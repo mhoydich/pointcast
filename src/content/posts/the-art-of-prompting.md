@@ -12,6 +12,8 @@ Most people think of prompting as giving instructions to a machine. Type what yo
 
 Great prompting is more like directing a film than writing a manual. You're not telling the AI what to do step by step — you're setting a scene, establishing a tone, and leaving room for the unexpected.
 
+---
+
 ## The Iteration Loop
 
 The best results never come from a single prompt. They emerge from a conversation:
@@ -23,11 +25,15 @@ The best results never come from a single prompt. They emerge from a conversatio
 
 This loop is familiar to anyone who's worked in a creative medium. It's sketching, not engineering.
 
+---
+
 ## Taste as Technology
 
 Here's the controversial take: in a world where everyone has access to the same AI tools, **taste becomes the differentiator**. Not technical skill. Not prompt engineering tricks. Taste.
 
 The ability to recognize quality. To know when something is almost right but needs one more iteration. To have a vision that guides the collaboration.
+
+---
 
 ## A New Creative Practice
 

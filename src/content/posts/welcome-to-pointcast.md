@@ -12,6 +12,8 @@ PointCast is born from a simple idea: the best creative work happens when human 
 
 Every article, every project showcase, every piece of art you find here was created through genuine collaboration between Mike Hoydich and Claude — not AI-generated content rubber-stamped by a human, but real creative partnership.
 
+---
+
 ## What You'll Find Here
 
 **Articles** — Deep dives into technology, creativity, and the evolving landscape of human-AI collaboration.
@@ -22,11 +24,15 @@ Every article, every project showcase, every piece of art you find here was crea
 
 **Essays** — Long-form thinking about the world we're building.
 
+---
+
 ## The Nounish Spirit
 
 PointCast is built with the spirit of Nouns DAO — open, collaborative, and a little bit weird in the best way. The pixel art aesthetic isn't just a style choice; it's a statement about building in public and creating culture that belongs to everyone.
 
 ⌐◨-◨
+
+---
 
 ## What's Next
 

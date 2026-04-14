@@ -13,6 +13,9 @@ interface Props {
 
 const { title, description, date, type, image, tags = [] } = Astro.props;
 
+const isDispatch = type === 'newsletter';
+const proseClass = isDispatch ? 'prose-dispatch' : 'prose-nouns';
+
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
@@ -21,58 +24,182 @@ const formattedDate = date.toLocaleDateString('en-US', {
 ---
 
 <BaseLayout title={title} description={description} image={image}>
-  <article class="max-w-3xl mx-auto px-4 py-10 md:py-14" aria-label={title}>
-    <header class="mb-10">
-      <div class="flex items-center gap-3 mb-4">
-        <TagPill tag={type} />
-        <time class="text-sm text-nouns-muted font-mono" datetime={date.toISOString()}>
-          {formattedDate}
-        </time>
-      </div>
+  <article class="article-root" aria-label={title}>
+    <div class="snap-container" id="snap-scroll">
 
-      <h1 class="text-3xl md:text-5xl font-heading text-nouns-yellow leading-tight mb-5">
-        {title}
-      </h1>
+      <!-- Title card -->
+      <section class="snap-card" aria-label="Article header">
+        <div class="max-w-3xl mx-auto w-full px-4">
+          <div class="flex items-center gap-3 mb-4">
+            <TagPill tag={type} />
+            <time class="text-sm text-nouns-muted font-mono" datetime={date.toISOString()}>
+              {formattedDate}
+            </time>
+          </div>
 
-      <p class="text-lg text-nouns-muted leading-relaxed">
-        {description}
-      </p>
+          <h1 class="text-3xl md:text-5xl font-heading text-nouns-yellow leading-tight mb-5">
+            {title}
+          </h1>
 
-      {tags.length > 0 && (
-        <div class="flex flex-wrap gap-2 mt-5" role="list" aria-label="Tags">
-          {tags.map(tag => (
-            <span role="listitem" class="text-xs font-mono text-nouns-muted/60 bg-nouns-bg-elevated px-2.5 py-1 rounded-full">
-              #{tag}
-            </span>
-          ))}
+          <p class="text-lg md:text-xl text-nouns-white/70 leading-relaxed mb-6">
+            {description}
+          </p>
+
+          {tags.length > 0 && (
+            <div class="flex flex-wrap gap-2 mb-6" role="list" aria-label="Tags">
+              {tags.map(tag => (
+                <span role="listitem" class="text-xs font-mono text-nouns-muted/60 bg-nouns-bg-elevated px-2.5 py-1 rounded-full">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {isDispatch && (
+            <div class="flex items-center gap-3 text-sm text-nouns-muted font-mono">
+              <span class="text-nouns-yellow">MH</span>
+              <span class="text-nouns-border">&times;</span>
+              <span class="text-nouns-blue">Opus 4.6</span>
+            </div>
+          )}
+
+          <!-- Mobile scroll hint -->
+          <div class="mt-8 text-center md:hidden scroll-hint">
+            <span class="text-nouns-muted/40 text-xs font-mono">swipe up</span>
+            <div class="text-nouns-yellow/30 text-lg mt-1">&darr;</div>
+          </div>
         </div>
+      </section>
+
+      {image && (
+        <section class="snap-card" aria-label="Featured image">
+          <div class="max-w-3xl mx-auto w-full px-4">
+            <img
+              src={image}
+              alt={title}
+              class="w-full rounded-2xl"
+            />
+          </div>
+        </section>
       )}
-    </header>
 
-    {image && (
-      <div class="mb-10 -mx-4 md:mx-0">
-        <img
-          src={image}
-          alt={title}
-          class="w-full rounded-none md:rounded-2xl"
-        />
+      <!-- Content: split into snap cards by JS on mobile -->
+      <div id="article-content" class={`${proseClass} max-w-3xl mx-auto w-full px-4`}>
+        <slot />
       </div>
-    )}
 
-    <div class="prose-nouns">
-      <slot />
+      <!-- Coda card -->
+      <section class="snap-card" aria-label="Article footer">
+        <div class="max-w-3xl mx-auto w-full px-4 text-center">
+          <div class="mb-6">
+            <span class="text-nouns-yellow font-heading text-3xl">⌐◨-◨</span>
+          </div>
+          <p class="text-nouns-muted font-mono text-sm mb-1">
+            Made with Claude Cowork
+          </p>
+          <p class="text-nouns-muted/50 font-mono text-xs mb-6">
+            {formattedDate} &middot; PointCast
+          </p>
+          <a href="/feed" class="inline-block px-6 py-2.5 border border-nouns-border text-nouns-muted font-mono text-sm rounded-xl hover:border-nouns-yellow hover:text-nouns-yellow transition-colors">
+            &larr; Back to Feed
+          </a>
+        </div>
+      </section>
+
     </div>
 
-    <footer class="mt-16 pt-8 border-t border-nouns-border/50">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3 text-sm text-nouns-muted">
-          <span class="text-nouns-yellow font-mono">⌐◨-◨</span>
-          <span>Made with Claude Cowork</span>
-        </div>
-        <a href="/feed" class="text-sm text-nouns-muted font-mono hover:text-nouns-yellow transition-colors">
-          &larr; Feed
-        </a>
-      </div>
-    </footer>
+    <!-- Progress dots (mobile only) -->
+    <nav class="snap-progress" id="snap-dots" aria-label="Reading progress"></nav>
   </article>
 </BaseLayout>
+
+<script>
+  function initSnap() {
+    const content = document.getElementById('article-content');
+    const scrollContainer = document.getElementById('snap-scroll');
+    const dotsContainer = document.getElementById('snap-dots');
+    if (!content || !scrollContainer || !dotsContainer) return;
+
+    const isMobile = window.matchMedia('(max-width: 767px)').matches;
+    if (!isMobile) return;
+
+    // Split content at <hr> elements (markdown ---) into sections
+    const children = Array.from(content.children);
+    const sections: HTMLElement[][] = [[]];
+
+    children.forEach(child => {
+      if (child.tagName === 'HR') {
+        sections.push([]);
+      } else {
+        sections[sections.length - 1].push(child as HTMLElement);
+      }
+    });
+
+    const validSections = sections.filter(s => s.length > 0);
+
+    // Only snap if there are multiple sections (has --- dividers)
+    if (validSections.length <= 1) {
+      // Single section — still wrap in one snap card for consistency
+      const card = document.createElement('section');
+      card.className = 'snap-card';
+      const inner = document.createElement('div');
+      inner.className = content.className;
+      while (content.firstChild) inner.appendChild(content.firstChild);
+      card.appendChild(inner);
+      content.replaceWith(card);
+      // No dots needed for single section
+    } else {
+      // Multiple sections — wrap each in a snap card
+      const proseClass = content.classList.contains('prose-dispatch') ? 'prose-dispatch' : 'prose-nouns';
+      const frag = document.createDocumentFragment();
+
+      validSections.forEach((section, i) => {
+        const card = document.createElement('section');
+        card.className = 'snap-card animate-fade-up';
+        card.setAttribute('aria-label', `Section ${i + 1} of ${validSections.length}`);
+
+        const inner = document.createElement('div');
+        inner.className = `max-w-3xl mx-auto w-full px-4 ${proseClass}`;
+        section.forEach(el => inner.appendChild(el));
+        card.appendChild(inner);
+        frag.appendChild(card);
+      });
+
+      content.replaceWith(frag);
+    }
+
+    // Build progress dots
+    const allCards = scrollContainer.querySelectorAll('.snap-card');
+    dotsContainer.innerHTML = '';
+    for (let i = 0; i < allCards.length; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'snap-dot' + (i === 0 ? ' active' : '');
+      dotsContainer.appendChild(dot);
+    }
+
+    // Track active card
+    const dots = dotsContainer.querySelectorAll('.snap-dot');
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const idx = Array.from(allCards).indexOf(entry.target as Element);
+            dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+          }
+        });
+      },
+      { root: scrollContainer, threshold: 0.5 }
+    );
+    allCards.forEach(card => observer.observe(card));
+
+    // Hide scroll hint after first swipe
+    const hint = document.querySelector('.scroll-hint');
+    if (hint) {
+      scrollContainer.addEventListener('scroll', () => {
+        (hint as HTMLElement).style.opacity = '0';
+      }, { once: true });
+    }
+  }
+
+  initSnap();
+</script>
