@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ContentCard from '../components/ContentCard.astro';
-import TagPill from '../components/TagPill.astro';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -12,36 +11,47 @@ const allContent = [
   ...projects.map(p => ({ ...p, collection: 'projects' as const, type: 'project' as const })),
 ].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 
-const types = ['all', 'article', 'essay', 'newsletter', 'project', 'art'] as const;
+const types = ['all', 'newsletter', 'article', 'essay', 'project', 'art'] as const;
+
+const typeLabels: Record<string, string> = {
+  all: 'All',
+  newsletter: 'Dispatches',
+  article: 'Articles',
+  essay: 'Essays',
+  project: 'Projects',
+  art: 'Art',
+};
 ---
 
 <BaseLayout title="Feed" description="All published content from Mike Hoydich & Claude Cowork Publishings.">
-  <div class="max-w-4xl mx-auto px-4 py-12">
-    <header class="mb-10">
-      <h1 class="text-4xl font-heading text-nouns-yellow mb-2">Feed</h1>
+  <div class="max-w-5xl mx-auto px-4 py-10 md:py-14">
+    <header class="mb-8">
+      <h1 class="text-3xl md:text-4xl font-heading text-nouns-yellow mb-2">Feed</h1>
       <p class="text-nouns-muted font-mono text-sm">
-        All content, chronologically. {allContent.length} items published.
+        {allContent.length} pieces published
       </p>
     </header>
 
-    <!-- Type filters (client-side) -->
-    <div class="flex flex-wrap gap-2 mb-8 pb-6 border-b border-nouns-border">
+    <!-- Type filters -->
+    <div class="flex flex-wrap gap-2 mb-8 pb-6 border-b border-nouns-border/50" role="tablist" aria-label="Content type filter">
       {types.map(type => (
         <button
           data-filter={type}
+          role="tab"
+          aria-selected={type === 'all' ? 'true' : 'false'}
           class:list={[
-            'filter-btn px-4 py-1.5 text-xs font-mono uppercase tracking-wider rounded-full border transition-colors cursor-pointer',
+            'filter-btn px-4 py-2 text-xs font-mono uppercase tracking-wider rounded-full border transition-colors cursor-pointer',
             type === 'all'
-              ? 'bg-nouns-yellow/20 text-nouns-yellow border-nouns-yellow/30'
-              : 'bg-nouns-bg-elevated text-nouns-muted border-nouns-border hover:border-nouns-yellow/50',
+              ? 'bg-nouns-yellow/15 text-nouns-yellow border-nouns-yellow/20'
+              : 'bg-nouns-bg-elevated/50 text-nouns-muted border-nouns-border/50 hover:border-nouns-yellow/30',
           ]}
         >
-          {type}
+          {typeLabels[type]}
         </button>
       ))}
     </div>
 
-    <div class="grid gap-6 md:grid-cols-2" id="feed-grid">
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" id="feed-grid" role="tabpanel">
       {allContent.map(item => (
         <div data-type={item.type}>
           <ContentCard
@@ -68,15 +78,15 @@ const types = ['all', 'article', 'essay', 'newsletter', 'project', 'art'] as con
     btn.addEventListener('click', () => {
       const filter = (btn as HTMLElement).dataset.filter;
 
-      // Update button styles
       buttons.forEach(b => {
-        b.classList.remove('bg-nouns-yellow/20', 'text-nouns-yellow', 'border-nouns-yellow/30');
-        b.classList.add('bg-nouns-bg-elevated', 'text-nouns-muted', 'border-nouns-border');
+        b.classList.remove('bg-nouns-yellow/15', 'text-nouns-yellow', 'border-nouns-yellow/20');
+        b.classList.add('bg-nouns-bg-elevated/50', 'text-nouns-muted', 'border-nouns-border/50');
+        b.setAttribute('aria-selected', 'false');
       });
-      btn.classList.remove('bg-nouns-bg-elevated', 'text-nouns-muted', 'border-nouns-border');
-      btn.classList.add('bg-nouns-yellow/20', 'text-nouns-yellow', 'border-nouns-yellow/30');
+      btn.classList.remove('bg-nouns-bg-elevated/50', 'text-nouns-muted', 'border-nouns-border/50');
+      btn.classList.add('bg-nouns-yellow/15', 'text-nouns-yellow', 'border-nouns-yellow/20');
+      btn.setAttribute('aria-selected', 'true');
 
-      // Filter items
       items.forEach(item => {
         const type = (item as HTMLElement).dataset.type;
         if (filter === 'all' || type === filter) {

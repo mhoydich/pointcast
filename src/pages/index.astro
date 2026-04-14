@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
 import ContentCard from '../components/ContentCard.astro';
+import TagPill from '../components/TagPill.astro';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -12,20 +13,60 @@ const allContent = [
   ...posts.map(p => ({ ...p, collection: 'posts' as const, type: p.data.type })),
   ...projects.map(p => ({ ...p, collection: 'projects' as const, type: 'project' as const })),
 ].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+// Separate featured (latest dispatch) from rest
+const latestDispatch = allContent.find(item => item.type === 'newsletter');
+const rest = allContent.filter(item => item !== latestDispatch);
 ---
 
 <BaseLayout title="Home">
   <Hero />
 
-  <section class="max-w-4xl mx-auto px-4 py-12">
-    <div class="flex items-center gap-3 mb-8">
-      <div class="h-px flex-1 bg-nouns-border"></div>
-      <h2 class="font-heading text-2xl text-nouns-yellow">Latest</h2>
-      <div class="h-px flex-1 bg-nouns-border"></div>
+  <!-- Featured dispatch -->
+  {latestDispatch && (
+    <section class="max-w-5xl mx-auto px-4 py-12" aria-label="Latest dispatch">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="h-px flex-1 bg-nouns-border/50"></div>
+        <h2 class="font-heading text-xl text-nouns-yellow">Latest Dispatch</h2>
+        <div class="h-px flex-1 bg-nouns-border/50"></div>
+      </div>
+
+      <a
+        href={`/posts/${latestDispatch.id}`}
+        class="block group"
+        aria-label={`Read dispatch: ${latestDispatch.data.title}`}
+      >
+        <article class="bg-nouns-bg-card border border-nouns-yellow/20 rounded-2xl p-6 md:p-8 card-hover">
+          <div class="flex items-center gap-3 mb-4">
+            <TagPill tag="newsletter" />
+            <time class="text-xs text-nouns-muted font-mono" datetime={latestDispatch.data.date.toISOString()}>
+              {latestDispatch.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </time>
+          </div>
+          <h3 class="font-heading text-2xl md:text-3xl text-nouns-white group-hover:text-nouns-yellow transition-colors mb-3 leading-tight">
+            {latestDispatch.data.title}
+          </h3>
+          <p class="text-nouns-muted leading-relaxed max-w-2xl">
+            {latestDispatch.data.description}
+          </p>
+          <div class="mt-5 inline-flex items-center gap-2 text-nouns-yellow font-mono text-sm">
+            Read dispatch <span aria-hidden="true">&rarr;</span>
+          </div>
+        </article>
+      </a>
+    </section>
+  )}
+
+  <!-- All content -->
+  <section class="max-w-5xl mx-auto px-4 py-8 pb-16" aria-label="Recent content">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="h-px flex-1 bg-nouns-border/50"></div>
+      <h2 class="font-heading text-xl text-nouns-yellow">Recent</h2>
+      <div class="h-px flex-1 bg-nouns-border/50"></div>
     </div>
 
-    <div class="grid gap-6 md:grid-cols-2">
-      {allContent.map(item => (
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {rest.map(item => (
         <ContentCard
           title={item.data.title}
           description={item.data.description}
@@ -39,9 +80,9 @@ const allContent = [
       ))}
     </div>
 
-    <div class="text-center mt-12">
-      <a href="/feed" class="inline-flex items-center gap-2 px-6 py-2.5 border border-nouns-border text-nouns-muted font-mono text-sm rounded-lg hover:border-nouns-yellow hover:text-nouns-yellow transition-colors">
-        View all &rarr;
+    <div class="text-center mt-10">
+      <a href="/feed" class="inline-flex items-center gap-2 px-6 py-3 border border-nouns-border text-nouns-muted font-mono text-sm rounded-xl hover:border-nouns-yellow hover:text-nouns-yellow transition-colors">
+        View all content <span aria-hidden="true">&rarr;</span>
       </a>
     </div>
   </section>

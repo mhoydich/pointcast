@@ -2,7 +2,7 @@
 title: "Seeing the Future №0205 · AI / Front Door"
 description: "The front door is moving — and the hinges are agentic. Atlas, Comet, Dia, Claude-in-Chrome — the entry point is no longer a URL. It is a cursor that reads."
 date: 2026-04-14
-type: article
+type: newsletter
 tags: [ai, browsers, agentic, enterprise, good-feels, seeing-the-future]
 ---
 
