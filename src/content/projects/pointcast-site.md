@@ -1,36 +1,59 @@
 ---
 title: "PointCast.xyz"
-description: "The site you're looking at right now — a nounish publishing platform built with Astro, Tailwind, and Claude Cowork."
-date: 2026-04-13
-tags: [web, design, nouns, astro]
-stack: [Astro, Tailwind CSS, Vercel, Claude]
+description: "A warm editorial publishing platform built with Astro, Tailwind, and Claude — inspired by Seeing the Future's dispatch design language."
+date: 2026-04-12
+tags: [web, design, nouns, astro, editorial]
+stack: [Astro, Tailwind CSS, Cloudflare Pages, Claude]
 link: "https://pointcast.xyz"
 ---
 
-## The Build
+## The build
 
-PointCast.xyz is a mobile-first content hub built from scratch using Astro and Tailwind CSS. The entire site was designed and coded through human-AI collaboration — Mike providing creative direction and design vision, Claude handling implementation.
+PointCast.xyz was designed and coded entirely through human-AI collaboration. Mike set the creative direction — the editorial warmth, the Nouns identity, the dispatch format. Claude handled the implementation across every file.
 
-## Design Philosophy
+The site went from zero to deployed in a single session. No Figma. No wireframes. The design emerged through iteration.
 
-The visual language draws from **Nouns DAO** culture:
+---
 
-- **Pixel art accents** and the iconic noggles (⌐◨-◨)
-- **Bold, saturated colors** against a dark background
-- **Londrina Solid** typography for that nounish character
-- **Mobile-first** scrollable experience
+## Design language
 
-## Technical Decisions
+The visual system draws from two sources:
 
-**Astro** was chosen for its content-first architecture — zero JavaScript by default, content collections for type-safe Markdown, and blazing fast builds.
+**The Seeing the Future dispatch** — warm paper tones, serif headlines, progressive disclosure, numbered observation cards. The kind of reading experience that respects your attention.
 
-**Tailwind CSS 4** provides the design system foundation with custom theme tokens mapping to the Nouns color palette.
+**Nouns DAO culture** — noggles as identity, CC0 ethos, pixel-art accents. Building in public, sharing freely.
 
-**Vercel** handles deployment with automatic builds on push.
+The result is editorial warmth with nounish soul. Light mode by default, dark mode that responds to your system preference.
 
-## What's Next
+---
 
-- RSS feed for subscribers
-- Search functionality
-- Dark/light theme toggle
+## Typography
+
+Three fonts, each with a clear job:
+
+- **Lora** — Serif headlines. Italic titles. The editorial anchor.
+- **Outfit** — Body text. Clean, readable, stays out of the way.
+- **JetBrains Mono** — Metadata, kickers, timestamps. The data layer.
+
+Londrina Solid appears only for the PointCast brand name — a nod to the Nouns typographic tradition.
+
+---
+
+## Technical stack
+
+**Astro 6** — Content-first architecture. Zero JS by default. Content collections with Zod schemas for type-safe markdown.
+
+**Tailwind CSS 4** — Design tokens via `@theme` block. Light/dark mode through CSS custom properties and `prefers-color-scheme`.
+
+**Cloudflare Pages** — Global edge deployment. Builds in under a second.
+
+**Mobile snap-scroll** — On mobile, articles split at section breaks into swipeable cards with progress dots. Desktop gets long-scroll.
+
+---
+
+## What's next
+
+- RSS feed
+- Per-post OG images
+- Search
 - Commenting system

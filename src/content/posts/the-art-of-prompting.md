@@ -1,42 +1,69 @@
 ---
-title: "The Art of Prompting: A Creative Practice"
-description: "Prompting isn't just a technical skill — it's a creative discipline that rewards intuition, iteration, and taste."
+title: "Taste as Technology"
+description: "In a world where everyone has the same AI tools, the differentiator isn't technical skill. It's the thing that can't be prompted — taste."
 date: 2026-04-10
 type: essay
-tags: [ai, creativity, prompting, craft]
+tags: [ai, creativity, craft, taste]
 ---
 
-## Beyond Instructions
+## The democratization problem
 
-Most people think of prompting as giving instructions to a machine. Type what you want, get what you asked for. But that framing misses something fundamental.
+Everyone has access to the same models. The same APIs. The same context windows and tool-calling capabilities. A teenager in Manila and a partner at McKinsey can both open Claude and type the same prompt.
 
-Great prompting is more like directing a film than writing a manual. You're not telling the AI what to do step by step — you're setting a scene, establishing a tone, and leaving room for the unexpected.
-
----
-
-## The Iteration Loop
-
-The best results never come from a single prompt. They emerge from a conversation:
-
-1. **Start broad** — establish the territory
-2. **React honestly** — what works, what doesn't
-3. **Refine with specificity** — build on what resonates
-4. **Know when to stop** — taste is knowing when it's done
-
-This loop is familiar to anyone who's worked in a creative medium. It's sketching, not engineering.
+So why does the output look so different?
 
 ---
 
-## Taste as Technology
+## Prompting is directing, not typing
 
-Here's the controversial take: in a world where everyone has access to the same AI tools, **taste becomes the differentiator**. Not technical skill. Not prompt engineering tricks. Taste.
+Most people treat prompting like filling out a form. They type what they want, hit enter, and accept whatever comes back. This is like walking into a recording studio and reading the lyrics off your phone.
 
-The ability to recognize quality. To know when something is almost right but needs one more iteration. To have a vision that guides the collaboration.
+Good prompting is directing. You're setting a scene. Establishing tone. Leaving room for the unexpected while holding the vision tight enough that the result feels intentional.
+
+The best prompt I ever wrote was three sentences long. The worst was four paragraphs. Length is not the variable.
 
 ---
 
-## A New Creative Practice
+## The iteration is the work
 
-We're at the beginning of something. The tools are crude, the culture is forming, and the best practices haven't been written yet.
+Nobody lands it on the first try. The real skill is the loop:
 
-That's exactly what makes it exciting.
+**Start broad.** Let the model surprise you. Half the time, the best version of your idea is one you didn't have when you sat down.
+
+**React honestly.** "This is close but the second paragraph feels corporate" is worth more than a detailed rewrite. Say what's wrong, not what to write.
+
+**Refine with specificity.** Once you know the shape, get precise. "Make the metaphor about doors, not windows" changes everything.
+
+**Know when to stop.** This is taste. The ability to recognize when one more iteration would polish away the thing that makes it interesting.
+
+---
+
+## Taste can't be prompted
+
+Here's the uncomfortable truth: the best AI work will come from people who were already good at something. Not good at prompting — good at *seeing*. Good at knowing when a sentence lands and when it slides. Good at recognizing quality even when they can't articulate why.
+
+Taste is the filter between capability and craft. You can teach someone the tools in an afternoon. You can't teach them to care about the difference between "good enough" and "right."
+
+---
+
+## The new creative stack
+
+The people doing the most interesting work right now share three traits:
+
+They have **domain knowledge** — real experience in the thing they're building, not just opinions about it.
+
+They have **iteration tolerance** — the willingness to throw away the first version and the third version and the seventh version because none of them were the one.
+
+They have **taste** — the ability to recognize the moment when the work crosses from competent to alive.
+
+The tools are commoditized. The taste never will be.
+
+---
+
+## The craft continues
+
+We're at the beginning of something. The tools are crude, the norms are unwritten, and the best practices haven't been discovered yet. That's exactly what makes it worth paying attention.
+
+The people who figure out the craft — not the prompts, the *craft* — will define what this era produces. Everyone else will produce slop that sounds the same as everyone else's slop.
+
+Choose which side of that line you want to be on.

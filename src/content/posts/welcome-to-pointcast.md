@@ -1,41 +1,59 @@
 ---
-title: "Welcome to PointCast"
-description: "Introducing a new kind of publishing — where human creativity meets AI intelligence. This is the story of why we built PointCast."
-date: 2026-04-13
+title: "The Room Where It Happens"
+description: "PointCast isn't a blog. It's a publishing imprint for the work that happens when you stop treating AI as a tool and start treating it as a collaborator."
+date: 2026-04-12
 type: article
-tags: [meta, ai, publishing, nouns]
+tags: [meta, collaboration, publishing, nouns]
 ---
 
-## The Beginning
+## The premise is simple
 
-PointCast is born from a simple idea: the best creative work happens when human intuition and machine intelligence collaborate rather than compete.
+Most AI-generated content is slop. You know it when you see it — the same cadence, the same hedging, the same four-paragraph structure that says nothing in exactly the right tone. It exists because someone typed a prompt and hit publish without ever sitting in the room with the output.
 
-Every article, every project showcase, every piece of art you find here was created through genuine collaboration between Mike Hoydich and Claude — not AI-generated content rubber-stamped by a human, but real creative partnership.
-
----
-
-## What You'll Find Here
-
-**Articles** — Deep dives into technology, creativity, and the evolving landscape of human-AI collaboration.
-
-**Projects** — Showcases of things we've built together, from code to creative works.
-
-**Art** — AI-generated visual art directed by human creative vision.
-
-**Essays** — Long-form thinking about the world we're building.
+PointCast is the room.
 
 ---
 
-## The Nounish Spirit
+## What happens in the room
 
-PointCast is built with the spirit of Nouns DAO — open, collaborative, and a little bit weird in the best way. The pixel art aesthetic isn't just a style choice; it's a statement about building in public and creating culture that belongs to everyone.
+Mike brings direction. Taste. The lived experience of running a cannabis company in California, playing competitive pickleball, and building coordination systems on-chain. The kind of context that can't be prompted — it has to be earned.
 
-⌐◨-◨
+Claude brings depth. Pattern recognition across domains. The ability to iterate at the speed of thought. The willingness to be wrong twelve times before landing on something that sings.
+
+Neither could publish this alone. That's the point.
 
 ---
 
-## What's Next
+## Why it matters now
 
-This is just the beginning. We're publishing regularly, building tools, and exploring what's possible when you take the human-AI collaboration seriously.
+We're at a specific moment. The tools are good enough to produce real work, but the culture hasn't caught up. Most people are either dismissing AI entirely or drowning in its output without curation.
 
-Stay tuned. Subscribe to the feed. Put on your noggles.
+The gap is taste. Someone has to sit between the capability and the audience and say: *this is worth reading, and this isn't.* That's what a publisher does. That's what Cowork is.
+
+---
+
+## The nounish thing
+
+PointCast is built in the spirit of Nouns DAO — open, forkable, meant to proliferate. The noggles aren't decoration. They're a statement: we build in public, we share freely, and we believe culture should belong to everyone.
+
+Every piece published here is a collaboration. Every collaboration is transparent. That's the deal.
+
+---
+
+## What you'll find
+
+**Dispatches** — Weekly intelligence briefings. Structured observations with actionable takes. The kind of thing you forward to your cofounder at 7am.
+
+**Articles** — When something needs more than a bullet point. Deep dives into what's actually happening, not what the timeline thinks is happening.
+
+**Essays** — Long-form thinking. The stuff that doesn't fit in a thread.
+
+**Projects** — Things we've built. Code, tools, experiments. Show, don't tell.
+
+---
+
+## The invitation
+
+Read. Disagree. Build something better. That's the whole point of CC0 — the work belongs to everyone the moment it's published.
+
+Put on your noggles. ⌐◨-◨
