@@ -32,9 +32,9 @@ The gap is taste. Someone has to sit between the capability and the audience and
 
 ---
 
-## The nounish thing
+## The open thing
 
-PointCast is built in the spirit of Nouns DAO — open, forkable, meant to proliferate. The noggles aren't decoration. They're a statement: we build in public, we share freely, and we believe culture should belong to everyone.
+PointCast is built in public. Open, forkable, meant to proliferate. We build, we share freely, and we believe culture should belong to everyone.
 
 Every piece published here is a collaboration. Every collaboration is transparent. That's the deal.
 
@@ -54,6 +54,4 @@ Every piece published here is a collaboration. Every collaboration is transparen
 
 ## The invitation
 
-Read. Disagree. Build something better. That's the whole point of CC0 — the work belongs to everyone the moment it's published.
-
-Put on your noggles. ⌐◨-◨
+Read. Disagree. Build something better. The work belongs to everyone the moment it's published.

@@ -1,7 +1,5 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Hero from '../components/Hero.astro';
-import ContentCard from '../components/ContentCard.astro';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -12,77 +10,107 @@ const allContent = [
   ...projects.map(p => ({ ...p, collection: 'projects' as const, type: 'project' as const })),
 ].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 
-const latestDispatch = allContent.find(item => item.type === 'newsletter');
-const rest = allContent.filter(item => item !== latestDispatch);
+const lead = allContent[0];
+const wire = allContent.slice(1);
+
+const typeLabel: Record<string, string> = {
+  newsletter: 'Dispatch',
+  article: 'Article',
+  essay: 'Essay',
+  project: 'Project',
+  art: 'Art',
+};
+
+function fmtDate(d: Date) {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 ---
 
 <BaseLayout title="Home">
-  <Hero />
+  <div class="max-w-[34rem] mx-auto px-4 pt-10 md:pt-16 pb-20">
 
-  <!-- Featured dispatch -->
-  {latestDispatch && (
-    <section class="max-w-[34rem] mx-auto px-4 py-10" aria-label="Latest dispatch">
-      <div class="flex items-center gap-3 mb-5">
-        <div class="h-px flex-1 bg-rule/50"></div>
-        <h2 class="font-mono text-[0.66rem] tracking-[0.22em] uppercase text-ink-soft">Latest Dispatch</h2>
-        <div class="h-px flex-1 bg-rule/50"></div>
+    <!-- Masthead -->
+    <header class="mb-10">
+      <div class="flex items-center justify-between pb-3 border-b border-rule mb-6 font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink-soft">
+        <span>Mike Hoydich &times; Claude Cowork</span>
+        <span class="pill"><span class="pill-dot"></span>Active</span>
       </div>
 
-      <a
-        href={`/posts/${latestDispatch.id}`}
-        class="block group"
-        aria-label={`Read dispatch: ${latestDispatch.data.title}`}
-      >
-        <article class="editorial-card border-l-3 border-l-warm">
-          <div class="flex items-center gap-2.5 mb-3">
-            <span class="type-dispatch font-mono text-[0.58rem] tracking-[0.18em] uppercase px-2 py-0.5 rounded-full">
-              Dispatch
-            </span>
-            <time class="text-[0.62rem] text-ink-soft font-mono tracking-[0.1em] uppercase" datetime={latestDispatch.data.date.toISOString()}>
-              {latestDispatch.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-            </time>
-          </div>
-          <h3 class="font-serif text-xl text-ink group-hover:text-warm transition-colors mb-2 leading-tight font-semibold">
-            {latestDispatch.data.title}
-          </h3>
-          <p class="text-sm text-ink-soft leading-relaxed max-w-lg">
-            {latestDispatch.data.description}
-          </p>
-          <div class="mt-4 inline-flex items-center gap-2 text-warm font-mono text-[0.66rem] tracking-[0.14em] uppercase">
-            Read dispatch <span aria-hidden="true">&rarr;</span>
-          </div>
-        </article>
-      </a>
+      <h1 class="font-heading text-5xl md:text-6xl text-ink leading-[0.92] mb-3">
+        PointCast
+      </h1>
+      <p class="text-[0.95rem] text-ink-soft leading-relaxed max-w-sm">
+        Intelligence dispatches and creative work from human-AI collaboration.
+      </p>
+    </header>
+
+    <!-- Lead story -->
+    {lead && (
+      <section aria-label="Lead story" class="mb-12">
+        <div class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-warm mb-3">
+          {typeLabel[lead.type] || 'Post'} &middot; {fmtDate(lead.data.date)}
+        </div>
+
+        <a href={lead.collection === 'posts' ? `/posts/${lead.id}` : `/projects/${lead.id}`} class="group block">
+          <h2 class="font-serif text-[1.5rem] md:text-[1.75rem] text-ink font-medium italic leading-[1.15] mb-3 group-hover:text-warm transition-colors">
+            {lead.data.title}
+          </h2>
+        </a>
+
+        <p class="text-[0.95rem] text-ink/75 leading-relaxed mb-4">
+          {lead.data.description}
+        </p>
+
+        <a
+          href={lead.collection === 'posts' ? `/posts/${lead.id}` : `/projects/${lead.id}`}
+          class="inline-flex items-center gap-2 text-warm font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:underline"
+        >
+          Read {typeLabel[lead.type]?.toLowerCase() || 'post'} &rarr;
+        </a>
+      </section>
+    )}
+
+    <!-- The Wire -->
+    <section aria-label="Recent" class="mb-12">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="h-px flex-1 bg-rule"></div>
+        <h2 class="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-ink-soft">The Wire</h2>
+        <div class="h-px flex-1 bg-rule"></div>
+      </div>
+
+      <div class="space-y-0">
+        {wire.map(item => {
+          const href = item.collection === 'posts' ? `/posts/${item.id}` : `/projects/${item.id}`;
+          return (
+            <a href={href} class="group flex items-baseline gap-4 py-3.5 border-b border-rule/50 hover:bg-card-hover/50 -mx-3 px-3 rounded-md transition-colors">
+              <span class="font-mono text-[0.58rem] tracking-[0.14em] uppercase text-ink-soft/50 w-16 shrink-0">
+                {fmtDate(item.data.date)}
+              </span>
+              <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-warm/60 w-14 shrink-0">
+                {typeLabel[item.type] || 'Post'}
+              </span>
+              <span class="font-serif text-[0.95rem] text-ink group-hover:text-warm transition-colors font-medium leading-snug">
+                {item.data.title}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+
+      <div class="mt-6">
+        <a href="/feed" class="inline-flex items-center gap-2 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:text-warm transition-colors">
+          Full archive &rarr;
+        </a>
+      </div>
     </section>
-  )}
 
-  <!-- All content -->
-  <section class="max-w-3xl mx-auto px-4 py-6 pb-16" aria-label="Recent content">
-    <div class="flex items-center gap-3 mb-5">
-      <div class="h-px flex-1 bg-rule/50"></div>
-      <h2 class="font-mono text-[0.66rem] tracking-[0.22em] uppercase text-ink-soft">Recent</h2>
-      <div class="h-px flex-1 bg-rule/50"></div>
-    </div>
+    <!-- Sign-off -->
+    <footer class="border-t border-rule pt-6 flex items-center justify-between">
+      <p class="font-serif italic text-ink-soft text-[0.9rem]">
+        Where taste meets machine.
+      </p>
+      <span class="text-warm/40 text-sm">&#x2310;&#x25A8;-&#x25A8;</span>
+    </footer>
 
-    <div class="grid gap-5 sm:grid-cols-2">
-      {rest.map(item => (
-        <ContentCard
-          title={item.data.title}
-          description={item.data.description}
-          date={item.data.date}
-          type={item.type}
-          slug={item.id}
-          image={item.data.image}
-          tags={item.data.tags}
-          collection={item.collection}
-        />
-      ))}
-    </div>
-
-    <div class="text-center mt-8">
-      <a href="/feed" class="inline-flex items-center gap-2 px-5 py-2 border border-rule text-ink-soft font-mono text-[0.66rem] tracking-[0.18em] uppercase rounded-md hover:border-warm hover:text-warm transition-colors">
-        View all content <span aria-hidden="true">&rarr;</span>
-      </a>
-    </div>
-  </section>
+  </div>
 </BaseLayout>
