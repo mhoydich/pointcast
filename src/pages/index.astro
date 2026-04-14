@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Hero from '../components/Hero.astro';
+import ContentCard from '../components/ContentCard.astro';
+import { getCollection } from 'astro:content';
+
+const posts = await getCollection('posts', ({ data }) => !data.draft);
+const projects = await getCollection('projects', ({ data }) => !data.draft);
+
+// Combine and sort by date
+const allContent = [
+  ...posts.map(p => ({ ...p, collection: 'posts' as const, type: p.data.type })),
+  ...projects.map(p => ({ ...p, collection: 'projects' as const, type: 'project' as const })),
+].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+---
+
+<BaseLayout title="Home">
+  <Hero />
+
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <div class="flex items-center gap-3 mb-8">
+      <div class="h-px flex-1 bg-nouns-border"></div>
+      <h2 class="font-heading text-2xl text-nouns-yellow">Latest</h2>
+      <div class="h-px flex-1 bg-nouns-border"></div>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2">
+      {allContent.map(item => (
+        <ContentCard
+          title={item.data.title}
+          description={item.data.description}
+          date={item.data.date}
+          type={item.type}
+          slug={item.id}
+          image={item.data.image}
+          tags={item.data.tags}
+          collection={item.collection}
+        />
+      ))}
+    </div>
+
+    <div class="text-center mt-12">
+      <a href="/feed" class="inline-flex items-center gap-2 px-6 py-2.5 border border-nouns-border text-nouns-muted font-mono text-sm rounded-lg hover:border-nouns-yellow hover:text-nouns-yellow transition-colors">
+        View all &rarr;
+      </a>
+    </div>
+  </section>
+</BaseLayout>

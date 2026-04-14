@@ -1,0 +1,90 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ContentCard from '../components/ContentCard.astro';
+import TagPill from '../components/TagPill.astro';
+import { getCollection } from 'astro:content';
+
+const posts = await getCollection('posts', ({ data }) => !data.draft);
+const projects = await getCollection('projects', ({ data }) => !data.draft);
+
+const allContent = [
+  ...posts.map(p => ({ ...p, collection: 'posts' as const, type: p.data.type })),
+  ...projects.map(p => ({ ...p, collection: 'projects' as const, type: 'project' as const })),
+].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+const types = ['all', 'article', 'essay', 'project', 'art'] as const;
+---
+
+<BaseLayout title="Feed" description="All published content from Mike Hoydich & Claude Cowork Publishings.">
+  <div class="max-w-4xl mx-auto px-4 py-12">
+    <header class="mb-10">
+      <h1 class="text-4xl font-heading text-nouns-yellow mb-2">Feed</h1>
+      <p class="text-nouns-muted font-mono text-sm">
+        All content, chronologically. {allContent.length} items published.
+      </p>
+    </header>
+
+    <!-- Type filters (client-side) -->
+    <div class="flex flex-wrap gap-2 mb-8 pb-6 border-b border-nouns-border">
+      {types.map(type => (
+        <button
+          data-filter={type}
+          class:list={[
+            'filter-btn px-4 py-1.5 text-xs font-mono uppercase tracking-wider rounded-full border transition-colors cursor-pointer',
+            type === 'all'
+              ? 'bg-nouns-yellow/20 text-nouns-yellow border-nouns-yellow/30'
+              : 'bg-nouns-bg-elevated text-nouns-muted border-nouns-border hover:border-nouns-yellow/50',
+          ]}
+        >
+          {type}
+        </button>
+      ))}
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2" id="feed-grid">
+      {allContent.map(item => (
+        <div data-type={item.type}>
+          <ContentCard
+            title={item.data.title}
+            description={item.data.description}
+            date={item.data.date}
+            type={item.type}
+            slug={item.id}
+            image={item.data.image}
+            tags={item.data.tags}
+            collection={item.collection}
+          />
+        </div>
+      ))}
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  const buttons = document.querySelectorAll('.filter-btn');
+  const items = document.querySelectorAll('#feed-grid > div');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filter = (btn as HTMLElement).dataset.filter;
+
+      // Update button styles
+      buttons.forEach(b => {
+        b.classList.remove('bg-nouns-yellow/20', 'text-nouns-yellow', 'border-nouns-yellow/30');
+        b.classList.add('bg-nouns-bg-elevated', 'text-nouns-muted', 'border-nouns-border');
+      });
+      btn.classList.remove('bg-nouns-bg-elevated', 'text-nouns-muted', 'border-nouns-border');
+      btn.classList.add('bg-nouns-yellow/20', 'text-nouns-yellow', 'border-nouns-yellow/30');
+
+      // Filter items
+      items.forEach(item => {
+        const type = (item as HTMLElement).dataset.type;
+        if (filter === 'all' || type === filter) {
+          (item as HTMLElement).style.display = '';
+        } else {
+          (item as HTMLElement).style.display = 'none';
+        }
+      });
+    });
+  });
+</script>
