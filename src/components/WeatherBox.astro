@@ -1,0 +1,297 @@
+---
+/**
+ * WeatherBox — live El Segundo (ZIP 90245) weather. Fetches on client mount
+ * from Open-Meteo (no auth needed, generous rate limits). Renders the stats
+ * most interesting for a coastal LA county town: temp + feels-like, wind,
+ * UV, humidity, cloud cover (for marine-layer detection), plus a short
+ * weather-code summary.
+ *
+ * "Mint this moment" CTA is wired to capture the current weather snapshot
+ * into a payload shape the future Visit Nouns FA2 contract will consume as
+ * token metadata. Button is disabled until the contract is live; handler
+ * fires a `pc:mint-moment` event so the hook is ready.
+ *
+ *   moment payload shape (future contract metadata):
+ *     {
+ *       timestamp: ISO 8601 string,
+ *       location: { zip: "90245", city: "El Segundo", state: "CA" },
+ *       weather:  { tempF, feelsLikeF, conditions, windMph, windDir,
+ *                   humidity, cloudCover, uvIndex, code },
+ *       nounId:   number  (defaults to POINTCAST_NOUN_ID from index.astro)
+ *     }
+ */
+
+// El Segundo centroid lat/lon, ZIP 90245. Swapping cities = swap these.
+const LAT = 33.9192;
+const LON = -118.4165;
+const ZIP = '90245';
+const CITY = 'El Segundo';
+const STATE = 'CA';
+---
+
+<section class="mt-12 mb-10" id="weather">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      <span class="text-warm/70">07</span> &middot; El Segundo Now
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <!-- Block-y midcentury card — thick corners, warm accent block, grid layout -->
+  <div
+    class="weather-card relative rounded-xl overflow-hidden border-2 border-rule/50 bg-card"
+    data-lat={LAT}
+    data-lon={LON}
+    data-zip={ZIP}
+    data-city={CITY}
+    data-state={STATE}
+  >
+    <!-- Midcentury corner dots (same treatment as SpinningBox) -->
+    <div class="absolute top-0 left-0 w-2 h-2 bg-warm/80" aria-hidden="true"></div>
+    <div class="absolute top-0 right-0 w-2 h-2 bg-ink/60" aria-hidden="true"></div>
+    <div class="absolute bottom-0 left-0 w-2 h-2 bg-ink/60" aria-hidden="true"></div>
+    <div class="absolute bottom-0 right-0 w-2 h-2 bg-warm/80" aria-hidden="true"></div>
+
+    <div class="p-5 md:p-6">
+      <!-- Header row: city + conditions + mint CTA -->
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <p class="font-mono text-[0.52rem] tracking-[0.22em] uppercase text-ink-soft/50 mb-1">
+            {CITY}, {STATE} &middot; {ZIP}
+          </p>
+          <p class="font-serif italic text-[1.5rem] md:text-[1.75rem] text-ink leading-tight" id="weather-conditions">
+            loading…
+          </p>
+          <p class="font-mono text-[0.54rem] tracking-[0.16em] uppercase text-warm mt-1" id="weather-tagline">
+            reading the sky&hellip;
+          </p>
+        </div>
+
+        <!-- Big temp readout -->
+        <div class="text-right shrink-0">
+          <p class="font-mono font-bold text-[2.5rem] md:text-[3rem] text-ink leading-none" id="weather-temp">&mdash;</p>
+          <p class="font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-1">
+            feels <span id="weather-feels">&mdash;</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Grid of most-interesting stats -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-5" id="weather-grid">
+        <div class="stat-block rounded-md bg-paper/70 border border-rule/30 p-3">
+          <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/50 mb-1">Wind</p>
+          <p class="font-mono text-[0.95rem] text-ink" id="weather-wind">&mdash;</p>
+        </div>
+        <div class="stat-block rounded-md bg-paper/70 border border-rule/30 p-3">
+          <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/50 mb-1">UV Index</p>
+          <p class="font-mono text-[0.95rem] text-ink" id="weather-uv">&mdash;</p>
+        </div>
+        <div class="stat-block rounded-md bg-paper/70 border border-rule/30 p-3">
+          <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/50 mb-1">Humidity</p>
+          <p class="font-mono text-[0.95rem] text-ink" id="weather-humidity">&mdash;</p>
+        </div>
+        <div class="stat-block rounded-md bg-paper/70 border border-rule/30 p-3">
+          <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/50 mb-1">Cloud Cover</p>
+          <p class="font-mono text-[0.95rem] text-ink" id="weather-cloud">&mdash;</p>
+        </div>
+      </div>
+
+      <!-- Timestamp + Mint-moment CTA -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-rule/30">
+        <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/50">
+          captured <span id="weather-time">&mdash;</span>
+        </p>
+        <button
+          id="mint-moment-btn"
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-ink text-paper font-mono text-[0.58rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+          title="Mint this moment as a Visit Noun on Tezos"
+        >
+          <span id="mint-moment-label">Mint this moment</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  /**
+   * El Segundo live weather — Open-Meteo, no auth, browser-side CORS.
+   *
+   * On mount: fetch current conditions, paint the card. On interval:
+   * silently refresh every 5 min so the card stays current without
+   * beating up the API. On error: show a short "—" state, don't crash.
+   */
+
+  type WeatherSnapshot = {
+    timestamp: string;
+    location: { zip: string; city: string; state: string };
+    weather: {
+      tempF: number;
+      feelsLikeF: number;
+      conditions: string;
+      windMph: number;
+      windDir: string;
+      humidity: number;
+      cloudCover: number;
+      uvIndex: number;
+      code: number;
+    };
+  };
+
+  // WMO weather codes → readable labels. Subset, covers 99% of LA county.
+  // https://open-meteo.com/en/docs#weathervariables
+  function codeToCondition(code: number): { label: string; tag: string } {
+    if (code === 0) return { label: 'Clear blue sky', tag: 'sunny · classic LA' };
+    if (code === 1) return { label: 'Mainly clear', tag: 'high thin wisps' };
+    if (code === 2) return { label: 'Partly cloudy', tag: 'some drift overhead' };
+    if (code === 3) return { label: 'Overcast', tag: 'blanket day' };
+    if (code >= 45 && code <= 48) return { label: 'Fog', tag: 'marine layer hanging' };
+    if (code >= 51 && code <= 57) return { label: 'Drizzle', tag: 'light sky spray' };
+    if (code >= 61 && code <= 67) return { label: 'Rain', tag: 'get indoors' };
+    if (code >= 71 && code <= 77) return { label: 'Snow', tag: 'rare air for 90245' };
+    if (code >= 80 && code <= 82) return { label: 'Showers', tag: 'passing cells' };
+    if (code >= 95 && code <= 99) return { label: 'Thunderstorm', tag: 'sky is arguing' };
+    return { label: 'Unknown', tag: '' };
+  }
+
+  function windDirFromDeg(deg: number): string {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(((deg % 360) / 45)) % 8];
+  }
+
+  function fmtTime(iso: string): string {
+    try {
+      return new Date(iso).toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles',
+      }) + ' PT';
+    } catch { return '—'; }
+  }
+
+  async function loadWeather(): Promise<WeatherSnapshot | null> {
+    const card = document.querySelector<HTMLElement>('.weather-card');
+    if (!card) return null;
+    const lat = card.dataset.lat;
+    const lon = card.dataset.lon;
+    const zip = card.dataset.zip ?? '90245';
+    const city = card.dataset.city ?? 'El Segundo';
+    const state = card.dataset.state ?? 'CA';
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,uv_index` +
+      `&timezone=America/Los_Angeles&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const c = data?.current;
+      if (!c) throw new Error('no current data');
+      const cond = codeToCondition(Number(c.weather_code));
+      const snap: WeatherSnapshot = {
+        timestamp: c.time,
+        location: { zip, city, state },
+        weather: {
+          tempF: Math.round(c.temperature_2m),
+          feelsLikeF: Math.round(c.apparent_temperature),
+          conditions: cond.label,
+          windMph: Math.round(c.wind_speed_10m),
+          windDir: windDirFromDeg(Number(c.wind_direction_10m)),
+          humidity: Math.round(c.relative_humidity_2m),
+          cloudCover: Math.round(c.cloud_cover),
+          uvIndex: Number(c.uv_index?.toFixed?.(1) ?? c.uv_index ?? 0),
+          code: Number(c.weather_code),
+        },
+      };
+      return snap;
+    } catch (err) {
+      console.error('Weather load failed:', err);
+      return null;
+    }
+  }
+
+  let currentSnap: WeatherSnapshot | null = null;
+
+  function paintWeather(snap: WeatherSnapshot | null): void {
+    if (!snap) {
+      const cond = document.getElementById('weather-conditions');
+      if (cond) cond.textContent = 'no signal from the sky';
+      return;
+    }
+    currentSnap = snap;
+    const cond = codeToCondition(snap.weather.code);
+    const set = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    set('weather-conditions', snap.weather.conditions);
+    set('weather-tagline', cond.tag);
+    set('weather-temp', `${snap.weather.tempF}°`);
+    set('weather-feels', `${snap.weather.feelsLikeF}°`);
+    set('weather-wind', `${snap.weather.windMph} mph · ${snap.weather.windDir}`);
+    set('weather-uv', String(snap.weather.uvIndex));
+    set('weather-humidity', `${snap.weather.humidity}%`);
+    set('weather-cloud', `${snap.weather.cloudCover}%`);
+    set('weather-time', fmtTime(snap.timestamp));
+  }
+
+  // Mint-moment — captures the current weather snapshot and mints a
+  // PointCast Visit Noun with the moment context. Pre-wired: when the
+  // FA2 contract address is populated in src/data/contracts.json, this
+  // fires a real Taquito mint. While empty, it shows a "deploy first"
+  // status and a fallback event for the admin flow.
+  const mintBtn = document.getElementById('mint-moment-btn') as HTMLButtonElement | null;
+  const mintLabel = document.getElementById('mint-moment-label');
+  mintBtn?.addEventListener('click', async () => {
+    if (!mintBtn || !currentSnap) return;
+    const { hasVisitNounsContract, mintVisitNoun } = await import('../lib/mint');
+    if (!hasVisitNounsContract('mainnet')) {
+      if (mintLabel) mintLabel.textContent = 'Mint ships soon';
+      window.dispatchEvent(new CustomEvent('pc:mint-moment', { detail: currentSnap }));
+      setTimeout(() => { if (mintLabel) mintLabel.textContent = 'Mint this moment'; }, 2000);
+      return;
+    }
+
+    // Each moment mints a random Noun — the nounId becomes the visual
+    // token, and the moment context (weather, location, timestamp) is
+    // stored off-chain for display on the future receipt page.
+    const nounId = Math.floor(Math.random() * 1200);
+    mintBtn.disabled = true;
+    if (mintLabel) mintLabel.textContent = 'Minting…';
+
+    try {
+      const res = await mintVisitNoun(nounId, 'mainnet', {
+        weather: currentSnap.weather as any,
+        location: currentSnap.location as any,
+        capturedAt: currentSnap.timestamp,
+        source: 'weather-card',
+      });
+      if (!res.ok) {
+        if (res.reason === 'user-cancelled' && mintLabel) mintLabel.textContent = 'Mint this moment';
+        else if (res.reason === 'insufficient-balance' && mintLabel) mintLabel.textContent = 'Need more ꜩ';
+        else if (mintLabel) mintLabel.textContent = 'Mint failed';
+        mintBtn.disabled = false;
+        return;
+      }
+      if (mintLabel) mintLabel.textContent = `✓ Minted #${nounId}`;
+      if (res.tzktUrl) {
+        setTimeout(() => { window.open(res.tzktUrl!, '_blank', 'noopener'); }, 300);
+      }
+      await res.confirmation;
+      if (mintLabel) mintLabel.textContent = `✓ Confirmed`;
+    } catch (err) {
+      console.error('Mint moment failed:', err);
+      if (mintLabel) mintLabel.textContent = 'Mint failed';
+      mintBtn.disabled = false;
+    }
+  });
+
+  // Kick it off.
+  loadWeather().then(paintWeather);
+  // Refresh every 5 min.
+  setInterval(() => { loadWeather().then(paintWeather); }, 5 * 60 * 1000);
+  // Also refresh when tab returns to foreground.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') loadWeather().then(paintWeather);
+  });
+</script>

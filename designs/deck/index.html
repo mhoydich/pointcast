@@ -1,0 +1,1526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PointCast — Broadcast Yourself</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f2e8;
+    --ink: #1a1813;
+    --ink-soft: #4a463d;
+    --rule: #1a1813;
+    --warm: #c94d2c;
+    --soft: #c26a4a;
+    --paper-2: #efe9d9;
+    --paper-3: #e5ddc7;
+
+    --serif: "Lora", "Times New Roman", serif;
+    --sans: "Outfit", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+
+  html, body { margin: 0; padding: 0; background: #0a0908; }
+  body { font-family: var(--sans); color: var(--ink); }
+
+  deck-stage { background: #0a0908; }
+
+  section.slide {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 30px;
+    line-height: 1.35;
+    font-weight: 400;
+    overflow: hidden;
+  }
+
+  /* ── Shared primitives ─────────────────────────────────────────── */
+
+  .frame {
+    position: absolute;
+    inset: 56px;
+    border: 2px solid var(--ink);
+    box-sizing: border-box;
+  }
+  /* Corner dots — alternating warm + ink */
+  .frame::before, .frame::after,
+  .corner-dots > i {
+    content: "";
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+  }
+  .corner-dots { position: absolute; inset: 0; pointer-events: none; }
+  .corner-dots > i { position: absolute; }
+  .corner-dots > .tl { top: -7px; left: -7px; background: var(--warm); }
+  .corner-dots > .tr { top: -7px; right: -7px; background: var(--ink); }
+  .corner-dots > .bl { bottom: -7px; left: -7px; background: var(--ink); }
+  .corner-dots > .br { bottom: -7px; right: -7px; background: var(--warm); }
+
+  .masthead {
+    position: absolute;
+    top: 56px; left: 56px; right: 56px;
+    height: 64px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    font-family: var(--mono);
+    font-size: 18px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .masthead > * { white-space: nowrap; }
+  .masthead .left { display: flex; align-items: center; gap: 22px; }
+  .masthead .right { display: flex; align-items: center; gap: 22px; }
+  .masthead .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--warm);
+    display: inline-block;
+    box-shadow: 0 0 0 3px rgba(201,77,44,0.18);
+  }
+
+  .rule { border: 0; border-top: 2px solid var(--ink); margin: 0; }
+  .hair { border: 0; border-top: 1px solid var(--ink); margin: 0; opacity: 0.5; }
+
+  .kicker {
+    font-family: var(--mono);
+    font-size: 20px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .kicker .bullet { color: var(--warm); margin: 0 10px; }
+
+  .footer {
+    position: absolute;
+    left: 56px; right: 56px; bottom: 56px;
+    height: 48px;
+    border-top: 2px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    font-family: var(--mono);
+    font-size: 16px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .footer > * { white-space: nowrap; }
+  .footer .num {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .footer .num b { font-weight: 600; color: var(--warm); }
+
+  .onair {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 20px;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    background: var(--paper);
+    font-family: var(--mono);
+    font-size: 24px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .onair .pulse {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--warm);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(201,77,44,0.6); }
+    50%      { box-shadow: 0 0 0 8px rgba(201,77,44,0); }
+  }
+
+  .live {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--warm); color: var(--paper);
+    padding: 4px 10px;
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: 0.2em;
+  }
+  .live::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--paper);
+  }
+
+  /* ── Slide-specific content container ──────────────────────────── */
+  .content {
+    position: absolute;
+    left: 56px; right: 56px;
+    top: 120px;
+    bottom: 104px;
+    padding: 0 28px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .serif { font-family: var(--serif); }
+  .mono { font-family: var(--mono); }
+  .italic { font-style: italic; }
+  .warm { color: var(--warm); }
+  .soft { color: var(--soft); }
+  .ink-soft { color: var(--ink-soft); }
+
+  /* ── Slide 1 — Title ───────────────────────────────────────────── */
+  .s1 .mast-title {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 360px;
+    line-height: 0.86;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .s1 .mast-title .amp { font-style: italic; color: var(--warm); font-weight: 500; }
+  .s1 .sub {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 64px;
+    color: var(--ink-soft);
+    margin-top: 18px;
+  }
+  .s1 .strip {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 48px;
+    padding-top: 28px;
+    border-top: 2px solid var(--ink);
+  }
+  .s1 .strip .lhs { display: flex; align-items: center; gap: 22px; }
+  .s1 .broadcast {
+    position: absolute;
+    right: -40px; top: 50%;
+    transform: translateY(-50%);
+    width: 620px; height: 620px;
+    pointer-events: none;
+    opacity: 0.95;
+  }
+
+  /* Broadcast arcs svg styling — warm concentric */
+  .arcs circle { fill: none; stroke: var(--warm); stroke-width: 2; }
+  .arcs .dish { fill: var(--ink); }
+
+  /* ── Slide 2 — The problem ─────────────────────────────────────── */
+  .s2 .big {
+    font-family: var(--serif);
+    font-size: 128px;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+  .s2 .big em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s2 .cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+  }
+  .s2 .col {
+    padding: 28px 28px 28px 0;
+    border-right: 1px solid var(--ink);
+  }
+  .s2 .col:nth-child(2) { padding-left: 28px; }
+  .s2 .col:nth-child(3) { padding-left: 28px; border-right: 0; }
+  .s2 .col .n {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 60px;
+    color: var(--warm);
+    line-height: 1;
+  }
+  .s2 .col h3 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 34px;
+    margin: 14px 0 10px;
+    letter-spacing: -0.01em;
+  }
+  .s2 .col p {
+    font-size: 26px;
+    color: var(--ink-soft);
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  /* ── Slide 3 — What it is ──────────────────────────────────────── */
+  .s3 .layout {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 56px;
+    flex: 1;
+  }
+  .s3 h2 {
+    font-family: var(--serif);
+    font-size: 112px;
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    margin: 0;
+  }
+  .s3 h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s3 .lede {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 34px;
+    color: var(--ink-soft);
+    margin-top: 28px;
+    max-width: 820px;
+    line-height: 1.4;
+  }
+  .s3 .feed {
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    box-shadow: 12px 12px 0 0 var(--ink);
+    padding: 24px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .s3 .feed .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono);
+    font-size: 16px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .s3 .feed .entry { display: flex; gap: 18px; padding: 10px 0; border-bottom: 1px solid var(--ink); }
+  .s3 .feed .entry:last-child { border-bottom: 0; }
+  .s3 .feed .entry .date {
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--ink-soft);
+    letter-spacing: 0.1em;
+    padding-top: 6px;
+    width: 92px;
+    flex-shrink: 0;
+  }
+  .s3 .feed .entry h4 {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    line-height: 1.15;
+  }
+  .s3 .feed .entry p {
+    font-size: 19px;
+    margin: 0;
+    color: var(--ink-soft);
+    line-height: 1.35;
+  }
+  .s3 .feed .entry .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--warm);
+    margin-top: 4px;
+  }
+
+  /* ── Slide 4 — The Nouns ───────────────────────────────────────── */
+  .s4 .top {
+    display: grid; grid-template-columns: 1fr auto; gap: 40px;
+    align-items: end;
+    margin-bottom: 28px;
+  }
+  .s4 h2 {
+    font-family: var(--serif);
+    font-size: 120px;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    margin: 0;
+  }
+  .s4 h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s4 .lede {
+    font-family: var(--serif); font-style: italic;
+    font-size: 30px; color: var(--ink-soft);
+    max-width: 540px; margin: 0;
+    text-align: right;
+  }
+  .s4 .noun-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .s4 .noun {
+    aspect-ratio: 1 / 1;
+    border: 2px solid var(--ink);
+    background: var(--paper-2);
+    position: relative;
+    overflow: hidden;
+    image-rendering: pixelated;
+  }
+  .s4 .noun img {
+    width: 100%; height: 100%;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .s4 .noun .lbl {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 4px 8px;
+    background: var(--ink);
+    color: var(--paper);
+    letter-spacing: 0.1em;
+    display: flex; justify-content: space-between;
+  }
+  .s4 .meta-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    border-top: 2px solid var(--ink);
+    padding-top: 22px;
+    margin-top: 28px;
+  }
+  .s4 .meta-row .cell .k {
+    font-family: var(--mono);
+    font-size: 15px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .s4 .meta-row .cell .v {
+    font-family: var(--serif);
+    font-size: 34px;
+    line-height: 1.15;
+    margin-top: 6px;
+  }
+
+  /* ── Slide 5 — The Drum Room ───────────────────────────────────── */
+  .s5 .split {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 0;
+  }
+  .s5 .left {
+    padding: 0 56px 0 0;
+    border-right: 2px solid var(--ink);
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .s5 .right {
+    padding: 0 0 0 56px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .s5 h2 {
+    font-family: var(--serif);
+    font-size: 140px;
+    line-height: 0.9;
+    letter-spacing: -0.03em;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .s5 h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s5 .url {
+    font-family: var(--mono);
+    font-size: 28px;
+    letter-spacing: 0.08em;
+    margin-top: 22px;
+    padding-top: 22px;
+    border-top: 2px solid var(--ink);
+  }
+  .s5 .facts {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    margin-top: 24px;
+  }
+  .s5 .fact {
+    border: 2px solid var(--ink);
+    padding: 18px 20px;
+  }
+  .s5 .fact .n {
+    font-family: var(--serif); font-size: 60px;
+    font-weight: 600; line-height: 1;
+  }
+  .s5 .fact .n em { font-style: italic; color: var(--warm); }
+  .s5 .fact .l {
+    font-family: var(--mono); font-size: 15px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-soft); margin-top: 8px;
+  }
+  .s5 .drum {
+    width: 480px; height: 480px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 30%, var(--paper-2), var(--paper-3) 60%, var(--paper) 100%);
+    border: 2px solid var(--ink);
+    position: relative;
+    box-shadow: 16px 16px 0 0 var(--ink);
+  }
+  .s5 .drum::before {
+    content: ""; position: absolute; inset: 36px;
+    border: 2px dashed var(--ink); border-radius: 50%;
+    opacity: 0.45;
+  }
+  .s5 .drum::after {
+    content: ""; position: absolute; inset: 74px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--soft) 0%, var(--warm) 100%);
+    border: 2px solid var(--ink);
+    box-shadow: inset -10px -16px 0 rgba(26,24,19,0.12);
+  }
+  .s5 .drum-count {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--serif);
+    font-size: 96px;
+    font-weight: 700;
+    color: var(--paper);
+    z-index: 2;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 0 var(--ink);
+  }
+  .s5 .drum-label {
+    position: absolute;
+    bottom: 30px; left: 50%;
+    transform: translate(-50%, 0);
+    font-family: var(--mono); font-size: 14px;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--paper);
+    z-index: 2;
+  }
+  .s5 .tap {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 14px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink);
+    animation: float 2.6s ease-in-out infinite;
+  }
+  .s5 .tap.t1 { top: 12%; left: 66%; }
+  .s5 .tap.t2 { top: 38%; left: 12%; animation-delay: .6s; }
+  .s5 .tap.t3 { bottom: 16%; left: 62%; animation-delay: 1.2s; }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); opacity: 0.6; }
+    50%      { transform: translateY(-8px); opacity: 1; }
+  }
+
+  /* ── Slide 6 — Editorial blocks ────────────────────────────────── */
+  .s6 .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 0;
+    border-top: 2px solid var(--ink);
+    border-left: 2px solid var(--ink);
+  }
+  .s6 .cell {
+    border-right: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    padding: 22px 24px;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    min-height: 0;
+  }
+  .s6 .cell .no {
+    font-family: var(--mono);
+    font-size: 15px;
+    letter-spacing: 0.22em;
+    color: var(--ink-soft);
+  }
+  .s6 .cell h3 {
+    font-family: var(--serif);
+    font-size: 40px;
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    margin: 14px 0 8px;
+  }
+  .s6 .cell h3 em { font-style: italic; color: var(--warm); font-weight: 500; }
+  .s6 .cell p {
+    font-size: 19px;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.35;
+  }
+  .s6 .cell .tag {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--warm);
+    margin-top: 10px;
+  }
+  .s6 .cell.warm { background: var(--warm); color: var(--paper); }
+  .s6 .cell.warm .no, .s6 .cell.warm p { color: rgba(246,242,232,0.8); }
+  .s6 .cell.warm h3 em { color: var(--paper); }
+  .s6 .cell.warm .tag { color: var(--paper); }
+  .s6 .cell.paper2 { background: var(--paper-2); }
+  .s6 .cell.paper3 { background: var(--paper-3); }
+
+  /* ── Slide 7 — The tokens ──────────────────────────────────────── */
+  .s7 h2 {
+    font-family: var(--serif);
+    font-size: 120px;
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0 0 28px;
+  }
+  .s7 h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s7 .tokens {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .s7 .tok {
+    border: 2px solid var(--ink);
+    padding: 28px 28px 24px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    background: var(--paper);
+    position: relative;
+  }
+  .s7 .tok .ticker {
+    font-family: var(--serif);
+    font-size: 80px;
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+  }
+  .s7 .tok .ticker em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s7 .tok .sub {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 28px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+  }
+  .s7 .tok .specs { display: flex; flex-direction: column; gap: 6px; margin-top: 28px; }
+  .s7 .tok .spec {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    font-family: var(--mono);
+    font-size: 16px;
+    letter-spacing: 0.04em;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+  .s7 .tok .spec:last-child { border-bottom: 0; }
+  .s7 .tok .spec .k { color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.18em; font-size: 13px; flex-shrink: 0; }
+  .s7 .tok .spec .v { font-weight: 500; text-align: right; }
+  .s7 .tok .role {
+    position: absolute;
+    top: -14px; left: 22px;
+    font-family: var(--mono);
+    font-size: 14px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    background: var(--paper);
+    padding: 0 10px;
+    color: var(--warm);
+  }
+  .s7 .foot-note {
+    font-family: var(--mono);
+    font-size: 17px;
+    letter-spacing: 0.12em;
+    margin-top: 22px;
+    color: var(--ink-soft);
+  }
+
+  /* ── Slide 8 — The stack ───────────────────────────────────────── */
+  .s8 .layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: 56px;
+  }
+  .s8 h2 {
+    font-family: var(--serif);
+    font-size: 112px; line-height: 0.94;
+    font-weight: 500; letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .s8 h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s8 .note {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 30px;
+    color: var(--ink-soft);
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 2px solid var(--ink);
+    max-width: 520px;
+  }
+  .s8 .claude-card {
+    margin-top: 22px;
+    padding: 18px 22px;
+    border: 2px solid var(--ink);
+    background: var(--paper-2);
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 17px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .s8 .claude-card .pct {
+    font-family: var(--serif);
+    font-size: 54px; font-style: italic;
+    color: var(--warm);
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .s8 .layers {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .s8 .layer {
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    align-items: center;
+    gap: 24px;
+    border: 2px solid var(--ink);
+    padding: 18px 22px;
+    background: var(--paper);
+  }
+  .s8 .layer .lvl {
+    font-family: var(--mono);
+    font-size: 14px; letter-spacing: 0.22em;
+    color: var(--warm);
+    text-transform: uppercase;
+  }
+  .s8 .layer .name {
+    font-family: var(--serif);
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  .s8 .layer .name em { font-style: italic; color: var(--warm); font-weight: 500; }
+  .s8 .layer .tech {
+    font-family: var(--mono);
+    font-size: 16px;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    text-align: right;
+  }
+
+  /* ── Slide 9 — The numbers ─────────────────────────────────────── */
+  .s9 {
+    background: var(--paper);
+  }
+  .s9 .numbers {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+  }
+  .s9 .n {
+    padding: 40px 40px;
+    border-right: 2px solid var(--ink);
+    display: flex; flex-direction: column; justify-content: space-between;
+    position: relative;
+  }
+  .s9 .n:last-child { border-right: 0; }
+  .s9 .n .lbl {
+    font-family: var(--mono);
+    font-size: 18px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .s9 .n .fig {
+    font-family: var(--serif);
+    font-size: 220px;
+    line-height: 0.88;
+    letter-spacing: -0.04em;
+    font-weight: 700;
+    margin-top: 12px;
+    color: var(--ink);
+  }
+  .s9 .n .fig em {
+    font-style: italic;
+    color: var(--warm);
+    font-weight: 600;
+  }
+  .s9 .n .cap {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 28px;
+    color: var(--ink-soft);
+    margin-top: 18px;
+    max-width: 360px;
+    line-height: 1.3;
+  }
+  .s9 .header-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .s9 .header-row h2 {
+    font-family: var(--serif);
+    font-size: 88px; line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .s9 .header-row h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s9 .header-row .asof {
+    font-family: var(--mono);
+    font-size: 18px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  /* ── Slide 10 — What's next ────────────────────────────────────── */
+  .s10 h2 {
+    font-family: var(--serif);
+    font-size: 140px;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    margin: 0;
+  }
+  .s10 h2 em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s10 .roadmap {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-top: 28px;
+    border-top: 2px solid var(--ink);
+  }
+  .s10 .node {
+    padding: 24px 24px 0 24px;
+    border-right: 1px solid var(--ink);
+    position: relative;
+  }
+  .s10 .node:last-child { border-right: 0; }
+  .s10 .node::before {
+    content: "";
+    position: absolute;
+    top: -11px; left: 24px;
+    width: 20px; height: 20px;
+    background: var(--warm);
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+  }
+  .s10 .node .when {
+    font-family: var(--mono);
+    font-size: 15px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .s10 .node h3 {
+    font-family: var(--serif);
+    font-size: 42px;
+    line-height: 1.02;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 16px 0 8px;
+  }
+  .s10 .node h3 em { font-style: italic; color: var(--warm); font-weight: 500; }
+  .s10 .node p {
+    font-size: 21px;
+    color: var(--ink-soft);
+    line-height: 1.35;
+    margin: 0;
+  }
+  .s10 .cta {
+    margin-top: auto;
+    padding-top: 28px;
+    border-top: 2px solid var(--ink);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 28px;
+  }
+  .s10 .cta .verbs {
+    display: flex; align-items: center; gap: 22px;
+    font-family: var(--serif);
+    font-size: 56px;
+    letter-spacing: -0.01em;
+    font-weight: 500;
+  }
+  .s10 .cta .verbs em { font-style: italic; color: var(--warm); font-weight: 600; }
+  .s10 .cta .verbs .sep { color: var(--ink-soft); font-style: italic; font-weight: 400; }
+  .s10 .cta .handle {
+    font-family: var(--mono);
+    font-size: 22px;
+    letter-spacing: 0.14em;
+    padding: 12px 20px;
+    border: 2px solid var(--ink);
+    background: var(--warm);
+    color: var(--paper);
+  }
+
+  /* Hide broken img frames gracefully */
+  img { background: var(--paper-2); }
+</style>
+</head>
+<body>
+
+<deck-stage width="1920" height="1080">
+
+  <!-- ─────────────────────── 1 · TITLE ─────────────────────── -->
+  <section class="slide s1" data-label="PointCast">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left">
+        <span class="dot"></span>
+        <span>Vol. 01 · No. 01</span>
+      </div>
+      <div>A Personal Broadcast</div>
+      <div class="right">
+        <span>April MMXXVI</span>
+      </div>
+    </div>
+
+    <div class="content" style="justify-content: center; padding-top: 40px;">
+      <div style="display:flex; align-items:center; gap: 24px; margin-bottom: 20px;">
+        <span class="onair"><span class="pulse"></span>On Air</span>
+        <span class="mono" style="font-size: 24px; letter-spacing: 0.2em;">— EST. 2026</span>
+      </div>
+      <h1 class="mast-title">
+        Point<span class="amp">·</span>Cast
+      </h1>
+      <div class="sub">Broadcast Yourself.</div>
+      <div class="s1 strip" style="margin-top: 56px;">
+        <div class="lhs">
+          <span class="mono" style="font-size: 24px; letter-spacing: 0.2em; white-space: nowrap;">POINTCAST.XYZ</span>
+          <span class="mono ink-soft" style="font-size: 20px; letter-spacing: 0.2em; white-space: nowrap;">·  ART · MUSIC · NOUNS · TEZOS</span>
+        </div>
+        <div class="mono" style="font-size: 20px; letter-spacing: 0.2em; white-space: nowrap;">📡 SIGNAL STRONG</div>
+      </div>
+    </div>
+
+    <!-- Broadcast arcs, top-right -->
+    <svg class="broadcast arcs" viewBox="0 0 600 600">
+      <g transform="translate(300 300)">
+        <circle r="70"  opacity="0.9"/>
+        <circle r="140" opacity="0.7"/>
+        <circle r="210" opacity="0.5"/>
+        <circle r="280" opacity="0.3"/>
+        <!-- satellite dish -->
+        <g transform="translate(0 0)">
+          <path class="dish" d="M -28 -6 L 28 -6 L 36 22 L -36 22 Z" fill="#1a1813"/>
+          <rect x="-3" y="-40" width="6" height="36" fill="#1a1813"/>
+          <circle cx="0" cy="-44" r="8" fill="#c94d2c" stroke="#1a1813" stroke-width="2"/>
+        </g>
+      </g>
+    </svg>
+
+    <div class="footer">
+      <span class="num">PAGE <b>01</b> / 10</span>
+      <span>PointCast — Vol. 01</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 2 · THE PROBLEM ─────────────────────── -->
+  <section class="slide s2" data-label="The Problem">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>02 · The Problem</span></div>
+      <div>PointCast — Vol. 01</div>
+      <div class="right"><span>Section A</span></div>
+    </div>
+
+    <div class="content">
+      <div class="kicker">Dispatch<span class="bullet">●</span>Why bother</div>
+      <div class="big" style="margin-top: 28px;">
+        Social media is <em>flattening.</em><br>
+        Platforms <em>eat</em> what you publish.<br>
+        Art becomes <em>“content.”</em>
+      </div>
+
+      <div class="cols" style="margin-top: auto;">
+        <div class="col">
+          <div class="n">i.</div>
+          <h3>The feed is a blender.</h3>
+          <p>Every post is reformatted into the same 1:1 square, the same algorithmic rhythm.</p>
+        </div>
+        <div class="col">
+          <div class="n">ii.</div>
+          <h3>Platforms keep the keys.</h3>
+          <p>Your audience, your reach, your archive — rented from someone else's server.</p>
+        </div>
+        <div class="col">
+          <div class="n">iii.</div>
+          <h3>Art is renamed “content.”</h3>
+          <p>A song, a painting, a joke — all flattened into the same unit of attention.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>02</b> / 10</span>
+      <span>THE PROBLEM</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 3 · THE IDEA ─────────────────────── -->
+  <section class="slide s3" data-label="The Idea">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>03 · The Idea</span></div>
+      <div>A PERSONAL BROADCAST</div>
+      <div class="right"><span>Section A</span></div>
+    </div>
+
+    <div class="content">
+      <div class="kicker">Signal<span class="bullet">●</span>Newspaper-shaped</div>
+      <div class="layout" style="margin-top: 22px;">
+        <div>
+          <h2>A home page<br>that acts like a <em>station.</em></h2>
+          <div class="lede">
+            One human, one collaborator (Claude), one daily signal — set in a newspaper-shaped feed
+            you actually own.
+          </div>
+          <div style="margin-top: 38px; display:flex; flex-direction: column; gap: 14px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.1em;">
+            <div>→ Personal, not performative.</div>
+            <div>→ Editorial, not algorithmic.</div>
+            <div>→ Owned, not rented.</div>
+          </div>
+        </div>
+
+        <div class="feed">
+          <div class="bar">
+            <span>Today's Broadcast</span>
+            <span class="live">LIVE</span>
+          </div>
+          <div class="entry">
+            <div class="date">APR · 17</div>
+            <div>
+              <h4>Drum Room crosses 100k taps</h4>
+              <p>Global kick counter hit six figures overnight. Tezos mint queued.</p>
+              <span class="tag">Drum · Music</span>
+            </div>
+          </div>
+          <div class="entry">
+            <div class="date">APR · 16</div>
+            <div>
+              <h4>Violent Crimes — Nouns-synth edit</h4>
+              <p>A Kanye mash, rebuilt as an 8-bar loop, rendered through a pixel visualiser.</p>
+              <span class="tag">Art · Music</span>
+            </div>
+          </div>
+          <div class="entry">
+            <div class="date">APR · 15</div>
+            <div>
+              <h4>Pickleball dispatch, week 12</h4>
+              <p>Notes from the court. New paddle. Still losing to my neighbor.</p>
+              <span class="tag">Field notes</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>03</b> / 10</span>
+      <span>THE IDEA</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 4 · THE NOUNS ─────────────────────── -->
+  <section class="slide s4" data-label="The Nouns">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>04 · The Nouns</span></div>
+      <div>ONE NOUN PER VISITOR</div>
+      <div class="right"><span>Section B</span></div>
+    </div>
+
+    <div class="content">
+      <div class="top">
+        <div>
+          <div class="kicker" style="margin-bottom: 18px;">Visitor<span class="bullet">●</span>Identity</div>
+          <h2>Every reader gets<br>a <em>Noun.</em></h2>
+        </div>
+        <p class="lede">
+          Assigned on arrival, deterministic from the wallet or session.
+          The masthead is different for everyone.
+        </p>
+      </div>
+
+      <div class="noun-grid">
+        <div class="noun"><img src="nouns/42.svg" alt=""><div class="lbl"><span>#042</span><span>GLASSES</span></div></div>
+        <div class="noun"><img src="nouns/127.svg" alt=""><div class="lbl"><span>#127</span><span>HAT</span></div></div>
+        <div class="noun"><img src="nouns/272.svg" alt=""><div class="lbl"><span>#272</span><span>LOGO</span></div></div>
+        <div class="noun"><img src="nouns/455.svg" alt=""><div class="lbl"><span>#455</span><span>ORB</span></div></div>
+        <div class="noun"><img src="nouns/567.svg" alt=""><div class="lbl"><span>#567</span><span>VIS</span></div></div>
+        <div class="noun"><img src="nouns/672.svg" alt=""><div class="lbl"><span>#672</span><span>HAT</span></div></div>
+        <div class="noun"><img src="nouns/787.svg" alt=""><div class="lbl"><span>#787</span><span>BAND</span></div></div>
+        <div class="noun"><img src="nouns/901.svg" alt=""><div class="lbl"><span>#901</span><span>CROWN</span></div></div>
+        <div class="noun"><img src="nouns/1024.svg" alt=""><div class="lbl"><span>#1024</span><span>CAP</span></div></div>
+      </div>
+
+      <div class="meta-row">
+        <div class="cell">
+          <div class="k">Source</div>
+          <div class="v">noun.pics · CC0 pixel canon</div>
+        </div>
+        <div class="cell">
+          <div class="k">Assignment</div>
+          <div class="v">Deterministic per visitor</div>
+        </div>
+        <div class="cell">
+          <div class="k">Purpose</div>
+          <div class="v">Signed guestbook, shared vocabulary</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>04</b> / 10</span>
+      <span>THE NOUNS</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 5 · THE DRUM ROOM ─────────────────────── -->
+  <section class="slide s5" data-label="The Drum Room">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>05 · The Drum Room</span></div>
+      <div>MULTIPLAYER PERCUSSION</div>
+      <div class="right"><span>Section B</span></div>
+    </div>
+
+    <div class="content">
+      <div class="split">
+        <div class="left">
+          <div>
+            <div class="kicker" style="margin-bottom: 14px;">Room<span class="bullet">●</span>Live</div>
+            <h2>The Drum <em>Room.</em></h2>
+            <div class="url">→ pointcast.xyz/drum</div>
+          </div>
+
+          <div class="facts">
+            <div class="fact">
+              <div class="n">1 <em>tap</em></div>
+              <div class="l">Bumps the global count</div>
+            </div>
+            <div class="fact">
+              <div class="n">∞ <em>players</em></div>
+              <div class="l">All in one room</div>
+            </div>
+            <div class="fact">
+              <div class="n">DRUM</div>
+              <div class="l">Tezos token, soon</div>
+            </div>
+            <div class="fact">
+              <div class="n">&lt;50ms</div>
+              <div class="l">Hit → heard, globally</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="right">
+          <div class="drum">
+            <div class="drum-count">104,221</div>
+            <div class="drum-label">GLOBAL TAPS</div>
+          </div>
+          <span class="tap t1">◦ tap</span>
+          <span class="tap t2">◦ tap</span>
+          <span class="tap t3">◦ tap</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>05</b> / 10</span>
+      <span>THE DRUM ROOM</span>
+      <span>pointcast.xyz/drum</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 6 · EDITORIAL BLOCKS ─────────────────────── -->
+  <section class="slide s6" data-label="Editorial Blocks">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>06 · Editorial Blocks</span></div>
+      <div>EIGHT SELF-CONTAINED DISPATCHES</div>
+      <div class="right"><span>Section C</span></div>
+    </div>
+
+    <div class="content" style="padding: 0 28px;">
+      <div class="kicker" style="margin-bottom: 18px;">Front page<span class="bullet">●</span>Eight blocks</div>
+
+      <div class="grid">
+        <div class="cell">
+          <div class="no">I. FIELD</div>
+          <div>
+            <h3>Baseball</h3>
+            <p>Box scores, bad takes, the slow season.</p>
+          </div>
+          <div class="tag">Sport</div>
+        </div>
+        <div class="cell paper2">
+          <div class="no">II. FIELD</div>
+          <div>
+            <h3>Basketball</h3>
+            <p>Late-game rotations, shot-chart obsessions.</p>
+          </div>
+          <div class="tag">Sport</div>
+        </div>
+        <div class="cell warm">
+          <div class="no">III. COURT</div>
+          <div>
+            <h3>Pickleball</h3>
+            <p>America's fastest-growing <em>beef.</em></p>
+          </div>
+          <div class="tag">Weekly</div>
+        </div>
+        <div class="cell paper3">
+          <div class="no">IV. GEAR</div>
+          <div>
+            <h3>Paddle</h3>
+            <p>A growing log of paddles, grips, and regrets.</p>
+          </div>
+          <div class="tag">Log</div>
+        </div>
+        <div class="cell paper3">
+          <div class="no">V. REMEDY</div>
+          <div>
+            <h3>Tiger Balm</h3>
+            <p>Unsolicited testimony. Apply generously.</p>
+          </div>
+          <div class="tag">Essay</div>
+        </div>
+        <div class="cell warm">
+          <div class="no">VI. ARCH</div>
+          <div>
+            <h3>Lautner</h3>
+            <p>Notes on concrete, glass, and <em>LA skies.</em></p>
+          </div>
+          <div class="tag">Archive</div>
+        </div>
+        <div class="cell paper2">
+          <div class="no">VII. AUDIO</div>
+          <div>
+            <h3>Violent Crimes</h3>
+            <p>Kanye, re-scored through a Nouns-synth.</p>
+          </div>
+          <div class="tag">Edit</div>
+        </div>
+        <div class="cell">
+          <div class="no">VIII. TOOL</div>
+          <div>
+            <h3>Nouns Generator v2</h3>
+            <p>A browser-native Noun factory. Seed → SVG → mint.</p>
+          </div>
+          <div class="tag">Release</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>06</b> / 10</span>
+      <span>EDITORIAL BLOCKS</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 7 · THE TOKENS ─────────────────────── -->
+  <section class="slide s7" data-label="The Tokens">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>07 · The Tokens</span></div>
+      <div>ON-CHAIN LAYER — TEZOS</div>
+      <div class="right"><span>Section D</span></div>
+    </div>
+
+    <div class="content">
+      <div class="kicker" style="margin-bottom: 14px;">On chain<span class="bullet">●</span>SmartPy v0.24.1</div>
+      <h2>Three <em>instruments.</em><br>One station.</h2>
+
+      <div class="tokens">
+        <div class="tok">
+          <div class="role">Collectible</div>
+          <div>
+            <div class="ticker">Visit<br><em>Nouns</em></div>
+            <div class="sub">A Noun per visitor, signed.</div>
+          </div>
+          <div class="specs">
+            <div class="spec"><span class="k">STANDARD</span><span class="v">FA2</span></div>
+            <div class="spec"><span class="k">CHAIN</span><span class="v">Tezos</span></div>
+            <div class="spec"><span class="k">SUPPLY</span><span class="v">Unbounded</span></div>
+            <div class="spec"><span class="k">MINT</span><span class="v">On arrival</span></div>
+          </div>
+        </div>
+
+        <div class="tok">
+          <div class="role">Utility</div>
+          <div>
+            <div class="ticker"><em>$</em>DRUM</div>
+            <div class="sub">One tap, one unit.</div>
+          </div>
+          <div class="specs">
+            <div class="spec"><span class="k">STANDARD</span><span class="v">FA1.2</span></div>
+            <div class="spec"><span class="k">CHAIN</span><span class="v">Tezos</span></div>
+            <div class="spec"><span class="k">SUPPLY</span><span class="v">Tap-minted</span></div>
+            <div class="spec"><span class="k">SOURCE</span><span class="v">Drum Room</span></div>
+          </div>
+        </div>
+
+        <div class="tok">
+          <div class="role">Bazaar</div>
+          <div>
+            <div class="ticker">Market<em>·</em><br>place</div>
+            <div class="sub">Collect the station.</div>
+          </div>
+          <div class="specs">
+            <div class="spec"><span class="k">TYPE</span><span class="v">Fixed + Auction</span></div>
+            <div class="spec"><span class="k">FEES</span><span class="v">Artist-first</span></div>
+            <div class="spec"><span class="k">ROYALTY</span><span class="v">On-chain</span></div>
+            <div class="spec"><span class="k">STATUS</span><span class="v">Shipping</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot-note">
+        BUILT WITH SMARTPY v0.24.1  ·  DEPLOYED TO GHOSTNET  ·  MAINNET Q3
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>07</b> / 10</span>
+      <span>THE TOKENS</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 8 · THE STACK ─────────────────────── -->
+  <section class="slide s8" data-label="The Stack">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>08 · The Stack</span></div>
+      <div>ENGINEERING NOTES</div>
+      <div class="right"><span>Section D</span></div>
+    </div>
+
+    <div class="content">
+      <div class="layout">
+        <div style="display:flex; flex-direction: column;">
+          <div class="kicker" style="margin-bottom: 16px;">Under the hood<span class="bullet">●</span>Static-first</div>
+          <h2>Small pieces,<br>loosely <em>joined.</em></h2>
+          <p class="note">
+            Static at the edge, dynamic where it matters. No framework lock-in, no platform
+            rent — just a site that happens to talk to a blockchain.
+          </p>
+          <div class="claude-card">
+            <span>Built <em style="color: var(--warm); font-style: italic;">with</em> Claude</span>
+            <span class="pct">~100%</span>
+            <span>Pair-prog'd</span>
+          </div>
+        </div>
+
+        <div class="layers">
+          <div class="layer">
+            <div class="lvl">01 · EDGE</div>
+            <div class="name">Astro static site<br><em>Cloudflare Pages Fns + KV</em></div>
+            <div class="tech">astro@4 · pages-fns · KV</div>
+          </div>
+          <div class="layer">
+            <div class="lvl">02 · SOCIAL</div>
+            <div class="name">Farcaster Frame +<br><em>Mini App</em> on /drum</div>
+            <div class="tech">frame-sdk · mini-app</div>
+          </div>
+          <div class="layer">
+            <div class="lvl">03 · CHAIN</div>
+            <div class="name">Beacon SDK<br><em>pinned + SRI</em></div>
+            <div class="tech">beacon@4 · SRI hash</div>
+          </div>
+          <div class="layer">
+            <div class="lvl">04 · CONTRACT</div>
+            <div class="name">SmartPy contracts<br><em>FA2 · FA1.2</em></div>
+            <div class="tech">smartpy@0.24.1</div>
+          </div>
+          <div class="layer">
+            <div class="lvl">05 · REALTIME</div>
+            <div class="name">Drum counter<br><em>Durable KV</em> + WS fallback</div>
+            <div class="tech">cf-kv · ws</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>08</b> / 10</span>
+      <span>THE STACK</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 9 · THE NUMBERS ─────────────────────── -->
+  <section class="slide s9" data-label="The Numbers">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>09 · The Numbers</span></div>
+      <div>READINGS FROM THE STATION</div>
+      <div class="right"><span>Section E</span></div>
+    </div>
+
+    <div class="content">
+      <div class="header-row">
+        <h2>Early <em>signal.</em></h2>
+        <span class="asof">AS OF APR · 17 · 2026</span>
+      </div>
+
+      <div style="display:flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 18px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 18px; white-space: nowrap;">
+        <span>◦  SOURCE: POINTCAST LOGS</span>
+        <span>◦  REPLACE WITH LIVE FEED</span>
+        <span>◦  UPDATED DAILY</span>
+      </div>
+
+      <div class="numbers">
+        <div class="n">
+          <div>
+            <div class="lbl">I. DRUMS</div>
+            <div class="fig">104<em>k</em></div>
+          </div>
+          <div class="cap">Global taps since launch. Every tap bumps the counter.</div>
+        </div>
+        <div class="n">
+          <div>
+            <div class="lbl">II. VISITORS</div>
+            <div class="fig">12<em>.4k</em></div>
+          </div>
+          <div class="cap">Unique arrivals. Each one handed their own Noun.</div>
+        </div>
+        <div class="n">
+          <div>
+            <div class="lbl">III. NOUNS SEEN</div>
+            <div class="fig">9,812</div>
+          </div>
+          <div class="cap">Distinct Nouns rendered. Combinatorial masthead.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>09</b> / 10</span>
+      <span>THE NUMBERS</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── 10 · WHAT'S NEXT ─────────────────────── -->
+  <section class="slide s10" data-label="What's Next">
+    <div class="frame"></div>
+    <div class="corner-dots"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+    <div class="masthead">
+      <div class="left"><span class="dot"></span><span>10 · What's Next</span></div>
+      <div>TRANSMISSION CONTINUES</div>
+      <div class="right"><span>Section F</span></div>
+    </div>
+
+    <div class="content">
+      <div class="kicker" style="margin-bottom: 14px;">Coming soon<span class="bullet">●</span>Stay tuned</div>
+      <h2>What's <em>next.</em></h2>
+
+      <div class="roadmap">
+        <div class="node">
+          <div class="when">Q2 · 2026</div>
+          <h3>Mini <em>Apps</em></h3>
+          <p>Every block becomes a standalone Farcaster mini-app.</p>
+        </div>
+        <div class="node">
+          <div class="when">Q3 · 2026</div>
+          <h3>Zora Coin <em>on Base</em></h3>
+          <p>Multi-chain identity. Coin of the station, on a second rail.</p>
+        </div>
+        <div class="node">
+          <div class="when">Q3 · 2026</div>
+          <h3>El Segundo <em>Community TV</em></h3>
+          <p>Local cable, reimagined. Neighborhood as newsroom.</p>
+        </div>
+        <div class="node">
+          <div class="when">Q4 · 2026</div>
+          <h3>Physical <em>Noun prints</em></h3>
+          <p>Risograph, signed + numbered, mailed to collectors.</p>
+        </div>
+      </div>
+
+      <div class="cta">
+        <div class="verbs">
+          <em>Visit.</em><span class="sep">·</span>
+          <em>Drum.</em><span class="sep">·</span>
+          <em>Collect.</em><span class="sep">·</span>
+          <em>Cast.</em>
+        </div>
+        <div class="handle">@mhoydich</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="num">PAGE <b>10</b> / 10</span>
+      <span>WHAT'S NEXT</span>
+      <span>pointcast.xyz</span>
+    </div>
+  </section>
+
+</deck-stage>
+
+<script type="application/json" id="speaker-notes">
+[
+"Welcome. This is PointCast — a personal broadcast at the intersection of art, music, and on-chain Tezos tokens, built with Claude. Think of it as a radio station one person runs out of their living room — except the living room is a website, and everyone who tunes in gets handed their own mascot at the door. Ten slides. I'll move fast.",
+
+"Let me start with why this exists. Social media is flattening. You make something — a song, a painting, a weird little essay — and the platform reshapes it into the same unit of attention as everything else. Platforms eat what you publish. Your audience, your archive, your reach — all rented. And somewhere along the way, art stopped being called art and started being called content. PointCast is my small, stubborn attempt to push back on that.",
+
+"So what is it. PointCast is a personal broadcast, shaped like a newspaper. One human — me — and one collaborator — Claude. A daily signal. It's not a feed that optimizes for engagement; it's a front page that I curate. On the right you're seeing a rough mockup — each entry is editorial, each with a tag, each with breathing room. The point isn't to post more. The point is to publish.",
+
+"Every visitor to PointCast is assigned a Noun. Nouns are a CC0 pixel-art canon from the Nouns DAO — glasses, a body, an accessory, a background. On PointCast, the assignment is deterministic — your wallet or session maps to a specific Noun, and that becomes your handle. The masthead of the site is literally different for every person who arrives. Nine Nouns here, pulled live from noun-dot-pics. It's a guestbook, a shared vocabulary, and — eventually — a collectible.",
+
+"The Drum Room is the flagship toy. It lives at pointcast.xyz slash drum. You tap — on a keyboard, on a phone, inside a Farcaster frame — and a single global counter goes up by one. That's it. That's the whole mechanic. It's multiplayer percussion — everyone's hitting the same drum, all the time. Under 50 milliseconds from hit to heard. The DRUM token is coming to Tezos soon, and every tap will mint one unit.",
+
+"PointCast is built from eight self-contained editorial blocks. Baseball, basketball, pickleball — the sports beat. Paddle — a running log of equipment. Tiger Balm — a surprisingly popular essay. Lautner — architecture archive, concrete and LA skies. Violent Crimes — a Kanye mash rescored through a Nouns-synth. And the Nouns Generator v2 — a browser-native Noun factory. Each block is its own little newsroom. Some will become mini apps, some will stay as posts.",
+
+"Three instruments on one station. Visit Nouns is an FA2 token on Tezos — the collectible you get when you show up. DRUM is an FA1.2 utility token — one tap, one unit. And the Marketplace is the bazaar where the station's output gets collected — fixed-price and auction, artist-first splits, on-chain royalties. All of it built in SmartPy version zero-point-twenty-four-point-one. Deployed on Ghostnet now; mainnet in Q3.",
+
+"The stack is boring in the best way. Astro static site at the edge on Cloudflare Pages, with Pages Functions plus KV where things need to be dynamic — like the Drum counter. Farcaster Frame and Mini App on slash drum, so you can play without leaving your feed. Beacon SDK for the Tezos wallet handshake — pinned version with SRI, because supply-chain hygiene matters. And almost all of this was pair-programmed with Claude. I'm not exaggerating the one hundred percent — Claude wrote, I directed.",
+
+"Early readings. These are placeholders — your live dashboard will replace them — but they tell the shape of the thing. A hundred thousand drum taps. Twelve and a half thousand visitors. Nearly ten thousand distinct Nouns rendered across the station. Small numbers by platform standards, but every one of them is a person who showed up to a website someone actually made. That matters to me.",
+
+"What's next. Q2, every editorial block becomes its own Farcaster mini app. Q3, a Zora coin launches on Base — multi-chain identity, because Tezos shouldn't be the only rail. Also Q3, El Segundo community TV — a local cable-TV experiment, neighborhood as newsroom. Q4, physical Noun prints — risograph, signed and numbered, mailed to collectors. If you want to help shape any of this: visit, drum, collect, cast. I'm at m-h-o-y-d-i-c-h on Farcaster. Thanks for tuning in."
+]
+</script>
+<script src="deck-stage.js"></script>
+</body>
+</html>

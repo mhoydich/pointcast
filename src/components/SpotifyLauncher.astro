@@ -1,0 +1,108 @@
+---
+/**
+ * SpotifyLauncher — drop-in Spotify embed that matches PointCast's warm editorial frame.
+ *
+ * Usage:
+ *   <SpotifyLauncher url="https://open.spotify.com/track/..." />
+ *   <SpotifyLauncher url="https://open.spotify.com/playlist/..." caption="Why this one." />
+ *   <SpotifyLauncher url="..." variant="full" />
+ *
+ * Accepts any Spotify share URL (track / playlist / album / artist / episode / show).
+ * The `?si=` tracker is stripped automatically. `variant` defaults to 'compact' for
+ * tracks + episodes and 'full' for everything else. `caption` renders a short
+ * companion note under the player (serif italic, ink-soft).
+ */
+
+interface Props {
+  url: string;
+  variant?: 'compact' | 'full' | 'auto';
+  caption?: string;
+  title?: string;
+}
+
+const { url, variant = 'auto', caption, title } = Astro.props;
+
+// Parse a Spotify URL into { type, id }. Returns null on unrecognized input.
+function parseSpotify(input: string): { type: string; id: string } | null {
+  try {
+    const u = new URL(input);
+    if (!/(^|\.)spotify\.com$/i.test(u.hostname)) return null;
+    const parts = u.pathname.split('/').filter(Boolean);
+    // Handle /embed/{type}/{id} and /{type}/{id} and /intl-xx/{type}/{id}
+    const idx = parts.findIndex(p => ['track', 'playlist', 'album', 'artist', 'episode', 'show'].includes(p));
+    if (idx < 0 || !parts[idx + 1]) return null;
+    return { type: parts[idx], id: parts[idx + 1] };
+  } catch {
+    return null;
+  }
+}
+
+const parsed = parseSpotify(url);
+const resolvedVariant: 'compact' | 'full' =
+  variant === 'auto'
+    ? (parsed && (parsed.type === 'track' || parsed.type === 'episode') ? 'compact' : 'full')
+    : variant;
+const height = resolvedVariant === 'compact' ? 80 : 352;
+
+const embedSrc = parsed
+  ? `https://open.spotify.com/embed/${parsed.type}/${parsed.id}?utm_source=generator`
+  : null;
+
+const kickerLabel = parsed
+  ? `Currently Spinning · ${parsed.type}`
+  : 'Currently Spinning';
+---
+
+<figure class="spotify-launcher my-6">
+  <div class="flex items-center gap-3 mb-2">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <span class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      {kickerLabel}
+    </span>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  {embedSrc ? (
+    <div class="rounded-xl border border-rule/30 bg-card overflow-hidden">
+      <iframe
+        src={embedSrc}
+        width="100%"
+        height={height}
+        frameborder="0"
+        loading="lazy"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        title={title || `Spotify ${parsed!.type}`}
+        style="display: block;"
+      ></iframe>
+    </div>
+  ) : (
+    <div class="rounded-xl border border-rule/30 bg-card p-4 text-center">
+      <p class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-ink-soft/60 mb-2">
+        Embed unavailable
+      </p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener"
+        class="text-warm font-mono text-[0.62rem] tracking-[0.18em] uppercase hover:underline"
+      >
+        Open in Spotify &nearr;
+      </a>
+    </div>
+  )}
+
+  {caption && (
+    <figcaption class="mt-3 font-serif italic text-[0.88rem] text-ink-soft leading-snug">
+      {caption}
+    </figcaption>
+  )}
+
+  <a
+    href={url}
+    target="_blank"
+    rel="noopener"
+    class="inline-flex items-center gap-1 mt-2 text-ink-soft/50 hover:text-warm font-mono text-[0.54rem] tracking-[0.18em] uppercase transition-colors"
+  >
+    Open in Spotify &nearr;
+  </a>
+</figure>

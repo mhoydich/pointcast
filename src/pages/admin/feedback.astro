@@ -1,0 +1,157 @@
+---
+/**
+ * /admin/feedback — token-gated feedback inbox viewer for Mike.
+ *
+ * Usage:
+ *   1. In Cloudflare Pages: `npx wrangler pages secret put ADMIN_TOKEN`
+ *      Enter a random token. Save it somewhere.
+ *   2. Visit https://pointcast.xyz/admin/feedback?token=<that token>
+ *   3. See feedback entries newest-first with mood, message, contact,
+ *      city, and sent-at timestamp.
+ *
+ * The page renders empty until the token is supplied; all data fetching
+ * happens client-side against /api/feedback-list, which rejects 401 if
+ * the token doesn't match the ADMIN_TOKEN secret.
+ */
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Feedback · Admin" description="PointCast feedback inbox">
+  <div class="max-w-[52rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-6">
+      <div class="flex items-center gap-3">
+        <a href="/" class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline">
+          PointCast
+        </a>
+        <span class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm">
+          / admin / feedback
+        </span>
+      </div>
+    </div>
+
+    <header class="mb-6">
+      <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm mb-2">
+        admin · feedback inbox
+      </p>
+      <h1 class="font-serif italic text-[1.8rem] md:text-[2.2rem] text-ink font-medium leading-[1.1] mb-2">
+        Feedback
+      </h1>
+      <p class="text-[0.88rem] text-ink/70">
+        Token-gated. Paste your <code class="font-mono">ADMIN_TOKEN</code> to load. Entries are stored 30 days.
+      </p>
+    </header>
+
+    <!-- Token input -->
+    <div class="mb-6 flex flex-wrap items-end gap-2">
+      <label class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-ink-soft/60 w-full md:w-auto">
+        admin token
+      </label>
+      <input
+        id="token-input"
+        type="password"
+        placeholder="paste token here"
+        class="flex-1 min-w-[10rem] px-2 py-1.5 rounded-sm border border-rule/40 bg-card font-mono text-[0.78rem] text-ink focus:border-warm focus:outline-none"
+      />
+      <button
+        id="load-btn"
+        type="button"
+        class="px-3 py-1.5 rounded-sm bg-ink text-paper font-mono text-[0.58rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer"
+      >Load →</button>
+    </div>
+
+    <p id="status" class="font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink-soft/60 min-h-[0.9rem] mb-4"></p>
+
+    <!-- Inbox list -->
+    <div id="inbox" class="space-y-3"></div>
+  </div>
+</BaseLayout>
+
+<script>
+  const tokenInput = document.getElementById('token-input') as HTMLInputElement | null;
+  const loadBtn = document.getElementById('load-btn') as HTMLButtonElement | null;
+  const statusEl = document.getElementById('status');
+  const inboxEl = document.getElementById('inbox');
+
+  const MOOD_EMOJI: Record<string, string> = {
+    loving: '🥰',
+    impressed: '🤯',
+    confused: '🤔',
+    annoyed: '😤',
+    broken: '🔨',
+  };
+
+  function esc(s: unknown): string {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]!));
+  }
+
+  function fmtTime(t: number): string {
+    try {
+      return new Date(t).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+    } catch { return '—'; }
+  }
+
+  async function load(token: string) {
+    if (!statusEl || !inboxEl) return;
+    statusEl.textContent = 'loading…';
+    inboxEl.innerHTML = '';
+    try {
+      const r = await fetch(`/api/feedback-list?token=${encodeURIComponent(token)}`);
+      if (r.status === 401) {
+        statusEl.textContent = 'unauthorized · check token';
+        return;
+      }
+      if (!r.ok) {
+        statusEl.textContent = `error · http ${r.status}`;
+        return;
+      }
+      const data = await r.json();
+      const entries = Array.isArray(data.entries) ? data.entries : [];
+      statusEl.textContent = `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · newest first`;
+      if (entries.length === 0) {
+        inboxEl.innerHTML = `<p class="font-serif italic text-ink-soft/60">No feedback yet.</p>`;
+        return;
+      }
+      inboxEl.innerHTML = entries.map((e: any) => {
+        const locBits = [e.city, e.region, e.country].filter(Boolean).join(', ');
+        const mood = e.mood && MOOD_EMOJI[e.mood] ? `${MOOD_EMOJI[e.mood]} ${e.mood}` : '';
+        return `
+          <article class="p-3 md:p-4 rounded-md border border-rule/40 bg-card/60">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <span class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-warm">
+                ${esc(mood || '—')}
+              </span>
+              <span class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/55">
+                ${esc(fmtTime(e.t))} · ${esc(locBits || '—')}
+              </span>
+            </div>
+            <p class="text-[0.95rem] text-ink leading-relaxed whitespace-pre-wrap mb-2">${esc(e.message)}</p>
+            ${e.contact ? `<p class="font-mono text-[0.52rem] tracking-[0.16em] uppercase text-ink-soft/60">contact · ${esc(e.contact)}</p>` : ''}
+            ${e.path ? `<p class="font-mono text-[0.48rem] tracking-[0.14em] uppercase text-ink-soft/40 mt-1">path · ${esc(e.path)}</p>` : ''}
+          </article>
+        `;
+      }).join('');
+    } catch (err) {
+      statusEl.textContent = `error · ${(err as any)?.message ?? 'unknown'}`;
+    }
+  }
+
+  // Auto-load from URL ?token=...
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  if (urlToken && tokenInput) {
+    tokenInput.value = urlToken;
+    load(urlToken);
+  }
+  loadBtn?.addEventListener('click', () => {
+    const t = tokenInput?.value ?? '';
+    if (t) load(t);
+  });
+  tokenInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadBtn?.click();
+  });
+</script>

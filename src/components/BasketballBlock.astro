@@ -1,0 +1,297 @@
+---
+/**
+ * BasketballBlock — Mike's NBA corner, self-contained (no external links).
+ *
+ * Expandable cards. Default: city + name + today's game + take.
+ * Expanded: conference rank + record + last 5 W/L strip + next 3 games.
+ *
+ * Data source: NBA's public liveData CDN (no key, CORS open):
+ *   https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json
+ *   https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json (season schedule)
+ *   https://cdn.nba.com/static/json/staticData/standings.json (not always fresh)
+ *
+ * No <a> tags to nba.com — per "don't link off" direction.
+ */
+
+const TEAMS = [
+  {
+    code: 'LAL', id: 1610612747, name: 'Lakers', city: 'Los Angeles',
+    colors: { primary: '#552583', accent: '#FDB927' },
+    take: 'Purple, gold, LeBron still threading passes in year 23.',
+  },
+  {
+    code: 'NYK', id: 1610612752, name: 'Knicks', city: 'New York',
+    colors: { primary: '#F58426', accent: '#006BB6' },
+    take: 'MSG is loudest when Brunson is cooking.',
+  },
+] as const;
+---
+
+<section class="mt-10 mb-8" id="basketball">
+  <div class="flex items-center gap-3 mb-3">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      Basketball &middot; <span class="text-warm">tap to expand</span>
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    {TEAMS.map((t) => (
+      <button
+        type="button"
+        class="nba-card group relative rounded-xl border-2 border-ink/80 overflow-hidden p-4 text-left transition-all hover:-translate-y-0.5 w-full bg-card text-ink"
+        style={`border-top: 8px solid ${t.colors.primary};`}
+        data-nba-team
+        data-team-id={t.id}
+        data-team-code={t.code}
+        aria-expanded="false"
+      >
+        <p class="font-mono text-[0.5rem] tracking-[0.22em] uppercase mb-0.5 font-bold" style={`color: ${t.colors.primary};`}>
+          {t.city}
+        </p>
+        <h3 class="font-heading text-[1.6rem] leading-none mb-2 text-ink">
+          {t.name}
+        </h3>
+        <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/80 min-h-[1.2rem]" data-nba-status>
+          loading&hellip;
+        </p>
+        <p class="font-serif italic text-[0.85rem] leading-snug mt-2 text-ink/85">
+          {t.take}
+        </p>
+
+        <div class="nba-expanded hidden mt-3 pt-3 border-t border-ink/20 space-y-2" data-nba-expanded>
+          <div class="flex items-center justify-between gap-3">
+            <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/60">Season</p>
+            <p class="font-mono text-[0.66rem] tabular-nums text-ink" data-nba-record>\u2014</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1">Last 5</p>
+            <div class="flex gap-1" data-nba-last5>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+            </div>
+          </div>
+          <div>
+            <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1">Next 3</p>
+            <ul class="space-y-0.5 font-mono text-[0.58rem] tracking-[0.08em] text-ink" data-nba-next3>
+              <li class="opacity-50">\u2014</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="font-mono text-[0.46rem] tracking-[0.18em] uppercase text-ink-soft/50 mt-3 nba-expand-hint">
+          tap for record &middot; last 5 &middot; next 3
+        </p>
+      </button>
+    ))}
+  </div>
+</section>
+
+<script>
+  type NbaGame = {
+    gameStatus?: number;
+    gameStatusText?: string;
+    period?: number;
+    gameClock?: string;
+    gameEt?: string;
+    gameDateEst?: string;
+    homeTeam?: { teamId?: number; teamTricode?: string; score?: number; wins?: number; losses?: number };
+    awayTeam?: { teamId?: number; teamTricode?: string; score?: number; wins?: number; losses?: number };
+  };
+  type ScoreboardResp = { scoreboard?: { games?: NbaGame[] } };
+
+  function fmtTime(iso?: string): string {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    } catch { return iso; }
+  }
+  function fmtDate(iso?: string): string {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch { return iso; }
+  }
+
+  async function getScoreboard(): Promise<NbaGame[]> {
+    try {
+      const res = await fetch('https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const data: ScoreboardResp = await res.json();
+      return data.scoreboard?.games ?? [];
+    } catch { return []; }
+  }
+
+  async function getSeasonSchedule(): Promise<any[]> {
+    try {
+      const res = await fetch('https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data?.leagueSchedule?.gameDates ?? [];
+    } catch { return []; }
+  }
+
+  async function hydrateStatus(card: HTMLElement, games: NbaGame[]): Promise<void> {
+    const statusEl = card.querySelector('[data-nba-status]') as HTMLElement | null;
+    if (!statusEl) return;
+    const code = card.dataset.teamCode;
+    const g = games.find((g) => g.homeTeam?.teamTricode === code || g.awayTeam?.teamTricode === code);
+    if (!g) {
+      statusEl.textContent = 'no game today';
+      statusEl.style.opacity = '0.5';
+      return;
+    }
+    const isHome = g.homeTeam?.teamTricode === code;
+    const us = isHome ? g.homeTeam : g.awayTeam;
+    const them = isHome ? g.awayTeam : g.homeTeam;
+    const vsLabel = `${isHome ? 'vs' : '@'} ${them?.teamTricode ?? '\u2014'}`;
+    const s = g.gameStatus;
+    if (s === 2) {
+      const q = g.period ?? 0;
+      const clk = g.gameClock ?? '';
+      statusEl.textContent = `LIVE Q${q} ${clk} \u00B7 ${us?.score ?? 0}\u2013${them?.score ?? 0} ${vsLabel}`;
+    } else if (s === 3) {
+      const ours = us?.score ?? 0;
+      const theirs = them?.score ?? 0;
+      const result = ours > theirs ? 'W' : 'L';
+      statusEl.textContent = `FINAL ${result} \u00B7 ${ours}\u2013${theirs} ${vsLabel}`;
+    } else {
+      statusEl.textContent = `${fmtTime(g.gameEt)} ${vsLabel}`;
+    }
+  }
+
+  async function hydrateExpanded(card: HTMLElement, schedule: any[], liveGames: NbaGame[]): Promise<void> {
+    const teamId = Number(card.dataset.teamId);
+    const code = card.dataset.teamCode;
+    if (!teamId) return;
+
+    // Walk season schedule to extract this team's games w/ statuses
+    const myGames: Array<{
+      date: string;
+      status: number;
+      isHome: boolean;
+      themCode: string;
+      myScore?: number;
+      theirScore?: number;
+    }> = [];
+
+    schedule.forEach((day: any) => {
+      (day.games ?? []).forEach((g: any) => {
+        if (g.homeTeam?.teamId === teamId || g.awayTeam?.teamId === teamId) {
+          const isHome = g.homeTeam?.teamId === teamId;
+          const me = isHome ? g.homeTeam : g.awayTeam;
+          const them = isHome ? g.awayTeam : g.homeTeam;
+          myGames.push({
+            date: g.gameDateEst ?? day.gameDate ?? '',
+            status: g.gameStatus ?? 1,
+            isHome,
+            themCode: them?.teamTricode ?? '\u2014',
+            myScore: me?.score,
+            theirScore: them?.score,
+          });
+        }
+      });
+    });
+
+    // Sort chronological
+    myGames.sort((a, b) => (a.date > b.date ? 1 : -1));
+
+    // Record (from the last finished game's W/L record, if available)
+    const recordEl = card.querySelector('[data-nba-record]') as HTMLElement | null;
+    if (recordEl) {
+      // Pull W/L from today's scoreboard if present, which is fresher than schedule data.
+      const today = liveGames.find((g) => g.homeTeam?.teamId === teamId || g.awayTeam?.teamId === teamId);
+      const me = today ? (today.homeTeam?.teamId === teamId ? today.homeTeam : today.awayTeam) : null;
+      if (me && typeof me.wins === 'number' && typeof me.losses === 'number') {
+        recordEl.textContent = `${me.wins}\u2013${me.losses}`;
+      } else {
+        // fallback: count wins + losses from completed schedule games
+        const finals = myGames.filter((g) => g.status === 3);
+        const w = finals.filter((g) => (g.myScore ?? 0) > (g.theirScore ?? 0)).length;
+        const l = finals.length - w;
+        recordEl.textContent = finals.length > 0 ? `${w}\u2013${l}` : 'offseason';
+        if (finals.length === 0) recordEl.style.opacity = '0.5';
+      }
+    }
+
+    // Last 5
+    const last5El = card.querySelector('[data-nba-last5]') as HTMLElement | null;
+    if (last5El) {
+      const last5 = myGames.filter((g) => g.status === 3).slice(-5);
+      last5El.innerHTML = '';
+      if (last5.length === 0) {
+        for (let i = 0; i < 5; i++) {
+          const s = document.createElement('span');
+          s.className = 'w-6 h-6 rounded bg-current/10 flex items-center justify-center font-mono text-[0.52rem] opacity-30';
+          s.textContent = '\u2014';
+          last5El.appendChild(s);
+        }
+      } else {
+        last5.forEach((g) => {
+          const won = (g.myScore ?? 0) > (g.theirScore ?? 0);
+          const s = document.createElement('span');
+          s.className = `w-6 h-6 rounded flex items-center justify-center font-mono text-[0.56rem] font-bold ${won ? 'bg-current/25' : 'bg-current/10'}`;
+          s.textContent = won ? 'W' : 'L';
+          last5El.appendChild(s);
+        });
+      }
+    }
+
+    // Next 3
+    const next3El = card.querySelector('[data-nba-next3]') as HTMLElement | null;
+    if (next3El) {
+      const upcoming = myGames.filter((g) => g.status === 1).slice(0, 3);
+      next3El.innerHTML = '';
+      if (upcoming.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'opacity-50';
+        li.textContent = 'no upcoming games';
+        next3El.appendChild(li);
+      } else {
+        upcoming.forEach((g) => {
+          const li = document.createElement('li');
+          li.className = 'flex justify-between gap-2';
+          const d = document.createElement('span');
+          d.className = 'opacity-70';
+          d.textContent = fmtDate(g.date);
+          const s = document.createElement('span');
+          s.textContent = `${g.isHome ? 'vs' : '@'} ${g.themCode}`;
+          li.appendChild(d);
+          li.appendChild(s);
+          next3El.appendChild(li);
+        });
+      }
+    }
+  }
+
+  (async () => {
+    const cards = document.querySelectorAll<HTMLElement>('[data-nba-team]');
+    if (cards.length === 0) return;
+    const liveGames = await getScoreboard();
+    cards.forEach((card) => hydrateStatus(card, liveGames));
+
+    let schedule: any[] | null = null;
+    cards.forEach((card) => {
+      let hydrated = false;
+      card.addEventListener('click', async () => {
+        const expanded = card.querySelector('[data-nba-expanded]') as HTMLElement | null;
+        const hint = card.querySelector('.nba-expand-hint') as HTMLElement | null;
+        if (!expanded) return;
+        const nowOpen = expanded.classList.toggle('hidden') === false;
+        card.setAttribute('aria-expanded', String(nowOpen));
+        if (hint) hint.textContent = nowOpen ? 'tap to close' : 'tap for record \u00B7 last 5 \u00B7 next 3';
+        if (nowOpen && !hydrated) {
+          hydrated = true;
+          if (!schedule) schedule = await getSeasonSchedule();
+          hydrateExpanded(card, schedule, liveGames);
+        }
+      });
+    });
+  })();
+</script>

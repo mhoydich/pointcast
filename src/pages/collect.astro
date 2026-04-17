@@ -1,0 +1,185 @@
+---
+/**
+ * /collect — the PointCast marketplace.
+ *
+ * Shows Mike's full Tezos token inventory (pulled from objkt GraphQL into
+ * src/data/market.json by scripts/fetch-market.mjs). Each card links to
+ * a token detail page at /collect/[tokenId].
+ *
+ * No live API calls at render time — everything's baked from the cached
+ * snapshot. Re-run `node scripts/fetch-market.mjs` when inventory changes.
+ */
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import market from '../data/market.json';
+
+const { tokens, updatedAt, count } = market as {
+  updatedAt: string;
+  contract: string;
+  count: number;
+  tokens: Array<{
+    tokenId: string;
+    contract: string;
+    name: string;
+    description: string;
+    imageDisplay: string;
+    imageThumb: string;
+    supply: number;
+    mintedAt: string | null;
+    artist: { alias: string; address: string };
+    priceXtz: number | null;
+    listed: boolean;
+    objktUrl: string;
+  }>;
+};
+
+const listedTokens = tokens.filter((t) => t.listed);
+const listedCount = listedTokens.length;
+
+function fmtPrice(xtz: number | null): string {
+  if (xtz === null) return '';
+  if (xtz === 0) return 'free';
+  if (xtz < 1) return `${xtz.toFixed(2)} ꜩ`;
+  return `${xtz.toFixed(1)} ꜩ`;
+}
+
+function fmtSupply(s: number): string {
+  if (s >= 1000) return `${(s / 1000).toFixed(s % 1000 === 0 ? 0 : 1)}k`;
+  return String(s);
+}
+
+const updatedStr = new Date(updatedAt).toLocaleDateString('en-US', {
+  month: 'short', day: 'numeric', year: 'numeric',
+}).toUpperCase();
+---
+
+<BaseLayout
+  title="Collect"
+  description="Collect PointCast tokens on Tezos. CC0-flavored editorial art, broadcast cards, and visit nouns — mint directly with your Kukai wallet."
+  image="/images/og-collect.png"
+>
+  <div class="max-w-[60rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+
+    <!-- Masthead band — same treatment as homepage, plus wallet -->
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-4">
+      <div class="flex items-center gap-3">
+        <a href="/" class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline">
+          PointCast
+        </a>
+        <span class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm">/ collect</span>
+      </div>
+      <WalletConnect />
+    </div>
+
+    <!-- Page header -->
+    <header class="mb-10">
+      <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
+        <div>
+          <h1 class="font-serif italic text-[2.2rem] md:text-[2.8rem] text-ink font-medium leading-[1.05] mb-2">
+            Collect
+          </h1>
+          <p class="text-[0.95rem] text-ink/70 leading-relaxed max-w-[36rem]">
+            Editorial art on Tezos. Photographs, writing, signature moments.
+            All minted to one FA2 contract — connect a Kukai wallet and the
+            mint signs on-chain in a few seconds. Gas: fractions of a tez.
+          </p>
+        </div>
+        <div class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/60 leading-relaxed text-right shrink-0">
+          <p>{count} tokens · {listedCount} listed</p>
+          <p class="mt-1">updated {updatedStr}</p>
+        </div>
+      </div>
+
+      <!-- Kukai helper line for first-timers -->
+      <p class="font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/50 border-t border-rule/30 pt-4">
+        new to tezos? grab
+        <a href="https://wallet.kukai.app" target="_blank" rel="noopener" class="text-warm hover:underline">kukai wallet</a>
+        &middot; fund it with ~5 ꜩ via any exchange (kraken, bitvavo, etc.)
+        &middot; you're in.
+      </p>
+    </header>
+
+    <!-- Token grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {tokens.map((t) => (
+        <a
+          href={`/collect/${t.tokenId}`}
+          class="group flex flex-col rounded-xl overflow-hidden border border-rule/30 bg-card hover:bg-card-hover hover:border-warm/40 transition-colors"
+        >
+          <div class="aspect-square bg-paper overflow-hidden relative">
+            <img
+              src={t.imageThumb || t.imageDisplay}
+              alt={t.name}
+              class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300 token-img"
+              loading="lazy"
+              data-fallback={t.imageDisplay.replace('/display', '/artifact')}
+            />
+            <!-- Subtle inset rule so light-on-paper artworks have a visible frame -->
+            <div class="absolute inset-0 ring-1 ring-inset ring-rule/50 pointer-events-none"></div>
+          </div>
+          <div class="p-4">
+            <div class="flex items-start justify-between gap-3 mb-1">
+              <h3 class="font-serif italic text-[1.05rem] text-ink leading-tight group-hover:text-warm transition-colors">
+                {t.name}
+              </h3>
+              {t.listed && t.priceXtz !== null && (
+                <span class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-warm shrink-0 pt-1">
+                  {fmtPrice(t.priceXtz)}
+                </span>
+              )}
+            </div>
+            <p class="font-mono text-[0.52rem] tracking-[0.16em] uppercase text-ink-soft/60 mb-2">
+              #{t.tokenId} &middot; {fmtSupply(t.supply)} editions
+              {t.listed ? ' · listed' : ' · unlisted'}
+            </p>
+            {t.description && (
+              <p class="text-[0.85rem] text-ink-soft/80 leading-snug line-clamp-2">
+                {t.description}
+              </p>
+            )}
+          </div>
+        </a>
+      ))}
+    </div>
+
+    <!-- Contract footer -->
+    <footer class="mt-16 pt-6 border-t border-rule/40">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/50">
+        <div>
+          contract:
+          <a
+            href={`https://tzkt.io/${market.contract}/operations`}
+            target="_blank"
+            rel="noopener"
+            class="hover:text-warm transition-colors break-all"
+          >
+            {market.contract}
+          </a>
+        </div>
+        <a href="/" class="hover:text-warm transition-colors">&larr; back to broadcast</a>
+      </div>
+    </footer>
+
+  </div>
+</BaseLayout>
+
+<script>
+  // Fallback to the /artifact CDN variant if /display 404s on any tile.
+  document.querySelectorAll<HTMLImageElement>('img.token-img').forEach((img) => {
+    img.addEventListener('error', () => {
+      const fallback = img.dataset.fallback;
+      if (fallback && img.src !== fallback) img.src = fallback;
+    }, { once: true });
+  });
+</script>
+
+<style>
+  /* Tailwind v4 doesn't ship line-clamp utilities by default here */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

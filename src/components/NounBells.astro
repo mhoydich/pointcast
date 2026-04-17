@@ -1,0 +1,118 @@
+---
+/**
+ * NounBells — a playable grid of 24 uniquely-tuned nouns.
+ *
+ * Each tile taps to a distinct chime (via src/lib/chimes.ts — same synth
+ * as the presence strip + modal + drum room, so the whole site sounds
+ * coherent). Rapid-tap for rhythms; the pentatonic constraint means any
+ * two tiles always harmonize.
+ *
+ * The 24 IDs are picked at build time from the full 0–1199 range, so each
+ * deploy rotates the voicing of the instrument while staying stable for
+ * the visit. Add/remove rows by bumping `rows × cols` below.
+ *
+ * Taps broadcast via /api/sounds so other visitors with "hear others" on
+ * hear the same bell a few seconds later — distributed gong.
+ */
+
+const rows = 3;
+const cols = 8;
+const count = rows * cols;
+
+// Stratified pick — slice the full ID range into `count` buckets and pick
+// one from each. Guarantees the grid spans the full tonal palette rather
+// than clustering by accident.
+const stride = Math.floor(1200 / count);
+const bellNounIds: number[] = [];
+for (let i = 0; i < count; i++) {
+  const lo = i * stride;
+  const hi = Math.min(1199, lo + stride - 1);
+  bellNounIds.push(lo + Math.floor(Math.random() * (hi - lo + 1)));
+}
+---
+
+<section class="mt-12 mb-10" id="noun-bells">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      <span class="text-warm/70">05</span> &middot; Noun Bells
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/55 text-center mb-5">
+    each noun sings its own note &middot; tap to play &middot; rapid-fire for a rhythm
+  </p>
+
+  <!-- Block-y frame — doubled thick rule so the instrument reads as a
+       discrete object ("a bell rack") not just a decorative grid. -->
+  <div class="relative rounded-xl overflow-hidden border-2 border-ink/80 bg-card p-3 md:p-4">
+    <!-- Midcentury corner blocks echoing the footer + Spotify + Weather -->
+    <div class="absolute top-0 left-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+    <div class="absolute top-0 right-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 left-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+
+    <!-- Static Tailwind classes so JIT can see them. If you change rows*cols
+         remember to update these to match (dynamic template strings get
+         stripped during build and render unclassed). -->
+    <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5 md:gap-2">
+      {bellNounIds.map((id) => (
+        <button
+          type="button"
+          class="noun-bell group relative block p-0 border-0 bg-paper/60 rounded-md overflow-hidden cursor-pointer transition-all duration-75 ease-out ring-1 ring-rule/30 hover:ring-warm/60 active:scale-90"
+          data-bell-noun={id}
+          aria-label={`Play noun ${id}`}
+        >
+          <img
+            src={`https://noun.pics/${id}.svg`}
+            alt=""
+            aria-hidden="true"
+            width="72"
+            height="72"
+            class="block w-full aspect-square"
+            style="image-rendering: pixelated;"
+            loading="lazy"
+          />
+          <span class="absolute inset-0 ring-0 group-active:ring-2 ring-warm/80 rounded-md pointer-events-none transition-all"></span>
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/40 text-center mt-3">
+    24 voices &middot; pentatonic &middot; shared across the room
+  </p>
+</section>
+
+<script>
+  /**
+   * NounBells client — lightweight wrapper over src/lib/chimes.ts.
+   * Every tap plays the noun's signature + broadcasts to /api/sounds so
+   * other visitors hear it too (respect the hear-others toggle).
+   */
+  import { playNounVoice, broadcastSound } from '../lib/chimes';
+
+  // Brief scale-pulse feedback so rapid taps feel percussive even in
+  // browsers where the CSS :active state doesn't hold long enough.
+  function pulse(el: HTMLElement) {
+    el.style.transition = 'transform 70ms ease-out';
+    el.style.transform = 'scale(0.9)';
+    setTimeout(() => {
+      el.style.transform = 'scale(1.05)';
+      setTimeout(() => { el.style.transform = ''; }, 80);
+    }, 60);
+  }
+
+  // Delegated handler — one listener, every bell routes through it. Works
+  // even if we re-render the grid later.
+  const bellsSection = document.getElementById('noun-bells');
+  bellsSection?.addEventListener('pointerdown', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('.noun-bell');
+    if (!btn) return;
+    const id = Number(btn.dataset.bellNoun ?? 0);
+    playNounVoice(id);
+    broadcastSound('profile', id);
+    pulse(btn);
+  });
+</script>

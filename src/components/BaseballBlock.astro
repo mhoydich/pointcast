@@ -1,0 +1,319 @@
+---
+/**
+ * BaseballBlock — Mike's MLB corner, self-contained (no external links).
+ *
+ * Each team is a collapsible card. Default state shows city + name +
+ * today's game status + Mike's take. Tap-to-expand reveals:
+ *   - Division rank + record + games back
+ *   - Last 5 games as a W/L strip
+ *   - Next 3 scheduled games (date + opponent)
+ *   - Season highlight stat
+ *
+ * All data fetched from MLB's public StatsAPI (no key, CORS open):
+ *   https://statsapi.mlb.com/api/v1/schedule
+ *   https://statsapi.mlb.com/api/v1/standings
+ *
+ * Intentional design: NO <a> tags to mlb.com — per Mike's "don't link off"
+ * direction. The block is the destination, not a gateway.
+ */
+
+const TEAMS = [
+  {
+    code: 'LAD', id: 119, name: 'Dodgers', city: 'Los Angeles',
+    colors: { primary: '#005A9C', accent: '#FFFFFF' },
+    take: 'Ohtani in blue still doesn\u2019t feel real.',
+    divisionId: 203,  // NL West
+  },
+  {
+    code: 'NYM', id: 121, name: 'Mets', city: 'New York',
+    colors: { primary: '#002D72', accent: '#FF5910' },
+    take: 'Citi Field apple. Cohen\u2019s checkbook era.',
+    divisionId: 204,  // NL East
+  },
+  {
+    code: 'NYY', id: 147, name: 'Yankees', city: 'New York',
+    colors: { primary: '#132448', accent: '#C4CED4' },
+    take: 'Pinstripes, 27 rings, nothing to explain.',
+    divisionId: 201,  // AL East
+  },
+] as const;
+---
+
+<section class="mt-10 mb-8" id="baseball">
+  <div class="flex items-center gap-3 mb-3">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      Baseball &middot; <span class="text-warm">tap to expand</span>
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" id="baseball-teams">
+    {TEAMS.map((t) => (
+      <button
+        type="button"
+        class="mlb-card group relative rounded-xl border-2 border-ink/80 overflow-hidden p-4 text-left transition-all hover:-translate-y-0.5 w-full bg-card text-ink"
+        style={`border-top: 8px solid ${t.colors.primary};`}
+        data-mlb-team
+        data-team-id={t.id}
+        data-team-code={t.code}
+        data-division-id={t.divisionId}
+        aria-expanded="false"
+      >
+        <p class="font-mono text-[0.5rem] tracking-[0.22em] uppercase mb-0.5 font-bold" style={`color: ${t.colors.primary};`}>
+          {t.city}
+        </p>
+        <h3 class="font-heading text-[1.6rem] leading-none mb-2 text-ink">
+          {t.name}
+        </h3>
+        <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/80 min-h-[1.2rem]" data-mlb-status>
+          loading today&rsquo;s game&hellip;
+        </p>
+        <p class="font-serif italic text-[0.85rem] leading-snug mt-2 text-ink/85">
+          {t.take}
+        </p>
+
+        <!-- Expanded content — hidden until clicked. Populated on first expand. -->
+        <div class="mlb-expanded hidden mt-3 pt-3 border-t border-ink/20 space-y-2" data-mlb-expanded>
+          <div class="flex items-center justify-between gap-3">
+            <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/60">Division</p>
+            <p class="font-mono text-[0.66rem] tabular-nums text-ink" data-mlb-standing>—</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1">Last 5</p>
+            <div class="flex gap-1" data-mlb-last5>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+              <span class="w-6 h-6 rounded bg-ink/10"></span>
+            </div>
+          </div>
+          <div>
+            <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1">Next 3</p>
+            <ul class="space-y-0.5 font-mono text-[0.58rem] tracking-[0.08em] text-ink" data-mlb-next3>
+              <li class="opacity-50">—</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="font-mono text-[0.46rem] tracking-[0.18em] uppercase text-ink-soft/50 mt-3 mlb-expand-hint">
+          tap for standings &middot; streak &middot; next 3
+        </p>
+      </button>
+    ))}
+  </div>
+</section>
+
+<script>
+  type ScheduleGame = {
+    gameDate?: string;
+    status?: { abstractGameState?: string; detailedState?: string };
+    teams?: {
+      home?: { team?: { id?: number; abbreviation?: string; name?: string }; score?: number };
+      away?: { team?: { id?: number; abbreviation?: string; name?: string }; score?: number };
+    };
+    linescore?: { currentInning?: number; inningHalf?: string };
+  };
+  type ScheduleResp = { dates?: Array<{ games?: ScheduleGame[] }> };
+  type StandingsResp = {
+    records?: Array<{
+      division?: { id?: number };
+      teamRecords?: Array<{
+        team?: { id?: number };
+        divisionRank?: string;
+        wins?: number;
+        losses?: number;
+        gamesBack?: string;
+      }>;
+    }>;
+  };
+
+  function fmtTime(iso: string): string {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    } catch { return iso; }
+  }
+  function fmtDate(iso: string): string {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch { return iso; }
+  }
+  function ymd(offset = 0): string {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  async function hydrateStatus(card: HTMLElement): Promise<void> {
+    const statusEl = card.querySelector('[data-mlb-status]') as HTMLElement | null;
+    if (!statusEl) return;
+    const teamId = Number(card.dataset.teamId);
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&date=${ymd(0)}`;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const data: ScheduleResp = await res.json();
+      const games = data.dates?.[0]?.games ?? [];
+      if (games.length === 0) {
+        statusEl.textContent = 'no game today';
+        statusEl.style.opacity = '0.5';
+        return;
+      }
+      const g = games[0];
+      const isHome = g.teams?.home?.team?.id === teamId;
+      const us = isHome ? g.teams?.home : g.teams?.away;
+      const them = isHome ? g.teams?.away : g.teams?.home;
+      const vsLabel = `${isHome ? 'vs' : '@'} ${them?.team?.abbreviation ?? '\u2014'}`;
+      const state = g.status?.abstractGameState ?? '';
+      if (state === 'Live') {
+        const inning = g.linescore?.currentInning ?? '';
+        const half = g.linescore?.inningHalf ?? '';
+        const arrow = half?.toLowerCase() === 'top' ? '\u25B2' : '\u25BC';
+        statusEl.textContent = `LIVE \u00B7 ${us?.score ?? 0}\u2013${them?.score ?? 0} ${vsLabel} \u00B7 ${arrow}${inning}`;
+      } else if (state === 'Final') {
+        const ours = us?.score ?? 0;
+        const theirs = them?.score ?? 0;
+        const result = ours > theirs ? 'W' : ours < theirs ? 'L' : 'T';
+        statusEl.textContent = `FINAL ${result} \u00B7 ${ours}\u2013${theirs} ${vsLabel}`;
+      } else {
+        statusEl.textContent = `${fmtTime(g.gameDate ?? '')} ${vsLabel}`;
+      }
+    } catch {
+      statusEl.textContent = 'live data offline';
+      statusEl.style.opacity = '0.5';
+    }
+  }
+
+  async function hydrateExpanded(card: HTMLElement): Promise<void> {
+    const teamId = Number(card.dataset.teamId);
+    const divisionId = Number(card.dataset.divisionId);
+
+    // 1) Standings — division rank + record + games back
+    const standingEl = card.querySelector('[data-mlb-standing]') as HTMLElement | null;
+    if (standingEl) {
+      try {
+        const url = `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&standingType=regularSeason`;
+        const res = await fetch(url, { cache: 'no-store' });
+        const data: StandingsResp = await res.json();
+        const division = (data.records ?? []).find((r) => r.division?.id === divisionId);
+        const team = division?.teamRecords?.find((t) => t.team?.id === teamId);
+        if (team) {
+          const rank = team.divisionRank ?? '-';
+          const w = team.wins ?? 0;
+          const l = team.losses ?? 0;
+          const gb = team.gamesBack && team.gamesBack !== '-' ? ` \u00B7 ${team.gamesBack} GB` : '';
+          standingEl.textContent = `#${rank} \u00B7 ${w}\u2013${l}${gb}`;
+        } else {
+          standingEl.textContent = 'season not started';
+          standingEl.style.opacity = '0.5';
+        }
+      } catch {
+        standingEl.textContent = 'standings offline';
+        standingEl.style.opacity = '0.5';
+      }
+    }
+
+    // 2) Last 5 games — W/L strip
+    const last5El = card.querySelector('[data-mlb-last5]') as HTMLElement | null;
+    if (last5El) {
+      try {
+        const endDate = ymd(-1);
+        const startDate = ymd(-21);  // look back 3 weeks to find last 5 completed games
+        const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${startDate}&endDate=${endDate}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        const data: ScheduleResp = await res.json();
+        const finals: Array<{ w: boolean }> = [];
+        (data.dates ?? []).forEach((d) => {
+          (d.games ?? []).forEach((g) => {
+            if (g.status?.abstractGameState === 'Final') {
+              const isHome = g.teams?.home?.team?.id === teamId;
+              const us = isHome ? g.teams?.home : g.teams?.away;
+              const them = isHome ? g.teams?.away : g.teams?.home;
+              finals.push({ w: (us?.score ?? 0) > (them?.score ?? 0) });
+            }
+          });
+        });
+        const last5 = finals.slice(-5);
+        last5El.innerHTML = '';
+        if (last5.length === 0) {
+          for (let i = 0; i < 5; i++) {
+            const s = document.createElement('span');
+            s.className = 'w-6 h-6 rounded bg-current/10 flex items-center justify-center font-mono text-[0.52rem] opacity-30';
+            s.textContent = '\u2014';
+            last5El.appendChild(s);
+          }
+        } else {
+          last5.forEach((g) => {
+            const s = document.createElement('span');
+            s.className = `w-6 h-6 rounded flex items-center justify-center font-mono text-[0.56rem] font-bold ${g.w ? 'bg-current/25' : 'bg-current/10'}`;
+            s.textContent = g.w ? 'W' : 'L';
+            last5El.appendChild(s);
+          });
+        }
+      } catch {}
+    }
+
+    // 3) Next 3 scheduled games
+    const next3El = card.querySelector('[data-mlb-next3]') as HTMLElement | null;
+    if (next3El) {
+      try {
+        const startDate = ymd(0);
+        const endDate = ymd(14);
+        const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${startDate}&endDate=${endDate}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        const data: ScheduleResp = await res.json();
+        const next: ScheduleGame[] = [];
+        (data.dates ?? []).forEach((d) => {
+          (d.games ?? []).forEach((g) => {
+            if (g.status?.abstractGameState === 'Preview') next.push(g);
+          });
+        });
+        const upto3 = next.slice(0, 3);
+        next3El.innerHTML = '';
+        if (upto3.length === 0) {
+          const li = document.createElement('li');
+          li.className = 'opacity-50';
+          li.textContent = 'no upcoming games';
+          next3El.appendChild(li);
+        } else {
+          upto3.forEach((g) => {
+            const isHome = g.teams?.home?.team?.id === teamId;
+            const them = isHome ? g.teams?.away : g.teams?.home;
+            const li = document.createElement('li');
+            li.className = 'flex justify-between gap-2';
+            const d = document.createElement('span');
+            d.className = 'opacity-70';
+            d.textContent = fmtDate(g.gameDate ?? '');
+            const s = document.createElement('span');
+            s.textContent = `${isHome ? 'vs' : '@'} ${them?.team?.abbreviation ?? '\u2014'}`;
+            li.appendChild(d);
+            li.appendChild(s);
+            next3El.appendChild(li);
+          });
+        }
+      } catch {}
+    }
+  }
+
+  // Wire up: hydrate status immediately; hydrate extras on first expand.
+  document.querySelectorAll<HTMLElement>('[data-mlb-team]').forEach((card) => {
+    hydrateStatus(card);
+    let hydrated = false;
+    card.addEventListener('click', () => {
+      const expanded = card.querySelector('[data-mlb-expanded]') as HTMLElement | null;
+      const hint = card.querySelector('.mlb-expand-hint') as HTMLElement | null;
+      if (!expanded) return;
+      const open = expanded.classList.toggle('hidden');
+      const isOpen = !open; // toggle returns new state of hidden
+      card.setAttribute('aria-expanded', String(isOpen));
+      if (hint) hint.textContent = isOpen ? 'tap to close' : 'tap for standings \u00B7 streak \u00B7 next 3';
+      if (isOpen && !hydrated) {
+        hydrated = true;
+        hydrateExpanded(card);
+      }
+    });
+  });
+</script>

@@ -1,0 +1,277 @@
+---
+/**
+ * ShareCardButton.astro — PointCast Share-Card Drop-in Component
+ *
+ * Usage:
+ *   <ShareCardButton
+ *     type="user_milestone"
+ *     title="You just hit 100 drums!"
+ *     stat="100"
+ *     subtitle="Keep the beat going."
+ *     date="Apr 17, 2026"
+ *     label="Share"
+ *   />
+ *
+ * For mint receipts with Noun art:
+ *   <ShareCardButton
+ *     type="mint_receipt"
+ *     title="You minted Visit Noun"
+ *     stat="342"
+ *     noun-id="342"
+ *     date="Apr 17, 2026"
+ *     label="Share Mint"
+ *   />
+ *
+ * Props:
+ *   type        — EventType (required)
+ *   title       — Card headline (required)
+ *   stat        — Hero number/stat (required)
+ *   subtitle    — Supporting text (optional)
+ *   noun-id     — Noun ID for mint receipt art (optional)
+ *   date        — Date label shown in watermark (optional)
+ *   meta-*      — Any prop prefixed meta- becomes a meta key/value pair
+ *   label       — Button text (default: "Share")
+ *
+ * The component renders a <share-card-button> custom element that
+ * hydrates itself from data-* attributes. No framework required.
+ *
+ * Prerequisites:
+ *   - Copy share-card.ts and share-card-presets.ts into your src/lib/
+ *   - Import this component where needed
+ *   - The inline <script> below handles all client-side logic
+ */
+
+export interface Props {
+  type: "user_milestone" | "mint_receipt" | "leaderboard" | "platform_milestone" | "weekly_recap";
+  title: string;
+  stat: string;
+  subtitle?: string;
+  "noun-id"?: number | string;
+  date?: string;
+  label?: string;
+  class?: string;
+  [key: `meta-${string}`]: string;
+}
+
+const {
+  type,
+  title,
+  stat,
+  subtitle,
+  "noun-id": nounId,
+  date,
+  label = "Share",
+  class: className = "",
+  ...rest
+} = Astro.props;
+
+// Collect meta-* props into a JSON object
+const meta: Record<string, string> = {};
+for (const [key, value] of Object.entries(rest)) {
+  if (key.startsWith("meta-")) {
+    meta[key.slice(5)] = String(value);
+  }
+}
+
+const eventData = JSON.stringify({
+  type,
+  title,
+  stat,
+  ...(subtitle ? { subtitle } : {}),
+  ...(nounId != null ? { nounId: Number(nounId) } : {}),
+  ...(date ? { date } : {}),
+  ...(Object.keys(meta).length > 0 ? { meta } : {}),
+});
+---
+
+<share-card-button
+  data-event={eventData}
+  data-label={label}
+  class={`pc-share-btn-wrapper ${className}`}
+>
+  <button
+    type="button"
+    class="pc-share-btn"
+    aria-label={`Share: ${title}`}
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+    </svg>
+    <span>{label}</span>
+  </button>
+</share-card-button>
+
+<style>
+  .pc-share-btn-wrapper {
+    display: inline-block;
+  }
+
+  .pc-share-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #c94d2c;
+    color: #fff;
+    font-family: "JetBrains Mono", "Fira Mono", "Courier New", monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.625rem 1.25rem;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .pc-share-btn:hover {
+    background: #a83d22;
+  }
+
+  .pc-share-btn:active {
+    transform: scale(0.98);
+  }
+</style>
+
+<script>
+/**
+ * ShareCardButton custom element — hydrates from data-event attribute.
+ * Dynamically imports share-card.ts to keep the bundle lean.
+ */
+class ShareCardButtonElement extends HTMLElement {
+  connectedCallback() {
+    const btn = this.querySelector("button");
+    if (!btn) return;
+    btn.addEventListener("click", () => this.#openModal());
+  }
+
+  async #openModal() {
+    const eventData = JSON.parse(this.dataset.event ?? "{}");
+
+    // Dynamic import keeps share-card out of the initial bundle
+    const { generateShareCard } = await import("../lib/share-card.js");
+
+    // Build modal DOM
+    const overlay = document.createElement("div");
+    overlay.className = "pc-modal-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Share card");
+
+    overlay.innerHTML = `
+      <div class="pc-modal">
+        <div class="pc-modal-header">
+          <span class="pc-modal-title">Share Card</span>
+          <button class="pc-modal-close" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="pc-modal-preview">
+          <div class="pc-loading">
+            <div class="pc-spinner"></div>
+            <span>Generating card…</span>
+          </div>
+        </div>
+        <p class="pc-modal-hint">1024 × 1024 PNG · optimised for iMessage, Warpcast, Twitter &amp; Instagram</p>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    const close = () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      overlay.remove();
+    };
+    overlay.querySelector(".pc-modal-close")?.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    let blobUrl: string | null = null;
+    let blob: Blob | null = null;
+
+    try {
+      blob = await generateShareCard(eventData);
+      blobUrl = URL.createObjectURL(blob);
+
+      const preview = overlay.querySelector(".pc-modal-preview")!;
+      preview.innerHTML = `<img src="${blobUrl}" alt="Generated share card" class="pc-card-img" />`;
+
+      // Insert action bar before hint
+      const actionBar = document.createElement("div");
+      actionBar.className = "pc-action-bar";
+      actionBar.innerHTML = `
+        <button class="pc-action-btn pc-action-save" title="Save as PNG">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Save</span>
+        </button>
+        <button class="pc-action-btn pc-action-copy" title="Copy to clipboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Copy</span>
+        </button>
+        <button class="pc-action-btn pc-action-share" title="Share">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          <span>Share</span>
+        </button>
+      `;
+
+      const hint = overlay.querySelector(".pc-modal-hint")!;
+      hint.before(actionBar);
+
+      actionBar.querySelector(".pc-action-save")?.addEventListener("click", () => {
+        if (!blobUrl) return;
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `pointcast-${eventData.type}-${Date.now()}.png`;
+        a.click();
+      });
+
+      actionBar.querySelector(".pc-action-copy")?.addEventListener("click", async () => {
+        if (!blob) return;
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          const span = actionBar.querySelector(".pc-action-copy span")!;
+          span.textContent = "Copied!";
+          setTimeout(() => { span.textContent = "Copy"; }, 2000);
+        } catch {
+          if (blobUrl) window.open(blobUrl, "_blank");
+        }
+      });
+
+      actionBar.querySelector(".pc-action-share")?.addEventListener("click", async () => {
+        if (!blob) return;
+        const file = new File([blob], `pointcast-${eventData.type}.png`, { type: "image/png" });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: eventData.title, text: `${eventData.title} — pointcast.xyz` });
+        } else {
+          if (blobUrl) {
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = `pointcast-${eventData.type}.png`;
+            a.click();
+          }
+        }
+      });
+
+    } catch (err) {
+      const preview = overlay.querySelector(".pc-modal-preview")!;
+      preview.innerHTML = `<div class="pc-error"><span>Failed to generate card.</span><code>${String(err)}</code></div>`;
+    }
+  }
+}
+
+customElements.define("share-card-button", ShareCardButtonElement);
+</script>

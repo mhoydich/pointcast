@@ -1,0 +1,228 @@
+---
+/**
+ * WeeklyRecapBlock.astro — Homepage Feed Card
+ *
+ * Renders a compact, newspaper-style card summarizing the latest weekly recap.
+ * Displays 3 headline stats + the hero moment, with a link to the full recap page.
+ *
+ * Usage:
+ *   import WeeklyRecapBlock from '../components/WeeklyRecapBlock.astro';
+ *   <WeeklyRecapBlock />
+ *
+ * Data is fetched server-side at build/request time from the /api/recap endpoint.
+ * Falls back gracefully if no recap is available yet.
+ */
+
+import type { WeeklyRecap } from '../types/recap';
+
+// ─── Server-side data fetch ───────────────────────────────────────────────────
+
+let recap: WeeklyRecap | null = null;
+let fetchError = false;
+
+try {
+  // In SSR mode (Cloudflare Pages), use the internal KV binding directly.
+  // In static mode, fall back to the public API endpoint.
+  const apiUrl = import.meta.env.SITE
+    ? `${import.meta.env.SITE}/api/recap`
+    : '/api/recap';
+
+  const res = await fetch(apiUrl, {
+    cf: { cacheTtl: 3600, cacheEverything: true },
+  } as RequestInit);
+
+  if (res.ok) {
+    recap = (await res.json()) as WeeklyRecap;
+  }
+} catch {
+  fetchError = true;
+}
+
+// ─── Formatting helpers ───────────────────────────────────────────────────────
+
+function formatWeekLabel(startDate: string, endDate: string): string {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString('en-US', opts)} – ${end.toLocaleDateString('en-US', opts)}`;
+}
+
+function formatNumber(n: number): string {
+  return n.toLocaleString('en-US');
+}
+
+const weekLabel = recap ? formatWeekLabel(recap.startDate, recap.endDate) : '';
+const recapUrl = recap ? `/recap/${recap.id}` : '/recap';
+---
+
+{recap ? (
+  <article class="recap-card" aria-label="This Week at PointCast">
+    <header class="recap-card__header">
+      <span class="recap-card__eyebrow">This Week at PointCast</span>
+      <span class="recap-card__week">{weekLabel}</span>
+    </header>
+
+    <div class="recap-card__stats">
+      <div class="recap-card__stat">
+        <span class="recap-card__stat-number">{formatNumber(recap.totalDrums)}</span>
+        <span class="recap-card__stat-label">
+          drums{recap.topDrummerHandle !== 'anonymous' ? ` — led by @${recap.topDrummerHandle}` : ''}
+        </span>
+      </div>
+
+      <div class="recap-card__stat">
+        <span class="recap-card__stat-number">{formatNumber(recap.newVisitors)}</span>
+        <span class="recap-card__stat-label">
+          new visitors{recap.topNounId !== 'none' ? ` — Noun #${recap.topNounId} on top` : ''}
+        </span>
+      </div>
+
+      {recap.newDrops.length > 0 && (
+        <div class="recap-card__stat">
+          <span class="recap-card__stat-number">{recap.newDrops.length}</span>
+          <span class="recap-card__stat-label">
+            new {recap.newDrops.length === 1 ? 'drop' : 'drops'} this week
+          </span>
+        </div>
+      )}
+    </div>
+
+    <blockquote class="recap-card__hero">
+      <p>{recap.heroMoment.headline}</p>
+    </blockquote>
+
+    <footer class="recap-card__footer">
+      <a href={recapUrl} class="recap-card__link">
+        Read the full dispatch &rarr;
+      </a>
+    </footer>
+  </article>
+) : fetchError ? (
+  <aside class="recap-card recap-card--empty">
+    <span class="recap-card__eyebrow">This Week at PointCast</span>
+    <p class="recap-card__empty-text">The dispatch is being prepared. Check back Monday morning.</p>
+  </aside>
+) : (
+  <aside class="recap-card recap-card--empty">
+    <span class="recap-card__eyebrow">This Week at PointCast</span>
+    <p class="recap-card__empty-text">No recap yet — the first dispatch drops next Monday.</p>
+  </aside>
+)}
+
+<style>
+  /* ─── Card Shell ─────────────────────────────────────────────────────────── */
+  .recap-card {
+    font-family: var(--font-serif, 'Georgia', 'Times New Roman', serif);
+    border: 1px solid currentColor;
+    padding: 1.5rem 1.75rem;
+    max-width: 480px;
+    background: var(--color-surface, #fff);
+    color: var(--color-text, #111);
+    position: relative;
+  }
+
+  .recap-card--empty {
+    opacity: 0.6;
+  }
+
+  /* ─── Header ─────────────────────────────────────────────────────────────── */
+  .recap-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1.25rem;
+    border-bottom: 2px solid currentColor;
+    padding-bottom: 0.5rem;
+  }
+
+  .recap-card__eyebrow {
+    font-family: var(--font-sans, 'Helvetica Neue', sans-serif);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .recap-card__week {
+    font-family: var(--font-sans, 'Helvetica Neue', sans-serif);
+    font-size: 0.65rem;
+    opacity: 0.6;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Stats ──────────────────────────────────────────────────────────────── */
+  .recap-card__stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .recap-card__stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    line-height: 1;
+  }
+
+  .recap-card__stat-number {
+    font-size: 2.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .recap-card__stat-label {
+    font-family: var(--font-sans, 'Helvetica Neue', sans-serif);
+    font-size: 0.8rem;
+    opacity: 0.75;
+    line-height: 1.3;
+  }
+
+  /* ─── Hero Moment ────────────────────────────────────────────────────────── */
+  .recap-card__hero {
+    margin: 0 0 1.25rem 0;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid currentColor;
+    font-style: italic;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    background: var(--color-surface-alt, rgba(0,0,0,0.03));
+  }
+
+  .recap-card__hero p {
+    margin: 0;
+  }
+
+  /* ─── Footer ─────────────────────────────────────────────────────────────── */
+  .recap-card__footer {
+    border-top: 1px solid currentColor;
+    padding-top: 0.75rem;
+  }
+
+  .recap-card__link {
+    font-family: var(--font-sans, 'Helvetica Neue', sans-serif);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: inherit;
+    opacity: 0.8;
+    transition: opacity 0.15s ease;
+  }
+
+  .recap-card__link:hover {
+    opacity: 1;
+    text-decoration: underline;
+  }
+
+  .recap-card__empty-text {
+    font-family: var(--font-sans, 'Helvetica Neue', sans-serif);
+    font-size: 0.85rem;
+    opacity: 0.7;
+    margin: 0.75rem 0 0;
+    font-style: italic;
+  }
+</style>

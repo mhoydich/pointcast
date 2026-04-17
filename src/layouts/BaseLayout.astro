@@ -1,5 +1,4 @@
 ---
-import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import '../styles/global.css';
 
@@ -8,13 +7,30 @@ interface Props {
   description?: string;
   image?: string;
   hideNav?: boolean;
+  /**
+   * Opt-in Farcaster Frame metadata. When provided, extra <meta> tags
+   * render in the <head> so a cast containing this page's URL unfurls as
+   * an interactive Frame in Warpcast (Frames v1 spec).
+   * Only `/drum` uses this today.
+   */
+  frame?: {
+    image: string;           // absolute URL to the Frame image
+    postUrl: string;         // absolute URL to the Frame POST handler
+    button1Label: string;    // CTA for the primary Frame button
+    button2Label?: string;   // optional secondary button (link action by default)
+    button2Target?: string;  // absolute URL for the link button
+  };
 }
 
 const {
   title,
   description = 'Mike Hoydich & Claude Cowork Publishings — articles, projects, art, and essays born from human-AI collaboration.',
-  image = '/images/og-default.png',
+  // Versioned filename busts iMessage's aggressive LinkPresentation cache —
+  // any client that previously cached the old og-default.png treats this as
+  // a different URL and refetches. Bump the suffix when we change the art.
+  image = '/images/og-home-v3.png',
   hideNav = false,
+  frame = undefined,
 } = Astro.props;
 
 const siteTitle = title === 'Home' ? 'PointCast' : `${title} | PointCast`;
@@ -34,37 +50,123 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
     <meta name="theme-color" content="#12110e" media="(prefers-color-scheme: dark)" />
     <link rel="canonical" href={canonicalURL} />
 
-    <!-- Open Graph -->
+    <!-- Open Graph — explicit dimensions + type + secure_url dramatically
+         improve unfurl reliability in iMessage (Apple's LinkPresentation
+         sometimes silently drops previews when these are missing). -->
     <meta property="og:title" content={siteTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
+    <meta property="og:image:secure_url" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={siteTitle} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="PointCast" />
     <meta property="og:url" content={canonicalURL} />
+    <meta property="og:locale" content="en_US" />
+
+    {frame && (
+      <>
+        {/* Farcaster Frame v1 meta tags — renders an interactive drum-tap
+            card when pointcast.xyz/drum is cast in Warpcast. */}
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content={frame.image} />
+        <meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
+        <meta property="fc:frame:post_url" content={frame.postUrl} />
+        <meta property="fc:frame:button:1" content={frame.button1Label} />
+        {frame.button2Label && frame.button2Target && (
+          <>
+            <meta property="fc:frame:button:2" content={frame.button2Label} />
+            <meta property="fc:frame:button:2:action" content="link" />
+            <meta property="fc:frame:button:2:target" content={frame.button2Target} />
+          </>
+        )}
+      </>
+    )}
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={siteTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={siteTitle} />
+    <meta name="twitter:site" content="@mhoydich" />
 
-    <!-- Fonts — display swap for fast render -->
+    <!-- Fonts — display swap, trimmed to 8 variants actually used -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Outfit:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,500&family=Outfit:wght@400&family=Syne:wght@700&family=JetBrains+Mono:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
 
     <title>{siteTitle}</title>
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="application/rss+xml" title="PointCast" href="/rss.xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Structured data (JSON-LD) — helps search engines, LLM crawlers,
+         and generative-engine citations (GEO) understand who made this
+         and what it is. `@graph` pattern so all three entities (Website,
+         Organization, Person) are declared in a single script without
+         duplication across pages. -->
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebSite',
+          '@id': 'https://pointcast.xyz/#website',
+          name: 'PointCast',
+          alternateName: 'PointCast Network',
+          url: 'https://pointcast.xyz',
+          description: 'A living broadcast by Mike Hoydich × Claude. Art, music, on-chain moments, and multiplayer play — from El Segundo.',
+          publisher: { '@id': 'https://pointcast.xyz/#org' },
+          author: { '@id': 'https://pointcast.xyz/#person' },
+          inLanguage: 'en-US',
+        },
+        {
+          '@type': 'Organization',
+          '@id': 'https://pointcast.xyz/#org',
+          name: 'PointCast',
+          url: 'https://pointcast.xyz',
+          logo: 'https://pointcast.xyz/images/og-home-v3.png',
+          founder: { '@id': 'https://pointcast.xyz/#person' },
+          sameAs: [
+            'https://x.com/mhoydich',
+            'https://github.com/MikeHoydich',
+            'https://www.linkedin.com/in/mhoydich/',
+          ],
+        },
+        {
+          '@type': 'Person',
+          '@id': 'https://pointcast.xyz/#person',
+          name: 'Mike Hoydich',
+          alternateName: 'Michael Hoydich',
+          url: 'https://pointcast.xyz/about',
+          jobTitle: 'COO, Good Feels',
+          worksFor: { '@type': 'Organization', name: 'Good Feels', url: 'https://shop.getgoodfeels.com' },
+          homeLocation: {
+            '@type': 'Place',
+            address: { '@type': 'PostalAddress', addressLocality: 'El Segundo', addressRegion: 'CA', postalCode: '90245', addressCountry: 'US' },
+          },
+          sameAs: [
+            'https://x.com/mhoydich',
+            'https://github.com/MikeHoydich',
+            'https://www.linkedin.com/in/mhoydich/',
+            'https://www.instagram.com/mhoydich/',
+            'https://www.are.na/michael-hoydich/channels',
+            'https://soundcloud.com/mikeisnice',
+            'https://medium.com/@mhoydich',
+          ],
+        },
+      ],
+    })} />
   </head>
   <body class="min-h-screen flex flex-col bg-paper text-ink font-body">
     <!-- Skip to content (accessibility) -->
     <a href="#main-content" class="skip-link">Skip to content</a>
-
-    <Header />
 
     <main id="main-content" class="flex-1" role="main">
       <slot />

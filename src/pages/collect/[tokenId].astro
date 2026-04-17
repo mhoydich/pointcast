@@ -1,0 +1,345 @@
+---
+/**
+ * /collect/[tokenId] — full detail + collect flow for a single token.
+ *
+ * Pre-rendered for every token in src/data/market.json. Big image, full
+ * metadata, supply/price stats, Collect CTA that deep-links to objkt's
+ * purchase page (where the connected Kukai wallet signs the buy).
+ *
+ * Round 2: replace the objkt redirect with an on-site Taquito + Beacon
+ * mint call once PointCast deploys its own FA2 contract.
+ */
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WalletConnect from '../../components/WalletConnect.astro';
+import market from '../../data/market.json';
+
+export async function getStaticPaths() {
+  const { tokens } = market as { tokens: Array<{ tokenId: string }> };
+  return tokens.map((t) => ({ params: { tokenId: t.tokenId } }));
+}
+
+const { tokenId } = Astro.params;
+const token = (market as any).tokens.find((t: any) => t.tokenId === tokenId);
+
+if (!token) {
+  return Astro.redirect('/collect');
+}
+
+function fmtPrice(xtz: number | null): string {
+  if (xtz === null) return '—';
+  if (xtz === 0) return 'free mint';
+  if (xtz < 1) return `${xtz.toFixed(2)} ꜩ`;
+  return `${xtz.toFixed(1)} ꜩ`;
+}
+
+const mintedAt = token.mintedAt
+  ? new Date(token.mintedAt).toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+    })
+  : '';
+
+const description = token.description || '';
+const siteDesc = `${token.name} · ${token.supply} editions on Tezos · collect on PointCast`;
+---
+
+<BaseLayout
+  title={`${token.name} · Collect`}
+  description={siteDesc}
+  image={token.imageDisplay}
+>
+  <div class="max-w-[60rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+
+    <!-- Masthead band -->
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-6">
+      <div class="flex items-center gap-3">
+        <a href="/" class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline">
+          PointCast
+        </a>
+        <a href="/collect" class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm hover:underline">
+          &larr; / collect
+        </a>
+      </div>
+      <WalletConnect />
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 items-start">
+
+      <!-- Image -->
+      <figure class="rounded-xl overflow-hidden border border-rule/30 bg-card">
+        <img
+          id="token-hero"
+          src={token.imageDisplay}
+          alt={token.name}
+          class="w-full h-auto block"
+          loading="eager"
+          data-fallback={token.imageDisplay.replace('/display', '/artifact')}
+        />
+      </figure>
+
+      <!-- Details -->
+      <div>
+        <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-warm/80 mb-2">
+          PointCast · token #{token.tokenId}
+        </p>
+        <h1 class="font-serif italic text-[2rem] md:text-[2.4rem] text-ink font-medium leading-[1.05] mb-3">
+          {token.name}
+        </h1>
+
+        {description && (
+          <p class="font-serif italic text-[1rem] text-ink-soft/85 leading-relaxed mb-6">
+            {description}
+          </p>
+        )}
+
+        <!-- Stats grid -->
+        <div class="grid grid-cols-2 gap-4 mb-6 pb-6 border-b border-rule/40">
+          <div>
+            <p class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1">Supply</p>
+            <p class="font-mono text-[0.95rem] text-ink">{token.supply.toLocaleString()} editions</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1">Price</p>
+            <p class="font-mono text-[0.95rem] text-warm">{fmtPrice(token.priceXtz)}</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1">Status</p>
+            <p class="font-mono text-[0.78rem] text-ink">
+              {token.listed ? 'listed · live' : 'unlisted'}
+            </p>
+          </div>
+          {mintedAt && (
+            <div>
+              <p class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1">Minted</p>
+              <p class="font-mono text-[0.78rem] text-ink">{mintedAt}</p>
+            </div>
+          )}
+          {token.artist?.alias && (
+            <div class="col-span-2">
+              <p class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1">Artist</p>
+              <p class="font-mono text-[0.78rem] text-ink">
+                {token.artist.alias}
+                {token.artist.address && (
+                  <span class="text-ink-soft/60 ml-2 text-[0.7rem]">
+                    ({token.artist.address.slice(0, 6)}…{token.artist.address.slice(-4)})
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <!-- Collect flow -->
+        <div class="space-y-3 mb-4">
+          {token.listed ? (
+            <button
+              id="collect-btn"
+              type="button"
+              data-objkt-url={token.objktUrl}
+              data-token-id={token.tokenId}
+              data-ask-id={token.askId ?? ''}
+              data-marketplace={token.marketplaceContract ?? ''}
+              data-price-mutez={token.priceMutez ?? 0}
+              data-seller={token.seller ?? ''}
+              class="w-full inline-flex items-center justify-center px-5 py-3 rounded-md bg-ink text-paper font-mono text-[0.66rem] tracking-[0.16em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+            >
+              <span id="collect-btn-label">Collect on Tezos &rarr;</span>
+            </button>
+          ) : (
+            <div class="w-full px-5 py-3 rounded-md bg-card border border-rule/40 text-center">
+              <p class="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-ink-soft/70">
+                not listed yet
+              </p>
+              <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50 mt-1">
+                this one's off the market &mdash; see below for others
+              </p>
+            </div>
+          )}
+
+          <!-- Transaction status line — fills in while signing + confirming -->
+          <p
+            id="collect-status"
+            class="font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]"
+            role="status"
+            aria-live="polite"
+          ></p>
+
+          <a
+            href={token.objktUrl}
+            target="_blank"
+            rel="noopener"
+            class="w-full inline-flex items-center justify-center px-5 py-2.5 rounded-md bg-card border border-rule/40 text-ink-soft hover:border-warm hover:text-warm font-mono text-[0.62rem] tracking-[0.14em] uppercase transition-colors"
+          >
+            View on objkt &nearr;
+          </a>
+        </div>
+
+        <!-- Wallet helper -->
+        <p class="font-mono text-[0.52rem] tracking-[0.16em] uppercase text-ink-soft/50 leading-relaxed">
+          no wallet yet? get
+          <a href="https://wallet.kukai.app" target="_blank" rel="noopener" class="text-warm hover:underline">kukai</a>
+          &middot; fund it with a few ꜩ &middot; you're good.
+        </p>
+      </div>
+    </div>
+
+    <!-- Other tokens -->
+    <section class="mt-16 pt-8 border-t border-rule/40">
+      <h2 class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/60 mb-4">
+        more on the contract
+      </h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {(market as any).tokens
+          .filter((t: any) => t.tokenId !== token.tokenId)
+          .slice(0, 8)
+          .map((t: any) => (
+            <a
+              href={`/collect/${t.tokenId}`}
+              class="group flex flex-col rounded-lg overflow-hidden border border-rule/30 hover:border-warm/40 transition-colors"
+            >
+              <div class="aspect-square bg-card overflow-hidden">
+                <img
+                  src={t.imageThumb || t.imageDisplay}
+                  alt={t.name}
+                  class="w-full h-full object-cover token-img-tile"
+                  loading="lazy"
+                  data-fallback={t.imageDisplay.replace('/display', '/artifact')}
+                />
+              </div>
+              <div class="p-2">
+                <p class="font-serif italic text-[0.78rem] text-ink leading-tight group-hover:text-warm transition-colors line-clamp-1">
+                  {t.name}
+                </p>
+                <p class="font-mono text-[0.48rem] tracking-[0.16em] uppercase text-ink-soft/55 mt-0.5">
+                  #{t.tokenId}
+                </p>
+              </div>
+            </a>
+          ))}
+      </div>
+    </section>
+
+  </div>
+</BaseLayout>
+
+<script>
+  /**
+   * Collect flow (v2, on-chain): sign fulfill_ask on objkt's marketplace
+   * contract directly from the connected Kukai wallet. No redirect — the
+   * whole transaction happens from PointCast.
+   *
+   * Flow:
+   *   1. Read listing data from the button's data-attrs (ask_id, marketplace, price)
+   *   2. Lazy-import src/lib/tezos.ts → pulls Taquito + BeaconWallet (~700KB)
+   *   3. Call connectKukai() — either returns the active account or prompts
+   *   4. Call collectToken({ marketplace, askId, priceMutez }) → signs tx
+   *   5. Show opHash + watch for confirmation
+   */
+  const btn = document.getElementById('collect-btn') as HTMLButtonElement | null;
+  const statusEl = document.getElementById('collect-status');
+  const btnLabel = document.getElementById('collect-btn-label');
+
+  function setStatus(html: string): void {
+    if (statusEl) statusEl.innerHTML = html;
+  }
+
+  btn?.addEventListener('click', async () => {
+    if (!btn) return;
+    const objktUrl = btn.dataset.objktUrl ?? '';
+    const askId = Number(btn.dataset.askId || 0);
+    const marketplace = btn.dataset.marketplace ?? '';
+    const priceMutez = Number(btn.dataset.priceMutez || 0);
+    const seller = btn.dataset.seller ?? '';
+
+    if (!askId || !marketplace) {
+      setStatus('listing data missing — falling back to objkt');
+      window.open(objktUrl, '_blank', 'noopener');
+      return;
+    }
+
+    // Check we have a Tezos wallet
+    let wallet: { chain?: string; address?: string } | null = null;
+    try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
+
+    btn.disabled = true;
+    if (btnLabel) btnLabel.textContent = 'Signing…';
+    setStatus('loading taquito + opening your wallet…');
+
+    try {
+      // Lazy-import the Tezos client (code-splits Taquito out of initial bundle)
+      const { collectToken, connectKukai, getActiveAddress } = await import('../../lib/tezos');
+
+      // Ensure we have an active Beacon session
+      let addr = await getActiveAddress();
+      if (!addr) {
+        setStatus('please approve connection in kukai…');
+        addr = await connectKukai();
+        // Persist in our generic wallet state so the masthead chip updates
+        localStorage.setItem('pc:wallet', JSON.stringify({
+          chain: 'tezos', address: addr, provider: 'kukai',
+        }));
+      }
+
+      // Guard: objkt marketplace blocks self-fulfillment (M_NO_SELF_FULFILL).
+      // Detect before signing — avoids a useless simulation round-trip to Kukai.
+      if (seller && addr === seller) {
+        setStatus("you're the seller — share the link so someone else can collect, or test with a second wallet");
+        if (btnLabel) btnLabel.textContent = 'Collect on Tezos →';
+        btn.disabled = false;
+        return;
+      }
+
+      setStatus(`signing as ${addr.slice(0,6)}…${addr.slice(-4)} · confirm in your wallet…`);
+      const { opHash, confirmation } = await collectToken({
+        marketplaceAddress: marketplace,
+        askId,
+        priceMutez,
+        amount: 1,
+      });
+
+      const shortHash = opHash.slice(0, 10);
+      setStatus(`✓ broadcast <a href="https://tzkt.io/${opHash}" target="_blank" rel="noopener" class="text-warm hover:underline">${shortHash}…</a> · confirming…`);
+
+      await confirmation;
+
+      setStatus(`✓ collected! <a href="https://tzkt.io/${opHash}" target="_blank" rel="noopener" class="text-warm hover:underline">view on tzkt →</a>`);
+      if (btnLabel) btnLabel.textContent = 'Collected ✓';
+    } catch (err: any) {
+      console.error('Collect failed:', err);
+      const msg = err?.message || String(err);
+      if (/ABORTED|reject|cancel/i.test(msg)) {
+        setStatus('signing cancelled · try again when ready');
+      } else if (/NotEnoughBalance|balance/i.test(msg)) {
+        setStatus('not enough tez in wallet for gas · fund kukai and retry');
+      } else {
+        setStatus(`error: ${msg.slice(0, 120)}`);
+      }
+      if (btnLabel) btnLabel.textContent = 'Collect on Tezos →';
+      btn.disabled = false;
+    }
+  });
+
+  // Image fallback — swap to /artifact if /display 404s
+  const hero = document.getElementById('token-hero') as HTMLImageElement | null;
+  hero?.addEventListener('error', () => {
+    const fallback = hero.dataset.fallback;
+    if (fallback && hero.src !== fallback) hero.src = fallback;
+  }, { once: true });
+
+  // Same fallback for cross-link tiles
+  document.querySelectorAll<HTMLImageElement>('.token-img-tile').forEach((img) => {
+    img.addEventListener('error', () => {
+      const fb = img.dataset.fallback;
+      if (fb && img.src !== fb) img.src = fb;
+    }, { once: true });
+  });
+</script>
+
+<style>
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

@@ -1,0 +1,542 @@
+---
+/**
+ * /recap/[week].astro — Full Weekly Recap Archive Page
+ *
+ * Renders the complete newspaper-style dispatch for a given week.
+ * URL pattern: /recap/2026-w16
+ *
+ * In SSR mode (Cloudflare Pages with `output: 'server'`), this page
+ * is rendered on-demand and reads directly from the RECAPS KV namespace.
+ *
+ * In static mode, `getStaticPaths` pre-renders all known recap pages.
+ */
+
+import type { WeeklyRecap } from '../../types/recap';
+
+// ─── Static path generation (for static output mode) ─────────────────────────
+export async function getStaticPaths() {
+  // In static mode, fetch the index of all available recap IDs
+  // and pre-render each one. In SSR mode, this export is ignored.
+  try {
+    const baseUrl = import.meta.env.SITE ?? 'http://localhost:4321';
+    const res = await fetch(`${baseUrl}/api/recap?index=true`);
+    if (!res.ok) return [];
+    const ids = (await res.json()) as string[];
+    return ids.map((id) => ({ params: { week: id } }));
+  } catch {
+    return [];
+  }
+}
+
+// ─── Server-side data fetch ───────────────────────────────────────────────────
+
+const { week } = Astro.params;
+
+// Validate the week parameter format
+const isValidWeek = /^\d{4}-w\d{2}$/.test(week ?? '');
+
+let recap: WeeklyRecap | null = null;
+let notFound = false;
+
+if (!isValidWeek) {
+  notFound = true;
+} else {
+  try {
+    const baseUrl = import.meta.env.SITE ?? 'http://localhost:4321';
+    const res = await fetch(`${baseUrl}/api/recap?week=${week}`, {
+      cf: { cacheTtl: 3600, cacheEverything: true },
+    } as RequestInit);
+
+    if (res.status === 404) {
+      notFound = true;
+    } else if (res.ok) {
+      recap = (await res.json()) as WeeklyRecap;
+    }
+  } catch {
+    notFound = true;
+  }
+}
+
+if (notFound) {
+  return Astro.redirect('/404');
+}
+
+// ─── Formatting helpers ───────────────────────────────────────────────────────
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const startOpts: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric' };
+  const endOpts: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' };
+  return `${start.toLocaleDateString('en-US', startOpts)} – ${end.toLocaleDateString('en-US', endOpts)}`;
+}
+
+function formatNumber(n: number): string {
+  return n.toLocaleString('en-US');
+}
+
+function formatPublishedDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+const dateRange = recap ? formatDateRange(recap.startDate, recap.endDate) : '';
+const publishedDate = recap ? formatPublishedDate(recap.publishedAt) : '';
+const pageTitle = recap ? `Week of ${dateRange} — PointCast Dispatch` : 'Dispatch Not Found';
+const canonicalUrl = `https://pointcast.xyz/recap/${week}`;
+
+// Determine noun art URL (assumes nouns.wtf or local asset convention)
+function nounArtUrl(nounId: string): string {
+  if (nounId === 'none') return '';
+  // Adjust this URL pattern to match PointCast's actual noun image hosting
+  return `https://noun.pics/${nounId}.svg`;
+}
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{pageTitle}</title>
+  <meta name="description" content={recap ? `PointCast weekly dispatch: ${recap.heroMoment.headline}` : 'PointCast weekly recap'} />
+  <link rel="canonical" href={canonicalUrl} />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content={pageTitle} />
+  <meta property="og:description" content={recap?.heroMoment.headline ?? ''} />
+  <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:site_name" content="PointCast" />
+
+  <!-- RSS Discovery -->
+  <link rel="alternate" type="application/rss+xml" title="PointCast Weekly Dispatch" href="/rss.xml" />
+
+  <style>
+    /* ─── Reset & Base ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-serif: 'Georgia', 'Times New Roman', serif;
+      --font-sans: 'Helvetica Neue', 'Arial', sans-serif;
+      --color-ink: #111;
+      --color-paper: #faf9f6;
+      --color-rule: #111;
+      --color-muted: #555;
+      --color-accent: #111;
+      --max-width: 720px;
+    }
+
+    body {
+      font-family: var(--font-serif);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      line-height: 1.6;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    /* ─── Masthead ───────────────────────────────────────────────────────────── */
+    .masthead {
+      max-width: var(--max-width);
+      margin: 0 auto 2.5rem;
+      border-bottom: 3px double var(--color-rule);
+      padding-bottom: 1rem;
+    }
+
+    .masthead__back {
+      font-family: var(--font-sans);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: var(--color-muted);
+      display: block;
+      margin-bottom: 1rem;
+    }
+
+    .masthead__back:hover { color: var(--color-ink); }
+
+    .masthead__nameplate {
+      font-family: var(--font-sans);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+
+    .masthead__title {
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .masthead__dateline {
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      color: var(--color-muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────────────────── */
+    .dispatch {
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    /* ─── Section Dividers ───────────────────────────────────────────────────── */
+    .section-rule {
+      border: none;
+      border-top: 1px solid var(--color-rule);
+      margin: 2rem 0;
+    }
+
+    .section-label {
+      font-family: var(--font-sans);
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 1.25rem;
+    }
+
+    /* ─── Headline Stats Grid ────────────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1.5rem 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-block {
+      border-top: 2px solid var(--color-rule);
+      padding-top: 0.75rem;
+    }
+
+    .stat-block__number {
+      display: block;
+      font-size: clamp(2.5rem, 8vw, 4rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 0.35rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-block__caption {
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      color: var(--color-muted);
+      line-height: 1.4;
+    }
+
+    .stat-block__caption strong {
+      color: var(--color-ink);
+      font-weight: 600;
+    }
+
+    /* ─── Hero Moment ────────────────────────────────────────────────────────── */
+    .hero-moment {
+      border: 2px solid var(--color-rule);
+      padding: 1.5rem 1.75rem;
+      margin: 2rem 0;
+      position: relative;
+    }
+
+    .hero-moment__tag {
+      font-family: var(--font-sans);
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: var(--color-ink);
+      color: var(--color-paper);
+      padding: 0.15rem 0.5rem;
+      position: absolute;
+      top: -0.65rem;
+      left: 1.25rem;
+    }
+
+    .hero-moment__headline {
+      font-size: clamp(1.1rem, 3vw, 1.5rem);
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 0.6rem;
+    }
+
+    .hero-moment__description {
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      color: var(--color-muted);
+      line-height: 1.55;
+    }
+
+    /* ─── Noun Leaderboard ───────────────────────────────────────────────────── */
+    .noun-leaderboard {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .noun-row {
+      display: grid;
+      grid-template-columns: 2rem 1fr 3rem;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-sans);
+      font-size: 0.8rem;
+    }
+
+    .noun-row__rank {
+      font-size: 0.65rem;
+      color: var(--color-muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .noun-row__bar-wrap {
+      height: 6px;
+      background: rgba(0,0,0,0.08);
+      position: relative;
+    }
+
+    .noun-row__bar {
+      height: 100%;
+      background: var(--color-ink);
+      transition: width 0.3s ease;
+    }
+
+    .noun-row__label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .noun-row__id {
+      font-weight: 600;
+    }
+
+    .noun-row__count {
+      font-size: 0.65rem;
+      color: var(--color-muted);
+    }
+
+    .noun-row__visits {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--color-muted);
+      font-size: 0.7rem;
+    }
+
+    /* ─── Drops List ─────────────────────────────────────────────────────────── */
+    .drops-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .drop-item {
+      border-left: 2px solid var(--color-rule);
+      padding-left: 0.75rem;
+    }
+
+    .drop-item__title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--color-ink);
+    }
+
+    .drop-item__title:hover { text-decoration: underline; }
+
+    .drop-item__teaser {
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      color: var(--color-muted);
+      margin-top: 0.2rem;
+      line-height: 1.4;
+    }
+
+    /* ─── Quiet Week State ───────────────────────────────────────────────────── */
+    .quiet-week-notice {
+      font-style: italic;
+      font-size: 1.05rem;
+      color: var(--color-muted);
+      padding: 1.5rem 0;
+      border-top: 1px solid var(--color-rule);
+      border-bottom: 1px solid var(--color-rule);
+      text-align: center;
+    }
+
+    /* ─── Footer ─────────────────────────────────────────────────────────────── */
+    .dispatch-footer {
+      margin-top: 3rem;
+      border-top: 3px double var(--color-rule);
+      padding-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-sans);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+    }
+
+    .dispatch-footer a {
+      color: var(--color-muted);
+      text-decoration: none;
+    }
+
+    .dispatch-footer a:hover { color: var(--color-ink); }
+  </style>
+</head>
+<body>
+
+{recap && (
+  <>
+    <!-- Masthead -->
+    <header class="masthead">
+      <a href="/" class="masthead__back">&larr; PointCast</a>
+      <p class="masthead__nameplate">The PointCast Dispatch</p>
+      <h1 class="masthead__title">This Week at PointCast</h1>
+      <p class="masthead__dateline">
+        {dateRange} &nbsp;&mdash;&nbsp; Published {publishedDate}
+      </p>
+    </header>
+
+    <main class="dispatch">
+
+      {recap.isQuietWeek ? (
+        <!-- Zero-activity week -->
+        <p class="quiet-week-notice">
+          {recap.heroMoment.description}
+        </p>
+      ) : (
+        <>
+          <!-- 5 Headline Stats -->
+          <p class="section-label">By the numbers</p>
+          <div class="stats-grid">
+
+            <div class="stat-block">
+              <span class="stat-block__number">{formatNumber(recap.totalDrums)}</span>
+              <p class="stat-block__caption">
+                Drums this week.
+                {recap.topDrummerHandle !== 'anonymous' && (
+                  <> Led by <strong>@{recap.topDrummerHandle}</strong> with {formatNumber(recap.topDrummerCount)}.</>
+                )}
+              </p>
+            </div>
+
+            <div class="stat-block">
+              <span class="stat-block__number">{formatNumber(recap.newVisitors)}</span>
+              <p class="stat-block__caption">
+                New visitors cast their presence.
+              </p>
+            </div>
+
+            <div class="stat-block">
+              <span class="stat-block__number">#{recap.topNounId}</span>
+              <p class="stat-block__caption">
+                Top noun of the week.
+                {recap.topNounVisits > 0 && (
+                  <> Chosen by <strong>{formatNumber(recap.topNounVisits)}</strong> visitors.</>
+                )}
+              </p>
+            </div>
+
+            {recap.newDrops.length > 0 && (
+              <div class="stat-block">
+                <span class="stat-block__number">{recap.newDrops.length}</span>
+                <p class="stat-block__caption">
+                  New {recap.newDrops.length === 1 ? 'drop' : 'drops'} published this week.
+                </p>
+              </div>
+            )}
+
+            {recap.nounBreakdown.length > 0 && (
+              <div class="stat-block">
+                <span class="stat-block__number">{recap.nounBreakdown.length}</span>
+                <p class="stat-block__caption">
+                  Distinct nouns represented across all visits.
+                </p>
+              </div>
+            )}
+
+          </div>
+
+          <!-- Hero Moment -->
+          <hr class="section-rule" />
+          <div class="hero-moment">
+            <span class="hero-moment__tag">Moment of the Week</span>
+            <h2 class="hero-moment__headline">{recap.heroMoment.headline}</h2>
+            <p class="hero-moment__description">{recap.heroMoment.description}</p>
+          </div>
+
+          <!-- Noun Leaderboard -->
+          {recap.nounBreakdown.length > 1 && (
+            <>
+              <hr class="section-rule" />
+              <p class="section-label">Noun leaderboard</p>
+              <div class="noun-leaderboard">
+                {recap.nounBreakdown.slice(0, 8).map((entry, i) => {
+                  const maxVisits = recap.nounBreakdown[0].visitCount;
+                  const pct = maxVisits > 0 ? Math.round((entry.visitCount / maxVisits) * 100) : 0;
+                  return (
+                    <div class="noun-row">
+                      <span class="noun-row__rank">{i + 1}</span>
+                      <div class="noun-row__label">
+                        <span class="noun-row__id">Noun #{entry.nounId}</span>
+                        <div class="noun-row__bar-wrap">
+                          <div class="noun-row__bar" style={`width: ${pct}%`}></div>
+                        </div>
+                      </div>
+                      <span class="noun-row__visits">{formatNumber(entry.visitCount)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <!-- New Drops -->
+          {recap.newDrops.length > 0 && (
+            <>
+              <hr class="section-rule" />
+              <p class="section-label">New this week</p>
+              <div class="drops-list">
+                {recap.newDrops.map((drop) => (
+                  <div class="drop-item">
+                    <a href={drop.url} class="drop-item__title" target="_blank" rel="noopener">
+                      {drop.title}
+                    </a>
+                    {drop.teaser && (
+                      <p class="drop-item__teaser">{drop.teaser}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      <!-- Footer -->
+      <footer class="dispatch-footer">
+        <span>PointCast Dispatch &mdash; {recap.id}</span>
+        <a href="/rss.xml">RSS Feed</a>
+      </footer>
+
+    </main>
+  </>
+)}
+
+</body>
+</html>

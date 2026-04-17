@@ -1,0 +1,257 @@
+---
+/**
+ * PulseAlert — unobtrusive live-event banner for PointCast.
+ *
+ * Slides in from the top when notable things happen in the room, auto-
+ * dismisses after a few seconds, and self-throttles so a flurry of events
+ * doesn't turn into a Las-Vegas marquee. Events listened for:
+ *
+ *   • `pc:wire`     — new Wire message (with detail.msg)
+ *   • `pc:presence` — presence count crossed a threshold (detail.humans)
+ *   • `pc:drum`     — drumming flurry (detail.bpm)
+ *   • `pc:visit`    — first visit from a new country (detail.country)
+ *
+ * Throttle rules:
+ *   - Same type: no more than 1 per 90 seconds
+ *   - Different types: minimum 8s gap between banners
+ *   - Queue of 3 max; anything beyond drops
+ *
+ * The shared `triggerPulse({type, title, body, noun?})` function is exposed
+ * on `window.pcPulse` so any script can fire one without depending on the
+ * event system — useful for client-only triggers like "you just hit combo
+ * x5". Jackpot component (next iteration) escalates past a PulseAlert into
+ * a full-screen interstitial.
+ */
+---
+
+<!-- Fixed-position mount, outside normal flow. Safe-area inset respected
+     for iPhone notch. Slight top gap on mobile so the card doesn't kiss
+     the status bar — prevents "looks broken" moments when a pulse fires
+     right as the visitor lands. -->
+<div
+  id="pulse-alert-host"
+  class="fixed inset-x-0 top-0 z-50 flex flex-col items-center gap-1 px-3 pointer-events-none"
+  style="padding-top: max(env(safe-area-inset-top, 0px), 0.5rem);"
+  aria-live="polite"
+  aria-atomic="false"
+></div>
+
+<style>
+  #pulse-alert-host :global(.pulse-card) {
+    transform: translateY(-120%);
+    opacity: 0;
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms;
+    will-change: transform, opacity;
+  }
+  #pulse-alert-host :global(.pulse-card.in) {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  #pulse-alert-host :global(.pulse-card.out) {
+    transform: translateY(-20%);
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #pulse-alert-host :global(.pulse-card) {
+      transition: opacity 180ms;
+      transform: none;
+    }
+  }
+</style>
+
+<script>
+  import { playNounVoice } from '../lib/chimes';
+
+  type PulseType = 'wire' | 'presence' | 'drum' | 'visit' | 'custom';
+
+  interface Pulse {
+    type: PulseType;
+    title: string;
+    body?: string;
+    nounId?: number;
+    // Optional chime — defaults to playing the noun's voice if nounId given
+    chime?: boolean;
+    // Optional duration override (ms)
+    duration?: number;
+  }
+
+  const host = document.getElementById('pulse-alert-host');
+  if (!host) {
+    console.warn('[pulse] host missing — aborting init');
+  } else {
+    const DEFAULT_DURATION = 4500;
+    const MIN_GAP_MS = 8_000;           // between any two banners
+    const SAME_TYPE_COOLDOWN_MS = 90_000; // between banners of same type
+    const MAX_QUEUE = 3;
+
+    let lastShowT = 0;
+    const lastTypeShowT = new Map<PulseType, number>();
+    const queue: Pulse[] = [];
+    let showing = false;
+
+    function canShow(p: Pulse): boolean {
+      const now = Date.now();
+      if (now - lastShowT < MIN_GAP_MS) return false;
+      const lastSame = lastTypeShowT.get(p.type) ?? 0;
+      if (now - lastSame < SAME_TYPE_COOLDOWN_MS) return false;
+      return true;
+    }
+
+    function render(p: Pulse): HTMLElement {
+      const card = document.createElement('div');
+      // Mobile-safe sizing: never wider than viewport minus outer padding.
+      // Explicit mobile padding + tighter text prevents the "weird banner"
+      // look when a pulse lands right as a mobile visitor enters.
+      card.className = 'pulse-card pointer-events-auto w-full max-w-[min(22rem,calc(100%-0rem))] rounded-xl border-2 border-ink/80 bg-card shadow-lg px-3 py-2 flex items-center gap-2.5';
+      card.setAttribute('role', 'status');
+
+      // Optional noun avatar
+      if (typeof p.nounId === 'number' && Number.isFinite(p.nounId)) {
+        const img = document.createElement('img');
+        img.src = `https://noun.pics/${p.nounId}.svg`;
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        img.width = 28;
+        img.height = 28;
+        img.className = 'rounded-sm ring-1 ring-warm/40 shrink-0';
+        img.style.imageRendering = 'pixelated';
+        img.loading = 'lazy';
+        card.appendChild(img);
+      }
+
+      const text = document.createElement('div');
+      text.className = 'flex-1 min-w-0';
+
+      const title = document.createElement('p');
+      title.className = 'font-mono text-[0.52rem] tracking-[0.18em] uppercase text-warm leading-tight truncate';
+      title.textContent = p.title;
+      text.appendChild(title);
+
+      if (p.body) {
+        const body = document.createElement('p');
+        // line-clamp-2 on narrow mobile screens: never more than 2 lines
+        // so the card can't expand to cover half the viewport.
+        body.className = 'font-serif text-[0.82rem] md:text-[0.9rem] text-ink leading-snug line-clamp-2';
+        body.textContent = p.body;
+        text.appendChild(body);
+      }
+      card.appendChild(text);
+
+      // Dismiss button — appears only on hover/focus so the card stays clean.
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'shrink-0 opacity-40 hover:opacity-100 transition font-mono text-xs text-ink-soft cursor-pointer';
+      close.textContent = '×';
+      close.setAttribute('aria-label', 'Dismiss');
+      close.addEventListener('click', () => dismiss(card));
+      card.appendChild(close);
+
+      return card;
+    }
+
+    function dismiss(card: HTMLElement): void {
+      card.classList.remove('in');
+      card.classList.add('out');
+      setTimeout(() => card.remove(), 280);
+    }
+
+    function showNow(p: Pulse): void {
+      if (!host) return;
+      const card = render(p);
+      host.appendChild(card);
+      // Next frame so transition fires.
+      requestAnimationFrame(() => card.classList.add('in'));
+
+      // Chime: by default play the noun voice if we have one.
+      const shouldChime = p.chime !== false && typeof p.nounId === 'number';
+      if (shouldChime) {
+        try { playNounVoice(p.nounId!); } catch {}
+      }
+
+      const now = Date.now();
+      lastShowT = now;
+      lastTypeShowT.set(p.type, now);
+      showing = true;
+
+      const duration = p.duration ?? DEFAULT_DURATION;
+      setTimeout(() => {
+        dismiss(card);
+        showing = false;
+        // Drain next queued, respecting min-gap.
+        setTimeout(drain, MIN_GAP_MS);
+      }, duration);
+    }
+
+    function drain(): void {
+      if (showing) return;
+      const next = queue.shift();
+      if (!next) return;
+      if (!canShow(next)) {
+        // Skip — cooldown still active. Try next in queue.
+        drain();
+        return;
+      }
+      showNow(next);
+    }
+
+    function triggerPulse(p: Pulse): void {
+      if (!canShow(p) && !showing) {
+        // Not currently showing but cooldown active → silently drop (don't queue).
+        return;
+      }
+      if (showing) {
+        if (queue.length < MAX_QUEUE) queue.push(p);
+        return;
+      }
+      showNow(p);
+    }
+
+    // Expose globally so other scripts + inline handlers can trigger.
+    (window as unknown as { pcPulse?: (p: Pulse) => void }).pcPulse = triggerPulse;
+
+    // --- Event listeners ------------------------------------------------
+
+    // Wire message — fires "ON THE WIRE" banner with the message body.
+    document.addEventListener('pc:wire', (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as {
+        text?: string; nounId?: number; pid?: string;
+      } | undefined;
+      if (!detail || !detail.text) return;
+      // Don't pulse our own messages — the Wire's optimistic paint already
+      // shows them. pid === 'self' means TheWire marked it as optimistic.
+      if (detail.pid === 'self') return;
+      triggerPulse({
+        type: 'wire',
+        title: 'On the wire',
+        body: detail.text,
+        nounId: typeof detail.nounId === 'number' ? detail.nounId : undefined,
+      });
+    });
+
+    // Presence crossed 2+ — fires "Room's warming up". Only fires on the
+    // transition 1 → multi, not on every poll when count is stable.
+    let lastHumanCount = -1;
+    document.addEventListener('pc:presence', (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as { humans?: number } | undefined;
+      if (!detail || typeof detail.humans !== 'number') return;
+      const prev = lastHumanCount;
+      lastHumanCount = detail.humans;
+      if (prev < 2 && detail.humans >= 2) {
+        triggerPulse({
+          type: 'presence',
+          title: `${detail.humans} humans here now`,
+          body: 'say something, drum something, break the ice',
+          chime: false,
+        });
+      }
+      if (prev < 5 && detail.humans >= 5) {
+        triggerPulse({
+          type: 'presence',
+          title: 'FULL HOUSE',
+          body: `${detail.humans} humans in the room — this is a moment`,
+          chime: false,
+        });
+      }
+    });
+  }
+</script>

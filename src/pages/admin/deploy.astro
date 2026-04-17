@@ -1,0 +1,430 @@
+---
+/**
+ * /admin/deploy — browser-based contract originator for the PointCast
+ * Visit Nouns FA2 (and any future PointCast contract).
+ *
+ * Rationale for doing this in the browser (not a Node script):
+ *   • We already have Taquito + Beacon + Kukai plumbing from /collect.
+ *   • No private keys in shell history. Mike signs origination with Kukai
+ *     the same way he'd buy a token — one tool, one confirmation UI.
+ *   • Works against mainnet OR shadownet without config files, just a radio
+ *     toggle.
+ *
+ * Flow:
+ *   1. Mike compiles contracts/visit_nouns_fa2.py via smartpy.io.
+ *   2. Downloads the two artifacts: Michelson code + initial storage
+ *      (both in Michelson-JSON form).
+ *   3. Pastes them into the textareas below.
+ *   4. Picks a network (Shadownet for dry runs, Mainnet when ready).
+ *   5. Clicks Deploy — Kukai pops up, Mike signs, contract is originated.
+ *   6. Page prints the new `KT1…` address + explorer links.
+ *
+ * NOTE 2026-04: Ghostnet is deprecated. Shadownet is the active testnet
+ * (faucet: faucet.shadownet.teztnets.com, rpc: shadownet.smartpy.io).
+ *
+ * No access control on this route yet (security-through-obscurity) — it's
+ * safe because origination requires a signature from the connected wallet.
+ * A stranger landing here can't do anything without Mike's Kukai. Still,
+ * before shipping a v1 marketplace, add basic auth via a Pages Function.
+ */
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WalletConnect from '../../components/WalletConnect.astro';
+---
+
+<BaseLayout title="Deploy · Admin" description="PointCast contract originator">
+  <div class="max-w-[52rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+
+    <!-- Masthead band — same treatment as the homepage. -->
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-6">
+      <div class="flex items-center gap-3">
+        <a href="/" class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline">
+          PointCast
+        </a>
+        <span class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm">
+          / admin / deploy
+        </span>
+      </div>
+      <WalletConnect />
+    </div>
+
+    <header class="mb-8">
+      <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm mb-2">
+        admin · contract originator
+      </p>
+      <h1 class="font-serif italic text-[1.8rem] md:text-[2.2rem] text-ink font-medium leading-[1.1] mb-3">
+        Deploy a PointCast contract
+      </h1>
+      <p class="text-[0.95rem] text-ink/70 leading-relaxed">
+        Paste compiled Michelson + initial storage below. Pick a network.
+        Click <strong>Deploy</strong>. Kukai will pop a signing prompt; the
+        origination lands on-chain a few seconds later and the contract
+        address appears here.
+      </p>
+    </header>
+
+    <!-- Network selector -->
+    <section class="mb-6">
+      <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60 mb-2">
+        network
+      </p>
+      <div class="flex gap-3" role="radiogroup">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="network" value="shadownet" checked class="accent-warm" />
+          <span class="font-mono text-[0.68rem] tracking-[0.14em] uppercase">
+            Shadownet <span class="text-ink-soft/50">(testnet · free faucet)</span>
+          </span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="network" value="mainnet" class="accent-warm" />
+          <span class="font-mono text-[0.68rem] tracking-[0.14em] uppercase">
+            Mainnet <span class="text-ink-soft/50">(real ꜩ · production)</span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Code textarea -->
+    <section class="mb-5">
+      <label for="code-input" class="flex items-center justify-between mb-2">
+        <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
+          michelson code <span class="text-warm">(json array from smartpy → contract.json)</span>
+        </span>
+        <span id="code-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
+          0 KB
+        </span>
+      </label>
+      <textarea
+        id="code-input"
+        rows="6"
+        placeholder="[ { &quot;prim&quot;: &quot;parameter&quot;, &quot;args&quot;: [...] }, { &quot;prim&quot;: &quot;storage&quot;, ... }, { &quot;prim&quot;: &quot;code&quot;, ... } ]"
+        class="w-full font-mono text-[0.7rem] p-3 rounded-md border border-rule/40 bg-card/60 text-ink focus:border-warm focus:outline-none"
+      ></textarea>
+    </section>
+
+    <!-- Storage textarea -->
+    <section class="mb-5">
+      <label for="storage-input" class="flex items-center justify-between mb-2">
+        <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
+          initial storage <span class="text-warm">(michelson-json value)</span>
+        </span>
+        <span id="storage-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
+          0 B
+        </span>
+      </label>
+      <textarea
+        id="storage-input"
+        rows="5"
+        placeholder='{ "prim": "Pair", "args": [ ... ] }'
+        class="w-full font-mono text-[0.7rem] p-3 rounded-md border border-rule/40 bg-card/60 text-ink focus:border-warm focus:outline-none"
+      ></textarea>
+    </section>
+
+    <!-- Quick-load button for the Visit Nouns FA2 contract — fetches the
+         pre-staged Michelson + storage from /admin/_artifacts/ and patches
+         the admin field to the connected wallet. Saves copy-pasting 340KB
+         of JSON every time we redeploy. -->
+    <section class="mb-5">
+      <button
+        id="load-visit-nouns-btn"
+        type="button"
+        class="w-full inline-flex items-center justify-center px-5 py-2.5 rounded-md bg-card border border-rule/40 text-ink-soft font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm cursor-pointer transition-colors"
+      >
+        ↺ Load Visit Nouns FA2 (pre-staged) &rarr;
+      </button>
+      <p id="load-status" class="mt-2 font-mono text-[0.52rem] tracking-[0.14em] uppercase text-ink-soft/50 min-h-[0.8rem]"></p>
+    </section>
+
+    <!-- Deploy button + status -->
+    <section class="mb-8">
+      <button
+        id="deploy-btn"
+        type="button"
+        class="w-full inline-flex items-center justify-center px-5 py-3 rounded-md bg-ink text-paper font-mono text-[0.66rem] tracking-[0.16em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+      >
+        <span id="deploy-btn-label">Review &amp; Deploy &rarr;</span>
+      </button>
+
+      <p
+        id="deploy-status"
+        class="mt-3 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </section>
+
+    <!-- Result panel -->
+    <section
+      id="deploy-result"
+      class="hidden mb-8 p-4 rounded-md border border-warm/40 bg-warm/5"
+    >
+      <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm mb-2">
+        ✓ Contract originated
+      </p>
+      <p class="font-mono text-[0.8rem] text-ink mb-3 break-all" id="deploy-address">
+        KT1…
+      </p>
+      <div class="flex flex-wrap gap-2" id="deploy-links"></div>
+    </section>
+
+    <!-- Help card -->
+    <details class="mt-8 p-4 rounded-md border border-rule/30 bg-card/40">
+      <summary class="font-mono text-[0.58rem] tracking-[0.2em] uppercase text-ink-soft cursor-pointer">
+        How to compile the contract
+      </summary>
+      <div class="mt-3 text-[0.85rem] text-ink-soft/80 leading-relaxed space-y-2">
+        <p>
+          1. Open <a href="https://smartpy.io/ide" target="_blank" rel="noopener" class="text-warm hover:underline">smartpy.io/ide</a>.
+        </p>
+        <p>
+          2. Paste the contents of <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">contracts/visit_nouns_fa2.py</code> into the editor.
+        </p>
+        <p>
+          3. Click <strong>Run</strong>. When tests pass, click <strong>Deploy Michelson Contract</strong> → <strong>Download</strong>.
+        </p>
+        <p>
+          4. Paste the contents of <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">step_nnn_cont_0_contract.json</code> (the Michelson code) into the first textarea.
+        </p>
+        <p>
+          5. Paste the contents of <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">step_nnn_cont_0_storage.json</code> (the initial storage) into the second textarea.
+        </p>
+        <p>
+          6. Pick <strong>Shadownet</strong> first (free ꜩ from
+          <a href="https://faucet.shadownet.teztnets.com" target="_blank" rel="noopener" class="text-warm hover:underline">faucet.shadownet.teztnets.com</a>),
+          deploy, test, then repeat on <strong>Mainnet</strong>.
+        </p>
+      </div>
+    </details>
+
+  </div>
+</BaseLayout>
+
+<script>
+  /**
+   * Browser-side originator. Uses the same Taquito + Beacon setup as
+   * the /collect flow (src/lib/tezos.ts) — lazy-loaded on first click so
+   * ~700KB of crypto libs don't land on every /admin/deploy pageload.
+   */
+
+  const codeInput = document.getElementById('code-input') as HTMLTextAreaElement;
+  const storageInput = document.getElementById('storage-input') as HTMLTextAreaElement;
+  const codeStats = document.getElementById('code-stats');
+  const storageStats = document.getElementById('storage-stats');
+  const deployBtn = document.getElementById('deploy-btn') as HTMLButtonElement;
+  const deployLabel = document.getElementById('deploy-btn-label');
+  const statusEl = document.getElementById('deploy-status');
+  const resultPanel = document.getElementById('deploy-result');
+  const addressEl = document.getElementById('deploy-address');
+  const linksEl = document.getElementById('deploy-links');
+
+  function setStatus(html: string): void {
+    if (statusEl) statusEl.innerHTML = html;
+  }
+
+  function updateStats() {
+    const codeBytes = new Blob([codeInput.value]).size;
+    const storageBytes = new Blob([storageInput.value]).size;
+    if (codeStats) codeStats.textContent =
+      codeBytes > 1024 ? `${(codeBytes / 1024).toFixed(1)} KB` : `${codeBytes} B`;
+    if (storageStats) storageStats.textContent =
+      storageBytes > 1024 ? `${(storageBytes / 1024).toFixed(1)} KB` : `${storageBytes} B`;
+  }
+  codeInput?.addEventListener('input', updateStats);
+  storageInput?.addEventListener('input', updateStats);
+
+  // One-click loader for the pre-staged Visit Nouns FA2 contract.
+  // Fetches contract.json + storage.json from /admin/_artifacts/, then
+  // patches the %administrator field to the currently-connected wallet
+  // (or leaves the default if no wallet is connected).
+  const loadBtn = document.getElementById('load-visit-nouns-btn');
+  const loadStatus = document.getElementById('load-status');
+  loadBtn?.addEventListener('click', async () => {
+    if (loadStatus) loadStatus.textContent = 'fetching…';
+    try {
+      const [contract, storageRaw] = await Promise.all([
+        fetch('/admin/_artifacts/visit-nouns-contract.json', { cache: 'no-store' }).then(r => r.text()),
+        fetch('/admin/_artifacts/visit-nouns-storage.json', { cache: 'no-store' }).then(r => r.text()),
+      ]);
+      // Patch admin to the currently-connected wallet if available
+      let wallet: { address?: string } | null = null;
+      try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
+      const connected = wallet?.address;
+      const storage = connected
+        ? storageRaw.replace(/"tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw"/g, '"' + connected + '"')
+        : storageRaw;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set!;
+      setter.call(codeInput, contract);
+      setter.call(storageInput, storage);
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      storageInput.dispatchEvent(new Event('input', { bubbles: true }));
+      if (loadStatus) {
+        loadStatus.textContent = connected
+          ? `loaded · admin set to ${connected.slice(0,8)}…${connected.slice(-6)}`
+          : 'loaded · admin = default (connect wallet to auto-patch)';
+      }
+    } catch (err: any) {
+      if (loadStatus) loadStatus.textContent = 'failed: ' + (err?.message || 'unknown error');
+    }
+  });
+
+  function selectedNetwork(): 'mainnet' | 'shadownet' {
+    const checked = document.querySelector<HTMLInputElement>('input[name="network"]:checked');
+    return (checked?.value as 'mainnet' | 'shadownet') ?? 'shadownet';
+  }
+
+  function rpcFor(network: 'mainnet' | 'shadownet'): string {
+    return network === 'mainnet'
+      ? 'https://mainnet.api.tez.ie'
+      : 'https://shadownet.smartpy.io';
+  }
+
+  deployBtn?.addEventListener('click', async () => {
+    const codeRaw = codeInput.value.trim();
+    const storageRaw = storageInput.value.trim();
+    if (!codeRaw || !storageRaw) {
+      setStatus('paste michelson code and initial storage first');
+      return;
+    }
+
+    let code: unknown;
+    let storage: unknown;
+    try {
+      code = JSON.parse(codeRaw);
+    } catch (e) {
+      setStatus('michelson code is not valid JSON — check the paste');
+      return;
+    }
+    try {
+      storage = JSON.parse(storageRaw);
+    } catch (e) {
+      setStatus('initial storage is not valid JSON — check the paste');
+      return;
+    }
+    if (!Array.isArray(code)) {
+      setStatus('michelson code must be a JSON array (parameter/storage/code sections)');
+      return;
+    }
+
+    const network = selectedNetwork();
+    const rpcUrl = rpcFor(network);
+
+    deployBtn.disabled = true;
+    if (deployLabel) deployLabel.textContent = 'Loading Taquito…';
+    setStatus(`initializing ${network} · ${rpcUrl}`);
+
+    try {
+      // Lazy-import Taquito — same pattern we use on /collect. Beacon
+      // handles the Kukai handshake.
+      const { TezosToolkit } = await import('@taquito/taquito');
+      const { BeaconWallet } = await import('@taquito/beacon-wallet');
+
+      const tezos = new TezosToolkit(rpcUrl);
+      // NOTE: current Beacon SDK (@airgap / @ecadlabs v4+) rejects `network`
+      // in requestPermissions — it must be set at DAppClient construction.
+      // We pass the rpcUrl explicitly so Kukai routes to the right RPC even
+      // for testnets the wallet doesn't natively recognize (e.g. Shadownet).
+      const wallet = new BeaconWallet({
+        name: 'PointCast Admin',
+        network: {
+          type: network as any,
+          name: network === 'shadownet' ? 'Shadownet' : undefined,
+          rpcUrl,
+        },
+      } as any);
+      tezos.setWalletProvider(wallet);
+
+      if (deployLabel) deployLabel.textContent = 'Waiting for Kukai…';
+      setStatus('confirm the origination in kukai…');
+
+      const existing = await wallet.client.getActiveAccount();
+      if (!existing || (existing as any).network?.type !== network) {
+        // Clear any stale session tied to the other network — this unblocks
+        // the common "Awaiting confirmation" stall that happens when an old
+        // Ghostnet/Mainnet session collides with a new Shadownet request.
+        try { await wallet.clearActiveAccount(); } catch {}
+        await wallet.client.requestPermissions();
+      }
+
+      // Let Kukai estimate fees/gas/storage itself. Setting a fee cap too
+      // low causes a silent ABORTED_ERROR (Kukai's simulator rejects before
+      // showing a prompt). For large contracts (340KB FA2) the storage burn
+      // alone can be 8–15 ꜩ; hard-coding a fee cap fights that. Kukai will
+      // still surface the real number in the confirm dialog.
+      const op = await tezos.wallet.originate({
+        code: code as any,
+        init: storage as any,
+      } as any).send();
+
+      const opHash = (op as any).opHash;
+      setStatus(`✓ broadcast ${opHash.slice(0, 10)}… · confirming on ${network}…`);
+
+      const contract = await op.contract();
+      const address = contract.address;
+
+      // Success panel
+      if (resultPanel) resultPanel.classList.remove('hidden');
+      if (addressEl) addressEl.textContent = address;
+      if (linksEl) {
+        const tzktBase = network === 'mainnet' ? 'https://tzkt.io' : 'https://shadownet.tzkt.io';
+        const bcdNet = network === 'mainnet' ? 'mainnet' : 'shadownet';
+        linksEl.innerHTML = `
+          <a href="${tzktBase}/${address}/operations" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors">
+            tzkt &nearr;
+          </a>
+          <a href="https://better-call.dev/${bcdNet}/${address}" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors">
+            better-call.dev &nearr;
+          </a>
+        `;
+      }
+      setStatus(`✓ contract originated at ${address}`);
+      if (deployLabel) deployLabel.textContent = 'Deployed ✓';
+
+      // Persist in localStorage so the frontend can read it later when we
+      // wire up the mint buttons.
+      try {
+        localStorage.setItem(
+          `pc:contract:visit_nouns:${network}`,
+          JSON.stringify({ address, deployedAt: Date.now(), opHash }),
+        );
+      } catch { /* storage full? ignore */ }
+
+    } catch (err: any) {
+      // Dump EVERY field we can get at — Beacon/Taquito errors frequently
+      // put the useful text in non-enumerable props, aggregated `errors[]`,
+      // or custom fields like errorType / data.
+      const ownProps: Record<string, any> = {};
+      try {
+        for (const k of Object.getOwnPropertyNames(err || {})) ownProps[k] = (err as any)[k];
+      } catch {}
+      console.error('Deploy failed — full error:', err, 'ownProps:', ownProps);
+      (window as any).__pcLastErr = { err, ownProps };
+
+      // Pull out whatever reads best.
+      let msg: string | undefined = err?.message;
+      if (!msg && err?.name && err?.name !== 'Error') msg = err.name;
+      if (!msg && err?.errorType) msg = err.errorType;
+      if (!msg && err?.errors?.[0]?.id) msg = err.errors[0].id + ': ' + (err.errors[0].msg || '');
+      if (!msg && err?.errors?.[0]?.kind) msg = (err.errors[0].kind + ': ' + (err.errors[0].id || err.errors[0].msg || ''));
+      if (!msg && err?.description) msg = err.description;
+      if (!msg && err?.title) msg = err.title;
+      if (!msg && err?.data) msg = typeof err.data === 'string' ? err.data : JSON.stringify(err.data).slice(0, 200);
+      if (!msg) {
+        try { msg = JSON.stringify(err, Object.getOwnPropertyNames(err || {})); } catch {}
+      }
+      if (!msg || msg === '{}') msg = String(err);
+      if (/ABORTED|reject|cancel/i.test(msg)) {
+        setStatus('signing cancelled · try again when ready');
+      } else if (/NotEnoughBalance|balance/i.test(msg)) {
+        setStatus('not enough tez for origination · fund wallet (~5-10 ꜩ) and retry');
+      } else if (/gas.*limit|gas_limit/i.test(msg)) {
+        setStatus('gas limit rejected by wallet · try again, fee is already capped at 2 ꜩ');
+      } else {
+        setStatus(`error: ${String(msg).slice(0, 300)}`);
+      }
+      if (deployLabel) deployLabel.textContent = 'Review & Deploy →';
+      deployBtn.disabled = false;
+    }
+  });
+</script>

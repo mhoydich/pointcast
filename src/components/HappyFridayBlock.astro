@@ -1,0 +1,500 @@
+---
+// src/components/HappyFridayBlock.astro
+// Renders ONLY during the weekend window: Thursday 5pm PT → Sunday 11am PT.
+// Content rotates weekly by ISO week number mod 5.
+// Self-contained: no external fetches. All data lives in src/data/happy-friday.ts.
+
+import type { WeekendData, PlaylistData, CocktailData, LongreadData, DispatchData, RitualData } from '../data/happy-friday';
+import { weekendRotation } from '../data/happy-friday';
+
+// ─── 1. Determine current PT weekday + hour ───────────────────────────────────
+const now = new Date();
+
+const ptFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles',
+  weekday: 'short',
+  hour: 'numeric',
+  hour12: false,
+});
+
+const ptParts = ptFormatter.formatToParts(now);
+const weekday = ptParts.find(p => p.type === 'weekday')?.value ?? '';
+const hour = parseInt(ptParts.find(p => p.type === 'hour')?.value ?? '0', 10);
+
+// ─── 2. Weekend window gate ───────────────────────────────────────────────────
+// Thu 17:00 PT → Sun 10:59 PT
+const inWindow =
+  (weekday === 'Thu' && hour >= 17) ||
+  weekday === 'Fri' ||
+  weekday === 'Sat' ||
+  (weekday === 'Sun' && hour < 11);
+
+if (!inWindow) {
+  return null;
+}
+
+// ─── 3. ISO week → rotation index ────────────────────────────────────────────
+function isoWeek(d: Date): number {
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604_800_000);
+}
+
+const rotationIndex = isoWeek(now) % 5;
+const data: WeekendData = weekendRotation[rotationIndex];
+
+// ─── 4. Typed helpers ─────────────────────────────────────────────────────────
+const isPlaylist  = (d: WeekendData): d is PlaylistData  => d.mode === 'playlist';
+const isCocktail  = (d: WeekendData): d is CocktailData  => d.mode === 'cocktail';
+const isLongread  = (d: WeekendData): d is LongreadData  => d.mode === 'longread';
+const isDispatch  = (d: WeekendData): d is DispatchData  => d.mode === 'dispatch';
+const isRitual    = (d: WeekendData): d is RitualData    => d.mode === 'ritual';
+
+// ─── 5. Mode label ────────────────────────────────────────────────────────────
+const modeLabels: Record<string, string> = {
+  playlist: 'Saturday Morning Playlist',
+  cocktail: 'Cocktail of the Week',
+  longread: 'Long Read to Save',
+  dispatch: 'Weekend City Dispatch',
+  ritual:   "Friday's Ritual",
+};
+const modeLabel = modeLabels[data.mode];
+---
+
+<section class="hf-block" aria-label="Happy Friday weekend block">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <div class="hf-header">
+    <span class="hf-sun" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="4.5" fill="var(--hf-accent)" />
+        <line x1="12" y1="2"   x2="12" y2="5"   stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="12" y1="19"  x2="12" y2="22"  stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="2"  y1="12"  x2="5"  y2="12"  stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="19" y1="12"  x2="22" y2="12"  stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="5.6"  y1="5.6"  x2="7.8"  y2="7.8"  stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="16.2" y1="16.2" x2="18.4" y2="18.4" stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="5.6"  y1="18.4" x2="7.8"  y2="16.2" stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="16.2" y1="7.8"  x2="18.4" y2="5.6"  stroke="var(--hf-accent)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <h2 class="hf-title">Happy Friday</h2>
+    <span class="hf-mode-tag">{modeLabel}</span>
+  </div>
+
+  <!-- ── Content ────────────────────────────────────────────────────────────── -->
+  <div class="hf-body">
+
+    {isPlaylist(data) && (
+      <div class="hf-playlist">
+        <h3 class="hf-content-title">{data.title}</h3>
+        <p class="hf-subtitle">{data.subtitle}</p>
+        <ol class="hf-track-list">
+          {data.tracks.map((track) => (
+            <li>{track}</li>
+          ))}
+        </ol>
+        <div class="hf-meta">{data.meta}</div>
+      </div>
+    )}
+
+    {isCocktail(data) && (
+      <div class="hf-cocktail">
+        <h3 class="hf-content-title">{data.title}</h3>
+        <p class="hf-subtitle">{data.subtitle}</p>
+        <table class="hf-recipe-table">
+          <thead>
+            <tr>
+              <th>Ingredient</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.recipe.map((row) => (
+              <tr>
+                <td>{row.ingredient}</td>
+                <td class="hf-amount">{row.amount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="hf-instructions">{data.instructions}</p>
+        <p class="hf-story">{data.story}</p>
+        <div class="hf-meta">{data.meta}</div>
+      </div>
+    )}
+
+    {isLongread(data) && (
+      <div class="hf-longread">
+        <h3 class="hf-content-title">{data.title}</h3>
+        <p class="hf-byline">by {data.author}</p>
+        <p class="hf-subtitle">{data.subtitle}</p>
+        <p class="hf-pitch">{data.pitch}</p>
+        <div class="hf-meta">{data.meta}</div>
+      </div>
+    )}
+
+    {isDispatch(data) && (
+      <div class="hf-dispatch">
+        <h3 class="hf-content-title">{data.title}</h3>
+        <p class="hf-subtitle">{data.neighborhood}</p>
+        <ol class="hf-spot-list">
+          {data.spots.map((spot) => (
+            <li>
+              <strong class="hf-spot-name">{spot.name}</strong>
+              <span class="hf-spot-note">{spot.note}</span>
+            </li>
+          ))}
+        </ol>
+        <div class="hf-meta">{data.meta}</div>
+      </div>
+    )}
+
+    {isRitual(data) && (
+      <div class="hf-ritual">
+        <h3 class="hf-content-title">{data.title}</h3>
+        <p class="hf-subtitle">{data.subtitle}</p>
+        <ol class="hf-ritual-list">
+          {data.items.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ol>
+        <div class="hf-meta">{data.meta}</div>
+      </div>
+    )}
+
+  </div>
+</section>
+
+<style>
+  /* ── Design tokens ──────────────────────────────────────────────────────── */
+  .hf-block {
+    --hf-bg:        #fdf8ee;          /* warmer than site cream */
+    --hf-ink:       #1a1813;
+    --hf-accent:    #c94d2c;          /* warm terracotta */
+    --hf-gold:      #b8860b;          /* subtle gold accent */
+    --hf-muted:     #7a7060;
+    --hf-border:    #1a1813;
+    --hf-font-serif: 'Lora', Georgia, serif;
+    --hf-font-sans:  'Mondwest', 'Helvetica Neue', sans-serif;
+    --hf-font-mono:  'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  /* ── Block shell ────────────────────────────────────────────────────────── */
+  .hf-block {
+    background-color: var(--hf-bg);
+    color: var(--hf-ink);
+    border: 2px solid var(--hf-border);
+    /* Slightly irregular corners for hand-drawn feel */
+    border-radius: 3px 7px 5px 4px / 4px 5px 7px 3px;
+    padding: 1.5rem 1.75rem;
+    margin: 2rem 0;
+    position: relative;
+    /* Warm offset shadow */
+    box-shadow: 5px 5px 0 rgba(184, 134, 11, 0.18);
+    /* Noise texture via SVG data URI — zero JS, zero HTTP */
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 300px 300px;
+  }
+
+  /* Gold left-edge rule — distinguishes from hard-news blocks */
+  .hf-block::before {
+    content: '';
+    position: absolute;
+    top: 0.5rem;
+    left: -6px;
+    bottom: 0.5rem;
+    width: 4px;
+    background: var(--hf-gold);
+    border-radius: 2px;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .hf-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed var(--hf-ink);
+    flex-wrap: wrap;
+  }
+
+  .hf-sun {
+    display: flex;
+    align-items: center;
+    /* CSS-only rotation — no JS, no IntersectionObserver */
+    animation: hf-spin 24s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes hf-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* Respect reduced-motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    .hf-sun { animation: none; }
+  }
+
+  .hf-title {
+    font-family: var(--hf-font-serif);
+    font-style: italic;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: var(--hf-accent);
+    margin: 0;
+    letter-spacing: -0.025em;
+    line-height: 1;
+  }
+
+  .hf-mode-tag {
+    font-family: var(--hf-font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--hf-muted);
+    border: 1px solid var(--hf-muted);
+    padding: 0.15em 0.45em;
+    border-radius: 2px;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  /* ── Body ───────────────────────────────────────────────────────────────── */
+  .hf-body {
+    line-height: 1.65;
+  }
+
+  .hf-content-title {
+    font-family: var(--hf-font-sans);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0 0 0.2rem 0;
+    color: var(--hf-ink);
+    letter-spacing: -0.01em;
+  }
+
+  .hf-subtitle {
+    font-family: var(--hf-font-serif);
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--hf-muted);
+    margin: 0 0 1rem 0;
+  }
+
+  /* ── Playlist ───────────────────────────────────────────────────────────── */
+  .hf-track-list {
+    list-style: none;
+    margin: 0 0 1rem 0;
+    padding: 0;
+    counter-reset: track;
+  }
+
+  .hf-track-list li {
+    counter-increment: track;
+    font-family: var(--hf-font-serif);
+    font-size: 0.95rem;
+    padding: 0.35rem 0 0.35rem 2rem;
+    border-bottom: 1px dotted rgba(26,24,19,0.15);
+    position: relative;
+  }
+
+  .hf-track-list li:last-child {
+    border-bottom: none;
+  }
+
+  .hf-track-list li::before {
+    content: counter(track, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    font-family: var(--hf-font-mono);
+    font-size: 0.7rem;
+    color: var(--hf-accent);
+    top: 0.45rem;
+  }
+
+  /* ── Cocktail ───────────────────────────────────────────────────────────── */
+  .hf-recipe-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 1rem 0;
+    font-family: var(--hf-font-serif);
+    font-size: 0.9rem;
+  }
+
+  .hf-recipe-table thead tr {
+    border-bottom: 2px solid var(--hf-ink);
+  }
+
+  .hf-recipe-table th {
+    font-family: var(--hf-font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--hf-muted);
+    text-align: left;
+    padding: 0.25rem 0.5rem 0.25rem 0;
+    font-weight: 400;
+  }
+
+  .hf-recipe-table td {
+    padding: 0.3rem 0.5rem 0.3rem 0;
+    border-bottom: 1px dotted rgba(26,24,19,0.15);
+    vertical-align: top;
+  }
+
+  .hf-amount {
+    font-family: var(--hf-font-mono);
+    font-size: 0.85rem;
+    color: var(--hf-accent);
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .hf-instructions {
+    font-family: var(--hf-font-serif);
+    font-size: 0.95rem;
+    margin: 0 0 0.75rem 0;
+  }
+
+  .hf-story {
+    font-family: var(--hf-font-serif);
+    font-style: italic;
+    font-size: 0.9rem;
+    color: var(--hf-muted);
+    margin: 0 0 1rem 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--hf-gold);
+  }
+
+  /* ── Long Read ──────────────────────────────────────────────────────────── */
+  .hf-byline {
+    font-family: var(--hf-font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--hf-muted);
+    margin: -0.2rem 0 0.75rem 0;
+  }
+
+  .hf-pitch {
+    font-family: var(--hf-font-serif);
+    font-size: 0.97rem;
+    margin: 0 0 1rem 0;
+    line-height: 1.7;
+  }
+
+  /* ── City Dispatch ──────────────────────────────────────────────────────── */
+  .hf-spot-list {
+    list-style: none;
+    counter-reset: spot;
+    margin: 0 0 1rem 0;
+    padding: 0;
+  }
+
+  .hf-spot-list li {
+    counter-increment: spot;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 0.75rem;
+    margin-bottom: 1rem;
+    position: relative;
+    padding-left: 1.75rem;
+  }
+
+  .hf-spot-list li::before {
+    content: counter(spot);
+    position: absolute;
+    left: 0;
+    top: 0.1rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: var(--hf-accent);
+    color: var(--hf-bg);
+    font-family: var(--hf-font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .hf-spot-name {
+    font-family: var(--hf-font-sans);
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .hf-spot-note {
+    font-family: var(--hf-font-serif);
+    font-size: 0.9rem;
+    color: var(--hf-muted);
+    display: block;
+    line-height: 1.6;
+  }
+
+  /* ── Ritual ─────────────────────────────────────────────────────────────── */
+  .hf-ritual-list {
+    list-style: none;
+    counter-reset: ritual;
+    margin: 0 0 1rem 0;
+    padding: 0;
+  }
+
+  .hf-ritual-list li {
+    counter-increment: ritual;
+    font-family: var(--hf-font-serif);
+    font-size: 0.97rem;
+    padding: 0.5rem 0 0.5rem 2rem;
+    border-bottom: 1px dotted rgba(26,24,19,0.15);
+    position: relative;
+    line-height: 1.65;
+  }
+
+  .hf-ritual-list li:last-child {
+    border-bottom: none;
+  }
+
+  .hf-ritual-list li::before {
+    content: counter(ritual);
+    position: absolute;
+    left: 0;
+    top: 0.55rem;
+    width: 1.2rem;
+    height: 1.2rem;
+    border: 1.5px solid var(--hf-gold);
+    color: var(--hf-gold);
+    font-family: var(--hf-font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  /* ── Meta footer ────────────────────────────────────────────────────────── */
+  .hf-meta {
+    font-family: var(--hf-font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--hf-muted);
+    border-top: 1px solid rgba(26,24,19,0.12);
+    padding-top: 0.65rem;
+    margin-top: 0.5rem;
+  }
+</style>

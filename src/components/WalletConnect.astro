@@ -1,0 +1,322 @@
+---
+/**
+ * WalletConnect — multi-chain wallet connector.
+ *
+ * Three wallets, three chains:
+ *   - Kukai (Tezos) — via Beacon SDK, lazy-loaded from jsDelivr
+ *   - MetaMask (Ethereum) — native window.ethereum
+ *   - Phantom (Solana) — native window.solana
+ *
+ * State persists in localStorage under `pc:wallet`:
+ *   { chain, address, provider }
+ *
+ * Exposes two window-level events:
+ *   - 'pc:wallet-change'    fires on connect/disconnect with detail = wallet | null
+ *   - 'pc:open-wallet-menu' listen for this to pop the menu from elsewhere
+ *                            (e.g. the Noun modal's Mint button when user isn't connected)
+ *
+ * The Mint flow reads wallet state directly from localStorage on click.
+ */
+---
+
+<div id="wallet-connect" class="relative inline-flex">
+  <button
+    id="wallet-connect-btn"
+    type="button"
+    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-rule/50 bg-card/80 hover:border-warm hover:bg-card transition-colors font-mono text-[0.58rem] tracking-[0.16em] uppercase text-ink-soft hover:text-ink cursor-pointer"
+    aria-haspopup="menu"
+    aria-expanded="false"
+  >
+    <svg id="wallet-connect-icon" class="w-3 h-3 text-warm" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+      <circle cx="6" cy="6" r="3"/>
+    </svg>
+    <span id="wallet-connect-label">connect wallet</span>
+  </button>
+
+  <div
+    id="wallet-menu"
+    class="hidden absolute top-full right-0 mt-2 w-64 bg-paper border border-rule rounded-lg shadow-xl z-50 overflow-hidden"
+    role="menu"
+  >
+    <!-- When disconnected: list of wallets -->
+    <div id="wallet-menu-connect" class="divide-y divide-rule/30">
+      <button
+        data-wallet="kukai"
+        type="button"
+        class="w-full flex items-start gap-3 p-3 hover:bg-card transition-colors text-left cursor-pointer"
+        role="menuitem"
+      >
+        <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5 shrink-0">tz</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-[0.9rem] text-ink font-medium leading-tight">Kukai</p>
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Tezos · browser wallet</p>
+        </div>
+      </button>
+      <!-- Tezos-only for now. MetaMask + Phantom hidden per diagnosis in
+           docs/wallet-metamask-diagnosis.md (Manus task 9MSNEGn8CCtFzsYG8UsmUt).
+           The window.ethereum path is brittle on mobile Safari and WalletConnect
+           v2 deep-links drop silently; all current PointCast tokens are on Tezos,
+           so surfacing EVM/Solana options creates broken paths without utility.
+           Re-enable when Zora (Base) integration is scoped with Wagmi or the
+           Zora SDK. The handler code below (data-wallet cases) is preserved so
+           uncomment + deploy flips them back on. -->
+      <div class="p-3 bg-card/60 border-b border-rule/30">
+        <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1">Other chains</p>
+        <p class="text-[0.78rem] text-ink-soft leading-snug italic">
+          Tezos only for now &mdash; Ethereum + Solana arrive with the Zora drop.
+        </p>
+      </div>
+      <!--
+      <button
+        data-wallet="metamask"
+        type="button"
+        class="w-full flex items-start gap-3 p-3 hover:bg-card transition-colors text-left cursor-pointer"
+        role="menuitem"
+      >
+        <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5 shrink-0">eth</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-[0.9rem] text-ink font-medium leading-tight">MetaMask</p>
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Ethereum · Base · L2s</p>
+        </div>
+      </button>
+      <button
+        data-wallet="phantom"
+        type="button"
+        class="w-full flex items-start gap-3 p-3 hover:bg-card transition-colors text-left cursor-pointer"
+        role="menuitem"
+      >
+        <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5 shrink-0">sol</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-[0.9rem] text-ink font-medium leading-tight">Phantom</p>
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Solana</p>
+        </div>
+      </button>
+      -->
+    </div>
+
+    <!-- When connected: shows address + disconnect -->
+    <div id="wallet-menu-connected" class="hidden p-3">
+      <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/60">connected to</p>
+      <p id="wallet-menu-chain" class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5">—</p>
+      <p id="wallet-menu-address" class="font-mono text-[0.7rem] text-ink mt-2 break-all leading-snug">—</p>
+      <button
+        id="wallet-disconnect"
+        type="button"
+        class="mt-3 w-full px-3 py-2 rounded-md bg-card border border-rule/40 hover:border-warm text-ink-soft hover:text-warm font-mono text-[0.58rem] tracking-[0.14em] uppercase cursor-pointer transition-colors"
+      >
+        Disconnect
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Types + storage
+  // ---------------------------------------------------------------------------
+  type Wallet = {
+    chain: 'tezos' | 'eth' | 'solana';
+    address: string;
+    provider: 'kukai' | 'metamask' | 'phantom';
+  };
+
+  const STORAGE_KEY = 'pc:wallet';
+  // Pinned Beacon SDK — exact version + SRI integrity. Defends against
+  // a supply-chain attack where a future malicious version of the package
+  // would silently ship to every visitor's browser. Bump both the version
+  // and the SRI hash together when rolling forward (script:
+  //   VERSION=<next>; curl -sL "https://cdn.jsdelivr.net/npm/@airgap/beacon-sdk@${VERSION}/dist/walletbeacon.min.js" | openssl dgst -sha384 -binary | openssl base64 -A
+  // ).
+  const BEACON_VERSION = '4.8.1';
+  const BEACON_CDN = `https://cdn.jsdelivr.net/npm/@airgap/beacon-sdk@${BEACON_VERSION}/dist/walletbeacon.min.js`;
+  const BEACON_SRI = 'sha384-BRG93bqbyUWvDu3ImCSrlsOmHKakx1XM9AZiihMekRYBJinl0IKE5XZxTU14EG1K';
+
+  function loadWallet(): Wallet | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as Wallet;
+    } catch { return null; }
+  }
+
+  function saveWallet(w: Wallet | null): void {
+    if (w) localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
+    else localStorage.removeItem(STORAGE_KEY);
+    broadcast(w);
+  }
+
+  function broadcast(w: Wallet | null): void {
+    window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: w }));
+  }
+
+  function shortAddress(addr: string): string {
+    if (!addr) return '';
+    if (addr.length <= 12) return addr;
+    return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
+  const btn = document.getElementById('wallet-connect-btn') as HTMLButtonElement | null;
+  const label = document.getElementById('wallet-connect-label');
+  const icon = document.getElementById('wallet-connect-icon');
+  const menu = document.getElementById('wallet-menu');
+  const menuConnect = document.getElementById('wallet-menu-connect');
+  const menuConnected = document.getElementById('wallet-menu-connected');
+  const menuChain = document.getElementById('wallet-menu-chain');
+  const menuAddress = document.getElementById('wallet-menu-address');
+
+  function renderState(): void {
+    const w = loadWallet();
+    if (w) {
+      if (label) label.textContent = shortAddress(w.address);
+      if (icon) icon.classList.add('text-warm');
+      menuConnect?.classList.add('hidden');
+      menuConnected?.classList.remove('hidden');
+      if (menuChain) menuChain.textContent = `${w.provider} · ${w.chain}`;
+      if (menuAddress) menuAddress.textContent = w.address;
+      btn?.classList.add('border-warm/50');
+    } else {
+      if (label) label.textContent = 'connect wallet';
+      menuConnect?.classList.remove('hidden');
+      menuConnected?.classList.add('hidden');
+      btn?.classList.remove('border-warm/50');
+    }
+  }
+
+  function openMenu(): void {
+    menu?.classList.remove('hidden');
+    btn?.setAttribute('aria-expanded', 'true');
+  }
+  function closeMenu(): void {
+    menu?.classList.add('hidden');
+    btn?.setAttribute('aria-expanded', 'false');
+  }
+  function toggleMenu(): void {
+    if (menu?.classList.contains('hidden')) openMenu(); else closeMenu();
+  }
+
+  btn?.addEventListener('click', toggleMenu);
+
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    const target = e.target as Node;
+    if (!document.getElementById('wallet-connect')?.contains(target)) closeMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  });
+
+  // External trigger from Noun modal's Mint button
+  window.addEventListener('pc:open-wallet-menu', () => {
+    openMenu();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Connect flows
+  // ---------------------------------------------------------------------------
+  async function loadBeacon(): Promise<any> {
+    if ((window as any).beacon) return (window as any).beacon;
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = BEACON_CDN;
+      // Subresource Integrity — the browser refuses to execute the script
+      // if the delivered bytes don't match this hash. If jsDelivr's copy
+      // is tampered with, the whole wallet flow fails closed instead of
+      // silently running malicious code.
+      s.integrity = BEACON_SRI;
+      s.crossOrigin = 'anonymous';
+      s.onload = () => resolve((window as any).beacon);
+      s.onerror = () => reject(new Error('Failed to load Beacon SDK (integrity check or network)'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function connectKukai(): Promise<void> {
+    try {
+      const beacon = await loadBeacon();
+      const client = new beacon.DAppClient({
+        name: 'PointCast',
+        preferredNetwork: 'mainnet',
+      });
+      const perms = await client.requestPermissions();
+      const address: string = perms.address;
+      if (!address) throw new Error('No address returned');
+      saveWallet({ chain: 'tezos', address, provider: 'kukai' });
+      renderState();
+      closeMenu();
+    } catch (err) {
+      console.warn('Kukai connect failed:', err);
+      alert('Kukai connection cancelled or failed.');
+    }
+  }
+
+  async function connectMetaMask(): Promise<void> {
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      window.open('https://metamask.io/download/', '_blank');
+      return;
+    }
+    try {
+      const accounts: string[] = await eth.request({ method: 'eth_requestAccounts' });
+      if (!accounts?.[0]) throw new Error('No accounts returned');
+      saveWallet({ chain: 'eth', address: accounts[0], provider: 'metamask' });
+      renderState();
+      closeMenu();
+    } catch (err) {
+      console.warn('MetaMask connect failed:', err);
+    }
+  }
+
+  async function connectPhantom(): Promise<void> {
+    const sol = (window as any).solana;
+    if (!sol?.isPhantom) {
+      window.open('https://phantom.com/download', '_blank');
+      return;
+    }
+    try {
+      const resp = await sol.connect();
+      const address = resp.publicKey?.toString?.() ?? resp.publicKey ?? '';
+      if (!address) throw new Error('No pubkey returned');
+      saveWallet({ chain: 'solana', address, provider: 'phantom' });
+      renderState();
+      closeMenu();
+    } catch (err) {
+      console.warn('Phantom connect failed:', err);
+    }
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-wallet]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const kind = el.dataset.wallet;
+      if (kind === 'kukai') connectKukai();
+      else if (kind === 'metamask') connectMetaMask();
+      else if (kind === 'phantom') connectPhantom();
+    });
+  });
+
+  // Disconnect
+  document.getElementById('wallet-disconnect')?.addEventListener('click', async () => {
+    const w = loadWallet();
+    if (w?.provider === 'kukai') {
+      // Best-effort: Beacon sessions get cleared on the dApp side via `clearActiveAccount`
+      try {
+        const beacon = (window as any).beacon;
+        if (beacon) {
+          const client = new beacon.DAppClient({ name: 'PointCast' });
+          await client.clearActiveAccount();
+        }
+      } catch { /* ignore */ }
+    } else if (w?.provider === 'phantom') {
+      try { await (window as any).solana?.disconnect?.(); } catch { /* ignore */ }
+    }
+    saveWallet(null);
+    renderState();
+    closeMenu();
+  });
+
+  // Initial render + broadcast so listeners know the wallet at load
+  renderState();
+  broadcast(loadWallet());
+</script>

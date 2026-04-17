@@ -1,0 +1,362 @@
+---
+/**
+ * Jackpot — Ms. Pac-Man-style full-screen celebration interstitial.
+ *
+ * When notable room moments hit, this sweeps in a full-viewport card for
+ * 2.5 seconds with a big title, optional Noun, confetti, and a chime, then
+ * auto-dismisses. Shareable: the user can tap "save moment" before the
+ * close animation runs to grab a PNG.
+ *
+ * MVP triggers (more added as Manus's UX spec lands):
+ *   • "FULL HOUSE"      — 5+ humans in the room simultaneously
+ *   • "CENTURY"         — global drum count hits a new 10,000 boundary
+ *   • "TRENDING"        — 3+ Wire messages in 30s
+ *   • "WORLD PREMIERE"  — (triggered from visit flow, future)
+ *
+ * Priority: higher-priority events can interrupt lower ones within 2s of
+ * show. Default cooldown: 60s between jackpots site-wide, 10min per type.
+ *
+ * Exposes `window.pcJackpot({type, title, body, nounId?})` for any script
+ * (drum, Wire, presence, future signals) to fire. PulseAlert is for subtle
+ * notifications; Jackpot is the big moment.
+ */
+---
+
+<div
+  id="jackpot-host"
+  class="fixed inset-0 z-[60] pointer-events-none flex items-center justify-center"
+  aria-live="assertive"
+  aria-atomic="true"
+></div>
+
+<style>
+  #jackpot-host :global(.jackpot-backdrop) {
+    position: fixed;
+    inset: 0;
+    /* Solid dark base + radial warm accent layered on top. Using two
+       separate layers gives much stronger darkening at the edges than a
+       single gradient from transparent-warm. */
+    background:
+      radial-gradient(ellipse at center, rgba(194, 106, 74, 0.32) 0%, transparent 55%),
+      rgba(18, 17, 14, 0.94);
+    opacity: 0;
+    transition: opacity 320ms ease-out;
+    will-change: opacity;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  #jackpot-host :global(.jackpot-backdrop.in) { opacity: 1; }
+
+  /* Card — override bg-card with a stronger "interrupt" look: deep-ink
+     wrapper around a warm cream inner, so it clearly reads as an overlay
+     and not just another block on the page. */
+  #jackpot-host :global(.jackpot-card) {
+    background: #f5efe4;
+    box-shadow:
+      0 0 0 4px #12110e,
+      0 24px 48px -12px rgba(0, 0, 0, 0.6),
+      0 0 80px 4px rgba(194, 106, 74, 0.3);
+  }
+
+  #jackpot-host :global(.jackpot-card) {
+    position: relative;
+    transform: scale(0.6) rotate(-4deg);
+    opacity: 0;
+    transition: transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 220ms;
+    will-change: transform, opacity;
+  }
+  #jackpot-host :global(.jackpot-card.in) {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  #jackpot-host :global(.jackpot-card.out) {
+    transform: scale(0.9) rotate(2deg);
+    opacity: 0;
+  }
+
+  @keyframes jackpotPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+  #jackpot-host :global(.jackpot-card.in) {
+    animation: jackpotPulse 1.2s ease-in-out infinite;
+  }
+
+  /* Confetti — simple CSS bits that fall + spin */
+  #jackpot-host :global(.confetti) {
+    position: absolute;
+    width: 8px;
+    height: 14px;
+    opacity: 0;
+    transform: translateY(-20px) rotate(0deg);
+    animation: confettiFall 2.4s ease-out forwards;
+  }
+  @keyframes confettiFall {
+    0%   { opacity: 0;  transform: translate(0, -40px)   rotate(0deg)   scale(0.8); }
+    15%  { opacity: 1; }
+    100% { opacity: 0;  transform: translate(var(--dx, 80px), 100vh) rotate(720deg) scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #jackpot-host :global(.jackpot-card) {
+      transition: opacity 180ms;
+      transform: none;
+      animation: none;
+    }
+    #jackpot-host :global(.jackpot-card.in) { animation: none; }
+    #jackpot-host :global(.confetti) { display: none; }
+  }
+</style>
+
+<script>
+  import { playNounVoice, playKind } from '../lib/chimes';
+
+  interface JackpotEvent {
+    type: string;
+    title: string;       // "FULL HOUSE", "CENTURY", etc.
+    body?: string;       // short descriptor below title
+    nounId?: number;     // optional featured noun
+    priority?: number;   // 1-10, higher pre-empts lower within 2s of show
+    duration?: number;   // ms, default 2800
+  }
+
+  const host = document.getElementById('jackpot-host');
+  if (!host) {
+    console.warn('[jackpot] host missing — aborting');
+  } else {
+    const DEFAULT_DURATION = 2800;
+    // Cooldown is measured from LAST DISMISS, not last show — so a 30s
+    // quiet window kicks in AFTER the jackpot disappears. This feels less
+    // gatekeeper-y + lets rapid successive triggers of different types feel
+    // responsive (the Wire going viral right after a FULL HOUSE is narrative,
+    // not spam).
+    const GLOBAL_COOLDOWN_MS = 30_000;
+    const TYPE_COOLDOWN_MS = 5 * 60_000;
+    const CONFETTI_COUNT = 40;
+    const CONFETTI_COLORS = ['#c26a4a', '#d4a76a', '#3b6b5c', '#8a5a3b', '#12110e', '#f5efe4'];
+
+    let lastDismissT = 0;  // 0 means "nothing has dismissed yet" → immediate first fire
+    const lastTypeShowT = new Map<string, number>();
+    let activeCard: HTMLElement | null = null;
+    let activeCardTimer: number | null = null;
+    let activePriority = 0;
+
+    function canShow(evt: JackpotEvent): boolean {
+      const now = Date.now();
+      const priority = evt.priority ?? 5;
+      // If currently showing, allow preemption only if new priority is strictly higher.
+      if (activeCard && priority < activePriority) return false;
+      if (activeCard && priority === activePriority) return false;
+      // If no active card, check global cooldown from last dismiss.
+      if (!activeCard && lastDismissT > 0 && now - lastDismissT < GLOBAL_COOLDOWN_MS) return false;
+      const lastSame = lastTypeShowT.get(evt.type) ?? 0;
+      if (now - lastSame < TYPE_COOLDOWN_MS) return false;
+      return true;
+    }
+
+    function buildConfetti(): DocumentFragment {
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < CONFETTI_COUNT; i++) {
+        const bit = document.createElement('span');
+        bit.className = 'confetti';
+        const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+        bit.style.background = color;
+        bit.style.left = `${Math.random() * 100}%`;
+        bit.style.top = '0';
+        bit.style.setProperty('--dx', `${(Math.random() - 0.5) * 400}px`);
+        bit.style.animationDelay = `${Math.random() * 0.4}s`;
+        bit.style.animationDuration = `${1.6 + Math.random() * 1.2}s`;
+        frag.appendChild(bit);
+      }
+      return frag;
+    }
+
+    function render(evt: JackpotEvent): HTMLElement {
+      // Backdrop — darkens the page but stays pointer-events: none so you
+      // can still interact with the underlying page if you want.
+      const backdrop = document.createElement('div');
+      backdrop.className = 'jackpot-backdrop pointer-events-auto';
+
+      const card = document.createElement('div');
+      card.className = 'jackpot-card relative rounded-2xl border-2 border-warm bg-card px-8 py-7 md:px-12 md:py-10 mx-4 max-w-[32rem] w-[calc(100%-2rem)] text-center shadow-2xl pointer-events-auto';
+
+      // Corner dots
+      ['top-2 left-2 bg-warm', 'top-2 right-2 bg-ink', 'bottom-2 left-2 bg-ink', 'bottom-2 right-2 bg-warm'].forEach((c) => {
+        const d = document.createElement('span');
+        d.className = `absolute w-3 h-3 ${c}`;
+        d.setAttribute('aria-hidden', 'true');
+        card.appendChild(d);
+      });
+
+      // Kicker
+      const kicker = document.createElement('p');
+      kicker.className = 'font-mono text-[0.6rem] tracking-[0.3em] uppercase text-warm/70 mb-3';
+      kicker.textContent = 'Jackpot';
+      card.appendChild(kicker);
+
+      // Title — display-heavy serif
+      const title = document.createElement('h2');
+      title.className = 'font-heading text-[2.5rem] md:text-[3.25rem] leading-none text-ink tracking-tight mb-3';
+      title.textContent = evt.title;
+      card.appendChild(title);
+
+      // Body
+      if (evt.body) {
+        const body = document.createElement('p');
+        body.className = 'font-serif italic text-[1rem] md:text-[1.1rem] text-ink-soft/80 leading-snug mb-3';
+        body.textContent = evt.body;
+        card.appendChild(body);
+      }
+
+      // Noun if present
+      if (typeof evt.nounId === 'number' && Number.isFinite(evt.nounId)) {
+        const img = document.createElement('img');
+        img.src = `https://noun.pics/${evt.nounId}.svg`;
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        img.width = 96;
+        img.height = 96;
+        img.className = 'mx-auto rounded-lg ring-2 ring-warm/50 block mt-2';
+        img.style.imageRendering = 'pixelated';
+        card.appendChild(img);
+      }
+
+      // Share hint (non-interactive — the user just screencaps)
+      const hint = document.createElement('p');
+      hint.className = 'font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/40 mt-4';
+      hint.textContent = 'screenshot this · pointcast.xyz';
+      card.appendChild(hint);
+
+      backdrop.appendChild(card);
+      return backdrop;
+    }
+
+    function dismiss(card: HTMLElement): void {
+      card.classList.remove('in');
+      card.classList.add('out');
+      const inner = card.querySelector('.jackpot-card') as HTMLElement | null;
+      if (inner) {
+        inner.classList.remove('in');
+        inner.classList.add('out');
+      }
+      setTimeout(() => card.remove(), 360);
+      activeCard = null;
+      activePriority = 0;
+      lastDismissT = Date.now();  // Global cooldown starts from here
+      if (activeCardTimer != null) {
+        clearTimeout(activeCardTimer);
+        activeCardTimer = null;
+      }
+    }
+
+    function showNow(evt: JackpotEvent): void {
+      if (!host) return;
+      // Clear any active card first if we're preempting.
+      if (activeCard) dismiss(activeCard);
+
+      const wrapper = render(evt);
+      host.appendChild(wrapper);
+
+      // Confetti — appended to backdrop so it fills the viewport.
+      const confettiLayer = document.createElement('div');
+      confettiLayer.className = 'absolute inset-0 overflow-hidden pointer-events-none';
+      confettiLayer.appendChild(buildConfetti());
+      wrapper.appendChild(confettiLayer);
+
+      // Animate IN
+      requestAnimationFrame(() => {
+        wrapper.classList.add('in');
+        const inner = wrapper.querySelector('.jackpot-card') as HTMLElement | null;
+        if (inner) inner.classList.add('in');
+      });
+
+      // Chime: multi-note stab using drum kind + noun voice if available.
+      try {
+        playKind('drum', typeof evt.nounId === 'number' ? evt.nounId : 42);
+        setTimeout(() => {
+          if (typeof evt.nounId === 'number') playNounVoice(evt.nounId);
+        }, 200);
+      } catch {}
+
+      // Tap-anywhere-outside-card to dismiss early.
+      wrapper.addEventListener('click', (e) => {
+        const inner = wrapper.querySelector('.jackpot-card');
+        if (inner && !inner.contains(e.target as Node)) {
+          dismiss(wrapper);
+        }
+      });
+
+      activeCard = wrapper;
+      activePriority = evt.priority ?? 5;
+      lastTypeShowT.set(evt.type, Date.now());
+
+      const duration = evt.duration ?? DEFAULT_DURATION;
+      activeCardTimer = window.setTimeout(() => dismiss(wrapper), duration);
+    }
+
+    function triggerJackpot(evt: JackpotEvent): void {
+      if (!canShow(evt)) return;
+      showNow(evt);
+    }
+
+    (window as unknown as { pcJackpot?: (e: JackpotEvent) => void }).pcJackpot = triggerJackpot;
+
+    // -------- Triggers ---------------------------------------------------
+
+    // FULL HOUSE — 5+ humans in room simultaneously.
+    document.addEventListener('pc:presence', (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as { humans?: number } | undefined;
+      if (!detail || typeof detail.humans !== 'number') return;
+      if (detail.humans >= 5) {
+        triggerJackpot({
+          type: 'full-house',
+          title: 'FULL HOUSE',
+          body: `${detail.humans} humans in the room right now`,
+          priority: 8,
+        });
+      }
+    });
+
+    // CENTURY — global drum count crosses a new 10,000 boundary.
+    let lastDrumMilestone = 0;
+    document.addEventListener('pc:drum-total', (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as { total?: number } | undefined;
+      if (!detail || typeof detail.total !== 'number') return;
+      const milestone = Math.floor(detail.total / 10_000);
+      if (milestone > lastDrumMilestone && milestone > 0) {
+        lastDrumMilestone = milestone;
+        triggerJackpot({
+          type: 'century',
+          title: `${(milestone * 10).toLocaleString()}K DRUMS`,
+          body: 'the whole room just crossed another milestone',
+          priority: 7,
+        });
+      }
+    });
+
+    // TRENDING — 3+ Wire messages in 30s.
+    const wireTimestamps: number[] = [];
+    document.addEventListener('pc:wire', (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as { pid?: string } | undefined;
+      const now = Date.now();
+      wireTimestamps.push(now);
+      // Prune older than 30s
+      while (wireTimestamps.length && now - wireTimestamps[0] > 30_000) {
+        wireTimestamps.shift();
+      }
+      if (wireTimestamps.length >= 3) {
+        triggerJackpot({
+          type: 'trending',
+          title: 'TRENDING',
+          body: 'the wire is on fire — say something',
+          priority: 6,
+        });
+        // Reset so it doesn't fire again immediately.
+        wireTimestamps.length = 0;
+      }
+    });
+  }
+</script>

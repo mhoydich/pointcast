@@ -1,0 +1,243 @@
+---
+/**
+ * FeedbackBlock — creative feedback widget on the homepage.
+ *
+ * Not a 1–5 rating form — that's lifeless. Instead:
+ *   • Pick a mood (emoji chip) — optional but shapes the prompt
+ *   • Dynamic textarea prompt that changes each visit (one of N)
+ *   • Optional contact (email/@) hidden behind a toggle
+ *   • Submits to /api/feedback which stores in KV + emails Mike
+ *
+ * Block-y midcentury frame to match the Drum/Spinning/Weather aesthetic.
+ */
+---
+
+<section class="mt-10 mb-8" id="feedback">
+  <div class="flex items-center gap-3 mb-3">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      <span class="text-warm/70">09</span> &middot; Feedback &middot; <span class="text-warm">tell mike</span>
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <div class="relative rounded-xl overflow-hidden border-2 border-ink/80 bg-card p-4 md:p-5">
+    <!-- Midcentury corner blocks -->
+    <div class="absolute top-0 left-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+    <div class="absolute top-0 right-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 left-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+
+    <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-warm mb-1">
+      anonymous · emailed straight to mike
+    </p>
+    <p class="font-serif italic text-[1.15rem] md:text-[1.3rem] text-ink leading-snug mb-4" id="fb-prompt">
+      what would make you come back?
+    </p>
+
+    <!-- Mood chips — tappable emoji, sets the `mood` on submit -->
+    <div class="flex flex-wrap gap-1.5 mb-3" id="fb-mood-row">
+      <button type="button" data-mood="loving"    class="fb-mood px-2.5 py-1.5 rounded-full border border-rule/40 bg-paper/60 hover:border-warm/60 cursor-pointer transition-colors text-sm">🥰 loving</button>
+      <button type="button" data-mood="impressed" class="fb-mood px-2.5 py-1.5 rounded-full border border-rule/40 bg-paper/60 hover:border-warm/60 cursor-pointer transition-colors text-sm">🤯 impressed</button>
+      <button type="button" data-mood="confused"  class="fb-mood px-2.5 py-1.5 rounded-full border border-rule/40 bg-paper/60 hover:border-warm/60 cursor-pointer transition-colors text-sm">🤔 confused</button>
+      <button type="button" data-mood="annoyed"   class="fb-mood px-2.5 py-1.5 rounded-full border border-rule/40 bg-paper/60 hover:border-warm/60 cursor-pointer transition-colors text-sm">😤 annoyed</button>
+      <button type="button" data-mood="broken"    class="fb-mood px-2.5 py-1.5 rounded-full border border-rule/40 bg-paper/60 hover:border-warm/60 cursor-pointer transition-colors text-sm">🔨 broken</button>
+    </div>
+
+    <textarea
+      id="fb-message"
+      rows="3"
+      maxlength="2000"
+      placeholder="type whatever comes to mind…"
+      class="w-full px-3 py-2 rounded-md border border-rule/40 bg-paper font-serif italic text-[1rem] text-ink leading-snug focus:border-warm focus:outline-none resize-vertical"
+    ></textarea>
+
+    <!-- Optional contact — hidden until toggled -->
+    <div class="mt-2 flex items-center gap-2 flex-wrap">
+      <button type="button" id="fb-contact-toggle"
+        class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/55 hover:text-warm cursor-pointer">
+        + want a reply?
+      </button>
+      <input
+        id="fb-contact"
+        type="text"
+        maxlength="200"
+        placeholder="email or @handle · optional"
+        class="hidden flex-1 min-w-[8rem] px-2 py-1 rounded-sm border border-rule/40 bg-paper text-[0.82rem] text-ink focus:border-warm focus:outline-none"
+      />
+    </div>
+
+    <div class="flex items-center justify-between gap-2 mt-3">
+      <p class="font-mono text-[0.46rem] tracking-[0.18em] uppercase text-ink-soft/40" id="fb-charcount">
+        0 / 2000
+      </p>
+      <button
+        id="fb-submit"
+        type="button"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm bg-ink text-paper font-mono text-[0.56rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+      >
+        <span id="fb-submit-label">Send →</span>
+      </button>
+    </div>
+    <p id="fb-status" class="mt-2 font-mono text-[0.5rem] tracking-[0.18em] uppercase text-warm min-h-[0.85rem]" role="status" aria-live="polite"></p>
+
+    <!-- Success confirmation — big + unmistakable. Replaces the whole form
+         area on successful send so the sender CANNOT miss that it landed.
+         Hidden until `fb-success` is toggled visible by the submit handler. -->
+    <div
+      id="fb-success"
+      class="hidden absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card border-2 border-ink/80 rounded-xl p-6 text-center"
+      role="alert"
+      aria-live="assertive"
+    >
+      <span class="text-4xl" aria-hidden="true">✓</span>
+      <p class="font-heading text-[1.5rem] md:text-[1.75rem] text-ink leading-none">
+        Got it, thanks.
+      </p>
+      <p class="font-serif italic text-[0.95rem] text-ink-soft/80 leading-snug max-w-[24rem]">
+        Your note landed in Mike's pile. He actually reads these.
+      </p>
+      <p class="font-mono text-[0.5rem] tracking-[0.22em] uppercase text-warm/60 mt-1">
+        stored at /admin/feedback &middot; emailed if inbox wired
+      </p>
+      <button
+        type="button"
+        id="fb-reset"
+        class="mt-2 font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/60 hover:text-warm transition-colors cursor-pointer"
+      >
+        send another →
+      </button>
+    </div>
+  </div>
+</section>
+
+<script>
+  /**
+   * FeedbackBlock client — rotates prompts, handles mood state, submits.
+   */
+  const PROMPTS = [
+    'what would make you come back?',
+    'what caught your eye?',
+    'what is broken? be specific.',
+    'what would you show a friend first?',
+    'what is missing?',
+    'what did you tap the most?',
+    'what should disappear?',
+    'one sentence for mike?',
+    'what did this remind you of?',
+  ];
+
+  const promptEl = document.getElementById('fb-prompt');
+  if (promptEl) {
+    // Fresh prompt per page load — subtle novelty so a returning visitor
+    // doesn't feel like they're answering the same survey.
+    promptEl.textContent = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+  }
+
+  // Mood chips — mutually exclusive selection
+  let currentMood: string = '';
+  document.querySelectorAll<HTMLButtonElement>('.fb-mood').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mood = btn.dataset.mood ?? '';
+      if (currentMood === mood) {
+        currentMood = '';
+      } else {
+        currentMood = mood;
+      }
+      document.querySelectorAll<HTMLButtonElement>('.fb-mood').forEach((b) => {
+        const active = b.dataset.mood === currentMood;
+        b.classList.toggle('bg-warm/20', active);
+        b.classList.toggle('border-warm/70', active);
+        b.classList.toggle('bg-paper/60', !active);
+      });
+    });
+  });
+
+  // Contact toggle
+  const contactToggle = document.getElementById('fb-contact-toggle');
+  const contactInput = document.getElementById('fb-contact') as HTMLInputElement | null;
+  contactToggle?.addEventListener('click', () => {
+    if (!contactInput) return;
+    contactInput.classList.toggle('hidden');
+    if (!contactInput.classList.contains('hidden')) contactInput.focus();
+    if (contactToggle) {
+      contactToggle.textContent = contactInput.classList.contains('hidden')
+        ? '+ want a reply?'
+        : '– skip contact';
+    }
+  });
+
+  // Charcount
+  const msgEl = document.getElementById('fb-message') as HTMLTextAreaElement | null;
+  const charCountEl = document.getElementById('fb-charcount');
+  msgEl?.addEventListener('input', () => {
+    if (!charCountEl || !msgEl) return;
+    charCountEl.textContent = `${msgEl.value.length} / 2000`;
+  });
+
+  // Submit
+  const submitBtn = document.getElementById('fb-submit') as HTMLButtonElement | null;
+  const submitLabel = document.getElementById('fb-submit-label');
+  const statusEl = document.getElementById('fb-status');
+  // Reset button on the success overlay — hides the confirmation so the
+  // visitor can send a second note without reloading. Restores the form to
+  // a fresh empty state.
+  document.getElementById('fb-reset')?.addEventListener('click', () => {
+    const successEl = document.getElementById('fb-success');
+    if (successEl) successEl.classList.add('hidden');
+    if (statusEl) statusEl.textContent = '';
+    if (submitLabel) submitLabel.textContent = 'Send →';
+    if (charCountEl) charCountEl.textContent = '0 / 2000';
+  });
+
+  submitBtn?.addEventListener('click', async () => {
+    if (!submitBtn || !msgEl) return;
+    const message = msgEl.value.trim();
+    if (!message) {
+      if (statusEl) statusEl.textContent = 'add a note first';
+      return;
+    }
+    submitBtn.disabled = true;
+    if (submitLabel) submitLabel.textContent = 'Sending…';
+    if (statusEl) statusEl.textContent = '';
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          mood: currentMood,
+          contact: contactInput?.value ?? '',
+          path: window.location.pathname,
+        }),
+      });
+      if (!res.ok) {
+        if (res.status === 429) throw new Error('too many submissions · try again in a minute');
+        throw new Error(`HTTP ${res.status}`);
+      }
+      // BIG celebration: swap the whole form for a clearly-received message.
+      // The prior "✓ Sent" label + small status line were too subtle — Mike
+      // clicked Send and didn't realize it had landed. This takeover is
+      // unmistakable and optionally dismissible.
+      const successEl = document.getElementById('fb-success');
+      if (successEl) successEl.classList.remove('hidden');
+      if (submitLabel) submitLabel.textContent = '✓ Sent';
+      if (statusEl) statusEl.textContent = 'thank you — mike reads these';
+      msgEl.value = '';
+      if (contactInput) contactInput.value = '';
+      currentMood = '';
+      document.querySelectorAll<HTMLButtonElement>('.fb-mood').forEach((b) => {
+        b.classList.remove('bg-warm/20', 'border-warm/70');
+        b.classList.add('bg-paper/60');
+      });
+      setTimeout(() => {
+        if (submitLabel) submitLabel.textContent = 'Send →';
+        submitBtn.disabled = false;
+      }, 2500);
+    } catch (err: any) {
+      if (submitLabel) submitLabel.textContent = 'Send →';
+      if (statusEl) statusEl.textContent = err?.message ?? 'something broke · try again';
+      submitBtn.disabled = false;
+    }
+  });
+</script>

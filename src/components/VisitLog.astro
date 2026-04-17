@@ -1,0 +1,1801 @@
+---
+/**
+ * VisitLog — noun-identity flow. Automatic, visual-only (no text).
+ *
+ * Flow:
+ *   1. User lands → client picks a random Noun id (0–1199).
+ *   2. Widget shows: [Noun 48px] "your visit · posting in Xs" [↻ regenerate]
+ *   3. 10s countdown. Clicking regenerate picks a fresh noun + resets timer.
+ *   4. At t=0 (or on pagehide via sendBeacon) the visit POSTs and the widget
+ *      collapses to a one-line confirmation.
+ *   5. Polling refresh pulls the latest entries — each rendered as a compact
+ *      feed-item row with the visitor's assigned Noun as its avatar.
+ *
+ * AI crawlers, bots, and spiders are auto-logged by the Pages middleware
+ * (functions/_middleware.ts) since they don't execute JS. They get a random
+ * server-picked noun and appear in the same stream.
+ *
+ * Reactions: any other visitor can stick a slackmoji on anyone in "here now".
+ * Powered by GET/POST /api/reactions — stored in the VISITS KV with a ~10min
+ * TTL so the room has a little "vibe" even as people drift in and out.
+ *
+ * No user-generated text = no moderation surface. The visual is the signal.
+ */
+
+---
+
+<section id="visit-stream" class="mb-12">
+  <!-- First-time welcome — COMPACT version. Mobile was choking on the
+       earlier card (big paragraph + 4 stacked tiles pushed everything
+       below the fold). Now: one-line greeting + tight 2-row tile grid,
+       dismiss in the corner. Everything fits on a 360px screen without
+       overwhelming the feed below. -->
+  <div
+    id="visit-first-welcome"
+    class="hidden mb-4 p-2.5 md:p-3.5 rounded-md border border-warm/40 bg-warm/8 relative"
+    role="region"
+    aria-label="Welcome"
+  >
+    <button
+      id="visit-first-welcome-dismiss"
+      type="button"
+      class="absolute top-1 right-1 w-6 h-6 rounded-md inline-flex items-center justify-center text-ink-soft hover:text-warm hover:bg-warm/10 transition-colors cursor-pointer text-lg leading-none"
+      aria-label="Dismiss welcome"
+    >&times;</button>
+    <p class="font-mono text-[0.5rem] tracking-[0.22em] uppercase text-warm mb-1 pr-6">
+      first visit &middot; <span id="visit-first-welcome-kicker">welcome</span>
+    </p>
+    <p class="font-serif italic text-[1rem] md:text-[1.15rem] text-ink leading-snug mb-2.5" id="visit-first-welcome-title">
+      Welcome to PointCast. Tap bells, drum together, collect moments.
+    </p>
+    <!-- Tight 4-tile grid — 2 cols on mobile, 4 on desktop. Short labels
+         only, no subcopy. Fits on a phone without scrolling. -->
+    <div class="grid grid-cols-4 gap-px bg-rule/30 border border-rule/30">
+      <a href="#feed-drum" class="block p-1.5 md:p-2 bg-paper hover:bg-warm/10 transition-colors group text-center">
+        <p class="font-mono text-[0.48rem] md:text-[0.52rem] font-bold tracking-[0.12em] uppercase text-ink group-hover:text-warm">
+          Drum
+        </p>
+      </a>
+      <a href="#noun-bells" class="block p-1.5 md:p-2 bg-paper hover:bg-warm/10 transition-colors group text-center">
+        <p class="font-mono text-[0.48rem] md:text-[0.52rem] font-bold tracking-[0.12em] uppercase text-ink group-hover:text-warm">
+          Bells
+        </p>
+      </a>
+      <a href="/collect" class="block p-1.5 md:p-2 bg-paper hover:bg-warm/10 transition-colors group text-center">
+        <p class="font-mono text-[0.48rem] md:text-[0.52rem] font-bold tracking-[0.12em] uppercase text-ink group-hover:text-warm">
+          Collect
+        </p>
+      </a>
+      <a href="#weather" class="block p-1.5 md:p-2 bg-paper hover:bg-warm/10 transition-colors group text-center">
+        <p class="font-mono text-[0.48rem] md:text-[0.52rem] font-bold tracking-[0.12em] uppercase text-ink group-hover:text-warm">
+          Mint
+        </p>
+      </a>
+    </div>
+  </div>
+
+  <!-- Return-visit greeting — warm one-liner personalized by city + weather.
+       Populated by /api/greeting (reads Cloudflare edge geo, calls
+       Open-Meteo for their coords, composes a two-line hello). Hidden
+       until the API resolves so it never flashes a stale/empty state.
+       For first-time visitors, the block above takes over. -->
+  <div
+    id="visit-greeting"
+    class="hidden mb-5 p-3.5 rounded-md border border-warm/25 bg-warm/5"
+    role="status"
+    aria-live="polite"
+  >
+    <p
+      id="visit-greeting-line"
+      class="font-serif italic text-[1.1rem] md:text-[1.2rem] text-ink leading-snug"
+    ></p>
+    <p
+      id="visit-greeting-sub"
+      class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-warm/85 mt-1.5"
+    ></p>
+  </div>
+
+  <!-- Your-noun widget: countdown + regenerate -->
+  <div
+    id="visit-widget"
+    class="flex items-center gap-4 mb-6 p-4 rounded-xl border border-rule/30 bg-card"
+    role="status"
+    aria-live="polite"
+  >
+    <img
+      id="visit-widget-noun"
+      src=""
+      alt=""
+      aria-hidden="true"
+      width="96"
+      height="96"
+      class="noun-img rounded-lg ring-1 ring-rule/40 shrink-0"
+      style="image-rendering: pixelated; width: 80px; height: 80px;"
+    />
+    <div class="flex-1 min-w-0">
+      <p class="font-mono text-[0.58rem] tracking-[0.2em] uppercase text-ink-soft/60 leading-tight">
+        <span id="visit-widget-label">your visit</span>
+      </p>
+      <p class="font-serif italic text-[1.15rem] md:text-[1.25rem] text-ink leading-tight mt-1">
+        <span id="visit-widget-status">posting in <span id="visit-widget-countdown" class="text-warm">10</span>s</span>
+      </p>
+      <p
+        id="visit-widget-hint"
+        class="font-mono text-[0.52rem] tracking-[0.16em] uppercase text-ink-soft/45 mt-2 hidden"
+      ></p>
+    </div>
+    <button
+      id="visit-widget-regen"
+      type="button"
+      class="inline-flex items-center justify-center px-3 py-2 rounded-md bg-ink text-paper font-mono text-[0.58rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer shrink-0"
+      aria-label="Regenerate your noun"
+    >
+      &#8635; new noun
+    </button>
+  </div>
+
+  <!-- Optional note to attach to your visit. Short, public, signed by
+       your noun. Stored alongside the visit entry in the log; rendered
+       on each entry so returning visitors see a little guestbook. -->
+  <div id="visit-note-wrapper" class="mb-5 flex items-start gap-2">
+    <input
+      id="visit-note-input"
+      type="text"
+      maxlength="140"
+      placeholder="share a note with your visit… (optional)"
+      class="flex-1 min-w-0 px-3 py-2 rounded-md border border-rule/40 bg-card/60 font-serif italic text-[0.95rem] text-ink placeholder:text-ink-soft/40 focus:border-warm focus:outline-none"
+    />
+    <p class="font-mono text-[0.44rem] tracking-[0.18em] uppercase text-ink-soft/45 shrink-0 mt-2 w-10 text-right">
+      <span id="visit-note-chars">0</span>/140
+    </p>
+  </div>
+
+  <!-- Here-now strip — live nouns of everyone active in the last 5 min -->
+  <div class="mb-8">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="pill"><span class="pill-dot"></span><span data-present-count>&mdash;</span> here now</span>
+      <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/50">
+        total <span data-visit-count>&mdash;</span>
+      </span>
+      <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/50">
+        &middot;
+        <a href="/api/visit" target="_blank" rel="noopener" class="hover:text-warm transition-colors underline-offset-2 hover:underline">
+          raw log &rarr;
+        </a>
+      </span>
+    </div>
+    <!-- Noun avatars of current visitors (humans + AI + bots).
+         Avatars rescale based on presence count — see JS `resizePresentStrip`.
+         When ≥ 2 are here, they grow from 56px ambient → 96px featured, and
+         emoji-reaction chips appear below each. When solo, your own noun
+         shows so you can interact (chime on tap, react, etc.) with an
+         invite caption underneath. -->
+    <div
+      id="present-strip"
+      class="flex flex-wrap gap-3 md:gap-4 min-h-[2rem] items-start transition-all"
+    ></div>
+    <!-- Solo caption — shown only when it's just you in the room. -->
+    <div
+      id="present-solo-caption"
+      class="hidden flex flex-wrap items-center gap-2 mt-2"
+    >
+      <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/55">
+        just you &middot; tap your noun for a chime
+      </p>
+      <button
+        type="button"
+        id="invite-share-btn"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded-sm bg-ink text-paper font-mono text-[0.52rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer"
+      >share &rarr;</button>
+    </div>
+    <!-- Breakdown by type: "1 other · 2 ai · 1 bot" (crowd view only) -->
+    <p id="present-breakdown" class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/45 mt-2"></p>
+  </div>
+
+  <!-- Visitor summary — aggregate breakdown of the last 100 visits.
+       Answers "who's been here lately?" at a glance: humans, AI crawlers,
+       link-preview bots, each with a breakdown of WHICH service (Claude,
+       OpenAI, Facebook previewer, Googlebot, etc.). -->
+  <div id="visitor-summary" class="mb-8 hidden">
+    <div class="flex items-center gap-3 mb-3">
+      <span class="pill pill-summary font-mono text-[0.56rem] tracking-[0.2em] uppercase px-2.5 py-1 rounded-full border border-rule/40 text-ink-soft bg-card/60">
+        Visitor mix
+      </span>
+      <span class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/50">
+        from the last <span id="summary-window">—</span>
+      </span>
+    </div>
+    <div class="grid grid-cols-3 gap-2 md:gap-3">
+      <div class="stat-card p-3 rounded-md border border-rule/30 bg-card/40">
+        <p class="font-mono text-[0.5rem] tracking-[0.2em] uppercase text-ink-soft/50 mb-1">Humans</p>
+        <p class="font-mono text-[1.4rem] md:text-[1.6rem] font-bold text-ink leading-none tabular-nums" id="summary-humans">—</p>
+        <p class="font-mono text-[0.48rem] tracking-[0.16em] uppercase text-ink-soft/40 mt-1.5">
+          real people · js widget
+        </p>
+      </div>
+      <div class="stat-card p-3 rounded-md border border-rule/30 bg-card/40">
+        <p class="font-mono text-[0.5rem] tracking-[0.2em] uppercase text-ink-soft/50 mb-1">AI crawlers</p>
+        <p class="font-mono text-[1.4rem] md:text-[1.6rem] font-bold text-ink leading-none tabular-nums" id="summary-ai">—</p>
+        <p class="font-mono text-[0.48rem] tracking-[0.16em] uppercase text-ink-soft/40 mt-1.5" id="summary-ai-breakdown">
+          &mdash;
+        </p>
+      </div>
+      <div class="stat-card p-3 rounded-md border border-rule/30 bg-card/40">
+        <p class="font-mono text-[0.5rem] tracking-[0.2em] uppercase text-ink-soft/50 mb-1">Previewers + bots</p>
+        <p class="font-mono text-[1.4rem] md:text-[1.6rem] font-bold text-ink leading-none tabular-nums" id="summary-bots">—</p>
+        <p class="font-mono text-[0.48rem] tracking-[0.16em] uppercase text-ink-soft/40 mt-1.5" id="summary-bots-breakdown">
+          &mdash;
+        </p>
+      </div>
+    </div>
+    <details class="mt-3">
+      <summary class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/50 hover:text-warm cursor-pointer">
+        what's a "Facebook" or "Slack" visitor?
+      </summary>
+      <p class="mt-2 text-[0.8rem] text-ink-soft/75 leading-relaxed">
+        These are <strong>link-preview scrapers</strong> — not people. When
+        someone shares a pointcast.xyz URL inside Facebook, Messenger,
+        Slack, Twitter/X, Discord, LinkedIn, iMessage, or WhatsApp, the
+        platform's server fetches the page to build that thumbnail card
+        with the title + image. We see the fetch, classify it by user
+        agent, and count it. Bots in this column are either link-preview
+        scrapers or search indexers like Googlebot / Bingbot / Applebot.
+        A spike here means your links are spreading somewhere — even if
+        that somewhere isn't clicking through.
+      </p>
+    </details>
+  </div>
+
+  <!-- Live visit entries — compact rows, tighter vertical rhythm.
+       Capped at 5 "full" rows (then compact thumbnail grid) so the
+       visit stream doesn't eat the homepage scroll on mobile. -->
+  <div id="visit-entries" class="space-y-3">
+    <p
+      id="visit-entries-loading"
+      class="font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/40"
+    >
+      &hellip; tuning the log &hellip;
+    </p>
+  </div>
+</section>
+
+<!-- Noun modal — opens when any visit noun is clicked.
+     Lets the visitor see full-size, download as PNG, and (soon) mint on Tezos. -->
+<div
+  id="noun-modal"
+  class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ink/80 backdrop-blur-sm"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="noun-modal-title"
+>
+  <div class="max-w-md w-full bg-paper border border-rule rounded-xl p-5 relative">
+    <button
+      id="noun-modal-close"
+      type="button"
+      class="absolute top-3 right-3 w-8 h-8 rounded-md text-ink-soft hover:text-warm hover:bg-card transition-colors inline-flex items-center justify-center cursor-pointer"
+      aria-label="Close"
+    >
+      &times;
+    </button>
+
+    <div class="flex flex-col items-center">
+      <!-- The modal image is interactive — tap to play the noun's chime,
+           rapid-tap for an instrument vibe. A "tap to play" affordance sits
+           underneath so the mechanic is discoverable. -->
+      <button
+        id="noun-modal-img-btn"
+        type="button"
+        class="p-0 border-0 bg-transparent cursor-pointer block mb-2"
+        aria-label="Play this noun's chime"
+      >
+        <img
+          id="noun-modal-img"
+          src=""
+          alt="Visit Noun"
+          width="320"
+          height="320"
+          class="noun-img rounded-lg ring-1 ring-rule/40 transition-transform duration-75 ease-out"
+          style="image-rendering: pixelated; width: 280px; height: 280px;"
+        />
+      </button>
+      <p class="font-mono text-[0.52rem] tracking-[0.2em] uppercase text-warm/70 mb-3">
+        &#9202; tap the noun to play &middot; rapid-fire for a rhythm
+      </p>
+
+      <p id="noun-modal-title" class="font-serif italic text-[1.3rem] text-ink text-center leading-tight mb-1">
+        PointCast Visit Noun
+      </p>
+      <p id="noun-modal-id" class="font-mono text-[0.58rem] tracking-[0.2em] uppercase text-warm mb-3">
+        noun &mdash;
+      </p>
+
+      <div class="w-full space-y-1 mb-5 font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/75 text-center">
+        <p id="noun-modal-kicker">&mdash;</p>
+        <p id="noun-modal-meta">&mdash;</p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2 w-full">
+        <button
+          id="noun-modal-download"
+          type="button"
+          class="flex-1 inline-flex items-center justify-center px-4 py-2 rounded-md bg-ink text-paper font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-50"
+        >
+          Download PNG
+        </button>
+        <button
+          id="noun-modal-mint"
+          type="button"
+          class="flex-1 inline-flex items-center justify-center px-4 py-2 rounded-md bg-card border border-rule/50 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors cursor-pointer"
+        >
+          Mint on Tezos &nearr;
+        </button>
+      </div>
+
+      <p class="mt-3 font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/45 text-center">
+        cc0 &middot; <span id="noun-modal-open-nouns">view on noun.pics &nearr;</span>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Config
+  // ---------------------------------------------------------------------------
+  const NOUN_RANGE = 1200;
+  const COUNTDOWN_SECONDS = 10;
+  const POLL_INTERVAL_MS = 15000;
+  // Dialed from 10 → 5. Mobile scroll was eaten by big per-entry rows;
+  // 5 is enough to communicate "live activity" without dominating the
+  // homepage. Everything beyond 5 becomes a tiny-thumb grid.
+  const MAX_FEED_ENTRIES = 5;
+  const COMPACT_THRESHOLD = 10;
+
+  // ---------------------------------------------------------------------------
+  // Type labels
+  // ---------------------------------------------------------------------------
+  const TYPE_LABEL: Record<string, string> = {
+    'human':          'Human',
+    'ai:openai':      'OpenAI · AI',
+    'ai:anthropic':   'Claude · AI',
+    'ai:perplexity':  'Perplexity · AI',
+    'ai:commoncrawl': 'CCBot · AI',
+    'ai:bytedance':   'ByteSpider · AI',
+    'ai:google':      'Google · AI',
+    'ai:meta':        'Meta · AI',
+    'ai:cohere':      'Cohere · AI',
+    'ai:mistral':     'Mistral · AI',
+    'ai:you':         'You.com · AI',
+    'bot:google':     'Googlebot',
+    'bot:bing':       'Bingbot',
+    'bot:ddg':        'DuckDuckBot',
+    'bot:yandex':     'Yandex',
+    'bot:baidu':      'Baidu',
+    'bot:apple':      'Applebot',
+    'bot:facebook':   'Facebook',
+    'bot:twitter':    'Twitter',
+    'bot:linkedin':   'LinkedIn',
+    'bot:slack':      'Slack',
+    'bot:discord':    'Discord',
+    'bot:telegram':   'Telegram',
+    'bot:whatsapp':   'WhatsApp',
+    'bot:seo':        'SEO bot',
+    'bot:other':      'Bot',
+    'unknown':        'Unknown',
+    'pointcast':      'PointCast Noun',
+  };
+
+  // ---------------------------------------------------------------------------
+  // Types & utilities
+  // ---------------------------------------------------------------------------
+  type Entry = {
+    t: number;
+    type: string;
+    country?: string;
+    city?: string;
+    region?: string;
+    nounId: number;
+    firsts?: string[];
+    note?: string;   // visitor's optional ≤140-char note shared at commit time
+  };
+
+  type PresenceEntry = {
+    t: number;
+    type: string;
+    nounId: number;
+    pid?: string;
+  };
+
+  type ReactionTuple = { emoji: string; count: number };
+
+  // Whitelist mirrors `ALLOWED_EMOJIS` in functions/api/visit.ts. Kept in sync
+  // by hand — short list, unlikely to drift.
+  const REACTION_EMOJIS = ['👋', '❤️', '👀', '🔥', '✨', '🎉', '🫡', '🤝'];
+
+  // Stable per-browser session ID — used to dedupe server-side so the same
+  // client can only count once per (target, emoji). Not PII; generated locally.
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ??
+             `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // Local mirror of "what reactions has THIS browser sent" so we can render
+  // chips as "active" and toggle them off on re-click. Keyed `${pid}:${emoji}`.
+  const MY_REACTIONS_KEY = 'pc:myReactions';
+  function loadMyReactions(): Record<string, true> {
+    try {
+      const raw = localStorage.getItem(MY_REACTIONS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return typeof parsed === 'object' && parsed !== null ? parsed : {};
+    } catch { return {}; }
+  }
+  let myReactions: Record<string, true> = loadMyReactions();
+  function saveMyReactions(): void {
+    try { localStorage.setItem(MY_REACTIONS_KEY, JSON.stringify(myReactions)); }
+    catch { /* ignore */ }
+  }
+
+  // Server-reported reactions per pid, from GET /api/visit
+  let reactionsByPid: Record<string, ReactionTuple[]> = {};
+
+  function pickNounId(): number {
+    return Math.floor(Math.random() * NOUN_RANGE);
+  }
+
+  function fmtAgo(t: number): string {
+    const sec = Math.floor((Date.now() - t) / 1000);
+    if (sec < 60) return `${sec}s`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h`;
+    return `${Math.floor(hr / 24)}d`;
+  }
+
+  function fmtLocation(e: Entry): string {
+    if (e.type === 'human') {
+      return [e.city, e.region, e.country].filter(Boolean).join(', ');
+    }
+    return e.country || '';
+  }
+
+  function escapeHTML(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]!));
+  }
+
+  function firstBadge(e: Entry): string {
+    if (!e.firsts || e.firsts.length === 0) return '';
+    const main = e.firsts.includes('type') ? 'First' : e.firsts.includes('country') ? 'New place' : 'First';
+    return `<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-warm/15 text-warm font-mono text-[0.5rem] tracking-[0.18em] uppercase ml-1">★ ${main}</span>`;
+  }
+
+  // Compact feed row — dialed down from 80px to 48px noun, single-line
+  // meta with overflow ellipsis, and the redundant "tap to view" text
+  // removed. Mobile scroll reclaims ~60% vertical space per entry.
+  function renderEntryFull(e: Entry): string {
+    const kicker = TYPE_LABEL[e.type] ?? 'Visit';
+    const loc = fmtLocation(e);
+    const ago = fmtAgo(e.t);
+    const badge = firstBadge(e);
+    const payload = encodeURIComponent(JSON.stringify(e));
+    return `
+      <article class="flex gap-3 items-center" data-entry-t="${e.t}">
+        <button
+          type="button"
+          class="noun-thumb shrink-0 cursor-pointer hover:scale-110 transition-transform"
+          data-noun="${payload}"
+          aria-label="Open visit noun ${e.nounId}"
+        >
+          <img
+            src="https://noun.pics/${e.nounId}.svg"
+            alt=""
+            aria-hidden="true"
+            width="48"
+            height="48"
+            class="noun-img rounded-md ring-1 ring-rule/40 block"
+            style="image-rendering: pixelated;"
+            loading="lazy"
+          />
+        </button>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-x-1.5 font-mono text-[0.58rem] tracking-[0.14em] uppercase whitespace-nowrap overflow-hidden">
+            <span class="text-warm shrink-0">${escapeHTML(kicker)}</span>
+            <span class="text-warm/40 shrink-0">·</span>
+            <span class="text-ink-soft/70 shrink-0">${escapeHTML(ago)}</span>
+            ${loc ? `<span class="text-warm/40 shrink-0">·</span><span class="text-ink-soft/60 truncate">${escapeHTML(loc)}</span>` : ''}
+            ${badge}
+          </div>
+          ${e.note ? `<p class="font-serif italic text-[0.92rem] text-ink/80 leading-snug mt-0.5 break-words">"${escapeHTML(e.note)}"</p>` : ''}
+          <p class="font-mono text-[0.46rem] tracking-[0.16em] uppercase text-ink-soft/40 mt-0.5">
+            noun ${e.nounId}
+          </p>
+        </div>
+      </article>
+    `;
+  }
+
+  // Compact strip: smaller noun avatar, still clickable
+  function renderEntryCompact(e: Entry): string {
+    const payload = encodeURIComponent(JSON.stringify(e));
+    return `
+      <button
+        type="button"
+        class="noun-thumb shrink-0 cursor-pointer hover:scale-110 transition-transform"
+        data-noun="${payload}"
+        title="${escapeHTML(TYPE_LABEL[e.type] ?? 'Visit')} · ${escapeHTML(fmtAgo(e.t))} ago · noun ${e.nounId}"
+        aria-label="Open visit noun ${e.nounId}"
+      >
+        <img
+          src="https://noun.pics/${e.nounId}.svg"
+          alt=""
+          aria-hidden="true"
+          width="36"
+          height="36"
+          class="noun-img rounded-md opacity-80 hover:opacity-100 transition-opacity block"
+          style="image-rendering: pixelated;"
+          loading="lazy"
+        />
+      </button>
+    `;
+  }
+
+  let lastRenderedTs = 0;
+
+  function renderEntries(entries: Entry[]): void {
+    const container = document.getElementById('visit-entries');
+    if (!container) return;
+    if (entries.length === 0) {
+      container.innerHTML = `<p class="font-serif italic text-ink-soft/60">No visits logged yet — you'll be the first.</p>`;
+      lastRenderedTs = 0;
+      return;
+    }
+
+    const full = entries.slice(0, MAX_FEED_ENTRIES);
+    const rest = entries.slice(MAX_FEED_ENTRIES);
+
+    let html = full.map(renderEntryFull).join('');
+    if (rest.length > 0) {
+      html += `
+        <div class="pt-4 mt-2 border-t border-rule/30">
+          <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/50 mb-3">
+            + ${rest.length} earlier
+          </p>
+          <div class="flex flex-wrap gap-1.5">
+            ${rest.map(renderEntryCompact).join('')}
+          </div>
+        </div>
+      `;
+    }
+    container.innerHTML = html;
+
+    // Flash newly-arrived entries
+    if (lastRenderedTs > 0) {
+      container.querySelectorAll<HTMLElement>('[data-entry-t]').forEach((el) => {
+        const t = Number(el.dataset.entryT);
+        if (t > lastRenderedTs) {
+          el.animate(
+            [
+              { backgroundColor: 'rgba(196, 149, 46, 0.2)' },
+              { backgroundColor: 'rgba(196, 149, 46, 0)' },
+            ],
+            { duration: 2000, easing: 'ease-out' },
+          );
+        }
+      });
+    }
+    lastRenderedTs = entries[0]?.t ?? 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // API
+  // ---------------------------------------------------------------------------
+  function getNoteInput(): string {
+    const el = document.getElementById('visit-note-input') as HTMLInputElement | null;
+    return el ? el.value.trim().slice(0, 140) : '';
+  }
+
+  async function postVisit(nounId: number): Promise<{ ok?: boolean; reason?: string } | null> {
+    try {
+      const res = await fetch('/api/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nounId, note: getNoteInput() }),
+        keepalive: true,
+      });
+      return await res.json();
+    } catch { return null; }
+  }
+
+  function postVisitBeacon(nounId: number): void {
+    // For pagehide — sendBeacon is more reliable than fetch during unload.
+    const payload = new Blob([
+      JSON.stringify({ nounId, note: getNoteInput() }),
+    ], { type: 'application/json' });
+    try { navigator.sendBeacon('/api/visit', payload); } catch { /* */ }
+  }
+
+  // Lightweight presence ping — fires on page load + every 60s so visitors
+  // show in "here now" the moment they arrive, not 10s later when the
+  // widget commits. Doesn't bump the visit count or add to the log.
+  async function pingPresence(nounId: number): Promise<void> {
+    try {
+      await fetch('/api/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nounId, presence_only: true }),
+        keepalive: true,
+      });
+    } catch { /* best-effort */ }
+  }
+
+  async function loadLog(): Promise<{
+    count: number;
+    present: PresenceEntry[];
+    log: Entry[];
+    reactions: Record<string, ReactionTuple[]>;
+    yourPid: string | null;
+  }> {
+    const res = await fetch('/api/visit', { method: 'GET' });
+    if (!res.ok) throw new Error(`GET /api/visit failed: ${res.status}`);
+    const data = await res.json();
+    return {
+      count: data.count ?? 0,
+      present: Array.isArray(data.present) ? data.present : [],
+      log: data.log ?? [],
+      reactions: (data.reactions && typeof data.reactions === 'object')
+        ? data.reactions as Record<string, ReactionTuple[]>
+        : {},
+      yourPid: typeof data.yourPid === 'string' ? data.yourPid : null,
+    };
+  }
+
+  // Server-reported "which of the present pids is me". Lets us dedup self
+  // from the here-now strip (which previously showed your own noun as the
+  // first/only avatar even though you already see it in the widget above).
+  let yourPid: string | null = null;
+
+  async function postReaction(
+    pid: string,
+    emoji: string,
+    action: 'add' | 'remove',
+  ): Promise<ReactionTuple[] | null> {
+    try {
+      const res = await fetch('/api/reactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid, emoji, action, sessionId }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return Array.isArray(data?.reactions) ? data.reactions : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function updateCountEverywhere(count: number): void {
+    document.querySelectorAll<HTMLElement>('[data-visit-count]').forEach((el) => {
+      el.textContent = String(count);
+    });
+  }
+
+  function renderReactionRow(pid: string, tuples: ReactionTuple[]): string {
+    // Chips for current non-zero emoji counts + a "+" button to open the picker.
+    const chips = tuples.map((t) => {
+      const mine = !!myReactions[`${pid}:${t.emoji}`];
+      const activeCls = mine
+        ? 'bg-warm/20 border-warm/60 text-ink'
+        : 'bg-card border-rule/40 text-ink-soft hover:border-warm/40 hover:text-warm';
+      return `
+        <button
+          type="button"
+          class="react-chip inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border ${activeCls} font-mono text-[0.58rem] tracking-[0.1em] transition-colors cursor-pointer"
+          data-pid="${escapeHTML(pid)}"
+          data-emoji="${escapeHTML(t.emoji)}"
+          aria-label="${mine ? 'Remove' : 'Add'} ${escapeHTML(t.emoji)} reaction"
+        ><span class="text-[0.85rem] leading-none">${t.emoji}</span><span class="tabular-nums">${t.count}</span></button>
+      `;
+    }).join('');
+    return `
+      <div class="react-row flex flex-wrap items-center gap-1 mt-1 justify-center">
+        ${chips}
+        <button
+          type="button"
+          class="react-add inline-flex items-center justify-center w-5 h-5 rounded-full border border-rule/40 bg-card text-ink-soft/70 hover:border-warm/60 hover:text-warm transition-colors cursor-pointer"
+          data-pid="${escapeHTML(pid)}"
+          aria-label="Add a reaction"
+          aria-expanded="false"
+        ><span class="text-[0.7rem] leading-none">+</span></button>
+      </div>
+    `;
+  }
+
+  function updatePresenceEverywhere(present: PresenceEntry[]): void {
+    // "Here now" count used to be total presence — but that inflates every
+    // time Facebook/Slack/etc. scrapes a shared URL (each datacenter IP
+    // hits us and registers as a bot:facebook presence). For the
+    // "living-room" feel, count HUMANS only; bots + AI are surfaced
+    // separately in the breakdown line below.
+    const humanCount = present.filter((p) => p.type === 'human').length;
+    document.querySelectorAll<HTMLElement>('[data-present-count]').forEach((el) => {
+      el.textContent = String(humanCount);
+    });
+
+    // Notify PulseAlert + future jackpot system of the current human count.
+    // PulseAlert tracks its own previous value; we just emit the current.
+    document.dispatchEvent(new CustomEvent('pc:presence', {
+      detail: { humans: humanCount, total: present.length },
+    }));
+
+    // Dedup self — your own noun is already shown in the widget above,
+    // so the here-now strip should only feature OTHER visitors. Keeps
+    // the page from looking like three stacked copies of the same noun
+    // when you're alone or the only human in the room.
+    const others = yourPid
+      ? present.filter((p) => p.pid && p.pid !== yourPid)
+      : present;
+    const othersCount = others.length;
+
+    // Size rule based on OTHERS (not total). 0 others = solo state (show
+    // invite block). 1 = 56px ambient. 2-3 = 96px featured. 4-6 = 80px.
+    // 7+ = 64px packed. Keeps the visual density reasonable at any scale.
+    const avatarPx =
+      othersCount <= 1 ? 72 :
+      othersCount <= 3 ? 96 :
+      othersCount <= 6 ? 80 :
+                          64;
+    const avatarCls = avatarPx >= 96 ? 'rounded-lg' : 'rounded-md';
+
+    // Render the strip of live visitor nouns
+    const strip = document.getElementById('present-strip');
+    if (strip) {
+      // Layout mode: crowd view when 2+ others so each card gets its own
+      // vertical slot; solo view stays a tight row.
+      strip.dataset.mode = othersCount >= 2 ? 'crowd' : 'solo';
+
+      // Solo = you're the only one here. Include YOUR card in the strip so
+      // clicking your noun plays a chime + reactions are interactive. A
+      // small invite caption sits alongside so there's still a nudge to
+      // bring someone in. When others arrive, self is dedup'd out (existing
+      // `others` filter above) so the crowd view isn't doubling your noun.
+      const toRender = othersCount === 0 ? present : others;
+      if (toRender.length === 0) {
+        strip.innerHTML = `
+          <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/40 py-1">
+            quiet on the wire
+          </span>
+        `;
+        return;
+      }
+      {
+        strip.innerHTML = toRender.map((p) => {
+          const label = TYPE_LABEL[p.type] ?? 'Visit';
+          const kind = p.type === 'human' ? 'human' : p.type.startsWith('ai:') ? 'ai' : 'bot';
+          const ringTone =
+            kind === 'human' ? 'ring-warm/60' :
+            kind === 'ai'    ? 'ring-ink/50'  :
+                                'ring-rule/60';
+          const pid = p.pid ?? '';
+          // Treat presence entries as mini-visits for modal purposes.
+          const payload = encodeURIComponent(JSON.stringify({
+            t: p.t, type: p.type, nounId: p.nounId,
+          }));
+          const tuples = (pid && reactionsByPid[pid]) ? reactionsByPid[pid] : [];
+          // Always render the reactions row when we have a pid — even solo.
+          // That way the + button is visible (and discoverable) whether or
+          // not other people are in the room. Before, reactions only showed
+          // at count>=2 which meant most visitors never saw the feature exist.
+          const reactionsHtml = pid ? renderReactionRow(pid, tuples) : '';
+          return `
+            <div class="present-card flex flex-col items-center gap-0 shrink-0" data-pid="${escapeHTML(pid)}">
+              <button
+                type="button"
+                class="noun-thumb cursor-pointer hover:scale-110 transition-transform block"
+                data-noun="${payload}"
+                title="${escapeHTML(label)} · noun ${p.nounId}"
+                aria-label="Open visitor noun ${p.nounId}"
+              >
+                <img
+                  src="https://noun.pics/${p.nounId}.svg"
+                  alt=""
+                  aria-hidden="true"
+                  width="${avatarPx}"
+                  height="${avatarPx}"
+                  class="noun-img ${avatarCls} ring-1 ${ringTone} block"
+                  style="image-rendering: pixelated; width: ${avatarPx}px; height: ${avatarPx}px;"
+                  loading="lazy"
+                />
+              </button>
+              ${reactionsHtml}
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // Solo caption — shows "just you · tap for chime · share →" only when
+    // no one else is present. Hidden in crowd view.
+    const soloCaption = document.getElementById('present-solo-caption');
+    if (soloCaption) {
+      if (othersCount === 0 && present.length > 0) {
+        soloCaption.classList.remove('hidden');
+        soloCaption.classList.add('flex');
+      } else {
+        soloCaption.classList.add('hidden');
+        soloCaption.classList.remove('flex');
+      }
+    }
+
+    // Breakdown by type — describes OTHERS so the label matches what's
+    // rendered in the strip. When alone, the solo caption handles the
+    // narration so we clear this line.
+    const breakdown = document.getElementById('present-breakdown');
+    if (breakdown) {
+      if (othersCount === 0) {
+        breakdown.textContent = '';
+      } else {
+        let humans = 0, ais = 0, bots = 0;
+        others.forEach((p) => {
+          if (p.type === 'human') humans++;
+          else if (p.type.startsWith('ai:')) ais++;
+          else bots++;
+        });
+        const parts: string[] = [];
+        if (humans) parts.push(`${humans} other${humans === 1 ? '' : 's'}`);
+        if (ais) parts.push(`${ais} ai`);
+        if (bots) parts.push(`${bots} bot${bots === 1 ? '' : 's'}`);
+        breakdown.textContent = parts.join(' · ');
+      }
+    }
+  }
+
+  // --- Visitor summary --------------------------------------------------------
+  //
+  // Aggregates the last N log entries into a quick "who's been here lately"
+  // readout: humans vs AI crawlers vs link-preview-bots + a per-service
+  // breakdown so Mike can see Facebook previewer vs Googlebot vs Slack
+  // unfurl at a glance. Computed client-side from the log[] already on
+  // page — no extra API call.
+
+  /**
+   * Readable one-liner for each non-human type. Shown in the breakdown
+   * summary so "Facebook" reads as what it actually is: a link-preview
+   * scraper run by FB's servers when someone pastes pointcast.xyz into
+   * a message or post.
+   */
+  const TYPE_ROLE: Record<string, string> = {
+    'ai:openai':      'ChatGPT + browsing',
+    'ai:anthropic':   'Claude crawler',
+    'ai:perplexity':  'Perplexity search',
+    'ai:commoncrawl': 'Common Crawl',
+    'ai:bytedance':   'TikTok crawler',
+    'ai:google':      'Gemini · Google-Extended',
+    'ai:meta':        'Meta AI',
+    'ai:cohere':      'Cohere',
+    'ai:mistral':     'Mistral',
+    'ai:you':         'You.com',
+    'bot:google':     'Google search indexer',
+    'bot:bing':       'Bing search indexer',
+    'bot:ddg':        'DuckDuckGo indexer',
+    'bot:yandex':     'Yandex indexer',
+    'bot:baidu':      'Baidu indexer',
+    'bot:apple':      'Siri · Spotlight indexer',
+    'bot:facebook':   'Facebook link preview',
+    'bot:twitter':    'X / Twitter card',
+    'bot:linkedin':   'LinkedIn preview',
+    'bot:slack':      'Slack unfurl',
+    'bot:discord':    'Discord embed',
+    'bot:telegram':   'Telegram preview',
+    'bot:whatsapp':   'WhatsApp preview',
+    'bot:seo':        'SEO analysis bot',
+    'bot:other':      'Generic bot/spider',
+  };
+
+  function renderVisitorSummary(log: Entry[]): void {
+    const section = document.getElementById('visitor-summary');
+    if (!section || !Array.isArray(log) || log.length === 0) {
+      section?.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+
+    // Count types in the log window. Log caps at 100 entries, so this is
+    // "last 100 visits" rather than all-time — which actually tells a more
+    // useful story about current traffic than the cumulative count.
+    const byType: Record<string, number> = {};
+    for (const e of log) {
+      byType[e.type] = (byType[e.type] ?? 0) + 1;
+    }
+    const humans = byType['human'] ?? 0;
+    const aiEntries = Object.entries(byType).filter(([k]) => k.startsWith('ai:'));
+    const botEntries = Object.entries(byType).filter(([k]) => k.startsWith('bot:'));
+    const aiTotal = aiEntries.reduce((s, [, v]) => s + v, 0);
+    const botTotal = botEntries.reduce((s, [, v]) => s + v, 0);
+
+    const set = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    set('summary-humans', String(humans));
+    set('summary-ai', String(aiTotal));
+    set('summary-bots', String(botTotal));
+    set('summary-window', `${log.length} visits`);
+
+    // Top-3 breakdowns, "Role · N" formatted.
+    function topN(entries: [string, number][], n: number): string {
+      if (entries.length === 0) return 'none yet';
+      return entries
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n)
+        .map(([k, v]) => `${TYPE_ROLE[k] ?? k} · ${v}`)
+        .join(' · ');
+    }
+    const aiEl = document.getElementById('summary-ai-breakdown');
+    if (aiEl) aiEl.textContent = topN(aiEntries, 3);
+    const botEl = document.getElementById('summary-bots-breakdown');
+    if (botEl) botEl.textContent = topN(botEntries, 3);
+  }
+
+  // Invite / share handler — fires from the "just you" block. Uses Web Share
+  // API when available (mobile) and falls back to copy-to-clipboard on desktop.
+  document.getElementById('present-strip')?.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('#invite-share-btn');
+    if (!btn) return;
+    const shareUrl = 'https://pointcast.xyz/';
+    const shareData = { title: 'PointCast', text: 'come hang on pointcast', url: shareUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        btn.textContent = 'Copied';
+        setTimeout(() => { if (btn.isConnected) btn.textContent = 'Invite →'; }, 1500);
+      }
+    } catch { /* user cancelled share — no-op */ }
+  });
+
+  async function refresh(): Promise<void> {
+    try {
+      const { count, present, log, reactions, yourPid: yp } = await loadLog();
+      reactionsByPid = reactions;
+      yourPid = yp;
+      updateCountEverywhere(count);
+      updatePresenceEverywhere(present);
+      renderEntries(log);
+      renderVisitorSummary(log);
+    } catch { /* keep last-good state */ }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reactions — emoji picker popover + chip toggle
+  // ---------------------------------------------------------------------------
+  let pickerEl: HTMLDivElement | null = null;
+
+  function closePicker(): void {
+    if (pickerEl && pickerEl.parentNode) pickerEl.parentNode.removeChild(pickerEl);
+    pickerEl = null;
+    document.querySelectorAll<HTMLElement>('.react-add[aria-expanded="true"]').forEach((btn) => {
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function openPicker(anchor: HTMLElement, pid: string): void {
+    closePicker();
+    const popover = document.createElement('div');
+    popover.className =
+      'react-picker absolute z-40 flex items-center gap-1 px-2 py-1.5 rounded-full bg-paper border border-rule/60 shadow-lg';
+    popover.innerHTML = REACTION_EMOJIS.map((e) => `
+      <button
+        type="button"
+        class="react-pick-btn w-7 h-7 inline-flex items-center justify-center rounded-full hover:bg-card transition-colors cursor-pointer text-[1rem]"
+        data-pid="${escapeHTML(pid)}"
+        data-emoji="${escapeHTML(e)}"
+        aria-label="React with ${e}"
+      >${e}</button>
+    `).join('');
+
+    // Anchor above the button. The parent flow element (present-strip) is
+    // position: static by default, so we absolute-position off document and
+    // place using getBoundingClientRect.
+    popover.style.position = 'fixed';
+    const rect = anchor.getBoundingClientRect();
+    // Start centered on the anchor; clamp to viewport after first paint.
+    popover.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
+    popover.style.top = `${Math.round(rect.top - 8)}px`;
+    popover.style.transform = 'translate(-50%, -100%)';
+    document.body.appendChild(popover);
+    pickerEl = popover;
+    anchor.setAttribute('aria-expanded', 'true');
+
+    // Clamp horizontally after it's in the DOM (so we can measure).
+    const p = popover.getBoundingClientRect();
+    const margin = 8;
+    if (p.left < margin) {
+      popover.style.left = `${margin}px`;
+      popover.style.transform = 'translateY(-100%)';
+    } else if (p.right > window.innerWidth - margin) {
+      popover.style.left = `${window.innerWidth - margin}px`;
+      popover.style.transform = 'translate(-100%, -100%)';
+    }
+  }
+
+  async function toggleReaction(pid: string, emoji: string): Promise<void> {
+    if (!pid || !emoji) return;
+    const key = `${pid}:${emoji}`;
+    const wasMine = !!myReactions[key];
+    // Optimistic local state so the chip animates immediately.
+    if (wasMine) delete myReactions[key]; else myReactions[key] = true;
+    saveMyReactions();
+
+    // Optimistic count bump so the chip doesn't briefly show stale numbers.
+    const current = reactionsByPid[pid] ?? [];
+    const idx = current.findIndex((t) => t.emoji === emoji);
+    if (wasMine) {
+      if (idx >= 0) {
+        current[idx] = { emoji, count: Math.max(0, current[idx].count - 1) };
+        if (current[idx].count === 0) current.splice(idx, 1);
+      }
+    } else {
+      if (idx >= 0) {
+        current[idx] = { emoji, count: current[idx].count + 1 };
+      } else {
+        current.push({ emoji, count: 1 });
+      }
+    }
+    reactionsByPid[pid] = current;
+
+    // Re-render just the reactions row for this card, don't rebuild the whole strip.
+    const card = document.querySelector<HTMLElement>(`.present-card[data-pid="${CSS.escape(pid)}"]`);
+    if (card) {
+      const oldRow = card.querySelector('.react-row');
+      if (oldRow) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = renderReactionRow(pid, reactionsByPid[pid] ?? []);
+        const newRow = wrapper.firstElementChild;
+        if (newRow) oldRow.replaceWith(newRow);
+      }
+    }
+
+    const result = await postReaction(pid, emoji, wasMine ? 'remove' : 'add');
+    if (result) {
+      reactionsByPid[pid] = result;
+      // Final authoritative re-render for this card.
+      const card2 = document.querySelector<HTMLElement>(`.present-card[data-pid="${CSS.escape(pid)}"]`);
+      if (card2) {
+        const oldRow = card2.querySelector('.react-row');
+        if (oldRow) {
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = renderReactionRow(pid, result);
+          const newRow = wrapper.firstElementChild;
+          if (newRow) oldRow.replaceWith(newRow);
+        }
+      }
+    } else {
+      // Server rejected / offline — roll back local mirror.
+      if (wasMine) myReactions[key] = true; else delete myReactions[key];
+      saveMyReactions();
+    }
+  }
+
+  // Delegated clicks — the present-strip's HTML is rebuilt every poll,
+  // so binding at the strip level keeps handlers attached across renders.
+  document.getElementById('present-strip')?.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const addBtn = target.closest<HTMLElement>('.react-add');
+    if (addBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = addBtn.dataset.pid ?? '';
+      if (addBtn.getAttribute('aria-expanded') === 'true') {
+        closePicker();
+      } else {
+        openPicker(addBtn, pid);
+      }
+      return;
+    }
+    const chip = target.closest<HTMLElement>('.react-chip');
+    if (chip) {
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = chip.dataset.pid ?? '';
+      const emoji = chip.dataset.emoji ?? '';
+      toggleReaction(pid, emoji);
+      return;
+    }
+  });
+
+  // Picker lives on document.body so bind there for pick-button clicks.
+  document.body.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const pickBtn = target.closest<HTMLElement>('.react-pick-btn');
+    if (pickBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = pickBtn.dataset.pid ?? '';
+      const emoji = pickBtn.dataset.emoji ?? '';
+      closePicker();
+      toggleReaction(pid, emoji);
+      return;
+    }
+    // Click outside an open picker closes it.
+    if (pickerEl && !target.closest('.react-picker') && !target.closest('.react-add')) {
+      closePicker();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && pickerEl) closePicker();
+  });
+  window.addEventListener('scroll', () => { if (pickerEl) closePicker(); }, { passive: true });
+  window.addEventListener('resize', () => { if (pickerEl) closePicker(); });
+
+  // ---------------------------------------------------------------------------
+  // Widget — noun picker with 10s countdown
+  // ---------------------------------------------------------------------------
+  const widget = document.getElementById('visit-widget');
+  const widgetNoun = document.getElementById('visit-widget-noun') as HTMLImageElement | null;
+  const widgetRegen = document.getElementById('visit-widget-regen') as HTMLButtonElement | null;
+  const widgetStatus = document.getElementById('visit-widget-status');
+  const widgetCountdown = document.getElementById('visit-widget-countdown');
+  const widgetLabel = document.getElementById('visit-widget-label');
+
+  // Persistent-noun key — `drum.astro` + `TheWire.astro` + any other page
+  // that wants "the viewer's noun" reads this. Means the Mid drum #42 default
+  // never leaks into presence, and the viewer has one consistent identity
+  // across /, /drum, and future rooms.
+  const CURRENT_NOUN_KEY = 'pc:currentNoun';
+
+  function rememberNoun(n: number): void {
+    try { localStorage.setItem(CURRENT_NOUN_KEY, String(n)); } catch {}
+    // Also hang it on window so same-page consumers (TheWire) don't have
+    // to read localStorage on every call.
+    (window as unknown as { __pcNounId?: number }).__pcNounId = n;
+  }
+
+  // Seed from localStorage if we have one; otherwise pick fresh (and write it).
+  function initialNoun(): number {
+    try {
+      const raw = localStorage.getItem(CURRENT_NOUN_KEY);
+      if (raw != null) {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n >= 0 && n < 1876) return n;
+      }
+    } catch {}
+    const n = pickNounId();
+    rememberNoun(n);
+    return n;
+  }
+
+  let currentNoun = initialNoun();
+  rememberNoun(currentNoun);
+  let countdown = COUNTDOWN_SECONDS;
+  let timerId: number | null = null;
+  let pending = true;            // a noun is selected but not yet committed
+  let committedCount = 0;        // how many nouns this session has posted
+  let committing = false;        // prevents double-commits
+
+  function paintNoun(): void {
+    if (widgetNoun) widgetNoun.src = `https://noun.pics/${currentNoun}.svg`;
+  }
+
+  function stopTimer(): void {
+    if (timerId) {
+      window.clearInterval(timerId);
+      timerId = null;
+    }
+  }
+
+  function startTimer(): void {
+    countdown = COUNTDOWN_SECONDS;
+    stopTimer();
+    if (widgetStatus) widgetStatus.innerHTML = `posting in <span id="visit-widget-countdown" class="text-warm">${countdown}</span>s`;
+    timerId = window.setInterval(() => {
+      countdown -= 1;
+      const cd = document.getElementById('visit-widget-countdown');
+      if (cd) cd.textContent = String(Math.max(0, countdown));
+      if (countdown <= 0) {
+        // Commit once and stop. The widget becomes "done" until the user
+        // clicks regenerate for another noun. No infinite loop.
+        commitCurrent();
+      }
+    }, 1000);
+  }
+
+  async function commitCurrent(): Promise<void> {
+    if (!pending || committing) return;
+    committing = true;
+    const id = currentNoun;
+    pending = false;
+    stopTimer();
+    const res = await postVisit(id);
+    committedCount += 1;
+    committing = false;
+
+    if (widgetLabel) {
+      widgetLabel.textContent = committedCount === 1 ? 'logged' : `${committedCount} logged`;
+    }
+    if (widgetStatus) {
+      widgetStatus.innerHTML = `&#10003; noun ${id} &middot; <span class="text-ink-soft/60">tap ${String.fromCharCode(8635)} for another</span>`;
+    }
+
+    // Surface storage-down state if the API is misbehaving.
+    const hint = document.getElementById('visit-widget-hint');
+    if (hint) {
+      if (res?.reason === 'kv-not-bound') {
+        hint.textContent = 'storage not yet wired — will populate when live';
+        hint.classList.remove('hidden');
+      } else {
+        hint.classList.add('hidden');
+      }
+    }
+
+    refresh();
+  }
+
+  widgetRegen?.addEventListener('click', async () => {
+    if (committing) return;
+    // "New noun" = commit the current one (if still pending), then pick
+    // a fresh one and restart the timer. Each regenerate stamps a noun
+    // to the wire — but it's user-driven, not automatic.
+    await commitCurrent();
+    currentNoun = pickNounId();
+    rememberNoun(currentNoun);
+    pending = true;
+    paintNoun();
+    if (widgetLabel) widgetLabel.textContent = 'next noun';
+    startTimer();
+  });
+
+  // Beacon-post on page hide so late leavers still get logged.
+  window.addEventListener('pagehide', () => {
+    if (pending && !committing) {
+      pending = false;
+      postVisitBeacon(currentNoun);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Noun modal — click any visit noun to open, download, mint
+  // ---------------------------------------------------------------------------
+  const modal = document.getElementById('noun-modal');
+  const modalImg = document.getElementById('noun-modal-img') as HTMLImageElement | null;
+  const modalId = document.getElementById('noun-modal-id');
+  const modalKicker = document.getElementById('noun-modal-kicker');
+  const modalMeta = document.getElementById('noun-modal-meta');
+  const modalClose = document.getElementById('noun-modal-close');
+  const modalDownload = document.getElementById('noun-modal-download') as HTMLButtonElement | null;
+  const modalMint = document.getElementById('noun-modal-mint') as HTMLButtonElement | null;
+  const modalOpenNouns = document.getElementById('noun-modal-open-nouns');
+
+  type ModalEntry = { t: number; type: string; nounId: number; country?: string; city?: string; region?: string };
+  let modalCurrent: ModalEntry | null = null;
+
+  function openModal(e: ModalEntry): void {
+    modalCurrent = e;
+    const label = TYPE_LABEL[e.type] ?? 'Visit';
+    const loc = e.type === 'human'
+      ? [e.city, e.region, e.country].filter(Boolean).join(', ')
+      : e.country || '—';
+    if (modalImg) modalImg.src = `https://noun.pics/${e.nounId}.svg`;
+    if (modalId) modalId.textContent = `noun ${e.nounId}`;
+    if (modalKicker) modalKicker.textContent = label;
+    if (modalMeta) modalMeta.textContent = `${loc || '—'} · ${new Date(e.t).toLocaleString('en-US')}`;
+    if (modalOpenNouns) {
+      modalOpenNouns.innerHTML = `<a href="https://noun.pics/${e.nounId}.svg" target="_blank" rel="noopener" class="hover:text-warm transition-colors underline-offset-2 hover:underline">view on noun.pics &nearr;</a>`;
+    }
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeModal(): void {
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.body.style.overflow = '';
+    }
+    modalCurrent = null;
+  }
+
+  modalClose?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal();
+  });
+
+  // Modal noun is rapid-tap playable — every tap re-plays the noun's
+  // signature chime (and broadcasts to other visitors). Visual feedback is
+  // a quick scale-pulse so rapid taps feel percussive.
+  const modalImgBtn = document.getElementById('noun-modal-img-btn');
+  modalImgBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!modalCurrent) return;
+    chimeWithBroadcast('profile', Number(modalCurrent.nounId ?? 0));
+    const img = document.getElementById('noun-modal-img') as HTMLImageElement | null;
+    if (img) {
+      img.style.transform = 'scale(0.94)';
+      setTimeout(() => {
+        img.style.transform = 'scale(1.04)';
+        setTimeout(() => { img.style.transform = ''; }, 80);
+      }, 60);
+    }
+  });
+
+  // Modal-open on noun-thumb click is no longer delegated here — the new
+  // handleNounTap flow above fires chimes on single tap and escalates to
+  // modal only on double-tap. Keeps the presence strip playable as an
+  // instrument (rapid-tapping) without the modal blocking every second tap.
+
+  // Download PNG — same blob-fetch → canvas flow as the main generator,
+  // CORS-safe against noun.pics.
+  modalDownload?.addEventListener('click', async () => {
+    if (!modalCurrent || !modalDownload) return;
+    const originalText = modalDownload.textContent;
+    modalDownload.disabled = true;
+    modalDownload.textContent = 'Saving…';
+    try {
+      const url = `https://noun.pics/${modalCurrent.nounId}.svg`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No canvas context');
+
+      await new Promise<void>((resolve, reject) => {
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(tempImg, 0, 0, 512, 512);
+          resolve();
+        };
+        tempImg.onerror = () => reject(new Error('decode failed'));
+        tempImg.src = objectUrl;
+      });
+      URL.revokeObjectURL(objectUrl);
+
+      canvas.toBlob((pngBlob) => {
+        if (!pngBlob) return;
+        const link = document.createElement('a');
+        const dlUrl = URL.createObjectURL(pngBlob);
+        link.href = dlUrl;
+        link.download = `pointcast-visit-noun-${modalCurrent?.nounId}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(dlUrl);
+      }, 'image/png');
+    } catch (err) {
+      console.error('Download failed', err);
+    } finally {
+      modalDownload.disabled = false;
+      modalDownload.textContent = originalText ?? 'Download PNG';
+    }
+  });
+
+  // Mint hook — routes into the PointCast marketplace at /collect.
+  //   - Not connected OR non-Tezos → open WalletConnect menu (and continue)
+  //   - Always navigate to /collect where the full catalog lives
+  // Round 2 will deploy a dedicated Visit Nouns contract so the modal's
+  // Mint button can call mint(nounId) directly via Taquito + Beacon,
+  // turning each visit into its own on-chain token.
+  function readWallet(): { chain: string; address: string; provider: string } | null {
+    try { return JSON.parse(localStorage.getItem('pc:wallet') || 'null'); }
+    catch { return null; }
+  }
+
+  modalMint?.addEventListener('click', async () => {
+    if (!modalCurrent || !modalMint) return;
+    const originalLabel = modalMint.textContent;
+
+    // Check contract deployment status — contracts.json ships empty strings
+    // until Mike deploys. Empty = "soon" UX. Populated = real mint flow.
+    const { hasVisitNounsContract, mintVisitNoun } = await import('../lib/mint');
+    if (!hasVisitNounsContract('mainnet')) {
+      closeModal();
+      window.dispatchEvent(new CustomEvent('pc:open-wallet-menu', { detail: { reason: 'mint' } }));
+      setTimeout(() => { window.location.href = '/collect'; }, 200);
+      return;
+    }
+
+    // Live mint path — call mint_noun(nounId) via Taquito. Kukai pops for
+    // sig. Visitor pays gas only (unless mint_price_mutez > 0 admin-side).
+    modalMint.disabled = true;
+    modalMint.textContent = 'Minting…';
+    try {
+      const res = await mintVisitNoun(modalCurrent.nounId, 'mainnet', {
+        source: 'noun-modal',
+        capturedAt: new Date().toISOString(),
+      });
+      if (!res.ok) {
+        if (res.reason === 'user-cancelled') {
+          modalMint.textContent = originalLabel ?? 'Mint on Tezos ↗';
+        } else if (res.reason === 'insufficient-balance') {
+          modalMint.textContent = 'Need more ꜩ';
+        } else {
+          modalMint.textContent = 'Mint failed';
+          console.error('Mint failed:', res.reason);
+        }
+        modalMint.disabled = false;
+        return;
+      }
+      modalMint.textContent = `✓ Minted — ${res.opHash?.slice(0, 8)}…`;
+      // Re-open link to tzkt so user can watch confirmation land.
+      if (res.tzktUrl) {
+        setTimeout(() => { window.open(res.tzktUrl!, '_blank', 'noopener'); }, 300);
+      }
+      await res.confirmation;
+      modalMint.textContent = `✓ Confirmed on chain`;
+    } catch (err) {
+      console.error('Mint error:', err);
+      modalMint.textContent = 'Mint failed';
+      modalMint.disabled = false;
+    }
+  });
+
+  // Make the widget's own noun clickable too (so you can download your own).
+  widgetNoun?.addEventListener('click', () => {
+    openModal({ t: Date.now(), type: 'human', nounId: currentNoun });
+  });
+  if (widgetNoun) widgetNoun.classList.add('cursor-pointer', 'hover:scale-[1.03]', 'transition-transform');
+
+  // ---------------------------------------------------------------------------
+  // Chimes — delegate to shared synth in src/lib/chimes.ts.
+  //
+  // Every noun gets a deterministically-unique voice (note + waveform +
+  // chord + decay + brightness derived from nounId). Taps the same noun
+  // twice → same sound. Tap different nouns → genuinely different timbres,
+  // but always inside the Yō pentatonic so fast sequences stay consonant.
+  //
+  // The drum room + NounBells instrument use the same module so the
+  // entire site has one coherent sonic identity.
+  // ---------------------------------------------------------------------------
+
+  import { playKind as chime, type ChimeKind } from '../lib/chimes';
+
+  // ---------------------------------------------------------------------------
+  // Cross-client sound broadcast — POST every chime to /api/sounds, poll
+  // back for other visitors' sounds and play them locally (if "hear others"
+  // is on). Means if Mike and a friend are both in the room, tapping a
+  // noun on Mike's phone plays the same chime on the friend's device ~2s
+  // later. Shared room vibe.
+  //
+  // The toggle is remembered in localStorage (pc:hearOthers) and defaults
+  // to ON. A UI button lives in the "here now" section for quick access.
+  // ---------------------------------------------------------------------------
+
+  const HEAR_OTHERS_KEY = 'pc:hearOthers';
+  function loadHearOthers(): boolean {
+    try {
+      const raw = localStorage.getItem(HEAR_OTHERS_KEY);
+      return raw === null ? true : raw === '1';
+    } catch { return true; }
+  }
+  function saveHearOthers(v: boolean): void {
+    try { localStorage.setItem(HEAR_OTHERS_KEY, v ? '1' : '0'); } catch {}
+  }
+  let hearOthers = loadHearOthers();
+
+  // Throttle sound broadcasts so rapid tapping doesn't flood the server.
+  // 5/sec is enough for expressive rhythms, well below KV write limits.
+  let lastBroadcastAt = 0;
+  const MIN_BROADCAST_MS = 200;
+
+  async function broadcastSound(kind: ChimeKind, seed = 0): Promise<void> {
+    const now = Date.now();
+    if (now - lastBroadcastAt < MIN_BROADCAST_MS) return;
+    lastBroadcastAt = now;
+    try {
+      await fetch('/api/sounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: kind, seed, sessionId }),
+        keepalive: true,
+      });
+    } catch { /* best-effort */ }
+  }
+
+  // Wrap `chime` so any local playback also fires a broadcast. Calls to
+  // `chime()` throughout the script get this behavior for free.
+  const _chimeLocal = chime;
+  function chimeWithBroadcast(kind: ChimeKind, seed = 0): void {
+    _chimeLocal(kind, seed);
+    broadcastSound(kind, seed);
+  }
+  // Replace the reference bound to click handlers below.
+  // (Declared as `let` so the later code re-binds to this function.)
+  // @ts-ignore — we intentionally overwrite the const-ish earlier binding
+  // (chime was previously a function declaration). Shadowing via a new
+  // local name used in handlers.
+
+  // Poll recent sound events and play anything we didn't originate.
+  let lastSoundT = Date.now();
+  // Track our own pid-hash so we can filter out our own broadcasts
+  // (server returns sha256(sessionId).slice(0,10) as pid).
+  async function computeOwnPid(): Promise<string> {
+    try {
+      const buf = new TextEncoder().encode(sessionId);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .slice(0, 10);
+    } catch { return ''; }
+  }
+  let ownPid = '';
+  computeOwnPid().then((p) => { ownPid = p; });
+
+  async function pollSounds(): Promise<void> {
+    if (!hearOthers) return;
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) {
+        if (ev.pid && ownPid && ev.pid === ownPid) continue; // skip own
+        // Dial volume down for other people's sounds so a busy room
+        // doesn't drown out your own interactions.
+        _chimeLocal(ev.type as ChimeKind, Number(ev.seed) || 0);
+      }
+    } catch { /* ignore */ }
+  }
+  // Poll every 2s while the tab is visible.
+  const soundsPollInterval = setInterval(() => {
+    if (document.visibilityState === 'visible' && hearOthers) pollSounds();
+  }, 2000);
+  // Kick off immediately after mount so the first event lands fast.
+  setTimeout(pollSounds, 500);
+
+  // ---------------------------------------------------------------------
+  // Noun-tap → chime, NOT modal. Modal opens on double-tap.
+  //
+  // Rationale: Mike wants the presence strip to be playable like a little
+  // instrument. Tapping a noun should fire the chime instantly and let
+  // you rapid-fire without the modal blocking subsequent taps. Deliberate
+  // deep-interaction (download, mint, full view) lives on double-tap.
+  // ---------------------------------------------------------------------
+
+  const DOUBLE_TAP_WINDOW_MS = 420;
+  const lastTapAt = new WeakMap<Element, number>();
+
+  function handleNounTap(target: HTMLElement, payload: any): void {
+    // Brief tap animation for visual feedback.
+    target.style.transition = 'transform 80ms ease-out';
+    target.style.transform = 'scale(0.92)';
+    setTimeout(() => {
+      target.style.transform = 'scale(1.06)';
+      setTimeout(() => { target.style.transform = ''; }, 90);
+    }, 70);
+
+    // Chime (local + broadcast to other visitors).
+    chimeWithBroadcast('profile', Number(payload?.nounId ?? 0));
+
+    // Double-tap detection: if a tap within DOUBLE_TAP_WINDOW_MS of the
+    // previous tap on the same element, escalate to modal.
+    const now = Date.now();
+    const prev = lastTapAt.get(target) ?? 0;
+    if (now - prev < DOUBLE_TAP_WINDOW_MS) {
+      lastTapAt.delete(target);
+      try { openModal(payload); } catch { /* swallow */ }
+    } else {
+      lastTapAt.set(target, now);
+    }
+  }
+
+  document.getElementById('visit-stream')?.addEventListener(
+    'click',
+    (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>('.noun-thumb');
+      if (!t) return;
+      // Stop the legacy delegated modal-open handler on #visit-stream —
+      // we handle modal explicitly via double-tap above.
+      e.preventDefault();
+      e.stopPropagation();
+      const raw = t.dataset.noun;
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(decodeURIComponent(raw));
+        handleNounTap(t, parsed);
+      } catch { /* swallow */ }
+    },
+    // Capture-phase so we preempt the later bubbling modal handler.
+    true,
+  );
+
+  // Top-right PointCast noun button — outside #visit-stream. Same double-tap
+  // rule: single tap plays the chime, double opens the modal.
+  const pcNounBtn = document.getElementById('pointcast-noun-btn');
+  pcNounBtn?.addEventListener(
+    'click',
+    (e) => {
+      e.preventDefault();
+      const raw = (pcNounBtn as HTMLElement).dataset.noun ?? '';
+      try {
+        const parsed = raw ? JSON.parse(raw) : { type: 'pointcast', nounId: 137 };
+        handleNounTap(pcNounBtn as HTMLElement, parsed);
+      } catch {
+        chimeWithBroadcast('profile', 137);
+      }
+    },
+    true,
+  );
+
+  // Reaction chips + picker — single-click-triggered so no double-tap logic,
+  // but still broadcast so other visitors hear the tap.
+  document.body.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.react-chip')) chimeWithBroadcast('emoji', 0);
+      if (target.closest('.react-pick-btn')) chimeWithBroadcast('emoji-add', 0);
+    },
+    true,
+  );
+
+  // ---------------------------------------------------------------------
+  // Hear-others toggle UI — small speaker chip in the "here now" row.
+  // Click to toggle; persists in localStorage across sessions.
+  // ---------------------------------------------------------------------
+
+  function updateHearOthersToggleUI(btn: HTMLButtonElement): void {
+    btn.setAttribute('aria-pressed', hearOthers ? 'true' : 'false');
+    btn.innerHTML = hearOthers
+      ? '<span aria-hidden="true">🔊</span><span class="ml-1">sounds on</span>'
+      : '<span aria-hidden="true">🔇</span><span class="ml-1">sounds off</span>';
+    btn.className = [
+      'inline-flex items-center gap-1 px-2 py-1 rounded-full border font-mono text-[0.52rem] tracking-[0.16em] uppercase transition-colors cursor-pointer',
+      hearOthers
+        ? 'bg-warm/15 border-warm/40 text-ink hover:bg-warm/25'
+        : 'bg-card border-rule/40 text-ink-soft/60 hover:border-warm/40 hover:text-warm',
+    ].join(' ');
+  }
+
+  // Inject the toggle next to the "here now" pill on first render.
+  function ensureHearOthersToggle(): void {
+    if (document.getElementById('hear-others-toggle')) return;
+    const anchor = document.querySelector('#visit-stream .pill-dot')?.closest('span');
+    const mount = anchor?.parentElement;
+    if (!mount) return;
+    const btn = document.createElement('button');
+    btn.id = 'hear-others-toggle';
+    btn.type = 'button';
+    btn.title = 'Hear other visitors\' chimes';
+    updateHearOthersToggleUI(btn);
+    btn.addEventListener('click', () => {
+      hearOthers = !hearOthers;
+      saveHearOthers(hearOthers);
+      updateHearOthersToggleUI(btn);
+    });
+    mount.appendChild(btn);
+  }
+  // Call after DOM is ready (frontmatter runs before the HTML below).
+  setTimeout(ensureHearOthersToggle, 50);
+
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // Greeting — routes between two experiences:
+  //
+  //   • First-time visitors (no `pc:visited` in localStorage) see a bigger
+  //     welcome block with a 4-tile mini-tour. Marked "visited" on dismiss
+  //     or after 3s (prevents flash-on-accidental-refresh).
+  //   • Return visitors get the compact warm one-liner personalized by
+  //     city + weather.
+  //
+  // Both blocks are hidden at paint time; JS reveals the right one once
+  // /api/greeting resolves so there's no empty-card flash.
+  // ---------------------------------------------------------------------
+
+  const VISITED_KEY = 'pc:visited';
+  function isFirstVisit(): boolean {
+    try { return !localStorage.getItem(VISITED_KEY); } catch { return false; }
+  }
+  function markVisited(): void {
+    try { localStorage.setItem(VISITED_KEY, String(Date.now())); } catch {}
+  }
+
+  async function paintGreeting(): Promise<void> {
+    try {
+      const r = await fetch('/api/greeting');
+      const data = r.ok ? await r.json() : null;
+      const firstTime = isFirstVisit();
+
+      if (firstTime) {
+        // First-time welcome — populate the kicker with their city + temp
+        // if available, leave the base copy otherwise.
+        const welcome = document.getElementById('visit-first-welcome');
+        const kicker = document.getElementById('visit-first-welcome-kicker');
+        if (welcome) {
+          if (kicker && data) {
+            const locBits: string[] = [];
+            if (data.city && data.region && data.country === 'US') locBits.push(`${data.city}, ${data.region}`);
+            else if (data.city && data.country) locBits.push(`${data.city}, ${data.country}`);
+            else if (data.country) locBits.push(data.country);
+            if (data.tempF != null) locBits.push(`${data.tempF}° ${data.conditions ?? ''}`.trim());
+            if (locBits.length > 0) kicker.textContent = locBits.join(' · ');
+          }
+          welcome.classList.remove('hidden');
+        }
+        // Wire the dismiss button once.
+        const dismiss = document.getElementById('visit-first-welcome-dismiss');
+        dismiss?.addEventListener('click', () => {
+          document.getElementById('visit-first-welcome')?.classList.add('hidden');
+          markVisited();
+          // Immediately show the regular greeting once dismissed.
+          showReturnGreeting(data);
+        }, { once: true });
+        // Also auto-mark as visited after 3s so a quick refresh doesn't
+        // re-show the welcome indefinitely.
+        setTimeout(markVisited, 3000);
+        return;
+      }
+
+      // Return visitor — compact greeting
+      showReturnGreeting(data);
+    } catch { /* silent */ }
+  }
+
+  function showReturnGreeting(data: any): void {
+    if (!data) return;
+    const box = document.getElementById('visit-greeting');
+    const line = document.getElementById('visit-greeting-line');
+    const sub = document.getElementById('visit-greeting-sub');
+    if (!box || !line || !sub) return;
+    if (typeof data.greeting === 'string') line.textContent = data.greeting;
+    if (typeof data.subline === 'string') sub.textContent = data.subline;
+    if (data.greeting || data.subline) box.classList.remove('hidden');
+  }
+
+  // Visit note char counter — keeps the 0/140 label honest as you type.
+  const noteInput = document.getElementById('visit-note-input') as HTMLInputElement | null;
+  const noteCharsEl = document.getElementById('visit-note-chars');
+  noteInput?.addEventListener('input', () => {
+    if (noteCharsEl) noteCharsEl.textContent = String(noteInput.value.length);
+  });
+
+  paintNoun();
+  startTimer();
+  // Fire presence IMMEDIATELY so visitors appear in "here now" without
+  // waiting for the 10s widget countdown. Before this, a friend bouncing
+  // in 4s was invisible server-side.
+  pingPresence(currentNoun);
+  paintGreeting();
+  refresh();
+
+  setInterval(refresh, POLL_INTERVAL_MS);
+  // Heartbeat — refreshes presence TTL so sessions don't drop mid-conversation.
+  // KV's 600s TTL + 60s heartbeat means a visitor stays "here" as long as
+  // their tab is open, without flooding the API.
+  setInterval(() => pingPresence(currentNoun), 60_000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      pingPresence(currentNoun);
+      refresh();
+    }
+  });
+</script>

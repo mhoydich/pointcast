@@ -1,0 +1,1202 @@
+---
+/**
+ * src/components/ViolentCrimesBlock.astro
+ *
+ * DESIGN CHOICES:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * • Self-contained: all audio scheduling lives in the inline <script> tag.
+ *   No external audio samples — pure Web Audio via chimes.ts playNounVoice().
+ *
+ * • Score imported from ../lib/violent-crimes-score.ts. The CHORUS_NOTE_INDICES
+ *   export marks which notes are remixable (chorus cluster, beats 24–31).
+ *
+ * • BPM defaults to 75, with transport chips for 60 / 75 / 90 / 120.
+ *   Tempo changes reschedule remaining notes and update stave scroll speed.
+ *
+ * • Remix: chorus Noun IDs are replaced with seeded-random IDs from the full
+ *   0–1199 pool. Share URLs use ?remix=N and the same seed hydrates on load.
+ *   Seeded LCG PRNG — no external deps, deterministic per seed.
+ *
+ * • Audio leak prevention: every scheduled setTimeout handle is stored in
+ *   `timers[]` and cleared via clearTimers() on pause/restart/remix.
+ *
+ * • Safari iOS 16.4+ compatible: playNounVoice uses only OscillatorNode +
+ *   GainNode (no AudioWorklet). AudioContext is created lazily on first tap
+ *   to satisfy iOS autoplay policy.
+ *
+ * • prefers-reduced-motion: CSS transitions/animations are suppressed;
+ *   audio playback continues unaffected.
+ *
+ * • Mobile-first: max-width 560px, single-column, all tap targets ≥ 44px.
+ *   On ≤420px viewports, button labels are hidden (icon-only).
+ *
+ * • Pixel-art stave: Noun avatars are coloured divs whose hue is derived
+ *   deterministically from nounId (golden-angle hue spacing).
+ *   Vertical position on the stave = nounId % 3 (three "lines").
+ *
+ * REQUIRES:
+ *   ../lib/chimes.ts must export: playNounVoice(nounId: number, volumePeak?: number): void
+ *   ../lib/violent-crimes-score.ts must export: score, CHORUS_NOTE_INDICES, Note
+ */
+---
+
+<section class="vc-block bg-card" aria-label="Violent Crimes — Noun Synth Player">
+
+  <!-- Midcentury corner dots (warm/ink squares) -->
+  <span class="corner corner-tl" aria-hidden="true"></span>
+  <span class="corner corner-tr" aria-hidden="true"></span>
+  <span class="corner corner-bl" aria-hidden="true"></span>
+  <span class="corner corner-br" aria-hidden="true"></span>
+
+  <!-- Header -->
+  <header class="vc-header">
+    <h2 class="vc-title">Violent Crimes</h2>
+    <p class="vc-caption"><em id="vc-caption-copy">a noun-voice tribute &mdash; 75 bpm</em></p>
+  </header>
+
+  <!-- Status / BPM row -->
+  <div class="vc-meta">
+    <span class="vc-bpm-label" id="vc-bpm-label">75 BPM</span>
+    <span class="vc-status" id="vc-status" aria-live="polite" aria-atomic="true">ready</span>
+  </div>
+
+  <!-- Progress bar -->
+  <div
+    class="vc-progress-track"
+    role="progressbar"
+    aria-valuenow="0"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    aria-label="Playback progress"
+    id="vc-progress-track"
+  >
+    <div class="vc-progress-fill" id="vc-progress-fill"></div>
+  </div>
+
+  <!-- Pixel-art stave: scrolling Noun avatars -->
+  <div class="vc-stave-wrap" aria-hidden="true" id="vc-stave-wrap">
+    <div class="vc-stave-lines" aria-hidden="true">
+      <div class="vc-stave-line"></div>
+      <div class="vc-stave-line"></div>
+      <div class="vc-stave-line"></div>
+    </div>
+    <div class="vc-stave-track" id="vc-stave-track">
+      <!-- Noun pip divs injected by JS -->
+    </div>
+    <!-- Playhead -->
+    <div class="vc-playhead" id="vc-playhead" aria-hidden="true"></div>
+  </div>
+
+  <div class="vc-visualizer" id="vc-visualizer" aria-hidden="true" hidden>
+    <span class="vc-kicker">voiceprint</span>
+    <div class="vc-visualizer-bars" id="vc-visualizer-bars">
+      {Array.from({ length: 12 }).map((_, idx) => (
+        <span
+          class="vc-visualizer-bar"
+          data-bar={idx}
+          style={`--bar-index:${idx};`}
+          aria-hidden="true"
+        ></span>
+      ))}
+    </div>
+  </div>
+
+  <div class="vc-tempo-row" role="group" aria-label="Tempo selector">
+    <span class="vc-kicker">tempo</span>
+    <div class="vc-chip-group">
+      {[60, 75, 90, 120].map((bpm) => (
+        <button
+          class={`vc-chip vc-tempo-chip${bpm === 75 ? ' is-active' : ''}`}
+          type="button"
+          data-bpm={bpm}
+          aria-pressed={bpm === 75 ? 'true' : 'false'}
+        >
+          {bpm} BPM
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <!-- Transport controls -->
+  <div class="vc-controls" role="group" aria-label="Transport controls">
+    <button class="vc-btn vc-btn-play" id="vc-play" type="button" aria-label="Play">
+      <!-- Play triangle -->
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false">
+        <polygon points="4,2 18,10 4,18"/>
+      </svg>
+      <span class="vc-btn-label">Play</span>
+    </button>
+
+    <button
+      class="vc-chip vc-chip-loop"
+      id="vc-loop"
+      type="button"
+      aria-label="Toggle loop playback"
+      aria-pressed="false"
+    >
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M16 6h-8a4 4 0 0 0 0 8h6"/>
+        <polyline points="13,3 16,6 13,9"/>
+        <path d="M4 14h8a4 4 0 0 0 0-8H6"/>
+        <polyline points="7,17 4,14 7,11"/>
+      </svg>
+      <span class="vc-btn-label">Loop</span>
+    </button>
+
+    <button class="vc-btn vc-btn-pause" id="vc-pause" type="button" aria-label="Pause" disabled>
+      <!-- Pause bars -->
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false">
+        <rect x="4" y="2" width="4" height="16" rx="1"/>
+        <rect x="12" y="2" width="4" height="16" rx="1"/>
+      </svg>
+      <span class="vc-btn-label">Pause</span>
+    </button>
+
+    <button class="vc-btn vc-btn-restart" id="vc-restart" type="button" aria-label="Restart from beginning">
+      <!-- Restart arrow -->
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M3 10 A7 7 0 1 1 10 17"/>
+        <polyline points="3,6 3,10 7,10"/>
+      </svg>
+      <span class="vc-btn-label">Restart</span>
+    </button>
+
+    <button class="vc-btn vc-btn-remix" id="vc-remix" type="button" aria-label="Remix chorus with new Nouns">
+      <!-- Shuffle/remix arrows -->
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <polyline points="16,3 19,6 16,9"/>
+        <path d="M1,6 H5 A4,4 0 0 1 9,10 A4,4 0 0 0 13,14 H19"/>
+        <polyline points="16,14 19,17 16,20" transform="translate(0,-3)"/>
+        <path d="M1,14 H5 A4,4 0 0 0 9,10"/>
+      </svg>
+      <span class="vc-btn-label">Remix</span>
+    </button>
+
+    <button class="vc-btn vc-btn-share" id="vc-share" type="button" aria-label="Copy remix share URL">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="5" cy="10" r="2"></circle>
+        <circle cx="15" cy="5" r="2"></circle>
+        <circle cx="15" cy="15" r="2"></circle>
+        <path d="M7 9l6-3"></path>
+        <path d="M7 11l6 3"></path>
+      </svg>
+      <span class="vc-btn-label" id="vc-share-label">Share</span>
+    </button>
+  </div>
+
+  <!-- Noun roster: coloured pips that pulse when their Noun is singing -->
+  <div class="vc-roster-wrap">
+    <span class="vc-roster-label">nouns</span>
+    <div class="vc-roster" id="vc-roster" aria-label="Nouns in this arrangement">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+</section>
+
+<style>
+  /* ── Card shell ─────────────────────────────────────────────────────────── */
+  .vc-block {
+    position: relative;
+    padding: 2rem 1.5rem 1.75rem;
+    border: 1.5px solid var(--color-ink, #1a1a1a);
+    max-width: 560px;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-mono, ui-monospace, 'Courier New', monospace);
+    background: var(--color-card, #fdf8f0);
+    color: var(--color-ink, #1a1a1a);
+    overflow: hidden;
+  }
+
+  /* ── Corner dots ────────────────────────────────────────────────────────── */
+  .corner {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    background: var(--color-warm, #c8a96e);
+    border: 1.5px solid var(--color-ink, #1a1a1a);
+    pointer-events: none;
+  }
+  .corner-tl { top: 6px;    left: 6px;  }
+  .corner-tr { top: 6px;    right: 6px; }
+  .corner-bl { bottom: 6px; left: 6px;  }
+  .corner-br { bottom: 6px; right: 6px; }
+
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .vc-header {
+    margin-bottom: 0.75rem;
+    text-align: center;
+  }
+  .vc-title {
+    font-family: var(--font-serif, Georgia, 'Times New Roman', serif);
+    font-size: clamp(1.3rem, 5vw, 1.85rem);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin: 0;
+    line-height: 1.1;
+  }
+  .vc-caption {
+    font-family: var(--font-serif, Georgia, serif);
+    font-size: 0.78rem;
+    color: var(--color-muted, #888);
+    margin: 0.3rem 0 0;
+  }
+
+  /* ── Meta row ───────────────────────────────────────────────────────────── */
+  .vc-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+  }
+  .vc-bpm-label {
+    font-weight: 700;
+    color: var(--color-ink, #1a1a1a);
+  }
+  .vc-status {
+    font-style: italic;
+    color: var(--color-muted, #888);
+    min-width: 6ch;
+    text-align: right;
+  }
+
+  /* ── Progress bar ───────────────────────────────────────────────────────── */
+  .vc-progress-track {
+    height: 3px;
+    background: var(--color-border, #ddd);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    cursor: default;
+  }
+  .vc-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--color-warm, #c8a96e);
+    border-radius: 2px;
+    transition: width 0.18s linear;
+    will-change: width;
+  }
+
+  /* ── Stave ──────────────────────────────────────────────────────────────── */
+  .vc-stave-wrap {
+    position: relative;
+    height: 60px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    border-top: 1px solid var(--color-border, #e0d8cc);
+    border-bottom: 1px solid var(--color-border, #e0d8cc);
+    background: var(--color-card, #fdf8f0);
+  }
+  .vc-stave-lines {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .vc-stave-line {
+    height: 1px;
+    background: var(--color-border, #e0d8cc);
+    width: 100%;
+  }
+  .vc-stave-track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    will-change: transform;
+    z-index: 1;
+  }
+  /* Playhead — vertical line showing current position */
+  .vc-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 25%;
+    width: 1px;
+    background: var(--color-warm, #c8a96e);
+    opacity: 0.7;
+    z-index: 3;
+    pointer-events: none;
+  }
+  /* Individual Noun pip on the stave */
+  .vc-noun-pip {
+    position: absolute;
+    height: 14px;
+    min-width: 8px;
+    border: 1px solid rgba(0,0,0,0.22);
+    border-radius: 1px;
+    box-sizing: border-box;
+    transition: box-shadow 0.12s, border-color 0.12s;
+  }
+  .vc-noun-pip.active {
+    box-shadow: 0 0 5px 1px rgba(200,169,110,0.75);
+    border-color: var(--color-ink, #1a1a1a);
+    z-index: 2;
+  }
+
+  /* ── Tempo + utility chips ──────────────────────────────────────────────── */
+  .vc-tempo-row,
+  .vc-visualizer {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+  .vc-tempo-row {
+    margin-bottom: 0.9rem;
+    flex-wrap: wrap;
+  }
+  .vc-kicker {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-muted, #888);
+    flex-shrink: 0;
+  }
+  .vc-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .vc-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 36px;
+    min-width: 44px;
+    padding: 0 0.85rem;
+    border: 1.5px solid var(--color-ink, #1a1a1a);
+    background: rgba(253, 248, 240, 0.72);
+    color: var(--color-ink, #1a1a1a);
+    font-family: var(--font-mono, ui-monospace, 'Courier New', monospace);
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 999px;
+    transition: background 0.14s, color 0.14s, border-color 0.14s, box-shadow 0.14s, transform 0.14s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .vc-chip:hover,
+  .vc-chip:focus-visible {
+    background: var(--color-ink, #1a1a1a);
+    color: var(--color-card, #fdf8f0);
+    outline: none;
+  }
+  .vc-chip:focus-visible {
+    outline: 2px solid var(--color-warm, #c8a96e);
+    outline-offset: 2px;
+  }
+  .vc-chip.is-active,
+  .vc-chip[aria-pressed='true'] {
+    background: var(--color-warm, #c8a96e);
+    border-color: var(--color-warm, #c8a96e);
+    color: var(--color-card, #fdf8f0);
+    box-shadow: 0 0 0 1px rgba(26, 26, 26, 0.06);
+  }
+  .vc-chip-loop {
+    flex: 0 0 auto;
+    min-width: 88px;
+    align-self: stretch;
+  }
+
+  /* ── Visualizer ─────────────────────────────────────────────────────────── */
+  .vc-visualizer {
+    margin: -0.2rem 0 0.95rem;
+    min-height: 42px;
+  }
+  .vc-visualizer-bars {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: end;
+    gap: 0.28rem;
+    min-height: 36px;
+  }
+  .vc-visualizer-bar {
+    --bar-height: 0.18;
+    height: calc(8px + var(--bar-height) * 28px);
+    border: 1px solid rgba(26, 26, 26, 0.16);
+    background:
+      linear-gradient(180deg, rgba(253, 248, 240, 0.16) 0%, rgba(253, 248, 240, 0) 42%),
+      linear-gradient(180deg, rgba(200, 169, 110, 0.28) 0%, rgba(200, 169, 110, 0.9) 100%);
+    box-shadow: inset 0 1px 0 rgba(253, 248, 240, 0.4);
+    transform-origin: bottom center;
+    transition: height 0.08s linear, opacity 0.14s linear;
+    animation: vc-bar-shimmer 1.15s ease-in-out infinite;
+    animation-delay: calc(var(--bar-index) * 80ms);
+  }
+  @keyframes vc-bar-shimmer {
+    0%, 100% { filter: saturate(0.92) brightness(0.95); }
+    50% { filter: saturate(1.08) brightness(1.06); }
+  }
+
+  /* ── Transport controls ─────────────────────────────────────────────────── */
+  .vc-controls {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .vc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.38rem;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 1rem;
+    border: 1.5px solid var(--color-ink, #1a1a1a);
+    background: transparent;
+    color: var(--color-ink, #1a1a1a);
+    font-family: var(--font-mono, ui-monospace, 'Courier New', monospace);
+    font-size: 0.72rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 0;
+    transition: background 0.14s, color 0.14s;
+    flex: 1 1 auto;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .vc-btn:hover:not(:disabled),
+  .vc-btn:focus-visible:not(:disabled) {
+    background: var(--color-ink, #1a1a1a);
+    color: var(--color-card, #fdf8f0);
+    outline: none;
+  }
+  .vc-btn:focus-visible {
+    outline: 2px solid var(--color-warm, #c8a96e);
+    outline-offset: 2px;
+  }
+  .vc-btn:disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
+  }
+  .vc-btn-remix {
+    border-color: var(--color-warm, #c8a96e);
+    color: var(--color-warm, #c8a96e);
+  }
+  .vc-btn-remix:hover:not(:disabled),
+  .vc-btn-remix:focus-visible:not(:disabled) {
+    background: var(--color-warm, #c8a96e);
+    color: var(--color-card, #fdf8f0);
+  }
+  .vc-btn-share.is-copied {
+    background: var(--color-warm, #c8a96e);
+    border-color: var(--color-warm, #c8a96e);
+    color: var(--color-card, #fdf8f0);
+  }
+
+  /* ── Noun roster ────────────────────────────────────────────────────────── */
+  .vc-roster-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .vc-roster-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-muted, #888);
+    padding-top: 6px;
+    flex-shrink: 0;
+  }
+  .vc-roster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    min-height: 30px;
+  }
+  .vc-roster-pip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    font-size: 0.55rem;
+    font-family: var(--font-mono, ui-monospace, 'Courier New', monospace);
+    border: 1px solid transparent;
+    border-radius: 2px;
+    cursor: default;
+    transition: transform 0.1s, border-color 0.1s, box-shadow 0.1s;
+    position: relative;
+    color: rgba(0,0,0,0.6);
+    font-weight: 700;
+    line-height: 1;
+  }
+  .vc-roster-pip.singing {
+    transform: scale(1.1);
+    border-color: var(--color-ink, #1a1a1a) !important;
+    box-shadow: 0 0 0 2px var(--color-warm, #c8a96e);
+    color: var(--color-ink, #1a1a1a);
+    z-index: 1;
+  }
+
+  /* ── Reduced motion ─────────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .vc-progress-fill,
+    .vc-stave-track,
+    .vc-noun-pip,
+    .vc-roster-pip,
+    .vc-chip,
+    .vc-visualizer-bar {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+
+  /* ── Mobile (≤420px) ────────────────────────────────────────────────────── */
+  @media (max-width: 420px) {
+    .vc-block {
+      padding: 1.5rem 0.9rem 1.25rem;
+    }
+    .vc-btn-label {
+      display: none;
+    }
+    .vc-btn {
+      padding: 0 0.6rem;
+      flex: 0 0 auto;
+    }
+    .vc-controls {
+      gap: 0.35rem;
+    }
+    .vc-tempo-row,
+    .vc-visualizer {
+      gap: 0.5rem;
+    }
+    .vc-chip {
+      padding: 0 0.7rem;
+    }
+  }
+</style>
+
+<script>
+  /**
+   * Inline script — runs client-side only.
+   * Astro compiles this with Vite; imports are resolved at build time.
+   *
+   * NOTE: `import type` is intentionally omitted here; the Note interface
+   * is only used for type-checking in the score file. We cast locally.
+   */
+
+  // @ts-ignore — resolved by Astro/Vite
+  import { nounVoice, playNounVoice } from '../lib/chimes.ts';
+  // @ts-ignore
+  import { score as BASE_SCORE, CHORUS_NOTE_INDICES } from '../lib/violent-crimes-score.ts';
+
+  // ── Types (inlined to avoid import-type in script) ────────────────────────
+  interface Note {
+    nounId: number;
+    time: number;
+    duration: number;
+    emphasis?: number;
+  }
+
+  // ── Constants ─────────────────────────────────────────────────────────────
+  const BPM_OPTIONS = [60, 75, 90, 120];
+  const DEFAULT_BPM = 75;
+  const TOTAL_BEATS = 48; // last note ends at beat 48 (44 + 4)
+  const LOOP_STORAGE_KEY = 'pc:vc:loop';
+  const SHARE_FLASH_MS = 1600;
+  const CHORUS_INDEX_SET = new Set<number>(CHORUS_NOTE_INDICES as number[]);
+  const ALL_NOUN_PITCHES = Array.from({ length: 1200 }, (_, nounId) => ({
+    nounId,
+    baseFreq: nounVoice(nounId).baseFreq,
+  }));
+  const MIN_BASE_FREQ = ALL_NOUN_PITCHES.reduce(
+    (min, entry) => Math.min(min, entry.baseFreq),
+    Number.POSITIVE_INFINITY,
+  );
+  const MAX_BASE_FREQ = ALL_NOUN_PITCHES.reduce(
+    (max, entry) => Math.max(max, entry.baseFreq),
+    0,
+  );
+
+  function beatMsFor(bpm: number): number {
+    return (60 / bpm) * 1000;
+  }
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function randomSeed(): number {
+    return Math.floor(Math.random() * 99999);
+  }
+
+  function parseSeed(raw: string | null): number | null {
+    if (!raw) return null;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.abs(parsed);
+  }
+
+  // ── Seeded PRNG (LCG) ─────────────────────────────────────────────────────
+  function lcgRng(seed: number) {
+    let s = seed >>> 0;
+    return (): number => {
+      s = Math.imul(s, 1664525) + 1013904223 >>> 0;
+      return s / 0x100000000;
+    };
+  }
+
+  // ── Seed helpers ──────────────────────────────────────────────────────────
+  function readSeedFromHash(): number | null {
+    const m = window.location.hash.match(/vc-seed=(\d+)/);
+    return m ? parseSeed(m[1]) : null;
+  }
+
+  function readSeedFromUrl(): number | null {
+    const url = new URL(window.location.href);
+    return parseSeed(url.searchParams.get('remix')) ?? readSeedFromHash();
+  }
+
+  function buildShareUrl(seed: number): string {
+    const url = new URL(window.location.href);
+    url.searchParams.set('remix', String(seed));
+    return url.toString();
+  }
+
+  function syncSeedInUrl(seed: number): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set('remix', String(seed));
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function readLoopPreference(): boolean {
+    try {
+      return localStorage.getItem(LOOP_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function writeLoopPreference(looping: boolean): void {
+    try {
+      localStorage.setItem(LOOP_STORAGE_KEY, looping ? '1' : '0');
+    } catch {
+      // Ignore private-mode / storage failures.
+    }
+  }
+
+  // ── Score builder ─────────────────────────────────────────────────────────
+  function buildScore(seed: number): Note[] {
+    const rng     = lcgRng(seed);
+    // Fisher-Yates shuffle of all 1200 noun IDs
+    const pool    = Array.from({ length: 1200 }, (_, i) => i);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const remixIds = pool.slice(0, CHORUS_NOTE_INDICES.length);
+
+    return (BASE_SCORE as Note[]).map((note: Note, idx: number) => {
+      const remixPos = (CHORUS_NOTE_INDICES as number[]).indexOf(idx);
+      if (remixPos !== -1) {
+        return { ...note, nounId: remixIds[remixPos] };
+      }
+      return { ...note };
+    });
+  }
+
+  // ── Colour helper (golden-angle hue spacing) ──────────────────────────────
+  function nounHue(id: number): string {
+    const hue = (id * 137.508) % 360;
+    return `hsl(${hue.toFixed(1)}, 52%, 54%)`;
+  }
+
+  const harmonyCache = new Map<number, [number, number]>();
+
+  function findClosestNounId(targetFreq: number, exclude: Set<number>): number {
+    let bestId = 0;
+    let bestDiff = Number.POSITIVE_INFINITY;
+    ALL_NOUN_PITCHES.forEach((entry) => {
+      if (exclude.has(entry.nounId)) return;
+      const diff = Math.abs(Math.log(entry.baseFreq / targetFreq));
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestId = entry.nounId;
+      }
+    });
+    return bestId;
+  }
+
+  function getChordStack(nounId: number): [number, number, number] {
+    const cached = harmonyCache.get(nounId);
+    if (cached) return [nounId, cached[0], cached[1]];
+
+    const baseFreq = nounVoice(nounId).baseFreq;
+    const exclude = new Set<number>([nounId]);
+    const fifthId = findClosestNounId(baseFreq * 1.5, exclude);
+    exclude.add(fifthId);
+    const octaveId = findClosestNounId(baseFreq * 2, exclude);
+    harmonyCache.set(nounId, [fifthId, octaveId]);
+    return [nounId, fifthId, octaveId];
+  }
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const $captionCopy = document.getElementById('vc-caption-copy') as HTMLElement;
+  const $bpmLabel   = document.getElementById('vc-bpm-label')    as HTMLElement;
+  const $play       = document.getElementById('vc-play')         as HTMLButtonElement;
+  const $pause      = document.getElementById('vc-pause')        as HTMLButtonElement;
+  const $restart    = document.getElementById('vc-restart')      as HTMLButtonElement;
+  const $remix      = document.getElementById('vc-remix')        as HTMLButtonElement;
+  const $loop       = document.getElementById('vc-loop')         as HTMLButtonElement;
+  const $share      = document.getElementById('vc-share')        as HTMLButtonElement;
+  const $shareLabel = document.getElementById('vc-share-label')  as HTMLElement;
+  const $status     = document.getElementById('vc-status')       as HTMLElement;
+  const $progFill   = document.getElementById('vc-progress-fill') as HTMLElement;
+  const $progTrack  = document.getElementById('vc-progress-track') as HTMLElement;
+  const $staveTrack = document.getElementById('vc-stave-track')  as HTMLElement;
+  const $staveWrap  = document.getElementById('vc-stave-wrap')   as HTMLElement;
+  const $roster     = document.getElementById('vc-roster')       as HTMLElement;
+  const $visualizer = document.getElementById('vc-visualizer')   as HTMLElement;
+  const $tempoButtons = Array.from(document.querySelectorAll('.vc-tempo-chip')) as HTMLButtonElement[];
+  const $visualizerBars = Array.from(document.querySelectorAll('.vc-visualizer-bar')) as HTMLElement[];
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const initialSeed = readSeedFromUrl();
+  let currentBpm   = DEFAULT_BPM;
+  let beatMs       = beatMsFor(currentBpm);
+  let totalMs      = TOTAL_BEATS * beatMs;
+  let currentSeed  = initialSeed ?? randomSeed();
+  let currentScore = buildScore(currentSeed);
+  let timers       : ReturnType<typeof setTimeout>[] = [];
+  let rafId        = 0;
+  let startTime    = 0;   // performance.now() when play started
+  let pausedAt     = 0;   // ms elapsed when paused
+  let isPlaying    = false;
+  let isFinished   = false;
+  let isLooping    = readLoopPreference();
+  let reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let shareFlashTimer: ReturnType<typeof setTimeout> | null = null;
+  let stavePips: HTMLElement[] = [];
+  let rosterPips = new Map<number, HTMLElement>();
+
+  function setStatus(msg: string): void {
+    $status.textContent = msg;
+  }
+
+  function restoreStatus(): void {
+    if (isPlaying) {
+      setStatus('playing');
+      return;
+    }
+    if (isFinished) {
+      setStatus('fin.');
+      return;
+    }
+    if (pausedAt > 0) {
+      setStatus('paused');
+      return;
+    }
+    const hasRemixParam = new URL(window.location.href).searchParams.has('remix');
+    setStatus(hasRemixParam ? `seed ${currentSeed}` : 'ready');
+  }
+
+  function updateTempoUi(): void {
+    $bpmLabel.textContent = `${currentBpm} BPM`;
+    $captionCopy.textContent = `a noun-voice tribute — ${currentBpm} bpm`;
+    $tempoButtons.forEach((button) => {
+      const selected = Number(button.dataset.bpm) === currentBpm;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+  }
+
+  function updateLoopUi(): void {
+    $loop.classList.toggle('is-active', isLooping);
+    $loop.setAttribute('aria-pressed', isLooping ? 'true' : 'false');
+  }
+
+  function resetShareLabel(): void {
+    $share.classList.remove('is-copied');
+    $shareLabel.textContent = 'Share';
+  }
+
+  function clearActiveHighlights(): void {
+    stavePips.forEach((pip) => pip.classList.remove('active'));
+    rosterPips.forEach((pip) => pip.classList.remove('singing'));
+  }
+
+  function hideVisualizer(): void {
+    $visualizer.hidden = true;
+  }
+
+  function getCurrentElapsedMs(): number {
+    if (isFinished) return totalMs;
+    if (!isPlaying) return pausedAt;
+    return Math.max(0, performance.now() - startTime);
+  }
+
+  function getLeadNoteAtBeat(currentBeat: number): Note | null {
+    let lead: Note | null = null;
+    currentScore.forEach((note) => {
+      if (currentBeat >= note.time && currentBeat < note.time + note.duration) {
+        if (!lead || note.time >= lead.time) lead = note;
+      }
+    });
+    return lead;
+  }
+
+  function updateVisualizer(currentBeat: number): void {
+    if (!isPlaying) {
+      hideVisualizer();
+      return;
+    }
+
+    const lead = getLeadNoteAtBeat(currentBeat);
+    if (!lead) {
+      hideVisualizer();
+      return;
+    }
+
+    const freq = nounVoice(lead.nounId).baseFreq;
+    const normalized = clamp(
+      (Math.log(freq) - Math.log(MIN_BASE_FREQ)) / (Math.log(MAX_BASE_FREQ) - Math.log(MIN_BASE_FREQ)),
+      0,
+      1,
+    );
+    const emphasis = clamp(lead.emphasis ?? 0.5, 0.18, 1);
+    const now = performance.now();
+
+    $visualizer.hidden = false;
+    $visualizerBars.forEach((bar, idx) => {
+      const crest = 0.14 + Math.abs(Math.cos(idx * 0.47 - currentBeat * 0.38)) * 0.22;
+      const shimmer = reducedMotion
+        ? 0
+        : Math.sin(now / 150 + idx * 0.72 + currentBeat * 1.6) * 0.08;
+      const height = clamp(
+        0.16 + normalized * 0.48 + emphasis * 0.16 + crest + shimmer,
+        0.14,
+        1,
+      );
+      bar.style.setProperty('--bar-height', height.toFixed(3));
+    });
+  }
+
+  function renderFrame(elapsedMs: number): void {
+    const safeElapsed = clamp(elapsedMs, 0, totalMs);
+    const pct = totalMs === 0 ? 0 : Math.min(100, (safeElapsed / totalMs) * 100);
+    const currentBeat = safeElapsed / beatMs;
+
+    $progFill.style.width = `${pct}%`;
+    $progTrack.setAttribute('aria-valuenow', String(Math.round(pct)));
+
+    if (!reducedMotion) {
+      const wrapW = $staveWrap.clientWidth || 320;
+      const pxPerBeat = wrapW / 8;
+      const scrollX = currentBeat * pxPerBeat - wrapW * 0.25;
+      $staveTrack.style.transform = `translateX(${-Math.max(0, scrollX)}px)`;
+    } else if (safeElapsed === 0 || isFinished) {
+      $staveTrack.style.transform = safeElapsed === 0 ? 'translateX(0)' : $staveTrack.style.transform;
+    }
+
+    const activeNouns = new Set<number>();
+    currentScore.forEach((note, idx) => {
+      const active = isPlaying && currentBeat >= note.time && currentBeat < note.time + note.duration;
+      stavePips[idx]?.classList.toggle('active', active);
+      if (active) activeNouns.add(note.nounId);
+    });
+
+    rosterPips.forEach((pip, nounId) => {
+      pip.classList.toggle('singing', activeNouns.has(nounId));
+    });
+
+    if (isPlaying) updateVisualizer(currentBeat);
+    else hideVisualizer();
+  }
+
+  // ── Stave builder ─────────────────────────────────────────────────────────
+  function buildStave(score: Note[]): void {
+    $staveTrack.innerHTML = '';
+    stavePips = [];
+    const wrapW    = $staveWrap.clientWidth || 320;
+    const pxPerBeat = wrapW / 8; // viewport shows 8 beats at a time
+
+    const maxBeat = Math.max(...score.map(n => n.time + n.duration));
+    $staveTrack.style.width = `${maxBeat * pxPerBeat}px`;
+
+    score.forEach((note, idx) => {
+      const pip = document.createElement('div');
+      pip.className = 'vc-noun-pip';
+      pip.dataset.idx = String(idx);
+      pip.style.backgroundColor = nounHue(note.nounId);
+      pip.style.width  = `${Math.max(8, note.duration * pxPerBeat - 2)}px`;
+      pip.style.left   = `${note.time * pxPerBeat}px`;
+      // Three stave rows based on nounId mod 3
+      const row = note.nounId % 3;
+      pip.style.bottom = `${6 + row * 16}px`;
+      pip.setAttribute('title', `Noun #${note.nounId}`);
+      stavePips[idx] = pip;
+      $staveTrack.appendChild(pip);
+    });
+  }
+
+  function buildRoster(score: Note[]): void {
+    $roster.innerHTML = '';
+    rosterPips = new Map<number, HTMLElement>();
+    const unique = [...new Set(score.map(n => n.nounId))].sort((a, b) => a - b);
+    unique.forEach(id => {
+      const pip = document.createElement('div');
+      pip.className = 'vc-roster-pip';
+      pip.id = `vc-rp-${id}`;
+      pip.dataset.nounId = String(id);
+      pip.style.backgroundColor = nounHue(id);
+      pip.style.borderColor     = nounHue(id);
+      pip.textContent = String(id);
+      pip.setAttribute('title', `Noun #${id}`);
+      rosterPips.set(id, pip);
+      $roster.appendChild(pip);
+    });
+  }
+
+  // ── Audio scheduling ──────────────────────────────────────────────────────
+  function scheduleNotes(score: Note[], fromMs: number): void {
+    clearTimers();
+    score.forEach((note, idx) => {
+      const noteMs = note.time * beatMs;
+      const delay  = noteMs - fromMs;
+      if (delay < 0) return; // note already passed
+
+      const vol = (note.emphasis ?? 0.5) * 0.22;
+
+      const t = setTimeout(() => {
+        try {
+          if (CHORUS_INDEX_SET.has(idx)) {
+            const [baseId, fifthId, octaveId] = getChordStack(note.nounId);
+            playNounVoice(baseId, vol);
+            playNounVoice(fifthId, vol * 0.72);
+            playNounVoice(octaveId, vol * 0.56);
+          } else {
+            playNounVoice(note.nounId, vol);
+          }
+        } catch (_) {
+          // Ignore audio errors to keep the transport responsive.
+        }
+      }, delay);
+
+      timers.push(t);
+    });
+  }
+
+  function clearTimers(): void {
+    timers.forEach(id => clearTimeout(id));
+    timers = [];
+  }
+
+  // ── Playback controls ─────────────────────────────────────────────────────
+  function tick(): void {
+    if (!isPlaying) return;
+
+    const elapsed = getCurrentElapsedMs();
+    renderFrame(elapsed);
+
+    if (elapsed >= totalMs) {
+      onFinished();
+    } else {
+      rafId = requestAnimationFrame(tick);
+    }
+  }
+
+  function play(fromMs = 0): void {
+    clearTimers();
+    cancelAnimationFrame(rafId);
+    isPlaying  = true;
+    isFinished = false;
+    startTime  = performance.now() - fromMs;
+    pausedAt   = 0;
+
+    scheduleNotes(currentScore, fromMs);
+    renderFrame(fromMs);
+    rafId = requestAnimationFrame(tick);
+
+    setStatus('playing');
+    $play.disabled  = true;
+    $pause.disabled = false;
+  }
+
+  function pause(): void {
+    if (!isPlaying) return;
+    isPlaying = false;
+    pausedAt  = getCurrentElapsedMs();
+    clearTimers();
+    cancelAnimationFrame(rafId);
+    renderFrame(pausedAt);
+    setStatus('paused');
+    $play.disabled  = false;
+    $pause.disabled = true;
+  }
+
+  function restart(autoPlay = true): void {
+    clearTimers();
+    cancelAnimationFrame(rafId);
+    isPlaying  = false;
+    isFinished = false;
+    pausedAt   = 0;
+
+    renderFrame(0);
+    clearActiveHighlights();
+    setStatus('ready');
+    $play.disabled  = false;
+    $pause.disabled = true;
+
+    if (autoPlay) play(0);
+  }
+
+  function onFinished(): void {
+    clearTimers();
+    cancelAnimationFrame(rafId);
+
+    if (isLooping) {
+      restart(true);
+      return;
+    }
+
+    isPlaying  = false;
+    isFinished = true;
+    pausedAt   = totalMs;
+    renderFrame(totalMs);
+    clearActiveHighlights();
+    setStatus('fin.');
+    $play.disabled  = false;
+    $pause.disabled = true;
+  }
+
+  function remix(seed = randomSeed()): void {
+    const wasPlaying = isPlaying;
+    clearTimers();
+    cancelAnimationFrame(rafId);
+    isPlaying = false;
+    isFinished = false;
+    pausedAt = 0;
+
+    // New random seed
+    currentSeed  = seed;
+    currentScore = buildScore(currentSeed);
+    syncSeedInUrl(currentSeed);
+
+    buildStave(currentScore);
+    buildRoster(currentScore);
+
+    renderFrame(0);
+    clearActiveHighlights();
+    setStatus(`seed ${currentSeed}`);
+    $play.disabled  = false;
+    $pause.disabled = true;
+
+    if (wasPlaying) play(0);
+  }
+
+  function setBpm(nextBpm: number): void {
+    if (!BPM_OPTIONS.includes(nextBpm) || nextBpm === currentBpm) return;
+
+    const beatPosition = isFinished
+      ? TOTAL_BEATS
+      : (getCurrentElapsedMs() / beatMs);
+
+    currentBpm = nextBpm;
+    beatMs = beatMsFor(currentBpm);
+    totalMs = TOTAL_BEATS * beatMs;
+    updateTempoUi();
+
+    if (isFinished) {
+      pausedAt = totalMs;
+      renderFrame(totalMs);
+      return;
+    }
+
+    const nextElapsed = Math.min(totalMs, beatPosition * beatMs);
+    if (isPlaying) {
+      clearTimers();
+      cancelAnimationFrame(rafId);
+      startTime = performance.now() - nextElapsed;
+      scheduleNotes(currentScore, nextElapsed);
+      renderFrame(nextElapsed);
+      rafId = requestAnimationFrame(tick);
+    } else {
+      pausedAt = nextElapsed;
+      renderFrame(pausedAt);
+    }
+  }
+
+  async function shareCurrentRemix(): Promise<void> {
+    const url = buildShareUrl(currentSeed);
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard unavailable');
+      }
+      await navigator.clipboard.writeText(url);
+      syncSeedInUrl(currentSeed);
+      $share.classList.add('is-copied');
+      $shareLabel.textContent = 'copied ✓';
+      setStatus('copied');
+      if (shareFlashTimer) clearTimeout(shareFlashTimer);
+      shareFlashTimer = setTimeout(() => {
+        resetShareLabel();
+        restoreStatus();
+      }, SHARE_FLASH_MS);
+    } catch {
+      setStatus('copy err');
+    }
+  }
+
+  // ── Event wiring ──────────────────────────────────────────────────────────
+  $play.addEventListener('click', () => {
+    if (isFinished) { restart(); return; }
+    play(pausedAt);
+  });
+  $pause.addEventListener('click', pause);
+  $restart.addEventListener('click', () => restart());
+  $remix.addEventListener('click', () => remix());
+  $loop.addEventListener('click', () => {
+    isLooping = !isLooping;
+    writeLoopPreference(isLooping);
+    updateLoopUi();
+  });
+  $share.addEventListener('click', () => {
+    void shareCurrentRemix();
+  });
+  $tempoButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextBpm = Number(button.dataset.bpm);
+      setBpm(nextBpm);
+    });
+  });
+
+  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', e => {
+    reducedMotion = e.matches;
+    renderFrame(getCurrentElapsedMs());
+  });
+
+  window.addEventListener('resize', () => {
+    buildStave(currentScore);
+    renderFrame(getCurrentElapsedMs());
+  });
+
+  // ── Initialise ────────────────────────────────────────────────────────────
+  currentScore = buildScore(currentSeed);
+  buildStave(currentScore);
+  buildRoster(currentScore);
+  updateTempoUi();
+  updateLoopUi();
+  resetShareLabel();
+  renderFrame(0);
+
+  if (initialSeed !== null) {
+    syncSeedInUrl(currentSeed);
+  }
+  restoreStatus();
+</script>

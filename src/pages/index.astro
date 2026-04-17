@@ -1,194 +1,1047 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import FeedItem from '../components/FeedItem.astro';
+import VisitLog from '../components/VisitLog.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import SpinningBox from '../components/SpinningBox.astro';
+import WeatherBox from '../components/WeatherBox.astro';
+import NounBells from '../components/NounBells.astro';
+import DrumModule from '../components/DrumModule.astro';
+// TheWire (anonymous live chat) is built + deployed but currently unmounted
+// pending moderation / gated-posting. See note lower in this file.
+// import TheWire from '../components/TheWire.astro';
+import PulseAlert from '../components/PulseAlert.astro';
+import Jackpot from '../components/Jackpot.astro';
+import BaseballBlock from '../components/BaseballBlock.astro';
+import BasketballBlock from '../components/BasketballBlock.astro';
+import PickleballBlock from '../components/PickleballBlock.astro';
+import PaddleBlock from '../components/PaddleBlock.astro';
+import TigerBalmBlock from '../components/TigerBalmBlock.astro';
+import LautnerBlock from '../components/LautnerBlock.astro';
+import ViolentCrimesBlock from '../components/ViolentCrimesBlock.astro';
+import HappyFridayBlock from '../components/HappyFridayBlock.astro';
+import FeedbackBlock from '../components/FeedbackBlock.astro';
+import market from '../data/market.json';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('posts', ({ data }) => !data.draft);
 const projects = await getCollection('projects', ({ data }) => !data.draft);
+const drops = await getCollection('drops', ({ data }) => !data.draft);
 
-const allContent = [
-  ...posts.map(p => ({ ...p, collection: 'posts' as const, type: p.data.type })),
-  ...projects.map(p => ({ ...p, collection: 'projects' as const, type: 'project' as const })),
-].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+// Featured-collect block — one of Mike's listed Tezos tokens, rotates per
+// build. Placed as the last content block before the sign-off so it's the
+// final thing a reader sees on the scroll down.
+const listedTokens = (market as any).tokens.filter((t: any) => t.listed);
+const sortedByAppeal = [...listedTokens].sort((a: any, b: any) => {
+  const ap = a.priceXtz ?? Number.POSITIVE_INFINITY;
+  const bp = b.priceXtz ?? Number.POSITIVE_INFINITY;
+  if (ap !== bp) return ap - bp;
+  return (b.supply ?? 0) - (a.supply ?? 0);
+});
+const featuredCollect = sortedByAppeal[Math.floor(Math.random() * Math.max(1, sortedByAppeal.length))] ?? null;
 
-const lead = allContent[0];
-const wire = allContent.slice(1);
-
-const typeLabel: Record<string, string> = {
-  newsletter: 'Dispatch',
-  article: 'Article',
-  essay: 'Essay',
-  project: 'Project',
-  art: 'Art',
-};
-
-function fmtDate(d: Date) {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function fmtCollectPrice(xtz: number | null | undefined): string {
+  if (xtz == null) return '—';
+  if (xtz === 0) return 'free mint';
+  if (xtz < 1) return `${xtz.toFixed(2)} ꜩ`;
+  return `${xtz.toFixed(1)} ꜩ`;
 }
 
-// Random Noun IDs for inline decoration
-const nounIds = Array.from({ length: 5 }, () => Math.floor(Math.random() * 1876));
+// Unified feed — every moment in one chronological river.
+const feed = [...posts, ...projects, ...drops].sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime()
+);
+
+const nounIds = Array.from({ length: 16 }, () => Math.floor(Math.random() * 1876));
+
+// Nouns Generator starts with a random Noun on first load.
+// Range capped at 1200 to stay under current Noun supply (~1340 as of Apr 2026).
+const starterNounId = Math.floor(Math.random() * 1200);
+
+// PointCast identity noun — Mike's persistent avatar in the masthead.
+// This is the "PointCast Noun" itself (not tied to the Nouns DAO auction).
+// It will become mintable via our FA2 contract once that ships. Change this
+// one constant to swap Mike's identity noun site-wide.
+const POINTCAST_NOUN_ID = 137;
 ---
 
 <BaseLayout title="Home">
-  <div class="max-w-[34rem] mx-auto px-4 pt-10 md:pt-16 pb-20">
+  <!-- Live event banner — listens for pc:wire, pc:presence, pc:drum events
+       and slides in a small midcentury alert card from the top when something
+       notable happens. Self-throttled so a flurry doesn't turn into noise. -->
+  <PulseAlert />
 
-    <!-- Masthead — data-forward, inspired by original PointCast Network (1996) -->
-    <header class="mb-10">
-      <!-- Network ID line -->
-      <div class="flex items-center justify-between pb-2 mb-4 border-b border-rule/50">
-        <div class="flex items-center gap-3">
-          <span class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink font-semibold">PC</span>
-          <span class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-ink-soft/60">PointCast Network</span>
-        </div>
-        <span class="pill"><span class="pill-dot"></span>Live</span>
-      </div>
+  <!-- Jackpot — full-screen celebration interstitial for big moments
+       (FULL HOUSE, CENTURY, TRENDING). Fires rarely (global 60s cooldown,
+       per-type 10min), self-dismisses after ~2.8s. Designed to be
+       screenshottable — Kana caps + sends to a friend. -->
+  <Jackpot />
 
-      <!-- Data line -->
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4 font-mono text-[0.58rem] tracking-[0.14em] uppercase text-ink-soft/70">
-        <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</span>
-        <span class="text-warm/40">&bull;</span>
-        <span>{allContent.length} dispatches</span>
-        <span class="text-warm/40">&bull;</span>
-        <span>El Segundo, CA</span>
-        <span class="text-warm/40">&bull;</span>
-        <span>Mike Hoydich &times; Claude</span>
-      </div>
+  <div class="max-w-[34rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
 
-      <!-- Ticker — headline crawler -->
-      <div class="ticker" aria-label="Recent headlines">
-        <div class="ticker-track">
-          {/* Duplicate items for seamless loop */}
-          {[...allContent, ...allContent].map((item) => {
-            const href = item.collection === 'posts' ? `/posts/${item.id}` : `/projects/${item.id}`;
-            return (
-              <>
-                <div class="ticker-item">
-                  <span class="text-warm/60">{typeLabel[item.type] || 'Post'}</span>
-                  <a href={href}>{item.data.title}</a>
-                </div>
-                <span class="ticker-sep">&loz;</span>
-              </>
-            );
-          })}
-        </div>
-      </div>
-    </header>
-
-    <!-- Lead story -->
-    {lead && (
-      <section aria-label="Lead story" class="mb-12">
-        <div class="flex items-center gap-3 mb-3">
-          <span class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-warm">
-            {typeLabel[lead.type] || 'Post'} &middot; {fmtDate(lead.data.date)}
-          </span>
-          <img
-            src={`https://noun.pics/${nounIds[1]}.svg`}
-            alt=""
-            aria-hidden="true"
-            width="20"
-            height="20"
-            class="rounded-sm opacity-30"
-            style="image-rendering: pixelated;"
-          />
-        </div>
-
-        <a href={lead.collection === 'posts' ? `/posts/${lead.id}` : `/projects/${lead.id}`} class="group block">
-          <h2 class="font-serif text-[1.5rem] md:text-[1.75rem] text-ink font-medium italic leading-[1.15] mb-3 group-hover:text-warm transition-colors">
-            {lead.data.title}
-          </h2>
-        </a>
-
-        <p class="text-[0.95rem] text-ink/75 leading-relaxed mb-4">
-          {lead.data.description}
-        </p>
-
+    <!-- Masthead band — thin horizontal strip, rules top and bottom -->
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-4">
+      <div class="flex items-center gap-4">
+        <h1 class="font-mono text-2xl md:text-3xl font-bold tracking-[0.22em] uppercase text-ink leading-none">
+          PointCast
+        </h1>
         <a
-          href={lead.collection === 'posts' ? `/posts/${lead.id}` : `/projects/${lead.id}`}
-          class="inline-flex items-center gap-2 text-warm font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:underline"
+          href="/collect"
+          class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-ink-soft/60 hover:text-warm transition-colors hidden sm:inline"
         >
-          Read {typeLabel[lead.type]?.toLowerCase() || 'post'} &rarr;
+          Collect &rarr;
         </a>
-      </section>
-    )}
-
-    <!-- Noun strip — inline creative element -->
-    <div class="flex items-center gap-3 py-4 border-y border-rule/50 mb-8 overflow-hidden" aria-hidden="true">
-      <span class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-ink-soft/30 shrink-0">on-chain</span>
-      <div class="flex gap-2 overflow-hidden">
-        {nounIds.map(id => (
+        <a
+          href="/drum"
+          class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-ink-soft/60 hover:text-warm transition-colors hidden sm:inline"
+        >
+          Drum &rarr;
+        </a>
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        <span class="pill"><span class="pill-dot"></span>Live</span>
+        <!-- PointCast identity noun — clickable. Opens the noun modal
+             (owned by VisitLog.astro) so the viewer can see it big, save it,
+             and — once the FA2 contract is deployed — mint it to Tezos. -->
+        <button
+          id="pointcast-noun-btn"
+          type="button"
+          class="noun-thumb p-0 border-0 bg-transparent cursor-pointer hover:scale-110 transition-transform"
+          data-noun={`{"t":${Date.now()},"type":"pointcast","nounId":${POINTCAST_NOUN_ID}}`}
+          title="PointCast Noun · click to mint"
+          aria-label="Open PointCast Noun"
+        >
           <img
-            src={`https://noun.pics/${id}.svg`}
-            alt=""
+            src={`https://noun.pics/${POINTCAST_NOUN_ID}.svg`}
+            alt="PointCast Noun"
             width="32"
             height="32"
-            class="rounded-sm opacity-40 hover:opacity-100 transition-opacity"
+            class="noun-img rounded-md ring-1 ring-warm/40 block"
             style="image-rendering: pixelated;"
           />
-        ))}
+        </button>
       </div>
-      <span class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-ink-soft/30 shrink-0">cc0</span>
     </div>
 
-    <!-- The Wire -->
-    <section aria-label="Recent" class="mb-12">
+    <!-- Drum Module — hero above everything. First interactive thing
+         visitors see. Taps chime globally (via /api/sounds) + bump the
+         shared /api/drum counter — Kana's tap in Fullerton lands on
+         Mike's speakers in El Segundo within 2s. -->
+    <DrumModule />
+
+    <!-- Meta line + wallet connect -->
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-10">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[0.56rem] tracking-[0.16em] uppercase text-ink-soft/60">
+        <span><span data-present-count class="text-warm">&mdash;</span> here</span>
+        <span class="text-warm/40">&middot;</span>
+        <span><span data-visit-count>&mdash;</span> visits</span>
+        <span class="text-warm/40">&middot;</span>
+        <span>{feed.length} moments</span>
+        <span class="text-warm/40">&middot;</span>
+        <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()}</span>
+        <span class="text-warm/40">&middot;</span>
+        <span>Mike &times; Claude</span>
+      </div>
+      <WalletConnect />
+    </div>
+
+    <!-- Unified feed — posts + projects + drops in one river.
+         Ordered ABOVE the visitor log so the latest drop (e.g. this morning's
+         Noah jacket link) is visible almost immediately on scroll, rather
+         than hidden behind the long presence/visitor/noun-strip section. -->
+    <div class="space-y-10 mb-12">
+      {feed.map((item, i) => (
+        <FeedItem item={item} decorNounId={nounIds[(i + 8) % nounIds.length]} />
+      ))}
+    </div>
+
+    <!-- Live visit log — the "living room" layer. Moved BELOW the feed
+         per Apr-17 tuning: nouns-heavy presence + "95 earlier" avatar grid
+         was pushing editorial content (drops/posts) too far down-page.
+         Presence still matters, just not at the fold. -->
+    <VisitLog />
+
+    <!-- TheWire (open-public live chat) is built but currently disabled —
+         anonymous text input at scale needs moderation we don't yet have.
+         Component + /api/wire endpoint are in place; re-enable by wrapping
+         the import in `<TheWire />` once either (a) Mike-only wallet-gated
+         mode ships, or (b) we add a simple moderation / report flow. -->
+
+    <!-- About — teaser only; /about is canonical -->
+    <section class="border-t border-rule/50 pt-8 mb-10">
       <div class="flex items-center gap-3 mb-5">
-        <div class="h-px flex-1 bg-rule"></div>
-        <h2 class="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-ink-soft">The Wire</h2>
-        <div class="h-px flex-1 bg-rule"></div>
+        <div class="h-px flex-1 bg-rule/40"></div>
+        <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60"><span class="text-warm/70">02</span> &middot; About</h2>
+        <div class="h-px flex-1 bg-rule/40"></div>
       </div>
 
-      <div class="space-y-0">
-        {wire.map((item, i) => {
-          const href = item.collection === 'posts' ? `/posts/${item.id}` : `/projects/${item.id}`;
-          return (
-            <a href={href} class="group flex items-center gap-4 py-3.5 border-b border-rule/50 hover:bg-card-hover/50 -mx-3 px-3 rounded-md transition-colors">
-              <span class="font-mono text-[0.58rem] tracking-[0.14em] uppercase text-ink-soft/50 w-16 shrink-0">
-                {fmtDate(item.data.date)}
-              </span>
-              <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-warm/60 w-14 shrink-0">
-                {typeLabel[item.type] || 'Post'}
-              </span>
-              <span class="font-serif text-[0.95rem] text-ink group-hover:text-warm transition-colors font-medium leading-snug flex-1">
-                {item.data.title}
-              </span>
-              {i === 0 && (
-                <img
-                  src={`https://noun.pics/${nounIds[2]}.svg`}
-                  alt=""
-                  aria-hidden="true"
-                  width="22"
-                  height="22"
-                  class="rounded-sm opacity-20 group-hover:opacity-50 transition-opacity shrink-0 hidden sm:block"
-                  style="image-rendering: pixelated;"
-                />
-              )}
-            </a>
-          );
-        })}
+      <div class="flex items-start gap-4">
+        <div class="flex gap-1 shrink-0 pt-1" aria-hidden="true">
+          {nounIds.slice(0, 2).map(id => (
+            <img
+              src={`https://noun.pics/${id}.svg`}
+              alt=""
+              width="24"
+              height="24"
+              class="noun-img rounded-sm opacity-40"
+              style="image-rendering: pixelated;"
+              loading="lazy"
+            />
+          ))}
+        </div>
+        <div>
+          <h3 class="font-serif text-[1.1rem] text-ink font-medium italic leading-tight mb-1">Michael Hoydich</h3>
+          <p class="font-mono text-[0.58rem] tracking-[0.14em] uppercase text-ink-soft/60 mb-2">
+            COO at Good Feels &middot; El Segundo, CA
+          </p>
+          <p class="text-[0.9rem] text-ink/70 leading-relaxed mb-2">
+            Builder, creative technologist, and COO at
+            <a href="https://shop.getgoodfeels.com" target="_blank" rel="noopener" class="text-warm underline underline-offset-2 decoration-warm/30 hover:decoration-warm">Good Feels</a>.
+            PointCast is published with Claude.
+          </p>
+          <a href="/about" class="inline-flex items-center gap-1 text-warm font-mono text-[0.58rem] tracking-[0.14em] uppercase hover:underline">
+            More &rarr;
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Baseball — interleaved here (after About) so it doesn't cluster with
+         the other sports/interest blocks. Live MLB data. -->
+    <BaseballBlock />
+
+    <!-- Links -->
+    <section class="border-t border-rule/50 pt-8 mb-10">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="h-px flex-1 bg-rule/40"></div>
+        <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60"><span class="text-warm/70">03</span> &middot; Links</h2>
+        <div class="h-px flex-1 bg-rule/40"></div>
       </div>
 
-      <div class="mt-6">
-        <a href="/feed" class="inline-flex items-center gap-2 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:text-warm transition-colors">
-          Full archive &rarr;
+      <div class="grid grid-cols-2 gap-3">
+        <a href="https://shop.getgoodfeels.com" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[2]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">Good Feels</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">shop</span>
+          </div>
+        </a>
+        <a href="https://objkt.com/users/tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[3]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">objkt</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">tezos nft</span>
+          </div>
+        </a>
+        <a href="https://www.fxhash.xyz/u/mhoydich" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[4]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">fxhash</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">gen art</span>
+          </div>
+        </a>
+        <a href="https://opensea.io/mhoydich" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[8]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">OpenSea</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">eth nft</span>
+          </div>
+        </a>
+        <a href="https://www.are.na/michael-hoydich/channels" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[5]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">Are.na</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">collect</span>
+          </div>
+        </a>
+        <a href="https://alpha.midjourney.com/@mhoydich?tab=spotlight" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[6]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">Midjourney</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">generate</span>
+          </div>
+        </a>
+        <a href="https://ideogram.ai/@mhoydich" target="_blank" rel="noopener" class="group flex items-center gap-3 p-3 rounded-lg bg-card hover:bg-card-hover border border-rule/30 transition-colors">
+          <img src={`https://noun.pics/${nounIds[7]}.svg`} alt="" aria-hidden="true" width="20" height="20" class="noun-img rounded-sm opacity-30 group-hover:opacity-70 transition-opacity" style="image-rendering: pixelated;" loading="lazy" />
+          <div>
+            <span class="text-[0.85rem] text-ink font-medium group-hover:text-warm transition-colors">Ideogram</span>
+            <span class="block font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">generate</span>
+          </div>
         </a>
       </div>
     </section>
 
-    <!-- Sign-off -->
-    <footer class="border-t border-rule pt-6 flex items-center justify-between">
-      <p class="font-serif italic text-ink-soft text-[0.9rem]">
-        Where taste meets machine.
-      </p>
-      <img
-        src={`https://noun.pics/${nounIds[4]}.svg`}
-        alt=""
-        aria-hidden="true"
-        width="24"
-        height="24"
-        class="rounded-sm opacity-25"
-        style="image-rendering: pixelated;"
-      />
-    </footer>
+    <!-- Paddle — Mike's current 11SIX24 Vapor Power 2. Product-card block,
+         placed after Links so it reads as a sibling gear recommendation. -->
+    <PaddleBlock />
+
+    <!-- John Lautner — about block. Mid-century architecture tangent,
+         placed between Paddle + Nouns Generator as a "cultural" palate
+         cleanser before the playful modules. -->
+    <LautnerBlock />
+
+    <!-- Nouns Generator — upgraded module.
+         Tap the noun to play its chime. Generate rolls to a new one
+         (plays the new note). Favorite = save to your personal strip.
+         History shows your last 8 rolls. Share copies a deep link with
+         `?noun=N`. Mint pre-wired to the FA2 contract; activates when
+         the address lands in src/data/contracts.json.
+         Keyboard: G = generate, S = save PNG, F = favorite. -->
+    <section id="generator" class="border-t border-rule/50 pt-8 mb-10 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="h-px flex-1 bg-rule/40"></div>
+        <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60">
+          <span class="text-warm/70">04</span> &middot; Nouns Generator &middot; <span class="text-warm">tap to play</span>
+        </h2>
+        <div class="h-px flex-1 bg-rule/40"></div>
+      </div>
+
+      <div class="flex flex-col items-center">
+        <!-- Noun display — tap the frame to play the noun's chime -->
+        <button
+          id="noun-frame-btn"
+          type="button"
+          class="relative mb-3 block p-0 border-0 bg-transparent cursor-pointer"
+          aria-label="Tap to play this noun's chime"
+        >
+          <!-- Midcentury corner dots, matching Spinning/Weather/Drum -->
+          <span class="absolute -top-1 -left-1 w-2.5 h-2.5 bg-warm" aria-hidden="true"></span>
+          <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-ink" aria-hidden="true"></span>
+          <span class="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-ink" aria-hidden="true"></span>
+          <span class="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-warm" aria-hidden="true"></span>
+          <div class="w-[200px] h-[200px] md:w-[224px] md:h-[224px] rounded-lg border-2 border-ink/80 bg-card overflow-hidden flex items-center justify-center" id="noun-frame">
+            <img
+              id="noun-img"
+              src={`https://noun.pics/${starterNounId}.svg`}
+              alt="Random Noun"
+              width="224"
+              height="224"
+              crossorigin="anonymous"
+              class="noun-img w-full h-full transition-all duration-200"
+              style="image-rendering: pixelated;"
+              draggable="false"
+            />
+          </div>
+          <!-- Favorite badge — filled when current noun is favorited -->
+          <span id="noun-fav-badge" class="hidden absolute top-2 right-2 text-lg pointer-events-none" aria-hidden="true">❤️</span>
+        </button>
+
+        <!-- Meta line: noun ID + generation count -->
+        <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1" id="noun-label" aria-live="polite">
+          Noun &mdash; &middot; CC0
+        </p>
+        <p class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/30 mb-3" id="noun-error" role="status" hidden>
+          &#9888; Couldn't load &mdash; try again
+        </p>
+
+        <!-- Primary controls -->
+        <div class="flex flex-wrap justify-center gap-2 mb-4">
+          <button
+            id="noun-generate"
+            type="button"
+            class="px-4 py-2 rounded-md bg-ink text-paper font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Generate <span class="text-warm/60 ml-1">G</span>
+          </button>
+          <button
+            id="noun-save"
+            type="button"
+            class="px-4 py-2 rounded-md bg-card border border-rule/50 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Save PNG <span class="text-warm/60 ml-1">S</span>
+          </button>
+          <button
+            id="noun-fav"
+            type="button"
+            class="px-3 py-2 rounded-md bg-card border border-rule/50 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors cursor-pointer"
+            aria-label="Favorite this noun"
+          >
+            <span id="noun-fav-label">♡ Fave</span> <span class="text-warm/60 ml-1">F</span>
+          </button>
+          <button
+            id="noun-share"
+            type="button"
+            class="px-3 py-2 rounded-md bg-card border border-rule/50 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors cursor-pointer"
+            aria-label="Share this noun"
+          >
+            <span id="noun-share-label">↗ Share</span>
+          </button>
+          <button
+            id="noun-mint"
+            type="button"
+            class="px-3 py-2 rounded-md bg-card border border-rule/50 text-ink-soft/70 font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors cursor-pointer"
+            aria-label="Mint this noun"
+          >
+            <span id="noun-mint-label">Mint ↗</span>
+            <span class="ml-1 px-1 py-0.5 rounded-sm bg-warm/10 border border-warm/20 text-warm/80 text-[0.48rem] tracking-[0.18em]" id="noun-mint-soon">soon</span>
+          </button>
+        </div>
+
+        <!-- Jump-to-noun input — type any ID 0-1199 to leap -->
+        <div class="flex items-center gap-2 mb-5 text-[0.56rem]">
+          <label for="noun-jump" class="font-mono tracking-[0.18em] uppercase text-ink-soft/55">
+            jump to #
+          </label>
+          <input
+            id="noun-jump"
+            type="number"
+            min="0"
+            max="1199"
+            placeholder="0-1199"
+            class="w-20 px-2 py-1 rounded-sm border border-rule/40 bg-paper font-mono text-[0.6rem] text-ink focus:border-warm focus:outline-none"
+          />
+        </div>
+
+        <!-- v2 Customize panel — background + caption + frame style that
+             compose into the Save PNG output. Lightweight, collapsed by
+             default so the main generator UI stays clean. -->
+        <details class="w-full max-w-[30rem] mb-4 rounded-md border border-rule/30 bg-card/40">
+          <summary class="flex items-center justify-between gap-2 p-2.5 cursor-pointer list-none">
+            <span class="font-mono text-[0.5rem] tracking-[0.22em] uppercase text-warm font-bold">Customize</span>
+            <span class="font-mono text-[0.46rem] tracking-[0.18em] uppercase text-ink-soft/45">bg &middot; caption &middot; frame</span>
+          </summary>
+          <div class="p-3 pt-0 space-y-3">
+
+            <!-- Background picker — 6 swatches, tap to set -->
+            <div>
+              <p class="font-mono text-[0.44rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1.5">Background</p>
+              <div class="flex items-center gap-1.5 flex-wrap" id="noun-bg-row">
+                <button type="button" data-bg="#f5efe4"                class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40" title="Cream"></button>
+                <button type="button" data-bg="#e7c79a"                class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40" title="Warm"></button>
+                <button type="button" data-bg="#c26a4a"                class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40" title="Terracotta"></button>
+                <button type="button" data-bg="#1f1712"                class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40" title="Ink"></button>
+                <button type="button" data-bg="linear-1"               class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40" title="Sunset" style="background: linear-gradient(135deg,#c26a4a,#e7c79a)"></button>
+                <button type="button" data-bg="linear-2"               class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40" title="Dusk"    style="background: linear-gradient(135deg,#1f1712,#c26a4a)"></button>
+                <button type="button" data-bg="transparent"            class="noun-bg-chip w-7 h-7 rounded-sm border-2 border-rule/40 bg-transparent" title="No background">
+                  <span class="block w-full h-full rounded-sm" style="background: repeating-conic-gradient(#e0d6c3 0% 25%, #f5efe4 0% 50%) 50% / 10px 10px;"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Caption input — ≤40 chars so the text fits on the PNG. -->
+            <div>
+              <p class="font-mono text-[0.44rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1.5">Caption &middot; optional</p>
+              <input
+                id="noun-caption"
+                type="text"
+                maxlength="40"
+                placeholder="e.g. Kana was here"
+                class="w-full px-2 py-1 rounded-sm border border-rule/40 bg-paper font-serif text-[0.85rem] text-ink placeholder:text-ink-soft/40 focus:border-warm focus:outline-none"
+              />
+            </div>
+
+            <!-- Frame picker — 4 styles -->
+            <div>
+              <p class="font-mono text-[0.44rem] tracking-[0.18em] uppercase text-ink-soft/55 mb-1.5">Frame</p>
+              <div class="flex items-center gap-1.5 flex-wrap" id="noun-frame-row">
+                <button type="button" data-frame="none"    class="noun-frame-chip px-2 py-1 rounded-sm border border-rule/40 bg-paper font-mono text-[0.48rem] tracking-[0.14em] uppercase text-ink-soft hover:border-warm">None</button>
+                <button type="button" data-frame="thin"    class="noun-frame-chip px-2 py-1 rounded-sm border border-rule/40 bg-paper font-mono text-[0.48rem] tracking-[0.14em] uppercase text-ink-soft hover:border-warm">Thin</button>
+                <button type="button" data-frame="thick"   class="noun-frame-chip px-2 py-1 rounded-sm border border-rule/40 bg-paper font-mono text-[0.48rem] tracking-[0.14em] uppercase text-ink-soft hover:border-warm">Thick</button>
+                <button type="button" data-frame="midc"    class="noun-frame-chip px-2 py-1 rounded-sm border border-rule/40 bg-paper font-mono text-[0.48rem] tracking-[0.14em] uppercase text-ink-soft hover:border-warm">Midcentury</button>
+              </div>
+            </div>
+
+          </div>
+        </details>
+
+        <!-- Recent history — last 8 rolled nouns, clickable to revisit -->
+        <div class="w-full max-w-[30rem] mb-3">
+          <div class="flex items-center gap-2 mb-1.5">
+            <p class="font-mono text-[0.44rem] tracking-[0.2em] uppercase text-ink-soft/50 shrink-0">
+              Recent
+            </p>
+            <div class="h-px flex-1 bg-rule/30"></div>
+          </div>
+          <div id="noun-history-strip" class="flex items-center gap-1.5 h-9"></div>
+        </div>
+
+        <!-- Favorites strip — nouns you've hearted -->
+        <div class="w-full max-w-[30rem]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <p class="font-mono text-[0.44rem] tracking-[0.2em] uppercase text-ink-soft/50 shrink-0">
+              Favorites <span id="noun-fav-count" class="text-warm">0</span>
+            </p>
+            <div class="h-px flex-1 bg-rule/30"></div>
+          </div>
+          <div id="noun-fav-strip" class="flex items-center gap-1.5 min-h-9 flex-wrap"></div>
+          <p id="noun-fav-empty" class="font-mono text-[0.48rem] tracking-[0.16em] uppercase text-ink-soft/40 mt-1">
+            tap ♡ on any noun to save it here
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tiger Balm — cultural/object tangent. Placed BEFORE the Noun Bells
+         so there's a prose interlude between the Nouns Generator and the
+         playable Bells grid. -->
+    <TigerBalmBlock />
+
+    <!-- Noun Bells — playable 24-tile instrument grid. Each noun a unique
+         voice via src/lib/chimes.ts. Taps broadcast across visitors. -->
+    <NounBells />
+
+    <!-- Basketball — live NBA data + expandable stats. -->
+    <BasketballBlock />
+
+    <!-- El Segundo Now — live weather, future mint-the-moment hook.
+         Moved up ahead of Spinning so the two Spotify-themed surfaces
+         (feed "currently spinning" posts + SpinningBox) aren't stacked. -->
+    <WeatherBox />
+
+    <!-- Pickleball — the sport. Placed between Weather and Spinning so
+         it reads as a "get outside / get moving" beat before the playlist. -->
+    <PickleballBlock />
+
+    <!-- Currently Spinning — Mike's Spotify, framed in block-y midcentury.
+         Moved later in the page now that the feed already leads with two
+         Spotify posts up top. One anchor per theme, well-spaced. -->
+    <SpinningBox />
+
+    <!-- Happy Friday — weekend-only editorial block (Thursday 5pm → Sunday
+         11am PT). Rotates 5 modes by ISO week: Saturday playlist / cocktail /
+         long read / city dispatch / ritual. Returns null outside the window.
+         Spec: docs/happy-friday.md. Built by Manus (41 credits). -->
+    <HappyFridayBlock />
+
+    <!-- Violent Crimes \u2014 a noun-voice tribute to Kanye's ballad.
+         Interactive mini-player built by Manus (a rare code-gen drop vs.
+         the usual research). Sits after Spinning so the "music on this
+         page" theme connects naturally. Uses chimes.ts playNounVoice()
+         for every note \u2014 no external samples. -->
+    <ViolentCrimesBlock />
+
+    {featuredCollect && (
+      <!-- Featured collect — last content block before the sign-off. Deep-links
+           to the on-chain collect flow at /collect/[tokenId]. Rotates per-build. -->
+      <section class="mt-12 mb-10">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="h-px flex-1 bg-rule/40"></div>
+          <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60">
+            <span class="text-warm/70">08</span> &middot; Collect
+          </h2>
+          <div class="h-px flex-1 bg-rule/40"></div>
+        </div>
+
+        <a
+          href={`/collect/${featuredCollect.tokenId}`}
+          class="group block rounded-xl border border-rule/30 bg-card/60 hover:bg-card hover:border-warm/40 transition-colors overflow-hidden"
+          data-collect-block
+        >
+          <div class="flex items-stretch gap-0">
+            <div class="shrink-0 w-32 md:w-40 bg-paper relative overflow-hidden">
+              <img
+                src={featuredCollect.imageThumb || featuredCollect.imageDisplay}
+                alt={featuredCollect.name}
+                class="w-full h-full object-cover aspect-square group-hover:scale-[1.03] transition-transform duration-300"
+                loading="lazy"
+              />
+              <div class="absolute inset-0 ring-1 ring-inset ring-rule/40 pointer-events-none"></div>
+            </div>
+            <div class="flex-1 min-w-0 p-4 md:p-5 flex flex-col justify-center">
+              <p class="font-mono text-[0.5rem] tracking-[0.22em] uppercase text-warm/80 mb-1">
+                Featured &middot; Tezos
+              </p>
+              <h3 class="font-serif italic text-[1.2rem] md:text-[1.4rem] text-ink leading-tight group-hover:text-warm transition-colors line-clamp-1">
+                {featuredCollect.name}
+              </h3>
+              <div class="flex items-center gap-2 mt-1.5 font-mono text-[0.56rem] tracking-[0.16em] uppercase">
+                <span class="text-warm">{fmtCollectPrice(featuredCollect.priceXtz)}</span>
+                <span class="text-warm/40">&middot;</span>
+                <span class="text-ink-soft/60">
+                  {Number(featuredCollect.supply).toLocaleString()} editions
+                </span>
+              </div>
+              <p class="font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/50 mt-2.5 group-hover:text-warm transition-colors">
+                Collect on Tezos &rarr;
+              </p>
+            </div>
+          </div>
+        </a>
+
+        <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/40 text-center mt-3">
+          <a href="/collect" class="hover:text-warm transition-colors">
+            see the full collection &rarr;
+          </a>
+        </p>
+      </section>
+    )}
+
+    <!-- Feedback block — creative, dynamic, emails mike. -->
+    <FeedbackBlock />
+
+    <!-- Sign-off merged into src/components/Footer.astro — no duplicate
+         "Where taste meets machine" strip here anymore. The BaseLayout's
+         <Footer /> is the single closing element for the page. -->
 
   </div>
 </BaseLayout>
+
+<script>
+  // --- PointCast Noun (masthead) ---------------------------------------------
+  // Mike's persistent identity avatar. Click opens the shared noun modal in
+  // VisitLog.astro. That modal is delegated off #visit-stream, so we emit a
+  // bubbling click there after building a matching payload.
+  const pcBtn = document.getElementById('pointcast-noun-btn') as HTMLButtonElement | null;
+  pcBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    // Forge a synthetic click on a throwaway .noun-thumb inside #visit-stream
+    // so VisitLog's delegated handler picks it up with the right payload.
+    const stream = document.getElementById('visit-stream');
+    if (!stream) return;
+    const proxy = document.createElement('button');
+    proxy.className = 'noun-thumb';
+    proxy.style.display = 'none';
+    proxy.dataset.noun = pcBtn.dataset.noun ?? '';
+    stream.appendChild(proxy);
+    proxy.click();
+    stream.removeChild(proxy);
+  });
+
+  // --- Nouns Generator — upgraded module --------------------------------
+  //
+  // Features:
+  //   • Tap the framed noun = plays its unique chime (via chimes.ts).
+  //   • Generate button rolls to a new noun; auto-plays that noun's chime.
+  //   • Favorite (F) / Share (copies URL) / Mint (wired for when contract ships).
+  //   • Recent history: last 8 rolled nouns, click any to revisit.
+  //   • Favorites strip: persistent via localStorage, remove on re-click.
+  //   • Jump-to-noun input: direct leap to any ID 0–1199.
+  //   • Keyboard: G / S / F while hovering or inside the generator area.
+  //   • `?noun=N` URL param restores a shared noun on load.
+  // ---------------------------------------------------------------------
+
+  // Shared chime synth — same voices as the bells grid, modal, drum room.
+  const chimesModule = (async () => {
+    try { return await import('../lib/chimes'); } catch { return null; }
+  })();
+
+  const img = document.getElementById('noun-img') as HTMLImageElement | null;
+  const frameBtn = document.getElementById('noun-frame-btn') as HTMLButtonElement | null;
+  const generateBtn = document.getElementById('noun-generate') as HTMLButtonElement | null;
+  const saveBtn = document.getElementById('noun-save') as HTMLButtonElement | null;
+  const favBtn = document.getElementById('noun-fav') as HTMLButtonElement | null;
+  const favLabel = document.getElementById('noun-fav-label');
+  const favBadge = document.getElementById('noun-fav-badge');
+  const shareBtn = document.getElementById('noun-share') as HTMLButtonElement | null;
+  const shareLabel = document.getElementById('noun-share-label');
+  const mintBtn = document.getElementById('noun-mint') as HTMLButtonElement | null;
+  const mintLabel = document.getElementById('noun-mint-label');
+  const mintSoonEl = document.getElementById('noun-mint-soon');
+  const jumpInput = document.getElementById('noun-jump') as HTMLInputElement | null;
+  const histStrip = document.getElementById('noun-history-strip');
+  const favStrip = document.getElementById('noun-fav-strip');
+  const favCountEl = document.getElementById('noun-fav-count');
+  const favEmptyEl = document.getElementById('noun-fav-empty');
+  const label = document.getElementById('noun-label');
+  const errorEl = document.getElementById('noun-error');
+
+  let genCount = 1;
+  let currentNounId: number = (() => {
+    // If ?noun=N in the URL, restore that on load for shareable links.
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      const n = Number(qs.get('noun'));
+      if (Number.isInteger(n) && n >= 0 && n < 1200) return n;
+    } catch {}
+    // Fallback to whatever the image started with.
+    const m = img?.src.match(/\/(\d+)\.svg/);
+    return m ? Math.min(1199, Math.max(0, Number(m[1]))) : Math.floor(Math.random() * 1200);
+  })();
+
+  // --- Favorites + history state ---------------------------------------
+  const FAV_KEY = 'pc:nounFavorites';
+  const HIST_KEY = 'pc:nounHistory';
+  function loadArr(key: string): number[] {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((n) => Number.isInteger(n) && n >= 0 && n < 1200) : [];
+    } catch { return []; }
+  }
+  function saveArr(key: string, arr: number[]) {
+    try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
+  }
+  let favorites = loadArr(FAV_KEY);
+  let history = loadArr(HIST_KEY);
+
+  function showError(msg: string) { if (errorEl) { errorEl.textContent = `⚠ ${msg}`; errorEl.hidden = false; } }
+  function clearError() { if (errorEl) errorEl.hidden = true; }
+  function setLoading(on: boolean) { if (img) img.style.opacity = on ? '0.4' : '1'; }
+
+  img?.addEventListener('error', () => { setLoading(false); showError("Couldn't load — try again"); });
+  img?.addEventListener('load', () => {
+    setLoading(false);
+    clearError();
+    if (label) label.textContent = `Noun #${currentNounId} · gen #${genCount} · CC0`;
+    renderFavUI();
+  });
+
+  function renderHistory() {
+    if (!histStrip) return;
+    if (history.length === 0) {
+      histStrip.innerHTML = `<span class="font-mono text-[0.44rem] tracking-[0.18em] uppercase text-ink-soft/40">none yet</span>`;
+      return;
+    }
+    histStrip.innerHTML = history.slice(-8).reverse().map((id) => `
+      <button type="button" data-noun-id="${id}" class="noun-hist-tile shrink-0 block p-0 border-0 bg-transparent cursor-pointer hover:scale-110 transition-transform" aria-label="Revisit noun ${id}">
+        <img src="https://noun.pics/${id}.svg" alt="" aria-hidden="true" width="32" height="32" class="rounded-sm ring-1 ring-rule/40 block" style="image-rendering: pixelated;" loading="lazy" />
+      </button>
+    `).join('');
+  }
+  function renderFavStrip() {
+    if (!favStrip) return;
+    if (favCountEl) favCountEl.textContent = String(favorites.length);
+    if (favEmptyEl) favEmptyEl.style.display = favorites.length === 0 ? '' : 'none';
+    favStrip.innerHTML = favorites.map((id) => `
+      <button type="button" data-fav-noun="${id}" class="noun-fav-tile shrink-0 relative block p-0 border-0 bg-transparent cursor-pointer hover:scale-110 transition-transform" aria-label="Play favorite noun ${id}">
+        <img src="https://noun.pics/${id}.svg" alt="" aria-hidden="true" width="36" height="36" class="rounded-sm ring-1 ring-warm/50 block" style="image-rendering: pixelated;" loading="lazy" />
+      </button>
+    `).join('');
+  }
+  function renderFavUI() {
+    const isFav = favorites.includes(currentNounId);
+    if (favLabel) favLabel.textContent = isFav ? '♥ Faved' : '♡ Fave';
+    if (favBadge) favBadge.classList.toggle('hidden', !isFav);
+  }
+
+  // --- Mint button pre-wire -------------------------------------------
+  (async () => {
+    try {
+      const mod = await import('../lib/mint');
+      if (mod.hasVisitNounsContract('mainnet')) {
+        mintSoonEl?.classList.add('hidden');
+        if (mintBtn) {
+          mintBtn.classList.remove('text-ink-soft/70');
+          mintBtn.classList.add('text-ink', 'bg-ink', 'text-paper', 'hover:bg-warm');
+        }
+      }
+    } catch {}
+  })();
+
+  function setNoun(id: number, bumpGen = true) {
+    if (!img) return;
+    const clamped = Math.max(0, Math.min(1199, Math.floor(id)));
+    currentNounId = clamped;
+    if (bumpGen) genCount += 1;
+    clearError();
+    setLoading(true);
+    img.src = `https://noun.pics/${clamped}.svg?t=${Date.now()}`;
+    // Play the noun's unique chime via shared synth.
+    chimesModule.then((mod) => mod?.playNounVoice?.(clamped, 0.2));
+    // Push to history (dedupe consecutive repeats)
+    if (history[history.length - 1] !== clamped) {
+      history.push(clamped);
+      if (history.length > 32) history.shift();
+      saveArr(HIST_KEY, history);
+      renderHistory();
+    }
+    renderFavUI();
+  }
+
+  // --- Generate = random noun ------------------------------------------
+  generateBtn?.addEventListener('click', () => {
+    setNoun(Math.floor(Math.random() * 1200));
+  });
+
+  // --- Frame tap = replay current noun's chime (rapid-tap friendly) ---
+  frameBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    chimesModule.then((mod) => mod?.playNounVoice?.(currentNounId, 0.22));
+    if (img) {
+      img.style.transform = 'scale(0.94)';
+      setTimeout(() => {
+        img.style.transform = 'scale(1.04)';
+        setTimeout(() => { img.style.transform = ''; }, 80);
+      }, 60);
+    }
+  });
+
+  // --- Favorite toggle ---------------------------------------------
+  function toggleFavorite(id: number) {
+    const idx = favorites.indexOf(id);
+    if (idx >= 0) favorites.splice(idx, 1);
+    else favorites.push(id);
+    saveArr(FAV_KEY, favorites);
+    renderFavStrip();
+    renderFavUI();
+  }
+  favBtn?.addEventListener('click', () => toggleFavorite(currentNounId));
+
+  // --- Share — URL with ?noun=N, Web Share on mobile, clipboard fallback
+  shareBtn?.addEventListener('click', async () => {
+    const url = `${window.location.origin}/?noun=${currentNounId}#generator`;
+    const shareData = {
+      title: `PointCast Noun #${currentNounId}`,
+      text: `check out this noun on pointcast`,
+      url,
+    };
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        if (shareLabel) {
+          shareLabel.textContent = '✓ Copied';
+          setTimeout(() => { if (shareLabel) shareLabel.textContent = '↗ Share'; }, 1500);
+        }
+      } else {
+        window.prompt('Share this URL:', url);
+      }
+    } catch { /* user cancelled */ }
+  });
+
+  // --- Mint — pre-wired; falls to /collect redirect if contract's empty.
+  mintBtn?.addEventListener('click', async () => {
+    const mod = await chimesModule;
+    try {
+      const mintMod = await import('../lib/mint');
+      if (!mintMod.hasVisitNounsContract('mainnet')) {
+        if (mintLabel) mintLabel.textContent = 'Mint ships soon';
+        setTimeout(() => { if (mintLabel) mintLabel.textContent = 'Mint ↗'; }, 1800);
+        return;
+      }
+      if (mintBtn) mintBtn.disabled = true;
+      if (mintLabel) mintLabel.textContent = 'Minting…';
+      const res = await mintMod.mintVisitNoun(currentNounId, 'mainnet', {
+        source: 'nouns-generator',
+        capturedAt: new Date().toISOString(),
+      });
+      if (!res.ok) {
+        if (mintLabel) mintLabel.textContent = res.reason === 'user-cancelled' ? 'Mint ↗' : 'Failed';
+        if (mintBtn) mintBtn.disabled = false;
+        return;
+      }
+      if (mintLabel) mintLabel.textContent = `✓ Minted #${currentNounId}`;
+      if (res.tzktUrl) setTimeout(() => window.open(res.tzktUrl!, '_blank', 'noopener'), 300);
+      await res.confirmation;
+      if (mintLabel) mintLabel.textContent = '✓ Confirmed';
+    } catch (err) {
+      console.error('Mint error:', err);
+      if (mintLabel) mintLabel.textContent = 'Failed';
+      if (mintBtn) mintBtn.disabled = false;
+    }
+  });
+
+  // --- Jump to specific noun --------------------------------------
+  jumpInput?.addEventListener('change', () => {
+    const v = Number(jumpInput.value);
+    if (Number.isFinite(v) && v >= 0 && v < 1200) setNoun(Math.floor(v));
+    jumpInput.value = '';
+  });
+
+  // --- History + favorites strip clicks ---------------------------
+  histStrip?.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-noun-id]');
+    if (!t) return;
+    setNoun(Number(t.dataset.nounId));
+  });
+  favStrip?.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-fav-noun]');
+    if (!t) return;
+    setNoun(Number(t.dataset.favNoun));
+  });
+
+  // --- Keyboard shortcuts — only when the generator is visible ---
+  const generatorSection = document.getElementById('generator');
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+    if (!generatorSection) return;
+    const rect = generatorSection.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+    if (e.code === 'KeyG') { e.preventDefault(); generateBtn?.click(); }
+    else if (e.code === 'KeyS' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); saveBtn?.click(); }
+    else if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); favBtn?.click(); }
+  });
+
+  // --- Initial paint ---------------------------------------------
+  if (img && currentNounId >= 0) {
+    // If URL param specified a noun, swap to it now.
+    if (img.src.indexOf(`/${currentNounId}.svg`) === -1) {
+      img.src = `https://noun.pics/${currentNounId}.svg`;
+    }
+  }
+  renderHistory();
+  renderFavStrip();
+  renderFavUI();
+
+  // --- v2 Customize state --------------------------------------------
+  // Persisted to localStorage so a visitor's style settings stick across
+  // Generate rolls + page reloads. Defaults: cream bg, no caption,
+  // midcentury frame.
+  const CUSTOMIZE_KEY = 'pc:nounCustomize';
+  type Customize = { bg: string; caption: string; frame: 'none' | 'thin' | 'thick' | 'midc' };
+  let customize: Customize = { bg: '#f5efe4', caption: '', frame: 'midc' };
+  try {
+    const raw = localStorage.getItem(CUSTOMIZE_KEY);
+    if (raw) customize = { ...customize, ...JSON.parse(raw) };
+  } catch {}
+  function persistCustomize() {
+    try { localStorage.setItem(CUSTOMIZE_KEY, JSON.stringify(customize)); } catch {}
+  }
+  function paintCustomizeUI() {
+    document.querySelectorAll<HTMLElement>('#noun-bg-row .noun-bg-chip').forEach((b) => {
+      const active = b.dataset.bg === customize.bg;
+      b.style.outline = active ? '2px solid #c26a4a' : 'none';
+      b.style.outlineOffset = active ? '2px' : '0';
+    });
+    document.querySelectorAll<HTMLElement>('#noun-frame-row .noun-frame-chip').forEach((b) => {
+      const active = b.dataset.frame === customize.frame;
+      b.style.borderColor = active ? '#c26a4a' : '';
+      b.style.color = active ? '#c26a4a' : '';
+    });
+    const captionEl = document.getElementById('noun-caption') as HTMLInputElement | null;
+    if (captionEl && captionEl.value !== customize.caption) captionEl.value = customize.caption;
+  }
+  // Wire up chips + caption
+  document.querySelectorAll<HTMLButtonElement>('#noun-bg-row .noun-bg-chip').forEach((b) => {
+    b.addEventListener('click', () => {
+      customize.bg = b.dataset.bg ?? '#f5efe4';
+      persistCustomize(); paintCustomizeUI();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>('#noun-frame-row .noun-frame-chip').forEach((b) => {
+    b.addEventListener('click', () => {
+      customize.frame = (b.dataset.frame as Customize['frame']) ?? 'midc';
+      persistCustomize(); paintCustomizeUI();
+    });
+  });
+  const capEl = document.getElementById('noun-caption') as HTMLInputElement | null;
+  capEl?.addEventListener('input', () => {
+    customize.caption = capEl.value.slice(0, 40);
+    persistCustomize();
+  });
+  paintCustomizeUI();
+
+  // Canvas helpers for Save PNG v2 — composites bg → noun → frame → caption.
+  function paintBackground(ctx: CanvasRenderingContext2D, w: number, h: number, bg: string) {
+    if (bg === 'transparent') return; // leave alpha 0
+    if (bg === 'linear-1') {
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#c26a4a'); g.addColorStop(1, '#e7c79a');
+      ctx.fillStyle = g;
+    } else if (bg === 'linear-2') {
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#1f1712'); g.addColorStop(1, '#c26a4a');
+      ctx.fillStyle = g;
+    } else {
+      ctx.fillStyle = bg;
+    }
+    ctx.fillRect(0, 0, w, h);
+  }
+  function paintFrame(ctx: CanvasRenderingContext2D, w: number, h: number, frame: Customize['frame']) {
+    if (frame === 'none') return;
+    ctx.lineJoin = 'miter';
+    if (frame === 'thin') {
+      ctx.strokeStyle = '#2a241a';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(3, 3, w - 6, h - 6);
+    } else if (frame === 'thick') {
+      ctx.strokeStyle = '#2a241a';
+      ctx.lineWidth = 16;
+      ctx.strokeRect(8, 8, w - 16, h - 16);
+    } else if (frame === 'midc') {
+      // Midcentury: thin dark rule + 4 warm corner squares
+      ctx.strokeStyle = '#2a241a';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, w - 4, h - 4);
+      const s = 18;
+      ctx.fillStyle = '#c26a4a';
+      ctx.fillRect(0, 0, s, s);
+      ctx.fillRect(w - s, h - s, s, s);
+      ctx.fillStyle = '#2a241a';
+      ctx.fillRect(w - s, 0, s, s);
+      ctx.fillRect(0, h - s, s, s);
+    }
+  }
+  function paintCaption(ctx: CanvasRenderingContext2D, w: number, h: number, caption: string, onDark: boolean) {
+    if (!caption) return;
+    // Position the caption ~16% from the bottom, centered horizontally.
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = onDark ? '#f5efe4' : '#2a241a';
+    // Measure and choose a font size that fits. Short captions get larger.
+    const maxW = w * 0.82;
+    const sizes = [34, 30, 26, 22, 18];
+    let chosen = sizes[0];
+    for (const s of sizes) {
+      ctx.font = `italic ${s}px "Lora", Georgia, serif`;
+      if (ctx.measureText(caption).width <= maxW) { chosen = s; break; }
+    }
+    ctx.font = `italic ${chosen}px "Lora", Georgia, serif`;
+    ctx.fillText(caption, w / 2, h * 0.84);
+  }
+
+  saveBtn?.addEventListener('click', async () => {
+    if (!img || !saveBtn) return;
+    saveBtn.disabled = true;
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saving…';
+
+    try {
+      // Fetch the SVG as a blob — sidesteps canvas-taint even if server lacks CORS
+      const response = await fetch(img.src);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      // Bigger canvas (512) for a sharper shareable image.
+      const W = 512, H = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No canvas context');
+
+      // 1) Background
+      paintBackground(ctx, W, H, customize.bg);
+
+      // 2) Noun image — centered, slight padding so the frame doesn't clip.
+      await new Promise<void>((resolve, reject) => {
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          try {
+            ctx.imageSmoothingEnabled = false;
+            const nounSize = Math.floor(W * 0.82);
+            const offset = Math.floor((W - nounSize) / 2);
+            ctx.drawImage(tempImg, offset, offset - 24, nounSize, nounSize);
+            resolve();
+          } catch (e) { reject(e); }
+        };
+        tempImg.onerror = () => reject(new Error('Image decode failed'));
+        tempImg.src = objectUrl;
+      });
+      URL.revokeObjectURL(objectUrl);
+
+      // 3) Caption — picks a light or dark fill based on background brightness.
+      const onDark = customize.bg === '#1f1712' || customize.bg === 'linear-2';
+      paintCaption(ctx, W, H, customize.caption, onDark);
+
+      // 4) Frame
+      paintFrame(ctx, W, H, customize.frame);
+
+      canvas.toBlob((pngBlob) => {
+        if (!pngBlob) {
+          showError('Export failed — tap Generate again');
+          return;
+        }
+        const link = document.createElement('a');
+        const dlUrl = URL.createObjectURL(pngBlob);
+        link.href = dlUrl;
+        const capSlug = customize.caption.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 24);
+        const suffix = capSlug ? `-${capSlug}` : '';
+        link.download = `noun-${currentNounId}${suffix}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(dlUrl);
+      }, 'image/png');
+    } catch (e) {
+      console.error('Save failed:', e);
+      showError('Save failed — try again');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText;
+    }
+  });
+</script>

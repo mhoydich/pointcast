@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PointCast Ads — Nouns in the Wild</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+  :root{
+    --paper:#f6f2e8;
+    --ink:#1a1813;
+    --warm:#c94d2c;
+    --soft:#c26a4a;
+    --rule:#1a1813;
+    --paper-2:#efe9da;
+    --band:#13110d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#0a0907;color:#f6f2e8;font-family:"Outfit",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .page{display:flex;flex-direction:column;align-items:center}
+  .band{
+    width:100%;
+    background:#0a0907;
+    color:#7a756a;
+    padding:48px 24px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    border-top:1px solid #1a1813;
+  }
+  .band:first-child{border-top:none}
+  .band .meta{
+    font-family:"JetBrains Mono",monospace;
+    font-size:11px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:#9c9588;
+  }
+  .band .meta b{color:#f6f2e8;font-weight:500}
+  .band .meta .sep{color:#3a352c;margin:0 10px}
+
+  /* The actual ad canvas — fixed, not responsive */
+  .ad{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Outfit",sans-serif;
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,0.5), 0 2px 0 rgba(0,0,0,0.3);
+  }
+
+  /* ——— Shared atoms ——— */
+  .mono{font-family:"JetBrains Mono",monospace;letter-spacing:0.22em;text-transform:uppercase}
+  .serif{font-family:"Lora",serif}
+  .italic{font-style:italic}
+  .rule{background:var(--ink);height:2px;width:100%}
+  .hair{background:var(--ink);height:1px;width:100%}
+
+  /* corner-dot rectangle — pseudo elements, alternating warm + ink */
+  .corner-frame{position:relative}
+  .corner-frame::before,
+  .corner-frame::after,
+  .corner-frame > .cd-tr,
+  .corner-frame > .cd-bl{
+    content:"";position:absolute;width:14px;height:14px;border-radius:50%;
+  }
+  .corner-frame::before{top:14px;left:14px;background:var(--warm)} /* TL warm */
+  .corner-frame::after{bottom:14px;right:14px;background:var(--warm)} /* BR warm */
+  .corner-frame > .cd-tr{top:14px;right:14px;background:var(--ink)}
+  .corner-frame > .cd-bl{bottom:14px;left:14px;background:var(--ink)}
+
+  /* ON AIR / LIVE pills */
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:6px 12px 6px 10px;border-radius:999px;
+    background:var(--ink);color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;
+    line-height:1;
+  }
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--warm);box-shadow:0 0 0 3px rgba(201,77,44,0.18)}
+  .pill.lg{font-size:13px;padding:9px 16px 9px 12px}
+  .pill.lg .dot{width:10px;height:10px}
+
+  /* broadcast arcs — terracotta concentric */
+  .arcs{position:absolute;pointer-events:none}
+  .arcs svg{display:block;overflow:visible}
+
+  /* Noun tile — clean square crop with bg */
+  .noun{display:block}
+  .noun img{display:block;width:100%;height:100%;image-rendering:pixelated}
+
+  /* Point·Cast wordmark */
+  .wordmark{font-family:"Lora",serif;font-weight:600;letter-spacing:-0.02em;line-height:0.95;color:var(--ink)}
+  .wordmark .dot{
+    display:inline-block;width:0.18em;height:0.18em;border-radius:50%;
+    background:var(--warm);vertical-align:0.32em;margin:0 0.08em;
+  }
+
+  /* ====== AD 1 — SQUARE 1080×1080 ====== */
+  .ad-square{
+    width:1080px;height:1080px;
+    padding:40px 48px 0;
+  }
+  .sq-head{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    padding-bottom:18px;border-bottom:2px solid var(--ink);
+  }
+  .sq-kick{font-size:13px;color:var(--ink)}
+  .sq-meta{font-size:13px;color:var(--ink);text-align:right;line-height:1.5}
+  .sq-meta b{color:var(--warm);font-weight:500}
+  .sq-grid{
+    margin-top:18px;
+    display:grid;grid-template-columns:1fr 1fr;gap:12px;
+    width:100%;
+  }
+  .sq-cell{
+    width:100%;height:300px;
+    border:2px solid var(--ink);
+    position:relative;overflow:hidden;
+    background:#000;
+  }
+  .sq-cell .label{
+    position:absolute;left:14px;bottom:14px;
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;
+    color:var(--paper);background:var(--ink);
+    padding:5px 8px;border:1px solid var(--paper);
+    z-index:2;
+  }
+  .sq-cell .num{
+    position:absolute;right:14px;top:14px;
+    font-family:"Lora",serif;font-style:italic;font-size:34px;line-height:1;
+    color:var(--paper);text-shadow:0 0 0 var(--ink);
+    z-index:2;mix-blend-mode:difference;
+  }
+  .sq-cell img{width:100%;height:100%;display:block;image-rendering:pixelated}
+  .sq-headline{
+    margin-top:20px;
+    font-family:"Lora",serif;font-style:italic;font-weight:500;
+    font-size:88px;line-height:0.92;letter-spacing:-0.03em;color:var(--ink);
+  }
+  .sq-headline .amp{color:var(--warm)}
+  .sq-headline.one-line{font-size:104px}
+  .sq-sub{
+    margin-top:10px;
+    font-size:18px;line-height:1.35;color:var(--ink);max-width:780px;
+  }
+  .sq-sub b{color:var(--warm);font-weight:500}
+  .sq-cta{
+    position:absolute;left:0;right:0;bottom:0;
+    background:var(--ink);color:var(--paper);
+    padding:14px 48px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:"JetBrains Mono",monospace;font-size:15px;letter-spacing:0.28em;text-transform:uppercase;
+  }
+  .sq-cta .right{display:flex;align-items:center;gap:14px;color:var(--warm)}
+  .sq-cta .arrow{font-family:"Lora",serif;font-style:italic;letter-spacing:0;font-size:22px}
+
+  /* ====== AD 2 — STORY 1080×1920 ====== */
+  .ad-story{
+    width:1080px;height:1920px;
+    padding:64px 56px 64px;
+    display:flex;flex-direction:column;
+  }
+  .st-top{display:flex;justify-content:space-between;align-items:center}
+  .st-kick{font-size:14px;color:var(--ink);max-width:560px;line-height:1.5}
+  .st-stage{
+    flex:1;
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+    margin-top:24px;
+  }
+  .st-noun{
+    position:relative;z-index:2;
+    width:760px;height:760px;
+    border:2px solid var(--ink);
+    background:#fff;overflow:hidden;
+  }
+  .st-noun img{width:100%;height:100%;display:block;image-rendering:pixelated}
+  .st-noun .badge{
+    position:absolute;left:-2px;top:-2px;
+    background:var(--ink);color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;
+    padding:8px 14px;
+  }
+  .st-noun .num{
+    position:absolute;right:-2px;bottom:-2px;
+    background:var(--paper);color:var(--ink);border-top:2px solid var(--ink);border-left:2px solid var(--ink);
+    font-family:"Lora",serif;font-style:italic;font-size:38px;line-height:1;
+    padding:10px 16px;
+  }
+  .st-headline{
+    font-family:"Lora",serif;font-style:italic;font-weight:500;
+    font-size:184px;line-height:0.9;letter-spacing:-0.035em;color:var(--ink);
+    margin-top:36px;
+  }
+  .st-headline .warm{color:var(--warm)}
+  .st-sub{
+    margin-top:24px;font-size:30px;line-height:1.35;color:var(--ink);max-width:900px;
+  }
+  .st-sub b{color:var(--warm);font-weight:500}
+  .st-bottom{
+    margin-top:36px;padding-top:22px;border-top:2px solid var(--ink);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .st-url{
+    font-family:"JetBrains Mono",monospace;font-size:30px;letter-spacing:0.22em;text-transform:uppercase;
+    color:var(--ink);
+  }
+  .st-url .dot{color:var(--warm)}
+  .st-arrow{
+    font-family:"Lora",serif;font-style:italic;font-size:36px;color:var(--warm);
+  }
+
+  /* ====== AD 3 — BANNER 1600×400 ====== */
+  .ad-banner{
+    width:1600px;height:400px;
+    padding:0;
+    display:grid;
+    grid-template-rows:auto 1fr;
+  }
+  .bn-meta{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:8px 28px;border-bottom:2px solid var(--ink);
+    font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:0.26em;text-transform:uppercase;color:var(--ink);
+  }
+  .bn-meta .center{color:var(--warm);letter-spacing:0.32em}
+  .bn-body{
+    display:grid;grid-template-columns:340px 1fr 200px;
+    align-items:center;
+    padding:0 28px;gap:24px;
+    position:relative;
+    height:100%;
+    overflow:hidden;
+  }
+  .bn-left{position:relative;z-index:2}
+  .bn-wm{font-size:54px;line-height:0.95;letter-spacing:-0.03em}
+  .bn-tag{
+    margin-top:6px;font-family:"Lora",serif;font-style:italic;font-size:15px;color:var(--ink);
+  }
+  .bn-row{
+    display:flex;gap:10px;justify-content:center;align-items:center;
+  }
+  .bn-noun{
+    width:84px;height:84px;border:2px solid var(--ink);overflow:hidden;background:#fff;position:relative;
+  }
+  .bn-noun img{width:100%;height:100%;display:block;image-rendering:pixelated}
+  .bn-noun .id{
+    position:absolute;left:0;bottom:0;background:var(--ink);color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:0.18em;
+    padding:2px 6px;
+  }
+  .bn-right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+  .bn-right .small{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:var(--ink)}
+  .bn-arcs{position:absolute;left:-60px;top:50%;transform:translateY(-50%);width:520px;height:520px;pointer-events:none;z-index:1}
+
+  /* ====== AD 4 — POSTER 1200×1500 ====== */
+  .ad-poster{
+    width:1200px;height:1500px;
+    padding:48px 56px;
+    display:flex;flex-direction:column;
+  }
+  .ps-pre{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.26em;text-transform:uppercase;color:var(--ink);
+    padding-bottom:10px;
+  }
+  .ps-pre .center{color:var(--warm)}
+  .ps-mast{
+    text-align:center;
+    border-top:3px double var(--ink);
+    border-bottom:3px double var(--ink);
+    padding:18px 0 24px;
+    position:relative;
+  }
+  .ps-mast .name{
+    font-family:"Lora",serif;font-weight:700;letter-spacing:-0.02em;
+    font-size:188px;line-height:0.9;color:var(--ink);
+  }
+  .ps-mast .name .dot{display:inline-block;width:0.13em;height:0.13em;border-radius:50%;background:var(--warm);vertical-align:0.32em;margin:0 0.04em}
+  .ps-mast .sub{
+    margin-top:8px;
+    font-family:"JetBrains Mono",monospace;font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--ink);
+  }
+  .ps-mast .sub .sep{color:var(--warm);margin:0 12px}
+  .ps-deck{
+    margin-top:14px;text-align:center;
+    font-family:"Lora",serif;font-style:italic;font-size:24px;color:var(--ink);
+  }
+  .ps-cols{
+    margin-top:28px;flex:1;
+    display:grid;grid-template-columns:1fr 2px 1fr;column-gap:0;row-gap:0;
+  }
+  .ps-divider{background:var(--ink)}
+  .ps-col{padding:0 26px}
+  .ps-col:first-child{padding-left:0}
+  .ps-col:last-child{padding-right:0}
+  .ps-feat{
+    display:grid;grid-template-columns:120px 1fr;gap:18px;
+    padding:22px 0;border-bottom:1px solid var(--ink);
+    align-items:flex-start;
+  }
+  .ps-feat:last-child{border-bottom:none}
+  .ps-feat .icon{
+    width:120px;height:120px;border:2px solid var(--ink);overflow:hidden;background:#fff;position:relative;
+  }
+  .ps-feat .icon img{width:100%;height:100%;display:block;image-rendering:pixelated}
+  .ps-feat .icon .id{
+    position:absolute;left:0;bottom:0;background:var(--ink);color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:0.16em;padding:2px 5px;
+  }
+  .ps-feat .kick{
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:var(--warm);
+  }
+  .ps-feat h3{
+    margin:6px 0 6px;font-family:"Lora",serif;font-weight:600;font-style:italic;
+    font-size:30px;line-height:1.05;letter-spacing:-0.01em;color:var(--ink);
+  }
+  .ps-feat p{
+    margin:0;font-size:15px;line-height:1.45;color:var(--ink);
+  }
+  .ps-foot{
+    margin-top:18px;border-top:3px double var(--ink);padding-top:22px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .ps-foot .kick{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:var(--ink)}
+  .ps-foot .url{
+    font-family:"Lora",serif;font-style:italic;font-weight:500;font-size:74px;line-height:1;color:var(--ink);letter-spacing:-0.02em;
+  }
+  .ps-foot .url .dot{color:var(--warm)}
+  .ps-foot .right{display:flex;align-items:center;gap:14px}
+
+  /* ====== AD 5 — CARD 1050×600 ====== */
+  .ad-card{
+    width:1050px;height:600px;
+    padding:36px;
+    display:grid;grid-template-columns:1fr 1px 1fr;gap:0;
+    background:var(--paper);
+  }
+  .cd-divider{background:var(--ink);width:1px;margin:0 36px}
+  .cd-left, .cd-right{display:flex;flex-direction:column;justify-content:space-between}
+  .cd-left{gap:24px}
+  .cd-noun{
+    width:100%;aspect-ratio:1/1;max-height:380px;
+    border:2px solid var(--ink);background:#fff;overflow:hidden;
+    position:relative;
+  }
+  .cd-noun img{width:100%;height:100%;display:block;image-rendering:pixelated}
+  .cd-stamp{
+    position:absolute;right:-2px;top:-2px;
+    background:var(--warm);color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;
+    padding:6px 10px;
+    transform:rotate(0deg);
+  }
+  .cd-bot{display:flex;justify-content:space-between;align-items:flex-end}
+  .cd-vis{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:0.26em;text-transform:uppercase;color:var(--ink)}
+  .cd-vis b{color:var(--warm);font-weight:500}
+  .cd-got{font-family:"Lora",serif;font-style:italic;font-weight:500;font-size:46px;line-height:1;color:var(--ink);letter-spacing:-0.02em}
+
+  .cd-top-r{display:flex;justify-content:space-between;align-items:flex-start}
+  .cd-wm{font-family:"Lora",serif;font-weight:600;font-size:64px;line-height:0.9;letter-spacing:-0.03em;color:var(--ink)}
+  .cd-wm .dot{display:inline-block;width:0.14em;height:0.14em;border-radius:50%;background:var(--warm);vertical-align:0.34em;margin:0 0.04em}
+  .cd-kick{margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:var(--ink)}
+  .cd-kick .warm{color:var(--warm)}
+  .cd-body{
+    font-family:"Lora",serif;font-style:italic;font-size:30px;line-height:1.25;color:var(--ink);letter-spacing:-0.01em;
+  }
+  .cd-body .warm{color:var(--warm)}
+  .cd-url{
+    font-family:"JetBrains Mono",monospace;font-size:18px;letter-spacing:0.28em;text-transform:uppercase;color:var(--ink);
+    border-top:2px solid var(--ink);padding-top:14px;display:flex;justify-content:space-between;align-items:center;
+  }
+  .cd-url .arr{font-family:"Lora",serif;font-style:italic;font-size:22px;letter-spacing:0;color:var(--warm)}
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ===================== AD 1 — SQUARE ===================== -->
+  <div class="band">
+    <div class="meta"><b>AD 01</b><span class="sep">/</span>SQUARE<span class="sep">·</span>1080 × 1080<span class="sep">·</span>INSTAGRAM / TWITTER<span class="sep">·</span>“THE DRUM ROOM”</div>
+  </div>
+  <section class="ad ad-square corner-frame" data-screen-label="01 Square — Drum Room">
+    <span class="cd-tr"></span><span class="cd-bl"></span>
+
+    <div class="sq-head">
+      <div>
+        <div class="wordmark" style="font-size:46px">Point<span class="dot"></span>Cast</div>
+        <div class="sq-kick mono" style="margin-top:6px">A Personal Broadcast</div>
+      </div>
+      <div class="sq-meta">
+        <span class="pill"><span class="dot"></span>Live · Drum Room</span><br>
+        <span class="mono" style="font-size:11px;display:inline-block;margin-top:10px">Vol. 01 · No. 04 · Apr MMXXVI</span>
+      </div>
+    </div>
+
+    <div class="sq-grid">
+      <div class="sq-cell"><span class="num">/42</span><img src="nouns/42.svg" alt=""><span class="label mono">Kick</span></div>
+      <div class="sq-cell"><span class="num">/272</span><img src="nouns/272.svg" alt=""><span class="label mono">Snare</span></div>
+      <div class="sq-cell"><span class="num">/672</span><img src="nouns/672.svg" alt=""><span class="label mono">Hat</span></div>
+      <div class="sq-cell"><span class="num">/901</span><img src="nouns/901.svg" alt=""><span class="label mono">Tom</span></div>
+    </div>
+
+    <h1 class="sq-headline one-line">Tap together<span class="amp">.</span></h1>
+    <p class="sq-sub">Multiplayer percussion, browser-native. <b>Every tap</b> bumps the global counter — and four little Nouns hit four little drums in time with the rest of the open web.</p>
+
+    <div class="sq-cta">
+      <span>POINTCAST.XYZ&nbsp;&nbsp;/&nbsp;&nbsp;DRUM</span>
+      <span class="right">Open the room <span class="arrow">→</span></span>
+    </div>
+  </section>
+
+
+  <!-- ===================== AD 2 — STORY ===================== -->
+  <div class="band">
+    <div class="meta"><b>AD 02</b><span class="sep">/</span>STORY<span class="sep">·</span>1080 × 1920<span class="sep">·</span>IG / TIKTOK VERTICAL<span class="sep">·</span>“BROADCAST YOURSELF”</div>
+  </div>
+  <section class="ad ad-story corner-frame" data-screen-label="02 Story — Broadcast Yourself">
+    <span class="cd-tr"></span><span class="cd-bl"></span>
+
+    <div class="st-top">
+      <div>
+        <div class="wordmark" style="font-size:54px">Point<span class="dot"></span>Cast</div>
+        <div class="st-kick mono" style="margin-top:8px">A personal signal<br>from the open web</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+        <span class="pill lg"><span class="dot"></span>On Air</span>
+        <span class="mono" style="font-size:11px;color:var(--ink)">Vol. 01 · No. 12</span>
+      </div>
+    </div>
+
+    <div class="hair" style="margin-top:22px"></div>
+
+    <div class="st-stage">
+      <!-- broadcast arcs -->
+      <div class="arcs" style="left:50%;top:50%;transform:translate(-50%,-50%);width:1100px;height:1100px">
+        <svg viewBox="0 0 1100 1100" width="1100" height="1100" fill="none">
+          <g stroke="#c94d2c" stroke-width="1.4" opacity="0.9">
+            <circle cx="550" cy="550" r="420"/>
+            <circle cx="550" cy="550" r="470"/>
+            <circle cx="550" cy="550" r="520" opacity="0.6"/>
+          </g>
+          <g stroke="#c26a4a" stroke-width="1" opacity="0.55">
+            <circle cx="550" cy="550" r="380"/>
+            <circle cx="550" cy="550" r="340"/>
+          </g>
+          <!-- compass ticks -->
+          <g stroke="#1a1813" stroke-width="2">
+            <line x1="550" y1="20" x2="550" y2="44"/>
+            <line x1="550" y1="1056" x2="550" y2="1080"/>
+            <line x1="20" y1="550" x2="44" y2="550"/>
+            <line x1="1056" y1="550" x2="1080" y2="550"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="st-noun">
+        <span class="badge">Now Broadcasting · /567</span>
+        <img src="nouns/567.svg" alt="Noun 567">
+        <span class="num">No. 567</span>
+      </div>
+    </div>
+
+    <h1 class="st-headline">Broadcast<br>yourself<span class="warm">.</span></h1>
+    <p class="st-sub">One human, one Claude, one daily edition. <b>Newspaper-shaped</b>, hand-set, sent over the open web every morning at sunrise.</p>
+
+    <div class="st-bottom">
+      <div class="st-url">pointcast<span class="dot">·</span>xyz</div>
+      <div style="display:flex;align-items:center;gap:18px">
+        <span class="mono" style="font-size:14px;color:var(--ink)">Subscribe</span>
+        <span class="st-arrow">→</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ===================== AD 3 — BANNER ===================== -->
+  <div class="band">
+    <div class="meta"><b>AD 03</b><span class="sep">/</span>BANNER<span class="sep">·</span>1600 × 400<span class="sep">·</span>TWITTER / FARCASTER HEADER<span class="sep">·</span>“NOW BROADCASTING”</div>
+  </div>
+  <section class="ad ad-banner corner-frame" data-screen-label="03 Banner — Now Broadcasting">
+    <span class="cd-tr"></span><span class="cd-bl"></span>
+
+    <div class="bn-meta">
+      <span>Vol. 01 · No. 01</span>
+      <span class="center">Now Broadcasting · From the Open Web · Daily</span>
+      <span>Est. MMXXVI</span>
+    </div>
+
+    <div class="bn-body">
+      <div class="bn-arcs">
+        <svg viewBox="0 0 520 520" width="520" height="520" fill="none">
+          <g stroke="#c94d2c" stroke-width="1.2" opacity="0.85">
+            <circle cx="120" cy="260" r="120"/>
+            <circle cx="120" cy="260" r="160"/>
+            <circle cx="120" cy="260" r="200" opacity="0.7"/>
+            <circle cx="120" cy="260" r="240" opacity="0.45"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="bn-left">
+        <div class="wordmark bn-wm">Point<span class="dot"></span>Cast</div>
+        <div class="bn-tag">A personal broadcast — newspaper-shaped, daily.</div>
+      </div>
+
+      <div class="bn-row">
+        <div class="bn-noun"><img src="nouns/127.svg" alt=""><span class="id">/127</span></div>
+        <div class="bn-noun"><img src="nouns/272.svg" alt=""><span class="id">/272</span></div>
+        <div class="bn-noun"><img src="nouns/455.svg" alt=""><span class="id">/455</span></div>
+        <div class="bn-noun"><img src="nouns/672.svg" alt=""><span class="id">/672</span></div>
+        <div class="bn-noun"><img src="nouns/787.svg" alt=""><span class="id">/787</span></div>
+      </div>
+
+      <div class="bn-right">
+        <span class="pill lg"><span class="dot"></span>On Air</span>
+        <span class="small">📡 pointcast.xyz</span>
+        <span class="small" style="color:var(--warm)">Tune in →</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ===================== AD 4 — POSTER ===================== -->
+  <div class="band">
+    <div class="meta"><b>AD 04</b><span class="sep">/</span>POSTER<span class="sep">·</span>1200 × 1500<span class="sep">·</span>PRINT / iMESSAGE<span class="sep">·</span>“THE TIMES YOU MISSED”</div>
+  </div>
+  <section class="ad ad-poster corner-frame" data-screen-label="04 Poster — Times You Missed">
+    <span class="cd-tr"></span><span class="cd-bl"></span>
+
+    <div class="ps-pre">
+      <span>Vol. 01 · No. 04</span>
+      <span class="center">📡 The Times You Missed</span>
+      <span>One Edition</span>
+    </div>
+
+    <div class="ps-mast">
+      <div class="name">POINT<span class="dot"></span>CAST</div>
+      <div class="sub">A Personal Broadcast<span class="sep">·</span>April MMXXVI<span class="sep">·</span>From the Open Web</div>
+    </div>
+
+    <p class="ps-deck">“The little paper you forgot to read — <em>filed by hand, set in pixels, sent at sunrise.</em>”</p>
+
+    <div class="ps-cols">
+      <div class="ps-col">
+        <div class="ps-feat">
+          <div class="icon"><img src="nouns/42.svg" alt=""><span class="id">/42</span></div>
+          <div>
+            <div class="kick">Studio · Live</div>
+            <h3>The Drum Room</h3>
+            <p>Multiplayer percussion on the open web. Four Nouns, four pads, one global counter — every tap heard everywhere at once.</p>
+          </div>
+        </div>
+        <div class="ps-feat">
+          <div class="icon"><img src="nouns/127.svg" alt=""><span class="id">/127</span></div>
+          <div>
+            <div class="kick">B-Side · Tribute</div>
+            <h3>Violent Crimes</h3>
+            <p>A Noun-voice tribute to the Kanye ballad. Pixel-faces, paper backdrop, one verse at a time. Closed-captioned for the bus.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-divider"></div>
+
+      <div class="ps-col">
+        <div class="ps-feat">
+          <div class="icon"><img src="nouns/567.svg" alt=""><span class="id">/567</span></div>
+          <div>
+            <div class="kick">Tools · v2</div>
+            <h3>Nouns Generator</h3>
+            <p>Pick a Noun. Caption it in italics. Save the poster to your camera roll. Three taps from idle to printable.</p>
+          </div>
+        </div>
+        <div class="ps-feat">
+          <div class="icon"><img src="nouns/672.svg" alt=""><span class="id">/672</span></div>
+          <div>
+            <div class="kick">Weekend · Rotation</div>
+            <h3>Happy Friday</h3>
+            <p>The weekend column: playlists for the kitchen, three-ingredient cocktails, small rituals to mark the close of the week.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ps-foot">
+      <div>
+        <div class="kick">Welcome aboard</div>
+        <div class="kick" style="color:var(--warm);margin-top:6px">Subscribe — free, forever</div>
+      </div>
+      <div class="right">
+        <div class="url">pointcast<span class="dot">·</span>xyz</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ===================== AD 5 — CARD ===================== -->
+  <div class="band">
+    <div class="meta"><b>AD 05</b><span class="sep">/</span>CARD<span class="sep">·</span>1050 × 600<span class="sep">·</span>BUSINESS CARD / iMESSAGE SHARE<span class="sep">·</span>“YOU GOT ONE”</div>
+  </div>
+  <section class="ad ad-card corner-frame" data-screen-label="05 Card — Visitor 0901">
+    <span class="cd-tr"></span><span class="cd-bl"></span>
+
+    <div class="cd-left">
+      <div class="cd-noun">
+        <span class="cd-stamp">📡 Visitor</span>
+        <img src="nouns/901.svg" alt="Noun 901">
+      </div>
+      <div class="cd-bot">
+        <div class="cd-vis">Visitor <b>No. 0901</b></div>
+        <div class="cd-got">You got one.</div>
+      </div>
+    </div>
+
+    <div class="cd-divider"></div>
+
+    <div class="cd-right">
+      <div>
+        <div class="cd-top-r">
+          <div>
+            <div class="cd-wm">Point<span class="dot"></span>Cast</div>
+            <div class="cd-kick">A Personal <span class="warm">Broadcast</span></div>
+          </div>
+          <span class="pill"><span class="dot"></span>On Air</span>
+        </div>
+      </div>
+
+      <div class="cd-body">
+        <em>visit</em> <span class="warm">·</span> <em>tap</em> <span class="warm">·</span> <em>collect</em><br>
+        a tiny paper for the open web, set in pixels and sent at sunrise.
+      </div>
+
+      <div class="cd-url">
+        <span>pointcast.xyz</span>
+        <span class="arr">your edition →</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="band">
+    <div class="meta">END · 5 OF 5 · POINT<span style="color:var(--warm)">·</span>CAST · MMXXVI</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,411 @@
+---
+/**
+ * TheWire — Twitter-style live stream for PointCast.
+ *
+ * One input, one live feed. Anyone in the room drops a short line; it shows
+ * up on everyone else's screen within ~2s and plays the author's Noun voice
+ * on arrival. Combined with presence + drums + sounds, this closes the loop
+ * on a real "room vibe" — text, sound, and presence all in one place.
+ *
+ * Storage: /api/wire — rolling KV buffer of last 50 messages, 1h TTL.
+ * Rate limit: 1 post per 15s per pid (enforced server-side).
+ *
+ * Pairs with PulseAlert (in-page event banner) and eventually the push
+ * notification subscribe button. All three share the same activity events:
+ * Wire messages + multi-human presence + drumming flurries.
+ */
+---
+
+<section class="mt-8 mb-8" id="wire">
+  <div class="flex items-center gap-3 mb-3">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/60">
+      <span class="text-warm/70">wire</span> &middot; live line &middot; <span class="text-warm">say something</span>
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <div class="relative rounded-xl overflow-hidden border-2 border-ink/80 bg-card p-4 md:p-5">
+    <!-- Midcentury corner blocks — matches Feedback/Drum/Weather -->
+    <div class="absolute top-0 left-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+    <div class="absolute top-0 right-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 left-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-warm">
+        live &middot; 200 chars &middot; everyone hears it
+      </p>
+      <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/50">
+        <span data-wire-count>0</span> on the wire
+      </p>
+    </div>
+
+    <!-- Input row — textarea + send button -->
+    <div class="flex items-start gap-2 mb-3">
+      <textarea
+        id="wire-input"
+        rows="1"
+        maxlength="200"
+        placeholder="what's happening right now?"
+        class="flex-1 bg-paper border border-rule/40 rounded-md px-3 py-2 font-serif text-[0.95rem] text-ink placeholder:text-ink-soft/40 focus:border-warm focus:outline-none resize-none overflow-hidden"
+      ></textarea>
+      <button
+        id="wire-send"
+        type="button"
+        class="shrink-0 px-4 py-2 rounded-md bg-ink text-paper font-mono text-[0.6rem] tracking-[0.18em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Send
+      </button>
+    </div>
+
+    <!-- Status line — shows char count / rate limit / send result -->
+    <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50 mb-3 min-h-[0.75rem]" id="wire-status" aria-live="polite">
+      <span id="wire-char-count">0</span>/200
+    </p>
+
+    <!-- Live feed — newest first, fades in on new arrivals -->
+    <div class="border-t border-rule/30 pt-3">
+      <div class="flex items-center gap-2 mb-2">
+        <p class="font-mono text-[0.48rem] tracking-[0.2em] uppercase text-ink-soft/50 shrink-0">
+          on air
+        </p>
+        <div class="h-px flex-1 bg-rule/30"></div>
+        <button
+          id="wire-mute-btn"
+          type="button"
+          class="font-mono text-[0.46rem] tracking-[0.18em] uppercase text-ink-soft/40 hover:text-warm transition-colors cursor-pointer"
+          title="Toggle per-message chime"
+        >
+          <span id="wire-mute-label">♪ on</span>
+        </button>
+      </div>
+      <div id="wire-feed" class="space-y-2 min-h-[4rem]">
+        <p class="font-serif italic text-[0.88rem] text-ink-soft/40 leading-relaxed" id="wire-empty">
+          nobody's on the wire yet. go first.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import {
+    playNounVoice,
+    broadcastSound,
+    getSessionId,
+  } from '../lib/chimes';
+
+  type WireMessage = {
+    id: string;
+    t: number;
+    text: string;
+    nounId: number;
+    pid: string;
+  };
+
+  const MAX_FEED = 20;
+  const POLL_INTERVAL_MS = 2200;
+  const MUTE_KEY = 'pc:wireMuted';
+
+  // Grab the visitor's current noun from the visit widget (VisitLog stashes it
+  // in a data-attr on the <body> or window, depending on flow). Fallback to a
+  // random one rolled from the sessionId so everyone still has a voice.
+  function getViewerNounId(): number {
+    // Preferred: VisitLog writes it here after noun selection.
+    const w = window as unknown as { __pcNounId?: number };
+    if (typeof w.__pcNounId === 'number' && Number.isFinite(w.__pcNounId)) {
+      return w.__pcNounId;
+    }
+    // Fallback — deterministic from sessionId so it's stable per visitor.
+    const sid = getSessionId();
+    let hash = 0;
+    for (let i = 0; i < sid.length; i++) {
+      hash = ((hash << 5) - hash + sid.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % 1200;
+  }
+
+  const input = document.getElementById('wire-input') as HTMLTextAreaElement | null;
+  const sendBtn = document.getElementById('wire-send') as HTMLButtonElement | null;
+  const charCount = document.getElementById('wire-char-count');
+  const status = document.getElementById('wire-status');
+  const feed = document.getElementById('wire-feed');
+  const emptyState = document.getElementById('wire-empty');
+  const countEl = document.querySelector('[data-wire-count]');
+  const muteBtn = document.getElementById('wire-mute-btn');
+  const muteLabel = document.getElementById('wire-mute-label');
+
+  if (!input || !sendBtn || !feed || !status) {
+    console.warn('[wire] missing required elements, skipping init');
+  } else {
+    let muted = localStorage.getItem(MUTE_KEY) === '1';
+    let seenIds = new Set<string>();
+    let lastPollT = 0;
+    let optimisticIds = new Set<string>();   // dedup: ids we inserted locally + later see from server
+    let firstLoad = true;
+
+    function updateMuteLabel() {
+      if (muteLabel) muteLabel.textContent = muted ? '♪ off' : '♪ on';
+    }
+    updateMuteLabel();
+
+    muteBtn?.addEventListener('click', () => {
+      muted = !muted;
+      localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
+      updateMuteLabel();
+    });
+
+    // Auto-resize textarea — grow with content up to ~5 rows.
+    function autosize() {
+      if (!input) return;
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    }
+    input.addEventListener('input', () => {
+      if (charCount) charCount.textContent = String(input.value.length);
+      autosize();
+    });
+
+    // Enter to send (Shift+Enter = newline).
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        void send();
+      }
+    });
+
+    function setStatus(msg: string, isError = false) {
+      if (!status) return;
+      status.innerHTML = '';
+      const span = document.createElement('span');
+      span.textContent = msg;
+      span.className = isError ? 'text-warm' : 'text-ink-soft/50';
+      status.appendChild(span);
+    }
+
+    function clearStatus() {
+      if (!status) return;
+      status.innerHTML = `<span id="wire-char-count">${input?.value.length ?? 0}</span>/200`;
+    }
+
+    function renderMessage(msg: WireMessage, opts: { optimistic?: boolean; chime?: boolean } = {}) {
+      if (!feed) return;
+      if (seenIds.has(msg.id)) return;
+      seenIds.add(msg.id);
+
+      // Hide empty state.
+      if (emptyState) emptyState.style.display = 'none';
+
+      const row = document.createElement('div');
+      row.className = 'wire-row flex items-start gap-2 opacity-0 translate-y-1 transition-all duration-300';
+      row.dataset.wireId = msg.id;
+      row.dataset.wireT = String(msg.t);
+
+      // Noun avatar
+      const avatar = document.createElement('img');
+      avatar.src = `https://noun.pics/${msg.nounId}.svg`;
+      avatar.alt = '';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.width = 24;
+      avatar.height = 24;
+      avatar.className = 'rounded-sm ring-1 ring-rule/40 shrink-0 mt-0.5 cursor-pointer hover:ring-warm transition';
+      avatar.style.imageRendering = 'pixelated';
+      avatar.loading = 'lazy';
+      avatar.addEventListener('click', () => {
+        try { playNounVoice(msg.nounId); } catch {}
+      });
+      row.appendChild(avatar);
+
+      // Text + meta
+      const textWrap = document.createElement('div');
+      textWrap.className = 'flex-1 min-w-0';
+
+      const textP = document.createElement('p');
+      textP.className = 'font-serif text-[0.92rem] text-ink leading-snug break-words';
+      textP.textContent = msg.text;  // always textContent, never innerHTML
+      textWrap.appendChild(textP);
+
+      const meta = document.createElement('p');
+      meta.className = 'font-mono text-[0.46rem] tracking-[0.18em] uppercase text-ink-soft/45 mt-0.5';
+      const relT = relativeTime(msg.t);
+      meta.textContent = `#${msg.nounId} · ${relT}`;
+      meta.dataset.relTs = String(msg.t);
+      textWrap.appendChild(meta);
+
+      row.appendChild(textWrap);
+
+      // Optimistic rows get a dimmed look until confirmed.
+      if (opts.optimistic) row.classList.add('opacity-60');
+
+      // Insert at top (newest first).
+      feed.insertBefore(row, feed.firstChild);
+
+      // Animate in.
+      requestAnimationFrame(() => {
+        row.classList.remove('opacity-0', 'translate-y-1');
+        row.classList.add('opacity-100', 'translate-y-0');
+      });
+
+      // Chime if allowed + not first-load (don't jackhammer on cold start).
+      if (opts.chime && !muted && !firstLoad) {
+        try { playNounVoice(msg.nounId); } catch {}
+      }
+
+      // Trim feed to MAX_FEED.
+      const rows = feed.querySelectorAll('.wire-row');
+      if (rows.length > MAX_FEED) {
+        for (let i = MAX_FEED; i < rows.length; i++) rows[i].remove();
+      }
+
+      // Notify the rest of the page that a Wire message landed — pulse
+      // alerts, notification system, and anything else can listen.
+      if (!opts.optimistic) {
+        document.dispatchEvent(new CustomEvent('pc:wire', { detail: msg }));
+      }
+    }
+
+    function relativeTime(t: number): string {
+      const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (diffSec < 5) return 'now';
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      return `${diffHr}h ago`;
+    }
+
+    // Re-render relative times every 20s so "30s ago" doesn't stay stale.
+    setInterval(() => {
+      document.querySelectorAll('[data-rel-ts]').forEach((el) => {
+        const ts = Number((el as HTMLElement).dataset.relTs);
+        if (!ts) return;
+        const current = el.textContent ?? '';
+        const parts = current.split(' · ');
+        if (parts.length === 2) {
+          parts[1] = relativeTime(ts);
+          el.textContent = parts.join(' · ');
+        }
+      });
+    }, 20_000);
+
+    async function send() {
+      if (!input || !sendBtn) return;
+      const text = input.value.trim();
+      if (!text) return;
+      sendBtn.disabled = true;
+      setStatus('sending…');
+
+      const nounId = getViewerNounId();
+      // Optimistic insert — renders immediately, no chime for self.
+      const optimisticId = 'opt-' + Math.random().toString(36).slice(2, 10);
+      optimisticIds.add(optimisticId);
+      renderMessage(
+        { id: optimisticId, t: Date.now(), text, nounId, pid: 'self' },
+        { optimistic: true, chime: false },
+      );
+      input.value = '';
+      if (charCount) charCount.textContent = '0';
+      autosize();
+
+      try {
+        const res = await fetch('/api/wire', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, nounId, sessionId: getSessionId() }),
+        });
+        if (res.status === 429) {
+          setStatus('hold on — one msg per 15s', true);
+          // Roll back optimistic.
+          document.querySelector(`[data-wire-id="${optimisticId}"]`)?.remove();
+          seenIds.delete(optimisticId);
+          optimisticIds.delete(optimisticId);
+          setTimeout(clearStatus, 3000);
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        if (!data?.ok) {
+          setStatus('send failed', true);
+          document.querySelector(`[data-wire-id="${optimisticId}"]`)?.remove();
+          seenIds.delete(optimisticId);
+          optimisticIds.delete(optimisticId);
+          setTimeout(clearStatus, 3000);
+          return;
+        }
+
+        // Replace optimistic row with the confirmed server message.
+        const confirmed = data.message as WireMessage;
+        const optimisticRow = document.querySelector(`[data-wire-id="${optimisticId}"]`);
+        if (optimisticRow && confirmed) {
+          seenIds.delete(optimisticId);
+          optimisticIds.delete(optimisticId);
+          seenIds.add(confirmed.id);
+          (optimisticRow as HTMLElement).dataset.wireId = confirmed.id;
+          (optimisticRow as HTMLElement).classList.remove('opacity-60');
+        }
+
+        // Broadcast chime so others hear it.
+        try {
+          broadcastSound('profile', nounId);
+        } catch {}
+
+        clearStatus();
+      } catch {
+        setStatus('network error', true);
+        document.querySelector(`[data-wire-id="${optimisticId}"]`)?.remove();
+        seenIds.delete(optimisticId);
+        optimisticIds.delete(optimisticId);
+        setTimeout(clearStatus, 3000);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', () => { void send(); });
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/wire?since=${lastPollT}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data) return;
+        lastPollT = data.now || Date.now();
+
+        const messages: WireMessage[] = Array.isArray(data.messages) ? data.messages : [];
+        // Render chronological (oldest first among new arrivals) so chimes fire in order.
+        messages.slice().reverse().forEach((msg) => {
+          // Skip if we already see it as optimistic — the id will differ but
+          // content + nounId + near-time match. Not perfect dedup but good
+          // enough: the optimistic clear-out happens on POST response anyway.
+          if (!seenIds.has(msg.id)) {
+            renderMessage(msg, { chime: true });
+          }
+        });
+
+        if (countEl) countEl.textContent = String(seenIds.size);
+        firstLoad = false;
+      } catch {}
+    }
+
+    // Kick off: initial load + steady polling.
+    void poll();
+    setInterval(poll, POLL_INTERVAL_MS);
+
+    // Pause polling while the tab is hidden, resume on visible (saves KV reads).
+    let pollTimer: number | null = null;
+    function startPolling() {
+      if (pollTimer != null) return;
+      pollTimer = window.setInterval(poll, POLL_INTERVAL_MS);
+    }
+    function stopPolling() {
+      if (pollTimer == null) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopPolling();
+      else { void poll(); startPolling(); }
+    });
+    startPolling();
+  }
+</script>

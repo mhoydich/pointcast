@@ -1,0 +1,384 @@
+---
+/**
+ * FeedItem — renders one entry in the unified stream-of-moment feed.
+ *
+ * The homepage merges three collections (posts, projects, drops) into a
+ * single chronological river and hands each item here. This component picks
+ * the right render path based on collection + drop type.
+ *
+ * Render paths:
+ *   - posts / projects   → traditional kicker + serif title + description
+ *   - drops.spotify      → <SpotifyLauncher> with caption
+ *   - drops.link         → warm card with title, blurb, domain
+ *   - drops.note         → serif italic markdown body, no card
+ *   - drops.quote        → blockquote + attribution
+ *   - drops.visit        → Claude-voice entry with noun + read link
+ *   - drops.image        → figure + caption
+ *   - drops.*            → generic external-link card (twitch/tumblr/etc.)
+ */
+
+import type { CollectionEntry } from 'astro:content';
+import { render } from 'astro:content';
+import SpotifyLauncher from './SpotifyLauncher.astro';
+
+type AnyEntry =
+  | CollectionEntry<'posts'>
+  | CollectionEntry<'projects'>
+  | CollectionEntry<'drops'>;
+
+interface Props {
+  item: AnyEntry;
+  decorNounId: number;
+}
+
+const { item, decorNounId } = Astro.props;
+
+const isPost = item.collection === 'posts';
+const isProject = item.collection === 'projects';
+const isDrop = item.collection === 'drops';
+
+const date = item.data.date;
+const dateStr = date
+  .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  .toUpperCase();
+const timeStr = date
+  .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+// Kicker label — what shows in the warm mono uppercase row.
+const postTypeLabels: Record<string, string> = {
+  newsletter: 'Dispatch',
+  article: 'Article',
+  essay: 'Essay',
+  art: 'Art',
+};
+
+const dropTypeLabels: Record<string, string> = {
+  spotify: 'Spotify',
+  link: 'Link',
+  note: 'Note',
+  quote: 'Quote',
+  image: 'Image',
+  visit: 'Claude Visit',
+  video: 'Video',
+  twitch: 'Twitch',
+  tumblr: 'Tumblr',
+  twitter: 'Twitter',
+  instagram: 'Instagram',
+  arena: 'Are.na',
+  objkt: 'objkt',
+  fxhash: 'fxhash',
+  mirror: 'Mirror',
+  generic: 'Link',
+};
+
+let kickerLabel = 'Post';
+if (isPost) kickerLabel = postTypeLabels[(item as CollectionEntry<'posts'>).data.type] ?? 'Article';
+if (isProject) kickerLabel = 'Project';
+if (isDrop) kickerLabel = dropTypeLabels[(item as CollectionEntry<'drops'>).data.type] ?? 'Drop';
+
+const href = isPost
+  ? `/posts/${item.id}`
+  : isProject
+    ? `/projects/${item.id}`
+    : null;
+
+// Render markdown body for drop types that carry voice in the body.
+const dropType = isDrop ? (item as CollectionEntry<'drops'>).data.type : null;
+const needsBody = isDrop && ['note', 'quote', 'visit'].includes(dropType as string);
+
+let Body: any = null;
+if (needsBody) {
+  const rendered = await render(item as CollectionEntry<'drops'>);
+  Body = rendered.Content;
+}
+
+// Extract a clean domain for link-style drops.
+function domainOf(url?: string): string {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+// Drops with a dedicated renderer. Everything else falls through to generic.
+const HAS_CUSTOM_RENDERER = new Set([
+  'spotify', 'link', 'note', 'quote', 'image', 'visit', 'objkt',
+]);
+
+const isGeneric = isDrop && !HAS_CUSTOM_RENDERER.has(dropType as string);
+---
+
+<article class="group">
+  <!-- Meta row: kicker + timestamp + decorative noun -->
+  <div class="flex items-center gap-3 mb-2">
+    <span class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-warm shrink-0">
+      {kickerLabel}
+    </span>
+    <span class="font-mono text-[0.58rem] tracking-[0.14em] uppercase text-ink-soft/50">
+      {dateStr}
+      {isDrop && (
+        <>
+          <span class="text-warm/40"> &middot; </span>{timeStr}
+        </>
+      )}
+    </span>
+    <img
+      src={`https://noun.pics/${decorNounId}.svg`}
+      alt=""
+      aria-hidden="true"
+      width="18"
+      height="18"
+      class="noun-img rounded-sm opacity-25 group-hover:opacity-70 transition-opacity ml-auto"
+      style="image-rendering: pixelated;"
+      loading="lazy"
+    />
+  </div>
+
+  {/* Posts + Projects — the classic render path */}
+  {(isPost || isProject) && (
+    <>
+      <a href={href!} class="block">
+        <h2 class="font-serif text-[1.25rem] md:text-[1.4rem] text-ink font-medium italic leading-[1.2] mb-2 group-hover:text-warm transition-colors">
+          {item.data.title}
+        </h2>
+      </a>
+      <p class="text-[0.9rem] text-ink/65 leading-relaxed">
+        {(item as CollectionEntry<'posts'> | CollectionEntry<'projects'>).data.description}
+      </p>
+      <a
+        href={href!}
+        class="inline-flex items-center gap-2 text-warm font-mono text-[0.58rem] tracking-[0.14em] uppercase hover:underline mt-2"
+      >
+        Read &rarr;
+      </a>
+    </>
+  )}
+
+  {/* Spotify — embed launcher with caption */}
+  {isDrop && dropType === 'spotify' && item.data.url && (
+    <SpotifyLauncher
+      url={item.data.url}
+      caption={item.data.caption}
+      title={item.data.title}
+      variant={item.data.variant ?? 'auto'}
+    />
+  )}
+
+  {/* Link — warm card, title → caption → domain chip */}
+  {isDrop && dropType === 'link' && item.data.url && (
+    <a
+      href={item.data.url}
+      target="_blank"
+      rel="noopener"
+      class="block rounded-xl border border-rule/30 bg-card hover:bg-card-hover p-4 transition-colors"
+    >
+      {item.data.title && (
+        <h3 class="font-serif text-[1.05rem] italic text-ink leading-tight mb-1 group-hover:text-warm transition-colors">
+          {item.data.title}
+        </h3>
+      )}
+      {item.data.caption && (
+        <p class="text-[0.88rem] text-ink-soft leading-snug mb-2">{item.data.caption}</p>
+      )}
+      <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/50">
+        {domainOf(item.data.url)} &nearr;
+      </p>
+    </a>
+  )}
+
+  {/* Note — markdown body in serif italic, no card chrome */}
+  {isDrop && dropType === 'note' && Body && (
+    <div class="font-serif italic text-[1.05rem] text-ink leading-relaxed drop-body">
+      <Body />
+    </div>
+  )}
+
+  {/* Quote — blockquote with warm accent bar + attribution */}
+  {isDrop && dropType === 'quote' && Body && (
+    <figure>
+      <blockquote class="font-serif italic text-[1.1rem] text-ink leading-relaxed border-l-2 border-warm/50 pl-4 drop-body">
+        <Body />
+      </blockquote>
+      {item.data.attribution && (
+        <figcaption class="mt-2 font-mono text-[0.58rem] tracking-[0.18em] uppercase text-ink-soft/60">
+          &mdash; {item.data.attribution}
+        </figcaption>
+      )}
+    </figure>
+  )}
+
+  {/* objkt — Tezos token unfurl with image, supply, Collect CTA, Kukai helper */}
+  {isDrop && dropType === 'objkt' && item.data.url && (
+    <div class="rounded-xl border border-rule/30 bg-card overflow-hidden">
+      {item.data.image && (
+        <a href={item.data.url} target="_blank" rel="noopener" class="block bg-paper">
+          <img
+            src={item.data.image}
+            alt={item.data.title ?? 'Tezos token'}
+            class="w-full h-auto block"
+            loading="lazy"
+          />
+        </a>
+      )}
+      <div class="p-4">
+        <div class="flex items-baseline justify-between gap-3 mb-2">
+          <div class="flex-1 min-w-0">
+            {item.data.title && (
+              <h3 class="font-serif italic text-[1.15rem] text-ink leading-tight">
+                <a href={item.data.url} target="_blank" rel="noopener" class="hover:text-warm transition-colors">
+                  {item.data.title}
+                </a>
+              </h3>
+            )}
+            {item.data.artist && (
+              <p class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-ink-soft/70 mt-1">
+                by {item.data.artist}
+              </p>
+            )}
+          </div>
+          <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm/80 shrink-0">
+            Tezos
+          </span>
+        </div>
+
+        {item.data.caption && (
+          <p class="text-[0.9rem] text-ink-soft/85 leading-relaxed font-serif italic mb-3">
+            {item.data.caption}
+          </p>
+        )}
+
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/60 mb-4">
+          {item.data.supply !== undefined && (
+            <span>{item.data.supply} editions</span>
+          )}
+          {item.data.priceXtz !== undefined && item.data.priceXtz > 0 && (
+            <>
+              <span class="text-warm/40">&middot;</span>
+              <span>{item.data.priceXtz} &#42793;</span>
+            </>
+          )}
+          <span class="text-warm/40">&middot;</span>
+          <span>cc0 on-chain</span>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2">
+          <a
+            href={item.data.url}
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-ink text-paper font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors no-underline"
+          >
+            Collect on objkt &nearr;
+          </a>
+          <a
+            href="https://wallet.kukai.app"
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-card border border-rule/50 text-ink-soft font-mono text-[0.62rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors no-underline"
+            title="Kukai is a browser-based Tezos wallet. Quickest on-ramp if you're new."
+          >
+            New to Tezos? Get Kukai &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Image — figure + caption */}
+  {isDrop && dropType === 'image' && item.data.url && (
+    <figure>
+      <img
+        src={item.data.url}
+        alt={item.data.title ?? ''}
+        class="w-full rounded-xl border border-rule/30"
+        loading="lazy"
+      />
+      {item.data.caption && (
+        <figcaption class="mt-2 font-serif italic text-[0.88rem] text-ink-soft leading-snug">
+          {item.data.caption}
+        </figcaption>
+      )}
+    </figure>
+  )}
+
+  {/* Visit — Claude-voice log entry: noun avatar + read link + note */}
+  {isDrop && dropType === 'visit' && Body && (
+    <div class="flex gap-4 rounded-xl border border-rule/30 bg-card p-4">
+      {item.data.nounId !== undefined && (
+        <img
+          src={`https://noun.pics/${item.data.nounId}.svg`}
+          alt=""
+          aria-hidden="true"
+          width="40"
+          height="40"
+          class="noun-img rounded-sm shrink-0 mt-1"
+          style="image-rendering: pixelated;"
+          loading="lazy"
+        />
+      )}
+      <div class="flex-1 min-w-0">
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.52rem] tracking-[0.18em] uppercase text-ink-soft/50 mb-2">
+          {item.data.nounId !== undefined && <span>noun {item.data.nounId}</span>}
+          {item.data.model && <span class="text-warm/70">&middot; {item.data.model}</span>}
+        </div>
+        {item.data.readSlug && (
+          <p class="text-[0.82rem] text-ink-soft mb-1">
+            read&nbsp;
+            <a
+              href={`/posts/${item.data.readSlug}`}
+              class="text-warm underline underline-offset-2 decoration-warm/30 hover:decoration-warm transition-colors"
+            >
+              {item.data.readTitle ?? item.data.readSlug}
+            </a>
+          </p>
+        )}
+        <div class="font-serif italic text-[0.95rem] text-ink leading-snug drop-body">
+          <Body />
+        </div>
+        {item.data.becameDispatch && (
+          <p class="font-mono text-[0.56rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-2">
+            &rarr; became&nbsp;
+            <a
+              href={`/posts/${item.data.becameDispatch}`}
+              class="text-warm hover:underline"
+            >
+              dispatch
+            </a>
+          </p>
+        )}
+      </div>
+    </div>
+  )}
+
+  {/* Generic fallback — unknown/unimplemented types render as external link */}
+  {isGeneric && (
+    <a
+      href={item.data.url ?? '#'}
+      target="_blank"
+      rel="noopener"
+      class="block rounded-xl border border-rule/30 bg-card hover:bg-card-hover p-4 transition-colors"
+    >
+      {item.data.title && (
+        <h3 class="font-serif text-[1.05rem] italic text-ink leading-tight mb-1 group-hover:text-warm transition-colors">
+          {item.data.title}
+        </h3>
+      )}
+      {item.data.caption && (
+        <p class="text-[0.88rem] text-ink-soft leading-snug mb-2">{item.data.caption}</p>
+      )}
+      <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/50">
+        {item.data.url ? `${domainOf(item.data.url)} ↗` : kickerLabel}
+      </p>
+    </a>
+  )}
+</article>
+
+<style is:global>
+  /* Reset paragraph margins inside drop bodies so single-paragraph drops
+     render tight (no extra space above/below the content). */
+  .drop-body > :first-child { margin-top: 0; }
+  .drop-body > :last-child { margin-bottom: 0; }
+  .drop-body p { margin: 0.5em 0; }
+</style>

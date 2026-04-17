@@ -1,0 +1,117 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Keep existing OG/Twitter tags intact for non-Farcaster link previews
+const title = "Noun Drum Rack";
+const description = "Play the Noun drum rack with the Farcaster community.";
+const ogImage = "https://pointcast.xyz/drum-og.png";
+
+// Mini App embed metadata (replaces deprecated fc:frame tags)
+// https://miniapps.farcaster.xyz/docs/guides/sharing
+const miniappEmbed = {
+  version: "1",
+  imageUrl: ogImage,
+  button: {
+    title: "🥁 Play Drums",
+    action: {
+      type: "launch_miniapp",
+      url: "https://pointcast.xyz/drum",
+      name: "Noun Drum Rack",
+      splashImageUrl: "https://pointcast.xyz/drum-splash.png",
+      splashBackgroundColor: "#ffffff"
+    }
+  }
+};
+---
+
+<BaseLayout title={title} description={description} image={ogImage}>
+  <head slot="head">
+    <!-- Farcaster Mini App Embed Tag -->
+    <meta name="fc:miniapp" content={JSON.stringify(miniappEmbed)} />
+    <!-- Backward compatibility for legacy Farcaster clients -->
+    <meta name="fc:frame" content={JSON.stringify(miniappEmbed)} />
+    
+    <!-- Load Farcaster Mini App SDK -->
+    <script type="module" src="https://esm.sh/@farcaster/miniapp-sdk"></script>
+  </head>
+
+  <main class="drum-room">
+    <h1>Noun Drum Rack</h1>
+    
+    <!-- Existing drum UI goes here -->
+    <div id="drum-rack">...</div>
+
+    <!-- New: Share to Farcaster Button -->
+    <button id="share-farcaster-btn" style="display: none;">
+      Share to Farcaster
+    </button>
+  </main>
+
+  <script type="module">
+    import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+
+    // 1. SDK Hydration & Authentication
+    async function initMiniApp() {
+      try {
+        // The SDK automatically detects if it's running inside a Farcaster client.
+        // Wait for the context to be available.
+        const context = await sdk.context;
+
+        if (context && context.user) {
+          // We are inside a Farcaster Mini App!
+          const { fid, username, displayName, pfpUrl } = context.user;
+          
+          console.log(`Authenticated as ${username} (FID: ${fid})`);
+
+          // Wire to existing localStorage pc:drumName (prefer Farcaster identity)
+          localStorage.setItem('pc:drumName', username || displayName || `FID:${fid}`);
+          
+          // Optional: Save PFP for leaderboards
+          if (pfpUrl) localStorage.setItem('pc:drumPfp', pfpUrl);
+
+          // Show the "Share to Farcaster" button since we're in a Mini App
+          document.getElementById('share-farcaster-btn').style.display = 'block';
+        } else {
+          // Not in a Mini App context, fall back to existing anonymous flow
+          console.log("Running in standard browser. Using anonymous flow.");
+          if (!localStorage.getItem('pc:drumName')) {
+            // Trigger existing "name yourself" UI here
+          }
+        }
+      } catch (error) {
+        console.error("Failed to initialize Farcaster Mini App SDK:", error);
+      } finally {
+        // CRITICAL: Call ready() to dismiss the Farcaster splash screen.
+        // If not called, users will see an infinite loading screen.
+        sdk.actions.ready();
+      }
+    }
+
+    // Initialize as soon as the DOM is ready
+    document.addEventListener('DOMContentLoaded', initMiniApp);
+
+    // 2. composeCast Integration
+    document.getElementById('share-farcaster-btn').addEventListener('click', async () => {
+      // Get the user's current drum count from your existing logic
+      const userDrumCount = parseInt(localStorage.getItem('pc:drumCount') || '0', 10);
+      
+      const text = `I just hit the Noun Drum Rack ${userDrumCount} times! 🥁 Can you beat my score?`;
+      
+      try {
+        // Open the cast composer with suggested text and an embed back to the Mini App
+        const result = await sdk.actions.composeCast({
+          text: text,
+          embeds: ["https://pointcast.xyz/drum"]
+        });
+        
+        if (result?.cast) {
+          console.log("Successfully casted:", result.cast.hash);
+        } else {
+          console.log("User cancelled the cast.");
+        }
+      } catch (error) {
+        console.error("Error opening cast composer:", error);
+      }
+    });
+  </script>
+</BaseLayout>

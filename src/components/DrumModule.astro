@@ -1,0 +1,898 @@
+---
+/**
+ * DrumModule — inline hero drum. First interactive surface on the
+ * homepage. Rich enough to be a real cookie-clicker mini-game; shares
+ * counters + sound broadcast with /drum so friends can tap together
+ * across surfaces.
+ *
+ * Shared state keys (all cross-page):
+ *   • localStorage  pc:drumLocalCount   your count
+ *   • localStorage  pc:drumUnlocks      which milestones you've hit
+ *   • localStorage  pc:drumStreak       longest consecutive-seconds streak
+ *   • KV            drum:total          global counter
+ *   • KV            sounds:buffer       broadcast events (5/sec throttle)
+ *
+ * Fun mechanics:
+ *   • Combo chain — rapid taps inside 380ms escalate x1 → x2 → x3 → x5
+ *   • BPM — rolling rate over last 8 taps
+ *   • Milestone progress — visual bar to next personal tier
+ *   • Active drummers — count of unique other drummers in last 10s
+ *   • On-fire glow — the drum frame pulses warm at combo x3+
+ *   • Haptic feedback — tiny vibration on mobile (respects OS settings)
+ *   • Spacebar / Enter — desktop tap, same as pointer
+ *   • Per-tap "+N" ripples for your taps + ghost ripples for remote
+ *   • Achievement toast when you cross a tier for the first time
+ */
+
+const DRUM_NOUN_ID = 42;
+---
+
+<section id="feed-drum" class="mt-6 mb-10">
+  <div class="flex items-center gap-3 mb-3">
+    <div class="h-px flex-1 bg-rule/40"></div>
+    <h2 class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm">
+      Drum Together &middot; <span class="text-ink-soft/55">live</span>
+    </h2>
+    <div class="h-px flex-1 bg-rule/40"></div>
+  </div>
+
+  <!-- Block-y frame — "on fire" border pulse triggers on combo x3+. -->
+  <div
+    id="feed-drum-frame"
+    class="relative rounded-xl overflow-hidden border-2 border-ink/80 bg-card transition-all"
+  >
+    <!-- Midcentury corner blocks -->
+    <div class="absolute top-0 left-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+    <div class="absolute top-0 right-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 left-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
+    <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
+
+    <div class="p-3 md:p-5">
+
+      <!-- Who's in the room — mini-strip above the drum on mobile so
+           presence is the first signal (visible without scrolling past
+           the big drum on small screens). Populated by /api/visit. -->
+      <div class="flex items-center gap-2 mb-3 min-h-[1.75rem]">
+        <span class="font-mono text-[0.48rem] tracking-[0.2em] uppercase text-ink-soft/55 shrink-0">
+          <span id="feed-drum-humans" class="text-warm font-bold">—</span> here
+          &middot; <span id="feed-drum-present-label">loading</span>
+        </span>
+        <div id="feed-drum-present-strip" class="flex items-center gap-1 flex-1 overflow-hidden"></div>
+      </div>
+
+      <!-- Drum + readout row. On mobile stacks vertical; desktop side-by-side. -->
+      <div class="flex flex-col sm:flex-row items-center gap-3 md:gap-5">
+
+        <!-- The drum. Touch-manipulation so rapid taps don't trigger
+             iOS double-tap zoom. -->
+        <button
+          id="feed-drum-btn"
+          type="button"
+          class="relative block p-0 border-0 bg-transparent cursor-pointer select-none shrink-0"
+          aria-label="Tap to drum"
+          data-noun-id={DRUM_NOUN_ID}
+          style="touch-action: manipulation;"
+        >
+          <div id="feed-drum-inner" class="border-2 border-ink/80 bg-paper p-2 transition-all duration-150">
+            <img
+              id="feed-drum-img"
+              src={`https://noun.pics/${DRUM_NOUN_ID}.svg`}
+              alt="The Drum"
+              width="180"
+              height="180"
+              class="block transition-transform duration-75 ease-out w-[140px] h-[140px] md:w-[160px] md:h-[160px]"
+              style="image-rendering: pixelated;"
+              draggable="false"
+            />
+          </div>
+        </button>
+
+        <!-- Readout column -->
+        <div class="flex-1 w-full min-w-0">
+          <!-- Top stat pair: Your / Global. Labels use whitespace-nowrap
+               so they never wrap and blow up the row height on narrow
+               screens. Numerics are overflow-hidden + tight so 5-digit
+               totals don't clip out of their cell. -->
+          <div class="grid grid-cols-2 gap-1.5 mb-2">
+            <div class="p-2 rounded-md border border-rule/40 bg-paper/50 min-w-0">
+              <p class="font-mono text-[0.44rem] md:text-[0.46rem] tracking-[0.16em] uppercase text-ink-soft/55 mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                <span class="sm:hidden">You</span><span class="hidden sm:inline">Your drums</span>
+              </p>
+              <p
+                id="feed-drum-your"
+                class="font-mono text-[1.05rem] md:text-[1.5rem] font-bold text-ink leading-none tabular-nums truncate"
+              >0</p>
+            </div>
+            <div class="p-2 rounded-md border border-rule/40 bg-paper/50 min-w-0">
+              <p class="font-mono text-[0.44rem] md:text-[0.46rem] tracking-[0.16em] uppercase text-ink-soft/55 mb-0.5 whitespace-nowrap">
+                Global
+              </p>
+              <p
+                id="feed-drum-global"
+                class="font-mono text-[1.05rem] md:text-[1.5rem] font-bold text-warm leading-none tabular-nums truncate"
+              >—</p>
+            </div>
+          </div>
+
+          <!-- Combo · BPM · Together — live row. Same nowrap + min-w-0
+               treatment; the "Together" label gets shortened on mobile
+               to "Jam" so it fits the narrow cell without ellipsing. -->
+          <div class="grid grid-cols-3 gap-1.5 mb-2">
+            <div id="feed-drum-combo-card" class="p-1.5 rounded-md border border-rule/40 bg-paper/50 transition-all min-w-0">
+              <p class="font-mono text-[0.42rem] md:text-[0.44rem] tracking-[0.16em] uppercase text-ink-soft/55 leading-none whitespace-nowrap">
+                Combo
+              </p>
+              <p id="feed-drum-combo" class="font-mono text-[0.85rem] md:text-[0.95rem] font-bold text-ink leading-none mt-1 tabular-nums truncate">x1</p>
+            </div>
+            <div class="p-1.5 rounded-md border border-rule/40 bg-paper/50 min-w-0">
+              <p class="font-mono text-[0.42rem] md:text-[0.44rem] tracking-[0.16em] uppercase text-ink-soft/55 leading-none whitespace-nowrap">
+                BPM
+              </p>
+              <p id="feed-drum-bpm" class="font-mono text-[0.85rem] md:text-[0.95rem] font-bold text-ink leading-none mt-1 tabular-nums truncate">—</p>
+            </div>
+            <div class="p-1.5 rounded-md border border-rule/40 bg-paper/50 min-w-0">
+              <p class="font-mono text-[0.42rem] md:text-[0.44rem] tracking-[0.16em] uppercase text-ink-soft/55 leading-none whitespace-nowrap">
+                <span class="sm:hidden">Jam</span><span class="hidden sm:inline">Together</span>
+              </p>
+              <p id="feed-drum-active" class="font-mono text-[0.85rem] md:text-[0.95rem] font-bold text-ink leading-none mt-1 tabular-nums truncate">0</p>
+            </div>
+          </div>
+
+          <!-- Milestone progress — label + progress-number share one row.
+               whitespace-nowrap on both so a wide label ("Master drummer")
+               doesn't wrap next to a long progress number ("9,842 / 10,000"). -->
+          <div class="mb-1.5">
+            <div class="flex items-center justify-between gap-2 mb-0.5 min-w-0">
+              <p class="font-mono text-[0.44rem] tracking-[0.16em] uppercase text-ink-soft/55 whitespace-nowrap truncate">
+                <span id="feed-drum-tier-label">Warming up</span>
+              </p>
+              <p class="font-mono text-[0.42rem] tracking-[0.14em] uppercase text-ink-soft/45 whitespace-nowrap shrink-0 tabular-nums">
+                <span id="feed-drum-tier-progress">0 / 10</span>
+              </p>
+            </div>
+            <div class="h-1.5 rounded-sm bg-rule/30 overflow-hidden">
+              <div
+                id="feed-drum-tier-fill"
+                class="h-full bg-warm/80 transition-all duration-200 ease-out"
+                style="width: 0%"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Achievement badges — compact row of 8 trophies.
+               Greyed when unearned; light up on the moment you hit each
+               threshold (pace/count/combo). Hover a chip to see its goal. -->
+          <div class="flex items-center gap-1 mb-1.5" id="feed-drum-badges" aria-label="Drum achievements">
+            <span class="drum-badge locked" data-badge="first"       title="First tap">🥁</span>
+            <span class="drum-badge locked" data-badge="novice"      title="Novice · 10 drums">🎯</span>
+            <span class="drum-badge locked" data-badge="combo-3"     title="Combo x3 · on fire">🔥</span>
+            <span class="drum-badge locked" data-badge="pace-120"    title="Pace ≥ 120 BPM">⚡</span>
+            <span class="drum-badge locked" data-badge="combo-5"     title="Combo x5 · flow state">✨</span>
+            <span class="drum-badge locked" data-badge="journeyman"  title="Journeyman · 100 drums">🥋</span>
+            <span class="drum-badge locked" data-badge="pace-240"    title="Pace ≥ 240 BPM">🚀</span>
+            <span class="drum-badge locked" data-badge="master"      title="Master · 1,000 drums">👑</span>
+          </div>
+
+          <!-- Next goal hint — tight on mobile; full copy on desktop. -->
+          <p class="font-mono text-[0.42rem] md:text-[0.44rem] tracking-[0.14em] md:tracking-[0.18em] uppercase text-ink-soft/55 mb-1.5 truncate" id="feed-drum-next-goal" aria-live="polite">
+            tap to unlock your first badge
+          </p>
+
+          <!-- Hint + full-room link. `min-w-0` on the hint text and
+               `shrink-0` on the pill so neither clips the other. -->
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <p class="font-mono text-[0.42rem] md:text-[0.44rem] tracking-[0.14em] md:tracking-[0.18em] uppercase text-ink-soft/45 min-w-0 truncate">
+              <span id="feed-drum-hint">tap or hit <span class="text-warm">space</span></span>
+            </p>
+            <a
+              href="/drum"
+              class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-sm bg-ink text-paper font-mono text-[0.5rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors whitespace-nowrap"
+            >full room &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ripples — contained inside the module card, not fixed to viewport -->
+    <div
+      id="feed-drum-ripples"
+      class="absolute inset-0 pointer-events-none z-10"
+      aria-hidden="true"
+    ></div>
+  </div>
+
+  <!-- Achievement toast — appears at top of viewport on tier unlock -->
+  <div
+    id="feed-drum-toast"
+    class="fixed top-4 left-1/2 -translate-x-1/2 z-40 hidden p-3 rounded-md bg-ink text-paper shadow-lg pointer-events-none"
+  >
+    <p class="font-mono text-[0.58rem] tracking-[0.18em] uppercase text-warm" id="feed-drum-toast-label">unlock</p>
+    <p class="font-serif italic text-[1rem] text-paper" id="feed-drum-toast-title">—</p>
+  </div>
+</section>
+
+<script>
+  /**
+   * DrumModule client. Loads lazily, wires the whole cookie-clicker loop.
+   */
+  import { getSessionId, hearOthers } from '../lib/chimes';
+
+  const btn = document.getElementById('feed-drum-btn') as HTMLButtonElement | null;
+  const img = document.getElementById('feed-drum-img') as HTMLImageElement | null;
+  const inner = document.getElementById('feed-drum-inner');
+  const frame = document.getElementById('feed-drum-frame');
+  const ripples = document.getElementById('feed-drum-ripples');
+  const yourEl = document.getElementById('feed-drum-your');
+  const globalEl = document.getElementById('feed-drum-global');
+  const hintEl = document.getElementById('feed-drum-hint');
+  const comboEl = document.getElementById('feed-drum-combo');
+  const comboCard = document.getElementById('feed-drum-combo-card');
+  const bpmEl = document.getElementById('feed-drum-bpm');
+  const activeEl = document.getElementById('feed-drum-active');
+  const tierLabelEl = document.getElementById('feed-drum-tier-label');
+  const tierProgEl = document.getElementById('feed-drum-tier-progress');
+  const tierFillEl = document.getElementById('feed-drum-tier-fill') as HTMLElement | null;
+  const toastEl = document.getElementById('feed-drum-toast');
+  const toastLabelEl = document.getElementById('feed-drum-toast-label');
+  const toastTitleEl = document.getElementById('feed-drum-toast-title');
+
+  if (btn) {
+    const sessionId = getSessionId();
+    const LOCAL_KEY = 'pc:drumLocalCount';    // shared with /drum
+    const UNLOCKS_KEY = 'pc:drumUnlocks';     // shared with /drum
+    const STREAK_KEY = 'pc:drumStreak';       // shared with /drum
+
+    // --- AudioContext priming ---------------------------------------
+    // Browser autoplay policies keep the AudioContext suspended until the
+    // user interacts with THIS page. Before this fix: Mike's mobile tap
+    // POSTed broadcasts fine, but his desktop (which he hadn't touched
+    // since loading) had a suspended ctx — remote ripples drew, but the
+    // drum thump played to a silent ctx. First pointer-down / scroll /
+    // key anywhere on the page creates + resumes audio so remote taps
+    // are audible from then on.
+    function primeAudio() {
+      const ctx = getCtx();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    }
+    const primeEvents: Array<keyof DocumentEventMap> = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+    for (const evt of primeEvents) {
+      document.addEventListener(evt, primeAudio, { once: true, passive: true, capture: true });
+    }
+
+    // --- Local count ------------------------------------------------
+    function loadLocal(): number {
+      try { return Number(localStorage.getItem(LOCAL_KEY)) || 0; } catch { return 0; }
+    }
+    function saveLocal(n: number) {
+      try { localStorage.setItem(LOCAL_KEY, String(n)); } catch {}
+    }
+    let localCount = loadLocal();
+    function renderYour() { if (yourEl) yourEl.textContent = localCount.toLocaleString(); }
+    renderYour();
+
+    // --- Milestones (shared keys with /drum) ------------------------
+    // Each tier also swaps the drum noun to a different face — the drum
+    // morphs as you level up. Visual reward + novelty. Noun IDs picked
+    // to be visually distinct; stays CC0 from noun.pics.
+    const PERSONAL_TIERS = [
+      { at: 10,     label: 'Novice drummer', next: 100,     drumNoun:  42 },
+      { at: 100,    label: 'Journeyman',     next: 1000,    drumNoun: 201 },
+      { at: 1000,   label: 'Master drummer', next: 10000,   drumNoun: 444 },
+      { at: 10000,  label: 'Grand master',   next: 100000,  drumNoun: 777 },
+      { at: 100000, label: 'Mythic',         next: 1000000, drumNoun: 999 },
+    ];
+    const DRUM_NOUN_DEFAULT = 42;
+
+    function drumNounForCount(count: number): number {
+      let id = DRUM_NOUN_DEFAULT;
+      for (const tier of PERSONAL_TIERS) {
+        if (count >= tier.at) id = tier.drumNoun;
+      }
+      return id;
+    }
+
+    let lastDrumNoun = drumNounForCount(0);
+    function updateDrumNoun(count: number) {
+      const next = drumNounForCount(count);
+      if (next === lastDrumNoun) return;
+      lastDrumNoun = next;
+      if (img) {
+        // Morph animation: quick fade + swap + fade back in.
+        img.style.transition = 'opacity 180ms ease-out, transform 180ms ease-out';
+        img.style.opacity = '0';
+        img.style.transform = 'scale(0.85)';
+        setTimeout(() => {
+          img.src = `https://noun.pics/${next}.svg`;
+          img.style.opacity = '1';
+          img.style.transform = 'scale(1.1)';
+          setTimeout(() => {
+            img.style.transform = '';
+            img.style.transition = 'transform 75ms ease-out';
+          }, 160);
+        }, 180);
+      }
+    }
+    const unlocked = new Set<string>();
+    try {
+      const raw = localStorage.getItem(UNLOCKS_KEY);
+      if (raw) JSON.parse(raw).forEach((k: string) => unlocked.add(k));
+    } catch {}
+    function saveUnlocks() {
+      try { localStorage.setItem(UNLOCKS_KEY, JSON.stringify([...unlocked])); } catch {}
+    }
+    function renderTier(count: number): void {
+      let current = { at: 0, label: 'Warming up', next: 10 };
+      for (const tier of PERSONAL_TIERS) {
+        if (count >= tier.at) current = { ...tier };
+        else { current = { at: current.at, label: current.label, next: tier.at }; break; }
+      }
+      if (tierLabelEl) tierLabelEl.textContent = current.label;
+      if (tierProgEl) tierProgEl.textContent = `${Math.min(count, current.next).toLocaleString()} / ${current.next.toLocaleString()}`;
+      if (tierFillEl) {
+        const pct = Math.min(100, Math.max(0, (count / current.next) * 100));
+        tierFillEl.style.width = `${pct}%`;
+      }
+    }
+    function showToast(label: string, title: string) {
+      if (!toastEl) return;
+      if (toastLabelEl) toastLabelEl.textContent = label;
+      if (toastTitleEl) toastTitleEl.textContent = title;
+      toastEl.classList.remove('hidden');
+      setTimeout(() => { toastEl.classList.add('hidden'); }, 2800);
+    }
+    function checkMilestones(count: number): void {
+      for (const tier of PERSONAL_TIERS) {
+        const key = `personal-${tier.at}`;
+        if (count >= tier.at && !unlocked.has(key)) {
+          unlocked.add(key);
+          saveUnlocks();
+          showToast('unlocked', `${tier.label} · ${tier.at.toLocaleString()} drums`);
+          // Confetti-ish: quick celebratory double-ripple.
+          if (btn) {
+            const rect = btn.getBoundingClientRect();
+            for (let i = 0; i < 6; i++) {
+              const angle = (i / 6) * Math.PI * 2;
+              const x = rect.left + rect.width / 2 + Math.cos(angle) * rect.width * 0.4;
+              const y = rect.top + rect.height / 2 + Math.sin(angle) * rect.width * 0.4;
+              setTimeout(() => spawnRipple(x, y, '★', '#c26a4a'), i * 50);
+            }
+          }
+        }
+      }
+    }
+    renderTier(localCount);
+    // If the user returns with prior count, drum should already be at
+    // their unlocked tier's noun rather than the default #42.
+    if (img && localCount > 0) {
+      const tierNoun = drumNounForCount(localCount);
+      if (tierNoun !== DRUM_NOUN_DEFAULT) {
+        img.src = `https://noun.pics/${tierNoun}.svg`;
+        lastDrumNoun = tierNoun;
+      }
+    }
+
+    // --- Taiko synth ------------------------------------------------
+    let audioCtx: AudioContext | null = null;
+    function getCtx(): AudioContext | null {
+      if (audioCtx) return audioCtx;
+      try {
+        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+        if (!Ctx) return null;
+        audioCtx = new Ctx();
+      } catch { audioCtx = null; }
+      return audioCtx;
+    }
+    function playDrum(gain = 0.45, pitchBoost = 0) {
+      const ctx = getCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const now = ctx.currentTime;
+      const out = ctx.createGain();
+      out.connect(ctx.destination);
+      out.gain.setValueAtTime(0, now);
+      out.gain.linearRampToValueAtTime(gain, now + 0.003);
+      out.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      const basePitch = 110 + pitchBoost;
+      osc.frequency.setValueAtTime(basePitch, now);
+      osc.frequency.exponentialRampToValueAtTime(55 + pitchBoost * 0.5, now + 0.12);
+      osc.connect(out);
+      osc.start(now);
+      osc.stop(now + 0.3);
+      // Attack noise
+      const bufSize = Math.floor(ctx.sampleRate * 0.04);
+      const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+      const ng = ctx.createGain();
+      ng.gain.value = 0.18;
+      noise.connect(ng);
+      ng.connect(out);
+      noise.start(now);
+    }
+
+    // --- Ripples ----------------------------------------------------
+    function spawnRipple(x: number, y: number, label = '+1', color = '#c26a4a') {
+      if (!ripples) return;
+      const containerRect = ripples.getBoundingClientRect();
+      const r = document.createElement('div');
+      r.style.position = 'absolute';
+      r.style.left = `${x - containerRect.left}px`;
+      r.style.top = `${y - containerRect.top}px`;
+      r.style.transform = 'translate(-50%, -50%)';
+      r.style.color = color;
+      r.style.fontFamily = 'JetBrains Mono, ui-monospace, monospace';
+      r.style.fontWeight = '700';
+      r.style.fontSize = '14px';
+      r.style.pointerEvents = 'none';
+      r.style.animation = 'drum-ripple 800ms cubic-bezier(.2,.8,.3,1) forwards';
+      r.textContent = label;
+      ripples.appendChild(r);
+      setTimeout(() => { if (r.isConnected) r.remove(); }, 900);
+    }
+
+    // --- Combo state ------------------------------------------------
+    const COMBO_WINDOW_MS = 380;
+    const COMBO_MULTS = [1, 2, 3, 5];
+    let comboIdx = 0;
+    let lastTapAt = 0;
+    const tapTimes: number[] = [];
+
+    function renderCombo() {
+      const mult = COMBO_MULTS[comboIdx];
+      if (comboEl) comboEl.textContent = `x${mult}`;
+      if (comboCard && frame) {
+        if (mult >= 3) {
+          comboCard.classList.add('border-warm', 'bg-warm/15');
+          comboCard.classList.remove('border-rule/40', 'bg-paper/50');
+          frame.classList.add('border-warm', 'shadow-[0_0_0_4px_rgba(194,106,74,0.15)]');
+          frame.classList.remove('border-ink/80');
+        } else {
+          comboCard.classList.remove('border-warm', 'bg-warm/15');
+          comboCard.classList.add('border-rule/40', 'bg-paper/50');
+          frame.classList.remove('border-warm', 'shadow-[0_0_0_4px_rgba(194,106,74,0.15)]');
+          frame.classList.add('border-ink/80');
+        }
+      }
+    }
+
+    function updateBPM() {
+      if (!bpmEl) return;
+      if (tapTimes.length < 2) { bpmEl.textContent = '—'; return; }
+      const bpmWindow = tapTimes.slice(-8);
+      const diffMs = bpmWindow[bpmWindow.length - 1] - bpmWindow[0];
+      if (diffMs <= 0) { bpmEl.textContent = '—'; return; }
+      const bpm = Math.round(((bpmWindow.length - 1) * 60_000) / diffMs);
+      bpmEl.textContent = String(bpm);
+      // Feed BPM into achievement tracking — pace-* badges unlock here.
+      checkPaceBadges(bpm);
+    }
+
+    // --- Achievements -----------------------------------------------
+    // Single source of truth for badge state. Stored as a string array
+    // so it round-trips through JSON.stringify cleanly + easily unions.
+    const BADGES_KEY = 'pc:drumBadgesV1';
+    const earnedBadges = new Set<string>();
+    try {
+      const raw = localStorage.getItem(BADGES_KEY);
+      if (raw) JSON.parse(raw).forEach((k: string) => earnedBadges.add(k));
+    } catch {}
+    function persistBadges() {
+      try { localStorage.setItem(BADGES_KEY, JSON.stringify([...earnedBadges])); } catch {}
+    }
+
+    // Copy used in the "next goal" hint row. Map the first unearned
+    // badge to a clean, verb-led instruction like "Hit a 3x combo".
+    const BADGE_GOAL_COPY: Record<string, string> = {
+      'first':       'tap the drum to unlock your first badge',
+      'novice':      '10 drums → Novice badge',
+      'combo-3':     'rapid-tap to hit a 3× combo',
+      'pace-120':    'keep 120 BPM for the ⚡ Pace badge',
+      'combo-5':     'chain 5× combo → Flow State',
+      'journeyman':  '100 drums → Journeyman',
+      'pace-240':    'push past 240 BPM → 🚀 Flying',
+      'master':      '1,000 drums → Master drummer',
+    };
+    // Order matches the badge row in the HTML; when a badge is unearned
+    // we show its goal. Once all are earned we show a "grand-master" hint.
+    const BADGE_ORDER = ['first', 'novice', 'combo-3', 'pace-120', 'combo-5', 'journeyman', 'pace-240', 'master'];
+    const nextGoalEl = document.getElementById('feed-drum-next-goal');
+
+    function paintBadges() {
+      document.querySelectorAll('.drum-badge').forEach((el) => {
+        const key = (el as HTMLElement).dataset.badge;
+        if (!key) return;
+        if (earnedBadges.has(key)) {
+          el.classList.remove('locked');
+          el.classList.add('earned');
+        }
+      });
+      // Update "next goal" line to the first un-earned badge.
+      if (nextGoalEl) {
+        const next = BADGE_ORDER.find((k) => !earnedBadges.has(k));
+        if (next) {
+          nextGoalEl.textContent = BADGE_GOAL_COPY[next] ?? '';
+        } else {
+          nextGoalEl.textContent = 'every badge earned · go unlock the full drum room →';
+        }
+      }
+    }
+
+    function awardBadge(key: string, label: string) {
+      if (earnedBadges.has(key)) return;
+      earnedBadges.add(key);
+      persistBadges();
+      paintBadges();
+      // Pop animation on the newly-lit badge.
+      const el = document.querySelector(`.drum-badge[data-badge="${key}"]`);
+      if (el) {
+        el.classList.add('just-earned');
+        setTimeout(() => el.classList.remove('just-earned'), 700);
+      }
+      showToast('unlocked', `${label}`);
+      haptic(20);
+    }
+
+    // Count-based badges — checked from existing checkMilestones cadence
+    // (every poll + every tap).
+    function checkCountBadges(count: number) {
+      if (count >= 1)    awardBadge('first',      'First tap · 🥁');
+      if (count >= 10)   awardBadge('novice',     'Novice · 10 drums');
+      if (count >= 100)  awardBadge('journeyman', 'Journeyman · 100 drums');
+      if (count >= 1000) awardBadge('master',     'Master · 1,000 drums');
+    }
+
+    // Combo-based — called on every successful tap right after the combo
+    // index is updated. comboIdx maps to multiplier: 0=x1, 1=x2, 2=x3, 3=x5.
+    function checkComboBadges(mult: number) {
+      if (mult >= 3) awardBadge('combo-3', 'Combo x3 · on fire 🔥');
+      if (mult >= 5) awardBadge('combo-5', 'Combo x5 · flow state ✨');
+    }
+
+    // Pace-based — called from updateBPM after each tap.
+    function checkPaceBadges(bpm: number) {
+      if (bpm >= 120) awardBadge('pace-120', 'Pace ≥ 120 BPM · ⚡');
+      if (bpm >= 240) awardBadge('pace-240', 'Pace ≥ 240 BPM · 🚀');
+    }
+
+    // Initial paint — lights up any badges the visitor already earned
+    // in a prior session (they land on the homepage and the row shows
+    // their progress immediately).
+    paintBadges();
+    checkCountBadges(localCount);
+
+    // Idle combo-reset + BPM decay — if you stop tapping, combo drops
+    // back to x1 after 800ms of silence.
+    setInterval(() => {
+      if (comboIdx > 0 && Date.now() - lastTapAt > 800) {
+        comboIdx = 0;
+        renderCombo();
+      }
+    }, 300);
+
+    // --- Haptic ----------------------------------------------------
+    function haptic(intensity = 10) {
+      try {
+        if ('vibrate' in navigator) navigator.vibrate(intensity);
+      } catch {}
+    }
+
+    // --- Batched server sync ---------------------------------------
+    let pendingDelta = 0;
+    let flushTimer: number | null = null;
+    async function flushDelta() {
+      if (pendingDelta <= 0) return;
+      const delta = pendingDelta;
+      pendingDelta = 0;
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      try {
+        const res = await fetch('/api/drum', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delta, sessionId }),
+          keepalive: true,
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (globalEl && typeof data.globalTotal === 'number') {
+          globalEl.textContent = Number(data.globalTotal).toLocaleString();
+        }
+        // Notify Jackpot system of the new global total. It tracks its own
+        // milestone-crossing logic (every 10k); we just push the raw number
+        // so it can decide whether to fire the CENTURY interstitial.
+        if (typeof data.globalTotal === 'number') {
+          document.dispatchEvent(new CustomEvent('pc:drum-total', {
+            detail: { total: data.globalTotal, you: data.yourTotal ?? null },
+          }));
+        }
+        if (typeof data.yourTotal === 'number' && data.yourTotal > localCount) {
+          localCount = data.yourTotal;
+          saveLocal(localCount);
+          renderYour();
+          renderTier(localCount);
+        }
+      } catch {
+        pendingDelta += delta;
+      }
+    }
+    function scheduleFlush() {
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = window.setTimeout(() => flushDelta(), 2500);
+    }
+
+    // --- The tap ---------------------------------------------------
+    function performTap(x: number, y: number) {
+      const now = Date.now();
+      if (now - lastTapAt < COMBO_WINDOW_MS && lastTapAt > 0) {
+        comboIdx = Math.min(COMBO_MULTS.length - 1, comboIdx + 1);
+      }
+      lastTapAt = now;
+      tapTimes.push(now);
+      if (tapTimes.length > 32) tapTimes.shift();
+      const mult = COMBO_MULTS[comboIdx];
+
+      // Local bump × combo mult
+      localCount += mult;
+      saveLocal(localCount);
+      renderYour();
+      renderTier(localCount);
+      renderCombo();
+      updateBPM();
+      checkMilestones(localCount);
+      updateDrumNoun(localCount);  // morph drum avatar on tier-cross
+      // Achievements — count + combo badges fire inline (pace badges are
+      // already checked inside updateBPM() above).
+      checkCountBadges(localCount);
+      checkComboBadges(mult);
+
+      if (hintEl) {
+        hintEl.textContent = mult > 1 ? `combo x${mult}!` : 'keep going';
+      }
+
+      // Sound + haptic
+      playDrum(0.45, comboIdx * 8);  // slight pitch boost on combo for feedback
+      haptic(mult >= 3 ? 20 : 10);
+
+      // Visual bounce on drum
+      if (img) {
+        img.style.transform = 'scale(0.93)';
+        setTimeout(() => {
+          img.style.transform = 'scale(1.05)';
+          setTimeout(() => { img.style.transform = ''; }, 70);
+        }, 50);
+      }
+
+      // "+N" ripple
+      spawnRipple(x, y, `+${mult}`, mult >= 3 ? '#ef6c3d' : '#c26a4a');
+
+      // Broadcast
+      fetch('/api/sounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'drum', seed: mult, sessionId }),
+        keepalive: true,
+      }).catch(() => {});
+
+      // Queue for server
+      pendingDelta += mult;
+      if (pendingDelta >= 10) flushDelta();
+      else scheduleFlush();
+    }
+
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const rect = btn.getBoundingClientRect();
+      performTap(e.clientX || rect.left + rect.width / 2, e.clientY || rect.top + rect.height / 2);
+    });
+
+    // --- Spacebar / Enter ------------------------------------------
+    document.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        // Only fire if the drum is visible in viewport — otherwise
+        // user is probably interacting elsewhere.
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+        e.preventDefault();
+        performTap(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      }
+    });
+
+    // --- Global + active-drummer polling --------------------------
+    const recentRemotePids = new Map<string, number>();  // pid → lastSeen
+    function activeCount(): number {
+      const now = Date.now();
+      // Prune entries older than 10s.
+      for (const [pid, t] of recentRemotePids) {
+        if (now - t > 10_000) recentRemotePids.delete(pid);
+      }
+      // +1 for self if we've tapped in last 10s.
+      const selfActive = now - lastTapAt < 10_000 ? 1 : 0;
+      return recentRemotePids.size + selfActive;
+    }
+    function renderActive() {
+      if (activeEl) activeEl.textContent = String(activeCount());
+    }
+
+    async function refreshGlobal() {
+      try {
+        const r = await fetch(`/api/drum?sessionId=${encodeURIComponent(sessionId)}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (globalEl && typeof data.globalTotal === 'number') {
+          globalEl.textContent = Number(data.globalTotal).toLocaleString();
+        }
+        if (typeof data.yourTotal === 'number' && data.yourTotal > localCount) {
+          localCount = data.yourTotal;
+          saveLocal(localCount);
+          renderYour();
+          renderTier(localCount);
+        }
+      } catch {}
+    }
+    refreshGlobal();
+    setInterval(() => {
+      if (document.visibilityState === 'visible') refreshGlobal();
+      renderActive();
+    }, 3000);
+
+    // --- Presence mini-strip inside DrumModule ---------------------
+    // Pulls /api/visit the same way VisitLog does, but renders a compact
+    // avatar row + human count *above* the drum on mobile, so friends
+    // see each other without scrolling past the big drum card.
+    const humansEl = document.getElementById('feed-drum-humans');
+    const presentLabelEl = document.getElementById('feed-drum-present-label');
+    const presentStripEl = document.getElementById('feed-drum-present-strip');
+
+    function escapeAttr(s: string): string {
+      return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    async function refreshPresence() {
+      try {
+        const r = await fetch('/api/visit');
+        if (!r.ok) return;
+        const data = await r.json();
+        const present = Array.isArray(data.present) ? data.present : [];
+        const yourPid = typeof data.yourPid === 'string' ? data.yourPid : null;
+        const humans = present.filter((p: any) => p.type === 'human');
+        const others = yourPid ? humans.filter((p: any) => p.pid && p.pid !== yourPid) : humans;
+
+        if (humansEl) humansEl.textContent = String(humans.length || 1);
+        if (presentLabelEl) {
+          if (others.length === 0) {
+            presentLabelEl.textContent = humans.length <= 1 ? 'just you' : 'drum together';
+          } else if (others.length === 1) {
+            presentLabelEl.textContent = '+ 1 other';
+          } else {
+            presentLabelEl.textContent = `+ ${others.length} others`;
+          }
+        }
+        if (presentStripEl) {
+          // Up to 6 avatars in the inline strip. Clicking one plays the
+          // noun's chime via the shared synth — presence is playable too.
+          const shown = others.slice(0, 6);
+          if (shown.length === 0) {
+            presentStripEl.innerHTML = '';
+          } else {
+            presentStripEl.innerHTML = shown.map((p: any) => `
+              <img
+                src="https://noun.pics/${Number(p.nounId)||0}.svg"
+                alt=""
+                aria-hidden="true"
+                width="24"
+                height="24"
+                class="rounded-sm ring-1 ring-warm/50 block shrink-0"
+                style="image-rendering: pixelated;"
+                loading="lazy"
+                data-pid="${escapeAttr(p.pid || '')}"
+              />
+            `).join('');
+          }
+        }
+      } catch {}
+    }
+
+    // Fire immediately + also on a faster cadence than visit-log's 15s
+    // so the drum module's "who's here" updates when friends arrive.
+    refreshPresence();
+    setInterval(() => {
+      if (document.visibilityState === 'visible') refreshPresence();
+    }, 8000);
+
+    // --- Remote drum ripples + active-count tracking ---------------
+    let lastSoundT = Date.now();
+    let ownPid = '';
+    (async () => {
+      try {
+        const buf = new TextEncoder().encode(sessionId);
+        const hash = await crypto.subtle.digest('SHA-256', buf);
+        ownPid = Array.from(new Uint8Array(hash))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
+          .slice(0, 10);
+      } catch {}
+    })();
+
+    async function pollDrums() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (typeof data.now === 'number') lastSoundT = data.now;
+        const events = Array.isArray(data.events) ? data.events : [];
+        for (const ev of events) {
+          if (ev.pid === ownPid) continue;
+          if (ev.type !== 'drum') continue;
+          // Track active drummer
+          if (ev.pid) recentRemotePids.set(ev.pid, Date.now());
+          if (!btn) continue;
+          const rect = btn.getBoundingClientRect();
+          const angle = Math.random() * Math.PI * 2;
+          const rad = rect.width * 0.55;
+          const x = rect.left + rect.width / 2 + Math.cos(angle) * rad;
+          const y = rect.top + rect.height / 2 + Math.sin(angle) * rad;
+          spawnRipple(x, y, '+1', '#8c7a5e');
+          if (hearOthers()) playDrum(0.22);
+        }
+        renderActive();
+      } catch {}
+    }
+    // Tight 800ms poll = near-realtime drum echoes from other players.
+    // KV GET is ~10ms + the server returns events since last_t so the
+    // payload is tiny when quiet. Keeps Kana-and-friends drumming feel
+    // sub-second.
+    setInterval(() => {
+      if (document.visibilityState === 'visible') pollDrums();
+    }, 800);
+  }
+</script>
+
+<style is:global>
+  /* Ripple keyframes shared with /drum — defined once on any page that
+     loads DrumModule, available to both module and full drum room. */
+  @keyframes drum-ripple {
+    0%   { opacity: 1;    transform: translate(-50%, -50%) scale(1);   }
+    100% { opacity: 0;    transform: translate(-50%, -220%) scale(1.4); }
+  }
+
+  /* Achievement badges in the DrumModule. Locked = dim + desaturated;
+     earned = full-color + subtle pulse for the first 1.5s after unlock. */
+  .drum-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    border-radius: 4px;
+    cursor: help;
+    transition: opacity 180ms ease, transform 180ms ease, filter 180ms ease;
+  }
+  .drum-badge.locked {
+    opacity: 0.22;
+    filter: grayscale(100%);
+  }
+  .drum-badge.earned {
+    opacity: 1;
+    filter: none;
+  }
+  @keyframes drum-badge-pop {
+    0%   { transform: scale(1);   }
+    40%  { transform: scale(1.55); }
+    100% { transform: scale(1);   }
+  }
+  .drum-badge.just-earned {
+    animation: drum-badge-pop 600ms ease-out;
+  }
+</style>
