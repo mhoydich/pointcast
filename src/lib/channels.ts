@@ -20,6 +20,7 @@ export type ChannelCode =
   | 'ESC' // El Segundo — ESCU fiction, local
   | 'FCT' // Faucet — free daily claims
   | 'VST' // Visit — human/agent log entries
+  | 'BTL' // Battler — deterministic Nouns duels (9th, added v2.1)
   ;
 
 export interface ChannelSpec {
@@ -107,6 +108,15 @@ export const CHANNELS: Record<ChannelCode, ChannelSpec> = {
     color600: '#5F5E5A',
     color800: '#38373A',
     color50: '#EFEFEE',
+  },
+  BTL: {
+    code: 'BTL',
+    slug: 'battler',
+    name: 'Battler',
+    purpose: 'Nouns Battler — deterministic duels. Every match is a block.',
+    color600: '#8A2432', // oxblood — the one primary that doesn't collide with the existing 8
+    color800: '#551620',
+    color50: '#FBEAEE',
   },
 };
 

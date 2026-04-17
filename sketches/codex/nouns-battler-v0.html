@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Nouns Battler v0 — CH.BTL</title>
+<style>
+  /*
+   * Nouns Battler — prototype sketch
+   * Channel: BTL (proposed oxblood 600/800/50)
+   * Honors BLOCKS.md: hard corners (0-2px), mono metadata at 0.08em tracking,
+   * Inter body / JetBrains Mono metadata (via Google Fonts CDN so the sketch
+   * is self-contained; real ship uses self-hosted fonts per spec review).
+   *
+   * No gameplay — just the aesthetic template + stat derivation proof.
+   */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --btl-600: #8A2432;
+    --btl-800: #551620;
+    --btl-50:  #FBEAEE;
+    --ink:     #111111;
+    --rule:    #1a1a1a;
+    --dim:     #6a6a6a;
+    --bar-fill:#111111;
+    --bar-bg:  #e8dfe1;
+    --bg:      #ffffff;
+    --panel:   #ffffff;
+    --beam:    #b3278e;
+    --water:   #1d8cb8;
+    --armor:   #4a4e54;
+    --wild:    #2e7a2e;
+    --feast:   #b67b10;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+
+  /* Outer match card — mimics BlockCard frame */
+  .match {
+    max-width: 980px;
+    margin: 32px auto;
+    border: 1.5px solid var(--btl-600);
+    border-radius: 2px;
+    background: var(--panel);
+  }
+
+  .match__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--btl-50);
+  }
+  .match__header .channel {
+    color: var(--btl-800);
+  }
+  .match__header .right {
+    color: var(--ink);
+    display: flex;
+    gap: 18px;
+  }
+
+  /* Title row */
+  .match__title {
+    padding: 14px 16px 4px;
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+  .match__dek {
+    padding: 0 16px 14px;
+    color: var(--dim);
+    font-size: 13px;
+  }
+
+  /* Two-column fighter pane */
+  .arena {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--rule);
+  }
+  .fighter {
+    padding: 16px;
+    border-right: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .fighter:last-child { border-right: none; }
+
+  .fighter__portrait {
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    background: #f4f4f4;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .fighter__portrait img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .fighter__name {
+    font-size: 17px;
+    font-weight: 500;
+    margin: 0;
+  }
+  .fighter__types {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .type-pill {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    line-height: 1.4;
+  }
+  .type-water { color: var(--water); }
+  .type-beam  { color: var(--beam); }
+  .type-armor { color: var(--armor); }
+  .type-wild  { color: var(--wild); }
+  .type-feast { color: var(--feast); }
+
+  /* HP bar */
+  .hp {
+    display: grid;
+    grid-template-columns: 46px 1fr 46px;
+    gap: 8px;
+    align-items: center;
+  }
+  .hp__label, .hp__value {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .hp__value { text-align: right; }
+  .hp__bar {
+    height: 10px;
+    background: var(--bar-bg);
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .hp__bar > span {
+    display: block;
+    height: 100%;
+    background: var(--bar-fill);
+    transition: width 180ms linear;
+  }
+
+  /* Stat grid */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 18px;
+  }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    border-bottom: 1px dotted #d4d4d4;
+    padding: 2px 0;
+  }
+  .stat .k { color: var(--dim); }
+  .stat .v { font-weight: 500; color: var(--ink); }
+
+  /* Log pane */
+  .log {
+    border-top: 1px solid var(--rule);
+    padding: 12px 16px;
+    background: #fafafa;
+    min-height: 140px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .log__head {
+    color: var(--btl-800);
+    margin-bottom: 6px;
+  }
+  .log__line {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    line-height: 1.55;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+  .log__line + .log__line { margin-top: 2px; }
+  .log__line.win  { color: var(--btl-800); }
+  .log__line.lose { color: var(--dim); }
+
+  /* Action bar */
+  .actions {
+    display: flex;
+    gap: 10px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--rule);
+    align-items: center;
+    justify-content: space-between;
+    background: var(--btl-50);
+  }
+  .actions__buttons {
+    display: flex;
+    gap: 10px;
+  }
+  .btn {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11.5px;
+    font-weight: 500;
+    background: #ffffff;
+    color: var(--ink);
+    border: 1.5px solid var(--btl-600);
+    border-radius: 2px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--btl-600);
+    color: #ffffff;
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .meta-right {
+    color: var(--dim);
+  }
+
+  /* Footer (block footer line) */
+  .match__footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    color: var(--dim);
+  }
+
+  @media (max-width: 720px) {
+    .arena { grid-template-columns: 1fr; }
+    .fighter { border-right: none; border-bottom: 1px solid var(--rule); }
+    .fighter:last-child { border-bottom: none; }
+  }
+</style>
+</head>
+<body>
+
+<main class="match" id="match">
+  <div class="match__header mono">
+    <div class="channel">CH.BTL &middot; 0417-137v420</div>
+    <div class="right">
+      <span>MATCH</span>
+      <span id="ts">04.17 &middot; 07:22 PT</span>
+      <span id="round-indicator">ROUND 0/3</span>
+    </div>
+  </div>
+
+  <h1 class="match__title">Nouns battler &mdash; match #137 vs #420</h1>
+  <p class="match__dek">Deterministic duel. Stats derived from seed only. No RNG, no hidden state.</p>
+
+  <section class="arena">
+    <article class="fighter" id="fighter-a">
+      <div class="fighter__portrait">
+        <img alt="Noun 137" src="https://noun.pics/137.svg" onerror="this.style.display='none'" />
+      </div>
+      <h2 class="fighter__name">Noun #<span data-field="id">137</span></h2>
+      <div class="fighter__types" data-field="types"></div>
+      <div class="hp">
+        <span class="hp__label">HP</span>
+        <div class="hp__bar"><span data-field="hp-bar" style="width:100%"></span></div>
+        <span class="hp__value" data-field="hp">—</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="k">ATK</span><span class="v" data-field="atk">—</span></div>
+        <div class="stat"><span class="k">DEF</span><span class="v" data-field="def">—</span></div>
+        <div class="stat"><span class="k">SPD</span><span class="v" data-field="spd">—</span></div>
+        <div class="stat"><span class="k">FOC</span><span class="v" data-field="foc">—</span></div>
+      </div>
+    </article>
+
+    <article class="fighter" id="fighter-b">
+      <div class="fighter__portrait">
+        <img alt="Noun 420" src="https://noun.pics/420.svg" onerror="this.style.display='none'" />
+      </div>
+      <h2 class="fighter__name">Noun #<span data-field="id">420</span></h2>
+      <div class="fighter__types" data-field="types"></div>
+      <div class="hp">
+        <span class="hp__label">HP</span>
+        <div class="hp__bar"><span data-field="hp-bar" style="width:100%"></span></div>
+        <span class="hp__value" data-field="hp">—</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="k">ATK</span><span class="v" data-field="atk">—</span></div>
+        <div class="stat"><span class="k">DEF</span><span class="v" data-field="def">—</span></div>
+        <div class="stat"><span class="k">SPD</span><span class="v" data-field="spd">—</span></div>
+        <div class="stat"><span class="k">FOC</span><span class="v" data-field="foc">—</span></div>
+      </div>
+    </article>
+  </section>
+
+  <section class="log" id="log">
+    <div class="log__head mono">LOG</div>
+    <div class="log__line">Press ATTACK to run one exchange.</div>
+  </section>
+
+  <div class="actions">
+    <div class="actions__buttons">
+      <button class="btn" id="btn-attack">ATTACK</button>
+      <button class="btn" id="btn-reset">RESET</button>
+    </div>
+    <div class="mono meta-right">SEED 137 v 420 &middot; PROTO v0 &middot; NO RNG</div>
+  </div>
+
+  <div class="match__footer mono">
+    <span>NOUNS BATTLER &middot; SKETCH</span>
+    <span>CH.BTL &middot; CODEX &middot; 2026.04.17</span>
+  </div>
+</main>
+
+<script>
+/* ================================================================
+ * Stat derivation — pure function of seedId.
+ *
+ * Nouns seeds are 5-trait rolls (bg, body, accessory, head, glasses).
+ * We do NOT have the real trait arrays locally in this sketch — production
+ * ships src/lib/battler/stat-derivation.ts which imports from the Nouns
+ * descriptor. Here we simulate by deriving pseudo-trait indexes from the
+ * seed id via a small deterministic mixing function, then mapping each to
+ * type + stat contributions. The output is reproducible: same id → same stats.
+ *
+ * This proves the mechanic: a client-only battle UI can render the whole
+ * match from nothing but two integers.
+ * ================================================================ */
+
+// Deterministic 32-bit mixing (xmur3-style).
+function mix(seed, salt) {
+  let h = (seed ^ salt) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+// Simulated trait indices (real version: pull from noun-sdk).
+function fakeSeedTraits(id) {
+  return {
+    bg:        mix(id, 0x01) % 2,
+    body:      mix(id, 0x02) % 30,
+    accessory: mix(id, 0x03) % 140,
+    head:      mix(id, 0x04) % 240,
+    glasses:   mix(id, 0x05) % 21,
+  };
+}
+
+// head index → primary type bucket (5 buckets round-robin via hash of name family).
+// In production, HEAD_TYPE_MAP is hand-curated from the real head trait list.
+// Prototype uses modulo distribution so the math still works.
+const TYPES = ['WATER','BEAM','ARMOR','WILD','FEAST'];
+const TYPE_CLASS = {
+  WATER: 'type-water',
+  BEAM:  'type-beam',
+  ARMOR: 'type-armor',
+  WILD:  'type-wild',
+  FEAST: 'type-feast',
+};
+
+function headToType(head) {
+  // Production: lookup table. Prototype: hash bucket.
+  return TYPES[mix(head, 0xaa) % 5];
+}
+function glassesToType(glasses) {
+  return TYPES[mix(glasses, 0xbb) % 5];
+}
+
+// Contribution in [-12, +12] keyed off trait index.
+function contrib(idx, salt) {
+  return ((mix(idx, salt) % 25) - 12);
+}
+
+function seedToStats(id) {
+  const t = fakeSeedTraits(id);
+  const headType    = headToType(t.head);
+  const glassesType = glassesToType(t.glasses);
+
+  const ATKraw = 50 + contrib(t.head, 0x10) + contrib(t.accessory, 0x11) + ((t.body % 2) ? 2 : -2);
+  const DEFraw = 50 + contrib(t.body, 0x12) + contrib(t.bg, 0x13);
+  const SPDraw = 50 + contrib(t.glasses, 0x14) - Math.round(contrib(t.body, 0x12) * 0.5);
+  const FOCraw = 50 + contrib(t.accessory, 0x15) + ((t.glasses % 7 === 0) ? 8 : 0);
+
+  const clamp = v => Math.max(1, Math.min(99, Math.round(v)));
+  const ATK = clamp(ATKraw);
+  const DEF = clamp(DEFraw);
+  const SPD = clamp(SPDraw);
+  const FOC = clamp(FOCraw);
+  const HP  = Math.round(80 + DEF * 0.4);
+
+  return {
+    id,
+    traits: t,
+    types: [headType, glassesType],
+    ATK, DEF, SPD, FOC, HP,
+  };
+}
+
+// Type matchup multiplier.
+const BEATS = {
+  WATER: 'BEAM',
+  BEAM:  'ARMOR',
+  ARMOR: 'WILD',
+  WILD:  'WATER',
+  FEAST: null, // FEAST is neutral
+};
+function matchupMult(attackerType, defenderType) {
+  if (BEATS[attackerType] === defenderType) return 1.5;
+  if (BEATS[defenderType] === attackerType) return 0.67;
+  return 1.0;
+}
+
+/* ================================================================
+ * Render
+ * ================================================================ */
+const state = {
+  a: null,
+  b: null,
+  hpA: 0,
+  hpB: 0,
+  round: 0,
+  done: false,
+};
+
+function fillFighter(rootId, stats) {
+  const root = document.getElementById(rootId);
+  root.querySelector('[data-field="id"]').textContent = stats.id;
+  root.querySelector('[data-field="atk"]').textContent = stats.ATK;
+  root.querySelector('[data-field="def"]').textContent = stats.DEF;
+  root.querySelector('[data-field="spd"]').textContent = stats.SPD;
+  root.querySelector('[data-field="foc"]').textContent = stats.FOC;
+
+  const typeHost = root.querySelector('[data-field="types"]');
+  typeHost.innerHTML = '';
+  stats.types.forEach((t, i) => {
+    const pill = document.createElement('span');
+    pill.className = 'type-pill ' + (TYPE_CLASS[t] || '');
+    pill.textContent = (i === 0 ? t : '/ ' + t);
+    typeHost.appendChild(pill);
+  });
+  updateHp(rootId, stats.HP, stats.HP);
+}
+
+function updateHp(rootId, current, max) {
+  const root = document.getElementById(rootId);
+  root.querySelector('[data-field="hp"]').textContent = current + ' / ' + max;
+  const pct = Math.max(0, (current / max) * 100);
+  root.querySelector('[data-field="hp-bar"]').style.width = pct + '%';
+}
+
+function logLine(text, cls) {
+  const host = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log__line' + (cls ? ' ' + cls : '');
+  line.textContent = text;
+  host.appendChild(line);
+  host.scrollTop = host.scrollHeight;
+}
+
+function resetLog() {
+  const host = document.getElementById('log');
+  host.innerHTML = '<div class="log__head mono">LOG</div>';
+}
+
+function round() {
+  if (state.done) return;
+  state.round += 1;
+
+  // Simple demo: both fighters STRIKE. Damage = ATK * matchupMult * (1 - DEF/200).
+  const a = state.a, b = state.b;
+  const multA = matchupMult(a.types[0], b.types[0]);
+  const multB = matchupMult(b.types[0], a.types[0]);
+
+  const dmgA = Math.max(4, Math.round(a.ATK * multA * (1 - b.DEF / 200)));
+  const dmgB = Math.max(4, Math.round(b.ATK * multB * (1 - a.DEF / 200)));
+
+  // Speed decides who lands first — no difference in single-strike exchange,
+  // but we log it for flavor.
+  const firstA = a.SPD >= b.SPD;
+  if (firstA) {
+    state.hpB = Math.max(0, state.hpB - dmgA);
+  } else {
+    state.hpA = Math.max(0, state.hpA - dmgB);
+  }
+  // Counter-hit if still alive.
+  if (firstA && state.hpB > 0) state.hpA = Math.max(0, state.hpA - dmgB);
+  if (!firstA && state.hpA > 0) state.hpB = Math.max(0, state.hpB - dmgA);
+
+  updateHp('fighter-a', state.hpA, a.HP);
+  updateHp('fighter-b', state.hpB, b.HP);
+
+  logLine(
+    `R${state.round} #${a.id}·STRIKE vs #${b.id}·STRIKE → ` +
+    `#${a.id} ${dmgA} (${a.types[0]}×${b.types[0]} ×${multA.toFixed(2)}) | ` +
+    `#${b.id} ${dmgB} (${b.types[0]}×${a.types[0]} ×${multB.toFixed(2)})`
+  );
+
+  document.getElementById('round-indicator').textContent = 'ROUND ' + Math.min(state.round, 3) + '/3';
+
+  const aDead = state.hpA <= 0;
+  const bDead = state.hpB <= 0;
+  if (aDead || bDead || state.round >= 3) {
+    state.done = true;
+    let winner;
+    if (aDead && bDead)       winner = 'DRAW';
+    else if (aDead)           winner = 'B';
+    else if (bDead)           winner = 'A';
+    else                      winner = state.hpA === state.hpB ? 'DRAW' : (state.hpA > state.hpB ? 'A' : 'B');
+
+    if (winner === 'DRAW') {
+      logLine('RESULT → DRAW', 'win');
+    } else {
+      const w = winner === 'A' ? a : b;
+      const l = winner === 'A' ? b : a;
+      logLine(`RESULT → #${w.id} wins. #${l.id} down.`, 'win');
+    }
+    document.getElementById('btn-attack').disabled = true;
+  }
+}
+
+function init() {
+  state.a = seedToStats(137);
+  state.b = seedToStats(420);
+  state.hpA = state.a.HP;
+  state.hpB = state.b.HP;
+  state.round = 0;
+  state.done = false;
+  fillFighter('fighter-a', state.a);
+  fillFighter('fighter-b', state.b);
+  resetLog();
+  logLine('#137 types: ' + state.a.types.join(' / ') + '  |  #420 types: ' + state.b.types.join(' / '));
+  logLine('Press ATTACK to resolve one exchange.');
+  document.getElementById('round-indicator').textContent = 'ROUND 0/3';
+  document.getElementById('btn-attack').disabled = false;
+  const now = new Date();
+  document.getElementById('ts').textContent =
+    String(now.getMonth()+1).padStart(2,'0') + '.' +
+    String(now.getDate()).padStart(2,'0') + ' · ' +
+    String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0') + ' PT';
+}
+
+document.getElementById('btn-attack').addEventListener('click', round);
+document.getElementById('btn-reset').addEventListener('click', init);
+init();
+</script>
+</body>
+</html>

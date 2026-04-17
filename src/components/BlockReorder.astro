@@ -1,0 +1,184 @@
+---
+/**
+ * BlockReorder — client-side drag-and-drop ordering layer for the home grid.
+ *
+ * Wraps the existing grid markup. When the user drags a block card, we
+ * track the new index order in localStorage under `pc:block-order`. On
+ * next page load, the order is applied via CSS `order:` on each card.
+ *
+ * No server state, no user account. Your reorder is visible only to you.
+ * A small "↻ reset order" chip bottom-left clears the localStorage key.
+ *
+ * Honors BLOCKS.md — hard corners, mono metadata, subtle hover affordance.
+ */
+---
+
+<div class="reorder-host">
+  <div class="reorder-toggle mono" id="pc-reorder-toggle" aria-live="polite">
+    <span class="reorder-toggle__dot" aria-hidden="true"></span>
+    <span class="reorder-toggle__label">CUSTOM ORDER · OFF</span>
+    <button class="reorder-toggle__btn" id="pc-reorder-reset" hidden>↻ RESET</button>
+  </div>
+  <slot />
+</div>
+
+<script is:inline>
+  const STORAGE_KEY = 'pc:block-order';
+
+  function loadOrder() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+    return {};
+  }
+
+  function saveOrder(order) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)); } catch (e) {}
+  }
+
+  function apply() {
+    const order = loadOrder();
+    const keys = Object.keys(order);
+    const toggle = document.getElementById('pc-reorder-toggle');
+    const resetBtn = document.getElementById('pc-reorder-reset');
+    if (keys.length > 0) {
+      toggle && toggle.classList.add('reorder-toggle--on');
+      const label = toggle && toggle.querySelector('.reorder-toggle__label');
+      if (label) label.textContent = 'CUSTOM ORDER · ' + keys.length;
+      if (resetBtn) resetBtn.hidden = false;
+      document.querySelectorAll('.block-card').forEach(function (el) {
+        const match = (el.getAttribute('aria-label') || '').match(/Block (\d{4}):/);
+        if (!match) return;
+        const id = match[1];
+        if (order[id] != null) el.style.order = String(order[id]);
+      });
+    } else {
+      toggle && toggle.classList.remove('reorder-toggle--on');
+      const label = toggle && toggle.querySelector('.reorder-toggle__label');
+      if (label) label.textContent = 'CUSTOM ORDER · OFF';
+      if (resetBtn) resetBtn.hidden = true;
+    }
+  }
+
+  function blockIdOf(el) {
+    const m = (el.getAttribute('aria-label') || '').match(/Block (\d{4}):/);
+    return m ? m[1] : null;
+  }
+
+  function wire() {
+    document.querySelectorAll('.block-card').forEach(function (card) {
+      card.draggable = true;
+      card.addEventListener('dragstart', function (e) {
+        const id = blockIdOf(card);
+        if (!id || !e.dataTransfer) return;
+        e.dataTransfer.setData('text/plain', id);
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('dragging');
+      });
+      card.addEventListener('dragend', function () { card.classList.remove('dragging'); });
+      card.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        card.classList.add('drag-over');
+      });
+      card.addEventListener('dragleave', function () { card.classList.remove('drag-over'); });
+      card.addEventListener('drop', function (e) {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        const srcId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+        const dstId = blockIdOf(card);
+        if (!srcId || !dstId || srcId === dstId) return;
+        reorderAround(srcId, dstId);
+        apply();
+      });
+    });
+
+    const resetBtn = document.getElementById('pc-reorder-reset');
+    resetBtn && resetBtn.addEventListener('click', function () {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+      document.querySelectorAll('.block-card').forEach(function (el) { el.style.order = ''; });
+      apply();
+    });
+  }
+
+  function reorderAround(srcId, dstId) {
+    const cards = Array.from(document.querySelectorAll('.block-card'));
+    const pairs = cards.map(function (c, idx) {
+      return { id: blockIdOf(c), idx: idx };
+    }).filter(function (p) { return !!p.id; });
+
+    // Current order — CSS order wins, falls back to DOM index.
+    const withN = pairs.map(function (p) {
+      const el = cards[p.idx];
+      return { id: p.id, n: el.style.order ? Number(el.style.order) : p.idx };
+    });
+    withN.sort(function (a, b) { return a.n - b.n; });
+
+    const idsInOrder = withN.map(function (x) { return x.id; }).filter(function (id) { return id !== srcId; });
+    const dstIdx = idsInOrder.indexOf(dstId);
+    idsInOrder.splice(dstIdx, 0, srcId);
+
+    const next = {};
+    idsInOrder.forEach(function (id, i) { next[id] = i; });
+    saveOrder(next);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { wire(); apply(); });
+  } else {
+    wire();
+    apply();
+  }
+</script>
+
+<style>
+  .reorder-host { display: contents; }
+
+  .reorder-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border: 1px dashed var(--pc-rule);
+    color: var(--pc-ink-muted);
+    background: transparent;
+    border-radius: 2px;
+    margin-bottom: 10px;
+    font-size: 10px;
+    width: fit-content;
+  }
+  .reorder-toggle--on {
+    border-style: solid;
+    border-color: var(--pc-accent);
+    color: var(--pc-accent);
+  }
+  .reorder-toggle__dot {
+    width: 7px; height: 7px;
+    background: var(--pc-rule);
+    border-radius: 50%;
+  }
+  .reorder-toggle--on .reorder-toggle__dot { background: var(--pc-accent); }
+  .reorder-toggle__btn {
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    background: transparent;
+    border: none;
+    color: var(--pc-accent);
+    cursor: pointer;
+    padding: 0 2px;
+  }
+  .reorder-toggle__btn:hover { text-decoration: underline; }
+
+  :global(.block-card.dragging) { opacity: 0.5; }
+  :global(.block-card.drag-over) {
+    outline: 2px solid var(--pc-accent);
+    outline-offset: -1px;
+  }
+  :global(.block-card) { cursor: grab; }
+  :global(.block-card:active) { cursor: grabbing; }
+</style>

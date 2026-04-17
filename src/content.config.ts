@@ -16,7 +16,7 @@ const blocks = defineCollection({
   loader: glob({ pattern: '**/*.json', base: './src/content/blocks' }),
   schema: z.object({
     id: z.string().regex(/^\d{4}$/, 'id must be 4-digit zero-padded string'),
-    channel: z.enum(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST']),
+    channel: z.enum(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST', 'BTL']),
     type: z.enum(['READ', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'NOTE', 'VISIT', 'LINK']),
     title: z.string(),
     body: z.string().optional(),
