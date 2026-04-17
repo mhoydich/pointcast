@@ -81,10 +81,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  if (isGet && !looksLikeAsset && !isApiRoute && wantsHtml && env.VISITS) {
-    const ua = request.headers.get('user-agent') ?? '';
-    const type = classifyUA(ua);
+  const ua = request.headers.get('user-agent') ?? '';
+  const type = isGet && !looksLikeAsset && !isApiRoute && wantsHtml
+    ? classifyUA(ua)
+    : 'unknown';
 
+  if (isGet && !looksLikeAsset && !isApiRoute && wantsHtml && env.VISITS) {
     // Humans: skip — let the JS widget on the page handle their log entry.
     // Non-humans: auto-log with a random noun so they show up in the feed.
     if (type !== 'human' && type !== 'unknown') {
@@ -102,5 +104,69 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  return next();
+  const response = await next();
+
+  // ── Stripped-HTML agent mode ────────────────────────────────────────────
+  //
+  // BLOCKS.md Phase 2: "When User-Agent matches known agent patterns
+  // (GPTBot, Claude-Web, Perplexity, Atlas, etc.), serve a stripped
+  // HTML version: no CSS, no JS, pure semantic markup with rich JSON-LD
+  // blobs."
+  //
+  // We transform the already-rendered Astro HTML on the way out via
+  // HTMLRewriter. Agents get smaller, cheaper-to-parse HTML with all
+  // the structural + JSON-LD signals intact.
+  //
+  // Triggers on any type starting with 'ai:' (GPTBot, ClaudeBot,
+  // PerplexityBot, CCBot, Bytespider, Google-Extended, etc.). Humans,
+  // unknown UAs, and non-AI bots (seo, social, search) get the full
+  // experience unchanged.
+  if (type.startsWith('ai:') && response.status === 200) {
+    const ct = response.headers.get('content-type') ?? '';
+    if (ct.startsWith('text/html')) {
+      const rewriter = new HTMLRewriter()
+        // Drop all runtime CSS: inline <style>, <link rel="stylesheet">,
+        // font preloads. Agents don't execute CSS.
+        .on('style', { element(el) { el.remove(); } })
+        .on('link[rel="stylesheet"]', { element(el) { el.remove(); } })
+        .on('link[rel="preconnect"]', { element(el) { el.remove(); } })
+        .on('link[rel="preload"]', { element(el) { el.remove(); } })
+        .on('link[rel~="icon"]', { element(el) { el.remove(); } })
+        .on('link[rel="manifest"]', { element(el) { el.remove(); } })
+        // Drop JS: all <script> EXCEPT JSON-LD. JSON-LD is structured
+        // data the agent wants; anything else is client-side runtime
+        // it doesn't execute.
+        .on('script', {
+          element(el) {
+            const t = el.getAttribute('type');
+            if (t === 'application/ld+json' || t === 'application/json+ld') return;
+            el.remove();
+          },
+        })
+        // Drop theme / browser chrome meta tags that aren't useful to
+        // agents. Keep description, og:*, twitter:* (agents scrape these).
+        .on('meta[name="theme-color"]', { element(el) { el.remove(); } })
+        .on('meta[name="generator"]', { element(el) { el.remove(); } })
+        // Drop Astro-injected style attributes on elements — these
+        // reference CSS variables the stripped agent won't see anyway.
+        .on('[style]', {
+          element(el) { el.removeAttribute('style'); },
+        });
+
+      const transformed = rewriter.transform(response);
+      // Clone headers so we can add the X-Agent-Mode signal.
+      const headers = new Headers(transformed.headers);
+      headers.set('X-Agent-Mode', `stripped · ${type}`);
+      headers.set('X-Robots-Tag', 'index, follow');
+      // Cache: same body per UA-class, safe to cache briefly at CDN.
+      headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+      return new Response(transformed.body, {
+        status: transformed.status,
+        statusText: transformed.statusText,
+        headers,
+      });
+    }
+  }
+
+  return response;
 };
