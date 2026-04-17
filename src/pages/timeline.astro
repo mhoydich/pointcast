@@ -1,0 +1,634 @@
+---
+/**
+ * /timeline — publication cadence visualization.
+ *
+ * Build-time computed SVG data viz over the blocks collection. Shows:
+ *   - Overall cadence as a 24-week bar chart (blocks per ISO week)
+ *   - Per-channel mini-sparklines (12-week window, same scale across
+ *     channels so Mike can eyeball which channel is surging)
+ *   - Week × channel heatmap (12w × 9ch) with channel-tinted intensity
+ *   - Type distribution as a stacked horizontal bar
+ *
+ * Pure SVG, no client-side rendering library. Hover interactions are
+ * inline `<title>` tooltips and CSS only. The whole page is static
+ * markup once built — agent-friendly, scrape-friendly, print-friendly.
+ *
+ * Sibling endpoint: /timeline.json for the same data in JSON.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS, CHANNEL_LIST, type ChannelCode } from '../lib/channels';
+import { BLOCK_TYPE_LIST, type BlockType } from '../lib/block-types';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => a.data.timestamp.getTime() - b.data.timestamp.getTime());
+
+// ISO-week bucket: "YYYY-Www". Use UTC to avoid DST edge cases.
+function isoWeekKey(d: Date): string {
+  // Copy to avoid mutating source
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  // ISO week: Thursday of that week is in the ISO year
+  const dayNum = (date.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const diff = date.getTime() - firstThursday.getTime();
+  const week = 1 + Math.round(diff / 604_800_000);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function weekStartDate(key: string): Date {
+  // Convert "2026-W16" back to the Monday of that ISO week
+  const [yearStr, weekStr] = key.split('-W');
+  const year = Number(yearStr);
+  const week = Number(weekStr);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = (jan4.getUTCDay() + 6) % 7;
+  const mondayOfWeek1 = new Date(Date.UTC(year, 0, 4 - jan4Day));
+  mondayOfWeek1.setUTCDate(mondayOfWeek1.getUTCDate() + (week - 1) * 7);
+  return mondayOfWeek1;
+}
+
+// Count blocks per (week, channel)
+const grid: Record<string, Record<ChannelCode, number>> = {};
+const weekTotals: Record<string, number> = {};
+const channelTotals: Record<ChannelCode, number> = {} as any;
+const typeTotals: Record<BlockType, number> = {} as any;
+
+for (const b of blocks) {
+  const wk = isoWeekKey(b.data.timestamp);
+  const ch = b.data.channel;
+  grid[wk] = grid[wk] ?? ({} as Record<ChannelCode, number>);
+  grid[wk][ch] = (grid[wk][ch] ?? 0) + 1;
+  weekTotals[wk] = (weekTotals[wk] ?? 0) + 1;
+  channelTotals[ch] = (channelTotals[ch] ?? 0) + 1;
+  typeTotals[b.data.type] = (typeTotals[b.data.type] ?? 0) + 1;
+}
+
+// Enumerate every ISO week between first block and now (inclusive),
+// filling zeros so the chart has a continuous x-axis.
+const firstDate = blocks[0]?.data.timestamp ?? new Date();
+const now = new Date();
+const allWeeks: string[] = [];
+{
+  let cursor = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), firstDate.getUTCDate()));
+  while (cursor <= now) {
+    const k = isoWeekKey(cursor);
+    if (!allWeeks.includes(k)) allWeeks.push(k);
+    cursor = new Date(cursor.getTime() + 7 * 86_400_000);
+  }
+  // Tail guarantee: include current week
+  const currentWeek = isoWeekKey(now);
+  if (!allWeeks.includes(currentWeek)) allWeeks.push(currentWeek);
+}
+
+const lastN = 24;
+const overallWeeks = allWeeks.slice(-lastN);
+const overallMax = Math.max(1, ...overallWeeks.map((w) => weekTotals[w] ?? 0));
+
+// Per-channel sparklines — last 12 weeks (tighter than overall)
+const sparkN = 12;
+const sparkWeeks = allWeeks.slice(-sparkN);
+const sparkMax = Math.max(1, ...sparkWeeks.flatMap((w) => CHANNEL_LIST.map((c) => grid[w]?.[c.code] ?? 0)));
+
+// Heatmap — same sparkWeeks × all channels
+const heatmapMaxPerCell = Math.max(1, ...sparkWeeks.flatMap((w) => CHANNEL_LIST.map((c) => grid[w]?.[c.code] ?? 0)));
+
+// Type distribution — 8 types, proportional bar
+const typeOrder: BlockType[] = ['READ', 'NOTE', 'LINK', 'LISTEN', 'WATCH', 'VISIT', 'MINT', 'FAUCET'];
+const typeSum = typeOrder.reduce((s, t) => s + (typeTotals[t] ?? 0), 0) || 1;
+
+function fmtWeekLabel(key: string): string {
+  const d = weekStartDate(key);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' }).format(d).toUpperCase();
+}
+
+const firstWeekLabel = overallWeeks[0] ? fmtWeekLabel(overallWeeks[0]) : '—';
+const lastWeekLabel = overallWeeks[overallWeeks.length - 1] ? fmtWeekLabel(overallWeeks[overallWeeks.length - 1]) : '—';
+
+const typeColors: Record<BlockType, string> = {
+  READ: '#185FA5',
+  NOTE: '#5F5E5A',
+  LINK: '#3B6D11',
+  LISTEN: '#993C1D',
+  WATCH: '#534AB7',
+  VISIT: '#5F5E5A',
+  MINT: '#993556',
+  FAUCET: '#BA7517',
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/timeline',
+  name: 'PointCast · publication cadence',
+  description: `Blocks-per-week over the last ${overallWeeks.length} weeks, per channel, plus type distribution. ${blocks.length} blocks since ${firstWeekLabel}.`,
+  url: 'https://pointcast.xyz/timeline',
+};
+---
+
+<BlockLayout
+  title="Timeline"
+  description={`Publication cadence for PointCast. ${blocks.length} blocks across ${Object.keys(channelTotals).length} channels, ${firstWeekLabel} → ${lastWeekLabel}.`}
+  image="/images/og/timeline.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/timeline.json', title: 'Timeline (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>timeline</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">TIMELINE · PUBLICATION CADENCE</p>
+      <h1 class="display">The shape of the broadcast.</h1>
+      <p class="dek">
+        {blocks.length} blocks across {Object.keys(channelTotals).length} channels since {firstWeekLabel}. Every bar is one ISO week,
+        height proportional to blocks published that week. All computed at
+        build time from the blocks collection — no telemetry, no analytics.
+      </p>
+    </header>
+
+    {/* ═════ OVERALL CADENCE ═════ */}
+    <section class="panel">
+      <div class="panel__head">
+        <p class="section-kicker">OVERALL · LAST {overallWeeks.length} WEEKS</p>
+        <p class="section-note">{firstWeekLabel} → {lastWeekLabel} · peak {overallMax} blocks in a week</p>
+      </div>
+      <svg class="chart chart--overall" viewBox={`0 0 ${overallWeeks.length * 24} 120`} preserveAspectRatio="none" role="img" aria-label="Blocks per week, last 24 weeks">
+        {overallWeeks.map((wk, i) => {
+          const count = weekTotals[wk] ?? 0;
+          const h = count > 0 ? Math.max(3, (count / overallMax) * 100) : 0;
+          return (
+            <g>
+              <rect
+                x={i * 24 + 2}
+                y={110 - h}
+                width="20"
+                height={h || 2}
+                fill={count > 0 ? '#12110E' : '#E5E3DE'}
+                opacity={count > 0 ? 0.9 : 0.5}
+              >
+                <title>{wk} · {count} block{count === 1 ? '' : 's'}</title>
+              </rect>
+              <text
+                x={i * 24 + 12}
+                y={118}
+                text-anchor="middle"
+                font-family="JetBrains Mono, monospace"
+                font-size="7"
+                fill="#5F5E5A"
+              >{i % 4 === 0 ? fmtWeekLabel(wk).slice(0, 3) : ''}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </section>
+
+    {/* ═════ PER-CHANNEL SPARKLINES ═════ */}
+    <section class="panel">
+      <div class="panel__head">
+        <p class="section-kicker">PER CHANNEL · LAST {sparkWeeks.length} WEEKS</p>
+        <p class="section-note">Same y-scale across channels — tallest bar = {sparkMax} block{sparkMax === 1 ? '' : 's'} in a week. Hover a bar for the count.</p>
+      </div>
+      <div class="sparklines">
+        {CHANNEL_LIST.map((ch) => {
+          const total = channelTotals[ch.code] ?? 0;
+          return (
+            <a class="spark" href={`/c/${ch.slug}`} style={`--ch-c: ${ch.color600}; --ch-c50: ${ch.color50}; --ch-c8: ${ch.color800}`}>
+              <div class="spark__head">
+                <span class="spark__code mono">CH.{ch.code}</span>
+                <span class="spark__count mono">{total} total</span>
+              </div>
+              <svg class="spark__svg" viewBox={`0 0 ${sparkWeeks.length * 10} 38`} preserveAspectRatio="none" role="img" aria-label={`${ch.name} — blocks per week for the last ${sparkWeeks.length} weeks`}>
+                {sparkWeeks.map((wk, i) => {
+                  const count = grid[wk]?.[ch.code] ?? 0;
+                  const h = count > 0 ? Math.max(3, (count / sparkMax) * 32) : 0;
+                  return (
+                    <rect
+                      x={i * 10 + 1}
+                      y={36 - h}
+                      width="8"
+                      height={h || 1.5}
+                      fill={count > 0 ? ch.color600 : '#E5E3DE'}
+                      opacity={count > 0 ? 1 : 0.6}
+                    >
+                      <title>{wk} · {count} {count === 1 ? 'block' : 'blocks'}</title>
+                    </rect>
+                  );
+                })}
+              </svg>
+              <p class="spark__name">{ch.name}</p>
+            </a>
+          );
+        })}
+      </div>
+    </section>
+
+    {/* ═════ HEATMAP ═════ */}
+    <section class="panel">
+      <div class="panel__head">
+        <p class="section-kicker">HEATMAP · WEEKS × CHANNELS</p>
+        <p class="section-note">{sparkWeeks.length}-week window. Cell intensity = fraction of the channel's busiest week. Empty cells are silent weeks.</p>
+      </div>
+      <div class="heatmap">
+        <div class="heatmap__rows">
+          {CHANNEL_LIST.map((ch) => (
+            <div class="heatmap__row">
+              <span class="heatmap__label mono" style={`color: ${ch.color800}`}>CH.{ch.code}</span>
+              <div class="heatmap__cells">
+                {sparkWeeks.map((wk) => {
+                  const count = grid[wk]?.[ch.code] ?? 0;
+                  const intensity = heatmapMaxPerCell > 0 ? count / heatmapMaxPerCell : 0;
+                  const bg = count > 0
+                    ? `color-mix(in oklab, ${ch.color600} ${Math.max(10, intensity * 100)}%, #fff)`
+                    : '#fafaf8';
+                  return (
+                    <span class="cell" style={`background: ${bg}`} title={`${wk} · CH.${ch.code} · ${count} block${count === 1 ? '' : 's'}`}>
+                      {count > 0 ? count : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div class="heatmap__legend">
+          <span class="mono">WEEK →</span>
+          <span class="heatmap__week-labels">
+            {sparkWeeks.map((wk, i) => (
+              <span class="heatmap__week-label mono">{i % 2 === 0 ? fmtWeekLabel(wk).split(' ')[1] : ''}</span>
+            ))}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    {/* ═════ TYPE DISTRIBUTION ═════ */}
+    <section class="panel">
+      <div class="panel__head">
+        <p class="section-kicker">TYPE DISTRIBUTION · ALL TIME</p>
+        <p class="section-note">What form do PointCast blocks take? {blocks.length} total.</p>
+      </div>
+      <div class="types-bar" role="img" aria-label="Stacked bar showing block counts by type">
+        {typeOrder.map((t) => {
+          const count = typeTotals[t] ?? 0;
+          const pct = (count / typeSum) * 100;
+          if (count === 0) return null;
+          return (
+            <span class="types-bar__seg" style={`width: ${pct}%; background: ${typeColors[t]}`} title={`${t} · ${count} block${count === 1 ? '' : 's'} · ${pct.toFixed(1)}%`}>
+              {pct > 8 && <span class="types-bar__label mono">{t}</span>}
+            </span>
+          );
+        })}
+      </div>
+      <dl class="types-legend">
+        {typeOrder.map((t) => {
+          const count = typeTotals[t] ?? 0;
+          if (count === 0) return null;
+          const pct = (count / typeSum) * 100;
+          return (
+            <div class="types-legend__item">
+              <span class="types-legend__swatch" style={`background: ${typeColors[t]}`}></span>
+              <dt class="mono">{t}</dt>
+              <dd>{count} · {pct.toFixed(0)}%</dd>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
+
+    <aside class="surfaces">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="surfaces__list">
+        <li><a href="/timeline.json"><span class="mono">GET</span> /timeline.json</a></li>
+        <li><a href="/archive.json"><span class="mono">GET</span> /archive.json</a></li>
+        <li><a href="/feed.json"><span class="mono">GET</span> /feed.json</a></li>
+        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* HERO */
+  .hero {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.2rem, 9vw, 4rem);
+    font-weight: 500;
+    line-height: 0.96;
+    letter-spacing: -0.018em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 62ch;
+  }
+
+  /* PANEL (shared section container) */
+  .panel {
+    margin-bottom: 24px;
+    padding: 16px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .panel__head {
+    margin-bottom: 12px;
+  }
+
+  .section-kicker {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+  }
+
+  .section-note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink-muted);
+    line-height: 1.45;
+  }
+
+  /* OVERALL CHART */
+  .chart--overall {
+    width: 100%;
+    height: 130px;
+    display: block;
+  }
+
+  /* SPARKLINES */
+  .sparklines {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  .spark {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    transition: border-color 0.12s, background-color 0.12s;
+  }
+
+  .spark:hover {
+    border-color: var(--ch-c);
+    background: var(--ch-c50);
+    text-decoration: none;
+  }
+
+  .spark__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .spark__code {
+    color: var(--ch-c8);
+  }
+
+  .spark__count {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .spark__svg {
+    width: 100%;
+    height: 42px;
+    display: block;
+  }
+
+  .spark__name {
+    margin: 0;
+    font-size: 12px;
+    color: var(--pc-ink-soft);
+  }
+
+  /* HEATMAP */
+  .heatmap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .heatmap__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 560px;
+  }
+
+  .heatmap__row {
+    display: grid;
+    grid-template-columns: 58px 1fr;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .heatmap__label {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+  }
+
+  .heatmap__cells {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 12), 1fr);
+    gap: 2px;
+  }
+
+  .heatmap__row .heatmap__cells {
+    --cols: 12;
+  }
+
+  .cell {
+    min-width: 24px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    color: var(--pc-ink);
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 2px;
+    font-weight: 500;
+  }
+
+  .heatmap__legend {
+    display: grid;
+    grid-template-columns: 58px 1fr;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+    min-width: 560px;
+  }
+
+  .heatmap__legend > span:first-child {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .heatmap__week-labels {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 2px;
+  }
+
+  .heatmap__week-label {
+    color: var(--pc-ink-muted);
+    font-size: 8.5px;
+    text-align: center;
+    letter-spacing: 0.1em;
+  }
+
+  /* TYPES */
+  .types-bar {
+    display: flex;
+    height: 36px;
+    width: 100%;
+    border: 1px solid var(--pc-ink);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .types-bar__seg {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .types-bar__label {
+    color: #fff;
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    font-weight: 500;
+  }
+
+  .types-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 6px 16px;
+    margin: 0;
+  }
+
+  .types-legend__item {
+    display: grid;
+    grid-template-columns: 12px auto 1fr;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .types-legend__swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  .types-legend dt {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+  }
+
+  .types-legend dd {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    color: var(--pc-ink);
+    letter-spacing: 0.08em;
+  }
+
+  /* SURFACES */
+  .surfaces {
+    margin-top: 28px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 36px;
+  }
+
+  @media (min-width: 720px) {
+    .surfaces__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>

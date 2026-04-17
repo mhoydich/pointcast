@@ -51,6 +51,7 @@ export const GET: APIRoute = async () => {
         battle: 'https://pointcast.xyz/battle',
         now: 'https://pointcast.xyz/now',
         search: 'https://pointcast.xyz/search',
+        timeline: 'https://pointcast.xyz/timeline',
         status: 'https://pointcast.xyz/status',
         forAgents: 'https://pointcast.xyz/for-agents',
       },
@@ -62,6 +63,12 @@ export const GET: APIRoute = async () => {
         now: 'https://pointcast.xyz/now.json',
         cast: 'https://pointcast.xyz/cast.json',
         battle: 'https://pointcast.xyz/battle.json',
+        timeline: 'https://pointcast.xyz/timeline.json',
+        feed: 'https://pointcast.xyz/feed.json',
+      },
+      rss: {
+        all: 'https://pointcast.xyz/feed.xml',
+        postsOnly: 'https://pointcast.xyz/rss.xml',
       },
       perBlock: {
         html: 'https://pointcast.xyz/b/{id}',

@@ -272,6 +272,19 @@ const PAGES = [
     glyphSize: 260,
     siblings: ['/archive', '/blocks.json'],
   },
+  {
+    slug: 'timeline',
+    url: '/timeline',
+    kind: 'cadence',
+    kicker: 'TIMELINE · CADENCE',
+    title: 'The shape of the broadcast.',
+    dek: 'Blocks-per-week per channel, heatmap, type distribution. Build-time computed.',
+    color600: '#12110E',
+    color800: '#12110E',
+    glyph: '▌▌',
+    glyphSize: 200,
+    siblings: ['/timeline.json', '/archive', '/for-agents'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
