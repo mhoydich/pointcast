@@ -1,0 +1,614 @@
+---
+/**
+ * /archive — the chronological index of every PointCast Block.
+ *
+ * The homepage is the living feed — fast, editorial, curated. This is the
+ * complete archive: every block ever published, in reverse chronological
+ * order, with channel + type filters. Dense, scannable, agent-friendly.
+ *
+ * Not meant to compete with the homepage for discovery — meant to be the
+ * reference page agents cite and humans bookmark when looking for a
+ * specific dispatch or edition.
+ *
+ * Sibling endpoints:
+ *   - /archive.json — same data, machine-readable
+ *   - /blocks.json — the existing full archive with body content
+ *   - /c/{slug}   — per-channel subset
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS, CHANNEL_LIST } from '../lib/channels';
+import { BLOCK_TYPE_LIST } from '../lib/block-types';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+// Count totals per channel + type for chip badges
+const channelCounts: Record<string, number> = {};
+const typeCounts: Record<string, number> = {};
+for (const b of blocks) {
+  channelCounts[b.data.channel] = (channelCounts[b.data.channel] ?? 0) + 1;
+  typeCounts[b.data.type] = (typeCounts[b.data.type] ?? 0) + 1;
+}
+
+// Bucket blocks by year/month for visual grouping. The archive is
+// rendered as a single stream but we insert a month divider row when
+// the month changes between entries.
+interface Row {
+  kind: 'divider' | 'block';
+  month?: string; // "Apr 2026"
+  block?: typeof blocks[number];
+}
+
+const rows: Row[] = [];
+let currentMonthKey = '';
+for (const b of blocks) {
+  const d = b.data.timestamp;
+  const mk = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+  if (mk !== currentMonthKey) {
+    currentMonthKey = mk;
+    const monthLabel = new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(d).toUpperCase();
+    rows.push({ kind: 'divider', month: monthLabel });
+  }
+  rows.push({ kind: 'block', block: b });
+}
+
+const firstYear = blocks.length > 0 ? blocks[blocks.length - 1].data.timestamp.getUTCFullYear() : new Date().getUTCFullYear();
+const latestYear = blocks.length > 0 ? blocks[0].data.timestamp.getUTCFullYear() : new Date().getUTCFullYear();
+const yearRange = firstYear === latestYear ? `${firstYear}` : `${firstYear}–${latestYear}`;
+
+function formatDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(d).toUpperCase();
+}
+
+function formatDay(d: Date): string {
+  return String(d.getUTCDate()).padStart(2, '0');
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/archive',
+  name: `PointCast archive · ${blocks.length} blocks`,
+  description: `Chronological index of every PointCast block, ${yearRange}.`,
+  url: 'https://pointcast.xyz/archive',
+  hasPart: blocks.slice(0, 50).map((b) => ({
+    '@type': 'CreativeWork',
+    name: b.data.title,
+    datePublished: b.data.timestamp.toISOString(),
+    url: `https://pointcast.xyz/b/${b.data.id}`,
+    identifier: b.data.id,
+  })),
+};
+---
+
+<BlockLayout
+  title="Archive"
+  description={`Chronological index of every PointCast block. ${blocks.length} blocks across ${Object.keys(channelCounts).length} channels, ${yearRange}.`}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/archive.json', title: 'Archive (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>archive</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">ARCHIVE · {blocks.length} BLOCKS · {yearRange}</p>
+      <h1 class="display">Every block, chronologically.</h1>
+      <p class="dek">
+        The homepage is the living feed. This is the record. Every block
+        ever published, reverse-chronological, with channel and type filters.
+        The archive mirror is at <a href="/archive.json">/archive.json</a>.
+      </p>
+    </header>
+
+    <section class="filters" aria-label="Filters">
+      <div class="filter-row">
+        <p class="filter-row__label">CHANNEL</p>
+        <div class="chips" data-filter-group="channel">
+          <button type="button" class="chip chip--active" data-filter="all" data-group="channel">
+            ALL <span class="chip__count">{blocks.length}</span>
+          </button>
+          {CHANNEL_LIST.filter((c) => (channelCounts[c.code] ?? 0) > 0).map((c) => (
+            <button type="button" class="chip" data-filter={c.code} data-group="channel" style={`--chip-c: ${c.color600}; --chip-c8: ${c.color800}; --chip-c50: ${c.color50};`}>
+              CH.{c.code} · {c.name} <span class="chip__count">{channelCounts[c.code] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <p class="filter-row__label">TYPE</p>
+        <div class="chips" data-filter-group="type">
+          <button type="button" class="chip chip--active" data-filter="all" data-group="type">
+            ALL <span class="chip__count">{blocks.length}</span>
+          </button>
+          {BLOCK_TYPE_LIST.filter((t) => (typeCounts[t.code] ?? 0) > 0).map((t) => (
+            <button type="button" class="chip" data-filter={t.code} data-group="type">
+              {t.label} <span class="chip__count">{typeCounts[t.code] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <p class="filter-row__label">SEARCH</p>
+        <input
+          type="search"
+          class="search"
+          id="archive-search"
+          placeholder="Title, channel, number…"
+          aria-label="Search archive"
+        />
+      </div>
+    </section>
+
+    <section class="stream" id="archive-stream" aria-label="Archive">
+      {rows.map((row) => {
+        if (row.kind === 'divider') {
+          return (
+            <div class="divider" data-row="divider">
+              <span class="divider__month">{row.month}</span>
+              <span class="divider__rule" aria-hidden="true"></span>
+            </div>
+          );
+        }
+        const b = row.block!;
+        const ch = CHANNELS[b.data.channel];
+        const d = b.data.timestamp;
+        const isReadOrPost = b.data.type === 'READ' && (b.data as any).slug;
+        const href = isReadOrPost ? `/posts/${(b.data as any).slug}` : `/b/${b.data.id}`;
+        return (
+          <a
+            class="row"
+            href={href}
+            data-row="block"
+            data-channel={b.data.channel}
+            data-type={b.data.type}
+            data-search={`${b.data.title} ${b.data.id} ${ch.code} ${b.data.type} ${ch.name}`.toLowerCase()}
+            style={`--row-c: ${ch.color600}; --row-c8: ${ch.color800}; --row-c50: ${ch.color50};`}
+          >
+            <span class="row__date mono" aria-label={d.toISOString()}>
+              <span class="row__day">{formatDay(d)}</span>
+              <span class="row__month">{formatDate(d).split(' ')[0]}</span>
+            </span>
+            <span class="row__id mono">№{b.data.id}</span>
+            <span class="row__ch">CH.{ch.code}</span>
+            <span class="row__type mono">{b.data.type}</span>
+            <span class="row__title">{b.data.title}</span>
+            {b.data.dek && <span class="row__dek">{b.data.dek}</span>}
+          </a>
+        );
+      })}
+    </section>
+
+    <aside class="agent-strip">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="agent-strip__list">
+        <li><a href="/archive.json"><span class="mono">GET</span> /archive.json</a></li>
+        <li><a href="/blocks.json"><span class="mono">GET</span> /blocks.json</a></li>
+        <li><a href="/sitemap-blocks.xml"><span class="mono">GET</span> /sitemap-blocks.xml</a></li>
+        <li><a href="/rss.xml"><span class="mono">RSS</span> /rss.xml</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <script is:inline>
+    // Two-axis filtering: channel ∩ type ∩ search. Hidden rows get
+    // display:none; month dividers are hidden if no visible blocks
+    // follow them (until the next divider).
+    (function () {
+      var stream = document.getElementById('archive-stream');
+      var search = document.getElementById('archive-search');
+      if (!stream || !search) return;
+
+      var state = { channel: 'all', type: 'all', q: '' };
+      var rows = Array.prototype.slice.call(stream.querySelectorAll('[data-row]'));
+      var chips = document.querySelectorAll('[data-group]');
+
+      function apply() {
+        var q = state.q.trim().toLowerCase();
+        var lastDividerEl = null;
+        var lastDividerHasVisible = false;
+
+        rows.forEach(function (r) {
+          if (r.dataset.row === 'divider') {
+            if (lastDividerEl) {
+              lastDividerEl.style.display = lastDividerHasVisible ? '' : 'none';
+            }
+            lastDividerEl = r;
+            lastDividerHasVisible = false;
+            return;
+          }
+          var matchCh = state.channel === 'all' || r.dataset.channel === state.channel;
+          var matchTy = state.type === 'all' || r.dataset.type === state.type;
+          var matchQ = !q || (r.dataset.search || '').indexOf(q) !== -1;
+          var show = matchCh && matchTy && matchQ;
+          r.style.display = show ? '' : 'none';
+          if (show) lastDividerHasVisible = true;
+        });
+
+        if (lastDividerEl) {
+          lastDividerEl.style.display = lastDividerHasVisible ? '' : 'none';
+        }
+      }
+
+      chips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          var group = chip.dataset.group;
+          var siblings = document.querySelectorAll('[data-group="' + group + '"]');
+          siblings.forEach(function (s) { s.classList.remove('chip--active'); });
+          chip.classList.add('chip--active');
+          state[group] = chip.dataset.filter;
+          apply();
+        });
+      });
+
+      search.addEventListener('input', function () {
+        state.q = search.value || '';
+        apply();
+      });
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2rem, 8vw, 3.4rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.018em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 54ch;
+  }
+
+  .dek a { color: var(--pc-accent); }
+
+  /* ══════════ FILTERS ══════════ */
+  .filters {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .filter-row {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .filter-row__label {
+    margin: 0;
+    padding-top: 5px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border: 1px solid var(--chip-c, var(--pc-rule));
+    background: #fff;
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--chip-c8, var(--pc-ink-soft));
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.12s;
+    line-height: 1.1;
+  }
+
+  .chip:hover {
+    background: var(--chip-c50, #f0eee8);
+  }
+
+  .chip--active {
+    background: var(--chip-c, var(--pc-ink));
+    border-color: var(--chip-c, var(--pc-ink));
+    color: #fff;
+  }
+
+  .chip__count {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    opacity: 0.65;
+  }
+
+  .chip--active .chip__count {
+    opacity: 0.82;
+    color: #fff;
+  }
+
+  .search {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    font-family: var(--pc-font-sans);
+    font-size: 13.5px;
+    color: var(--pc-ink);
+    background: #fff;
+  }
+
+  .search:focus {
+    outline: 2px solid rgba(24, 95, 165, 0.18);
+    border-color: var(--pc-accent);
+  }
+
+  /* ══════════ STREAM ══════════ */
+  .stream {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .divider {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: center;
+    margin: 22px 0 8px;
+  }
+
+  .divider:first-child {
+    margin-top: 4px;
+  }
+
+  .divider__month {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+  }
+
+  .divider__rule {
+    height: 1.5px;
+    background: var(--pc-ink);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 54px 68px 58px 54px 1fr;
+    grid-template-areas:
+      "date id ch type title"
+      ". . . . dek";
+    gap: 6px 12px;
+    padding: 10px 4px;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+    color: var(--pc-ink);
+    text-decoration: none;
+    transition: background-color 0.1s, padding-left 0.12s;
+  }
+
+  .row:hover {
+    background: var(--row-c50, #fafaf8);
+    border-bottom-color: var(--row-c, var(--pc-rule));
+    padding-left: 8px;
+    text-decoration: none;
+  }
+
+  .row__date {
+    grid-area: date;
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+    color: var(--pc-ink-muted);
+    gap: 2px;
+  }
+
+  .row__day {
+    font-family: var(--pc-font-mono);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    letter-spacing: 0;
+  }
+
+  .row__month {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted);
+  }
+
+  .row__id {
+    grid-area: id;
+    align-self: center;
+    color: var(--pc-ink-muted);
+    font-size: 10.5px;
+  }
+
+  .row__ch {
+    grid-area: ch;
+    align-self: center;
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid var(--row-c);
+    background: var(--row-c50);
+    color: var(--row-c8);
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    border-radius: 2px;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .row__type {
+    grid-area: type;
+    align-self: center;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .row__title {
+    grid-area: title;
+    align-self: center;
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--pc-ink);
+  }
+
+  .row:hover .row__title {
+    color: var(--row-c8, var(--pc-accent));
+  }
+
+  .row__dek {
+    grid-area: dek;
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+
+  /* ══════════ AGENT STRIP ══════════ */
+  .agent-strip {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .agent-strip__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .agent-strip__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .agent-strip__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 36px;
+  }
+
+  /* ══════════ RESPONSIVE ══════════ */
+  @media (min-width: 720px) {
+    .filter-row {
+      grid-template-columns: 80px 1fr;
+    }
+
+    .row {
+      grid-template-columns: 64px 72px 82px 54px 1fr;
+      grid-template-areas: "date id ch type title";
+      gap: 6px 14px;
+    }
+
+    .row__dek {
+      display: none;
+    }
+
+    .agent-strip__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .row {
+      grid-template-columns: 40px 1fr auto;
+      grid-template-areas:
+        "date title type"
+        "date dek dek"
+        "date ch id";
+      row-gap: 4px;
+    }
+
+    .row__day {
+      font-size: 18px;
+    }
+
+    .row__id {
+      font-size: 9.5px;
+    }
+  }
+</style>
