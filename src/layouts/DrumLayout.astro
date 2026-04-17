@@ -1,0 +1,197 @@
+---
+/**
+ * DrumLayout — hybrid layout for /drum specifically.
+ *
+ * /drum is a 71KB interactive page built against v1's Tailwind + warm
+ * palette (src/styles/global.css). We want it to read as v2 (white bg,
+ * self-hosted Inter + JetBrains Mono, no sticky v1 chrome) without
+ * rewriting the page's internal CSS wholesale — that's a larger
+ * follow-on task.
+ *
+ * This layout:
+ *   - Imports src/styles/global.css so Tailwind utilities work (bg-card,
+ *     text-warm, border-rule, hidden, etc. — all the classes /drum uses)
+ *   - Imports self-hosted Inter + JetBrains Mono like BlockLayout does
+ *   - Declares the v2 --pc-* tokens + forces body bg white, overriding
+ *     global.css's `body { background: var(--color-paper) }` via
+ *     higher-specificity selector (html:root body) and later cascade
+ *   - Injects the WalletChip into the top-right of the header strip so
+ *     the drum room has the same connect affordance as the home page
+ *   - Skips BaseLayout's v1 Footer — /drum is a lobby, not a page
+ *     deserving of site footer chrome
+ *
+ * Not generalizing this layout — it's specifically for pages that need
+ * both Tailwind utilities AND v2 shell. If another page wants the same
+ * treatment, promote to a shared helper.
+ */
+import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/global.css';
+import WalletChip from '../components/WalletChip.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  jsonLd?: Record<string, unknown> | null;
+}
+
+const {
+  title,
+  description = 'Multiplayer drum room on pointcast.xyz. Tap rhythms, chain combos, hear everyone else in real time. DRUM tokens on Tezos soon.',
+  image = '/images/og-drum.png',
+  jsonLd,
+} = Astro.props;
+
+const siteBase = Astro.site || new URL('https://pointcast.xyz');
+const canonicalURL = new URL(Astro.url.pathname, siteBase);
+const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
+const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} — PointCast`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <meta property="og:title" content={siteTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PointCast" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={siteTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:site" content="@mhoydich" />
+
+    {jsonLd && <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />}
+
+    <title>{siteTitle}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body class="drum-body">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+
+    <header class="drum-header">
+      <nav class="drum-header__inner">
+        <a href="/" class="drum-header__wordmark" aria-label="PointCast home">POINTCAST</a>
+        <span class="drum-header__sep" aria-hidden="true">·</span>
+        <a href="/drum" class="drum-header__kicker">CH.SPN · DRUM ROOM</a>
+        <span class="drum-header__spacer" aria-hidden="true"></span>
+        <WalletChip />
+      </nav>
+    </header>
+
+    <main id="main-content" role="main">
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  /* v2 tokens, same as BlockLayout — scoped globally so /drum's internal
+     classes can reference them alongside Tailwind utilities. Defined
+     after global.css so they win cascade for the handful of elements
+     we want to force v2-colored. */
+  :root {
+    --pc-bg: #ffffff;
+    --pc-ink: #12110E;
+    --pc-ink-soft: #38373A;
+    --pc-ink-muted: #5F5E5A;
+    --pc-rule: #C4C2BC;
+    --pc-rule-soft: #E5E3DE;
+    --pc-accent: #185FA5;
+    --pc-font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --pc-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  /* Force v2 white body background on /drum. global.css's @layer base
+     sets body { background: var(--color-paper) } (warm cream) — we
+     override here via higher-specificity body.drum-body selector. Same
+     pattern for text: use v2 ink color not warm ink-soft. */
+  html body.drum-body {
+    background: var(--pc-bg);
+    color: var(--pc-ink);
+    font-family: var(--pc-font-sans);
+    font-weight: 400;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body.drum-body main { flex: 1; }
+
+  body.drum-body a { color: var(--pc-accent); text-decoration: none; }
+  body.drum-body a:hover { text-decoration: underline; }
+
+  body.drum-body ::selection { background: var(--pc-accent); color: #fff; }
+
+  /* Drum header strip — mirrors the home page masthead in function
+     (wordmark + kicker + WalletChip) but with its own layout. */
+  body.drum-body .drum-header {
+    border-bottom: 1.5px solid var(--pc-ink);
+    padding: 10px 20px;
+    background: var(--pc-bg);
+  }
+  body.drum-body .drum-header__inner {
+    max-width: 1480px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  body.drum-body .drum-header__wordmark {
+    font-family: var(--pc-font-mono);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    color: var(--pc-ink);
+  }
+  body.drum-body .drum-header__wordmark:hover {
+    color: var(--pc-accent);
+    text-decoration: none;
+  }
+  body.drum-body .drum-header__kicker {
+    color: var(--pc-ink-muted);
+    font-weight: 400;
+  }
+  body.drum-body .drum-header__kicker:hover {
+    color: var(--pc-accent);
+    text-decoration: none;
+  }
+  body.drum-body .drum-header__sep { color: var(--pc-rule); }
+  body.drum-body .drum-header__spacer { flex: 1; }
+
+  body.drum-body .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--pc-ink);
+    color: #fff;
+    padding: 8px 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    z-index: 100;
+  }
+  body.drum-body .skip-link:focus { top: 0; }
+</style>

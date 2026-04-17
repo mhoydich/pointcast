@@ -1,0 +1,360 @@
+---
+/**
+ * /profile — visualize every wallet this browser has paired with.
+ *
+ * Reads pc:wallets from localStorage (set by WalletChip). Pulls live
+ * TzKT data for each (balance, NFT count, ops count, last activity).
+ * Shows which is active. Lets the user switch active / remove any.
+ *
+ * All client-side — no server state. "Your profile" is scoped to this
+ * browser + whatever Beacon sessions live in its storage.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfilePage',
+  '@id': 'https://pointcast.xyz/profile',
+  name: 'Your PointCast profile',
+  description: 'Every Tezos wallet this browser has paired with PointCast, with live TzKT balance / NFT / activity data.',
+  url: 'https://pointcast.xyz/profile',
+};
+---
+
+<BlockLayout title="Profile" description="Your connected Tezos wallets, visualized." jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <span>profile</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">PROFILE · WALLETS</p>
+      <h1>Your wallets</h1>
+      <p class="dek" id="profile-dek">
+        Every Tezos wallet you've paired with PointCast in this browser.
+        Live balances + NFT counts pulled from TzKT. Nothing server-side —
+        clear your browser data to clear this list.
+      </p>
+    </header>
+
+    <section id="profile-empty" class="empty" hidden>
+      <p class="empty__title">No wallets connected yet.</p>
+      <p class="empty__body">Connect via the wallet chip in the top-right of the home page. Kukai, Temple, Umami, Airgap — anything on Beacon.</p>
+      <p class="empty__cta"><a href="/">← Back to home</a></p>
+    </section>
+
+    <section id="profile-list" class="list" hidden></section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/for-agents">/for-agents</a></li>
+        <li><a href="/blocks.json">/blocks.json</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script>
+  type Wallet = { chain: 'tezos'; address: string; provider: string; addedAt: number; label?: string };
+
+  const KEY_WALLETS = 'pc:wallets';
+  const KEY_ACTIVE_ADDR = 'pc:wallet-active';
+  const KEY_LEGACY = 'pc:wallet';
+
+  function loadWallets(): Wallet[] {
+    try {
+      const raw = localStorage.getItem(KEY_WALLETS);
+      if (raw) {
+        const list = JSON.parse(raw) as Wallet[];
+        if (Array.isArray(list)) return list;
+      }
+    } catch { /* ignore */ }
+    return [];
+  }
+
+  function activeAddress(): string | null {
+    try { return localStorage.getItem(KEY_ACTIVE_ADDR); } catch { return null; }
+  }
+
+  function saveWallets(list: Wallet[], newActive: string | null) {
+    localStorage.setItem(KEY_WALLETS, JSON.stringify(list));
+    if (newActive) localStorage.setItem(KEY_ACTIVE_ADDR, newActive);
+    else localStorage.removeItem(KEY_ACTIVE_ADDR);
+    const active = list.find((w) => w.address === newActive) ?? null;
+    if (active) localStorage.setItem(KEY_LEGACY, JSON.stringify(active));
+    else localStorage.removeItem(KEY_LEGACY);
+    window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: active }));
+  }
+
+  function short(addr: string) {
+    return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+  }
+
+  const empty = document.getElementById('profile-empty')!;
+  const list = document.getElementById('profile-list')!;
+
+  interface LiveStats { balance: string; nfts: string; ops: string; lastActivity: string; }
+
+  async function fetchStats(addr: string): Promise<LiveStats> {
+    try {
+      const [acc, tokens] = await Promise.all([
+        fetch(`https://api.tzkt.io/v1/accounts/${addr}`),
+        fetch(`https://api.tzkt.io/v1/tokens/balances/count?account=${addr}&balance.gt=0`),
+      ]);
+      const a = acc.ok ? await acc.json() : {};
+      const n = tokens.ok ? (await tokens.text()).trim() : '—';
+      return {
+        balance: ((a.balance ?? 0) / 1_000_000).toFixed(4) + ' ꜩ',
+        nfts: String(n),
+        ops: String(a.numTransactions ?? '—'),
+        lastActivity: a.lastActivity
+          ? new Date(a.lastActivity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : '—',
+      };
+    } catch {
+      return { balance: '—', nfts: '—', ops: '—', lastActivity: '—' };
+    }
+  }
+
+  async function render() {
+    const wallets = loadWallets();
+    const active = activeAddress();
+
+    if (wallets.length === 0) {
+      empty.hidden = false;
+      list.hidden = true;
+      return;
+    }
+    empty.hidden = true;
+    list.hidden = false;
+    list.innerHTML = '';
+
+    // Sort newest-first
+    const sorted = [...wallets].sort((a, b) => b.addedAt - a.addedAt);
+
+    for (const w of sorted) {
+      const isActive = w.address === active || (!active && w === sorted[0]);
+      const addedFmt = new Date(w.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      const card = document.createElement('article');
+      card.className = 'card' + (isActive ? ' card--active' : '');
+      card.innerHTML = `
+        <header class="card__head">
+          <span class="card__tag">${isActive ? 'active' : 'remembered'}</span>
+          <span class="card__provider">${w.provider}</span>
+        </header>
+        <p class="card__addr">${w.address}</p>
+        <div class="card__stats">
+          <div class="card__stat"><span>balance</span><b data-stat="balance">…</b></div>
+          <div class="card__stat"><span>nfts held</span><b data-stat="nfts">…</b></div>
+          <div class="card__stat"><span>total ops</span><b data-stat="ops">…</b></div>
+          <div class="card__stat"><span>last active</span><b data-stat="lastActivity">…</b></div>
+          <div class="card__stat"><span>connected</span><b>${addedFmt}</b></div>
+        </div>
+        <div class="card__actions">
+          <a class="card__tzkt" href="https://tzkt.io/${w.address}" target="_blank" rel="noopener">TzKT ↗</a>
+          <a class="card__tzkt" href="https://objkt.com/profile/${w.address}/owned" target="_blank" rel="noopener">objkt ↗</a>
+          ${isActive ? '' : `<button type="button" class="card__switch" data-action="switch" data-addr="${w.address}">Make active</button>`}
+          <button type="button" class="card__remove" data-action="remove" data-addr="${w.address}">Remove</button>
+        </div>
+      `;
+      list.appendChild(card);
+
+      // Fetch stats (fire-and-forget, fills the — placeholders)
+      fetchStats(w.address).then((stats) => {
+        const q = (k: string) => card.querySelector<HTMLElement>(`[data-stat="${k}"]`);
+        if (q('balance')) q('balance')!.textContent = stats.balance;
+        if (q('nfts')) q('nfts')!.textContent = stats.nfts;
+        if (q('ops')) q('ops')!.textContent = stats.ops;
+        if (q('lastActivity')) q('lastActivity')!.textContent = stats.lastActivity;
+      });
+    }
+
+    // Wire switch / remove buttons
+    list.querySelectorAll<HTMLElement>('[data-action]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const addr = el.dataset.addr!;
+        const action = el.dataset.action!;
+        const current = loadWallets();
+        if (action === 'switch') {
+          saveWallets(current, addr);
+        } else if (action === 'remove') {
+          const next = current.filter((w) => w.address !== addr);
+          const nextActive = activeAddress() === addr
+            ? (next.length > 0 ? next[next.length - 1].address : null)
+            : activeAddress();
+          saveWallets(next, nextActive);
+        }
+        void render();
+      });
+    });
+  }
+
+  window.addEventListener('pc:wallet-change', () => void render());
+  window.addEventListener('storage', (e) => {
+    if (e.key === KEY_WALLETS || e.key === KEY_ACTIVE_ADDR) void render();
+  });
+
+  void render();
+</script>
+
+<style>
+  .page { max-width: 880px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .crumb {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 16px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .head { margin-bottom: 24px; }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 8px;
+  }
+  .head h1 {
+    font-family: var(--pc-font-sans);
+    font-size: 36px; line-height: 1.05; font-weight: 500;
+    margin: 0 0 10px; color: var(--pc-ink);
+  }
+  .dek {
+    font-family: var(--pc-font-sans);
+    font-size: 15.5px; line-height: 1.5;
+    color: var(--pc-ink-soft); margin: 0; max-width: 58ch;
+  }
+
+  .empty {
+    padding: 32px 20px;
+    border: 1px dashed var(--pc-rule);
+    border-radius: 2px;
+    text-align: center;
+    background: #fafafa;
+  }
+  .empty__title {
+    font-family: var(--pc-font-sans);
+    font-size: 18px; font-weight: 500;
+    margin: 0 0 8px;
+    color: var(--pc-ink);
+  }
+  .empty__body {
+    font-family: var(--pc-font-sans);
+    font-size: 14px; line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0 auto 12px; max-width: 44ch;
+  }
+  .empty__cta {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin: 0;
+  }
+  .empty__cta a { color: var(--pc-accent); }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card {
+    padding: 16px 18px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .card--active {
+    border-color: #2F8F5F;
+    box-shadow: 0 0 0 3px rgba(47,143,95,0.08);
+  }
+
+  .card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .card__tag {
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    color: var(--pc-ink-muted);
+  }
+  .card--active .card__tag { color: #2F8F5F; }
+  .card__provider {
+    color: var(--pc-ink-muted);
+  }
+
+  .card__addr {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    color: var(--pc-ink);
+    margin: 0 0 12px;
+    word-break: break-all;
+  }
+
+  .card__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 4px 18px;
+    padding: 10px 0;
+    border-top: 1px dashed var(--pc-rule);
+    border-bottom: 1px dashed var(--pc-rule);
+    margin-bottom: 12px;
+  }
+  .card__stat {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .card__stat span { color: var(--pc-ink-muted); }
+  .card__stat b { display: block; font-weight: 500; color: var(--pc-ink); letter-spacing: 0; font-size: 13px; text-transform: none; }
+
+  .card__actions {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .card__tzkt { color: var(--pc-accent); }
+  .card__switch,
+  .card__remove {
+    padding: 5px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+  .card__switch:hover {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+  .card__remove {
+    border-color: #A33;
+    color: #A33;
+  }
+  .card__remove:hover {
+    background: #A33;
+    color: #fff;
+  }
+
+  .agent-strip {
+    margin-top: 32px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--pc-rule);
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .agent-strip__label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
+  .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+</style>
