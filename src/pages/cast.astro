@@ -18,6 +18,7 @@ const snapshot = await getPrizeCastSnapshot();
 const pending = prizeCastKt1 === '';
 const tzktUrl = getPrizeCastTzktUrl(prizeCastKt1) ?? (visitNounsKt1 ? `https://tzkt.io/${visitNounsKt1}` : 'https://tzkt.io');
 const nextDrawDate = new Date(snapshot.nextDrawAt);
+const winners = pending ? [] : snapshot.winners.slice(0, 10);
 
 function formatCountdown(target: Date) {
   const diff = Math.max(0, target.getTime() - Date.now());
@@ -25,7 +26,7 @@ function formatCountdown(target: Date) {
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
-  return `${days}d ${hours}h ${minutes}m`;
+  return { days, hours, minutes };
 }
 
 function formatUtcLabel(date: Date) {
@@ -40,25 +41,52 @@ function formatUtcLabel(date: Date) {
   }).format(date).replace(',', '');
 }
 
+function dayOfWeekMarker(offset: number) {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset));
+  // 0 Sun ... 6 Sat, in UTC
+  return {
+    dow: d.getUTCDay(),
+    label: new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(d).toUpperCase(),
+    isToday: offset === 0,
+    isDrawDay: d.getUTCDay() === 0,
+    dayNum: d.getUTCDate(),
+  };
+}
+
+const rhythmDays = Array.from({ length: 7 }, (_, i) => dayOfWeekMarker(i));
+const cd = formatCountdown(nextDrawDate);
+
+// Status pill text
+const statusText = pending ? 'PENDING ORIGINATION' : snapshot.fetchError ? 'DEGRADED READ' : 'LIVE · SETTLING WEEKLY';
+const statusTone = pending ? 'pending' : snapshot.fetchError ? 'warn' : 'live';
+
 const metrics = [
   {
     label: 'TVL',
-    value: pending ? 'pending origination' : formatTezAmount(snapshot.tvlTez),
-    note: pending ? 'ghostnet smoke test next' : `principal ${formatTezAmount(snapshot.principalTez)}`,
+    value: pending ? '—' : formatTezAmount(snapshot.tvlTez),
+    delta: pending ? 'ꜩ' : `PRINCIPAL ${formatTezAmount(snapshot.principalTez, 2)}`,
+    rank: '01',
   },
   {
-    label: 'Prize Pool',
-    value: pending ? 'pending origination' : formatTezAmount(snapshot.prizePoolTez),
-    note: pending ? 'yield starts after origination' : `yield since ${snapshot.accumulatedSince ? formatUtcLabel(new Date(snapshot.accumulatedSince)) : 'last draw'}`,
+    label: 'PRIZE POOL',
+    value: pending ? '—' : formatTezAmount(snapshot.prizePoolTez),
+    delta: pending ? 'ꜩ' : `YIELD · ${snapshot.accumulatedSince ? 'ACCUMULATING' : 'AWAITING FIRST DRAW'}`,
+    rank: '02',
   },
   {
-    label: 'Next Draw',
-    value: pending ? 'pending origination' : formatCountdown(nextDrawDate),
-    note: `Sunday 18:00 UTC · ${formatUtcLabel(nextDrawDate)}`,
+    label: 'PARTICIPANTS',
+    value: pending ? '—' : String(snapshot.participantCount ?? 0),
+    delta: pending ? 'WALLETS' : 'WALLETS HOLDING TICKETS',
+    rank: '03',
+  },
+  {
+    label: 'NEXT DRAW',
+    value: pending ? '—' : `${cd.days}d ${String(cd.hours).padStart(2, '0')}h ${String(cd.minutes).padStart(2, '0')}m`,
+    delta: `SUN 18:00 UTC · ${formatUtcLabel(nextDrawDate).toUpperCase()}`,
+    rank: '04',
   },
 ];
-
-const winners = pending ? [] : snapshot.winners.slice(0, 10);
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -86,25 +114,24 @@ const jsonLd = {
   alternates={[{ type: 'application/json', href: '/cast.json', title: 'Prize Cast snapshot (JSON)' }]}
 >
   <div class="page">
-    {pending && (
-      <aside class="banner">
-        <p class="banner__label">PENDING ORIGINATION</p>
-        <p>{PRIZE_CAST_PENDING_MESSAGE}. Ghostnet test is next; mainnet address lands here after origination.</p>
-      </aside>
-    )}
-
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a>
-      <span aria-hidden="true">/</span>
+      <span aria-hidden="true">›</span>
       <span>cast</span>
     </nav>
 
     <header class="head">
-      <div>
-        <p class="kicker">CAST · PRIZE POOL</p>
-        <h1>Prize Cast</h1>
+      <div class="head__kicker-row">
+        <p class="kicker">CH.CST · PRIZE CAST · v1</p>
+        <span class={`status status--${statusTone}`}>
+          <span class="status__dot" aria-hidden="true"></span>
+          {statusText}
+        </span>
+      </div>
+      <div class="head__body">
+        <h1 class="display">No-loss prize savings.</h1>
         <p class="dek">
-          Deposit tez into a no-loss prize pool, keep your principal liquid, and let the aggregate baking yield roll into a weekly Sunday draw.
+          Deposit tez. Your principal stays liquid. The aggregate baking yield pools each week, and one participant wins the whole thing every Sunday at 18:00 UTC.
         </p>
       </div>
       <div class="head__rail">
@@ -112,288 +139,847 @@ const jsonLd = {
       </div>
     </header>
 
-    <section class="metrics" aria-label="Prize Cast metrics">
+    <section class="terminal" aria-label="Prize Cast live metrics">
       {metrics.map((item) => (
         <article class="metric">
-          <p class="metric__label">{item.label}</p>
-          <p class="metric__value">{item.value}</p>
-          <p class="metric__note">{item.note}</p>
+          <div class="metric__head">
+            <span class="metric__rank">{item.rank}</span>
+            <span class="metric__label">{item.label}</span>
+          </div>
+          <p class={`metric__value ${pending ? 'metric__value--pending' : ''}`} data-metric={item.label.toLowerCase().replace(/\s+/g, '-')}>{item.value}</p>
+          <p class="metric__delta">{item.delta}</p>
         </article>
       ))}
+    </section>
+
+    <section class="rhythm" aria-label="Weekly draw rhythm">
+      <div class="rhythm__head">
+        <p class="section-kicker">DRAW RHYTHM · 7-DAY</p>
+        <p class="section-note">Sunday 18:00 UTC · the week resets after settlement</p>
+      </div>
+      <div class="rhythm__bar" role="presentation">
+        {rhythmDays.map((day) => (
+          <div class={`cell ${day.isToday ? 'cell--today' : ''} ${day.isDrawDay ? 'cell--draw' : ''}`}>
+            <span class="cell__day">{day.label.slice(0, 1)}</span>
+            <span class="cell__num">{day.dayNum}</span>
+            {day.isDrawDay && <span class="cell__mark">DRAW</span>}
+            {day.isToday && !day.isDrawDay && <span class="cell__mark">NOW</span>}
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="mech" aria-label="How Prize Cast works">
+      <div class="mech__head">
+        <p class="section-kicker">MECHANISM · HOW IT WORKS</p>
+      </div>
+      <ol class="mech__steps">
+        <li class="step">
+          <span class="step__num">01</span>
+          <div class="step__body">
+            <h3 class="step__title">Deposit</h3>
+            <p class="step__note">Send tez to the pool via Beacon. You receive tickets proportional to your stake. Min deposit {pending ? '1.00' : (snapshot.minDepositMutez ? (snapshot.minDepositMutez / 1_000_000).toFixed(2) : '1.00')} ꜩ.</p>
+          </div>
+        </li>
+        <li class="step">
+          <span class="step__num">02</span>
+          <div class="step__body">
+            <h3 class="step__title">Stake</h3>
+            <p class="step__note">The pool contract stakes with a Tezos baker. Principal is never at risk — the baker earns ~5% APY, which the contract collects.</p>
+          </div>
+        </li>
+        <li class="step">
+          <span class="step__num">03</span>
+          <div class="step__body">
+            <h3 class="step__title">Accrue</h3>
+            <p class="step__note">Each week, the aggregate baking reward accumulates in the prize pool. Everyone's principal stays liquid and withdrawable at any moment.</p>
+          </div>
+        </li>
+        <li class="step">
+          <span class="step__num">04</span>
+          <div class="step__body">
+            <h3 class="step__title">Draw</h3>
+            <p class="step__note">Sunday 18:00 UTC, anyone can call <code>draw()</code>. On-chain randomness picks one ticket. Prize pool empties into that wallet.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="panel-wrap" aria-label="Deposit / withdraw">
+      {pending && (
+        <div class="pending-band">
+          <p class="pending-band__label">DEPOSIT DESK · OFFLINE</p>
+          <p class="pending-band__note">{PRIZE_CAST_PENDING_MESSAGE}. The smoke test is next; this panel goes live the moment the mainnet KT1 lands in <code>contracts.json</code>.</p>
+        </div>
+      )}
+      <PrizeCastPanel contract={prizeCastKt1} minDepositMutez={snapshot.minDepositMutez} />
     </section>
 
     {!pending && snapshot.fetchError && (
       <div class="error">
         <p class="error__label">DEGRADED READ</p>
-        <p>{snapshot.fetchError}. Rebuild to refresh or verify the contract directly on <a href={tzktUrl} target="_blank" rel="noopener">TzKT</a>.</p>
+        <p>{snapshot.fetchError}. Verify the contract directly on <a href={tzktUrl} target="_blank" rel="noopener">TzKT</a>.</p>
       </div>
     )}
 
-    <section class="panel-wrap">
-      <PrizeCastPanel contract={prizeCastKt1} minDepositMutez={snapshot.minDepositMutez} />
-    </section>
-
-    <section class="winners">
+    <section class="winners" aria-label="Past winners">
       <div class="section-head">
-        <p class="section-head__kicker">LAST 10</p>
-        <h2>Past winners</h2>
+        <p class="section-kicker">PAST WINNERS · LAST 10</p>
+        <p class="section-note">Every settled draw ends up here as a receipt. On-chain, permanent, linkable.</p>
       </div>
 
       {pending ? (
-        <div class="empty">
-          <p>{PRIZE_CAST_FIRST_DRAW_PLACEHOLDER}</p>
+        <div class="receipt receipt--placeholder">
+          <div class="receipt__head mono">
+            <span>TICKET</span>
+            <span>WINNER</span>
+            <span>PRIZE</span>
+            <span>BLOCK</span>
+          </div>
+          <div class="receipt__empty">
+            <p>{PRIZE_CAST_FIRST_DRAW_PLACEHOLDER}</p>
+            <p class="receipt__empty-sub">No prize has been cast yet. Come back after Sunday 18:00 UTC following the ghostnet smoke test.</p>
+          </div>
         </div>
       ) : winners.length > 0 ? (
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>tokenId</th>
-                <th>winner</th>
-                <th>prize</th>
-                <th>block</th>
-              </tr>
-            </thead>
-            <tbody>
-              {winners.map((winner) => (
-                <tr>
-                  <td>#{winner.round}</td>
-                  <td>{shortTezosAddress(winner.winner)}</td>
-                  <td>{formatTezAmount(winner.prizeTez)}</td>
-                  <td>{winner.block ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div class="receipt">
+          <div class="receipt__head mono">
+            <span>TICKET</span>
+            <span>WINNER</span>
+            <span>PRIZE</span>
+            <span>BLOCK</span>
+          </div>
+          {winners.map((winner, idx) => (
+            <div class={`receipt__row ${idx === 0 ? 'receipt__row--latest' : ''}`}>
+              <span class="receipt__cell mono">#{String(winner.round).padStart(4, '0')}</span>
+              <span class="receipt__cell">
+                {winner.caller ? (
+                  <a href={`https://tzkt.io/${winner.winner}`} target="_blank" rel="noopener">{shortTezosAddress(winner.winner)}</a>
+                ) : shortTezosAddress(winner.winner)}
+                {idx === 0 && <span class="latest-tag mono">LATEST</span>}
+              </span>
+              <span class="receipt__cell receipt__cell--prize">{formatTezAmount(winner.prizeTez)}</span>
+              <span class="receipt__cell mono">{winner.block ?? '—'}</span>
+            </div>
+          ))}
         </div>
       ) : (
-        <div class="empty">
-          <p>No draw data yet. First settled draw will appear here after the contract originates and the first Sunday closes.</p>
+        <div class="receipt receipt--placeholder">
+          <p>No draw data yet. The first settled draw will land here.</p>
         </div>
       )}
     </section>
 
     <aside class="agent-strip">
-      <p class="agent-strip__label">AGENT SURFACES</p>
-      <ul>
-        <li><a href="/cast.json">/cast.json</a></li>
-        <li><a href="/for-agents">/for-agents</a></li>
-        <li><a href={tzktUrl} target="_blank" rel="noopener">TzKT ↗</a></li>
-        <li><a href="/docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md">design doc</a></li>
+      <div class="agent-strip__head">
+        <p class="section-kicker">AGENT SURFACES</p>
+        <p class="section-note">This page exists in three registers — HTML, JSON, structured. Pick your reader.</p>
+      </div>
+      <ul class="agent-strip__list">
+        <li><a href="/cast.json"><span class="mono">GET</span> /cast.json</a></li>
+        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
+        <li><a href={tzktUrl} target="_blank" rel="noopener"><span class="mono">→</span> TzKT</a></li>
+        <li><a href="/docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md"><span class="mono">DOC</span> design</a></li>
       </ul>
-      <p class="agent-strip__meta">
-        {pending ? 'Visit Nouns rail live at ' : 'Prize Cast contract '}
-        <code>{pending ? visitNounsKt1 : prizeCastKt1}</code>
+      <p class="agent-strip__contract mono">
+        CONTRACT · <code>{prizeCastKt1 || 'pending origination'}</code>
       </p>
     </aside>
   </div>
+
+  <script>
+    /**
+     * Live countdown — updates the NEXT DRAW metric every 30s so the tile
+     * doesn't freeze at build-time. Server-side value is the fallback for
+     * agents and no-JS clients; this just keeps human viewers honest.
+     */
+    const SUNDAY_18 = 'next-draw';
+    function nextSunday18UTC(now = new Date()): Date {
+      const next = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        18, 0, 0, 0,
+      ));
+      const daysUntil = (7 - now.getUTCDay()) % 7;
+      next.setUTCDate(next.getUTCDate() + daysUntil);
+      if (daysUntil === 0 && now.getTime() >= next.getTime()) {
+        next.setUTCDate(next.getUTCDate() + 7);
+      }
+      return next;
+    }
+
+    function tick() {
+      const el = document.querySelector(`[data-metric="${SUNDAY_18}"]`);
+      if (!el) return;
+      const target = nextSunday18UTC();
+      const diff = Math.max(0, target.getTime() - Date.now());
+      const totalMinutes = Math.floor(diff / 60_000);
+      const d = Math.floor(totalMinutes / 1440);
+      const h = Math.floor((totalMinutes % 1440) / 60);
+      const m = totalMinutes % 60;
+      const s = Math.floor((diff / 1000) % 60);
+      el.textContent = `${d}d ${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  </script>
 </BlockLayout>
 
 <style>
+  :root {
+    /* Prize Cast uses GDN green as the accent — "money in motion". Scoped
+       local to keep v2 --pc-* tokens uncontaminated. */
+    --cst-600: #0F6E56;
+    --cst-800: #074638;
+    --cst-50: #E7F4EF;
+    --cst-warn: #993C1D;
+  }
+
   .page {
-    max-width: 1080px;
+    max-width: 1140px;
     margin: 0 auto;
     padding: 18px 16px 80px;
   }
 
-  .banner,
-  .error,
-  .metric,
-  .empty,
-  .agent-strip {
-    border: 1px solid var(--pc-rule);
-    border-radius: 2px;
-    background: #fff;
-  }
-
-  .banner,
-  .error,
-  .empty,
-  .agent-strip {
-    padding: 12px 14px;
-  }
-
-  .banner {
-    margin-bottom: 16px;
-    background: color-mix(in srgb, var(--pc-accent) 7%, white);
-  }
-
-  .banner__label,
-  .error__label,
-  .kicker,
-  .metric__label,
-  .section-head__kicker,
-  .agent-strip__label,
-  .crumb {
+  .mono {
     font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
 
-  .banner__label,
-  .error__label,
-  .section-head__kicker,
-  .agent-strip__label,
-  .metric__label,
-  .crumb {
-    color: var(--pc-ink-muted);
+  .section-kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cst-800);
     margin: 0 0 6px;
   }
 
-  .crumb {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 14px;
+  .section-note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink-muted);
+    line-height: 1.5;
   }
 
+  /* ═════ CRUMB ═════ */
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .crumb a { color: var(--cst-800); }
+
+  /* ═════ HEAD ═════ */
   .head {
     display: grid;
-    gap: 14px;
-    margin-bottom: 18px;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1.5px solid var(--cst-600);
+  }
+
+  .head__kicker-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   .kicker {
-    color: var(--pc-accent);
-    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cst-800);
+    margin: 0;
   }
 
-  h1, h2 {
-    margin: 0;
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border: 1.5px solid;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .status__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+
+  .status--live {
+    color: var(--cst-800);
+    border-color: var(--cst-600);
+    background: var(--cst-50);
+  }
+
+  .status--pending {
+    color: var(--pc-ink-muted);
+    border-color: var(--pc-rule);
+    background: #fafaf8;
+  }
+  .status--pending .status__dot { animation: none; opacity: 0.5; }
+
+  .status--warn {
+    color: var(--cst-warn);
+    border-color: var(--cst-warn);
+    background: #fbefea;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.4rem, 11vw, 5.8rem);
     font-weight: 500;
+    line-height: 0.92;
+    letter-spacing: -0.022em;
+    margin: 0 0 14px;
     color: var(--pc-ink);
   }
 
-  h1 {
-    font-size: clamp(2.2rem, 9vw, 4rem);
-    line-height: 0.98;
-    margin-bottom: 10px;
-  }
-
-  h2 {
-    font-size: 1.5rem;
-    line-height: 1.1;
-  }
-
-  .dek,
-  .metric__note,
-  .empty p,
-  .agent-strip__meta,
-  .banner p,
-  .error p {
+  .dek {
     margin: 0;
+    font-size: 17px;
+    line-height: 1.45;
     color: var(--pc-ink-soft);
-    font-size: 15px;
-    line-height: 1.5;
+    max-width: 54ch;
   }
 
   .head__rail {
     justify-self: start;
   }
 
-  .metrics {
+  /* ═════ TERMINAL (metrics) ═════ */
+  .terminal {
     display: grid;
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 18px;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 0;
+    margin-bottom: 24px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
   }
 
   .metric {
-    padding: 14px;
+    padding: 16px 16px 18px;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    position: relative;
     min-width: 0;
+  }
+
+  .metric:last-child {
+    border-bottom: 0;
+  }
+
+  .metric__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .metric__rank {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--cst-600);
+  }
+
+  .metric__label {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
   }
 
   .metric__value {
     margin: 0 0 6px;
-    font-size: clamp(1.4rem, 6vw, 2rem);
-    line-height: 1.05;
+    font-family: var(--pc-font-sans);
+    font-weight: 500;
+    font-size: clamp(2rem, 7vw, 3.2rem);
+    line-height: 0.98;
     color: var(--pc-ink);
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
     word-break: break-word;
   }
 
-  .error {
-    margin-bottom: 18px;
-    background: #fdf3f3;
-    border-color: #a33;
+  .metric__value--pending {
+    color: var(--pc-ink-muted);
   }
 
-  .panel-wrap,
-  .winners {
-    margin-bottom: 18px;
+  .metric__delta {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
   }
 
-  .section-head {
-    margin-bottom: 10px;
-  }
-
-  .table-wrap {
-    overflow-x: auto;
-    border: 1px solid var(--pc-rule);
+  /* ═════ RHYTHM (weekly bar) ═════ */
+  .rhythm {
+    margin-bottom: 24px;
+    border: 1.5px solid var(--pc-rule);
     border-radius: 2px;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 480px;
     background: #fff;
+    padding: 16px;
   }
 
-  th,
-  td {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--pc-rule-soft);
-    text-align: left;
-    font-size: 14px;
-    color: var(--pc-ink);
+  .rhythm__head {
+    margin-bottom: 14px;
   }
 
-  th {
+  .rhythm__bar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+
+  .cell {
+    aspect-ratio: 1 / 1.2;
+    min-height: 54px;
+    border: 1.25px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    position: relative;
+    padding: 4px;
+  }
+
+  .cell__day {
     font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
-    text-transform: uppercase;
     color: var(--pc-ink-muted);
-    background: color-mix(in srgb, var(--pc-accent) 4%, white);
   }
 
-  tbody tr:last-child td {
+  .cell__num {
+    font-family: var(--pc-font-sans);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1;
+  }
+
+  .cell__mark {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--pc-font-mono);
+    font-size: 7.5px;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+  }
+
+  .cell--today {
+    background: var(--cst-50);
+    border-color: var(--cst-600);
+  }
+
+  .cell--today .cell__day,
+  .cell--today .cell__num,
+  .cell--today .cell__mark {
+    color: var(--cst-800);
+  }
+
+  .cell--draw {
+    background: var(--pc-ink);
+    border-color: var(--pc-ink);
+  }
+
+  .cell--draw .cell__day,
+  .cell--draw .cell__num,
+  .cell--draw .cell__mark {
+    color: #fff;
+  }
+
+  .cell--today.cell--draw {
+    background: var(--cst-800);
+  }
+
+  /* ═════ MECH (mechanism) ═════ */
+  .mech {
+    margin-bottom: 24px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+    padding: 16px;
+  }
+
+  .mech__head {
+    margin-bottom: 14px;
+  }
+
+  .mech__steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 12px;
+    padding: 14px 0;
+    border-top: 1px dashed var(--pc-rule-soft);
+    align-items: start;
+  }
+
+  .step:first-child {
+    border-top: 0;
+    padding-top: 4px;
+  }
+
+  .step__num {
+    font-family: var(--pc-font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--cst-600);
+    line-height: 1;
+  }
+
+  .step__title {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans);
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.1;
+    color: var(--pc-ink);
+  }
+
+  .step__note {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+
+  .step__note code {
+    background: var(--cst-50);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    color: var(--cst-800);
+  }
+
+  /* ═════ PANEL WRAP ═════ */
+  .panel-wrap {
+    margin-bottom: 24px;
+  }
+
+  .pending-band {
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px 2px 0 0;
+    background: color-mix(in srgb, var(--cst-600) 6%, white);
+    padding: 14px 16px;
     border-bottom: 0;
   }
 
-  .agent-strip ul {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 10px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 16px;
+  .pending-band__label {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cst-800);
   }
 
-  .agent-strip code {
+  .pending-band__note {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+
+  .pending-band__note code {
     font-family: var(--pc-font-mono);
-    font-size: 11px;
+    font-size: 12px;
+  }
+
+  /* pull the panel border up against the pending band */
+  .pending-band + :global(.prize-panel) {
+    border-radius: 0 0 2px 2px;
+    border-top: 0;
+  }
+
+  /* ═════ ERROR ═════ */
+  .error {
+    margin-bottom: 24px;
+    border: 1.5px solid var(--cst-warn);
+    border-radius: 2px;
+    background: #fbefea;
+    padding: 12px 14px;
+  }
+
+  .error__label {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cst-warn);
+  }
+
+  /* ═════ WINNERS (receipt tape) ═════ */
+  .winners {
+    margin-bottom: 24px;
+  }
+
+  .section-head {
+    margin-bottom: 14px;
+  }
+
+  .receipt {
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .receipt__head {
+    display: grid;
+    grid-template-columns: 90px 1fr 120px 90px;
+    padding: 10px 14px;
+    background: var(--pc-ink);
+    color: #fff;
+    font-size: 9.5px;
+    gap: 8px;
+  }
+
+  .receipt__row {
+    display: grid;
+    grid-template-columns: 90px 1fr 120px 90px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--pc-rule-soft);
+    gap: 8px;
+    align-items: center;
+  }
+
+  .receipt__row--latest {
+    background: var(--cst-50);
+    border-top: 1.5px solid var(--cst-600);
+  }
+
+  .receipt__cell {
+    min-width: 0;
+    font-size: 14px;
+    color: var(--pc-ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .receipt__cell--prize {
+    font-family: var(--pc-font-sans);
+    font-weight: 500;
+    color: var(--cst-800);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .latest-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--cst-800);
+    color: #fff;
+    font-size: 8.5px;
+    letter-spacing: 0.14em;
+    border-radius: 2px;
+  }
+
+  .receipt--placeholder {
+    padding: 0;
+  }
+
+  .receipt__empty {
+    padding: 32px 24px;
+    text-align: center;
+    background: color-mix(in srgb, var(--cst-600) 4%, white);
+  }
+
+  .receipt__empty p {
+    margin: 0 0 4px;
+    font-size: 15px;
+    color: var(--pc-ink);
+  }
+
+  .receipt__empty-sub {
+    color: var(--pc-ink-muted) !important;
+    font-size: 13px !important;
+  }
+
+  /* ═════ AGENT STRIP ═════ */
+  .agent-strip {
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    background: var(--cst-50);
+    padding: 16px;
+  }
+
+  .agent-strip__head {
+    margin-bottom: 12px;
+  }
+
+  .agent-strip__list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .agent-strip__list a {
+    font-size: 14px;
+    color: var(--cst-800);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .agent-strip__list a .mono {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    min-width: 32px;
+  }
+
+  .agent-strip__contract {
+    margin: 0;
+    color: var(--pc-ink-muted);
     word-break: break-all;
   }
 
-  @media (min-width: 720px) {
+  .agent-strip__contract code {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    color: var(--pc-ink);
+  }
+
+  /* ═════ RESPONSIVE ═════ */
+  @media (min-width: 680px) {
     .page {
-      padding-left: 20px;
-      padding-right: 20px;
+      padding-left: 24px;
+      padding-right: 24px;
     }
 
     .head {
-      grid-template-columns: 1fr auto;
-      align-items: start;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "kicker kicker"
+        "body rail";
+      align-items: end;
     }
 
-    .head__rail {
-      justify-self: end;
+    .head__kicker-row { grid-area: kicker; }
+    .head__body { grid-area: body; }
+    .head__rail { grid-area: rail; justify-self: end; align-self: start; }
+
+    .terminal {
+      grid-template-columns: repeat(2, 1fr);
     }
 
-    .metrics {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    .metric {
+      border-bottom: 0;
+      border-right: 1px solid var(--pc-rule-soft);
+    }
+
+    .metric:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .metric:nth-child(-n+2) {
+      border-bottom: 1px solid var(--pc-rule-soft);
+    }
+
+    .agent-strip__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (min-width: 960px) {
+    .terminal {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .metric {
+      border-bottom: 0;
+      border-right: 1px solid var(--pc-rule-soft);
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric:nth-child(2n) {
+      border-right: 1px solid var(--pc-rule-soft);
+    }
+
+    .metric:nth-child(-n+2) {
+      border-bottom: 0;
+    }
+
+    .metric__value {
+      font-size: 2.8rem;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .receipt__head,
+    .receipt__row {
+      grid-template-columns: 70px 1fr 90px;
+    }
+
+    .receipt__head > span:last-child,
+    .receipt__row > span:last-child {
+      display: none;
+    }
+
+    .rhythm__bar {
+      gap: 4px;
+    }
+
+    .cell {
+      min-height: 48px;
+      padding: 3px;
+    }
+
+    .cell__num {
+      font-size: 15px;
     }
   }
 </style>
