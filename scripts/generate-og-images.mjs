@@ -122,6 +122,132 @@ function blockCard(block) {
   </svg>`;
 }
 
+/**
+ * Per-page unfurl card. Used for first-class routes that aren't Blocks
+ * themselves (/cast, /editions, /archive, /battle, /collection). Each
+ * gets its own identity bar, kicker, and big-display title so unfurls
+ * in Slack/Farcaster/Twitter don't all fall back to the generic home
+ * card.
+ */
+function pageCard(page) {
+  const titleLines = wrapText(page.title || '', page.titleChars ?? 18, 2);
+  const titleFontSize = page.titleFontSize ?? 108;
+  const lineHeight = Math.round(titleFontSize * 1.08);
+  const titleText = titleLines.map((l, i) =>
+    `<text x="80" y="${260 + i * lineHeight}" font-family="Inter, system-ui, sans-serif" font-size="${titleFontSize}" font-weight="500" letter-spacing="-2" fill="#12110E">${xmlEscape(l)}</text>`
+  ).join('');
+
+  const dekLines = page.dek ? wrapText(page.dek, 54, 3) : [];
+  // dek Y begins after the title block
+  const dekBaseY = 260 + titleLines.length * lineHeight + 60;
+  const dekText = dekLines.map((l, i) =>
+    `<text x="80" y="${dekBaseY + i * 36}" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="400" fill="#38373A">${xmlEscape(l)}</text>`
+  ).join('');
+
+  // Right-column glyph (optional) — for the pages that have a natural icon
+  const glyph = page.glyph
+    ? `<text x="${W - 80}" y="280" font-family="JetBrains Mono, ui-monospace, monospace" font-size="${page.glyphSize ?? 240}" font-weight="500" fill="${page.color600}" text-anchor="end" opacity="0.18">${xmlEscape(page.glyph)}</text>`
+    : '';
+
+  // Bottom metadata — url, kind, sibling surfaces
+  const siblings = (page.siblings ?? []).slice(0, 3).join(' · ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect width="${W}" height="${H}" fill="#FFFFFF" />
+    <!-- Left accent bar — page color -->
+    <rect x="0" y="0" width="24" height="${H}" fill="${page.color600}" />
+    ${glyph}
+    <!-- Kicker line -->
+    <text x="80" y="110" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22" font-weight="500" letter-spacing="3.6" fill="${page.color800}">${xmlEscape(page.kicker)}</text>
+    <text x="80" y="148" font-family="JetBrains Mono, ui-monospace, monospace" font-size="16" font-weight="400" letter-spacing="2.5" fill="#5F5E5A">POINTCAST · ${xmlEscape(page.kind.toUpperCase())}</text>
+    ${titleText}
+    ${dekText}
+    <!-- Footer rule + URL + siblings -->
+    <line x1="80" y1="${H - 70}" x2="${W - 80}" y2="${H - 70}" stroke="#C4C2BC" stroke-width="1" />
+    <text x="80" y="${H - 35}" font-family="JetBrains Mono, ui-monospace, monospace" font-size="14" font-weight="500" letter-spacing="2.5" fill="#5F5E5A">POINTCAST.XYZ${xmlEscape(page.url)}${siblings ? ' · ' + xmlEscape(siblings) : ''}</text>
+  </svg>`;
+}
+
+// Manifest of first-class pages to OG-card. Add new entries here; each
+// produces /images/og/{slug}.png consumed by the page via image prop.
+const PAGES = [
+  {
+    slug: 'cast',
+    url: '/cast',
+    kind: 'prize pool',
+    kicker: 'CH.CST · PRIZE CAST',
+    title: 'No-loss prize savings.',
+    dek: 'Deposit tez, keep your principal, win the weekly yield. Sunday 18:00 UTC.',
+    color600: '#0F6E56',
+    color800: '#074638',
+    glyph: 'ꜩ',
+    glyphSize: 280,
+    siblings: ['/cast.json', '/for-agents'],
+  },
+  {
+    slug: 'editions',
+    url: '/editions',
+    kind: 'mint dashboard',
+    kicker: 'EDITIONS · MINT · CLAIM',
+    title: 'Everything mintable.',
+    dek: 'On-chain live, listed on objkt, daily faucets, contracts incoming — one page.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '◆',
+    siblings: ['/editions.json', '/collect', '/for-agents'],
+  },
+  {
+    slug: 'archive',
+    url: '/archive',
+    kind: 'archive',
+    kicker: 'ARCHIVE · EVERY BLOCK',
+    title: 'Every block, chronologically.',
+    dek: 'The homepage is the feed. This is the record. Filter by channel, type, search.',
+    color600: '#5F5E5A',
+    color800: '#38373A',
+    glyph: '/',
+    siblings: ['/archive.json', '/blocks.json', '/for-agents'],
+  },
+  {
+    slug: 'battle',
+    url: '/battle',
+    kind: 'nouns battler',
+    kicker: 'CH.BTL · NOUNS BATTLER',
+    title: 'Every seed is a fighter.',
+    dek: 'Deterministic duels. No RNG. Same seed, same stats, forever. Best-of-3.',
+    color600: '#8A2432',
+    color800: '#551620',
+    glyph: 'VS',
+    glyphSize: 200,
+    siblings: ['/battle.json', '/c/battler'],
+  },
+  {
+    slug: 'collection',
+    url: '/collection',
+    kind: 'holdings',
+    kicker: 'COLLECTION · TEZOS',
+    title: "Mike's Tezos NFTs.",
+    dek: 'Every token held across every contract, live from TzKT at build time.',
+    color600: '#993C1D',
+    color800: '#6A2810',
+    glyph: '⧉',
+    siblings: ['/collection/visit-nouns', '/collect'],
+  },
+  {
+    slug: 'drum',
+    url: '/drum',
+    kind: 'drum room',
+    kicker: 'CH.SPN · DRUM ROOM',
+    title: 'Tap together.',
+    dek: 'Cookie-clicker drums. Every hit persists. DRUM tokens on Tezos, soon.',
+    color600: '#993C1D',
+    color800: '#6A2810',
+    glyph: '♩',
+    glyphSize: 280,
+    siblings: ['/c/spinning', '/for-agents'],
+  },
+];
+
 async function svgToPng(svg, outPath) {
   await fs.mkdir(path.dirname(outPath), { recursive: true });
   await sharp(Buffer.from(svg))
@@ -133,6 +259,13 @@ async function main() {
   console.log('[og] generating default card...');
   await svgToPng(defaultCard(), path.join(OUT_DIR, 'og-home-v2.png'));
   console.log('  ✓ /images/og/og-home-v2.png');
+
+  console.log('[og] generating', PAGES.length, 'page cards...');
+  for (const page of PAGES) {
+    const svg = pageCard(page);
+    await svgToPng(svg, path.join(OUT_DIR, `${page.slug}.png`));
+    console.log(`  ✓ /images/og/${page.slug}.png`);
+  }
 
   const blockFiles = (await fs.readdir(BLOCKS_DIR)).filter((f) => f.endsWith('.json'));
   console.log('[og] generating', blockFiles.length, 'block cards...');
