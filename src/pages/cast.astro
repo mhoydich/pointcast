@@ -1,0 +1,399 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import PrizeCastPanel from '../components/PrizeCastPanel.astro';
+import WalletChip from '../components/WalletChip.astro';
+import contracts from '../data/contracts.json';
+import {
+  PRIZE_CAST_FIRST_DRAW_PLACEHOLDER,
+  PRIZE_CAST_PENDING_MESSAGE,
+  formatTezAmount,
+  getPrizeCastSnapshot,
+  getPrizeCastTzktUrl,
+  shortTezosAddress,
+} from '../lib/prize-cast';
+
+const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
+const prizeCastKt1 = ((contracts as any).prize_cast?.mainnet ?? '').trim();
+const snapshot = await getPrizeCastSnapshot();
+const pending = prizeCastKt1 === '';
+const tzktUrl = getPrizeCastTzktUrl(prizeCastKt1) ?? (visitNounsKt1 ? `https://tzkt.io/${visitNounsKt1}` : 'https://tzkt.io');
+const nextDrawDate = new Date(snapshot.nextDrawAt);
+
+function formatCountdown(target: Date) {
+  const diff = Math.max(0, target.getTime() - Date.now());
+  const totalMinutes = Math.floor(diff / 60_000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  return `${days}d ${hours}h ${minutes}m`;
+}
+
+function formatUtcLabel(date: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    hour12: false,
+  }).format(date).replace(',', '');
+}
+
+const metrics = [
+  {
+    label: 'TVL',
+    value: pending ? 'pending origination' : formatTezAmount(snapshot.tvlTez),
+    note: pending ? 'ghostnet smoke test next' : `principal ${formatTezAmount(snapshot.principalTez)}`,
+  },
+  {
+    label: 'Prize Pool',
+    value: pending ? 'pending origination' : formatTezAmount(snapshot.prizePoolTez),
+    note: pending ? 'yield starts after origination' : `yield since ${snapshot.accumulatedSince ? formatUtcLabel(new Date(snapshot.accumulatedSince)) : 'last draw'}`,
+  },
+  {
+    label: 'Next Draw',
+    value: pending ? 'pending origination' : formatCountdown(nextDrawDate),
+    note: `Sunday 18:00 UTC · ${formatUtcLabel(nextDrawDate)}`,
+  },
+];
+
+const winners = pending ? [] : snapshot.winners.slice(0, 10);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/cast',
+  name: 'Prize Cast',
+  description: 'No-loss prize savings on Tezos. Deposit tez, keep principal, and the weekly yield becomes the prize.',
+  url: 'https://pointcast.xyz/cast',
+  mainEntity: {
+    '@type': 'FinancialProduct',
+    name: 'Prize Cast',
+    category: 'Prize-linked savings',
+    additionalProperty: [
+      { '@type': 'PropertyValue', name: 'contract', value: prizeCastKt1 || 'pending origination' },
+      { '@type': 'PropertyValue', name: 'nextDrawAt', value: snapshot.nextDrawAt },
+    ],
+  },
+};
+---
+
+<BlockLayout
+  title="Prize Cast"
+  description="No-loss prize savings on Tezos. Deposit tez, keep your principal, and the aggregate yield becomes the weekly prize."
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/cast.json', title: 'Prize Cast snapshot (JSON)' }]}
+>
+  <div class="page">
+    {pending && (
+      <aside class="banner">
+        <p class="banner__label">PENDING ORIGINATION</p>
+        <p>{PRIZE_CAST_PENDING_MESSAGE}. Ghostnet test is next; mainnet address lands here after origination.</p>
+      </aside>
+    )}
+
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>cast</span>
+    </nav>
+
+    <header class="head">
+      <div>
+        <p class="kicker">CAST · PRIZE POOL</p>
+        <h1>Prize Cast</h1>
+        <p class="dek">
+          Deposit tez into a no-loss prize pool, keep your principal liquid, and let the aggregate baking yield roll into a weekly Sunday draw.
+        </p>
+      </div>
+      <div class="head__rail">
+        <WalletChip />
+      </div>
+    </header>
+
+    <section class="metrics" aria-label="Prize Cast metrics">
+      {metrics.map((item) => (
+        <article class="metric">
+          <p class="metric__label">{item.label}</p>
+          <p class="metric__value">{item.value}</p>
+          <p class="metric__note">{item.note}</p>
+        </article>
+      ))}
+    </section>
+
+    {!pending && snapshot.fetchError && (
+      <div class="error">
+        <p class="error__label">DEGRADED READ</p>
+        <p>{snapshot.fetchError}. Rebuild to refresh or verify the contract directly on <a href={tzktUrl} target="_blank" rel="noopener">TzKT</a>.</p>
+      </div>
+    )}
+
+    <section class="panel-wrap">
+      <PrizeCastPanel contract={prizeCastKt1} minDepositMutez={snapshot.minDepositMutez} />
+    </section>
+
+    <section class="winners">
+      <div class="section-head">
+        <p class="section-head__kicker">LAST 10</p>
+        <h2>Past winners</h2>
+      </div>
+
+      {pending ? (
+        <div class="empty">
+          <p>{PRIZE_CAST_FIRST_DRAW_PLACEHOLDER}</p>
+        </div>
+      ) : winners.length > 0 ? (
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>tokenId</th>
+                <th>winner</th>
+                <th>prize</th>
+                <th>block</th>
+              </tr>
+            </thead>
+            <tbody>
+              {winners.map((winner) => (
+                <tr>
+                  <td>#{winner.round}</td>
+                  <td>{shortTezosAddress(winner.winner)}</td>
+                  <td>{formatTezAmount(winner.prizeTez)}</td>
+                  <td>{winner.block ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div class="empty">
+          <p>No draw data yet. First settled draw will appear here after the contract originates and the first Sunday closes.</p>
+        </div>
+      )}
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">AGENT SURFACES</p>
+      <ul>
+        <li><a href="/cast.json">/cast.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+        <li><a href={tzktUrl} target="_blank" rel="noopener">TzKT ↗</a></li>
+        <li><a href="/docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md">design doc</a></li>
+      </ul>
+      <p class="agent-strip__meta">
+        {pending ? 'Visit Nouns rail live at ' : 'Prize Cast contract '}
+        <code>{pending ? visitNounsKt1 : prizeCastKt1}</code>
+      </p>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .banner,
+  .error,
+  .metric,
+  .empty,
+  .agent-strip {
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .banner,
+  .error,
+  .empty,
+  .agent-strip {
+    padding: 12px 14px;
+  }
+
+  .banner {
+    margin-bottom: 16px;
+    background: color-mix(in srgb, var(--pc-accent) 7%, white);
+  }
+
+  .banner__label,
+  .error__label,
+  .kicker,
+  .metric__label,
+  .section-head__kicker,
+  .agent-strip__label,
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .banner__label,
+  .error__label,
+  .section-head__kicker,
+  .agent-strip__label,
+  .metric__label,
+  .crumb {
+    color: var(--pc-ink-muted);
+    margin: 0 0 6px;
+  }
+
+  .crumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .head {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .kicker {
+    color: var(--pc-accent);
+    margin: 0 0 8px;
+  }
+
+  h1, h2 {
+    margin: 0;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  h1 {
+    font-size: clamp(2.2rem, 9vw, 4rem);
+    line-height: 0.98;
+    margin-bottom: 10px;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    line-height: 1.1;
+  }
+
+  .dek,
+  .metric__note,
+  .empty p,
+  .agent-strip__meta,
+  .banner p,
+  .error p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .head__rail {
+    justify-self: start;
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .metric {
+    padding: 14px;
+    min-width: 0;
+  }
+
+  .metric__value {
+    margin: 0 0 6px;
+    font-size: clamp(1.4rem, 6vw, 2rem);
+    line-height: 1.05;
+    color: var(--pc-ink);
+    word-break: break-word;
+  }
+
+  .error {
+    margin-bottom: 18px;
+    background: #fdf3f3;
+    border-color: #a33;
+  }
+
+  .panel-wrap,
+  .winners {
+    margin-bottom: 18px;
+  }
+
+  .section-head {
+    margin-bottom: 10px;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 480px;
+    background: #fff;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    text-align: left;
+    font-size: 14px;
+    color: var(--pc-ink);
+  }
+
+  th {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    background: color-mix(in srgb, var(--pc-accent) 4%, white);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .agent-strip ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+
+  .agent-strip code {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    word-break: break-all;
+  }
+
+  @media (min-width: 720px) {
+    .page {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+
+    .head {
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+
+    .head__rail {
+      justify-self: end;
+    }
+
+    .metrics {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+</style>
