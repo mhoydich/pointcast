@@ -1,0 +1,315 @@
+---
+/**
+ * /collection — every NFT Mike holds on Tezos, across every contract.
+ *
+ * Build-time fetch of tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw's token
+ * balances from TzKT (~200 tokens across ~30 contracts as of
+ * 2026-04-17). Rendered as a unified grid with links out to objkt
+ * and per-contract drill-down pages where available.
+ *
+ * Drill-downs live at /collection/visit-nouns for the PointCast
+ * Visit Nouns FA2. This index is the wider net.
+ *
+ * Re-runs on every build (Astro content-aware rebuild triggers
+ * from new block commits), so newly-acquired tokens appear without
+ * manual intervention.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+const TZKT = 'https://api.tzkt.io/v1';
+const MAX_TOKENS = 120; // enough to cover the current holdings + headroom
+
+interface Token {
+  balance: string;
+  token: {
+    tokenId: string;
+    contract: { address: string; alias?: string };
+    metadata?: {
+      name?: string;
+      description?: string;
+      artifactUri?: string;
+      displayUri?: string;
+      thumbnailUri?: string;
+      creators?: string[] | string;
+    };
+    firstTime?: string;
+  };
+  firstTime?: string;
+  lastTime?: string;
+}
+
+let tokens: Token[] = [];
+let fetchErr: string | null = null;
+try {
+  const r = await fetch(
+    `${TZKT}/tokens/balances?account=${WALLET}&balance.gt=0&limit=${MAX_TOKENS}&sort.desc=lastLevel&token.metadata.artifactUri.ne=null`
+  );
+  if (r.ok) tokens = await r.json();
+  else fetchErr = `TzKT returned ${r.status}`;
+} catch (e: any) {
+  fetchErr = e?.message || 'tzkt fetch failed';
+}
+
+// Group tokens by contract for a secondary-view option (kept flat by
+// default, but we keep the metadata handy for the group headers).
+const byContract: Record<string, Token[]> = {};
+for (const t of tokens) {
+  const c = t.token.contract.address;
+  byContract[c] = byContract[c] ?? [];
+  byContract[c].push(t);
+}
+
+// Per-token image: prefer the objkt CDN (fast + always-live), fall back
+// to IPFS via ipfs.io, fall back to metadata displayUri.
+function imageFor(t: Token): string {
+  const c = t.token.contract.address;
+  const id = t.token.tokenId;
+  return `https://assets.objkt.media/file/assets-003/${c}/${id}/thumb400`;
+}
+
+function ipfsGateway(uri?: string): string | null {
+  if (!uri) return null;
+  if (uri.startsWith('ipfs://')) return 'https://ipfs.io/ipfs/' + uri.slice(7);
+  return uri;
+}
+
+function shortAddr(a: string): string {
+  return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Collection',
+  '@id': 'https://pointcast.xyz/collection',
+  name: 'Mike Hoydich · Tezos holdings',
+  description: `${tokens.length} Tezos NFTs across ${Object.keys(byContract).length} contracts. Live from TzKT at build time.`,
+  url: 'https://pointcast.xyz/collection',
+  collectionSize: tokens.length,
+  hasPart: tokens.slice(0, 30).map((t) => ({
+    '@type': 'CreativeWork',
+    name: t.token.metadata?.name ?? `Token #${t.token.tokenId}`,
+    url: `https://objkt.com/tokens/${t.token.contract.address}/${t.token.tokenId}`,
+    image: imageFor(t),
+    identifier: `${t.token.contract.address}:${t.token.tokenId}`,
+  })),
+};
+---
+
+<BlockLayout
+  title="Collection"
+  description={`Every Tezos NFT Mike holds on ${WALLET}. ${tokens.length} tokens across ${Object.keys(byContract).length} contracts.`}
+  jsonLd={jsonLd}
+>
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <span>collection</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">COLLECTION · TEZOS HOLDINGS</p>
+      <h1>Mike's Tezos NFTs</h1>
+      <p class="dek">
+        {tokens.length} tokens held across {Object.keys(byContract).length} contracts.
+        Live from TzKT at build time; refreshes on every deploy.
+        Drill down to <a href="/collection/visit-nouns">/collection/visit-nouns</a>
+        for the PointCast-originated Visit Nouns FA2.
+      </p>
+
+      <div class="meta">
+        <p><span>wallet</span> <code>{WALLET}</code></p>
+        <p><span>tokens</span> <b>{tokens.length}</b></p>
+        <p><span>contracts</span> <b>{Object.keys(byContract).length}</b></p>
+        <p><span>tzkt</span> <a href={`https://tzkt.io/${WALLET}/tokens`} target="_blank" rel="noopener">view wallet →</a></p>
+      </div>
+    </header>
+
+    {fetchErr && (
+      <div class="error">
+        <p class="error__label">TZKT FETCH FAILED AT BUILD</p>
+        <p>{fetchErr}. Rebuild to retry, or view the wallet directly on <a href={`https://tzkt.io/${WALLET}`} target="_blank" rel="noopener">TzKT</a>.</p>
+      </div>
+    )}
+
+    {tokens.length > 0 && (
+      <section class="grid">
+        {tokens.map((t) => {
+          const meta = t.token.metadata ?? {};
+          const name = meta.name ?? `Token #${t.token.tokenId}`;
+          const ipfsFallback = ipfsGateway(meta.displayUri ?? meta.thumbnailUri ?? meta.artifactUri);
+          const contractAlias = t.token.contract.alias;
+          return (
+            <article class="card">
+              <a class="card__art" href={`https://objkt.com/tokens/${t.token.contract.address}/${t.token.tokenId}`} target="_blank" rel="noopener">
+                <img
+                  src={imageFor(t)}
+                  alt={name}
+                  loading="lazy"
+                  data-fallback={ipfsFallback ?? ''}
+                  onerror="if(this.dataset.fallback && this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}else{this.parentElement.style.display='none';}"
+                />
+              </a>
+              <div class="card__body">
+                <p class="card__title" title={name}>{name.length > 38 ? name.slice(0, 37) + '…' : name}</p>
+                <p class="card__contract" title={t.token.contract.address}>
+                  {contractAlias ? contractAlias : shortAddr(t.token.contract.address)}
+                  <span class="card__tid">№{t.token.tokenId}</span>
+                </p>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    )}
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/collection/visit-nouns">/collection/visit-nouns</a></li>
+        <li><a href={`https://api.tzkt.io/v1/tokens/balances?account=${WALLET}&balance.gt=0`} target="_blank" rel="noopener">TzKT balances ↗</a></li>
+        <li><a href={`https://objkt.com/profile/${WALLET}/owned`} target="_blank" rel="noopener">objkt profile ↗</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page { max-width: 1280px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .crumb {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 16px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .head { margin-bottom: 22px; }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 8px;
+  }
+  .head h1 {
+    font-family: var(--pc-font-sans);
+    font-size: 38px; line-height: 1.05; font-weight: 500;
+    margin: 0 0 10px; color: var(--pc-ink);
+  }
+  .dek {
+    font-family: var(--pc-font-sans);
+    font-size: 16px; line-height: 1.5;
+    color: var(--pc-ink-soft); margin: 0 0 14px; max-width: 64ch;
+  }
+  .dek a { color: var(--pc-accent); }
+
+  .meta {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px 20px;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #F6F4EF;
+  }
+  .meta p {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .meta p code, .meta p a, .meta p b {
+    color: var(--pc-ink); text-transform: none; letter-spacing: 0;
+  }
+  .meta p code { font-size: 10.5px; word-break: break-all; }
+  .meta p a { color: var(--pc-accent); }
+  @media (max-width: 839px) { .meta { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 479px) { .meta { grid-template-columns: 1fr; } }
+
+  .error {
+    border: 1px solid #A33;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border-radius: 2px;
+    background: #FDF3F3;
+    font-family: var(--pc-font-sans); font-size: 13px; color: #7A2323;
+  }
+  .error__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin: 0 0 4px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    border-radius: 2px;
+    transition: border-color 0.12s;
+  }
+  .card:hover { border-color: var(--pc-ink); }
+
+  .card__art {
+    display: block;
+    background: #F6F4EF;
+    border-radius: 2px;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+  }
+  .card__art img {
+    width: 100%; height: 100%; display: block;
+    object-fit: cover;
+  }
+
+  .card__body {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 0 2px 2px;
+  }
+
+  .card__title {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card__contract {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .card__tid {
+    color: var(--pc-ink);
+  }
+
+  .agent-strip {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--pc-rule);
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .agent-strip__label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
+  .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+</style>

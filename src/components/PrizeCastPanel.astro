@@ -1,0 +1,435 @@
+---
+interface Props {
+  contract: string;
+  minDepositMutez?: number | null;
+}
+
+const {
+  contract = '',
+  minDepositMutez = 1_000_000,
+} = Astro.props;
+
+const contractReady = contract.startsWith('KT1');
+const minDepositTez = ((minDepositMutez ?? 1_000_000) / 1_000_000).toFixed(2);
+---
+
+<section
+  class="prize-panel"
+  data-prize-cast-panel
+  data-contract={contract}
+  data-min-deposit-mutez={minDepositMutez ?? 1_000_000}
+>
+  <div class="prize-panel__head">
+    <div>
+      <p class="prize-panel__kicker">Deposit / withdraw</p>
+      <h2>Move tez in and out of the weekly cast.</h2>
+    </div>
+    <p class="prize-panel__wallet" data-wallet-state>
+      {contractReady ? 'Connect wallet to deposit.' : 'Not yet originated — ghostnet test pending.'}
+    </p>
+  </div>
+
+  <label class="prize-panel__field">
+    <span class="prize-panel__label">Amount (ꜩ)</span>
+    <input
+      type="number"
+      inputmode="decimal"
+      min="0"
+      step="0.01"
+      placeholder={minDepositTez}
+      data-amount-input
+      disabled={!contractReady}
+    />
+  </label>
+
+  <dl class="prize-panel__facts">
+    <div>
+      <dt>Min deposit</dt>
+      <dd>{Number(minDepositTez).toFixed(2)} ꜩ</dd>
+    </div>
+    <div>
+      <dt>Flow</dt>
+      <dd>Beacon → Kukai / Temple / Umami</dd>
+    </div>
+    <div>
+      <dt>Withdrawals</dt>
+      <dd>Principal stays liquid</dd>
+    </div>
+  </dl>
+
+  <div class="prize-panel__actions">
+    <button type="button" class="prize-panel__btn prize-panel__btn--primary" data-action="deposit" disabled={!contractReady}>
+      {contractReady ? 'Connect wallet to deposit' : 'Deposit unavailable'}
+    </button>
+    <button type="button" class="prize-panel__btn prize-panel__btn--ghost" data-action="withdraw" disabled={!contractReady}>
+      {contractReady ? 'Connect wallet to withdraw' : 'Withdraw unavailable'}
+    </button>
+  </div>
+
+  <p class="prize-panel__status" role="status" aria-live="polite" data-status>
+    {contractReady ? 'Deposits accrue tickets over time; withdrawals return principal.' : 'Contract address lands here after the ghostnet smoke test.'}
+  </p>
+
+  <p class="prize-panel__footnote">
+    Deposit signs <code>deposit()</code> with mutez attached. Withdraw signs <code>withdraw(amount_mutez)</code>.
+    Successful ops open on TzKT in the status line.
+  </p>
+</section>
+
+<script>
+  type WalletState = { chain?: string; address?: string; provider?: string };
+
+  const STORAGE_KEY = 'pc:wallet';
+
+  function short(addr: string) {
+    return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+  }
+
+  function loadWallet(): WalletState | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) as WalletState : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveWallet(wallet: WalletState | null) {
+    if (wallet) localStorage.setItem(STORAGE_KEY, JSON.stringify(wallet));
+    else localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: wallet }));
+  }
+
+  function tezToMutez(value: string): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.round(parsed * 1_000_000);
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-prize-cast-panel]').forEach((panel) => {
+    const contract = panel.dataset.contract || '';
+    const minDepositMutez = Number(panel.dataset.minDepositMutez ?? 1_000_000);
+    const amountInput = panel.querySelector<HTMLInputElement>('[data-amount-input]')!;
+    const walletStateEl = panel.querySelector<HTMLElement>('[data-wallet-state]')!;
+    const statusEl = panel.querySelector<HTMLElement>('[data-status]')!;
+    const depositBtn = panel.querySelector<HTMLButtonElement>('[data-action="deposit"]')!;
+    const withdrawBtn = panel.querySelector<HTMLButtonElement>('[data-action="withdraw"]')!;
+
+    function setStatus(html: string) {
+      statusEl.innerHTML = html;
+    }
+
+    function setBusy(busy: boolean) {
+      depositBtn.disabled = busy || !contract.startsWith('KT1');
+      withdrawBtn.disabled = busy || !contract.startsWith('KT1');
+      amountInput.disabled = busy || !contract.startsWith('KT1');
+    }
+
+    function renderButtons() {
+      if (!contract.startsWith('KT1')) {
+        walletStateEl.textContent = 'Not yet originated — ghostnet test pending.';
+        depositBtn.textContent = 'Deposit unavailable';
+        withdrawBtn.textContent = 'Withdraw unavailable';
+        return;
+      }
+
+      const wallet = loadWallet();
+      if (wallet?.address) {
+        walletStateEl.textContent = `Connected as ${short(wallet.address)} · ${wallet.provider ?? 'wallet'}`;
+        depositBtn.textContent = 'Deposit now';
+        withdrawBtn.textContent = 'Withdraw principal';
+      } else {
+        walletStateEl.textContent = 'Connect wallet to deposit.';
+        depositBtn.textContent = 'Connect wallet to deposit';
+        withdrawBtn.textContent = 'Connect wallet to withdraw';
+      }
+    }
+
+    async function ensureWallet(): Promise<string> {
+      const { connectKukai, getActiveAddress } = await import('../lib/tezos');
+      let address = await getActiveAddress();
+      if (!address) {
+        address = await connectKukai();
+      }
+      saveWallet({ chain: 'tezos', address, provider: 'kukai' });
+      renderButtons();
+      return address;
+    }
+
+    async function runOperation(kind: 'deposit' | 'withdraw') {
+      if (!contract.startsWith('KT1')) {
+        return;
+      }
+
+      setBusy(true);
+      const originalDeposit = depositBtn.textContent;
+      const originalWithdraw = withdrawBtn.textContent;
+      depositBtn.textContent = kind === 'deposit' ? 'Preparing…' : (originalDeposit || 'Deposit now');
+      withdrawBtn.textContent = kind === 'withdraw' ? 'Preparing…' : (originalWithdraw || 'Withdraw principal');
+
+      try {
+        const wallet = loadWallet();
+        if (!wallet?.address) {
+          setStatus('Opening Beacon wallet picker…');
+          const address = await ensureWallet();
+          setStatus(`Wallet connected as ${short(address)}. Enter an amount, then sign.`);
+          return;
+        }
+
+        const amountMutez = tezToMutez(amountInput.value);
+        if (kind === 'deposit' && amountMutez < minDepositMutez) {
+          setStatus(`Minimum deposit is ${(minDepositMutez / 1_000_000).toFixed(2)} ꜩ.`);
+          return;
+        }
+        if (kind === 'withdraw' && amountMutez <= 0) {
+          setStatus('Enter a withdraw amount in tez.');
+          return;
+        }
+
+        const { tezosClient } = await import('../lib/tezos');
+        const tezos = await tezosClient();
+        const c = await tezos.wallet.at(contract);
+        const ep = c.methodsObject as any;
+
+        if (!ep.deposit || !ep.withdraw) {
+          throw new Error('Prize Cast contract entrypoints not found.');
+        }
+
+        if (kind === 'deposit') {
+          depositBtn.textContent = 'Awaiting signature…';
+        } else {
+          withdrawBtn.textContent = 'Awaiting signature…';
+        }
+        setStatus(`Signing ${kind} as ${short(wallet.address)}…`);
+
+        const op = kind === 'deposit'
+          ? await ep.deposit().send({ amount: amountMutez, mutez: true })
+          : await ep.withdraw(amountMutez).send();
+
+        const shortHash = op.opHash?.slice(0, 10) ?? '—';
+        setStatus(`Broadcast <a href="https://tzkt.io/${op.opHash}" target="_blank" rel="noopener">${shortHash}…</a> · confirming…`);
+
+        await op.confirmation?.(1);
+        if (kind === 'deposit') {
+          depositBtn.textContent = 'Deposited ✓';
+        } else {
+          withdrawBtn.textContent = 'Withdrawn ✓';
+        }
+        setStatus(`Confirmed — <a href="https://tzkt.io/${op.opHash}" target="_blank" rel="noopener">view on TzKT</a>`);
+        amountInput.value = '';
+        window.dispatchEvent(new CustomEvent('pc:prize-cast-refresh'));
+      } catch (error: any) {
+        const message = error?.message || error?.errorType || String(error);
+        if (/reject|cancel|abort/i.test(message)) {
+          setStatus('Signing cancelled.');
+        } else if (/not found|entrypoints/i.test(message)) {
+          setStatus('Contract shape changed — check the Prize Cast entrypoints.');
+        } else if (/balance|NotEnough/i.test(message)) {
+          setStatus('Not enough tez to cover that amount.');
+        } else {
+          setStatus(`Error: ${String(message).slice(0, 180)}`);
+        }
+      } finally {
+        depositBtn.textContent = originalDeposit || 'Deposit now';
+        withdrawBtn.textContent = originalWithdraw || 'Withdraw principal';
+        setBusy(false);
+        renderButtons();
+      }
+    }
+
+    depositBtn.addEventListener('click', () => {
+      void runOperation('deposit');
+    });
+    withdrawBtn.addEventListener('click', () => {
+      void runOperation('withdraw');
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === STORAGE_KEY) renderButtons();
+    });
+    window.addEventListener('pc:wallet-change', () => renderButtons());
+
+    renderButtons();
+  });
+</script>
+
+<style>
+  .prize-panel {
+    border: 1.5px solid var(--pc-ink);
+    background: #fff;
+    padding: 14px;
+    border-radius: 2px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .prize-panel__head {
+    display: grid;
+    gap: 10px;
+  }
+
+  .prize-panel__kicker,
+  .prize-panel__wallet,
+  .prize-panel__label,
+  .prize-panel__facts dt,
+  .prize-panel__status,
+  .prize-panel__footnote {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .prize-panel__kicker {
+    color: var(--pc-accent);
+    margin-bottom: 6px;
+  }
+
+  .prize-panel__head h2 {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.08;
+    font-weight: 500;
+    color: var(--pc-ink);
+    max-width: 14ch;
+  }
+
+  .prize-panel__wallet {
+    color: var(--pc-ink-muted);
+  }
+
+  .prize-panel__field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .prize-panel__label {
+    color: var(--pc-ink-muted);
+  }
+
+  .prize-panel__field input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    padding: 12px 12px;
+    font-family: var(--pc-font-sans);
+    font-size: 18px;
+    color: var(--pc-ink);
+    background: #fff;
+  }
+
+  .prize-panel__field input:focus {
+    outline: 2px solid rgba(24, 95, 165, 0.18);
+    border-color: var(--pc-accent);
+  }
+
+  .prize-panel__facts {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .prize-panel__facts div {
+    border-top: 1px solid var(--pc-rule-soft);
+    padding-top: 10px;
+    display: grid;
+    gap: 4px;
+  }
+
+  .prize-panel__facts dd {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--pc-ink);
+  }
+
+  .prize-panel__actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  .prize-panel__btn {
+    border-radius: 2px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+  }
+
+  .prize-panel__btn--primary {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .prize-panel__btn--primary:not(:disabled):hover {
+    background: var(--pc-accent);
+    border-color: var(--pc-accent);
+  }
+
+  .prize-panel__btn--ghost {
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .prize-panel__btn--ghost:not(:disabled):hover {
+    border-color: var(--pc-accent);
+    color: var(--pc-accent);
+  }
+
+  .prize-panel__btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .prize-panel__status {
+    color: var(--pc-ink-muted);
+    min-height: 1.4rem;
+    line-height: 1.5;
+  }
+
+  .prize-panel__status a {
+    color: var(--pc-accent);
+  }
+
+  .prize-panel__footnote {
+    color: var(--pc-ink-muted);
+    line-height: 1.6;
+  }
+
+  .prize-panel__footnote code {
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: none;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 700px) {
+    .prize-panel__head {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+
+    .prize-panel__actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 420px) {
+    .prize-panel__facts {
+      grid-template-columns: 1fr;
+    }
+
+    .prize-panel__head h2 {
+      font-size: 22px;
+      max-width: none;
+    }
+  }
+</style>
