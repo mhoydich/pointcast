@@ -141,16 +141,34 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
         <img src={data.media.src} alt={data.title} loading="lazy" />
       </div>
     )}
+    {/* LISTEN-embed treatment: mount the iframe only on the detail page.
+        On the home grid a third-party iframe per card hits ~6s of cold
+        load (Manus QA 2026-04-17, finding 3.1). Facade is a static chip
+        that doubles as a "tap to open" affordance — the card's outer
+        anchor already routes to /b/{id}, where the iframe loads cleanly.
+     */}
     {data.media?.kind === 'embed' && data.type === 'LISTEN' && (
-      <div class="block-card__embed block-card__embed--audio">
-        <iframe
-          src={data.media.src}
-          loading="lazy"
-          frameborder="0"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          title={data.title}
-        ></iframe>
-      </div>
+      detail ? (
+        <div class="block-card__embed block-card__embed--audio">
+          <iframe
+            src={data.media.src}
+            loading="lazy"
+            frameborder="0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            title={data.title}
+          ></iframe>
+        </div>
+      ) : (
+        <div class="block-card__embed-facade" aria-hidden="true">
+          <span class="block-card__embed-facade-play">▶</span>
+          <span class="block-card__embed-facade-label">
+            {(() => {
+              try { return new URL(data.media.src).host.replace(/^www\./, ''); }
+              catch { return 'Open to play'; }
+            })()}
+          </span>
+        </div>
+      )
     )}
 
     {/* Body — notes, short READs, visit summaries */}
@@ -294,6 +312,33 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     height: 80px;
     display: block;
     border: 0;
+  }
+
+  /* Spotify/audio facade — tiny row that reads as a media chip without
+     loading the iframe. Matches the card's mono metadata rhythm. */
+  .block-card__embed-facade {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    padding: 4px 8px;
+    border: 1px solid var(--ch-600);
+    background: var(--ch-50);
+    color: var(--ch-800);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-radius: 2px;
+  }
+
+  .block-card__embed-facade-play {
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .block-card__embed-facade-label {
+    font-weight: 500;
   }
 
   .block-card__footer {
