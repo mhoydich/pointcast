@@ -285,6 +285,19 @@ const PAGES = [
     glyphSize: 200,
     siblings: ['/timeline.json', '/archive', '/for-agents'],
   },
+  {
+    slug: 'stack',
+    url: '/stack',
+    kind: 'tech disclosure',
+    kicker: 'STACK · TECH DISCLOSURE',
+    title: 'How this is built.',
+    dek: 'Astro, Cloudflare Pages, SmartPy, Taquito, Beacon, TzKT, noun.pics — and what we skipped.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '{}',
+    glyphSize: 220,
+    siblings: ['/stack.json', '/agents.json'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {

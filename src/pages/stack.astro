@@ -1,0 +1,362 @@
+---
+/**
+ * /stack — technical disclosure page.
+ *
+ * Part of the agent-native / "taste meets machine" thesis: if the site
+ * is transparent about what it's built on, agents can reason about it
+ * more precisely and humans can trust it more directly. This page
+ * documents the runtime, content, on-chain, and identity layers.
+ *
+ * Companion /stack.json mirrors the same data as JSON.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+type StackItem = {
+  name: string;
+  url?: string;
+  version?: string;
+  role: string;
+  why: string;
+};
+
+type StackLayer = {
+  code: string;
+  name: string;
+  note: string;
+  items: StackItem[];
+};
+
+const LAYERS: StackLayer[] = [
+  {
+    code: 'RT',
+    name: 'Runtime',
+    note: 'Static site compiled once, served from the edge. No server processes, no databases — state lives in files + Cloudflare KV.',
+    items: [
+      { name: 'Astro 6.1', url: 'https://astro.build', role: 'static-site framework', why: 'Islands + file-based routing + content collections keep the Blocks primitive expressible without a CMS.' },
+      { name: 'Cloudflare Pages', url: 'https://pages.cloudflare.com', role: 'static hosting + edge functions', why: 'Global edge, Pages Functions for the middleware (agent-mode UA sniff, presence, metadata endpoint), and KV for presence counters.' },
+      { name: 'Vite', url: 'https://vitejs.dev', role: 'bundler', why: 'Ships with Astro. Zero config once the Inter/JetBrains Mono variable fonts are wired via @fontsource-variable.' },
+      { name: 'TypeScript', url: 'https://www.typescriptlang.org', role: 'types', why: 'Blocks schema is type-checked, channel codes are a union type, no drift between docs and code.' },
+    ],
+  },
+  {
+    code: 'CT',
+    name: 'Content',
+    note: 'Every block is a JSON file in src/content/blocks/. The BLOCKS.md schema is the source of truth; the repo is the CMS.',
+    items: [
+      { name: 'Astro Content Collections', url: 'https://docs.astro.build/en/guides/content-collections/', role: 'typed content layer', why: 'getCollection() gives schema-validated blocks at build time. Zero runtime content lookup.' },
+      { name: 'Markdown', url: 'https://daringfireball.net/projects/markdown/', role: 'long-form body format', why: 'Body text on READ-type blocks; posts/ directory for long-form Cowork essays.' },
+      { name: 'Inter (Variable)', url: 'https://rsms.me/inter/', role: 'sans-serif display + body', why: 'Self-hosted via @fontsource-variable/inter. No Google Fonts request.' },
+      { name: 'JetBrains Mono (Variable)', url: 'https://www.jetbrains.com/lp/mono/', role: 'monospace', why: 'Self-hosted variable. Every BlockCard header + footer line uses it; kickers, IDs, timestamps.' },
+    ],
+  },
+  {
+    code: 'TZ',
+    name: 'On-chain (Tezos)',
+    note: 'Free mainnet FA2 + planned FA1.2 + Prize Cast. Signer keys are throwaways; admin is Mike\'s wallet post-transfer.',
+    items: [
+      { name: 'SmartPy 0.24', url: 'https://smartpy.io', role: 'contract language', why: 'Python-flavored Michelson compiler. contracts/v2/*.py → Michelson JSON → originated via Taquito.' },
+      { name: 'Taquito 24.2', url: 'https://tezostaquito.io', role: 'Tezos JS SDK', why: 'Originates contracts, calls entrypoints, reads storage. Beacon-integrated for wallet-signed ops.' },
+      { name: 'Beacon SDK 24.2', url: 'https://walletbeacon.io', role: 'wallet connector', why: 'Kukai, Temple, Umami, Altme — one protocol, any wallet. 24.2 required network at DAppClient instantiation, not requestPermissions (a footgun we hit in v4).' },
+      { name: 'TzKT', url: 'https://tzkt.io', role: 'indexer + REST API', why: 'Live totalSupply, token metadata, account balances. Polled at build time for /collection, /editions, /now.' },
+      { name: 'objkt.com', url: 'https://objkt.com', role: 'marketplace', why: 'Every Visit Nouns mint surfaces in the collection page. /collect tokens list via objkt CDN.' },
+      { name: 'noun.pics', url: 'https://noun.pics', role: 'CC0 Nouns avatars', why: 'Source for all Noun glyphs on the site. Seed IDs 0-1199; CC0 per nouns.wtf.' },
+    ],
+  },
+  {
+    code: 'AG',
+    name: 'Agent layer',
+    note: 'Four ways for machines to consume PointCast without scraping HTML.',
+    items: [
+      { name: '/agents.json', url: 'https://pointcast.xyz/agents.json', role: 'discovery manifest', why: 'One request → every endpoint, contract, channel, type, agent-mode spec. Aliased at .well-known/agents.json.' },
+      { name: 'JSON Feed v1.1', url: 'https://pointcast.xyz/feed.json', role: 'standards feed', why: 'Every block in jsonfeed.org v1.1 format. Most modern readers speak it.' },
+      { name: 'JSON-LD (schema.org)', url: 'https://schema.org', role: 'inline structured data', why: 'Every page carries JSON-LD: CreativeWork on blocks, CollectionPage on indexes, WebApplication on /battle.' },
+      { name: 'Stripped HTML mode', role: 'UA-based CSS/JS strip', why: 'ai:* User-Agents + GPTBot/ClaudeBot/etc get CSS and JS removed at the edge via HTMLRewriter. ~12% payload savings.' },
+      { name: 'llms.txt', url: 'https://pointcast.xyz/llms.txt', role: 'LLM summary', why: 'Emerging convention: a markdown doc summarizing the site for LLMs.' },
+    ],
+  },
+  {
+    code: 'TM',
+    name: 'Team',
+    note: 'Multi-agent workflow. Mike is the director; the rest are hands.',
+    items: [
+      { name: 'Mike Hoydich', url: 'https://pointcast.xyz/about', role: 'director · strategy · content · approvals', why: 'Writes the dispatches, makes brand/aesthetic/GTM calls, approves merges + contract deploys.' },
+      { name: 'Claude Code', url: 'https://claude.com/claude-code', role: 'primary engineer', why: 'Architecture, schema, rendering, routing, contracts, deploys. Default to sonnet; 1M-context for multi-hour sessions.' },
+      { name: 'Codex', url: 'https://openai.com/codex', role: 'specialist reviewer', why: 'Code review before main merges; alternative UI passes; second opinions. Medium reasoning, serial runs — xhigh concurrent hangs observed.' },
+      { name: 'Manus', url: 'https://manus.im', role: 'operations + computer-use', why: 'Behind-login ops: deploy settings, DNS, objkt collection admin, end-to-end mint testing as a real user.' },
+    ],
+  },
+  {
+    code: 'NO',
+    name: 'Deliberately not using',
+    note: 'Things we skipped on purpose. Not exhaustive — just the interesting no\'s.',
+    items: [
+      { name: 'Google Analytics / GA4', role: 'no analytics', why: 'Privacy by default. No telemetry, no cookie banners, no fingerprinting. If we add analytics later it will be Plausible or Fathom, first-party, self-hosted.' },
+      { name: 'React / Next.js / SPA framework', role: 'static-first', why: 'Hydrating JSX is overkill for a content site. Astro ships HTML + tiny islands; typical page is under 20KB of JS.' },
+      { name: 'WalletConnect / Rainbow Kit', role: 'Tezos-only wallets', why: 'Beacon is the native Tezos standard. We don\'t pretend to be multichain.' },
+      { name: 'Search-as-a-service', role: 'client-side search', why: '/search bakes the index into the page (~6KB). No Algolia, no Meilisearch, no network round-trip.' },
+      { name: 'Cookie banner', role: 'no tracking cookies', why: 'No cookies set by PointCast. Wallets set their own. Nothing to consent to.' },
+    ],
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  '@id': 'https://pointcast.xyz/stack',
+  name: 'PointCast · stack',
+  description: 'Technical disclosure: runtime, content, Tezos, agent-layer, team.',
+  url: 'https://pointcast.xyz/stack',
+};
+---
+
+<BlockLayout
+  title="Stack"
+  description="What PointCast is built on — Astro, Cloudflare Pages, SmartPy, Taquito, Beacon, TzKT, noun.pics. And what we deliberately skipped."
+  image="/images/og/stack.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/stack.json', title: 'Stack (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>stack</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">STACK · TECHNICAL DISCLOSURE</p>
+      <h1 class="display">How this is built.</h1>
+      <p class="dek">
+        PointCast is a static site compiled once and served from the edge.
+        This page documents every layer — runtime, content, on-chain, agent,
+        team — so agents can reason about the system and humans can trust it.
+      </p>
+    </header>
+
+    {LAYERS.map((layer) => (
+      <section class="layer">
+        <header class="layer__head">
+          <div class="layer__head-top">
+            <p class="layer__code mono">{layer.code}</p>
+            <h2 class="layer__title">{layer.name}</h2>
+          </div>
+          <p class="layer__note">{layer.note}</p>
+        </header>
+        <ul class="items">
+          {layer.items.map((item) => (
+            <li class="item">
+              <div class="item__head">
+                {item.url ? (
+                  <a class="item__name" href={item.url} target={item.url.startsWith('http') ? '_blank' : '_self'} rel={item.url.startsWith('http') ? 'noopener' : undefined}>
+                    {item.name}
+                    {item.url.startsWith('http') && <span aria-hidden="true"> ↗</span>}
+                  </a>
+                ) : (
+                  <span class="item__name">{item.name}</span>
+                )}
+                <span class="item__role mono">{item.role}</span>
+              </div>
+              <p class="item__why">{item.why}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+
+    <aside class="surfaces">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="surfaces__list">
+        <li><a href="/stack.json"><span class="mono">GET</span> /stack.json</a></li>
+        <li><a href="/agents.json"><span class="mono">GET</span> /agents.json</a></li>
+        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
+        <li><a href="https://github.com/MikeHoydich/pointcast" target="_blank" rel="noopener"><span class="mono">REPO</span> GitHub ↗</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero {
+    margin-bottom: 28px;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.2rem, 9vw, 4rem);
+    font-weight: 500;
+    line-height: 0.96;
+    letter-spacing: -0.018em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 58ch;
+  }
+
+  .layer {
+    margin-bottom: 28px;
+  }
+
+  .layer__head {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .layer__head-top {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .layer__code {
+    color: var(--pc-accent);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    border: 1px solid var(--pc-accent);
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+
+  .layer__title {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  .layer__note {
+    margin: 0;
+    font-size: 14px;
+    color: var(--pc-ink-soft);
+    line-height: 1.5;
+    max-width: 70ch;
+  }
+
+  .items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .item {
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+  }
+
+  .item:last-child {
+    border-bottom: 0;
+  }
+
+  .item__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+
+  .item__name {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  .item__name[href]:hover {
+    color: var(--pc-accent);
+    text-decoration: none;
+  }
+
+  .item__role {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .item__why {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+
+  .surfaces {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 38px;
+  }
+
+  @media (min-width: 720px) {
+    .surfaces__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>
