@@ -132,12 +132,52 @@ Prototype sketch: `sketches/codex/nouns-battler-v0.html`
 - [x] (X) Phase 1 spec review: 8 blocking items all addressed
 - [x] (X) Nouns Battler design + prototype sketch + Phase 1 implementation review
 
-### Mainnet pipeline — armed, awaiting funding
-- [x] `scripts/deploy-visit-nouns-mainnet.mjs` — tested path, identical to Shadownet
-- [x] `scripts/post-mainnet-wire.mjs` — writes KT1 into `src/data/contracts.json`
-- [x] `scripts/post-mainnet-batch-mint.mjs` — mints [137, 205, 420, 417, 1, 42, 99, 777, 808, 1111]
-- [x] `scripts/post-mainnet-auto.sh` — polling daemon chaining origination → wire → mint → build → deploy (running as PID 96871 via nohup)
-- [ ] Funding: ≥25 ꜩ to `tz1PS4WgbYCKcKnfbfMNSH44JfrnFVhkcKp1` — `waiting-on-mh` (Daniel call in progress)
+### Mainnet pipeline — ✅ LIVE
+- [x] Funding arrived 2026-04-17T20:48 (25 ꜩ from tz2FjJhB → tz1PS4W throwaway)
+- [x] **Visit Nouns FA2 originated: `KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh`**
+- [x] 10 starter Nouns minted (seeds 1, 42, 99, 137, 205, 417, 420, 777, 808, 1111)
+- [x] `scripts/post-mainnet-auto.sh` completed full cascade
+- [x] Block 0229 commemorative flipped draft:false with real KT1
+- [x] `set_metadata_base_cid` on-chain via op `oorQrDKPGmDqpq8QnicAuskcwxLMQX4mqqeZ2PRh15ob6J3uP4F` → future mints have working URIs
+- [x] `functions/api/tezos-metadata/[tokenId].ts` serves TZIP-21 JSON per token
+- [x] 10 mint visualized as Blocks 0230-0239 via `scripts/import-visit-nouns.mjs`
+- [x] `/collection/visit-nouns` gallery page (live TzKT data)
+- [ ] (MH) Proto-mint decision: the 10 pre-metadata-fix mints have their URIs frozen on-chain and show "no cover available" on objkt. Three paths:
+  - (a) accept as archaeology; future mints work
+  - (b) re-originate v2 contract + re-mint (4 ꜩ; throwaway has 14.8 ꜩ)
+  - (c) SmartPy patch + contract upgrade (most work)
+- [ ] (MH) Admin transfer: `node scripts/transfer-admin.mjs` when ready
+
+### Wallet + Login (shipped)
+- [x] WalletChip in home masthead — 4-wallet Beacon picker (Kukai/Temple/Umami/Airgap) + TzKT-backed visualizer (balance, NFT count, ops count, TzKT deep-link)
+- [x] Beacon SDK 24.2 network-property fix applied in `src/lib/tezos.ts`
+- [x] MintButton dispatch extended to `mint()` entrypoint alongside `mint_noun` / `claim`
+
+### Prize Cast (no-loss prize savings) — ARCHITECTED
+- [x] PM brief: `docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md`
+- [x] `contracts/v2/prize_cast.py` — 463-line SmartPy v0.24 contract (Codex delivery)
+- [x] `scripts/deploy-prize-cast-ghostnet.mjs` — ghostnet origination
+- [x] `contracts/v2/README-prize-cast.md` — design doc + randomness tradeoffs
+- [ ] Compile via smartpy.io / docker (not installed locally)
+- [ ] Originate on ghostnet for smoke test
+- [ ] Frontend `/cast` page (2nd Codex session, after ghostnet deploy)
+
+### Battler Phase 2 — ✅ SHIPPED
+- [x] localStorage match log capped at 50 entries
+- [x] Export-match-as-JSON button on completion
+- [x] `/battle-log` — dedicated archive page
+- [x] `/battle.json` — agent-readable rules + card-of-day + entrypoints
+
+### Engineering polish (shipped today)
+- [x] Block 0228 — SPN LINK wires /drum into the v2 grid
+- [x] Spotify iframe facade on LISTEN-embed cards (Manus QA 3.1)
+- [x] Dead IPFS gateway (cloudflare-ipfs) → objkt CDN + ipfs.io fallback across 20 NFT blocks (0300-0319)
+- [x] LINK block dead-click fix on `/b/[id]` — external-CTA strip for non-MINT blocks
+- [x] Image sizing on detail pages (52vh cap + object-fit:contain)
+- [x] READ block article typography (paragraphs, 16px mobile / 17px desktop)
+- [x] Block 0168 — Hemp THC terminal dispatch (GF READ)
+- [x] Block 0169 — Streetwear terminal dispatch (FD READ)
+- [x] `/for-agents` updated with new endpoints + live contract record
 
 ### Production URL
 **`https://pointcast.xyz`** — v2 live. Preview URL `blocks-rebuild.pointcast.pages.dev` retired with cutover.
