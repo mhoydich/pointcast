@@ -1,0 +1,310 @@
+---
+/**
+ * BlockCard — the single primitive that renders every piece of content on
+ * pointcast.xyz v2. Grammar per BLOCKS.md:
+ *
+ *   ┌───────────────────────────────────────────────────┐
+ *   │ CH.{CODE} · {ID}         {TYPE}  {TIMESTAMP}      │  ← header
+ *   │                                                   │
+ *   │ Title in sentence case, sans, weight 500          │
+ *   │                                                   │
+ *   │ Body or media treatment (varies by type)          │
+ *   │                                                   │
+ *   │                                                   │
+ *   │ FOOTER META · per type (reading time / ED count)  │  ← footer
+ *   └───────────────────────────────────────────────────┘
+ *
+ * Every block shares the same frame; the body swaps on type. Hard corners,
+ * 1.5px channel-colored border, optional 6px left accent bar on READ type.
+ */
+import type { CollectionEntry } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import { BLOCK_TYPES } from '../lib/block-types';
+
+interface Props {
+  block: CollectionEntry<'blocks'>;
+  /** If true, renders a larger body preview (used on single-block pages). */
+  detail?: boolean;
+}
+
+const { block, detail = false } = Astro.props;
+const data = block.data;
+const channel = CHANNELS[data.channel];
+const typeSpec = BLOCK_TYPES[data.type];
+
+// Compact timestamp: "04.17 · 07:22 PT"
+const ts = data.timestamp;
+const fmt = new Intl.DateTimeFormat('en-US', {
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'America/Los_Angeles',
+}).formatToParts(ts);
+const part = (t: string) => fmt.find((p) => p.type === t)?.value ?? '';
+const tsShort = `${part('month')}.${part('day')} · ${part('hour')}:${part('minute')} PT`;
+
+// Grid footprint per size. Default 1x1 → one column, one row; 2x1 spans 2
+// columns etc. Tablet + mobile downgrades are handled in global.css with
+// media queries on the grid container.
+const sizeClassMap: Record<string, string> = {
+  '1x1': 'span-1x1',
+  '2x1': 'span-2x1',
+  '1x2': 'span-1x2',
+  '2x2': 'span-2x2',
+  '3x2': 'span-3x2',
+};
+const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
+
+// Domain extraction for LINK footer
+function extractHost(url?: string) {
+  if (!url) return '';
+  try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; }
+}
+---
+
+<article
+  class:list={[
+    'block-card',
+    `type-${data.type.toLowerCase()}`,
+    `channel-${data.channel.toLowerCase()}`,
+    sizeClass,
+    { 'block-card--detail': detail, 'block-card--accent': data.type === 'READ' },
+  ]}
+  style={{
+    '--ch-600': channel.color600,
+    '--ch-800': channel.color800,
+    '--ch-50': channel.color50,
+  }}
+>
+  <a href={`/b/${data.id}`} class="block-card__link" aria-label={`Block ${data.id}: ${data.title}`}>
+    <header class="block-card__header">
+      <span class="block-card__code">CH.{channel.code} · {data.id}</span>
+      <span class="block-card__type-tag">{typeSpec.label}</span>
+      <time class="block-card__time" datetime={ts.toISOString()}>{tsShort}</time>
+    </header>
+
+    {data.noun !== undefined && !detail && (
+      <img
+        src={`https://noun.pics/${data.noun}.svg`}
+        alt=""
+        aria-hidden="true"
+        width="28"
+        height="28"
+        loading="lazy"
+        class="block-card__noun"
+        style="image-rendering: pixelated;"
+      />
+    )}
+
+    <h3 class="block-card__title">{data.title}</h3>
+    {data.dek && <p class="block-card__dek">{data.dek}</p>}
+
+    {/* Media treatment — image or embed */}
+    {data.media?.kind === 'image' && (
+      <div class="block-card__media">
+        <img src={data.media.src} alt={data.title} loading="lazy" />
+      </div>
+    )}
+    {data.media?.kind === 'embed' && data.type === 'LISTEN' && (
+      <div class="block-card__embed block-card__embed--audio">
+        <iframe
+          src={data.media.src}
+          loading="lazy"
+          frameborder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          title={data.title}
+        ></iframe>
+      </div>
+    )}
+
+    {/* Body — notes, short READs, visit summaries */}
+    {data.body && (data.type === 'NOTE' || data.type === 'VISIT' || data.type === 'LINK' || (detail && data.type === 'READ')) && (
+      <p class="block-card__body">{data.body}</p>
+    )}
+
+    {/* Footer meta — type-specific */}
+    <footer class="block-card__footer">
+      {typeSpec.footerHint === 'readingTime' && data.readingTime && (
+        <span class="block-card__meta">{data.readingTime} · ED {data.edition ? `${data.edition.minted}/${data.edition.supply === 'open' ? '∞' : data.edition.supply}` : '—'}</span>
+      )}
+      {typeSpec.footerHint === 'externalLink' && data.external && (
+        <span class="block-card__meta">{extractHost(data.external.url)} ↗</span>
+      )}
+      {typeSpec.footerHint === 'destination' && data.external && (
+        <span class="block-card__meta">{extractHost(data.external.url)} ↗</span>
+      )}
+      {typeSpec.footerHint === 'edition' && data.edition && (
+        <span class="block-card__meta">
+          {data.edition.price === 'free' ? 'FREE' : `${data.edition.price?.tez ?? '—'} ꜩ`}
+          {' · '}
+          ED {data.edition.minted}/{data.edition.supply === 'open' ? '∞' : data.edition.supply}
+        </span>
+      )}
+      {typeSpec.footerHint === 'claimStatus' && data.edition && (
+        <span class="block-card__meta">
+          CLAIMED {data.edition.minted}/{data.edition.supply === 'open' ? '∞' : data.edition.supply} TODAY
+        </span>
+      )}
+      {typeSpec.footerHint === 'location' && data.meta?.location && (
+        <span class="block-card__meta">{data.meta.location}</span>
+      )}
+      {typeSpec.footerHint === 'agent' && data.visitor && (
+        <span class="block-card__meta">
+          {data.visitor.vendor ?? data.visitor.name ?? (data.visitor.kind === 'agent' ? 'AGENT' : 'HUMAN')}
+        </span>
+      )}
+    </footer>
+  </a>
+</article>
+
+<style>
+  .block-card {
+    position: relative;
+    display: block;
+    background: #fff;
+    border: 1.5px solid var(--ch-600);
+    border-radius: 2px;
+    overflow: hidden;
+    container-type: inline-size;
+  }
+
+  .block-card--accent {
+    border-left-width: 6px;
+  }
+
+  .block-card__link {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    color: inherit;
+    text-decoration: none;
+    height: 100%;
+  }
+
+  .block-card__link:hover .block-card__title {
+    color: var(--ch-800);
+  }
+
+  .block-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+    font-weight: 500;
+  }
+
+  .block-card__code {
+    white-space: nowrap;
+  }
+
+  .block-card__type-tag {
+    font-size: 9px;
+    padding: 2px 6px;
+    border: 1px solid var(--ch-600);
+    color: var(--ch-800);
+    background: var(--ch-50);
+    border-radius: 1px;
+  }
+
+  .block-card__time {
+    color: #5F5E5A;
+    font-size: 9px;
+    font-weight: 400;
+  }
+
+  .block-card__noun {
+    align-self: flex-start;
+    border: 1px solid var(--ch-600);
+    border-radius: 2px;
+  }
+
+  .block-card__title {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: #12110E;
+    margin: 0;
+  }
+
+  .block-card__dek {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #38373A;
+    margin: 0;
+  }
+
+  .block-card__body {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #38373A;
+    margin: 0;
+  }
+
+  .block-card__media {
+    margin: 2px -16px;
+  }
+
+  .block-card__media img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+
+  .block-card__embed--audio {
+    margin: 2px -16px;
+  }
+
+  .block-card__embed iframe {
+    width: 100%;
+    height: 80px;
+    display: block;
+    border: 0;
+  }
+
+  .block-card__footer {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px dashed color-mix(in oklab, var(--ch-600) 30%, #fff);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .block-card__meta {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  /* Size variants — grid spans on desktop; gracefully fall back on tablet / mobile */
+  .span-1x1 { grid-column: span 1; }
+  .span-2x1 { grid-column: span 2; }
+  .span-1x2 { grid-row: span 2; }
+  .span-2x2 { grid-column: span 2; grid-row: span 2; }
+  .span-3x2 { grid-column: span 3; grid-row: span 2; }
+
+  @media (max-width: 1023px) {
+    .span-2x1, .span-2x2, .span-3x2 { grid-column: span 2; grid-row: auto; }
+  }
+
+  @media (max-width: 639px) {
+    .span-1x1, .span-2x1, .span-1x2, .span-2x2, .span-3x2 {
+      grid-column: span 1;
+      grid-row: auto;
+    }
+  }
+</style>

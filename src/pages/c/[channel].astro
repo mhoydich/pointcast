@@ -1,0 +1,136 @@
+---
+/**
+ * /c/{channel} — channel-listing page. Filtered Block grid for one channel.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import BlockCard from '../../components/BlockCard.astro';
+import { CHANNELS, CHANNEL_LIST } from '../../lib/channels';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  return CHANNEL_LIST.map((ch) => ({
+    params: { channel: ch.slug },
+    props: { channelSlug: ch.slug, channelCode: ch.code },
+  }));
+}
+
+const { channelSlug, channelCode } = Astro.props as { channelSlug: string; channelCode: keyof typeof CHANNELS };
+const ch = CHANNELS[channelCode];
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft && data.channel === channelCode))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+---
+
+<BaseLayout title={`CH.${ch.code} · ${ch.name} — PointCast`} description={ch.purpose}>
+  <div class="page">
+    <header class="ch-header" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
+      <a href="/" class="ch-header__back">← All channels</a>
+      <div class="ch-header__title">
+        <span class="ch-header__code">CH.{ch.code}</span>
+        <h1 class="ch-header__name">{ch.name}</h1>
+      </div>
+      <p class="ch-header__purpose">{ch.purpose}</p>
+      <nav class="ch-header__feeds">
+        <a href={`/c/${ch.slug}.rss`}>RSS</a>
+        <span aria-hidden="true">·</span>
+        <a href={`/c/${ch.slug}.json`}>JSON</a>
+      </nav>
+    </header>
+
+    <main class="grid" role="main">
+      {blocks.length === 0 ? (
+        <p class="empty">No blocks in this channel yet. Early days.</p>
+      ) : (
+        blocks.map((block) => <BlockCard block={block} />)
+      )}
+    </main>
+  </div>
+</BaseLayout>
+
+<style>
+  .page { max-width: 1480px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .ch-header {
+    padding: 16px 0 14px;
+    border-bottom: 1.5px solid var(--ch-600);
+    margin-bottom: 16px;
+  }
+
+  .ch-header__back {
+    display: inline-block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5F5E5A;
+    text-decoration: none;
+    margin-bottom: 12px;
+  }
+
+  .ch-header__back:hover { color: var(--ch-800); }
+
+  .ch-header__title {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .ch-header__code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    background: var(--ch-50);
+    border: 1px solid var(--ch-600);
+    color: var(--ch-800);
+  }
+
+  .ch-header__name {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--ch-800);
+  }
+
+  .ch-header__purpose {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    color: #38373A;
+    margin: 6px 0 10px;
+  }
+
+  .ch-header__feeds {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5F5E5A;
+    display: flex;
+    gap: 10px;
+  }
+
+  .ch-header__feeds a { color: var(--ch-800); text-decoration: none; }
+  .ch-header__feeds a:hover { text-decoration: underline; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: minmax(160px, auto);
+    grid-auto-flow: dense;
+    gap: 8px;
+  }
+
+  @media (max-width: 1279px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 1023px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 639px)  { .grid { grid-template-columns: 1fr; gap: 12px; } }
+
+  .empty {
+    grid-column: 1 / -1;
+    padding: 24px 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #5F5E5A;
+  }
+</style>

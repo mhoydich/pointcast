@@ -1,0 +1,107 @@
+---
+/**
+ * /b/{id} — single-block permalink page.
+ *
+ * Static-generated per block. Renders the BlockCard in "detail" mode:
+ * bigger type, no size-span truncation, full body. Also surfaces the
+ * JSON endpoint alongside so agents can discover `/b/{id}.json` from
+ * here.
+ *
+ * Permalinks are immutable per BLOCKS.md — a retired block 404s, the
+ * ID is never re-issued.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import BlockCard from '../../components/BlockCard.astro';
+import { CHANNELS } from '../../lib/channels';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  return blocks.map((block) => ({
+    params: { id: block.data.id },
+    props: { block },
+  }));
+}
+
+interface Props { block: CollectionEntry<'blocks'>; }
+const { block } = Astro.props;
+const ch = CHANNELS[block.data.channel];
+
+const title = `CH.${ch.code} · ${block.data.id} — ${block.data.title}`;
+const description = block.data.dek ?? block.data.body?.slice(0, 180) ?? block.data.title;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="page">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <a href={`/c/${ch.slug}`} style={`color: ${ch.color800}`}>CH.{ch.code} · {ch.name}</a>
+      <span aria-hidden="true">/</span>
+      <span>№ {block.data.id}</span>
+    </nav>
+
+    <div class="detail-frame">
+      <BlockCard block={block} detail />
+    </div>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href={`/b/${block.data.id}.json`}>/b/{block.data.id}.json</a></li>
+        <li><a href={`/c/${ch.slug}.json`}>/c/{ch.slug}.json</a></li>
+        <li><a href={`/c/${ch.slug}.rss`}>/c/{ch.slug}.rss</a></li>
+      </ul>
+    </aside>
+  </div>
+</BaseLayout>
+
+<style>
+  .page {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 20px 20px 80px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    gap: 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5F5E5A;
+    margin-bottom: 20px;
+  }
+
+  .breadcrumb a { color: #185FA5; text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+
+  .detail-frame :global(.block-card) {
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+
+  .agent-strip {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px dashed #C4C2BC;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .agent-strip__label { margin: 0 0 6px; color: #38373A; font-weight: 500; }
+
+  .agent-strip ul {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .agent-strip a { color: #185FA5; text-decoration: none; }
+  .agent-strip a:hover { text-decoration: underline; }
+</style>

@@ -1,5 +1,83 @@
 import { defineCollection, z } from 'astro:content';
-import { glob } from 'astro/loaders';
+import { glob, file } from 'astro/loaders';
+
+/**
+ * blocks — v2 primary collection.
+ *
+ * Every piece of content on PointCast is a Block. Schema follows BLOCKS.md
+ * at the repo root. Each block is a JSON file in `src/content/blocks/`
+ * named by its zero-padded 4-digit ID (e.g. `0205.json`).
+ *
+ * IDs are immutable and monotonically increasing across the archive. Never
+ * reuse, never renumber. A retired block 404s — its ID is never handed to
+ * something else.
+ */
+const blocks = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/blocks' }),
+  schema: z.object({
+    id: z.string().regex(/^\d{4}$/, 'id must be 4-digit zero-padded string'),
+    channel: z.enum(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST']),
+    type: z.enum(['READ', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'NOTE', 'VISIT', 'LINK']),
+    title: z.string(),
+    body: z.string().optional(),
+    timestamp: z.coerce.date(),
+    size: z.enum(['1x1', '2x1', '1x2', '2x2', '3x2']).default('1x1'),
+    noun: z.number().int().min(0).max(1875).optional(),
+
+    // Edition / mint metadata (Tezos-only in v2)
+    edition: z
+      .object({
+        supply: z.union([z.number().int().positive(), z.literal('open')]),
+        minted: z.number().int().min(0).default(0),
+        price: z.union([
+          z.object({ tez: z.number().nonnegative().optional(), usd: z.number().nonnegative().optional() }),
+          z.literal('free'),
+        ]),
+        chain: z.literal('tezos').default('tezos'),
+        contract: z.string().regex(/^KT1[A-Za-z0-9]{33}$/, 'contract must be a KT1 address'),
+        tokenId: z.number().int().min(0),
+        marketplace: z.enum(['objkt', 'fxhash', 'teia']).optional(),
+      })
+      .optional(),
+
+    media: z
+      .object({
+        kind: z.enum(['image', 'audio', 'video', 'embed']),
+        src: z.string(),
+      })
+      .optional(),
+
+    external: z
+      .object({
+        label: z.string(),
+        url: z.string().url(),
+      })
+      .optional(),
+
+    // Agent-readable tags. Free-form, but keys used consistently become a
+    // de-facto tag taxonomy over time.
+    meta: z.record(z.string(), z.string()).optional(),
+
+    // READ-type specifics
+    readingTime: z.string().optional(),   // e.g. "4 min"
+    dek: z.string().optional(),           // one-line editorial subtitle
+
+    // VISIT-type specifics (carried from v1's visit-drop concept)
+    visitor: z
+      .object({
+        kind: z.enum(['human', 'agent']),
+        name: z.string().optional(),       // handle or display name
+        vendor: z.string().optional(),     // "Claude", "Perplexity", etc.
+        geo: z.string().optional(),        // city or region
+        nounId: z.number().int().optional(),
+      })
+      .optional(),
+
+    draft: z.boolean().default(false),
+  }),
+});
+
+/* ----- v1 legacy collections — retained while content migrates ----- */
 
 const posts = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/posts' }),
@@ -28,18 +106,6 @@ const projects = defineCollection({
   }),
 });
 
-/**
- * drops — short-form stream-of-moment feed items.
- *
- * Each drop is a markdown file; frontmatter `type` picks the renderer in
- * src/components/FeedItem.astro. Markdown body is used by note/quote/visit
- * types for voice; other types (spotify/link/image/video/etc.) use the `url`
- * + `caption` fields and ignore the body.
- *
- * Implemented types: spotify, link, note, quote, image, visit.
- * Pending types (render as generic link card until their embed lands):
- *   video, twitch, tumblr, twitter, instagram, arena, objkt, fxhash, mirror.
- */
 const drops = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/drops' }),
   schema: z.object({
@@ -52,26 +118,21 @@ const drops = defineCollection({
     title: z.string().optional(),
     url: z.string().optional(),
     caption: z.string().optional(),
-    // quote-specific
     attribution: z.string().optional(),
-    // visit-specific (Claude's log entries)
     nounId: z.number().optional(),
     readSlug: z.string().optional(),
     readTitle: z.string().optional(),
     becameDispatch: z.string().optional(),
     model: z.string().optional(),
-    // spotify-specific: override default compact embed
     variant: z.enum(['compact', 'full', 'auto']).optional(),
-    // image drops + objkt/fxhash unfurls
     image: z.string().optional(),
-    // objkt/fxhash unfurl fields
     artist: z.string().optional(),
-    supply: z.number().optional(),          // total editions
-    priceXtz: z.number().optional(),        // ask price in tez, if listed
-    contract: z.string().optional(),        // KT1… FA2 contract
-    tokenId: z.string().optional(),         // token id on contract
+    supply: z.number().optional(),
+    priceXtz: z.number().optional(),
+    contract: z.string().optional(),
+    tokenId: z.string().optional(),
     draft: z.boolean().default(false),
   }),
 });
 
-export const collections = { posts, projects, drops };
+export const collections = { blocks, posts, projects, drops };
