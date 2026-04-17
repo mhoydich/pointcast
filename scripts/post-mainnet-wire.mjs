@@ -14,8 +14,10 @@ import path from 'node:path';
 
 const KT1_PATH = '/tmp/pointcast-visit-nouns-mainnet-kt1.txt';
 const SHADOWNET_KT1 = 'KT1S8BbKPzWjTRQgnc986Az8A187V886UtK5';
+const MAINNET_PLACEHOLDER = 'KT1_MAINNET_PLACEHOLDER'; // swapped out of Block 0229 when origination lands
 const CONTRACTS_JSON = path.resolve(process.cwd(), 'src/data/contracts.json');
 const BLOCKS_DIR = path.resolve(process.cwd(), 'src/content/blocks');
+const COMMEMORATIVE_BLOCK = path.resolve(process.cwd(), 'src/content/blocks/0229.json');
 
 function log(...args) { console.log('[wire]', ...args); }
 
@@ -47,21 +49,38 @@ async function main() {
     log('✓ contracts.json updated');
   }
 
-  // 2. Rewrite any Block JSONs that reference the Shadownet KT1 → mainnet KT1.
-  //    Only Block 0209 (now LINK, no edition) and 0210 (FAUCET w/ Shadownet KT1)
-  //    and 0220 (Battler teaser, no edition) exist — so in practice this is 0210.
+  // 2. Rewrite any Block JSONs that reference the Shadownet KT1 → mainnet KT1,
+  //    and swap the KT1_MAINNET_PLACEHOLDER token in Block 0229 (the
+  //    commemorative "FA2 live on mainnet" NOTE that was pre-staged as a draft).
   let blocksChanged = 0;
   for (const file of fs.readdirSync(BLOCKS_DIR)) {
     if (!file.endsWith('.json')) continue;
     const p = path.join(BLOCKS_DIR, file);
     const raw = fs.readFileSync(p, 'utf8');
-    if (!raw.includes(SHADOWNET_KT1)) continue;
-    const updated = raw.replaceAll(SHADOWNET_KT1, MAINNET_KT1);
+    if (!raw.includes(SHADOWNET_KT1) && !raw.includes(MAINNET_PLACEHOLDER)) continue;
+    const updated = raw
+      .replaceAll(SHADOWNET_KT1, MAINNET_KT1)
+      .replaceAll(MAINNET_PLACEHOLDER, MAINNET_KT1);
     fs.writeFileSync(p, updated);
     blocksChanged++;
     log('✓ block', file, 'switched to mainnet KT1');
   }
   log('blocks updated:', blocksChanged);
+
+  // 3. Flip the commemorative origination block (0229) from draft → live.
+  //    It was pre-staged as draft:true so the Blocks grid stays honest before
+  //    the contract exists. Now that it does, publish it.
+  if (fs.existsSync(COMMEMORATIVE_BLOCK)) {
+    const data = JSON.parse(fs.readFileSync(COMMEMORATIVE_BLOCK, 'utf8'));
+    if (data.draft === true) {
+      data.draft = false;
+      data.timestamp = new Date().toISOString(); // anchor to the actual origination moment
+      fs.writeFileSync(COMMEMORATIVE_BLOCK, JSON.stringify(data, null, 2) + '\n');
+      log('✓ block 0229 flipped draft:true → draft:false (origination commemorative)');
+    } else {
+      log('block 0229 already live — skipping');
+    }
+  }
 
   log('');
   log('NEXT: review diff → git commit → npm run build → wrangler pages deploy');

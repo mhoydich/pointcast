@@ -7,51 +7,31 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
-## Phase 1 — Visual rebuild (blocks-rebuild branch)
+## Phase 1 — Visual rebuild ✅ SHIPPED (now on `main`, live at pointcast.xyz)
 
-### Foundation
-- [ ] (CC) Add `blocks` content collection to `src/content.config.ts` with full Block schema — `queued`
-- [ ] (CC) Create `src/content/blocks/` directory structure with first 5 migrated blocks — `queued`
-- [ ] (CC) Channel constants module `src/lib/channels.ts` (code, name, color ramps, purpose) — `queued`
-- [ ] (CC) BlockType constants module `src/lib/block-types.ts` (footer templates per type) — `queued`
-- [ ] (CC) Self-host JetBrains Mono + Inter, remove Lora/Syne/Outfit — `queued`
-- [ ] (CC) Rewrite `src/styles/global.css` for the Blocks palette + tight 8px grid tokens — `queued`
+All foundation, component, routing, and content-migration tasks landed in commits `0ee3f44` → `05aca57`. 88 pages build, 48 blocks live across 9 channels, Manus QA + Codex Battler review both closed.
 
-### Block component
-- [ ] (CC) `src/components/BlockCard.astro` — base card with channel code, ID, title, meta footer — `queued`
-- [ ] (CC) Per-type body treatments: READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK — `queued`
-- [ ] (CC) Channel color tokenization in Tailwind config — `queued`
-- [ ] (CC) Sizing system — `1x1 / 2x1 / 1x2 / 2x2 / 3x2` via `grid-column / grid-row span` — `queued`
-
-### Routing + pages
-- [ ] (CC) New home `src/pages/index.astro` — dense grid, `grid-auto-flow: dense` — `queued`
-- [ ] (CC) `src/pages/b/[id].astro` single-block page — `queued`
-- [ ] (CC) `src/pages/b/[id].json.ts` machine-readable endpoint — `queued`
-- [ ] (CC) `src/pages/c/[channel].astro` channel listing — `queued`
-- [ ] (CC) Mobile: single-column stack, sticky channel chip bar — `queued`
-- [ ] (CC) Tablet: 2-col grid, size downgrades — `queued`
-
-### Content migration
-- [ ] (CC) Map v1 dispatches (seeing-the-future-0159/0205, nyc-mesh, cold-creek) → Block JSON — `queued`
-- [ ] (CC) Map v1 editorial modules (baseball, paddle, lautner, etc.) → appropriate Block types — `queued`
-- [ ] (CC) Map v1 drops (whimsical, wild mountain honey, noah jacket, etc.) → LINK/LISTEN blocks — `queued`
+- [x] (CC) Block schema + content collection, channels.ts, block-types.ts, BlockLayout
+- [x] (CC) BlockCard.astro with all 8 type treatments + size variants (1x1/2x1/1x2/2x2/3x2)
+- [x] (CC) Home grid (auto-fit dense), /b/[id], /b/[id].json, /c/[channel], sticky mobile chip bar
+- [x] (CC) Self-hosted Inter + JetBrains Mono via @fontsource-variable
+- [x] (CC) Content migration: v1 dispatches, editorial modules, drops, 20 Tezos NFT imports
+- [x] (M) End-to-end QA pass — 5 blockers fixed same-day, log at `docs/manus-logs/2026-04-17.md`
+- [x] (X) Phase 1 spec review — all blocking items addressed in `docs/codex-logs/2026-04-17-phase-1-review.md`
 - [ ] (MH) Decide numbering: fill №0160–0204 gaps or leave sparse? — `waiting-on-mh`
-
-### Ship to preview
-- [ ] (CC) Deploy blocks-rebuild to a pages.dev preview URL (not pointcast.xyz yet) — `queued`
-- [ ] (M) First pass end-to-end test — desktop + mobile screenshots, log to `docs/manus-logs/` — `queued` (after preview URL)
-- [ ] (X) Review BlockCard + home grid against BLOCKS.md spec, log to `docs/codex-logs/` — `queued` (after Manus confirms preview works)
 
 ---
 
-## Phase 2 — Agent layer
+## Phase 2 — Agent layer ✅ SHIPPED
 
-- [ ] (CC) `/for-agents` manifest page — purpose, channel list, endpoint list, citation format — `queued`
-- [ ] (CC) JSON-LD injection per block — `queued`
-- [ ] (CC) `/c/{channel}.rss` + `/c/{channel}.json` feeds — `queued`
-- [ ] (CC) `/blocks.json` full paginated archive — `queued`
-- [ ] (CC) `/sitemap-blocks.xml` — `queued`
-- [ ] (CC) User-Agent-based stripped-HTML mode for known agent strings — `queued`
+- [x] (CC) `/for-agents` manifest with purpose, channel list, endpoint list, citation format
+- [x] (CC) JSON-LD on home + `/b/[id]` + `/c/[channel]` pages
+- [x] (CC) `/c/{slug}.rss` + `/c/{slug}.json` (JSON Feed v1.1) per channel
+- [x] (CC) `/blocks.json` full archive
+- [x] (CC) `/sitemap-blocks.xml` filtered to /b/ URLs (per Manus 1.3)
+- [x] (CC) Per-block OG images via `scripts/generate-og-images.mjs` (1200×630 PNGs for all 48 blocks)
+- [ ] (CC) User-Agent-based stripped-HTML mode for known agent strings — `queued` (low priority — JSON-LD + /for-agents covers 95%)
+- [x] (CC) Spotify iframe facade on LISTEN-embed blocks (Manus QA 3.1) — home grid renders static chip, iframe mounts only on /b/[id]
 
 ---
 
@@ -125,27 +105,39 @@ Prototype sketch: `sketches/codex/nouns-battler-v0.html`
 
 ---
 
-## Completed this session
+## Completed this session (2026-04-17)
 
-### Shadownet origination
-- [x] (CC) Visit Nouns FA2 originated on Shadownet — `KT1S8BbKPzWjTRQgnc986Az8A187V886UtK5`
-- [x] (CC) First mint_noun(137) confirmed on Shadownet — `onh9QXxTcPQaD61tpRsz7sE8LCoHGfEFkTEwVKTm51DYd1KDXZT`
-- [x] (CC) `scripts/deploy-visit-nouns-shadownet.mjs` + `scripts/mint-first-noun-shadownet.mjs` proven end-to-end
+### v1 → v2 cutover
+- [x] v1 snapshot preserved at commit `7fea01c` (rollback available if v2 ever needs to be reverted)
+- [x] `blocks-rebuild` merged, `main` now serves v2 at `pointcast.xyz`
 
-### v2 / blocks-rebuild
-- [x] (CC) v1 snapshot committed to `main` — commit `7fea01c`
-- [x] (CC) `blocks-rebuild` branch created, BLOCKS.md + AGENTS.md installed at repo root, log directories scaffolded
-- [x] (CC) Phase 1 foundation: `src/lib/{channels,block-types}.ts`, new `blocks` content collection, `BlockCard.astro`, home grid, `/b/[id]`, `/b/[id].json`, `/c/[channel]`
-- [x] (CC) 16 seed Blocks across all 8 channels + all 8 types
-- [x] (CC) `BlockLayout.astro` — dedicated v2 layout, self-hosted Inter + JetBrains Mono, white bg, two weights (per Codex review)
-- [x] (CC) Sticky channel chip bar on mobile, auto-fit minmax grid, title de-duplication, noun-cap removed, footer cascade refactor (per Codex review)
-- [x] (CC) **Phase 2 agent layer**: `/for-agents` manifest, `/blocks.json`, `/sitemap-blocks.xml`, `/c/{slug}.json` (JSON Feed v1.1), `/c/{slug}.rss` (RSS 2.0), JSON-LD on home + permalink pages
-- [x] (CC) `MintButton.astro` — Beacon + Taquito lazy-loaded, wired to /b/{id} on MINT/FAUCET types, `tezosClient()` exported from `src/lib/tezos.ts`
-- [x] (CC) `PresenceBar.astro` + `functions/api/presence.ts` (PresenceRoom Durable Object) — DO deploy deferred to a companion Worker per Cloudflare Pages requirements; bar degrades gracefully. See `docs/presence-next-steps.md`.
-- [x] (X) Phase 1 spec review written to `docs/codex-logs/2026-04-17-phase-1-review.md` — all blocking items addressed
-- [x] (X) **Big assignment kicked off**: Nouns Battler design doc + prototype sketch, running in background
-- [x] (X) Nouns Battler **delivered**: `docs/codex-logs/2026-04-17-nouns-battler-design.md` + `sketches/codex/nouns-battler-v0.html` — 4 MH decisions surfaced, CC Phase 1/2/3 queued
-- [x] Paddle Block 0209 reframed as LINK (editorial study, not product photo) + image renamed `/images/paddle-study.jpg` for honesty
+### Shadownet origination (pre-mainnet proof)
+- [x] Visit Nouns FA2 originated on Shadownet — `KT1S8BbKPzWjTRQgnc986Az8A187V886UtK5`
+- [x] First mint_noun(137) confirmed — `onh9QXxTcPQaD61tpRsz7sE8LCoHGfEFkTEwVKTm51DYd1KDXZT`
+- [x] Node + InMemorySigner pattern proven; scripts reusable for mainnet
 
-### Preview URL
-**`https://blocks-rebuild.pointcast.pages.dev`** — latest Phase 2 ship. Production `pointcast.xyz` still serves v1 from `main`.
+### v2 shipped
+- [x] 48 Blocks across 9 channels (FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL)
+- [x] BlockLayout, BlockCard, channel chip bar, auto-fit grid, drag-reorder, PresenceBar, MintButton
+- [x] `/for-agents`, `/blocks.json`, `/sitemap-blocks.xml`, per-channel RSS + JSON Feed v1.1
+- [x] `/b/[id]` permalinks with JSON-LD + alternates + machine-readable endpoints
+- [x] `/status` live agent activity page, `/battle` Nouns Battler Phase 1, `/404` VST-themed
+- [x] Per-block OG images (sharp-generated PNGs at 1200×630) for every block
+- [x] 20 real Tezos NFTs imported as SPN LINK blocks (0300–0319) from TzKT
+- [x] Block 0228 wires /drum into the v2 grid (SPN LINK)
+- [x] Spotify iframe facade — lifts ~6s cold load off the home grid
+
+### Agent cycles
+- [x] (M) End-to-end QA: 11 findings, 5 blockers all closed same-day, response log appended
+- [x] (X) Phase 1 spec review: 8 blocking items all addressed
+- [x] (X) Nouns Battler design + prototype sketch + Phase 1 implementation review
+
+### Mainnet pipeline — armed, awaiting funding
+- [x] `scripts/deploy-visit-nouns-mainnet.mjs` — tested path, identical to Shadownet
+- [x] `scripts/post-mainnet-wire.mjs` — writes KT1 into `src/data/contracts.json`
+- [x] `scripts/post-mainnet-batch-mint.mjs` — mints [137, 205, 420, 417, 1, 42, 99, 777, 808, 1111]
+- [x] `scripts/post-mainnet-auto.sh` — polling daemon chaining origination → wire → mint → build → deploy (running as PID 96871 via nohup)
+- [ ] Funding: ≥25 ꜩ to `tz1PS4WgbYCKcKnfbfMNSH44JfrnFVhkcKp1` — `waiting-on-mh` (Daniel call in progress)
+
+### Production URL
+**`https://pointcast.xyz`** — v2 live. Preview URL `blocks-rebuild.pointcast.pages.dev` retired with cutover.
