@@ -5,9 +5,9 @@
  * Single-page interactive battler. Two fighters (Card of the Day vs.
  * Challenger), full best-of-3 resolver, all client-side + deterministic.
  *
- * Phase 1 (this file): choose-your-challenger via seed input, run a match,
- * see the log. No match persistence yet — Phase 2 writes a BTL NOTE block
- * per completed match. Phase 3 adds the commemorative mint on Visit Nouns FA2.
+ * Phase 2 (this file): choose-your-challenger via seed input, run a match,
+ * persist/export the result locally, see the log. Phase 3 adds the
+ * commemorative mint on Visit Nouns FA2.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
@@ -38,7 +38,7 @@ const jsonLd = {
     </nav>
 
     <header class="head">
-      <p class="kicker">CH.BTL · NOUNS BATTLER · v1 PHASE 1</p>
+      <p class="kicker">CH.BTL · NOUNS BATTLER · v1 PHASE 2</p>
       <h1>Every Nouns seed is a fighter.</h1>
       <p class="dek">
         Stats derive from the five trait slots. Two types per Noun — head picks
@@ -100,11 +100,24 @@ const jsonLd = {
           <button class="btn" data-stance="GUARD">GUARD</button>
           <button class="btn" data-stance="FOCUS">FOCUS</button>
         </div>
-        <button class="btn btn--ghost" id="btn-reset">RESET</button>
+        <div class="actions__tools">
+          <button class="btn btn--ghost btn--small" id="btn-record" hidden>RECORD THIS MATCH</button>
+          <button class="btn btn--ghost" id="btn-reset">RESET</button>
+        </div>
+      </div>
+
+      <div class="archive">
+        <div class="archive__head mono">
+          <span>LOCAL MATCH LOG · LAST 50</span>
+          <a href="/battle-log">open full log →</a>
+        </div>
+        <div class="archive__body" id="match-archive">
+          <div class="archive__empty">No completed matches recorded yet.</div>
+        </div>
       </div>
 
       <div class="match__footer mono">
-        <span>NOUNS BATTLER · PHASE 1 · NO RNG · NO HIDDEN STATE</span>
+        <span>NOUNS BATTLER · PHASE 2 · NO RNG · NO HIDDEN STATE</span>
         <span>CH.BTL · CODEX DESIGN · CC BUILD</span>
       </div>
     </main>
@@ -115,6 +128,7 @@ const jsonLd = {
         <li><a href={`/c/${ch.slug}`}>/c/{ch.slug}</a></li>
         <li><a href={`/c/${ch.slug}.json`}>/c/{ch.slug}.json</a></li>
         <li><a href={`/c/${ch.slug}.rss`}>/c/{ch.slug}.rss</a></li>
+        <li><a href="/battle.json">/battle.json</a></li>
         <li><a href="/for-agents">/for-agents</a></li>
       </ul>
     </aside>
@@ -122,10 +136,11 @@ const jsonLd = {
 </BlockLayout>
 
 <script>
-  import { seedToStats, BATTLER_TYPES, type FighterStats } from '../lib/battler/stat-derivation';
-  import { resolveMatch, type Stance, type RoundResult } from '../lib/battler/resolve';
+  import { seedToStats, type FighterStats } from '../lib/battler/stat-derivation';
+  import { resolveMatch, type Stance } from '../lib/battler/resolve';
 
   const CARD_OF_THE_DAY = 137;
+  const MATCH_LOG_KEY = 'pc:battler-matches';
 
   const TYPE_COLOR: Record<string, string> = {
     WATER: '#1d8cb8', BEAM: '#b3278e', ARMOR: '#4a4e54', WILD: '#2e7a2e', FEAST: '#b67b10',
@@ -139,12 +154,20 @@ const jsonLd = {
     done: boolean;
   }
 
-  function randStance(): Stance {
-    const s: Stance[] = ['STRIKE', 'GUARD', 'FOCUS'];
-    return s[Math.floor(Math.random() * 3)];
+  type MatchWinner = 'A' | 'B' | 'DRAW';
+  type MatchRoundExport = [Stance, Stance, number, number];
+
+  interface MatchRecord {
+    matchId: string;
+    cardOfDayId: number;
+    challengerId: number;
+    rounds: MatchRoundExport[];
+    winner: MatchWinner;
+    timestamp: string;
   }
 
   let state: State;
+  let completedMatch: MatchRecord | null = null;
 
   function initMatch(challengerId: number) {
     state = {
@@ -154,7 +177,10 @@ const jsonLd = {
       round: 0,
       done: false,
     };
+    completedMatch = null;
     render();
+    renderArchive();
+    setRecordButton();
     document.getElementById('match-id')!.textContent = `${String(CARD_OF_THE_DAY).padStart(4, '0')}v${String(challengerId).padStart(4, '0')}`;
     const body = document.getElementById('log-body')!;
     body.innerHTML = '<div class="log__line">Pick a stance to start round 1.</div>';
@@ -201,6 +227,65 @@ const jsonLd = {
     body.scrollTop = body.scrollHeight;
   }
 
+  function readMatchLog(): MatchRecord[] {
+    try {
+      const raw = localStorage.getItem(MATCH_LOG_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderArchive() {
+    const host = document.getElementById('match-archive')!;
+    const matches = readMatchLog();
+    host.innerHTML = '';
+
+    if (matches.length === 0) {
+      host.innerHTML = '<div class="archive__empty">No completed matches recorded yet.</div>';
+      return;
+    }
+
+    matches.forEach((match) => {
+      const item = document.createElement('article');
+      item.className = 'archive__item';
+
+      const head = document.createElement('div');
+      head.className = 'archive__item-head mono';
+      head.textContent = `${match.matchId} · ${match.winner} · ${new Date(match.timestamp).toLocaleString()}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'archive__item-meta';
+      meta.textContent = `#${match.cardOfDayId} vs #${match.challengerId} · ${match.rounds.length} rounds`;
+
+      item.append(head, meta);
+      host.appendChild(item);
+    });
+  }
+
+  function setRecordButton() {
+    const btn = document.getElementById('btn-record') as HTMLButtonElement;
+    btn.hidden = !completedMatch;
+    btn.disabled = !completedMatch;
+  }
+
+  function makeMatchRecord(result: ReturnType<typeof resolveMatch>): MatchRecord {
+    const timestamp = new Date().toISOString();
+    const stamp = timestamp.replace(/[:.]/g, '-');
+    const winner: MatchWinner = result.winner === 'a' ? 'A' : result.winner === 'b' ? 'B' : 'DRAW';
+
+    return {
+      matchId: `${String(result.a.id).padStart(4, '0')}v${String(result.b.id).padStart(4, '0')}-${stamp}`,
+      cardOfDayId: result.a.id,
+      challengerId: result.b.id,
+      rounds: result.rounds.map((round) => [round.stanceA, round.stanceB, round.damageA, round.damageB]),
+      winner,
+      timestamp,
+    };
+  }
+
   function playRound(stance: Stance) {
     if (state.done) return;
     // Challenger stance derives from CHARACTER (stats), not modular id rotation.
@@ -241,36 +326,37 @@ const jsonLd = {
           : result.winner === 'b' ? `Challenger (#${state.challenger.id})`
           : 'DRAW';
         log(`— MATCH END — winner: ${winner}`, 'win');
-        persistMatch(result);
+        completedMatch = makeMatchRecord(result);
+        persistMatch(completedMatch);
+        renderArchive();
+        setRecordButton();
       }
     }
     setRound();
   }
 
   /**
-   * Persist the finished match to localStorage under `pc:battler:matches`.
-   * Each match entry is a compact record a build-time script (Phase 2)
-   * can read to emit BTL NOTE blocks in the feed. Keeps the last 50 to
-   * bound storage.
+   * Persist the finished match to localStorage under `pc:battler-matches`.
+   * Keeps only the most recent 50 so local state stays bounded.
    */
-  function persistMatch(result: ReturnType<typeof resolveMatch>) {
-    const KEY = 'pc:battler:matches';
-    const now = new Date().toISOString();
-    const record = {
-      ts: now,
-      a: result.a.id,
-      b: result.b.id,
-      winner: result.winner,
-      finalHpA: result.finalHpA,
-      finalHpB: result.finalHpB,
-      rounds: result.rounds.map(r => ({ sA: r.stanceA, sB: r.stanceB, dA: r.damageA, dB: r.damageB })),
-    };
+  function persistMatch(record: MatchRecord) {
     try {
-      const raw = localStorage.getItem(KEY);
-      const arr = raw ? JSON.parse(raw) : [];
+      const arr = readMatchLog();
       arr.unshift(record);
-      localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 50)));
+      localStorage.setItem(MATCH_LOG_KEY, JSON.stringify(arr.slice(0, 50)));
     } catch {}
+  }
+
+  function exportMatch(record: MatchRecord) {
+    const blob = new Blob([JSON.stringify(record, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${record.matchId}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function wire() {
@@ -289,6 +375,9 @@ const jsonLd = {
       (document.getElementById('seed-input') as HTMLInputElement).value = String(id);
       (document.getElementById('port-b') as HTMLImageElement).src = `https://noun.pics/${id}.svg`;
       initMatch(id);
+    });
+    document.getElementById('btn-record')!.addEventListener('click', () => {
+      if (completedMatch) exportMatch(completedMatch);
     });
     (document.getElementById('seed-input') as HTMLInputElement).addEventListener('change', (e) => {
       const id = Number((e.target as HTMLInputElement).value || 0);
@@ -527,6 +616,11 @@ const jsonLd = {
     display: flex;
     gap: 8px;
   }
+  .actions__tools {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
   .btn {
     font-family: var(--pc-font-mono);
     font-size: 11px;
@@ -544,6 +638,47 @@ const jsonLd = {
   .btn:hover { background: var(--ch-600); color: #fff; }
   .btn--ghost { border-color: var(--pc-rule); color: var(--pc-ink-muted); }
   .btn--ghost:hover { background: var(--pc-rule-soft); color: var(--pc-ink); border-color: var(--pc-ink); }
+  .btn--small {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  .archive {
+    padding: 12px 16px;
+    border-top: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+  .archive__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--ch-800);
+    margin-bottom: 8px;
+  }
+  .archive__body {
+    display: grid;
+    gap: 8px;
+  }
+  .archive__empty {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    color: var(--pc-ink-muted);
+  }
+  .archive__item {
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: var(--ch-50);
+  }
+  .archive__item-head {
+    color: var(--ch-800);
+    margin-bottom: 4px;
+  }
+  .archive__item-meta {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    color: var(--pc-ink);
+  }
 
   .match__footer {
     padding: 10px 16px;
@@ -576,5 +711,21 @@ const jsonLd = {
     .fighter { border-right: none; border-bottom: 1px solid var(--pc-rule); }
     .fighter:last-child { border-bottom: none; }
     .stats { grid-template-columns: repeat(4, 1fr); }
+    .actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .actions__buttons,
+    .actions__tools {
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .match__footer {
+      flex-direction: column;
+      gap: 6px;
+    }
+    .archive__head {
+      flex-direction: column;
+    }
   }
 </style>

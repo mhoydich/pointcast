@@ -1,0 +1,200 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+
+const ch = CHANNELS.BTL;
+---
+
+<BlockLayout title="Battler Match Log" description="Local Nouns Battler match archive.">
+  <div class="page" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
+    <nav class="crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/battle">/battle</a>
+      <span aria-hidden="true">/</span>
+      <span>local log</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">CH.BTL · LOCAL MATCH LOG</p>
+      <h1>Browser-only battler archive.</h1>
+      <p class="dek">
+        This page reads <code>pc:battler-matches</code> from localStorage on
+        this device only. Nothing is uploaded to the server.
+      </p>
+    </header>
+
+    <main class="panel">
+      <div class="panel__head mono">
+        <span>LAST 50 MATCHES</span>
+        <a href="/battle">Back to battle →</a>
+      </div>
+      <div class="panel__body" id="match-log">
+        <div class="empty">No local matches recorded yet.</div>
+      </div>
+    </main>
+  </div>
+</BlockLayout>
+
+<script>
+  const MATCH_LOG_KEY = 'pc:battler-matches';
+
+  interface MatchRecord {
+    matchId: string;
+    cardOfDayId: number;
+    challengerId: number;
+    rounds: [string, string, number, number][];
+    winner: 'A' | 'B' | 'DRAW';
+    timestamp: string;
+  }
+
+  function readMatchLog(): MatchRecord[] {
+    try {
+      const raw = localStorage.getItem(MATCH_LOG_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderLog() {
+    const host = document.getElementById('match-log')!;
+    const matches = readMatchLog();
+    host.innerHTML = '';
+
+    if (matches.length === 0) {
+      host.innerHTML = '<div class="empty">No local matches recorded yet.</div>';
+      return;
+    }
+
+    matches.forEach((match) => {
+      const item = document.createElement('article');
+      item.className = 'item';
+
+      const head = document.createElement('div');
+      head.className = 'item__head mono';
+      head.textContent = `${match.matchId} · ${match.winner} · ${new Date(match.timestamp).toLocaleString()}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'item__meta';
+      meta.textContent = `#${match.cardOfDayId} vs #${match.challengerId} · ${match.rounds.length} rounds`;
+
+      item.append(head, meta);
+      host.appendChild(item);
+    });
+  }
+
+  renderLog();
+</script>
+
+<style>
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 20px 20px 80px;
+  }
+
+  .crumb,
+  .kicker,
+  .mono,
+  .panel__body,
+  .empty,
+  .item__meta {
+    font-family: var(--pc-font-mono);
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .head {
+    margin-bottom: 18px;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 1.1;
+  }
+
+  .dek {
+    margin: 0;
+    font-size: 14px;
+    color: var(--pc-ink-soft);
+  }
+
+  .panel {
+    border: 1.5px solid var(--ch-600);
+    border-radius: 2px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .panel__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--ch-50);
+    border-bottom: 1px solid var(--ch-600);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  .panel__body {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .empty {
+    color: var(--pc-ink-muted);
+  }
+
+  .item {
+    padding: 10px 12px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: var(--ch-50);
+  }
+
+  .item__head {
+    margin-bottom: 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  .item__meta {
+    color: var(--pc-ink);
+  }
+
+  @media (max-width: 700px) {
+    .panel__head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>
