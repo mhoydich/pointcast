@@ -106,7 +106,7 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [ ] (MH) Good Feels drops: PointCast contract or separate? — `waiting-on-mh`
 - [ ] (MH) `/status` page showing live agent activity? (poetic, cheap, v2 launch feature?) — `waiting-on-mh`
 - [ ] (MH) Typography: Inter free for v1 OK, defer Söhne / Neue Haas? — `waiting-on-mh`
-- [ ] (MH) Approve Battler channel decision: new `BTL` channel (recommended by X) or fold into CRT? — `waiting-on-mh` — blocks Battler Phase 1 merge
+- [x] (MH) Approve Battler channel decision — BTL new 9th channel (oxblood #8A2432), approved verbally "go for nouns battler if it meets your criteria" 2026-04-17 — `done`
 - [ ] (MH) Approve Battler "Card of the Day" selector: today's auction vs yesterday's auction (X recommends), random, or curated? — `waiting-on-mh`
 - [ ] (MH) Approve match-NOTE block ID scheme: `BTL-NNNN` prefix (X recommends) vs main monotonic sequence (amends BLOCKS.md schema either way) — `waiting-on-mh`
 - [ ] (MH) Approve commemorative mint economics: free-gas FAUCET treatment (X recommends) vs paid 1–5 tez MINT edition — `waiting-on-mh`

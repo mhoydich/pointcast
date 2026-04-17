@@ -103,7 +103,9 @@ export function seedToStats(id: number): FighterStats {
   const DEF = clamp(DEFraw);
   const SPD = clamp(SPDraw);
   const FOC = clamp(FOCraw);
-  const HP = Math.round(80 + DEF * 0.4);
+  // Wider HP band so round 3 actually lands and low-DEF fighters feel glassy.
+  // (Per Codex review balance note: previous 80+DEF*0.4 gave a 40-HP band.)
+  const HP = Math.round(70 + DEF * 0.6);
 
   return { id, traits: t, types: [headType, glassesType], ATK, DEF, SPD, FOC, HP };
 }
@@ -118,9 +120,12 @@ const BEATS: Record<BattlerType, BattlerType | null> = {
   FEAST: null,
 };
 
-/** 1.5× on advantage, 0.67× on disadvantage, 1.0× neutral. */
+/** Type multipliers: 1.3× advantage, 0.77× disadvantage, 1.0× neutral.
+ *  Flatter than v1 (was 1.5/0.67) so stance reads matter more relative to
+ *  type matchups — was making STRIKE×3 Pareto-optimal too often.
+ *  Codex balance feedback, 2026-04-17-battler-phase-1-review.md. */
 export function matchupMultiplier(attacker: BattlerType, defender: BattlerType): number {
-  if (BEATS[attacker] === defender) return 1.5;
-  if (BEATS[defender] === attacker) return 0.67;
+  if (BEATS[attacker] === defender) return 1.3;
+  if (BEATS[defender] === attacker) return 0.77;
   return 1.0;
 }

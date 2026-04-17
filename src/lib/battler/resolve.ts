@@ -57,9 +57,15 @@ export interface MatchResult {
   finalHpB: number;
 }
 
+/**
+ * Stance multipliers: 1.55× advantage, 0.6× disadvantage, 1.0× neutral.
+ * Stronger than type mults so the stance read is the decisive lever each
+ * round — the information you actively choose, versus the type matchup
+ * you inherit. (Codex review balance note: FOC was a near-dead stance.)
+ */
 function stanceFactor(attackerStance: Stance, defenderStance: Stance): number {
-  if (STANCE_BEATS[attackerStance] === defenderStance) return 1.3;
-  if (STANCE_BEATS[defenderStance] === attackerStance) return 0.75;
+  if (STANCE_BEATS[attackerStance] === defenderStance) return 1.55;
+  if (STANCE_BEATS[defenderStance] === attackerStance) return 0.6;
   return 1.0;
 }
 

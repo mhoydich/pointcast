@@ -9,19 +9,19 @@ Scope: battler `stat-derivation.ts`, `resolve.ts`, `battle.astro`, `blocks/0220.
 
 1. **BTL shipped ahead of MH approval.** `channels.ts:112`, `content.config.ts:19`, `blocks/0220.json` all live. AGENTS.md: new channel = MH decision. TASKS.md:109 still `waiting-on-mh`. Design doc flagged this as merge-gate. **High, (MH/CC).**
 2. **Challenger stance is a pure rotation.** `battle.astro:210`: `deriv = ((challenger.id * 31) + round * 7) % 3`. Since `7 % 3 = 1` and `14 % 3 = 2`, every challenger plays `[x, x+1, x+2]` — all three stances exactly once, order seeded by `id % 3`. Verified across 2000 seeds. Two replays solves the pattern; the RPS read is dead. Replace with `mix(id ^ round ^ cardOfDay.id, salt) % 3`. **High, (CC).**
-3. **Head→type map is a hash bucket.** Design §"Type assignment" specified curated families (crab/whale → WATER, laser → BEAM, skull/tank → ARMOR, bear/cactus → WILD, taco/pizza → FEAST). `stat-derivation.ts:66-72` does `mix(head, 0xaa) % 5` — a uniform bucket that discards the themed premise. File comment at L10 admits the real descriptor isn't bundled. Ship a hand-coded 240-entry `HEAD_TYPE_MAP` + 21-entry `GLASSES_TYPE_MAP` as interim. Otherwise "head picks primary" is cosmetic. **High, (CC).**
+3. **Head→type map is a hash bucket.** Design §"Type assignment" specified curated families (crab → WATER, laser → BEAM, skull/tank → ARMOR, bear → WILD, taco → FEAST). `stat-derivation.ts:66-72` does `mix(head, 0xaa) % 5` — uniform bucket, discards the themed premise. L10 comment admits the real descriptor isn't bundled. Ship a hand-coded 240-entry `HEAD_TYPE_MAP` + 21-entry `GLASSES_TYPE_MAP` as interim; otherwise "head picks primary" is cosmetic. **High, (CC).**
 4. **SPD barely matters.** `resolve.ts:99-108` — faster side hits first, but slower side still deals full counter damage unless the first hit KOs. At HP ~98 and damage 20-60, that's rare. Across 5 matches SPD never altered an outcome. Go simultaneous, or scale counter by remaining-HP fraction. **Med, (CC).**
 5. **No simultaneous reveal beat.** Design §Core mechanic: stances "reveal simultaneously." `battle.astro:204-236` resolves instantly on click. Add ~400ms delay + `> OPPONENT: GUARD` reveal above the damage log. **Med, (CC).**
 6. **`0220.json` `type: "FAUCET"` misleads** — no `edition` field, no claim surface. Use `type: "LINK"` until Phase 3. **Low, (CC).**
 
 ## Gameplay feel notes
 
-Played 5 matches against Card of the Day #137 (seeds 1, 420, 999, 1234, 2000).
+Played 5 matches vs. Card of the Day #137 (seeds 1, 420, 999, 1234, 2000).
 
-- **#137 is under-tuned for a hero card.** ATK 40, DEF 46, SPD 55, FOC 53, HP 98 — loses to 3 of 5 sampled challengers on STRIKE×3 even with optimal stance. Hand-pick a seed, or add a Card-of-Day stat override.
-- **#137 self-counters.** Primary BEAM, secondary ARMOR; BEAM beats ARMOR. Cosmetic, downstream of #3.
-- **FOCUS is near-dead.** Only beats GUARD, and GUARD appears exactly once per match (dev #2). Fix #2 revives FOCUS.
-- **STRIKE×3 is Pareto-optimal ~60% of seeds.** Type mults (1.5/0.67) swamp stance mults (1.3/0.75). Tighten type to 1.25/0.8 or widen stance to 1.5/0.6.
+- **#137 is under-tuned.** ATK 40, DEF 46, SPD 55, FOC 53, HP 98 — loses to 3 of 5 on STRIKE×3 with optimal stance. Hand-pick a seed or add a Card-of-Day override.
+- **#137 self-counters.** BEAM/ARMOR; BEAM beats ARMOR. Downstream of #3.
+- **FOCUS is near-dead.** Only beats GUARD, which appears exactly once per match (dev #2). Fix #2 revives it.
+- **STRIKE×3 Pareto-optimal ~60% of seeds.** Type mults (1.5/0.67) swamp stance mults (1.3/0.75). Tighten type to 1.25/0.8 or widen stance to 1.5/0.6.
 - **Round 3 rarely lands.** `HP = 80 + DEF*0.4` gives ~12-point HP spread; matches end round 2. Bump base HP to 100 and DEF×0.8, or scale damage down.
 
 ## Code quality notes (non-blocking)
@@ -38,14 +38,14 @@ Inter + JetBrains Mono via `--pc-font-sans|mono` tokens. No serif italic, no sys
 
 ## Handoffs
 
-- **(MH)** Resolve BTL channel approval in TASKS.md:109 — priority **high** (merge gate)
-- **(CC)** Replace deterministic challenger stance with seed+round+opponent hash — priority **high** (dev #2)
-- **(CC)** Ship curated `HEAD_TYPE_MAP` + `GLASSES_TYPE_MAP` — priority **high** (dev #3)
-- **(CC)** Add stance reveal beat (~400ms + opponent line) — priority **med** (dev #5)
-- **(CC)** Rebalance stance/type mults + widen HP so round 3 lands — priority **med** (feel notes)
-- **(CC)** Fix SPD counter-damage so speed alters outcomes — priority **med** (dev #4)
-- **(CC)** Hand-pick a respectable Card of the Day seed — priority **low** (feel note)
-- **(CC)** Flip `0220.json` to `type: "LINK"` — priority **low** (dev #6)
-- **(CC)** Extract `battle.css`; fix mono tracking; unify seed cap — priority **low**
+- **(MH)** Resolve BTL approval in TASKS.md:109 — **high** (merge gate)
+- **(CC)** Replace challenger stance with seed+round+opponent hash — **high** (dev #2)
+- **(CC)** Ship curated `HEAD_TYPE_MAP` + `GLASSES_TYPE_MAP` — **high** (dev #3)
+- **(CC)** Add stance reveal beat — **med** (dev #5)
+- **(CC)** Rebalance stance/type mults + widen HP — **med** (feel)
+- **(CC)** Fix SPD counter-damage — **med** (dev #4)
+- **(CC)** Hand-pick respectable Card of the Day seed — **low**
+- **(CC)** Flip `0220.json` to `type: "LINK"` — **low** (dev #6)
+- **(CC)** Extract `battle.css`; fix mono tracking; unify seed cap — **low**
 
-No sketches this round. Phase 2 depends on #2 and #3 landing.
+No sketches this round. Phase 2 depends on #2 and #3.

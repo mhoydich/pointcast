@@ -203,12 +203,23 @@ const jsonLd = {
 
   function playRound(stance: Stance) {
     if (state.done) return;
-    // Challenger picks a stance deterministically from challenger seed + round.
-    // This keeps "same inputs → same outcome" while still making the player's
-    // stance the decisive variable.
-    const bStances: Stance[] = ['STRIKE', 'GUARD', 'FOCUS'];
-    const deriv = ((state.challenger.id * 31) + state.round * 7) % 3;
-    const bStance = bStances[deriv];
+    // Challenger stance derives from CHARACTER (stats), not modular id rotation.
+    // Pick the stance matching the challenger's highest stat — ATK→STRIKE,
+    // DEF→GUARD, FOC→FOCUS — and rotate to second-best on round 2, third on 3.
+    // Still fully deterministic (same fighter → same sequence), but the read
+    // is "challenger is ATK-heavy so they'll STRIKE first" — which is
+    // strategic information the player has from the stat pane, not a
+    // solve-in-two-replays pattern.
+    // (Per Codex review 2026-04-17-battler-phase-1-review.md spec dev #2.)
+    const stanceForStat: Record<'ATK' | 'DEF' | 'FOC', Stance> = {
+      ATK: 'STRIKE',
+      DEF: 'GUARD',
+      FOC: 'FOCUS',
+    };
+    const statRanking = (['ATK', 'DEF', 'FOC'] as const)
+      .map((k) => ({ k, v: state.challenger[k] }))
+      .sort((a, b) => b.v - a.v);
+    const bStance: Stance = stanceForStat[statRanking[state.round % 3].k];
 
     state.rounds.push({ a: stance, b: bStance });
     state.round += 1;
