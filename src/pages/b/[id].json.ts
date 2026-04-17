@@ -5,7 +5,7 @@
  * optional fields should default to `undefined` rather than changing
  * existing field names or types. Follow semver-ish behavior in spirit.
  */
-import { getCollection } from 'astro:content';
+import { getCollection, type CollectionEntry } from 'astro:content';
 import { CHANNELS } from '../../lib/channels';
 import { BLOCK_TYPES } from '../../lib/block-types';
 import type { APIRoute } from 'astro';
@@ -18,12 +18,15 @@ export async function getStaticPaths() {
   }));
 }
 
-export const GET: APIRoute = async ({ props }) => {
-  const block = (props as any).block;
-  const ch = CHANNELS[block.data.channel as keyof typeof CHANNELS];
-  const t = BLOCK_TYPES[block.data.type as keyof typeof BLOCK_TYPES];
+interface Props { block: CollectionEntry<'blocks'>; }
+
+export const GET: APIRoute<Props> = async ({ props }) => {
+  const { block } = props;
+  const ch = CHANNELS[block.data.channel];
+  const t = BLOCK_TYPES[block.data.type];
 
   const payload = {
+    $schema: 'https://pointcast.xyz/BLOCKS.md',
     id: block.data.id,
     url: `https://pointcast.xyz/b/${block.data.id}`,
     channel: {
@@ -31,6 +34,8 @@ export const GET: APIRoute = async ({ props }) => {
       slug: ch.slug,
       name: ch.name,
       purpose: ch.purpose,
+      color600: ch.color600,
+      color800: ch.color800,
     },
     type: {
       code: t.code,
@@ -49,7 +54,6 @@ export const GET: APIRoute = async ({ props }) => {
     external: block.data.external,
     visitor: block.data.visitor,
     meta: block.data.meta,
-    schema: 'https://pointcast.xyz/BLOCKS.md',
   };
 
   return new Response(JSON.stringify(payload, null, 2), {

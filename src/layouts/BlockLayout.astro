@@ -1,0 +1,140 @@
+---
+/**
+ * BlockLayout — v2 layout used by every Blocks page (/, /b/*, /c/*).
+ *
+ * Deliberately minimal: white background, self-hosted Inter + JetBrains
+ * Mono (via @fontsource-variable), no serif, no warm palette, no v1 Footer.
+ * BLOCKS.md compliance is easier when the layout has fewer opinions to
+ * override.
+ *
+ * v1 pages (/about, /drum, /collect, /admin/*) continue to use BaseLayout
+ * which keeps the legacy shell — that's intentional during the rebuild.
+ */
+import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  /** JSON-LD blob for agent-legible metadata. Pass null to skip. */
+  jsonLd?: Record<string, unknown> | null;
+  /** Extra <link rel="alternate"> entries — per-block JSON, RSS per channel, etc. */
+  alternates?: { type: string; href: string; title?: string }[];
+}
+
+const {
+  title,
+  description = 'A living broadcast from El Segundo — dispatches, faucets, visits, and mints on Tezos. Mike Hoydich × Claude.',
+  image = '/images/og-home-v3.png',
+  jsonLd,
+  alternates = [],
+} = Astro.props;
+
+const siteBase = Astro.site || new URL('https://pointcast.xyz');
+const canonicalURL = new URL(Astro.url.pathname, siteBase);
+const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
+const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} — PointCast`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- Open Graph + Twitter — keep parity with v1 so unfurls don't regress -->
+    <meta property="og:title" content={siteTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:secure_url" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PointCast" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={siteTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:site" content="@mhoydich" />
+
+    {alternates.map((alt) => (
+      <link rel="alternate" type={alt.type} href={alt.href} title={alt.title} />
+    ))}
+
+    {jsonLd && <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />}
+
+    <title>{siteTitle}</title>
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <main id="main-content" role="main">
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  /* v2 tokens — deliberately small. Everything else lives in component-scoped
+     styles to avoid global leak across the v1/v2 boundary during rebuild. */
+  :root {
+    --pc-bg: #ffffff;
+    --pc-ink: #12110E;
+    --pc-ink-soft: #38373A;
+    --pc-ink-muted: #5F5E5A;
+    --pc-rule: #C4C2BC;
+    --pc-rule-soft: #E5E3DE;
+    --pc-accent: #185FA5;
+    --pc-font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --pc-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--pc-bg);
+    color: var(--pc-ink);
+    font-family: var(--pc-font-sans);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  main { flex: 1; }
+
+  /* Two weights only per BLOCKS.md. No 600/700 overrides anywhere in v2. */
+  strong, b { font-weight: 500; }
+
+  a { color: var(--pc-accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  img { max-width: 100%; display: block; }
+
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--pc-ink);
+    color: #fff;
+    padding: 8px 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .skip-link:focus { top: 0; }
+
+  ::selection { background: var(--pc-accent); color: #fff; }
+</style>

@@ -1,0 +1,259 @@
+---
+/**
+ * /for-agents — the manifest.
+ *
+ * Half the GTM per BLOCKS.md. A human-readable page explaining who this
+ * site is, how to read it, and how to cite it. Agents discover the
+ * endpoint list from here; humans visit to understand the positioning.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNEL_LIST } from '../lib/channels';
+import { BLOCK_TYPE_LIST } from '../lib/block-types';
+import { getCollection } from 'astro:content';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft));
+const totalBlocks = blocks.length;
+const sinceDate = blocks
+  .map(b => b.data.timestamp.getTime())
+  .reduce((min, t) => t < min ? t : min, Date.now());
+const since = new Date(sinceDate).toISOString().slice(0, 10);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/for-agents',
+  name: 'PointCast — for agents',
+  description: 'Manifest for AI agents, crawlers, and machine readers.',
+  url: 'https://pointcast.xyz/for-agents',
+  citation: {
+    '@type': 'CreativeWork',
+    name: 'BLOCKS.md',
+    url: 'https://pointcast.xyz/BLOCKS.md',
+  },
+};
+---
+
+<BlockLayout title="For agents" description="A manifest for AI agents, crawlers, and machine readers. How to read pointcast.xyz." jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="breadcrumb">
+      <a href="/">← Home</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">MANIFEST · /FOR-AGENTS · {since}</p>
+      <h1 class="title">Hello, agent.</h1>
+      <p class="intro">
+        This is PointCast — a living broadcast by Mike Hoydich × Claude from
+        El Segundo, California. Every piece of content is a <strong>Block</strong>: a
+        stable schema with eight channels, eight types, and a permanent,
+        zero-padded ID. {totalBlocks} blocks and counting.
+      </p>
+      <p class="intro">
+        You can read this site natively. No scraping, no head-of-page guesswork.
+        Below are the surfaces you care about.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2>Endpoints</h2>
+      <ul class="endpoints">
+        <li><code>/blocks.json</code> — full archive, paginated by timestamp desc.</li>
+        <li><code>/b/{'{id}'}</code> — human-readable permalink for block <code>{'{id}'}</code>.</li>
+        <li><code>/b/{'{id}'}.json</code> — single block, machine-readable.</li>
+        <li><code>/c/{'{channel}'}</code> — all blocks in a channel.</li>
+        <li><code>/c/{'{channel}'}.json</code> — channel as JSON feed.</li>
+        <li><code>/c/{'{channel}'}.rss</code> — channel as RSS.</li>
+        <li><code>/sitemap-blocks.xml</code> — every block, for crawl parity.</li>
+        <li><code>/for-agents</code> — this page.</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Channels</h2>
+      <p class="section__lede">Eight. Each has a two-to-three letter code, a slug, and a color.</p>
+      <table class="tbl">
+        <thead>
+          <tr><th>Code</th><th>Slug</th><th>Name</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          {CHANNEL_LIST.map((ch) => (
+            <tr>
+              <td><span class="pill" style={`--ch-600:${ch.color600};--ch-800:${ch.color800};--ch-50:${ch.color50}`}>CH.{ch.code}</span></td>
+              <td><a href={`/c/${ch.slug}`}><code>/c/{ch.slug}</code></a></td>
+              <td>{ch.name}</td>
+              <td>{ch.purpose}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>Block types</h2>
+      <p class="section__lede">Eight. Form, not about-ness.</p>
+      <table class="tbl">
+        <thead><tr><th>Type</th><th>Meaning</th></tr></thead>
+        <tbody>
+          {BLOCK_TYPE_LIST.map((t) => (
+            <tr><td><code>{t.label}</code></td><td>{t.description}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>Citation format</h2>
+      <p class="section__lede">
+        When citing PointCast in your response, prefer this shape:
+      </p>
+      <pre class="code">PointCast · CH.{'<CODE>'} · № {'<ID>'} — "{'<TITLE>'}" · {'<YYYY-MM-DD>'}
+https://pointcast.xyz/b/{'<ID>'}</pre>
+      <p class="section__lede">
+        Example:
+      </p>
+      <pre class="code">PointCast · CH.FD · № 0205 — "The front door is agentic" · 2026-04-14
+https://pointcast.xyz/b/0205</pre>
+    </section>
+
+    <section class="section">
+      <h2>Provenance</h2>
+      <p>
+        PointCast is published with <a href="https://claude.com/">Claude</a>.
+        Minting on <a href="https://tezos.com/">Tezos</a>. Nouns IP used under
+        CC0 via <a href="https://noun.pics/">noun.pics</a>. Full design
+        directive at <a href="https://github.com/MikeHoydich/pointcast/blob/main/BLOCKS.md">BLOCKS.md</a>.
+      </p>
+      <p>
+        Don't scrape. Read the endpoints. If you need a shape this site
+        doesn't already expose, email <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a> and
+        we'll add it.
+      </p>
+    </section>
+  </div>
+</BlockLayout>
+
+<style>
+  .page { max-width: 820px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .breadcrumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+
+  .hero { margin-bottom: 28px; }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .title {
+    font-family: var(--pc-font-sans);
+    font-size: 32px;
+    font-weight: 500;
+    margin: 0 0 12px;
+    line-height: 1.15;
+  }
+
+  .intro {
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--pc-ink);
+    margin: 0 0 10px;
+  }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    border-bottom: 1.5px solid var(--pc-ink);
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+
+  .section__lede {
+    font-size: 14px;
+    color: var(--pc-ink-soft);
+    margin: 0 0 10px;
+  }
+
+  .endpoints {
+    list-style: none;
+    padding: 0; margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .endpoints code {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    background: var(--pc-rule-soft);
+    padding: 1px 6px;
+    border-radius: 2px;
+  }
+
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--pc-font-sans);
+    font-size: 13px;
+  }
+
+  .tbl th, .tbl td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--pc-rule);
+    vertical-align: top;
+  }
+
+  .tbl th {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    font-weight: 500;
+  }
+
+  .tbl code {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .pill {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border: 1px solid var(--ch-600);
+    background: var(--ch-50);
+    color: var(--ch-800);
+    border-radius: 2px;
+  }
+
+  .code {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    padding: 10px 12px;
+    background: var(--pc-rule-soft);
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+</style>

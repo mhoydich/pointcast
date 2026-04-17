@@ -1,0 +1,167 @@
+---
+/**
+ * MintButton — one-click mint for MINT / FAUCET block types.
+ *
+ * Lazy-loads Taquito + Beacon on first click so the ~700KB of crypto
+ * doesn't land on every home-page visit. Reads the contract address,
+ * token id, and price from data attributes so the same component handles
+ * both paid mints (MINT) and gas-only claims (FAUCET).
+ *
+ * Expects the consumer to wrap this in a Block context where:
+ *   - data-contract = KT1... FA2 address
+ *   - data-token-id = number
+ *   - data-price-mutez = 0 for free claims, otherwise price in mutez
+ *   - data-kind = "mint" | "faucet"  (affects the button label only)
+ */
+
+interface Props {
+  contract: string;
+  tokenId: number;
+  priceMutez?: number;
+  kind?: 'mint' | 'faucet';
+  /** Display label override. Defaults: "Mint" or "Claim". */
+  label?: string;
+}
+
+const { contract, tokenId, priceMutez = 0, kind = 'mint', label } = Astro.props;
+const displayLabel = label ?? (kind === 'faucet' ? 'Claim →' : priceMutez > 0 ? `Mint · ${(priceMutez / 1_000_000).toFixed(2)} ꜩ →` : 'Mint → free');
+---
+
+<div
+  class="mint-wrap"
+  data-contract={contract}
+  data-token-id={tokenId}
+  data-price-mutez={priceMutez}
+  data-kind={kind}
+>
+  <button type="button" class="mint-btn" data-mint-button>
+    <span class="mint-btn__label">{displayLabel}</span>
+  </button>
+  <p class="mint-status" role="status" aria-live="polite"></p>
+</div>
+
+<script>
+  type WalletState = { chain?: string; address?: string; provider?: string };
+
+  document.querySelectorAll<HTMLElement>('.mint-wrap').forEach((wrap) => {
+    const btn = wrap.querySelector<HTMLButtonElement>('[data-mint-button]')!;
+    const label = btn.querySelector<HTMLElement>('.mint-btn__label')!;
+    const statusEl = wrap.querySelector<HTMLElement>('.mint-status')!;
+
+    const contract = wrap.dataset.contract || '';
+    const tokenId = Number(wrap.dataset.tokenId ?? 0);
+    const priceMutez = Number(wrap.dataset.priceMutez ?? 0);
+    const kind = (wrap.dataset.kind === 'faucet' ? 'faucet' : 'mint') as 'mint' | 'faucet';
+
+    function setStatus(html: string) { statusEl.innerHTML = html; }
+
+    if (!contract || !contract.startsWith('KT1')) {
+      btn.disabled = true;
+      setStatus('contract not wired — coming soon');
+      return;
+    }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const originalLabel = label.textContent;
+      label.textContent = 'Loading Taquito…';
+      setStatus('preparing…');
+
+      try {
+        // Lazy-load the Tezos client — we already have /src/lib/tezos.ts from v1.
+        const { connectKukai, getActiveAddress, tezosClient } = await import('../lib/tezos');
+
+        // Persisted wallet, if any
+        let wallet: WalletState | null = null;
+        try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
+        let addr = await getActiveAddress();
+        if (!addr) {
+          setStatus('connect kukai…');
+          addr = await connectKukai();
+          localStorage.setItem('pc:wallet', JSON.stringify({ chain: 'tezos', address: addr, provider: 'kukai' }));
+        }
+
+        label.textContent = kind === 'faucet' ? 'Claiming…' : 'Minting…';
+        setStatus(`signing as ${addr.slice(0, 6)}…${addr.slice(-4)}`);
+
+        const tezos = await tezosClient();
+        const c = await tezos.wallet.at(contract);
+
+        // FA2 visit_nouns contract calls `mint_noun(noun_id)`. The DRUM faucet
+        // contract will expose `claim(tokenId)`. We dispatch by known ABIs —
+        // if neither is present we fail gracefully.
+        let op;
+        if ((c.methodsObject as any).mint_noun) {
+          op = await (c.methodsObject as any).mint_noun(tokenId).send({ amount: priceMutez, mutez: true });
+        } else if ((c.methodsObject as any).claim) {
+          op = await (c.methodsObject as any).claim(tokenId).send();
+        } else {
+          throw new Error('contract does not expose mint_noun or claim');
+        }
+
+        const shortHash = op.opHash?.slice(0, 10) ?? '—';
+        setStatus(`✓ broadcast <a href="https://tzkt.io/${op.opHash}" target="_blank" rel="noopener">${shortHash}…</a> · confirming…`);
+
+        await op.confirmation?.();
+        setStatus(`✓ done — <a href="https://tzkt.io/${op.opHash}" target="_blank" rel="noopener">tzkt</a>`);
+        label.textContent = kind === 'faucet' ? 'Claimed ✓' : 'Minted ✓';
+      } catch (err: any) {
+        const msg = err?.message || err?.errorType || String(err);
+        if (/reject|cancel|abort/i.test(msg)) {
+          setStatus('signing cancelled');
+        } else if (/balance|NotEnough/i.test(msg)) {
+          setStatus('not enough tez — top up your wallet');
+        } else {
+          setStatus(`error: ${String(msg).slice(0, 180)}`);
+        }
+        label.textContent = originalLabel ?? '';
+        btn.disabled = false;
+      }
+    });
+  });
+</script>
+
+<style>
+  .mint-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .mint-btn {
+    padding: 8px 14px;
+    border: 1.5px solid var(--pc-ink, #12110E);
+    background: var(--pc-ink, #12110E);
+    color: #fff;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 0.1s, color 0.1s;
+  }
+
+  .mint-btn:not(:disabled):hover {
+    background: var(--pc-accent, #185FA5);
+    border-color: var(--pc-accent, #185FA5);
+  }
+
+  .mint-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .mint-status {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    min-height: 0.9rem;
+  }
+
+  .mint-status a { color: var(--pc-accent, #185FA5); }
+</style>

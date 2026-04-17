@@ -3,15 +3,13 @@
  * pointcast.xyz v2 — home grid.
  *
  * Every content surface is a Block (per BLOCKS.md). The home page is a
- * dense CSS grid of BlockCards, most recent first. Size variants are
- * honored on desktop (2x1, 2x2, 3x2 etc.); mobile collapses to a single
- * column and tablet to two columns.
- *
- * No sidebar. No top nav. Channel colors ARE the navigation — the reader
- * learns the colors and navigates by them.
+ * dense auto-fit grid of BlockCards, most recent first. Size variants
+ * are honored on desktop; mobile collapses to a single column with a
+ * sticky channel chip bar at top.
  */
-import BaseLayout from '../layouts/BaseLayout.astro';
+import BlockLayout from '../layouts/BlockLayout.astro';
 import BlockCard from '../components/BlockCard.astro';
+import PresenceBar from '../components/PresenceBar.astro';
 import { CHANNEL_LIST } from '../lib/channels';
 import { getCollection } from 'astro:content';
 
@@ -19,54 +17,83 @@ const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
 const blockCount = blocks.length;
+
+// JSON-LD — make the home a CollectionPage so agents can parse the list.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/#home',
+  name: 'PointCast',
+  description: 'A living broadcast from El Segundo. Every piece is a Block.',
+  url: 'https://pointcast.xyz/',
+  inLanguage: 'en-US',
+  hasPart: blocks.slice(0, 20).map((b) => ({
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz/b/${b.data.id}`,
+    name: b.data.title,
+    datePublished: b.data.timestamp.toISOString(),
+    url: `https://pointcast.xyz/b/${b.data.id}`,
+  })),
+};
+
+const alternates = [
+  { type: 'application/json', href: '/blocks.json', title: 'All blocks (JSON)' },
+  ...CHANNEL_LIST.map((c) => ({
+    type: 'application/rss+xml',
+    href: `/c/${c.slug}.rss`,
+    title: `PointCast · ${c.name} (RSS)`,
+  })),
+];
 ---
 
-<BaseLayout title="PointCast v2" description="A living broadcast from El Segundo — dispatches, faucets, visits, and mints on Tezos. Mike Hoydich × Claude.">
+<BlockLayout title="Home" jsonLd={jsonLd} alternates={alternates}>
   <div class="page">
 
-    <!-- Masthead — one line. Wordmark, block count, current time. -->
+    <!-- Masthead — one line. Wordmark, block count, current time, agent link. -->
     <header class="masthead">
       <a href="/" class="wordmark">POINTCAST</a>
-      <span class="masthead__sep" aria-hidden="true">·</span>
-      <span class="masthead__meta">{blockCount} BLOCKS</span>
-      <span class="masthead__sep" aria-hidden="true">·</span>
-      <time class="masthead__meta masthead__time" id="pc-clock">— : —</time>
-      <span class="masthead__sep masthead__sep--wide" aria-hidden="true"></span>
-      <a href="/for-agents" class="masthead__agent-link">/for-agents →</a>
+      <span class="sep" aria-hidden="true">·</span>
+      <span class="meta">{blockCount} BLOCKS</span>
+      <span class="sep" aria-hidden="true">·</span>
+      <time class="meta time" id="pc-clock">— : —</time>
+      <PresenceBar />
+      <span class="spacer" aria-hidden="true"></span>
+      <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
 
-    <!-- Channel legend — tappable chips, also a visual glossary. -->
+    <!-- Channel legend — sticky-horizontal on mobile, flex-wrap on desktop. -->
     <nav class="channels" aria-label="Channels">
       {CHANNEL_LIST.map((ch) => (
-        <a class="channel-chip" href={`/c/${ch.slug}`} style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
-          <span class="channel-chip__dot" aria-hidden="true"></span>
-          <span class="channel-chip__code">CH.{ch.code}</span>
-          <span class="channel-chip__name">{ch.name}</span>
+        <a class="chip" href={`/c/${ch.slug}`} style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
+          <span class="chip__dot" aria-hidden="true"></span>
+          <span class="chip__code">CH.{ch.code}</span>
+          <span class="chip__name">{ch.name}</span>
         </a>
       ))}
     </nav>
 
     <!-- The grid — every block. -->
-    <main class="grid" role="main">
+    <section class="grid" role="main">
       {blocks.map((block) => <BlockCard block={block} />)}
-    </main>
+    </section>
 
-    <!-- Footer — endpoint list. Agent-oriented. -->
+    <!-- Footer — endpoint list. Agent-oriented, no social nav. -->
     <footer class="endpoints">
       <p class="endpoints__label">ENDPOINTS</p>
       <ul class="endpoints__list">
         <li><a href="/blocks.json">/blocks.json</a></li>
         <li><a href="/sitemap-blocks.xml">/sitemap-blocks.xml</a></li>
         <li><a href="/for-agents">/for-agents</a></li>
-        <li><a href="/visits">/visits</a></li>
+        <li><a href="/drum">/drum</a></li>
+        <li><a href="/collect">/collect</a></li>
+        <li><a href="/about">/about</a></li>
       </ul>
     </footer>
 
   </div>
-</BaseLayout>
+</BlockLayout>
 
 <script is:inline>
-  // Live clock — updates every 10s in PT. Monospace, matches header.
   (function() {
     const el = document.getElementById('pc-clock');
     if (!el) return;
@@ -96,53 +123,56 @@ const blockCount = blocks.length;
     align-items: baseline;
     gap: 10px;
     padding-bottom: 10px;
-    border-bottom: 1.5px solid #12110E;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    border-bottom: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
 
   .wordmark {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--pc-font-mono);
     font-size: 22px;
     font-weight: 500;
     letter-spacing: 0.22em;
-    color: #12110E;
-    text-decoration: none;
+    color: var(--pc-ink);
   }
+  .wordmark:hover { color: var(--pc-accent); text-decoration: none; }
 
-  .wordmark:hover { color: #185FA5; }
+  .meta { color: var(--pc-ink-soft); font-weight: 400; }
+  .time { min-width: 60px; }
+  .sep { color: var(--pc-rule); }
+  .spacer { flex: 1; }
 
-  .masthead__meta {
-    color: #38373A;
-    font-weight: 400;
-  }
+  .agent-link { color: var(--pc-accent); font-weight: 500; }
 
-  .masthead__time { min-width: 60px; }
-
-  .masthead__sep { color: #C4C2BC; }
-
-  .masthead__sep--wide { flex: 1; background: transparent; }
-
-  .masthead__agent-link {
-    color: #185FA5;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .masthead__agent-link:hover { text-decoration: underline; }
-
+  /* Channel chip bar — flex-wrap desktop, horizontal-scroll + sticky on mobile */
   .channels {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     padding: 14px 0;
-    border-bottom: 1px dashed #C4C2BC;
+    border-bottom: 1px dashed var(--pc-rule);
     margin-bottom: 14px;
+    background: var(--pc-bg);
   }
 
-  .channel-chip {
+  @media (max-width: 767px) {
+    .channels {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .channels::-webkit-scrollbar { display: none; }
+    .chip { flex-shrink: 0; }
+  }
+
+  .chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -150,45 +180,34 @@ const blockCount = blocks.length;
     border: 1px solid var(--ch-600);
     background: var(--ch-50);
     color: var(--ch-800);
-    text-decoration: none;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    border-radius: 1px;
+    border-radius: 2px;
     transition: background-color 0.12s;
   }
-
-  .channel-chip:hover {
+  .chip:hover {
     background: color-mix(in oklab, var(--ch-600) 20%, #fff);
+    text-decoration: none;
   }
-
-  .channel-chip__dot {
+  .chip__dot {
     display: inline-block;
     width: 7px; height: 7px;
     background: var(--ch-600);
     border-radius: 50%;
   }
+  .chip__code { font-weight: 500; }
+  .chip__name { font-weight: 400; color: var(--pc-ink-soft); }
 
-  .channel-chip__code { font-weight: 500; }
-
-  .channel-chip__name { font-weight: 400; color: #38373A; }
-
+  /* Self-healing grid per BLOCKS.md: auto-fit + minmax(220px, 1fr) */
   .grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-auto-rows: minmax(160px, auto);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-auto-rows: minmax(170px, auto);
     grid-auto-flow: dense;
     gap: 8px;
     margin-top: 14px;
-  }
-
-  @media (max-width: 1279px) {
-    .grid { grid-template-columns: repeat(4, 1fr); }
-  }
-
-  @media (max-width: 1023px) {
-    .grid { grid-template-columns: repeat(2, 1fr); }
   }
 
   @media (max-width: 639px) {
@@ -201,19 +220,18 @@ const blockCount = blocks.length;
   .endpoints {
     margin-top: 48px;
     padding-top: 16px;
-    border-top: 1.5px solid #12110E;
+    border-top: 1.5px solid var(--pc-ink);
     display: flex;
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
 
-  .endpoints__label { margin: 0; color: #38373A; font-weight: 500; }
-
+  .endpoints__label { margin: 0; color: var(--pc-ink-soft); font-weight: 500; }
   .endpoints__list {
     list-style: none;
     margin: 0; padding: 0;
@@ -221,11 +239,5 @@ const blockCount = blocks.length;
     gap: 12px;
     flex-wrap: wrap;
   }
-
-  .endpoints__list a {
-    color: #185FA5;
-    text-decoration: none;
-  }
-
-  .endpoints__list a:hover { text-decoration: underline; }
+  .endpoints__list a { color: var(--pc-accent); }
 </style>

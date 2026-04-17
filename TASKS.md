@@ -111,8 +111,24 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ## Completed this session
 
-- [x] (CC) Visit Nouns FA2 originated on Shadownet — `KT1S8BbKPzWjTRQgnc986Az8A187V886UtK5` — commit `7fea01c`
+### Shadownet origination
+- [x] (CC) Visit Nouns FA2 originated on Shadownet — `KT1S8BbKPzWjTRQgnc986Az8A187V886UtK5`
 - [x] (CC) First mint_noun(137) confirmed on Shadownet — `onh9QXxTcPQaD61tpRsz7sE8LCoHGfEFkTEwVKTm51DYd1KDXZT`
 - [x] (CC) `scripts/deploy-visit-nouns-shadownet.mjs` + `scripts/mint-first-noun-shadownet.mjs` proven end-to-end
+
+### v2 / blocks-rebuild
 - [x] (CC) v1 snapshot committed to `main` — commit `7fea01c`
 - [x] (CC) `blocks-rebuild` branch created, BLOCKS.md + AGENTS.md installed at repo root, log directories scaffolded
+- [x] (CC) Phase 1 foundation: `src/lib/{channels,block-types}.ts`, new `blocks` content collection, `BlockCard.astro`, home grid, `/b/[id]`, `/b/[id].json`, `/c/[channel]`
+- [x] (CC) 16 seed Blocks across all 8 channels + all 8 types
+- [x] (CC) `BlockLayout.astro` — dedicated v2 layout, self-hosted Inter + JetBrains Mono, white bg, two weights (per Codex review)
+- [x] (CC) Sticky channel chip bar on mobile, auto-fit minmax grid, title de-duplication, noun-cap removed, footer cascade refactor (per Codex review)
+- [x] (CC) **Phase 2 agent layer**: `/for-agents` manifest, `/blocks.json`, `/sitemap-blocks.xml`, `/c/{slug}.json` (JSON Feed v1.1), `/c/{slug}.rss` (RSS 2.0), JSON-LD on home + permalink pages
+- [x] (CC) `MintButton.astro` — Beacon + Taquito lazy-loaded, wired to /b/{id} on MINT/FAUCET types, `tezosClient()` exported from `src/lib/tezos.ts`
+- [x] (CC) `PresenceBar.astro` + `functions/api/presence.ts` (PresenceRoom Durable Object) — DO deploy deferred to a companion Worker per Cloudflare Pages requirements; bar degrades gracefully. See `docs/presence-next-steps.md`.
+- [x] (X) Phase 1 spec review written to `docs/codex-logs/2026-04-17-phase-1-review.md` — all blocking items addressed
+- [x] (X) **Big assignment kicked off**: Nouns Battler design doc + prototype sketch, running in background
+- [x] Paddle Block 0209 reframed as LINK (editorial study, not product photo) + image renamed `/images/paddle-study.jpg` for honesty
+
+### Preview URL
+**`https://blocks-rebuild.pointcast.pages.dev`** — latest Phase 2 ship. Production `pointcast.xyz` still serves v1 from `main`.

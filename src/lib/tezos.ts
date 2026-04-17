@@ -30,6 +30,15 @@ function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
   return { tezos: _tezos, wallet: _wallet };
 }
 
+/**
+ * Lazily-initialized Tezos toolkit shared across all call sites. Mint,
+ * collect, and any future on-chain op all go through this one instance
+ * so Beacon pair state stays consistent.
+ */
+export async function tezosClient(): Promise<TezosToolkit> {
+  return getToolkit().tezos;
+}
+
 /** Returns the currently-connected Tezos address, or null if disconnected. */
 export async function getActiveAddress(): Promise<string | null> {
   const { wallet } = getToolkit();

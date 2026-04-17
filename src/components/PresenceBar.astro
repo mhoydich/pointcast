@@ -1,0 +1,117 @@
+---
+/**
+ * PresenceBar — live "who's here" readout for the masthead.
+ *
+ * Opens a WebSocket to `/api/presence` (a Cloudflare Durable Object,
+ * functions/api/presence.ts) that broadcasts an aggregate to every
+ * connected client once per second. Server-side doesn't know identities;
+ * the DO just counts unique session IDs and tags each as human vs. agent.
+ *
+ * Render:
+ *   · HUMANS 3 · AGENTS 1 · YOU ·
+ *
+ * Graceful degradation: if the WS doesn't connect in 4s (or errors), the
+ * bar quietly hides — no flashy "DISCONNECTED" state. The rest of the
+ * masthead keeps working.
+ */
+---
+
+<span class="presence" id="pc-presence" aria-live="polite" data-initial="off">
+  <span class="presence__sep" aria-hidden="true">·</span>
+  <span class="presence__label" id="pc-presence-label">CONNECTING…</span>
+</span>
+
+<script>
+  (() => {
+    const el = document.getElementById('pc-presence');
+    const label = document.getElementById('pc-presence-label');
+    if (!el || !label) return;
+
+    // Skip presence on file://, http localhost without Functions, etc. A
+    // cheap feature-flag so the local dev server doesn't get stuck in
+    // CONNECTING… on every hot reload.
+    if (!window.location.host.endsWith('pointcast.xyz') && !window.location.host.endsWith('.pages.dev')) {
+      el.style.display = 'none';
+      return;
+    }
+
+    // Naive agent-detection — if the UA string contains a well-known agent
+    // vendor, tag the presence as AGENT. Server trusts the tag but clamps
+    // to [human, agent] and dedupes on session id.
+    const isAgent = /gptbot|claude|perplexity|atlas|bingbot|googlebot/i.test(navigator.userAgent);
+    const sessionId = (() => {
+      const KEY = 'pc:session';
+      let v = localStorage.getItem(KEY);
+      if (!v) {
+        v = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2));
+        try { localStorage.setItem(KEY, v); } catch {}
+      }
+      return v;
+    })();
+
+    const wsURL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/api/presence';
+    let ws: WebSocket | null = null;
+    let connectTimer: number | null = null;
+    let degrade: number | null = null;
+
+    function setLabel(text: string) { label.textContent = text; }
+    function hide() { el.style.display = 'none'; if (ws) try { ws.close(); } catch {} }
+
+    degrade = window.setTimeout(() => hide(), 4000);
+
+    try {
+      ws = new WebSocket(wsURL + '?sid=' + encodeURIComponent(sessionId) + '&kind=' + (isAgent ? 'agent' : 'human'));
+    } catch {
+      hide();
+      return;
+    }
+
+    ws.addEventListener('open', () => {
+      if (degrade) clearTimeout(degrade);
+      setLabel('ON AIR');
+    });
+
+    ws.addEventListener('message', (evt) => {
+      try {
+        const { humans, agents } = JSON.parse(evt.data);
+        setLabel(`HUMANS ${humans} · AGENTS ${agents}`);
+      } catch {}
+    });
+
+    ws.addEventListener('error', () => hide());
+    ws.addEventListener('close', () => {
+      // Silent backoff — try once after 10s, then give up.
+      if (!connectTimer) {
+        connectTimer = window.setTimeout(() => { /* one-shot retry no-op; keep it simple */ }, 10_000);
+      }
+    });
+  })();
+</script>
+
+<style>
+  .presence {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .presence__sep { color: var(--pc-rule); }
+  .presence__label::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 6px;
+    background: #C95C2E;
+    border-radius: 50%;
+    animation: pc-pulse 1.6s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes pc-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+</style>

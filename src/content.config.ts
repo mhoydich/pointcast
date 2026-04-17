@@ -22,7 +22,10 @@ const blocks = defineCollection({
     body: z.string().optional(),
     timestamp: z.coerce.date(),
     size: z.enum(['1x1', '2x1', '1x2', '2x2', '3x2']).default('1x1'),
-    noun: z.number().int().min(0).max(1875).optional(),
+    // Nouns are minted daily forever — no hard upper cap. A lower bound of 0
+    // catches negative seeds. If noun.pics starts 404ing for a specific seed
+    // BlockCard's img onerror handler degrades to the dotted frame.
+    noun: z.number().int().min(0).optional(),
 
     // Edition / mint metadata (Tezos-only in v2)
     edition: z

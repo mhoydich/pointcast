@@ -21,6 +21,43 @@ import type { CollectionEntry } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import { BLOCK_TYPES } from '../lib/block-types';
 
+/**
+ * Footer meta line — one string per type, picked by footerHint.
+ * Extracted to keep the template readable and mirror the table in BLOCKS.md.
+ */
+function footerMeta(data: CollectionEntry<'blocks'>['data'], hint: string): string | null {
+  const ed = data.edition;
+  const supplyStr = (s: number | 'open' | undefined) => (s === 'open' ? '∞' : String(s ?? '—'));
+  const host = (url?: string) => {
+    if (!url) return '';
+    try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; }
+  };
+
+  switch (hint) {
+    case 'readingTime':
+      if (!data.readingTime) return null;
+      return ed ? `${data.readingTime} · ED ${ed.minted}/${supplyStr(ed.supply)}` : data.readingTime;
+    case 'externalLink':
+    case 'destination':
+      return data.external ? `${host(data.external.url)} ↗` : null;
+    case 'duration':
+      return data.external ? `${host(data.external.url)} ↗` : null;
+    case 'edition':
+      if (!ed) return null;
+      const price = ed.price === 'free' ? 'FREE' : `${ed.price?.tez ?? '—'} ꜩ`;
+      return `${price} · ED ${ed.minted}/${supplyStr(ed.supply)}`;
+    case 'claimStatus':
+      if (!ed) return null;
+      return `CLAIMED ${ed.minted}/${supplyStr(ed.supply)} TODAY`;
+    case 'location':
+      return data.meta?.location ?? null;
+    case 'agent':
+      if (!data.visitor) return null;
+      return data.visitor.vendor ?? data.visitor.name ?? (data.visitor.kind === 'agent' ? 'AGENT' : 'HUMAN');
+  }
+  return null;
+}
+
 interface Props {
   block: CollectionEntry<'blocks'>;
   /** If true, renders a larger body preview (used on single-block pages). */
@@ -57,11 +94,6 @@ const sizeClassMap: Record<string, string> = {
 };
 const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
 
-// Domain extraction for LINK footer
-function extractHost(url?: string) {
-  if (!url) return '';
-  try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; }
-}
 ---
 
 <article
@@ -124,38 +156,15 @@ function extractHost(url?: string) {
       <p class="block-card__body">{data.body}</p>
     )}
 
-    {/* Footer meta — type-specific */}
-    <footer class="block-card__footer">
-      {typeSpec.footerHint === 'readingTime' && data.readingTime && (
-        <span class="block-card__meta">{data.readingTime} · ED {data.edition ? `${data.edition.minted}/${data.edition.supply === 'open' ? '∞' : data.edition.supply}` : '—'}</span>
-      )}
-      {typeSpec.footerHint === 'externalLink' && data.external && (
-        <span class="block-card__meta">{extractHost(data.external.url)} ↗</span>
-      )}
-      {typeSpec.footerHint === 'destination' && data.external && (
-        <span class="block-card__meta">{extractHost(data.external.url)} ↗</span>
-      )}
-      {typeSpec.footerHint === 'edition' && data.edition && (
-        <span class="block-card__meta">
-          {data.edition.price === 'free' ? 'FREE' : `${data.edition.price?.tez ?? '—'} ꜩ`}
-          {' · '}
-          ED {data.edition.minted}/{data.edition.supply === 'open' ? '∞' : data.edition.supply}
-        </span>
-      )}
-      {typeSpec.footerHint === 'claimStatus' && data.edition && (
-        <span class="block-card__meta">
-          CLAIMED {data.edition.minted}/{data.edition.supply === 'open' ? '∞' : data.edition.supply} TODAY
-        </span>
-      )}
-      {typeSpec.footerHint === 'location' && data.meta?.location && (
-        <span class="block-card__meta">{data.meta.location}</span>
-      )}
-      {typeSpec.footerHint === 'agent' && data.visitor && (
-        <span class="block-card__meta">
-          {data.visitor.vendor ?? data.visitor.name ?? (data.visitor.kind === 'agent' ? 'AGENT' : 'HUMAN')}
-        </span>
-      )}
-    </footer>
+    {/* Footer meta — type-specific, computed in footerMeta() helper above */}
+    {(() => {
+      const meta = footerMeta(data, typeSpec.footerHint);
+      return (
+        <footer class="block-card__footer">
+          {meta && <span class="block-card__meta">{meta}</span>}
+        </footer>
+      );
+    })()}
   </a>
 </article>
 
@@ -211,7 +220,7 @@ function extractHost(url?: string) {
     border: 1px solid var(--ch-600);
     color: var(--ch-800);
     background: var(--ch-50);
-    border-radius: 1px;
+    border-radius: 2px;
   }
 
   .block-card__time {

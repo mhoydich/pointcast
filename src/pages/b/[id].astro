@@ -1,18 +1,11 @@
 ---
 /**
- * /b/{id} — single-block permalink page.
- *
- * Static-generated per block. Renders the BlockCard in "detail" mode:
- * bigger type, no size-span truncation, full body. Also surfaces the
- * JSON endpoint alongside so agents can discover `/b/{id}.json` from
- * here.
- *
- * Permalinks are immutable per BLOCKS.md — a retired block 404s, the
- * ID is never re-issued.
+ * /b/{id} — single-block permalink. JSON-LD + alternates surface.
  */
 import { getCollection, type CollectionEntry } from 'astro:content';
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import BlockLayout from '../../layouts/BlockLayout.astro';
 import BlockCard from '../../components/BlockCard.astro';
+import MintButton from '../../components/MintButton.astro';
 import { CHANNELS } from '../../lib/channels';
 
 export async function getStaticPaths() {
@@ -29,9 +22,36 @@ const ch = CHANNELS[block.data.channel];
 
 const title = `CH.${ch.code} · ${block.data.id} — ${block.data.title}`;
 const description = block.data.dek ?? block.data.body?.slice(0, 180) ?? block.data.title;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  '@id': `https://pointcast.xyz/b/${block.data.id}`,
+  identifier: block.data.id,
+  name: block.data.title,
+  description,
+  datePublished: block.data.timestamp.toISOString(),
+  inLanguage: 'en-US',
+  isPartOf: {
+    '@type': 'Collection',
+    name: ch.name,
+    url: `https://pointcast.xyz/c/${ch.slug}`,
+  },
+  encodingFormat: 'application/json',
+  ...(block.data.external?.url ? { mainEntity: { '@type': 'URL', url: block.data.external.url } } : {}),
+  ...(block.data.edition
+    ? { offers: { '@type': 'Offer', price: block.data.edition.price === 'free' ? 0 : block.data.edition.price?.tez, priceCurrency: 'XTZ' } }
+    : {}),
+};
+
+const alternates = [
+  { type: 'application/json', href: `/b/${block.data.id}.json`, title: 'Machine-readable block' },
+  { type: 'application/json', href: `/c/${ch.slug}.json`, title: `${ch.name} (JSON feed)` },
+  { type: 'application/rss+xml', href: `/c/${ch.slug}.rss`, title: `${ch.name} (RSS)` },
+];
 ---
 
-<BaseLayout title={title} description={description}>
+<BlockLayout title={title} description={description} jsonLd={jsonLd} alternates={alternates}>
   <div class="page">
     <nav class="breadcrumb" aria-label="Breadcrumb">
       <a href="/">← All blocks</a>
@@ -45,55 +65,93 @@ const description = block.data.dek ?? block.data.body?.slice(0, 180) ?? block.da
       <BlockCard block={block} detail />
     </div>
 
+    {/* Mint / claim surface — only on MINT and FAUCET types with an edition */}
+    {(block.data.type === 'MINT' || block.data.type === 'FAUCET') && block.data.edition && (
+      <div class="mint-strip">
+        <MintButton
+          contract={block.data.edition.contract}
+          tokenId={block.data.edition.tokenId}
+          priceMutez={block.data.edition.price === 'free' ? 0 : Math.round(((block.data.edition.price as any)?.tez ?? 0) * 1_000_000)}
+          kind={block.data.type === 'FAUCET' ? 'faucet' : 'mint'}
+        />
+        {block.data.edition.marketplace && block.data.edition.contract.startsWith('KT1') && (
+          <a
+            class="mint-strip__secondary"
+            href={`https://objkt.com/tokens/${block.data.edition.contract}/${block.data.edition.tokenId}`}
+            target="_blank"
+            rel="noopener"
+          >View on objkt ↗</a>
+        )}
+      </div>
+    )}
+
     <aside class="agent-strip">
       <p class="agent-strip__label">MACHINE-READABLE</p>
       <ul>
         <li><a href={`/b/${block.data.id}.json`}>/b/{block.data.id}.json</a></li>
         <li><a href={`/c/${ch.slug}.json`}>/c/{ch.slug}.json</a></li>
         <li><a href={`/c/${ch.slug}.rss`}>/c/{ch.slug}.rss</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
       </ul>
     </aside>
   </div>
-</BaseLayout>
+</BlockLayout>
 
 <style>
   .page {
-    max-width: 780px;
+    max-width: 820px;
     margin: 0 auto;
     padding: 20px 20px 80px;
   }
 
   .breadcrumb {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #5F5E5A;
+    color: var(--pc-ink-muted);
     margin-bottom: 20px;
   }
 
-  .breadcrumb a { color: #185FA5; text-decoration: none; }
-  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb a { color: var(--pc-accent); }
 
+  /* Detail-mode block ignores grid spans (no parent grid context) */
   .detail-frame :global(.block-card) {
-    grid-column: auto !important;
-    grid-row: auto !important;
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .mint-strip {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mint-strip__secondary {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
   }
 
   .agent-strip {
     margin-top: 24px;
     padding-top: 14px;
-    border-top: 1px dashed #C4C2BC;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    border-top: 1px dashed var(--pc-rule);
+    font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
-
-  .agent-strip__label { margin: 0 0 6px; color: #38373A; font-weight: 500; }
-
+  .agent-strip__label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
   .agent-strip ul {
     list-style: none;
     margin: 0; padding: 0;
@@ -101,7 +159,4 @@ const description = block.data.dek ?? block.data.body?.slice(0, 180) ?? block.da
     flex-wrap: wrap;
     gap: 12px;
   }
-
-  .agent-strip a { color: #185FA5; text-decoration: none; }
-  .agent-strip a:hover { text-decoration: underline; }
 </style>

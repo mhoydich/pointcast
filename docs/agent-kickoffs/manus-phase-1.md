@@ -19,20 +19,29 @@ Do a structured QA pass. Open TASKS.md and claim `(M) First pass end-to-end test
 
 ### Devices to test
 
-1. **Desktop wide** (≥1440px) — full 6-column grid, size variants should show (0205 spans 3x2, 0209 spans 2x2, 0212 spans 2x1)
-2. **Laptop** (1024–1279px) — 4-column grid
-3. **Tablet** (768–1023px) — 2-column grid, size variants downgrade
-4. **Mobile** (≤639px) — single column, full-bleed. Safari iOS + Chrome Android at minimum.
+1. **Desktop wide** (≥1440px) — auto-fit grid flows to 6 columns, size variants show (0205 spans 3x2, 0209 spans 2x2, 0212/0213/0214/0215/0219 span 2x1)
+2. **Laptop** (1024–1279px) — grid auto-fits to 4-ish columns
+3. **Tablet** (768–1023px) — grid auto-fits to ~2 columns, size variants downgrade gracefully
+4. **Mobile** (≤639px) — single column, full-bleed. **Channel chip bar should be sticky at top and horizontally scrollable.** Safari iOS + Chrome Android at minimum.
 
 ### What to check (score each 1–5)
 
 - **Primitive legibility** — can you tell what channel + type + ID each block is at a glance?
 - **Channel color as navigation** — do the 8 colors read as distinct? Ambiguous pairs?
 - **Density vs. clutter** — BLOCKS.md wants a "wall of signal." Does it feel that, or does it feel crowded?
-- **Typography** — mono metadata, sans title. Two weights (400, 500). Any weight used wrong?
-- **Type-specific treatments** — LISTEN embed, MINT image+edition footer, FAUCET claim status, VISIT agent badge
+- **Typography** — self-hosted Inter + JetBrains Mono should be loaded. Two weights (400, 500). Any mono falling through to system ui-monospace is a bug.
+- **Type-specific treatments** — LISTEN embed, MINT image+edition footer, FAUCET claim status, VISIT agent badge, LINK destination footer
 - **Responsive behavior** — anything overflow, any size downgrade look awkward?
-- **Permalink pages** — click any block to land on `/b/{id}`. Permalink page renders the detail. The agent-strip shows `/b/{id}.json`, `/c/{slug}.json`, `/c/{slug}.rss` links. Click each — the JSON should load; the .rss and .json feeds will 404 for now (Phase 2 work).
+- **Permalink pages** — click any block to land on `/b/{id}`. The detail page now shows (a) the big BlockCard, (b) for MINT + FAUCET types, a mint strip with a "Mint/Claim" button, (c) a machine-readable agent strip with `/b/{id}.json`, `/c/{slug}.json`, `/c/{slug}.rss` links — **click each one, they should all load now (Phase 2 landed)**.
+
+### Phase 2 + presence + mint surfaces
+
+- **`/for-agents`** — a manifest page for AI agents. Check it reads as intentional rather than generic. Screenshot it.
+- **`/blocks.json`** — full archive JSON. Pretty-print should be readable.
+- **`/sitemap-blocks.xml`** — every block + channel URL.
+- **`/c/{slug}.rss`** + **`/c/{slug}.json`** — RSS + JSON Feed per channel. Feed readers (NetNewsWire, Feedbin) should parse them cleanly — if you have one installed, subscribe and screenshot.
+- **Presence bar** — in the masthead there's an "ON AIR" dot + counter that tries to open a WebSocket to `/api/presence`. **It will fail and hide** on the current ship because the Durable Object isn't live yet (Pages limitation — see `docs/presence-next-steps.md`). Don't flag that as a bug — flag the _hide_ as the expected graceful degradation. Log whether it hid within 4s or flashed.
+- **Mint button** — on `/b/0210` (the FAUCET block) and `/b/0209` (wait, that was reframed as a LINK now — don't mint test there). On /b/0210 click "Claim →". Kukai should pop on Shadownet. **Do not sign.** We're just testing the UI flow. Log what happened: did the button lazy-load Taquito? Did Beacon pair modal appear? Did the status line update in real-time? Cancel the sign.
 
 ### Deliverable
 
