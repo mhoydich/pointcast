@@ -28,9 +28,15 @@ import { BLOCK_TYPES } from '../lib/block-types';
 function footerMeta(data: CollectionEntry<'blocks'>['data'], hint: string): string | null {
   const ed = data.edition;
   const supplyStr = (s: number | 'open' | undefined) => (s === 'open' ? '∞' : String(s ?? '—'));
+  // For internal URLs (pointcast.xyz/*) show the pathname — "/drum ↗" reads
+  // better than "pointcast.xyz ↗" when the user is already on pointcast.xyz.
   const host = (url?: string) => {
     if (!url) return '';
-    try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; }
+    try {
+      const u = new URL(url, 'https://pointcast.xyz'); // base handles relative "/drum"
+      const h = u.host.replace(/^www\./, '');
+      return h === 'pointcast.xyz' && u.pathname !== '/' ? u.pathname : h;
+    } catch { return ''; }
   };
 
   switch (hint) {
@@ -110,7 +116,14 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     '--ch-50': channel.color50,
   }}
 >
-  <a href={`/b/${data.id}`} class="block-card__link" aria-label={`Block ${data.id}: ${data.title}`}>
+  {/* On grid mode the whole card is a link into /b/{id}. On detail mode
+      (the permalink page itself) href is omitted — the /b/[id] page
+      supplies a dedicated CTA below this card for any external URL. */}
+  <a
+    href={detail ? undefined : `/b/${data.id}`}
+    class:list={['block-card__link', { 'block-card__link--inert': detail }]}
+    aria-label={detail ? undefined : `Block ${data.id}: ${data.title}`}
+  >
     <header class="block-card__header">
       <span class="block-card__code">CH.{channel.code} · {data.id}</span>
       <span class="block-card__type-tag">{typeSpec.label}</span>
@@ -135,10 +148,21 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     <h3 class="block-card__title">{data.title}</h3>
     {data.dek && <p class="block-card__dek">{data.dek}</p>}
 
-    {/* Media treatment — image or embed */}
+    {/* Media treatment — image or embed.
+        onerror flips to the IPFS fallback if the primary (objkt CDN)
+        fails. After that it hides the media frame entirely instead of
+        showing a broken-image icon — Mike caught the broken-image
+        pattern in the 03xx Tezos imports 2026-04-17 after the
+        cloudflare-ipfs gateway was sunset. */}
     {data.media?.kind === 'image' && (
       <div class="block-card__media">
-        <img src={data.media.src} alt={data.title} loading="lazy" />
+        <img
+          src={data.media.src}
+          alt={data.title}
+          loading="lazy"
+          data-fallback={(data.media as any).ipfsFallback ?? ''}
+          onerror="if(this.dataset.fallback && this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}else{this.parentElement.style.display='none';}"
+        />
       </div>
     )}
     {/* LISTEN-embed treatment: mount the iframe only on the detail page.
@@ -215,6 +239,14 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
 
   .block-card__link:hover .block-card__title {
     color: var(--ch-800);
+  }
+
+  /* Detail mode: anchor exists for class consistency but has no href;
+     make it visually + interactively inert so hover + cursor match. */
+  .block-card__link--inert,
+  .block-card__link--inert:hover .block-card__title {
+    cursor: default;
+    color: inherit;
   }
 
   .block-card__header {

@@ -24,9 +24,19 @@ const OUT_DIR = path.resolve(process.cwd(), 'src/content/blocks');
 function log(...args) { console.log('[tzimport]', ...args); }
 
 function resolveIpfs(uri) {
+  // Cloudflare's IPFS gateway was sunset in 2024; ipfs.io is the
+  // reliable public fallback. objkt's own CDN is preferred over IPFS
+  // for thumbnails — see objktThumb() which takes precedence when we
+  // have a contract+tokenId.
   if (!uri) return null;
-  if (uri.startsWith('ipfs://')) return 'https://cloudflare-ipfs.com/ipfs/' + uri.slice(7);
+  if (uri.startsWith('ipfs://')) return 'https://ipfs.io/ipfs/' + uri.slice(7);
   return uri;
+}
+
+function objktThumb(contract, tokenId) {
+  // objkt's internal asset CDN. `thumb400` is the thumbnail size that
+  // looks best in the 220px-min grid cells (Retina-friendly at 2x).
+  return `https://assets.objkt.media/file/assets-003/${contract}/${tokenId}/thumb400`;
 }
 
 async function main() {
@@ -65,10 +75,15 @@ async function main() {
     const tokenId = b.token.tokenId;
     const id = String(BLOCK_ID_START + i).padStart(4, '0');
 
+    // Image-selection: objkt's own CDN first (fast, always live, sized
+    // for grid cells), then fall back to the IPFS asset via ipfs.io.
+    // Keep the IPFS fallback in the block so a future retry pass can
+    // reach the canonical on-chain asset if needed.
     const artifactUri = resolveIpfs(meta.artifactUri);
     const displayUri = resolveIpfs(meta.displayUri);
     const thumbnailUri = resolveIpfs(meta.thumbnailUri);
-    const image = displayUri || thumbnailUri || artifactUri || null;
+    const primaryImage = objktThumb(contract, tokenId);
+    const ipfsFallback = displayUri || thumbnailUri || artifactUri || null;
 
     const artist = Array.isArray(meta.creators) ? meta.creators[0] : (meta.creators ?? meta.artist ?? 'unknown');
     const title = meta.name.length > 80 ? meta.name.slice(0, 77) + '…' : meta.name;
@@ -83,7 +98,7 @@ async function main() {
       timestamp: b.firstTime || b.lastTime || new Date().toISOString(),
       size: i === 0 ? '2x1' : '1x1',
       noun: (Number(tokenId) % 2000),
-      ...(image ? { media: { kind: 'image', src: image } } : {}),
+      media: { kind: 'image', src: primaryImage, ...(ipfsFallback ? { ipfsFallback } : {}) },
       external: {
         label: 'objkt.com',
         url: `https://objkt.com/tokens/${contract}/${tokenId}`,

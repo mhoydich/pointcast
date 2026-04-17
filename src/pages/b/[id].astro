@@ -68,6 +68,40 @@ const alternates = [
       <BlockCard block={block} detail />
     </div>
 
+    {/* External CTA — any block with external.url that isn't MINT/FAUCET
+        (those get their own mint-strip below). Internal URLs like /drum,
+        /battle stay in-tab; cross-origin URLs open new tabs. Fixes the
+        "dead click on /b/0220 Card of the Day" that Mike caught 2026-04-17. */}
+    {block.data.external && !(block.data.type === 'MINT' || block.data.type === 'FAUCET') && (() => {
+      const url = block.data.external.url;
+      const isInternal = (() => {
+        try {
+          const u = new URL(url, 'https://pointcast.xyz');
+          return u.host.replace(/^www\./, '') === 'pointcast.xyz';
+        } catch { return false; }
+      })();
+      const label = block.data.external.label || 'Open';
+      const pretty = (() => {
+        try {
+          const u = new URL(url, 'https://pointcast.xyz');
+          const h = u.host.replace(/^www\./, '');
+          return h === 'pointcast.xyz' ? u.pathname : h;
+        } catch { return ''; }
+      })();
+      return (
+        <a
+          class="external-cta"
+          href={url}
+          target={isInternal ? '_self' : '_blank'}
+          rel={isInternal ? undefined : 'noopener noreferrer'}
+          style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}
+        >
+          <span class="external-cta__label">→ {label}</span>
+          <span class="external-cta__host">{pretty}</span>
+        </a>
+      );
+    })()}
+
     {/* Mint / claim surface — only on MINT and FAUCET types with an edition */}
     {(block.data.type === 'MINT' || block.data.type === 'FAUCET') && block.data.edition && (
       <div class="mint-strip">
@@ -135,6 +169,37 @@ const alternates = [
   .detail-frame :global(.block-card) {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  .external-cta {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--ch-600);
+    border-radius: 2px;
+    background: var(--ch-50);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--ch-800);
+    text-decoration: none;
+    transition: background-color 0.12s;
+  }
+  .external-cta:hover {
+    background: color-mix(in oklab, var(--ch-600) 18%, #fff);
+    text-decoration: none;
+  }
+  .external-cta__label {
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .external-cta__host {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
   }
 
   .mint-strip {

@@ -22,10 +22,17 @@ let _wallet: BeaconWallet | null = null;
 function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
   if (_tezos && _wallet) return { tezos: _tezos, wallet: _wallet };
   _tezos = new TezosToolkit(RPC_URL);
+  // Beacon SDK (as shipped inside @taquito/beacon-wallet 24.2) removed
+  // the `network` argument from requestPermissions and now reads it
+  // exclusively from DAppClient construction options. See
+  //   node_modules/@ecadlabs/beacon-dapp/dist/esm/dapp-client/DAppClient.js:1100
+  //   'the "network" property is no longer accepted in input. Please
+  //    provide it when instantiating DAppClient.'
   _wallet = new BeaconWallet({
     name: 'PointCast',
+    network: { type: 'mainnet' as any },
     preferredNetwork: 'mainnet' as any,
-  });
+  } as any);
   _tezos.setWalletProvider(_wallet);
   return { tezos: _tezos, wallet: _wallet };
 }
@@ -51,9 +58,9 @@ export async function connectKukai(): Promise<string> {
   const { wallet } = getToolkit();
   const existing = await wallet.client.getActiveAccount();
   if (existing) return existing.address;
-  const perms = await wallet.client.requestPermissions({
-    network: { type: 'mainnet' as any },
-  });
+  // `network` used to live here; the current Beacon SDK requires it
+  // to be set at DAppClient construction and throws if passed here.
+  const perms = await wallet.client.requestPermissions();
   return perms.address;
 }
 
