@@ -60,6 +60,25 @@ for (const t of tokens) {
   byContract[c].push(t);
 }
 
+// Sorted contract summary for the filter chip row. Contracts with more
+// tokens lead — that's the signal the user most likely wants to skim.
+// The alias falls back to a short hash when TzKT hasn't labelled the
+// contract yet.
+function contractLabel(addr: string, tokens: Token[]): string {
+  const alias = tokens[0]?.token.contract.alias;
+  if (alias) return alias;
+  return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+}
+
+const contractChips = Object.entries(byContract)
+  .map(([addr, ts]) => ({
+    addr,
+    label: contractLabel(addr, ts),
+    count: ts.length,
+    slug: addr.slice(3, 11).toLowerCase(), // stable-ish id for the filter
+  }))
+  .sort((a, b) => b.count - a.count);
+
 // Per-token image: prefer the objkt CDN (fast + always-live), fall back
 // to IPFS via ipfs.io, fall back to metadata displayUri.
 function imageFor(t: Token): string {
@@ -133,15 +152,31 @@ const jsonLd = {
       </div>
     )}
 
+    {contractChips.length > 1 && (
+      <nav class="filter" aria-label="Filter by contract" id="contract-filter">
+        <span class="filter__label">BY CONTRACT</span>
+        <div class="filter__chips">
+          <button type="button" class="chip chip--active" data-filter="all">
+            ALL <span class="chip__count">{tokens.length}</span>
+          </button>
+          {contractChips.slice(0, 12).map((c) => (
+            <button type="button" class="chip" data-filter={c.addr} title={c.addr}>
+              {c.label} <span class="chip__count">{c.count}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+    )}
+
     {tokens.length > 0 && (
-      <section class="grid">
+      <section class="grid" id="token-grid">
         {tokens.map((t) => {
           const meta = t.token.metadata ?? {};
           const name = meta.name ?? `Token #${t.token.tokenId}`;
           const ipfsFallback = ipfsGateway(meta.displayUri ?? meta.thumbnailUri ?? meta.artifactUri);
           const contractAlias = t.token.contract.alias;
           return (
-            <article class="card">
+            <article class="card" data-contract={t.token.contract.address}>
               <a class="card__art" href={`https://objkt.com/tokens/${t.token.contract.address}/${t.token.tokenId}`} target="_blank" rel="noopener">
                 <img
                   src={imageFor(t)}
@@ -163,6 +198,31 @@ const jsonLd = {
         })}
       </section>
     )}
+
+    <script is:inline>
+      // Client-side filter — toggles display of .card elements based on
+      // the active chip. No reload, no router, just a classList flip.
+      (function () {
+        const filter = document.getElementById('contract-filter');
+        const grid = document.getElementById('token-grid');
+        if (!filter || !grid) return;
+
+        const chips = filter.querySelectorAll('[data-filter]');
+        const cards = grid.querySelectorAll('.card');
+
+        chips.forEach((chip) => {
+          chip.addEventListener('click', () => {
+            chips.forEach((c) => c.classList.remove('chip--active'));
+            chip.classList.add('chip--active');
+            const f = chip.getAttribute('data-filter');
+            cards.forEach((card) => {
+              const match = f === 'all' || card.getAttribute('data-contract') === f;
+              card.style.display = match ? '' : 'none';
+            });
+          });
+        });
+      })();
+    </script>
 
     <aside class="agent-strip">
       <p class="agent-strip__label">MACHINE-READABLE</p>
@@ -240,6 +300,79 @@ const jsonLd = {
     font-family: var(--pc-font-mono);
     font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
     margin: 0 0 4px;
+  }
+
+  .filter {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .filter__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    padding-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .filter__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--pc-ink-soft);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.12s;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chip:hover {
+    border-color: var(--pc-ink);
+    color: var(--pc-ink);
+  }
+
+  .chip--active {
+    background: var(--pc-ink);
+    border-color: var(--pc-ink);
+    color: #fff;
+  }
+
+  .chip__count {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: inherit;
+    opacity: 0.6;
+  }
+
+  .chip--active .chip__count {
+    opacity: 0.75;
   }
 
   .grid {

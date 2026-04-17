@@ -7,16 +7,20 @@
  */
 import type { APIRoute } from 'astro';
 import { seedToStats } from '../lib/battler/stat-derivation';
-
-const CARD_OF_THE_DAY = 137;
+import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
 
 export const GET: APIRoute = async () => {
-  const cardOfTheDay = seedToStats(CARD_OF_THE_DAY);
+  const today = pickCardOfTheDay();
+  const cardOfTheDay = seedToStats(today.id);
 
   const payload = {
     cardOfTheDay: {
       id: cardOfTheDay.id,
       seedTraits: cardOfTheDay.traits,
+      date: today.date,
+      dateLabel: today.dateLabel,
+      note: today.note,
+      rosterIndex: today.rosterIndex,
     },
     phase: 2,
     stanceRules: {
