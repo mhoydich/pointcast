@@ -60,10 +60,10 @@ const jsonLd = {
           <div class="types" data-field="types"></div>
           <div class="hp"><span class="hp__label">HP</span><div class="hp__bar"><span data-field="hp-bar" style="width:100%"></span></div><span data-field="hp">—</span></div>
           <div class="stats">
-            <div class="stat"><span class="k">ATK</span><span class="v" data-field="atk">—</span></div>
-            <div class="stat"><span class="k">DEF</span><span class="v" data-field="def">—</span></div>
-            <div class="stat"><span class="k">SPD</span><span class="v" data-field="spd">—</span></div>
-            <div class="stat"><span class="k">FOC</span><span class="v" data-field="foc">—</span></div>
+            <div class="stat"><span class="k">ATK</span><span class="v" data-field="atk">—</span><span class="stat__bar"><span data-field="atk-bar" style="width:0%"></span></span></div>
+            <div class="stat"><span class="k">DEF</span><span class="v" data-field="def">—</span><span class="stat__bar"><span data-field="def-bar" style="width:0%"></span></span></div>
+            <div class="stat"><span class="k">SPD</span><span class="v" data-field="spd">—</span><span class="stat__bar"><span data-field="spd-bar" style="width:0%"></span></span></div>
+            <div class="stat"><span class="k">FOC</span><span class="v" data-field="foc">—</span><span class="stat__bar"><span data-field="foc-bar" style="width:0%"></span></span></div>
           </div>
         </article>
 
@@ -76,15 +76,27 @@ const jsonLd = {
           <div class="types" data-field="types"></div>
           <div class="hp"><span class="hp__label">HP</span><div class="hp__bar"><span data-field="hp-bar" style="width:100%"></span></div><span data-field="hp">—</span></div>
           <div class="stats">
-            <div class="stat"><span class="k">ATK</span><span class="v" data-field="atk">—</span></div>
-            <div class="stat"><span class="k">DEF</span><span class="v" data-field="def">—</span></div>
-            <div class="stat"><span class="k">SPD</span><span class="v" data-field="spd">—</span></div>
-            <div class="stat"><span class="k">FOC</span><span class="v" data-field="foc">—</span></div>
+            <div class="stat"><span class="k">ATK</span><span class="v" data-field="atk">—</span><span class="stat__bar"><span data-field="atk-bar" style="width:0%"></span></span></div>
+            <div class="stat"><span class="k">DEF</span><span class="v" data-field="def">—</span><span class="stat__bar"><span data-field="def-bar" style="width:0%"></span></span></div>
+            <div class="stat"><span class="k">SPD</span><span class="v" data-field="spd">—</span><span class="stat__bar"><span data-field="spd-bar" style="width:0%"></span></span></div>
+            <div class="stat"><span class="k">FOC</span><span class="v" data-field="foc">—</span><span class="stat__bar"><span data-field="foc-bar" style="width:0%"></span></span></div>
           </div>
           <label class="seed-select mono">
             Challenger seed <input id="seed-input" type="number" min="0" max="9999" value="420" />
           </label>
         </article>
+      </section>
+
+      <section class="result-banner" id="result-banner" hidden>
+        <div class="result-banner__flourish mono" id="result-flourish">+++ GLORY +++</div>
+        <h2 id="result-headline">Noun #137 Wins</h2>
+        <p class="result-banner__score" id="result-score">Noun #137 wins 2-1</p>
+        <p class="result-banner__sub" id="result-sub">Hard read. Clean finish.</p>
+        <div class="result-banner__actions">
+          <button class="btn btn--arcade" id="btn-rematch" type="button">REMATCH</button>
+          <button class="btn btn--arcade" id="btn-new" type="button">NEW CHALLENGER</button>
+          <button class="btn btn--arcade btn--arcade-alt" id="btn-share" type="button">SHARE</button>
+        </div>
       </section>
 
       <section class="log" id="log">
@@ -168,50 +180,92 @@ const jsonLd = {
 
   let state: State;
   let completedMatch: MatchRecord | null = null;
+  let activeCardId = CARD_OF_THE_DAY;
+  let activeChallengerId = 420;
 
-  function initMatch(challengerId: number) {
+  function clampSeed(value: number, fallback: number) {
+    if (!Number.isFinite(value)) return fallback;
+    return Math.max(0, Math.min(9999, Math.floor(value)));
+  }
+
+  function initMatch(cardId: number, challengerId: number) {
+    activeCardId = clampSeed(cardId, CARD_OF_THE_DAY);
+    activeChallengerId = clampSeed(challengerId, 420);
     state = {
-      cardOfDay: seedToStats(CARD_OF_THE_DAY),
-      challenger: seedToStats(challengerId),
+      cardOfDay: seedToStats(activeCardId),
+      challenger: seedToStats(activeChallengerId),
       rounds: [],
       round: 0,
       done: false,
     };
     completedMatch = null;
+    const resultBanner = document.getElementById('result-banner')!;
+    resultBanner.hidden = true;
     render();
     renderArchive();
     setRecordButton();
-    document.getElementById('match-id')!.textContent = `${String(CARD_OF_THE_DAY).padStart(4, '0')}v${String(challengerId).padStart(4, '0')}`;
+    document.getElementById('match-id')!.textContent = `${String(activeCardId).padStart(4, '0')}v${String(activeChallengerId).padStart(4, '0')}`;
     const body = document.getElementById('log-body')!;
     body.innerHTML = '<div class="log__line">Pick a stance to start round 1.</div>';
+    (document.getElementById('seed-input') as HTMLInputElement).value = String(activeChallengerId);
+    (document.getElementById('port-a') as HTMLImageElement).src = `https://noun.pics/${activeCardId}.svg`;
+    (document.getElementById('port-b') as HTMLImageElement).src = `https://noun.pics/${activeChallengerId}.svg`;
     setRound();
   }
 
   function render() {
-    fill('fighter-a', state.cardOfDay, state.cardOfDay.HP);
-    fill('fighter-b', state.challenger, state.challenger.HP);
+    fill('fighter-a', state.cardOfDay, state.cardOfDay.HP, state.cardOfDay.HP);
+    fill('fighter-b', state.challenger, state.challenger.HP, state.challenger.HP);
   }
 
-  function fill(rootId: string, f: FighterStats, currentHp: number) {
+  function renderTypeChart(type: string) {
+    return `
+      <span class="type-pill" style="background-color:${TYPE_COLOR[type] || '#888'}">${type}</span>
+      <button class="type-help" type="button" aria-label="Type advantage chart">?</button>
+      <span class="type-chart" role="tooltip">
+        <strong>${type}</strong>
+        <span>STRIKE beats FOCUS</span>
+        <span>GUARD beats STRIKE</span>
+        <span>FOCUS beats GUARD</span>
+      </span>
+    `;
+  }
+
+  function setStatBar(root: HTMLElement, key: 'atk' | 'def' | 'spd' | 'foc', value: number) {
+    const bar = root.querySelector(`[data-field="${key}-bar"]`) as HTMLElement;
+    bar.style.width = `${(value / Math.max(value, 100)) * 100}%`;
+  }
+
+  function flashDamage(root: HTMLElement, previousHp: number, currentHp: number) {
+    if (currentHp >= previousHp) return;
+    root.classList.remove('fighter--hit');
+    window.requestAnimationFrame(() => root.classList.add('fighter--hit'));
+  }
+
+  function fill(rootId: string, f: FighterStats, currentHp: number, previousHp: number) {
     const root = document.getElementById(rootId)!;
     root.querySelector('[data-field="id"]')!.textContent = String(f.id);
     root.querySelector('[data-field="atk"]')!.textContent = String(f.ATK);
     root.querySelector('[data-field="def"]')!.textContent = String(f.DEF);
     root.querySelector('[data-field="spd"]')!.textContent = String(f.SPD);
     root.querySelector('[data-field="foc"]')!.textContent = String(f.FOC);
+    setStatBar(root, 'atk', f.ATK);
+    setStatBar(root, 'def', f.DEF);
+    setStatBar(root, 'spd', f.SPD);
+    setStatBar(root, 'foc', f.FOC);
     const typeHost = root.querySelector('[data-field="types"]') as HTMLElement;
     typeHost.innerHTML = '';
     f.types.forEach((t) => {
-      const pill = document.createElement('span');
-      pill.className = 'type-pill';
-      pill.style.backgroundColor = TYPE_COLOR[t] || '#888';
-      pill.textContent = t;
-      typeHost.appendChild(pill);
+      const chip = document.createElement('span');
+      chip.className = 'type-chip';
+      chip.innerHTML = renderTypeChart(t);
+      typeHost.appendChild(chip);
     });
     const hpText = root.querySelector('[data-field="hp"]') as HTMLElement;
     hpText.textContent = `${currentHp} / ${f.HP}`;
     const bar = root.querySelector('[data-field="hp-bar"]') as HTMLElement;
     bar.style.width = Math.max(0, (currentHp / f.HP) * 100) + '%';
+    flashDamage(root, previousHp, currentHp);
   }
 
   function setRound() {
@@ -224,6 +278,33 @@ const jsonLd = {
     el.className = 'log__line' + (cls ? ' log__line--' + cls : '');
     el.textContent = line;
     body.appendChild(el);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function getOutcomeLabel(round: NonNullable<ReturnType<typeof resolveMatch>['rounds'][number]>) {
+    if (round.damageA >= Math.max(24, round.damageB + 12)) return 'CRIT';
+    if (round.damageA <= 1 && round.damageB <= 1) return 'MISS';
+    if (round.damageA <= 2 && round.damageB > round.damageA) return 'BLOCKED';
+    if (round.damageB >= Math.max(12, round.damageA + 4)) return 'COUNTER';
+    if (round.damageA > round.damageB) return 'CLEAN HIT';
+    return 'MISS';
+  }
+
+  function logRound(round: NonNullable<ReturnType<typeof resolveMatch>['rounds'][number]>) {
+    const body = document.getElementById('log-body')!;
+    const wrap = document.createElement('div');
+    wrap.className = 'log__round';
+
+    const call = document.createElement('div');
+    call.className = 'log__call mono';
+    call.textContent = getOutcomeLabel(round);
+
+    const detail = document.createElement('div');
+    detail.className = 'log__line';
+    detail.textContent = round.log;
+
+    wrap.append(call, detail);
+    body.appendChild(wrap);
     body.scrollTop = body.scrollHeight;
   }
 
@@ -286,6 +367,54 @@ const jsonLd = {
     };
   }
 
+  function scoreMatch(result: ReturnType<typeof resolveMatch>) {
+    return result.rounds.reduce((acc, round) => {
+      if (round.winner === 'a') acc.a += 1;
+      else if (round.winner === 'b') acc.b += 1;
+      else acc.draws += 1;
+      return acc;
+    }, { a: 0, b: 0, draws: 0 });
+  }
+
+  function renderResultBanner(result: ReturnType<typeof resolveMatch>) {
+    const banner = document.getElementById('result-banner')!;
+    const flourish = document.getElementById('result-flourish')!;
+    const headline = document.getElementById('result-headline')!;
+    const score = document.getElementById('result-score')!;
+    const sub = document.getElementById('result-sub')!;
+    const tally = scoreMatch(result);
+
+    if (result.winner === 'draw') {
+      flourish.textContent = '+++ DEAD EVEN +++';
+      headline.textContent = `DRAW · ${tally.a}-${tally.b}-${tally.draws}`;
+      score.textContent = `Final HP ${result.finalHpA}-${result.finalHpB}`;
+      sub.textContent = 'Both stood their ground.';
+    } else {
+      const winner = result.winner === 'a' ? result.a : result.b;
+      const loserRounds = result.winner === 'a' ? tally.b : tally.a;
+      const winnerRounds = result.winner === 'a' ? tally.a : tally.b;
+      flourish.textContent = '+++ GLORY TO THE WINNER +++';
+      headline.textContent = `Noun #${winner.id} WINS`;
+      score.textContent = `Noun #${winner.id} wins ${winnerRounds}-${loserRounds}${tally.draws ? `-${tally.draws}` : ''}`;
+      sub.textContent = `Final HP ${result.finalHpA}-${result.finalHpB}. Cabinet stays hot.`;
+    }
+
+    banner.hidden = false;
+  }
+
+  async function shareCurrentMatch() {
+    const url = `${window.location.origin}/battle?card=${activeCardId}&challenger=${activeChallengerId}`;
+    const btn = document.getElementById('btn-share') as HTMLButtonElement;
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = 'COPIED';
+      window.setTimeout(() => { btn.textContent = 'SHARE'; }, 1200);
+    } catch {
+      btn.textContent = 'COPY FAIL';
+      window.setTimeout(() => { btn.textContent = 'SHARE'; }, 1200);
+    }
+  }
+
   function playRound(stance: Stance) {
     if (state.done) return;
     // Challenger stance derives from CHARACTER (stats), not modular id rotation.
@@ -317,15 +446,18 @@ const jsonLd = {
     // Render fresh HP bars with the outcome at this cumulative round.
     const roundResult = result.rounds[state.round - 1];
     if (roundResult) {
-      fill('fighter-a', state.cardOfDay, roundResult.hpA);
-      fill('fighter-b', state.challenger, roundResult.hpB);
-      log(roundResult.log);
+      const prevHpA = state.round > 1 ? result.rounds[state.round - 2].hpA : state.cardOfDay.HP;
+      const prevHpB = state.round > 1 ? result.rounds[state.round - 2].hpB : state.challenger.HP;
+      fill('fighter-a', state.cardOfDay, roundResult.hpA, prevHpA);
+      fill('fighter-b', state.challenger, roundResult.hpB, prevHpB);
+      logRound(roundResult);
       if (roundResult.hpA === 0 || roundResult.hpB === 0 || state.round >= 3) {
         state.done = true;
         const winner = result.winner === 'a' ? `Card of the Day (#${state.cardOfDay.id})`
           : result.winner === 'b' ? `Challenger (#${state.challenger.id})`
           : 'DRAW';
         log(`— MATCH END — winner: ${winner}`, 'win');
+        renderResultBanner(result);
         completedMatch = makeMatchRecord(result);
         persistMatch(completedMatch);
         renderArchive();
@@ -368,25 +500,36 @@ const jsonLd = {
     });
     document.getElementById('btn-reset')!.addEventListener('click', () => {
       const seed = Number((document.getElementById('seed-input') as HTMLInputElement).value || 420);
-      initMatch(seed);
+      initMatch(activeCardId, seed);
     });
     document.getElementById('btn-roll')!.addEventListener('click', () => {
-      const id = Math.floor(Math.random() * 2000);
-      (document.getElementById('seed-input') as HTMLInputElement).value = String(id);
-      (document.getElementById('port-b') as HTMLImageElement).src = `https://noun.pics/${id}.svg`;
-      initMatch(id);
+      initMatch(activeCardId, Math.floor(Math.random() * 2000));
     });
     document.getElementById('btn-record')!.addEventListener('click', () => {
       if (completedMatch) exportMatch(completedMatch);
     });
+    document.getElementById('btn-rematch')!.addEventListener('click', () => {
+      initMatch(activeCardId, activeChallengerId);
+    });
+    document.getElementById('btn-new')!.addEventListener('click', () => {
+      initMatch(activeCardId, Math.floor(Math.random() * 2000));
+    });
+    document.getElementById('btn-share')!.addEventListener('click', () => {
+      shareCurrentMatch();
+    });
     (document.getElementById('seed-input') as HTMLInputElement).addEventListener('change', (e) => {
-      const id = Number((e.target as HTMLInputElement).value || 0);
-      (document.getElementById('port-b') as HTMLImageElement).src = `https://noun.pics/${id}.svg`;
-      initMatch(id);
+      initMatch(activeCardId, Number((e.target as HTMLInputElement).value || 0));
+    });
+    document.querySelectorAll<HTMLElement>('.fighter').forEach((fighter) => {
+      fighter.addEventListener('animationend', () => fighter.classList.remove('fighter--hit'));
     });
   }
 
-  initMatch(420);
+  const params = new URLSearchParams(window.location.search);
+  initMatch(
+    clampSeed(Number(params.get('card') ?? CARD_OF_THE_DAY), CARD_OF_THE_DAY),
+    clampSeed(Number(params.get('challenger') ?? 420), 420),
+  );
   wire();
 </script>
 
@@ -477,16 +620,26 @@ const jsonLd = {
   }
 
   .port {
+    position: relative;
     display: flex;
     justify-content: center;
     padding: 6px;
     background: var(--ch-50);
     border: 1px solid var(--ch-600);
     border-radius: 2px;
+    overflow: hidden;
   }
   .port img {
     width: 80px; height: 80px;
     image-rendering: pixelated;
+  }
+  .fighter--hit .port::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--ch-600) 52%, transparent);
+    animation: damage-flash 1.2s ease-out;
+    pointer-events: none;
   }
 
   .types {
@@ -494,6 +647,13 @@ const jsonLd = {
     gap: 6px;
     margin-bottom: 10px;
     min-height: 22px;
+    flex-wrap: wrap;
+  }
+  .type-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
   .type-pill {
     font-family: var(--pc-font-mono);
@@ -504,6 +664,45 @@ const jsonLd = {
     color: #fff;
     padding: 3px 7px;
     border-radius: 2px;
+  }
+  .type-help {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--ch-600);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ch-800);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+  }
+  .type-chart {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    z-index: 3;
+    min-width: 150px;
+    display: none;
+    padding: 8px 10px;
+    background: var(--ch-800);
+    color: var(--ch-50);
+    border: 1px solid var(--ch-600);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  }
+  .type-chart strong,
+  .type-chart span {
+    display: block;
+  }
+  .type-chart strong { margin-bottom: 5px; }
+  .type-chip:hover .type-chart,
+  .type-chip:focus-within .type-chart {
+    display: block;
   }
 
   .hp {
@@ -528,7 +727,7 @@ const jsonLd = {
     display: block;
     height: 100%;
     background: var(--pc-ink);
-    transition: width 0.3s ease;
+    transition: width 0.6s ease-out;
   }
 
   .stats {
@@ -558,6 +757,19 @@ const jsonLd = {
     font-size: 14px;
     font-weight: 500;
   }
+  .stat__bar {
+    display: block;
+    width: 100%;
+    height: 5px;
+    background: color-mix(in srgb, var(--ch-600) 14%, white);
+    border: 1px solid color-mix(in srgb, var(--ch-600) 50%, white);
+    overflow: hidden;
+  }
+  .stat__bar span {
+    display: block;
+    height: 100%;
+    background: var(--ch-600);
+  }
 
   .seed-select {
     display: flex;
@@ -586,6 +798,48 @@ const jsonLd = {
     cursor: pointer;
   }
 
+  .result-banner {
+    padding: 14px 16px 16px;
+    background: var(--ch-800);
+    color: var(--ch-50);
+    border-top: 1px solid var(--pc-rule);
+    border-bottom: 1px solid var(--pc-rule);
+  }
+  .result-banner__flourish {
+    color: color-mix(in srgb, var(--ch-50) 74%, white);
+    margin-bottom: 6px;
+  }
+  .result-banner h2 {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: clamp(26px, 6vw, 44px);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+  }
+  .result-banner__score,
+  .result-banner__sub {
+    margin: 0;
+  }
+  .result-banner__score {
+    margin-top: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .result-banner__sub {
+    margin-top: 4px;
+    color: color-mix(in srgb, var(--ch-50) 70%, white);
+    font-size: 14px;
+  }
+  .result-banner__actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
   .log {
     padding: 12px 16px;
     background: #fafafa;
@@ -600,7 +854,13 @@ const jsonLd = {
     line-height: 1.55;
     color: var(--pc-ink);
   }
+  .log__round + .log__round,
   .log__line + .log__line { margin-top: 2px; }
+  .log__call {
+    color: var(--ch-800);
+    margin-top: 8px;
+    margin-bottom: 2px;
+  }
   .log__line--win { color: var(--ch-800); font-weight: 500; }
 
   .actions {
@@ -641,6 +901,20 @@ const jsonLd = {
   .btn--small {
     padding: 6px 10px;
     font-size: 10px;
+  }
+  .btn--arcade {
+    border-radius: 0;
+    background: var(--ch-600);
+    color: #fff;
+    box-shadow: 3px 3px 0 var(--pc-ink);
+  }
+  .btn--arcade:hover {
+    background: var(--ch-50);
+    color: var(--ch-800);
+  }
+  .btn--arcade-alt {
+    background: #fff;
+    color: var(--ch-800);
   }
 
   .archive {
@@ -727,5 +1001,16 @@ const jsonLd = {
     .archive__head {
       flex-direction: column;
     }
+  }
+
+  @media (max-width: 420px) {
+    .page { padding-inline: 12px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .actions__buttons { display: grid; grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @keyframes damage-flash {
+    0% { opacity: 0.75; }
+    100% { opacity: 0; }
   }
 </style>
