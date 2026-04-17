@@ -87,16 +87,26 @@ const displayLabel = label ?? (kind === 'faucet' ? 'Claim →' : priceMutez > 0 
         const tezos = await tezosClient();
         const c = await tezos.wallet.at(contract);
 
-        // FA2 visit_nouns contract calls `mint_noun(noun_id)`. The DRUM faucet
-        // contract will expose `claim(tokenId)`. We dispatch by known ABIs —
-        // if neither is present we fail gracefully.
+        // FA2 dispatch by exposed entrypoint. Known shapes:
+        //   Visit Nouns FA2           → mint_noun(noun_id)
+        //   DRUM / faucet contracts   → claim(tokenId)
+        //   Mike's objkt FA2 (KT1Qc…) → mint(...) but ADMIN-ONLY — buyers
+        //                                 should go to objkt, so we prefer
+        //                                 the external CTA over this button
+        //                                 for that collection. Kept here as
+        //                                 a safety net if a wallet tries.
+        // If none match we throw a user-readable error that names the
+        // entrypoints we looked for so debugging is obvious.
+        const ep = c.methodsObject as any;
         let op;
-        if ((c.methodsObject as any).mint_noun) {
-          op = await (c.methodsObject as any).mint_noun(tokenId).send({ amount: priceMutez, mutez: true });
-        } else if ((c.methodsObject as any).claim) {
-          op = await (c.methodsObject as any).claim(tokenId).send();
+        if (ep.mint_noun) {
+          op = await ep.mint_noun(tokenId).send({ amount: priceMutez, mutez: true });
+        } else if (ep.claim) {
+          op = await ep.claim(tokenId).send();
+        } else if (ep.mint) {
+          op = await ep.mint(tokenId).send({ amount: priceMutez, mutez: true });
         } else {
-          throw new Error('contract does not expose mint_noun or claim');
+          throw new Error('no mintable entrypoint (tried mint_noun, claim, mint) — use the external link to purchase on the marketplace');
         }
 
         const shortHash = op.opHash?.slice(0, 10) ?? '—';
