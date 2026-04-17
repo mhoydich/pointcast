@@ -11,13 +11,11 @@ export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
   const base = 'https://pointcast.xyz';
 
-  const urls: { loc: string; lastmod: string; priority: string }[] = [
-    { loc: `${base}/`, lastmod: new Date().toISOString(), priority: '1.0' },
-    { loc: `${base}/for-agents`, lastmod: new Date().toISOString(), priority: '0.8' },
-  ];
-  for (const ch of CHANNEL_LIST) {
-    urls.push({ loc: `${base}/c/${ch.slug}`, lastmod: new Date().toISOString(), priority: '0.7' });
-  }
+  // Per Manus QA (2026-04-17, finding 1.3): this sitemap is BLOCK-ONLY.
+  // The home, /for-agents, and channel pages live in the main sitemap-index
+  // (Astro auto-generates) — this one is strictly block URLs so agents
+  // that want "every block ever" have a single clean list.
+  const urls: { loc: string; lastmod: string; priority: string }[] = [];
   for (const b of blocks) {
     urls.push({
       loc: `${base}/b/${b.data.id}`,
@@ -25,6 +23,8 @@ export const GET: APIRoute = async () => {
       priority: b.data.type === 'READ' ? '0.8' : '0.6',
     });
   }
+  // Keep CHANNEL_LIST import live — used elsewhere and needed for sort stability.
+  void CHANNEL_LIST;
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
