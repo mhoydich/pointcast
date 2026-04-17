@@ -187,3 +187,57 @@ Prototype sketch: `sketches/codex/nouns-battler-v0.html`
 
 ### Production URL
 **`https://pointcast.xyz`** — v2 live. Preview URL `blocks-rebuild.pointcast.pages.dev` retired with cutover.
+
+---
+
+## Evening run 2026-04-17 (autonomous — Mike napping) ✅ SHIPPED
+
+### Battler 2.0 (Codex medium-reasoning run)
+- [x] Result banner with +++ GLORY / --- LOSS flourish
+- [x] Rematch / New Challenger / Share buttons
+- [x] Stat bars (ATK/DEF/SPD/FOC) + HP feedback animations
+- [x] Round-call glyphs, replay state via `?card=N&challenger=M` querystring
+
+### /cast UI cool-ification (within v2 bands)
+- [x] Bloomberg-terminal treatment — monumental display headline, 4-tile metric terminal row
+- [x] Live countdown (TICK every 1s) for Next Draw
+- [x] 7-day rhythm bar (today tinted cst-50, Sunday filled ink)
+- [x] Mechanism diagram — Deposit → Stake → Accrue → Draw
+- [x] Past-winners receipt tape with LATEST tag on top row
+- [x] Pending-band above PrizeCastPanel when contract absent
+- [x] Accent: local --cst-600 #0F6E56 (GDN green, "money in motion")
+
+### Card of the Day rotation
+- [x] `src/lib/battler/card-of-the-day.ts` — 21-Noun curated roster, dayIndex % 21
+- [x] `battle.astro` + `battle.json.ts` read from rotation module
+- [x] CotD banner below hero on /battle — portrait tile + date + rotation info
+- [x] `/battle.json` includes date, dateLabel, note, rosterIndex
+
+### /collection index
+- [x] Per-contract filter chip row above grid (top 12 by count)
+- [x] Client-side filter, no reload
+
+### /archive (new page + endpoint)
+- [x] Chronological index of every block with channel + type filters + search
+- [x] Month dividers in the stream, channel-colored rows
+- [x] `/archive.json` — byMonth structure for cadence reasoning
+
+### /editions (new page + endpoint)
+- [x] Four-lane dashboard: ON-CHAIN LIVE · LISTED MARKET · FAUCET DAILY · PLANNED INCOMING
+- [x] Live TzKT totalSupply for Visit Nouns FA2
+- [x] Listed market inventory (from market.json), FAUCET blocks, DRUM + Prize Cast placeholders
+- [x] `/editions.json` — machine mirror with per-token listings
+
+### Agent surfaces + OG
+- [x] `/for-agents` adds archive, editions, cast, collection entries + Agent mode section (X-Agent-Mode header doc)
+- [x] OG pipeline extended: `/images/og/{cast,editions,archive,battle,collection,drum}.png`
+- [x] Each page overrides `image=` to reference per-page OG card
+- [x] Homepage footer endpoints adds /archive, /editions, /cast
+
+### Still open (inherited + new)
+- [ ] (MH) Proto-mint decision (a/b/c) — carryover
+- [ ] (MH) SmartPy compile path — docker install, smartpy.io paste, or dedicated VM — blocks DRUM ghostnet + Prize Cast mainnet origination
+- [ ] (MH) Admin transfer ceremony (`node scripts/transfer-admin.mjs`)
+- [ ] (CC) /drum UI polish — deferred until DRUM token lands (compile-blocked)
+- [ ] (X) Battler Phase 3 commemorative mint — gated on admin transfer
+- [ ] (CC) Consider a proper CH.CST channel in channels.ts (requires MH decision per AGENTS.md schema-change rule)
