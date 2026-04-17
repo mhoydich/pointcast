@@ -106,6 +106,22 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [ ] (MH) Good Feels drops: PointCast contract or separate? — `waiting-on-mh`
 - [ ] (MH) `/status` page showing live agent activity? (poetic, cheap, v2 launch feature?) — `waiting-on-mh`
 - [ ] (MH) Typography: Inter free for v1 OK, defer Söhne / Neue Haas? — `waiting-on-mh`
+- [ ] (MH) Approve Battler channel decision: new `BTL` channel (recommended by X) or fold into CRT? — `waiting-on-mh` — blocks Battler Phase 1 merge
+- [ ] (MH) Approve Battler "Card of the Day" selector: today's auction vs yesterday's auction (X recommends), random, or curated? — `waiting-on-mh`
+- [ ] (MH) Approve match-NOTE block ID scheme: `BTL-NNNN` prefix (X recommends) vs main monotonic sequence (amends BLOCKS.md schema either way) — `waiting-on-mh`
+- [ ] (MH) Approve commemorative mint economics: free-gas FAUCET treatment (X recommends) vs paid 1–5 tez MINT edition — `waiting-on-mh`
+
+---
+
+## Nouns Battler (designed by X · 2026-04-17)
+
+Design doc: `docs/codex-logs/2026-04-17-nouns-battler-design.md`
+Prototype sketch: `sketches/codex/nouns-battler-v0.html`
+
+- [ ] (CC) Build Nouns Battler Phase 1: `src/lib/battler/stat-derivation.ts` (pure seed → stats), `src/lib/battler/resolve.ts` (pure 3-round resolver), `src/pages/battle.astro` (full BTL channel battle page, client-side only), first hand-written Card of the Day block, BTL channel added to `src/lib/channels.ts` — `queued` — priority **med** (after MH channel decision)
+- [ ] (CC) Nouns Battler Phase 2: localStorage match log + build step that emits one BTL NOTE block per completed match + `/battle.json` + `/c/battler.json` agent feeds — `queued` — priority **low** (after Phase 1 Battler)
+- [ ] (CC) Nouns Battler Phase 3: wire Card of the Day to Visit Nouns FA2 as 1/1 commemorative mint, Beacon connect on battle page, TzKT live supply — `queued` — priority **low** (gated on Tezos faucet mainnet origination)
+- [ ] (X) Review CC's Battler Phase 1 implementation vs design doc — `queued` — after Phase 1 Battler lands on preview
 
 ---
 
@@ -128,6 +144,7 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (CC) `PresenceBar.astro` + `functions/api/presence.ts` (PresenceRoom Durable Object) — DO deploy deferred to a companion Worker per Cloudflare Pages requirements; bar degrades gracefully. See `docs/presence-next-steps.md`.
 - [x] (X) Phase 1 spec review written to `docs/codex-logs/2026-04-17-phase-1-review.md` — all blocking items addressed
 - [x] (X) **Big assignment kicked off**: Nouns Battler design doc + prototype sketch, running in background
+- [x] (X) Nouns Battler **delivered**: `docs/codex-logs/2026-04-17-nouns-battler-design.md` + `sketches/codex/nouns-battler-v0.html` — 4 MH decisions surfaced, CC Phase 1/2/3 queued
 - [x] Paddle Block 0209 reframed as LINK (editorial study, not product photo) + image renamed `/images/paddle-study.jpg` for honesty
 
 ### Preview URL
