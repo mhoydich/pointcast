@@ -1,0 +1,759 @@
+---
+/**
+ * /editions — unified dashboard of everything mintable on PointCast.
+ *
+ * A single agent-legible page that answers "what can I mint, claim, or
+ * collect right now?" Mixes on-chain supply (TzKT live), cached market
+ * inventory (src/data/market.json), FAUCET blocks, and planned/incoming
+ * editions.
+ *
+ * Agents: pair with /editions.json for the same shape as structured data.
+ * Humans: skim the status pills to see what's LIVE vs LISTED vs PLANNED.
+ *
+ * No new on-chain reads at build time; we use the market.json snapshot
+ * (refreshes via scripts/fetch-market.mjs) + a single TzKT totalSupply
+ * pull for the Visit Nouns FA2.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import contracts from '../data/contracts.json';
+import market from '../data/market.json';
+
+const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
+const drumTokenKt1 = ((contracts as any).drum_token?.mainnet ?? '').trim();
+const prizeCastKt1 = ((contracts as any).prize_cast?.mainnet ?? '').trim();
+
+// Live Visit Nouns supply — TzKT at build time
+let visitNounsSupply: { total: number; holders: number } | null = null;
+let visitNounsError: string | null = null;
+if (visitNounsKt1.startsWith('KT1')) {
+  try {
+    const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${visitNounsKt1}&limit=10000&select=totalSupply,holdersCount`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (r.ok) {
+      const list: Array<{ totalSupply: string; holdersCount: number }> = await r.json();
+      const total = list.reduce((sum, t) => sum + Number(t.totalSupply ?? 0), 0);
+      const holders = list.reduce((max, t) => Math.max(max, t.holdersCount ?? 0), 0);
+      visitNounsSupply = { total, holders };
+    } else {
+      visitNounsError = `tzkt returned ${r.status}`;
+    }
+  } catch (e: any) {
+    visitNounsError = e?.message || 'tzkt fetch failed';
+  }
+}
+
+// Market inventory (existing FA2 at KT1Qc77…)
+const { tokens: marketTokens, count: marketCount, contract: marketContract } = market as any;
+const listedTokens = (marketTokens || []).filter((t: any) => t.listed);
+
+// FAUCET blocks from content collection
+const faucetBlocks = (await getCollection('blocks', ({ data }) => !data.draft && data.type === 'FAUCET'))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+// MINT blocks
+const mintBlocks = (await getCollection('blocks', ({ data }) => !data.draft && data.type === 'MINT'))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+// Summary counters
+const totalLive = (visitNounsSupply?.total ?? 0);
+const totalListed = listedTokens.length;
+const totalFaucet = faucetBlocks.length;
+const totalMint = mintBlocks.length;
+
+function fmtPrice(xtz: number | null): string {
+  if (xtz === null || xtz === undefined) return '—';
+  if (xtz === 0) return 'FREE';
+  return `${xtz.toFixed(xtz < 1 ? 2 : 1)} ꜩ`;
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/editions',
+  name: 'PointCast editions — everything mintable',
+  description: 'Live dashboard of every mintable or claimable PointCast edition across Tezos.',
+  url: 'https://pointcast.xyz/editions',
+};
+---
+
+<BlockLayout
+  title="Editions"
+  description="Every mintable, claimable, and planned PointCast edition in one page. On-chain supply from TzKT, market inventory from objkt, faucet status from the blocks archive."
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/editions.json', title: 'Editions (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>editions</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">EDITIONS · MINT · CLAIM · COLLECT</p>
+      <h1 class="display">Everything mintable on PointCast.</h1>
+      <p class="dek">
+        On-chain supply live from TzKT. Market inventory from the cached objkt
+        snapshot. Faucet status from the blocks archive. One page, four lanes,
+        scan it and pick.
+      </p>
+    </header>
+
+    <section class="summary" aria-label="Summary">
+      <div class="sum">
+        <p class="sum__label">ON-CHAIN · LIVE</p>
+        <p class="sum__value">{totalLive}</p>
+        <p class="sum__note">Visit Nouns FA2 minted</p>
+      </div>
+      <div class="sum">
+        <p class="sum__label">LISTED · MARKET</p>
+        <p class="sum__value">{totalListed}</p>
+        <p class="sum__note">tokens on objkt</p>
+      </div>
+      <div class="sum">
+        <p class="sum__label">FAUCET · CHANNELS</p>
+        <p class="sum__value">{totalFaucet}</p>
+        <p class="sum__note">free daily claims</p>
+      </div>
+      <div class="sum">
+        <p class="sum__label">PLANNED · INCOMING</p>
+        <p class="sum__value">2</p>
+        <p class="sum__note">DRUM · Prize Cast</p>
+      </div>
+    </section>
+
+    {/* ═════ LANE 1 · ON-CHAIN · LIVE ═════ */}
+    <section class="lane">
+      <header class="lane__head">
+        <p class="kicker lane__kicker lane__kicker--live">ON-CHAIN · LIVE</p>
+        <h2 class="lane__title">Visit Nouns FA2 <span class="pill pill--live">LIVE · MAINNET</span></h2>
+        <p class="lane__note">
+          Open-supply FA2 — each Noun seed is a distinct tokenId (0 through 1199).
+          {visitNounsSupply ? `${visitNounsSupply.total} minted. ${visitNounsSupply.holders} distinct holders (max per tokenId).` : 'Supply read pending.'}
+          {visitNounsError && <span class="lane__note-err"> TzKT: {visitNounsError}.</span>}
+        </p>
+      </header>
+      <div class="cards">
+        <article class="card card--big">
+          <div class="card__body">
+            <p class="card__kicker">COLLECTION · <code>{visitNounsKt1 || '—'}</code></p>
+            <h3 class="card__title">Every Noun is a Visit.</h3>
+            <p class="card__note">
+              Mint the Noun you want. Contract metadata base is pointcast.xyz's own
+              TZIP-21 endpoint, so every id 0–1199 has working metadata.
+            </p>
+            <dl class="card__stats">
+              <div>
+                <dt>Type</dt>
+                <dd>FA2 · Open edition</dd>
+              </div>
+              <div>
+                <dt>Minted</dt>
+                <dd>{visitNounsSupply?.total ?? '—'} / ∞</dd>
+              </div>
+              <div>
+                <dt>Mint price</dt>
+                <dd>FREE · gas only (~0.003 ꜩ)</dd>
+              </div>
+              <div>
+                <dt>Marketplace</dt>
+                <dd>
+                  <a href={`https://objkt.com/collection/${visitNounsKt1}`} target="_blank" rel="noopener">objkt ↗</a>
+                  · <a href={`https://tzkt.io/${visitNounsKt1}`} target="_blank" rel="noopener">TzKT ↗</a>
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="card__actions">
+            <a class="btn btn--primary" href="/collection/visit-nouns">View mints</a>
+            <a class="btn btn--ghost" href="/for-agents#visit-nouns">Spec</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    {/* ═════ LANE 2 · LISTED · MARKET ═════ */}
+    <section class="lane">
+      <header class="lane__head">
+        <p class="kicker lane__kicker lane__kicker--market">LISTED · MARKET</p>
+        <h2 class="lane__title">Collector tokens <span class="pill pill--market">{listedTokens.length} LISTED · objkt</span></h2>
+        <p class="lane__note">
+          Mike's editorial FA2 — photography, writing, signature moments.
+          One listing per tokenId. Mint directly from <a href="/collect">/collect</a>
+          with a Kukai wallet; the objkt ask is handled on-chain.
+        </p>
+      </header>
+      {listedTokens.length > 0 ? (
+        <div class="market-grid">
+          {listedTokens.map((t: any) => (
+            <a class="mkt" href={`/collect/${t.tokenId}`}>
+              <div class="mkt__art">
+                <img src={t.imageThumb || t.imageDisplay} alt={t.name} loading="lazy" />
+              </div>
+              <div class="mkt__body">
+                <p class="mkt__title">{t.name}</p>
+                <p class="mkt__meta mono">
+                  #{t.tokenId} · <span class="mkt__price">{fmtPrice(t.priceXtz)}</span> · {t.amountLeft ?? '?'} LEFT
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="lane__empty">No listings right now. Check back soon.</p>
+      )}
+      <p class="lane__footnote mono">
+        CONTRACT · <code>{marketContract}</code> · updated {new Date(market.updatedAt).toISOString().slice(0, 10)}
+      </p>
+    </section>
+
+    {/* ═════ LANE 3 · FAUCET · DAILY ═════ */}
+    <section class="lane">
+      <header class="lane__head">
+        <p class="kicker lane__kicker lane__kicker--faucet">FAUCET · DAILY</p>
+        <h2 class="lane__title">Free daily claims <span class="pill pill--faucet">GAS ONLY</span></h2>
+        <p class="lane__note">
+          One claim per wallet per day, no tez cost beyond gas. Visit the block,
+          connect a wallet, claim. Mechanic lives on CH.FCT.
+        </p>
+      </header>
+      <div class="cards">
+        {faucetBlocks.map((b) => {
+          const ch = CHANNELS[b.data.channel];
+          const ed = b.data.edition;
+          return (
+            <article class="card" style={`--card-c: ${ch.color600}; --card-c50: ${ch.color50};`}>
+              <div class="card__body">
+                <p class="card__kicker">CH.{ch.code} · FAUCET · №{b.data.id}</p>
+                <h3 class="card__title">{b.data.title}</h3>
+                {b.data.dek && <p class="card__note">{b.data.dek}</p>}
+                {ed && (
+                  <dl class="card__stats">
+                    <div><dt>Supply today</dt><dd>{ed.supply}</dd></div>
+                    <div><dt>Claimed</dt><dd>{ed.minted}</dd></div>
+                    <div><dt>Price</dt><dd>{ed.price === 'free' ? 'FREE' : `${(ed.price as any)?.tez} ꜩ`}</dd></div>
+                    {'resetAtPT' in ((b.data as any).meta ?? {}) && <div><dt>Resets</dt><dd>{(b.data as any).meta.resetAtPT} PT</dd></div>}
+                  </dl>
+                )}
+              </div>
+              <div class="card__actions">
+                <a class="btn btn--primary" href={`/b/${b.data.id}`}>Open block</a>
+              </div>
+            </article>
+          );
+        })}
+        {faucetBlocks.length === 0 && <p class="lane__empty">No active faucet blocks right now.</p>}
+      </div>
+    </section>
+
+    {/* ═════ LANE 4 · PLANNED · INCOMING ═════ */}
+    <section class="lane">
+      <header class="lane__head">
+        <p class="kicker lane__kicker lane__kicker--planned">PLANNED · INCOMING</p>
+        <h2 class="lane__title">Coming online <span class="pill pill--planned">BLOCKED ON COMPILE</span></h2>
+        <p class="lane__note">
+          Two editions are contract-complete but not yet originated. Both are
+          sitting on the SmartPy compile step — once that's unblocked they go
+          to ghostnet, then mainnet.
+        </p>
+      </header>
+      <div class="cards">
+        <article class="card card--planned">
+          <div class="card__body">
+            <p class="card__kicker">CH.SPN · TOKEN · FA1.2</p>
+            <h3 class="card__title">DRUM · attention coin <span class="pill pill--soon">SOON</span></h3>
+            <p class="card__note">
+              An FA1.2 token you earn by drumming on /drum. Signed-voucher claim
+              flow: tap enough, claim via Beacon, mint on-chain. Targeting a 10:1
+              drums→DRUM issuance rate at launch.
+            </p>
+            <dl class="card__stats">
+              <div><dt>Contract</dt><dd>{drumTokenKt1 || '<em>pending origination</em>'}</dd></div>
+              <div><dt>Spec</dt><dd><a href="/docs/pm-briefs/2026-04-17-drum-token-integration.md">PM brief</a></dd></div>
+              <div><dt>Source</dt><dd>contracts/v2/drum_token.py</dd></div>
+            </dl>
+          </div>
+          <div class="card__actions">
+            <a class="btn btn--ghost" href="/drum">Visit drum room</a>
+          </div>
+        </article>
+        <article class="card card--planned">
+          <div class="card__body">
+            <p class="card__kicker">CH.CST · NO-LOSS SAVINGS</p>
+            <h3 class="card__title">Prize Cast <span class="pill pill--soon">SOON</span></h3>
+            <p class="card__note">
+              Pool tez, stake with a baker, weekly yield becomes the prize.
+              Principal stays liquid. One winner every Sunday 18:00 UTC.
+              PoolTogether-flavored, Tezos-native.
+            </p>
+            <dl class="card__stats">
+              <div><dt>Contract</dt><dd>{prizeCastKt1 || '<em>pending origination</em>'}</dd></div>
+              <div><dt>Spec</dt><dd><a href="/docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md">PM brief</a></dd></div>
+              <div><dt>Draw day</dt><dd>Sunday 18:00 UTC</dd></div>
+            </dl>
+          </div>
+          <div class="card__actions">
+            <a class="btn btn--primary" href="/cast">Open /cast</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <aside class="agent-strip">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="agent-strip__list">
+        <li><a href="/editions.json"><span class="mono">GET</span> /editions.json</a></li>
+        <li><a href="/blocks.json"><span class="mono">GET</span> /blocks.json</a></li>
+        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
+        <li><a href={`https://tzkt.io/${visitNounsKt1}`} target="_blank" rel="noopener"><span class="mono">TZK</span> TzKT ↗</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  :root {
+    --ed-live: #0F6E56;
+    --ed-market: #185FA5;
+    --ed-faucet: #BA7517;
+    --ed-planned: #5F5E5A;
+  }
+
+  .page {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ══ HERO ══ */
+  .hero {
+    margin-bottom: 22px;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.2rem, 9vw, 4.4rem);
+    font-weight: 500;
+    line-height: 0.96;
+    letter-spacing: -0.018em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 58ch;
+  }
+
+  /* ══ SUMMARY ══ */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--pc-rule-soft);
+    border: 1.5px solid var(--pc-ink);
+    margin-bottom: 24px;
+  }
+
+  .sum {
+    background: #fff;
+    padding: 14px 16px;
+  }
+
+  .sum__label {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .sum__value {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans);
+    font-size: 2rem;
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sum__note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+  }
+
+  /* ══ LANE ══ */
+  .lane {
+    margin-bottom: 28px;
+  }
+
+  .lane__head {
+    margin-bottom: 14px;
+  }
+
+  .lane__kicker--live    { color: var(--ed-live); }
+  .lane__kicker--market  { color: var(--ed-market); }
+  .lane__kicker--faucet  { color: var(--ed-faucet); }
+  .lane__kicker--planned { color: var(--ed-planned); }
+
+  .lane__title {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .lane__note {
+    margin: 0;
+    font-size: 14px;
+    color: var(--pc-ink-soft);
+    line-height: 1.5;
+    max-width: 72ch;
+  }
+
+  .lane__note a { color: var(--pc-accent); }
+  .lane__note-err { color: var(--ed-faucet); }
+
+  .lane__empty {
+    margin: 8px 0 0;
+    color: var(--pc-ink-muted);
+    font-size: 14px;
+  }
+
+  .lane__footnote {
+    margin: 10px 0 0;
+    color: var(--pc-ink-muted);
+    word-break: break-all;
+  }
+
+  /* ══ PILLS ══ */
+  .pill {
+    display: inline-block;
+    padding: 3px 7px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    line-height: 1.3;
+    vertical-align: middle;
+  }
+
+  .pill--live    { color: var(--ed-live);    border-color: var(--ed-live);    background: #e7f4ef; }
+  .pill--market  { color: var(--ed-market);  border-color: var(--ed-market);  background: #eef4fa; }
+  .pill--faucet  { color: var(--ed-faucet);  border-color: var(--ed-faucet);  background: #fbf1e1; }
+  .pill--planned { color: var(--ed-planned); border-color: var(--ed-planned); background: #efefee; }
+  .pill--soon    { color: #fff;              border-color: var(--ed-faucet);  background: var(--ed-faucet); }
+
+  /* ══ CARDS ══ */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 12px;
+  }
+
+  .card {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: 12px;
+    padding: 16px;
+    border: 1.5px solid var(--card-c, var(--pc-rule));
+    border-radius: 2px;
+    background: #fff;
+    min-height: 180px;
+  }
+
+  .card--big {
+    grid-column: 1 / -1;
+    background: var(--card-c50, #f6f4ef);
+    border: 1.5px solid var(--ed-live);
+  }
+
+  .card--planned {
+    background: #fafaf8;
+    border-style: dashed;
+    border-color: var(--ed-planned);
+  }
+
+  .card__body {
+    min-width: 0;
+  }
+
+  .card__kicker {
+    margin: 0 0 6px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    word-break: break-all;
+  }
+
+  .card__kicker code {
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--pc-ink);
+  }
+
+  .card__title {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-sans);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .card--big .card__title {
+    font-size: 26px;
+  }
+
+  .card__note {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+
+  .card__stats {
+    margin: 0;
+    padding: 10px 0 0;
+    border-top: 1px dashed var(--pc-rule);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+
+  .card__stats > div {
+    min-width: 0;
+  }
+
+  .card__stats dt {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 2px;
+  }
+
+  .card__stats dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink);
+    word-break: break-word;
+  }
+
+  .card__stats dd a {
+    color: var(--pc-accent);
+  }
+
+  .card__stats dd em {
+    color: var(--pc-ink-muted);
+    font-style: italic;
+  }
+
+  .card__actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    transition: all 0.12s;
+    cursor: pointer;
+  }
+
+  .btn--primary {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .btn--primary:hover {
+    background: var(--pc-accent);
+    border-color: var(--pc-accent);
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .btn--ghost {
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .btn--ghost:hover {
+    border-color: var(--pc-accent);
+    color: var(--pc-accent);
+    text-decoration: none;
+  }
+
+  /* ══ MARKET GRID ══ */
+  .market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+  }
+
+  .mkt {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    transition: border-color 0.12s;
+  }
+
+  .mkt:hover {
+    border-color: var(--ed-market);
+    text-decoration: none;
+  }
+
+  .mkt__art {
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #F6F4EF;
+    border-radius: 2px;
+  }
+
+  .mkt__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .mkt__title {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mkt__meta {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .mkt__price {
+    color: var(--ed-market);
+    font-weight: 500;
+  }
+
+  /* ══ AGENT STRIP ══ */
+  .agent-strip {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .agent-strip__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .agent-strip__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .agent-strip__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 36px;
+  }
+
+  /* ══ RESPONSIVE ══ */
+  @media (min-width: 640px) {
+    .summary {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .card--big {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+    }
+
+    .agent-strip__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>
