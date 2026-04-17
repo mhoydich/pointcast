@@ -148,10 +148,16 @@ Prototype sketch: `sketches/codex/nouns-battler-v0.html`
   - (c) SmartPy patch + contract upgrade (most work)
 - [ ] (MH) Admin transfer: `node scripts/transfer-admin.mjs` when ready
 
-### Wallet + Login (shipped)
-- [x] WalletChip in home masthead — 4-wallet Beacon picker (Kukai/Temple/Umami/Airgap) + TzKT-backed visualizer (balance, NFT count, ops count, TzKT deep-link)
+### Wallet + Login (shipped — multi-wallet pass)
+- [x] WalletChip in home masthead — Beacon-native picker, no wallet enumeration in the dropdown
+- [x] Multi-wallet storage: `pc:wallets` array + `pc:wallet-active` + legacy `pc:wallet` mirror for MintButton back-compat
+- [x] WalletChip dropdown shows active wallet + remembered list + switch/add/disconnect + profile link
+- [x] TzKT-backed visualizer on active wallet (balance, NFTs held)
+- [x] `/profile` page — every remembered wallet visualized with live TzKT stats (balance, NFTs, ops, last-activity), switch / remove actions, objkt + TzKT deep-links
 - [x] Beacon SDK 24.2 network-property fix applied in `src/lib/tezos.ts`
 - [x] MintButton dispatch extended to `mint()` entrypoint alongside `mint_noun` / `claim`
+- [x] `/drum` ported to new `DrumLayout` — v2 shell (white bg, Inter + JetBrains Mono, WalletChip in header) while keeping Tailwind + warm palette available for internal drum classes
+- [x] Stripped-HTML agent mode middleware — AI crawlers (`ai:*` UAs) get CSS/JS removed while JSON-LD stays intact. ~12% smaller payload verified on pointcast.xyz.
 
 ### Prize Cast (no-loss prize savings) — ARCHITECTED
 - [x] PM brief: `docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md`
