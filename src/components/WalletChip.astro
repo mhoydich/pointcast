@@ -40,16 +40,27 @@
   <div class="wallet-chip__menu" id="wallet-chip-menu" role="menu" hidden>
     <!-- disconnected state -->
     <div class="wallet-chip__panel" id="wallet-chip-connect-panel">
-      <p class="wallet-chip__hint">Tezos — Beacon opens Kukai, Temple, Umami, or Airgap. Kukai wraps Google, Apple, Facebook, Twitter, Reddit.</p>
+      <p class="wallet-chip__header">Tezos wallets</p>
+      <ul class="wallet-chip__wallets">
+        <li><b>Kukai</b> — web wallet, Google/Apple/Facebook/Twitter/Reddit sign-in</li>
+        <li><b>Temple</b> — browser extension, seed-phrase or ledger</li>
+        <li><b>Umami</b> — desktop app, full-featured</li>
+        <li><b>Airgap</b> — mobile app, cold-storage vault</li>
+      </ul>
       <button type="button" class="wallet-chip__connect" id="wallet-chip-connect">
         Open Beacon picker →
       </button>
+      <p class="wallet-chip__footnote">Beacon is the Tezos wallet standard. One click opens the picker; each wallet manages its own sign-in.</p>
     </div>
 
     <!-- connected state -->
     <div class="wallet-chip__panel" id="wallet-chip-connected-panel" hidden>
       <p class="wallet-chip__kv"><span>addr</span><b id="wallet-chip-addr">—</b></p>
       <p class="wallet-chip__kv"><span>chain</span><b id="wallet-chip-chain">—</b></p>
+      <p class="wallet-chip__kv"><span>balance</span><b id="wallet-chip-balance">—</b></p>
+      <p class="wallet-chip__kv"><span>nfts held</span><b id="wallet-chip-nfts">—</b></p>
+      <p class="wallet-chip__kv"><span>ops</span><b id="wallet-chip-ops">—</b></p>
+      <a class="wallet-chip__tzkt" id="wallet-chip-tzkt" href="#" target="_blank" rel="noopener">View on TzKT ↗</a>
       <button type="button" class="wallet-chip__disconnect" id="wallet-chip-disconnect">
         Disconnect
       </button>
@@ -71,6 +82,10 @@
   const chainEl = document.getElementById('wallet-chip-chain')!;
   const connectBtn = document.getElementById('wallet-chip-connect') as HTMLButtonElement;
   const disconnectBtn = document.getElementById('wallet-chip-disconnect') as HTMLButtonElement;
+  const balanceEl = document.getElementById('wallet-chip-balance')!;
+  const nftsEl = document.getElementById('wallet-chip-nfts')!;
+  const opsEl = document.getElementById('wallet-chip-ops')!;
+  const tzktLink = document.getElementById('wallet-chip-tzkt') as HTMLAnchorElement;
 
   function loadWallet(): Wallet | null {
     try {
@@ -96,11 +111,38 @@
       connectedPanel.hidden = false;
       addrEl.textContent = w.address;
       chainEl.textContent = `${w.chain} · mainnet`;
+      tzktLink.href = `https://tzkt.io/${w.address}`;
+      // Fire-and-forget visualizer fetch — TzKT is CORS-friendly + fast.
+      // Balance in ꜩ, NFT count = tokens with balance > 0 on the wallet,
+      // ops = total on-chain transactions the address has participated in.
+      void loadVisualizer(w.address);
     } else {
       label.textContent = 'connect wallet →';
       chip.classList.remove('is-connected');
       connectPanel.hidden = false;
       connectedPanel.hidden = true;
+    }
+  }
+
+  async function loadVisualizer(addr: string) {
+    balanceEl.textContent = '…'; nftsEl.textContent = '…'; opsEl.textContent = '…';
+    try {
+      const [accountRes, tokensRes] = await Promise.all([
+        fetch(`https://api.tzkt.io/v1/accounts/${addr}`),
+        fetch(`https://api.tzkt.io/v1/tokens/balances/count?account=${addr}&balance.gt=0`),
+      ]);
+      if (accountRes.ok) {
+        const a = await accountRes.json();
+        const tz = ((a.balance ?? 0) / 1_000_000).toFixed(2);
+        balanceEl.textContent = `${tz} ꜩ`;
+        opsEl.textContent = String(a.numTransactions ?? 0);
+      }
+      if (tokensRes.ok) {
+        const count = await tokensRes.text();
+        nftsEl.textContent = String(count).trim();
+      }
+    } catch {
+      balanceEl.textContent = '—'; nftsEl.textContent = '—'; opsEl.textContent = '—';
     }
   }
 
@@ -226,6 +268,54 @@
     line-height: 1.45;
     color: var(--pc-ink-soft);
     margin: 0 0 10px;
+  }
+
+  .wallet-chip__header {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .wallet-chip__wallets {
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .wallet-chip__wallets li {
+    font-family: var(--pc-font-sans);
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--pc-ink-soft);
+  }
+  .wallet-chip__wallets b {
+    font-weight: 500;
+    color: var(--pc-ink);
+    margin-right: 4px;
+  }
+
+  .wallet-chip__footnote {
+    font-family: var(--pc-font-sans);
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--pc-ink-muted);
+    margin: 8px 0 0;
+    font-style: italic;
+  }
+
+  .wallet-chip__tzkt {
+    display: block;
+    margin-top: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
   }
 
   .wallet-chip__connect,
