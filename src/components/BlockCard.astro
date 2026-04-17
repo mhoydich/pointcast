@@ -195,9 +195,20 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
       )
     )}
 
-    {/* Body — notes, short READs, visit summaries */}
+    {/* Body.
+        - NOTE / VISIT / LINK / detail-mode READ all render the body.
+        - For READ on detail, split on blank lines into proper paragraphs
+          (the JSON stores bodies with \n\n as paragraph breaks), and
+          apply article typography for comfortable long-form reading on
+          mobile + desktop. Plain <p> for everything else. */}
     {data.body && (data.type === 'NOTE' || data.type === 'VISIT' || data.type === 'LINK' || (detail && data.type === 'READ')) && (
-      <p class="block-card__body">{data.body}</p>
+      detail && data.type === 'READ' ? (
+        <div class="block-card__article">
+          {data.body.split(/\n\n+/).map((para) => <p class="block-card__article-p">{para}</p>)}
+        </div>
+      ) : (
+        <p class="block-card__body">{data.body}</p>
+      )
     )}
 
     {/* Footer meta — type-specific, computed in footerMeta() helper above */}
@@ -324,6 +335,34 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     margin: 0;
   }
 
+  /* READ on detail mode — article typography. Mobile-first: comfortable
+     reading size (16px), generous line-height, paragraph spacing.
+     Constrains line-length to ~72 characters at desktop to keep
+     long-form readable. */
+  .block-card__article {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9em;
+    max-width: 64ch;
+  }
+  .block-card__article-p {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #12110E;
+    margin: 0;
+  }
+  .block-card__article-p code {
+    font-family: var(--pc-font-mono);
+    font-size: 0.92em;
+    background: #F2EFE9;
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  @media (min-width: 640px) {
+    .block-card__article-p { font-size: 17px; }
+  }
+
   .block-card__media {
     margin: 2px -16px;
   }
@@ -335,6 +374,21 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     object-fit: cover;
   }
 
+  /* Detail mode: contain images so the whole frame is visible and the
+     image never takes more than ~half the viewport. Letterbox with a
+     warm cream so tall/wide images sit neatly. Fixes the case where
+     /b/0209 (paddle study, 1400×1045) dominated the viewport on the
+     permalink page. */
+  .block-card--detail .block-card__media {
+    margin: 6px -16px 2px;
+    background: #F6F4EF;
+  }
+  .block-card--detail .block-card__media img {
+    max-height: 52vh;
+    width: 100%;
+    object-fit: contain;
+  }
+
   .block-card__embed--audio {
     margin: 2px -16px;
   }
@@ -344,6 +398,12 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     height: 80px;
     display: block;
     border: 0;
+  }
+
+  /* On detail, the Spotify embed grows to the full player height so the
+     track list + controls are usable (80px only fits the play bar). */
+  .block-card--detail .block-card__embed iframe {
+    height: 352px;
   }
 
   /* Spotify/audio facade — tiny row that reads as a media chip without
