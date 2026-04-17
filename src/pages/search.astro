@@ -1,0 +1,468 @@
+---
+/**
+ * /search — client-side search over every PointCast Block.
+ *
+ * Ships an index of blocks (id, channel, type, title, dek, timestamp) as
+ * JSON baked into the page at build time. The script filters in-place as
+ * the visitor types — no network, no fallback, no rate limit.
+ *
+ * The server also exposes /blocks.json + /archive.json for agents that
+ * want to do their own filtering. This page is the human-oriented affordance.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+// Index shape consumed by the client-side filter. Keep lightweight —
+// strings only, no body. The archive is <100 entries, this sub-10kB.
+const INDEX = blocks.map((b) => {
+  const ch = CHANNELS[b.data.channel];
+  return {
+    id: b.data.id,
+    url: `/b/${b.data.id}`,
+    channel: ch.code,
+    channelSlug: ch.slug,
+    channelName: ch.name,
+    channelColor: ch.color600,
+    channelBg: ch.color50,
+    channelFg: ch.color800,
+    type: b.data.type,
+    title: b.data.title,
+    dek: b.data.dek ?? '',
+    timestamp: b.data.timestamp.toISOString(),
+    // Pre-built search haystack — lowercase string containing every
+    // searchable substring for a given block. Built at build time so the
+    // client just runs `indexOf` per block.
+    haystack: [
+      b.data.id,
+      b.data.title,
+      b.data.dek ?? '',
+      ch.code,
+      ch.name,
+      ch.slug,
+      b.data.type,
+    ].join(' ').toLowerCase(),
+  };
+});
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': 'https://pointcast.xyz/search',
+  name: 'PointCast · search',
+  url: 'https://pointcast.xyz/search',
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: {
+      '@type': 'EntryPoint',
+      urlTemplate: 'https://pointcast.xyz/search?q={search_term_string}',
+    },
+    'query-input': 'required name=search_term_string',
+  },
+};
+---
+
+<BlockLayout
+  title="Search"
+  description={`Search every PointCast block by title, channel, type, or id. ${blocks.length} blocks indexed, fully client-side.`}
+  image="/images/og/search.png"
+  jsonLd={jsonLd}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>search</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">SEARCH · {blocks.length} BLOCKS</p>
+      <h1 class="display">Find any block.</h1>
+      <p class="dek">
+        Client-side search over every title, dek, channel code, type, and
+        block ID. Starts filtering the moment you type. Hit enter to open
+        the top result. No network, no rate limit.
+      </p>
+    </header>
+
+    <form class="form" role="search" id="search-form" autocomplete="off">
+      <label class="form__field">
+        <span class="sr-only">Search query</span>
+        <input
+          type="search"
+          id="q"
+          name="q"
+          placeholder="noun, dispatch, faucet, #0205, CH.FD, READ…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          aria-describedby="count"
+        />
+      </label>
+      <p class="form__meta mono">
+        <span id="count">— of {blocks.length}</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span>TRY · <button type="button" class="q-hint" data-q="dispatch">dispatch</button>, <button type="button" class="q-hint" data-q="FAUCET">FAUCET</button>, <button type="button" class="q-hint" data-q="CH.FD">CH.FD</button></span>
+      </p>
+    </form>
+
+    <section class="results" id="results" aria-live="polite" aria-label="Search results">
+      {/* rendered by the script below */}
+    </section>
+
+    <aside class="surfaces">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="surfaces__list">
+        <li><a href="/blocks.json"><span class="mono">GET</span> /blocks.json</a></li>
+        <li><a href="/archive.json"><span class="mono">GET</span> /archive.json</a></li>
+        <li><a href="/archive"><span class="mono">SEE</span> /archive</a></li>
+        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <script is:inline define:vars={{ INDEX }}>
+    (function () {
+      const input = document.getElementById('q');
+      const countEl = document.getElementById('count');
+      const out = document.getElementById('results');
+      const form = document.getElementById('search-form');
+
+      function render(list) {
+        if (list.length === 0) {
+          out.innerHTML = '<p class="empty">No matches. Try a looser query, a channel code like <code>CH.FD</code>, or a type like <code>READ</code>.</p>';
+          return;
+        }
+        out.innerHTML = list.slice(0, 60).map(function (b) {
+          const dateShort = new Date(b.timestamp).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: '2-digit' }).toUpperCase();
+          const dekSafe = b.dek ? b.dek.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+          return (
+            '<a class="hit" href="' + b.url + '"'
+              + ' style="--row-c: ' + b.channelColor + '; --row-c50: ' + b.channelBg + '; --row-c8: ' + b.channelFg + '">'
+              + '<span class="hit__ch" style="border-color:' + b.channelColor + '; background:' + b.channelBg + '; color:' + b.channelFg + '">CH.' + b.channel + '</span>'
+              + '<span class="hit__id mono">№' + b.id + '</span>'
+              + '<span class="hit__type mono">' + b.type + '</span>'
+              + '<span class="hit__date mono">' + dateShort + '</span>'
+              + '<span class="hit__title">' + b.title + '</span>'
+              + (dekSafe ? '<span class="hit__dek">' + dekSafe + '</span>' : '')
+            + '</a>'
+          );
+        }).join('');
+      }
+
+      function runQuery(q) {
+        const needle = q.trim().toLowerCase();
+        if (!needle) {
+          // empty query — show the latest 20
+          const top = INDEX.slice(0, 20);
+          countEl.textContent = 'Showing latest 20 of ' + INDEX.length;
+          render(top);
+          return;
+        }
+        const hits = INDEX.filter(function (b) {
+          return b.haystack.indexOf(needle) !== -1;
+        });
+        countEl.textContent = hits.length + ' of ' + INDEX.length;
+        render(hits);
+      }
+
+      // Kick off with initial state (honor ?q= on initial load)
+      const params = new URLSearchParams(window.location.search);
+      const initial = params.get('q') || '';
+      if (initial) input.value = initial;
+      runQuery(initial);
+
+      input.addEventListener('input', function () {
+        runQuery(input.value || '');
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        // Enter opens the first result
+        const first = out.querySelector('.hit');
+        if (first) window.location.href = first.getAttribute('href');
+      });
+
+      document.querySelectorAll('.q-hint').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          input.value = btn.getAttribute('data-q') || '';
+          runQuery(input.value);
+          input.focus();
+        });
+      });
+
+      // Autofocus on desktop, not mobile (triggers keyboard pop)
+      if (window.matchMedia && window.matchMedia('(min-width: 720px)').matches) {
+        input.focus();
+      }
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2rem, 8vw, 3.2rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.018em;
+    margin: 0 0 10px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    max-width: 58ch;
+  }
+
+  /* ══════ FORM ══════ */
+  .form {
+    margin-bottom: 20px;
+  }
+
+  .form__field input {
+    width: 100%;
+    padding: 14px 16px;
+    font-family: var(--pc-font-sans);
+    font-size: 18px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .form__field input:focus {
+    outline: 2px solid rgba(24, 95, 165, 0.18);
+    border-color: var(--pc-accent);
+  }
+
+  .form__meta {
+    margin: 8px 2px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+    flex-wrap: wrap;
+  }
+
+  .form__meta .sep {
+    color: var(--pc-rule);
+  }
+
+  .q-hint {
+    border: 0;
+    background: none;
+    padding: 2px 6px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+    cursor: pointer;
+    border-bottom: 1px dashed var(--pc-accent);
+  }
+
+  .q-hint:hover {
+    color: var(--pc-ink);
+    border-bottom-color: var(--pc-ink);
+  }
+
+  /* ══════ RESULTS ══════ */
+  .results {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .empty {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--pc-ink-muted);
+    border: 1px dashed var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+    font-size: 15px;
+  }
+
+  .empty code {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    padding: 1px 5px;
+    background: var(--pc-rule-soft);
+    border-radius: 2px;
+    color: var(--pc-ink);
+  }
+
+  .hit {
+    display: grid;
+    grid-template-columns: auto 56px 54px 64px 1fr;
+    grid-template-areas: "ch id type date title";
+    gap: 6px 12px;
+    padding: 10px 4px;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+    color: var(--pc-ink);
+    text-decoration: none;
+    align-items: center;
+    transition: background-color 0.12s, padding-left 0.12s;
+  }
+
+  .hit:hover {
+    background: var(--row-c50, #fafaf8);
+    padding-left: 8px;
+    text-decoration: none;
+  }
+
+  .hit__ch {
+    grid-area: ch;
+    display: inline-flex;
+    padding: 2px 6px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    min-width: 54px;
+    justify-content: center;
+  }
+
+  .hit__id { grid-area: id; color: var(--pc-ink-muted); }
+  .hit__type { grid-area: type; color: var(--pc-ink-muted); }
+  .hit__date { grid-area: date; color: var(--pc-ink-muted); font-size: 9.5px; }
+
+  .hit__title {
+    grid-area: title;
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--pc-ink);
+  }
+
+  .hit:hover .hit__title {
+    color: var(--row-c8, var(--pc-accent));
+  }
+
+  .hit__dek {
+    display: none;
+  }
+
+  /* ══════ SURFACES ══════ */
+  .surfaces {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 38px;
+  }
+
+  /* ══════ RESPONSIVE ══════ */
+  @media (max-width: 620px) {
+    .hit {
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas:
+        "ch title id"
+        "ch dek dek";
+      row-gap: 2px;
+    }
+
+    .hit__id { text-align: right; }
+    .hit__type, .hit__date { display: none; }
+
+    .hit__dek {
+      grid-area: dek;
+      display: block;
+      font-size: 13px;
+      color: var(--pc-ink-soft);
+      line-height: 1.35;
+    }
+
+    .hit__title {
+      font-size: 14.5px;
+    }
+  }
+
+  @media (min-width: 720px) {
+    .surfaces__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>

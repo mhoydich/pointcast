@@ -1,0 +1,818 @@
+---
+/**
+ * /now — the live "right now" page for PointCast.
+ *
+ * Derek Sivers-style /now page but wired to live system state. Answers in
+ * one viewport: what's happening this instant on PointCast? What's the
+ * Card of the Day? When does the next Prize Cast draw settle? What's the
+ * latest block? What's the agent surface count?
+ *
+ * Different from /status (which is task + agent activity focused) — /now
+ * is the *user-facing* snapshot. A human or agent arrives here to get
+ * oriented in 5 seconds.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
+import { getPrizeCastSnapshot, getNextPrizeCastDrawAt } from '../lib/prize-cast';
+import contracts from '../data/contracts.json';
+import { execSync } from 'node:child_process';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const latestBlocks = blocks.slice(0, 4);
+const todaysCard = pickCardOfTheDay();
+const nextDraw = getNextPrizeCastDrawAt();
+const prizeCast = await getPrizeCastSnapshot();
+const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
+const prizeCastKt1 = ((contracts as any).prize_cast?.mainnet ?? '').trim();
+const drumKt1 = ((contracts as any).drum_token?.mainnet ?? '').trim();
+
+// Live TzKT mint count for Visit Nouns
+let mintCount: number | null = null;
+if (visitNounsKt1.startsWith('KT1')) {
+  try {
+    const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${visitNounsKt1}&limit=10000&select=totalSupply`);
+    if (r.ok) {
+      const list: Array<{ totalSupply: string }> = await r.json();
+      mintCount = list.reduce((sum, t) => sum + Number(t.totalSupply ?? 0), 0);
+    }
+  } catch {}
+}
+
+// Most recent commit (for "last code change")
+let lastCommit: { hash: string; subject: string; date: string } | null = null;
+try {
+  const out = execSync('git log -1 --pretty=format:"%h|%s|%cI"', { encoding: 'utf-8' }).trim();
+  const [hash, subject, date] = out.split('|');
+  lastCommit = { hash, subject, date };
+} catch {}
+
+// Count blocks by channel for the footprint strip
+const channelCounts: Record<string, number> = {};
+for (const b of blocks) channelCounts[b.data.channel] = (channelCounts[b.data.channel] ?? 0) + 1;
+
+const buildTime = new Date().toISOString();
+const buildDateLabel = new Intl.DateTimeFormat('en-US', {
+  month: 'short', day: 'numeric', year: 'numeric',
+  hour: '2-digit', minute: '2-digit',
+  timeZone: 'America/Los_Angeles', hour12: false,
+}).format(new Date()).replace(',', '') + ' PT';
+
+function timeAgoRough(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso).getTime();
+  if (!d) return '—';
+  const diff = Date.now() - d;
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  return `${days}d ago`;
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/now',
+  name: 'PointCast · Right now',
+  description: 'Live system snapshot of PointCast — Card of the Day, Prize Cast draw countdown, latest blocks, agent surfaces.',
+  url: 'https://pointcast.xyz/now',
+  dateModified: buildTime,
+};
+---
+
+<BlockLayout
+  title="Now"
+  description="Right now on PointCast — Card of the Day, Prize Cast countdown, latest blocks, agent surfaces. One screen, live snapshot."
+  image="/images/og/now.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/now.json', title: 'Now snapshot (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>now</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__kicker-row">
+        <p class="kicker">NOW · LIVE SYSTEM SNAPSHOT</p>
+        <span class="pulse">
+          <span class="pulse__dot" aria-hidden="true"></span>
+          <span class="mono" id="now-clock">{buildDateLabel}</span>
+        </span>
+      </div>
+      <h1 class="display">Right now on PointCast.</h1>
+      <p class="dek">
+        One screen. One moment. What's broadcasting, what's settling, what the
+        machines just did. Updates with every page load; server state from
+        TzKT and the commit log; countdowns tick client-side.
+      </p>
+    </header>
+
+    {/* ══════ BROADCAST · CotD + Prize Cast ══════ */}
+    <section class="strip">
+      <div class="strip__head">
+        <p class="kicker strip__kicker">BROADCAST · TODAY</p>
+      </div>
+      <div class="strip__cards">
+        <article class="card card--cotd">
+          <a href="/battle" class="card__face">
+            <div class="card__art">
+              <img src={`https://noun.pics/${todaysCard.id}.svg`} alt={`Card of the Day — Noun ${todaysCard.id}`} loading="lazy" />
+            </div>
+            <div class="card__body">
+              <p class="card__kicker mono">CARD OF THE DAY · {todaysCard.dateLabel}</p>
+              <h2 class="card__title">Noun #{todaysCard.id}</h2>
+              <p class="card__note">{todaysCard.note}</p>
+              <p class="card__footer mono">DAY {todaysCard.rosterIndex + 1} / 21 · BATTLE →</p>
+            </div>
+          </a>
+        </article>
+
+        <article class="card card--cast">
+          <a href="/cast" class="card__face">
+            <div class="card__count">
+              <p class="card__kicker mono">NEXT PRIZE CAST DRAW</p>
+              <p class="card__big-number" data-role="draw-countdown">—</p>
+              <p class="card__footer mono">SUN 18:00 UTC · /CAST →</p>
+            </div>
+            <dl class="card__grid">
+              <div>
+                <dt>TVL</dt>
+                <dd>{prizeCast.tvlTez !== null ? `${prizeCast.tvlTez.toFixed(2)} ꜩ` : 'PENDING'}</dd>
+              </div>
+              <div>
+                <dt>PRIZE POOL</dt>
+                <dd>{prizeCast.prizePoolTez !== null ? `${prizeCast.prizePoolTez.toFixed(2)} ꜩ` : '—'}</dd>
+              </div>
+              <div>
+                <dt>STATUS</dt>
+                <dd>{prizeCastKt1.startsWith('KT1') ? 'LIVE' : 'PENDING'}</dd>
+              </div>
+            </dl>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    {/* ══════ LATEST · 4 most recent blocks ══════ */}
+    <section class="latest">
+      <div class="latest__head">
+        <p class="kicker">LATEST · FROM THE FEED</p>
+        <a class="latest__more" href="/archive">See archive →</a>
+      </div>
+      <ol class="latest__list">
+        {latestBlocks.map((b) => {
+          const ch = CHANNELS[b.data.channel];
+          return (
+            <li class="latest__item">
+              <a href={`/b/${b.data.id}`} class="latest__link" style={`--row-c: ${ch.color600}; --row-c50: ${ch.color50}; --row-c8: ${ch.color800}`}>
+                <span class="latest__stamp">
+                  <span class="latest__ago mono" data-role="ago" data-ts={b.data.timestamp.toISOString()}>—</span>
+                  <span class="latest__ch" style={`border-color: ${ch.color600}; background: ${ch.color50}; color: ${ch.color800}`}>
+                    CH.{ch.code}
+                  </span>
+                </span>
+                <span class="latest__title">{b.data.title}</span>
+                <span class="latest__id mono">№{b.data.id}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+
+    {/* ══════ FOOTPRINT · what's in the system right now ══════ */}
+    <section class="footprint">
+      <div class="footprint__head">
+        <p class="kicker">FOOTPRINT · SYSTEM STATE</p>
+      </div>
+      <div class="footprint__grid">
+        <div class="fp">
+          <p class="fp__label mono">BLOCKS LIVE</p>
+          <p class="fp__value">{blocks.length}</p>
+          <p class="fp__note mono">ACROSS {Object.keys(channelCounts).length} CHANNELS</p>
+        </div>
+        <div class="fp">
+          <p class="fp__label mono">VISIT NOUNS MINTED</p>
+          <p class="fp__value">{mintCount ?? '—'}</p>
+          <p class="fp__note mono">{visitNounsKt1 ? 'LIVE · MAINNET' : 'PENDING'}</p>
+        </div>
+        <div class="fp">
+          <p class="fp__label mono">DRUM TOKEN</p>
+          <p class="fp__value">—</p>
+          <p class="fp__note mono">{drumKt1 ? 'LIVE' : 'CONTRACT · PENDING COMPILE'}</p>
+        </div>
+        <div class="fp">
+          <p class="fp__label mono">PRIZE CAST</p>
+          <p class="fp__value">{prizeCastKt1 ? 'LIVE' : 'PENDING'}</p>
+          <p class="fp__note mono">{prizeCastKt1 ? 'WEEKLY DRAWS' : 'CONTRACT · PENDING COMPILE'}</p>
+        </div>
+      </div>
+    </section>
+
+    {/* ══════ AGENT TRAIL · last commit + links to /status ══════ */}
+    <section class="trail">
+      <div class="trail__head">
+        <p class="kicker">AGENT TRAIL · LAST COMMIT</p>
+      </div>
+      {lastCommit ? (
+        <div class="trail__commit">
+          <p class="trail__hash mono">
+            <a href={`https://github.com/MikeHoydich/pointcast/commit/${lastCommit.hash}`} target="_blank" rel="noopener">{lastCommit.hash}</a>
+          </p>
+          <p class="trail__subject">{lastCommit.subject}</p>
+          <p class="trail__ago mono" data-role="ago" data-ts={lastCommit.date}>—</p>
+        </div>
+      ) : (
+        <p class="trail__empty">Commit log unavailable at build time.</p>
+      )}
+      <p class="trail__note">
+        See <a href="/status">/status</a> for agent owners, task queue, and the full commit history.
+      </p>
+    </section>
+
+    {/* ══════ SURFACES ══════ */}
+    <aside class="surfaces">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="surfaces__list">
+        <li><a href="/now.json"><span class="mono">GET</span> /now.json</a></li>
+        <li><a href="/archive.json"><span class="mono">GET</span> /archive.json</a></li>
+        <li><a href="/editions.json"><span class="mono">GET</span> /editions.json</a></li>
+        <li><a href="/battle.json"><span class="mono">GET</span> /battle.json</a></li>
+        <li><a href="/cast.json"><span class="mono">GET</span> /cast.json</a></li>
+        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <script is:inline>
+    // Live clock (PT), live Prize Cast draw countdown, relative-time on
+    // the latest blocks + last commit. All re-rendered on tick.
+    (function () {
+      const clock = document.getElementById('now-clock');
+      const drawEl = document.querySelector('[data-role="draw-countdown"]');
+
+      const clockFmt = new Intl.DateTimeFormat('en-US', {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        timeZone: 'America/Los_Angeles', hour12: false,
+      });
+
+      function nextSunday18UTC(now) {
+        const next = new Date(Date.UTC(
+          now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+          18, 0, 0, 0,
+        ));
+        const daysUntil = (7 - now.getUTCDay()) % 7;
+        next.setUTCDate(next.getUTCDate() + daysUntil);
+        if (daysUntil === 0 && now.getTime() >= next.getTime()) {
+          next.setUTCDate(next.getUTCDate() + 7);
+        }
+        return next;
+      }
+
+      function agoLabel(iso) {
+        const d = new Date(iso).getTime();
+        if (!d) return '—';
+        const diff = Date.now() - d;
+        const m = Math.floor(diff / 60000);
+        if (m < 1) return 'just now';
+        if (m < 60) return m + 'm ago';
+        const h = Math.floor(m / 60);
+        if (h < 24) return h + 'h ago';
+        const days = Math.floor(h / 24);
+        return days + 'd ago';
+      }
+
+      function tick() {
+        if (clock) {
+          clock.textContent = clockFmt.format(new Date()).replace(',', '') + ' PT';
+        }
+        if (drawEl) {
+          const target = nextSunday18UTC(new Date());
+          const diff = Math.max(0, target.getTime() - Date.now());
+          const totalMinutes = Math.floor(diff / 60000);
+          const d = Math.floor(totalMinutes / 1440);
+          const h = Math.floor((totalMinutes % 1440) / 60);
+          const mi = totalMinutes % 60;
+          const s = Math.floor((diff / 1000) % 60);
+          drawEl.textContent = d + 'd ' + String(h).padStart(2, '0') + 'h ' + String(mi).padStart(2, '0') + 'm ' + String(s).padStart(2, '0') + 's';
+        }
+        document.querySelectorAll('[data-role="ago"]').forEach(function (el) {
+          const ts = el.getAttribute('data-ts');
+          if (ts) el.textContent = agoLabel(ts);
+        });
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ══════ HERO ══════ */
+  .hero {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__kicker-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .pulse {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border: 1.5px solid var(--pc-accent);
+    background: #eef4fa;
+    color: var(--pc-accent);
+    border-radius: 2px;
+  }
+
+  .pulse__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.18); }
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.2rem, 10vw, 4.6rem);
+    font-weight: 500;
+    line-height: 0.94;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    margin: 0;
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    max-width: 60ch;
+  }
+
+  /* ══════ BROADCAST STRIP ══════ */
+  .strip {
+    margin-bottom: 24px;
+  }
+
+  .strip__head {
+    margin-bottom: 10px;
+  }
+
+  .strip__kicker {
+    color: var(--pc-accent);
+  }
+
+  .strip__cards {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .card {
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .card__face {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 14px;
+    padding: 14px;
+    color: var(--pc-ink);
+    transition: background-color 0.12s;
+  }
+
+  .card__face:hover {
+    background: #fafaf8;
+    text-decoration: none;
+  }
+
+  .card--cotd {
+    border-color: #8A2432;
+    background: #FBEAEE;
+  }
+
+  .card--cotd .card__face:hover {
+    background: color-mix(in oklab, #FBEAEE 75%, #fff);
+  }
+
+  .card--cast {
+    border-color: #0F6E56;
+    background: #E7F4EF;
+  }
+
+  .card--cast .card__face {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .card--cast .card__face:hover {
+    background: color-mix(in oklab, #E7F4EF 75%, #fff);
+  }
+
+  .card__art {
+    aspect-ratio: 1 / 1;
+    border: 1.5px solid #8A2432;
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .card__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+  }
+
+  .card__body, .card__count {
+    min-width: 0;
+  }
+
+  .card__kicker {
+    margin: 0 0 6px;
+    color: var(--pc-ink-muted);
+  }
+
+  .card--cotd .card__kicker { color: #551620; }
+  .card--cast .card__kicker { color: #074638; }
+
+  .card__title {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans);
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--pc-ink);
+  }
+
+  .card__note {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: var(--pc-ink-soft);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .card__footer {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .card__big-number {
+    margin: 0 0 6px;
+    font-family: var(--pc-font-sans);
+    font-weight: 500;
+    font-size: clamp(1.8rem, 6vw, 2.6rem);
+    line-height: 1;
+    color: #074638;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card__grid {
+    margin: 10px 0 0;
+    padding-top: 10px;
+    border-top: 1px dashed #0F6E56;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px 10px;
+  }
+
+  .card__grid div { min-width: 0; }
+
+  .card__grid dt {
+    margin: 0 0 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #074638;
+    opacity: 0.7;
+  }
+
+  .card__grid dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink);
+    font-weight: 500;
+  }
+
+  /* ══════ LATEST ══════ */
+  .latest {
+    margin-bottom: 24px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .latest__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .latest__more {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+  }
+
+  .latest__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .latest__item + .latest__item {
+    border-top: 1px dashed var(--pc-rule-soft);
+  }
+
+  .latest__link {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+    color: var(--pc-ink);
+    text-decoration: none;
+    transition: padding-left 0.12s, background-color 0.12s;
+  }
+
+  .latest__link:hover {
+    padding-left: 8px;
+    background: var(--row-c50, #fafaf8);
+    text-decoration: none;
+  }
+
+  .latest__stamp {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .latest__ago {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+    min-width: 62px;
+  }
+
+  .latest__ch {
+    display: inline-flex;
+    padding: 2px 6px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    min-width: 52px;
+    justify-content: center;
+  }
+
+  .latest__title {
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1.3;
+  }
+
+  .latest__link:hover .latest__title {
+    color: var(--row-c8, var(--pc-accent));
+  }
+
+  .latest__id {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+  }
+
+  /* ══════ FOOTPRINT ══════ */
+  .footprint {
+    margin-bottom: 24px;
+  }
+
+  .footprint__head {
+    margin-bottom: 10px;
+  }
+
+  .footprint__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--pc-rule-soft);
+    border: 1px solid var(--pc-ink);
+    border-radius: 2px;
+  }
+
+  .fp {
+    padding: 14px 16px;
+    background: #fff;
+  }
+
+  .fp__label {
+    margin: 0 0 8px;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .fp__value {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans);
+    font-weight: 500;
+    font-size: clamp(1.4rem, 5vw, 2rem);
+    color: var(--pc-ink);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fp__note {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  /* ══════ TRAIL ══════ */
+  .trail {
+    margin-bottom: 24px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .trail__head {
+    margin-bottom: 8px;
+  }
+
+  .trail__commit {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 6px 0 10px;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+  }
+
+  .trail__hash {
+    margin: 0;
+  }
+
+  .trail__hash a {
+    color: var(--pc-accent);
+  }
+
+  .trail__subject {
+    margin: 0;
+    font-size: 14px;
+    color: var(--pc-ink);
+    line-height: 1.3;
+  }
+
+  .trail__ago {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    white-space: nowrap;
+  }
+
+  .trail__note,
+  .trail__empty {
+    margin: 10px 0 0;
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+  }
+
+  .trail__note a {
+    color: var(--pc-accent);
+  }
+
+  /* ══════ SURFACES ══════ */
+  .surfaces {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 38px;
+  }
+
+  /* ══════ RESPONSIVE ══════ */
+  @media (min-width: 720px) {
+    .strip__cards {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .footprint__grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .surfaces__list {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .latest__link {
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "stamp id"
+        "title title";
+      gap: 6px 8px;
+    }
+
+    .latest__stamp { grid-area: stamp; }
+    .latest__title { grid-area: title; font-size: 14px; }
+    .latest__id { grid-area: id; }
+  }
+</style>

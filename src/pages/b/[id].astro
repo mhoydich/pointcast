@@ -9,16 +9,39 @@ import MintButton from '../../components/MintButton.astro';
 import { CHANNELS } from '../../lib/channels';
 
 export async function getStaticPaths() {
-  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
-  return blocks.map((block) => ({
+  const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+    .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+  return blocks.map((block, idx) => ({
     params: { id: block.data.id },
-    props: { block },
+    props: {
+      block,
+      // Adjacent blocks in reverse-chronological order — "prev" = next older
+      // (scroll forward in the feed), "next" = next newer (scroll backward).
+      // Naming matches the /b/[id] visitor's mental model: "next block" is
+      // the one that was published more recently.
+      prev: blocks[idx + 1] ?? null,
+      next: blocks[idx - 1] ?? null,
+      // Up to 4 related blocks from the same channel, excluding self.
+      related: blocks
+        .filter((b, i) => i !== idx && b.data.channel === block.data.channel)
+        .slice(0, 4),
+    },
   }));
 }
 
-interface Props { block: CollectionEntry<'blocks'>; }
-const { block } = Astro.props;
+interface Props {
+  block: CollectionEntry<'blocks'>;
+  prev: CollectionEntry<'blocks'> | null;
+  next: CollectionEntry<'blocks'> | null;
+  related: CollectionEntry<'blocks'>[];
+}
+const { block, prev, next, related } = Astro.props;
 const ch = CHANNELS[block.data.channel];
+
+function shortTitle(t: string, max = 40) {
+  return t.length > max ? t.slice(0, max - 1) + '…' : t;
+}
 
 const title = `CH.${ch.code} · ${block.data.id} — ${block.data.title}`;
 const description = block.data.dek ?? block.data.body?.slice(0, 180) ?? block.data.title;
@@ -122,12 +145,52 @@ const alternates = [
       </div>
     )}
 
+    {(prev || next) && (
+      <nav class="block-nav" aria-label="Adjacent blocks">
+        {prev ? (
+          <a class="block-nav__link block-nav__link--prev" href={`/b/${prev.data.id}`}>
+            <span class="block-nav__dir mono">← OLDER</span>
+            <span class="block-nav__meta mono">CH.{CHANNELS[prev.data.channel].code} · №{prev.data.id}</span>
+            <span class="block-nav__title">{shortTitle(prev.data.title, 52)}</span>
+          </a>
+        ) : <span class="block-nav__link block-nav__link--empty"></span>}
+        {next ? (
+          <a class="block-nav__link block-nav__link--next" href={`/b/${next.data.id}`}>
+            <span class="block-nav__dir mono">NEWER →</span>
+            <span class="block-nav__meta mono">CH.{CHANNELS[next.data.channel].code} · №{next.data.id}</span>
+            <span class="block-nav__title">{shortTitle(next.data.title, 52)}</span>
+          </a>
+        ) : <span class="block-nav__link block-nav__link--empty"></span>}
+      </nav>
+    )}
+
+    {related.length > 0 && (
+      <section class="related" aria-label="Related blocks">
+        <div class="related__head">
+          <p class="related__kicker mono" style={`color: ${ch.color800}`}>MORE FROM CH.{ch.code} · {ch.name.toUpperCase()}</p>
+          <a class="related__all" href={`/c/${ch.slug}`}>See channel →</a>
+        </div>
+        <ul class="related__list">
+          {related.map((r) => (
+            <li>
+              <a href={`/b/${r.data.id}`} class="related__item">
+                <span class="related__id mono">№{r.data.id}</span>
+                <span class="related__type mono">{r.data.type}</span>
+                <span class="related__title">{shortTitle(r.data.title, 60)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
     <aside class="agent-strip">
       <p class="agent-strip__label">MACHINE-READABLE</p>
       <ul>
         <li><a href={`/b/${block.data.id}.json`}>/b/{block.data.id}.json</a></li>
         <li><a href={`/c/${ch.slug}.json`}>/c/{ch.slug}.json</a></li>
         <li><a href={`/c/${ch.slug}.rss`}>/c/{ch.slug}.rss</a></li>
+        <li><a href="/archive">/archive</a></li>
         <li><a href="/for-agents">/for-agents</a></li>
       </ul>
     </aside>
@@ -218,6 +281,160 @@ const alternates = [
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--pc-accent);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ═════ BLOCK NAV (prev / next) ═════ */
+  .block-nav {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .block-nav__link {
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    transition: border-color 0.12s, background-color 0.12s;
+    min-height: 72px;
+  }
+
+  .block-nav__link--empty {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .block-nav__link:hover {
+    border-color: var(--pc-ink);
+    background: #fafaf8;
+    text-decoration: none;
+  }
+
+  .block-nav__link--next {
+    text-align: right;
+  }
+
+  .block-nav__dir {
+    color: var(--pc-accent);
+    font-weight: 500;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+  }
+
+  .block-nav__meta {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .block-nav__title {
+    font-family: var(--pc-font-sans);
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--pc-ink);
+  }
+
+  /* ═════ RELATED ═════ */
+  .related {
+    margin-top: 24px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .related__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .related__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+
+  .related__all {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+  }
+
+  .related__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .related__item {
+    display: grid;
+    grid-template-columns: 58px 54px 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 6px;
+    border-top: 1px dashed var(--pc-rule-soft);
+    color: var(--pc-ink);
+    transition: background-color 0.1s;
+  }
+
+  .related__item:hover {
+    background: #fff;
+    text-decoration: none;
+  }
+
+  .related__id {
+    color: var(--pc-ink-muted);
+  }
+
+  .related__type {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .related__title {
+    font-family: var(--pc-font-sans);
+    font-size: 14px;
+    color: var(--pc-ink);
+    line-height: 1.3;
+  }
+
+  @media (max-width: 560px) {
+    .block-nav {
+      grid-template-columns: 1fr;
+    }
+
+    .related__item {
+      grid-template-columns: 52px 1fr;
+      grid-template-areas:
+        "id title"
+        "type title";
+      align-items: start;
+      row-gap: 2px;
+    }
+
+    .related__id { grid-area: id; }
+    .related__type { grid-area: type; }
+    .related__title { grid-area: title; font-size: 13.5px; }
   }
 
   .agent-strip {

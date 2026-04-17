@@ -246,6 +246,32 @@ const PAGES = [
     glyphSize: 280,
     siblings: ['/c/spinning', '/for-agents'],
   },
+  {
+    slug: 'now',
+    url: '/now',
+    kind: 'live snapshot',
+    kicker: 'NOW · RIGHT NOW',
+    title: 'Right now on PointCast.',
+    dek: 'Card of the Day, Prize Cast countdown, latest blocks, contract state — one screen.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '●',
+    glyphSize: 240,
+    siblings: ['/now.json', '/status', '/for-agents'],
+  },
+  {
+    slug: 'search',
+    url: '/search',
+    kind: 'search',
+    kicker: 'SEARCH · EVERY BLOCK',
+    title: 'Find any block.',
+    dek: 'Client-side search over every title, channel, type, and id. No network, no limits.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '?',
+    glyphSize: 260,
+    siblings: ['/archive', '/blocks.json'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
