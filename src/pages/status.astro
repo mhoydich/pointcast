@@ -1,0 +1,389 @@
+---
+/**
+ * /status — live view of what the machines are doing.
+ *
+ * "Taste meets machine" in the most literal sense — the site shows
+ * you the machines working. Open question in AGENTS.md §3: "Do we want
+ * a /status page on PointCast itself showing what each agent is
+ * currently doing? (Kind of poetic, feeds the agent-native thesis,
+ * low build cost)" — Codex's Phase 1 review recommended yes. Shipping.
+ *
+ * Data sources (all build-time + client-polled):
+ *   - Recent git commits on main → agent signal
+ *   - TASKS.md parsed for current status per owner
+ *   - Mainnet origination state (KT1 written to /tmp on success;
+ *     we surface "awaiting funding" → "originated KT1…")
+ *
+ * Since this is SSG, the commit list is baked in at build time and
+ * refreshes on every deploy. The client-side ticker re-renders
+ * timestamps as "X min ago" relative to now.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import { CHANNEL_LIST } from '../lib/channels';
+
+// Recent commits
+let commits: { hash: string; subject: string; date: string; author: string }[] = [];
+try {
+  const out = execSync('git log --pretty=format:"%h|%s|%cI|%an" -n 15', { encoding: 'utf-8' });
+  commits = out.trim().split('\n').map((line) => {
+    const [hash, subject, date, author] = line.split('|');
+    return { hash, subject, date, author };
+  });
+} catch {}
+
+// TASKS.md quick parse — count by status
+let taskCounts: Record<string, number> = { 'in-progress': 0, queued: 0, blocked: 0, 'waiting-on-mh': 0, done: 0 };
+try {
+  const raw = fs.readFileSync('TASKS.md', 'utf-8');
+  for (const line of raw.split('\n')) {
+    const m = line.match(/— `([a-z-]+)`/);
+    if (m && m[1] in taskCounts) taskCounts[m[1]]++;
+  }
+} catch {}
+
+// Contract state
+let visitNounsShadownet = '';
+let visitNounsMainnet = '';
+try {
+  const contracts = JSON.parse(fs.readFileSync('src/data/contracts.json', 'utf-8'));
+  visitNounsShadownet = contracts.visit_nouns.shadownet ?? '';
+  visitNounsMainnet = contracts.visit_nouns.mainnet ?? '';
+} catch {}
+
+const buildTime = new Date().toISOString();
+
+// Who's active per agent (rolled up from commit authors + TASKS.md).
+const agents = [
+  {
+    key: 'CC',
+    name: 'Claude Code',
+    role: 'Primary engineer — code, schema, rendering, contracts',
+    color: '#185FA5',
+    lastCommit: commits.find((c) => /Claude/i.test(c.author) || /claude/i.test(c.subject)),
+  },
+  {
+    key: 'X',
+    name: 'Codex',
+    role: 'Reviewer — PR reviews, design sketches, spec enforcement',
+    color: '#8A2432',
+    lastCommit: null,
+  },
+  {
+    key: 'M',
+    name: 'Manus',
+    role: 'Operations — QA, deploys, cross-posts, real-user testing',
+    color: '#993556',
+    lastCommit: null,
+  },
+  {
+    key: 'MH',
+    name: 'Mike Hoydich',
+    role: 'Director — strategy, content, approvals',
+    color: '#12110E',
+    lastCommit: commits.find((c) => /Hoydich/i.test(c.author) && !/claude/i.test(c.author)),
+  },
+];
+---
+
+<BlockLayout title="Status" description="Live view of what the machines are doing on PointCast.">
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <span>STATUS</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">/STATUS · WHAT THE MACHINES ARE DOING</p>
+      <h1>The machines, visible.</h1>
+      <p class="dek">PointCast is written by a team of agents. This page shows what they're doing, in something close to real time.</p>
+    </header>
+
+    <section class="block">
+      <h2>AGENTS</h2>
+      <div class="agents">
+        {agents.map((a) => (
+          <article class="agent" style={`--a: ${a.color};`}>
+            <header>
+              <span class="agent__tag mono">({a.key})</span>
+              <span class="agent__name">{a.name}</span>
+            </header>
+            <p class="agent__role">{a.role}</p>
+            {a.lastCommit ? (
+              <p class="agent__last mono">
+                LAST · <a href={`https://github.com/MikeHoydich/pointcast/commit/${a.lastCommit.hash}`}>{a.lastCommit.hash}</a> · <time datetime={a.lastCommit.date} class="rel" data-ts={a.lastCommit.date}>—</time>
+              </p>
+            ) : (
+              <p class="agent__last mono agent__last--idle">LAST · —</p>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>TASKS — {Object.values(taskCounts).reduce((a, b) => a + b, 0)} total</h2>
+      <div class="stats">
+        {Object.entries(taskCounts).map(([k, v]) => (
+          <div class="stat"><span class="k mono">{k.replace('-', ' ')}</span><span class="v">{v}</span></div>
+        ))}
+      </div>
+      <p class="agent__role">
+        Full queue: <a href="https://github.com/MikeHoydich/pointcast/blob/main/TASKS.md">TASKS.md</a>
+      </p>
+    </section>
+
+    <section class="block">
+      <h2>CONTRACTS</h2>
+      <table class="tbl">
+        <tr>
+          <td class="mono">Visit Nouns FA2 · Shadownet</td>
+          <td class="mono">{visitNounsShadownet ? (
+            <a href={`https://shadownet.tzkt.io/${visitNounsShadownet}/operations`}>{visitNounsShadownet}</a>
+          ) : <span class="mute">—</span>}</td>
+        </tr>
+        <tr>
+          <td class="mono">Visit Nouns FA2 · Mainnet</td>
+          <td class="mono">{visitNounsMainnet ? (
+            <a href={`https://tzkt.io/${visitNounsMainnet}/operations`}>{visitNounsMainnet}</a>
+          ) : <span class="mute pulse">awaiting funding @ tz1PS4W…cKp1</span>}</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="block">
+      <h2>RECENT COMMITS</h2>
+      <ol class="commits">
+        {commits.map((c) => (
+          <li class="commit">
+            <a class="commit__hash mono" href={`https://github.com/MikeHoydich/pointcast/commit/${c.hash}`}>{c.hash}</a>
+            <span class="commit__subject">{c.subject}</span>
+            <time class="commit__date mono rel" datetime={c.date} data-ts={c.date}>—</time>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="block">
+      <h2>CHANNELS · LIVE</h2>
+      <ul class="channels">
+        {CHANNEL_LIST.map((ch) => (
+          <li><a class="channel-pill mono" href={`/c/${ch.slug}`} style={`--c:${ch.color600};`}>
+            <span class="channel-pill__dot"></span>CH.{ch.code} · {ch.name}
+          </a></li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="built mono">
+      BUILT · <time datetime={buildTime} class="rel" data-ts={buildTime}>—</time> · COMMIT <a href="https://github.com/MikeHoydich/pointcast/commits/main">main</a>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  // Rehydrate all .rel timestamps into "X min ago" every 15 seconds.
+  function rel(ts) {
+    const d = new Date(ts).getTime();
+    if (!d) return '—';
+    const diff = Date.now() - d;
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return s + 's ago';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 48) return h + 'h ago';
+    const days = Math.floor(h / 24);
+    return days + 'd ago';
+  }
+  function tick() {
+    document.querySelectorAll('.rel').forEach(function (el) {
+      const ts = el.getAttribute('data-ts');
+      if (ts) el.textContent = rel(ts);
+    });
+  }
+  tick();
+  setInterval(tick, 15000);
+</script>
+
+<style>
+  .page { max-width: 880px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero { margin-bottom: 28px; }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+  .hero h1 {
+    font-family: var(--pc-font-sans);
+    font-size: 30px;
+    font-weight: 500;
+    margin: 0 0 10px;
+    line-height: 1.1;
+  }
+  .dek { font-size: 15px; color: var(--pc-ink); margin: 0; }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .block { margin: 28px 0; }
+  .block h2 {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    border-bottom: 1.5px solid var(--pc-ink);
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+
+  /* Agents */
+  .agents {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .agent {
+    padding: 12px 14px;
+    border: 1.5px solid var(--a);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .agent header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .agent__tag { color: var(--a); }
+  .agent__name {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--a);
+  }
+  .agent__role { margin: 2px 0 6px; font-size: 13px; color: var(--pc-ink-soft); line-height: 1.4; }
+  .agent__last { color: var(--pc-ink-muted); margin: 0; }
+  .agent__last--idle { opacity: 0.5; }
+
+  /* Stats */
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; }
+  .stat {
+    flex: 1 1 140px;
+    padding: 10px 12px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #fff;
+  }
+  .stat .k { color: var(--pc-ink-muted); font-size: 10px; }
+  .stat .v {
+    font-family: var(--pc-font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  /* Table */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl td {
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--pc-rule);
+    vertical-align: top;
+  }
+  .tbl td:first-child { color: var(--pc-ink-soft); width: 40%; }
+  .mute { color: var(--pc-ink-muted); }
+  .pulse {
+    animation: pc-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pc-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+
+  /* Commits */
+  .commits {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .commit {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--pc-rule);
+    font-size: 13px;
+  }
+  .commit__hash {
+    color: var(--pc-accent);
+  }
+  .commit__subject {
+    color: var(--pc-ink);
+    font-family: var(--pc-font-sans);
+  }
+  .commit__date {
+    color: var(--pc-ink-muted);
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  /* Channels */
+  .channels {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .channel-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--c);
+    color: var(--c);
+    border-radius: 2px;
+  }
+  .channel-pill__dot {
+    width: 7px; height: 7px;
+    background: var(--c);
+    border-radius: 50%;
+  }
+
+  .built {
+    margin-top: 48px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--pc-rule);
+    color: var(--pc-ink-muted);
+  }
+
+  @media (max-width: 639px) {
+    .commit { grid-template-columns: auto 1fr; }
+    .commit__date { grid-column: 2; }
+  }
+</style>

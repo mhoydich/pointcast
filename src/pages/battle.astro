@@ -230,9 +230,36 @@ const jsonLd = {
           : result.winner === 'b' ? `Challenger (#${state.challenger.id})`
           : 'DRAW';
         log(`— MATCH END — winner: ${winner}`, 'win');
+        persistMatch(result);
       }
     }
     setRound();
+  }
+
+  /**
+   * Persist the finished match to localStorage under `pc:battler:matches`.
+   * Each match entry is a compact record a build-time script (Phase 2)
+   * can read to emit BTL NOTE blocks in the feed. Keeps the last 50 to
+   * bound storage.
+   */
+  function persistMatch(result: ReturnType<typeof resolveMatch>) {
+    const KEY = 'pc:battler:matches';
+    const now = new Date().toISOString();
+    const record = {
+      ts: now,
+      a: result.a.id,
+      b: result.b.id,
+      winner: result.winner,
+      finalHpA: result.finalHpA,
+      finalHpB: result.finalHpB,
+      rounds: result.rounds.map(r => ({ sA: r.stanceA, sB: r.stanceB, dA: r.damageA, dB: r.damageB })),
+    };
+    try {
+      const raw = localStorage.getItem(KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      arr.unshift(record);
+      localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 50)));
+    } catch {}
   }
 
   function wire() {
