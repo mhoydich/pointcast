@@ -86,9 +86,45 @@ const alternates = [
   { type: 'application/json', href: `/c/${ch.slug}.json`, title: `${ch.name} (JSON feed)` },
   { type: 'application/rss+xml', href: `/c/${ch.slug}.rss`, title: `${ch.name} (RSS)` },
 ];
+
+/**
+ * Farcaster Frame — every block becomes a 1-button Frame when shared
+ * in Warpcast / any Farcaster client. MINT-type blocks get an extra
+ * "Open on objkt" button when the edition is on mainnet. The objkt
+ * link takes you to the collect page, where Beacon-wallet signing
+ * happens in-app until Frame v2 mint actions are reliable.
+ */
+const frameButtons: Array<{ label: string; action?: 'link' | 'post'; target?: string }> = [
+  { label: 'Open on PointCast', action: 'link', target: `https://pointcast.xyz/b/${block.data.id}` },
+];
+if ((block.data.type === 'MINT' || block.data.type === 'FAUCET') && block.data.edition?.contract?.startsWith('KT1') && block.data.edition?.marketplace === 'objkt') {
+  frameButtons.push({
+    label: 'View on objkt',
+    action: 'link',
+    target: `https://objkt.com/tokens/${block.data.edition.contract}/${block.data.edition.tokenId}`,
+  });
+}
+if (block.data.external?.url) {
+  const pretty = (() => {
+    try { return new URL(block.data.external.url, 'https://pointcast.xyz').host.replace(/^www\./, ''); }
+    catch { return ''; }
+  })();
+  if (pretty && pretty !== 'pointcast.xyz' && frameButtons.length < 4) {
+    frameButtons.push({
+      label: `→ ${pretty}`,
+      action: 'link',
+      target: block.data.external.url,
+    });
+  }
+}
+const frame = {
+  image: `https://pointcast.xyz/images/og/b/${block.data.id}.png`,
+  aspectRatio: '1.91:1' as const,
+  buttons: frameButtons,
+};
 ---
 
-<BlockLayout title={title} description={description} image={ogImage} jsonLd={jsonLd} alternates={alternates}>
+<BlockLayout title={title} description={description} image={ogImage} jsonLd={jsonLd} alternates={alternates} frame={frame}>
   <div class="page">
     <h1 class="sr-only">CH.{ch.code} · Block № {block.data.id} — {block.data.title}</h1>
 

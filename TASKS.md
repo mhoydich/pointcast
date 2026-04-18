@@ -241,3 +241,97 @@ Prototype sketch: `sketches/codex/nouns-battler-v0.html`
 - [ ] (CC) /drum UI polish — deferred until DRUM token lands (compile-blocked)
 - [ ] (X) Battler Phase 3 commemorative mint — gated on admin transfer
 - [ ] (CC) Consider a proper CH.CST channel in channels.ts (requires MH decision per AGENTS.md schema-change rule)
+
+---
+
+## v2.1 autonomous run (2026-04-17 late evening → 2026-04-18 early AM)
+
+Mike: "keep going ... traffic, seo, geo, llm ... version upgrade across various ... make plans ... keep getting chat and manus involved."
+
+### Shipped (CC, autonomous)
+
+**GEO / LLM canonical**
+- [x] /manifesto — FAQPage + DefinedTerm JSON-LD (12 Q&A)
+- [x] /glossary — 24 terms across 6 categories with stable anchor URLs
+- [x] /llms.txt rewrite + /llms-full.txt
+- [x] /agents.json — consolidated discovery manifest
+- [x] .well-known/agents.json + .well-known/ai.json aliases (via _redirects)
+
+**Dashboards + discovery**
+- [x] /now + /now.json — live snapshot (CotD, next draw, latest 4 blocks)
+- [x] /archive + /archive.json — chronological index, filters, search
+- [x] /editions + /editions.json — mintable dashboard with live TzKT supply
+- [x] /timeline + /timeline.json — publication cadence viz (SVG)
+- [x] /stack + /stack.json — technical disclosure
+- [x] /search — client-side block search
+- [x] /subscribe — feeds + socials explainer
+- [x] /changelog — hand-curated version history
+- [x] /random + /random.json — discovery shortcut
+
+**Home page / visual**
+- [x] HomeMajors strip — inline /drum tap + /cast countdown
+- [x] Presence pill upgrade — YOU + others count
+- [x] BlockCard per-type variants (NOTE sticky, VISIT terminal, LINK arrow, WATCH cinema, MINT/FAUCET ticket)
+- [x] Scroll rhythm via :nth-child
+- [x] READ grid preview — first paragraph + line-clamp
+
+**Content + Blocks**
+- [x] Block 0230 · FD NOTE · Ten new surfaces (session log, 2×1)
+- [x] Block 0231 · FD LINK · /timeline
+- [x] Block 0232 · VST VISIT · Claude Code kept building
+- [x] Block 0233 · GDN NOTE · Sun's already down (1×2)
+- [x] Block 0234 · BTL NOTE · Card of the Day = Noun #137
+- [x] Block 0235 · FD LINK · /agents.json (2×1)
+- [x] Block 0236 · SPN WATCH · 11-min chakra tune-up (Mike drop, 2×1, YouTube embed)
+- [x] Block 0237 · CRT NOTE · Third shot roll drill
+- [x] Block 0238 · GF NOTE · Farm Bill clock (2×1)
+- [x] Block 0239 · ESC NOTE · Beach cities never cook at night
+
+**Infrastructure**
+- [x] Card of the Day rotation (src/lib/battler/card-of-the-day.ts, 21-Noun roster, UTC-date keyed)
+- [x] WATCH type first-class (YouTube/Vimeo poster auto-derivation, iframe on detail)
+- [x] Block detail prev/next nav + "More from CH.XX" related blocks
+- [x] Feeds: /feed.xml + /feed.json (unified RSS + JSON Feed v1.1)
+- [x] BreadcrumbList + ItemList JSON-LD on /b/[id], /c/[channel], /archive
+- [x] CORS + security headers on all agent surfaces (public/_headers)
+- [x] IndexNow Pages Function at /api/indexnow (env-guarded)
+- [x] scripts/indexnow-submit.mjs — post-deploy helper
+- [x] /rss canonical alias → /feed.xml (302)
+- [x] OG cards for /cast, /editions, /archive, /battle, /collection, /drum, /now, /search, /timeline, /stack, /manifesto, /glossary, /changelog, /subscribe
+- [x] pc-version meta tag + hreflang alternates
+- [x] robots.txt agent-surfaces hint block
+- [x] Astro 6.1.6 → 6.1.7 patch
+- [x] BLOCKS.md v2.1 revision marker
+- [x] Farcaster Frame meta tags on /b/[id] + /manifesto (vNext spec)
+
+**Plans + dispatches**
+- [x] docs/plans/2026-04-17-traffic-strategy.md
+- [x] docs/briefs/2026-04-17-codex-geo-review.md
+- [x] docs/briefs/2026-04-17-manus-traffic-ops.md
+
+### Next-up queue
+
+For Manus (operations, login-session):
+- [ ] Google Search Console registration + sitemap submit
+- [ ] Bing Webmaster + IndexNow key (unblocks /api/indexnow)
+- [ ] LLM directory submissions (llmstxt.site, etc.)
+- [ ] Farcaster + X launch-post drafts (for MH review)
+- [ ] objkt.com Visit Nouns collection curation
+
+For Codex (review, serial medium-reasoning):
+- [ ] /manifesto FAQ extraction-friendliness review
+- [ ] DefinedTerm coverage expansion proposals
+- [ ] /llms-full.txt audit
+
+For Mike (decisions):
+- [ ] Proto-mint (a/b/c)
+- [ ] SmartPy compile path
+- [ ] Admin transfer
+- [ ] CH.CST 10th channel?
+- [ ] Approve + publish social drafts once Manus lands them
+
+For CC (carryover engineering):
+- [ ] Wallet-signed DRUM claim flow (blocked on compile)
+- [ ] Prize Cast deposit/withdraw (blocked on compile)
+- [ ] Block-level KV reactions (needs Manus to bind REACTIONS_KV)
+- [ ] "Minted by you" visualizer on /b/{id} for MINT blocks

@@ -13,6 +13,12 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 
+interface FrameButton {
+  label: string;
+  action?: 'link' | 'post' | 'post_redirect' | 'mint' | 'tx';
+  target?: string;
+}
+
 interface Props {
   title: string;
   description?: string;
@@ -21,6 +27,21 @@ interface Props {
   jsonLd?: Record<string, unknown> | null;
   /** Extra <link rel="alternate"> entries — per-block JSON, RSS per channel, etc. */
   alternates?: { type: string; href: string; title?: string }[];
+  /**
+   * Farcaster Frame — if provided, this page renders as a Frame when
+   * embedded in Warpcast / any Farcaster client. Up to 4 buttons.
+   * Omit to opt out (home feed stays as a normal unfurl, not a Frame).
+   *
+   * Spec: https://docs.farcaster.xyz/developers/frames/spec
+   */
+  frame?: {
+    /** Frame image (1.91:1 or 1:1). Defaults to the page's og:image. */
+    image?: string;
+    /** Image aspect ratio — default "1.91:1" (wide) matches our OG cards. */
+    aspectRatio?: '1.91:1' | '1:1';
+    /** Up to 4 buttons. Most common: single "link" button to the block URL. */
+    buttons?: FrameButton[];
+  };
 }
 
 const {
@@ -29,6 +50,7 @@ const {
   image = '/images/og/og-home-v2.png',
   jsonLd,
   alternates = [],
+  frame,
 } = Astro.props;
 
 const siteBase = Astro.site || new URL('https://pointcast.xyz');
@@ -71,6 +93,26 @@ const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} —
     {alternates.map((alt) => (
       <link rel="alternate" type={alt.type} href={alt.href} title={alt.title} />
     ))}
+
+    {/* Farcaster Frame — opt-in per page via the `frame` prop. Every
+        block gets a single "Open on PointCast" link button by default;
+        editionable blocks (MINT/FAUCET) can override with a mint action
+        once Frame v2 wallet signing lands in the wild. */}
+    {frame && (
+      <>
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content={frame.image ?? ogImage} />
+        <meta property="fc:frame:image:aspect_ratio" content={frame.aspectRatio ?? '1.91:1'} />
+        <meta property="of:accepts:xmtp" content="2024-02-09" />
+        {(frame.buttons ?? []).slice(0, 4).map((btn, i) => (
+          <>
+            <meta property={`fc:frame:button:${i + 1}`} content={btn.label} />
+            {btn.action && <meta property={`fc:frame:button:${i + 1}:action`} content={btn.action} />}
+            {btn.target && <meta property={`fc:frame:button:${i + 1}:target`} content={btn.target} />}
+          </>
+        ))}
+      </>
+    )}
 
     {jsonLd && <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />}
 
