@@ -1,0 +1,643 @@
+---
+/**
+ * /yield — token mechanic experiments sandbox.
+ *
+ * Mike 2026-04-18: "on the token flexible systems, a bunch of
+ * experiments, see what works, learn, grow, scale."
+ *
+ * Five candidate yield models for PointCast-native tokens. None of
+ * these are committed to — the page is a side-by-side sandbox so the
+ * DAO + Mike + anyone browsing can see how each would behave with
+ * different inputs. All math is client-side, all inputs are sliders,
+ * all outputs are estimated monthly payouts.
+ *
+ * Models are compositional — you might combine two or three in
+ * production. v3 strategy doc recommends combining Attention Yield
+ * (headline) with Royalty Router (funding) — this page lets you see
+ * why.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Model {
+  id: 'attention' | 'reflow' | 'royalty' | 'stake' | 'baker';
+  code: string;
+  color: string;
+  color50: string;
+  title: string;
+  summary: string;
+  mechanic: string;
+  moderation: string;
+  tradeoffs: { label: string; notes: string[] };
+  // JS function names that compute monthly payout — wired in the script
+  // below. Kept in data here so HTML + JS read from the same definition.
+  inputs: Array<{ id: string; label: string; min: number; max: number; step: number; default: number; unit: string }>;
+  /** Short description of the calc the JS runs. Human-readable. */
+  calcNote: string;
+}
+
+const MODELS: Model[] = [
+  {
+    id: 'attention',
+    code: 'A',
+    color: '#185FA5',
+    color50: '#EEF4FA',
+    title: 'Attention Yield',
+    summary: 'Drip small amounts to wallets that maintain active presence. Visit, drum, view blocks — your wallet ticks up.',
+    mechanic: 'Server aggregates session events per wallet-day (capped). Weekly job distributes a fixed pool of DRUM (or ꜩ) pro-rata to eligible wallets.',
+    moderation: 'Zero. Events are machine-generated, caps prevent farming.',
+    tradeoffs: {
+      label: 'Farming risk vs. felt experience',
+      notes: [
+        'Headline upside: every visitor sees their wallet tick up — it is the exact feeling of "constant drip" Mike asked for.',
+        'Farming risk: bots accumulate trivially. Mitigation: cap per-wallet-per-day, require a Visit Noun held (so farming cost = mint + gas).',
+        'Visible: easy to explain and easy to show on /wallet or /now.',
+      ],
+    },
+    inputs: [
+      { id: 'pool',     label: 'Monthly pool',           min: 10,   max: 1000, step: 10,   default: 200,   unit: 'DRUM' },
+      { id: 'wallets',  label: 'Eligible wallets',       min: 10,   max: 5000, step: 10,   default: 200,   unit: 'wallets' },
+      { id: 'share',    label: 'Your activity share',    min: 0.1,  max: 5,    step: 0.1,  default: 1.0,   unit: '×' },
+    ],
+    calcNote: 'Your monthly = (pool / wallets) × activityShare. Cap: 3× pool/wallets average per wallet to prevent whale concentration.',
+  },
+  {
+    id: 'reflow',
+    code: 'B',
+    color: '#0F6E56',
+    color50: '#E7F4EF',
+    title: 'Prize Cast Reflow',
+    summary: 'A fraction of each Prize Cast weekly draw skips the winner and drips to Visit Nouns holders pro-rata.',
+    mechanic: 'Contract withholds N% of the weekly prize pool. That slice is distributed to Visit Nouns FA2 holders weighted by holdings at snapshot.',
+    moderation: 'Zero. The split happens on-chain at draw time.',
+    tradeoffs: {
+      label: 'Lottery purity vs. holder incentive',
+      notes: [
+        'Upside: Visit Nouns holders earn a recurring tiny amount whether they deposit to Cast or not. Turns the NFT into a passive yield instrument.',
+        'Downside: reduces the jackpot, which is the whole marketing draw of no-loss lotteries.',
+        'Balance: 10-20% reflow feels like the right ceiling. More and the prize feels diluted.',
+      ],
+    },
+    inputs: [
+      { id: 'tvl',       label: 'Prize Cast TVL',             min: 100,  max: 10000, step: 100,  default: 1000, unit: 'ꜩ' },
+      { id: 'apy',       label: 'Baker APY',                  min: 3,    max: 7,     step: 0.1,  default: 5,    unit: '%' },
+      { id: 'reflowPct', label: 'Reflow slice',               min: 0,    max: 50,    step: 5,    default: 15,   unit: '%' },
+      { id: 'holders',   label: 'Visit Noun holders',         min: 10,   max: 2000,  step: 10,   default: 100,  unit: 'holders' },
+    ],
+    calcNote: 'Weekly yield = TVL × APY / 52. Reflow = weekly × pct. Per holder (equal dist) = reflow / holders.',
+  },
+  {
+    id: 'royalty',
+    code: 'C',
+    color: '#993556',
+    color50: '#FAEAF0',
+    title: 'Royalty Router',
+    summary: '50% of Visit Nouns FA2 secondary-market royalties route back to holders, not the treasury.',
+    mechanic: 'At sale time the contract splits the royalty fee: half to the project treasury, half to current holders pro-rata. Accumulates into a claimable pool.',
+    moderation: 'Zero. All on-chain.',
+    tradeoffs: {
+      label: 'Treasury depth vs. holder aligned incentive',
+      notes: [
+        'Upside: self-reinforcing. Holders want secondary volume because they earn from it — so they promote the collection.',
+        'Downside: treasury gets less, which slows operational spending (ESREF seeding, gear pool for mesh internet, etc.)',
+        'Note: activity-dependent. Months with no sales = zero payout from this model, so it pairs well with something steady like Attention Yield.',
+      ],
+    },
+    inputs: [
+      { id: 'volume',   label: 'Monthly secondary volume', min: 0,    max: 500,  step: 10,   default: 40,  unit: 'ꜩ' },
+      { id: 'royalty',  label: 'Royalty rate',             min: 2.5,  max: 15,   step: 0.5,  default: 7.5, unit: '%' },
+      { id: 'split',    label: 'Holder split',             min: 0,    max: 100,  step: 10,   default: 50,  unit: '%' },
+      { id: 'holders',  label: 'Visit Noun holders',       min: 10,   max: 2000, step: 10,   default: 100, unit: 'holders' },
+    ],
+    calcNote: 'Monthly royalty = volume × royalty%. Holder slice = × split%. Per holder (equal) = slice / holders.',
+  },
+  {
+    id: 'stake',
+    code: 'D',
+    color: '#993C1D',
+    color50: '#FBEFEA',
+    title: 'DRUM Stake Yield',
+    summary: 'Hold DRUM tokens and they earn DRUM. Proportional to your held + staked balance. Rewards from a fixed weekly inflation budget.',
+    mechanic: 'Weekly contract mint of N DRUM. Distributed pro-rata to all holders at snapshot. Staking is just "don\'t sell" — no lock-ups.',
+    moderation: 'Zero. Deterministic contract math.',
+    tradeoffs: {
+      label: 'Inflation vs. long-tail holding',
+      notes: [
+        'Upside: simple, classic. Holders hold longer because exit = forfeit future drops.',
+        'Downside: pure inflation. Without demand, token value dilutes.',
+        'Balance: fixed weekly mint creates predictable drip; cap the total or halve the emission every N months to avoid runaway inflation.',
+      ],
+    },
+    inputs: [
+      { id: 'weeklyMint',   label: 'Weekly DRUM mint',       min: 100,  max: 10000, step: 100,  default: 1000, unit: 'DRUM' },
+      { id: 'totalSupply',  label: 'DRUM in circulation',    min: 1000, max: 200000, step: 1000, default: 20000, unit: 'DRUM' },
+      { id: 'yourBalance',  label: 'Your DRUM balance',      min: 0,    max: 10000, step: 10,   default: 100,  unit: 'DRUM' },
+    ],
+    calcNote: 'Your weekly = weeklyMint × (yourBalance / totalSupply). Monthly = weekly × 4.33.',
+  },
+  {
+    id: 'baker',
+    code: 'E',
+    color: '#534AB7',
+    color50: '#EEEDF7',
+    title: 'Baker Kickback',
+    summary: 'Prize Cast delegates staked tez to a baker. Some bakers kick back a % to the delegator. That kickback becomes additional yield.',
+    mechanic: 'Prize Cast contract\'s staking delegate is set to a kickback-friendly baker. Kickback routes to a separate pool, distributed to Visit Nouns holders weekly.',
+    moderation: 'Zero. Baker handles kickback off-protocol; distribution is on-chain.',
+    tradeoffs: {
+      label: 'Extra yield vs. baker dependency',
+      notes: [
+        'Upside: free 0.3-0.7% APY on top of the base baking yield. Compositional with Prize Cast Reflow.',
+        'Downside: dependent on a single baker being stable and honest. Baker risk = slashing or downtime = no kickback.',
+        'Mitigation: rotate between 2-3 kickback-friendly bakers quarterly via DAO vote.',
+      ],
+    },
+    inputs: [
+      { id: 'tvl',          label: 'Prize Cast TVL',     min: 100, max: 10000, step: 100, default: 1000, unit: 'ꜩ' },
+      { id: 'kickback',     label: 'Baker kickback',     min: 0,   max: 2,     step: 0.1, default: 0.5,  unit: '%' },
+      { id: 'holders',      label: 'Visit Noun holders', min: 10,  max: 2000,  step: 10,  default: 100,  unit: 'holders' },
+    ],
+    calcNote: 'Monthly kickback = TVL × kickback% / 12. Per holder = kickback / holders.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  '@id': 'https://pointcast.xyz/yield',
+  name: 'PointCast yield — token mechanic experiments',
+  description: 'Five candidate token/yield models for PointCast, presented side by side as interactive sandboxes.',
+  url: 'https://pointcast.xyz/yield',
+};
+---
+
+<BlockLayout
+  title="Yield"
+  description="PointCast's token/yield experiments sandbox. Five candidate mechanics side-by-side. Tune the sliders, see what works."
+  image="/images/og/yield.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/yield.json', title: 'Yield models (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>yield</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">YIELD · EXPERIMENTS · v1</p>
+      <h1 class="display">Five models. No commitments.</h1>
+      <p class="dek">
+        The DAO is deciding what "yield" looks like on PointCast. These
+        are five candidate mechanics side-by-side. Each is a sandbox —
+        tune the inputs, see monthly payouts, read the tradeoffs. None
+        of them are live yet. Some will compose; some won't make it.
+      </p>
+    </header>
+
+    <section class="models">
+      {MODELS.map((m) => (
+        <article class="model" id={m.id} style={`--m-c: ${m.color}; --m-c50: ${m.color50};`}>
+          <header class="model__head">
+            <span class="model__code mono">MODEL {m.code}</span>
+            <h2 class="model__title">{m.title}</h2>
+            <span class="model__mod mono">MOD · 0</span>
+          </header>
+          <p class="model__summary">{m.summary}</p>
+          <div class="model__mechanic">
+            <p class="kicker model__mechanic-label">MECHANIC</p>
+            <p class="model__mechanic-body">{m.mechanic}</p>
+          </div>
+          <div class="model__sandbox" data-model={m.id}>
+            <p class="kicker">SANDBOX · TUNE INPUTS</p>
+            <div class="controls">
+              {m.inputs.map((inp) => (
+                <label class="ctrl">
+                  <span class="ctrl__label mono">{inp.label}</span>
+                  <div class="ctrl__row">
+                    <input
+                      type="range"
+                      min={inp.min}
+                      max={inp.max}
+                      step={inp.step}
+                      value={inp.default}
+                      data-input={inp.id}
+                      class="ctrl__slider"
+                    />
+                    <span class="ctrl__value mono" data-value={inp.id}>{inp.default}</span>
+                    <span class="ctrl__unit mono">{inp.unit}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div class="readout">
+              <div class="readout__label mono">MONTHLY PAYOUT · YOUR WALLET</div>
+              <div class="readout__value" data-payout>—</div>
+              <div class="readout__note mono" data-payout-note>computing…</div>
+            </div>
+            <p class="model__calc mono">CALC · {m.calcNote}</p>
+          </div>
+          <div class="model__tradeoffs">
+            <p class="kicker">TRADEOFFS · {m.tradeoffs.label.toUpperCase()}</p>
+            <ul>
+              {m.tradeoffs.notes.map((n) => <li>{n}</li>)}
+            </ul>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="composition">
+      <p class="kicker">COMPOSITION NOTE</p>
+      <p>
+        These aren't mutually exclusive. The v3 strategy recommendation combines <a href="#attention"><strong>Model A (Attention Yield)</strong></a> as the headline mechanic (visible, constant, small drip) with <a href="#royalty"><strong>Model C (Royalty Router)</strong></a> as the funding source — so the yield you earn by visiting is literally paid for by the secondary-market activity that your collection drives. Self-reinforcing loop.
+      </p>
+      <p>
+        <a href="/dao"><strong>PC-0001</strong></a> at the DAO will be the first vote that binds real capital to any of these. Until then, this page exists to let everyone see the math.
+      </p>
+    </section>
+
+    <aside class="surfaces">
+      <p class="kicker">RELATED</p>
+      <ul class="surfaces__list">
+        <li><a href="/dao"><span class="mono">DAO</span> /dao</a></li>
+        <li><a href="/cast"><span class="mono">PRIZE</span> /cast</a></li>
+        <li><a href="/drum"><span class="mono">DRUM</span> /drum</a></li>
+        <li><a href="/yield.json"><span class="mono">JSON</span> /yield.json</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <script is:inline define:vars={{ MODELS_DATA: MODELS.map((m) => ({ id: m.id, calc: m.id })) }}>
+    (function () {
+      /**
+       * Per-model payout calcs. Matches the `calcNote` on each model
+       * exactly. If the formula changes here, update the note.
+       */
+      const calcs = {
+        attention({ pool, wallets, share }) {
+          const base = pool / Math.max(1, wallets);
+          const capped = Math.min(share, 3);
+          return base * capped;
+        },
+        reflow({ tvl, apy, reflowPct, holders }) {
+          const weekly = (tvl * (apy / 100)) / 52;
+          const reflow = weekly * (reflowPct / 100);
+          const monthly = reflow * 4.33;
+          return monthly / Math.max(1, holders);
+        },
+        royalty({ volume, royalty, split, holders }) {
+          const fee = volume * (royalty / 100);
+          const holderPool = fee * (split / 100);
+          return holderPool / Math.max(1, holders);
+        },
+        stake({ weeklyMint, totalSupply, yourBalance }) {
+          const weekly = weeklyMint * (yourBalance / Math.max(1, totalSupply));
+          return weekly * 4.33;
+        },
+        baker({ tvl, kickback, holders }) {
+          const monthly = (tvl * (kickback / 100)) / 12;
+          return monthly / Math.max(1, holders);
+        },
+      };
+
+      const units = {
+        attention: { suffix: 'DRUM/mo', note: 'from the monthly pool, weighted by activity share, capped at 3× mean' },
+        reflow:    { suffix: 'ꜩ/mo',   note: 'your share of Prize Cast weekly yield reflowed to Visit Nouns holders' },
+        royalty:   { suffix: 'ꜩ/mo',   note: 'your slice of the royalty-router pool from secondary-market sales' },
+        stake:     { suffix: 'DRUM/mo', note: 'your pro-rata share of the weekly DRUM inflation' },
+        baker:     { suffix: 'ꜩ/mo',   note: 'your share of the baker kickback, distributed to holders weekly' },
+      };
+
+      function computeFor(modelId) {
+        const container = document.querySelector(`[data-model="${modelId}"]`);
+        if (!container) return;
+        const inputs = {};
+        container.querySelectorAll('[data-input]').forEach(function (el) {
+          const k = el.getAttribute('data-input');
+          inputs[k] = Number(el.value);
+          const vEl = container.querySelector(`[data-value="${k}"]`);
+          if (vEl) vEl.textContent = String(Number(el.value));
+        });
+
+        const calc = calcs[modelId];
+        if (!calc) return;
+        const result = calc(inputs);
+        const out = container.querySelector('[data-payout]');
+        const note = container.querySelector('[data-payout-note]');
+        const u = units[modelId];
+        if (out) {
+          const rounded = result >= 10 ? result.toFixed(2) : result.toFixed(3);
+          out.textContent = rounded + ' ' + u.suffix;
+        }
+        if (note) note.textContent = u.note;
+      }
+
+      document.querySelectorAll('[data-model]').forEach(function (container) {
+        const mid = container.getAttribute('data-model');
+        container.querySelectorAll('[data-input]').forEach(function (el) {
+          el.addEventListener('input', function () { computeFor(mid); });
+        });
+        computeFor(mid);
+      });
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.2rem, 9vw, 3.8rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+  }
+
+  .dek {
+    margin: 0;
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    max-width: 60ch;
+  }
+
+  .models {
+    display: grid;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+
+  .model {
+    padding: 18px;
+    border: 1.5px solid var(--m-c);
+    border-radius: 2px;
+    background: #fff;
+    scroll-margin-top: 20px;
+  }
+
+  .model__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .model__code {
+    padding: 3px 8px;
+    border: 1px solid var(--m-c);
+    background: var(--m-c);
+    color: #fff;
+    font-size: 10.5px;
+    border-radius: 2px;
+  }
+
+  .model__title {
+    flex: 1;
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1.15;
+  }
+
+  .model__mod {
+    padding: 2px 7px;
+    border: 1px solid var(--m-c);
+    background: var(--m-c50);
+    color: var(--m-c);
+    font-size: 9.5px;
+    border-radius: 2px;
+  }
+
+  .model__summary {
+    margin: 0 0 12px;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+
+  .model__mechanic {
+    padding: 10px 12px;
+    background: var(--m-c50);
+    border-radius: 2px;
+    margin-bottom: 14px;
+  }
+
+  .model__mechanic-label {
+    color: var(--m-c);
+    margin-bottom: 4px;
+  }
+
+  .model__mechanic-body {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--pc-ink);
+  }
+
+  /* ═════ SANDBOX ═════ */
+  .model__sandbox {
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+    margin-bottom: 14px;
+  }
+
+  .controls {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .ctrl__label {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .ctrl__row {
+    display: grid;
+    grid-template-columns: 1fr 64px 56px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .ctrl__slider {
+    width: 100%;
+    accent-color: var(--m-c);
+  }
+
+  .ctrl__value {
+    text-align: right;
+    font-size: 13px;
+    color: var(--pc-ink);
+    font-weight: 500;
+  }
+
+  .ctrl__unit {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .readout {
+    padding: 12px;
+    background: #fff;
+    border: 1.5px solid var(--m-c);
+    border-radius: 2px;
+    text-align: center;
+  }
+
+  .readout__label {
+    color: var(--m-c);
+    margin-bottom: 4px;
+  }
+
+  .readout__value {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(22px, 5vw, 32px);
+    font-weight: 500;
+    color: var(--pc-ink);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 6px;
+  }
+
+  .readout__note {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    font-family: var(--pc-font-sans);
+  }
+
+  .model__calc {
+    margin: 10px 0 0;
+    color: var(--pc-ink-muted);
+    font-size: 9px;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-transform: none;
+  }
+
+  .model__tradeoffs {
+    padding-top: 12px;
+    border-top: 1px dashed var(--pc-rule-soft);
+  }
+
+  .model__tradeoffs ul {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .model__tradeoffs li {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+
+  .composition {
+    padding: 16px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+    margin-bottom: 24px;
+  }
+
+  .composition p {
+    margin: 0 0 10px;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--pc-ink);
+  }
+
+  .composition p:last-child { margin-bottom: 0; }
+
+  .composition a {
+    color: var(--pc-accent);
+  }
+
+  .composition strong {
+    font-weight: 500;
+  }
+
+  .surfaces {
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 48px;
+  }
+
+  @media (min-width: 640px) {
+    .surfaces__list { grid-template-columns: repeat(4, 1fr); }
+  }
+</style>

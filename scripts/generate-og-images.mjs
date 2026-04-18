@@ -363,6 +363,19 @@ const PAGES = [
     glyphSize: 180,
     siblings: ['/dao.json', '/manifesto', '/for-agents'],
   },
+  {
+    slug: 'yield',
+    url: '/yield',
+    kind: 'experiments',
+    kicker: 'YIELD · EXPERIMENTS',
+    title: 'Five models. No commitments.',
+    dek: 'Candidate token mechanics side-by-side. Tune the sliders, see monthly payouts, read the tradeoffs.',
+    color600: '#0F6E56',
+    color800: '#074638',
+    glyph: '∑',
+    glyphSize: 240,
+    siblings: ['/yield.json', '/dao', '/cast'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
