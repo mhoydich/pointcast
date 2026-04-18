@@ -238,6 +238,46 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
       )
     )}
 
+    {/* WATCH-embed treatment: YouTube (or any video embed). On the grid
+        we show the poster thumbnail with a play overlay — a static <img>
+        is much lighter than an iframe and doubles as a visual hook that
+        makes WATCH cards scannable in the feed. On the detail page the
+        iframe mounts for real playback. Mike 2026-04-17: "blocks keep
+        working on the visual part via scroll so they don't all look
+        the same" — giving WATCH its own facade treatment pulls it out
+        of the LINK-lookalike category. */}
+    {data.media?.kind === 'embed' && data.type === 'WATCH' && (
+      detail ? (
+        <div class="block-card__embed block-card__embed--video">
+          <iframe
+            src={data.media.src}
+            loading="lazy"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
+            allowfullscreen
+            title={data.title}
+          ></iframe>
+        </div>
+      ) : (
+        <div class="block-card__video-facade" aria-hidden="true">
+          {(data.media as any).thumbnail ? (
+            <img
+              src={(data.media as any).thumbnail}
+              alt=""
+              loading="lazy"
+              class="block-card__video-poster"
+            />
+          ) : (
+            <div class="block-card__video-poster block-card__video-poster--empty"></div>
+          )}
+          <span class="block-card__video-play">▶</span>
+          {(data as any).meta?.duration && (
+            <span class="block-card__video-duration mono">{(data as any).meta.duration}</span>
+          )}
+        </div>
+      )
+    )}
+
     {/* Body.
         - NOTE / VISIT / LINK / detail-mode READ all render the body.
         - For READ on detail, split on blank lines into proper paragraphs
@@ -567,13 +607,10 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     pointer-events: none;
   }
 
-  /* WATCH — cinema-frame letterbox: thin horizontal bars top + bottom. */
-  .block-card.type-watch:not(.block-card--detail) .block-card__link {
-    padding-top: 18px;
-    padding-bottom: 18px;
-  }
-
-  .block-card.type-watch:not(.block-card--detail)::before {
+  /* WATCH — cinema-frame letterbox. Skipped when the block has a proper
+     media poster (the thumbnail itself is the cinema hook). We ONLY
+     apply letterbox bars when there's no poster to render. */
+  .block-card.type-watch:not(.block-card--detail):not(:has(.block-card__video-facade))::before {
     content: '';
     position: absolute;
     top: 0;
@@ -583,7 +620,7 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     background: #12110E;
   }
 
-  .block-card.type-watch:not(.block-card--detail)::after {
+  .block-card.type-watch:not(.block-card--detail):not(:has(.block-card__video-facade))::after {
     content: '';
     position: absolute;
     bottom: 0;
@@ -591,6 +628,11 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     right: 0;
     height: 6px;
     background: #12110E;
+  }
+
+  .block-card.type-watch:not(.block-card--detail):not(:has(.block-card__video-facade)) .block-card__link {
+    padding-top: 18px;
+    padding-bottom: 18px;
   }
 
   /* CRT channel (courtside sports): subtle chalked baseline accent on
@@ -692,6 +734,92 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
      track list + controls are usable (80px only fits the play bar). */
   .block-card--detail .block-card__embed iframe {
     height: 352px;
+  }
+
+  /* ══ WATCH · video embed ══
+     Detail mode gets a 16:9 responsive iframe for proper playback.
+     Grid mode gets a static poster thumbnail facade with play overlay —
+     zero third-party iframes on the home grid. */
+  .block-card__embed--video {
+    margin: 2px -16px;
+    aspect-ratio: 16 / 9;
+    background: #12110E;
+  }
+
+  .block-card__embed--video iframe {
+    width: 100%;
+    height: 100%;
+  }
+
+  .block-card__video-facade {
+    position: relative;
+    margin: 2px -16px;
+    aspect-ratio: 16 / 9;
+    background: #12110E;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .block-card__video-poster {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0.88;
+    transition: opacity 0.15s;
+  }
+
+  .block-card__video-poster--empty {
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        color-mix(in oklab, var(--ch-600) 30%, #000) 0 8px,
+        color-mix(in oklab, var(--ch-600) 45%, #000) 8px 16px
+      );
+  }
+
+  .block-card:hover .block-card__video-poster {
+    opacity: 1;
+  }
+
+  .block-card__video-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 4px;
+    font-size: 18px;
+    color: #fff;
+    background: color-mix(in oklab, #12110E 55%, transparent);
+    border: 1.5px solid #fff;
+    border-radius: 50%;
+    pointer-events: none;
+    transition: background-color 0.15s, transform 0.15s;
+  }
+
+  .block-card:hover .block-card__video-play {
+    background: color-mix(in oklab, var(--ch-800) 85%, transparent);
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+
+  .block-card__video-duration {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    padding: 2px 6px;
+    background: color-mix(in oklab, #12110E 80%, transparent);
+    color: #fff;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    border-radius: 2px;
+    pointer-events: none;
   }
 
   /* Spotify/audio facade — tiny row that reads as a media chip without

@@ -47,6 +47,12 @@ const blocks = defineCollection({
       .object({
         kind: z.enum(['image', 'audio', 'video', 'embed']),
         src: z.string(),
+        /** Optional preview thumbnail. Used on the home grid for WATCH
+         *  blocks so the card shows a video poster instead of just a
+         *  facade chip. YouTube: img.youtube.com/vi/{id}/hqdefault.jpg. */
+        thumbnail: z.string().optional(),
+        /** Optional IPFS fallback URL if the primary CDN fails. */
+        ipfsFallback: z.string().optional(),
       })
       .optional(),
 
