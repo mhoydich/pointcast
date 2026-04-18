@@ -73,6 +73,7 @@ export const GET: APIRoute = async () => {
         all: 'https://pointcast.xyz/feed.xml',
         postsOnly: 'https://pointcast.xyz/rss.xml',
       },
+      indexnow: 'https://pointcast.xyz/api/indexnow',
       perBlock: {
         html: 'https://pointcast.xyz/b/{id}',
         json: 'https://pointcast.xyz/b/{id}.json',
@@ -154,6 +155,27 @@ export const GET: APIRoute = async () => {
       responseHeader: 'X-Agent-Mode: stripped · ai:<vendor>',
       payloadSavings: '~12% smaller on the home feed (97,631 vs 111,170 bytes verified).',
       source: 'https://github.com/MikeHoydich/pointcast/blob/main/functions/_middleware.ts',
+    },
+
+    cors: {
+      policy: 'All JSON / markdown agent surfaces carry Access-Control-Allow-Origin: *.',
+      applies: [
+        '/agents.json', '/blocks.json', '/archive.json', '/editions.json',
+        '/now.json', '/cast.json', '/battle.json', '/timeline.json',
+        '/stack.json', '/feed.json', '/feed.xml', '/b/*.json',
+        '/c/*.json', '/c/*.rss', '/llms.txt', '/llms-full.txt',
+      ],
+      note: 'Agents can fetch from any origin. No preflight needed for GETs.',
+    },
+
+    push: {
+      indexnow: {
+        endpoint: 'https://pointcast.xyz/api/indexnow',
+        method: 'POST',
+        shape: '{ urls: ["https://pointcast.xyz/..."] }',
+        status: 'awaiting key binding (INDEXNOW_KEY in Cloudflare Pages env)',
+        spec: 'https://www.indexnow.org/documentation',
+      },
     },
 
     citationFormat: {
