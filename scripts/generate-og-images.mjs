@@ -337,6 +337,19 @@ const PAGES = [
     glyphSize: 260,
     siblings: ['/stack', '/manifesto'],
   },
+  {
+    slug: 'subscribe',
+    url: '/subscribe',
+    kind: 'follow',
+    kicker: 'SUBSCRIBE · FEEDS',
+    title: "Follow, don't sign up.",
+    dek: 'RSS, JSON Feed, per-channel streams, Farcaster, X, GitHub. No email lists, no cookies.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '♦',
+    glyphSize: 220,
+    siblings: ['/feed.xml', '/feed.json', '/for-agents'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {

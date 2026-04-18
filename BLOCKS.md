@@ -1,10 +1,25 @@
 # BLOCKS.md
 
-**PointCast v2 — the Blocks pivot**
+**PointCast v2.1 — the Blocks pivot, live edition**
 
 Author: Mike Hoydich × Claude
-Date: April 2026 (v2 — Tezos-first)
-Status: Directive for rebuild on `blocks-rebuild` branch
+Revision: **v2.1** (2026-04-17) — live on `main`, serving pointcast.xyz.
+
+Previous revisions:
+- **v2.1** (2026-04-17 evening) — adds 9th channel BTL (Battler),
+  `media.thumbnail` + `media.ipfsFallback` schema fields, agent-layer
+  surfaces (/manifesto, /glossary, /agents.json, /llms-full.txt),
+  home-page majors strip (inline /drum + /cast), stronger per-type
+  variants + scroll rhythm via `:nth-child`, BreadcrumbList + ItemList
+  JSON-LD coverage.
+- **v2.0** (2026-04-17) — mainnet origination of Visit Nouns FA2 at
+  KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh, 10 starter mints, TZIP-21
+  metadata endpoint live, /collection page.
+- **v2.0-rebuild** (earlier April 2026) — initial Blocks pivot off v1.
+  8 channels, 8 types, monotonic IDs, Astro content collections.
+- **v1** (2025 → April 2026) — markdown-doc era; retired at commit
+  7fea01c, preserved for rollback. Original dispatches, drum room,
+  Noun Bells instrument, /collect inventory.
 
 ---
 

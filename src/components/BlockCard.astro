@@ -325,6 +325,21 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
       )
     )}
 
+    {/* READ grid preview — first paragraph of body (up to ~220 chars).
+        Grid-mode READ cards only rendered title+dek before, leaving
+        large 2x1 cards looking empty. Mike 2026-04-17 (screenshot):
+        NYC Mesh and agentic 2x1 cards had visible dead space. Preview
+        pulls the first paragraph and clips with a CSS line-clamp so
+        tall cards still breathe. */}
+    {!detail && data.type === 'READ' && data.body && (
+      <p class="block-card__preview">
+        {(() => {
+          const first = data.body.split(/\n\n+/)[0].trim();
+          return first.length > 220 ? first.slice(0, 217).trimEnd() + '…' : first;
+        })()}
+      </p>
+    )}
+
     {/* Footer meta — type-specific, computed in footerMeta() helper above */}
     {(() => {
       const meta = footerMeta(data, typeSpec.footerHint);
@@ -694,6 +709,34 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     line-height: 1.5;
     color: #38373A;
     margin: 0;
+  }
+
+  /* READ grid preview — fills the 2x1/2x2 size variants that otherwise
+     showed only kicker + title + dek. Line-clamp keeps it bounded so
+     very long first paragraphs don't push the footer off the card. */
+  .block-card__preview {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #5F5E5A;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* On narrow 1x1 READ cards, three lines is plenty — four would push
+     past the minimum row height. */
+  .block-card.span-1x1 .block-card__preview {
+    -webkit-line-clamp: 3;
+  }
+
+  /* On wide 2x1 or taller 1x2/2x2, let it breathe more. */
+  .block-card.span-2x2 .block-card__preview,
+  .block-card.span-1x2 .block-card__preview {
+    -webkit-line-clamp: 8;
   }
 
   /* READ on detail mode — article typography. Mobile-first: comfortable
