@@ -298,6 +298,19 @@ const PAGES = [
     glyphSize: 220,
     siblings: ['/stack.json', '/agents.json'],
   },
+  {
+    slug: 'manifesto',
+    url: '/manifesto',
+    kind: 'canonical',
+    kicker: 'MANIFESTO · CANONICAL',
+    title: 'What is PointCast.',
+    dek: 'Twelve questions, twelve answers. FAQPage + DefinedTerm schema for LLM citation.',
+    color600: '#12110E',
+    color800: '#12110E',
+    glyph: '¶',
+    glyphSize: 240,
+    siblings: ['/llms.txt', '/llms-full.txt', '/agents.json'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {

@@ -43,6 +43,7 @@ export const GET: APIRoute = async () => {
     endpoints: {
       human: {
         home: 'https://pointcast.xyz/',
+        manifesto: 'https://pointcast.xyz/manifesto',
         archive: 'https://pointcast.xyz/archive',
         editions: 'https://pointcast.xyz/editions',
         collection: 'https://pointcast.xyz/collection',

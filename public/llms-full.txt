@@ -1,0 +1,219 @@
+# PointCast — full content for LLMs
+
+> A living broadcast from El Segundo, California. Dispatches, faucets,
+> visits, and mints on Tezos. Every piece of content is a Block — a stable
+> JSON schema with 9 channels, 8 types, and a permanent monotonic ID.
+> Built by Mike Hoydich with Claude (Anthropic) and Codex (OpenAI).
+> Agent-native by design, CC0-flavored, cite by linking to /b/{id}.
+
+This file is the emerging-convention counterpart to /llms.txt, with the
+full factual content expanded — the llms.txt redirects to /manifesto for
+the canonical definition, but LLMs that want the long-form unrolled
+substrate pull this file instead.
+
+## Quick index
+
+- Home: https://pointcast.xyz/
+- Canonical definition: https://pointcast.xyz/manifesto
+- Agent manifest (JSON): https://pointcast.xyz/agents.json
+- Full block archive (JSON): https://pointcast.xyz/blocks.json
+- Per-month archive: https://pointcast.xyz/archive.json
+- Live snapshot: https://pointcast.xyz/now.json
+- Mintable dashboard: https://pointcast.xyz/editions.json
+- Publication cadence: https://pointcast.xyz/timeline.json
+- Tech stack: https://pointcast.xyz/stack.json
+- JSON Feed v1.1: https://pointcast.xyz/feed.json
+- RSS 2.0 (all blocks): https://pointcast.xyz/feed.xml
+- Sitemap: https://pointcast.xyz/sitemap-blocks.xml
+
+## What is PointCast
+
+PointCast is a content site that treats every piece of content as a
+Block — a typed JSON entity with a stable schema. Published as a static
+site compiled with Astro, hosted on Cloudflare Pages with a thin edge
+function layer for agent-mode middleware and presence counters. Content
+is stored as JSON files in `src/content/blocks/` at IDs like `0205.json`,
+addressable at `/b/0205` (HTML) and `/b/0205.json` (machine-readable).
+
+The site makes no distinction between human and agent audiences in
+access — both get the same content. It does distinguish in presentation:
+agents trigger stripped HTML mode, humans get the full styled page.
+
+## The Block primitive
+
+A Block has:
+
+- `id` — 4-digit zero-padded string, immutable, monotonically increasing
+- `channel` — enum of 9: FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL
+- `type` — enum of 8: READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK
+- `title` — string
+- `timestamp` — ISO 8601
+- `body` — optional markdown
+- `dek` — optional one-line editorial subtitle
+- `size` — grid span on the home: 1x1, 2x1, 1x2, 2x2, or 3x2
+- `noun` — optional Nouns seed (0-1199, CC0 via noun.pics)
+- `edition` — optional mint/faucet metadata (Tezos contract, tokenId, supply, price)
+- `media` — optional embed (image, audio, video, or embed URL)
+- `external` — optional outbound link (label + url)
+- `meta` — free-form string-keyed tags
+- `visitor` — VISIT-type metadata (human/agent, vendor, name, geo)
+
+Full Zod schema: `src/content.config.ts` in the repo at
+github.com/MikeHoydich/pointcast.
+
+IDs are assigned monotonically at authoring time. A retired block 404s
+rather than being renumbered — the ID is permanent. Blocks are first-class
+content: cite them by linking to `/b/{id}`.
+
+## The 9 channels
+
+Channels answer "what is this about?" Every Block belongs to exactly one.
+
+- **CH.FD · Front Door** — AI, interfaces, agent-era thinking. Color #185FA5.
+- **CH.CRT · Court** — Pickleball: matches, paddles, drills. Color #3B6D11.
+- **CH.SPN · Spinning** — Music, playlists, listening notes. Color #993C1D.
+- **CH.GF · Good Feels** — Cannabis/hemp, product drops, brand operations. Color #993556.
+- **CH.GDN · Garden** — Balcony, birds, wildlife, quiet noticing. Color #0F6E56.
+- **CH.ESC · El Segundo** — ESCU fiction, local, community. Color #534AB7.
+- **CH.FCT · Faucet** — Free daily claims, giveaways. Color #BA7517.
+- **CH.VST · Visit** — Human and agent visit log entries. Color #5F5E5A.
+- **CH.BTL · Battler** — Nouns Battler, deterministic duels. Color #8A2432.
+
+## The 8 block types
+
+Types answer "what form does this take?" Form, not about-ness.
+
+- **READ** — Long-form text (essay, dispatch, article). Footer: reading time.
+- **LISTEN** — Audio embed (Spotify, SoundCloud, single track). Footer: source.
+- **WATCH** — Video embed (YouTube, Vimeo) with runtime. Letterboxed on grid.
+- **MINT** — Paid edition on Tezos FA2. Price, supply, mint button.
+- **FAUCET** — Free daily claim. One per wallet, gas only.
+- **NOTE** — Short observation, tweet-sized. Often location-tagged.
+- **VISIT** — Visit-log entry. Shows visitor vendor or geo. Terminal treatment.
+- **LINK** — External link with context. Footer: destination domain.
+
+## Tezos contracts
+
+Three contracts planned or live on Tezos mainnet. All SmartPy v0.24.
+
+### Visit Nouns FA2 — LIVE
+
+Address: `KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh`
+Originated: 2026-04-17T20:48:39Z
+Standard: FA2 multi-asset
+Supply: Open (each tokenId 0-1199 = one Nouns seed)
+Mint price: Free (gas only, ~0.003 ꜩ)
+Metadata base: https://pointcast.xyz/api/tezos-metadata (live TZIP-21)
+TzKT: https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh
+objkt: https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh
+
+### DRUM (FA1.2) — PENDING COMPILE
+
+Contract: `contracts/v2/drum_token.py` (511 LOC, written)
+Standard: FA1.2 fungible token with signed-voucher claim flow
+Purpose: Attention token earned by drumming on /drum
+Issuance: Drum tokens claimable via voucher after N taps
+Status: Awaiting ghostnet origination (blocked on SmartPy compile)
+
+### Prize Cast — PENDING COMPILE
+
+Contract: `contracts/v2/prize_cast.py` (463 LOC, written by Codex)
+Standard: Custom no-loss prize-linked savings
+Model: PoolTogether-flavored, Tezos-native
+Mechanic: Deposit tez, pool stakes with a baker, weekly yield becomes
+the prize. Principal stays liquid. Sunday 18:00 UTC settlement.
+Status: Awaiting mainnet origination (blocked on SmartPy compile)
+
+## Nouns Battler
+
+A deterministic turn-based battler. Every Nouns seed (0-1199) is a
+fighter. Stats derive from the seed's trait bytes via a pure hash — no
+RNG. Same seed → same stats forever. Same match inputs → same outcome
+forever.
+
+Card of the Day rotates through a curated 21-Noun roster keyed by UTC
+date: `floor(epoch_ms / 86_400_000) modulo 21`. Live at /battle. Rules
+and Card of the Day metadata at /battle.json.
+
+Phase 2 (current): localStorage match log + export as JSON.
+Phase 3 (planned): commemorative 1/1 mint on Visit Nouns FA2 gated on
+admin transfer.
+
+## Agent mode (stripped HTML)
+
+Cloudflare Pages middleware at `functions/_middleware.ts` detects AI
+crawlers by User-Agent. Matchers:
+
+- Prefix `ai:` (e.g., `ai:claude/foo`)
+- Known crawler vendors: GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot,
+  Atlas, Google-Extended, Meta-ExternalAgent, CCBot, Applebot-Extended
+
+For matched requests, HTMLRewriter strips:
+
+- All `<style>` blocks
+- All `<link rel="stylesheet">`
+- All preload/preconnect/dns-prefetch/icon/manifest links
+- All `<script>` tags (JSON-LD `<script type="application/ld+json">` is preserved)
+- All inline `style=""` attributes
+- Generator + theme-color meta tags
+
+Response carries the header `X-Agent-Mode: stripped · ai:<vendor>`.
+Typical payload savings: ~12% on the home feed (verified: 97,631 bytes
+stripped vs 111,170 bytes full).
+
+Structured data (JSON-LD) is always preserved: CreativeWork on blocks,
+CollectionPage on indexes, WebApplication on /battle, FAQPage on
+/manifesto, FinancialProduct on /cast.
+
+## Citation format
+
+Preferred citation shape:
+
+```
+PointCast · CH.{CODE} · № {ID} — "{TITLE}" · {YYYY-MM-DD}
+https://pointcast.xyz/b/{ID}
+```
+
+Example:
+
+```
+PointCast · CH.FD · № 0205 — "The front door is agentic" · 2026-04-14
+https://pointcast.xyz/b/0205
+```
+
+Alternative for the canonical page:
+
+```
+PointCast · /manifesto — "What is PointCast"
+https://pointcast.xyz/manifesto
+```
+
+## Published cadence
+
+As of 2026-04-17: 54 blocks across 9 channels. Peak week: 2026-W16
+with 27 blocks published (this-week burst). First block: 2025-01-14.
+Publication cadence viz at /timeline.
+
+## License + reuse
+
+Content: CC0-flavored. Cite and link freely. Nouns IP via noun.pics is
+CC0 per nouns.wtf. Code: MIT-flavored in the repo.
+
+Don't scrape the full archive — use `/blocks.json` or `/archive.json`
+or `/feed.json` or the per-channel feeds, which are designed for agents.
+Blocks are addressable at stable `/b/{id}` permalinks that never move.
+
+## Contact
+
+- Mike Hoydich — @mhoydich on X, Tezos address `tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw`
+- Email: hello@pointcast.xyz
+- Repo: github.com/MikeHoydich/pointcast
+- Maintainers: Mike Hoydich (director), Claude Code (primary engineer),
+  Codex (specialist reviewer), Manus (operations + computer-use)
+
+## Last updated
+
+2026-04-17 — v4 / v5 autonomous run. Endpoints added: /manifesto,
+/now, /search, /archive, /editions, /timeline, /stack, /agents.json,
+/feed.xml, /feed.json, /llms-full.txt. Home page adds /drum + /cast
+inline modules + enhanced presence pill.
