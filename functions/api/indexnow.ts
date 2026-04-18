@@ -75,6 +75,18 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     return json({ ok: true }, 204);
   }
 
+  // HEAD → minimal 200 for health checkers that use HEAD
+  if (request.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'X-Pc-Service': 'indexnow',
+        'X-Pc-Key-Bound': String(Boolean(env.INDEXNOW_KEY)),
+      },
+    });
+  }
+
   // GET → status check + documentation-friendly response
   if (request.method === 'GET') {
     return json({
