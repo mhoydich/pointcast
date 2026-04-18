@@ -46,6 +46,8 @@ export const GET: APIRoute = async () => {
         manifesto: 'https://pointcast.xyz/manifesto',
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',
+        publish: 'https://pointcast.xyz/publish',
+        beacon: 'https://pointcast.xyz/beacon',
         glossary: 'https://pointcast.xyz/glossary',
         changelog: 'https://pointcast.xyz/changelog',
         archive: 'https://pointcast.xyz/archive',
@@ -74,6 +76,8 @@ export const GET: APIRoute = async () => {
         random: 'https://pointcast.xyz/random.json',
         dao: 'https://pointcast.xyz/dao.json',
         yield: 'https://pointcast.xyz/yield.json',
+        publish: 'https://pointcast.xyz/publish.json',
+        beacon: 'https://pointcast.xyz/beacon.json',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',

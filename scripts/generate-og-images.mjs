@@ -376,6 +376,32 @@ const PAGES = [
     glyphSize: 240,
     siblings: ['/yield.json', '/dao', '/cast'],
   },
+  {
+    slug: 'publish',
+    url: '/publish',
+    kind: 'on-chain',
+    kicker: 'PUBLISH · v1',
+    title: 'Publish to Tezos.',
+    dek: 'Wallet signs. Content is hashed + timestamped. On-chain anchor lands when the Dispatch FA2 contract ships.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '✍',
+    glyphSize: 220,
+    siblings: ['/publish.json', '/dao', '/manifesto'],
+  },
+  {
+    slug: 'beacon',
+    url: '/beacon',
+    kind: '25-mi radius',
+    kicker: 'BEACON · 25 MILES',
+    title: 'A beacon for the area.',
+    dek: '25-mile radius from El Segundo: the South Bay, the Westside, the Harbor, edge of DTLA. Neighborhoods in range.',
+    color600: '#534AB7',
+    color800: '#332C7C',
+    glyph: '◉',
+    glyphSize: 260,
+    siblings: ['/beacon.json', '/b/0244', '/dao'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
