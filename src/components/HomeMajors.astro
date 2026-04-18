@@ -1,0 +1,523 @@
+---
+/**
+ * HomeMajors — inline hero modules for /drum and /cast on the home feed.
+ *
+ * Mike 2026-04-17: "make sure the majors, like drum or pool together, have
+ * some type of module on the home page prior to click" + "likely have
+ * ability to drum get started" + "number of current visitors, etc
+ * represented when someone is there."
+ *
+ * Two cards side-by-side above the feed:
+ *
+ *   ┌──────────── DRUM ROOM · tap to start ────────────┐   ┌──── PRIZE CAST · next draw ────┐
+ *   │  [Noun drum, tappable]   7 · your taps today      │   │  3d 04h 22m 11s                │
+ *   │  [Noun drum, tappable]   global  147              │   │  live at Sunday 18:00 UTC      │
+ *   │  TAP TO START · OPEN ROOM →                       │   │  OPEN PRIZE CAST →             │
+ *   └──────────────────────────────────────────────────┘   └────────────────────────────────┘
+ *
+ * Drum module: three small tap targets (Low · Mid · High) that play the
+ * real taiko thump audio via a trimmed-down Web Audio copy of the /drum
+ * synth. Tap increments a local counter in localStorage (shared key with
+ * /drum so counts continue across). A third line shows global taps from
+ * /api/drum if reachable.
+ *
+ * Cast module: live Sunday-18:00-UTC countdown, ticks every second.
+ * When Prize Cast originates, the middle row will show live TVL.
+ *
+ * Both modules are graceful: audio failure → silent, drum API 404 →
+ * "global count unavailable", no blocking spinners.
+ */
+import contracts from '../data/contracts.json';
+
+const prizeCastKt1 = ((contracts as any).prize_cast?.mainnet ?? '').trim();
+const prizeCastStatus = prizeCastKt1 ? 'LIVE' : 'PENDING';
+---
+
+<section class="majors" aria-label="Major modules">
+  {/* ═════ DRUM MODULE ═════ */}
+  <article class="major major--drum">
+    <header class="major__head">
+      <span class="major__kicker mono">CH.SPN · DRUM ROOM</span>
+      <span class="major__tag mono">TAP TO START</span>
+    </header>
+    <div class="drum-mini" id="drum-mini">
+      <button
+        type="button"
+        class="drum-mini__tap"
+        data-drum-pitch="70"
+        aria-label="Tap low drum"
+      >
+        <img src="https://noun.pics/20.svg" alt="" loading="lazy" draggable="false" />
+        <span class="drum-mini__label mono">LOW</span>
+      </button>
+      <button
+        type="button"
+        class="drum-mini__tap"
+        data-drum-pitch="110"
+        aria-label="Tap mid drum"
+      >
+        <img src="https://noun.pics/42.svg" alt="" loading="lazy" draggable="false" />
+        <span class="drum-mini__label mono">MID</span>
+      </button>
+      <button
+        type="button"
+        class="drum-mini__tap"
+        data-drum-pitch="170"
+        aria-label="Tap high drum"
+      >
+        <img src="https://noun.pics/101.svg" alt="" loading="lazy" draggable="false" />
+        <span class="drum-mini__label mono">HIGH</span>
+      </button>
+    </div>
+    <dl class="major__stats">
+      <div>
+        <dt class="mono">YOURS</dt>
+        <dd class="mono" id="drum-mini-your">—</dd>
+      </div>
+      <div>
+        <dt class="mono">GLOBAL</dt>
+        <dd class="mono" id="drum-mini-global">—</dd>
+      </div>
+      <div>
+        <dt class="mono">STATUS</dt>
+        <dd class="mono" id="drum-mini-status">READY</dd>
+      </div>
+    </dl>
+    <footer class="major__foot">
+      <a class="major__cta" href="/drum">
+        <span class="major__cta-label">Open drum room</span>
+        <span aria-hidden="true">→</span>
+      </a>
+      <span class="major__note mono">DRUM TOKEN · SOON</span>
+    </footer>
+  </article>
+
+  {/* ═════ PRIZE CAST MODULE ═════ */}
+  <article class="major major--cast">
+    <header class="major__head">
+      <span class="major__kicker mono">CH.CST · PRIZE CAST</span>
+      <span class={`major__tag mono major__tag--${prizeCastKt1 ? 'live' : 'pending'}`}>
+        {prizeCastStatus}
+      </span>
+    </header>
+    <div class="cast-mini">
+      <p class="cast-mini__label mono">NEXT DRAW · SUN 18:00 UTC</p>
+      <p class="cast-mini__count" id="cast-mini-count" data-role="countdown">— d — h — m — s</p>
+    </div>
+    <dl class="major__stats">
+      <div>
+        <dt class="mono">CADENCE</dt>
+        <dd>Weekly</dd>
+      </div>
+      <div>
+        <dt class="mono">MODEL</dt>
+        <dd>No-loss · yield prize</dd>
+      </div>
+      <div>
+        <dt class="mono">NETWORK</dt>
+        <dd>Tezos</dd>
+      </div>
+    </dl>
+    <footer class="major__foot">
+      <a class="major__cta" href="/cast">
+        <span class="major__cta-label">Open Prize Cast</span>
+        <span aria-hidden="true">→</span>
+      </a>
+      <span class="major__note mono">DEPOSIT · PENDING ORIGINATION</span>
+    </footer>
+  </article>
+</section>
+
+<script is:inline>
+  /**
+   * Trimmed taiko synth — just the "thump" variant (sine sweep + noise burst)
+   * because the mini doesn't need bell/shaker. Lazy-init the AudioContext so
+   * Safari's autoplay policy is respected: a real context only gets created
+   * on the first user tap.
+   */
+  (function () {
+    const ctxBox = { ctx: null };
+    function getCtx() {
+      if (ctxBox.ctx) return ctxBox.ctx;
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return null;
+      try { ctxBox.ctx = new Ctor(); } catch { return null; }
+      return ctxBox.ctx;
+    }
+
+    function playThump(pitch) {
+      const ctx = getCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch {} }
+      const now = ctx.currentTime;
+
+      const out = ctx.createGain();
+      out.connect(ctx.destination);
+      out.gain.setValueAtTime(0, now);
+      out.gain.linearRampToValueAtTime(0.38, now + 0.003);
+      out.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(pitch * 0.5, now + 0.12);
+      osc.connect(out);
+      osc.start(now);
+      osc.stop(now + 0.3);
+
+      const bufSize = Math.floor(ctx.sampleRate * 0.04);
+      const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const noiseData = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        noiseData[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.22, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      noise.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noise.start(now);
+    }
+
+    // Counter — shared with /drum via localStorage key 'pc:drum-your'
+    const YOUR_KEY = 'pc:drum-your';
+    function readYour() {
+      try { return Number(localStorage.getItem(YOUR_KEY) || 0); } catch { return 0; }
+    }
+    function writeYour(n) {
+      try { localStorage.setItem(YOUR_KEY, String(n)); } catch {}
+    }
+
+    const yourEl = document.getElementById('drum-mini-your');
+    const globalEl = document.getElementById('drum-mini-global');
+    const statusEl = document.getElementById('drum-mini-status');
+    if (!yourEl || !globalEl) return;
+
+    let yourCount = readYour();
+    yourEl.textContent = String(yourCount);
+
+    // Try to pull global drum count from /api/drum. If 404 or network
+    // fails, keep a dash — no error noise.
+    fetch('/api/drum')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j) => {
+        const total = Number(j?.total ?? j?.count ?? 0);
+        globalEl.textContent = total > 0 ? total.toLocaleString('en-US') : '—';
+      })
+      .catch(() => {
+        globalEl.textContent = '—';
+      });
+
+    document.querySelectorAll('#drum-mini .drum-mini__tap').forEach(function (btn) {
+      btn.addEventListener('pointerdown', function () {
+        const pitch = Number(btn.getAttribute('data-drum-pitch') || 110);
+        playThump(pitch);
+        yourCount += 1;
+        yourEl.textContent = String(yourCount);
+        writeYour(yourCount);
+        if (statusEl) statusEl.textContent = 'DRUMMING';
+        // Tiny bump animation on the tap tile
+        btn.classList.add('drum-mini__tap--hit');
+        setTimeout(function () { btn.classList.remove('drum-mini__tap--hit'); }, 180);
+
+        // Fire-and-forget global increment. The /api/drum endpoint bumps
+        // a KV counter; we don't need the response here (the home card's
+        // global count is stale-tolerant).
+        fetch('/api/drum', { method: 'POST' }).catch(function () {});
+      });
+    });
+  })();
+
+  /**
+   * Prize Cast countdown — ticks every second until Sunday 18:00 UTC.
+   */
+  (function () {
+    const el = document.getElementById('cast-mini-count');
+    if (!el) return;
+
+    function nextSunday18() {
+      const now = new Date();
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 18, 0, 0, 0));
+      const delta = (7 - now.getUTCDay()) % 7;
+      d.setUTCDate(d.getUTCDate() + delta);
+      if (delta === 0 && now.getTime() >= d.getTime()) d.setUTCDate(d.getUTCDate() + 7);
+      return d;
+    }
+
+    function tick() {
+      const diff = Math.max(0, nextSunday18().getTime() - Date.now());
+      const mins = Math.floor(diff / 60000);
+      const d = Math.floor(mins / 1440);
+      const h = Math.floor((mins % 1440) / 60);
+      const m = mins % 60;
+      const s = Math.floor((diff / 1000) % 60);
+      el.textContent = d + 'd ' + String(h).padStart(2, '0') + 'h ' + String(m).padStart(2, '0') + 'm ' + String(s).padStart(2, '0') + 's';
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  })();
+</script>
+
+<style>
+  .majors {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+  }
+
+  @media (min-width: 880px) {
+    .majors {
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+  }
+
+  .major {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    position: relative;
+    min-height: 240px;
+  }
+
+  .major--drum {
+    background: #FBEFEA;
+    border-color: #993C1D;
+  }
+
+  .major--cast {
+    background: #E7F4EF;
+    border-color: #0F6E56;
+  }
+
+  .major__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .major__kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    font-weight: 500;
+  }
+
+  .major--drum .major__kicker { color: #6A2810; }
+  .major--cast .major__kicker { color: #074638; }
+
+  .major__tag {
+    padding: 2px 7px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+  }
+
+  .major--drum .major__tag {
+    color: #6A2810;
+    border-color: #993C1D;
+    background: #fff;
+  }
+
+  .major__tag--live {
+    color: #074638;
+    border-color: #0F6E56;
+    background: #fff;
+  }
+
+  .major__tag--pending {
+    color: var(--pc-ink-muted);
+    border-color: var(--pc-rule);
+    background: #fff;
+  }
+
+  /* ══ DRUM MINI ══ */
+  .drum-mini {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .drum-mini__tap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 6px 6px;
+    border: 1.5px solid #993C1D;
+    border-radius: 2px;
+    background: #fff;
+    cursor: pointer;
+    transition: transform 0.08s, background-color 0.12s;
+    touch-action: manipulation;
+    min-width: 0;
+  }
+
+  .drum-mini__tap:hover {
+    background: #fff7f2;
+  }
+
+  .drum-mini__tap--hit {
+    transform: scale(0.94);
+    background: #ffd9c4;
+  }
+
+  .drum-mini__tap img {
+    width: 48px;
+    height: 48px;
+    display: block;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+
+  .drum-mini__label {
+    color: #6A2810;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+  }
+
+  /* ══ CAST MINI ══ */
+  .cast-mini {
+    flex: 1;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    border: 1.5px solid #0F6E56;
+    border-radius: 2px;
+    background: #fff;
+    padding: 14px 12px;
+  }
+
+  .cast-mini__label {
+    color: #074638;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    margin: 0;
+    text-align: center;
+  }
+
+  .cast-mini__count {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: clamp(18px, 4.5vw, 26px);
+    font-weight: 500;
+    color: #12110E;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  /* ══ STATS ══ */
+  .major__stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 0;
+  }
+
+  .major__stats > div {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .major__stats dt {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted);
+    margin: 0;
+  }
+
+  .major__stats dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .major--drum .major__stats dd.mono {
+    font-family: var(--pc-font-mono);
+    font-size: 14px;
+    color: #6A2810;
+    font-weight: 500;
+  }
+
+  /* ══ FOOT ══ */
+  .major__foot {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed color-mix(in oklab, currentColor 25%, transparent);
+    flex-wrap: wrap;
+  }
+
+  .major__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    transition: background-color 0.12s, color 0.12s;
+  }
+
+  .major--drum .major__cta {
+    color: #6A2810;
+    background: #fff;
+  }
+
+  .major--drum .major__cta:hover {
+    background: #6A2810;
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .major--cast .major__cta {
+    color: #074638;
+    background: #fff;
+  }
+
+  .major--cast .major__cta:hover {
+    background: #074638;
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .major__note {
+    color: var(--pc-ink-muted);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+  }
+</style>

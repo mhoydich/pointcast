@@ -18,7 +18,11 @@
 
 <span class="presence" id="pc-presence" aria-live="polite" data-initial="off">
   <span class="presence__sep" aria-hidden="true">·</span>
-  <span class="presence__label" id="pc-presence-label">CONNECTING…</span>
+  <span class="presence__pill" id="pc-presence-pill">
+    <span class="presence__dot" aria-hidden="true"></span>
+    <span class="presence__you">YOU</span>
+    <span class="presence__count" id="pc-presence-label">·</span>
+  </span>
 </span>
 
 <script>
@@ -68,13 +72,20 @@
 
     ws.addEventListener('open', () => {
       if (degrade) clearTimeout(degrade);
-      setLabel('ON AIR');
+      setLabel('ALONE');
     });
 
     ws.addEventListener('message', (evt) => {
       try {
         const { humans, agents } = JSON.parse(evt.data);
-        setLabel(`HUMANS ${humans} · AGENTS ${agents}`);
+        // "YOU · +2 HUMANS · 1 AGENT" style — the YOU pill already
+        // indicates this visitor, so show others-only counts here.
+        const otherHumans = Math.max(0, (humans ?? 0) - (isAgent ? 0 : 1));
+        const otherAgents = Math.max(0, (agents ?? 0) - (isAgent ? 1 : 0));
+        const parts = [];
+        if (otherHumans > 0) parts.push(`+${otherHumans} ${otherHumans === 1 ? 'HUMAN' : 'HUMANS'}`);
+        if (otherAgents > 0) parts.push(`+${otherAgents} ${otherAgents === 1 ? 'AGENT' : 'AGENTS'}`);
+        setLabel(parts.length ? parts.join(' · ') : 'ALONE');
       } catch {}
     });
 
@@ -91,27 +102,67 @@
 <style>
   .presence {
     display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
     font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--pc-ink-muted);
   }
-  .presence__sep { color: var(--pc-rule); }
-  .presence__label::before {
-    content: "";
+
+  .presence__sep {
+    color: var(--pc-rule);
+  }
+
+  .presence__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid #C95C2E;
+    border-radius: 2px;
+    background: color-mix(in srgb, #C95C2E 6%, #fff);
+    color: #7a2e0d;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+
+  .presence__dot {
     display: inline-block;
-    width: 6px; height: 6px;
-    margin-right: 6px;
-    background: #C95C2E;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
+    background: #C95C2E;
     animation: pc-pulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .presence__you {
+    font-weight: 500;
+  }
+
+  .presence__count::before {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 9px;
+    margin: 0 6px -1px 2px;
+    background: currentColor;
+    opacity: 0.35;
     vertical-align: middle;
   }
+
   @keyframes pc-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.35; }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.15); }
+  }
+
+  @media (max-width: 620px) {
+    .presence__pill {
+      padding: 2px 6px;
+      font-size: 9.5px;
+    }
   }
 </style>
