@@ -1,0 +1,88 @@
+---
+/**
+ * /random — land on a random PointCast Block.
+ *
+ * Picks a block at build time (so static hosting works), emits a
+ * <meta http-equiv="refresh"> + client-side location.replace so the
+ * visitor is immediately redirected to the chosen block. Acts like a
+ * server 302 for human visitors without needing an edge function.
+ *
+ * Each build → a different landing target. Stable URL, moving redirect.
+ * Agents that parse the HTML can either follow the refresh or pull
+ * /random.json (which returns a fresh random pick on every request via
+ * the edge — actually, static too, but agents don't care).
+ *
+ * Agent-friendly: also carries JSON-LD pointing to the chosen block so
+ * an agent reading the page without following the redirect still gets
+ * structured data.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const pick = blocks[Math.floor(Math.random() * blocks.length)];
+const ch = CHANNELS[pick.data.channel];
+const targetUrl = `/b/${pick.data.id}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/random',
+  name: 'PointCast · random',
+  description: 'A random PointCast Block. Redirects on every visit.',
+  mainEntity: {
+    '@type': 'CreativeWork',
+    name: pick.data.title,
+    url: `https://pointcast.xyz${targetUrl}`,
+    identifier: pick.data.id,
+  },
+};
+---
+
+<BlockLayout
+  title="Random"
+  description="A random PointCast Block. Redirects on load."
+  jsonLd={jsonLd}
+>
+  <meta slot="head" http-equiv="refresh" content={`0; url=${targetUrl}`} />
+  <link slot="head" rel="canonical" href={`https://pointcast.xyz${targetUrl}`} />
+
+  <div class="page">
+    <p class="line mono">RANDOM · REDIRECTING TO</p>
+    <h1 class="dest">
+      <a href={targetUrl} style={`color: ${ch.color800}`}>CH.{ch.code} · № {pick.data.id} — {pick.data.title}</a>
+    </h1>
+    <p class="line mono">IF THE REDIRECT DOESN'T FIRE, TAP THE LINK ABOVE OR <a href="/random">ROLL AGAIN</a></p>
+  </div>
+
+  <script is:inline define:vars={{ targetUrl }}>
+    window.location.replace(targetUrl);
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 120px 24px;
+    text-align: center;
+  }
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 18px;
+  }
+  .mono a { color: var(--pc-accent); }
+  .dest {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    font-weight: 500;
+    margin: 0 0 24px;
+    line-height: 1.2;
+  }
+  .dest a { color: var(--pc-ink); }
+</style>
