@@ -75,6 +75,36 @@ const data = block.data;
 const channel = CHANNELS[data.channel];
 const typeSpec = BLOCK_TYPES[data.type];
 
+/** Extract a YouTube video id from any canonical URL shape. Returns null
+ *  when the url isn't YouTube (so callers can fall through to Vimeo, etc). */
+function youtubeIdFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/(?:embed\/|watch\?v=|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
+  return m ? m[1] : null;
+}
+
+function vimeoIdFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const m = url.match(/(?:vimeo\.com\/(?:video\/)?|player\.vimeo\.com\/video\/)(\d{5,})/);
+  return m ? m[1] : null;
+}
+
+/** If a WATCH block has a YouTube or Vimeo media.src but no explicit
+ *  thumbnail, derive one from the video id. Keeps block JSON minimal —
+ *  authors only need media.src and we compute the poster. */
+function resolveVideoThumbnail(): string | null {
+  if (data.type !== 'WATCH' || data.media?.kind !== 'embed') return null;
+  const explicit = (data.media as any).thumbnail;
+  if (explicit) return explicit;
+  const ytId = youtubeIdFromUrl(data.media.src) ?? youtubeIdFromUrl(data.external?.url);
+  if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+  const vId = vimeoIdFromUrl(data.media.src) ?? vimeoIdFromUrl(data.external?.url);
+  if (vId) return `https://vumbnail.com/${vId}.jpg`;
+  return null;
+}
+
+const videoThumbnail = resolveVideoThumbnail();
+
 // Compact timestamp: "04.17 · 07:22 PT"
 const ts = data.timestamp;
 const fmt = new Intl.DateTimeFormat('en-US', {
@@ -260,12 +290,13 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
         </div>
       ) : (
         <div class="block-card__video-facade" aria-hidden="true">
-          {(data.media as any).thumbnail ? (
+          {videoThumbnail ? (
             <img
-              src={(data.media as any).thumbnail}
+              src={videoThumbnail}
               alt=""
               loading="lazy"
               class="block-card__video-poster"
+              onerror="this.style.display='none'; this.parentElement.classList.add('block-card__video-facade--poster-failed');"
             />
           ) : (
             <div class="block-card__video-poster block-card__video-poster--empty"></div>
