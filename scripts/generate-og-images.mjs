@@ -402,6 +402,19 @@ const PAGES = [
     glyphSize: 260,
     siblings: ['/beacon.json', '/b/0244', '/dao'],
   },
+  {
+    slug: 'ai-stack',
+    url: '/ai-stack',
+    kind: 'best practices',
+    kicker: 'AI STACK · BEST PRACTICES',
+    title: 'What we reach for.',
+    dek: '24 AI tools opinionated + tiered. Claude, Midjourney, Ideogram, DeepSeek, Kimi, Runway, ElevenLabs, Suno, more.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: 'AI',
+    glyphSize: 260,
+    siblings: ['/ai-stack.json', '/stack', '/for-agents'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {

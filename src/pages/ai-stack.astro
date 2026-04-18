@@ -1,0 +1,543 @@
+---
+/**
+ * /ai-stack — PointCast's AI tools best-practices guide.
+ *
+ * Mike 2026-04-18: "a best practices ai guide, and our current stack
+ * what we use, including midjourney, ideogram and any others you can
+ * think, deepseek, kimi, runway, etc, tried a bunch and what they are
+ * good at."
+ *
+ * Companion to /stack (which covers the software/infrastructure layer).
+ * This one covers AI tools: what we reach for, what each is good at,
+ * and when NOT to reach for it.
+ *
+ * Entries are hand-curated not scraped — this is a POV, not a directory.
+ * If you're building something similar, the recommendations are
+ * opinionated. Take what's useful, ignore the rest.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Tool {
+  name: string;
+  maker: string;
+  url?: string;
+  category: string;
+  goodAt: string;
+  reachFor: string;
+  avoidFor?: string;
+  mikesTake?: string;
+  pointcastUses?: string;
+  tier: 'daily' | 'weekly' | 'occasional' | 'watching';
+}
+
+const TOOLS: Tool[] = [
+  // ══ LANGUAGE · CHAT ══
+  {
+    name: 'Claude',
+    maker: 'Anthropic',
+    url: 'https://claude.ai',
+    category: 'Language · chat',
+    goodAt: 'Long-form reasoning, writing that reads like writing, coding with context. Best-in-class at staying inside the intent of a multi-turn conversation.',
+    reachFor: 'Dispatches, technical docs, architectural debates, anything where tone + structure matter. Claude Code (the CLI) for engineering work with 1M-context.',
+    avoidFor: 'Image gen, video, real-time search-augmented answers.',
+    mikesTake: 'The default. Claude Opus 4.7 (1M) carries most of the PointCast code + content work.',
+    pointcastUses: 'Primary engineer (Claude Code), content co-author, Mike\'s daily chat.',
+    tier: 'daily',
+  },
+  {
+    name: 'ChatGPT',
+    maker: 'OpenAI',
+    url: 'https://chatgpt.com',
+    category: 'Language · chat',
+    goodAt: 'Broad general knowledge, consistent formatting, image+text multimodal, voice mode. The baseline.',
+    reachFor: 'Quick answers, formatted lists, scripts, voice conversations while walking.',
+    avoidFor: 'Long-form with persistent tone, highly specialized coding over many files.',
+    mikesTake: 'Strong. Different mouthfeel than Claude — ChatGPT feels more like a product, Claude more like a colleague. Both earn their keep.',
+    pointcastUses: 'Cross-check, image-prompt refinement, occasional voice brainstorms.',
+    tier: 'weekly',
+  },
+  {
+    name: 'Gemini',
+    maker: 'Google',
+    url: 'https://gemini.google.com',
+    category: 'Language · chat',
+    goodAt: 'Massive context windows (1M+ native). Google-grounded facts. Integrated search.',
+    reachFor: 'Ingesting very large documents. Research with real-time grounding.',
+    avoidFor: 'Creative writing with a strong voice — tends toward generic.',
+    mikesTake: 'Underrated for raw reading-of-huge-docs tasks. Voice stays bland.',
+    pointcastUses: 'Occasional — when a brief PDF or transcript is too large for Claude.',
+    tier: 'occasional',
+  },
+  {
+    name: 'DeepSeek',
+    maker: 'DeepSeek',
+    url: 'https://chat.deepseek.com',
+    category: 'Language · chat',
+    goodAt: 'Math, reasoning chains, coding. Best open-weights-ish model in the wild for problem-solving.',
+    reachFor: 'Algorithm reasoning, optimization puzzles, any problem where a long chain-of-thought helps.',
+    avoidFor: 'Creative writing with style. Tone is utilitarian.',
+    mikesTake: 'The moment when a non-US lab proved state of the art was real. Tried a bunch; DeepSeek R1 surprised.',
+    pointcastUses: 'Second opinion on tricky code diffs. Occasional.',
+    tier: 'occasional',
+  },
+  {
+    name: 'Kimi',
+    maker: 'Moonshot AI',
+    url: 'https://kimi.com',
+    category: 'Language · chat',
+    goodAt: 'Very long context (up to 2M tokens). Strong Chinese-language work. Good at document Q&A.',
+    reachFor: 'When you need to stuff an entire book into a single chat + ask structured questions.',
+    avoidFor: 'English-first creative writing; not the strongest voice.',
+    mikesTake: 'The context window is genuinely useful. Tried it for feeding whole repos.',
+    pointcastUses: 'Experimentally.',
+    tier: 'watching',
+  },
+
+  // ══ CODE ══
+  {
+    name: 'Claude Code',
+    maker: 'Anthropic',
+    url: 'https://claude.com/claude-code',
+    category: 'Code · engineering',
+    goodAt: 'Multi-hour autonomous sessions with file system + shell access. 1M context retains whole-repo understanding.',
+    reachFor: 'Shipping features end-to-end. Reading + editing dozens of files. Running build/test loops.',
+    avoidFor: 'Nothing for us — this is the engine.',
+    mikesTake: 'The agent that wrote 90% of the code you\'re looking at. Signed blocks as "Claude Code" in the VISIT channel.',
+    pointcastUses: 'Primary engineer. All day.',
+    tier: 'daily',
+  },
+  {
+    name: 'Codex',
+    maker: 'OpenAI',
+    url: 'https://openai.com/codex',
+    category: 'Code · engineering',
+    goodAt: 'Independent code review. Alternative UI passes. Opinionated critiques.',
+    reachFor: 'Second-pair-of-eyes on a Claude Code diff. Reviewing PRs before merge.',
+    avoidFor: 'Long autonomous sessions — concurrent xhigh runs silently hang (observed on PointCast 2026-04-17). Medium reasoning, serial only.',
+    mikesTake: 'Complementary, not competitive. Use for review, not for shipping.',
+    pointcastUses: 'Reviewer role. Wrote battle.astro\'s Phase 2 pass.',
+    tier: 'weekly',
+  },
+  {
+    name: 'Cursor',
+    maker: 'Anysphere',
+    url: 'https://cursor.com',
+    category: 'Code · engineering',
+    goodAt: 'Editor-integrated AI completions + chat. Real-time multi-file context in a familiar IDE shape.',
+    reachFor: 'Traditional IDE-first workflows where you want AI assists inline.',
+    avoidFor: 'When you want the model to actually run commands + iterate.',
+    mikesTake: 'Great for devs who prefer not leaving VSCode. PointCast leans more CLI.',
+    pointcastUses: 'Occasional.',
+    tier: 'occasional',
+  },
+
+  // ══ IMAGE ══
+  {
+    name: 'Midjourney',
+    maker: 'Midjourney',
+    url: 'https://midjourney.com',
+    category: 'Image · generation',
+    goodAt: 'Painterly quality. Strong aesthetic defaults. Reliable composition. Prompt weighting syntax is mature.',
+    reachFor: 'Hero imagery, dispatch cover art, anything where you want the output to feel like it was made on purpose.',
+    avoidFor: 'Text inside images (weak), precise logo work, photoreal portraits of specific people.',
+    mikesTake: 'The best image model for *aesthetic* intent. v7 got even better. Discord-only workflow is dated but tolerable.',
+    pointcastUses: 'Dispatch hero images (when we have them). Cover art experiments.',
+    tier: 'weekly',
+  },
+  {
+    name: 'Ideogram',
+    maker: 'Ideogram AI',
+    url: 'https://ideogram.ai',
+    category: 'Image · generation',
+    goodAt: 'Typography inside images. Nails text-in-graphics where Midjourney stumbles. Clean vector-feel output.',
+    reachFor: 'Anything with words on it — posters, social cards, logotype sketches, magazine-style covers.',
+    avoidFor: 'Painterly / stylized outputs — Midjourney wins there.',
+    mikesTake: 'The text model. Uses it anytime a composition needs legible words.',
+    pointcastUses: 'Typographic experiments, block cover drafts with words.',
+    tier: 'weekly',
+  },
+  {
+    name: 'Flux',
+    maker: 'Black Forest Labs',
+    url: 'https://blackforestlabs.ai',
+    category: 'Image · generation',
+    goodAt: 'Photoreal. Open weights variant available. Fast.',
+    reachFor: 'When you need a photo-ish rendering and want to run it locally or via an API.',
+    avoidFor: 'Strong aesthetic direction out of the box — feels more utility than art.',
+    mikesTake: 'Underrated. The Schnell variant is genuinely fast.',
+    pointcastUses: 'Occasional.',
+    tier: 'occasional',
+  },
+  {
+    name: 'DALL-E / gpt-image',
+    maker: 'OpenAI',
+    url: 'https://chatgpt.com',
+    category: 'Image · generation',
+    goodAt: 'Integrated with ChatGPT — iterate on an image via conversation. Good at following precise instructions.',
+    reachFor: 'Quick one-offs inside a ChatGPT session, iterative refinement.',
+    avoidFor: 'Aesthetic depth — Midjourney outclasses here.',
+    mikesTake: 'Convenient but not the go-to for hero art.',
+    pointcastUses: 'Quick mockups.',
+    tier: 'occasional',
+  },
+
+  // ══ VIDEO ══
+  {
+    name: 'Runway',
+    maker: 'Runway',
+    url: 'https://runwayml.com',
+    category: 'Video · generation',
+    goodAt: 'Image-to-video, text-to-video, motion brush, green-screen extraction. The toolkit for creative video work.',
+    reachFor: 'Turn a Midjourney still into a 4-10 second video clip. Loopable atmospheric shots.',
+    avoidFor: 'Long-form coherent video. Multi-shot scenes. Lip-sync.',
+    mikesTake: 'Gen-4 is the current favorite. Price is the bottleneck for volume.',
+    pointcastUses: 'Experimental video content — not yet on PointCast, but will be for WATCH blocks.',
+    tier: 'occasional',
+  },
+  {
+    name: 'Sora',
+    maker: 'OpenAI',
+    url: 'https://sora.com',
+    category: 'Video · generation',
+    goodAt: 'Longer, more coherent shots. Strong physics simulation. Multi-subject composition.',
+    reachFor: 'Short narrative clips. Physics-heavy scenes (water, fabric, crowds).',
+    avoidFor: 'Fine control — Runway has better editing tools on top.',
+    mikesTake: 'The coherence bar moved with Sora. Tight rollout limits it for now.',
+    pointcastUses: 'Tried experimentally.',
+    tier: 'watching',
+  },
+  {
+    name: 'Kling',
+    maker: 'Kuaishou',
+    url: 'https://klingai.com',
+    category: 'Video · generation',
+    goodAt: 'Fast, cheap, decent quality. Competitive with Runway at a fraction of the price.',
+    reachFor: 'High-volume iteration before committing to a final Runway render.',
+    avoidFor: 'Peak quality for showcase work.',
+    mikesTake: 'Worth trying. The price-performance is real.',
+    pointcastUses: 'Occasional.',
+    tier: 'occasional',
+  },
+  {
+    name: 'Pika',
+    maker: 'Pika Labs',
+    url: 'https://pika.art',
+    category: 'Video · generation',
+    goodAt: 'Playful, stylized video. Strong "modifier" features (lip-sync, pan, zoom).',
+    reachFor: 'Fun/stylized clips. Not attempting photoreal.',
+    avoidFor: 'Photoreal — that is Runway/Sora territory.',
+    mikesTake: 'The character-style generator in the video category.',
+    pointcastUses: 'Experimental.',
+    tier: 'occasional',
+  },
+
+  // ══ RESEARCH / SEARCH ══
+  {
+    name: 'Perplexity',
+    maker: 'Perplexity',
+    url: 'https://perplexity.ai',
+    category: 'Research · search',
+    goodAt: 'Search-grounded answers with citations. Fast summarization of current events.',
+    reachFor: 'Any question where you need today\'s answer, not a 2024 answer.',
+    avoidFor: 'Deep reasoning — it prefers fast synthesis over depth.',
+    mikesTake: 'The replacement for "I google this then open 5 tabs and read."',
+    pointcastUses: 'Daily for research, fact-checking, Tezos ecosystem updates.',
+    tier: 'daily',
+  },
+  {
+    name: 'Claude · web search',
+    maker: 'Anthropic',
+    url: 'https://claude.ai',
+    category: 'Research · search',
+    goodAt: 'Deeper-reasoning web search inside a long Claude session.',
+    reachFor: 'When you\'re mid-convo with Claude and need a fact added mid-stream.',
+    avoidFor: 'Speed-optimized search — Perplexity is faster.',
+    mikesTake: 'The search feels integrated rather than bolted on.',
+    pointcastUses: 'Inside Claude Code sessions for live API docs, etc.',
+    tier: 'weekly',
+  },
+
+  // ══ AGENTS / COMPUTER USE ══
+  {
+    name: 'Manus',
+    maker: 'Manus',
+    url: 'https://manus.im',
+    category: 'Agent · computer use',
+    goodAt: 'Real browser sessions. Logged-in operations. End-to-end workflows a UI requires.',
+    reachFor: 'GSC registration, deploy settings, social posting, objkt admin, anything with authentication walls.',
+    avoidFor: 'Code engineering — different stack.',
+    mikesTake: 'The operations agent. Does the things Claude Code can\'t reach.',
+    pointcastUses: 'Ops lane — see docs/briefs/*-manus-*.md for current queue.',
+    tier: 'weekly',
+  },
+  {
+    name: 'Claude Agent (Anthropic)',
+    maker: 'Anthropic',
+    url: 'https://docs.claude.com/en/agents',
+    category: 'Agent · computer use',
+    goodAt: 'Sub-agent spawning from within Claude Code for parallel work. Structured tool-use patterns.',
+    reachFor: 'Delegating research or review inside a larger Claude Code session.',
+    avoidFor: 'Outside-application workflows.',
+    mikesTake: 'Underused so far. Probably the next area to explore for multi-agent ops inside the same session.',
+    pointcastUses: 'Experimentally within Claude Code.',
+    tier: 'occasional',
+  },
+  {
+    name: 'OpenAI Operator / Computer Use',
+    maker: 'OpenAI',
+    url: 'https://openai.com/operator',
+    category: 'Agent · computer use',
+    goodAt: 'GUI-driven web tasks with OpenAI models behind it.',
+    reachFor: 'If you\'re already in the OpenAI ecosystem.',
+    avoidFor: 'Complex flows — Manus is more production-ready in our experience.',
+    mikesTake: 'Worth trying; Manus is the lead so far.',
+    pointcastUses: 'Tested; not adopted.',
+    tier: 'watching',
+  },
+
+  // ══ AUDIO / VOICE ══
+  {
+    name: 'ElevenLabs',
+    maker: 'ElevenLabs',
+    url: 'https://elevenlabs.io',
+    category: 'Audio · voice',
+    goodAt: 'Voice cloning. Text-to-speech that passes for human. Multilingual.',
+    reachFor: 'Audio dispatches. Narration.',
+    avoidFor: 'Music composition.',
+    mikesTake: 'The voice model. v3 is borderline indistinguishable.',
+    pointcastUses: 'Experimental — no PointCast voice dispatches yet.',
+    tier: 'occasional',
+  },
+  {
+    name: 'Suno',
+    maker: 'Suno',
+    url: 'https://suno.com',
+    category: 'Audio · music',
+    goodAt: 'Song generation — music + vocals from a prompt. Fast iteration.',
+    reachFor: 'Jingles, bed music, quick demo tracks.',
+    avoidFor: 'Professional studio production.',
+    mikesTake: 'The Violent Crimes Noun-voice tribute (Block 0219) was partially this.',
+    pointcastUses: 'Experimental.',
+    tier: 'occasional',
+  },
+  {
+    name: 'Hume AI',
+    maker: 'Hume',
+    url: 'https://hume.ai',
+    category: 'Audio · voice',
+    goodAt: 'Emotionally expressive voice with detected prosody. Conversational AI that matches your emotional tone.',
+    reachFor: 'When voice UX matters more than textual accuracy.',
+    avoidFor: 'Simple TTS — overkill.',
+    mikesTake: 'Watching. Use case is narrower than ElevenLabs but specific.',
+    pointcastUses: 'Watching.',
+    tier: 'watching',
+  },
+];
+
+const categories = Array.from(new Set(TOOLS.map((t) => t.category)));
+const tierOrder = ['daily', 'weekly', 'occasional', 'watching'] as const;
+
+function tierLabel(t: string): string {
+  const labels: Record<string, string> = {
+    daily: 'DAILY',
+    weekly: 'WEEKLY',
+    occasional: 'OCCASIONAL',
+    watching: 'WATCHING',
+  };
+  return labels[t] ?? t.toUpperCase();
+}
+
+const byCategory: Record<string, Tool[]> = {};
+for (const t of TOOLS) {
+  byCategory[t.category] = byCategory[t.category] ?? [];
+  byCategory[t.category].push(t);
+}
+for (const cat of Object.keys(byCategory)) {
+  byCategory[cat].sort((a, b) => tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier));
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  '@id': 'https://pointcast.xyz/ai-stack',
+  name: 'PointCast AI stack — best-practices guide',
+  description: `What AI tools PointCast uses, what each is good at, when to reach for them. ${TOOLS.length} tools documented across ${categories.length} categories.`,
+  url: 'https://pointcast.xyz/ai-stack',
+};
+---
+
+<BlockLayout
+  title="AI stack"
+  description={`Best-practices guide to the AI tools PointCast uses — what each is good at, when to reach for them. ${TOOLS.length} tools across ${categories.length} categories.`}
+  image="/images/og/ai-stack.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/ai-stack.json', title: 'AI stack (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>ai-stack</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">AI STACK · BEST PRACTICES · {TOOLS.length} TOOLS</p>
+      <h1 class="display">What we reach for.</h1>
+      <p class="dek">
+        A hand-curated working list. Not a directory. What each AI tool
+        is good at, when to reach for it, when not to. Opinionated —
+        this is our stack, not your stack. Take what's useful.
+      </p>
+    </header>
+
+    <section class="legend">
+      <p class="legend__label mono">USAGE TIER</p>
+      <ul>
+        <li><span class="tag tag--daily">DAILY</span> — core tool, reached for constantly</li>
+        <li><span class="tag tag--weekly">WEEKLY</span> — routine use for specific tasks</li>
+        <li><span class="tag tag--occasional">OCCASIONAL</span> — when the job calls for it</li>
+        <li><span class="tag tag--watching">WATCHING</span> — tested, not yet adopted</li>
+      </ul>
+    </section>
+
+    {Object.keys(byCategory).map((cat) => (
+      <section class="category">
+        <header class="category__head">
+          <h2 class="category__title">{cat}</h2>
+          <p class="category__count mono">{byCategory[cat].length} tools</p>
+        </header>
+        <div class="tools">
+          {byCategory[cat].map((t) => (
+            <article class={`tool tool--${t.tier}`}>
+              <header class="tool__head">
+                <span class={`tag tag--${t.tier}`}>{tierLabel(t.tier)}</span>
+                {t.url ? (
+                  <h3 class="tool__name"><a href={t.url} target="_blank" rel="noopener">{t.name} ↗</a></h3>
+                ) : (
+                  <h3 class="tool__name">{t.name}</h3>
+                )}
+                <span class="tool__maker mono">{t.maker}</span>
+              </header>
+              <dl class="tool__facts">
+                <div>
+                  <dt class="mono">GOOD AT</dt>
+                  <dd>{t.goodAt}</dd>
+                </div>
+                <div>
+                  <dt class="mono">REACH FOR</dt>
+                  <dd>{t.reachFor}</dd>
+                </div>
+                {t.avoidFor && (
+                  <div>
+                    <dt class="mono">AVOID FOR</dt>
+                    <dd>{t.avoidFor}</dd>
+                  </div>
+                )}
+                {t.mikesTake && (
+                  <div>
+                    <dt class="mono">MH TAKE</dt>
+                    <dd class="tool__take">{t.mikesTake}</dd>
+                  </div>
+                )}
+                {t.pointcastUses && (
+                  <div>
+                    <dt class="mono">POINTCAST</dt>
+                    <dd>{t.pointcastUses}</dd>
+                  </div>
+                )}
+              </dl>
+            </article>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    <section class="principles">
+      <p class="kicker">PRINCIPLES · HOW WE PICK</p>
+      <ol>
+        <li><strong>Voice fit first.</strong> Claude reads like a colleague. ChatGPT reads like a product. Pick the one whose voice aligns with how you think.</li>
+        <li><strong>Use the best model for the job, not the one in the subscription.</strong> Pay for two at once if that's what the work needs. A bad output on the wrong model costs more than the second sub.</li>
+        <li><strong>Code needs tool-use, not just completion.</strong> Claude Code over Claude-the-chat for anything spanning files.</li>
+        <li><strong>Image aesthetics ≠ image function.</strong> Midjourney for feel, Ideogram for text, Flux for photo.</li>
+        <li><strong>Video is in its Sora-moment.</strong> Coherence is moving fast. Experiment quarterly — the leader shifts.</li>
+        <li><strong>Agents are a layer, not a product.</strong> Manus for ops, Claude Code for engineering, Codex for review. Different stacks, same workflow.</li>
+      </ol>
+    </section>
+
+    <aside class="surfaces">
+      <p class="kicker">RELATED</p>
+      <ul class="surfaces__list">
+        <li><a href="/stack"><span class="mono">TECH</span> /stack</a></li>
+        <li><a href="/manifesto"><span class="mono">CANON</span> /manifesto</a></li>
+        <li><a href="/for-agents"><span class="mono">AGENTS</span> /for-agents</a></li>
+        <li><a href="/ai-stack.json"><span class="mono">JSON</span> /ai-stack.json</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page { max-width: 900px; margin: 0 auto; padding: 18px 16px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .kicker { font-family: var(--pc-font-mono); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 8px; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: 18px; display: flex; gap: 8px; }
+
+  .hero { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1.5px solid var(--pc-ink); }
+  .display { font-family: var(--pc-font-sans); font-size: clamp(2.2rem, 9vw, 4rem); font-weight: 500; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .dek { margin: 0; font-size: 15.5px; line-height: 1.5; color: var(--pc-ink-soft); max-width: 58ch; }
+
+  .legend { margin-bottom: 20px; padding: 12px 14px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  .legend__label { color: var(--pc-ink-muted); font-size: 9.5px; margin: 0 0 8px; }
+  .legend ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .legend li { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--pc-ink-soft); }
+
+  @media (min-width: 720px) {
+    .legend ul { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .tag { display: inline-flex; padding: 2px 7px; border: 1px solid; border-radius: 2px; font-family: var(--pc-font-mono); font-size: 9.5px; letter-spacing: 0.14em; font-weight: 500; }
+  .tag--daily      { color: #0F6E56; border-color: #0F6E56; background: #E7F4EF; }
+  .tag--weekly     { color: #185FA5; border-color: #185FA5; background: #EEF4FA; }
+  .tag--occasional { color: #BA7517; border-color: #BA7517; background: #FBF1E1; }
+  .tag--watching   { color: #5F5E5A; border-color: var(--pc-rule); background: #fff; }
+
+  .category { margin-bottom: 28px; }
+  .category__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1.5px solid var(--pc-ink); }
+  .category__title { margin: 0; font-family: var(--pc-font-sans); font-size: 22px; font-weight: 500; color: var(--pc-ink); }
+  .category__count { color: var(--pc-ink-muted); font-size: 9.5px; }
+
+  .tools { display: grid; gap: 12px; }
+
+  .tool { padding: 14px 16px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fff; }
+  .tool--daily    { border-left: 3px solid #0F6E56; }
+  .tool--weekly   { border-left: 3px solid #185FA5; }
+  .tool--occasional { border-left: 3px solid #BA7517; }
+  .tool--watching { border-left: 3px solid var(--pc-rule); }
+
+  .tool__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tool__name { margin: 0; font-family: var(--pc-font-sans); font-size: 17px; font-weight: 500; color: var(--pc-ink); flex: 1; min-width: 0; }
+  .tool__name a { color: inherit; }
+  .tool__name a:hover { color: var(--pc-accent); }
+  .tool__maker { color: var(--pc-ink-muted); font-size: 9.5px; }
+
+  .tool__facts { margin: 0; display: grid; gap: 8px; }
+  .tool__facts > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: baseline; }
+  .tool__facts dt { margin: 0; color: var(--pc-ink-muted); font-size: 9.5px; }
+  .tool__facts dd { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--pc-ink); }
+  .tool__facts dd.tool__take { font-style: italic; color: var(--pc-ink-soft); }
+
+  @media (max-width: 560px) {
+    .tool__facts > div { grid-template-columns: 1fr; gap: 2px; }
+  }
+
+  .principles { margin: 28px 0; padding: 16px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  .principles ol { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+  .principles li { font-size: 14px; line-height: 1.55; color: var(--pc-ink-soft); }
+  .principles li strong { font-weight: 500; color: var(--pc-ink); }
+
+  .surfaces { padding: 14px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  .surfaces__list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; }
+  .surfaces__list a { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--pc-accent); padding: 4px 0; }
+  .surfaces__list .mono { color: var(--pc-ink-muted); min-width: 56px; }
+  @media (min-width: 640px) { .surfaces__list { grid-template-columns: repeat(4, 1fr); } }
+</style>
