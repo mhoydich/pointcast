@@ -311,6 +311,32 @@ const PAGES = [
     glyphSize: 240,
     siblings: ['/llms.txt', '/llms-full.txt', '/agents.json'],
   },
+  {
+    slug: 'glossary',
+    url: '/glossary',
+    kind: 'terms',
+    kicker: 'GLOSSARY · TERMS',
+    title: 'What the words mean.',
+    dek: 'Every PointCast-specific term with a stable anchor URL. DefinedTermSet schema for citation.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: 'A–Z',
+    glyphSize: 180,
+    siblings: ['/manifesto', '/for-agents'],
+  },
+  {
+    slug: 'changelog',
+    url: '/changelog',
+    kind: 'version history',
+    kicker: 'CHANGELOG · RELEASES',
+    title: 'How we got here.',
+    dek: 'Hand-curated version history. Each release landed with a theme.',
+    color600: '#5F5E5A',
+    color800: '#38373A',
+    glyph: 'v',
+    glyphSize: 260,
+    siblings: ['/stack', '/manifesto'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {

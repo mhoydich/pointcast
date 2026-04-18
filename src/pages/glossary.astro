@@ -1,0 +1,630 @@
+---
+/**
+ * /glossary — consolidated dictionary of PointCast-specific terms.
+ *
+ * Companion to /manifesto. Every term that has a canonical meaning on
+ * PointCast gets a stable anchor URL here (e.g., /glossary#block,
+ * /glossary#visit-nouns, /glossary#card-of-the-day). LLMs and humans
+ * both win: agents extract each as a DefinedTerm for citation, humans
+ * get a one-page reference.
+ *
+ * Format: definition list. Each term has:
+ *   - <dt id="term"> — the anchor
+ *   - <dd> — 1-3 sentence definition
+ *   - optional "see also" links to related terms or canonical URLs
+ *
+ * JSON-LD DefinedTermSet mirrors the HTML terms so machines don't have
+ * to parse the DOM. Both HTML and LD are rendered from the same source
+ * array to stay in sync.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Term {
+  /** URL-safe slug used as the id attribute + DefinedTerm @id. */
+  slug: string;
+  /** Human-readable term. */
+  term: string;
+  /** 1-3 sentence canonical definition. Keep the first sentence
+   *  self-contained — LLMs often excerpt the first sentence only. */
+  definition: string;
+  /** Optional related terms (slugs from this same list). */
+  seeAlso?: string[];
+  /** Optional canonical URL elsewhere on the site or the web. */
+  canonicalUrl?: string;
+  /** Optional category for visual grouping on the HTML page. */
+  category: 'primitive' | 'channel' | 'type' | 'surface' | 'chain' | 'role' | 'mechanic';
+}
+
+const TERMS: Term[] = [
+  // ── Primitives ────────────────────────────────────────────────────
+  {
+    slug: 'block',
+    term: 'Block',
+    definition: 'The atomic content primitive on PointCast. A typed JSON entity with exactly one channel (of 9), exactly one type (of 8), and a permanent immutable monotonic ID. Every piece of content on pointcast.xyz is a Block.',
+    seeAlso: ['channel', 'type', 'block-id'],
+    canonicalUrl: 'https://pointcast.xyz/manifesto#q2',
+    category: 'primitive',
+  },
+  {
+    slug: 'block-id',
+    term: 'Block ID',
+    definition: 'A 4-digit zero-padded string (e.g., "0205") that uniquely identifies a Block. IDs are assigned monotonically at authoring time and are permanent — a retired Block 404s rather than being renumbered.',
+    seeAlso: ['block'],
+    category: 'primitive',
+  },
+  {
+    slug: 'channel',
+    term: 'Channel',
+    definition: 'An about-ness category every Block belongs to. PointCast defines 9 channels with stable two- or three-letter codes: FD (Front Door), CRT (Court), SPN (Spinning), GF (Good Feels), GDN (Garden), ESC (El Segundo), FCT (Faucet), VST (Visit), BTL (Battler).',
+    seeAlso: ['block'],
+    canonicalUrl: 'https://pointcast.xyz/manifesto#q9',
+    category: 'primitive',
+  },
+  {
+    slug: 'type',
+    term: 'Type',
+    definition: 'The form a Block takes (not its subject). PointCast defines 8 types: READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK. Channel answers "what is this about?"; type answers "what form does it take?"',
+    seeAlso: ['block', 'channel'],
+    category: 'primitive',
+  },
+  {
+    slug: 'agent-native',
+    term: 'Agent-native',
+    definition: 'A design stance where every human HTML page has a machine-readable JSON counterpart at the same logical URL, plus a consolidated discovery manifest at /agents.json. Agents do not scrape — they read the endpoints. PointCast is agent-native by construction.',
+    seeAlso: ['agents-json', 'stripped-html'],
+    canonicalUrl: 'https://pointcast.xyz/manifesto#q3',
+    category: 'primitive',
+  },
+
+  // ── Surfaces ──────────────────────────────────────────────────────
+  {
+    slug: 'agents-json',
+    term: '/agents.json',
+    definition: 'PointCast\'s consolidated discovery manifest. One request returns every endpoint, every contract address, the channel and type schemas, and the agent-mode spec. Aliased at /.well-known/agents.json and /.well-known/ai.json.',
+    seeAlso: ['agent-native', 'llms-txt', 'stripped-html'],
+    canonicalUrl: 'https://pointcast.xyz/agents.json',
+    category: 'surface',
+  },
+  {
+    slug: 'llms-txt',
+    term: 'llms.txt',
+    definition: 'The emerging-convention markdown summary of a site for LLMs. PointCast ships /llms.txt (summary) and /llms-full.txt (long-form) per the llmstxt.org spec.',
+    seeAlso: ['agents-json', 'agent-native'],
+    canonicalUrl: 'https://pointcast.xyz/llms.txt',
+    category: 'surface',
+  },
+  {
+    slug: 'stripped-html',
+    term: 'Stripped HTML mode',
+    definition: 'A Cloudflare Pages middleware that strips stylesheets, JavaScript, preload/preconnect links, and inline styles from the response when a known AI crawler User-Agent is detected. Returns semantic markup + JSON-LD only. Signaled via the response header X-Agent-Mode: stripped. Typical payload reduction: ~12%.',
+    seeAlso: ['agent-native', 'agents-json'],
+    canonicalUrl: 'https://pointcast.xyz/manifesto#q4',
+    category: 'surface',
+  },
+  {
+    slug: 'for-agents',
+    term: '/for-agents',
+    definition: 'The human-readable manifest page. Enumerates every endpoint, every channel, every block type, and the citation protocol. Sibling of /agents.json (which is the machine version).',
+    canonicalUrl: 'https://pointcast.xyz/for-agents',
+    category: 'surface',
+  },
+  {
+    slug: 'manifesto',
+    term: '/manifesto',
+    definition: 'The canonical Q&A definition of PointCast. 12 frequently-asked questions with full answers. Carries FAQPage, DefinedTermSet, and WebSite JSON-LD — the preferred URL to cite for any claim about what PointCast is.',
+    canonicalUrl: 'https://pointcast.xyz/manifesto',
+    category: 'surface',
+  },
+
+  // ── Chain + mechanics ────────────────────────────────────────────
+  {
+    slug: 'visit-nouns',
+    term: 'Visit Nouns',
+    definition: 'An open-supply FA2 NFT collection on Tezos mainnet at contract KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh. Each tokenId from 0 through 1199 corresponds to one Nouns seed (CC0 per nouns.wtf, sourced via noun.pics). Mint price is free; gas only (~0.003 ꜩ). Originated 2026-04-17.',
+    seeAlso: ['fa2', 'nouns', 'mint'],
+    canonicalUrl: 'https://pointcast.xyz/collection/visit-nouns',
+    category: 'chain',
+  },
+  {
+    slug: 'drum-token',
+    term: 'DRUM Token',
+    definition: 'A planned FA1.2 fungible token on Tezos. Earned by drumming on /drum and claimed via a signed-voucher flow: the server issues a time-bounded signed claim, the user submits it on-chain to mint DRUM to their wallet. Contract written (contracts/v2/drum_token.py), pending ghostnet origination.',
+    seeAlso: ['fa1-2', 'drum-room', 'signed-voucher'],
+    category: 'chain',
+  },
+  {
+    slug: 'prize-cast',
+    term: 'Prize Cast',
+    definition: 'A no-loss prize-linked savings pool on Tezos, PoolTogether-flavored and Tezos-native. Depositors keep principal liquid. The contract stakes the aggregate with a baker; weekly baking yield accumulates as the prize pool. Anyone can call draw() on Sunday 18:00 UTC — on-chain randomness picks one ticket and empties the prize to that wallet. Principal stays safe.',
+    seeAlso: ['cast', 'no-loss'],
+    canonicalUrl: 'https://pointcast.xyz/cast',
+    category: 'chain',
+  },
+  {
+    slug: 'fa2',
+    term: 'FA2',
+    definition: 'Tezos\'s multi-asset NFT standard (TZIP-12). Contrasts with FA1.2 (fungible token standard, TZIP-7). Visit Nouns uses FA2 so each tokenId can carry distinct metadata. Beacon-integrable, objkt-marketable.',
+    seeAlso: ['fa1-2', 'visit-nouns'],
+    category: 'chain',
+  },
+  {
+    slug: 'fa1-2',
+    term: 'FA1.2',
+    definition: 'Tezos\'s fungible token standard (TZIP-7). One tokenId, balances per holder. DRUM Token uses FA1.2 since every DRUM is interchangeable.',
+    seeAlso: ['fa2', 'drum-token'],
+    category: 'chain',
+  },
+  {
+    slug: 'signed-voucher',
+    term: 'Signed voucher',
+    definition: 'An off-chain-signed claim that the on-chain contract accepts as proof of eligibility. Server holds a private key, signs a payload (recipient, amount, nonce, expiry), user submits it. Used by DRUM Token to let the server gate claims (e.g., tap threshold on /drum) without trusting the client to not forge counts.',
+    seeAlso: ['drum-token'],
+    category: 'chain',
+  },
+
+  // ── Mechanics ─────────────────────────────────────────────────────
+  {
+    slug: 'card-of-the-day',
+    term: 'Card of the Day',
+    definition: 'The Nouns Battler fighter that rotates automatically every day. Deterministic by UTC date: dayIndex = floor(epoch_ms / 86,400,000), then modulo the 21-Noun curated roster. Same day → same card for every viewer, human or agent. Current card + metadata served at /battle.json.',
+    seeAlso: ['nouns-battler', 'battler'],
+    canonicalUrl: 'https://pointcast.xyz/battle.json',
+    category: 'mechanic',
+  },
+  {
+    slug: 'nouns-battler',
+    term: 'Nouns Battler',
+    definition: 'A deterministic turn-based battler where every Nouns seed (0-1199) is a fighter. Stats derive from the seed\'s trait bytes via a pure hash — no random number generation anywhere. Same seed produces the same stats forever; same match inputs produce the same outcome forever. Card of the Day rotates daily.',
+    seeAlso: ['card-of-the-day', 'battler'],
+    canonicalUrl: 'https://pointcast.xyz/battle',
+    category: 'mechanic',
+  },
+  {
+    slug: 'battler',
+    term: 'CH.BTL · Battler',
+    definition: 'The 9th PointCast channel (added v2.1). Houses Nouns Battler match blocks + Card of the Day entries. Oxblood color palette (#8A2432 primary).',
+    seeAlso: ['nouns-battler', 'channel'],
+    category: 'channel',
+  },
+  {
+    slug: 'drum-room',
+    term: 'Drum room',
+    definition: 'The multiplayer cookie-clicker percussion surface at /drum. Five-drum rack (Low, Mid, High, Bell, Shaker) with progressive unlocks at personal tap milestones. Uses deterministic Web Audio synthesis — every tap you and every remote drummer makes is audible in real time. Feeds the DRUM Token claim flow.',
+    seeAlso: ['drum-token', 'spinning'],
+    canonicalUrl: 'https://pointcast.xyz/drum',
+    category: 'mechanic',
+  },
+  {
+    slug: 'cast',
+    term: 'CH.CST · /cast',
+    definition: 'The Prize Cast frontend at /cast. Bloomberg-terminal treatment with live TVL, prize pool, participant count, and a tick-every-second next-draw countdown. Deposit + withdraw flows land when the contract originates on mainnet.',
+    seeAlso: ['prize-cast'],
+    canonicalUrl: 'https://pointcast.xyz/cast',
+    category: 'mechanic',
+  },
+
+  // ── Roles ─────────────────────────────────────────────────────────
+  {
+    slug: 'cc',
+    term: 'CC (Claude Code)',
+    definition: 'The primary engineering agent for PointCast. Handles schema, rendering, routing, contracts, and deploys. Built on Anthropic\'s Claude. Writes most commits on the main branch; reviewed by Codex before merges.',
+    seeAlso: ['codex', 'manus'],
+    category: 'role',
+  },
+  {
+    slug: 'codex',
+    term: 'Codex (X)',
+    definition: 'The specialist reviewer agent. Handles code review before main merges, alternative UI passes, and spec enforcement. Built on OpenAI\'s Codex. Runs medium reasoning, serial only — concurrent xhigh runs hang silently (observed 2026-04-17).',
+    seeAlso: ['cc', 'manus'],
+    category: 'role',
+  },
+  {
+    slug: 'manus',
+    term: 'Manus (M)',
+    definition: 'The operations and computer-use agent. Handles behind-login work: deploy settings, DNS, objkt admin, GSC/Bing registration, end-to-end mint testing as a real user. Logs each session to docs/manus-logs/.',
+    seeAlso: ['cc', 'codex'],
+    category: 'role',
+  },
+];
+
+const categories: Record<string, { code: string; label: string; note: string }> = {
+  primitive: { code: '01', label: 'Primitives',          note: 'The atomic concepts.' },
+  surface:   { code: '02', label: 'Surfaces',            note: 'Discovery endpoints.' },
+  chain:     { code: '03', label: 'On-chain (Tezos)',    note: 'Contracts + standards.' },
+  mechanic:  { code: '04', label: 'Mechanics',           note: 'Interactive systems.' },
+  channel:   { code: '05', label: 'Channels',            note: 'Addressable by code.' },
+  role:      { code: '06', label: 'Roles (team)',        note: 'Who does what.' },
+};
+
+const order: Array<keyof typeof categories> = ['primitive', 'surface', 'chain', 'mechanic', 'channel', 'role'];
+const grouped = order.map((k) => ({
+  ...categories[k],
+  slug: k,
+  terms: TERMS.filter((t) => t.category === k),
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'DefinedTermSet',
+  '@id': 'https://pointcast.xyz/glossary#terms',
+  name: 'PointCast glossary',
+  description: 'Canonical definitions of PointCast-specific terms. Each term has a stable anchor URL (/glossary#<slug>).',
+  url: 'https://pointcast.xyz/glossary',
+  hasDefinedTerm: TERMS.map((t) => ({
+    '@type': 'DefinedTerm',
+    '@id': `https://pointcast.xyz/glossary#${t.slug}`,
+    name: t.term,
+    termCode: t.slug,
+    description: t.definition,
+    inDefinedTermSet: 'https://pointcast.xyz/glossary#terms',
+    ...(t.canonicalUrl ? { url: t.canonicalUrl } : {}),
+  })),
+};
+---
+
+<BlockLayout
+  title="Glossary"
+  description={`Canonical definitions of ${TERMS.length} PointCast-specific terms. Each term has a stable anchor URL — cite /glossary#<slug> when referring to a concept.`}
+  image="/images/og/glossary.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/agents.json', title: 'Discovery manifest (JSON)' },
+  ]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>glossary</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">GLOSSARY · {TERMS.length} TERMS</p>
+      <h1 class="display">What the words mean.</h1>
+      <p class="dek">
+        Every PointCast-specific term in one place. Each has a stable anchor
+        URL — cite <code>/glossary#&lt;slug&gt;</code> when referring to a
+        concept. Machine-readable via inline <code>DefinedTermSet</code>
+        JSON-LD.
+      </p>
+    </header>
+
+    <nav class="toc" aria-label="Category table of contents">
+      {grouped.map((g) => (
+        <a class="toc__chip" href={`#cat-${g.slug}`}>
+          <span class="mono">{g.code}</span>
+          <span>{g.label}</span>
+          <span class="toc__count mono">{g.terms.length}</span>
+        </a>
+      ))}
+    </nav>
+
+    {grouped.map((g) => (
+      <section class="cat" id={`cat-${g.slug}`}>
+        <header class="cat__head">
+          <p class="cat__code mono">{g.code} · {g.label.toUpperCase()}</p>
+          <p class="cat__note">{g.note}</p>
+        </header>
+        <dl class="terms">
+          {g.terms.map((t) => (
+            <div class="term">
+              <dt id={t.slug} class="term__dt">
+                <a href={`#${t.slug}`} class="term__anchor" aria-label="Permalink">#</a>
+                <span class="term__name">{t.term}</span>
+                <code class="term__slug mono">{t.slug}</code>
+              </dt>
+              <dd class="term__dd">
+                <p>{t.definition}</p>
+                {(t.seeAlso || t.canonicalUrl) && (
+                  <p class="term__meta mono">
+                    {t.canonicalUrl && (
+                      <a href={t.canonicalUrl} class="term__canon">CANONICAL ↗</a>
+                    )}
+                    {t.seeAlso && t.seeAlso.length > 0 && (
+                      <>
+                        {t.canonicalUrl && <span class="term__meta-sep">·</span>}
+                        SEE ALSO {t.seeAlso.map((s, i) => (
+                          <>
+                            {i > 0 && <span class="term__meta-comma">,</span>}
+                            <a href={`#${s}`} class="term__see">{s}</a>
+                          </>
+                        ))}
+                      </>
+                    )}
+                  </p>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    ))}
+
+    <aside class="surfaces">
+      <p class="kicker">RELATED</p>
+      <ul class="surfaces__list">
+        <li><a href="/manifesto"><span class="mono">CANONICAL</span> /manifesto</a></li>
+        <li><a href="/for-agents"><span class="mono">ENDPOINTS</span> /for-agents</a></li>
+        <li><a href="/agents.json"><span class="mono">JSON</span> /agents.json</a></li>
+        <li><a href="/stack"><span class="mono">TECH</span> /stack</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero {
+    margin-bottom: 22px;
+    padding-bottom: 16px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.2rem, 8.5vw, 3.8rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+  }
+
+  .dek {
+    margin: 0;
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    max-width: 56ch;
+  }
+
+  .dek code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    padding: 1px 5px;
+    background: var(--pc-rule-soft);
+    border-radius: 2px;
+  }
+
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+
+  .toc__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    font-size: 12px;
+    font-weight: 500;
+    transition: border-color 0.1s, background-color 0.1s;
+  }
+
+  .toc__chip:hover {
+    border-color: var(--pc-ink);
+    background: #fafaf8;
+    text-decoration: none;
+  }
+
+  .toc__chip .mono {
+    color: var(--pc-accent);
+    font-size: 9.5px;
+  }
+
+  .toc__count {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .cat {
+    margin-bottom: 26px;
+    scroll-margin-top: 16px;
+  }
+
+  .cat__head {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .cat__code {
+    margin: 0 0 4px;
+    color: var(--pc-accent);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+  }
+
+  .cat__note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+  }
+
+  .terms {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+  }
+
+  .term {
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+    display: grid;
+    gap: 6px;
+  }
+
+  .term:last-child {
+    border-bottom: 0;
+  }
+
+  .term__dt {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    scroll-margin-top: 20px;
+  }
+
+  .term__anchor {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 14px;
+    text-decoration: none;
+    flex-shrink: 0;
+    font-weight: 400;
+  }
+
+  .term__anchor:hover {
+    color: var(--pc-accent);
+  }
+
+  .term__dt:target .term__anchor {
+    color: var(--pc-accent);
+  }
+
+  .term__name {
+    font-family: var(--pc-font-sans);
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  .term__dt:target .term__name {
+    color: var(--pc-accent);
+  }
+
+  .term__slug {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    padding: 1px 5px;
+    background: var(--pc-rule-soft);
+    border-radius: 2px;
+    text-transform: none;
+    letter-spacing: 0.04em;
+  }
+
+  .term__dd {
+    margin: 0;
+    padding-left: 24px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .term__dd p {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+
+  .term__meta {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: baseline;
+  }
+
+  .term__meta-sep {
+    color: var(--pc-rule);
+  }
+
+  .term__meta-comma {
+    color: var(--pc-ink-muted);
+    margin-left: -4px;
+  }
+
+  .term__canon {
+    color: var(--pc-accent);
+  }
+
+  .term__see {
+    color: var(--pc-accent);
+  }
+
+  .term__see:hover {
+    color: var(--pc-ink);
+  }
+
+  .surfaces {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 80px;
+  }
+
+  @media (min-width: 640px) {
+    .surfaces__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .term__dd {
+      padding-left: 0;
+    }
+  }
+</style>

@@ -25,9 +25,48 @@ const alternates = [
   { type: 'application/rss+xml', href: `/c/${ch.slug}.rss`, title: `${ch.name} (RSS)` },
   { type: 'application/json', href: `/c/${ch.slug}.json`, title: `${ch.name} (JSON feed)` },
 ];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': `https://pointcast.xyz/c/${ch.slug}`,
+      name: `CH.${ch.code} · ${ch.name}`,
+      description: ch.purpose,
+      url: `https://pointcast.xyz/c/${ch.slug}`,
+      isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website' },
+      hasPart: blocks.slice(0, 30).map((b) => ({
+        '@type': 'CreativeWork',
+        '@id': `https://pointcast.xyz/b/${b.data.id}`,
+        name: b.data.title,
+        datePublished: b.data.timestamp.toISOString(),
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `https://pointcast.xyz/c/${ch.slug}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: `CH.${ch.code} · ${ch.name}`, item: `https://pointcast.xyz/c/${ch.slug}` },
+      ],
+    },
+    {
+      '@type': 'ItemList',
+      '@id': `https://pointcast.xyz/c/${ch.slug}#itemlist`,
+      numberOfItems: blocks.length,
+      itemListElement: blocks.map((b, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        url: `https://pointcast.xyz/b/${b.data.id}`,
+        name: b.data.title,
+      })),
+    },
+  ],
+};
 ---
 
-<BlockLayout title={`CH.${ch.code} · ${ch.name}`} description={ch.purpose} alternates={alternates}>
+<BlockLayout title={`CH.${ch.code} · ${ch.name}`} description={ch.purpose} jsonLd={jsonLd} alternates={alternates}>
   <div class="page">
     <header class="ch-header" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
       <a href="/" class="ch-header__back">← All channels</a>
