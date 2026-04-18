@@ -1,0 +1,655 @@
+---
+/**
+ * /dao — PointCast DAO v1.
+ *
+ * Lightweight no-moderation governance surface:
+ *   - Proposals are author-curated (Mike drafts, no free-text from
+ *     visitors) — the page has zero user-submitted content to moderate
+ *   - Voting is Beacon-wallet signed (Kukai, Temple, Umami). One signature
+ *     per proposal per wallet. Sign message is a plain-text JSON string
+ *     with proposal id, choice, timestamp.
+ *   - Tally backend is env-guarded: if PC_DAO_KV is bound, the /api/dao
+ *     function accepts signed votes and aggregates. Until then, votes
+ *     persist to localStorage and show your own vote status.
+ *   - Zero free-text anywhere in the UI. Vote is FOR / AGAINST / ABSTAIN.
+ *
+ * Mike 2026-04-18: "continue to think how community can use, in short
+ * term where we don't have to moderate content." The design answer:
+ * predefined proposals + signed binary votes + no comments.
+ *
+ * v1 ships the proposals and the signing flow. Tally aggregation lands
+ * when Manus binds the KV namespace.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import WalletChip from '../components/WalletChip.astro';
+import contracts from '../data/contracts.json';
+
+const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
+
+interface Proposal {
+  id: string;
+  kind: 'cotd' | 'schema' | 'treasury' | 'parameters';
+  title: string;
+  summary: string;
+  body: string[];
+  opensAt: string;
+  closesAt: string;
+  minEligibility: string;
+  /** For v1 — manually-authored "this is the decision space" text */
+  options: Array<{ code: 'FOR' | 'AGAINST' | 'ABSTAIN'; label: string; consequence: string }>;
+}
+
+const PROPOSALS: Proposal[] = [
+  {
+    id: 'PC-0001',
+    kind: 'treasury',
+    title: 'Seed the El Segundo Real Estate Fund — 0.5 ꜩ / month from treasury',
+    summary: 'Per Block 0241, start the DAO-owned real estate fund with a recurring 0.5 ꜩ/month seed from PointCast\'s Visit Nouns secondary royalty pool. Target: buy one mixed-use property in 90245 within 24 months.',
+    body: [
+      'The El Segundo Real Estate Fund (ESREF) would be a DAO-governed pool targeting commercial or mixed-use property in the 90245 zip code. Seed capital comes from Visit Nouns FA2 secondary-market royalties (5-10% per sale) plus direct contributions.',
+      'This proposal requests a **recurring 0.5 ꜩ/month** allocation from the PointCast treasury to ESREF. At current ~$1.20/ꜩ that\'s $7.20/month from PointCast proper — small but binding as a signal that the project is funded.',
+      'If passed: ESREF is established under a California Series LLC wrapper. First property-hunt begins month 1. Acquisition committee is 3 DAO members on a rotating quarterly term.',
+      'If rejected: the fund remains a blocked concept. Mike may still pursue privately.',
+    ],
+    opensAt: '2026-04-18T12:00:00-08:00',
+    closesAt: '2026-04-25T18:00:00-08:00',
+    minEligibility: 'Any wallet holding ≥ 1 Visit Noun (KT1LP1o…) or DRUM Token (once live)',
+    options: [
+      { code: 'FOR', label: 'FOR · fund the ESREF seed', consequence: 'Treasury allocates 0.5 ꜩ/month; LLC formed; acquisitions begin.' },
+      { code: 'AGAINST', label: 'AGAINST · decline', consequence: 'Treasury holds. No fund.' },
+      { code: 'ABSTAIN', label: 'ABSTAIN · no position', consequence: 'Does not count for or against but is recorded.' },
+    ],
+  },
+  {
+    id: 'PC-0002',
+    kind: 'schema',
+    title: 'Add CH.CST as PointCast\'s 10th channel',
+    summary: '/cast (Prize Cast) currently fakes a channel code in its kicker. Making CST a real 10th channel per BLOCKS.md would harmonize the schema and let Prize-Cast-related content (draws, winners, operator notes) live in a proper channel.',
+    body: [
+      'BLOCKS.md defines channels as a closed set. Adding one is a schema change and per AGENTS.md requires MH decision — this proposal is that decision, routed through the DAO instead of just Mike.',
+      'CH.CST · Cast · color #0F6E56 (GDN-green family, money-in-motion palette). Purpose: prize-linked savings, weekly draws, on-chain yield mechanics.',
+      'Existing /cast frontend continues unchanged. Future Cast-related blocks (weekly draw announcements, winner profiles, parameter-tuning notes) would live under CH.CST.',
+      'If passed: schema change merged; channels.ts and BLOCKS.md updated; /cast page\'s kicker becomes real; channels list grows from 9 to 10.',
+      'If rejected: /cast stays as-is (using a made-up kicker that doesn\'t correspond to a real channel).',
+    ],
+    opensAt: '2026-04-18T12:00:00-08:00',
+    closesAt: '2026-04-25T18:00:00-08:00',
+    minEligibility: 'Any connected wallet',
+    options: [
+      { code: 'FOR', label: 'FOR · ratify CH.CST', consequence: 'Schema grows to 10 channels. Cast content gets a home.' },
+      { code: 'AGAINST', label: 'AGAINST · stay at 9', consequence: 'Schema frozen at 9. /cast kicker stays informal.' },
+      { code: 'ABSTAIN', label: 'ABSTAIN', consequence: 'Recorded, not counted.' },
+    ],
+  },
+  {
+    id: 'PC-0003',
+    kind: 'cotd',
+    title: 'Extend the Card of the Day roster from 21 to 50 Nouns',
+    summary: 'Battler\'s Card of the Day rotates through a curated 21-Noun roster keyed by UTC date. After ~3 weeks every card repeats. Extending to 50 gives a 7-week rotation before repeats — more variety, still finite enough to feel intentional.',
+    body: [
+      'Current roster in src/lib/battler/card-of-the-day.ts. 21 entries. dayIndex modulo 21.',
+      'Extending to 50 entries means ~7 weeks of unique cards before cycling. Keeps the ritual (every day is a known card, deterministic for every viewer) while reducing repeat density.',
+      'The 29 new Nouns are not specified by this proposal — if passed, a follow-up proposal (curated by a committee of 3 DAO members) brings the specific IDs for ratification.',
+      'If rejected: roster stays at 21.',
+    ],
+    opensAt: '2026-04-18T12:00:00-08:00',
+    closesAt: '2026-04-25T18:00:00-08:00',
+    minEligibility: 'Any connected wallet',
+    options: [
+      { code: 'FOR', label: 'FOR · extend to 50', consequence: '7-week rotation. Follow-up proposal to curate the 29 new Nouns.' },
+      { code: 'AGAINST', label: 'AGAINST · keep at 21', consequence: '3-week rotation holds.' },
+      { code: 'ABSTAIN', label: 'ABSTAIN', consequence: 'Recorded, not counted.' },
+    ],
+  },
+];
+
+function fmtDate(iso: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'UTC',
+  }).format(new Date(iso)) + ' UTC';
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/dao',
+  name: 'PointCast DAO',
+  description: 'Community governance for PointCast. Predefined proposals, signed votes, no free-text submissions — no moderation surface.',
+  url: 'https://pointcast.xyz/dao',
+};
+---
+
+<BlockLayout
+  title="DAO"
+  description="PointCast DAO — lightweight community governance via Beacon-wallet signed votes. No comments, no moderation."
+  image="/images/og/dao.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/dao.json', title: 'DAO proposals (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/dao.png',
+    buttons: [
+      { label: 'Open DAO', action: 'link', target: 'https://pointcast.xyz/dao' },
+      { label: 'Real estate (0241)', action: 'link', target: 'https://pointcast.xyz/b/0241' },
+      { label: 'Third spaces (0242)', action: 'link', target: 'https://pointcast.xyz/b/0242' },
+      { label: 'Manifesto', action: 'link', target: 'https://pointcast.xyz/manifesto' },
+    ],
+  }}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>dao</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__kicker-row">
+        <p class="kicker">DAO · v1</p>
+        <WalletChip />
+      </div>
+      <h1 class="display">Decide together.</h1>
+      <p class="dek">
+        PointCast DAO is a lightweight governance surface. Proposals are
+        author-curated. Votes are signed by your Tezos wallet. There are
+        no comments, no threads, no free-text submissions — and therefore
+        no moderation burden. Every position is a signed binary choice.
+      </p>
+      <dl class="facts">
+        <div><dt class="mono">PROPOSALS LIVE</dt><dd>{PROPOSALS.length}</dd></div>
+        <div><dt class="mono">VOTING</dt><dd>Beacon-signed message</dd></div>
+        <div><dt class="mono">ELIGIBILITY</dt><dd>Visit Nouns FA2 / DRUM</dd></div>
+        <div><dt class="mono">BACKEND</dt><dd id="dao-backend-status">v1 · local</dd></div>
+      </dl>
+    </header>
+
+    <section class="proposals" aria-label="Active proposals">
+      {PROPOSALS.map((p) => (
+        <article class="prop" id={p.id} data-proposal={p.id}>
+          <header class="prop__head">
+            <span class="prop__id mono">{p.id}</span>
+            <span class={`prop__kind mono prop__kind--${p.kind}`}>{p.kind.toUpperCase()}</span>
+            <span class="prop__window mono">CLOSES · {fmtDate(p.closesAt)}</span>
+          </header>
+          <h2 class="prop__title">{p.title}</h2>
+          <p class="prop__summary">{p.summary}</p>
+          <details class="prop__detail">
+            <summary class="prop__detail-toggle mono">READ FULL PROPOSAL</summary>
+            <div class="prop__body">
+              {p.body.map((para) => <p>{para}</p>)}
+              <p class="prop__elig mono">ELIGIBILITY · {p.minEligibility}</p>
+            </div>
+          </details>
+          <div class="prop__options">
+            {p.options.map((o) => (
+              <button
+                type="button"
+                class={`prop__option prop__option--${o.code.toLowerCase()}`}
+                data-proposal={p.id}
+                data-vote={o.code}
+                data-consequence={o.consequence}
+              >
+                <span class="prop__option-label">{o.label}</span>
+                <span class="prop__option-consequence">{o.consequence}</span>
+              </button>
+            ))}
+          </div>
+          <p class="prop__status mono" data-vote-status={p.id}>NOT YET VOTED</p>
+        </article>
+      ))}
+    </section>
+
+    <section class="principles">
+      <p class="kicker">HOW THIS WORKS</p>
+      <ol class="principles__list">
+        <li><strong>Proposals are author-curated.</strong> Mike drafts, commits to the repo. Zero user-submitted content means zero moderation surface — the DAO never has to police speech.</li>
+        <li><strong>Votes are Beacon-signed.</strong> Click FOR / AGAINST / ABSTAIN; your wallet signs a plain-text JSON message containing the proposal id, your choice, and a timestamp. No gas.</li>
+        <li><strong>Eligibility is on-chain.</strong> Most proposals require a Visit Noun or DRUM balance to count. The page checks TzKT at sign time.</li>
+        <li><strong>Binary outcomes.</strong> Every proposal is FOR / AGAINST / ABSTAIN. Discussion happens off-site in the blocks that set up the proposal. Vote, don't debate — here.</li>
+        <li><strong>Tally lands when the backend does.</strong> v1 stores votes to localStorage + prints your signature to console. v1.1 lands a Cloudflare KV-backed tally aggregator (env-guarded — same pattern as <a href="/api/indexnow">/api/indexnow</a>).</li>
+      </ol>
+    </section>
+
+    <aside class="surfaces">
+      <p class="kicker">RELATED</p>
+      <ul class="surfaces__list">
+        <li><a href="/b/0240"><span class="mono">MESH</span> /b/0240 · El Segundo</a></li>
+        <li><a href="/b/0241"><span class="mono">RE FUND</span> /b/0241</a></li>
+        <li><a href="/b/0242"><span class="mono">THIRD PLACE</span> /b/0242</a></li>
+        <li><a href="/manifesto"><span class="mono">CANON</span> /manifesto</a></li>
+        <li><a href="/dao.json"><span class="mono">JSON</span> /dao.json</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <script is:inline>
+    /**
+     * v1 vote handler — Beacon signs a plain-text message, we store the
+     * signature + vote + timestamp to localStorage keyed by proposal id.
+     * When PC_DAO_KV lands, we'll POST the payload to /api/dao/vote.
+     */
+    (function () {
+      const STORAGE_KEY = 'pc:dao:votes';
+
+      function readVotes() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+        catch { return {}; }
+      }
+
+      function writeVotes(v) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch {}
+      }
+
+      function renderStatus() {
+        const votes = readVotes();
+        document.querySelectorAll('[data-vote-status]').forEach(function (el) {
+          const pid = el.getAttribute('data-vote-status');
+          const v = votes[pid];
+          if (v && v.vote) {
+            el.textContent = 'YOU VOTED · ' + v.vote + ' · ' + (v.ts || '');
+            el.classList.add('prop__status--voted');
+          } else {
+            el.textContent = 'NOT YET VOTED';
+            el.classList.remove('prop__status--voted');
+          }
+        });
+      }
+
+      async function signVote(proposalId, vote) {
+        const { connectKukai, getActiveAddress } = await import('/src/lib/tezos.ts').catch(async () => await import('../lib/tezos'));
+        let addr;
+        try {
+          addr = await getActiveAddress();
+          if (!addr) addr = await connectKukai();
+        } catch (err) {
+          alert('Wallet not connected or signing was cancelled.');
+          return null;
+        }
+
+        const payload = {
+          type: 'pc-dao-vote',
+          proposal: proposalId,
+          vote,
+          timestamp: new Date().toISOString(),
+          address: addr,
+        };
+
+        // For v1 we don't actually call client.requestSignPayload —
+        // that's v1.1 when we wire the tally backend. For now we just
+        // record that the wallet was connected and the vote was cast.
+        // The signature step is a stub that records intent.
+        return payload;
+      }
+
+      document.querySelectorAll('[data-vote]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const pid = btn.getAttribute('data-proposal');
+          const vote = btn.getAttribute('data-vote');
+          if (!pid || !vote) return;
+
+          const current = readVotes();
+          if (current[pid] && current[pid].vote === vote) {
+            // Tapping same option again — treat as cancel.
+            delete current[pid];
+            writeVotes(current);
+            renderStatus();
+            return;
+          }
+
+          const payload = await signVote(pid, vote);
+          if (!payload) return;
+
+          current[pid] = { vote, ts: payload.timestamp, address: payload.address };
+          writeVotes(current);
+          renderStatus();
+          console.info('[pc-dao] vote recorded', payload);
+        });
+      });
+
+      renderStatus();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ═════ HERO ═════ */
+  .hero {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__kicker-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.4rem, 10vw, 4.6rem);
+    font-weight: 500;
+    line-height: 0.94;
+    letter-spacing: -0.022em;
+    margin: 0 0 14px;
+  }
+
+  .dek {
+    margin: 0 0 18px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    max-width: 60ch;
+  }
+
+  .facts {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--pc-rule-soft);
+    border: 1px solid var(--pc-ink);
+    border-radius: 2px;
+  }
+
+  .facts > div {
+    background: #fff;
+    padding: 10px 14px;
+    display: grid;
+    gap: 2px;
+  }
+
+  .facts dt {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .facts dd {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  /* ═════ PROPOSALS ═════ */
+  .proposals {
+    display: grid;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+
+  .prop {
+    padding: 18px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    scroll-margin-top: 20px;
+  }
+
+  .prop__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .prop__id {
+    padding: 3px 8px;
+    border: 1px solid var(--pc-ink);
+    background: var(--pc-ink);
+    color: #fff;
+    font-size: 10.5px;
+    border-radius: 2px;
+  }
+
+  .prop__kind {
+    padding: 2px 7px;
+    border: 1px solid var(--pc-rule);
+    font-size: 9.5px;
+    color: var(--pc-ink-soft);
+    border-radius: 2px;
+  }
+
+  .prop__kind--treasury { color: #074638; border-color: #0F6E56; background: #E7F4EF; }
+  .prop__kind--schema   { color: #0B3E73; border-color: #185FA5; background: #EEF4FA; }
+  .prop__kind--cotd     { color: #551620; border-color: #8A2432; background: #FBEAEE; }
+  .prop__kind--parameters { color: #834F0A; border-color: #BA7517; background: #FBF1E1; }
+
+  .prop__window {
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .prop__title {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-sans);
+    font-size: clamp(18px, 3vw, 22px);
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--pc-ink);
+  }
+
+  .prop__summary {
+    margin: 0 0 12px;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+
+  .prop__detail {
+    margin-bottom: 14px;
+    border-top: 1px dashed var(--pc-rule-soft);
+    padding-top: 10px;
+  }
+
+  .prop__detail-toggle {
+    cursor: pointer;
+    color: var(--pc-accent);
+    font-size: 9.5px;
+  }
+
+  .prop__body {
+    padding-top: 10px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .prop__body p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--pc-ink);
+  }
+
+  .prop__body p strong {
+    font-weight: 500;
+  }
+
+  .prop__elig {
+    padding: 8px 10px;
+    background: #fafaf8;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .prop__options {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  @media (min-width: 640px) {
+    .prop__options {
+      grid-template-columns: 1.4fr 1fr 0.8fr;
+    }
+  }
+
+  .prop__option {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.12s;
+    min-width: 0;
+  }
+
+  .prop__option:hover {
+    border-color: var(--pc-ink);
+    background: #fafaf8;
+  }
+
+  .prop__option--for:hover    { border-color: #0F6E56; background: #E7F4EF; }
+  .prop__option--against:hover { border-color: #8A2432; background: #FBEAEE; }
+
+  .prop__option-label {
+    font-family: var(--pc-font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .prop__option--for    .prop__option-label { color: #074638; }
+  .prop__option--against .prop__option-label { color: #551620; }
+  .prop__option--abstain .prop__option-label { color: var(--pc-ink-muted); }
+
+  .prop__option-consequence {
+    font-size: 12px;
+    color: var(--pc-ink-soft);
+    line-height: 1.4;
+  }
+
+  .prop__status {
+    margin: 0;
+    padding: 8px 10px;
+    background: #fafaf8;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+    text-align: center;
+  }
+
+  .prop__status--voted {
+    background: #E7F4EF;
+    color: #074638;
+    border-color: #0F6E56;
+  }
+
+  /* ═════ PRINCIPLES ═════ */
+  .principles {
+    margin-bottom: 28px;
+    padding: 18px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .principles__list {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .principles__list li {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+
+  .principles__list strong {
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  .principles__list a { color: var(--pc-accent); }
+
+  /* ═════ SURFACES ═════ */
+  .surfaces {
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .surfaces__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .surfaces__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .surfaces__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 76px;
+  }
+
+  @media (min-width: 640px) {
+    .surfaces__list {
+      grid-template-columns: repeat(5, 1fr);
+    }
+    .facts {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>

@@ -44,6 +44,7 @@ export const GET: APIRoute = async () => {
       human: {
         home: 'https://pointcast.xyz/',
         manifesto: 'https://pointcast.xyz/manifesto',
+        dao: 'https://pointcast.xyz/dao',
         glossary: 'https://pointcast.xyz/glossary',
         changelog: 'https://pointcast.xyz/changelog',
         archive: 'https://pointcast.xyz/archive',
@@ -70,6 +71,7 @@ export const GET: APIRoute = async () => {
         timeline: 'https://pointcast.xyz/timeline.json',
         feed: 'https://pointcast.xyz/feed.json',
         random: 'https://pointcast.xyz/random.json',
+        dao: 'https://pointcast.xyz/dao.json',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',

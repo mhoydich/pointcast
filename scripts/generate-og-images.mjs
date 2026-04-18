@@ -350,6 +350,19 @@ const PAGES = [
     glyphSize: 220,
     siblings: ['/feed.xml', '/feed.json', '/for-agents'],
   },
+  {
+    slug: 'dao',
+    url: '/dao',
+    kind: 'governance',
+    kicker: 'DAO · v1',
+    title: 'Decide together.',
+    dek: 'Predefined proposals. Beacon-signed votes. No comments, no threads, no moderation.',
+    color600: '#12110E',
+    color800: '#12110E',
+    glyph: '✓/✗',
+    glyphSize: 180,
+    siblings: ['/dao.json', '/manifesto', '/for-agents'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
