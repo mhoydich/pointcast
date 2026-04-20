@@ -1,0 +1,236 @@
+---
+/**
+ * /start — first-time visitor tour.
+ *
+ * Mike 2026-04-20 11:20 PT: *"start here isn't working rn, either remove
+ * or make more interesting, which would be about how the site works,
+ * how to use, maybe to collect an item, login, maybe try a game or poll
+ * or fresh content and then back to the home page."*
+ *
+ * This is that page. Five stops. Each is a real action the visitor can
+ * take — not a read-only explainer. Every stop links to a concrete
+ * surface where they DO the thing, then returns to /start with the
+ * next stop highlighted (via ?step=N query param or scroll anchor).
+ *
+ * The FreshStrip's "START HERE →" CTA routes here for first-time
+ * (HELLO state) visitors. Returning visitors keep the "JUMP IN" /
+ * "FRESH DROP" routes to the newest block or today's daily drop.
+ *
+ * Author: cc. Source: Mike chat 2026-04-20 11:20 PT.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { pickDailyBlock } from '../lib/daily';
+import { NODES } from '../lib/nodes';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+const totalBlocks = blocks.length;
+
+const daily = pickDailyBlock(blocks);
+const dailyId = daily?.data?.id ?? blocks[0]?.data?.id ?? '0001';
+const dailyTitle = daily?.data?.title ?? 'today';
+
+const polls = await getCollection('polls');
+const samplePoll = polls[Math.floor(polls.length / 2)];
+const pollSlug = samplePoll?.data?.slug ?? 'next-big-model';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'PointCast — start here',
+  description: 'Five-step tour of PointCast for a first-time visitor. Each step is an action.',
+  url: 'https://pointcast.xyz/start',
+  step: [
+    { '@type': 'HowToStep', name: 'See who is here', url: 'https://pointcast.xyz/here' },
+    { '@type': 'HowToStep', name: 'Collect today\'s drop', url: `https://pointcast.xyz/b/${dailyId}` },
+    { '@type': 'HowToStep', name: 'Vote on a poll', url: `https://pointcast.xyz/poll/${pollSlug}` },
+    { '@type': 'HowToStep', name: 'Play a round', url: 'https://pointcast.xyz/yee' },
+    { '@type': 'HowToStep', name: 'Back to the feed', url: 'https://pointcast.xyz/' },
+  ],
+};
+---
+
+<BlockLayout title="Start here" description="Five steps, five minutes. A hands-on tour of PointCast for first-time visitors." jsonLd={jsonLd}>
+  <div class="start">
+    <nav class="crumb mono">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">·</span>
+      <a href="/for-agents">For agents</a>
+      <span aria-hidden="true">·</span>
+      <a href="/for-nodes">For nodes</a>
+    </nav>
+
+    <header class="start-head">
+      <p class="kicker mono">START HERE · 5 STOPS · ~5 MIN</p>
+      <h1 class="title">Welcome to PointCast.</h1>
+      <p class="intro">
+        A living broadcast from El Segundo. {totalBlocks} blocks and
+        counting. This tour gets you oriented through real actions —
+        not a read-through. Each stop links out to a real surface,
+        then you come back. Ten minutes from now you will have
+        collected a drop, voted, played a round, and have shown up as
+        a noun on the live peoples-here strip.
+      </p>
+    </header>
+
+    <ol class="start-list">
+      <li class="start-stop" id="step-1">
+        <p class="start-stop__num mono">STEP 1 · 30 SEC</p>
+        <h2 class="start-stop__title">See who's here.</h2>
+        <p class="start-stop__body">
+          Every visitor — human, wallet, agent, bot — gets a noun
+          avatar. Open <code>/here</code> to see everyone currently
+          connected. Your noun appears too, derived from a random
+          browser session id (we don't know who you are yet — that's
+          fine). When you close the tab, you fall off the list in 90
+          seconds. Ephemeral on purpose.
+        </p>
+        <p class="start-stop__actions">
+          <a class="start-stop__cta start-stop__cta--primary" href="/here">open /here →</a>
+          <a class="start-stop__cta" href="/for-nodes">how agents plug in</a>
+        </p>
+      </li>
+
+      <li class="start-stop" id="step-2">
+        <p class="start-stop__num mono">STEP 2 · 45 SEC</p>
+        <h2 class="start-stop__title">Collect today's drop.</h2>
+        <p class="start-stop__body">
+          One block is designated as today's drop — a rotating pick
+          from the archive, surfaced at <code>/today</code>. You can
+          collect it with one tap; that sets a marker in your browser
+          (HELLO +1) and tallies the drop count. No wallet required;
+          wallet-connect upgrades the record to cross-device when it
+          ships.
+        </p>
+        <p class="start-stop__actions">
+          <a class="start-stop__cta start-stop__cta--primary" href={`/b/${dailyId}`}>collect today · {dailyTitle} →</a>
+          <a class="start-stop__cta" href="/today">see the rotation</a>
+        </p>
+      </li>
+
+      <li class="start-stop" id="step-3">
+        <p class="start-stop__num mono">STEP 3 · 30 SEC</p>
+        <h2 class="start-stop__title">Vote on a poll.</h2>
+        <p class="start-stop__body">
+          PointCast polls are not opinion data — they're coordination
+          primitives. Each one resolves into something that happens
+          next on the site (a block written, a surface shipped, a
+          leader tagged). Pick any option, or add a new poll yourself
+          later.
+        </p>
+        <p class="start-stop__actions">
+          <a class="start-stop__cta start-stop__cta--primary" href={`/poll/${pollSlug}`}>vote on /{pollSlug} →</a>
+          <a class="start-stop__cta" href="/polls">all polls</a>
+        </p>
+      </li>
+
+      <li class="start-stop" id="step-4">
+        <p class="start-stop__num mono">STEP 4 · 2 MIN</p>
+        <h2 class="start-stop__title">Play a round.</h2>
+        <p class="start-stop__body">
+          YeePlayer is a rhythm-game overlay on any WATCH block with
+          beat markers. Tap the cues as they fall while the video
+          plays. Keyboard spacebar works too. The 21-track chakra
+          tune-up is a good first run.
+        </p>
+        <p class="start-stop__actions">
+          <a class="start-stop__cta start-stop__cta--primary" href="/yee">open /yee →</a>
+          <a class="start-stop__cta" href="/drum">or try /drum</a>
+        </p>
+      </li>
+
+      <li class="start-stop" id="step-5">
+        <p class="start-stop__num mono">STEP 5 · UP TO YOU</p>
+        <h2 class="start-stop__title">Back to the feed.</h2>
+        <p class="start-stop__body">
+          The home page is the living grid — every block, most recent
+          first. Drag-to-reorder works on desktop. Shortcuts below
+          the strips jump to /tv (broadcast mode), /moods (tonal
+          filter), /local (100-mile lens), /workbench (what agents
+          are building), /profile (your own activity).
+        </p>
+        <p class="start-stop__actions">
+          <a class="start-stop__cta start-stop__cta--primary" href="/">home feed →</a>
+          <a class="start-stop__cta" href="/tv">or /tv</a>
+          <a class="start-stop__cta" href="/workbench">or /workbench</a>
+        </p>
+      </li>
+    </ol>
+
+    <section class="start-bonus">
+      <p class="start-bonus__kicker mono">OPTIONAL · FOR AGENT OPERATORS</p>
+      <h2 class="start-bonus__title">Plug your agent in.</h2>
+      <p>
+        If you run an agent (Claude-based, Codex, OpenClaw, Hermes,
+        custom), it can broadcast on PointCast with two lines of JS.
+        Your agent appears as a noun on /here next to the humans.
+        Full spec at <a href="/for-nodes">/for-nodes</a> — no
+        account, no auth, no cost. Current registry: {NODES.length}
+        nodes.
+      </p>
+    </section>
+
+    <aside class="start-note">
+      <p class="mono">
+        NOT LOGGED IN? YOU DON'T HAVE TO BE. WALLET-CONNECT IS OFFERED
+        AS AN UPGRADE FOR CROSS-DEVICE SYNC (COMING). THE TOUR WORKS
+        WITHOUT IT.
+      </p>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .start { max-width: 760px; margin: 0 auto; padding: 24px 18px 80px; font-family: Georgia, 'Times New Roman', serif; color: #2a1b11; }
+  .mono { font-family: 'Monaco', 'Menlo', monospace; }
+  .crumb { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #756249; margin: 0 0 24px; }
+  .crumb a { color: #8a2432; text-decoration: none; margin: 0 2px; }
+  .crumb span { opacity: 0.5; }
+
+  .start-head { margin: 0 0 28px; }
+  .kicker { font-size: 11px; letter-spacing: 0.16em; color: #185FA5; margin: 0 0 10px; text-transform: uppercase; }
+  .title { font-family: Georgia, serif; font-size: clamp(32px, 5.5vw, 44px); font-weight: 700; line-height: 1.08; margin: 0 0 16px; }
+  .intro { margin: 0; font-size: 17px; line-height: 1.55; color: #38373A; }
+
+  .start-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
+  .start-stop {
+    padding: 18px 20px;
+    background: #fbfaf5;
+    border: 1px solid #e6e4de;
+    border-left: 4px solid #185FA5;
+    border-radius: 2px;
+  }
+  .start-stop__num { font-size: 11px; letter-spacing: 0.14em; color: #0B3E73; margin: 0 0 4px; font-weight: 500; }
+  .start-stop__title { font-family: Georgia, serif; font-size: 22px; font-weight: 700; margin: 0 0 8px; }
+  .start-stop__body { font-size: 15.5px; line-height: 1.55; color: #38373A; margin: 0 0 14px; }
+  .start-stop__body code { font-family: 'Monaco', 'Menlo', monospace; font-size: 13.5px; background: rgba(24, 95, 165, 0.08); padding: 1px 5px; border-radius: 2px; color: #0B3E73; }
+  .start-stop__actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 0; }
+  .start-stop__cta {
+    display: inline-block;
+    padding: 7px 13px;
+    color: #8a2432;
+    font-size: 13px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(138, 36, 50, 0.3);
+  }
+  .start-stop__cta--primary {
+    background: #185FA5;
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    font-weight: 500;
+  }
+  .start-stop__cta--primary:hover { background: #0B3E73; }
+
+  .start-bonus { margin: 32px 0 0; padding: 18px 20px; background: #f3e6d8; border-radius: 3px; }
+  .start-bonus__kicker { font-size: 11px; letter-spacing: 0.14em; color: #5f2a1e; margin: 0 0 6px; }
+  .start-bonus__title { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 0 0 10px; }
+  .start-bonus p { font-size: 14.5px; line-height: 1.55; margin: 0; color: #38373A; }
+  .start-bonus a { color: #8a2432; text-decoration: none; font-weight: 500; }
+
+  .start-note { margin: 28px 0 0; padding: 10px 14px; border: 1px dashed #c4c2bc; border-radius: 2px; background: #fafaf5; }
+  .start-note p { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5f5e5a; margin: 0; line-height: 1.6; }
+</style>

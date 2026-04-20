@@ -26,9 +26,39 @@ pages_build_output_dir = "dist"
 binding = "VISITS"
 id = "b456e586082a42c3b77cea450c79e7f7"
 
-# Presence Durable Object is DEFERRED on Pages — DOs need a separate
-# Worker on Pages (can't live inside functions/). The PresenceRoom class
-# in functions/api/presence.ts is ready; see docs/presence-next-steps.md
-# for the deploy path (ship the DO in a companion Worker, bind via
-# script_name). Meanwhile PresenceBar.astro degrades gracefully — the
-# WebSocket fails silently and the bar hides itself.
+# PC_PING_KV — async inbox for /ping form (POST /api/ping). 90-day retention.
+# Created 2026-04-18 via `wrangler kv namespace create PC_PING_KV`.
+[[kv_namespaces]]
+binding = "PC_PING_KV"
+id = "adb2efa1fecb460d896a99f5a2a35fc8"
+
+# PC_QUEUE_KV — sprint-pick queue from /sprint (POST /api/queue). 30-day retention.
+# Created 2026-04-18 via `wrangler kv namespace create PC_QUEUE_KV`.
+[[kv_namespaces]]
+binding = "PC_QUEUE_KV"
+id = "9f34cfebb2404343a008f999e08064e8"
+
+# PC_DROP_KV — paste-a-URL inbox from /drop (POST /api/drop). 60-day retention.
+# Created 2026-04-18 via `wrangler kv namespace create PC_DROP_KV`.
+[[kv_namespaces]]
+binding = "PC_DROP_KV"
+id = "d4bf332ab3564664942970641e1e2aca"
+
+# PC_POLLS_KV — Schelling-point poll vote store (POST /api/poll). Per-poll
+# tallies + per-address vote dedup. 180-day retention. Created 2026-04-18.
+[[kv_namespaces]]
+binding = "PC_POLLS_KV"
+id = "7a49bba243c346068d9440122f79c4f1"
+
+# Presence Durable Object — lives in a standalone Worker at
+# workers/presence/ because Pages Functions cannot export DO classes.
+# Deploy sequence:
+#   1. cd workers/presence && npx wrangler deploy
+#   2. npx wrangler pages deploy dist --project-name pointcast
+# Order matters on first ship — Pages needs the referenced script_name
+# to exist in the account before it'll resolve the binding.
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceRoom"
+script_name = "pointcast-presence"

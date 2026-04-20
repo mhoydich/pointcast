@@ -1,0 +1,443 @@
+---
+/**
+ * HereGrid — page-scale congregation renderer.
+ *
+ * Brief #7 (/here full-page congregation view). Renders up to ~64
+ * connected visitors as noun avatars in a responsive grid. YOU slot
+ * is highlighted; other visitors surface their optional self-reported
+ * state (mood, listening, where). Lives inside a dark/amber /tv-style
+ * shell on `/here`, but the component itself is self-contained and
+ * re-usable.
+ *
+ * Data flow:
+ *   1. Server renders skeleton (empty grid + YOU placeholder).
+ *   2. On mount: fetch `/api/presence/snapshot` once for initial state.
+ *   3. Open WS at `wss://{host}/api/presence?sid={sid}&kind=human`,
+ *      send `identify`, then update on broadcasts.
+ *   4. Cap display at ~64 visitors (grid overflow hidden below).
+ *
+ * Self-match: derive YOU's nounId from pc:session, then find the
+ * matching session entry with the closest joinedAt. Collisions surface
+ * as "you?" labels rather than hiding — honesty over illusion.
+ *
+ * Author: cc. Source: docs/briefs/2026-04-19-codex-here-congregation.md
+ * (cc implemented component after Codex handled the backend snapshot
+ * endpoint + DO refactor; UI + client state was cc's wheelhouse).
+ */
+
+interface Props {
+  /** Soft cap on rendered cells. Over this, remaining count shows as "+N more". */
+  cap?: number;
+}
+
+const { cap = 64 } = Astro.props;
+---
+
+<section class="here-grid" data-cap={cap}>
+  <header class="here-grid__head">
+    <p class="here-grid__kicker mono">
+      <span id="here-grid-total">1</span> HERE
+      <span class="here-grid__sep" aria-hidden="true">·</span>
+      <span id="here-grid-moods">—</span>
+    </p>
+    <p class="here-grid__time mono" id="here-grid-time">connecting…</p>
+  </header>
+
+  <ol class="here-grid__cells" id="here-grid-cells" aria-label="Visitors connected now">
+    {/* YOU cell — client fills the src on mount */}
+    <li class="here-cell here-cell--you" data-you="true">
+      <span class="here-cell__ring" aria-hidden="true"></span>
+      <img class="here-cell__noun" id="here-grid-you-img" alt="" src="" loading="eager" />
+      <span class="here-cell__label mono">YOU</span>
+    </li>
+  </ol>
+
+  <p class="here-grid__overflow mono" id="here-grid-overflow" hidden>
+    + <span id="here-grid-overflow-count">0</span> MORE
+  </p>
+
+  <p class="here-grid__quiet mono" id="here-grid-quiet">
+    waiting for peoples · broadcast your presence by staying on the page
+  </p>
+</section>
+
+<script is:inline define:vars={{ cap }}>
+(function () {
+  'use strict';
+  if (typeof window === 'undefined') return;
+
+  // ---------- helpers -----------------------------------------------------
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+  function cheapHash(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = (((h << 5) + h) + s.charCodeAt(i)) | 0;
+    return h >>> 0;
+  }
+  function nounIdFor(id) { return cheapHash(String(id || '')) % 1200; }
+  function escapeText(s) {
+    var div = document.createElement('div');
+    div.textContent = String(s == null ? '' : s);
+    return div.innerHTML;
+  }
+
+  // ---------- identity ----------------------------------------------------
+  var sessionId = lsGet('pc:session');
+  if (!sessionId) {
+    sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('s' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+    lsSet('pc:session', sessionId);
+  }
+  var myNounId = nounIdFor(sessionId);
+  lsSet('pc:visitor:noun', String(myNounId));
+
+  // Paint YOU slot immediately.
+  var youImg = document.getElementById('here-grid-you-img');
+  if (youImg) {
+    youImg.src = 'https://noun.pics/' + myNounId + '.svg';
+    youImg.alt = 'you · noun ' + myNounId;
+  }
+
+  // ---------- DOM refs ----------------------------------------------------
+  var cells = document.getElementById('here-grid-cells');
+  var totalEl = document.getElementById('here-grid-total');
+  var moodsEl = document.getElementById('here-grid-moods');
+  var timeEl = document.getElementById('here-grid-time');
+  var overflowEl = document.getElementById('here-grid-overflow');
+  var overflowCountEl = document.getElementById('here-grid-overflow-count');
+  var quietEl = document.getElementById('here-grid-quiet');
+
+  // ---------- rendering ---------------------------------------------------
+  var visibleCap = Math.max(1, cap | 0);
+
+  function timeStamp() {
+    var d = new Date();
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function aggregateMoods(sessions) {
+    var counts = {};
+    var unset = 0;
+    for (var i = 0; i < sessions.length; i++) {
+      var m = sessions[i].mood;
+      if (m && typeof m === 'string' && m.trim()) {
+        var key = m.toLowerCase().trim();
+        counts[key] = (counts[key] || 0) + 1;
+      } else {
+        unset += 1;
+      }
+    }
+    var pairs = Object.keys(counts).map(function (k) { return [k, counts[k]]; });
+    pairs.sort(function (a, b) { return b[1] - a[1]; });
+    var top = pairs.slice(0, 4).map(function (p) { return p[1] + ' ' + p[0]; });
+    if (unset > 0) top.push(unset + ' unset');
+    return top.length ? top.join(' · ') : '—';
+  }
+
+  function renderSessions(snapshot) {
+    var sessions = Array.isArray(snapshot && snapshot.sessions) ? snapshot.sessions.slice() : [];
+    var humans = (snapshot && typeof snapshot.humans === 'number') ? snapshot.humans : sessions.filter(function (s) { return s.kind === 'human'; }).length;
+    var agents = (snapshot && typeof snapshot.agents === 'number') ? snapshot.agents : sessions.filter(function (s) { return s.kind === 'agent'; }).length;
+    var total = humans + agents;
+
+    // Total + moods header
+    if (totalEl) totalEl.textContent = String(Math.max(total, 1));
+    if (moodsEl) moodsEl.textContent = aggregateMoods(sessions);
+    if (timeEl) timeEl.textContent = 'as of ' + timeStamp();
+
+    // Find YOU in the array: match nounId + earliest joinedAt that is my own
+    var myEntry = null;
+    var myIndex = -1;
+    var now = Date.now();
+    var closestDelta = Infinity;
+    for (var i = 0; i < sessions.length; i++) {
+      if (sessions[i].nounId === myNounId) {
+        var jt = Date.parse(sessions[i].joinedAt || '') || 0;
+        var delta = Math.abs(now - jt);
+        if (delta < closestDelta) { closestDelta = delta; myEntry = sessions[i]; myIndex = i; }
+      }
+    }
+
+    // Remove YOU from the "others" list for separate rendering.
+    var others = sessions.slice();
+    if (myIndex >= 0) others.splice(myIndex, 1);
+
+    // Sort others: most recent joinedAt first (newer activity surfaces).
+    others.sort(function (a, b) {
+      return (Date.parse(b.joinedAt || '') || 0) - (Date.parse(a.joinedAt || '') || 0);
+    });
+
+    // Update YOU cell details (mood/listening/where if any).
+    var youCell = cells && cells.querySelector('[data-you="true"]');
+    if (youCell) decorateCell(youCell, myEntry, /* isYou */ true);
+
+    // Clear existing non-YOU cells + re-render others.
+    if (!cells) return;
+    var existingOthers = cells.querySelectorAll('.here-cell:not(.here-cell--you)');
+    for (var j = 0; j < existingOthers.length; j++) existingOthers[j].parentNode.removeChild(existingOthers[j]);
+
+    var renderCount = Math.min(others.length, visibleCap - 1); // -1 for YOU
+    for (var k = 0; k < renderCount; k++) {
+      var cell = buildCell(others[k], /* isYou */ false);
+      cells.appendChild(cell);
+    }
+
+    // Overflow + quiet states
+    var overflow = others.length - renderCount;
+    if (overflowEl) {
+      if (overflow > 0) {
+        overflowEl.hidden = false;
+        if (overflowCountEl) overflowCountEl.textContent = String(overflow);
+      } else {
+        overflowEl.hidden = true;
+      }
+    }
+    if (quietEl) quietEl.hidden = others.length > 0;
+  }
+
+  function buildCell(s, isYou) {
+    var li = document.createElement('li');
+    li.className = 'here-cell' + (isYou ? ' here-cell--you' : ' here-cell--other');
+    if (isYou) li.setAttribute('data-you', 'true');
+    if (s && s.kind) li.setAttribute('data-kind', String(s.kind));
+    var ring = document.createElement('span');
+    ring.className = 'here-cell__ring';
+    ring.setAttribute('aria-hidden', 'true');
+    li.appendChild(ring);
+    var img = document.createElement('img');
+    img.className = 'here-cell__noun';
+    var nid = (s && typeof s.nounId === 'number') ? s.nounId : myNounId;
+    img.src = 'https://noun.pics/' + nid + '.svg';
+    img.alt = (isYou ? 'you · noun ' : 'visitor · noun ') + nid;
+    img.loading = 'lazy';
+    li.appendChild(img);
+    var label = document.createElement('span');
+    label.className = 'here-cell__label mono';
+    label.textContent = isYou ? 'YOU' : String((s && s.kind) ? s.kind.toUpperCase() : 'HUMAN');
+    li.appendChild(label);
+    decorateCell(li, s, isYou);
+    return li;
+  }
+
+  function decorateCell(cell, s, isYou) {
+    // Remove existing mood/state chips before redecorating (YOU cell may re-decorate).
+    var existing = cell.querySelectorAll('.here-cell__chip');
+    for (var i = 0; i < existing.length; i++) cell.removeChild(existing[i]);
+    if (!s) return;
+    if (s.mood) {
+      var chip = document.createElement('span');
+      chip.className = 'here-cell__chip here-cell__chip--mood mono';
+      chip.textContent = String(s.mood);
+      cell.appendChild(chip);
+    }
+    if (s.listening) {
+      var chip2 = document.createElement('span');
+      chip2.className = 'here-cell__chip here-cell__chip--listening mono';
+      chip2.textContent = '♪ ' + String(s.listening).slice(0, 40);
+      chip2.title = String(s.listening);
+      cell.appendChild(chip2);
+    }
+    if (s.where) {
+      var chip3 = document.createElement('span');
+      chip3.className = 'here-cell__chip here-cell__chip--where mono';
+      chip3.textContent = '· ' + String(s.where).slice(0, 24);
+      chip3.title = String(s.where);
+      cell.appendChild(chip3);
+    }
+  }
+
+  // ---------- initial snapshot --------------------------------------------
+  fetch('/api/presence/snapshot', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j) renderSessions(j); })
+    .catch(function () { /* ignore — WS will fill in */ });
+
+  // ---------- WS live update ----------------------------------------------
+  var ws = null;
+  var reconnectDelay = 1000;
+  var reconnectTimer = null;
+  var pingTimer = null;
+
+  function scheduleReconnect() {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, Math.min(reconnectDelay, 30000));
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+  }
+
+  function sendIdentify() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      var mood = lsGet('pc:visitor:mood') || null;
+      var listening = lsGet('pc:visitor:listening') || null;
+      var where = lsGet('pc:visitor:where') || null;
+      ws.send(JSON.stringify({
+        type: 'identify',
+        kind: 'human',
+        nounId: myNounId,
+        mood: mood,
+        listening: listening,
+        where: where,
+      }));
+    } catch (e) { /* ignore */ }
+  }
+
+  function connect() {
+    try {
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var url = proto + '//' + location.host + '/api/presence?sid=' + encodeURIComponent(sessionId) + '&kind=human';
+      ws = new WebSocket(url);
+    } catch (e) {
+      scheduleReconnect();
+      return;
+    }
+    ws.addEventListener('open', function () {
+      reconnectDelay = 1000;
+      sendIdentify();
+      if (pingTimer) clearInterval(pingTimer);
+      pingTimer = setInterval(function () {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+      }, 45000);
+    });
+    ws.addEventListener('message', function (ev) {
+      try {
+        var data = JSON.parse(ev.data);
+        if (data && data.sessions) renderSessions(data);
+      } catch (e) { /* ignore */ }
+    });
+    ws.addEventListener('close', function () {
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+      scheduleReconnect();
+    });
+    ws.addEventListener('error', function () { /* close handler reconnects */ });
+  }
+
+  connect();
+
+  // Re-identify on visibility regain (mood/listening/where may have changed).
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && ws && ws.readyState === WebSocket.OPEN) sendIdentify();
+  });
+})();
+</script>
+
+<style>
+  .here-grid {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px 48px;
+    color: #f3e6d8;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .here-grid__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 0 12px;
+    border-bottom: 1px solid rgba(232, 154, 45, 0.28);
+    margin: 0 0 20px;
+    flex-wrap: wrap;
+  }
+  .here-grid__kicker {
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #e89a2d;
+  }
+  .here-grid__sep { opacity: 0.55; margin: 0 6px; }
+  .here-grid__time {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9a8571;
+  }
+  .here-grid__cells {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 14px;
+  }
+  .here-cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 10px 14px;
+    background: rgba(243, 230, 216, 0.03);
+    border: 1px solid rgba(243, 230, 216, 0.08);
+    border-radius: 6px;
+    text-align: center;
+  }
+  .here-cell--you {
+    background: rgba(232, 154, 45, 0.06);
+    border-color: rgba(232, 154, 45, 0.38);
+  }
+  .here-cell__ring {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    right: 6px;
+    height: 72px;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+  .here-cell--you .here-cell__ring {
+    box-shadow: inset 0 0 0 2px #e89a2d;
+  }
+  .here-cell__noun {
+    width: 72px;
+    height: 72px;
+    image-rendering: pixelated;
+    background: #1a120a;
+  }
+  .here-cell__label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9a8571;
+  }
+  .here-cell--you .here-cell__label {
+    color: #e89a2d;
+    font-weight: 700;
+  }
+  .here-cell__chip {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: #d4c2ad;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(243, 230, 216, 0.06);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .here-cell__chip--mood {
+    color: #1a120a;
+    background: #e89a2d;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .here-grid__overflow {
+    margin: 24px 0 0;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: #9a8571;
+    text-align: center;
+  }
+  .here-grid__quiet {
+    margin: 24px 0 0;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: #756249;
+    text-align: center;
+    font-style: italic;
+  }
+  .mono {
+    font-family: 'Monaco', 'Menlo', monospace;
+  }
+</style>

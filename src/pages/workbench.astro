@@ -1,0 +1,311 @@
+---
+/**
+ * /workbench — cross-agent activity dashboard.
+ *
+ * Mike 2026-04-20 11:15 PT: *"i'm also starting to push claude, codex and
+ * soon manus to start interacting, let me know if there is a page, or its
+ * on sprints or somewhere we can track that activity."*
+ *
+ * This is that page. One glance answers: who's building what, what's
+ * queued next, where do I dig in.
+ *
+ * Sections (top-down):
+ *   1. LIVE · who's connected right now (client-hydrated from /api/presence/snapshot)
+ *   2. QUEUE · what's in flight + pending across Codex, cc, Manus
+ *   3. SHIPS · recent ticks (links to /sprints for the full log)
+ *   4. NODES · the registry + link to /for-nodes
+ *
+ * Deliberately static + link-heavy. The freshness signal is "deploy
+ * cadence" — redeploys pick up new briefs and sprints. Dynamic bits
+ * (live presence count, recent ship count) hydrate client-side.
+ *
+ * Author: cc. Source: docs/plans/2026-04-20-midday-state-plan.md +
+ * Mike chat 2026-04-20 11:15 PT.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { NODES, nodeCounts } from '../lib/nodes';
+import { COLLABORATORS, ROLE_LABEL } from '../lib/collaborators';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// ---------- Build-time data gather --------------------------------------
+
+const repoRoot = path.resolve('.');
+const sprintsDir = path.join(repoRoot, 'docs/sprints');
+const briefsDir  = path.join(repoRoot, 'docs/briefs');
+
+type SprintFile = { slug: string; date: string; title: string; size: number };
+type BriefFile  = { slug: string; kind: 'codex' | 'manus'; title: string };
+
+function safeRead(dir: string): string[] {
+  try {
+    return fs.readdirSync(dir).filter((f) => f.endsWith('.md')).sort().reverse();
+  } catch {
+    return [];
+  }
+}
+
+function titleFrom(md: string, fallback: string): string {
+  const m1 = md.match(/^#\s+(.+)$/m);
+  if (m1) return m1[1].trim().slice(0, 140);
+  return fallback;
+}
+
+function kindFrom(slug: string): 'codex' | 'manus' | 'other' {
+  if (slug.includes('-codex-')) return 'codex';
+  if (slug.includes('-manus-')) return 'manus';
+  return 'other';
+}
+
+// Sprints — last 12.
+const sprintFiles = safeRead(sprintsDir).slice(0, 12);
+const sprints: SprintFile[] = sprintFiles.map((slug) => {
+  const full = path.join(sprintsDir, slug);
+  const stat = fs.statSync(full);
+  const raw = fs.readFileSync(full, 'utf8');
+  const date = slug.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? '';
+  return {
+    slug: slug.replace(/\.md$/, ''),
+    date,
+    title: titleFrom(raw, slug),
+    size: stat.size,
+  };
+});
+
+// Briefs — currently-pending (authored after 2026-04-18). Split by kind.
+const briefFiles = safeRead(briefsDir);
+const briefs: BriefFile[] = briefFiles
+  .map((slug) => {
+    const raw = fs.readFileSync(path.join(briefsDir, slug), 'utf8');
+    return {
+      slug: slug.replace(/\.md$/, ''),
+      kind: kindFrom(slug),
+      title: titleFrom(raw, slug),
+    };
+  })
+  .filter((b) => b.kind !== 'other') as BriefFile[];
+
+const codexBriefs = briefs.filter((b) => b.kind === 'codex');
+const manusBriefs = briefs.filter((b) => b.kind === 'manus');
+
+// Counts.
+const counts = nodeCounts();
+const shippedToday = sprints.filter((s) => s.date === new Date().toISOString().slice(0, 10) || s.date === '2026-04-19' || s.date === '2026-04-20').length;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/workbench',
+  name: 'PointCast — workbench',
+  description: 'Cross-agent activity dashboard. Who is building what, what is queued, where to dig in.',
+  url: 'https://pointcast.xyz/workbench',
+};
+---
+
+<BlockLayout title="Workbench" description="Cross-agent activity dashboard — who's building what, right now." jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="crumb mono">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">·</span>
+      <a href="/here">/here</a>
+      <span aria-hidden="true">·</span>
+      <a href="/for-nodes">/for-nodes</a>
+      <span aria-hidden="true">·</span>
+      <a href="/sprints">/sprints</a>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">WORKBENCH · CROSS-AGENT DASHBOARD</p>
+      <h1 class="title">Who's building what.</h1>
+      <p class="dek">
+        PointCast is a small, real project run by four identities —
+        Mike anchoring, cc orchestrating + shipping, Codex engineering,
+        Manus doing ops. This page is one glance at what each is doing
+        right now, what's queued, and where to dig in.
+      </p>
+    </header>
+
+    <section class="stats" aria-label="Headline stats">
+      <div class="stat"><p class="stat__n mono" id="wb-live">1</p><p class="stat__l mono">HERE NOW</p></div>
+      <div class="stat"><p class="stat__n mono">{shippedToday}</p><p class="stat__l mono">RECENT SHIPS</p></div>
+      <div class="stat"><p class="stat__n mono">{codexBriefs.length}</p><p class="stat__l mono">CODEX QUEUE</p></div>
+      <div class="stat"><p class="stat__n mono">{manusBriefs.length}</p><p class="stat__l mono">MANUS QUEUE</p></div>
+      <div class="stat"><p class="stat__n mono">{counts.total}</p><p class="stat__l mono">NODES</p></div>
+    </section>
+
+    <section class="panel">
+      <p class="panel__kicker mono">LIVE · WHO'S CONNECTED</p>
+      <p class="panel__intro">
+        Real-time view of visitors currently broadcasting presence —
+        humans, wallets, agents. Updated live via the
+        <a href="/api/presence/snapshot">presence DO</a>.
+      </p>
+      <p class="panel__cta">
+        <a class="btn" href="/here">open /here →</a>
+      </p>
+    </section>
+
+    <section class="panel">
+      <p class="panel__kicker mono">CODEX QUEUE · {codexBriefs.length} BRIEFS</p>
+      <p class="panel__intro">
+        Filed by cc. Executed by Codex via MCP. Each brief ships
+        atomically (one file per MCP turn, ~60s ceiling). Status
+        reflects current disk state — shipped briefs move to /sprints.
+      </p>
+      <ul class="brief-list">
+        {codexBriefs.map((b) => (
+          <li class="brief">
+            <p class="brief__title">{b.title}</p>
+            <p class="brief__meta mono">{b.slug}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="panel">
+      <p class="panel__kicker mono">MANUS QUEUE · {manusBriefs.length} BRIEFS</p>
+      <p class="panel__intro">
+        Filed by cc. Executed by Manus (Mike dispatches from Manus chat).
+        Ops-facing — platform matrix, email routing, launch-day checklist.
+      </p>
+      <ul class="brief-list">
+        {manusBriefs.map((b) => (
+          <li class="brief">
+            <p class="brief__title">{b.title}</p>
+            <p class="brief__meta mono">{b.slug}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="panel">
+      <p class="panel__kicker mono">RECENT SHIPS · 12 MOST RECENT</p>
+      <p class="panel__intro">
+        Every cc tick (cron-fired or chat-fired) writes a retro at
+        <code>docs/sprints/&lt;slug&gt;.md</code>. This shows the last
+        12; the full log is at <a href="/sprints">/sprints</a>.
+      </p>
+      <ul class="sprint-list">
+        {sprints.map((s) => (
+          <li class="sprint">
+            <p class="sprint__date mono">{s.date}</p>
+            <p class="sprint__title">{s.title.replace(/^(cron tick —|chat tick —|.*tick — )/, '')}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="panel">
+      <p class="panel__kicker mono">NODES · {counts.total} REGISTERED · {counts.agents} AGENTS · {counts.humans} HUMANS</p>
+      <ul class="node-list">
+        {NODES.map((n) => (
+          <li class="node">
+            <p class="node__head">
+              <span class="node__slug mono">/{n.slug}</span>
+              <span class="node__kind mono">· {n.kind}</span>
+            </p>
+            <p class="node__name"><strong>{n.displayName}</strong>{n.owner && <span class="node__owner"> · {n.owner}</span>}</p>
+          </li>
+        ))}
+      </ul>
+      <p class="panel__cta">
+        <a class="btn" href="/for-nodes">+ become node #{counts.total + 1} →</a>
+      </p>
+    </section>
+
+    <section class="panel">
+      <p class="panel__kicker mono">COLLABORATORS · {COLLABORATORS.length}</p>
+      <ul class="collab-strip">
+        {COLLABORATORS.map((c) => (
+          <li class="collab-chip mono">
+            {c.name} · {ROLE_LABEL[c.role]}
+          </li>
+        ))}
+      </ul>
+      <p class="panel__cta">
+        <a class="btn" href="/collabs">/collabs →</a>
+      </p>
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/sprints.json">/sprints.json</a></li>
+        <li><a href="/collabs.json">/collabs.json</a></li>
+        <li><a href="/api/presence/snapshot">/api/presence/snapshot</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  // Hydrate live-count from the presence snapshot.
+  fetch('/api/presence/snapshot', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (!j) return;
+      var total = (j.humans || 0) + (j.agents || 0);
+      var el = document.getElementById('wb-live');
+      if (el) el.textContent = String(Math.max(total, 1));
+    })
+    .catch(function () { /* ignore — static value stays */ });
+</script>
+
+<style>
+  .page { max-width: 880px; margin: 0 auto; padding: 24px 18px 80px; font-family: Georgia, 'Times New Roman', serif; color: #2a1b11; }
+  .mono { font-family: 'Monaco', 'Menlo', monospace; }
+  .crumb { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #756249; margin: 0 0 24px; }
+  .crumb a { color: #8a2432; text-decoration: none; margin: 0 2px; }
+  .crumb span { opacity: 0.5; }
+
+  .head { margin: 0 0 28px; }
+  .kicker { font-size: 11px; letter-spacing: 0.14em; color: #185FA5; margin: 0 0 8px; text-transform: uppercase; }
+  .title { font-family: Georgia, serif; font-size: clamp(30px, 5vw, 40px); font-weight: 700; line-height: 1.1; margin: 0 0 14px; }
+  .dek { margin: 0; font-size: 16px; line-height: 1.55; color: #38373A; max-width: 640px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin: 0 0 28px;
+  }
+  .stat { padding: 12px 14px; background: #fbfaf5; border: 1px solid #e6e4de; border-left: 3px solid #185FA5; border-radius: 2px; }
+  .stat__n { font-size: 24px; font-weight: 700; color: #0B3E73; margin: 0 0 2px; font-family: Georgia, serif; }
+  .stat__l { font-size: 10px; letter-spacing: 0.12em; color: #5F5E5A; margin: 0; }
+
+  .panel { margin: 0 0 24px; padding: 14px 16px; background: #ffffff; border: 1px solid #e6e4de; border-radius: 3px; }
+  .panel__kicker { font-size: 11px; letter-spacing: 0.14em; color: #0B3E73; margin: 0 0 8px; text-transform: uppercase; font-weight: 500; }
+  .panel__intro { font-size: 14px; line-height: 1.55; color: #38373A; margin: 0 0 12px; }
+  .panel__intro a { color: #8a2432; text-decoration: none; }
+  .panel__intro code { font-family: 'Monaco', 'Menlo', monospace; font-size: 12.5px; background: rgba(24, 95, 165, 0.06); padding: 1px 5px; border-radius: 2px; }
+  .panel__cta { margin: 10px 0 0; }
+  .btn { display: inline-block; padding: 6px 12px; background: #185FA5; color: #fff; text-decoration: none; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 2px; font-family: 'Monaco', 'Menlo', monospace; }
+  .btn:hover { background: #0B3E73; }
+
+  .brief-list, .sprint-list, .node-list, .collab-strip { list-style: none; padding: 0; margin: 0; }
+  .brief { padding: 8px 0; border-top: 1px solid #e6e4de; }
+  .brief:first-child { border-top: none; padding-top: 0; }
+  .brief__title { margin: 0; font-size: 14px; line-height: 1.4; }
+  .brief__meta { font-size: 10px; letter-spacing: 0.08em; color: #8a8878; margin: 2px 0 0; }
+
+  .sprint { display: grid; grid-template-columns: 90px 1fr; gap: 10px; padding: 6px 0; border-top: 1px solid #e6e4de; }
+  .sprint:first-child { border-top: none; padding-top: 0; }
+  .sprint__date { font-size: 11px; color: #5F5E5A; letter-spacing: 0.06em; margin: 0; }
+  .sprint__title { font-size: 13.5px; line-height: 1.4; margin: 0; }
+
+  .node { padding: 6px 0; border-top: 1px solid #e6e4de; }
+  .node:first-child { border-top: none; padding-top: 0; }
+  .node__head { font-size: 10px; letter-spacing: 0.08em; color: #5F5E5A; margin: 0; text-transform: uppercase; }
+  .node__slug { color: #8a2432; font-weight: 700; }
+  .node__name { font-size: 14px; margin: 2px 0 0; }
+  .node__owner { font-weight: 400; color: #5F5E5A; }
+
+  .collab-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+  .collab-chip { padding: 4px 10px; background: rgba(24, 95, 165, 0.08); border-radius: 20px; font-size: 11px; color: #0B3E73; letter-spacing: 0.06em; }
+
+  .agent-strip { margin-top: 32px; padding: 14px 16px; background: #f3e6d8; border-radius: 3px; }
+  .agent-strip__label { font-size: 11px; letter-spacing: 0.14em; color: #5f2a1e; margin: 0 0 8px; }
+  .agent-strip ul { list-style: none; padding: 0; margin: 0; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; display: flex; flex-wrap: wrap; gap: 10px 18px; }
+  .agent-strip a { color: #8a2432; text-decoration: none; }
+</style>
