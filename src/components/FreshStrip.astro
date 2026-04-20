@@ -1,0 +1,487 @@
+---
+/**
+ * FreshStrip — the very top of the home page. Answers two questions on
+ * arrival: is there anything NEW since I was last here, and what's ONE
+ * thing I can do right now.
+ *
+ * Mike 2026-04-19 morning feedback: "top not fresh enough and nothing
+ * to do." This strip is the response. Always shows:
+ *
+ *   [freshness badge]  · last drop {pretty ago}  ·  [action CTA →]
+ *
+ * Freshness badge states (client-side, reads localStorage.pcLastVisit):
+ *   - First-time: "HELLO" badge + "start here →" CTA to newest block
+ *   - 0 new since last: "CAUGHT UP" badge + "revisit →" CTA to random older
+ *   - N new since last: "{N} NEW" badge + "jump in →" CTA to newest
+ *
+ * Server-renders with "{N}" placeholder hidden; JS updates in place.
+ * No content layout shift — the strip is the same height in all states.
+ */
+import { getCollection } from 'astro:content';
+import { pickDailyBlock, todayPT } from '../lib/daily';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const newest = blocks[0];
+const newestId = newest?.data.id ?? '';
+const newestTitle = newest?.data.title ?? '';
+const newestTimestampMs = newest?.data.timestamp.getTime() ?? 0;
+
+// Pass through up to 20 recent block ids so the "revisit random older"
+// action can pick a non-newest one without an extra fetch.
+const candidateIds = blocks.slice(1, 21).map((b) => b.data.id);
+
+// Today's daily drop — shared with /today and /tv via src/lib/daily.
+// The strip routes CAUGHT UP visitors to /today if the drop is
+// unclaimed; otherwise falls back to revisit-an-older behavior.
+const daily = pickDailyBlock(blocks);
+const dailyId = daily?.data.id ?? '';
+const todayStr = todayPT();
+---
+
+<aside class="fresh-strip" aria-label="Fresh signal" data-newest-id={newestId} data-newest-ms={newestTimestampMs} data-candidates={candidateIds.join(',')} data-daily-id={dailyId} data-today={todayStr}>
+  <div class="fresh-strip__row">
+    <span class="fresh-strip__badge fresh-strip__badge--loading mono" id="fresh-badge">
+      <span class="fresh-strip__dot" aria-hidden="true"></span>
+      <span class="fresh-strip__badge-label">HELLO</span>
+    </span>
+
+    <span class="fresh-strip__sep mono" aria-hidden="true">·</span>
+
+    <span class="fresh-strip__meta mono">
+      <span class="fresh-strip__meta-label">LAST DROP</span>
+      <span class="fresh-strip__meta-sep" aria-hidden="true">·</span>
+      <time class="fresh-strip__ago" id="fresh-ago" datetime={newest?.data.timestamp.toISOString()}>just now</time>
+    </span>
+
+    <span class="fresh-strip__sep mono" aria-hidden="true">·</span>
+
+    <span class="fresh-strip__hello mono" id="fresh-hello" title="HELLO — presence points. +1 per day for showing up. Stored in this browser.">
+      <span class="fresh-strip__hello-star" aria-hidden="true">✦</span>
+      <span class="fresh-strip__hello-label">HELLO</span>
+      <span class="fresh-strip__hello-count" id="fresh-hello-count">0</span>
+    </span>
+
+    <span class="fresh-strip__spacer" aria-hidden="true"></span>
+
+    <a class="fresh-strip__cta" id="fresh-cta" href="/start" aria-label="Start here — 5-step tour for first-time visitors">
+      <span class="fresh-strip__cta-label mono">START HERE</span>
+      <span class="fresh-strip__cta-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+
+  <p class="sr-only" aria-live="polite" id="fresh-sr"></p>
+</aside>
+
+<script is:inline>
+  (function () {
+    const strip = document.querySelector('.fresh-strip');
+    if (!strip) return;
+
+    const newestId = strip.dataset.newestId || '';
+    const newestMs = parseInt(strip.dataset.newestMs || '0', 10);
+    const candidates = (strip.dataset.candidates || '').split(',').filter(Boolean);
+    const dailyId = strip.dataset.dailyId || '';
+    const today = strip.dataset.today || '';
+
+    const badge = document.getElementById('fresh-badge');
+    const badgeLabel = badge ? badge.querySelector('.fresh-strip__badge-label') : null;
+    const cta = document.getElementById('fresh-cta');
+    const ctaLabel = cta ? cta.querySelector('.fresh-strip__cta-label') : null;
+    const ago = document.getElementById('fresh-ago');
+    const sr = document.getElementById('fresh-sr');
+
+    const LS_KEY = 'pc:lastVisit';
+    const NOW = Date.now();
+
+    // Read last visit (ISO string) from localStorage.
+    let lastVisit = 0;
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const parsed = parseInt(raw, 10);
+        if (!isNaN(parsed) && parsed > 0) lastVisit = parsed;
+      }
+    } catch (e) { /* localStorage disabled */ }
+
+    // Count blocks newer than lastVisit using the embedded newestMs as
+    // the latest timestamp. The exact per-block count would need a full
+    // list — but for the badge we just need first-time vs some vs none.
+    // "Some" is a heuristic good enough for a morning glance.
+    let state = 'hello';
+    let count = 0;
+    if (lastVisit === 0) {
+      state = 'hello';
+    } else if (newestMs > lastVisit) {
+      state = 'fresh';
+      // We know there's at least one. We don't have per-block counts
+      // client-side, but we can approximate by reading /blocks.json
+      // asynchronously — see below.
+      count = 1;
+    } else {
+      state = 'caught-up';
+    }
+
+    function paint() {
+      if (!badge || !badgeLabel || !cta || !ctaLabel) return;
+
+      badge.classList.remove('fresh-strip__badge--loading', 'fresh-strip__badge--hello', 'fresh-strip__badge--fresh', 'fresh-strip__badge--caught');
+
+      if (state === 'hello') {
+        badge.classList.add('fresh-strip__badge--hello');
+        badgeLabel.textContent = 'HELLO';
+        ctaLabel.textContent = 'START HERE';
+        cta.href = '/start';
+        if (sr) sr.textContent = 'Welcome. Take the 5-step tour.';
+      } else if (state === 'fresh') {
+        badge.classList.add('fresh-strip__badge--fresh');
+        const label = count > 1 ? count + ' NEW' : 'NEW';
+        badgeLabel.textContent = label;
+        ctaLabel.textContent = 'JUMP IN';
+        cta.href = '/b/' + newestId;
+        if (sr) sr.textContent = count + ' new since your last visit. Jump in at the newest block.';
+      } else {
+        // CAUGHT UP — check whether today's daily drop is still available.
+        // If visitor hasn't claimed today's drop yet, route them there;
+        // it's a concrete "something to do now" vs. a random older block.
+        // Per Mike 2026-04-19 morning feedback ("nothing to do") + the
+        // /today daily-drop surface shipped earlier this morning.
+        badge.classList.add('fresh-strip__badge--caught');
+        badgeLabel.textContent = 'CAUGHT UP';
+        let routedToDaily = false;
+        if (dailyId && today) {
+          let claimedToday = false;
+          try {
+            const raw = localStorage.getItem('pc:daily:collected');
+            if (raw) {
+              const arr = JSON.parse(raw);
+              if (Array.isArray(arr)) claimedToday = arr.some(function (c) { return c && c.date === today; });
+            }
+          } catch (e) { /* ignore */ }
+          if (!claimedToday) {
+            ctaLabel.textContent = "TODAY'S DROP";
+            cta.href = '/today';
+            if (sr) sr.textContent = "Caught up on the feed. Today's drop is still waiting — tap to collect.";
+            routedToDaily = true;
+          }
+        }
+        if (!routedToDaily) {
+          const pick = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : newestId;
+          ctaLabel.textContent = 'REVISIT';
+          cta.href = '/b/' + pick;
+          if (sr) sr.textContent = 'Caught up and claimed. Tap to revisit an older block.';
+        }
+      }
+    }
+
+    // Pretty-ago for LAST DROP.
+    function prettyAgo(ms) {
+      const delta = Math.max(0, NOW - ms);
+      const s = Math.floor(delta / 1000);
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + ' min ago';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ago';
+      const d = Math.floor(h / 24);
+      if (d < 7) return d + 'd ago';
+      return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    if (ago && newestMs) ago.textContent = prettyAgo(newestMs);
+
+    paint();
+
+    // Refine count by fetching /blocks.json — swap the badge label if we
+    // can compute a precise number. Non-blocking; if it fails, the
+    // heuristic label stays.
+    if (state === 'fresh' && lastVisit > 0) {
+      fetch('/blocks.json')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || !Array.isArray(j.blocks)) return;
+          const precise = j.blocks.filter(function (b) {
+            const ts = Date.parse(b.timestamp);
+            return !isNaN(ts) && ts > lastVisit;
+          }).length;
+          if (precise > 0 && precise !== count) {
+            count = precise;
+            paint();
+          }
+        })
+        .catch(function () { /* keep heuristic */ });
+    }
+
+    // Mark this visit AFTER painting — so the next visit's comparison
+    // is against the arrival moment of this one, not post-interaction.
+    try { localStorage.setItem(LS_KEY, String(NOW)); } catch (e) {}
+
+    // ── HELLO: daily presence points ─────────────────────────────────
+    //
+    // +1 per day for arriving. First visit ever = +1. First visit on a
+    // new PT calendar date = +1. Same-day revisits don't add.
+    //
+    // This is intentionally simple v0. Future path: spend HELLO for
+    // perks (custom noun, mood-slug authoring, etc.) OR convert to a
+    // Tezos HELLO token once a daylight decision on custody lands.
+    // See block 0280 (wallet ladder) for the framing — this sits at
+    // Rung 3-ish today and can graduate later without losing the count.
+    const HELLO_COUNT_KEY = 'pc:hello:count';
+    const HELLO_DAY_KEY = 'pc:hello:lastDay';
+    const helloEl = document.getElementById('fresh-hello');
+    const helloCountEl = document.getElementById('fresh-hello-count');
+
+    function todayPTStr() {
+      try {
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+      } catch (e) {
+        // en-CA gives YYYY-MM-DD; fallback if the runtime rejects it.
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return yyyy + '-' + mm + '-' + dd;
+      }
+    }
+
+    function spawnHelloFloat(amount) {
+      if (!helloEl) return;
+      const f = document.createElement('span');
+      f.className = 'fresh-strip__hello-float';
+      f.textContent = '+' + amount + ' HELLO';
+      f.setAttribute('aria-hidden', 'true');
+      helloEl.appendChild(f);
+      // Remove after animation completes (CSS handles the animation).
+      setTimeout(function () {
+        if (f.parentNode) f.parentNode.removeChild(f);
+      }, 1800);
+    }
+
+    let count = 0;
+    try {
+      const rawCount = localStorage.getItem(HELLO_COUNT_KEY);
+      if (rawCount) {
+        const parsed = parseInt(rawCount, 10);
+        if (!isNaN(parsed) && parsed >= 0) count = parsed;
+      }
+    } catch (e) { /* localStorage off */ }
+
+    let earnedToday = false;
+    try {
+      const lastDay = localStorage.getItem(HELLO_DAY_KEY);
+      const today = todayPTStr();
+      if (lastDay !== today) {
+        count += 1;
+        localStorage.setItem(HELLO_COUNT_KEY, String(count));
+        localStorage.setItem(HELLO_DAY_KEY, today);
+        earnedToday = true;
+      }
+    } catch (e) { /* localStorage off; count stays */ }
+
+    if (helloCountEl) helloCountEl.textContent = String(count);
+
+    if (earnedToday) {
+      if (helloEl) helloEl.classList.add('fresh-strip__hello--earned');
+      // Delay the float slightly so the badge paint registers first.
+      setTimeout(function () { spawnHelloFloat(1); }, 140);
+      // Remove the earned glow class after the float fades.
+      setTimeout(function () {
+        if (helloEl) helloEl.classList.remove('fresh-strip__hello--earned');
+      }, 2400);
+      if (sr) sr.textContent = (sr.textContent || '') + ' +1 HELLO earned.';
+    }
+  })();
+</script>
+
+<style>
+  .fresh-strip {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--pc-ink);
+    background: linear-gradient(180deg, #fef5e7 0%, #fdebc8 100%);
+    border-radius: 3px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+  .fresh-strip__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .fresh-strip__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #12110E;
+    color: #fef5e7;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 10px;
+  }
+  .fresh-strip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #F59F00;
+    box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7);
+  }
+  .fresh-strip__badge--loading { background: #5F5E5A; }
+  .fresh-strip__badge--hello .fresh-strip__dot { background: #1864AB; }
+  .fresh-strip__badge--fresh {
+    background: #8a2432;
+  }
+  .fresh-strip__badge--fresh .fresh-strip__dot {
+    background: #F59F00;
+    animation: fresh-pulse 2.4s ease-out infinite;
+  }
+  .fresh-strip__badge--caught {
+    background: #2a2925;
+    color: #c4c2bc;
+  }
+  .fresh-strip__badge--caught .fresh-strip__dot { background: #2B8A3E; }
+
+  @keyframes fresh-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7); }
+    70%  { box-shadow: 0 0 0 8px rgba(245, 159, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0); }
+  }
+
+  .fresh-strip__sep { color: #5F5E5A; opacity: 0.5; }
+
+  .fresh-strip__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #5F5E5A;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .fresh-strip__meta-label { font-weight: 600; color: #8a2432; }
+  .fresh-strip__meta-sep { opacity: 0.5; }
+  .fresh-strip__ago { color: #12110E; font-weight: 600; letter-spacing: 0.08em; }
+
+  .fresh-strip__spacer { flex: 1; }
+
+  /* HELLO — daily presence points. Gold ink, thin chip, glows on earn. */
+  .fresh-strip__hello {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border: 1px solid #F59F00;
+    background: #fff8e6;
+    color: #8a5a00;
+    border-radius: 999px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    position: relative;
+    cursor: default;
+    transition: background 0.3s, box-shadow 0.3s, transform 0.3s;
+  }
+  .fresh-strip__hello-star {
+    color: #F59F00;
+    font-size: 11px;
+    line-height: 1;
+  }
+  .fresh-strip__hello-label { letter-spacing: 0.18em; }
+  .fresh-strip__hello-count {
+    color: #12110E;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+  }
+  .fresh-strip__hello--earned {
+    background: #F59F00;
+    color: #12110E;
+    box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.6);
+    animation: hello-earn 1.6s ease-out;
+  }
+  .fresh-strip__hello--earned .fresh-strip__hello-count { color: #12110E; }
+  .fresh-strip__hello--earned .fresh-strip__hello-star {
+    color: #8a2432;
+    animation: hello-spin 0.9s ease-out;
+  }
+
+  @keyframes hello-earn {
+    0%   { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7); transform: scale(1); }
+    30%  { transform: scale(1.08); }
+    70%  { box-shadow: 0 0 0 14px rgba(245, 159, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0); transform: scale(1); }
+  }
+  @keyframes hello-spin {
+    0%   { transform: rotate(0deg) scale(1); }
+    50%  { transform: rotate(180deg) scale(1.3); }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+
+  .fresh-strip__hello-float {
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    transform: translate(-50%, 0);
+    padding: 2px 8px;
+    background: #8a2432;
+    color: #fef5e7;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: hello-float 1.6s ease-out forwards;
+  }
+  @keyframes hello-float {
+    0%   { opacity: 0; transform: translate(-50%, 0) scale(0.85); }
+    20%  { opacity: 1; transform: translate(-50%, -14px) scale(1.05); }
+    100% { opacity: 0; transform: translate(-50%, -44px) scale(1); }
+  }
+
+  .fresh-strip__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid #8a2432;
+    background: #fff;
+    color: #8a2432;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    font-size: 10px;
+    text-transform: uppercase;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 0.12s, color 0.12s;
+  }
+  .fresh-strip__cta:hover {
+    background: #8a2432;
+    color: #fef5e7;
+    text-decoration: none;
+  }
+  .fresh-strip__cta-arrow { font-weight: 700; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 520px) {
+    .fresh-strip__sep { display: none; }
+    .fresh-strip__meta-label { display: none; }
+    .fresh-strip__hello-label { display: none; }
+    .fresh-strip__row { gap: 6px; }
+  }
+</style>

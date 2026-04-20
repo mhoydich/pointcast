@@ -80,7 +80,9 @@ export const GET: APIRoute = async () => {
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
         tv: 'https://pointcast.xyz/tv',
+        here: 'https://pointcast.xyz/here',
         forAgents: 'https://pointcast.xyz/for-agents',
+        forNodes: 'https://pointcast.xyz/for-nodes',
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
@@ -115,6 +117,7 @@ export const GET: APIRoute = async () => {
         drop: 'https://pointcast.xyz/api/drop',
         poll: 'https://pointcast.xyz/api/poll',
         presence: 'wss://pointcast.xyz/api/presence',
+        presenceSnapshot: 'https://pointcast.xyz/api/presence/snapshot',
         presenceProtocol: {
           transport: 'websocket',
           query: {

@@ -68,6 +68,26 @@
     <button class="here-state__edit mono" id="here-state-edit" type="button">edit</button>
   </div>
 
+  {/* Tapped-visitor focus line — shows a selected OTHER visitor's
+      self-reported state. Populated by the click handler on
+      .here-slot--occupied slots. Per Mike 2026-04-20 11:25 PT:
+      "interesting to be able to click on them or if there is
+      additional data, share." */}
+  <div class="here-strip__focus" id="here-focus" hidden>
+    <img class="here-focus__noun" id="here-focus-noun" alt="" src="" />
+    <div class="here-focus__body">
+      <p class="here-focus__head mono">
+        <span id="here-focus-kind">VISITOR</span>
+        <span class="here-focus__sep" aria-hidden="true">·</span>
+        <span id="here-focus-noun-label">noun —</span>
+        <span class="here-focus__sep" aria-hidden="true">·</span>
+        <span id="here-focus-joined">joined —</span>
+      </p>
+      <p class="here-focus__detail" id="here-focus-detail"></p>
+    </div>
+    <button class="here-focus__close mono" id="here-focus-close" type="button" aria-label="Close visitor details">×</button>
+  </div>
+
   {/* TELL THE PEOPLES panel — expandable. Per Mike 2026-04-19 20:45 PT:
       "having the person set their mood, maybe the song they are
       listening to, location, or any other interesting data". */}
@@ -220,6 +240,10 @@
       }
       slot.classList.add('here-slot--occupied');
       slot.dataset.kind = session.kind || 'human';
+      // Stash the session JSON on the slot so the click handler can read it.
+      try { slot.dataset.session = JSON.stringify(session); } catch (e) {}
+      slot.setAttribute('role', 'button');
+      slot.setAttribute('tabindex', '0');
       var img = slot.querySelector('.here-slot__noun');
       var ghost = slot.querySelector('.here-slot__ghost');
       if (img) {
@@ -230,9 +254,84 @@
       if (ghost) ghost.hidden = true;
       var label = describeSession(session);
       if (label) {
-        slot.title = label;
-        slot.setAttribute('aria-label', label);
+        slot.title = label + ' · tap for details';
+        slot.setAttribute('aria-label', label + ' · tap for details');
+      } else {
+        slot.title = 'visitor · tap for details';
+        slot.setAttribute('aria-label', 'visitor · tap for details');
       }
+    }
+
+    // ---------- visitor-slot focus (click/tap to show details) ----------
+    var focusEl = document.getElementById('here-focus');
+    var focusNoun = document.getElementById('here-focus-noun');
+    var focusKind = document.getElementById('here-focus-kind');
+    var focusNounLabel = document.getElementById('here-focus-noun-label');
+    var focusJoined = document.getElementById('here-focus-joined');
+    var focusDetail = document.getElementById('here-focus-detail');
+    var focusClose = document.getElementById('here-focus-close');
+    var focusCurrentSlot = null;
+
+    function hideFocus() {
+      if (focusEl) focusEl.hidden = true;
+      focusCurrentSlot = null;
+    }
+    function formatJoinedAt(iso) {
+      try {
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '—';
+        var h = d.getHours(); var m = d.getMinutes();
+        var mm = m < 10 ? '0' + m : String(m);
+        return 'joined ' + h + ':' + mm;
+      } catch (e) { return '—'; }
+    }
+    function showFocus(slot) {
+      if (!focusEl || !slot) return;
+      var raw = slot.dataset.session;
+      if (!raw) return;
+      var session;
+      try { session = JSON.parse(raw); } catch (e) { return; }
+      if (!session) return;
+      if (focusNoun) {
+        focusNoun.src = nounUrl(Number(session.nounId));
+        focusNoun.alt = 'noun ' + session.nounId;
+      }
+      if (focusKind) focusKind.textContent = (session.kind || 'visitor').toUpperCase();
+      if (focusNounLabel) focusNounLabel.textContent = 'noun ' + session.nounId;
+      if (focusJoined) focusJoined.textContent = formatJoinedAt(session.joinedAt);
+      var parts = [];
+      if (session.mood) parts.push(String(session.mood).toUpperCase());
+      if (session.listening) parts.push('🎵 ' + session.listening);
+      if (session.where) parts.push('📍 ' + session.where);
+      if (focusDetail) focusDetail.textContent = parts.length ? parts.join(' · ') : 'no self-report — just showing up is enough.';
+      focusEl.hidden = false;
+      focusCurrentSlot = slot;
+    }
+    function onSlotActivate(e) {
+      var slot = e.currentTarget;
+      if (!slot) return;
+      // Toggle off if clicking the same slot.
+      if (focusCurrentSlot === slot) { hideFocus(); return; }
+      showFocus(slot);
+    }
+    if (focusClose) focusClose.addEventListener('click', hideFocus);
+    // Delegate — attach once; re-evaluates slot state every click.
+    var slotsEl = document.getElementById('here-slots');
+    if (slotsEl) {
+      slotsEl.addEventListener('click', function (e) {
+        var slot = e.target.closest('.here-slot--occupied');
+        if (!slot) return;
+        // Skip YOU — TELL panel already owns that surface.
+        if (slot.classList.contains('here-slot--you')) return;
+        onSlotActivate({ currentTarget: slot });
+      });
+      slotsEl.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var slot = e.target.closest('.here-slot--occupied');
+        if (!slot || slot.classList.contains('here-slot--you')) return;
+        e.preventDefault();
+        onSlotActivate({ currentTarget: slot });
+      });
     }
 
     function otherSessionsFromPayload(payload) {
@@ -685,6 +784,66 @@
   .here-strip__tell:hover {
     background: #F59F00;
     color: #12110E;
+  }
+
+  .here-strip__focus {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid #534AB7;
+    background: #fff;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .here-strip__focus[hidden] { display: none; }
+  .here-focus__noun {
+    width: 40px;
+    height: 40px;
+    image-rendering: pixelated;
+    background: #eee8dc;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .here-focus__body { flex: 1; min-width: 0; }
+  .here-focus__head {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #534AB7;
+    margin: 0 0 2px;
+    font-weight: 600;
+  }
+  .here-focus__sep { margin: 0 4px; opacity: 0.6; }
+  .here-focus__detail {
+    font-size: 12.5px;
+    color: #38373A;
+    margin: 0;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .here-focus__close {
+    background: transparent;
+    border: 1px solid #d6d4cd;
+    color: #5f5e5a;
+    width: 26px;
+    height: 26px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .here-focus__close:hover { background: #f5f2ea; color: #12110E; }
+
+  .here-slot--occupied {
+    cursor: pointer;
+  }
+  .here-slot--occupied:focus-visible {
+    outline: 2px solid #534AB7;
+    outline-offset: 2px;
   }
 
   .here-strip__panel {
