@@ -71,6 +71,18 @@ function dayLengthLabel(ms: number): string {
   return `${h}h ${String(m).padStart(2, '0')}m of daylight`;
 }
 
+/** Minutes past local midnight for `d` in `tz`. Returns null if d is null. */
+function localMinutes(d: Date | null, tz: string): number | null {
+  if (!d) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const h = parts.find((p) => p.type === 'hour')?.value;
+  const m = parts.find((p) => p.type === 'minute')?.value;
+  if (h === undefined || m === undefined) return null;
+  return parseInt(h, 10) * 60 + parseInt(m, 10);
+}
+
 const zonesSky = zones.map((z) => {
   const s = sunTimes(renderNow, z.lat, z.lon, renderNow);
   const ph = planetaryHour(renderNow, z.lat, z.lon, z.tz);
@@ -83,6 +95,12 @@ const zonesSky = zones.map((z) => {
       dayLength: dayLengthLabel(s.dayLengthMs),
       altitudeDeg: s.altitudeDeg,
       isDay: s.isDay,
+      // Positions on a 24h strip (0..1440 minutes past local midnight).
+      // Used by the <SunStrip> SVG so we can show the sun on its arc.
+      sunriseMin: localMinutes(s.sunrise, z.tz),
+      sunsetMin: localMinutes(s.sunset, z.tz),
+      nowMin: localMinutes(renderNow, z.tz) ?? 0,
+      solarNoonMin: localMinutes(s.solarNoon, z.tz),
     },
     planetaryHour: ph,
     season: se,
@@ -215,15 +233,76 @@ const jsonLd = {
           <p class="clock-card__status mono" data-role="status" data-bucket="">—</p>
 
           <div class="clock-card__sky" aria-label="Sky here">
-            <p class="clock-card__sky-line mono" data-role="sun">
-              <span aria-hidden="true">{sun.isDay ? '☀' : '☾'}</span>
-              <span data-role="sunrise">{sun.sunriseLocal}</span>
-              <span aria-hidden="true">→</span>
-              <span data-role="sunset">{sun.sunsetLocal}</span>
-            </p>
-            <p class="clock-card__sky-line clock-card__sky-line--muted mono" data-role="daylen">
-              {sun.dayLength}
-            </p>
+            <div class="sun-strip-wrap">
+              <svg
+                class="sun-strip"
+                viewBox="0 0 1440 28"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+                data-role="sun-strip"
+                data-sunrise={sun.sunriseMin ?? ''}
+                data-sunset={sun.sunsetMin ?? ''}
+                data-solar-noon={sun.solarNoonMin ?? ''}
+                data-now={sun.nowMin}
+                data-is-day={sun.isDay ? '1' : '0'}
+              >
+                <defs>
+                  <linearGradient id={`sun-grad-${data.id}-${z.label.replace(/[^a-zA-Z0-9]/g, '')}`} x1="0" x2="1" y1="0" y2="0">
+                    <stop offset="0%" stop-color="#D88A4A" />
+                    <stop offset="15%" stop-color="#F5D563" />
+                    <stop offset="50%" stop-color="#FBF6D4" />
+                    <stop offset="85%" stop-color="#F5D563" />
+                    <stop offset="100%" stop-color="#C26040" />
+                  </linearGradient>
+                </defs>
+                {/* Night base — full 24h indigo slab. */}
+                <rect x="0" y="0" width="1440" height="28" fill="#0B0E1F" />
+                {/* Day band from sunrise to sunset — server-rendered; client-updated
+                    via data-sunrise/sunset attributes on rebuild. */}
+                {sun.sunriseMin !== null && sun.sunsetMin !== null && (
+                  <rect
+                    data-role="day-band"
+                    x={sun.sunriseMin}
+                    y="0"
+                    width={sun.sunsetMin - sun.sunriseMin}
+                    height="28"
+                    fill={`url(#sun-grad-${data.id}-${z.label.replace(/[^a-zA-Z0-9]/g, '')})`}
+                  />
+                )}
+                {/* Hour ticks at 06, 12, 18 */}
+                <g stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1">
+                  <line x1="360" y1="0" x2="360" y2="28" />
+                  <line x1="720" y1="0" x2="720" y2="28" />
+                  <line x1="1080" y1="0" x2="1080" y2="28" />
+                </g>
+                {/* Now marker */}
+                <line
+                  data-role="now-marker"
+                  x1={sun.nowMin}
+                  y1="-2"
+                  x2={sun.nowMin}
+                  y2="30"
+                  stroke="#12110E"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                />
+                {/* Sun or moon glyph at current position */}
+                <circle
+                  data-role="now-body"
+                  cx={sun.nowMin}
+                  cy="14"
+                  r={sun.isDay ? 9 : 7}
+                  fill={sun.isDay ? '#FFE65C' : '#D9D6EF'}
+                  stroke={sun.isDay ? '#FBB040' : '#8B85C3'}
+                  stroke-width="1.5"
+                />
+              </svg>
+              <p class="sun-strip__labels mono" aria-hidden="true">
+                <span class="sun-strip__rise" data-role="sunrise">{sun.sunriseLocal}</span>
+                <span class="sun-strip__daylen" data-role="daylen">{sun.dayLength}</span>
+                <span class="sun-strip__set" data-role="sunset">{sun.sunsetLocal}</span>
+              </p>
+            </div>
             {ph && (
               <p class="clock-card__sky-line mono" data-role="phour">
                 <span aria-hidden="true">{ph.glyph}</span>
@@ -359,15 +438,31 @@ const jsonLd = {
       const s = sunTimes(now, lat, lon, now);
       const ph = planetaryHour(now, lat, lon, tz);
 
-      const sunLine = card.querySelector('[data-role="sun"]');
-      const sunriseEl = sunLine?.querySelector<HTMLElement>('[data-role="sunrise"]');
-      const sunsetEl = sunLine?.querySelector<HTMLElement>('[data-role="sunset"]');
+      // Compute local minutes past midnight for the strip now-marker.
+      const nowParts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+      }).formatToParts(now);
+      const nowMin =
+        parseInt(nowParts.find((p) => p.type === 'hour')?.value ?? '0', 10) * 60 +
+        parseInt(nowParts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+
+      const sunriseEl = card.querySelector<HTMLElement>('[data-role="sunrise"]');
+      const sunsetEl = card.querySelector<HTMLElement>('[data-role="sunset"]');
       if (sunriseEl) sunriseEl.textContent = fmt(s.sunrise, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
       if (sunsetEl) sunsetEl.textContent = fmt(s.sunset, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
-      // The day/night glyph is the first span in the sun line — update it.
-      if (sunLine) {
-        const firstSpan = sunLine.querySelector<HTMLElement>('span[aria-hidden="true"]');
-        if (firstSpan) firstSpan.textContent = s.isDay ? '☀' : '☾';
+
+      // Move the now-marker line + sun/moon body to the new nowMin position.
+      const marker = card.querySelector<SVGLineElement>('[data-role="now-marker"]');
+      const body = card.querySelector<SVGCircleElement>('[data-role="now-body"]');
+      if (marker) {
+        marker.setAttribute('x1', String(nowMin));
+        marker.setAttribute('x2', String(nowMin));
+      }
+      if (body) {
+        body.setAttribute('cx', String(nowMin));
+        body.setAttribute('r', s.isDay ? '9' : '7');
+        body.setAttribute('fill', s.isDay ? '#FFE65C' : '#D9D6EF');
+        body.setAttribute('stroke', s.isDay ? '#FBB040' : '#8B85C3');
       }
 
       const phPlanet = card.querySelector<HTMLElement>('[data-role="phour-planet"]');
@@ -506,6 +601,43 @@ const jsonLd = {
     display: flex;
     flex-direction: column;
     gap: 3px;
+  }
+  .sun-strip-wrap {
+    margin-bottom: 4px;
+  }
+  .sun-strip {
+    display: block;
+    width: 100%;
+    height: 22px;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(18, 17, 14, 0.15);
+  }
+  .sun-strip__labels {
+    margin: 3px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    gap: 6px;
+  }
+  .sun-strip__rise,
+  .sun-strip__set {
+    color: var(--ch-800);
+    font-weight: 500;
+  }
+  .sun-strip__daylen {
+    flex: 1;
+    text-align: center;
+    font-size: 8.5px;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .clock-card__sky-line {
     font-family: var(--pc-font-mono);
