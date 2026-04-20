@@ -1,0 +1,574 @@
+---
+/**
+ * /mesh — the three meshes of PointCast.
+ *
+ * LOCAL   — 25-mile radius around El Segundo. People, courts, cafes, blocks
+ *           tagged as visits. Mesh = the physical network of places the site
+ *           lives in.
+ * ONLINE  — nine channels, RSS, JSON feeds, Farcaster. Mesh = the syndication
+ *           graph other humans and clients read us through.
+ * AGENT   — llms.txt, /agents.json, /for-agents, stripped HTML mode. Mesh = the
+ *           parallel machine-readable surface every crawler / Claude / GPT / etc.
+ *           can walk.
+ *
+ * Each layer shows what's live, what's pending, and how to hop in. Static.
+ * No runtime. Pulls counts from the blocks collection + channels lib at build
+ * time so the numbers stay honest without any hand-curation.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS, CHANNEL_LIST } from '../lib/channels';
+import { BLOCK_TYPE_LIST } from '../lib/block-types';
+import { NEIGHBORHOODS_BY_DISTANCE, countByStatus, RADIUS_MILES } from '../lib/neighborhoods';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const totalBlocks = blocks.length;
+
+// Geotagged visits — VISIT-type blocks with visitor.geo or meta.location
+const visits = blocks.filter((b) =>
+  b.data.type === 'VISIT' ||
+  Boolean(b.data.visitor?.geo) ||
+  Boolean(b.data.meta?.location),
+);
+const humanVisits = visits.filter((b) => b.data.visitor?.kind !== 'agent').length;
+const agentVisits = visits.filter((b) => b.data.visitor?.kind === 'agent').length;
+
+// Neighborhoods — top 6 nearest so readers see the shape without going to /beacon
+const nearestNeighborhoods = NEIGHBORHOODS_BY_DISTANCE.slice(0, 6);
+const neighborhoodCounts = countByStatus();
+const seedNeighborhoods = NEIGHBORHOODS_BY_DISTANCE.filter((n) => n.status === 'seed').map((n) => n.name);
+
+// Channels — count blocks per channel
+const blocksByChannel = CHANNEL_LIST.map((ch) => ({
+  code: ch.code,
+  slug: ch.slug,
+  name: ch.name,
+  purpose: ch.purpose,
+  color600: ch.color600,
+  color800: ch.color800,
+  count: blocks.filter((b) => b.data.channel === ch.code).length,
+}));
+
+// Block types — count blocks per type
+const blocksByType = BLOCK_TYPE_LIST.map((t) => ({
+  code: t.code,
+  label: t.label,
+  count: blocks.filter((b) => b.data.type === t.code).length,
+}));
+
+// Agent surfaces — endpoints that return JSON/RSS/txt for machine readers
+const agentSurfaces = [
+  { path: '/agents.json',                     kind: 'manifest',   desc: 'Consolidated discovery manifest. Every machine-readable surface, contract addresses, stripped-HTML spec.' },
+  { path: '/blocks.json',                     kind: 'feed',       desc: 'Full block list. Same shape the homepage renders from.' },
+  { path: '/archive.json',                    kind: 'feed',       desc: 'Reverse-chronological archive.' },
+  { path: '/editions.json',                   kind: 'feed',       desc: 'All blocks with an edition (MINT / FAUCET).' },
+  { path: '/now.json',                        kind: 'state',      desc: 'Current mood / run state / top-of-stack. Shapes "what is PointCast doing right now".' },
+  { path: '/cast.json',                       kind: 'feed',       desc: 'Sunday Cast lineup.' },
+  { path: '/battle.json',                     kind: 'feed',       desc: 'Battler Card of the Day + rotation.' },
+  { path: '/timeline.json',                   kind: 'feed',       desc: 'Day-keyed rollup of every published block.' },
+  { path: '/feed.json',                       kind: 'feed',       desc: 'JSON Feed 1.1 of posts.' },
+  { path: '/feed.xml',                        kind: 'rss',        desc: 'RSS 2.0 of posts.' },
+  { path: '/rss.xml',                         kind: 'rss',        desc: 'RSS 2.0 aliased.' },
+  { path: '/c/{slug}.json',                   kind: 'channel',    desc: 'Per-channel JSON feed (one per each of the 9 channels).' },
+  { path: '/c/{slug}.rss',                    kind: 'channel',    desc: 'Per-channel RSS feed (one per each of the 9 channels).' },
+  { path: '/b/{id}.json',                     kind: 'block',      desc: 'Per-block JSON sibling to /b/{id}.' },
+  { path: '/llms.txt',                        kind: 'index',      desc: 'LLM-discovery convention (short).' },
+  { path: '/llms-full.txt',                   kind: 'index',      desc: 'LLM-discovery convention (verbose).' },
+  { path: '/sitemap-blocks.xml',              kind: 'sitemap',    desc: 'Sitemap of every block (for crawlers).' },
+  { path: '/for-agents',                      kind: 'doc',        desc: 'Human-readable manifest. Explains the Block primitive, channels, citation format.' },
+];
+
+// Known agent user-agents the site serves stripped HTML to (middleware)
+const agentUAs = [
+  'ai:*', 'GPTBot', 'ClaudeBot', 'PerplexityBot', 'OAI-SearchBot', 'Atlas', 'Google-Extended',
+];
+
+const title = 'Mesh — three networks that carry PointCast';
+const description = 'PointCast runs on three meshes at once. LOCAL: the 25-mile radius around El Segundo. ONLINE: nine channels, RSS, JSON feeds, Farcaster. AGENT: stripped-HTML, /agents.json, llms.txt, every block as JSON. This page is the map.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Collection',
+  name: 'PointCast Mesh',
+  description,
+  url: 'https://pointcast.xyz/mesh',
+  hasPart: [
+    { '@type': 'Place',     name: 'Local Mesh (25-mile radius, El Segundo-centered)',             url: 'https://pointcast.xyz/beacon' },
+    { '@type': 'DataFeed',  name: 'Online Mesh (channels + RSS + JSON feeds)',                      url: 'https://pointcast.xyz/agents.json' },
+    { '@type': 'Dataset',   name: 'Agent Mesh (stripped-HTML + llms.txt + machine manifest)',       url: 'https://pointcast.xyz/for-agents' },
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/mesh.png" jsonLd={jsonLd}>
+  <main class="mesh">
+    <header class="mesh__head">
+      <p class="kicker mono">MESH</p>
+      <h1 class="title">Three networks, one broadcast.</h1>
+      <p class="dek">
+        PointCast isn't one site. It's a thing sitting inside three overlapping
+        networks: a <strong>local</strong> one (25-mile radius around El Segundo),
+        an <strong>online</strong> one (nine channels, feeds, wallets), and an
+        <strong>agent</strong> one (stripped HTML and JSON surfaces every
+        LLM / crawler / indexer walks). This page shows all three at once.
+      </p>
+    </header>
+
+    <section class="layer layer--local">
+      <div class="layer__head">
+        <p class="layer__kicker mono">MESH · LOCAL</p>
+        <h2 class="layer__title">25-mile radius.</h2>
+        <p class="layer__dek">
+          El Segundo is the center. Every block tagged with a location, every
+          visit-drop, every pickleball court, every cafe. The mesh isn't a
+          Wi-Fi network (yet) — it's the set of places the site has been or
+          wants to go.
+        </p>
+      </div>
+      <div class="layer__grid">
+        <div class="stat">
+          <span class="stat__value mono">{RADIUS_MILES}<span class="stat__unit mono">MI</span></span>
+          <span class="stat__label mono">RADIUS</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value mono">{NEIGHBORHOODS_BY_DISTANCE.length}</span>
+          <span class="stat__label mono">NEIGHBORHOODS</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value mono">{visits.length}</span>
+          <span class="stat__label mono">VISITS</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value mono">{totalBlocks}</span>
+          <span class="stat__label mono">TOTAL BLOCKS</span>
+        </div>
+      </div>
+      <div class="places">
+        <p class="places__title mono">NEAREST · {nearestNeighborhoods.length} OF {NEIGHBORHOODS_BY_DISTANCE.length}</p>
+        <ul class="places__list">
+          {nearestNeighborhoods.map((p) => (
+            <li class={`place place--${p.status}`}>
+              <span class="place__name">{p.name}</span>
+              <span class="place__dist mono">{p.distance} MI · {p.bearing}</span>
+              <span class="place__status mono">{p.status.toUpperCase()}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="layer__cta">
+        <a class="btn" href="/beacon">→ /beacon · full map + 19 neighborhoods ({neighborhoodCounts.seed} seed, {neighborhoodCounts.target} target, {neighborhoodCounts.adjacent} adjacent)</a>
+        <a class="btn btn--ghost" href="/c/visit">→ CH.VST · visit log</a>
+      </div>
+    </section>
+
+    <section class="layer layer--online">
+      <div class="layer__head">
+        <p class="layer__kicker mono">MESH · ONLINE</p>
+        <h2 class="layer__title">Nine channels, open feeds.</h2>
+        <p class="layer__dek">
+          Each channel has a color, a slug, a purpose, and three feeds: HTML
+          at <code>/c/&#123;slug&#125;</code>, JSON at <code>/c/&#123;slug&#125;.json</code>,
+          RSS at <code>/c/&#123;slug&#125;.rss</code>. Subscribe to as few or as
+          many as you like. That's the mesh — readers pick their own slice.
+        </p>
+      </div>
+      <ul class="chan-grid">
+        {blocksByChannel.map((c) => (
+          <li class="chan" style={`--ch: ${c.color600}; --ch-deep: ${c.color800}`}>
+            <a href={`/c/${c.slug}`} class="chan__link">
+              <span class="chan__code mono">CH.{c.code}</span>
+              <span class="chan__name">{c.name}</span>
+              <span class="chan__purpose">{c.purpose}</span>
+              <span class="chan__count mono">{c.count} BLOCKS</span>
+              <span class="chan__feeds mono">
+                <a href={`/c/${c.slug}.json`} onclick="event.stopPropagation()">.json</a>
+                · <a href={`/c/${c.slug}.rss`} onclick="event.stopPropagation()">.rss</a>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <div class="layer__cta">
+        <a class="btn" href="/subscribe">→ /subscribe · RSS + JSON + email</a>
+        <a class="btn btn--ghost" href="/feed.xml">→ /feed.xml (all posts)</a>
+      </div>
+    </section>
+
+    <section class="layer layer--agent">
+      <div class="layer__head">
+        <p class="layer__kicker mono">MESH · AGENT</p>
+        <h2 class="layer__title">Parallel machine surface.</h2>
+        <p class="layer__dek">
+          Every page on PointCast has a JSON sibling. Every channel has a feed.
+          Every block has a citation format. Agents that announce themselves
+          via User-Agent (prefix <code>ai:</code>, or one of the well-known
+          bots) get stripped HTML — no CSS, no preload, no inline JS — for
+          ~12% smaller payload. CORS is open on every JSON endpoint. No
+          preflight.
+        </p>
+      </div>
+
+      <div class="layer__grid">
+        <div class="stat">
+          <span class="stat__value mono">{agentSurfaces.length}</span>
+          <span class="stat__label mono">AGENT SURFACES</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value mono">{CHANNEL_LIST.length}</span>
+          <span class="stat__label mono">CHANNELS × 3 FEEDS</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value mono">{BLOCK_TYPE_LIST.length}</span>
+          <span class="stat__label mono">BLOCK TYPES</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value mono">{agentUAs.length}</span>
+          <span class="stat__label mono">DETECTED UAs</span>
+        </div>
+      </div>
+
+      <div class="agent-table">
+        <p class="agent-table__title mono">WHAT AGENTS CAN WALK</p>
+        <ul class="agent-list">
+          {agentSurfaces.map((s) => (
+            <li class="agent-item">
+              <a href={s.path.includes('{') ? '/agents.json' : s.path} class="agent-item__path mono">{s.path}</a>
+              <span class="agent-item__kind mono">{s.kind.toUpperCase()}</span>
+              <span class="agent-item__desc">{s.desc}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div class="ua-box">
+        <p class="ua-box__title mono">DETECTED USER-AGENTS · STRIPPED-HTML MODE</p>
+        <ul class="ua-list">
+          {agentUAs.map((ua) => <li class="mono">{ua}</li>)}
+        </ul>
+        <p class="ua-box__note">
+          When any of these hit a page, the response strips <code>&lt;style&gt;</code>,
+          <code>&lt;link rel="preload"&gt;</code>, inline <code>&lt;script&gt;</code>,
+          icons, and generator meta. JSON-LD is preserved. An <code>X-Agent-Mode</code>
+          response header carries the vendor.
+        </p>
+      </div>
+
+      <div class="layer__cta">
+        <a class="btn" href="/agents.json">→ /agents.json · the manifest</a>
+        <a class="btn btn--ghost" href="/for-agents">→ /for-agents · human-readable mirror</a>
+        <a class="btn btn--ghost" href="/llms.txt">→ /llms.txt</a>
+      </div>
+    </section>
+
+    <section class="types">
+      <p class="types__title mono">CONTENT SHAPE · {BLOCK_TYPE_LIST.length} BLOCK TYPES</p>
+      <ul class="types__list">
+        {blocksByType.map((t) => (
+          <li class="type">
+            <span class="type__code mono">{t.code}</span>
+            <span class="type__label">{t.label}</span>
+            <span class="type__count mono">{t.count}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="closing">
+      <p class="closing__kicker mono">READ NEXT</p>
+      <ul class="closing__list">
+        <li><a href="/manifesto">/manifesto</a> — the why</li>
+        <li><a href="/for-agents">/for-agents</a> — the agent-facing README</li>
+        <li><a href="/glossary">/glossary</a> — the 24 terms</li>
+        <li><a href="/beacon">/beacon</a> — the 25-mile map</li>
+        <li><a href="/dao">/dao</a> — the governance layer</li>
+        <li><a href="/yield">/yield</a> — the economics sandbox</li>
+        <li><a href="/yee">/yee</a> — the rhythm overlay</li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .mesh {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 28px 18px 80px;
+    }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .mesh__head { margin-bottom: 36px; }
+    .kicker {
+      font-size: 10px;
+      margin: 0 0 10px;
+      color: #1864AB;
+      letter-spacing: 0.18em;
+    }
+    .title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: clamp(30px, 5.5vw, 44px);
+      font-weight: 700;
+      line-height: 1.08;
+      margin: 0 0 14px;
+      color: #12110E;
+    }
+    .dek { margin: 0; color: #38373A; font-size: 16px; line-height: 1.55; }
+    .dek code, .layer__dek code {
+      background: #f0eee6;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-size: 0.9em;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    }
+
+    .layer {
+      margin-bottom: 32px;
+      padding: 18px 18px 22px;
+      border: 1.5px solid #12110E;
+      border-radius: 2px;
+      background: #fff;
+    }
+    .layer--local  { border-left: 8px solid #3B6D11; }
+    .layer--online { border-left: 8px solid #185FA5; }
+    .layer--agent  { border-left: 8px solid #5F3DC4; background: #faf9f5; }
+    .layer__head { margin-bottom: 14px; }
+    .layer__kicker { font-size: 10px; margin: 0 0 6px; letter-spacing: 0.16em; color: #5F5E5A; }
+    .layer--local .layer__kicker  { color: #24460A; }
+    .layer--online .layer__kicker { color: #0B3E73; }
+    .layer--agent .layer__kicker  { color: #3A1F8B; }
+    .layer__title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 22px;
+      margin: 0 0 6px;
+      font-weight: 600;
+    }
+    .layer__dek { margin: 0; color: #38373A; font-size: 14.5px; line-height: 1.55; }
+
+    .layer__grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 12px;
+      border: 1px dashed #d6d4cd;
+      border-radius: 2px;
+      background: #faf9f5;
+    }
+    .stat__value { font-size: 22px; letter-spacing: 0; color: #12110E; font-weight: 700; }
+    .stat__unit { font-size: 11px; color: #5F5E5A; margin-left: 2px; font-weight: 500; }
+    .stat__label { font-size: 9.5px; color: #5F5E5A; }
+
+    /* Places block — nearest neighborhoods table, LOCAL mesh section */
+    .places {
+      margin: 14px 0;
+      padding: 10px 12px;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      background: #faf9f5;
+    }
+    .places__title { font-size: 10px; margin: 0 0 8px; color: #5F5E5A; }
+    .places__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: #e6e4de; border: 1px solid #e6e4de; border-radius: 2px; }
+    .place {
+      display: grid;
+      grid-template-columns: 1fr 100px 80px;
+      gap: 10px;
+      align-items: baseline;
+      padding: 6px 10px;
+      background: #fff;
+      font-size: 13px;
+    }
+    .place__name { color: #12110E; font-weight: 500; font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); }
+    .place__dist { color: #5F5E5A; font-size: 10.5px; letter-spacing: 0.12em; }
+    .place__status { font-size: 9.5px; letter-spacing: 0.14em; font-weight: 700; text-align: right; }
+    .place--seed .place__status     { color: #1E7C2F; }
+    .place--target .place__status   { color: #24460A; }
+    .place--adjacent .place__status { color: #6A2810; }
+
+    .layer__cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 12px;
+      border: 1.5px solid #12110E;
+      background: #fff;
+      color: #12110E;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s;
+    }
+    .btn:hover { background: #12110E; color: #fff; }
+    .btn--ghost { border-color: #b8b4a8; color: #5F5E5A; }
+    .btn--ghost:hover { background: transparent; color: #12110E; border-color: #12110E; }
+
+    /* Channels grid */
+    .chan-grid {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    .chan {}
+    .chan__link {
+      display: grid;
+      gap: 3px;
+      padding: 10px 12px;
+      border: 1px solid var(--ch);
+      border-left: 4px solid var(--ch);
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      text-decoration: none;
+      transition: background 0.12s;
+    }
+    .chan__link:hover { background: color-mix(in oklab, var(--ch) 10%, #fff); }
+    .chan__code { font-size: 10px; color: var(--ch-deep); font-weight: 700; }
+    .chan__name { font-size: 14px; font-weight: 600; font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); }
+    .chan__purpose { font-size: 12px; color: #5F5E5A; line-height: 1.3; }
+    .chan__count { font-size: 9.5px; color: var(--ch-deep); margin-top: 4px; }
+    .chan__feeds { font-size: 10px; color: #5F5E5A; }
+    .chan__feeds a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .chan__feeds a:hover { text-decoration: underline; }
+
+    /* Agent table */
+    .agent-table { margin: 18px 0; }
+    .agent-table__title { font-size: 10px; margin: 0 0 8px; color: #5F5E5A; }
+    .agent-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 1px;
+      background: #d6d4cd;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+    }
+    .agent-item {
+      display: grid;
+      grid-template-columns: 1fr 80px 2fr;
+      gap: 10px;
+      align-items: baseline;
+      padding: 8px 10px;
+      background: #fff;
+    }
+    .agent-item:hover { background: #fafaf5; }
+    .agent-item__path {
+      font-size: 11.5px;
+      color: #a02c2c;
+      text-decoration: none;
+      text-transform: lowercase;
+      letter-spacing: 0;
+    }
+    .agent-item__path:hover { text-decoration: underline; }
+    .agent-item__kind {
+      font-size: 9px;
+      color: #5F3DC4;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+    }
+    .agent-item__desc { font-size: 12px; color: #38373A; line-height: 1.4; }
+
+    /* UA box */
+    .ua-box {
+      margin: 12px 0;
+      padding: 10px 12px;
+      border: 1px dashed #5F3DC4;
+      border-radius: 2px;
+      background: #fff;
+    }
+    .ua-box__title { font-size: 10px; margin: 0 0 6px; color: #3A1F8B; }
+    .ua-list {
+      list-style: none;
+      margin: 0 0 8px;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .ua-list li {
+      font-size: 11px;
+      color: #12110E;
+      background: #f0eaff;
+      padding: 3px 8px;
+      border-radius: 2px;
+      border: 1px solid #d5c9ff;
+    }
+    .ua-box__note { margin: 0; font-size: 12.5px; color: #38373A; line-height: 1.5; }
+    .ua-box__note code {
+      background: #f0eaff;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 0.9em;
+    }
+
+    /* Types */
+    .types {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border: 1px solid #e6e4de;
+      border-radius: 2px;
+      background: #faf9f5;
+    }
+    .types__title { font-size: 10px; color: #5F5E5A; margin: 0 0 10px; }
+    .types__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 4px 10px;
+    }
+    .type {
+      display: grid;
+      grid-template-columns: 50px 1fr 40px;
+      gap: 6px;
+      align-items: baseline;
+      font-size: 13px;
+    }
+    .type__code { font-size: 10px; color: #5F3DC4; font-weight: 700; }
+    .type__label { color: #12110E; font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); }
+    .type__count { text-align: right; color: #5F5E5A; font-size: 11px; }
+
+    /* Closing */
+    .closing { margin-top: 28px; padding-top: 18px; border-top: 1px dashed #d6d4cd; }
+    .closing__kicker { font-size: 10px; color: #5F5E5A; margin: 0 0 10px; }
+    .closing__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 4px 12px;
+    }
+    .closing__list li { font-size: 13.5px; color: #12110E; }
+    .closing__list a { color: #a02c2c; text-decoration: none; font-weight: 500; }
+    .closing__list a:hover { text-decoration: underline; }
+
+    @media (max-width: 560px) {
+      .layer__grid { grid-template-columns: repeat(2, 1fr); }
+      .agent-item {
+        grid-template-columns: 1fr 70px;
+        grid-template-areas:
+          "path kind"
+          "desc desc";
+      }
+      .agent-item__path { grid-area: path; }
+      .agent-item__kind { grid-area: kind; text-align: right; }
+      .agent-item__desc { grid-area: desc; }
+    }
+  </style>
+</BlockLayout>

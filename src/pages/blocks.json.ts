@@ -31,6 +31,13 @@ export const GET: APIRoute = async () => {
         timestamp: b.data.timestamp.toISOString(),
         edition: b.data.edition,
         external: b.data.external,
+        // Editorial + graph fields — surfaced so agents can filter/classify
+        // without a second fetch. Added 2026-04-19 sprint `blocks-json-enrich`.
+        author: b.data.author,
+        source: b.data.source ?? null,
+        mood: b.data.mood ?? null,
+        moodUrl: b.data.mood ? `https://pointcast.xyz/mood/${b.data.mood}` : null,
+        companions: b.data.companions ?? [],
       };
     }),
   };

@@ -1,0 +1,178 @@
+---
+/**
+ * /products/{slug} — per-product detail page.
+ *
+ * One page per file in src/content/products/. Schema.org Product markup
+ * (top-level — not just nested in CollectionPage) so a single product
+ * is independently citeable + indexable. Every CTA jumps to the shop
+ * URL on shop.getgoodfeels.com.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+export async function getStaticPaths() {
+  const products = await getCollection('products', ({ data }) => !data.draft);
+  return products.map((p) => ({ params: { slug: p.data.slug }, props: { product: p } }));
+}
+
+interface Props { product: CollectionEntry<'products'>; }
+const { product } = Astro.props;
+const d = product.data;
+
+const title = `${d.name} — ${d.brand}`;
+const description = d.dek || d.description.slice(0, 200);
+const ogImage = (d.image && d.image[0]) || `/images/og/products.png`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  '@id': `https://pointcast.xyz/products/${d.slug}`,
+  name: d.name,
+  description: d.description,
+  brand: { '@type': 'Brand', name: d.brand },
+  url: `https://pointcast.xyz/products/${d.slug}`,
+  ...(d.image && d.image.length ? { image: d.image } : {}),
+  ...(d.category ? { category: d.category } : {}),
+  ...(d.priceUsd !== undefined ? {
+    offers: {
+      '@type': 'Offer',
+      price: d.priceUsd,
+      priceCurrency: d.currency,
+      availability: 'https://schema.org/' + (d.availability === 'in-stock' ? 'InStock' : d.availability === 'preorder' ? 'PreOrder' : d.availability === 'out-of-stock' ? 'OutOfStock' : 'Discontinued'),
+      url: d.url,
+      seller: { '@type': 'Organization', name: d.brand, url: 'https://shop.getgoodfeels.com' },
+    },
+  } : {}),
+  ...(d.ingredients && d.ingredients.length ? { material: d.ingredients.join(', ') } : {}),
+};
+
+const alternates = [
+  { type: 'text/html', href: '/products', title: 'All products' },
+  { type: 'application/json', href: '/products.json', title: 'Products (JSON)' },
+];
+---
+
+<BlockLayout title={title} description={description} image={ogImage} jsonLd={jsonLd} alternates={alternates}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/products">products</a>
+      <span aria-hidden="true">›</span>
+      <span>{d.slug}</span>
+    </nav>
+
+    <article class="prod">
+      <header class="prod__head">
+        <p class="kicker mono">{d.brand.toUpperCase()} · {d.category ? d.category.toUpperCase() : 'PRODUCT'}</p>
+        <h1 class="title">{d.name}</h1>
+        {d.dek && <p class="dek">{d.dek}</p>}
+      </header>
+
+      {d.image && d.image.length > 0 && (
+        <div class="gallery">
+          {d.image.map((src, i) => (
+            <img class="gallery__img" src={src} alt={`${d.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} />
+          ))}
+        </div>
+      )}
+
+      <section class="body">
+        <p>{d.description}</p>
+      </section>
+
+      <aside class="facts">
+        <dl>
+          <div><dt class="mono">PRICE</dt><dd>{d.priceUsd !== undefined ? `$${d.priceUsd.toFixed(2)} ${d.currency}` : 'see shop'}</dd></div>
+          <div><dt class="mono">AVAILABILITY</dt><dd class={`avail avail--${d.availability}`}>{d.availability}</dd></div>
+          {d.category && <div><dt class="mono">CATEGORY</dt><dd>{d.category}</dd></div>}
+          {d.effects && d.effects.length > 0 && <div><dt class="mono">EFFECTS</dt><dd>{d.effects.join(' · ')}</dd></div>}
+          {d.ingredients && d.ingredients.length > 0 && <div><dt class="mono">INGREDIENTS</dt><dd>{d.ingredients.join(', ')}</dd></div>}
+        </dl>
+      </aside>
+
+      <a class="cta" href={d.url} target="_blank" rel="noopener">→ Buy on {new URL(d.url).hostname.replace(/^www\./, '')}</a>
+
+      <p class="disclaimer mono">
+        POINTCAST DOES NOT SELL OR FULFILL · CHECKOUT HAPPENS AT {new URL(d.url).hostname.replace(/^www\./, '').toUpperCase()}
+      </p>
+    </article>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/products.json">/products.json</a></li>
+        <li><a href="/products">/products</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 760px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .prod { display: grid; gap: 18px; }
+    .prod__head { margin-bottom: 0; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #993556; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(26px, 5vw, 36px); font-weight: 700; line-height: 1.1; margin: 0 0 8px; }
+    .dek { margin: 0; color: #38373A; font-size: 15.5px; line-height: 1.5; }
+
+    .gallery { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .gallery__img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 2px; border: 1px solid #e6e4de; background: #f0eee6; }
+
+    .body { font-size: 15px; line-height: 1.65; color: #12110E; }
+    .body p { margin: 0 0 10px; }
+
+    .facts {
+      padding: 14px 16px;
+      border: 1px solid #e6c8d6;
+      border-left: 4px solid #993556;
+      border-radius: 2px;
+      background: #fdf6f9;
+    }
+    .facts dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+    @media (max-width: 480px) { .facts dl { grid-template-columns: 1fr; } }
+    .facts dt { font-size: 9px; color: #6B2139; letter-spacing: 0.18em; margin-bottom: 2px; font-weight: 700; }
+    .facts dd { margin: 0; font-size: 14px; color: #12110E; font-weight: 500; }
+    .avail { padding: 1px 6px; border-radius: 2px; font-size: 11px; font-weight: 700; }
+    .avail--in-stock { background: #E7F5EC; color: #1B4E2B; }
+    .avail--out-of-stock { background: #FCE8EA; color: #8A2432; }
+    .avail--preorder { background: #FFF4E5; color: #6A3E05; }
+    .avail--discontinued { background: #f0eee6; color: #5F5E5A; }
+
+    .cta {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 14px 20px;
+      background: #993556;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      transition: background 0.12s;
+      text-align: center;
+    }
+    .cta:hover { background: #6B2139; }
+
+    .disclaimer {
+      margin: 6px 0 0;
+      font-size: 9px;
+      color: #8a8878;
+      letter-spacing: 0.16em;
+    }
+
+    .agent-strip { margin-top: 24px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

@@ -29,13 +29,46 @@ const jsonLd = {
       <span>profile</span>
     </nav>
 
+    <!-- ─── IDENTITY CARD ─── -->
+    <section class="identity" id="identity-card">
+      <div class="identity__avatar">
+        <img class="identity__noun" id="identity-noun" alt="" src="" />
+      </div>
+      <div class="identity__meta">
+        <p class="kicker">YOU · PROFILE</p>
+        <h1 class="identity__name" id="identity-name">visitor</h1>
+        <p class="identity__dek" id="identity-dek">
+          Loading…
+        </p>
+        <p class="identity__hint mono" id="identity-hint"></p>
+      </div>
+    </section>
+
+    <!-- ─── CURRENT STATE (what you told the peoples) ─── -->
+    <section class="state-panel" id="state-panel" hidden>
+      <p class="kicker">CURRENT STATE · <a href="/#here-tell-panel" id="state-edit-link">edit ↗</a></p>
+      <ul class="state-chips" id="state-chips"></ul>
+    </section>
+
+    <!-- ─── ACTIVITY ─── -->
+    <section class="activity">
+      <p class="kicker">ACTIVITY · this browser's memory</p>
+      <div class="activity__grid" id="activity-grid">
+        <!-- JS fills -->
+      </div>
+      <div class="activity__detail" id="activity-detail">
+        <!-- JS fills votes + drops lists -->
+      </div>
+    </section>
+
+    <!-- ─── WALLETS ─── -->
     <header class="head">
-      <p class="kicker">PROFILE · WALLETS</p>
-      <h1>Your wallets</h1>
+      <p class="kicker">WALLETS</p>
+      <h2 class="head__h2">Paired on this browser</h2>
       <p class="dek" id="profile-dek">
-        Every Tezos wallet you've paired with PointCast in this browser.
-        Live balances + NFT counts pulled from TzKT. Nothing server-side —
-        clear your browser data to clear this list.
+        Tezos wallets you've connected via Beacon. Live balances + NFT
+        counts from TzKT. Server-side: nothing. Clear browser data =
+        clear this list.
       </p>
     </header>
 
@@ -199,6 +232,241 @@ const jsonLd = {
   });
 
   void render();
+
+  // ─── IDENTITY + ACTIVITY BLOCK ─────────────────────────────────
+  // Reads every `pc:*` localStorage key the site has written and
+  // renders: identity card (noun, name, first-seen), current state
+  // panel (mood/listening/where), activity stats grid, and detail
+  // lists for votes + drops. No server state; if cleared, everything
+  // resets.
+  function cheapHashL(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return h >>> 0;
+  }
+  function ls(k: string): string | null {
+    try { return localStorage.getItem(k); } catch { return null; }
+  }
+  function shortAddr(a: string): string {
+    return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+  }
+  function prettyDate(iso: string | null): string {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return iso; }
+  }
+  function countCollected(): number {
+    try {
+      const raw = ls('pc:daily:collected');
+      if (!raw) return 0;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.length : 0;
+    } catch { return 0; }
+  }
+  function collectedList(): Array<{date: string, blockId: string, at?: string}> {
+    try {
+      const raw = ls('pc:daily:collected');
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+  function pollsVotedList(): Array<{slug: string, optionId: string}> {
+    const out: Array<{slug: string, optionId: string}> = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith('pc:poll:voted:')) continue;
+        const slug = k.replace('pc:poll:voted:', '');
+        const optionId = localStorage.getItem(k) || '';
+        out.push({ slug, optionId });
+      }
+    } catch {}
+    return out;
+  }
+  function currentStreak(): number {
+    try {
+      const arr = collectedList();
+      const dates: Record<string, boolean> = {};
+      for (const c of arr) if (c && c.date) dates[c.date] = true;
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+      let streak = 0;
+      let cur = today;
+      while (dates[cur]) {
+        streak++;
+        const [y, m, d] = cur.split('-').map((s: string) => parseInt(s, 10));
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        dt.setUTCDate(dt.getUTCDate() - 1);
+        cur = dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0') + '-' + String(dt.getUTCDate()).padStart(2, '0');
+      }
+      return streak;
+    } catch { return 0; }
+  }
+
+  function paintIdentity() {
+    let sessionId = ls('pc:session');
+    if (!sessionId) {
+      try {
+        sessionId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+        localStorage.setItem('pc:session', sessionId);
+      } catch { sessionId = 'anonymous-' + Math.random().toString(36).slice(2); }
+    }
+
+    // Noun id
+    let nounId = 0;
+    const cachedNoun = ls('pc:visitor:noun');
+    if (cachedNoun) nounId = parseInt(cachedNoun, 10);
+    if (!(nounId >= 0 && nounId < 1200)) {
+      nounId = cheapHashL(sessionId) % 1200;
+      try { localStorage.setItem('pc:visitor:noun', String(nounId)); } catch {}
+    }
+
+    // First seen
+    let firstSeen = ls('pc:visitor:firstSeenAt');
+    if (!firstSeen) {
+      firstSeen = new Date().toISOString();
+      try { localStorage.setItem('pc:visitor:firstSeenAt', firstSeen); } catch {}
+    }
+
+    const wallets = loadWallets();
+    const active = activeAddress() ||
+      (wallets.length > 0 ? wallets[wallets.length - 1].address : null);
+
+    // Display name preference: user-set > wallet-short > agent-ua > noun-nnn
+    const override = ls('pc:visitor:display');
+    const isAgent = /gptbot|claudebot|claude-user|anthropic-ai|perplexitybot|oai-searchbot|atlas|google-extended|googlebot|bingbot/i.test(navigator.userAgent);
+    let displayName = 'visitor';
+    let kindLabel = 'human';
+    if (override && override.trim()) {
+      displayName = override.trim();
+      kindLabel = 'human · named';
+    } else if (active) {
+      displayName = shortAddr(active);
+      kindLabel = 'wallet';
+    } else if (isAgent) {
+      const agents = ['GPTBot', 'ClaudeBot', 'Claude-User', 'anthropic-ai', 'PerplexityBot', 'OAI-SearchBot', 'Atlas', 'Google-Extended', 'Googlebot', 'Bingbot'];
+      const ua = navigator.userAgent;
+      const match = agents.find((a) => ua.toLowerCase().includes(a.toLowerCase()));
+      displayName = match || 'agent';
+      kindLabel = 'agent';
+    } else {
+      displayName = 'noun-' + String(nounId).padStart(3, '0');
+      kindLabel = 'human · anonymous';
+    }
+
+    const img = document.getElementById('identity-noun') as HTMLImageElement;
+    const nameEl = document.getElementById('identity-name');
+    const dekEl = document.getElementById('identity-dek');
+    const hintEl = document.getElementById('identity-hint');
+    if (img) { img.src = `https://noun.pics/${nounId}.svg`; img.alt = `your noun · ${nounId}`; }
+    if (nameEl) nameEl.textContent = displayName;
+    if (dekEl) {
+      dekEl.innerHTML = `
+        Noun № <strong>${nounId}</strong> ·
+        <span class="identity__kind">${kindLabel}</span> ·
+        here since <time datetime="${firstSeen}">${prettyDate(firstSeen)}</time>
+      `;
+    }
+    if (hintEl) {
+      const notes: string[] = [];
+      if (active) notes.push(`active wallet ${shortAddr(active)}`);
+      if (!override) notes.push(`anonymous identity — noun id is deterministic from this browser's session`);
+      hintEl.textContent = notes.join(' · ');
+    }
+  }
+
+  function paintState() {
+    const mood = ls('pc:visitor:mood');
+    const listening = ls('pc:visitor:listening');
+    const where = ls('pc:visitor:where');
+    const panel = document.getElementById('state-panel');
+    const chipsEl = document.getElementById('state-chips');
+    if (!panel || !chipsEl) return;
+    const any = mood || listening || where;
+    panel.hidden = !any;
+    if (!any) return;
+    const items: Array<{label: string, value: string, kind: string}> = [];
+    if (mood) items.push({ label: 'mood', value: mood, kind: 'mood' });
+    if (listening) items.push({ label: '🎵 now playing', value: listening, kind: 'listening' });
+    if (where) items.push({ label: '📍 where', value: where, kind: 'where' });
+    chipsEl.innerHTML = items.map((i) => `
+      <li class="state-chip state-chip--${i.kind}">
+        <span class="state-chip__label">${i.label}</span>
+        <span class="state-chip__value">${escapeHtml(i.value)}</span>
+      </li>
+    `).join('');
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    } as any)[c]);
+  }
+
+  function paintActivity() {
+    const helloCount = parseInt(ls('pc:hello:count') || '0', 10);
+    const helloLastDay = ls('pc:hello:lastDay') || '—';
+    const dropsCount = countCollected();
+    const dropsStreak = currentStreak();
+    const votesCount = pollsVotedList().length;
+    // VoterStats
+    const voterState = (() => {
+      try {
+        const raw = ls('pc:voter:state');
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch { return null; }
+    })();
+    const level = voterState?.level ?? 1;
+    const xp = voterState?.xp ?? 0;
+    const streak = voterState?.streak ?? 0;
+    const title = voterState?.title ?? 'Novice Voter';
+
+    const grid = document.getElementById('activity-grid');
+    if (!grid) return;
+    const stats = [
+      { label: 'HELLO', value: String(helloCount), sub: helloLastDay !== '—' ? `last earned ${helloLastDay}` : '—' },
+      { label: 'drops collected', value: String(dropsCount), sub: dropsStreak > 0 ? `${dropsStreak}-day streak` : 'no active streak' },
+      { label: 'polls voted', value: String(votesCount), sub: votesCount === 0 ? 'no votes yet' : `unique: ${votesCount}` },
+      { label: 'voter level', value: `L${level}`, sub: `${xp} XP · ${title.toLowerCase()}` },
+    ];
+    grid.innerHTML = stats.map((s) => `
+      <div class="stat">
+        <span class="stat__label">${s.label}</span>
+        <span class="stat__value">${s.value}</span>
+        <span class="stat__sub">${s.sub}</span>
+      </div>
+    `).join('');
+
+    // Detail: votes list + drops list
+    const detail = document.getElementById('activity-detail');
+    if (!detail) return;
+    const votes = pollsVotedList();
+    const drops = collectedList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    detail.innerHTML = `
+      <div class="detail-col">
+        <h3 class="detail__h3">polls voted <span class="detail__count">${votes.length}</span></h3>
+        ${votes.length === 0 ? '<p class="detail__empty">tap a poll on the home page</p>' :
+          `<ul class="detail__list">${votes.map((v) => `
+            <li><a href="/poll/${v.slug}"><span class="detail__slug">${v.slug}</span> <span class="detail__pick">→ ${escapeHtml(v.optionId)}</span></a></li>
+          `).join('')}</ul>`}
+      </div>
+      <div class="detail-col">
+        <h3 class="detail__h3">drops collected <span class="detail__count">${drops.length}</span></h3>
+        ${drops.length === 0 ? '<p class="detail__empty">collect today\'s drop at <a href="/today">/today</a></p>' :
+          `<ul class="detail__list">${drops.map((d) => `
+            <li><a href="/b/${d.blockId}"><span class="detail__slug">${d.date}</span> <span class="detail__pick">№${d.blockId}</span></a></li>
+          `).join('')}</ul>`}
+      </div>
+    `;
+  }
+
+  paintIdentity();
+  paintState();
+  paintActivity();
+  window.addEventListener('storage', () => { paintIdentity(); paintState(); paintActivity(); });
 </script>
 
 <style>
@@ -212,6 +480,250 @@ const jsonLd = {
     margin-bottom: 16px;
   }
   .crumb a { color: var(--pc-accent); }
+
+  /* ─── IDENTITY ─── */
+  .identity {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 22px;
+    border: 1.5px solid #12110E;
+    border-left: 5px solid #F59F00;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #fef5e7 0%, #faf9f5 100%);
+    margin-bottom: 22px;
+  }
+  .identity__avatar {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #fff;
+    border: 3px solid #F59F00;
+    padding: 4px;
+  }
+  .identity__noun {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 50%;
+  }
+  .identity__meta { display: grid; gap: 4px; }
+  .identity__name {
+    margin: 6px 0 2px;
+    font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 32px;
+    font-weight: 500;
+    color: #12110E;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .identity__dek {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: 14px;
+    color: #2a2925;
+    line-height: 1.5;
+  }
+  .identity__dek strong { color: #8a2432; font-weight: 700; }
+  .identity__dek time { color: var(--pc-ink); font-weight: 600; }
+  .identity__kind {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #12110E;
+    color: #fef5e7;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border-radius: 8px;
+    vertical-align: 1px;
+  }
+  .identity__hint {
+    margin: 2px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--pc-ink-soft);
+    text-transform: none;
+  }
+
+  @media (max-width: 640px) {
+    .identity {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      text-align: center;
+    }
+    .identity__avatar { margin: 0 auto; width: 120px; height: 120px; }
+    .identity__name { font-size: 26px; }
+  }
+
+  /* ─── STATE PANEL ─── */
+  .state-panel {
+    padding: 14px 18px;
+    border: 1px dashed #534AB7;
+    border-radius: 3px;
+    background: #f6f5fc;
+    margin-bottom: 22px;
+  }
+  .state-panel .kicker { margin: 0 0 10px; }
+  .state-panel .kicker a { color: #534AB7; text-decoration: none; font-weight: 700; }
+  .state-panel .kicker a:hover { text-decoration: underline; }
+  .state-chips {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .state-chip {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 12px;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    background: #fff;
+    min-width: 140px;
+  }
+  .state-chip__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+  .state-chip__value {
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: 14px;
+    color: #12110E;
+    word-break: break-word;
+  }
+  .state-chip--mood .state-chip__value {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #F59F00;
+    font-weight: 700;
+  }
+
+  /* ─── ACTIVITY ─── */
+  .activity {
+    margin-bottom: 32px;
+  }
+  .activity .kicker { margin: 0 0 10px; }
+  .activity__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    padding: 12px 14px;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    background: #fff;
+    display: grid;
+    gap: 2px;
+  }
+  .stat__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+  .stat__value {
+    font-family: var(--pc-font-mono);
+    font-size: 24px;
+    color: #8a2432;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .stat__sub {
+    font-size: 11px;
+    color: var(--pc-ink-soft);
+    letter-spacing: 0.06em;
+  }
+
+  .activity__detail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 640px) {
+    .activity__detail { grid-template-columns: 1fr; }
+  }
+  .detail-col {
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    background: #fafaf7;
+  }
+  .detail__h3 {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 700;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .detail__count {
+    color: #8a2432;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .detail__list {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .detail__list a {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    font-size: 12px;
+    text-decoration: none;
+    color: #12110E;
+    border-radius: 2px;
+  }
+  .detail__list a:hover { background: #fef5e7; }
+  .detail__slug {
+    font-family: var(--pc-font-mono);
+    color: var(--pc-ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .detail__pick {
+    font-family: var(--pc-font-mono);
+    color: #534AB7;
+    font-weight: 600;
+  }
+  .detail__empty {
+    margin: 0;
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+    font-style: italic;
+  }
+  .detail__empty a { color: #534AB7; }
+
+  .head__h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 8px;
+    color: var(--pc-ink);
+  }
 
   .head { margin-bottom: 24px; }
   .kicker {

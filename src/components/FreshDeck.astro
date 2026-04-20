@@ -1,0 +1,118 @@
+---
+/**
+ * FreshDeck — "fresh on this visit" 3-card strip above the home grid.
+ *
+ * Mike 2026-04-18 (block 0272 directive via /ping screenshot, then PICKED
+ * on /sprint after KV bind landed): "almost want to visit and see fresh
+ * stuffs at the top".
+ *
+ * Server renders only an empty placeholder. Client JS clones 3 random
+ * BlockCards from the existing grid below into the deck. That way every
+ * page-view gets a different top — no fetches, no SSR jitter, no extra
+ * payload (the cards are already in the DOM).
+ *
+ * If the visitor has fewer than 3 blocks rendered (impossible on prod but
+ * possible during dev), the deck stays hidden — graceful zero-state.
+ */
+---
+
+<aside class="fresh-deck" id="fresh-deck" hidden aria-label="Fresh on this visit">
+  <p class="fresh-deck__kicker mono">
+    <span class="fresh-deck__label">FRESH ON THIS VISIT</span>
+    <span class="fresh-deck__sub">· 3 RANDOM PICKS · TAP TO READ</span>
+  </p>
+  <div class="fresh-deck__row" id="fresh-deck-row" role="list"></div>
+</aside>
+
+<script is:inline>
+  (function () {
+    /* Wait for the grid to exist (it renders below this component in
+     * source order; runs after parse). */
+    function init() {
+      const grid = document.querySelector('.grid');
+      const dest = document.getElementById('fresh-deck-row');
+      const wrap = document.getElementById('fresh-deck');
+      if (!grid || !dest || !wrap) return;
+
+      const cards = Array.from(grid.querySelectorAll('.block-card[data-id]'));
+      if (cards.length < 3) return;
+
+      // Partial Fisher-Yates: pick 3 unique indexes without sorting the rest.
+      const picks = [];
+      const pool = cards.slice();
+      for (let i = 0; i < 3 && pool.length > 0; i++) {
+        const j = Math.floor(Math.random() * pool.length);
+        picks.push(pool.splice(j, 1)[0]);
+      }
+
+      const frag = document.createDocumentFragment();
+      picks.forEach((card) => {
+        const clone = card.cloneNode(true);
+        clone.classList.add('fresh-deck__card');
+        // Strip grid-span classes so the cloned card flows in the deck row.
+        ['span-2x1', 'span-2x2', 'span-1x2', 'span-3x2'].forEach((c) => clone.classList.remove(c));
+        clone.classList.add('span-1x1');
+        clone.setAttribute('role', 'listitem');
+        // Add a small data-attr so we can spot fresh-deck cards in dev.
+        clone.dataset.fresh = '1';
+        frag.appendChild(clone);
+      });
+
+      dest.appendChild(frag);
+      wrap.hidden = false;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+</script>
+
+<style>
+  .fresh-deck {
+    margin: 4px 0 14px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-left: 4px solid #1E7C2F;
+    border-radius: 3px;
+    background: linear-gradient(to right, #f7f9f5 0%, #fbfaf5 60%);
+  }
+
+  .fresh-deck__kicker {
+    margin: 0 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #5F5E5A;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+  }
+  .fresh-deck__label { color: #1E7C2F; font-weight: 700; }
+  .fresh-deck__sub { color: #8a8878; font-weight: 400; }
+
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; }
+
+  .fresh-deck__row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  /* Make cloned cards behave as flow items inside the deck — overrides any
+     grid-area positioning that could come from CSS in BlockCard. */
+  .fresh-deck__row :global(.block-card) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  /* On mobile, stack vertically with breathing room — same airier rule as
+     the main grid mobile lighten. */
+  @media (max-width: 639px) {
+    .fresh-deck { margin: 4px 0 10px; padding: 10px 12px; }
+    .fresh-deck__row { grid-template-columns: 1fr; gap: 10px; }
+    .fresh-deck__sub { display: none; }
+  }
+</style>

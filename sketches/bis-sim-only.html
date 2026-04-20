@@ -1,0 +1,456 @@
+<!doctype html><html><head><title>T</title></head><body><h1 id=m>x</h1><script>
+console.log('[polls-100mi] script start');
+/* ───────── SEEDED RNG ───────── */
+function mulberry32(a) {
+  return function() {
+    let t = (a += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(42);
+function rWeighted(items) {
+  const total = items.reduce((s, it) => s + it.w, 0);
+  let r = rng() * total;
+  for (const it of items) { if ((r -= it.w) <= 0) return it.v; }
+  return items[items.length - 1].v;
+}
+
+/* ───────── CITIES ───────── */
+const ES = { lat: 33.9192, lng: -118.4165 };
+function milesBetween(a, b) {
+  const R = 3958.8;
+  const dLat = (b.lat - a.lat) * Math.PI/180;
+  const dLng = (b.lng - a.lng) * Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+
+const rawCities = [
+  { name: "El Segundo",       lat: 33.9192, lng: -118.4165, group: "beach", hub: true, w: 22 },
+  { name: "Manhattan Beach",  lat: 33.8847, lng: -118.4109, group: "beach", w: 15 },
+  { name: "Hermosa Beach",    lat: 33.8622, lng: -118.3995, group: "beach", w: 10 },
+  { name: "Redondo Beach",    lat: 33.8492, lng: -118.3884, group: "beach", w: 10 },
+  { name: "Venice",           lat: 33.9850, lng: -118.4695, group: "beach", w: 12 },
+  { name: "Santa Monica",     lat: 34.0195, lng: -118.4912, group: "beach", w: 14 },
+  { name: "Malibu",           lat: 34.0259, lng: -118.7798, group: "beach", w: 6 },
+  { name: "Palos Verdes",     lat: 33.7742, lng: -118.3936, group: "beach", w: 5 },
+  { name: "San Pedro",        lat: 33.7356, lng: -118.2923, group: "beach", w: 4 },
+  { name: "Long Beach",       lat: 33.7701, lng: -118.1937, group: "beach", w: 10 },
+  { name: "Culver City",      lat: 34.0211, lng: -118.3965, group: "metro", w: 8 },
+  { name: "West LA",          lat: 34.0467, lng: -118.4480, group: "metro", w: 7 },
+  { name: "Mar Vista",        lat: 34.0031, lng: -118.4312, group: "metro", w: 5 },
+  { name: "Inglewood",        lat: 33.9617, lng: -118.3531, group: "metro", w: 6 },
+  { name: "Torrance",         lat: 33.8358, lng: -118.3406, group: "metro", w: 6 },
+  { name: "DTLA",             lat: 34.0522, lng: -118.2437, group: "metro", w: 12 },
+  { name: "Koreatown",        lat: 34.0580, lng: -118.3000, group: "metro", w: 8 },
+  { name: "Silver Lake",      lat: 34.0869, lng: -118.2702, group: "metro", w: 9 },
+  { name: "Echo Park",        lat: 34.0781, lng: -118.2606, group: "metro", w: 6 },
+  { name: "Hollywood",        lat: 34.0928, lng: -118.3287, group: "metro", w: 9 },
+  { name: "Eagle Rock",       lat: 34.1399, lng: -118.2095, group: "metro", w: 4 },
+  { name: "Huntington Beach", lat: 33.6595, lng: -117.9988, group: "oc", w: 7 },
+  { name: "Newport Beach",    lat: 33.6189, lng: -117.9298, group: "oc", w: 6 },
+  { name: "Costa Mesa",       lat: 33.6411, lng: -117.9187, group: "oc", w: 4 },
+  { name: "Laguna Beach",     lat: 33.5427, lng: -117.7854, group: "oc", w: 3 },
+  { name: "Anaheim",          lat: 33.8366, lng: -117.9143, group: "oc", w: 6 },
+  { name: "Santa Ana",        lat: 33.7455, lng: -117.8677, group: "oc", w: 5 },
+  { name: "Irvine",           lat: 33.6846, lng: -117.8265, group: "oc", w: 5 },
+  { name: "Pomona",           lat: 34.0551, lng: -117.7499, group: "oc", w: 3 },
+  { name: "Riverside",        lat: 33.9533, lng: -117.3961, group: "oc", w: 4 },
+  { name: "San Bernardino",   lat: 34.1083, lng: -117.2898, group: "oc", w: 3 },
+  { name: "Temecula",         lat: 33.4936, lng: -117.1484, group: "oc", w: 2 },
+  { name: "Oceanside",        lat: 33.1959, lng: -117.3795, group: "oc", w: 2 },
+  { name: "Pasadena",         lat: 34.1478, lng: -118.1445, group: "north", w: 8 },
+  { name: "Glendale",         lat: 34.1425, lng: -118.2551, group: "north", w: 5 },
+  { name: "Burbank",          lat: 34.1808, lng: -118.3090, group: "north", w: 6 },
+  { name: "Santa Clarita",    lat: 34.3917, lng: -118.5426, group: "north", w: 3 },
+  { name: "Simi Valley",      lat: 34.2694, lng: -118.7815, group: "north", w: 3 },
+  { name: "Thousand Oaks",    lat: 34.1706, lng: -118.8376, group: "north", w: 3 },
+  { name: "Ventura",          lat: 34.2746, lng: -119.2290, group: "north", w: 3 },
+  { name: "Oxnard",           lat: 34.1975, lng: -119.1771, group: "north", w: 2 },
+  { name: "Ojai",             lat: 34.4480, lng: -119.2429, group: "north", w: 2 },
+  { name: "Big Bear",         lat: 34.2439, lng: -116.9114, group: "north", w: 1 },
+];
+const cities = rawCities.map(c => ({...c, dist: milesBetween(ES, c)})).filter(c => c.dist <= 102);
+
+const GROUP_COLOR = {
+  beach: '#E84D6A',   // nouns red
+  metro: '#4A9EFF',   // nouns blue
+  oc:    '#F7C325',   // nouns yellow
+  north: '#8866cc',   // nouns purple
+};
+
+/* ───────── POLLS ───────── */
+const GENRES = [
+  { id: "food",    label: "Food & Drink",     color: "#E84D6A" },
+  { id: "beach",   label: "Beach & Outdoors", color: "#4A9EFF" },
+  { id: "nbhd",    label: "Neighborhood",     color: "#c4952e" },
+  { id: "music",   label: "Music",            color: "#8866cc" },
+  { id: "sports",  label: "Sports",           color: "#F7C325" },
+  { id: "tech",    label: "Tech & AI",        color: "#2CC5A0" },
+  { id: "culture", label: "Culture & Art",    color: "#b12c4b" },
+  { id: "commute", label: "Commute",          color: "#b85f12" },
+  { id: "civic",   label: "Civic & Housing",  color: "#1b3a5b" },
+  { id: "zeit",    label: "Zeitgeist",        color: "#6a6154" },
+];
+
+const polls = [
+  { slug: "best-fish-taco", genre: "food", purpose: "editorial", w: 1.4,
+    q: "Best fish taco within the ring.",
+    dek: "No chain answers. Pick the one you'd drive for.",
+    opts: [
+      { id: "coni",   label: "Coni'Seafood (Inglewood)", hint: "marlin · smoked · bring cash" },
+      { id: "baja",   label: "Tacos Baja Ensenada",      hint: "East LA institution · fried" },
+      { id: "hb-pier",label: "HB Pier Plaza vendors",    hint: "walk-up · sunset adjacent" },
+      { id: "rock",   label: "Rocky Point Cantina (PV)", hint: "view tax · solid Baja" },
+      { id: "loreto", label: "Loreto Plaza (Malibu)",    hint: "the PCH classic" },
+    ], pref: [0.31,0.22,0.19,0.14,0.14] },
+  { slug: "breakfast-burrito", genre: "food", purpose: "editorial", w: 1.3,
+    q: "Morning breakfast burrito, ring-wide.",
+    dek: "Fuel for the day. Chiles optional. Tortilla non-negotiable.",
+    opts: [
+      { id: "cofax",    label: "Cofax (Fairfax)",       hint: "bacon · egg · cheese · potato" },
+      { id: "homestate",label: "HomeState",             hint: "queso · Texas-style" },
+      { id: "lupes",    label: "Lupe's #2 (Silverlake)",hint: "dollar-fifty salsa verde" },
+      { id: "bearflag", label: "Bear Flag",             hint: "chorizo · weekend line" },
+      { id: "casa",     label: "Casa Sanchez truck",    hint: "Torrance · commuter favorite" },
+    ], pref: [0.28,0.26,0.23,0.13,0.10] },
+  { slug: "in-n-out-order", genre: "food", purpose: "utility", w: 1.1,
+    q: "Your go-to In-N-Out order.",
+    dek: "There's no wrong answer but there is a most-popular one.",
+    opts: [
+      { id: "dd-animal", label: "Double-Double, animal style", hint: "the classic move" },
+      { id: "dd-plain",  label: "Double-Double, plain",        hint: "purist" },
+      { id: "4x4",       label: "4x4 off-menu",                hint: "you've already decided to regret it" },
+      { id: "protein",   label: "Protein style Double",        hint: "lettuce wrap · solid" },
+      { id: "cheese",    label: "Cheeseburger + fries animal", hint: "single patty · undefeated" },
+    ], pref: [0.44,0.16,0.07,0.14,0.19] },
+  { slug: "coffee-spot", genre: "food", purpose: "editorial", w: 1.2,
+    q: "Best coffee shop within 100 miles.",
+    dek: "Daily driver. Pour-over optional.",
+    opts: [
+      { id: "verve",     label: "Verve",                       hint: "Santa Cruz transplant · consistent" },
+      { id: "go-get-em", label: "Go Get Em Tiger",             hint: "Larchmont · Silver Lake" },
+      { id: "blue-btl",  label: "Blue Bottle",                 hint: "Abbott Kinney · flagship" },
+      { id: "dinosaur",  label: "Dinosaur Coffee",             hint: "espresso + breakfast sandwich" },
+      { id: "moonwater", label: "Moonwater (Santa Monica)",    hint: "new · nounish crowd" },
+    ], pref: [0.24,0.25,0.16,0.20,0.15] },
+  { slug: "sunset-perch", genre: "beach", purpose: "utility", w: 1.3,
+    q: "Best sunset spot in the South Bay.",
+    dek: "Five well-known perches. Pick the one readers will pick.",
+    opts: [
+      { id: "es-pier",        label: "El Segundo Beach pier",  hint: "refinery silhouette · Catalina" },
+      { id: "manhattan-pier", label: "Manhattan Beach pier",   hint: "the icon · crowd tax" },
+      { id: "hermosa-pier",   label: "Hermosa Beach pier",     hint: "lower key, same horizon" },
+      { id: "redondo-jetty",  label: "Redondo Harbor jetty",   hint: "south-facing curve" },
+      { id: "pv-bluffs",      label: "PV bluffs",              hint: "hillside · wind · quiet" },
+    ], pref: [0.27,0.31,0.15,0.12,0.15] },
+  { slug: "surf-break", genre: "beach", purpose: "editorial", w: 1.15,
+    q: "Best surf break inside the ring.",
+    dek: "Skill-agnostic. Pick the break you'd send a visitor to.",
+    opts: [
+      { id: "el-porto",   label: "El Porto",            hint: "peaky beach break · right there" },
+      { id: "malibu",     label: "First Point Malibu",  hint: "classic right · crowded" },
+      { id: "trestles",   label: "Trestles (edge)",     hint: "pilgrim pick · hike in" },
+      { id: "hb-pier",    label: "Huntington Pier",     hint: "south side · consistent" },
+      { id: "salt-creek", label: "Salt Creek (Laguna)", hint: "northern OC · shoulder-high" },
+    ], pref: [0.26,0.28,0.14,0.18,0.14] },
+  { slug: "dog-beach", genre: "beach", purpose: "utility", w: 0.9,
+    q: "Best dog beach within the ring.",
+    dek: "Leash laws vary — vote with your paws.",
+    opts: [
+      { id: "rosies", label: "Rosie's (Long Beach)",   hint: "fenced · off-leash · large" },
+      { id: "hb-dog", label: "Huntington Dog Beach",   hint: "long · popular · parking" },
+      { id: "leo",    label: "Leo Carrillo north end", hint: "quieter · malibu drive" },
+      { id: "del-rey",label: "Del Rey Lagoon",         hint: "not beach but good park" },
+    ], pref: [0.40,0.32,0.18,0.10] },
+  { slug: "weekend-trip", genre: "beach", purpose: "coordination", w: 1.1,
+    q: "Best weekend escape still inside the ring.",
+    dek: "Two-hour rule applies.",
+    opts: [
+      { id: "ojai",      label: "Ojai",            hint: "shangri-la · bookstore · hot springs" },
+      { id: "catalina",  label: "Catalina Island", hint: "Avalon ferry · snorkel" },
+      { id: "sb",        label: "Santa Barbara",   hint: "just inside · wine" },
+      { id: "big-bear",  label: "Big Bear",        hint: "ski winter · lake summer" },
+      { id: "idyllwild", label: "Idyllwild",       hint: "pines · low-key · climb" },
+    ], pref: [0.28,0.19,0.23,0.16,0.14] },
+  { slug: "es-meeting-spot", genre: "nbhd", purpose: "coordination", w: 1.2,
+    q: "Pick a meeting spot in El Segundo — win if you match the plurality.",
+    dek: "Schelling-point classic. No message, no time, just a place.",
+    opts: [
+      { id: "old-town", label: "Old Town Music Hall",     hint: "140 Richmond · silent films · organ" },
+      { id: "es-pier",  label: "El Segundo Beach pier",   hint: "Grand Ave meets the sand" },
+      { id: "the-point",label: "The Point",               hint: "Sepulveda + Park Place · clock tower" },
+      { id: "esbc",     label: "El Segundo Brewing",      hint: "Main St · beer + benches" },
+      { id: "library",  label: "El Segundo Library lawn", hint: "111 W Mariposa · civic green" },
+    ], pref: [0.22,0.34,0.18,0.17,0.09] },
+  { slug: "underrated-nbhd", genre: "nbhd", purpose: "editorial", w: 1.1,
+    q: "Most underrated neighborhood inside the ring.",
+    dek: "The one outsiders skip that insiders love.",
+    opts: [
+      { id: "san-pedro",  label: "San Pedro",     hint: "working waterfront · sincere" },
+      { id: "alhambra",   label: "Alhambra",      hint: "SGV gateway · food mecca" },
+      { id: "eagle-rck",  label: "Eagle Rock",    hint: "Occidental · Figueroa" },
+      { id: "el-segundo", label: "El Segundo",    hint: "inside joke · real answer" },
+      { id: "playa",      label: "Playa del Rey", hint: "beach town in plain sight" },
+    ], pref: [0.23,0.18,0.21,0.22,0.16] },
+  { slug: "overpriced-nbhd", genre: "nbhd", purpose: "editorial", w: 1.0,
+    q: "Most overpriced neighborhood.",
+    dek: "No wrong answer. Some of these are fighting words.",
+    opts: [
+      { id: "malibu",    label: "Malibu",            hint: "PCH + privilege tax" },
+      { id: "manhattan", label: "Manhattan Beach",   hint: "Tree Section premium" },
+      { id: "newport",   label: "Newport Beach",     hint: "Balboa · boat slip money" },
+      { id: "bev-hills", label: "Beverly Hills",     hint: "the obvious answer" },
+      { id: "venice",    label: "Venice (Rose Ave)", hint: "boho mark-up" },
+    ], pref: [0.22,0.18,0.20,0.24,0.16] },
+  { slug: "sunday-soundtrack", genre: "music", purpose: "editorial", w: 1.2,
+    q: "The soundtrack to your Sunday night?",
+    dek: "What's actually playing — or what should be.",
+    opts: [
+      { id: "anthem",     label: "rain anthem",      hint: "November Rain · Purple Rain" },
+      { id: "meditation", label: "meditation",       hint: "Alan Watts · long-form" },
+      { id: "hiphop",     label: "hip-hop",          hint: "90s east · De La · Wu" },
+      { id: "folk",       label: "folk / americana", hint: "Ryan Adams · Patty Griffin" },
+      { id: "electronic", label: "electronic",       hint: "Boards · Four Tet · ambient" },
+      { id: "jazz",       label: "jazz",             hint: "Coltrane · Evans · late Miles" },
+      { id: "silence",    label: "silence",          hint: "hum of the house" },
+    ], pref: [0.14,0.11,0.19,0.13,0.17,0.12,0.14] },
+  { slug: "la-venue", genre: "music", purpose: "editorial", w: 1.15,
+    q: "Best live venue in the ring.",
+    dek: "For any genre. Vibes not capacity.",
+    opts: [
+      { id: "greek",     label: "The Greek Theatre", hint: "outdoor · griffith park" },
+      { id: "bowl",      label: "Hollywood Bowl",    hint: "the picnic ritual" },
+      { id: "wiltern",   label: "The Wiltern",       hint: "deco · mid-size" },
+      { id: "troubadour",label: "Troubadour",        hint: "West Hollywood · tiny legend" },
+      { id: "fonda",     label: "The Fonda",         hint: "right-sized general admission" },
+    ], pref: [0.28,0.30,0.14,0.18,0.10] },
+  { slug: "local-radio", genre: "music", purpose: "utility", w: 0.9,
+    q: "Most-listened LA radio station.",
+    dek: "Over the air. Streaming counts.",
+    opts: [
+      { id: "kcrw", label: "KCRW (89.9)",   hint: "Morning Becomes · Novena Carmel" },
+      { id: "kxlu", label: "KXLU (88.9)",   hint: "college · free-form" },
+      { id: "kday", label: "KDAY (93.5)",   hint: "old school hip-hop" },
+      { id: "kjazz",label: "KJAZZ (88.1)",  hint: "day jazz · night blues" },
+      { id: "kcsn", label: "KCSN (88.5)",   hint: "adult album alt · deep cuts" },
+    ], pref: [0.48,0.09,0.12,0.16,0.15] },
+  { slug: "lakers-or-clippers", genre: "sports", purpose: "editorial", w: 1.15,
+    q: "Lakers or Clippers.",
+    dek: "Basketball loyalties in LA · pick one.",
+    opts: [
+      { id: "lakers",   label: "Lakers",                  hint: "16 banners · the church" },
+      { id: "clippers", label: "Clippers",                hint: "Intuit Dome · new kid with cash" },
+      { id: "neither",  label: "Neither · soccer",        hint: "LAFC / Galaxy person" },
+      { id: "both",     label: "Both · watch everything", hint: "hoops maxi" },
+    ], pref: [0.49,0.22,0.12,0.17] },
+  { slug: "pickleball-day", genre: "sports", purpose: "decision", w: 1.0,
+    q: "Best weekday morning for a regular open pickleball drop-in?",
+    dek: "Pick the day. Converges → it becomes real.",
+    opts: [
+      { id: "mon", label: "Monday",    hint: "quiet courts · hard for 9-5" },
+      { id: "tue", label: "Tuesday",   hint: "conventional pick" },
+      { id: "wed", label: "Wednesday", hint: "mid-week energy" },
+      { id: "thu", label: "Thursday",  hint: "pre-friday rhythm" },
+      { id: "fri", label: "Friday",    hint: "half-day vibe · bigger turnout" },
+    ], pref: [0.10,0.18,0.32,0.16,0.24] },
+  { slug: "rams-or-chargers", genre: "sports", purpose: "editorial", w: 0.9,
+    q: "Rams or Chargers.",
+    dek: "Both play at SoFi. Still have to pick.",
+    opts: [
+      { id: "rams",      label: "Rams",                       hint: "McVay era · Super Bowl bona fides" },
+      { id: "chargers",  label: "Chargers",                   hint: "Herbert · lightning bolts" },
+      { id: "neither",   label: "Don't care about football",  hint: "it's fine" },
+      { id: "nost",      label: "Chargers out of SD loyalty", hint: "hate the LA move" },
+    ], pref: [0.47,0.20,0.23,0.10] },
+  { slug: "ai-lineup-vibe", genre: "tech", purpose: "editorial", w: 1.35,
+    q: "Which AI lineup feels right for real multi-agent work?",
+    dek: "Four Chinese labs, two US, Google, a dozen open-weights — which combo do you reach for?",
+    opts: [
+      { id: "claude-codex", label: "Claude + Codex only",              hint: "mainstream duo" },
+      { id: "plus-kimi",    label: "+ Kimi K2.6",                      hint: "open-weights for swarm" },
+      { id: "plus-gemini",  label: "+ Gemini 3.1 Pro",                 hint: "add multimodal + long-context" },
+      { id: "open-only",    label: "Open-weights only",                hint: "no vendor lock" },
+      { id: "one-model",    label: "One model · specialize hard",      hint: "depth over breadth" },
+      { id: "doesnt-matter",label: "Doesn't matter · harness > model", hint: "scaffolding is the moat" },
+    ], pref: [0.28,0.15,0.16,0.06,0.09,0.26] },
+  { slug: "next-big-model", genre: "tech", purpose: "forecast", w: 1.05,
+    q: "Which lab announces the next frontier model first?",
+    dek: "Resolves 2026-05-31.",
+    opts: [
+      { id: "openai",    label: "OpenAI · 'Spud'",           hint: "overheard code name" },
+      { id: "anthropic", label: "Anthropic · 'Mythos'",      hint: "overheard code name" },
+      { id: "google",    label: "Google DeepMind",           hint: "next Gemini flagship" },
+      { id: "xai",       label: "xAI · Grok next",           hint: "cadence suggests close" },
+      { id: "meta",      label: "Meta · Llama next",         hint: "open-weight drop" },
+      { id: "darkhorse", label: "Dark horse · DeepSeek/Kimi",hint: "the surprise" },
+    ], pref: [0.26,0.29,0.14,0.11,0.08,0.12] },
+  { slug: "la-startup-scene", genre: "tech", purpose: "editorial", w: 0.95,
+    q: "Silicon Beach in 2026.",
+    dek: "Is LA tech back, or a satellite office of SF?",
+    opts: [
+      { id: "back",       label: "It's back · founders moving down", hint: "Santa Monica · DTLA · El Segundo" },
+      { id: "el-segundo", label: "El Segundo is the real story",     hint: "hard tech · aerospace adjacent" },
+      { id: "satellite",  label: "Satellite of SF",                  hint: "deals still flow from the bay" },
+      { id: "nope",       label: "Nope · scene never was",           hint: "media entertainment ≠ tech" },
+    ], pref: [0.21,0.38,0.24,0.17] },
+  { slug: "museum-pick", genre: "culture", purpose: "utility", w: 1.0,
+    q: "If you can pick one LA museum for a visitor.",
+    dek: "Just one. No cheating with 'getty villa and center'.",
+    opts: [
+      { id: "lacma",  label: "LACMA (post-build)", hint: "Zumthor open · still divisive" },
+      { id: "broad",  label: "The Broad",          hint: "infinity mirrors · free" },
+      { id: "getty",  label: "Getty Center",       hint: "the view + the gardens" },
+      { id: "hammer", label: "Hammer",             hint: "Westwood · sharp rotation" },
+      { id: "moca",   label: "MOCA Grand",         hint: "Arata · small · strong shows" },
+    ], pref: [0.21,0.27,0.28,0.12,0.12] },
+  { slug: "indie-bookstore", genre: "culture", purpose: "utility", w: 0.85,
+    q: "Favorite indie bookstore within the ring.",
+    dek: "Yes, the answer is subjective.",
+    opts: [
+      { id: "skylight", label: "Skylight Books",   hint: "Los Feliz · the tree" },
+      { id: "vromans",  label: "Vroman's",         hint: "Pasadena · since 1894" },
+      { id: "stories",  label: "Stories Books",    hint: "Echo Park · backyard" },
+      { id: "book-soup",label: "Book Soup",        hint: "Sunset Strip · tightly curated" },
+      { id: "arcana",   label: "Arcana (art books)",hint: "Culver City · specialist" },
+    ], pref: [0.28,0.22,0.20,0.18,0.12] },
+  { slug: "film-theater", genre: "culture", purpose: "editorial", w: 0.9,
+    q: "Best repertory film theater.",
+    dek: "Where you go when streaming won't cut it.",
+    opts: [
+      { id: "new-bev",  label: "New Beverly",      hint: "QT's house · 35mm" },
+      { id: "vista",    label: "Vista",            hint: "single screen · spire" },
+      { id: "egyptian", label: "Egyptian",         hint: "Hollywood · restored" },
+      { id: "aero",     label: "Aero (SM)",        hint: "Cinemathèque · double features" },
+      { id: "arclight", label: "Arclight rebooted",hint: "dome · reserved seating" },
+    ], pref: [0.30,0.23,0.19,0.15,0.13] },
+  { slug: "worst-405-stretch", genre: "commute", purpose: "utility", w: 1.05,
+    q: "Worst stretch of the 405.",
+    dek: "Where your Tuesday dies.",
+    opts: [
+      { id: "sepulveda",label: "Sepulveda Pass",    hint: "weekdays 4-7pm · legend" },
+      { id: "carson",   label: "Carson / LAX",      hint: "merge chaos · always" },
+      { id: "long-bch", label: "Long Beach curve",  hint: "710 handoff · accident magnet" },
+      { id: "irvine",   label: "Irvine grid",       hint: "all day · no relief" },
+      { id: "ventura",  label: "Ventura split",     hint: "101 merge · northbound evenings" },
+    ], pref: [0.47,0.20,0.13,0.13,0.07] },
+  { slug: "metro-priority", genre: "commute", purpose: "decision", w: 0.95,
+    q: "Next Metro expansion that matters most.",
+    dek: "If only one line could land in 5 years.",
+    opts: [
+      { id: "sepulveda",label: "Sepulveda line (Valley→Westside)", hint: "the white whale" },
+      { id: "lax-pm",   label: "LAX people-mover completion",       hint: "airport ring done" },
+      { id: "sb-exp",   label: "South Bay extension",               hint: "Green line to Torrance · further" },
+      { id: "east-ex",  label: "East LA extension",                 hint: "equity of service" },
+      { id: "bus-lanes",label: "Bus-only lanes everywhere",         hint: "rails are fantasy · paint is free" },
+    ], pref: [0.36,0.16,0.13,0.18,0.17] },
+  { slug: "buy-vs-rent", genre: "civic", purpose: "editorial", w: 0.85,
+    q: "Buy or rent in LA metro right now.",
+    dek: "Gut call · no spreadsheet.",
+    opts: [
+      { id: "buy",     label: "Buy · anywhere you can afford",   hint: "inflation hedge" },
+      { id: "rent",    label: "Rent · mobility matters",          hint: "low commitment" },
+      { id: "already", label: "Already did · locked in",          hint: "smug · correct" },
+      { id: "never",   label: "Never · tax / climate / price",    hint: "exit pending" },
+    ], pref: [0.20,0.31,0.26,0.23] },
+  { slug: "if-leaving-la", genre: "civic", purpose: "editorial", w: 0.8,
+    q: "If you left LA, where next.",
+    dek: "Hypothetical. Mostly.",
+    opts: [
+      { id: "austin",  label: "Austin",              hint: "tax · tech · heat" },
+      { id: "portland",label: "Portland",            hint: "trees · rain · same price" },
+      { id: "nyc",     label: "New York",            hint: "the counter-move" },
+      { id: "europe",  label: "Europe · LIS/BCN/BER",hint: "remote work · visa" },
+      { id: "stay",    label: "Not leaving",         hint: "this is home" },
+    ], pref: [0.15,0.12,0.18,0.21,0.34] },
+  { slug: "zeitgeist-april-2026", genre: "zeit", purpose: "editorial", w: 1.2,
+    q: "Which word captures April 2026?",
+    dek: "Zeitgeist poll — no resolution, just the archived mood-label.",
+    opts: [
+      { id: "mesh",     label: "mesh",     hint: "coordination · federation" },
+      { id: "compound", label: "compound", hint: "slow accumulation" },
+      { id: "signal",   label: "signal",   hint: "finding it in the noise" },
+      { id: "drift",    label: "drift",    hint: "everything moving, nothing moored" },
+      { id: "flow",     label: "flow",     hint: "on tempo · in the work" },
+      { id: "forecast", label: "forecast", hint: "reading what comes" },
+    ], pref: [0.19,0.16,0.22,0.12,0.17,0.14], zeitgeist: true },
+  { slug: "2026-mood", genre: "zeit", purpose: "editorial", w: 0.9,
+    q: "Your 2026 running mood.",
+    dek: "Not predictive · descriptive.",
+    opts: [
+      { id: "grounded", label: "grounded", hint: "present · building quietly" },
+      { id: "anxious",  label: "anxious",  hint: "too many tabs open" },
+      { id: "building", label: "building", hint: "heads-down · shipping" },
+      { id: "waiting",  label: "waiting",  hint: "something has to break" },
+      { id: "leaving",  label: "leaving",  hint: "in between somewhere" },
+    ], pref: [0.22,0.24,0.28,0.18,0.08] },
+];
+polls.forEach((p, i) => { p.idx = i; p.votes = 0; p.tally = new Array(p.opts.length).fill(0); p.cityTally = {}; });
+
+/* ───────── SIMULATE 10,000 ───────── */
+const TOTAL_VOTES = 10000;
+const NOW = new Date('2026-04-20T10:45:00-07:00').getTime();
+const WINDOW_MS = 48 * 3600 * 1000;
+const interactions = [];
+const pollPicker = polls.map(p => ({ v: p.idx, w: p.w }));
+const cityPicker = cities.map(c => ({ v: c.name, w: c.w }));
+const cityIndex = {};
+cities.forEach(c => cityIndex[c.name] = c);
+
+function hourEnergy(hour, dow) {
+  let b = 0.08;
+  b += 0.25 * Math.exp(-Math.pow((hour - 8.5)/1.6, 2));
+  b += 0.18 * Math.exp(-Math.pow((hour - 12.5)/1.2, 2));
+  b += 0.55 * Math.exp(-Math.pow((hour - 19.5)/1.8, 2));
+  b += 0.15 * Math.exp(-Math.pow((hour - 22.5)/1.4, 2));
+  if (dow === 0 || dow === 6) b *= 0.82;
+  return b;
+}
+
+for (let i = 0; i < TOTAL_VOTES; i++) {
+  let ts;
+  for (let t = 0; t < 8; t++) {
+    const c = NOW - rng() * WINDOW_MS;
+    const d = new Date(c);
+    if (rng() < hourEnergy(d.getHours() + d.getMinutes()/60, d.getDay())) { ts = c; break; }
+  }
+  if (!ts) ts = NOW - rng() * WINDOW_MS;
+
+  const pollIdx = rWeighted(pollPicker);
+  const poll = polls[pollIdx];
+  const city = rWeighted(cityPicker);
+  const co = cityIndex[city];
+  const prefs = poll.pref.slice();
+  if (poll.slug === 'sunset-perch' && co.group === 'oc')        { prefs[1] += 0.08; prefs[4] -= 0.04; }
+  if (poll.slug === 'worst-405-stretch' && co.group === 'oc')   { prefs[3] += 0.15; prefs[0] -= 0.08; }
+  if (poll.slug === 'underrated-nbhd' && co.group === 'beach')  { prefs[3] += 0.12; }
+  if (poll.slug === 'lakers-or-clippers' && co.group === 'oc')  { prefs[2] += 0.10; prefs[0] -= 0.05; }
+  if (poll.slug === 'coffee-spot' && co.group === 'north')      { prefs[1] += 0.08; }
+  const optIdx = rWeighted(prefs.map((p, i) => ({ v: i, w: Math.max(0.01, p) })));
+
+  interactions.push({ pollIdx, optIdx, city, ts });
+  poll.votes += 1;
+  poll.tally[optIdx] += 1;
+  poll.cityTally[city] = (poll.cityTally[city] || 0) + 1;
+}
+interactions.sort((a, b) => b.ts - a.ts);
+
+const cityTotals = {}, hourGrid = Array.from({length:7}, () => new Array(24).fill(0));
+const genreTotals = {}, timeline = new Array(192).fill(0);
+const zeit = {};
+for (const p of polls) if (p.zeitgeist) p.opts.forEach(o => { zeit[o.label] = 0; });
+for (const v of interactions) {
+  cityTotals[v.city] = (cityTotals[v.city]||0) + 1;
+  const d = new Date(v.ts);
+  hourGrid[d.getDay()][d.getHours()] += 1;
+  const p = polls[v.pollIdx];
+  genreTotals[p.genre] = (genreTotals[p.genre]||0) + 1;
+  const bkt = Math.floor((NOW - v.ts) / (15*60*1000));
+  if (bkt >= 0 && bkt < 192) timeline[191 - bkt] += 1;
+  if (p.zeitgeist) zeit[p.opts[v.optIdx].label] += 1;
+}
+
+/* ───────── PROJECTION & MAP ───────── */
+window._ran=true;document.getElementById('m').textContent='OK inter='+interactions.length;</script></body></html>

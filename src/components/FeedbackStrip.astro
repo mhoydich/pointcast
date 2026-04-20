@@ -1,0 +1,272 @@
+---
+/**
+ * FeedbackStrip — lightweight per-block reaction surface on /b/{id} pages.
+ *
+ * Mike 2026-04-18 block 0272 directive ("feedback") + /sprint PICK on
+ * feedback-block-strip. Three-button row + optional one-liner text.
+ * Counts are private to Mike (reads via /admin/feedback, not public).
+ *
+ * POST shape:
+ *   { mood: 'loving' | 'confused' | 'annoyed', message?, blockId, path }
+ *
+ * Existing `/api/feedback` already handles mood validation + storage +
+ * optional Resend email. This strip just calls it with blockId pinned so
+ * the admin viewer can group by block.
+ *
+ * Props:
+ *   blockId — the 4-digit block id (/b/{id}) this strip is pinned to
+ */
+interface Props {
+  blockId: string;
+}
+const { blockId } = Astro.props;
+---
+
+<aside class="fb" data-block-id={blockId} aria-label="Per-block feedback">
+  <p class="fb__kicker mono">
+    <span class="fb__label">FEEDBACK · PRIVATE TO MIKE</span>
+    <span class="fb__sub">· one tap, optional line</span>
+  </p>
+  <div class="fb__row" role="group" aria-label="Reaction">
+    <button type="button" class="fb__btn" data-fb-mood="loving"   aria-label="This resonated">
+      <span class="fb__glyph">✓</span>
+      <span class="fb__word">RESONATED</span>
+    </button>
+    <button type="button" class="fb__btn" data-fb-mood="confused" aria-label="I'm confused">
+      <span class="fb__glyph">?</span>
+      <span class="fb__word">CONFUSED</span>
+    </button>
+    <button type="button" class="fb__btn" data-fb-mood="annoyed"  aria-label="This missed">
+      <span class="fb__glyph">✗</span>
+      <span class="fb__word">MISSED</span>
+    </button>
+  </div>
+  <details class="fb__more">
+    <summary class="fb__more-summary mono">+ add a line (optional)</summary>
+    <div class="fb__more-body">
+      <input
+        type="text"
+        class="fb__input"
+        id={`fb-msg-${blockId}`}
+        placeholder="one line of texture — up to 280 chars"
+        maxlength="280"
+        aria-label="Optional one-line comment"
+      />
+      <button type="button" class="fb__btn fb__btn--send" data-fb-send>
+        SEND
+      </button>
+    </div>
+  </details>
+  <p class="fb__status mono" data-fb-status aria-live="polite"></p>
+</aside>
+
+<script is:inline define:vars={{ blockId }}>
+  (function () {
+    var root = document.querySelector('.fb[data-block-id="' + blockId + '"]');
+    if (!root) return;
+    var status = root.querySelector('[data-fb-status]');
+    var buttons = Array.from(root.querySelectorAll('.fb__btn[data-fb-mood]'));
+    var sendBtn = root.querySelector('[data-fb-send]');
+    var input = root.querySelector('.fb__input');
+    var lsKey = 'pc:fb:' + blockId;
+
+    function setStatus(msg, kind) {
+      if (!status) return;
+      status.textContent = msg;
+      status.dataset.kind = kind || '';
+    }
+
+    // If user already gave feedback on this block in this browser, soften the UI.
+    (function paintPrior() {
+      try {
+        var prior = localStorage.getItem(lsKey);
+        if (!prior) return;
+        buttons.forEach(function (b) {
+          if (b.getAttribute('data-fb-mood') === prior) {
+            b.classList.add('fb__btn--voted');
+          }
+        });
+        setStatus('you reacted: ' + prior + ' · tap again to update', 'prior');
+      } catch (e) {}
+    })();
+
+    function post(mood, message) {
+      setStatus('sending…', '');
+      return fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood: mood || undefined,
+          message: message || undefined,
+          blockId: blockId,
+          path: location.pathname,
+        }),
+      })
+        .then(function (r) { return r.json().catch(function () { return { ok: false }; }).then(function (j) { return { ok: r.ok && j.ok, status: r.status, body: j }; }); })
+        .catch(function () { return { ok: false, status: 0, body: null }; });
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var mood = b.getAttribute('data-fb-mood');
+        buttons.forEach(function (x) { x.classList.remove('fb__btn--voted'); });
+        b.classList.add('fb__btn--voted');
+        post(mood, '').then(function (res) {
+          if (res.ok) {
+            try { localStorage.setItem(lsKey, mood); } catch (e) {}
+            setStatus('✓ thanks · private to Mike', 'ok');
+          } else if (res.status === 429) {
+            setStatus('rate-limited · give it a minute', 'warn');
+          } else {
+            setStatus('couldn\'t send · try again', 'err');
+          }
+        });
+      });
+    });
+
+    if (sendBtn) {
+      sendBtn.addEventListener('click', function () {
+        var msg = input && input.value.trim();
+        if (!msg) { setStatus('type a line first', 'warn'); return; }
+        // Find current mood (last clicked or prior) if any
+        var mood = '';
+        for (var i = 0; i < buttons.length; i++) {
+          if (buttons[i].classList.contains('fb__btn--voted')) {
+            mood = buttons[i].getAttribute('data-fb-mood') || '';
+            break;
+          }
+        }
+        post(mood, msg).then(function (res) {
+          if (res.ok) {
+            if (input) input.value = '';
+            setStatus('✓ line sent · private to Mike', 'ok');
+          } else if (res.status === 429) {
+            setStatus('rate-limited · give it a minute', 'warn');
+          } else {
+            setStatus('couldn\'t send · try again', 'err');
+          }
+        });
+      });
+    }
+  })();
+</script>
+
+<style>
+  .fb {
+    margin-top: 18px;
+    padding: 10px 12px;
+    border: 1px dashed var(--pc-rule, #d6d4cd);
+    border-radius: 2px;
+    background: #faf9f5;
+  }
+  .fb__kicker {
+    margin: 0 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .fb__label { color: #8A2432; font-weight: 700; }
+  .fb__sub { color: #8a8878; font-weight: 400; }
+
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; }
+
+  .fb__row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .fb__btn {
+    flex: 1 1 0;
+    min-width: 80px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    background: #fff;
+    color: #12110E;
+    border-radius: 2px;
+    cursor: pointer;
+    font: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .fb__btn:hover { background: #fbf9ff; border-color: #8A2432; }
+  .fb__btn[data-fb-mood="loving"]:hover   { border-color: #1E7C2F; }
+  .fb__btn[data-fb-mood="confused"]:hover { border-color: #E89A22; }
+  .fb__btn[data-fb-mood="annoyed"]:hover  { border-color: #8A2432; }
+
+  .fb__btn--voted {
+    background: #fbf9ff !important;
+    border-width: 2px !important;
+  }
+  .fb__btn--voted[data-fb-mood="loving"]   { border-color: #1E7C2F !important; }
+  .fb__btn--voted[data-fb-mood="confused"] { border-color: #E89A22 !important; }
+  .fb__btn--voted[data-fb-mood="annoyed"]  { border-color: #8A2432 !important; }
+
+  .fb__glyph { font-size: 16px; font-weight: 700; line-height: 1; }
+  .fb__btn[data-fb-mood="loving"] .fb__glyph   { color: #1E7C2F; }
+  .fb__btn[data-fb-mood="confused"] .fb__glyph { color: #E89A22; }
+  .fb__btn[data-fb-mood="annoyed"] .fb__glyph  { color: #8A2432; }
+  .fb__word { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 9.5px; letter-spacing: 0.14em; font-weight: 700; text-transform: uppercase; color: #5F5E5A; }
+
+  .fb__more {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #5F5E5A;
+  }
+  .fb__more-summary {
+    cursor: pointer;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #8A2432;
+    padding: 4px 0;
+    list-style: none;
+  }
+  .fb__more-summary::-webkit-details-marker { display: none; }
+  .fb__more-body {
+    margin-top: 6px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .fb__input {
+    flex: 1 1 200px;
+    padding: 6px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 2px;
+    background: #fff;
+    color: #12110E;
+    font-size: 13px;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+  }
+  .fb__input:focus { outline: none; border-color: #8A2432; }
+  .fb__btn--send {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 6px 14px;
+    background: #8A2432;
+    color: #fff;
+    border-color: #8A2432;
+    flex-direction: row;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+  }
+  .fb__btn--send:hover { background: #6B1A25; border-color: #6B1A25; }
+
+  .fb__status {
+    margin: 8px 0 0;
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: #5F5E5A;
+    min-height: 12px;
+  }
+  .fb__status[data-kind="ok"]    { color: #1B4E2B; }
+  .fb__status[data-kind="warn"]  { color: #6A3E05; }
+  .fb__status[data-kind="err"]   { color: #8A2432; }
+  .fb__status[data-kind="prior"] { color: #3A1F8B; }
+</style>

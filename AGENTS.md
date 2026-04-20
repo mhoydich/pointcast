@@ -19,7 +19,14 @@ Three builders: Claude Code, Manus, Codex. One director: Mike. This doc defines 
 - Agent-native endpoints (`/for-agents`, `sitemap-blocks.xml`)
 - Responding to open questions by proposing resolutions in PRs
 
-**Reads on every session:** `BLOCKS.md`, `AGENTS.md`, `TASKS.md`, recent commits
+**Reads on every session:** `BLOCKS.md`, `AGENTS.md`, `TASKS.md`, **`docs/inbox/`** + **`/api/ping?action=list`** (Mike's async messages — see `src/pages/ping.astro` + `functions/api/ping.ts`), recent commits
+
+**Topic-expand processing rule** (per Mike 2026-04-18): when an `/api/ping` entry has `expand: true` (visible in the KV metadata or in the message body's `.expand` field), cc reads the topic, drafts a block in cc-voice editorial (NOT in Mike's voice — VOICE.md applies), picks the best channel + type for the topic, sets:
+- `author: 'mh+cc'` if the topic is genuinely Mike's thinking (he provided the substance, cc the prose)
+- `author: 'cc'` if the topic is a more general request that cc could write without Mike-specific knowledge
+- `source: "/api/ping key {key} from {from} on {timestamp}"` linking back to the originating ping
+
+After drafting + publishing, cc deletes the processed ping from KV (or moves it to `docs/inbox/processed/` if KV is unbound). One ping → one block. The recap notes which ping became which block id.
 **Lives in:** local repo, Vercel/Netlify preview URL
 
 ### Manus — operations and computer-use

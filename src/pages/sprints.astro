@@ -1,0 +1,230 @@
+---
+/**
+ * /sprints — autonomous sprint log.
+ *
+ * Renders docs/sprints/{date}-{slug}.md files chronologically. Each entry
+ * shows what shipped, what didn't, follow-ups, and notes from the cc cron
+ * tick (or chat tick) that wrote it. Companion JSON at /sprints.json.
+ *
+ * This page is the transparent record — anyone can read what cc did
+ * without Mike having to manually summarize.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { readAllRecaps, summary } from '../lib/sprint-recap';
+
+const recaps = readAllRecaps();
+const stats = summary(recaps);
+
+const title = 'Sprints — autonomous work log';
+const description = 'Every sprint cc has shipped, in chronological order. Each entry: trigger, duration, what shipped, what didn\'t, follow-ups, notes. Read by humans + agents.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Sprint Log',
+  description,
+  url: 'https://pointcast.xyz/sprints',
+  hasPart: recaps.map((r) => ({
+    '@type': 'Article',
+    name: r.title,
+    datePublished: r.firedAt,
+    url: `https://pointcast.xyz/sprints#${r.sprintId}`,
+    author: { '@type': 'SoftwareApplication', name: 'Claude Code' },
+  })),
+};
+
+function fmtTime(iso: string): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Los_Angeles',
+    }).format(d) + ' PT';
+  } catch { return iso; }
+}
+
+function bulletize(raw: string): string[] {
+  return raw.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('-')).map((l) => l.replace(/^-\s*/, ''));
+}
+---
+
+<BlockLayout title={title} description={description} image="/images/og/sprints.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>sprints</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">SPRINTS · AUTONOMOUS WORK LOG</p>
+      <h1 class="title">Every sprint cc has shipped.</h1>
+      <p class="dek">
+        Each entry is a recap file at <code>docs/sprints/&#123;date&#125;-&#123;slug&#125;.md</code>
+        written by cc on the cron tick (or chat tick) that fired it.
+        <a href="/sprint">/sprint</a> is the picker; this is the record.
+        Schema docs at <code>docs/sprints/README.md</code>; companion JSON
+        at <a href="/sprints.json">/sprints.json</a>.
+      </p>
+      <ul class="stats">
+        <li><span class="stats__num">{stats.count}</span><span class="stats__lbl mono">SPRINTS</span></li>
+        <li><span class="stats__num">{stats.totalMin}</span><span class="stats__lbl mono">CC MINUTES</span></li>
+        <li><span class="stats__num">{stats.totalHours}h</span><span class="stats__lbl mono">CUMULATIVE</span></li>
+        <li><span class="stats__num">{stats.byTrigger.cron || 0}</span><span class="stats__lbl mono">CRON-FIRED</span></li>
+      </ul>
+    </header>
+
+    {recaps.length === 0 ? (
+      <section class="empty">
+        <p>No sprint recaps yet. Once cc fires its first sprint, it lands here.</p>
+      </section>
+    ) : (
+      <ol class="recaps">
+        {recaps.map((r) => (
+          <li class="recap" id={r.sprintId}>
+            <header class="recap__head">
+              <h2 class="recap__title">{r.title}</h2>
+              <div class="recap__meta mono">
+                <span class={`recap__trigger recap__trigger--${r.trigger || 'unknown'}`}>{(r.trigger || '?').toUpperCase()}</span>
+                <span class="recap__time">{fmtTime(r.firedAt)}</span>
+                {typeof r.durationMin === 'number' && <span class="recap__duration">{r.durationMin}m</span>}
+                {r.status && <span class={`recap__status recap__status--${r.status.replace(/-/g, '_')}`}>{r.status.toUpperCase()}</span>}
+              </div>
+              <p class="recap__id mono">#{r.sprintId}{r.shippedAs ? ` · ${r.shippedAs}` : ''}</p>
+            </header>
+
+            {r.sections['what-shipped'] && (
+              <div class="recap__section">
+                <p class="recap__section-title mono">WHAT SHIPPED</p>
+                <ul class="recap__bullets">
+                  {bulletize(r.sections['what-shipped']).map((b) => (
+                    <li set:html={b
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/`([^`]+)`/g, '<code>$1</code>')
+                      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+                    } />
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {r.sections['what-didn-t'] && (
+              <details class="recap__section recap__section--collapsible">
+                <summary class="recap__section-title mono">WHAT DIDN'T · expand</summary>
+                <ul class="recap__bullets">
+                  {bulletize(r.sections['what-didn-t']).map((b) => (
+                    <li set:html={b
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/`([^`]+)`/g, '<code>$1</code>')
+                      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    } />
+                  ))}
+                </ul>
+              </details>
+            )}
+
+            {r.sections['follow-ups'] && (
+              <details class="recap__section recap__section--collapsible">
+                <summary class="recap__section-title mono">FOLLOW-UPS · expand</summary>
+                <ul class="recap__bullets">
+                  {bulletize(r.sections['follow-ups']).map((b) => (
+                    <li set:html={b
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/`([^`]+)`/g, '<code>$1</code>')
+                      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    } />
+                  ))}
+                </ul>
+              </details>
+            )}
+
+            {r.sections['notes'] && (
+              <details class="recap__section recap__section--collapsible">
+                <summary class="recap__section-title mono">NOTES · expand</summary>
+                <p class="recap__notes">{r.sections['notes']}</p>
+              </details>
+            )}
+          </li>
+        ))}
+      </ol>
+    )}
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/sprints.json">/sprints.json</a></li>
+        <li><a href="/sprint">/sprint</a></li>
+        <li><a href="/api/queue">/api/queue</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 820px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 24px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #1E7C2F; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 5vw, 40px); font-weight: 700; line-height: 1.1; margin: 0 0 12px; }
+    .dek { margin: 0 0 16px; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek a { color: #a02c2c; text-decoration: none; }
+    .dek a:hover { text-decoration: underline; }
+    .dek code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em; }
+
+    .stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+    .stats li { padding: 10px 12px; border: 1px dashed #d6d4cd; border-radius: 2px; background: #faf9f5; display: flex; flex-direction: column; gap: 4px; }
+    .stats__num { font-size: 22px; font-weight: 700; color: #12110E; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+    .stats__lbl { font-size: 9.5px; color: #5F5E5A; }
+
+    .empty { padding: 30px 20px; border: 1px dashed #ccc; border-radius: 2px; text-align: center; color: #777; }
+
+    .recaps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: recap; }
+    .recap { padding: 14px 16px; border: 1px solid #e6e4de; border-left: 5px solid #1E7C2F; border-radius: 2px; background: #fff; scroll-margin-top: 60px; }
+    .recap__head { margin-bottom: 12px; }
+    .recap__title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 18px; font-weight: 600; margin: 0 0 6px; color: #12110E; }
+    .recap__meta { display: flex; gap: 8px; font-size: 9.5px; flex-wrap: wrap; align-items: baseline; margin-bottom: 4px; }
+    .recap__trigger { padding: 2px 6px; border-radius: 2px; font-weight: 700; }
+    .recap__trigger--cron  { background: #E7F5EC; color: #1B4E2B; }
+    .recap__trigger--chat  { background: #EEF4FA; color: #0B3E73; }
+    .recap__trigger--ping  { background: #FCE8EA; color: #8A2432; }
+    .recap__trigger--queue { background: #FFF4E5; color: #6A3E05; }
+    .recap__trigger--unknown { background: #f0eee6; color: #5F5E5A; }
+    .recap__time { color: #5F5E5A; }
+    .recap__duration { color: #5F5E5A; font-weight: 700; }
+    .recap__status { padding: 2px 6px; border-radius: 2px; font-weight: 700; font-size: 9px; }
+    .recap__status--complete { background: #1E7C2F; color: #fff; }
+    .recap__status--partial  { background: #E89A22; color: #fff; }
+    .recap__status--aborted  { background: #8A2432; color: #fff; }
+    .recap__status--pending_deploy { background: #5F3DC4; color: #fff; }
+    .recap__id { font-size: 10px; color: #5F5E5A; margin: 0; letter-spacing: 0.06em; text-transform: lowercase; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+    .recap__section { margin-top: 8px; }
+    .recap__section--collapsible summary { cursor: pointer; user-select: none; padding: 4px 0; }
+    .recap__section--collapsible[open] summary { color: #1E7C2F; }
+    .recap__section-title { font-size: 9.5px; color: #5F5E5A; margin: 0 0 4px; letter-spacing: 0.16em; }
+    .recap__bullets { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+    .recap__bullets li { padding: 4px 0 4px 14px; position: relative; font-size: 13.5px; line-height: 1.5; color: #12110E; }
+    .recap__bullets li::before { content: '·'; position: absolute; left: 4px; color: #1E7C2F; font-weight: 700; }
+    .recap__bullets code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); background: #f0eee6; padding: 1px 4px; border-radius: 2px; font-size: 0.9em; }
+    .recap__bullets a { color: #a02c2c; text-decoration: none; }
+    .recap__bullets a:hover { text-decoration: underline; }
+    .recap__notes { margin: 4px 0 0; font-size: 13.5px; line-height: 1.55; color: #38373A; white-space: pre-wrap; }
+
+    .agent-strip { margin-top: 24px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

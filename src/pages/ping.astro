@@ -1,0 +1,434 @@
+---
+/**
+ * /ping — the async front door for messages to Claude Code.
+ *
+ * Mike's 2026-04-18 request: "i'd like some way to contact, communicate with
+ * you via the site, maybe you poll every so often". This page is that front
+ * door. Tiny composer, optional Beacon-wallet identity, writes to
+ * /api/ping. Claude Code reads both the KV-backed inbox (when PC_PING_KV is
+ * bound) and the docs/inbox/ directory (always) at the start of every
+ * session.
+ *
+ * No moderation surface by design — messages are private to the team. Any
+ * message that makes it to a public block goes through a manual editorial
+ * step, never auto-published.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Ping — message Claude Code';
+const description = 'Async inbox for PointCast. Drop a message — Claude Code reads it at the start of the next session. Optional Beacon wallet signing, no account required.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ContactPage',
+  name: 'Ping',
+  description,
+  url: 'https://pointcast.xyz/ping',
+  mainEntity: {
+    '@type': 'CommunicateAction',
+    about: 'Messages to the PointCast team (Claude Code, Mike).',
+    instrument: {
+      '@type': 'WebAPI',
+      url: 'https://pointcast.xyz/api/ping',
+    },
+  },
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/ping.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>ping</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">PING · ASYNC INBOX</p>
+      <h1 class="title">Message the team.</h1>
+      <p class="dek">
+        Drop a line, Claude Code reads it at the start of the next session
+        (along with <code>docs/inbox/</code>). Mike sees it too. Nothing posts
+        publicly — this is a private channel. Wallet signing is optional but
+        gives your message a stable identity across threads.
+      </p>
+    </header>
+
+    <form class="composer" id="ping-form" novalidate>
+      <div class="row">
+        <label class="field">
+          <span class="label mono">FROM · optional</span>
+          <input type="text" id="ping-from" name="from" placeholder="mike · a visitor · @handle" maxlength="80" autocomplete="name" />
+        </label>
+        <label class="field">
+          <span class="label mono">SUBJECT · optional</span>
+          <input type="text" id="ping-subject" name="subject" placeholder="one line is plenty" maxlength="120" />
+        </label>
+      </div>
+      <label class="field">
+        <span class="label mono">MESSAGE · required · up to 4000 chars</span>
+        <textarea id="ping-body" name="body" rows="8" required maxlength="4000" placeholder="hey cc — …"></textarea>
+        <span class="counter mono" id="ping-counter">0 / 4000</span>
+      </label>
+
+      <div class="expand">
+        <label class="expand__opt">
+          <input type="checkbox" id="ping-expand" />
+          <span><strong>Topic — expand and publish</strong> (cc drafts a block from your seed in cc-voice editorial, publishes on next tick)</span>
+        </label>
+        <p class="expand__hint">When checked, your message is treated as a topic, not a private note. Default OFF — pings stay private unless you opt in.</p>
+      </div>
+
+      <div class="sign">
+        <label class="sign__opt">
+          <input type="checkbox" id="ping-sign" />
+          <span>Sign with Beacon wallet (optional — attaches your Tezos address)</span>
+        </label>
+        <p class="sign__addr mono" id="ping-addr">not connected</p>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn--primary" id="ping-submit">▶ Send</button>
+        <button type="button" class="btn" id="ping-clear">Clear</button>
+      </div>
+
+      <p class="status" id="ping-status" aria-live="polite"></p>
+    </form>
+
+    <section class="how">
+      <p class="kicker mono">HOW THIS WORKS</p>
+      <ol class="how__steps">
+        <li>You hit <strong>Send</strong>. A POST goes to <code>/api/ping</code>.</li>
+        <li>The message lands in Workers KV (<code>PC_PING_KV</code>) keyed by timestamp + content hash. 90-day retention.</li>
+        <li>On session start, Claude Code runs <code>GET /api/ping?action=list</code> + <code>ls docs/inbox/</code> and notes anything new in the next sprint recap.</li>
+        <li><strong>If you checked "Topic — expand and publish"</strong>, cc treats the message as a topic seed: drafts a block in cc-voice editorial (NOT in your voice — VOICE.md applies), picks a channel + type, sets <code>author: 'mh+cc'</code> with <code>source</code> pointing to your ping key, and ships on the next cron tick.</li>
+      </ol>
+    </section>
+
+    <section class="direct">
+      <p class="kicker mono">DIRECT PATHS</p>
+      <ul class="direct__list">
+        <li><strong>Email:</strong> <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a></li>
+        <li><strong>X / Twitter:</strong> <a href="https://x.com/mhoydich" target="_blank" rel="noopener">@mhoydich</a></li>
+        <li><strong>Farcaster:</strong> (TBD)</li>
+        <li><strong>Repo:</strong> <code>docs/inbox/</code> on <a href="https://github.com/MikeHoydich/pointcast" target="_blank" rel="noopener">github.com/MikeHoydich/pointcast</a></li>
+      </ul>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/ping">/api/ping</a> — endpoint</li>
+        <li><a href="/api/ping?action=list">/api/ping?action=list</a> — recent messages (KV-bound)</li>
+        <li><a href="/collabs">/collabs</a> — who reads this</li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <script is:inline>
+    (function () {
+      const form = document.getElementById('ping-form');
+      const body = document.getElementById('ping-body');
+      const counter = document.getElementById('ping-counter');
+      const status = document.getElementById('ping-status');
+      const submitBtn = document.getElementById('ping-submit');
+      const clearBtn = document.getElementById('ping-clear');
+      const signBox = document.getElementById('ping-sign');
+      const addrEl = document.getElementById('ping-addr');
+
+      function setStatus(msg, kind) {
+        status.textContent = msg;
+        status.dataset.kind = kind || '';
+      }
+
+      body.addEventListener('input', () => {
+        counter.textContent = body.value.length + ' / 4000';
+      });
+
+      clearBtn.addEventListener('click', () => {
+        form.reset();
+        counter.textContent = '0 / 4000';
+        setStatus('', '');
+      });
+
+      /* Wallet address hook — optional Beacon connect. We stash the last
+       * connected address in localStorage (pc:addr) so this page can
+       * resurface it without re-connecting. Real signing happens in a
+       * later version; v0 just attaches the address as identity claim. */
+      function paintAddr() {
+        try {
+          const saved = localStorage.getItem('pc:addr');
+          addrEl.textContent = saved ? saved : 'not connected';
+        } catch { addrEl.textContent = 'not connected'; }
+      }
+      paintAddr();
+      signBox.addEventListener('change', () => {
+        if (signBox.checked) {
+          try {
+            const saved = localStorage.getItem('pc:addr');
+            if (!saved) {
+              setStatus('No saved address — connect a wallet on /publish or /dao first, then come back.', 'err');
+              signBox.checked = false;
+              return;
+            }
+          } catch {}
+        }
+        paintAddr();
+      });
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const bodyVal = body.value.trim();
+        if (!bodyVal) { setStatus('Message required.', 'err'); return; }
+        submitBtn.disabled = true;
+        setStatus('Sending…', '');
+
+        const expandBox = document.getElementById('ping-expand');
+        const payload = {
+          type: 'pc-ping-v1',
+          subject: document.getElementById('ping-subject').value.trim() || undefined,
+          body: bodyVal,
+          from: document.getElementById('ping-from').value.trim() || undefined,
+          expand: expandBox && expandBox.checked ? true : undefined,
+          timestamp: new Date().toISOString(),
+        };
+        if (signBox.checked) {
+          try {
+            const saved = localStorage.getItem('pc:addr');
+            if (saved) payload.address = saved;
+          } catch {}
+        }
+
+        try {
+          const r = await fetch('/api/ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.ok) {
+            const okMsg = j.expand
+              ? '✓ Topic queued for expansion. cc drafts + publishes a block on the next tick. key: ' + (j.key || '—')
+              : '✓ Sent. key: ' + (j.key || '—');
+            setStatus(okMsg, 'ok');
+            form.reset();
+            counter.textContent = '0 / 4000';
+          } else if (r.status === 503 && j.reason === 'key-not-bound') {
+            setStatus('KV not bound yet. Fallback: drop a file in docs/inbox/ in the repo, or email hello@pointcast.xyz — cc reads both at session start.', 'warn');
+          } else {
+            setStatus('Failed: ' + (j.error || r.status), 'err');
+          }
+        } catch (err) {
+          setStatus('Network error: ' + (err && err.message ? err.message : 'offline'), 'err');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
+
+  <style>
+    .page { max-width: 720px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb {
+      display: flex; gap: 8px; margin-bottom: 14px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #7a7a72;
+    }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+    .crumb a:hover { text-decoration: underline; }
+
+    .head { margin-bottom: 24px; }
+    .kicker { font-size: 10px; margin: 0 0 10px; letter-spacing: 0.18em; color: #8A2432; }
+    .title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin: 0 0 14px;
+    }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek code, .how code, .direct code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em;
+    }
+
+    .composer {
+      padding: 16px;
+      border: 1px solid #12110E;
+      border-radius: 2px;
+      background: #fff;
+      display: grid;
+      gap: 12px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+    .field { display: grid; gap: 5px; }
+    .label { font-size: 9.5px; color: #5F5E5A; letter-spacing: 0.14em; }
+    .field input, .field textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      font-size: 14px;
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      transition: border-color 0.12s;
+    }
+    .field input:focus, .field textarea:focus {
+      outline: none;
+      border-color: #12110E;
+    }
+    .field textarea {
+      min-height: 160px;
+      resize: vertical;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 13px;
+      line-height: 1.55;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .counter {
+      font-size: 9px;
+      color: #8a8878;
+      align-self: end;
+      letter-spacing: 0.12em;
+    }
+
+    .expand {
+      padding: 10px 12px;
+      border: 1.5px dashed #5F3DC4;
+      border-radius: 2px;
+      background: #fbf9ff;
+      display: grid;
+      gap: 6px;
+    }
+    .expand__opt {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      color: #38373A;
+      cursor: pointer;
+      line-height: 1.45;
+    }
+    .expand__opt input { margin-top: 3px; flex: 0 0 auto; }
+    .expand__opt strong { color: #3A1F8B; font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); }
+    .expand__hint {
+      margin: 0;
+      font-size: 11.5px;
+      color: #5F5E5A;
+      line-height: 1.4;
+      padding-left: 22px;
+    }
+
+    .sign {
+      padding: 8px 10px;
+      border: 1px dashed #d6d4cd;
+      border-radius: 2px;
+      background: #faf9f5;
+      display: grid;
+      gap: 4px;
+    }
+    .sign__opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #38373A;
+      cursor: pointer;
+    }
+    .sign__addr {
+      font-size: 10px;
+      color: #5F5E5A;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 14px;
+      border: 1.5px solid #12110E;
+      background: #fff;
+      color: #12110E;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .btn:hover { background: #12110E; color: #fff; }
+    .btn--primary { background: #12110E; color: #fff; }
+    .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+    .status {
+      margin: 0;
+      font-size: 12.5px;
+      padding: 6px 10px;
+      border-radius: 2px;
+      min-height: 16px;
+    }
+    .status[data-kind="ok"]   { background: #E7F5EC; color: #1B4E2B; }
+    .status[data-kind="warn"] { background: #FFF4E5; color: #6A3E05; }
+    .status[data-kind="err"]  { background: #FCE8EA; color: #8A2432; }
+
+    .how, .direct {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border: 1px solid #e6e4de;
+      border-radius: 2px;
+      background: #fbfaf5;
+    }
+    .how__steps {
+      list-style: none;
+      counter-reset: how;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+    .how__steps li {
+      position: relative;
+      padding-left: 22px;
+      font-size: 13.5px;
+      line-height: 1.5;
+      color: #38373A;
+    }
+    .how__steps li::before {
+      counter-increment: how;
+      content: counter(how) '.';
+      position: absolute;
+      left: 0;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      color: #8A2432;
+      font-weight: 700;
+    }
+    .direct__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px; color: #12110E; }
+    .direct__list a { color: #a02c2c; text-decoration: none; }
+    .direct__list a:hover { text-decoration: underline; }
+
+    .agent-strip {
+      margin-top: 24px;
+      padding-top: 14px;
+      border-top: 1px dashed #d6d4cd;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

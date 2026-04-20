@@ -1,0 +1,255 @@
+---
+/**
+ * /products — the Good Feels SEO foothold.
+ *
+ * Mike 2026-04-18: PointCast already carries agent-discovery trust;
+ * exposing a structured Product surface lets crawlers (and LLMs) find
+ * Good Feels through us with proper schema.org markup.
+ *
+ * v0: empty on purpose. The page renders an onboarding state until the
+ * first product lands at src/content/products/{slug}.json. v1: Mike
+ * curates a small catalog (5-15 entries) of Good Feels' headline products.
+ *
+ * The page is a catalog, not a checkout. Every CTA bounces to
+ * shop.getgoodfeels.com — we never see payment or PII.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const products = (await getCollection('products', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+
+// Group by category for the catalog nav.
+const byCategory: Record<string, typeof products> = {};
+for (const p of products) {
+  const cat = p.data.category || 'uncategorized';
+  if (!byCategory[cat]) byCategory[cat] = [];
+  byCategory[cat].push(p);
+}
+const categories = Object.keys(byCategory).sort();
+
+const title = 'Products — Good Feels via PointCast';
+const description = 'Structured product catalog feeding shop.getgoodfeels.com. Schema.org Product markup, agent-readable, CORS-open. v0 empty on purpose; v1 curated by Mike.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Products',
+  description,
+  url: 'https://pointcast.xyz/products',
+  about: {
+    '@type': 'Organization',
+    name: 'Good Feels',
+    url: 'https://shop.getgoodfeels.com',
+  },
+  hasPart: products.map((p) => ({
+    '@type': 'Product',
+    '@id': `https://pointcast.xyz/products/${p.data.slug}`,
+    name: p.data.name,
+    description: p.data.description,
+    brand: { '@type': 'Brand', name: p.data.brand },
+    url: `https://pointcast.xyz/products/${p.data.slug}`,
+    ...(p.data.image && p.data.image.length ? { image: p.data.image } : {}),
+    ...(p.data.priceUsd !== undefined ? {
+      offers: {
+        '@type': 'Offer',
+        price: p.data.priceUsd,
+        priceCurrency: p.data.currency,
+        availability: 'https://schema.org/' + (p.data.availability === 'in-stock' ? 'InStock' : 'OutOfStock'),
+        url: p.data.url,
+      },
+    } : {}),
+  })),
+};
+
+const alternates = [
+  { type: 'application/json', href: '/products.json', title: 'Products (JSON)' },
+];
+---
+
+<BlockLayout title={title} description={description} image="/images/og/products.png" jsonLd={jsonLd} alternates={alternates}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>products</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">PRODUCTS · GOOD FEELS</p>
+      <h1 class="title">A structured shop window.</h1>
+      <p class="dek">
+        Good Feels is the day job. PointCast carries the agent-discovery
+        trust — every JSON endpoint open, stripped HTML for crawlers,
+        every block citeable. This page extends that trust to the shop:
+        proper <code>schema.org/Product</code> markup, deep-link to
+        <a href="https://shop.getgoodfeels.com" target="_blank" rel="noopener">shop.getgoodfeels.com</a>
+        for checkout. We never see your card. We just route the read.
+      </p>
+    </header>
+
+    {products.length === 0 ? (
+      <section class="empty">
+        <p class="empty__title">v0 — onboarding</p>
+        <p class="empty__body">
+          The catalog ships empty on purpose. The first product lands
+          when Mike drops one (via <a href="/drop">/drop</a> with a
+          <code>shop.getgoodfeels.com/products/{'{slug}'}</code> URL) or
+          commits a JSON entry directly under
+          <code>src/content/products/{'{slug}'}.json</code>. Schema is
+          documented at <a href="/products.json">/products.json</a> and in
+          <code>src/content.config.ts</code>.
+        </p>
+        <p class="empty__body">
+          The whole scaffold — page renderer, per-product detail at
+          <code>/products/{'{slug}'}</code>, JSON mirror, schema.org
+          markup, OG card — is live and waiting. Add an entry, get a
+          fully agent-readable product page on the next deploy.
+        </p>
+        <ul class="empty__quick">
+          <li><a href="/drop">→ /drop · paste a Good Feels product URL</a></li>
+          <li><a href="https://shop.getgoodfeels.com" target="_blank" rel="noopener">→ shop.getgoodfeels.com ↗</a></li>
+          <li><a href="/products.json">→ /products.json · machine view</a></li>
+          <li><a href="/sprint">→ /sprint · pick "good-feels-product-block" to seed the first one</a></li>
+        </ul>
+      </section>
+    ) : (
+      <section class="cats">
+        {categories.map((cat) => (
+          <div class="cat">
+            <p class="cat__title mono">{cat.toUpperCase()} · {byCategory[cat].length}</p>
+            <ul class="cat__list">
+              {byCategory[cat].map((p) => (
+                <li class="prod" id={p.data.slug}>
+                  <a href={`/products/${p.data.slug}`} class="prod__link">
+                    {p.data.image && p.data.image[0] && (
+                      <img class="prod__img" src={p.data.image[0]} alt={p.data.name} loading="lazy" />
+                    )}
+                    <div class="prod__body">
+                      <h2 class="prod__name">{p.data.name}</h2>
+                      {p.data.dek && <p class="prod__dek">{p.data.dek}</p>}
+                      <div class="prod__meta mono">
+                        <span class="prod__brand">{p.data.brand}</span>
+                        {p.data.priceUsd !== undefined && (
+                          <span class="prod__price">${p.data.priceUsd.toFixed(2)} {p.data.currency}</span>
+                        )}
+                        <span class={`prod__avail prod__avail--${p.data.availability}`}>{p.data.availability}</span>
+                      </div>
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+    )}
+
+    <section class="why">
+      <p class="kicker mono">WHY THIS EXISTS</p>
+      <p>
+        PointCast is agent-readable by design. Adding a structured product
+        surface piggybacks Good Feels onto that crawlability. An LLM
+        researching cannabis brands or hemp-adjacent products that lands
+        on PointCast first finds <code>/agents.json</code>, then
+        <code>/products.json</code>, then per-product
+        <code>schema.org/Product</code> blocks with name, brand, image,
+        price, and the canonical shop URL. Every checkout hop happens at
+        shop.getgoodfeels.com.
+      </p>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/products.json">/products.json</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+        <li><a href="https://shop.getgoodfeels.com" target="_blank" rel="noopener">shop.getgoodfeels.com ↗</a></li>
+        <li><a href="/drop">/drop</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 820px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 22px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #993556; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 5vw, 40px); font-weight: 700; line-height: 1.1; margin: 0 0 12px; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek a, .why a, .empty__quick a { color: #a02c2c; text-decoration: none; font-weight: 500; }
+    .dek a:hover, .why a:hover, .empty__quick a:hover { text-decoration: underline; }
+    .dek code, .why code, .empty__body code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em;
+    }
+
+    .empty {
+      padding: 22px 18px;
+      border: 1.5px dashed #993556;
+      border-radius: 2px;
+      background: #fdf6f9;
+    }
+    .empty__title {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: #993556; font-weight: 700; margin: 0 0 12px;
+    }
+    .empty__body { margin: 0 0 12px; line-height: 1.55; font-size: 14.5px; color: #38373A; }
+    .empty__quick { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+
+    .cats { display: grid; gap: 24px; }
+    .cat__title { font-size: 10px; color: #993556; margin: 0 0 10px; }
+    .cat__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .prod { }
+    .prod__link {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 14px;
+      padding: 12px;
+      border: 1px solid #e6c8d6;
+      border-left: 4px solid #993556;
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .prod__link:hover { background: #fdf6f9; border-color: #6B2139; }
+    .prod__img { width: 100%; height: 100px; object-fit: cover; border-radius: 2px; background: #f0eee6; }
+    .prod__name { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+    .prod__dek { font-size: 13.5px; color: #5F5E5A; margin: 0 0 6px; line-height: 1.4; }
+    .prod__meta { display: flex; gap: 10px; font-size: 10px; flex-wrap: wrap; }
+    .prod__brand { color: #993556; font-weight: 700; }
+    .prod__price { color: #12110E; font-weight: 700; }
+    .prod__avail { padding: 1px 6px; border-radius: 2px; font-weight: 700; }
+    .prod__avail--in-stock { background: #E7F5EC; color: #1B4E2B; }
+    .prod__avail--out-of-stock { background: #FCE8EA; color: #8A2432; }
+    .prod__avail--preorder { background: #FFF4E5; color: #6A3E05; }
+    .prod__avail--discontinued { background: #f0eee6; color: #5F5E5A; }
+
+    @media (max-width: 540px) {
+      .prod__link { grid-template-columns: 80px 1fr; gap: 10px; padding: 10px; }
+      .prod__img { height: 80px; }
+    }
+
+    .why {
+      margin-top: 24px;
+      padding: 14px 16px;
+      border: 1px dashed #d6d4cd;
+      border-radius: 2px;
+      background: #fbfaf5;
+    }
+    .why p { margin: 0; line-height: 1.55; font-size: 13.5px; color: #38373A; }
+
+    .agent-strip { margin-top: 24px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

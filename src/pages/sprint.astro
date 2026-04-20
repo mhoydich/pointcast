@@ -1,0 +1,399 @@
+---
+/**
+ * /sprint — one-click work picker for cc.
+ *
+ * Mike 2026-04-18: "yah it'd be neat to have just some one click options
+ * or so, maybe a feedback area for me tho, while its say 10 am and you
+ * are idle, i can see these options and say pick 1 like a progress on
+ * yeeplayer whatev and then green light it".
+ *
+ * Layout: header (status + last sprint) → cards (PICK buttons) →
+ * feedback textarea (custom directive) → cron schedule note.
+ *
+ * Mobile-first. Big tap targets. Single column. Loads in one viewport.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SPRINT_BACKLOG, counts } from '../lib/sprints';
+
+const c = counts();
+const ready = SPRINT_BACKLOG.filter((s) => s.status === 'ready');
+const needsInput = SPRINT_BACKLOG.filter((s) => s.status === 'needs-input');
+const done = SPRINT_BACKLOG.filter((s) => s.status === 'done').slice(0, 3);
+
+const title = 'Sprint — one-click directives for cc';
+const description = 'Pick a sprint. Tap a card → cc executes on the next cron tick. Free-text feedback also accepted. Mobile-first, no login.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'PointCast Sprint Picker',
+  description,
+  url: 'https://pointcast.xyz/sprint',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/sprint.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>sprint</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">SPRINT · WHAT SHOULD CC WORK ON NEXT</p>
+      <h1 class="title">Pick one. cc runs it next tick.</h1>
+      <p class="dek">
+        cc wakes hourly via <code>CronCreate</code> (minute :11). On wake it reads
+        this queue, picks the highest-priority pick, ships it, recaps to
+        <code>docs/sprints/</code>, and idles. You can also chat-tick at any time.
+      </p>
+      <p class="state mono">
+        <span class="state__chip">{c.ready} ready</span>
+        <span class="state__chip state__chip--blocked">{c['needs-input']} needs input</span>
+        <span class="state__chip state__chip--done">{c.done} done</span>
+      </p>
+    </header>
+
+    <section class="cards" aria-label="Ready sprints">
+      <p class="section-title mono">READY · TAP TO PICK</p>
+      <ul class="list">
+        {ready.map((s) => (
+          <li class="card" id={s.id}>
+            <div class="card__head">
+              <h2 class="card__title">{s.title}</h2>
+              <span class="card__est mono">~{s.estMin}m</span>
+            </div>
+            <p class="card__why">{s.why}</p>
+            <p class="card__output mono"><strong>OUTPUT:</strong> {s.output}</p>
+            <div class="card__actions">
+              <button
+                class="btn btn--primary pick-btn"
+                type="button"
+                data-sprint-id={s.id}
+                data-sprint-title={s.title}
+              >▶ PICK THIS</button>
+              <a class="btn btn--ghost" href={`#${s.id}`}>#{s.id}</a>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {needsInput.length > 0 && (
+      <section class="cards" aria-label="Needs-input sprints">
+        <p class="section-title mono">NEEDS INPUT · NOT YET PICKABLE</p>
+        <ul class="list">
+          {needsInput.map((s) => (
+            <li class="card card--blocked" id={s.id}>
+              <div class="card__head">
+                <h2 class="card__title">{s.title}</h2>
+                <span class="card__est mono">~{s.estMin}m</span>
+              </div>
+              <p class="card__why">{s.why}</p>
+              {s.needs && <p class="card__needs"><strong>Needs:</strong> {s.needs}</p>}
+              <p class="card__output mono"><strong>OUTPUT:</strong> {s.output}</p>
+              <div class="card__actions">
+                <span class="btn btn--disabled">⊘ NEEDS INPUT</span>
+                <a class="btn btn--ghost" href="/ping">→ /ping to send the input</a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <section class="custom" aria-label="Custom directive">
+      <p class="section-title mono">CUSTOM DIRECTIVE · OR FEEDBACK</p>
+      <form id="custom-form" novalidate>
+        <label class="field">
+          <textarea
+            id="custom-body"
+            rows="3"
+            maxlength="1000"
+            placeholder="anything else cc should pick up — e.g. 'audit blocks 0250-0260', 'add a Mythos block', or just feedback"
+            required
+          ></textarea>
+          <span class="counter mono" id="custom-counter">0 / 1000</span>
+        </label>
+        <div class="actions">
+          <button type="submit" class="btn btn--primary" id="custom-submit">▶ SEND DIRECTIVE</button>
+          <button type="button" class="btn" id="custom-clear">Clear</button>
+        </div>
+        <p class="status" id="custom-status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    {done.length > 0 && (
+      <section class="recent">
+        <p class="section-title mono">RECENTLY SHIPPED</p>
+        <ul class="recent__list">
+          {done.map((s) => (
+            <li class="recent__item">
+              <span class="recent__title">{s.title}</span>
+              {s.shippedAt && <span class="recent__date mono">{s.shippedAt.slice(0, 10)}</span>}
+              {s.shippedAs && <span class="recent__ref mono">{s.shippedAs}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/queue">/api/queue</a></li>
+        <li><a href="/api/queue?action=list">/api/queue?action=list</a></li>
+        <li><a href="/ping">/ping</a></li>
+        <li><a href="/collabs">/collabs</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <script is:inline>
+    (function () {
+      function sendPick(payload) {
+        return fetch('/api/queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }));
+      }
+
+      /* ─── Card pick buttons ─── */
+      const pickBtns = document.querySelectorAll('.pick-btn');
+      pickBtns.forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-sprint-id');
+          const tt = btn.getAttribute('data-sprint-title') || id;
+          const orig = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = '⏳ Sending…';
+          const res = await sendPick({
+            type: 'pc-queue-v1',
+            sprintId: id,
+            timestamp: new Date().toISOString(),
+          });
+          if (res.status === 200 && res.body.ok) {
+            btn.textContent = '✓ PICKED';
+            btn.classList.add('btn--done');
+          } else if (res.status === 503 && res.body.reason === 'key-not-bound') {
+            btn.textContent = '⚠ KV not bound — see fallback';
+            btn.classList.add('btn--warn');
+            alert('KV not bound yet. Fallback: drop a file in docs/queue/ in the repo with sprint id "' + id + '". cc reads on session start. — ' + (res.body.fallback || ''));
+          } else {
+            btn.textContent = '✗ ' + (res.body.error || res.status);
+            btn.classList.add('btn--err');
+          }
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = orig;
+            btn.classList.remove('btn--done', 'btn--warn', 'btn--err');
+          }, 4500);
+        });
+      });
+
+      /* ─── Custom directive form ─── */
+      const form = document.getElementById('custom-form');
+      const body = document.getElementById('custom-body');
+      const counter = document.getElementById('custom-counter');
+      const status = document.getElementById('custom-status');
+      const submitBtn = document.getElementById('custom-submit');
+      const clearBtn = document.getElementById('custom-clear');
+
+      function setStatus(msg, kind) { status.textContent = msg; status.dataset.kind = kind || ''; }
+      body.addEventListener('input', () => { counter.textContent = body.value.length + ' / 1000'; });
+      clearBtn.addEventListener('click', () => { form.reset(); counter.textContent = '0 / 1000'; setStatus('', ''); });
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = body.value.trim();
+        if (!text) { setStatus('Directive required.', 'err'); return; }
+        submitBtn.disabled = true;
+        setStatus('Sending…', '');
+        const res = await sendPick({
+          type: 'pc-queue-v1',
+          custom: text,
+          timestamp: new Date().toISOString(),
+        });
+        if (res.status === 200 && res.body.ok) {
+          setStatus('✓ Sent. key: ' + (res.body.key || '—'), 'ok');
+          form.reset();
+          counter.textContent = '0 / 1000';
+        } else if (res.status === 503 && res.body.reason === 'key-not-bound') {
+          setStatus('KV not bound. Fallback: drop a file in docs/queue/{ts}-{slug}.md in the repo. cc reads on session start.', 'warn');
+        } else {
+          setStatus('Failed: ' + (res.body.error || res.status), 'err');
+        }
+        submitBtn.disabled = false;
+      });
+    })();
+  </script>
+
+  <style>
+    .page { max-width: 760px; margin: 0 auto; padding: 18px 14px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb {
+      display: flex; gap: 8px; margin-bottom: 12px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72;
+    }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 18px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #185FA5; }
+    .title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: clamp(24px, 5vw, 34px);
+      font-weight: 700;
+      line-height: 1.12;
+      margin: 0 0 10px;
+    }
+    .dek { margin: 0 0 10px; color: #38373A; line-height: 1.5; font-size: 14.5px; }
+    .dek code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em;
+    }
+    .state { display: flex; gap: 6px; flex-wrap: wrap; font-size: 10px; }
+    .state__chip {
+      padding: 3px 8px;
+      background: #E7F5EC;
+      color: #1B4E2B;
+      border-radius: 2px;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+    }
+    .state__chip--blocked { background: #FFF4E5; color: #6A3E05; }
+    .state__chip--done    { background: #E8E6FF; color: #3A1F8B; }
+
+    .cards { margin-bottom: 22px; }
+    .section-title { font-size: 10px; color: #5F5E5A; margin: 0 0 8px; letter-spacing: 0.16em; }
+    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .card {
+      padding: 14px;
+      border: 1px solid #12110E;
+      border-left: 5px solid #1E7C2F;
+      border-radius: 2px;
+      background: #fff;
+      scroll-margin-top: 60px;
+    }
+    .card--blocked { border-left-color: #E89A22; background: #fffaf2; }
+    .card__head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .card__title {
+      margin: 0;
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 17px;
+      font-weight: 600;
+      color: #12110E;
+      flex: 1 1 auto;
+    }
+    .card__est { font-size: 10px; color: #5F5E5A; letter-spacing: 0.14em; }
+    .card__why { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: #38373A; }
+    .card__needs { margin: 0 0 8px; font-size: 13px; color: #6A3E05; padding: 4px 8px; background: #FFF4E5; border-radius: 2px; }
+    .card__output { margin: 0 0 12px; font-size: 10.5px; color: #5F5E5A; line-height: 1.5; letter-spacing: 0.06em; text-transform: none; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+    .card__output strong { color: #12110E; letter-spacing: 0.12em; text-transform: uppercase; font-size: 9.5px; }
+    .card__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 14px;
+      border: 1.5px solid #12110E;
+      background: #fff;
+      color: #12110E;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      text-decoration: none;
+      min-height: 38px;
+    }
+    .btn:hover { background: #12110E; color: #fff; }
+    .btn--primary { background: #12110E; color: #fff; }
+    .btn--primary:hover { background: #000; }
+    .btn--ghost { border-color: #b8b4a8; color: #5F5E5A; min-height: 30px; padding: 6px 10px; font-size: 10px; }
+    .btn--ghost:hover { background: transparent; color: #12110E; border-color: #12110E; }
+    .btn--disabled {
+      background: #f0eee6;
+      color: #8a8878;
+      border-color: #d6d4cd;
+      cursor: not-allowed;
+    }
+    .btn--done { background: #1E7C2F; border-color: #1E7C2F; color: #fff; }
+    .btn--warn { background: #E89A22; border-color: #E89A22; color: #fff; }
+    .btn--err  { background: #8A2432; border-color: #8A2432; color: #fff; }
+    .btn[disabled] { opacity: 0.7; cursor: not-allowed; }
+
+    /* Custom directive */
+    .custom {
+      margin-bottom: 22px;
+      padding: 14px;
+      border: 1px solid #d6d4cd;
+      border-left: 5px solid #185FA5;
+      border-radius: 2px;
+      background: #fbfaf5;
+    }
+    .field { display: grid; gap: 5px; margin-bottom: 8px; }
+    .field textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      font-size: 14px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      line-height: 1.55;
+      letter-spacing: 0;
+      text-transform: none;
+      min-height: 90px;
+      resize: vertical;
+    }
+    .field textarea:focus { outline: none; border-color: #12110E; }
+    .counter { font-size: 9px; color: #8a8878; align-self: end; letter-spacing: 0.12em; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status {
+      margin: 8px 0 0;
+      font-size: 12.5px;
+      padding: 6px 10px;
+      border-radius: 2px;
+      min-height: 16px;
+    }
+    .status[data-kind="ok"]   { background: #E7F5EC; color: #1B4E2B; }
+    .status[data-kind="warn"] { background: #FFF4E5; color: #6A3E05; }
+    .status[data-kind="err"]  { background: #FCE8EA; color: #8A2432; }
+
+    .recent { margin-bottom: 22px; padding: 12px 14px; border: 1px dashed #d6d4cd; border-radius: 2px; background: #faf9f5; }
+    .recent__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+    .recent__item { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline; font-size: 13px; }
+    .recent__title { color: #12110E; }
+    .recent__date { color: #5F5E5A; font-size: 10px; }
+    .recent__ref  { color: #185FA5; font-size: 10px; letter-spacing: 0; text-transform: none; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+    .agent-strip {
+      margin-top: 22px;
+      padding-top: 12px;
+      border-top: 1px dashed #d6d4cd;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+
+    @media (max-width: 540px) {
+      .card { padding: 12px; }
+      .card__title { font-size: 16px; }
+      .btn { font-size: 11px; padding: 11px 14px; }
+    }
+  </style>
+</BlockLayout>

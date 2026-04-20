@@ -1,0 +1,295 @@
+---
+/**
+ * /mood/{slug} — filter page that surfaces every block + gallery entry
+ * sharing a mood tag. Named follow-up from sprint `10pm-bundle` (2026-04-18).
+ *
+ * Design:
+ *   - Build-time static route; getStaticPaths enumerates all distinct mood
+ *     slugs across both collections.
+ *   - Each page lists blocks first (newest → oldest), then gallery items.
+ *   - If only one surface has entries for a mood, the other section is
+ *     hidden rather than rendered empty.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import BlockCard from '../../components/BlockCard.astro';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  let gallery: CollectionEntry<'gallery'>[] = [];
+  try {
+    gallery = await getCollection('gallery', ({ data }) => !data.draft);
+  } catch {
+    // Gallery collection may be empty — swallow and treat as no items.
+    gallery = [];
+  }
+
+  const moods = new Set<string>();
+  for (const b of blocks) if (b.data.mood) moods.add(b.data.mood);
+  for (const g of gallery) if (g.data.mood) moods.add(g.data.mood);
+
+  return Array.from(moods).map((slug) => {
+    const matchingBlocks = blocks
+      .filter((b) => b.data.mood === slug)
+      .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+    const matchingGallery = gallery
+      .filter((g) => g.data.mood === slug)
+      .sort((a, b) => b.data.createdAt.getTime() - a.data.createdAt.getTime());
+
+    return {
+      params: { slug },
+      props: {
+        slug,
+        blocks: matchingBlocks,
+        gallery: matchingGallery,
+      },
+    };
+  });
+}
+
+interface Props {
+  slug: string;
+  blocks: CollectionEntry<'blocks'>[];
+  gallery: CollectionEntry<'gallery'>[];
+}
+const { slug, blocks, gallery } = Astro.props;
+
+const prettyMood = slug.replace(/-/g, ' ');
+const title = `mood · ${prettyMood}`;
+const description = `Every block and gallery entry on PointCast tagged with the "${prettyMood}" mood — a tonal cross-cut of the feed.`;
+
+const totalCount = blocks.length + gallery.length;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': `https://pointcast.xyz/mood/${slug}`,
+  name: title,
+  description,
+  url: `https://pointcast.xyz/mood/${slug}`,
+  inLanguage: 'en-US',
+  hasPart: [
+    ...blocks.slice(0, 20).map((b) => ({
+      '@type': 'CreativeWork',
+      '@id': `https://pointcast.xyz/b/${b.data.id}`,
+      name: b.data.title,
+      datePublished: b.data.timestamp.toISOString(),
+      url: `https://pointcast.xyz/b/${b.data.id}`,
+    })),
+    ...gallery.slice(0, 20).map((g) => ({
+      '@type': 'ImageObject',
+      '@id': `https://pointcast.xyz/gallery#${g.data.slug}`,
+      name: g.data.title,
+      contentUrl: g.data.imageUrl,
+      datePublished: g.data.createdAt.toISOString(),
+    })),
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="page">
+
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>mood</span>
+      <span aria-hidden="true">/</span>
+      <span>{slug}</span>
+    </nav>
+
+    <header class="masthead">
+      <h1 class="title">mood · <em>{prettyMood}</em></h1>
+      <p class="count mono">{totalCount} ITEM{totalCount === 1 ? '' : 'S'} · {blocks.length} BLOCK{blocks.length === 1 ? '' : 'S'}{gallery.length > 0 ? ` · ${gallery.length} GALLERY` : ''}</p>
+      <p class="lede">
+        A tonal cross-cut of PointCast. Every entry below carries the
+        same mood tag — not a channel, not a type, but a register.
+        Moods are editorial: added by cc when a block's emotional or
+        atmospheric fingerprint is worth naming.
+      </p>
+    </header>
+
+    {blocks.length > 0 && (
+      <section class="section" aria-label={`Blocks tagged ${slug}`}>
+        <h2 class="section__kicker mono">BLOCKS · {blocks.length}</h2>
+        <div class="grid">
+          {blocks.map((block) => <BlockCard block={block} />)}
+        </div>
+      </section>
+    )}
+
+    {gallery.length > 0 && (
+      <section class="section" aria-label={`Gallery items tagged ${slug}`}>
+        <h2 class="section__kicker mono">GALLERY · {gallery.length}</h2>
+        <ul class="gallery-list">
+          {gallery.map((g) => (
+            <li class="gallery-item">
+              <a href={`/gallery#${g.data.slug}`} class="gallery-item__link">
+                <img src={g.data.imageUrl} alt={g.data.title} loading="lazy" class="gallery-item__img" />
+                <div class="gallery-item__meta">
+                  <p class="gallery-item__title">{g.data.title}</p>
+                  <p class="gallery-item__tool mono">{g.data.tool.toUpperCase()}</p>
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {totalCount === 0 && (
+      <p class="empty">No entries yet for this mood. (Unreachable if the route rendered at build time — but safe fallback.)</p>
+    )}
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href={`/mood/${slug}.json`}>/mood/{slug}.json</a></li>
+        <li><a href="/moods.json">/moods.json</a></li>
+        <li><a href="/blocks.json">/blocks.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </aside>
+
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 20px 20px 80px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+  .breadcrumb a { color: var(--pc-accent); }
+
+  .masthead {
+    padding-bottom: 14px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    margin-bottom: 24px;
+  }
+  .title {
+    margin: 0 0 6px;
+    font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 32px;
+    font-weight: 500;
+    color: #12110E;
+    letter-spacing: -0.01em;
+  }
+  .title em { font-style: italic; color: #8a2432; }
+  .count {
+    margin: 0 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--pc-ink-soft);
+  }
+  .lede {
+    margin: 0;
+    max-width: 58ch;
+    font-family: var(--pc-font-body, var(--pc-font-serif));
+    font-size: 15px;
+    line-height: 1.55;
+    color: #2a2925;
+  }
+
+  .section { margin: 28px 0; }
+  .section__kicker {
+    margin: 0 0 12px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-auto-rows: minmax(170px, auto);
+    grid-auto-flow: dense;
+    gap: 8px;
+  }
+  @media (max-width: 639px) {
+    .grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      grid-auto-rows: minmax(120px, auto);
+    }
+  }
+
+  .gallery-list {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .gallery-item__link {
+    display: block;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #fafaf7;
+    transition: border-color 0.12s;
+  }
+  .gallery-item__link:hover { border-color: #5F3DC4; text-decoration: none; }
+  .gallery-item__img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+  }
+  .gallery-item__meta { padding: 8px 10px; }
+  .gallery-item__title {
+    margin: 0;
+    font-size: 13px;
+    color: #12110E;
+    line-height: 1.3;
+  }
+  .gallery-item__tool {
+    margin: 4px 0 0;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-soft);
+  }
+
+  .empty {
+    margin: 40px 0;
+    text-align: center;
+    color: var(--pc-ink-soft);
+    font-style: italic;
+  }
+
+  .agent-strip {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid var(--pc-rule, #d6d4cd);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+  }
+  .agent-strip__label { margin: 0 0 6px; font-weight: 600; }
+  .agent-strip ul {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .agent-strip a { color: var(--pc-accent); }
+
+  .mono { font-family: var(--pc-font-mono); }
+</style>
+

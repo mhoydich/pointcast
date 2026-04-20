@@ -1,0 +1,228 @@
+---
+/**
+ * /family — Fukunaga Hoydich family + named circle.
+ *
+ * Mike 2026-04-18 chat directive: "michael and family, hoydich fukunaga
+ * family, kana jane, kenzo montana" + follow-up "names are fine, fukunaga
+ * hoydich" + "morgan" (2026-04-19). Cc consent-checked every name before
+ * listing.
+ *
+ * Grouped by role: family first, then circle. Each card: avatar, name,
+ * relationship (optional), Tezos address if opted in.
+ *
+ * Visit Nouns FA2 holder check happens client-side — when a connected
+ * wallet matches a listed address, that card gets a "YOU'RE IN THE CIRCLE"
+ * chip. Tie-in to the charter membership concept (Block 0278).
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const members = (await getCollection('family', ({ data }) => data.listed))
+  .sort((a, b) => {
+    // Family first, then circle, then others; alphabetical within
+    const roleOrder: Record<string, number> = { family: 0, circle: 1, collaborator: 2, 'honored-guest': 3 };
+    const ra = roleOrder[a.data.role] ?? 9;
+    const rb = roleOrder[b.data.role] ?? 9;
+    if (ra !== rb) return ra - rb;
+    return a.data.name.localeCompare(b.data.name);
+  });
+
+const familyMembers = members.filter((m) => m.data.role === 'family');
+const circleMembers = members.filter((m) => m.data.role !== 'family');
+
+const title = 'Family — Fukunaga Hoydich';
+const description = 'The Fukunaga Hoydich family + named circle. Private individuals, listed with explicit consent. Tezos addresses opt-in per person. Named in El Segundo, 2026.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'Fukunaga Hoydich Family',
+  description,
+  url: 'https://pointcast.xyz/family',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>family</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">FAMILY · FUKUNAGA HOYDICH · EL SEGUNDO · 2026</p>
+      <h1 class="title">The circle.</h1>
+      <p class="dek">
+        A small, consented list. Family first, then named circle — people
+        Mike writes about often enough that their names carry weight across
+        the site. Everyone here opted in; no address is listed until the
+        person personally shares it.
+      </p>
+    </header>
+
+    {familyMembers.length > 0 && (
+      <section class="group">
+        <p class="group__kicker mono">FAMILY</p>
+        <ul class="members">
+          {familyMembers.map((m) => (
+            <li class="member" data-member-slug={m.data.slug} data-member-address={m.data.tezosAddress ?? ''}>
+              <div class="member__avatar">
+                {m.data.avatar ? <img src={m.data.avatar} alt="" loading="lazy" /> : <span class="member__avatar-placeholder">·</span>}
+              </div>
+              <div class="member__body">
+                <p class="member__name">{m.data.name}</p>
+                {m.data.relationship && <p class="member__rel">{m.data.relationship}</p>}
+                <p class="member__meta mono">
+                  {m.data.tezosAddress
+                    ? (<><span class="member__addr">{m.data.tezosAddress.slice(0, 6)}…{m.data.tezosAddress.slice(-4)}</span></>)
+                    : <span class="member__addr-empty">tezos address · pending opt-in</span>
+                  }
+                </p>
+                <p class="member__match mono" data-member-match hidden>YOU'RE IN THE CIRCLE</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {circleMembers.length > 0 && (
+      <section class="group">
+        <p class="group__kicker mono">CIRCLE</p>
+        <ul class="members">
+          {circleMembers.map((m) => (
+            <li class="member" data-member-slug={m.data.slug} data-member-address={m.data.tezosAddress ?? ''}>
+              <div class="member__avatar">
+                {m.data.avatar ? <img src={m.data.avatar} alt="" loading="lazy" /> : <span class="member__avatar-placeholder">·</span>}
+              </div>
+              <div class="member__body">
+                <p class="member__name">{m.data.name}</p>
+                {m.data.relationship && <p class="member__rel">{m.data.relationship}</p>}
+                <p class="member__meta mono">
+                  {m.data.tezosAddress
+                    ? (<><span class="member__addr">{m.data.tezosAddress.slice(0, 6)}…{m.data.tezosAddress.slice(-4)}</span></>)
+                    : <span class="member__addr-empty">tezos address · pending opt-in</span>
+                  }
+                </p>
+                <p class="member__match mono" data-member-match hidden>YOU'RE IN THE CIRCLE</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <section class="consent">
+      <p class="consent__kicker mono">CONSENT · PRIVACY</p>
+      <p>
+        Every name above was added with explicit consent — either
+        long-public (Mike) or confirmed in a chat directive. Tezos
+        addresses are listed only when personally shared. If you're on
+        this page and want a change (add an address, change a
+        relationship line, remove yourself entirely), ping Mike or drop a
+        note at <a href="/ping">/ping</a>.
+      </p>
+      <p>
+        Private individuals never get added to this list by cc without
+        explicit consent — even with Mike's blanket permission, the per-
+        person gate stands. Same care applied to tezos addresses, phone
+        numbers, and any other identity detail.
+      </p>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/family.json">/family.json</a></li>
+        <li><a href="/collabs">/collabs · builders</a></li>
+        <li><a href="/b/0280">/b/0280 · the wallet ladder</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <script is:inline>
+    // When a Tezos wallet address (via Beacon) is in localStorage, find the
+    // matching member card + render "YOU'RE IN THE CIRCLE" chip. Fallback
+    // silently when the address isn't present.
+    (function () {
+      try {
+        var addr = localStorage.getItem('pc:addr');
+        if (!addr) return;
+        var addrLower = addr.toLowerCase();
+        var cards = Array.from(document.querySelectorAll('.member[data-member-address]'));
+        cards.forEach(function (card) {
+          var a = (card.getAttribute('data-member-address') || '').toLowerCase();
+          if (a && a === addrLower) {
+            var match = card.querySelector('[data-member-match]');
+            if (match) match.hidden = false;
+            card.classList.add('member--you');
+          }
+        });
+      } catch(e) {}
+    })();
+  </script>
+
+  <style>
+    .page { max-width: 820px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 22px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #8A2432; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 5vw, 40px); font-weight: 700; line-height: 1.1; margin: 0 0 12px; }
+    .dek { margin: 0; color: #38373A; font-size: 15px; line-height: 1.55; }
+
+    .group { margin-bottom: 22px; }
+    .group__kicker { font-size: 10px; color: #5F5E5A; margin: 0 0 8px; }
+
+    .members { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .member {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid #8A2432;
+      border-radius: 2px;
+      background: #fff;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .member--you { border-color: #1E7C2F; background: #f2f8f4; }
+    .member--you .member__match { color: #1B4E2B; font-weight: 700; }
+
+    .member__avatar {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: #f0eee6;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      border: 1px solid #e6e4de;
+    }
+    .member__avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .member__avatar-placeholder { color: #b8b4a8; font-size: 20px; }
+
+    .member__body { min-width: 0; }
+    .member__name { margin: 0; font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 16px; font-weight: 600; color: #12110E; }
+    .member__rel { margin: 2px 0 0; font-size: 12.5px; color: #5F5E5A; line-height: 1.4; }
+    .member__meta { margin: 6px 0 0; font-size: 9.5px; letter-spacing: 0.06em; text-transform: none; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+    .member__addr { color: #12110E; }
+    .member__addr-empty { color: #b8b4a8; }
+    .member__match { margin: 4px 0 0; font-size: 9.5px; letter-spacing: 0.16em; }
+
+    .consent { margin-top: 24px; padding: 14px 16px; border: 1px dashed #d6d4cd; border-radius: 2px; background: #fbfaf5; }
+    .consent__kicker { font-size: 10px; color: #5F5E5A; margin: 0 0 8px; letter-spacing: 0.16em; }
+    .consent p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; color: #38373A; }
+    .consent p:last-child { margin-bottom: 0; }
+    .consent a { color: #a02c2c; text-decoration: none; }
+
+    .agent-strip { margin-top: 24px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

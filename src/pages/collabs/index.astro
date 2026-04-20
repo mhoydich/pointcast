@@ -1,0 +1,421 @@
+---
+/**
+ * /collabs — the collaborators registry + federation spec.
+ *
+ * Mike 2026-04-18: "how does this start to mesh with other people, like
+ * taner in turkey, how do we communicate together, build together". This
+ * is the answer — a directory + a simple rubric for plugging in.
+ *
+ * Sections:
+ *   1. Who's in the orbit (COLLABORATORS from src/lib/collaborators.ts)
+ *   2. How to join (3-step federation spec)
+ *   3. What the primitives look like (Block + /agents.json + /llms.txt)
+ *   4. Governance handshake (DAO ratification)
+ *
+ * Companion JSON surface at /collabs.json. Agents can fetch one URL
+ * to know who's officially part of the PointCast network.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { COLLABORATORS, ROLE_LABEL } from '../../lib/collaborators';
+
+const siteCollabs = COLLABORATORS.filter((c) => c.role === 'director' || c.role === 'collaborator' || c.role === 'federated' || c.role === 'advisor');
+const teamCollabs = COLLABORATORS.filter((c) => c.role === 'engineer' || c.role === 'reviewer' || c.role === 'operations');
+
+const title = 'Collabs — who builds PointCast';
+const description = 'The directory of people and agents contributing to PointCast, plus a 3-step federation spec for anyone who wants to plug in a compatible site or feed.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Collaborators',
+  description,
+  url: 'https://pointcast.xyz/collabs',
+  hasPart: COLLABORATORS.map((c) => ({
+    '@type': c.vendor ? 'SoftwareApplication' : 'Person',
+    '@id': `https://pointcast.xyz/collabs#${c.slug}`,
+    name: c.name,
+    description: c.intro,
+    ...(c.url ? { url: c.url } : {}),
+    ...(c.vendor ? { applicationCategory: 'AIAssistant', creator: { '@type': 'Organization', name: c.vendor } } : {}),
+    ...(c.location ? { location: c.location } : {}),
+  })),
+};
+
+const alternates = [
+  { type: 'application/json', href: '/collabs.json', title: 'Collaborators (JSON)' },
+  { type: 'text/html', href: '/mesh', title: 'The three meshes' },
+];
+---
+
+<BlockLayout title={title} description={description} image="/images/og/collabs.png" jsonLd={jsonLd} alternates={alternates}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>collabs</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">COLLABS · REGISTRY + FEDERATION SPEC</p>
+      <h1 class="title">Who builds this with us.</h1>
+      <p class="dek">
+        PointCast isn't one person. A small number of humans, a few AI systems, and — increasingly — sibling sites that run on compatible primitives. This page is the registry. If you're on it, you're in the orbit. If you want to be on it, the three-step <a href="#join">federation spec</a> below tells you how.
+      </p>
+    </header>
+
+    <aside class="live-clock" aria-label="Sky clock">
+      <p class="live-clock__kicker mono">LIVE · CH.FD № 0324</p>
+      <p class="live-clock__copy">
+        Sun arcs, planetary hours, the moon overhead — seven zones'
+        worth of sky, ticking. <a href="/clock/0324">Open the clock →</a>
+      </p>
+    </aside>
+
+    <section class="cohort">
+      <p class="cohort__title mono">DIRECTION + COLLABORATORS</p>
+      <ul class="list">
+        {siteCollabs.map((c) => (
+          <li class="card" id={c.slug}>
+            <div class="card__head">
+              <h2 class="card__name">{c.name}</h2>
+              <span class="card__role mono">{ROLE_LABEL[c.role]}</span>
+            </div>
+            {c.location && <p class="card__loc mono">{c.location.toUpperCase()}</p>}
+            <p class="card__intro">{c.intro}</p>
+            <ul class="card__links">
+              {c.url && <li><a href={c.url} target={c.url.startsWith('http') && !c.url.includes('pointcast.xyz') ? '_blank' : '_self'} rel="noopener">{c.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a></li>}
+              {c.twitter && <li><a href={`https://x.com/${c.twitter.replace('@','')}`} target="_blank" rel="noopener">x / {c.twitter}</a></li>}
+              {c.farcaster && <li><a href={`https://warpcast.com/${c.farcaster.replace('@','')}`} target="_blank" rel="noopener">fc / {c.farcaster}</a></li>}
+              {c.github && <li><a href={`https://github.com/${c.github}`} target="_blank" rel="noopener">gh / {c.github}</a></li>}
+              {c.feed && <li><a href={c.feed} target="_blank" rel="noopener">feed ↗</a></li>}
+            </ul>
+            {c.since && <p class="card__since mono">since {c.since}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="cohort">
+      <p class="cohort__title mono">ENGINEERING + OPS (AI SYSTEMS)</p>
+      <ul class="list">
+        {teamCollabs.map((c) => (
+          <li class="card card--ai" id={c.slug}>
+            <div class="card__head">
+              <h2 class="card__name">{c.name}</h2>
+              <span class="card__role mono">{ROLE_LABEL[c.role]}</span>
+            </div>
+            {c.vendor && <p class="card__loc mono">{c.vendor} · {c.location ?? 'cloud'}</p>}
+            <p class="card__intro">{c.intro}</p>
+            <ul class="card__links">
+              {c.url && <li><a href={c.url} target="_blank" rel="noopener">{c.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a></li>}
+            </ul>
+            {c.since && <p class="card__since mono">since {c.since}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="contribute" id="contribute">
+      <p class="kicker mono">WAYS TO CONTRIBUTE</p>
+      <h2 class="contribute__title">Pick the path that fits.</h2>
+      <p class="contribute__intro">
+        PointCast is a small, real project. The most useful contributions
+        are the ones people actually try — so below are concrete paths,
+        not a call for abstract "community." Pick one. Start tiny.
+      </p>
+
+      <ul class="contribute__paths">
+        <li class="contribute__path">
+          <p class="contribute__path-kicker mono">1. BROADCAST AS A NODE</p>
+          <h3 class="contribute__path-title">Run an agent on PointCast.</h3>
+          <p>
+            Your agent (OpenClaw, Claude, Codex, custom) opens a WebSocket to
+            <code>/api/presence</code>. It shows up as a noun avatar on
+            <a href="/here">/here</a> and the home-page "peoples here" strip.
+            Two lines of JavaScript. Zero auth at v0, zero cost to you.
+            <a href="/for-nodes">Full spec at /for-nodes</a>.
+          </p>
+          <p class="contribute__meta mono">LIVE · READY · 2-LINE SNIPPET</p>
+        </li>
+
+        <li class="contribute__path">
+          <p class="contribute__path-kicker mono">2. WRITE A GUEST BLOCK</p>
+          <h3 class="contribute__path-title">Author a block in your voice.</h3>
+          <p>
+            A READ, a LISTEN, a WATCH, a VISIT — attributed to your handle.
+            Lives in your own lane at <code>/p/&#123;slug&#125;</code>
+            (separate namespace from the main editorial feed). Mike
+            cross-posts what fits. You publish freely.
+          </p>
+          <p class="contribute__meta mono">SPEC DRAFTING · MIKE GATES WHITELIST</p>
+        </li>
+
+        <li class="contribute__path">
+          <p class="contribute__path-kicker mono">3. FEDERATE YOUR SITE</p>
+          <h3 class="contribute__path-title">Plug a compatible feed in.</h3>
+          <p>
+            Expose <code>/feed.xml</code> or <code>/feed.json</code> + a
+            minimal <code>/agents.json</code> manifest on your domain.
+            PointCast pulls it into the mesh. You keep your site exactly
+            as it is. Three steps below.
+          </p>
+          <p class="contribute__meta mono">SPEC BELOW · BLOCKS.MD COMPATIBLE</p>
+        </li>
+
+        <li class="contribute__path">
+          <p class="contribute__path-kicker mono">4. HOST LOCAL</p>
+          <h3 class="contribute__path-title">Be a spot · be a station.</h3>
+          <p>
+            A place that anchors a <a href="/tv">/tv</a> station — a coffee shop,
+            a workshop, a community garden, a weekly meetup. Real physical
+            location with a weather pull + drop series. El Segundo is
+            station zero; SoCal has 14 more live; other regions open
+            case-by-case. Low-commitment: one drop a week is plenty. See the
+            current El Segundo coffee field map at <a href="/collabs/map">/collabs/map</a>.
+          </p>
+          <p class="contribute__meta mono">SOCAL LIVE · OTHER REGIONS CASE-BY-CASE</p>
+        </li>
+
+        <li class="contribute__path">
+          <p class="contribute__path-kicker mono">5. DONATE COMPUTE</p>
+          <h3 class="contribute__path-title">GPU hours · agent sub-tasks.</h3>
+          <p>
+            Forward-looking. Future <code>/workbench</code> will let
+            multiple agents tackle parallel sub-tasks on one project
+            (Kimi K2.6 + Codex + Claude as swarm). If you have idle GPU
+            capacity or want to sponsor an agent's time, flag interest
+            via <a href="/ping">/ping</a>. Not wired yet; signals help
+            us decide if we build it.
+          </p>
+          <p class="contribute__meta mono">FUTURE · INTEREST-GATHERING</p>
+        </li>
+
+        <li class="contribute__path">
+          <p class="contribute__path-kicker mono">6. SEED POLLS · ASK THE ROOM</p>
+          <h3 class="contribute__path-title">Good questions are scarce.</h3>
+          <p>
+            The home-page poll rotation is the most under-used surface
+            on PointCast. Draft a poll JSON (5-7 options, purpose,
+            outcome), open a PR or send it via <a href="/drop">/drop</a>.
+            Two ship per week on average; your question can be one of
+            them.
+          </p>
+          <p class="contribute__meta mono">LOW CEREMONY · 10 MIN</p>
+        </li>
+      </ul>
+
+      <p class="contribute__footer">
+        Contributing doesn't require connecting a wallet, making an account,
+        or filling a form. If any of these paths call and the wiring's
+        unclear, just <a href="/ping">/ping</a> — Claude Code reads the inbox
+        every session. Quiet observation is also valid.
+      </p>
+    </section>
+
+    <section class="join" id="join">
+      <p class="kicker mono">FEDERATION · HOW TO PLUG IN</p>
+      <h2 class="join__title">Three steps, no onboarding call.</h2>
+      <ol class="join__steps">
+        <li>
+          <strong>1. Expose a feed.</strong>
+          <p>RSS 2.0 at <code>/feed.xml</code>, JSON Feed at <code>/feed.json</code>, or both. If you're comfortable, mirror the Block primitive (JSON at <code>/b/&#123;id&#125;.json</code>). See <a href="/for-agents">/for-agents</a> for what that looks like.</p>
+        </li>
+        <li>
+          <strong>2. Publish an agent manifest.</strong>
+          <p>A single JSON file at <code>/agents.json</code> on your domain listing your feeds, contracts, and citation format. Copy <a href="/agents.json" target="_blank" rel="noopener">ours</a> as a template. <a href="/llms.txt">/llms.txt</a> helps too.</p>
+        </li>
+        <li>
+          <strong>3. PR the registry.</strong>
+          <p>Add an entry to <code>src/lib/collaborators.ts</code> (this page's data source) with your slug, intro line, feed, and handles. Open a PR. DAO ratification happens via PC-0005 or a future proposal — Mike merges on passing vote.</p>
+        </li>
+      </ol>
+      <p class="join__note">
+        That's the whole spec. You keep your site, your design, your cadence. You become citeable in our citations, indexable in our <a href="/mesh">mesh</a>, and routable through our <a href="/agents.json">/agents.json</a>. Nothing forks — we just know you exist.
+      </p>
+    </section>
+
+    <section class="ping">
+      <p class="kicker mono">TALK TO US</p>
+      <p>
+        Want to chat before plugging in? <a href="/ping">/ping</a> is the async
+        front door — write a message, Claude Code checks it at the start of
+        every session. Email works too: <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a>.
+      </p>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/collabs.json">/collabs.json</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+        <li><a href="/mesh">/mesh</a></li>
+        <li><a href="/dao">/dao</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 820px; margin: 0 auto; padding: 24px 18px 80px; }
+    .crumb {
+      display: flex; gap: 8px; margin-bottom: 14px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #7a7a72;
+    }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+    .crumb a:hover { text-decoration: underline; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+
+    .head { margin-bottom: 28px; }
+    .kicker { font-size: 10px; margin: 0 0 10px; letter-spacing: 0.16em; color: #185FA5; }
+    .title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin: 0 0 14px;
+    }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15.5px; }
+    .dek a, .ping a, .join__note a {
+      color: #a02c2c;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .dek a:hover, .ping a:hover, .join__note a:hover { text-decoration: underline; }
+
+    .live-clock {
+      margin: 0 0 22px;
+      padding: 12px 14px;
+      border: 1px solid #185FA5;
+      border-left-width: 4px;
+      background: #EEF4FA;
+      border-radius: 2px;
+    }
+    .live-clock__kicker {
+      font-size: 9.5px;
+      letter-spacing: 0.16em;
+      color: #0B3E73;
+      margin: 0 0 4px;
+      font-weight: 500;
+    }
+    .live-clock__copy {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #12110E;
+    }
+    .live-clock__copy a {
+      color: #0B3E73;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .live-clock__copy a:hover { text-decoration: underline; }
+
+    .cohort { margin-bottom: 28px; }
+    .cohort__title { font-size: 10px; color: #5F5E5A; margin: 0 0 10px; }
+
+    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .card {
+      padding: 14px 16px;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid #185FA5;
+      border-radius: 2px;
+      background: #fff;
+      scroll-margin-top: 60px;
+    }
+    .card--ai { border-left-color: #5F3DC4; background: #faf9f5; }
+    .card__head {
+      display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .card__name {
+      margin: 0;
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .card__role {
+      font-size: 9.5px;
+      letter-spacing: 0.16em;
+      color: #5F3DC4;
+      font-weight: 700;
+    }
+    .card__loc { font-size: 10px; color: #5F5E5A; margin: 0 0 6px; }
+    .card__intro { margin: 0 0 8px; color: #38373A; font-size: 14.5px; line-height: 1.5; }
+    .card__links {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-wrap: wrap; gap: 10px;
+      font-size: 12px;
+    }
+    .card__links a {
+      color: #a02c2c;
+      text-decoration: none;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11.5px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .card__links a:hover { text-decoration: underline; }
+    .card__since { font-size: 9.5px; color: #8a8878; margin: 8px 0 0; letter-spacing: 0.1em; }
+
+    .contribute { margin: 28px 0 24px; }
+    .contribute__title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 20px; font-weight: 700; line-height: 1.15; margin: 0 0 8px;
+    }
+    .contribute__intro { margin: 0 0 16px; font-size: 14.5px; line-height: 1.55; color: #38373A; }
+    .contribute__paths { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    .contribute__path {
+      padding: 12px 14px;
+      background: #fbfaf5;
+      border: 1px solid #e6e4de;
+      border-left: 3px solid #185FA5;
+      border-radius: 2px;
+    }
+    .contribute__path-kicker {
+      font-size: 9.5px; letter-spacing: 0.14em; color: #0B3E73; margin: 0 0 2px; font-weight: 500;
+    }
+    .contribute__path-title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 16px; font-weight: 700; margin: 0 0 6px;
+    }
+    .contribute__path p { margin: 0 0 6px; font-size: 13.5px; line-height: 1.55; color: #38373A; }
+    .contribute__path a { color: #a02c2c; text-decoration: none; font-weight: 500; }
+    .contribute__path a:hover { text-decoration: underline; }
+    .contribute__path code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 12.5px; padding: 1px 5px; background: rgba(24, 95, 165, 0.08); border-radius: 2px; }
+    .contribute__meta { font-size: 9px; color: #8a8878; margin: 4px 0 0; letter-spacing: 0.1em; }
+    .contribute__footer { margin: 16px 0 0; font-size: 13.5px; line-height: 1.55; color: #5F5E5A; font-style: italic; }
+    .contribute__footer a { color: #a02c2c; text-decoration: none; }
+    .contribute__footer a:hover { text-decoration: underline; }
+
+    .join { margin: 28px 0 20px; padding: 16px 18px; border: 1px solid #12110E; border-radius: 2px; background: #fbfaf5; }
+    .join__title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 20px; font-weight: 600; margin: 0 0 12px;
+    }
+    .join__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .join__steps li { padding: 10px 12px; background: #fff; border: 1px solid #e6e4de; border-radius: 2px; }
+    .join__steps strong { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 15px; }
+    .join__steps p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; color: #38373A; }
+    .join__steps code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em;
+    }
+    .join__note { margin: 12px 0 0; font-size: 13.5px; color: #38373A; line-height: 1.5; }
+
+    .ping { margin: 20px 0; padding: 12px 16px; border: 1px dashed #d6d4cd; background: #faf9f5; border-radius: 2px; }
+    .ping p { margin: 0; font-size: 14px; color: #38373A; line-height: 1.5; }
+
+    .agent-strip {
+      margin-top: 24px; padding-top: 14px;
+      border-top: 1px dashed #d6d4cd;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

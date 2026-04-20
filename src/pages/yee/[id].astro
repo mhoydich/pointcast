@@ -1,0 +1,968 @@
+---
+/**
+ * /yee/{id} — YeePlayer v0.
+ *
+ * Static Guitar-Hero × karaoke-style rhythm game that overlays a beat
+ * track on any WATCH-type block whose media contains a `beats` array.
+ * v0 ships with just /b/0236 (the 11-min chakra tune-up) — LAM / VAM /
+ * RAM / YAM / HAM / AUM / OM fall from the top of the track and the
+ * player taps SPACE (or clicks the hit zone) as each bija reaches the
+ * bottom line. Perfect ±150 ms, Good ±500 ms, Miss beyond that.
+ *
+ * Entirely client-side: YouTube IFrame API supplies getCurrentTime(),
+ * a requestAnimationFrame loop positions notes against the playhead,
+ * Web Audio gives a soft hit-confirmation tone. No server. No saves.
+ *
+ * This is distinct from /b/{id} — that page stays the canonical,
+ * agent-readable record. /yee/{id} is the playable companion.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) =>
+    !data.draft && data.type === 'WATCH' && Array.isArray((data.media as any)?.beats) && (data.media as any).beats.length > 0,
+  );
+  return blocks.map((block) => ({
+    params: { id: block.data.id },
+    props: { block },
+  }));
+}
+
+interface Props {
+  block: CollectionEntry<'blocks'>;
+}
+const { block } = Astro.props;
+const data = block.data;
+const ch = CHANNELS[data.channel];
+const beats = (data.media as any).beats as Array<{ t: number; word: string; color?: string; key?: string; note?: string }>;
+
+/** Extract YouTube video id from the embed URL. Falls back to null if the
+ *  src isn't a recognizable YouTube form — in that case we render the beat
+ *  track on a standalone audio cue instead of syncing to a video. */
+function youtubeIdFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1) || null;
+    if (/(^|\.)youtube\.com$/.test(u.hostname)) {
+      if (u.pathname === '/watch') return u.searchParams.get('v');
+      const m = u.pathname.match(/^\/(?:embed|shorts|v)\/([\w-]{6,})/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return null;
+}
+
+const ytId = youtubeIdFromUrl(data.media?.src);
+const totalBeats = beats.length;
+const firstBeat = beats[0]?.t ?? 0;
+const lastBeat = beats[beats.length - 1]?.t ?? 0;
+const durationSec = data.meta?.duration
+  ? (() => {
+      const m = data.meta.duration.match(/^(\d+):(\d{2})$/);
+      return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : lastBeat + 30;
+    })()
+  : lastBeat + 30;
+
+const title = `YeePlayer · ${data.title}`;
+const description = `Tap the bija mantras as they fall. A static rhythm-game overlay on CH.${ch.code} № ${data.id} — ${data.title}. ${totalBeats} beats across ${Math.round(durationSec / 60)} minutes.`;
+const ogImage = `/images/og/b/${data.id}.png`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  name: title,
+  description,
+  applicationCategory: 'Game',
+  operatingSystem: 'Web Browser (any)',
+  genre: 'Rhythm',
+  playMode: 'SinglePlayer',
+  isPartOf: {
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz/b/${data.id}`,
+    name: data.title,
+  },
+};
+
+const alternates = [
+  { type: 'application/json', href: `/b/${data.id}.json`, title: 'Source block (JSON)' },
+  { type: 'text/html', href: `/b/${data.id}`, title: 'Source block (canonical HTML)' },
+];
+---
+
+<BlockLayout title={title} description={description} image={ogImage} jsonLd={jsonLd} alternates={alternates}>
+  <main class="yee">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href={`/b/${data.id}`}>← Back to block № {data.id}</a>
+      <span class="crumb__sep" aria-hidden="true">/</span>
+      <span class="crumb__here">YeePlayer v0</span>
+    </nav>
+
+    <header class="yee__head">
+      <p class="yee__kicker mono" style={`color: ${ch.color800}`}>CH.{ch.code} · № {data.id} · YEEPLAYER v0</p>
+      <h1 class="yee__title">{data.title}</h1>
+      <p class="yee__dek">{data.dek}</p>
+    </header>
+
+    <div class="yee__stage" id="yee-stage" data-total-beats={totalBeats} data-duration={durationSec}>
+      {/* Video column */}
+      <div class="yee__video">
+        {ytId ? (
+          <div class="yt-mount" id="yee-player" data-yt={ytId}></div>
+        ) : (
+          <div class="yt-fallback">Video source unavailable — beats will still play along to silent clock.</div>
+        )}
+        <div class="yee__hud">
+          <div class="hud-row">
+            <span class="mono hud-label">TIME</span>
+            <span class="mono hud-value" id="hud-time">0:00 / {Math.floor(durationSec / 60)}:{String(durationSec % 60).padStart(2, '0')}</span>
+          </div>
+          <div class="hud-row">
+            <span class="mono hud-label">SCORE</span>
+            <span class="mono hud-value" id="hud-score">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="mono hud-label">COMBO</span>
+            <span class="mono hud-value" id="hud-combo">×0</span>
+          </div>
+          <div class="hud-row">
+            <span class="mono hud-label">HIT</span>
+            <span class="mono hud-value" id="hud-hits">0 / {totalBeats}</span>
+          </div>
+          <div class="hud-row hud-row--wide">
+            <span class="mono hud-label">BEST</span>
+            <span class="mono hud-value" id="hud-best">—</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Beat track column */}
+      <div class="yee__track" id="yee-track" aria-label="Beat track — bija mantras fall from top, tap SPACE when they reach the line">
+        <div class="track__zone" id="track-zone">
+          {/* How-to-play overlay — shown before start, hidden once the
+              player hits START. Per Mike 2026-04-19 morning: "wasn't
+              totally clear what to do" — this card fixes that before
+              the empty track appears. */}
+          <div class="track__howto" id="track-howto">
+            <p class="howto__eyebrow mono">HOW TO PLAY</p>
+            <ol class="howto__list">
+              <li><strong>Press ▶ START</strong> (or SPACE) to begin.</li>
+              <li>Colored <strong>bija mantras</strong> fall from the top toward the dashed line.</li>
+              <li>When a mantra reaches the line, <strong>tap SPACE</strong> (or the TAP zone below).</li>
+              <li>Center-hit = <strong>PERFECT</strong> (+100). Near-hit = <strong>GOOD</strong> (+50). Miss = combo breaks.</li>
+            </ol>
+            <p class="howto__note">
+              Track paces itself to the content. <strong>Meditation tracks</strong> have long gaps between beats (that's the point). <strong>Music tracks</strong> are denser. The chip above the track will tell you what's coming next and when.
+            </p>
+          </div>
+        </div>
+        <div class="track__label mono" id="track-label">PRESS ▶ TO START</div>
+        <div class="track__next mono" id="track-next" hidden>
+          <span class="track__next-label">NEXT</span>
+          <span class="track__next-word" id="track-next-word">—</span>
+          <span class="track__next-sep" aria-hidden="true">·</span>
+          <span class="track__next-eta" id="track-next-eta">—</span>
+        </div>
+        <button class="track__hit" id="track-hit" type="button" aria-label="Hit note">
+          <span class="hit__pulse" aria-hidden="true"></span>
+          <span class="hit__label mono">TAP · SPACE</span>
+        </button>
+      </div>
+    </div>
+
+    <section class="yee__controls">
+      <button class="btn btn--primary" id="btn-start" type="button">▶ Start</button>
+      <button class="btn" id="btn-restart" type="button">↻ Restart</button>
+      <a class="btn btn--ghost" href={`/b/${data.id}`}>← Back to block</a>
+    </section>
+
+    <section class="yee__legend">
+      <p class="legend__title mono">BIJA LEGEND · 7 CHAKRAS · 21 BEATS</p>
+      <ul class="legend__list">
+        <li><span class="swatch" style="background: #C92A2A"></span> Root · <strong>LAM</strong></li>
+        <li><span class="swatch" style="background: #E8590C"></span> Sacral · <strong>VAM</strong></li>
+        <li><span class="swatch" style="background: #F59F00"></span> Solar · <strong>RAM</strong></li>
+        <li><span class="swatch" style="background: #2B8A3E"></span> Heart · <strong>YAM</strong></li>
+        <li><span class="swatch" style="background: #1864AB"></span> Throat · <strong>HAM</strong></li>
+        <li><span class="swatch" style="background: #5F3DC4"></span> Third Eye · <strong>AUM</strong></li>
+        <li><span class="swatch" style="background: #862E9C"></span> Crown · <strong>OM</strong></li>
+      </ul>
+      <p class="legend__note">
+        Bija mantras fall from the top. Tap <strong>SPACE</strong> (or the <strong>TAP</strong> zone)
+        when a mantra reaches the dashed line at the bottom. The <strong>NEXT</strong> chip above
+        the track shows what's coming and when. Meditation tracks pace their beats to the
+        content, so there are long pauses between hits — that's the chant, not a speed run.
+        Music tracks are denser. Perfect timing bonus, but the bija itself is the point. Version 0, static, no save.
+      </p>
+    </section>
+
+    <section class="yee__meta">
+      <p class="mono"><strong>Source:</strong> {data.meta?.creator ?? '—'} · {data.meta?.source ?? '—'}</p>
+      <p class="mono"><strong>Run time:</strong> {data.meta?.duration ?? '—'}</p>
+      <p class="mono"><strong>Canonical block:</strong> <a href={`/b/${data.id}`}>/b/{data.id}</a></p>
+      <p class="mono"><strong>Machine-readable:</strong> <a href={`/b/${data.id}.json`}>/b/{data.id}.json</a></p>
+    </section>
+  </main>
+
+  {/* Beat data as JSON — parsed by client JS below. Inline keeps it a single
+      round-trip and avoids an extra fetch for 21 entries. */}
+  <script type="application/json" id="yee-beats" set:html={JSON.stringify(beats)}></script>
+
+  <script is:inline>
+    /**
+     * YeePlayer v0 client.
+     *
+     * Flow:
+     * 1. Inject YouTube IFrame API.
+     * 2. Create player in #yee-player; expose ready callback.
+     * 3. rAF loop polls player.getCurrentTime() → positions beats,
+     *    flags hit window, emits miss when beat passes hit line.
+     * 4. Keyboard (Space) + pointer (click hit zone) → attempt hit:
+     *    within ±150 ms of nearest active beat → PERFECT (+100),
+     *    within ±500 ms → GOOD (+50), else nothing (drag-through).
+     * 5. Web Audio for a short sine confirmation (same synth family
+     *    as /drum's taiko thump, but higher and softer).
+     */
+    (function () {
+      const beatsEl = document.getElementById('yee-beats');
+      const beats = JSON.parse(beatsEl ? beatsEl.textContent : '[]');
+      const total = beats.length;
+      const mount = document.getElementById('yee-player');
+      const ytId = mount ? mount.dataset.yt : null;
+      const zone = document.getElementById('track-zone');
+      const hitBtn = document.getElementById('track-hit');
+      const hudTime = document.getElementById('hud-time');
+      const hudScore = document.getElementById('hud-score');
+      const hudCombo = document.getElementById('hud-combo');
+      const hudHits = document.getElementById('hud-hits');
+      const label = document.getElementById('track-label');
+      const btnStart = document.getElementById('btn-start');
+      const btnRestart = document.getElementById('btn-restart');
+
+      // Per Mike 2026-04-19 morning ("wasn't totally clear what to do /
+      // too slow"): give beats 6s of visible travel so players can see
+      // them approaching from well in advance. On meditation tracks
+      // with long gaps this also doubles how much of the track has a
+      // beat visible on-screen at any time.
+      const LEAD_MS = 6000;     // how far ahead of hit-time beats appear
+      const PERFECT_MS = 200;
+      const GOOD_MS = 650;
+
+      const state = {
+        player: null,
+        ready: false,
+        started: false,
+        score: 0,
+        hits: 0,
+        combo: 0,
+        maxCombo: 0,
+        // Per-beat state: status = 'pending' | 'hit' | 'miss', plus a dom node.
+        list: beats.map((b) => ({ ...b, status: 'pending', el: null, lastY: -9999 })),
+      };
+
+      function fmtTime(s) {
+        s = Math.max(0, Math.floor(s));
+        const m = Math.floor(s / 60);
+        const r = s - m * 60;
+        return m + ':' + String(r).padStart(2, '0');
+      }
+
+      /* Build DOM nodes for every beat up front. CSS transform moves them. */
+      state.list.forEach((b, i) => {
+        const el = document.createElement('div');
+        el.className = 'beat';
+        el.dataset.index = String(i);
+        el.style.setProperty('--beat-color', b.color || '#1864AB');
+        el.innerHTML = '<span class="beat__word">' + (b.word || '·') + '</span>';
+        el.style.transform = 'translateY(-9999px)';
+        zone.appendChild(el);
+        b.el = el;
+      });
+
+      /* ============== Web Audio for hit-confirmation ============== */
+      let actx = null;
+      function ensureAudio() {
+        if (actx) return actx;
+        try {
+          actx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) { actx = null; }
+        return actx;
+      }
+      function chime(freq, dur) {
+        const ctx = ensureAudio();
+        if (!ctx) return;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0, ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0005, ctx.currentTime + dur);
+        o.connect(g).connect(ctx.destination);
+        o.start();
+        o.stop(ctx.currentTime + dur + 0.05);
+      }
+      function buzz(ms) {
+        try { if (navigator.vibrate) navigator.vibrate(ms); } catch {}
+      }
+
+      /* ============== Best-run persistence ==============
+       * One localStorage key per title: yee:best:{id}. Stored as JSON.
+       * Shape: { score, hits, total, maxCombo, at: ISO }.
+       * Displayed pre-game in the HUD and updated on final summary.
+       */
+      const BEST_KEY = 'yee:best:' + (location.pathname.split('/').pop() || 'x');
+      function readBest() {
+        try { const raw = localStorage.getItem(BEST_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+      }
+      function writeBest(run) {
+        try { localStorage.setItem(BEST_KEY, JSON.stringify(run)); } catch {}
+      }
+      function paintBest() {
+        const b = readBest();
+        if (!b) return;
+        const bestEl = document.getElementById('hud-best');
+        if (bestEl) bestEl.textContent = b.score + ' / ' + b.hits + '·' + b.total + ' · ×' + b.maxCombo;
+      }
+
+      /* ============== YouTube IFrame API ============== */
+      function loadYT() {
+        if (!ytId) return;
+        if (window.YT && window.YT.Player) { onYTReady(); return; }
+        if (!document.querySelector('script[data-yt-api]')) {
+          const s = document.createElement('script');
+          s.src = 'https://www.youtube.com/iframe_api';
+          s.dataset.ytApi = '1';
+          document.head.appendChild(s);
+        }
+        window.onYouTubeIframeAPIReady = onYTReady;
+      }
+      function onYTReady() {
+        if (!ytId) return;
+        state.player = new YT.Player('yee-player', {
+          width: '100%',
+          height: '100%',
+          videoId: ytId,
+          playerVars: {
+            playsinline: 1, modestbranding: 1, rel: 0, iv_load_policy: 3, controls: 1,
+          },
+          events: {
+            onReady: () => { state.ready = true; label.textContent = 'READY · PRESS START'; },
+            onStateChange: (e) => {
+              if (e.data === YT.PlayerState.PLAYING && !state.started) {
+                state.started = true;
+                label.textContent = 'PLAYING';
+                // Hide the how-to overlay once playback begins. Also
+                // unhide the NEXT countdown so players always know
+                // what's coming, per the 2026-04-19 morning feedback.
+                var howto = document.getElementById('track-howto');
+                if (howto) howto.style.display = 'none';
+                var next = document.getElementById('track-next');
+                if (next) next.hidden = false;
+                loop();
+              }
+              if (e.data === YT.PlayerState.ENDED) {
+                label.textContent = finalSummary();
+                var next2 = document.getElementById('track-next');
+                if (next2) next2.hidden = true;
+              }
+            },
+          },
+        });
+      }
+
+      /* ============== Loop ============== */
+      function currentSec() {
+        if (!state.player || !state.player.getCurrentTime) return 0;
+        try { return state.player.getCurrentTime() || 0; } catch { return 0; }
+      }
+
+      // NEXT countdown element refs — looked up once.
+      var nextWordEl = document.getElementById('track-next-word');
+      var nextEtaEl = document.getElementById('track-next-eta');
+      var nextContainerEl = document.getElementById('track-next');
+
+      function paintNext(now) {
+        if (!nextWordEl || !nextEtaEl) return;
+        // Find the next pending beat
+        var nextBeat = null;
+        for (var i = 0; i < state.list.length; i++) {
+          var b = state.list[i];
+          if (b.status === 'pending' && b.t >= now - 0.2) { nextBeat = b; break; }
+        }
+        if (!nextBeat) {
+          nextWordEl.textContent = '—';
+          nextEtaEl.textContent = 'done';
+          if (nextContainerEl) nextContainerEl.classList.remove('track__next--imminent');
+          return;
+        }
+        nextWordEl.textContent = nextBeat.word || '·';
+        nextWordEl.style.color = nextBeat.color || '#f1f1ee';
+        var sec = Math.max(0, nextBeat.t - now);
+        nextEtaEl.textContent = 'in ' + fmtTime(sec);
+        if (nextContainerEl) {
+          if (sec <= 3) nextContainerEl.classList.add('track__next--imminent');
+          else nextContainerEl.classList.remove('track__next--imminent');
+        }
+      }
+
+      function loop() {
+        if (!state.started) return;
+        const now = currentSec();
+        hudTime.textContent = fmtTime(now) + ' / ' + hudTime.textContent.split(' / ')[1];
+        paintNext(now);
+
+        const trackHeight = zone.clientHeight || 1;
+        for (let i = 0; i < state.list.length; i++) {
+          const b = state.list[i];
+          if (b.status !== 'pending') continue;
+
+          const deltaMs = (b.t - now) * 1000;
+          if (deltaMs > LEAD_MS) {
+            // not yet visible
+            b.el.style.transform = 'translateY(-9999px)';
+            continue;
+          }
+          if (deltaMs < -GOOD_MS) {
+            // passed — mark miss
+            b.status = 'miss';
+            b.el.classList.add('beat--miss');
+            state.combo = 0;
+            updateHud();
+            continue;
+          }
+
+          // Position: at deltaMs = LEAD_MS → y = 0 (top of zone)
+          //           at deltaMs = 0      → y = trackHeight (hit line)
+          const progress = 1 - deltaMs / LEAD_MS;
+          const y = progress * trackHeight;
+          b.el.style.transform = 'translateY(' + Math.round(y) + 'px)';
+          b.lastY = y;
+
+          // In-window glow
+          const absDelta = Math.abs(deltaMs);
+          if (absDelta < GOOD_MS) b.el.classList.add('beat--in-window');
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function updateHud() {
+        hudScore.textContent = String(state.score);
+        hudCombo.textContent = '×' + state.combo;
+        hudHits.textContent = state.hits + ' / ' + total;
+        if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+      }
+
+      /* ============== Hit attempt ============== */
+      function attempt() {
+        if (!state.started) {
+          // first press = start the video (after user gesture → audio is unlocked)
+          ensureAudio();
+          if (state.player && state.player.playVideo) {
+            state.player.playVideo();
+            // Pull keyboard focus off the iframe so SPACE hits the overlay,
+            // not YouTube's pause control. Refocus on the hit button so
+            // keyboard users keep a visible focus indicator.
+            setTimeout(() => {
+              try {
+                const frame = document.querySelector('#yee-player iframe');
+                if (frame && frame.blur) frame.blur();
+              } catch {}
+              try { hitBtn.focus({ preventScroll: true }); } catch {}
+            }, 120);
+          } else {
+            // no video fallback: simulate a clock using performance.now()
+            state.started = true;
+            label.textContent = 'SILENT CLOCK';
+            state.startT = performance.now();
+            state.player = { getCurrentTime: () => (performance.now() - state.startT) / 1000 };
+            loop();
+          }
+          return;
+        }
+        const now = currentSec();
+        // Find the closest pending beat within the GOOD window
+        let best = null, bestAbs = Infinity;
+        for (const b of state.list) {
+          if (b.status !== 'pending') continue;
+          const d = Math.abs((b.t - now) * 1000);
+          if (d < bestAbs && d <= GOOD_MS) { best = b; bestAbs = d; }
+        }
+        if (!best) {
+          // stray tap — no penalty, just a small clack
+          chime(180, 0.08);
+          return;
+        }
+        const absDelta = bestAbs;
+        if (absDelta <= PERFECT_MS) {
+          best.status = 'hit';
+          best.el.classList.add('beat--perfect');
+          state.score += 100;
+          state.combo += 1;
+          state.hits += 1;
+          chime(880, 0.16);
+          buzz(14);
+        } else {
+          best.status = 'hit';
+          best.el.classList.add('beat--good');
+          state.score += 50;
+          state.combo += 1;
+          state.hits += 1;
+          chime(660, 0.16);
+          buzz(8);
+        }
+        updateHud();
+      }
+
+      function finalSummary() {
+        const pct = total ? Math.round((state.hits / total) * 100) : 0;
+        const prior = readBest();
+        const run = {
+          score: state.score,
+          hits: state.hits,
+          total: total,
+          maxCombo: state.maxCombo,
+          at: new Date().toISOString(),
+        };
+        let newBest = false;
+        if (!prior || run.score > prior.score) { writeBest(run); newBest = true; }
+        paintBest();
+        return 'DONE · ' + state.score + ' pts · ' + state.hits + '/' + total + ' hits (' + pct + '%) · max combo ×' + state.maxCombo + (newBest ? ' · NEW BEST' : '');
+      }
+
+      /* ============== Controls ============== */
+      btnStart.addEventListener('click', attempt);
+      btnRestart.addEventListener('click', () => { location.reload(); });
+      hitBtn.addEventListener('click', attempt);
+      // Keyboard: SPACE hits a beat. Capture phase so we win against any
+      // inner handler (including iframe focus-stealing) before the event
+      // reaches a passive listener.
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+          // Don't intercept space when the user is typing into an input.
+          const t = e.target;
+          const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+          if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          attempt();
+        }
+      }, { capture: true });
+
+      // Belt-and-suspenders: if focus drifts back to the iframe, pull it off.
+      document.addEventListener('focusin', (e) => {
+        if (state.started && e.target && e.target.tagName === 'IFRAME') {
+          try { hitBtn.focus({ preventScroll: true }); } catch {}
+        }
+      });
+
+      /* ============== Kick off ============== */
+      paintBest();
+      loadYT();
+    })();
+  </script>
+
+  <style>
+    .yee {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 16px 16px 80px;
+    }
+
+    .crumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7a7a72;
+      margin-bottom: 14px;
+    }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+    .crumb a:hover { text-decoration: underline; }
+    .crumb__sep { color: #ccc; }
+    .crumb__here { color: #333; }
+
+    .yee__head { margin-bottom: 16px; }
+    .yee__kicker { font-size: 10px; letter-spacing: 0.16em; margin: 0 0 6px; }
+    .yee__title { font-size: 26px; line-height: 1.15; margin: 0 0 6px; font-weight: 600; }
+    .yee__dek { margin: 0; color: #555; font-size: 15px; line-height: 1.4; }
+
+    .yee__stage {
+      display: grid;
+      grid-template-columns: 1fr 240px;
+      gap: 14px;
+      border: 1.5px solid #1b1b19;
+      background: #0f0f0e;
+      color: #f1f1ee;
+      padding: 14px;
+      border-radius: 3px;
+      min-height: 480px;
+    }
+
+    /* Video column */
+    .yee__video {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .yt-mount, .yt-fallback {
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border: 1px solid #333;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ccc;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      text-align: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+    .yt-mount iframe { width: 100%; height: 100%; border: 0; }
+
+    .yee__hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 8px;
+      border: 1px dashed #2a2a28;
+      border-radius: 2px;
+      background: #161614;
+    }
+    .hud-row { display: flex; flex-direction: column; gap: 2px; }
+    .hud-row--wide { grid-column: 1 / -1; border-top: 1px dashed #2a2a28; padding-top: 6px; margin-top: 2px; }
+    .hud-label { font-size: 9px; letter-spacing: 0.14em; color: #888; }
+    .hud-value { font-size: 13px; color: #f1f1ee; font-weight: 600; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+    /* Beat track */
+    .yee__track {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #2a2a28;
+      border-radius: 2px;
+      background: linear-gradient(to bottom, #15141a 0%, #1b1a22 50%, #0d0d12 100%);
+      overflow: hidden;
+      min-height: 440px;
+    }
+    .track__zone {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      border-bottom: 2px dashed rgba(255, 255, 255, 0.18);
+    }
+    .track__label {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      color: #f1f1ee;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 3px 8px;
+      border-radius: 2px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* NEXT countdown — always visible during play so the player knows
+       what's coming and when. Becomes urgent at <3s. */
+    .track__next {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      padding: 5px 11px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(241, 241, 238, 0.2);
+      border-radius: 14px;
+      color: #f1f1ee;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      z-index: 2;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    }
+    .track__next--imminent {
+      background: rgba(248, 196, 71, 0.92);
+      border-color: #f8c447;
+      color: #0a0a0d;
+      transform: translateX(-50%) scale(1.06);
+      animation: next-pulse 0.6s ease-in-out infinite;
+    }
+    @keyframes next-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248, 196, 71, 0.5); }
+      50%      { box-shadow: 0 0 14px 2px rgba(248, 196, 71, 0.8); }
+    }
+    .track__next-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      opacity: 0.75;
+      font-weight: 700;
+    }
+    .track__next-word {
+      font-weight: 700;
+      letter-spacing: 0.14em;
+    }
+    .track__next-sep { opacity: 0.4; }
+    .track__next-eta {
+      color: #a9a7a2;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+    .track__next--imminent .track__next-eta { color: #2a1c00; font-weight: 700; }
+
+    /* How-to-play overlay — covers the track before first start. Large
+       type, numbered steps, explicit about what the player does. */
+    .track__howto {
+      position: absolute;
+      inset: 34px 14px 14px;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+      border: 1px dashed rgba(241, 241, 238, 0.28);
+      border-radius: 3px;
+      background: rgba(8, 8, 12, 0.82);
+      backdrop-filter: blur(2px);
+      color: #f1f1ee;
+      overflow-y: auto;
+    }
+    .howto__eyebrow {
+      margin: 0;
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      color: #f8c447;
+      font-weight: 700;
+    }
+    .howto__list {
+      list-style: decimal;
+      margin: 0;
+      padding-left: 20px;
+      display: grid;
+      gap: 6px;
+      font-family: var(--pc-font-sans, system-ui, sans-serif);
+      font-size: 13px;
+      line-height: 1.45;
+      color: #e8e6df;
+    }
+    .howto__list li { padding-left: 3px; }
+    .howto__list strong {
+      color: #fff;
+      font-weight: 700;
+    }
+    .howto__note {
+      margin: 0;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(241, 241, 238, 0.18);
+      font-family: var(--pc-font-sans, system-ui, sans-serif);
+      font-size: 12px;
+      line-height: 1.4;
+      color: #b6b4ae;
+    }
+    .howto__note strong { color: #f1f1ee; font-weight: 600; }
+    .beat {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateY(-9999px);
+      --beat-color: #1864AB;
+      padding: 10px 14px;
+      min-width: 90px;
+      border: 1.5px solid var(--beat-color);
+      border-radius: 4px;
+      background: color-mix(in oklab, var(--beat-color) 22%, #0a0a0d);
+      color: #fff;
+      text-align: center;
+      box-shadow: 0 0 18px color-mix(in oklab, var(--beat-color) 40%, transparent);
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+      margin-left: -60px;
+      transition: box-shadow 0.12s, background 0.12s;
+      will-change: transform;
+    }
+    .beat__word { display: inline-block; }
+    .beat--in-window {
+      box-shadow: 0 0 26px color-mix(in oklab, var(--beat-color) 72%, transparent);
+    }
+    .beat--perfect {
+      background: #fff;
+      color: #111;
+      border-color: #fff;
+      box-shadow: 0 0 36px #fff;
+      animation: pop 0.25s ease-out;
+    }
+    .beat--good {
+      background: color-mix(in oklab, var(--beat-color) 60%, #fff);
+      color: #111;
+      animation: pop 0.25s ease-out;
+    }
+    .beat--miss {
+      opacity: 0.25;
+      border-style: dashed;
+      filter: grayscale(1);
+    }
+    @keyframes pop {
+      0%   { transform: translateY(var(--pop-y, 0)) scale(1); }
+      50%  { transform: translateY(var(--pop-y, 0)) scale(1.18); }
+      100% { transform: translateY(var(--pop-y, 0)) scale(1); }
+    }
+
+    .track__hit {
+      flex: 0 0 92px;
+      background: #1b1a22;
+      border: 0;
+      border-top: 2px solid #f1f1ee;
+      color: #f1f1ee;
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s;
+    }
+    .track__hit:hover { background: #24232c; }
+    .track__hit:active { background: #0f0f0e; }
+    .hit__pulse {
+      position: absolute;
+      inset: 10px;
+      border-radius: 2px;
+      border: 1.5px dashed rgba(241, 241, 238, 0.3);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    .hit__label {
+      position: relative;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      font-weight: 700;
+      z-index: 1;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50%      { opacity: 0.85; transform: scale(1.02); }
+    }
+
+    /* Controls row */
+    .yee__controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border: 1.5px solid #1b1b19;
+      background: #fff;
+      color: #1b1b19;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s;
+    }
+    .btn:hover { background: #1b1b19; color: #fff; }
+    .btn--primary { background: #1b1b19; color: #fff; }
+    .btn--primary:hover { background: #000; }
+    .btn--ghost { border-color: #bbb; color: #555; }
+    .btn--ghost:hover { background: transparent; color: #1b1b19; border-color: #1b1b19; }
+
+    /* Legend */
+    .yee__legend {
+      margin-top: 22px;
+      padding: 14px;
+      border: 1px solid #e6e4de;
+      border-radius: 2px;
+      background: #faf9f5;
+    }
+    .legend__title {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: #555;
+      margin: 0 0 10px;
+    }
+    .legend__list {
+      list-style: none;
+      margin: 0 0 10px;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 4px 10px;
+      font-size: 13px;
+    }
+    .swatch {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: -1px;
+    }
+    .legend__note {
+      margin: 8px 0 0;
+      color: #666;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* Meta strip */
+    .yee__meta {
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px dashed #d6d4cd;
+      display: grid;
+      gap: 4px;
+      font-size: 11px;
+      color: #555;
+    }
+    .yee__meta a { color: #a02c2c; text-decoration: none; }
+    .yee__meta a:hover { text-decoration: underline; }
+
+    @media (max-width: 720px) {
+      .yee__stage {
+        grid-template-columns: 1fr;
+      }
+      .yee__track { min-height: 360px; }
+      .yee__hud {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .yee__title { font-size: 22px; }
+    }
+    @media (max-width: 420px) {
+      .yee__hud { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Reduced-motion: softer pulses, still-readable beats. The falling
+       animation itself stays (it's the core game mechanic) but we cut
+       the infinite pulses + the pop animation to a single frame. */
+    @media (prefers-reduced-motion: reduce) {
+      .hit__pulse { animation: none; opacity: 0.5; }
+      .beat--perfect, .beat--good { animation: none; }
+      .track__hit { transition: none; }
+    }
+  </style>
+</BlockLayout>

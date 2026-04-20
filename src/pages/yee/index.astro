@@ -1,0 +1,243 @@
+---
+/**
+ * /yee — YeePlayer catalog.
+ *
+ * Lists every block with a beat map. Each entry links to /yee/{id} where
+ * the rhythm-game overlay runs. Static page, no runtime behavior.
+ *
+ * v0 ships with one title (Chakra Tune-Up, 21 beats) — this page gives
+ * us room to add more without restructuring.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+
+const blocks = (await getCollection('blocks', ({ data }) =>
+  !data.draft && data.type === 'WATCH' && Array.isArray((data.media as any)?.beats) && (data.media as any).beats.length > 0,
+)).sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const title = 'YeePlayer — rhythm-game overlays on PointCast blocks';
+const description = 'Static, meditation-speed rhythm overlays on selected PointCast WATCH blocks. Tap the bija mantras as they fall. v0 — Chakra Tune-Up.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'YeePlayer',
+  description,
+  hasPart: blocks.map((b) => ({
+    '@type': 'VideoGame',
+    name: `YeePlayer · ${b.data.title}`,
+    url: `https://pointcast.xyz/yee/${b.data.id}`,
+    genre: 'Rhythm',
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/yee.png" jsonLd={jsonLd}>
+  <main class="catalog">
+    <header class="catalog__head">
+      <p class="kicker mono">YEEPLAYER · v0</p>
+      <h1 class="title">Rhythm overlays on blocks.</h1>
+      <p class="dek">
+        A small experiment. Some WATCH blocks on PointCast ship with a
+        <code>beats</code> array — a list of cued words (usually bija mantras)
+        that fall down a track while the video plays. Tap SPACE (or the hit
+        zone) when each word reaches the line. Perfect timing is a bonus, not
+        the point. The point is slowing your attention down to meet a sound.
+      </p>
+      <p class="dek">
+        Meditation-speed, not Guitar Hero. Beats are ~30 seconds apart. No
+        penalty for missing. No score board. Static, single-player, fully
+        client-side — YouTube IFrame API + requestAnimationFrame is the whole
+        stack.
+      </p>
+    </header>
+
+    {blocks.length === 0 ? (
+      <p class="empty">No rhythm overlays published yet. Check back soon.</p>
+    ) : (
+      <ul class="list">
+        {blocks.map((b) => {
+          const ch = CHANNELS[b.data.channel];
+          const beats = (b.data.media as any).beats as any[];
+          return (
+            <li class="item">
+              <a href={`/yee/${b.data.id}`} class="item__link">
+                <div class="item__head">
+                  <span class="mono item__chan" style={`color: ${ch.color800}`}>CH.{ch.code}</span>
+                  <span class="mono item__id">№ {b.data.id}</span>
+                  <span class="mono item__type">WATCH · {beats.length} BEATS</span>
+                </div>
+                <h2 class="item__title">{b.data.title}</h2>
+                {b.data.dek && <p class="item__dek">{b.data.dek}</p>}
+                <div class="item__cta mono">▶ PLAY</div>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+
+    <section class="stack">
+      <p class="stack__title mono">THE STACK</p>
+      <ul class="stack__list">
+        <li><strong>Schema:</strong> <code>media.beats: Array&lt;{'{t, word, color?, note?, key?}'}&gt;</code></li>
+        <li><strong>Route:</strong> <code>/yee/{'{id}'}</code> built at static time, one per qualifying block</li>
+        <li><strong>Sync:</strong> YouTube IFrame API → <code>getCurrentTime()</code> polled in <code>requestAnimationFrame</code></li>
+        <li><strong>Hit window:</strong> ±150 ms perfect, ±500 ms good, else drop-through</li>
+        <li><strong>Audio:</strong> Web Audio API sine at 880 Hz (perfect) / 660 Hz (good)</li>
+        <li><strong>No server.</strong> No accounts. No high scores. Just you and the tone.</li>
+      </ul>
+    </section>
+
+    <section class="why">
+      <p class="why__title mono">WHY THIS EXISTS</p>
+      <p>
+        PointCast wants to reward sustained attention. A video is a one-way
+        stream. A beat track turns the stream into a loop — the watcher has
+        to listen forward and press on time, which means they have to actually
+        breathe with the thing. Meditation videos lose people because they
+        demand stillness; a light interactive layer can thread the needle.
+        v0 proves the primitive. v1 will add vibration, Tezos-signed session
+        receipts, and more titles.
+      </p>
+      <p class="why__meta mono">STATUS: v0 · SHIPPED {new Date().toISOString().slice(0, 10)} · NEXT: vibration + session receipts</p>
+    </section>
+  </main>
+
+  <style>
+    .catalog {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px 18px 80px;
+    }
+    .catalog__head { margin-bottom: 28px; }
+    .kicker {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      margin: 0 0 8px;
+      color: #5F3DC4;
+    }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; }
+    .title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 700;
+      line-height: 1.08;
+      margin: 0 0 14px;
+      color: #12110E;
+    }
+    .dek {
+      margin: 0 0 14px;
+      color: #38373A;
+      line-height: 1.55;
+      font-size: 15.5px;
+    }
+    .dek code {
+      background: #f0eee6;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-size: 0.9em;
+    }
+
+    .empty {
+      padding: 40px 20px;
+      border: 1px dashed #ccc;
+      border-radius: 2px;
+      text-align: center;
+      color: #777;
+    }
+
+    .list {
+      list-style: none;
+      margin: 0 0 28px;
+      padding: 0;
+      display: grid;
+      gap: 10px;
+    }
+    .item__link {
+      display: block;
+      padding: 14px 16px;
+      border: 1.5px solid #1b1b19;
+      border-left: 6px solid #5F3DC4;
+      border-radius: 2px;
+      background: #fff;
+      color: #1b1b19;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .item__link:hover {
+      background: #0f0f0e;
+      color: #fff;
+      border-color: #5F3DC4;
+    }
+    .item__link:hover .item__chan,
+    .item__link:hover .item__id,
+    .item__link:hover .item__type,
+    .item__link:hover .item__dek { color: #f1f1ee; }
+    .item__link:hover .item__cta { background: #fff; color: #1b1b19; }
+
+    .item__head {
+      display: flex;
+      gap: 10px;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+    }
+    .item__chan { color: #1864AB; font-weight: 700; }
+    .item__id { color: #5F5E5A; }
+    .item__type { color: #5F3DC4; margin-left: auto; font-weight: 700; }
+    .item__title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 19px;
+      line-height: 1.2;
+      margin: 0 0 4px;
+      font-weight: 600;
+    }
+    .item__dek { margin: 0; font-size: 14px; line-height: 1.4; color: #5F5E5A; }
+    .item__cta {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 4px 10px;
+      background: #5F3DC4;
+      color: #fff;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      font-weight: 700;
+      border-radius: 2px;
+    }
+
+    .stack, .why {
+      margin-top: 22px;
+      padding: 14px 16px;
+      border: 1px solid #e6e4de;
+      border-radius: 2px;
+      background: #faf9f5;
+    }
+    .stack__title, .why__title {
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: #5F5E5A;
+      margin: 0 0 8px;
+    }
+    .stack__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 5px;
+      font-size: 13.5px;
+      color: #12110E;
+    }
+    .stack__list code {
+      background: #ebe8df;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 12px;
+    }
+
+    .why p { margin: 0 0 10px; line-height: 1.55; font-size: 14px; color: #38373A; }
+    .why__meta { color: #5F5E5A; font-size: 10px; letter-spacing: 0.14em; margin: 10px 0 0; }
+  </style>
+</BlockLayout>

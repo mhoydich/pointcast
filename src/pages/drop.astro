@@ -1,0 +1,409 @@
+---
+/**
+ * /drop — paste-a-URL inbox for cc.
+ *
+ * Mike 2026-04-18: "give me a place to share urls with you like the spotify
+ * link or product link, locatino, etc". This is that. Paste a URL, see the
+ * live classification (Spotify track? YouTube video? Good-Feels product?
+ * Maps location?), optionally add a note + location + tag, hit send.
+ *
+ * cc reads /api/drop?action=list (or docs/drops/) at the start of each
+ * session and on every hourly cron tick. Classifies via
+ * src/lib/url-classifier.ts and files appropriately.
+ *
+ * Foursquare-inspired future features documented at
+ * docs/inspirations/foursquare.md.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { COLLABORATORS } from '../lib/collaborators';
+
+// Pull collaborator URLs so the page-side classifier can highlight collab links.
+const knownCollabHosts = COLLABORATORS
+  .map((c) => c.url || '')
+  .filter((u) => u.startsWith('http'))
+  .map((u) => {
+    try { return new URL(u).hostname.replace(/^www\./, ''); }
+    catch { return ''; }
+  })
+  .filter(Boolean);
+
+const title = 'Drop — paste a URL for cc';
+const description = 'Paste a Spotify, YouTube, product, location, or any URL. cc classifies, drafts a block, or files it. No login. Foursquare-flavored.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'PointCast Drop',
+  description,
+  url: 'https://pointcast.xyz/drop',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/drop.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>drop</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">DROP · PASTE-A-URL INBOX</p>
+      <h1 class="title">Paste a link. cc takes it from there.</h1>
+      <p class="dek">
+        Spotify track → LISTEN block. YouTube video → WATCH block (auto-thumbnail).
+        Good-Feels product URL → /products entry. Google Maps pin → VISIT log.
+        Anything else → LINK block with smart defaults. The classifier shows you what cc plans to do <em>before</em> you hit send.
+      </p>
+    </header>
+
+    <form id="drop-form" class="composer" novalidate>
+      <label class="field">
+        <span class="label mono">URL · required</span>
+        <input
+          type="url"
+          id="drop-url"
+          name="url"
+          inputmode="url"
+          autocomplete="url"
+          placeholder="https://open.spotify.com/track/… · https://youtu.be/… · https://maps.google.com/…"
+          required
+        />
+      </label>
+
+      <div class="classification" id="drop-class" hidden>
+        <span class="class__chip mono" id="class-kind">—</span>
+        <span class="class__chip mono" id="class-vendor">—</span>
+        <span class="class__chip mono" id="class-suggest">—</span>
+        <span class="class__why" id="class-why"></span>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <span class="label mono">NOTE · optional</span>
+          <input type="text" id="drop-note" name="note" maxlength="500" placeholder="why this · what to do with it" />
+        </label>
+        <label class="field">
+          <span class="label mono">LOCATION · optional</span>
+          <input type="text" id="drop-location" name="location" maxlength="200" placeholder="el segundo · capa los cab · home" />
+        </label>
+        <label class="field field--small">
+          <span class="label mono">TAG · optional</span>
+          <input type="text" id="drop-tag" name="tag" maxlength="40" placeholder="spotify · drill · meditation" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn--primary" id="drop-submit">▶ DROP IT</button>
+        <button type="button" class="btn" id="drop-clear">Clear</button>
+      </div>
+      <p class="status" id="drop-status" aria-live="polite"></p>
+    </form>
+
+    <section class="examples">
+      <p class="section-title mono">EXAMPLES · PASTE ONE TO TRY</p>
+      <ul class="examples__list">
+        <li><button class="ex-btn" type="button" data-url="https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT">spotify track → LISTEN block</button></li>
+        <li><button class="ex-btn" type="button" data-url="https://youtu.be/jPpUNAFHgxM">youtube video → WATCH block</button></li>
+        <li><button class="ex-btn" type="button" data-url="https://shop.getgoodfeels.com/products/coastal-rest">good feels product → /products</button></li>
+        <li><button class="ex-btn" type="button" data-url="https://maps.google.com/?q=Capa+Los+Cabos">maps location → VISIT</button></li>
+        <li><button class="ex-btn" type="button" data-url="https://substack.com/@author/post-123">article → READ block</button></li>
+      </ul>
+    </section>
+
+    <section class="future">
+      <p class="kicker mono">FUTURE · FOURSQUARE-FLAVORED</p>
+      <p>
+        v1 ships the inbox. v2 adds the social graph: <strong>check-ins</strong> at
+        beacon-radius venues, <strong>tips</strong> on places, <strong>lists</strong>
+        a la "best dink courts in the South Bay", <strong>specials</strong> from
+        Good Feels for repeat visitors, <strong>mayorship</strong>-style mechanics
+        wired to DRUM. See <a href="/b/0244">/b/0244</a> + <a href="/beacon">/beacon</a>
+        for the radius layer this builds on. Roadmap: <code>docs/inspirations/foursquare.md</code>.
+      </p>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/drop">/api/drop</a></li>
+        <li><a href="/api/drop?action=list">/api/drop?action=list</a></li>
+        <li><a href="/sprint">/sprint</a></li>
+        <li><a href="/ping">/ping</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <script type="application/json" id="known-collab-hosts" set:html={JSON.stringify(knownCollabHosts)}></script>
+
+  <script is:inline>
+    (function () {
+      // Mirrors src/lib/url-classifier.ts but inline so we can paint live.
+      // Authoritative classification still happens server-side at processing.
+      const LISTEN_HOSTS  = ['open.spotify.com', 'spotify.com', 'music.apple.com', 'soundcloud.com', 'bandcamp.com', 'tidal.com', 'music.youtube.com'];
+      const WATCH_HOSTS   = ['youtube.com', 'youtu.be', 'm.youtube.com', 'vimeo.com', 'twitch.tv', 'loom.com', 'instagram.com'];
+      const PRODUCT_HOSTS = ['shop.getgoodfeels.com', 'getgoodfeels.com'];
+      const LOCATION_HOSTS= ['maps.google.com', 'goo.gl', 'maps.apple.com', 'foursquare.com', 'openstreetmap.org', 'what3words.com'];
+      const SOCIAL_HOSTS  = ['twitter.com', 'x.com', 'warpcast.com', 'threads.net', 'bsky.app'];
+      const ARTICLE_HOSTS = ['substack.com', 'medium.com', 'mirror.xyz'];
+      const collabHosts = JSON.parse(document.getElementById('known-collab-hosts').textContent || '[]');
+
+      function host(u) { return u.hostname.replace(/^www\./, '').toLowerCase(); }
+      function any(h, list) { return list.some((x) => h === x || h.endsWith('.' + x)); }
+
+      function classify(input) {
+        let u; try { u = new URL(input.trim()); } catch { return null; }
+        const h = host(u);
+        if (any(h, WATCH_HOSTS))    return { kind: 'watch',    vendor: h, suggest: 'WATCH · CH.SPN', why: 'video host' };
+        if (any(h, LISTEN_HOSTS))   return { kind: 'listen',   vendor: h, suggest: 'LISTEN · CH.SPN', why: 'music host' };
+        if (any(h, PRODUCT_HOSTS) || /\/(products|product|shop|store)\//.test(u.pathname))
+                                     return { kind: 'product',  vendor: h, suggest: '/products · CH.GF', why: 'shop URL' };
+        if (any(h, LOCATION_HOSTS) || /\/maps?\//.test(u.pathname) || /\/place\//.test(u.pathname))
+                                     return { kind: 'location', vendor: h, suggest: 'VISIT · CH.VST', why: 'maps URL' };
+        if (collabHosts.some((c) => h === c || h.endsWith('.' + c)))
+                                     return { kind: 'collab',   vendor: h, suggest: 'LINK · CH.FD', why: 'collaborator domain' };
+        if (any(h, SOCIAL_HOSTS))   return { kind: 'social',   vendor: h, suggest: 'LINK · CH.FD', why: 'social network' };
+        if (any(h, ARTICLE_HOSTS) || /\/(blog|posts?|essays?|articles?)\//.test(u.pathname))
+                                     return { kind: 'article',  vendor: h, suggest: 'READ · CH.FD', why: 'blog/article' };
+        if (/\.(rss|xml|atom|json)$/.test(u.pathname) || /\/(feed|rss|atom)\/?$/.test(u.pathname))
+                                     return { kind: 'feed',     vendor: h, suggest: 'LINK · CH.FD', why: 'feed URL' };
+        return { kind: 'unknown', vendor: h, suggest: 'LINK · CH.FD (default)', why: 'no rule matched' };
+      }
+
+      const urlEl = document.getElementById('drop-url');
+      const classBox = document.getElementById('drop-class');
+      const classKind = document.getElementById('class-kind');
+      const classVendor = document.getElementById('class-vendor');
+      const classSuggest = document.getElementById('class-suggest');
+      const classWhy = document.getElementById('class-why');
+
+      function paint() {
+        const v = urlEl.value.trim();
+        if (!v) { classBox.hidden = true; return; }
+        const c = classify(v);
+        if (!c) { classBox.hidden = true; return; }
+        classKind.textContent = c.kind.toUpperCase();
+        classKind.dataset.kind = c.kind;
+        classVendor.textContent = c.vendor;
+        classSuggest.textContent = '→ ' + c.suggest;
+        classWhy.textContent = c.why;
+        classBox.hidden = false;
+      }
+      urlEl.addEventListener('input', paint);
+      urlEl.addEventListener('paste', () => setTimeout(paint, 30));
+
+      // Example buttons paste into the field and re-classify.
+      document.querySelectorAll('.ex-btn').forEach((b) => {
+        b.addEventListener('click', () => {
+          urlEl.value = b.getAttribute('data-url') || '';
+          paint();
+          urlEl.focus();
+        });
+      });
+
+      const form = document.getElementById('drop-form');
+      const submitBtn = document.getElementById('drop-submit');
+      const clearBtn = document.getElementById('drop-clear');
+      const status = document.getElementById('drop-status');
+      function setStatus(msg, kind) { status.textContent = msg; status.dataset.kind = kind || ''; }
+
+      clearBtn.addEventListener('click', () => { form.reset(); classBox.hidden = true; setStatus('', ''); });
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const url = urlEl.value.trim();
+        if (!url) { setStatus('URL required.', 'err'); return; }
+        try { new URL(url); } catch { setStatus('Not a valid URL.', 'err'); return; }
+        submitBtn.disabled = true;
+        setStatus('Sending…', '');
+        const payload = {
+          type: 'pc-drop-v1',
+          url,
+          note: document.getElementById('drop-note').value.trim() || undefined,
+          location: document.getElementById('drop-location').value.trim() || undefined,
+          tag: document.getElementById('drop-tag').value.trim() || undefined,
+          timestamp: new Date().toISOString(),
+        };
+        try {
+          const r = await fetch('/api/drop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.ok) {
+            setStatus('✓ Dropped. cc picks it up next tick. key: ' + (j.key || '—'), 'ok');
+            form.reset();
+            classBox.hidden = true;
+          } else if (r.status === 503 && j.reason === 'key-not-bound') {
+            setStatus('KV not bound. Fallback: drop a file in docs/drops/{ts}-{slug}.md in the repo. cc reads on session start.', 'warn');
+          } else {
+            setStatus('Failed: ' + (j.error || r.status), 'err');
+          }
+        } catch (err) {
+          setStatus('Network error: ' + (err && err.message ? err.message : 'offline'), 'err');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
+
+  <style>
+    .page { max-width: 760px; margin: 0 auto; padding: 18px 14px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb {
+      display: flex; gap: 8px; margin-bottom: 12px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72;
+    }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 18px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #0F6E56; }
+    .title {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: clamp(24px, 5vw, 34px);
+      font-weight: 700;
+      line-height: 1.12;
+      margin: 0 0 10px;
+    }
+    .dek { margin: 0; color: #38373A; line-height: 1.5; font-size: 14.5px; }
+    .dek code, .future code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em;
+    }
+
+    .composer {
+      display: grid; gap: 12px;
+      padding: 16px;
+      border: 1px solid #12110E;
+      border-left: 5px solid #0F6E56;
+      border-radius: 2px;
+      background: #fff;
+      margin-bottom: 22px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 0.6fr;
+      gap: 10px;
+    }
+    @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    .field { display: grid; gap: 5px; }
+    .label { font-size: 9.5px; color: #5F5E5A; letter-spacing: 0.14em; }
+    .field input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      font-size: 14px;
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+    }
+    .field input:focus { outline: none; border-color: #12110E; }
+
+    .classification {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 8px 10px;
+      border: 1px dashed #0F6E56;
+      border-radius: 2px;
+      background: #f0f9f4;
+      align-items: baseline;
+    }
+    .class__chip {
+      padding: 3px 8px;
+      background: #fff;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: #12110E;
+      font-weight: 700;
+    }
+    .class__chip[data-kind="listen"]   { background: #ffeae9; border-color: #993C1D; color: #6A2810; }
+    .class__chip[data-kind="watch"]    { background: #ffebee; border-color: #B00020; color: #6A0010; }
+    .class__chip[data-kind="product"]  { background: #fde7ee; border-color: #993556; color: #6B2139; }
+    .class__chip[data-kind="location"] { background: #e9f0e9; border-color: #3B6D11; color: #24460A; }
+    .class__chip[data-kind="collab"]   { background: #eef4fa; border-color: #185FA5; color: #0B3E73; }
+    .class__chip[data-kind="article"]  { background: #f5f0ff; border-color: #5F3DC4; color: #3A1F8B; }
+    .class__chip[data-kind="social"]   { background: #f0f8ff; border-color: #1864AB; color: #0B3E73; }
+    .class__chip[data-kind="feed"]     { background: #fff7e8; border-color: #BA7517; color: #834F0A; }
+    .class__chip[data-kind="unknown"]  { background: #f4f4f0; border-color: #5F5E5A; color: #38373A; }
+    .class__why { font-size: 11.5px; color: #5F5E5A; margin-left: 6px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); letter-spacing: 0.04em; text-transform: lowercase; }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 10px 14px;
+      border: 1.5px solid #12110E;
+      background: #fff;
+      color: #12110E;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .btn:hover { background: #12110E; color: #fff; }
+    .btn--primary { background: #12110E; color: #fff; }
+    .btn--primary:hover { background: #000; }
+    .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .status {
+      margin: 0;
+      font-size: 12.5px;
+      padding: 6px 10px;
+      border-radius: 2px;
+      min-height: 16px;
+    }
+    .status[data-kind="ok"]   { background: #E7F5EC; color: #1B4E2B; }
+    .status[data-kind="warn"] { background: #FFF4E5; color: #6A3E05; }
+    .status[data-kind="err"]  { background: #FCE8EA; color: #8A2432; }
+
+    .examples { margin-bottom: 22px; padding: 12px 14px; border: 1px dashed #d6d4cd; border-radius: 2px; background: #fbfaf5; }
+    .section-title { font-size: 10px; color: #5F5E5A; margin: 0 0 8px; letter-spacing: 0.16em; }
+    .examples__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .ex-btn {
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid #d6d4cd;
+      background: #fff;
+      color: #12110E;
+      border-radius: 2px;
+      font-size: 12.5px;
+      cursor: pointer;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      letter-spacing: 0.04em;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .ex-btn:hover { background: #f0f9f4; border-color: #0F6E56; }
+
+    .future {
+      margin-bottom: 22px;
+      padding: 14px 16px;
+      border: 1px dashed #0F6E56;
+      border-radius: 2px;
+      background: #f0f9f4;
+    }
+    .future p { margin: 0; line-height: 1.55; font-size: 13.5px; color: #38373A; }
+    .future a { color: #a02c2c; text-decoration: none; }
+    .future a:hover { text-decoration: underline; }
+
+    .agent-strip {
+      margin-top: 22px; padding-top: 12px;
+      border-top: 1px dashed #d6d4cd;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

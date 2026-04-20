@@ -1,0 +1,248 @@
+---
+/**
+ * MorningPara — editorial-paragraph morning brief.
+ *
+ * Replaces MorningBrief's 8-chip row per Mike 2026-04-19 21:50 PT:
+ * "morning brief isn't working · try a new morning brief". The brief
+ * is now a single sentence written as prose — pulling live weather +
+ * sports + site state into a morning-newspaper paragraph rather than
+ * a chip grid.
+ *
+ * Server renders date + today's drop + yesterday's ship count.
+ * Client fills weather (Open-Meteo) + sports (scoreboard CDNs) into
+ * placeholders. Each fetch fails silently; graceful fallback to "—".
+ */
+import { getCollection } from 'astro:content';
+import { pickDailyBlock, todayPT } from '../lib/daily';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const daily = pickDailyBlock(blocks);
+const dailyId = daily?.data.id ?? '';
+const dailyTitle = daily?.data.title ?? '';
+
+const now = new Date();
+const dateLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long', month: 'long', day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(now);
+
+// Time-of-day greeting — matches when the visitor actually arrives.
+// PT hours: <6 early, 6-11 morning, 11-14 midday, 14-18 afternoon,
+// 18-22 evening, 22-26 late night.
+const hourPT = parseInt(new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles',
+}).format(now), 10);
+let greeting = 'Hey';
+if (hourPT < 6) greeting = 'Good early morning';
+else if (hourPT < 11) greeting = 'Good morning';
+else if (hourPT < 14) greeting = 'Hey';
+else if (hourPT < 18) greeting = 'Good afternoon';
+else if (hourPT < 22) greeting = 'Good evening';
+else greeting = 'Late night';
+---
+
+<aside class="morning-para" aria-label="Morning paragraph">
+  <p class="morning-para__kicker mono">
+    <span class="morning-para__label">BRIEF</span>
+    <span class="morning-para__sep" aria-hidden="true">·</span>
+    <time class="morning-para__date">{dateLabel}</time>
+    <span class="morning-para__sep" aria-hidden="true">·</span>
+    <span class="morning-para__locus">EL SEGUNDO</span>
+  </p>
+  <p class="morning-para__body" id="morning-para-body">
+    <span class="morning-para__sentence">
+      <span class="morning-para__greet">{greeting}.</span>
+      <span id="mp-weather" class="morning-para__weather">—°F, loading</span>
+      <span class="morning-para__link">in El Segundo.</span>
+      <span class="morning-para__sports-inline" id="mp-sports">—</span>
+      {daily && (
+        <span class="morning-para__drop">
+          Today's drop is <a href={`/b/${dailyId}`} class="morning-para__drop-link">
+            <span class="morning-para__drop-num mono">№ {dailyId}</span>
+            <span class="morning-para__drop-title"> — {dailyTitle.slice(0, 60)}{dailyTitle.length > 60 ? '…' : ''}</span>
+          </a>.
+          <a href="/today" class="morning-para__cta">tap to collect →</a>
+        </span>
+      )}
+    </span>
+  </p>
+</aside>
+
+<script is:inline>
+  (function () {
+    /* El Segundo coords */
+    const LAT = 33.9192, LNG = -118.4165;
+
+    /* Weather via Open-Meteo — current + weathercode → lowercase adjective */
+    function weatherCodeToWord(code) {
+      if (code === 0) return 'clear';
+      if ([1,2].includes(code)) return 'mostly clear';
+      if (code === 3) return 'overcast';
+      if ([45,48].includes(code)) return 'foggy';
+      if ([51,53,55,56,57].includes(code)) return 'drizzly';
+      if ([61,63,65,66,67,80,81,82].includes(code)) return 'rainy';
+      if ([71,73,75,77,85,86].includes(code)) return 'snowy';
+      if ([95,96,99].includes(code)) return 'stormy';
+      return 'unclassified';
+    }
+
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LNG}&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FLos_Angeles`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (!j || !j.current) return;
+        const t = Math.round(j.current.temperature_2m);
+        const w = weatherCodeToWord(j.current.weather_code);
+        const el = document.getElementById('mp-weather');
+        if (el) el.textContent = `${t}°F and ${w}`;
+      })
+      .catch(() => {});
+
+    /* Sports inline — Lakers last night + Dodgers tonight. Both via
+       ESPN public scoreboards (undocumented but stable for years). */
+    const DATE_YMD = (() => {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${y}${m}${dd}`;
+    })();
+    const YDAY_YMD = (() => {
+      const d = new Date(Date.now() - 86_400_000);
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${y}${m}${dd}`;
+    })();
+
+    Promise.all([
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${YDAY_YMD}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=${DATE_YMD}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([nba, mlb]) => {
+      const parts = [];
+
+      // Find Lakers in last night's NBA scoreboard
+      if (nba && Array.isArray(nba.events)) {
+        const lalEvent = nba.events.find(e =>
+          (e.competitions || []).some(c =>
+            (c.competitors || []).some(x => x.team && x.team.abbreviation === 'LAL')
+          )
+        );
+        if (lalEvent) {
+          const comp = lalEvent.competitions[0];
+          const lal = comp.competitors.find(c => c.team.abbreviation === 'LAL');
+          const opp = comp.competitors.find(c => c.team.abbreviation !== 'LAL');
+          if (lal && opp) {
+            const lalScore = parseInt(lal.score || '0', 10);
+            const oppScore = parseInt(opp.score || '0', 10);
+            const result = lalScore > oppScore ? 'win' : 'loss';
+            const verb = lalScore > oppScore ? 'took down' : 'fell to';
+            parts.push(`Lakers ${verb} ${opp.team.shortDisplayName} ${lalScore}-${oppScore} last night.`);
+          }
+        }
+      }
+
+      // Find Dodgers today
+      if (mlb && Array.isArray(mlb.events)) {
+        const ladEvent = mlb.events.find(e =>
+          (e.competitions || []).some(c =>
+            (c.competitors || []).some(x => x.team && x.team.abbreviation === 'LAD')
+          )
+        );
+        if (ladEvent) {
+          const comp = ladEvent.competitions[0];
+          const ladTeam = comp.competitors.find(c => c.team.abbreviation === 'LAD');
+          const oppTeam = comp.competitors.find(c => c.team.abbreviation !== 'LAD');
+          const status = (comp.status && comp.status.type && comp.status.type.state) || 'pre';
+          if (status === 'pre' && ladTeam && oppTeam) {
+            const home = ladTeam.homeAway === 'home';
+            const first = ladEvent.date ? new Date(ladEvent.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }) : '';
+            parts.push(`Dodgers ${home ? 'host' : 'visit'} ${oppTeam.team.shortDisplayName}${first ? ' at ' + first.replace(' ', '') : ''}.`);
+          } else if (status === 'in' && ladTeam && oppTeam) {
+            parts.push(`Dodgers vs ${oppTeam.team.shortDisplayName} in progress.`);
+          } else if (status === 'post' && ladTeam && oppTeam) {
+            const ls = parseInt(ladTeam.score || '0', 10);
+            const os = parseInt(oppTeam.score || '0', 10);
+            const verb = ls > os ? 'beat' : 'lost to';
+            parts.push(`Dodgers ${verb} ${oppTeam.team.shortDisplayName} ${ls}-${os}.`);
+          }
+        }
+      }
+
+      const el = document.getElementById('mp-sports');
+      if (el) el.textContent = parts.length ? parts.join(' ') : '';
+    }).catch(() => {});
+  })();
+</script>
+
+<style>
+  .morning-para {
+    margin: 10px 0 12px;
+    padding: 14px 18px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-left: 4px solid #8a2432;
+    border-radius: 3px;
+    background: linear-gradient(to right, #fef5e7 0%, #faf9f5 50%, #faf9f5 100%);
+  }
+
+  .morning-para__kicker {
+    margin: 0 0 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+  .morning-para__label { color: #8a2432; font-weight: 700; }
+  .morning-para__sep { opacity: 0.4; }
+  .morning-para__date { letter-spacing: 0.14em; }
+
+  .morning-para__body {
+    margin: 0;
+    font-family: var(--pc-font-serif, Georgia, serif);
+    font-size: 17px;
+    line-height: 1.55;
+    color: #2a2925;
+    max-width: 68ch;
+  }
+  .morning-para__greet { font-weight: 600; color: #12110E; }
+  .morning-para__weather {
+    color: #12110E;
+    font-weight: 500;
+  }
+  .morning-para__sports-inline {
+    color: #2a2925;
+  }
+  .morning-para__drop {
+    display: inline;
+  }
+  .morning-para__drop-link {
+    color: #2a2925;
+    text-decoration: none;
+    border-bottom: 1px dotted #8a2432;
+  }
+  .morning-para__drop-link:hover {
+    border-bottom-style: solid;
+    color: #8a2432;
+    text-decoration: none;
+  }
+  .morning-para__drop-num { color: #8a2432; font-weight: 700; letter-spacing: 0.02em; }
+  .morning-para__cta {
+    margin-left: 6px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #F59F00;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .morning-para__cta:hover { text-decoration: underline; }
+
+  @media (max-width: 620px) {
+    .morning-para { padding: 12px 14px; }
+    .morning-para__body { font-size: 15px; line-height: 1.5; }
+  }
+</style>

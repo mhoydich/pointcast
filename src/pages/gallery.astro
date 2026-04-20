@@ -1,0 +1,358 @@
+---
+/**
+ * /gallery — slideshow viewer for Midjourney + AI-art entries.
+ *
+ * Mike 2026-04-18 chat: "make a midjourney slide show, create or gather
+ * greatest and build into a wonderful viewing experience".
+ *
+ * Grid on load → tap any image to open lightbox → arrow keys / swipe to
+ * navigate → ESC to close. Autoplay toggle (6s/frame). Keyboard + touch
+ * both supported.
+ *
+ * Content comes from src/content/gallery/*.json. cc ships with 4 seeded
+ * Noun #s (CC0) as placeholders; Mike adds MJ URLs via /drop or PR.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const entries = (await getCollection('gallery', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.createdAt.getTime() - a.data.createdAt.getTime());
+
+const title = 'Gallery — Midjourney + AI-art slideshow';
+const description = 'A viewing experience for Midjourney + AI-art pieces on PointCast. Grid → lightbox → arrows/swipe to navigate → autoplay 6s/frame. Seeded with CC0 Nouns while Mike adds MJ entries.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ImageGallery',
+  name: 'PointCast Gallery',
+  description,
+  url: 'https://pointcast.xyz/gallery',
+  associatedMedia: entries.map((e) => ({
+    '@type': 'ImageObject',
+    contentUrl: e.data.imageUrl,
+    name: e.data.title,
+    dateCreated: e.data.createdAt.toISOString(),
+    creator: e.data.author,
+  })),
+};
+
+const toolCounts: Record<string, number> = {};
+for (const e of entries) toolCounts[e.data.tool] = (toolCounts[e.data.tool] || 0) + 1;
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>gallery</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">GALLERY · MIDJOURNEY + AI-ART</p>
+      <h1 class="title">A viewing room.</h1>
+      <p class="dek">
+        Tap any image to open the lightbox — arrow keys or swipe to navigate,
+        ESC or tap the backdrop to close, press <code>a</code> or tap ▶ to
+        autoplay (6s/frame). {entries.length} piece{entries.length === 1 ? '' : 's'} in the room.
+        Add your own: <a href="/drop">drop</a> a Midjourney URL or commit a
+        JSON to <code>src/content/gallery/</code>.
+      </p>
+    </header>
+
+    {entries.length === 0 ? (
+      <section class="empty">
+        <p>No gallery entries yet. <a href="/drop">Drop</a> an image URL or see <code>src/content/gallery/_README.md</code>.</p>
+      </section>
+    ) : (
+      <>
+        <section class="grid" id="gallery-grid" aria-label="Image grid">
+          {entries.map((e, i) => (
+            <button
+              type="button"
+              class="tile"
+              data-index={i}
+              data-slug={e.data.slug}
+              aria-label={`Open ${e.data.title}`}
+            >
+              <img
+                class="tile__img"
+                src={e.data.imageUrl}
+                alt={e.data.title}
+                loading={i < 4 ? 'eager' : 'lazy'}
+              />
+              <span class="tile__overlay">
+                <span class="tile__title">{e.data.title}</span>
+                <span class="tile__meta mono">{e.data.tool.toUpperCase()}{e.data.mood ? ` · ${e.data.mood}` : ''}</span>
+              </span>
+            </button>
+          ))}
+        </section>
+
+        <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Image viewer">
+          <button type="button" class="lightbox__close" id="lb-close" aria-label="Close">✕</button>
+          <button type="button" class="lightbox__nav lightbox__nav--prev" id="lb-prev" aria-label="Previous image">‹</button>
+          <button type="button" class="lightbox__nav lightbox__nav--next" id="lb-next" aria-label="Next image">›</button>
+          <div class="lightbox__stage">
+            <img class="lightbox__img" id="lb-img" src="" alt="" />
+            <div class="lightbox__caption" id="lb-caption">
+              <p class="lightbox__title" id="lb-title"></p>
+              <p class="lightbox__meta mono" id="lb-meta"></p>
+              <p class="lightbox__source" id="lb-source"></p>
+            </div>
+          </div>
+          <div class="lightbox__controls">
+            <button type="button" class="lb-btn" id="lb-play" aria-label="Toggle autoplay">▶ AUTO 6s</button>
+            <span class="lb-counter mono" id="lb-counter">—</span>
+          </div>
+        </div>
+
+        <script type="application/json" id="gallery-data" set:html={JSON.stringify(entries.map((e) => ({
+          slug: e.data.slug,
+          title: e.data.title,
+          imageUrl: e.data.imageUrl,
+          tool: e.data.tool,
+          mood: e.data.mood ?? null,
+          promptSummary: e.data.promptSummary ?? null,
+          createdAt: e.data.createdAt.toISOString().slice(0, 10),
+          source: e.data.source ?? null,
+        })))}></script>
+
+        <script is:inline>
+          (function () {
+            const dataEl = document.getElementById('gallery-data');
+            if (!dataEl) return;
+            const entries = JSON.parse(dataEl.textContent || '[]');
+            const lb = document.getElementById('lightbox');
+            const img = document.getElementById('lb-img');
+            const titleEl = document.getElementById('lb-title');
+            const metaEl = document.getElementById('lb-meta');
+            const sourceEl = document.getElementById('lb-source');
+            const counterEl = document.getElementById('lb-counter');
+            const playBtn = document.getElementById('lb-play');
+
+            let current = 0;
+            let autoplay = false;
+            let autoplayTimer = null;
+
+            function paint() {
+              const e = entries[current];
+              if (!e) return;
+              img.src = e.imageUrl;
+              img.alt = e.title;
+              titleEl.textContent = e.title;
+              const metaBits = [e.tool.toUpperCase()];
+              if (e.mood) metaBits.push(e.mood);
+              if (e.createdAt) metaBits.push(e.createdAt);
+              metaEl.textContent = metaBits.join(' · ');
+              sourceEl.textContent = e.promptSummary || '';
+              counterEl.textContent = (current + 1) + ' / ' + entries.length;
+            }
+
+            function open(i) {
+              current = ((i % entries.length) + entries.length) % entries.length;
+              paint();
+              lb.hidden = false;
+              document.body.style.overflow = 'hidden';
+            }
+
+            function close() {
+              lb.hidden = true;
+              document.body.style.overflow = '';
+              stopAutoplay();
+            }
+
+            function next() { current = (current + 1) % entries.length; paint(); }
+            function prev() { current = (current - 1 + entries.length) % entries.length; paint(); }
+
+            function startAutoplay() {
+              autoplay = true;
+              playBtn.textContent = '❚❚ PAUSE';
+              playBtn.setAttribute('aria-pressed', 'true');
+              autoplayTimer = setInterval(next, 6000);
+            }
+            function stopAutoplay() {
+              autoplay = false;
+              playBtn.textContent = '▶ AUTO 6s';
+              playBtn.setAttribute('aria-pressed', 'false');
+              if (autoplayTimer) clearInterval(autoplayTimer);
+              autoplayTimer = null;
+            }
+
+            document.querySelectorAll('.tile[data-index]').forEach((el) => {
+              el.addEventListener('click', () => open(parseInt(el.getAttribute('data-index') || '0', 10)));
+            });
+            document.getElementById('lb-close').addEventListener('click', close);
+            document.getElementById('lb-prev').addEventListener('click', () => { stopAutoplay(); prev(); });
+            document.getElementById('lb-next').addEventListener('click', () => { stopAutoplay(); next(); });
+            playBtn.addEventListener('click', () => { if (autoplay) stopAutoplay(); else startAutoplay(); });
+
+            // Backdrop close
+            lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
+
+            // Keyboard
+            document.addEventListener('keydown', (e) => {
+              if (lb.hidden) return;
+              if (e.key === 'Escape') { close(); e.preventDefault(); }
+              else if (e.key === 'ArrowRight') { stopAutoplay(); next(); e.preventDefault(); }
+              else if (e.key === 'ArrowLeft') { stopAutoplay(); prev(); e.preventDefault(); }
+              else if (e.key === 'a' || e.key === 'A') { if (autoplay) stopAutoplay(); else startAutoplay(); }
+            });
+
+            // Basic swipe support
+            let touchX = null;
+            lb.addEventListener('touchstart', (e) => { touchX = e.changedTouches[0].clientX; }, { passive: true });
+            lb.addEventListener('touchend', (e) => {
+              if (touchX === null) return;
+              const dx = e.changedTouches[0].clientX - touchX;
+              if (Math.abs(dx) > 40) { stopAutoplay(); if (dx < 0) next(); else prev(); }
+              touchX = null;
+            }, { passive: true });
+          })();
+        </script>
+      </>
+    )}
+
+    <section class="about">
+      <p class="kicker mono">ABOUT THIS GALLERY</p>
+      <p>
+        The viewing room is a scaffold. Four Nouns (CC0) are seeded to
+        prove the mechanics — when Mike adds real Midjourney entries, they
+        sort to the top by <code>createdAt</code>. <code>tool</code> field
+        supports midjourney / ideogram / sora / runway / nouns / other so
+        future entries from any AI-art pipeline fit the same schema.
+        <code>mood</code> is the slug that will feed /mood/{'{slug}'} filters
+        when the mood primitive ships (next cron tick).
+      </p>
+      <p>
+        <strong>Distribution:</strong> {Object.keys(toolCounts).map((t) => `${toolCounts[t]} ${t}`).join(' · ')}.
+      </p>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/drop">/drop · add an image URL</a></li>
+        <li><a href="/ai-stack">/ai-stack · the tools we reach for</a></li>
+        <li><a href="/briefs">/briefs · Codex + Manus queue</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 1080px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 18px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #8A2432; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(26px, 5vw, 36px); font-weight: 700; line-height: 1.1; margin: 0 0 12px; }
+    .dek { margin: 0; color: #38373A; font-size: 14.5px; line-height: 1.55; }
+    .dek a { color: #a02c2c; text-decoration: none; font-weight: 500; }
+    .dek code, .about code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em; }
+
+    .empty { padding: 40px 20px; border: 1px dashed #d6d4cd; border-radius: 2px; text-align: center; color: #5F5E5A; }
+    .empty a { color: #a02c2c; text-decoration: none; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .tile {
+      position: relative;
+      padding: 0;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      background: #fff;
+      cursor: pointer;
+      overflow: hidden;
+      aspect-ratio: 1 / 1;
+      transition: border-color 0.12s, transform 0.12s;
+    }
+    .tile:hover, .tile:focus { border-color: #8A2432; transform: scale(1.01); outline: none; }
+    .tile__img { width: 100%; height: 100%; object-fit: cover; display: block; background: #f0eee6; }
+    .tile__overlay {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 8px 10px;
+      background: linear-gradient(to top, rgba(18, 17, 14, 0.82) 0%, rgba(18, 17, 14, 0) 100%);
+      color: #fff;
+      display: flex; flex-direction: column; gap: 2px;
+      text-align: left;
+    }
+    .tile__title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 12px; font-weight: 600; }
+    .tile__meta { font-size: 8.5px; letter-spacing: 0.14em; color: rgba(255,255,255,0.78); }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      position: fixed; inset: 0;
+      background: rgba(12, 11, 9, 0.92);
+      z-index: 1000;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      padding: 40px 20px 20px;
+    }
+    .lightbox__close {
+      position: absolute; top: 14px; right: 18px;
+      background: transparent; border: 0;
+      color: #fff; font-size: 22px; cursor: pointer;
+      padding: 8px 12px;
+    }
+    .lightbox__close:hover { color: #E89A22; }
+    .lightbox__nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.08); border: 0;
+      color: #fff; font-size: 32px; cursor: pointer;
+      width: 44px; height: 80px; border-radius: 2px;
+      padding: 0;
+    }
+    .lightbox__nav:hover { background: rgba(255, 255, 255, 0.18); }
+    .lightbox__nav--prev { left: 12px; }
+    .lightbox__nav--next { right: 12px; }
+
+    .lightbox__stage {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px;
+      min-height: 0;
+    }
+    .lightbox__img { max-width: 92vw; max-height: 70vh; object-fit: contain; background: #0a0a0a; border-radius: 2px; }
+    .lightbox__caption { color: #fff; text-align: center; max-width: 720px; padding: 0 12px; }
+    .lightbox__title { margin: 0 0 4px; font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 17px; font-weight: 600; }
+    .lightbox__meta { font-size: 9.5px; color: rgba(255,255,255,0.68); margin: 0 0 6px; }
+    .lightbox__source { font-size: 12px; color: rgba(255,255,255,0.72); margin: 0; font-style: italic; }
+
+    .lightbox__controls { display: flex; justify-content: center; gap: 16px; padding: 12px 0 4px; color: #fff; align-items: center; }
+    .lb-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.4);
+      color: #fff; padding: 6px 12px; border-radius: 2px; cursor: pointer;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px; letter-spacing: 0.14em; font-weight: 700;
+    }
+    .lb-btn:hover { background: rgba(255,255,255,0.1); border-color: #E89A22; color: #E89A22; }
+    .lb-btn[aria-pressed="true"] { background: #E89A22; color: #12110E; border-color: #E89A22; }
+    .lb-counter { font-size: 10px; color: rgba(255,255,255,0.68); letter-spacing: 0.14em; }
+
+    @media (max-width: 640px) {
+      .lightbox__nav { display: none; }
+      .lightbox__img { max-height: 65vh; }
+    }
+
+    .about {
+      margin-top: 22px; padding: 14px 16px;
+      border: 1px dashed #d6d4cd; border-radius: 2px; background: #fbfaf5;
+    }
+    .about p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; color: #38373A; }
+    .about p:last-child { margin-bottom: 0; }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

@@ -1,0 +1,771 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+interface CoffeeShop {
+  id: string;
+  name: string;
+  zone: string;
+  type: string;
+  address: string;
+  hours: string;
+  note: string;
+  lat: number;
+  lon: number;
+  color: string;
+  mapsUrl: string;
+  siteUrl?: string;
+}
+
+const title = 'Map — coffee near PointCast HQ';
+const description =
+  'Six dependable coffee stops around El Segundo and the immediate South Bay orbit, plotted for quick downtown walks, office-district runs, and one easy North Manhattan detour.';
+
+const shops: CoffeeShop[] = [
+  {
+    id: 'blue-butterfly-main',
+    name: 'Blue Butterfly Coffee',
+    zone: 'Downtown El Segundo',
+    type: 'all-day anchor',
+    address: '351 Main St, El Segundo, CA 90245',
+    hours: 'Every day · 6:00 AM - 7:00 PM',
+    note: 'The default Main Street answer: patio, breakfast, bagels, and the easiest place to linger.',
+    lat: 33.9205484,
+    lon: -118.4160859,
+    color: '#185fa5',
+    mapsUrl: 'https://maps.apple.com/place?place-id=I7BE048979469F7D7',
+    siteUrl: 'https://bluebutterflycoffee.com',
+  },
+  {
+    id: 'smoky-hollow-sierra',
+    name: 'Smoky Hollow Coffee Roasters',
+    zone: 'Smoky Hollow',
+    type: 'roastery room',
+    address: '118 Sierra St, El Segundo, CA 90245',
+    hours: 'Mon - Fri · 7:00 AM - 6:00 PM · Sat + Sun · 7:00 AM - 5:00 PM',
+    note: 'Warehouse-pocket shop with the strongest pure roastery energy in town.',
+    lat: 33.9171082,
+    lon: -118.4086704,
+    color: '#7d6f56',
+    mapsUrl: 'https://maps.apple.com/place?place-id=ID59CB4A0F622158C',
+    siteUrl: 'https://smokyhollowcoffee.com',
+  },
+  {
+    id: 'offset-el-segundo',
+    name: 'Offset Coffee Roasters',
+    zone: 'Sepulveda corridor',
+    type: 'patio stop',
+    address: '150 S Pacific Coast Hwy Unit B, El Segundo, CA 90245',
+    hours: 'Every day · 7:00 AM - 4:00 PM',
+    note: 'A clean, modern roastery stop with a strong patio and quick in-and-out rhythm.',
+    lat: 33.9147803,
+    lon: -118.3954512,
+    color: '#0d8f8a',
+    mapsUrl: 'https://maps.apple.com/place?place-id=I5BC475612C302B98',
+    siteUrl: 'https://offsetcoffee.com',
+  },
+  {
+    id: 'blue-butterfly-pct',
+    name: 'Blue Butterfly Coffee PCT Towers',
+    zone: 'North Sepulveda',
+    type: 'weekday fallback',
+    address: '222 N Pacific Coast Hwy N Ste 120, El Segundo, CA 90245',
+    hours: 'Mon - Fri · 7:00 AM - 3:00 PM',
+    note: 'Useful when meetings pull you into the office belt and you still want a real coffee stop.',
+    lat: 33.9191393,
+    lon: -118.3952911,
+    color: '#b46d8f',
+    mapsUrl: 'https://maps.apple.com/place?place-id=IEA06C437F0F36A06',
+  },
+  {
+    id: 'smoky-hollow-continental',
+    name: 'Smoky Hollow Coffee Roasters',
+    zone: 'Continental district',
+    type: 'weekday office outpost',
+    address: '300 Continental Blvd FL 1, El Segundo, CA 90245',
+    hours: 'Mon - Fri · 7:00 AM - 3:00 PM',
+    note: 'Best thought of as the Continental campus coffee answer, not the destination flagship.',
+    lat: 33.9202222,
+    lon: -118.3897717,
+    color: '#7c63d8',
+    mapsUrl: 'https://maps.apple.com/place?place-id=ICBE8B5F97A44FC56',
+    siteUrl: 'https://smokyhollowcoffee.com',
+  },
+  {
+    id: 'two-guns-north-manhattan',
+    name: 'Two Guns Espresso',
+    zone: 'North Manhattan',
+    type: 'southbound detour',
+    address: '3516 N Highland Ave, Manhattan Beach, CA 90266',
+    hours: 'Every day · 6:00 AM - 3:00 PM',
+    note: 'The one deliberate detour on this map: close enough to El Segundo to matter, breezier than the office run.',
+    lat: 33.9000732,
+    lon: -118.4172798,
+    color: '#d17a2c',
+    mapsUrl: 'https://maps.apple.com/place?place-id=I1D8FFF1CB85FD5E2',
+    siteUrl: 'https://twogunsespresso.com',
+  },
+];
+
+const bounds = {
+  minLat: 33.897,
+  maxLat: 33.9225,
+  minLon: -118.4195,
+  maxLon: -118.3885,
+};
+
+const mapArea = {
+  left: 140,
+  top: 54,
+  right: 584,
+  bottom: 596,
+};
+
+function scaleX(lon: number) {
+  const width = mapArea.right - mapArea.left;
+  return mapArea.left + ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * width;
+}
+
+function scaleY(lat: number) {
+  const height = mapArea.bottom - mapArea.top;
+  return mapArea.top + ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * height;
+}
+
+const plottedShops = shops.map((shop, index) => {
+  const x = scaleX(shop.lon);
+  const y = scaleY(shop.lat);
+  return {
+    ...shop,
+    x,
+    y,
+    labelY: index === shops.length - 1 ? y + 28 : y - 20,
+  };
+});
+
+const zones = [...new Map(plottedShops.map((shop) => [shop.zone, shop])).values()];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast coffee map',
+  description,
+  url: 'https://pointcast.xyz/collabs/map',
+  isPartOf: {
+    '@type': 'CollectionPage',
+    name: 'PointCast Collaborators',
+    url: 'https://pointcast.xyz/collabs',
+  },
+  hasPart: shops.map((shop, index) => ({
+    '@type': 'CafeOrCoffeeShop',
+    '@id': `https://pointcast.xyz/collabs/map#${shop.id}`,
+    name: shop.name,
+    description: shop.note,
+    url: shop.siteUrl ?? shop.mapsUrl,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: shop.address,
+      addressLocality: index === shops.length - 1 ? 'Manhattan Beach' : 'El Segundo',
+      addressRegion: 'CA',
+      postalCode: index === shops.length - 1 ? '90266' : '90245',
+      addressCountry: 'US',
+    },
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: shop.lat,
+      longitude: shop.lon,
+    },
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/collabs.png" jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/collabs">collabs</a>
+      <span aria-hidden="true">›</span>
+      <span>map</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">EL SEGUNDO · COFFEE FIELD MAP</p>
+      <h1 class="title">Where to grab coffee near HQ.</h1>
+      <p class="dek">
+        A small South Bay coffee surface for PointCast collaborators: downtown El Segundo anchors,
+        the warehouse-pocket roasters, two weekday office-district fallbacks, and one easy North
+        Manhattan detour when you want to drift closer to the water.
+      </p>
+
+      <section class="meta-strip" aria-label="Map summary">
+        <article class="meta-card">
+          <span class="mono">Coverage</span>
+          <strong>6 dependable stops</strong>
+        </article>
+        <article class="meta-card">
+          <span class="mono">Best cluster</span>
+          <strong>Downtown + Smoky Hollow</strong>
+        </article>
+        <article class="meta-card">
+          <span class="mono">Last check</span>
+          <strong>April 20, 2026</strong>
+        </article>
+      </section>
+    </header>
+
+    <section class="bridge">
+      <p class="bridge__kicker mono">CONNECTED SURFACE</p>
+      <p class="bridge__copy">
+        This page hangs off <a href="/collabs">/collabs</a> as the concrete version of the
+        "HOST LOCAL" path: a small scouting surface for coffee shops that could plausibly anchor
+        future <a href="/tv">/tv</a> stations or feed the broader SoCal lens at <a href="/local">/local</a>.
+      </p>
+    </section>
+
+    <section class="layout" aria-label="Coffee map and shortlist">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Field plot</h2>
+            <p>Plotted from current Apple Maps place coordinates so the pins reflect real geography.</p>
+          </div>
+          <span class="mono">South Bay / near LAX</span>
+        </div>
+
+        <div class="map-wrap">
+          <div class="map-frame">
+            <svg class="map-svg" viewBox="0 0 640 650" role="img" aria-labelledby="map-title map-desc">
+              <title id="map-title">Coffee shops around El Segundo</title>
+              <desc id="map-desc">
+                A stylized map showing six coffee shops around El Segundo and North Manhattan.
+              </desc>
+              <rect x="0" y="0" width="640" height="650" fill="#faf8f3"></rect>
+              <rect x="0" y="0" width="120" height="650" fill="#f4f8fc"></rect>
+              <g opacity="0.9">
+                <line class="grid-stroke" x1="110" y1="70" x2="590" y2="70"></line>
+                <line class="grid-stroke" x1="110" y1="180" x2="590" y2="180"></line>
+                <line class="grid-stroke" x1="110" y1="290" x2="590" y2="290"></line>
+                <line class="grid-stroke" x1="110" y1="400" x2="590" y2="400"></line>
+                <line class="grid-stroke" x1="110" y1="510" x2="590" y2="510"></line>
+                <line class="grid-stroke" x1="170" y1="40" x2="170" y2="600"></line>
+                <line class="grid-stroke" x1="280" y1="40" x2="280" y2="600"></line>
+                <line class="grid-stroke" x1="390" y1="40" x2="390" y2="600"></line>
+                <line class="grid-stroke" x1="500" y1="40" x2="500" y2="600"></line>
+              </g>
+              <g opacity="0.95">
+                <path class="route-stroke" d="M 270 55 L 270 595"></path>
+                <path class="route-stroke" d="M 450 55 L 450 595"></path>
+                <path class="route-stroke" d="M 165 178 L 580 178"></path>
+                <path class="route-stroke" d="M 165 318 L 580 318"></path>
+                <path class="route-stroke" d="M 165 474 L 580 474"></path>
+              </g>
+              <text class="road-label" x="279" y="64" transform="rotate(90 279 64)">Main / Sierra</text>
+              <text class="road-label" x="459" y="54" transform="rotate(90 459 54)">Pacific Coast Hwy</text>
+              <text class="road-label" x="176" y="171">Grand Ave</text>
+              <text class="road-label" x="176" y="311">El Segundo Blvd</text>
+              <text class="road-label" x="176" y="467">Manhattan Beach Blvd</text>
+              <text class="region-label" x="30" y="325" transform="rotate(-90 30 325)">Pacific Ocean</text>
+              <text class="region-label" x="170" y="128">Downtown El Segundo</text>
+              <text class="region-label" x="170" y="258">Smoky Hollow</text>
+              <text class="region-label" x="396" y="112">Sepulveda corridor</text>
+              <text class="region-label" x="382" y="255">Continental district</text>
+              <text class="region-label" x="170" y="582">North Manhattan</text>
+
+              {plottedShops.map((shop, index) => (
+                <g
+                  class:list={['marker-button', { 'is-active': index === 0 }]}
+                  data-shop={shop.id}
+                  tabindex="0"
+                  role="button"
+                  aria-label={`Focus ${shop.name}`}
+                >
+                  <circle
+                    class="marker-ring"
+                    cx={shop.x}
+                    cy={shop.y}
+                    r="15"
+                    fill="white"
+                    stroke={shop.color}
+                    stroke-width="1.5"
+                  ></circle>
+                  <circle class="marker-pip" cx={shop.x} cy={shop.y} r="8" fill={shop.color}></circle>
+                  <text class="marker-label" x={shop.x} y={shop.labelY} text-anchor="middle">{shop.name}</text>
+                </g>
+              ))}
+            </svg>
+          </div>
+
+          <div class="map-legend">
+            {zones.map((zone) => (
+              <span class="legend-chip">
+                <span class="legend-dot" style={`--chip-color:${zone.color}`}></span>
+                {zone.zone}
+              </span>
+            ))}
+          </div>
+
+          <p class="map-note">
+            The downtown and Smoky Hollow stops are the easiest cluster to work into a normal El
+            Segundo day. The Sepulveda and Continental pins are more weekday-office energy.
+          </p>
+        </div>
+      </article>
+
+      <aside class="panel list-shell">
+        <div class="list-head">
+          <h2>Shortlist</h2>
+          <p>Click a card or map marker to focus a stop. Weekday-only office outposts are labeled clearly.</p>
+        </div>
+
+        <div class="shop-list">
+          {plottedShops.map((shop, index) => (
+            <article class:list={['shop-card', { 'is-active': index === 0 }]} data-shop={shop.id} id={shop.id}>
+              <div class="shop-topline">
+                <div>
+                  <p class="shop-zone mono">{shop.zone}</p>
+                  <h3 class="shop-name">{shop.name}</h3>
+                </div>
+                <span class="shop-type mono">{shop.type}</span>
+              </div>
+
+              <p class="shop-copy">{shop.note}</p>
+              <p class="shop-address">{shop.address}</p>
+              <p class="shop-hours">{shop.hours}</p>
+
+              <div class="shop-links">
+                <a href={shop.mapsUrl} target="_blank" rel="noopener">Apple Maps</a>
+                {shop.siteUrl && <a href={shop.siteUrl} target="_blank" rel="noopener">Website</a>}
+              </div>
+            </article>
+          ))}
+        </div>
+      </aside>
+    </section>
+
+    <section class="callout">
+      <h2>How to use it</h2>
+      <p>
+        If you want the classic walkable El Segundo loop, start with Blue Butterfly on Main, hop east
+        to Smoky Hollow on Sierra, then cut back toward Offset on Pacific Coast Highway. Save the PCT
+        Towers and Continental locations for weekday meetings, and treat Two Guns as the clean
+        southbound escape hatch.
+      </p>
+    </section>
+
+    <section class="related">
+      <p class="related__label mono">RELATED</p>
+      <ul class="related__list">
+        <li><a href="/collabs">/collabs</a></li>
+        <li><a href="/tv">/tv</a></li>
+        <li><a href="/local">/local</a></li>
+        <li><a href="/here">/here</a></li>
+      </ul>
+    </section>
+
+    <p class="footer-note">
+      Data note: addresses, hours, and coordinates were cross-checked on April 20, 2026 against live
+      Apple Maps place pages and shop sites where available. Office-district cafes can shift hours
+      faster than the downtown anchors.
+    </p>
+  </div>
+
+  <script is:inline>
+    (() => {
+      const nodes = Array.from(document.querySelectorAll('[data-shop]'));
+
+      function setActive(shopId) {
+        nodes.forEach((node) => {
+          node.classList.toggle('is-active', node.dataset.shop === shopId);
+        });
+      }
+
+      nodes.forEach((node) => {
+        const activate = () => setActive(node.dataset.shop || '');
+        node.addEventListener('mouseenter', activate);
+        node.addEventListener('focus', activate);
+        node.addEventListener('click', activate);
+        node.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            activate();
+          }
+        });
+      });
+    })();
+  </script>
+
+  <style>
+    .page {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 72px;
+    }
+
+    .crumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 28px;
+      color: var(--pc-ink-muted);
+      font-size: 0.8rem;
+    }
+
+    .head {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+
+    .kicker {
+      margin: 0;
+      color: var(--pc-accent);
+      font-size: 0.75rem;
+    }
+
+    .mono {
+      font-family: var(--pc-font-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 0;
+      max-width: 11ch;
+      font-size: clamp(2.6rem, 8vw, 5rem);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .dek {
+      margin: 0;
+      max-width: 70ch;
+      color: var(--pc-ink-soft);
+      font-size: 1.03rem;
+      line-height: 1.65;
+    }
+
+    .meta-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .meta-card {
+      padding: 16px 18px;
+      border: 1px solid var(--pc-rule-soft);
+      background: linear-gradient(180deg, #fff, #fbfaf7);
+    }
+
+    .meta-card strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.15rem;
+      font-weight: 500;
+    }
+
+    .meta-card span {
+      color: var(--pc-ink-muted);
+      font-size: 0.82rem;
+    }
+
+    .bridge {
+      margin-bottom: 26px;
+      padding: 18px 20px;
+      border: 1px solid var(--pc-rule-soft);
+      background: linear-gradient(180deg, #fff, #fbfaf7);
+    }
+
+    .bridge__kicker,
+    .related__label {
+      margin: 0 0 8px;
+      color: var(--pc-accent);
+      font-size: 0.74rem;
+    }
+
+    .bridge__copy {
+      margin: 0;
+      max-width: 72ch;
+      color: var(--pc-ink-soft);
+      font-size: 0.95rem;
+      line-height: 1.62;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.95fr);
+      gap: 26px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--pc-rule-soft);
+      background: #fff;
+      box-shadow: 0 18px 40px rgba(18, 17, 14, 0.07);
+    }
+
+    .panel-head,
+    .list-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      padding: 18px 20px 16px;
+      border-bottom: 1px solid var(--pc-rule-soft);
+    }
+
+    .panel-head h2,
+    .list-head h2,
+    .callout h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .panel-head p,
+    .list-head p,
+    .callout p {
+      margin: 4px 0 0;
+      color: var(--pc-ink-muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .map-wrap {
+      padding: 18px;
+    }
+
+    .map-frame {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--pc-rule-soft);
+      background:
+        radial-gradient(circle at 14% 20%, rgba(24, 95, 165, 0.09), transparent 28%),
+        linear-gradient(180deg, #faf8f3 0%, #fff 100%);
+      aspect-ratio: 1 / 1.02;
+    }
+
+    .map-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      padding: 16px 2px 2px;
+    }
+
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--pc-ink-muted);
+      font-size: 0.82rem;
+    }
+
+    .legend-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      background: var(--chip-color, var(--pc-accent));
+    }
+
+    .map-note {
+      margin: 14px 0 0;
+      color: var(--pc-ink-muted);
+      font-size: 0.85rem;
+      line-height: 1.55;
+    }
+
+    .shop-list {
+      display: grid;
+    }
+
+    .shop-card {
+      display: grid;
+      gap: 12px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--pc-rule-soft);
+      transition: background-color 180ms ease, border-color 180ms ease;
+    }
+
+    .shop-card:last-child {
+      border-bottom: 0;
+    }
+
+    .shop-card.is-active {
+      background: #edf5fc;
+      border-color: rgba(24, 95, 165, 0.15);
+    }
+
+    .shop-topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .shop-name {
+      margin: 0;
+      font-size: 1.04rem;
+      font-weight: 500;
+    }
+
+    .shop-zone {
+      margin: 0 0 4px;
+      color: var(--pc-accent);
+      font-size: 0.74rem;
+    }
+
+    .shop-type {
+      color: var(--pc-ink-muted);
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+
+    .shop-copy,
+    .shop-address,
+    .shop-hours {
+      margin: 0;
+      color: var(--pc-ink-soft);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    .shop-address,
+    .shop-hours {
+      color: var(--pc-ink-muted);
+      font-size: 0.84rem;
+    }
+
+    .shop-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .shop-links a {
+      font-size: 0.84rem;
+      font-weight: 500;
+    }
+
+    .callout {
+      margin-top: 24px;
+      padding: 18px 20px;
+      border: 1px solid var(--pc-rule-soft);
+      background: linear-gradient(180deg, #fff, #fbfaf7);
+    }
+
+    .related {
+      margin-top: 18px;
+      padding: 18px 20px;
+      border: 1px solid var(--pc-rule-soft);
+      background: #fff;
+    }
+
+    .related__list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--pc-ink-muted);
+      font-size: 0.76rem;
+      line-height: 1.6;
+    }
+
+    .marker-button {
+      cursor: pointer;
+      outline: none;
+    }
+
+    .marker-button:focus-visible .marker-ring,
+    .marker-button.is-active .marker-ring {
+      stroke: var(--pc-ink);
+      stroke-width: 2;
+    }
+
+    .marker-button.is-active .marker-pip {
+      transform: scale(1.1);
+      transform-origin: center;
+    }
+
+    .marker-label {
+      fill: var(--pc-ink);
+      font-family: var(--pc-font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .region-label {
+      fill: #8a877f;
+      font-family: var(--pc-font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .road-label {
+      fill: #a19d95;
+      font-family: var(--pc-font-mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .route-stroke {
+      stroke: #d4d1ca;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .grid-stroke {
+      stroke: #dad7d0;
+      stroke-width: 1;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .title {
+        max-width: 12ch;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 20px, 1120px);
+        padding-top: 18px;
+      }
+
+      .meta-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-head,
+      .list-head,
+      .shop-card {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .map-wrap,
+      .bridge,
+      .callout,
+      .related {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+    }
+  </style>
+</BlockLayout>

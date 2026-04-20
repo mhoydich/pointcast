@@ -95,12 +95,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   catch { return json({ ok: false, reason: 'bad-body' }, { status: 400 }); }
 
   const message = clip(body?.message, 2000);
-  if (message.length < 1) {
+  const mood = typeof body?.mood === 'string' && ALLOWED_MOODS.has(body.mood) ? body.mood : '';
+  // Mike 2026-04-18: the block-level FeedbackStrip posts reactions as mood-only
+  // (resonated / missed / confused), where the tap itself is the signal and
+  // the optional one-liner goes in message. Allow empty message when mood is
+  // present, so the 3-button strip isn't gated on typing.
+  if (message.length < 1 && !mood) {
     return json({ ok: false, reason: 'empty' }, { status: 400 });
   }
-  const mood = typeof body?.mood === 'string' && ALLOWED_MOODS.has(body.mood) ? body.mood : '';
   const contact = clip(body?.contact, 200);
   const path = clip(body?.path, 200);
+  // Optional block id — when posted from a FeedbackStrip on /b/{id}, pins
+  // this entry to that block so the /admin/feedback viewer can group + count.
+  const blockId = clip(body?.blockId, 16);
 
   const now = Date.now();
   const rand = Math.random().toString(36).slice(2, 8);
@@ -114,6 +121,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const entry = {
     t: now, message, mood, contact, path,
+    blockId: blockId || undefined,
     city, region, country,
     ua: ua.slice(0, 200),
   };
@@ -129,11 +137,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Email Mike (if Resend is configured). Body includes everything useful
   // in plain text so Mike can eyeball quickly.
   const locBits = [city, region, country].filter(Boolean).join(', ');
-  const subject = `PointCast feedback${mood ? ` [${mood}]` : ''} — ${message.slice(0, 60)}${message.length > 60 ? '…' : ''}`;
+  const subject = `PointCast feedback${mood ? ` [${mood}]` : ''}${blockId ? ` b/${blockId}` : ''} — ${(message || mood).slice(0, 60)}${message.length > 60 ? '…' : ''}`;
   const emailBody = [
     `New PointCast feedback at ${new Date(now).toISOString()}`,
     ``,
     `Mood:    ${mood || '—'}`,
+    `Block:   ${blockId ? `/b/${blockId}` : '—'}`,
     `From:    ${locBits || '—'}`,
     `Page:    ${path || '—'}`,
     `Contact: ${contact || '—'}`,

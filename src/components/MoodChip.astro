@@ -1,0 +1,149 @@
+---
+/**
+ * MoodChip — top-of-home mood selector.
+ *
+ * Mike 2026-04-18: "at the top nav some click across, interaction, game,
+ * poll, whats beyond, mood, state register, go". The mood primitive
+ * lands as a one-tap chip at the very top — pick your mood, the page
+ * tints subtly, localStorage remembers for returns.
+ *
+ * v1 is localStorage-only — personal state register, not a shared
+ * tally. v2 can add /api/mood for a global aggregate if the primitive
+ * lands.
+ */
+
+const MOODS = [
+  { id: 'chill',   label: 'CHILL',   color: '#2B8A3E', hint: 'slow + calm' },
+  { id: 'hype',    label: 'HYPE',    color: '#C92A2A', hint: 'on the rise' },
+  { id: 'focus',   label: 'FOCUS',   color: '#1864AB', hint: 'in the work' },
+  { id: 'flow',    label: 'FLOW',    color: '#5F3DC4', hint: 'on tempo' },
+  { id: 'curious', label: 'CURIOUS', color: '#E8590C', hint: 'following a thread' },
+  { id: 'quiet',   label: 'QUIET',   color: '#5F5E5A', hint: 'under the noise' },
+];
+---
+
+<aside class="mood" aria-label="Current mood">
+  <span class="mood__kicker mono">MOOD · ONE TAP · PAGE FOLLOWS</span>
+  <div class="mood__row" role="group">
+    {MOODS.map((m) => (
+      <button
+        type="button"
+        class="mood__btn"
+        data-mood-id={m.id}
+        style={`--mood-color: ${m.color};`}
+        aria-label={`Set mood: ${m.label}`}
+      >
+        <span class="mood__swatch" aria-hidden="true"></span>
+        <span class="mood__label mono">{m.label}</span>
+        <span class="mood__hint">{m.hint}</span>
+      </button>
+    ))}
+  </div>
+</aside>
+
+<script is:inline>
+  (function () {
+    var buttons = Array.from(document.querySelectorAll('.mood__btn[data-mood-id]'));
+    if (!buttons.length) return;
+    var lsKey = 'pc:mood';
+    var root = document.documentElement;
+
+    function applyMood(id) {
+      if (!id) return;
+      root.setAttribute('data-pc-mood', id);
+      buttons.forEach(function (b) {
+        b.classList.toggle('mood__btn--active', b.getAttribute('data-mood-id') === id);
+      });
+    }
+
+    // Paint prior choice
+    try {
+      var prior = localStorage.getItem(lsKey);
+      if (prior) applyMood(prior);
+    } catch (e) {}
+
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-mood-id');
+        try { localStorage.setItem(lsKey, id); } catch (e) {}
+        applyMood(id);
+      });
+    });
+  })();
+</script>
+
+<style>
+  .mood {
+    margin: 6px 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-left: 4px solid #5F3DC4;
+    border-radius: 3px;
+    background: #fbfaf5;
+  }
+  .mood__kicker {
+    display: block;
+    margin: 0 0 6px;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: #5F5E5A;
+    font-weight: 700;
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; }
+
+  .mood__row {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .mood__btn {
+    flex: 1 1 110px;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    background: #fff;
+    color: #12110E;
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .mood__btn:hover { border-color: var(--mood-color); }
+  .mood__btn--active {
+    border-color: var(--mood-color);
+    border-width: 2px;
+    padding: 5px 7px;
+    background: color-mix(in oklab, var(--mood-color) 8%, #fff);
+  }
+  .mood__swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--mood-color);
+    flex: 0 0 auto;
+  }
+  .mood__label {
+    font-size: 10px; letter-spacing: 0.14em;
+    color: #12110E; font-weight: 700;
+  }
+  .mood__hint {
+    font-size: 10px; color: #8a8878;
+    flex: 1 1 auto; text-align: right;
+  }
+
+  @media (max-width: 640px) {
+    .mood__btn { flex: 1 1 calc(50% - 4px); }
+    .mood__hint { display: none; }
+  }
+
+  /* ═ Subtle page tint when mood is set ═
+     Sits at the document root so it affects any page-level surface that
+     picks it up. Deliberately tiny — not brand-overriding. */
+  :global(html[data-pc-mood="chill"]   body)  { background: linear-gradient(180deg, #f2f8f4 0%, #fff 200px); }
+  :global(html[data-pc-mood="hype"]    body)  { background: linear-gradient(180deg, #fff1f1 0%, #fff 200px); }
+  :global(html[data-pc-mood="focus"]   body)  { background: linear-gradient(180deg, #eef4fa 0%, #fff 200px); }
+  :global(html[data-pc-mood="flow"]    body)  { background: linear-gradient(180deg, #f5f0ff 0%, #fff 200px); }
+  :global(html[data-pc-mood="curious"] body)  { background: linear-gradient(180deg, #fff4ed 0%, #fff 200px); }
+  :global(html[data-pc-mood="quiet"]   body)  { background: linear-gradient(180deg, #f5f5f2 0%, #fff 200px); }
+</style>

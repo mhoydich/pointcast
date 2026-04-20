@@ -1,0 +1,609 @@
+---
+/**
+ * /today — the daily drop. One block per PT calendar day, chosen
+ * deterministically so every visitor globally sees the same pick on
+ * the same day. Tap-to-collect stores the claim in localStorage.
+ *
+ * Per Mike 2026-04-19 morning: "need the daily collection" — this is
+ * the v0. Client-side collection, streak counter, no wallet needed.
+ * Future paths: server aggregation via Cloudflare Function + KV, and
+ * eventually a Tezos HELLO-adjacent claim for users who opt in.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import { pickDailyBlock, todayPT, daySeed } from '../lib/daily';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const pick = pickDailyBlock(blocks);
+const todayStr = todayPT();
+const seedNum = daySeed();
+
+if (!pick) {
+  // Should never happen (we have ~70 blocks). Guard anyway.
+  throw new Error('/today — no blocks available for daily pick');
+}
+
+const ch = CHANNELS[pick.data.channel];
+const thumbnail = pick.data.media?.thumbnail
+  ?? (pick.data.noun ? `https://noun.pics/${pick.data.noun}.svg` : null);
+
+const prettyDate = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date());
+
+const qrTarget = `https://pointcast.xyz/b/${pick.data.id}`;
+const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=216x216&margin=2&data=${encodeURIComponent(qrTarget)}`;
+
+const title = `Today · ${prettyDate} · № ${pick.data.id}`;
+const description = `The daily drop for ${prettyDate}. Today's pick: block № ${pick.data.id} — ${pick.data.title}. One block per day, chosen deterministically so every visitor sees the same drop on the same day. Tap to collect.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  '@id': `https://pointcast.xyz/today`,
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/today',
+  dateModified: todayStr,
+  mainEntity: {
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz/b/${pick.data.id}`,
+    name: pick.data.title,
+    url: `https://pointcast.xyz/b/${pick.data.id}`,
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="page">
+
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>today</span>
+    </nav>
+
+    <header class="masthead">
+      <p class="masthead__kicker mono">TODAY · <time datetime={todayStr}>{prettyDate}</time></p>
+      <h1 class="masthead__title">The daily drop</h1>
+      <p class="masthead__lede">
+        One block per day, chosen the moment the PT calendar rolls over.
+        Everyone sees the same pick — a shared morning bell. Tap to collect
+        and build a streak; the count is local to this browser today, a
+        server tally later, a Tezos artifact when Mike says the word.
+      </p>
+    </header>
+
+    <article
+      class="pick"
+      data-block-id={pick.data.id}
+      data-today={todayStr}
+      data-seed={seedNum}
+    >
+      <div class="pick__head">
+        <span
+          class="pick__channel mono"
+          style={`background: color-mix(in oklab, ${ch.color600} 16%, transparent); color: ${ch.color800};`}
+        >
+          <span class="pick__channel-dot" aria-hidden="true"></span>
+          CH.{ch.code} · {ch.name}
+        </span>
+        <span class="pick__id mono">№ {pick.data.id} · {pick.data.type}</span>
+      </div>
+
+      <h2 class="pick__title">{pick.data.title}</h2>
+      {pick.data.dek && <p class="pick__dek">{pick.data.dek}</p>}
+
+      <div class="pick__body">
+        <div class="pick__col">
+          {thumbnail && (
+            <a href={`/b/${pick.data.id}`} class="pick__art" aria-label={`Open block № ${pick.data.id}`}>
+              <img src={thumbnail} alt="" loading="eager" />
+            </a>
+          )}
+          <div class="pick__meta mono">
+            {pick.data.mood && <a class="pick__mood" href={`/mood/${pick.data.mood}`}>★ {pick.data.mood.replace(/-/g, ' ')}</a>}
+            {pick.data.meta?.location && <span class="pick__loc">📍 {pick.data.meta.location}</span>}
+            {pick.data.readingTime && <span class="pick__rt">⏱ {pick.data.readingTime}</span>}
+          </div>
+        </div>
+
+        <div class="pick__col pick__col--actions">
+          <button
+            class="collect-btn"
+            id="collect-btn"
+            type="button"
+            aria-label="Collect today's drop"
+          >
+            <span class="collect-btn__icon" aria-hidden="true">✦</span>
+            <span class="collect-btn__label">COLLECT TODAY</span>
+            <span class="collect-btn__hint mono">TAP TO CLAIM</span>
+          </button>
+
+          <div class="collect-stats mono" id="collect-stats" aria-live="polite">
+            <span class="collect-stats__total">
+              <span class="collect-stats__num" id="collect-total">0</span>
+              <span class="collect-stats__label">COLLECTED</span>
+            </span>
+            <span class="collect-stats__sep" aria-hidden="true">·</span>
+            <span class="collect-stats__streak">
+              <span class="collect-stats__num" id="collect-streak">0</span>
+              <span class="collect-stats__label">DAY STREAK</span>
+            </span>
+          </div>
+
+          <a class="pick__open mono" href={`/b/${pick.data.id}`}>OPEN BLOCK →</a>
+
+          <div class="pick__qr">
+            <img src={qrSrc} alt={`QR to ${qrTarget}`} />
+            <span class="mono">→ phone · /b/{pick.data.id}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <section class="next-note">
+      <p class="mono next-note__kicker">COMES NEXT</p>
+      <p>
+        A new drop lands every day at midnight PT. The pick is deterministic —
+        the same block appears on /today across every browser, every device.
+        Come back tomorrow for the next. If you missed yesterday's, it'll
+        come back around when the rotation wraps.
+      </p>
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/today.json">/today.json</a></li>
+        <li><a href={`/b/${pick.data.id}.json`}>/b/{pick.data.id}.json</a></li>
+        <li><a href="/blocks.json">/blocks.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </aside>
+
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    var article = document.querySelector('.pick');
+    if (!article) return;
+
+    var blockId = article.dataset.blockId || '';
+    var today = article.dataset.today || '';
+
+    var btn = document.getElementById('collect-btn');
+    var btnLabel = btn ? btn.querySelector('.collect-btn__label') : null;
+    var btnHint = btn ? btn.querySelector('.collect-btn__hint') : null;
+    var totalEl = document.getElementById('collect-total');
+    var streakEl = document.getElementById('collect-streak');
+
+    var LS_KEY = 'pc:daily:collected';
+
+    function readCollected() {
+      try {
+        var raw = localStorage.getItem(LS_KEY);
+        if (!raw) return [];
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) { return []; }
+    }
+
+    function writeCollected(arr) {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch (e) {}
+    }
+
+    /** Compute the current consecutive-day streak ending at `today`.
+     *  A day counts if there's a claim with that exact PT date. */
+    function computeStreak(arr, todayStr) {
+      var dates = {};
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].date) dates[arr[i].date] = true;
+      }
+      var streak = 0;
+      var cur = todayStr;
+      while (dates[cur]) {
+        streak++;
+        // Step back one day.
+        var parts = cur.split('-').map(function (s) { return parseInt(s, 10); });
+        var d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        d.setUTCDate(d.getUTCDate() - 1);
+        cur = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+      }
+      return streak;
+    }
+
+    function paint() {
+      var arr = readCollected();
+      if (totalEl) totalEl.textContent = String(arr.length);
+      if (streakEl) streakEl.textContent = String(computeStreak(arr, today));
+      var has = arr.some(function (c) { return c && c.date === today; });
+      if (has && btn) {
+        btn.classList.add('collect-btn--claimed');
+        btn.disabled = true;
+        if (btnLabel) btnLabel.textContent = '✓ COLLECTED';
+        if (btnHint) btnHint.textContent = 'COME BACK TOMORROW';
+      }
+    }
+
+    function floater(msg) {
+      if (!btn) return;
+      var f = document.createElement('span');
+      f.className = 'collect-float';
+      f.textContent = msg;
+      btn.appendChild(f);
+      setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, 1800);
+    }
+
+    function chime(freq, dur) {
+      try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = freq || 720;
+        g.gain.setValueAtTime(0, ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0005, ctx.currentTime + (dur || 0.18));
+        o.connect(g).connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + (dur || 0.18) + 0.05);
+      } catch (e) {}
+    }
+
+    function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+    if (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        var arr = readCollected();
+        if (arr.some(function (c) { return c && c.date === today; })) {
+          paint();  // already collected; just repaint
+          return;
+        }
+        arr.push({ date: today, blockId: blockId, at: new Date().toISOString() });
+        writeCollected(arr);
+        chime(720, 0.16);
+        setTimeout(function () { chime(900, 0.14); }, 140);
+        buzz(20);
+        floater('+1 COLLECTED');
+        article.classList.add('pick--claimed-anim');
+        setTimeout(function () { article.classList.remove('pick--claimed-anim'); }, 900);
+        paint();
+      });
+    }
+
+    paint();
+  })();
+</script>
+
+<style>
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px 20px 80px;
+  }
+  .breadcrumb {
+    display: flex;
+    gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+  .breadcrumb a { color: var(--pc-accent); }
+
+  .masthead {
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    margin-bottom: 24px;
+  }
+  .masthead__kicker {
+    margin: 0 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #8a2432;
+    font-weight: 700;
+  }
+  .masthead__title {
+    margin: 0 0 10px;
+    font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 36px;
+    font-weight: 500;
+    color: #12110E;
+    letter-spacing: -0.01em;
+  }
+  .masthead__lede {
+    margin: 0;
+    max-width: 64ch;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #2a2925;
+  }
+
+  /* ── PICK CARD ───────────────────────────────────────────────── */
+  .pick {
+    padding: 22px;
+    border: 1.5px solid #12110E;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #fef5e7 0%, #faf9f5 50%);
+    position: relative;
+    overflow: hidden;
+  }
+  .pick--claimed-anim {
+    animation: pick-claimed 900ms ease-out;
+  }
+  @keyframes pick-claimed {
+    0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.5); }
+    30%  { transform: scale(1.01); box-shadow: 0 0 0 14px rgba(245, 159, 0, 0.2); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 159, 0, 0); }
+  }
+  .pick__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .pick__channel {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border-radius: 2px;
+  }
+  .pick__channel-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .pick__id {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--pc-ink-soft);
+    text-transform: uppercase;
+  }
+  .pick__title {
+    margin: 0 0 10px;
+    font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: #12110E;
+    letter-spacing: -0.005em;
+  }
+  .pick__dek {
+    margin: 0 0 18px;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #2a2925;
+    max-width: 68ch;
+  }
+
+  .pick__body {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .pick__body { grid-template-columns: 1fr; }
+  }
+
+  .pick__col { display: flex; flex-direction: column; gap: 12px; }
+  .pick__col--actions { align-items: stretch; }
+
+  .pick__art {
+    display: block;
+    aspect-ratio: 4 / 3;
+    max-width: 100%;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #faf9f5;
+  }
+  .pick__art img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    background: #fff;
+  }
+
+  .pick__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-soft);
+    text-transform: uppercase;
+  }
+  .pick__mood {
+    color: #8a2432;
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .pick__mood:hover { text-decoration: underline; }
+
+  /* Collect button — the single big action. */
+  .collect-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 18px 16px;
+    border: 2px solid #12110E;
+    border-radius: 4px;
+    background: #12110E;
+    color: #fef5e7;
+    font-family: var(--pc-font-mono);
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+    transition: background 0.15s, transform 0.12s, box-shadow 0.2s;
+  }
+  .collect-btn:hover:not(:disabled) {
+    background: #8a2432;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -8px rgba(138, 36, 50, 0.6);
+  }
+  .collect-btn:active:not(:disabled) { transform: translateY(0); }
+  .collect-btn__icon {
+    font-size: 22px;
+    color: #F59F00;
+    line-height: 1;
+  }
+  .collect-btn__label {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+  }
+  .collect-btn__hint {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    opacity: 0.7;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .collect-btn--claimed {
+    background: #2B8A3E;
+    border-color: #2B8A3E;
+    cursor: default;
+  }
+  .collect-btn--claimed:hover { transform: none; box-shadow: none; }
+
+  .collect-float {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    transform: translate(-50%, 0);
+    padding: 3px 9px;
+    background: #F59F00;
+    color: #12110E;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    border-radius: 2px;
+    pointer-events: none;
+    animation: collect-float 1.8s ease-out forwards;
+  }
+  @keyframes collect-float {
+    0%   { opacity: 0; transform: translate(-50%, 0) scale(0.9); }
+    15%  { opacity: 1; transform: translate(-50%, -12px) scale(1.05); }
+    100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
+  }
+
+  /* Stats row */
+  .collect-stats {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px dashed #d6d4cd;
+    border-radius: 2px;
+    background: #fff;
+  }
+  .collect-stats__total, .collect-stats__streak {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+  .collect-stats__num {
+    font-size: 18px;
+    font-weight: 700;
+    color: #8a2432;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .collect-stats__label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+  .collect-stats__sep { color: var(--pc-ink-muted); opacity: 0.5; }
+
+  .pick__open {
+    display: inline-block;
+    text-align: center;
+    padding: 8px 12px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--pc-accent);
+    border-top: 1px dashed #d6d4cd;
+    padding-top: 12px;
+  }
+
+  .pick__qr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-soft);
+    text-transform: uppercase;
+    border-top: 1px dashed #d6d4cd;
+    padding-top: 12px;
+  }
+  .pick__qr img {
+    width: 96px; height: 96px;
+    background: #fff;
+    padding: 5px;
+    border-radius: 3px;
+  }
+
+  /* ── NEXT NOTE ───────────────────────────────────────────────── */
+  .next-note {
+    margin-top: 28px;
+    padding: 14px 16px;
+    border-left: 3px solid #d6d4cd;
+    background: #faf9f5;
+    border-radius: 2px;
+  }
+  .next-note__kicker {
+    margin: 0 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: var(--pc-ink-soft);
+    font-weight: 700;
+  }
+  .next-note p {
+    margin: 0;
+    max-width: 64ch;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #2a2925;
+  }
+
+  /* ── AGENT STRIP ─────────────────────────────────────────────── */
+  .agent-strip {
+    margin-top: 36px;
+    padding-top: 14px;
+    border-top: 1px solid var(--pc-rule, #d6d4cd);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+  }
+  .agent-strip__label { margin: 0 0 6px; font-weight: 600; }
+  .agent-strip ul {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .agent-strip a { color: var(--pc-accent); }
+
+  .mono { font-family: var(--pc-font-mono); }
+</style>

@@ -1,0 +1,306 @@
+---
+/**
+ * MorningBrief — lightweight morning strip on the home feed.
+ *
+ * Mike 2026-04-18: "think about what i'd want to read when i open up the
+ * shop in the morning, check pointcast." A single-row strip that fires
+ * on the next-most-important stuff before the feed proper: today's date,
+ * weather in El Segundo, last night's Lakers + Dodgers scores, Card of
+ * the Day, and whatever the site is "currently on" (latest block).
+ *
+ * Rendering strategy:
+ *   - Server renders a skeleton with `—` placeholders and today's date.
+ *     This ships the layout before any JS runs so there's no reflow.
+ *   - Client hydrates weather (Open-Meteo), NBA + MLB scoreboards (public
+ *     CDNs, no auth), and the current-time clock. Each fetch is guarded
+ *     — a failure falls back to the skeleton, never the whole strip.
+ *   - No analytics, no tracking, no external link-outs. The strip is
+ *     read-only.
+ *
+ * This is editorial, not infrastructure — every value shown is a quick
+ * check, not a commitment. Lighter scroll > dense scroll per Mike's
+ * 2026-04-18 morning feedback ("too dense, needed sports scores, some
+ * liter faire, etc, look at our prior explorations").
+ */
+import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
+
+const cotd = pickCardOfTheDay();
+const now = new Date();
+// "TUE · APR 18 · 2026"
+const dateLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: '2-digit',
+  year: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(now).toUpperCase().replace(/,/g, ' ·');
+---
+
+<aside class="brief" aria-label="Morning brief">
+  <div class="brief__row brief__row--top">
+    <span class="brief__kicker mono">MORNING BRIEF</span>
+    <span class="brief__sep mono" aria-hidden="true">·</span>
+    <span class="brief__date mono">{dateLabel}</span>
+    <span class="brief__sep mono" aria-hidden="true">·</span>
+    <span class="brief__locus mono">EL SEGUNDO</span>
+    <span class="brief__sep mono" aria-hidden="true">·</span>
+    <time class="brief__clock mono" id="brief-clock">— : —</time>
+  </div>
+  <div class="brief__row brief__row--bottom">
+    <span class="chip chip--weather" id="brief-weather" title="El Segundo weather">
+      <span class="chip__label mono">WX</span>
+      <span class="chip__val mono">—°F · loading</span>
+    </span>
+    <span class="chip chip--nba" id="brief-nba" title="Lakers last/next">
+      <span class="chip__label mono">NBA</span>
+      <span class="chip__val mono">LAL —</span>
+    </span>
+    <span class="chip chip--mlb" id="brief-mlb" title="Dodgers last/next">
+      <span class="chip__label mono">MLB</span>
+      <span class="chip__val mono">LAD —</span>
+    </span>
+    <a class="chip chip--cotd" href="/battle" title="Card of the Day">
+      <span class="chip__label mono">COTD</span>
+      <span class="chip__val mono">#{cotd.id} · {cotd.note.slice(0, 28)}</span>
+    </a>
+    <a class="chip chip--latest" href="/archive" title="Most recent block">
+      <span class="chip__label mono">LATEST</span>
+      <span class="chip__val mono" id="brief-latest">→ /archive</span>
+    </a>
+    {/* CC / DROP / GO RANDOM BLOCK nav chips removed 2026-04-19 per Mike's
+        "visit → update → daily → interact → scroll" flow rethink. These
+        three duplicated the endpoints footer and padded the density in
+        the DAILY CONTENT zone. Routes still exist; /sprint, /drop,
+        /random all remain navigable from the footer. */}
+  </div>
+</aside>
+
+<script is:inline>
+  (function () {
+    /* ─── Clock ── PT local, updates once/min ─── */
+    const clock = document.getElementById('brief-clock');
+    function paintClock() {
+      if (!clock) return;
+      const d = new Date();
+      const t = new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        timeZone: 'America/Los_Angeles',
+      }).format(d);
+      clock.textContent = t + ' PT';
+    }
+    paintClock();
+    setInterval(paintClock, 60_000);
+
+    /* ─── Weather ── Open-Meteo, El Segundo ─── */
+    const wx = document.getElementById('brief-weather');
+    const wxVal = wx && wx.querySelector('.chip__val');
+    const LAT = 33.9192, LON = -118.4165;
+    const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=' + LAT + '&longitude=' + LON
+      + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m'
+      + '&daily=temperature_2m_max,temperature_2m_min'
+      + '&timezone=America/Los_Angeles&temperature_unit=fahrenheit&wind_speed_unit=mph';
+    const WX_CODE = {
+      0:'clear', 1:'mostly clear', 2:'partly cloudy', 3:'overcast',
+      45:'fog', 48:'fog', 51:'drizzle', 53:'drizzle', 55:'drizzle',
+      61:'rain', 63:'rain', 65:'rain', 71:'snow', 73:'snow', 75:'snow',
+      80:'showers', 81:'showers', 82:'showers', 95:'storm', 96:'storm', 99:'storm',
+    };
+    const DIRS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    function deg2dir(d) { return DIRS[Math.round(d / 22.5) % 16] || ''; }
+    fetch(WX_URL, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => {
+        if (!j || !j.current || !wxVal) return;
+        const t = Math.round(j.current.temperature_2m);
+        const hi = j.daily && j.daily.temperature_2m_max ? Math.round(j.daily.temperature_2m_max[0]) : null;
+        const lo = j.daily && j.daily.temperature_2m_min ? Math.round(j.daily.temperature_2m_min[0]) : null;
+        const cond = WX_CODE[j.current.weather_code] || '';
+        const wind = Math.round(j.current.wind_speed_10m) + 'mph ' + deg2dir(j.current.wind_direction_10m);
+        const parts = [t + '\u00B0F'];
+        if (hi !== null && lo !== null) parts.push('H ' + hi + '/L ' + lo);
+        if (cond) parts.push(cond);
+        parts.push(wind);
+        wxVal.textContent = parts.join(' \u00B7 ');
+      })
+      .catch(() => { if (wxVal) wxVal.textContent = '\u2014 (offline)'; });
+
+    /* ─── NBA · Lakers ── NBA liveData CDN ─── */
+    const nba = document.getElementById('brief-nba');
+    const nbaVal = nba && nba.querySelector('.chip__val');
+    const LAL_ID = 1610612747;
+    fetch('https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => {
+        if (!j || !nbaVal) return;
+        const games = (j.scoreboard && j.scoreboard.games) || [];
+        const g = games.find((g) => g.homeTeam.teamId === LAL_ID || g.awayTeam.teamId === LAL_ID);
+        if (!g) { nbaVal.textContent = 'LAL \u2014 off today'; return; }
+        const isHome = g.homeTeam.teamId === LAL_ID;
+        const lal = isHome ? g.homeTeam : g.awayTeam;
+        const opp = isHome ? g.awayTeam : g.homeTeam;
+        const status = (g.gameStatusText || '').trim();
+        if (g.gameStatus === 1) {
+          // Not started
+          nbaVal.textContent = 'LAL ' + (isHome ? 'vs ' : '@ ') + opp.teamTricode + ' \u00B7 ' + status;
+        } else {
+          nbaVal.textContent = 'LAL ' + lal.score + ' \u2013 ' + opp.teamTricode + ' ' + opp.score + ' \u00B7 ' + status;
+        }
+      })
+      .catch(() => { if (nbaVal) nbaVal.textContent = 'LAL \u2014 (offline)'; });
+
+    /* ─── MLB · Dodgers ── MLB statsapi ─── */
+    const mlb = document.getElementById('brief-mlb');
+    const mlbVal = mlb && mlb.querySelector('.chip__val');
+    const LAD_ID = 119;
+    // today + yesterday: prefer in-progress > most recent final
+    const today = new Date().toISOString().slice(0, 10);
+    const yd = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const MLB_URL = 'https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=' + LAD_ID + '&startDate=' + yd + '&endDate=' + today;
+    fetch(MLB_URL, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => {
+        if (!j || !mlbVal) return;
+        const dates = j.dates || [];
+        let pick = null;
+        // scan newest → oldest; prefer Live, then Final, then Preview
+        for (let i = dates.length - 1; i >= 0 && !pick; i--) {
+          for (const g of (dates[i].games || [])) {
+            pick = g; break;
+          }
+        }
+        if (!pick) { mlbVal.textContent = 'LAD \u2014 off'; return; }
+        const home = pick.teams.home, away = pick.teams.away;
+        const lad = home.team.id === LAD_ID ? home : away;
+        const opp = home.team.id === LAD_ID ? away : home;
+        const status = pick.status.detailedState || pick.status.abstractGameState || '';
+        if (status === 'Preview' || status === 'Scheduled') {
+          mlbVal.textContent = 'LAD ' + (lad === home ? 'vs ' : '@ ') + (opp.team.abbreviation || opp.team.teamCode || '') + ' \u00B7 ' + status;
+        } else {
+          mlbVal.textContent = 'LAD ' + (lad.score ?? '-') + ' \u2013 ' + (opp.team.abbreviation || '') + ' ' + (opp.score ?? '-') + ' \u00B7 ' + status;
+        }
+      })
+      .catch(() => { if (mlbVal) mlbVal.textContent = 'LAD \u2014 (offline)'; });
+
+    /* ─── Latest block from home feed ───
+     * The first grid cell has a data-id attribute on BlockReorder. We grab
+     * it client-side so the strip reflects whatever the server just rendered.
+     */
+    const latestEl = document.getElementById('brief-latest');
+    try {
+      const firstCard = document.querySelector('.grid .block-card');
+      if (firstCard && latestEl) {
+        const id = firstCard.getAttribute('data-id') || '';
+        const title = firstCard.querySelector('.block-card__title, h2, h3');
+        const titleText = title ? title.textContent.trim() : '';
+        if (id) {
+          latestEl.textContent = '\u2192 \u2116 ' + id + (titleText ? ' \u00B7 ' + titleText.slice(0, 28) : '');
+          const wrap = latestEl.closest('a');
+          if (wrap) wrap.setAttribute('href', '/b/' + id);
+        }
+      }
+    } catch {}
+  })();
+</script>
+
+<style>
+  .brief {
+    margin: 8px 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    background: #fbfaf5;
+    display: grid;
+    gap: 6px;
+  }
+  .brief__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+  }
+  .brief__row--top {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .brief__kicker {
+    color: #a02c2c;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+  }
+  .brief__sep { color: #c8c5bd; }
+  .brief__locus { color: #5F5E5A; }
+  .brief__date { color: #12110E; font-weight: 500; }
+  .brief__clock { color: #12110E; font-weight: 500; }
+
+  .brief__row--bottom {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border: 1px solid #d6d4cd;
+    background: #fff;
+    border-radius: 2px;
+    color: #12110E;
+    text-decoration: none;
+    transition: background 0.1s, border-color 0.1s;
+    max-width: 100%;
+  }
+  a.chip:hover { background: #0f0f0e; color: #fff; border-color: #0f0f0e; text-decoration: none; }
+  a.chip:hover .chip__label { color: #f1f1ee; }
+  .chip__label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #5F5E5A;
+    font-weight: 700;
+  }
+  .chip__val {
+    font-size: 11px;
+    color: #12110E;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chip--weather { border-left: 3px solid #1864AB; }
+  .chip--nba     { border-left: 3px solid #552583; }
+  .chip--mlb     { border-left: 3px solid #005A9C; }
+  .chip--cotd    { border-left: 3px solid #8A2432; }
+  .chip--latest  { border-left: 3px solid #12110E; }
+  .chip--sprint  { border-left: 3px solid #1E7C2F; }
+  .chip--drop    { border-left: 3px solid #0F6E56; }
+  .chip--go      { border-left: 3px solid #E8590C; }
+  .chip--go .chip__val { color: #C95019; font-weight: 700; }
+
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; }
+
+  @media (max-width: 540px) {
+    /* Mike 2026-04-18 home-mobile-lighten: bigger tap targets, looser
+       breathing room on mobile, drum-style scrollable horizontal row.
+       Labels stay visible on large mobile (was hiding). */
+    .brief { padding: 10px 12px; gap: 8px; }
+    .brief__row--bottom {
+      gap: 8px;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chip {
+      padding: 7px 10px;
+      flex: 0 0 auto;
+      min-height: 36px;
+    }
+    .chip__label { font-size: 8.5px; }
+    .chip__val { font-size: 11px; max-width: none; }
+  }
+  @media (max-width: 400px) {
+    .chip__val { max-width: 220px; }
+  }
+</style>
