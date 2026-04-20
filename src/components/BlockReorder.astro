@@ -1,137 +1,264 @@
 ---
 /**
- * BlockReorder — client-side drag-and-drop ordering layer for the home grid.
+ * BlockReorder — pointer-event drag-to-reorder with explicit Arrange Mode.
  *
- * Wraps the existing grid markup. When the user drags a block card, we
- * track the new index order in localStorage under `pc:block-order`. On
- * next page load, the order is applied via CSS `order:` on each card.
+ * Mike 2026-04-20 13:50 PT: *"can you make the blocks drag and droppable,
+ * arrangeable."* Previous version used HTML5 drag-and-drop which (a)
+ * didn't work on touch devices at all, and (b) conflicted with the card
+ * being a clickable link. This rewrite uses Pointer Events (works on
+ * mouse + touch + pen) and an explicit arrange-mode toggle that
+ * suppresses card-click so the user can drag without accidentally
+ * opening a block.
  *
- * No server state, no user account. Your reorder is visible only to you.
- * A small "↻ reset order" chip bottom-left clears the localStorage key.
+ * Flow:
+ *   1. Toggle chip reads ARRANGE · OFF by default.
+ *   2. Tap to turn on — cards gain a grip overlay + drag affordance,
+ *      link clicks are suppressed, cursor switches to grab.
+ *   3. Press and drag any card — it follows the pointer. On release,
+ *      we compute the nearest drop target + persist the new order.
+ *   4. Tap toggle again to turn off — clicks restore, overlays fade.
  *
- * Honors BLOCKS.md — hard corners, mono metadata, subtle hover affordance.
+ * Order persists in `pc:block-order` (same key as before so nobody
+ * loses their saved arrangement across the rewrite). Applied on load
+ * via CSS `order:` on each card so the grid rearranges without layout
+ * shift after first paint.
+ *
+ * No deps. Local-only. No server state. Each visitor sees their own
+ * arrangement.
  */
 ---
 
 <div class="reorder-host">
   <div class="reorder-toggle mono" id="pc-reorder-toggle" aria-live="polite">
-    <span class="reorder-toggle__dot" aria-hidden="true"></span>
-    <span class="reorder-toggle__label">CUSTOM ORDER · OFF</span>
-    <button class="reorder-toggle__btn" id="pc-reorder-reset" hidden>↻ RESET</button>
+    <button class="reorder-toggle__btn reorder-toggle__btn--mode" id="pc-reorder-mode" type="button" aria-pressed="false">
+      <span class="reorder-toggle__dot" aria-hidden="true"></span>
+      <span class="reorder-toggle__label" id="pc-reorder-label">ARRANGE · OFF</span>
+    </button>
+    <button class="reorder-toggle__btn reorder-toggle__btn--reset" id="pc-reorder-reset" type="button" hidden>↻ RESET</button>
+    <span class="reorder-toggle__hint" id="pc-reorder-hint">tap to arrange</span>
   </div>
   <slot />
 </div>
 
 <script is:inline>
-  const STORAGE_KEY = 'pc:block-order';
+(function () {
+  'use strict';
+  var STORAGE_KEY = 'pc:block-order';
 
+  // ---------- storage helpers --------------------------------------------
   function loadOrder() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return parsed;
-    } catch {}
-    return {};
+      var parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) { return {}; }
   }
-
   function saveOrder(order) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)); } catch (e) {}
   }
-
-  function apply() {
-    const order = loadOrder();
-    const keys = Object.keys(order);
-    const toggle = document.getElementById('pc-reorder-toggle');
-    const resetBtn = document.getElementById('pc-reorder-reset');
-    if (keys.length > 0) {
-      toggle && toggle.classList.add('reorder-toggle--on');
-      const label = toggle && toggle.querySelector('.reorder-toggle__label');
-      if (label) label.textContent = 'CUSTOM ORDER · ' + keys.length;
-      if (resetBtn) resetBtn.hidden = false;
-      document.querySelectorAll('.block-card').forEach(function (el) {
-        const match = (el.getAttribute('aria-label') || '').match(/Block (\d{4}):/);
-        if (!match) return;
-        const id = match[1];
-        if (order[id] != null) el.style.order = String(order[id]);
-      });
-    } else {
-      toggle && toggle.classList.remove('reorder-toggle--on');
-      const label = toggle && toggle.querySelector('.reorder-toggle__label');
-      if (label) label.textContent = 'CUSTOM ORDER · OFF';
-      if (resetBtn) resetBtn.hidden = true;
-    }
+  function clearOrder() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
   }
 
   function blockIdOf(el) {
-    const m = (el.getAttribute('aria-label') || '').match(/Block (\d{4}):/);
+    if (!el) return null;
+    var direct = el.getAttribute && el.getAttribute('data-id');
+    if (direct) return direct;
+    var m = el.getAttribute && (el.getAttribute('aria-label') || '').match(/Block (\d{4}):/);
     return m ? m[1] : null;
   }
 
-  function wire() {
-    document.querySelectorAll('.block-card').forEach(function (card) {
-      card.draggable = true;
-      card.addEventListener('dragstart', function (e) {
-        const id = blockIdOf(card);
-        if (!id || !e.dataTransfer) return;
-        e.dataTransfer.setData('text/plain', id);
-        e.dataTransfer.effectAllowed = 'move';
-        card.classList.add('dragging');
-      });
-      card.addEventListener('dragend', function () { card.classList.remove('dragging'); });
-      card.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-        card.classList.add('drag-over');
-      });
-      card.addEventListener('dragleave', function () { card.classList.remove('drag-over'); });
-      card.addEventListener('drop', function (e) {
-        e.preventDefault();
-        card.classList.remove('drag-over');
-        const srcId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
-        const dstId = blockIdOf(card);
-        if (!srcId || !dstId || srcId === dstId) return;
-        reorderAround(srcId, dstId);
-        apply();
-      });
-    });
-
-    const resetBtn = document.getElementById('pc-reorder-reset');
-    resetBtn && resetBtn.addEventListener('click', function () {
-      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-      document.querySelectorAll('.block-card').forEach(function (el) { el.style.order = ''; });
-      apply();
+  // ---------- apply persisted order --------------------------------------
+  function applyOrder() {
+    var order = loadOrder();
+    var keys = Object.keys(order);
+    var label = document.getElementById('pc-reorder-label');
+    var resetBtn = document.getElementById('pc-reorder-reset');
+    var host = document.querySelector('.reorder-host');
+    if (keys.length > 0) {
+      host && host.classList.add('reorder-host--has-custom');
+      if (label) label.textContent = 'ARRANGE · ' + (arrangeOn ? 'ON' : 'OFF') + ' · ' + keys.length + ' MOVED';
+      if (resetBtn) resetBtn.hidden = false;
+    } else {
+      host && host.classList.remove('reorder-host--has-custom');
+      if (label) label.textContent = 'ARRANGE · ' + (arrangeOn ? 'ON' : 'OFF');
+      if (resetBtn) resetBtn.hidden = true;
+    }
+    var cards = document.querySelectorAll('.block-card');
+    cards.forEach(function (el) {
+      var id = blockIdOf(el);
+      if (!id) return;
+      if (order[id] != null) el.style.order = String(order[id]);
+      else el.style.order = '';
     });
   }
 
-  function reorderAround(srcId, dstId) {
-    const cards = Array.from(document.querySelectorAll('.block-card'));
-    const pairs = cards.map(function (c, idx) {
-      return { id: blockIdOf(c), idx: idx };
-    }).filter(function (p) { return !!p.id; });
+  // ---------- mode toggle -------------------------------------------------
+  var arrangeOn = false;
 
-    // Current order — CSS order wins, falls back to DOM index.
-    const withN = pairs.map(function (p) {
-      const el = cards[p.idx];
-      return { id: p.id, n: el.style.order ? Number(el.style.order) : p.idx };
+  function setArrange(on) {
+    arrangeOn = !!on;
+    var host = document.querySelector('.reorder-host');
+    var mode = document.getElementById('pc-reorder-mode');
+    var hint = document.getElementById('pc-reorder-hint');
+    if (host) host.classList.toggle('reorder-host--arranging', arrangeOn);
+    if (mode) mode.setAttribute('aria-pressed', arrangeOn ? 'true' : 'false');
+    if (hint) hint.textContent = arrangeOn ? 'drag any card · tap toggle to finish' : 'tap to arrange';
+    applyOrder();
+  }
+
+  // ---------- drag state --------------------------------------------------
+  var active = null;          // current dragging element
+  var placeholder = null;     // visual gap in DOM flow
+  var startX = 0, startY = 0;
+  var pointerId = null;
+
+  function onPointerDown(e) {
+    if (!arrangeOn) return;
+    var card = e.target.closest && e.target.closest('.block-card');
+    if (!card) return;
+    // Only primary button for mouse; all for touch/pen.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    e.preventDefault();
+    active = card;
+    pointerId = e.pointerId;
+    var rect = card.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+
+    // Capture the pointer so we get move/up even if pointer leaves the card.
+    try { card.setPointerCapture(pointerId); } catch (err) {}
+
+    card.classList.add('block-card--dragging');
+    card.style.position = 'fixed';
+    card.style.left = rect.left + 'px';
+    card.style.top = rect.top + 'px';
+    card.style.width = rect.width + 'px';
+    card.style.height = rect.height + 'px';
+    card.style.zIndex = '1000';
+    card.style.pointerEvents = 'none';
+
+    // Insert a placeholder to hold the space.
+    placeholder = document.createElement('div');
+    placeholder.className = 'block-card block-card--placeholder';
+    placeholder.style.width = rect.width + 'px';
+    placeholder.style.height = rect.height + 'px';
+    placeholder.style.order = card.style.order || '';
+    card.parentNode.insertBefore(placeholder, card.nextSibling);
+  }
+
+  function onPointerMove(e) {
+    if (!active || e.pointerId !== pointerId) return;
+    e.preventDefault();
+    active.style.left = (e.clientX - startX) + 'px';
+    active.style.top = (e.clientY - startY) + 'px';
+
+    // Find the card under the pointer (excluding the active and placeholder).
+    var x = e.clientX, y = e.clientY;
+    var cards = document.querySelectorAll('.block-card');
+    var nearest = null;
+    var nearestDist = Infinity;
+    cards.forEach(function (c) {
+      if (c === active || c === placeholder) return;
+      var r = c.getBoundingClientRect();
+      var cx = r.left + r.width / 2;
+      var cy = r.top + r.height / 2;
+      var d = Math.hypot(cx - x, cy - y);
+      if (d < nearestDist) { nearest = c; nearestDist = d; }
     });
-    withN.sort(function (a, b) { return a.n - b.n; });
+    if (nearest && placeholder && nearest !== placeholder) {
+      var r = nearest.getBoundingClientRect();
+      // Insert placeholder before or after nearest based on pointer side.
+      var after = (x > r.left + r.width / 2) || (y > r.top + r.height / 2 && x > r.left);
+      nearest.parentNode.insertBefore(placeholder, after ? nearest.nextSibling : nearest);
+    }
+  }
 
-    const idsInOrder = withN.map(function (x) { return x.id; }).filter(function (id) { return id !== srcId; });
-    const dstIdx = idsInOrder.indexOf(dstId);
-    idsInOrder.splice(dstIdx, 0, srcId);
+  function onPointerUp(e) {
+    if (!active || e.pointerId !== pointerId) return;
+    e.preventDefault();
 
-    const next = {};
-    idsInOrder.forEach(function (id, i) { next[id] = i; });
+    // Move active into placeholder position.
+    if (placeholder && placeholder.parentNode) {
+      placeholder.parentNode.insertBefore(active, placeholder);
+      placeholder.parentNode.removeChild(placeholder);
+    }
+    active.classList.remove('block-card--dragging');
+    active.style.position = '';
+    active.style.left = '';
+    active.style.top = '';
+    active.style.width = '';
+    active.style.height = '';
+    active.style.zIndex = '';
+    active.style.pointerEvents = '';
+
+    try { active.releasePointerCapture(pointerId); } catch (err) {}
+    active = null;
+    placeholder = null;
+    pointerId = null;
+
+    persistDomOrder();
+    applyOrder();
+  }
+
+  function persistDomOrder() {
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.block-card'));
+    var next = {};
+    cards.forEach(function (c, i) {
+      // Skip any lingering placeholders.
+      if (c.classList.contains('block-card--placeholder')) return;
+      var id = blockIdOf(c);
+      if (!id) return;
+      next[id] = i;
+    });
     saveOrder(next);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { wire(); apply(); });
-  } else {
-    wire();
-    apply();
+  function suppressClicksWhileArranging(e) {
+    if (!arrangeOn) return;
+    // Allow clicks on toggle + reset; suppress clicks on any card link.
+    if (e.target.closest('.reorder-toggle')) return;
+    if (e.target.closest('.block-card')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   }
+
+  function wire() {
+    var host = document.querySelector('.reorder-host');
+    if (!host) return;
+
+    // Pointer events on the host (delegated).
+    host.addEventListener('pointerdown', onPointerDown);
+    host.addEventListener('pointermove', onPointerMove);
+    host.addEventListener('pointerup', onPointerUp);
+    host.addEventListener('pointercancel', onPointerUp);
+
+    // Suppress card clicks while in arrange mode (capture phase).
+    host.addEventListener('click', suppressClicksWhileArranging, true);
+
+    // Toggle
+    var mode = document.getElementById('pc-reorder-mode');
+    if (mode) mode.addEventListener('click', function () { setArrange(!arrangeOn); });
+
+    // Reset
+    var reset = document.getElementById('pc-reorder-reset');
+    if (reset) reset.addEventListener('click', function () {
+      clearOrder();
+      var cards = document.querySelectorAll('.block-card');
+      cards.forEach(function (el) { el.style.order = ''; });
+      applyOrder();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { wire(); applyOrder(); });
+  } else {
+    wire(); applyOrder();
+  }
+})();
 </script>
 
 <style>
@@ -140,27 +267,16 @@
   .reorder-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    border: 1px dashed var(--pc-rule);
-    color: var(--pc-ink-muted);
+    gap: 10px;
+    padding: 6px 10px;
+    border: 1px dashed var(--pc-rule, #c4c2bc);
+    color: var(--pc-ink-muted, #5F5E5A);
     background: transparent;
     border-radius: 2px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     font-size: 10px;
     width: fit-content;
   }
-  .reorder-toggle--on {
-    border-style: solid;
-    border-color: var(--pc-accent);
-    color: var(--pc-accent);
-  }
-  .reorder-toggle__dot {
-    width: 7px; height: 7px;
-    background: var(--pc-rule);
-    border-radius: 50%;
-  }
-  .reorder-toggle--on .reorder-toggle__dot { background: var(--pc-accent); }
   .reorder-toggle__btn {
     font-family: inherit;
     font-size: inherit;
@@ -168,17 +284,66 @@
     text-transform: inherit;
     background: transparent;
     border: none;
-    color: var(--pc-accent);
+    color: inherit;
     cursor: pointer;
     padding: 0 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  .reorder-toggle__btn:hover { text-decoration: underline; }
+  .reorder-toggle__btn--mode[aria-pressed="true"] .reorder-toggle__label { color: var(--pc-accent, #185FA5); font-weight: 700; }
+  .reorder-toggle__btn--reset { color: var(--pc-accent, #185FA5); font-weight: 600; }
+  .reorder-toggle__btn--reset:hover { text-decoration: underline; }
+  .reorder-toggle__dot {
+    width: 7px; height: 7px;
+    background: var(--pc-rule, #c4c2bc);
+    border-radius: 50%;
+    transition: background 0.15s;
+  }
+  .reorder-toggle__btn--mode[aria-pressed="true"] .reorder-toggle__dot {
+    background: var(--pc-accent, #185FA5);
+    box-shadow: 0 0 0 2px rgba(24, 95, 165, 0.2);
+  }
+  .reorder-toggle__hint { opacity: 0.6; }
 
-  :global(.block-card.dragging) { opacity: 0.5; }
-  :global(.block-card.drag-over) {
-    outline: 2px solid var(--pc-accent);
-    outline-offset: -1px;
+  /* When arrange mode is on, tint the toggle + add grip affordance to cards. */
+  :global(.reorder-host--arranging) {
+    --arrange-tint: rgba(24, 95, 165, 0.04);
   }
-  :global(.block-card) { cursor: grab; }
-  :global(.block-card:active) { cursor: grabbing; }
+  :global(.reorder-host--arranging .reorder-toggle) {
+    border-style: solid;
+    border-color: var(--pc-accent, #185FA5);
+    background: rgba(24, 95, 165, 0.06);
+  }
+  :global(.reorder-host--arranging .block-card) {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: 1px dashed rgba(24, 95, 165, 0.28);
+    outline-offset: -3px;
+    transition: outline-color 0.15s, transform 0.08s;
+  }
+  :global(.reorder-host--arranging .block-card:hover) {
+    outline-color: var(--pc-accent, #185FA5);
+  }
+  :global(.reorder-host--arranging .block-card:active) {
+    cursor: grabbing;
+    transform: scale(0.98);
+  }
+  :global(.block-card--dragging) {
+    opacity: 0.85;
+    box-shadow: 0 18px 48px -12px rgba(0, 0, 0, 0.35);
+    outline: 2px solid var(--pc-accent, #185FA5) !important;
+    transform: rotate(0.5deg);
+    transition: none;
+  }
+  :global(.block-card--placeholder) {
+    background: rgba(24, 95, 165, 0.06) !important;
+    border: 1px dashed var(--pc-accent, #185FA5) !important;
+    border-radius: 2px !important;
+    min-height: 120px;
+    opacity: 0.8;
+  }
+  :global(.block-card--placeholder > *) { visibility: hidden; }
 </style>
