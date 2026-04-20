@@ -42,16 +42,10 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
     ))}
   </div>
 
-  <div class="mood__soundtrack" id="mood-soundtrack" hidden data-soundtracks={SOUNDTRACKS_JSON}>
-    <button type="button" class="mood__soundtrack-toggle mono" id="mood-soundtrack-toggle" aria-expanded="false">
-      <span class="mood__soundtrack-play" aria-hidden="true">▶</span>
-      <span id="mood-soundtrack-label">soundtrack</span>
-    </button>
-    <div class="mood__soundtrack-player" id="mood-soundtrack-player" hidden>
-      <iframe id="mood-soundtrack-frame" src="about:blank" title="Mood soundtrack" loading="lazy" allow="autoplay; encrypted-media" referrerpolicy="no-referrer-when-downgrade"></iframe>
-      <button type="button" class="mood__soundtrack-close mono" id="mood-soundtrack-close" aria-label="Close soundtrack">× close</button>
-    </div>
-  </div>
+  {/* Soundtrack player moved into the persistent CoNavigator bar
+      (src/components/CoNavigator.astro) so music survives navigation.
+      MoodChip now only selects the mood + dispatches `pc:mood-changed`;
+      CoNav listens and offers ▶ play in its left zone. */}
 </aside>
 
 <script is:inline>
@@ -162,15 +156,12 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
         try { localStorage.setItem(lsKey, id); } catch (e) {}
         applyMood(id);
         meditativePulse(id);
-        showSoundtrackOffer(id);
+        // Notify the CoNavigator so the persistent bar updates + offers ▶.
+        try {
+          window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: id } }));
+        } catch (e) {}
       });
     });
-
-    // On load, if prior mood was set, surface the soundtrack offer immediately.
-    try {
-      var priorId = localStorage.getItem(lsKey);
-      if (priorId) showSoundtrackOffer(priorId);
-    } catch (e) {}
   })();
 </script>
 

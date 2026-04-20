@@ -153,6 +153,7 @@ const blocks = defineCollection({
                 to: z.string().regex(/^\d{2}:\d{2}$/),
                 label: z.string().max(80),
                 glyph: z.string().max(4).optional(),
+                data: z.string().max(140).optional(),
               }),
             )
             .max(16)

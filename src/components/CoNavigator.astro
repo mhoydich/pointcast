@@ -1,0 +1,406 @@
+---
+/**
+ * CoNavigator — persistent sticky footer bar across the whole site.
+ *
+ * Mike 2026-04-20 14:05 PT: *"need a way to keep the music as you
+ * navigate... lets start to look into a footer bar co navigator for
+ * pointcast, has your mood, current pointcast state, data, interaction
+ * tools, etc."*
+ *
+ * Design:
+ *   - Fixed to viewport bottom, ~56px tall (48 on mobile).
+ *   - Three zones, left-to-right:
+ *       [LEFT]   mood chip + ▶ play soundtrack
+ *       [MID]    state readouts (here now · hello · streak · shipped today)
+ *       [RIGHT]  quick-nav chips (/here · /workbench · /drop)
+ *   - Expandable drawer above the bar holds the soundtrack iframe.
+ *     The iframe uses `transition:persist="pc-soundtrack"` so
+ *     ClientRouter soft-navigations keep the audio alive across pages.
+ *
+ * Music persistence contract:
+ *   - MoodChip dispatches `pc:mood-changed` with detail.moodId on click.
+ *   - CoNav listens → updates display + surfaces a "▶ {label}" offer.
+ *   - User taps ▶ → iframe src = MOOD_SOUNDTRACKS[id].url.
+ *   - Navigating to any other page preserves the iframe (persist).
+ *   - pc:music:mood + pc:music:playing remembered in localStorage so
+ *     a full page reload can offer "▶ resume" with the prior mood.
+ *
+ * Author: cc. Source: Mike 2026-04-20 14:05 PT chat.
+ */
+import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
+const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
+---
+
+<aside class="conav" id="pc-conav" aria-label="PointCast co-navigator">
+  <div class="conav__bar">
+    <div class="conav__left">
+      <button
+        type="button"
+        class="conav__mood"
+        id="pc-conav-mood-btn"
+        aria-label="Current mood — tap to open soundtrack"
+      >
+        <span class="conav__mood-dot" id="pc-conav-mood-dot" aria-hidden="true"></span>
+        <span class="conav__mood-label mono" id="pc-conav-mood-label">SET MOOD</span>
+        <span class="conav__mood-arrow mono" id="pc-conav-mood-arrow" aria-hidden="true">▸</span>
+      </button>
+      <span class="conav__sep" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="conav__play"
+        id="pc-conav-play"
+        aria-label="Play mood soundtrack"
+        hidden
+      >
+        <span class="conav__play-icon" aria-hidden="true">▶</span>
+        <span class="conav__play-label mono" id="pc-conav-play-label">SOUNDTRACK</span>
+      </button>
+    </div>
+
+    <div class="conav__mid">
+      <span class="conav__stat">
+        <span class="conav__stat-n mono" id="pc-conav-here">·</span>
+        <span class="conav__stat-l mono">here</span>
+      </span>
+      <span class="conav__stat">
+        <span class="conav__stat-n mono" id="pc-conav-hello">·</span>
+        <span class="conav__stat-l mono">hello</span>
+      </span>
+      <span class="conav__stat">
+        <span class="conav__stat-n mono" id="pc-conav-streak">·</span>
+        <span class="conav__stat-l mono">streak</span>
+      </span>
+    </div>
+
+    <nav class="conav__right" aria-label="Quick nav">
+      <a class="conav__link mono" href="/here">here</a>
+      <a class="conav__link mono" href="/workbench">workbench</a>
+      <a class="conav__link mono" href="/drop">drop</a>
+    </nav>
+  </div>
+
+  <div class="conav__drawer" id="pc-conav-drawer" hidden data-soundtracks={SOUNDTRACKS_JSON}>
+    <div class="conav__drawer-head">
+      <p class="conav__drawer-title mono" id="pc-conav-drawer-title">soundtrack</p>
+      <button type="button" class="conav__drawer-close mono" id="pc-conav-close" aria-label="Close soundtrack">× close</button>
+    </div>
+    <!-- transition:persist keeps this iframe alive across ClientRouter soft-navs -->
+    <iframe
+      transition:persist="pc-soundtrack"
+      id="pc-conav-iframe"
+      src="about:blank"
+      title="Mood soundtrack"
+      loading="lazy"
+      allow="autoplay; encrypted-media"
+      referrerpolicy="no-referrer-when-downgrade"
+    ></iframe>
+  </div>
+</aside>
+
+<script>
+// Typed client script — runs once per full page load. Internal state is
+// re-read from localStorage + DOM each time so ClientRouter soft-navs
+// rehydrate cleanly.
+(function () {
+  'use strict';
+  if (typeof window === 'undefined') return;
+
+  const MOODS: Record<string, { color: string; label: string }> = {
+    chill:   { color: '#2B8A3E', label: 'CHILL' },
+    hype:    { color: '#C92A2A', label: 'HYPE' },
+    focus:   { color: '#1864AB', label: 'FOCUS' },
+    flow:    { color: '#5F3DC4', label: 'FLOW' },
+    curious: { color: '#E8590C', label: 'CURIOUS' },
+    quiet:   { color: '#5F5E5A', label: 'QUIET' },
+  };
+
+  const LS_MOOD = 'pc:mood';
+  const LS_MUSIC_MOOD = 'pc:music:mood';
+  const LS_MUSIC_PLAYING = 'pc:music:playing';
+
+  function qs<T extends Element>(sel: string): T | null { return document.querySelector(sel) as T | null; }
+  function qid<T extends HTMLElement>(id: string): T | null { return document.getElementById(id) as T | null; }
+
+  function init() {
+    const moodBtn = qid<HTMLButtonElement>('pc-conav-mood-btn');
+    const moodDot = qid<HTMLElement>('pc-conav-mood-dot');
+    const moodLabel = qid<HTMLElement>('pc-conav-mood-label');
+    const moodArrow = qid<HTMLElement>('pc-conav-mood-arrow');
+    const playBtn = qid<HTMLButtonElement>('pc-conav-play');
+    const playLabel = qid<HTMLElement>('pc-conav-play-label');
+    const drawer = qid<HTMLElement>('pc-conav-drawer');
+    const drawerTitle = qid<HTMLElement>('pc-conav-drawer-title');
+    const closeBtn = qid<HTMLButtonElement>('pc-conav-close');
+    const iframe = qid<HTMLIFrameElement>('pc-conav-iframe');
+
+    if (!drawer || !iframe) return;
+
+    let soundtracks: Record<string, { label: string; url: string; source: string; description: string }> = {};
+    try { soundtracks = JSON.parse(drawer.getAttribute('data-soundtracks') || '{}'); } catch { soundtracks = {}; }
+
+    // ---------- mood display update --------------------------------------
+    function paintMood(id: string | null) {
+      const m = id && MOODS[id];
+      if (m && moodDot && moodLabel) {
+        moodDot.style.background = m.color;
+        moodLabel.textContent = m.label;
+      } else if (moodDot && moodLabel) {
+        moodDot.style.background = '#c4c2bc';
+        moodLabel.textContent = 'SET MOOD';
+      }
+      // Show play offer if we have a soundtrack.
+      const t = id ? soundtracks[id] : null;
+      if (playBtn && playLabel && t) {
+        playBtn.hidden = false;
+        playLabel.textContent = t.label;
+      } else if (playBtn) {
+        playBtn.hidden = true;
+      }
+    }
+
+    function getMood(): string | null {
+      try { return localStorage.getItem(LS_MOOD); } catch { return null; }
+    }
+
+    // ---------- drawer + iframe ----------------------------------------
+    function openDrawer(moodId: string) {
+      if (!drawer || !iframe) return;
+      const t = soundtracks[moodId];
+      if (!t) return;
+      if (iframe.src !== t.url) iframe.src = t.url;
+      drawer.hidden = false;
+      if (drawerTitle) drawerTitle.textContent = t.label + ' · ' + (MOODS[moodId] ? MOODS[moodId].label : moodId.toUpperCase());
+      try {
+        localStorage.setItem(LS_MUSIC_MOOD, moodId);
+        localStorage.setItem(LS_MUSIC_PLAYING, '1');
+      } catch {}
+    }
+    function closeDrawer() {
+      if (!drawer || !iframe) return;
+      iframe.src = 'about:blank';
+      drawer.hidden = true;
+      try { localStorage.setItem(LS_MUSIC_PLAYING, '0'); } catch {}
+    }
+
+    // ---------- stats: live count + hello + streak ---------------------
+    function paintStats() {
+      const hereEl = qid('pc-conav-here');
+      const helloEl = qid('pc-conav-hello');
+      const streakEl = qid('pc-conav-streak');
+      try {
+        const h = parseInt(localStorage.getItem('pc:hello:count') || '0', 10) || 0;
+        if (helloEl) helloEl.textContent = String(h);
+      } catch {}
+      try {
+        const raw = localStorage.getItem('pc:daily:collected');
+        const arr: { date: string }[] = raw ? JSON.parse(raw) || [] : [];
+        // Simple streak: consecutive days ending today (PT).
+        const today = new Date().toISOString().slice(0, 10);
+        let streak = 0;
+        const uniq: Record<string, boolean> = {};
+        arr.forEach((c) => { if (c.date) uniq[c.date] = true; });
+        const cursor = new Date(today + 'T12:00:00');
+        while (true) {
+          const ymd = cursor.toISOString().slice(0, 10);
+          if (!uniq[ymd]) break;
+          streak++;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        if (streakEl) streakEl.textContent = String(streak);
+      } catch {}
+      fetch('/api/presence/snapshot', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j) return;
+          const total = (j.humans || 0) + (j.agents || 0);
+          if (hereEl) hereEl.textContent = String(Math.max(total, 1));
+        })
+        .catch(() => {});
+    }
+
+    // ---------- wiring --------------------------------------------------
+    if (moodBtn) moodBtn.addEventListener('click', () => {
+      const id = getMood();
+      if (!id) { window.location.href = '/#mood'; return; }
+      if (drawer && drawer.hidden) openDrawer(id);
+      else closeDrawer();
+    });
+    if (playBtn) playBtn.addEventListener('click', () => {
+      const id = getMood();
+      if (!id) return;
+      if (drawer && drawer.hidden) openDrawer(id);
+      else closeDrawer();
+    });
+    if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+
+    window.addEventListener('pc:mood-changed', (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const id = detail && detail.moodId;
+      if (id) paintMood(id);
+    });
+
+    // ---------- initial paint on every page load + soft-nav --------------
+    function hydrate() {
+      paintMood(getMood());
+      paintStats();
+      // If music was playing on a prior page AND iframe is still live, keep drawer open.
+      try {
+        const wasPlaying = localStorage.getItem(LS_MUSIC_PLAYING) === '1';
+        const moodId = localStorage.getItem(LS_MUSIC_MOOD) || getMood();
+        if (wasPlaying && drawer && moodId && iframe && iframe.src && iframe.src !== 'about:blank') {
+          drawer.hidden = false;
+          if (drawerTitle && soundtracks[moodId] && MOODS[moodId]) {
+            drawerTitle.textContent = soundtracks[moodId].label + ' · ' + MOODS[moodId].label;
+          }
+        }
+      } catch {}
+    }
+
+    hydrate();
+    document.addEventListener('astro:page-load', hydrate);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+<style>
+  .conav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    font-family: Georgia, 'Times New Roman', serif;
+    pointer-events: none;
+  }
+  .conav > * { pointer-events: auto; }
+
+  .conav__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    background: #12110e;
+    color: #f3e6d8;
+    border-top: 1px solid rgba(232, 154, 45, 0.24);
+    box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, 0.3);
+    min-height: 48px;
+    font-size: 12px;
+  }
+  .conav__left, .conav__mid, .conav__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .conav__mid { flex: 1 1 auto; justify-content: center; }
+
+  .mono { font-family: 'Monaco', 'Menlo', monospace; }
+
+  .conav__mood, .conav__play {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    transition: background 0.12s;
+  }
+  .conav__mood:hover, .conav__play:hover { background: rgba(243, 230, 216, 0.08); }
+  .conav__mood-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #c4c2bc;
+    flex-shrink: 0;
+  }
+  .conav__mood-label { font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+  .conav__mood-arrow { opacity: 0.6; font-size: 10px; }
+  .conav__sep {
+    width: 1px;
+    align-self: stretch;
+    background: rgba(243, 230, 216, 0.14);
+    margin: 0 2px;
+  }
+  .conav__play-icon { color: #e89a2d; font-size: 11px; }
+  .conav__play-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 10.5px; }
+
+  .conav__stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .conav__stat-n { font-weight: 700; color: #e89a2d; font-size: 13px; }
+  .conav__stat-l { opacity: 0.62; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+
+  .conav__link {
+    color: #d4c2ad;
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: lowercase;
+  }
+  .conav__link:hover { color: #e89a2d; background: rgba(232, 154, 45, 0.08); }
+
+  .conav__drawer {
+    background: #0b0b0b;
+    border-top: 1px solid rgba(232, 154, 45, 0.24);
+    padding: 8px 10px;
+    max-height: 200px;
+    overflow: hidden;
+  }
+  .conav__drawer[hidden] { display: none; }
+  .conav__drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+  }
+  .conav__drawer-title {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #e89a2d;
+    margin: 0;
+    text-transform: uppercase;
+  }
+  .conav__drawer-close {
+    background: transparent;
+    border: 1px solid rgba(243, 230, 216, 0.2);
+    color: #d4c2ad;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .conav__drawer-close:hover { background: rgba(243, 230, 216, 0.08); }
+  .conav__drawer iframe {
+    width: 100%;
+    height: 152px;
+    border: none;
+    border-radius: 2px;
+    background: #000;
+    display: block;
+  }
+
+  /* Don't let content hide under the fixed bar. Paired with a body bottom-padding rule. */
+  @media (max-width: 600px) {
+    .conav__bar { padding: 6px 10px; font-size: 11px; min-height: 44px; }
+    .conav__mid { display: none; }
+    .conav__link { padding: 3px 6px; font-size: 10px; }
+    .conav__drawer iframe { height: 120px; }
+  }
+</style>

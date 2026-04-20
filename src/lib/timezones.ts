@@ -25,6 +25,10 @@ export interface ClockRitual {
   label: string;
   /** Optional leading glyph. */
   glyph?: string;
+  /** Data-feeling line that backs up the vignette — "🛰 2 SpaceX
+   *  Starships tracked on Rocket Rd", "🚇 Lex line 4 min late". For
+   *  now these are hand-authored; future work wires real feeds. */
+  data?: string;
 }
 
 /** Manual zone from block JSON (authoring surface). Lat/lon optional —

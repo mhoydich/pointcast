@@ -26,6 +26,7 @@ import {
   zodiacOfDate,
 } from '../../lib/sky';
 import { nearestShower } from '../../lib/meteor-showers';
+import { getEntry } from 'astro:content';
 
 export async function getStaticPaths() {
   const blocks = await getCollection('blocks', ({ data }) =>
@@ -190,6 +191,12 @@ function fmtCountdown(msUntil: number): string {
   return `${hours}h`;
 }
 
+// Fetch companion poll (if one is wired via companions[] with surface='poll').
+const companionPoll = (data.companions ?? []).find((c: any) => c.surface === 'poll');
+const pollEntry = companionPoll
+  ? await getEntry('polls', companionPoll.id).catch(() => null)
+  : null;
+
 const moonCountdown = fmtCountdown(moon.nextFullAt.getTime() - renderNow.getTime());
 const newMoonCountdown = fmtCountdown(moon.nextNewAt.getTime() - renderNow.getTime());
 // Show the closer of full/new as the headline countdown.
@@ -280,6 +287,29 @@ const jsonLd = {
         </p>
       </div>
     </aside>
+
+    {pollEntry && (
+      <aside class="clock-poll" aria-label="Companion poll">
+        <p class="clock-poll__kicker mono">POLL · ZEITGEIST</p>
+        <h2 class="clock-poll__question">{pollEntry.data.question}</h2>
+        {pollEntry.data.dek && (
+          <p class="clock-poll__dek">{pollEntry.data.dek}</p>
+        )}
+        <ul class="clock-poll__options">
+          {pollEntry.data.options.map((o: any) => (
+            <li>
+              <a href={`/poll/${pollEntry.data.slug}?vote=${o.id}`} class="clock-poll__option">
+                <span class="clock-poll__option-label">{o.label}</span>
+                {o.hint && <span class="clock-poll__option-hint">{o.hint}</span>}
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p class="clock-poll__cta mono">
+          <a href={`/poll/${pollEntry.data.slug}`}>Vote + see where the group is going →</a>
+        </p>
+      </aside>
+    )}
 
     <section class="clock-grid" aria-label="World clock">
       {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se, latHemi, latAbs, equator, ritual, timeFormat }) => (
@@ -380,19 +410,26 @@ const jsonLd = {
           </p>
           <p class="clock-card__date mono" data-role="date">—</p>
           <p class="clock-card__status mono" data-role="status" data-bucket="">—</p>
-          <p
-            class={ritual ? 'clock-card__ritual clock-card__ritual--active' : 'clock-card__ritual'}
+          <section
+            class={ritual ? 'clock-card__vignette clock-card__vignette--active' : 'clock-card__vignette'}
             data-role="ritual"
           >
             {ritual ? (
               <>
-                {ritual.glyph && <span class="clock-card__ritual-glyph" aria-hidden="true">{ritual.glyph}</span>}
-                <span class="clock-card__ritual-label">{ritual.label}</span>
+                <p class="clock-card__vignette-line" data-role="vignette-line">
+                  {ritual.glyph && <span class="clock-card__vignette-glyph" aria-hidden="true">{ritual.glyph}</span>}
+                  <span class="clock-card__vignette-label">{ritual.label}</span>
+                </p>
+                {ritual.data && (
+                  <p class="clock-card__vignette-data mono" data-role="vignette-data">{ritual.data}</p>
+                )}
               </>
             ) : (
-              <span class="clock-card__ritual-quiet">quiet hour</span>
+              <p class="clock-card__vignette-line">
+                <span class="clock-card__vignette-quiet">quiet hour</span>
+              </p>
             )}
-          </p>
+          </section>
 
           <div class="clock-card__sky" aria-label="Sky here">
             <p class="clock-card__sky-line mono">
@@ -568,16 +605,23 @@ const jsonLd = {
           if (raw) { try { rituals = JSON.parse(raw); } catch {} }
           const r = findRitual(nowMin, rituals);
           if (r) {
-            const next = (r.glyph ? r.glyph + ' ' : '') + r.label;
-            if (ritualEl.textContent?.trim() !== next.trim()) {
-              ritualEl.innerHTML = (r.glyph ? `<span class="clock-card__ritual-glyph" aria-hidden="true">${r.glyph}</span>` : '') + `<span class="clock-card__ritual-label">${r.label}</span>`;
+            const vignetteLine =
+              (r.glyph ? `<span class="clock-card__vignette-glyph" aria-hidden="true">${r.glyph}</span>` : '') +
+              `<span class="clock-card__vignette-label">${r.label}</span>`;
+            const dataLine = r.data
+              ? `<p class="clock-card__vignette-data mono" data-role="vignette-data">${r.data}</p>`
+              : '';
+            const next = `<p class="clock-card__vignette-line" data-role="vignette-line">${vignetteLine}</p>${dataLine}`;
+            if (ritualEl.innerHTML.trim() !== next.trim()) {
+              ritualEl.innerHTML = next;
             }
-            ritualEl.classList.add('clock-card__ritual--active');
+            ritualEl.classList.add('clock-card__vignette--active');
           } else {
-            if (!ritualEl.querySelector('.clock-card__ritual-quiet')) {
-              ritualEl.innerHTML = '<span class="clock-card__ritual-quiet">quiet hour</span>';
+            const quiet = '<p class="clock-card__vignette-line"><span class="clock-card__vignette-quiet">quiet hour</span></p>';
+            if (ritualEl.innerHTML.trim() !== quiet.trim()) {
+              ritualEl.innerHTML = quiet;
             }
-            ritualEl.classList.remove('clock-card__ritual--active');
+            ritualEl.classList.remove('clock-card__vignette--active');
           }
         }
       }
@@ -767,6 +811,84 @@ const jsonLd = {
     font-size: 12px;
   }
 
+  .clock-poll {
+    margin: 0 0 24px;
+    padding: 16px 18px;
+    border: 1px solid var(--ch-600);
+    border-left-width: 4px;
+    background: #FBFAF5;
+    border-radius: 2px;
+  }
+  .clock-poll__kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+    margin: 0 0 6px;
+    font-weight: 500;
+  }
+  .clock-poll__question {
+    font-family: var(--pc-font-sans);
+    font-size: 20px;
+    line-height: 1.2;
+    font-weight: 500;
+    margin: 0 0 4px;
+    color: var(--pc-ink, #12110E);
+  }
+  .clock-poll__dek {
+    margin: 0 0 12px;
+    font-family: var(--pc-font-sans);
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--pc-ink-soft, #38373A);
+  }
+  .clock-poll__options {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 6px 10px;
+  }
+  .clock-poll__option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid color-mix(in oklab, var(--ch-600) 30%, #fff);
+    border-radius: 2px;
+    text-decoration: none;
+    color: var(--pc-ink, #12110E);
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .clock-poll__option:hover {
+    border-color: var(--ch-600);
+    background: var(--ch-50);
+    text-decoration: none;
+  }
+  .clock-poll__option-label {
+    font-size: 13px;
+    line-height: 1.3;
+    font-weight: 500;
+  }
+  .clock-poll__option-hint {
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--pc-ink-muted, #5F5E5A);
+    font-style: italic;
+  }
+  .clock-poll__cta {
+    margin: 8px 0 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+  }
+  .clock-poll__cta a { color: inherit; }
+
   .clock-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -857,37 +979,56 @@ const jsonLd = {
     opacity: 0.75;
     text-transform: uppercase;
   }
-  .clock-card__ritual {
-    margin: 3px 0 0;
-    font-family: var(--pc-font-sans);
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--pc-ink, #12110E);
-    padding: 4px 8px;
-    background: color-mix(in oklab, var(--ch-50) 60%, #fff);
-    border-left: 2px solid var(--ch-600);
+  /* Vignette — the hero moment of the card. Gets bigger typography and
+     a soft tinted panel so the eye lands here first. */
+  .clock-card__vignette {
+    margin: 6px 0 2px;
+    padding: 8px 10px;
+    background: color-mix(in oklab, var(--ch-50) 70%, #fff);
+    border-left: 3px solid var(--ch-600);
     border-radius: 2px;
+    min-height: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .clock-card__vignette--active {
+    background: color-mix(in oklab, var(--ch-50) 100%, transparent);
+  }
+  .clock-card__vignette-line {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--ch-800);
+    font-weight: 500;
     display: flex;
     align-items: baseline;
     gap: 6px;
-    min-height: 22px;
+    letter-spacing: -0.005em;
   }
-  .clock-card__ritual--active {
-    background: color-mix(in oklab, var(--ch-50) 100%, transparent);
-    border-left-color: var(--ch-600);
-    color: var(--ch-800);
-    font-weight: 500;
-  }
-  .clock-card__ritual-glyph {
-    font-size: 13px;
+  .clock-card__vignette-glyph {
+    font-size: 15px;
     line-height: 1;
   }
-  .clock-card__ritual-quiet {
+  .clock-card__vignette-label {
+    flex: 1;
+  }
+  .clock-card__vignette-data {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--pc-ink-muted, #5F5E5A);
+    letter-spacing: 0.02em;
+  }
+  .clock-card__vignette-quiet {
     color: var(--pc-ink-muted, #5F5E5A);
     font-style: italic;
-    opacity: 0.7;
-    font-size: 11px;
+    opacity: 0.6;
+    font-size: 12px;
     letter-spacing: 0.04em;
+    font-weight: 400;
   }
   .clock-card__seasonal {
     margin: 6px 0 0;
