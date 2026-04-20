@@ -1,0 +1,1696 @@
+---
+/**
+ * /magpie — hosted companion UI for the Magpie macOS clipboard app.
+ *
+ * Mike 2026-04-20: "ship a web version, /magpie".
+ *
+ * Architecture:
+ *   - Magpie is a local macOS app (Good-Feels/magpie on GitHub).
+ *     When the peer-node toggle is on, it serves a read-only HTTP API at
+ *     http://127.0.0.1:38473 exposing /clips.json, /config.json, /health.
+ *   - This page is hosted on pointcast.xyz. Its JS polls the user's local
+ *     Magpie server directly (localhost is treated as a secure origin by
+ *     browsers, so mixed-content isn't blocked; Magpie's server sends
+ *     Access-Control-Allow-Origin: *).
+ *   - Publish actions post directly to /api/ping on PointCast — same path
+ *     the native macOS UI uses.
+ *
+ * State machine:
+ *   1. Checking — initial handshake with 127.0.0.1:38473/health
+ *   2. Installed + running — render clip grid + expansion modal
+ *   3. Not reachable — show install/setup instructions
+ *
+ * Visual language: field-guide / nature-plan (moss + clay + parchment,
+ * Fraunces italic titles, IBM Plex Mono meta, pressed-specimen unfurls).
+ * This is intentionally distinct from PointCast's warm-editorial palette
+ * — Magpie is a sibling, not a subordinate page.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/magpie',
+  name: 'Magpie',
+  description: 'A macOS clipboard peer-node with a push-to-PointCast pipeline. Local-first capture, CC0 unfurls, block-type detection, and an expansion preview that stages a PointCast block before it publishes.',
+  url: 'https://pointcast.xyz/magpie',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'macOS 13+',
+  downloadUrl: 'https://github.com/Good-Feels/magpie/releases/latest',
+};
+---
+
+<BlockLayout
+  title="Magpie"
+  description="A field companion to PointCast. Copy anything — Magpie captures, unfurls, and stages it for publishing as a block."
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/magpie.json', title: 'Magpie manifest (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/og-home-v2.png',
+    buttons: [
+      { label: 'Open Magpie', action: 'link', target: 'https://pointcast.xyz/magpie' },
+      { label: 'Install', action: 'link', target: 'https://github.com/Good-Feels/magpie/releases/latest' },
+      { label: 'Source', action: 'link', target: 'https://github.com/Good-Feels/magpie' },
+    ],
+  }}
+>
+  <div class="magpie-root">
+    <nav class="mg-crumb">
+      <a href="/">← Home</a>
+    </nav>
+
+    <header class="mg-bar">
+      <div class="mg-masthead">
+        <div class="mg-brand">
+          <span class="mg-kicker">Field clippings · from your machine</span>
+          <div class="mg-wordmark">
+            <span class="mg-logo" aria-hidden="true">🐦‍⬛</span>
+            <strong>Magpie</strong>
+          </div>
+          <div class="mg-tagline">A specimen book of things worth keeping.</div>
+        </div>
+        <div class="mg-controls">
+          <input id="mg-q" type="search" placeholder="search the archive" autocomplete="off">
+          <label class="mg-chk"><input id="mg-pinnedOnly" type="checkbox"> pressed only</label>
+          <button id="mg-refresh" type="button" title="reload">↻</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="mg-meta">
+      <div>
+        <span class="mg-k">node</span>
+        <code id="mg-node">127.0.0.1:38473</code>
+        <span class="mg-dot">·</span>
+        <span class="mg-k">pointcast</span>
+        <code id="mg-pcEndpoint">—</code>
+        <span class="mg-dot">·</span>
+        <span class="mg-k">from</span>
+        <code id="mg-pcFrom">—</code>
+      </div>
+      <div>
+        <span id="mg-status" class="mg-pill checking"><span class="mg-pill-dot"></span>checking</span>
+      </div>
+    </section>
+
+    <section id="mg-install" class="mg-install" hidden>
+      <div class="mg-install-card">
+        <p class="mg-kicker mg-install-kicker">Magpie · not reachable</p>
+        <h2 class="mg-install-title">
+          Bring this page to life by running Magpie on your Mac.
+        </h2>
+        <p class="mg-install-dek">
+          This is the hosted window into a clipboard app that lives on your
+          own machine. Nothing leaves the device unless you press <em>push</em>.
+          Set-up takes about sixty seconds.
+        </p>
+        <ol class="mg-install-steps">
+          <li>
+            <span class="mg-step-n">1</span>
+            <div>
+              <strong>Download the latest build.</strong>
+              <a href="https://github.com/Good-Feels/magpie/releases/latest" target="_blank" rel="noopener">
+                github.com/Good-Feels/magpie/releases
+              </a>
+              — drag <code>Magpie.app</code> to Applications.
+            </div>
+          </li>
+          <li>
+            <span class="mg-step-n">2</span>
+            <div>
+              <strong>Launch it.</strong> Look for the clipboard icon in your
+              menu bar. Grant clipboard access when prompted.
+            </div>
+          </li>
+          <li>
+            <span class="mg-step-n">3</span>
+            <div>
+              <strong>Turn on the peer node.</strong> Settings →
+              <em>PointCast</em> → <em>Serve local web UI</em>. This page will
+              connect automatically.
+            </div>
+          </li>
+          <li>
+            <span class="mg-step-n">4</span>
+            <div>
+              <strong>Copy something.</strong> Come back here. Every URL
+              unfurls; every clip can be pushed to PointCast with a title, a
+              dek, and a chosen channel.
+            </div>
+          </li>
+        </ol>
+        <div class="mg-install-cta">
+          <a class="mg-btn primary" href="https://github.com/Good-Feels/magpie/releases/latest" target="_blank" rel="noopener">Download · macOS 13+</a>
+          <a class="mg-btn ghost" href="https://github.com/Good-Feels/magpie" target="_blank" rel="noopener">Source</a>
+          <button class="mg-btn ghost" type="button" id="mg-retry">Retry connection</button>
+          <button class="mg-btn ghost mg-demo-btn" type="button" id="mg-demo">Try demo mode ↝</button>
+        </div>
+        <details class="mg-settings">
+          <summary>Advanced · change local node endpoint</summary>
+          <div class="mg-settings-body">
+            <label class="mg-label" for="mg-endpoint">Peer-node URL</label>
+            <div class="mg-endpoint-row">
+              <input type="text" id="mg-endpoint" placeholder="http://127.0.0.1:38473" autocomplete="off" spellcheck="false">
+              <button class="mg-btn ghost" type="button" id="mg-endpoint-save">Save</button>
+              <button class="mg-btn ghost" type="button" id="mg-endpoint-reset">Reset</button>
+            </div>
+            <p class="mg-settings-hint">
+              Default is <code>http://127.0.0.1:38473</code>. If you changed the
+              port in Magpie Preferences or you're running on a non-default
+              loopback, set it here. Stored in this browser only.
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div id="mg-demo-banner" class="mg-demo-banner" hidden>
+      <span class="mg-kicker">❧ Demo mode</span>
+      <span class="mg-demo-copy">Browsing sample specimens. Push is disabled — install Magpie locally to capture your own clipboard.</span>
+      <button class="mg-btn ghost" type="button" id="mg-demo-exit">Exit demo</button>
+    </div>
+    <main id="mg-grid" class="mg-grid" aria-live="polite" hidden></main>
+
+    <footer class="mg-foot">
+      <span id="mg-count">—</span>
+      <span class="mg-dot">·</span>
+      <span>peer node · v0.4</span>
+      <span class="mg-dot">·</span>
+      <a href="/magpie.json">magpie.json</a>
+      <span class="mg-dot">·</span>
+      <a href="https://github.com/Good-Feels/magpie" target="_blank" rel="noopener">github</a>
+    </footer>
+
+    <template id="mg-tpl-clip">
+      <article class="mg-clip">
+        <header class="mg-clip-head">
+          <span class="mg-block-code"></span>
+          <span class="mg-sep">·</span>
+          <span class="mg-src"></span>
+          <span class="mg-count-badge" hidden></span>
+          <time class="mg-ts"></time>
+          <span class="mg-pin" hidden>❋</span>
+        </header>
+        <div class="mg-body"></div>
+        <footer class="mg-clip-foot">
+          <button class="mg-act mg-copy" type="button" title="copy text">copy</button>
+          <button class="mg-act mg-push" type="button" title="push to PointCast inbox">push →</button>
+          <button class="mg-act mg-push-expand" type="button" title="expand into a block">expand ✤</button>
+          <span class="mg-result"></span>
+        </footer>
+      </article>
+    </template>
+
+    <div id="mg-expandBackdrop" class="mg-expand-backdrop" hidden>
+      <div class="mg-expand-modal" role="dialog" aria-labelledby="mg-expandTitle">
+        <header class="mg-expand-head">
+          <div class="mg-kicker mg-expand-kicker">Expand into a block</div>
+          <div class="mg-expand-title" id="mg-expandTitle">Publish this clip to PointCast</div>
+          <button class="mg-close" type="button" aria-label="close" data-mg-close>✕</button>
+        </header>
+
+        <div class="mg-expand-body">
+          <div class="mg-field-row">
+            <div class="mg-field">
+              <label class="mg-label" for="mg-xChannel">Channel <span class="mg-hint">where this lives</span></label>
+              <select id="mg-xChannel"></select>
+            </div>
+            <div class="mg-field">
+              <label class="mg-label" for="mg-xBlockType">Type</label>
+              <select id="mg-xBlockType">
+                <option value="READ">READ</option>
+                <option value="NOTE">NOTE</option>
+                <option value="LISTEN">LISTEN</option>
+                <option value="WATCH">WATCH</option>
+                <option value="LINK">LINK</option>
+                <option value="VISIT">VISIT</option>
+                <option value="MINT">MINT</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mg-field">
+            <label class="mg-label" for="mg-xTitle">Title</label>
+            <input type="text" id="mg-xTitle" maxlength="120" placeholder="Title of this block">
+          </div>
+
+          <div class="mg-field">
+            <label class="mg-label" for="mg-xDek">Dek <span class="mg-hint">a line of framing — optional</span></label>
+            <textarea id="mg-xDek" maxlength="280" placeholder="A short description, a dek, what should a reader know?"></textarea>
+          </div>
+
+          <div class="mg-field">
+            <label class="mg-label" for="mg-xBody">Body <span class="mg-hint">what actually lives in the block</span></label>
+            <textarea id="mg-xBody" maxlength="4000"></textarea>
+          </div>
+
+          <div class="mg-citation">
+            <span class="mg-cite-head">Citation preview</span>
+            <span class="mg-cite-line">PointCast · <strong><span id="mg-xCiteChannel">CH.FD</span></strong> · № —</span>
+            <div class="mg-cite-title" id="mg-xCiteTitle">—</div>
+            <span class="mg-cite-line" id="mg-xCiteDate">—</span>
+          </div>
+        </div>
+
+        <footer class="mg-expand-foot">
+          <span class="mg-note">Expansion runs on Claude Code's next tick · edits go in as hints</span>
+          <div class="mg-buttons">
+            <button class="mg-btn ghost" type="button" data-mg-close>cancel</button>
+            <button class="mg-btn primary" type="button" id="mg-xPublish">publish block ⇝</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const NODE_DEFAULT = "http://127.0.0.1:38473";
+      const PC_PING      = "https://pointcast.xyz/api/ping";
+      const POLL_MS      = 5000;
+      const NODE_STORAGE_KEY = "magpie:node";
+
+      function readNodeBase() {
+        try {
+          const v = localStorage.getItem(NODE_STORAGE_KEY);
+          if (v && /^https?:\/\//i.test(v)) return v.replace(/\/$/, "");
+        } catch {}
+        return NODE_DEFAULT;
+      }
+      let NODE_BASE = readNodeBase();
+
+      const DEMO_CLIPS = [
+        {
+          id: 612, type: "text", pinned: true,
+          createdAt: new Date(Date.now() - 43 * 60 * 1000).toISOString(),
+          lastCopiedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+          copyCount: 5,
+          sourceApp: "Google Chrome",
+          text: "https://pointcast.xyz/b/0205",
+          preview: "https://pointcast.xyz/b/0205",
+          unfurl: {
+            host: "pointcast.xyz",
+            title: "The front door is agentic",
+            description: "A living broadcast from El Segundo. Dispatches, art drops, and coordination infrastructure from Mike Hoydich.",
+            favicon: "https://pointcast.xyz/favicon.ico",
+            image: "https://pointcast.xyz/images/og/og-home-v2.png"
+          }
+        },
+        {
+          id: 611, type: "text", pinned: false,
+          createdAt: new Date(Date.now() - 49 * 60 * 1000).toISOString(),
+          sourceApp: "Slack",
+          text: "ok so the DRUM voucher flow — we'll want the ghostnet origination before the cookie-clicker launch. target sunday.",
+          preview: "ok so the DRUM voucher flow — we'll want the ghostnet origination before the cookie-clicker launch. target sunday."
+        },
+        {
+          id: 610, type: "text", pinned: false,
+          createdAt: new Date(Date.now() - 62 * 60 * 1000).toISOString(),
+          sourceApp: "Google Chrome",
+          text: "https://x.com/mhoydich",
+          preview: "https://x.com/mhoydich",
+          unfurl: {
+            host: "x.com",
+            title: "Mike Hoydich on X",
+            description: "shipping magpie v0.5 — local clipboard peer-node with a push-to-pointcast pipeline. built in an afternoon w/ claude code.",
+            favicon: "https://abs.twimg.com/favicons/twitter.3.ico"
+          }
+        },
+        {
+          id: 609, type: "text", pinned: true,
+          createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          sourceApp: "Spotify",
+          text: "https://open.spotify.com/track/19SN5mb0gs0ze9PYBIVANZ",
+          preview: "https://open.spotify.com/track/19SN5mb0gs0ze9PYBIVANZ",
+          unfurl: {
+            host: "open.spotify.com",
+            title: "Copland: Appalachian Spring: VII. Variations on a Shaker Hymn",
+            description: "By Aaron Copland, Aurora Orchestra, Nicholas Collon · Spotify",
+            favicon: "https://open.spotifycdn.com/cdn/images/favicon32.b64ecc03.png",
+            image: "https://i.scdn.co/image/ab67616d0000b2733259047b02cd2fd4ecf6479b"
+          }
+        },
+        {
+          id: 608, type: "text", pinned: false,
+          createdAt: new Date(Date.now() - 2.5 * 60 * 60 * 1000).toISOString(),
+          sourceApp: "Notes",
+          text: "TODO: write up the Selkirk paddle face pattern notes before the Saturday drill session",
+          preview: "TODO: write up the Selkirk paddle face pattern notes before the Saturday drill session"
+        },
+        {
+          id: 607, type: "text", pinned: false,
+          createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+          sourceApp: "Google Chrome",
+          text: "https://github.com/Good-Feels/magpie",
+          preview: "https://github.com/Good-Feels/magpie",
+          unfurl: {
+            host: "github.com",
+            title: "Good-Feels/magpie",
+            description: "A fast, searchable clipboard manager for macOS. Copy freely. Everything is saved.",
+            favicon: "https://github.githubassets.com/favicons/favicon.png"
+          }
+        },
+        {
+          id: 606, type: "text", pinned: false,
+          createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+          lastCopiedAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+          copyCount: 3,
+          sourceApp: "Terminal",
+          text: "KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh",
+          preview: "KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh"
+        },
+        {
+          id: 605, type: "text", pinned: false,
+          createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+          sourceApp: "Messages",
+          text: "morgan: court 3 at 930? bringing the new project 002 — want to try the dead-hand rolls",
+          preview: "morgan: court 3 at 930? bringing the new project 002 — want to try the dead-hand rolls"
+        },
+        {
+          id: 604, type: "filePath", pinned: false,
+          createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+          sourceApp: "Finder",
+          text: "/Users/mhoydich/pointcast/docs/briefs/sprint-6.md",
+          preview: "sprint-6.md",
+          filePath: "/Users/mhoydich/pointcast/docs/briefs/sprint-6.md"
+        }
+      ];
+
+      const CHANNELS = [
+        { code: "FD",  name: "Front Door" },
+        { code: "CRT", name: "Court" },
+        { code: "SPN", name: "Spinning" },
+        { code: "GF",  name: "Good Feels" },
+        { code: "GDN", name: "Garden" },
+        { code: "ESC", name: "El Segundo" },
+        { code: "VST", name: "Visit" },
+        { code: "BTL", name: "Battler" },
+      ];
+
+      const state = {
+        connected: false,
+        demo: false,
+        config: null,
+        allClips: [],
+        clips: [],
+        query: "",
+        pinnedOnly: false,
+        modalClip: null,
+      };
+
+      const $ = (s) => document.querySelector(s);
+
+      function setStatus(text, cls) {
+        const el = $("#mg-status");
+        el.innerHTML = '<span class="mg-pill-dot"></span>' + text;
+        el.className = "mg-pill " + (cls || "checking");
+      }
+
+      async function probe() {
+        if (state.demo) return true; // skip health checks while in demo mode
+        try {
+          const ctl = new AbortController();
+          const t = setTimeout(() => ctl.abort(), 2500);
+          const res = await fetch(NODE_BASE + "/health", { signal: ctl.signal });
+          clearTimeout(t);
+          if (!res.ok) throw new Error("bad status");
+          const data = await res.json();
+          onConnected(data);
+          return true;
+        } catch (e) {
+          onDisconnected();
+          return false;
+        }
+      }
+
+      async function onConnected(health) {
+        if (state.connected) return; // already live
+        state.connected = true;
+        state.demo = false;
+        $("#mg-install").hidden = true;
+        $("#mg-demo-banner").hidden = true;
+        $("#mg-grid").hidden = false;
+        $("#mg-node").textContent = (NODE_BASE.replace(/^https?:\/\//, "") || NODE_DEFAULT);
+        await loadConfig();
+        await loadClips();
+      }
+
+      function onDisconnected() {
+        if (state.demo) return; // never fall back to offline while demo is active
+        state.connected = false;
+        state.allClips = [];
+        state.clips = [];
+        $("#mg-install").hidden = false;
+        $("#mg-demo-banner").hidden = true;
+        $("#mg-grid").hidden = true;
+        $("#mg-count").textContent = "local node offline";
+        setStatus("offline", "err");
+        $("#mg-pcEndpoint").textContent = "—";
+        $("#mg-pcFrom").textContent = "—";
+      }
+
+      function enterDemo() {
+        state.demo = true;
+        state.connected = false;
+        state.allClips = DEMO_CLIPS.slice();
+        state.config = { endpoint: PC_PING, fromName: "demo", address: "" };
+        $("#mg-install").hidden = true;
+        $("#mg-demo-banner").hidden = false;
+        $("#mg-grid").hidden = false;
+        $("#mg-pcEndpoint").textContent = PC_PING;
+        $("#mg-pcFrom").textContent = "demo";
+        $("#mg-pcAddress") && ($("#mg-pcAddress").textContent = "—");
+        setStatus("demo", "checking");
+        applyFilters();
+      }
+
+      function exitDemo() {
+        state.demo = false;
+        state.allClips = [];
+        state.clips = [];
+        $("#mg-demo-banner").hidden = true;
+        $("#mg-grid").hidden = true;
+        $("#mg-install").hidden = false;
+        setStatus("checking", "checking");
+        probe();
+      }
+
+      async function loadConfig() {
+        try {
+          const r = await fetch(NODE_BASE + "/config.json");
+          const d = await r.json();
+          state.config = d.pointcast || {};
+        } catch { state.config = {}; }
+        $("#mg-pcEndpoint").textContent = state.config.endpoint || "(not set)";
+        $("#mg-pcFrom").textContent = state.config.fromName || "(anon)";
+      }
+
+      async function loadClips() {
+        try {
+          const r = await fetch(NODE_BASE + "/clips.json");
+          const d = await r.json();
+          state.allClips = d.clips || [];
+          applyFilters();
+          setStatus((state.allClips.length) + " clippings", "ok");
+        } catch {
+          onDisconnected();
+        }
+      }
+
+      function applyFilters() {
+        let c = state.allClips;
+        if (state.pinnedOnly) c = c.filter(x => x.pinned);
+        if (state.query) {
+          const q = state.query.toLowerCase();
+          c = c.filter(x =>
+            (x.text || "").toLowerCase().includes(q)
+            || (x.preview || "").toLowerCase().includes(q)
+            || (x.sourceApp || "").toLowerCase().includes(q)
+            || (x.unfurl && x.unfurl.title && x.unfurl.title.toLowerCase().includes(q))
+            || (x.unfurl && x.unfurl.host && x.unfurl.host.toLowerCase().includes(q))
+          );
+        }
+        state.clips = c;
+        render();
+      }
+
+      function render() {
+        const grid = $("#mg-grid");
+        grid.innerHTML = "";
+        $("#mg-count").textContent = state.clips.length + " clip" + (state.clips.length === 1 ? "" : "s");
+        if (state.clips.length === 0) {
+          const d = document.createElement("div");
+          d.className = "mg-empty";
+          d.textContent = state.allClips.length === 0 ? "— no specimens collected yet —" : "— no clippings match that filter —";
+          grid.appendChild(d);
+          return;
+        }
+        const tpl = $("#mg-tpl-clip");
+        for (const clip of state.clips) {
+          const node = tpl.content.cloneNode(true);
+          const article = node.querySelector(".mg-clip");
+          article.dataset.id = clip.id;
+
+          node.querySelector(".mg-src").textContent = clip.sourceApp || "clipboard";
+          node.querySelector(".mg-ts").textContent = formatTime(clip.lastCopiedAt || clip.createdAt);
+          node.querySelector(".mg-block-code").textContent = detectBlockType(clip);
+          const count = clip.copyCount || 1;
+          if (count > 1) {
+            const badge = node.querySelector(".mg-count-badge");
+            badge.textContent = "×" + count;
+            badge.hidden = false;
+          }
+          if (clip.pinned) {
+            node.querySelector(".mg-pin").hidden = false;
+            article.classList.add("pinned");
+          }
+
+          const body = node.querySelector(".mg-body");
+          if (clip.type === "image") {
+            body.textContent = "[image · " + (clip.imageBytes || "?") + " bytes]";
+            body.classList.add("plain");
+          } else if (clip.type === "filePath") {
+            body.textContent = "📄 " + (clip.filePath || clip.preview || "");
+            body.classList.add("plain");
+          } else if (clip.unfurl && (clip.unfurl.title || clip.unfurl.description || clip.unfurl.image)) {
+            body.classList.add("unfurled");
+            body.innerHTML = renderUnfurl(clip);
+          } else {
+            body.innerHTML = linkify(clip.text || clip.preview || "");
+            body.classList.add("plain");
+          }
+
+          node.querySelector(".mg-copy").addEventListener("click", (e) => copyText(clip.text || clip.preview || "", e.target));
+          node.querySelector(".mg-push").addEventListener("click", (e) => publish(clip, false, null, e.target.parentElement.querySelector(".mg-result")));
+          node.querySelector(".mg-push-expand").addEventListener("click", (e) => openExpandModal(clip, e.target.parentElement.querySelector(".mg-result")));
+
+          grid.appendChild(node);
+        }
+      }
+
+      function formatTime(iso) {
+        try {
+          const d = new Date(iso);
+          const diff = (Date.now() - d.getTime()) / 1000;
+          if (diff < 60) return "just now";
+          if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+          if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+          if (diff < 86400 * 7) return Math.floor(diff / 86400) + "d ago";
+          return d.toLocaleDateString();
+        } catch { return iso; }
+      }
+
+      function detectBlockType(clip) {
+        if (clip.type === "image") return "IMG";
+        if (clip.type === "filePath") return "FILE";
+        const host = (clip.unfurl && clip.unfurl.host) || extractHost(clip.text || clip.preview || "");
+        if (!host) return ((clip.text || clip.preview || "").length > 240) ? "READ" : "NOTE";
+        const h = host.toLowerCase();
+        if (/spotify|soundcloud|music\.apple|bandcamp|tidal|anchor\.fm/.test(h)) return "LISTEN";
+        if (/youtube|youtu\.be|vimeo|twitch|loom\.com|tiktok\.com/.test(h)) return "WATCH";
+        if (/x\.com|twitter\.com|warpcast|bsky\.app|threads\.net|mastodon|farcaster/.test(h)) return "NOTE";
+        if (/objkt|teia\.art|fxhash|zora\.co|manifold|opensea|foundation\.app/.test(h)) return "MINT";
+        if (/maps\.google|google\.com\/maps|apple\.com\/maps|yelp\.com/.test(h)) return "VISIT";
+        if (/github|medium|substack|nytimes|bloomberg|wsj|wired|theverge|stratechery|pointcast/.test(h)) return "READ";
+        return "LINK";
+      }
+
+      function defaultChannelFor(clip, blockType) {
+        const host = ((clip.unfurl && clip.unfurl.host) || "").toLowerCase();
+        const src = (clip.sourceApp || "").toLowerCase();
+        if (blockType === "LISTEN") return "SPN";
+        if (blockType === "VISIT") return "VST";
+        if (/good[\s-]?feels|cannabis|hemp|leafly/.test((clip.text || "") + " " + host)) return "GF";
+        if (/pickleball|selkirk|paddle|court/.test((clip.text || "") + " " + host)) return "CRT";
+        if (/el.segundo|escu|neighborhood/.test(clip.text || "")) return "ESC";
+        if (/garden|bird|wildlife|balcony/.test(clip.text || "")) return "GDN";
+        if (src.includes("spotify")) return "SPN";
+        return "FD";
+      }
+
+      function extractHost(s) {
+        try { return new URL(s.trim().split(/\s+/)[0]).host || null; } catch { return null; }
+      }
+
+      function renderUnfurl(clip) {
+        const u = clip.unfurl || {};
+        const url = clip.text || clip.preview || "";
+        const esc = (s) => (s || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+        const image = u.image ? '<div class="mg-unfurl-plate"><img src="' + esc(u.image) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>' : "";
+        const favicon = u.favicon ? '<img class="mg-favicon" src="' + esc(u.favicon) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : "";
+        const host = u.host ? '<span class="mg-host">' + esc(u.host) + '</span>' : "";
+        const title = u.title ? '<div class="mg-unfurl-title">' + esc(u.title) + '</div>' : "";
+        const desc = u.description ? '<div class="mg-unfurl-desc">' + esc(u.description) + '</div>' : "";
+        const urlLine = url ? '<a class="mg-unfurl-url" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + '</a>' : "";
+        return '<div class="mg-unfurl">' + image + '<div class="mg-unfurl-host-row">' + favicon + host + '</div>' + title + desc + urlLine + '</div>';
+      }
+
+      function linkify(s) {
+        const escaped = s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+        return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+      }
+
+      async function copyText(text, btn) {
+        try {
+          await navigator.clipboard.writeText(text);
+          const o = btn.textContent;
+          btn.textContent = "copied ✓";
+          setTimeout(() => { btn.textContent = o; }, 900);
+        } catch { btn.textContent = "copy failed"; }
+      }
+
+      /* Modal */
+      function initChannelOptions() {
+        const sel = $("#mg-xChannel");
+        sel.innerHTML = "";
+        for (const c of CHANNELS) {
+          const opt = document.createElement("option");
+          opt.value = c.code;
+          opt.textContent = "CH." + c.code + " — " + c.name;
+          sel.appendChild(opt);
+        }
+      }
+
+      function openExpandModal(clip, resultEl) {
+        state.modalClip = { clip, resultEl };
+        const bt = detectBlockType(clip);
+        const ch = defaultChannelFor(clip, bt);
+        const u = clip.unfurl || {};
+        $("#mg-xBlockType").value = bt;
+        $("#mg-xChannel").value = ch;
+        $("#mg-xTitle").value = u.title || deriveFallbackTitle(clip);
+        $("#mg-xDek").value = u.description || "";
+        $("#mg-xBody").value = clip.text || clip.preview || "";
+        updateCitation();
+        const back = $("#mg-expandBackdrop");
+        back.hidden = false;
+        void back.offsetWidth;
+        back.classList.add("open");
+        setTimeout(() => $("#mg-xTitle").focus(), 50);
+      }
+
+      function closeExpandModal() {
+        const back = $("#mg-expandBackdrop");
+        back.classList.remove("open");
+        setTimeout(() => { back.hidden = true; }, 200);
+        state.modalClip = null;
+      }
+
+      function deriveFallbackTitle(clip) {
+        const t = (clip.text || clip.preview || "").trim();
+        if (!t) return "";
+        const first = t.split("\n", 1)[0].trim();
+        return first.length > 100 ? first.slice(0, 97) + "…" : first;
+      }
+
+      function updateCitation() {
+        $("#mg-xCiteChannel").textContent = "CH." + $("#mg-xChannel").value;
+        $("#mg-xCiteTitle").textContent = '"' + ($("#mg-xTitle").value.trim() || "—") + '"';
+        $("#mg-xCiteDate").textContent = new Date().toISOString().slice(0, 10);
+      }
+
+      async function publishFromModal() {
+        if (!state.modalClip) return;
+        const { clip, resultEl } = state.modalClip;
+        const ch = $("#mg-xChannel").value;
+        const bt = $("#mg-xBlockType").value;
+        const title = $("#mg-xTitle").value.trim();
+        const dek = $("#mg-xDek").value.trim();
+        const body = $("#mg-xBody").value.trim();
+        if (!title || !body) {
+          $("#mg-xPublish").textContent = "title + body required";
+          setTimeout(() => { $("#mg-xPublish").textContent = "publish block ⇝"; }, 1400);
+          return;
+        }
+        $("#mg-xPublish").disabled = true;
+        $("#mg-xPublish").textContent = "publishing…";
+        try {
+          await publish(clip, true, {
+            subject: title,
+            body: body,
+            channel: ch,
+            blockType: bt,
+            dek: dek || undefined,
+          }, resultEl);
+          closeExpandModal();
+        } catch {
+          $("#mg-xPublish").disabled = false;
+          $("#mg-xPublish").textContent = "retry ⇝";
+        }
+      }
+
+      async function publish(clip, expand, override, resultEl) {
+        if (state.demo) {
+          if (resultEl) { resultEl.textContent = "demo · push disabled"; resultEl.className = "mg-result err"; }
+          throw new Error("demo mode");
+        }
+        const endpoint = (state.config && state.config.endpoint) || PC_PING;
+        if (resultEl) { resultEl.textContent = "sending…"; resultEl.className = "mg-result"; }
+        const body = (override && override.body) || clip.text || clip.preview || "";
+        if (!body) {
+          if (resultEl) { resultEl.textContent = "empty"; resultEl.className = "mg-result err"; }
+          throw new Error("empty");
+        }
+        const subject = (override && override.subject) || deriveSubject(clip, body);
+        const payload = {
+          type: "pc-ping-v1",
+          body: body.slice(0, 4000),
+          timestamp: new Date().toISOString(),
+          expand: !!expand,
+        };
+        if (subject) payload.subject = subject.slice(0, 120);
+        if (state.config && state.config.fromName) payload.from = state.config.fromName.slice(0, 80);
+        if (state.config && state.config.address) payload.address = state.config.address;
+        // Structured expansion hints (pc-ping-v1 v0.5+)
+        if (override && override.channel) payload.channel = override.channel;
+        if (override && override.blockType) payload.blockType = override.blockType;
+        if (override && override.dek) payload.dek = override.dek.slice(0, 280);
+        // Always attach source context when we have it — helps cc infer
+        // even when expand=false.
+        const sourceUrl = (clip.text || clip.preview || "").trim();
+        if (/^https?:\/\//i.test(sourceUrl)) payload.sourceUrl = sourceUrl.slice(0, 2048);
+        if (clip.sourceApp) payload.sourceApp = clip.sourceApp.slice(0, 120);
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.ok) {
+            if (resultEl) { resultEl.textContent = expand ? "expanded ✓" : "pushed ✓"; resultEl.className = "mg-result ok"; }
+            return data;
+          } else {
+            const reason = data.reason || data.error || ("HTTP " + res.status);
+            if (resultEl) { resultEl.textContent = reason; resultEl.className = "mg-result err"; }
+            throw new Error(reason);
+          }
+        } catch (e) {
+          if (resultEl) { resultEl.textContent = "network err"; resultEl.className = "mg-result err"; }
+          throw e;
+        }
+      }
+
+      function deriveSubject(clip, body) {
+        if (clip.unfurl && clip.unfurl.title) return clip.unfurl.title;
+        const first = body.split("\n", 1)[0].trim();
+        try { const u = new URL(first); if (u.host) return clip.sourceApp ? clip.sourceApp + ": " + u.host : u.host; } catch {}
+        return clip.sourceApp ? "magpie clip from " + clip.sourceApp : "magpie clip";
+      }
+
+      /* wire up */
+      $("#mg-q").addEventListener("input", (e) => { state.query = e.target.value; applyFilters(); });
+      $("#mg-pinnedOnly").addEventListener("change", (e) => { state.pinnedOnly = e.target.checked; applyFilters(); });
+      $("#mg-refresh").addEventListener("click", () => {
+        if (state.demo) { state.allClips = DEMO_CLIPS.slice(); applyFilters(); return; }
+        state.connected ? loadClips() : probe();
+      });
+      $("#mg-retry").addEventListener("click", () => probe());
+      $("#mg-demo").addEventListener("click", enterDemo);
+      $("#mg-demo-exit").addEventListener("click", exitDemo);
+
+      const endpointInput = $("#mg-endpoint");
+      if (endpointInput) endpointInput.value = NODE_BASE === NODE_DEFAULT ? "" : NODE_BASE;
+      $("#mg-endpoint-save") && $("#mg-endpoint-save").addEventListener("click", () => {
+        const v = ($("#mg-endpoint").value || "").trim().replace(/\/$/, "");
+        if (v && /^https?:\/\//i.test(v)) {
+          try { localStorage.setItem(NODE_STORAGE_KEY, v); } catch {}
+          NODE_BASE = v;
+        } else if (!v) {
+          try { localStorage.removeItem(NODE_STORAGE_KEY); } catch {}
+          NODE_BASE = NODE_DEFAULT;
+        } else {
+          $("#mg-endpoint").style.borderColor = "var(--mg-leaf-red)";
+          setTimeout(() => { $("#mg-endpoint").style.borderColor = ""; }, 1400);
+          return;
+        }
+        setStatus("checking", "checking");
+        probe();
+      });
+      $("#mg-endpoint-reset") && $("#mg-endpoint-reset").addEventListener("click", () => {
+        try { localStorage.removeItem(NODE_STORAGE_KEY); } catch {}
+        NODE_BASE = NODE_DEFAULT;
+        $("#mg-endpoint").value = "";
+        setStatus("checking", "checking");
+        probe();
+      });
+
+      document.querySelectorAll("[data-mg-close]").forEach(el => el.addEventListener("click", closeExpandModal));
+      $("#mg-expandBackdrop").addEventListener("click", (e) => { if (e.target.id === "mg-expandBackdrop") closeExpandModal(); });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !$("#mg-expandBackdrop").hidden) closeExpandModal();
+        if (e.key === "Enter" && e.metaKey && state.modalClip) publishFromModal();
+      });
+
+      $("#mg-xChannel").addEventListener("change", updateCitation);
+      $("#mg-xTitle").addEventListener("input", updateCitation);
+      $("#mg-xPublish").addEventListener("click", publishFromModal);
+
+      initChannelOptions();
+      probe();
+      setInterval(() => { state.connected ? loadClips() : probe(); }, POLL_MS);
+    })();
+  </script>
+</BlockLayout>
+
+<style is:global>
+  @import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+</style>
+
+<style>
+  /* Nature-plan palette scoped to .magpie-root */
+  .magpie-root {
+    --mg-paper: #EFE8D2;
+    --mg-paper-tint: #E7DFC4;
+    --mg-card: #FAF5E0;
+    --mg-card-hover: #FFF9DD;
+    --mg-rule: #C8B98E;
+    --mg-rule-soft: #E0D6B6;
+    --mg-ink: #1E1C14;
+    --mg-ink-soft: #5A544A;
+    --mg-ink-mute: #8A8273;
+    --mg-moss: #3E5940;
+    --mg-moss-dark: #273A28;
+    --mg-sage-tint: #E3EAD8;
+    --mg-clay: #AE6A38;
+    --mg-clay-dark: #8D5524;
+    --mg-bronze: #7E5A2A;
+    --mg-leaf-red: #C14E3A;
+    --mg-display: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+    --mg-body: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --mg-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    background:
+      radial-gradient(ellipse 900px 500px at top left, rgba(139, 165, 141, 0.1), transparent),
+      radial-gradient(ellipse 700px 400px at bottom right, rgba(174, 106, 56, 0.08), transparent),
+      var(--mg-paper);
+    color: var(--mg-ink);
+    font-family: var(--mg-body);
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 100vh;
+    margin: -1px -1em;
+    padding: 0 1em;
+    -webkit-font-smoothing: antialiased;
+  }
+  .magpie-root ::selection { background: var(--mg-sage-tint); color: var(--mg-ink); }
+  .magpie-root * { box-sizing: border-box; }
+  .magpie-root [hidden] { display: none !important; }
+
+  .mg-crumb {
+    padding: 14px 32px 0;
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mg-ink-mute);
+  }
+  .mg-crumb a { color: var(--mg-clay); text-decoration: none; }
+  .mg-crumb a:hover { color: var(--mg-clay-dark); text-decoration: underline; }
+
+  .mg-bar {
+    border-bottom: 1px solid var(--mg-rule);
+    background: transparent;
+  }
+  .mg-masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 22px 32px 16px;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .mg-brand { display: flex; flex-direction: column; gap: 4px; }
+  .mg-kicker {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--mg-moss);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mg-kicker::before {
+    content: "❧";
+    font-family: var(--mg-display);
+    font-size: 14px;
+    color: var(--mg-clay);
+    letter-spacing: 0;
+  }
+  .mg-wordmark { display: flex; align-items: baseline; gap: 12px; margin-top: 2px; }
+  .mg-wordmark strong {
+    font-family: var(--mg-display);
+    font-size: 44px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--mg-ink);
+    line-height: 1;
+    font-style: italic;
+  }
+  .mg-logo { font-size: 26px; line-height: 1; }
+  .mg-tagline {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--mg-ink-soft);
+    margin-top: 4px;
+  }
+
+  .mg-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mg-controls input[type="search"] {
+    font-family: var(--mg-mono);
+    font-size: 12px;
+    padding: 8px 14px;
+    width: 220px;
+    border: 1px solid var(--mg-rule);
+    background: var(--mg-card);
+    color: var(--mg-ink);
+    border-radius: 2px;
+    transition: all 0.18s ease;
+  }
+  .mg-controls input[type="search"]:focus {
+    outline: none;
+    border-color: var(--mg-moss);
+    background: var(--mg-paper);
+    box-shadow: 0 0 0 3px rgba(62, 89, 64, 0.08);
+  }
+  .mg-chk {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--mg-ink-soft);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .mg-chk input { accent-color: var(--mg-moss); cursor: pointer; }
+  .mg-controls button {
+    font-family: var(--mg-mono);
+    font-size: 14px;
+    background: transparent;
+    color: var(--mg-ink);
+    border: 1px solid var(--mg-rule);
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 2px;
+    min-width: 36px;
+    transition: all 0.15s;
+  }
+  .mg-controls button:hover { background: var(--mg-card-hover); border-color: var(--mg-moss); color: var(--mg-moss); }
+
+  .mg-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 32px;
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--mg-ink-soft);
+    flex-wrap: wrap;
+    gap: 10px;
+    border-bottom: 1px solid var(--mg-rule-soft);
+  }
+  .mg-meta > div { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+  .mg-k { color: var(--mg-clay); letter-spacing: 0.2em; font-weight: 600; }
+  .mg-meta code { font-family: var(--mg-mono); font-size: 10px; color: var(--mg-ink); background: transparent; padding: 0; text-transform: none; letter-spacing: 0.02em; }
+  .mg-dot { color: var(--mg-rule); margin: 0 4px; }
+
+  .mg-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--mg-sage-tint);
+    color: var(--mg-moss);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-family: var(--mg-mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .mg-pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--mg-moss);
+    animation: mg-pulse 2.2s infinite;
+  }
+  @keyframes mg-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(62, 89, 64, 0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(62, 89, 64, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(62, 89, 64, 0); }
+  }
+  .mg-pill.err { background: rgba(193, 78, 58, 0.13); color: var(--mg-leaf-red); }
+  .mg-pill.err .mg-pill-dot { background: var(--mg-leaf-red); animation: none; }
+  .mg-pill.checking { background: transparent; color: var(--mg-ink-soft); border: 1px solid var(--mg-rule); }
+  .mg-pill.checking .mg-pill-dot { background: var(--mg-clay); opacity: 0.6; }
+  .mg-pill.ok { background: var(--mg-sage-tint); color: var(--mg-moss); }
+
+  /* ── Install state ───────────────────────── */
+  .mg-install { padding: 40px 32px 20px; display: flex; justify-content: center; }
+  .mg-install-card {
+    max-width: 640px;
+    width: 100%;
+    background: var(--mg-card);
+    border: 1px solid var(--mg-rule);
+    padding: 32px 36px;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(30, 28, 20, 0.04);
+  }
+  .mg-install-kicker { margin: 0 0 10px; }
+  .mg-install-title {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 32px;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    color: var(--mg-ink);
+    margin: 0 0 14px;
+  }
+  .mg-install-dek {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--mg-ink-soft);
+    margin: 0 0 24px;
+    max-width: 56ch;
+  }
+  .mg-install-dek em { font-family: var(--mg-display); font-style: italic; color: var(--mg-ink); }
+  .mg-install-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .mg-install-steps li {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding-bottom: 16px;
+    border-bottom: 1px dotted var(--mg-rule);
+  }
+  .mg-install-steps li:last-child { border-bottom: none; padding-bottom: 0; }
+  .mg-step-n {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--mg-clay);
+    line-height: 1;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+  }
+  .mg-install-steps li div { flex: 1; font-size: 14px; line-height: 1.55; color: var(--mg-ink); }
+  .mg-install-steps li strong { font-weight: 600; color: var(--mg-ink); display: block; margin-bottom: 2px; }
+  .mg-install-steps li em { font-family: var(--mg-display); font-style: italic; color: var(--mg-moss); }
+  .mg-install-steps li a { color: var(--mg-bronze); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(126, 90, 42, 0.35); }
+  .mg-install-steps li a:hover { text-decoration-color: var(--mg-bronze); color: var(--mg-clay-dark); }
+  .mg-install-steps li code { font-family: var(--mg-mono); font-size: 12px; padding: 1px 6px; background: var(--mg-paper-tint); border: 1px solid var(--mg-rule); border-radius: 2px; }
+  .mg-install-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .mg-demo-btn { color: var(--mg-moss) !important; border-color: var(--mg-moss) !important; }
+  .mg-demo-btn:hover { background: var(--mg-moss) !important; color: var(--mg-paper) !important; }
+
+  .mg-settings {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px dotted var(--mg-rule);
+  }
+  .mg-settings summary {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mg-clay);
+    cursor: pointer;
+    padding: 4px 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mg-settings summary::-webkit-details-marker { display: none; }
+  .mg-settings summary::before {
+    content: "+";
+    font-family: var(--mg-display);
+    font-size: 15px;
+    line-height: 0;
+    color: var(--mg-clay);
+    margin-right: 4px;
+  }
+  .mg-settings[open] summary::before { content: "−"; }
+  .mg-settings summary:hover { color: var(--mg-clay-dark); }
+  .mg-settings-body {
+    padding: 12px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .mg-endpoint-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .mg-endpoint-row input[type="text"] {
+    flex: 1;
+    min-width: 180px;
+    font-family: var(--mg-mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--mg-rule);
+    background: var(--mg-paper);
+    color: var(--mg-ink);
+    border-radius: 2px;
+  }
+  .mg-endpoint-row input[type="text"]:focus {
+    outline: none;
+    border-color: var(--mg-moss);
+    box-shadow: 0 0 0 3px rgba(62, 89, 64, 0.08);
+  }
+  .mg-settings-hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--mg-ink-soft);
+    line-height: 1.5;
+  }
+  .mg-settings-hint code {
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    padding: 1px 5px;
+    background: var(--mg-paper-tint);
+    border: 1px solid var(--mg-rule);
+    border-radius: 2px;
+  }
+
+  .mg-demo-banner {
+    margin: 20px 32px 0;
+    padding: 10px 18px;
+    background: var(--mg-sage-tint);
+    border: 1px solid var(--mg-moss);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--mg-moss-dark);
+    flex-wrap: wrap;
+  }
+  .mg-demo-banner .mg-kicker { color: var(--mg-moss-dark); font-weight: 700; white-space: nowrap; }
+  .mg-demo-banner .mg-kicker::before { display: none; }
+  .mg-demo-copy { flex: 1; min-width: 220px; font-family: var(--mg-body); font-size: 13px; color: var(--mg-ink); line-height: 1.45; }
+  .mg-demo-banner .mg-btn { border-color: var(--mg-moss-dark); color: var(--mg-moss-dark); }
+  .mg-demo-banner .mg-btn:hover { background: var(--mg-moss-dark); color: var(--mg-paper); border-color: var(--mg-moss-dark); }
+
+  .mg-btn {
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border: 1px solid var(--mg-rule);
+    background: transparent;
+    color: var(--mg-ink-soft);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    border-radius: 2px;
+    transition: all 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+  .mg-btn:hover { background: var(--mg-paper); color: var(--mg-ink); border-color: var(--mg-ink); }
+  .mg-btn.primary {
+    background: var(--mg-moss);
+    color: var(--mg-paper);
+    border-color: var(--mg-moss);
+    font-weight: 700;
+  }
+  .mg-btn.primary:hover {
+    background: var(--mg-moss-dark);
+    border-color: var(--mg-moss-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(39, 58, 40, 0.28);
+  }
+  .mg-btn.ghost { background: transparent; color: var(--mg-ink-soft); }
+
+  /* ── Grid ─────────────────────────────────── */
+  .mg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 22px;
+    padding: 28px 32px;
+  }
+  .mg-clip {
+    background: var(--mg-card);
+    border: 1px solid var(--mg-rule);
+    border-radius: 3px;
+    padding: 14px 18px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: all 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+    position: relative;
+    box-shadow: 0 1px 0 rgba(30, 28, 20, 0.04);
+  }
+  .mg-clip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(30, 28, 20, 0.06);
+    border-color: var(--mg-moss);
+  }
+  .mg-clip.pinned::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: -1px;
+    bottom: -1px;
+    width: 4px;
+    background: var(--mg-clay);
+    border-radius: 3px 0 0 3px;
+  }
+
+  .mg-clip-head {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    font-family: var(--mg-mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mg-ink-soft);
+    padding-bottom: 10px;
+    border-bottom: 1px dotted var(--mg-rule);
+  }
+  .mg-block-code {
+    color: var(--mg-clay);
+    font-weight: 700;
+    letter-spacing: 0.26em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mg-block-code::before { content: "◈"; font-size: 9px; color: var(--mg-clay); letter-spacing: 0; }
+  .mg-sep { color: var(--mg-rule); }
+  .mg-src { font-weight: 500; color: var(--mg-ink); letter-spacing: 0.16em; }
+  .mg-ts { margin-left: auto; color: var(--mg-ink-mute); font-weight: 400; }
+  .mg-count-badge {
+    margin-left: auto;
+    font-family: var(--mg-mono);
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--mg-clay);
+    background: var(--mg-sage-tint);
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.08em;
+  }
+  .mg-count-badge + .mg-ts { margin-left: 6px; }
+  .mg-pin { color: var(--mg-clay); font-size: 10px; margin-left: 4px; }
+
+  .mg-body {
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--mg-ink);
+    min-height: 24px;
+    position: relative;
+    flex: 1;
+  }
+  .mg-body a {
+    color: var(--mg-bronze);
+    text-decoration: underline;
+    text-decoration-color: rgba(126, 90, 42, 0.35);
+    text-underline-offset: 3px;
+    transition: all 0.15s;
+    word-break: break-all;
+  }
+  .mg-body a:hover { text-decoration-color: var(--mg-bronze); color: var(--mg-clay-dark); }
+  .mg-body.plain { max-height: 160px; overflow: hidden; }
+  .mg-body.plain::after {
+    content: "";
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 32px;
+    background: linear-gradient(transparent, var(--mg-card));
+    pointer-events: none;
+  }
+  .mg-clip:hover .mg-body.plain::after { background: linear-gradient(transparent, var(--mg-card-hover)); }
+
+  .mg-body.unfurled { max-height: none; overflow: visible; display: flex; flex-direction: column; gap: 10px; }
+  .mg-unfurl { display: flex; flex-direction: column; gap: 10px; }
+  .mg-unfurl-plate {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--mg-paper-tint);
+    border: 1px solid var(--mg-rule);
+    padding: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .mg-unfurl-plate img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: saturate(0.95) contrast(1.02);
+  }
+  .mg-unfurl-plate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    box-shadow: inset 0 0 0 1px rgba(30, 28, 20, 0.08);
+    pointer-events: none;
+  }
+  .mg-unfurl-host-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    color: var(--mg-moss);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .mg-favicon {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    object-fit: contain;
+    flex-shrink: 0;
+    background: var(--mg-paper);
+  }
+  .mg-host { color: var(--mg-moss); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mg-unfurl-host-row::after { content: ""; flex: 1; height: 1px; background: var(--mg-rule-soft); margin-left: 4px; }
+  .mg-unfurl-title {
+    font-family: var(--mg-display);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--mg-ink);
+    line-height: 1.18;
+    letter-spacing: -0.015em;
+    font-style: italic;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .mg-unfurl-desc {
+    font-family: var(--mg-body);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--mg-ink-soft);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+  .mg-unfurl-url {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    color: var(--mg-ink-mute) !important;
+    text-decoration: none !important;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    letter-spacing: 0.02em;
+  }
+  .mg-unfurl-url::before { content: "→ "; color: var(--mg-clay); opacity: 0.7; }
+  .mg-unfurl-url:hover { color: var(--mg-clay) !important; }
+
+  .mg-clip-foot {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+    padding-top: 12px;
+    border-top: 1px dotted var(--mg-rule);
+    margin-top: auto;
+  }
+  .mg-act {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border: 1px solid var(--mg-rule);
+    background: transparent;
+    color: var(--mg-ink-soft);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    transition: all 0.15s;
+    border-radius: 2px;
+  }
+  .mg-act:hover { background: var(--mg-paper); color: var(--mg-ink); border-color: var(--mg-moss); }
+  .mg-act.mg-push {
+    background: var(--mg-moss);
+    color: var(--mg-paper);
+    border-color: var(--mg-moss);
+    font-weight: 700;
+  }
+  .mg-act.mg-push:hover {
+    background: var(--mg-moss-dark);
+    border-color: var(--mg-moss-dark);
+    color: var(--mg-paper);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(39, 58, 40, 0.22);
+  }
+  .mg-act.mg-push-expand {
+    color: var(--mg-clay);
+    border-color: var(--mg-clay);
+    font-weight: 700;
+  }
+  .mg-act.mg-push-expand:hover {
+    background: var(--mg-clay);
+    color: var(--mg-paper);
+    border-color: var(--mg-clay);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(174, 106, 56, 0.22);
+  }
+  .mg-result {
+    font-family: var(--mg-mono);
+    font-size: 9px;
+    color: var(--mg-ink-mute);
+    margin-left: auto;
+    align-self: center;
+    padding-left: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .mg-result.ok { color: var(--mg-moss); }
+  .mg-result.err { color: var(--mg-leaf-red); }
+
+  .mg-empty {
+    grid-column: 1 / -1;
+    padding: 80px 20px;
+    text-align: center;
+    color: var(--mg-ink-mute);
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 17px;
+    background: var(--mg-card);
+    border: 1px solid var(--mg-rule);
+    border-radius: 3px;
+  }
+
+  .mg-foot {
+    padding: 24px 32px 32px;
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--mg-ink-mute);
+    text-align: center;
+    border-top: 1px solid var(--mg-rule-soft);
+    margin-top: 24px;
+  }
+  .mg-foot a {
+    color: var(--mg-clay);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(174, 106, 56, 0.3);
+    padding-bottom: 1px;
+  }
+
+  /* ── Expansion modal ──────────────────────── */
+  .mg-expand-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 28, 20, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 28px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .mg-expand-backdrop.open { opacity: 1; pointer-events: auto; }
+  .mg-expand-modal {
+    background: var(--mg-paper);
+    border: 1px solid var(--mg-rule);
+    border-radius: 4px;
+    width: 100%;
+    max-width: 640px;
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+    box-shadow: 0 24px 48px rgba(30, 28, 20, 0.25);
+    transform: translateY(12px);
+    opacity: 0;
+    transition: all 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+    font-family: var(--mg-body);
+  }
+  .mg-expand-backdrop.open .mg-expand-modal { transform: translateY(0); opacity: 1; }
+  .mg-expand-head {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--mg-rule);
+    position: relative;
+    background: linear-gradient(to bottom, var(--mg-card), var(--mg-paper));
+  }
+  .mg-expand-kicker { margin: 0; }
+  .mg-expand-kicker::before { content: "✤"; font-style: normal; }
+  .mg-expand-title {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--mg-ink);
+    margin-top: 4px;
+    letter-spacing: -0.01em;
+  }
+  .mg-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: transparent;
+    border: 1px solid var(--mg-rule);
+    color: var(--mg-ink-soft);
+    font-family: var(--mg-mono);
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    border-radius: 2px;
+    line-height: 1;
+  }
+  .mg-close:hover { background: var(--mg-paper); border-color: var(--mg-ink); color: var(--mg-ink); }
+
+  .mg-expand-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+  .mg-field { display: flex; flex-direction: column; gap: 6px; }
+  .mg-label {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--mg-ink-soft);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mg-hint {
+    color: var(--mg-ink-mute);
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: none;
+  }
+  .mg-field input[type="text"],
+  .mg-field textarea,
+  .mg-field select {
+    font-family: var(--mg-body);
+    font-size: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--mg-rule);
+    background: var(--mg-card);
+    color: var(--mg-ink);
+    border-radius: 2px;
+    width: 100%;
+    line-height: 1.5;
+  }
+  .mg-field input[type="text"]:focus,
+  .mg-field textarea:focus,
+  .mg-field select:focus {
+    outline: none;
+    border-color: var(--mg-moss);
+    background: var(--mg-paper);
+    box-shadow: 0 0 0 3px rgba(62, 89, 64, 0.1);
+  }
+  .mg-field textarea { resize: vertical; min-height: 70px; font-family: var(--mg-body); }
+  .mg-field select {
+    appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M3 4.5l3 3 3-3' stroke='%237E5A2A' stroke-width='1.2' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+  }
+  .mg-field-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+
+  .mg-citation {
+    background: var(--mg-paper-tint);
+    border: 1px dashed var(--mg-rule);
+    padding: 14px 18px;
+    border-radius: 2px;
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    color: var(--mg-ink-soft);
+    line-height: 1.7;
+    letter-spacing: 0.03em;
+    position: relative;
+  }
+  .mg-citation::before {
+    content: "❧";
+    position: absolute;
+    top: 8px;
+    right: 14px;
+    font-family: var(--mg-display);
+    color: var(--mg-clay);
+    opacity: 0.5;
+    font-size: 16px;
+  }
+  .mg-cite-head {
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 9px;
+    margin-bottom: 4px;
+    display: block;
+    color: var(--mg-clay);
+  }
+  .mg-cite-line { display: block; }
+  .mg-cite-line strong { color: var(--mg-ink); font-weight: 600; }
+  .mg-cite-title {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--mg-ink);
+    font-weight: 500;
+    margin: 4px 0;
+  }
+
+  .mg-expand-foot {
+    padding: 14px 24px 18px;
+    border-top: 1px solid var(--mg-rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: var(--mg-card);
+    flex-wrap: wrap;
+  }
+  .mg-note {
+    font-family: var(--mg-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--mg-ink-mute);
+  }
+  .mg-buttons { display: flex; gap: 8px; align-items: center; }
+
+  @media (max-width: 640px) {
+    .mg-masthead { padding: 16px 18px 10px; }
+    .mg-wordmark strong { font-size: 34px; }
+    .mg-controls input[type="search"] { width: 140px; }
+    .mg-meta { padding: 10px 18px; }
+    .mg-grid { padding: 18px; gap: 14px; }
+    .mg-install-card { padding: 22px 18px; }
+    .mg-install-title { font-size: 24px; }
+    .mg-expand-modal { max-width: 100%; }
+    .mg-field-row { grid-template-columns: 1fr; }
+  }
+</style>

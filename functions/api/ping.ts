@@ -47,7 +47,23 @@ interface PingPayload {
    * is editorial — the topic comes from Mike, the prose comes from cc.
    */
   expand?: boolean;
+
+  /**
+   * Structured expansion hints, added 2026-04-20 for Magpie v0.5. When
+   * expand=true and these are present, cc uses them as authoritative
+   * intent rather than inferring from subject+body. All optional; all
+   * validated as enums/length-bounded below. Backwards-compatible with
+   * pre-Magpie callers.
+   */
+  channel?: string;    // FD, CRT, SPN, GF, GDN, ESC, VST, BTL
+  blockType?: string;  // READ, NOTE, LISTEN, WATCH, LINK, VISIT, MINT
+  dek?: string;        // <= 280 chars — block dek
+  sourceUrl?: string;  // original URL the clip pointed at (for unfurl)
+  sourceApp?: string;  // app the clip came from (e.g. "Google Chrome")
 }
+
+const VALID_CHANNELS = new Set(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'VST', 'BTL', 'FCT']);
+const VALID_BLOCK_TYPES = new Set(['READ', 'NOTE', 'LISTEN', 'WATCH', 'LINK', 'VISIT', 'MINT', 'FAUCET']);
 
 function json<T>(data: T, init: number | ResponseInit = 200): Response {
   const ri: ResponseInit = typeof init === 'number' ? { status: init } : init;
@@ -107,12 +123,15 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       ok: true,
       endpoint: 'https://pointcast.xyz/api/ping',
       kvBound: Boolean(env.PC_PING_KV),
-      usage: 'POST body { type: "pc-ping-v1", subject?, body, from?, address?, timestamp }',
+      usage: 'POST body { type: "pc-ping-v1", subject?, body, from?, address?, timestamp, expand?, channel?, blockType?, dek?, sourceUrl?, sourceApp? }',
       notes: [
         'Async inbox for messages to Claude Code.',
         'Claude Code reads this (and docs/inbox/) at the start of every session.',
         'Until PC_PING_KV is bound in Cloudflare Pages env, POSTs return 503.',
         '?action=list returns the last 50 messages when KV is bound.',
+        'Structured expansion hints (v0.5+): when expand=true, channel + blockType + dek + sourceUrl + sourceApp are used as authoritative intent.',
+        `Valid channels: ${Array.from(VALID_CHANNELS).join(', ')}.`,
+        `Valid blockTypes: ${Array.from(VALID_BLOCK_TYPES).join(', ')}.`,
       ],
       spec: 'https://pointcast.xyz/ping',
     });
@@ -157,6 +176,27 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     return json({ ok: false, error: 'bad-address' }, 400);
   }
 
+  // Structured expansion hints (Magpie v0.5+). All optional.
+  if (body.channel !== undefined) {
+    if (typeof body.channel !== 'string' || !VALID_CHANNELS.has(body.channel)) {
+      return json({ ok: false, error: 'bad-channel', valid: Array.from(VALID_CHANNELS) }, 400);
+    }
+  }
+  if (body.blockType !== undefined) {
+    if (typeof body.blockType !== 'string' || !VALID_BLOCK_TYPES.has(body.blockType)) {
+      return json({ ok: false, error: 'bad-blockType', valid: Array.from(VALID_BLOCK_TYPES) }, 400);
+    }
+  }
+  if (body.dek && body.dek.length > 280) {
+    return json({ ok: false, error: 'dek-too-long', max: 280 }, 400);
+  }
+  if (body.sourceUrl && (body.sourceUrl.length > 2048 || !/^https?:\/\//i.test(body.sourceUrl))) {
+    return json({ ok: false, error: 'bad-sourceUrl' }, 400);
+  }
+  if (body.sourceApp && body.sourceApp.length > 120) {
+    return json({ ok: false, error: 'sourceApp-too-long', max: 120 }, 400);
+  }
+
   const timestamp = body.timestamp || new Date().toISOString();
   // Key: ping:{timestamp}:{short-hash of body} — sortable, de-duped by content.
   const hashInput = (body.from || 'anon') + ':' + (body.subject || '') + ':' + body.body;
@@ -173,6 +213,9 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         from: body.from || null,
         subject: body.subject || null,
         expand: body.expand === true ? 'true' : null,
+        channel: body.channel || null,
+        blockType: body.blockType || null,
+        sourceApp: body.sourceApp || null,
       },
     });
   } catch (err: any) {
@@ -184,8 +227,12 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     key,
     queued: timestamp,
     expand: body.expand === true,
+    channel: body.channel || null,
+    blockType: body.blockType || null,
     note: body.expand
-      ? 'Topic received. Claude Code drafts + publishes as a block on the next tick.'
+      ? (body.channel || body.blockType)
+        ? `Topic received. Will expand into CH.${body.channel || '?'} · ${body.blockType || '?'} on next tick.`
+        : 'Topic received. Claude Code drafts + publishes as a block on the next tick.'
       : 'Message received. Claude Code reads the inbox at session start.',
   });
 };
