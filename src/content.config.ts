@@ -138,7 +138,12 @@ const blocks = defineCollection({
           tz: z.string(),          // IANA timezone, e.g. "Asia/Tokyo"
           label: z.string(),       // display label, e.g. "Tokyo"
           sublabel: z.string().optional(),
-        })).max(12).optional(),
+          /** Optional coordinates — override the curated LOCATION_MAP
+           *  lookup for this zone. Needed if the label doesn't match any
+           *  entry in src/lib/timezones.ts. North/east positive. */
+          lat: z.number().min(-90).max(90).optional(),
+          lon: z.number().min(-180).max(180).optional(),
+        })).max(20).optional(),
         style: z.enum(['digital', 'analog', 'both']).default('digital'),
       })
       .optional(),
