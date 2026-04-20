@@ -20,6 +20,8 @@ const MOODS = [
   { id: 'curious', label: 'CURIOUS', color: '#E8590C', hint: 'following a thread' },
   { id: 'quiet',   label: 'QUIET',   color: '#5F5E5A', hint: 'under the noise' },
 ];
+import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
+const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 ---
 
 <aside class="mood" aria-label="Current mood">
@@ -38,6 +40,17 @@ const MOODS = [
         <span class="mood__hint">{m.hint}</span>
       </button>
     ))}
+  </div>
+
+  <div class="mood__soundtrack" id="mood-soundtrack" hidden data-soundtracks={SOUNDTRACKS_JSON}>
+    <button type="button" class="mood__soundtrack-toggle mono" id="mood-soundtrack-toggle" aria-expanded="false">
+      <span class="mood__soundtrack-play" aria-hidden="true">▶</span>
+      <span id="mood-soundtrack-label">soundtrack</span>
+    </button>
+    <div class="mood__soundtrack-player" id="mood-soundtrack-player" hidden>
+      <iframe id="mood-soundtrack-frame" src="about:blank" title="Mood soundtrack" loading="lazy" allow="autoplay; encrypted-media" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <button type="button" class="mood__soundtrack-close mono" id="mood-soundtrack-close" aria-label="Close soundtrack">× close</button>
+    </div>
   </div>
 </aside>
 
@@ -92,14 +105,72 @@ const MOODS = [
       if (prior) applyMood(prior);
     } catch (e) {}
 
+    // ---------- Soundtrack toggle (Mike 2026-04-20 13:20 PT: "soundtracks
+    //            that match the mood, that can be turned on, broadcast") ----
+    var soundtrackEl = document.getElementById('mood-soundtrack');
+    var soundtrackToggle = document.getElementById('mood-soundtrack-toggle');
+    var soundtrackLabel = document.getElementById('mood-soundtrack-label');
+    var soundtrackPlayer = document.getElementById('mood-soundtrack-player');
+    var soundtrackFrame = document.getElementById('mood-soundtrack-frame');
+    var soundtrackClose = document.getElementById('mood-soundtrack-close');
+    var soundtracks = {};
+    try { soundtracks = JSON.parse(soundtrackEl && soundtrackEl.getAttribute('data-soundtracks') || '{}'); } catch (e) { soundtracks = {}; }
+
+    function showSoundtrackOffer(id) {
+      if (!soundtrackEl || !soundtrackLabel || !soundtrackToggle) return;
+      var t = soundtracks[id];
+      if (!t) { soundtrackEl.hidden = true; return; }
+      soundtrackEl.hidden = false;
+      soundtrackLabel.textContent = t.label + ' · ' + id.toUpperCase();
+      soundtrackToggle.setAttribute('data-mood-id', id);
+      soundtrackToggle.setAttribute('aria-expanded', 'false');
+      // Reset player when switching moods.
+      if (soundtrackPlayer) soundtrackPlayer.hidden = true;
+      if (soundtrackFrame && soundtrackFrame.src && soundtrackFrame.src !== 'about:blank') {
+        soundtrackFrame.src = 'about:blank';
+      }
+    }
+
+    function openSoundtrack() {
+      if (!soundtrackPlayer || !soundtrackFrame || !soundtrackToggle) return;
+      var id = soundtrackToggle.getAttribute('data-mood-id');
+      var t = id && soundtracks[id];
+      if (!t) return;
+      soundtrackFrame.src = t.url;
+      soundtrackPlayer.hidden = false;
+      soundtrackToggle.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeSoundtrack() {
+      if (!soundtrackPlayer || !soundtrackFrame || !soundtrackToggle) return;
+      soundtrackFrame.src = 'about:blank';
+      soundtrackPlayer.hidden = true;
+      soundtrackToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    if (soundtrackToggle) {
+      soundtrackToggle.addEventListener('click', function () {
+        if (soundtrackToggle.getAttribute('aria-expanded') === 'true') closeSoundtrack();
+        else openSoundtrack();
+      });
+    }
+    if (soundtrackClose) soundtrackClose.addEventListener('click', closeSoundtrack);
+
     buttons.forEach(function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-mood-id');
         try { localStorage.setItem(lsKey, id); } catch (e) {}
         applyMood(id);
         meditativePulse(id);
+        showSoundtrackOffer(id);
       });
     });
+
+    // On load, if prior mood was set, surface the soundtrack offer immediately.
+    try {
+      var priorId = localStorage.getItem(lsKey);
+      if (priorId) showSoundtrackOffer(priorId);
+    } catch (e) {}
   })();
 </script>
 
@@ -167,6 +238,62 @@ const MOODS = [
     .mood__btn { flex: 1 1 calc(50% - 4px); }
     .mood__hint { display: none; }
   }
+
+  /* Soundtrack toggle appears once a mood is selected. */
+  .mood__soundtrack { margin: 10px 0 0; }
+  .mood__soundtrack[hidden] { display: none; }
+  .mood__soundtrack-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-left: 3px solid #5F3DC4;
+    border-radius: 3px;
+    color: #12110e;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .mood__soundtrack-toggle:hover { background: #f5f2ea; border-left-color: #3b2a85; }
+  .mood__soundtrack-play { color: #5F3DC4; }
+  .mood__soundtrack-toggle[aria-expanded="true"] .mood__soundtrack-play::before { content: '❚❚'; letter-spacing: -1px; }
+  .mood__soundtrack-toggle[aria-expanded="true"] .mood__soundtrack-play { content: ''; }
+
+  .mood__soundtrack-player {
+    margin: 10px 0 0;
+    padding: 8px;
+    background: #1f1208;
+    border-radius: 3px;
+    position: relative;
+  }
+  .mood__soundtrack-player[hidden] { display: none; }
+  .mood__soundtrack-player iframe {
+    width: 100%;
+    height: 152px;
+    border: none;
+    border-radius: 2px;
+    background: #0b0b0b;
+    display: block;
+  }
+  .mood__soundtrack-close {
+    margin: 6px 0 0;
+    background: transparent;
+    border: 1px solid rgba(243, 230, 216, 0.3);
+    color: #f3e6d8;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .mood__soundtrack-close:hover { background: rgba(243, 230, 216, 0.08); }
 
   /* ═ Subtle page tint when mood is set ═
      Sits at the document root so it affects any page-level surface that

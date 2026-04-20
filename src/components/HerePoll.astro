@@ -53,6 +53,11 @@ const data = poll?.data;
     </ul>
 
     <p class="here-poll__status mono" id="here-poll-status"></p>
+
+    <div class="here-poll__followup" id="here-poll-followup" hidden>
+      <p class="here-poll__followup-kicker mono">THEN TRY</p>
+      <a class="here-poll__followup-link" id="here-poll-followup-link" href="/polls">more polls →</a>
+    </div>
   </section>
 )}
 
@@ -130,6 +135,29 @@ const data = poll?.data;
     btn.addEventListener('click', function () { onVote(btn); });
   });
 
+  function showFollowup() {
+    var follow = document.getElementById('here-poll-followup');
+    var link = document.getElementById('here-poll-followup-link');
+    if (!follow || !link) return;
+    // Pick a follow-up poll by fetching /polls.json (machine mirror).
+    fetch('/polls.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.polls)) { follow.hidden = false; return; }
+        // Pick the next poll the visitor hasn't voted on yet (or else just the next slug).
+        var candidates = data.polls.filter(function (p) { return p.slug && p.slug !== slug; });
+        for (var i = 0; i < candidates.length; i++) {
+          var s = candidates[i].slug;
+          try { if (!localStorage.getItem('pc:poll:voted:' + s)) { link.href = '/poll/' + s; link.textContent = candidates[i].question ? 'then: ' + candidates[i].question + ' →' : 'then: /poll/' + s + ' →'; follow.hidden = false; return; } } catch (e) {}
+        }
+        // All voted — send them to all polls.
+        link.href = '/polls';
+        link.textContent = 'all polls →';
+        follow.hidden = false;
+      });
+  }
+
   if (voted) {
     fetchResults().then(function (res) {
       if (res && res.tallies) paintDistribution(res.tallies);
@@ -138,8 +166,17 @@ const data = poll?.data;
         paintDistribution(localTallies);
       }
       setStatus('you voted: ' + voted);
+      showFollowup();
     });
   }
+
+  // Enhance the vote handler to trigger followup after a successful submit.
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      // Small delay so the distribution paints first.
+      setTimeout(showFollowup, 400);
+    });
+  });
 })();
 </script>
 
@@ -267,4 +304,39 @@ const data = poll?.data;
     margin: 10px 0 0;
     font-family: 'Monaco', 'Menlo', monospace;
   }
+  .here-poll__followup {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    background: rgba(232, 154, 45, 0.08);
+    border: 1px solid rgba(232, 154, 45, 0.24);
+    border-left: 3px solid #e89a2d;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .here-poll__followup[hidden] { display: none; }
+  .here-poll__followup-kicker {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #e89a2d;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .here-poll__followup-link {
+    color: #f3e6d8;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 13px;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(232, 154, 45, 0.4);
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .here-poll__followup-link:hover { color: #e89a2d; border-bottom-color: #e89a2d; }
 </style>

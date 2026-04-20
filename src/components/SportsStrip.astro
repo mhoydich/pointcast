@@ -1,0 +1,235 @@
+---
+/**
+ * SportsStrip — recent global-major sports results on the home.
+ *
+ * Mike 2026-04-20 13:20 PT: *"after try a couple of sports updates of
+ * the latest results from last night or today, start with global major."*
+ *
+ * Four tiles: NBA, MLB, NHL, Premier League — covers the four major
+ * leagues in season right now (NFL offseason in April). Each tile
+ * fetches from ESPN's public scoreboard API client-side on mount,
+ * renders the most-recent finished game(s), and links out to ESPN
+ * for the full scoreboard. Results cached 10 min in sessionStorage
+ * so repeat page loads don't hammer ESPN.
+ *
+ * Honest fallback: if ESPN fetch fails (network / rate limit / API
+ * change), the tile just shows "scoreboard →" link, no fake scores.
+ *
+ * Author: cc. Source: Mike 2026-04-20 13:20 PT chat.
+ */
+---
+
+<aside class="sports-strip" aria-label="Recent sports results">
+  <header class="sports-strip__head">
+    <p class="sports-strip__kicker mono">
+      <span class="sports-strip__live">SPORTS</span>
+      <span class="sports-strip__sep" aria-hidden="true">·</span>
+      <span>last night · today · global major</span>
+    </p>
+  </header>
+
+  <div class="sports-strip__grid" id="sports-strip-grid">
+    <article class="sports-tile" data-league="nba" data-sport="basketball" data-path="basketball/nba">
+      <p class="sports-tile__kicker mono">NBA</p>
+      <div class="sports-tile__games" data-state="loading">
+        <p class="sports-tile__loading mono">loading…</p>
+      </div>
+      <a class="sports-tile__link mono" href="https://www.espn.com/nba/scoreboard" target="_blank" rel="noopener">full scoreboard →</a>
+    </article>
+
+    <article class="sports-tile" data-league="mlb" data-sport="baseball" data-path="baseball/mlb">
+      <p class="sports-tile__kicker mono">MLB</p>
+      <div class="sports-tile__games" data-state="loading">
+        <p class="sports-tile__loading mono">loading…</p>
+      </div>
+      <a class="sports-tile__link mono" href="https://www.espn.com/mlb/scoreboard" target="_blank" rel="noopener">full scoreboard →</a>
+    </article>
+
+    <article class="sports-tile" data-league="nhl" data-sport="hockey" data-path="hockey/nhl">
+      <p class="sports-tile__kicker mono">NHL · PLAYOFFS</p>
+      <div class="sports-tile__games" data-state="loading">
+        <p class="sports-tile__loading mono">loading…</p>
+      </div>
+      <a class="sports-tile__link mono" href="https://www.espn.com/nhl/scoreboard" target="_blank" rel="noopener">full scoreboard →</a>
+    </article>
+
+    <article class="sports-tile" data-league="epl" data-sport="soccer" data-path="soccer/eng.1">
+      <p class="sports-tile__kicker mono">PREMIER LEAGUE</p>
+      <div class="sports-tile__games" data-state="loading">
+        <p class="sports-tile__loading mono">loading…</p>
+      </div>
+      <a class="sports-tile__link mono" href="https://www.espn.com/soccer/scoreboard/_/league/eng.1" target="_blank" rel="noopener">full scoreboard →</a>
+    </article>
+  </div>
+</aside>
+
+<script is:inline>
+(function () {
+  'use strict';
+  var grid = document.getElementById('sports-strip-grid');
+  if (!grid) return;
+
+  var CACHE_PREFIX = 'pc:sports:v1:';
+  var TTL_MS = 10 * 60 * 1000;
+
+  function readCache(key) {
+    try {
+      var raw = sessionStorage.getItem(CACHE_PREFIX + key);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.at) return null;
+      if (Date.now() - parsed.at > TTL_MS) return null;
+      return parsed.data;
+    } catch (e) { return null; }
+  }
+  function writeCache(key, data) {
+    try { sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ at: Date.now(), data: data })); } catch (e) {}
+  }
+
+  function fmtGame(event) {
+    try {
+      var comp = event.competitions && event.competitions[0];
+      if (!comp) return null;
+      var competitors = comp.competitors || [];
+      if (competitors.length !== 2) return null;
+      var home = competitors.find(function (c) { return c.homeAway === 'home'; }) || competitors[0];
+      var away = competitors.find(function (c) { return c.homeAway === 'away'; }) || competitors[1];
+      var status = comp.status && comp.status.type && comp.status.type.state; // 'pre' | 'in' | 'post'
+      var homeAbbr = (home.team && home.team.abbreviation) || (home.team && home.team.shortDisplayName) || '—';
+      var awayAbbr = (away.team && away.team.abbreviation) || (away.team && away.team.shortDisplayName) || '—';
+      var homeScore = home.score || '';
+      var awayScore = away.score || '';
+      var line;
+      if (status === 'post') {
+        line = awayAbbr + ' ' + awayScore + ' @ ' + homeAbbr + ' ' + homeScore + ' · FINAL';
+      } else if (status === 'in') {
+        var detail = (comp.status.type.shortDetail || '').toLowerCase();
+        line = awayAbbr + ' ' + awayScore + ' @ ' + homeAbbr + ' ' + homeScore + ' · ' + detail;
+      } else {
+        var startTime = comp.status.type.shortDetail || 'soon';
+        line = awayAbbr + ' @ ' + homeAbbr + ' · ' + startTime;
+      }
+      return { line: line, status: status };
+    } catch (e) { return null; }
+  }
+
+  function rank(a, b) {
+    // Final > in-progress > upcoming. Within final, most recent first.
+    var order = { post: 3, in: 2, pre: 1 };
+    return (order[b.status] || 0) - (order[a.status] || 0);
+  }
+
+  function renderGames(tile, games) {
+    var container = tile.querySelector('.sports-tile__games');
+    if (!container) return;
+    if (!games || !games.length) {
+      container.dataset.state = 'empty';
+      container.innerHTML = '<p class="sports-tile__loading mono">no games scheduled</p>';
+      return;
+    }
+    container.dataset.state = 'loaded';
+    var sorted = games.slice().sort(rank).slice(0, 2);
+    container.innerHTML = sorted.map(function (g) {
+      var cls = 'sports-tile__game sports-tile__game--' + g.status;
+      return '<p class="' + cls + '">' + g.line + '</p>';
+    }).join('');
+  }
+
+  function renderError(tile) {
+    var container = tile.querySelector('.sports-tile__games');
+    if (!container) return;
+    container.dataset.state = 'error';
+    container.innerHTML = '<p class="sports-tile__loading mono">tap scoreboard →</p>';
+  }
+
+  function fetchLeague(tile) {
+    var path = tile.getAttribute('data-path');
+    var league = tile.getAttribute('data-league');
+    if (!path || !league) return;
+
+    var cached = readCache(league);
+    if (cached) { renderGames(tile, cached); return; }
+
+    var url = 'https://site.api.espn.com/apis/site/v2/sports/' + path + '/scoreboard';
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.events) { renderError(tile); return; }
+        var games = data.events.map(fmtGame).filter(function (g) { return g; });
+        writeCache(league, games);
+        renderGames(tile, games);
+      })
+      .catch(function () { renderError(tile); });
+  }
+
+  Array.prototype.forEach.call(grid.querySelectorAll('.sports-tile'), fetchLeague);
+})();
+</script>
+
+<style>
+  .sports-strip {
+    margin: 14px 0;
+    padding: 12px 14px;
+    background: #f9f5ee;
+    border: 1px solid #e6d8be;
+    border-left: 3px solid #185FA5;
+    border-radius: 3px;
+  }
+  .sports-strip__head { margin: 0 0 10px; }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace); }
+  .sports-strip__kicker {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #0B3E73;
+    margin: 0;
+    text-transform: uppercase;
+  }
+  .sports-strip__live { color: #185FA5; font-weight: 700; }
+  .sports-strip__sep { margin: 0 6px; opacity: 0.55; }
+  .sports-strip__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+  }
+  .sports-tile {
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #e6d8be;
+    border-radius: 2px;
+  }
+  .sports-tile__kicker {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: #0B3E73;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .sports-tile__games { min-height: 36px; margin: 0 0 6px; }
+  .sports-tile__loading {
+    font-size: 11px;
+    color: #8a8878;
+    margin: 0;
+    font-style: italic;
+  }
+  .sports-tile__game {
+    font-size: 12.5px;
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #12110e;
+    margin: 0 0 3px;
+    line-height: 1.35;
+  }
+  .sports-tile__game--post { color: #12110e; font-weight: 500; }
+  .sports-tile__game--in   { color: #185FA5; font-weight: 600; }
+  .sports-tile__game--pre  { color: #5f5e5a; }
+  .sports-tile__link {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #8a2432;
+    text-decoration: none;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .sports-tile__link:hover { color: #185FA5; text-decoration: underline; }
+</style>
