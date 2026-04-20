@@ -17,6 +17,15 @@ import BlockLayout from '../../layouts/BlockLayout.astro';
 import { CHANNELS } from '../../lib/channels';
 import { COLLABORATORS } from '../../lib/collaborators';
 import { resolveZones } from '../../lib/timezones';
+import {
+  moonPhase,
+  sunTimes,
+  planetaryHour,
+  season,
+  nextEquinoxOrSolstice,
+  zodiacOfDate,
+} from '../../lib/sky';
+import { nearestShower } from '../../lib/meteor-showers';
 
 export async function getStaticPaths() {
   const blocks = await getCollection('blocks', ({ data }) =>
@@ -36,6 +45,72 @@ const data = block.data;
 const ch = CHANNELS[data.channel];
 
 const zones = resolveZones(data.clock, COLLABORATORS);
+
+/**
+ * Prerender sky data server-side for each zone. Client JS re-derives
+ * these every minute so the planetary hour / sun altitude stay fresh
+ * without a page rebuild.
+ */
+const renderNow = new Date();
+
+function formatInZone(d: Date, tz: string, opts: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: tz }).format(d);
+}
+
+function hhmm(d: Date | null, tz: string): string {
+  if (!d) return '—';
+  return formatInZone(d, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function dayLengthLabel(ms: number): string {
+  if (ms <= 0) return 'polar night';
+  if (ms >= 86_400_000 - 1000) return 'polar day';
+  const totalMin = Math.round(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h ${String(m).padStart(2, '0')}m of daylight`;
+}
+
+const zonesSky = zones.map((z) => {
+  const s = sunTimes(renderNow, z.lat, z.lon, renderNow);
+  const ph = planetaryHour(renderNow, z.lat, z.lon, z.tz);
+  const se = season(renderNow, z.lat);
+  return {
+    zone: z,
+    sun: {
+      sunriseLocal: hhmm(s.sunrise, z.tz),
+      sunsetLocal: hhmm(s.sunset, z.tz),
+      dayLength: dayLengthLabel(s.dayLengthMs),
+      altitudeDeg: s.altitudeDeg,
+      isDay: s.isDay,
+    },
+    planetaryHour: ph,
+    season: se,
+  };
+});
+
+// Global sky ribbon data — computed once for the page (moon + shower + marker
+// are location-independent except for hemisphere nuance we don't track here).
+const moon = moonPhase(renderNow);
+const nextMarker = nextEquinoxOrSolstice(renderNow);
+const shower = nearestShower(renderNow);
+const zodiac = zodiacOfDate(renderNow);
+
+function fmtCountdown(msUntil: number): string {
+  const days = Math.floor(msUntil / 86_400_000);
+  const hours = Math.floor((msUntil % 86_400_000) / 3_600_000);
+  if (days >= 2) return `${days}d`;
+  if (days === 1) return `1d ${hours}h`;
+  return `${hours}h`;
+}
+
+const moonCountdown = fmtCountdown(moon.nextFullAt.getTime() - renderNow.getTime());
+const newMoonCountdown = fmtCountdown(moon.nextNewAt.getTime() - renderNow.getTime());
+// Show the closer of full/new as the headline countdown.
+const moonNextLabel = (moon.nextFullAt.getTime() - renderNow.getTime())
+  < (moon.nextNewAt.getTime() - renderNow.getTime())
+  ? `full in ${moonCountdown}`
+  : `new in ${newMoonCountdown}`;
 
 const title = `Collab Clock · ${data.title}`;
 const description = `Live world clock over the /collabs roster and manual zones. CH.${ch.code} № ${data.id} — ${zones.length} zones, ticking in the browser.`;
@@ -76,12 +151,60 @@ const jsonLd = {
       </p>
     </header>
 
+    <aside class="sky-ribbon" aria-label="Sky now">
+      <div class="sky-ribbon__cell">
+        <p class="sky-ribbon__kicker mono">MOON</p>
+        <p class="sky-ribbon__value">
+          <span class="sky-ribbon__glyph" aria-hidden="true">{moon.glyph}</span>
+          {moon.label}
+          <span class="sky-ribbon__muted">· {Math.round(moon.illumination * 100)}% lit · {moonNextLabel}</span>
+        </p>
+      </div>
+      {shower && (
+        <div class="sky-ribbon__cell">
+          <p class="sky-ribbon__kicker mono">
+            {shower.inWindow ? 'SHOWER' : 'NEXT SHOWER'}
+          </p>
+          <p class="sky-ribbon__value">
+            <span class="sky-ribbon__glyph" aria-hidden="true">{shower.shower.glyph}</span>
+            {shower.shower.name}
+            <span class="sky-ribbon__muted">
+              · {shower.daysUntil === 0
+                  ? 'peaks tonight'
+                  : shower.daysUntil > 0
+                    ? `peak in ${shower.daysUntil}d`
+                    : `peak was ${-shower.daysUntil}d ago`}
+              · from {shower.shower.radiant}
+            </span>
+          </p>
+        </div>
+      )}
+      <div class="sky-ribbon__cell">
+        <p class="sky-ribbon__kicker mono">COMING</p>
+        <p class="sky-ribbon__value">
+          <span class="sky-ribbon__glyph" aria-hidden="true">☼</span>
+          {nextMarker.label}
+          <span class="sky-ribbon__muted">· in {nextMarker.daysUntil}d</span>
+        </p>
+      </div>
+      <div class="sky-ribbon__cell">
+        <p class="sky-ribbon__kicker mono">ZODIAC</p>
+        <p class="sky-ribbon__value">
+          <span class="sky-ribbon__glyph" aria-hidden="true">{zodiac.glyph}</span>
+          Sun in {zodiac.name}
+          <span class="sky-ribbon__muted">· day {zodiac.dayInSign}</span>
+        </p>
+      </div>
+    </aside>
+
     <section class="clock-grid" aria-label="World clock">
-      {zones.map((z) => (
+      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se }) => (
         <article
           class="clock-card"
           data-tz={z.tz}
           data-origin={z.origin}
+          data-lat={z.lat}
+          data-lon={z.lon}
         >
           <p class="clock-card__label">{z.label}</p>
           <p class="clock-card__time mono" aria-live="off">
@@ -93,6 +216,34 @@ const jsonLd = {
           <p class="clock-card__date mono" data-role="date">—</p>
           <p class="clock-card__status mono" data-role="status" data-bucket="">—</p>
           {z.sublabel && <p class="clock-card__sub">{z.sublabel}</p>}
+
+          <div class="clock-card__sky" aria-label="Sky here">
+            <p class="clock-card__sky-line mono" data-role="sun">
+              <span aria-hidden="true">{sun.isDay ? '☀' : '☾'}</span>
+              <span data-role="sunrise">{sun.sunriseLocal}</span>
+              <span aria-hidden="true">→</span>
+              <span data-role="sunset">{sun.sunsetLocal}</span>
+            </p>
+            <p class="clock-card__sky-line clock-card__sky-line--muted mono" data-role="daylen">
+              {sun.dayLength}
+            </p>
+            {ph && (
+              <p class="clock-card__sky-line mono" data-role="phour">
+                <span aria-hidden="true">{ph.glyph}</span>
+                <span data-role="phour-planet">{ph.planet}</span>
+                <span class="clock-card__sky-sep">hour</span>
+                <span class="clock-card__sky-muted" data-role="phour-meta">
+                  · {ph.index} of 12 · {ph.phase}
+                </span>
+              </p>
+            )}
+            <p class="clock-card__sky-line mono" data-role="season">
+              <span aria-hidden="true">{se.glyph}</span>
+              {se.name}
+              <span class="clock-card__sky-muted">· day {se.dayOfSeason} of {se.lengthDays}</span>
+            </p>
+          </div>
+
           <p class="clock-card__tz mono" title={z.tz}>{z.tz}</p>
         </article>
       ))}
@@ -183,6 +334,60 @@ const jsonLd = {
   })();
 </script>
 
+<script>
+  /**
+   * Sky refresh — re-run the astronomical helpers every minute so the
+   * planetary hour (which ticks over roughly every 60min) and sun
+   * altitude / isDay flag stay fresh between page rebuilds. The initial
+   * values are server-rendered; this just updates them in place.
+   */
+  import { sunTimes, planetaryHour } from '../../lib/sky';
+
+  const CARDS = document.querySelectorAll<HTMLElement>('.clock-card[data-lat][data-lon]');
+
+  function fmt(d: Date | null, tz: string, opts: Intl.DateTimeFormatOptions): string {
+    if (!d) return '—';
+    return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: tz }).format(d);
+  }
+
+  function refresh() {
+    const now = new Date();
+    for (const card of CARDS) {
+      const tz = card.dataset.tz;
+      const lat = parseFloat(card.dataset.lat ?? '');
+      const lon = parseFloat(card.dataset.lon ?? '');
+      if (!tz || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+      const s = sunTimes(now, lat, lon, now);
+      const ph = planetaryHour(now, lat, lon, tz);
+
+      const sunLine = card.querySelector('[data-role="sun"]');
+      const sunriseEl = sunLine?.querySelector<HTMLElement>('[data-role="sunrise"]');
+      const sunsetEl = sunLine?.querySelector<HTMLElement>('[data-role="sunset"]');
+      if (sunriseEl) sunriseEl.textContent = fmt(s.sunrise, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
+      if (sunsetEl) sunsetEl.textContent = fmt(s.sunset, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
+      // The day/night glyph is the first span in the sun line — update it.
+      if (sunLine) {
+        const firstSpan = sunLine.querySelector<HTMLElement>('span[aria-hidden="true"]');
+        if (firstSpan) firstSpan.textContent = s.isDay ? '☀' : '☾';
+      }
+
+      const phPlanet = card.querySelector<HTMLElement>('[data-role="phour-planet"]');
+      const phMeta = card.querySelector<HTMLElement>('[data-role="phour-meta"]');
+      if (ph && phPlanet) phPlanet.textContent = ph.planet;
+      if (ph && phMeta) phMeta.textContent = `· ${ph.index} of 12 · ${ph.phase}`;
+      if (ph) {
+        const phLine = card.querySelector<HTMLElement>('[data-role="phour"]');
+        const glyph = phLine?.querySelector<HTMLElement>('span[aria-hidden="true"]');
+        if (glyph) glyph.textContent = ph.glyph;
+      }
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 60_000);
+</script>
+
 <style>
   .clock-page {
     max-width: 1100px;
@@ -243,10 +448,91 @@ const jsonLd = {
     opacity: 0.5;
   }
 
+  .sky-ribbon {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 18px;
+    padding: 14px 16px;
+    margin: 0 0 24px;
+    border: 1px solid var(--ch-600);
+    border-left-width: 4px;
+    background: linear-gradient(180deg, #0B0E1F 0%, #181333 100%);
+    color: #EDEAF7;
+    border-radius: 2px;
+  }
+  .sky-ribbon__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sky-ribbon__kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #8B85C3;
+    margin: 0;
+    font-weight: 500;
+  }
+  .sky-ribbon__value {
+    font-family: var(--pc-font-sans);
+    font-size: 13.5px;
+    line-height: 1.35;
+    margin: 0;
+    color: #F5F2FC;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .sky-ribbon__glyph {
+    font-size: 16px;
+    line-height: 1;
+    margin-right: 4px;
+  }
+  .sky-ribbon__muted {
+    color: #9A93D0;
+    font-size: 12px;
+  }
+
   .clock-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 14px;
+  }
+
+  .clock-card__sky {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed color-mix(in oklab, var(--ch-600) 22%, #fff);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .clock-card__sky-line {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    line-height: 1.4;
+    margin: 0;
+    color: var(--pc-ink, #12110E);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px;
+    letter-spacing: 0.02em;
+  }
+  .clock-card__sky-line--muted {
+    color: var(--pc-ink-muted, #5F5E5A);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .clock-card__sky-sep {
+    opacity: 0.7;
+  }
+  .clock-card__sky-muted {
+    color: var(--pc-ink-muted, #5F5E5A);
+    font-weight: 400;
   }
 
   .clock-card {
