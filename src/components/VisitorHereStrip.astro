@@ -1,0 +1,881 @@
+---
+/**
+ * VisitorHereStrip — "who's here right now" representation.
+ *
+ * Mike 2026-04-19 20:30 PT: PointCast is a Schelling point; represent
+ * the peoples around, make congregation visible. Every visitor —
+ * human, wallet, agent, bot — gets a noun avatar. This strip shows
+ * YOU on the left, then slots that fill as other visitors connect.
+ *
+ * Data source: localStorage (your noun + opt-in self-report fields)
+ * + the presence WebSocket. The DO now broadcasts per-visitor noun
+ * identity, so connected visitors render as actual noun avatars while
+ * the existing aggregate count stays intact for older consumers.
+ *
+ * Server-rendered skeleton; client hydrates.
+ */
+---
+
+<aside class="here-strip" aria-label="Visitors here right now" data-initial="hidden">
+  <div class="here-strip__row">
+    <span class="here-strip__kicker mono">
+      <span class="here-strip__kicker-label">PEOPLES HERE</span>
+      <span class="here-strip__kicker-sub" id="here-count">· 1 ·</span>
+    </span>
+
+    <ol class="here-strip__slots" id="here-slots">
+      {/* Slot 0 = YOU. Client fills from pc:session → getVisitorNounId. */}
+      <li class="here-slot here-slot--you" data-slot="0">
+        <span class="here-slot__ring" aria-hidden="true"></span>
+        <img class="here-slot__noun" id="here-you-img" alt="" src="" loading="eager" />
+        <span class="here-slot__label mono">YOU</span>
+      </li>
+      {/* Slots 1-11 = other visitors. Empty slots stay ghosted. */}
+      {Array.from({ length: 11 }).map((_, i) => (
+        <li class={`here-slot here-slot--ghost`} data-slot={i + 1}>
+          <img class="here-slot__noun here-slot__noun--other" alt="" src="" loading="lazy" hidden />
+          <span class="here-slot__ghost" aria-hidden="true">·</span>
+        </li>
+      ))}
+      {/* Overflow slot when >12 — replaced by "+N" number. */}
+      <li class="here-slot here-slot--overflow" id="here-overflow" hidden>
+        <span class="here-slot__overflow-num mono" id="here-overflow-num">+0</span>
+      </li>
+    </ol>
+
+    <button class="here-strip__tell mono" id="here-tell-btn" type="button" aria-expanded="false" aria-controls="here-tell-panel">
+      <span class="here-strip__tell-label">+ TELL</span>
+    </button>
+
+    <a class="here-strip__profile mono" href="/profile" id="here-profile-link">
+      <span class="here-strip__profile-label">PROFILE</span>
+      <span class="here-strip__profile-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+
+  {/* Inline state line — below the main row, rendered when the visitor
+      has told us something. Hidden until at least one field is set. */}
+  <div class="here-strip__state" id="here-state" hidden>
+    <span class="here-state__you mono">YOU</span>
+    <span class="here-state__sep" aria-hidden="true">·</span>
+    <span class="here-state__mood" id="here-state-mood" hidden></span>
+    <span class="here-state__listening" id="here-state-listening" hidden>
+      <span aria-hidden="true">🎵</span> <span id="here-state-listening-text"></span>
+    </span>
+    <span class="here-state__where" id="here-state-where" hidden>
+      <span aria-hidden="true">📍</span> <span id="here-state-where-text"></span>
+    </span>
+    <button class="here-state__edit mono" id="here-state-edit" type="button">edit</button>
+  </div>
+
+  {/* TELL THE PEOPLES panel — expandable. Per Mike 2026-04-19 20:45 PT:
+      "having the person set their mood, maybe the song they are
+      listening to, location, or any other interesting data". */}
+  <div class="here-strip__panel" id="here-tell-panel" hidden>
+    <p class="here-panel__eyebrow mono">TELL THE PEOPLES · local first · live when connected</p>
+
+    <label class="here-panel__field">
+      <span class="here-panel__label mono">🎵 now playing</span>
+      <input
+        type="text"
+        id="here-input-listening"
+        class="here-panel__input"
+        placeholder="Spotify URL or song title (optional)"
+        maxlength="120"
+        autocomplete="off"
+      />
+    </label>
+
+    <label class="here-panel__field">
+      <span class="here-panel__label mono">📍 where</span>
+      <div class="here-panel__where-row">
+        <input
+          type="text"
+          id="here-input-where"
+          class="here-panel__input"
+          placeholder="El Segundo · or your town (optional)"
+          maxlength="80"
+          autocomplete="off"
+        />
+        <button type="button" id="here-geo-btn" class="here-panel__geo mono" aria-label="Use my location">
+          📡 USE
+        </button>
+      </div>
+    </label>
+
+    <fieldset class="here-panel__moods">
+      <legend class="here-panel__label mono">mood</legend>
+      <div class="here-panel__mood-row" id="here-mood-row">
+        <button type="button" class="mood-pill" data-mood="chill">● chill</button>
+        <button type="button" class="mood-pill" data-mood="hype">● hype</button>
+        <button type="button" class="mood-pill" data-mood="focus">● focus</button>
+        <button type="button" class="mood-pill" data-mood="flow">● flow</button>
+        <button type="button" class="mood-pill" data-mood="curious">● curious</button>
+        <button type="button" class="mood-pill" data-mood="quiet">● quiet</button>
+      </div>
+    </fieldset>
+
+    <div class="here-panel__actions">
+      <button type="button" id="here-save-btn" class="here-panel__save mono">SAVE</button>
+      <button type="button" id="here-clear-btn" class="here-panel__clear mono">CLEAR</button>
+      <span class="here-panel__hint mono" id="here-save-hint"></span>
+    </div>
+  </div>
+</aside>
+
+<script is:inline>
+  (function () {
+    var strip = document.querySelector('.here-strip');
+    if (!strip) return;
+
+    function cheapHash(s) {
+      var h = 5381;
+      for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+      return h >>> 0;
+    }
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
+    function nounUrl(id) { return 'https://noun.pics/' + id + '.svg'; }
+    function truncate(s, max) {
+      if (!s || s.length <= max) return s || '';
+      return s.slice(0, max - 1) + '…';
+    }
+
+    var sessionId;
+    sessionId = lsGet('pc:session');
+    if (!sessionId) {
+      sessionId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+      lsSet('pc:session', sessionId);
+    }
+
+    var nounId;
+    var cachedNoun = lsGet('pc:visitor:noun');
+    if (cachedNoun) nounId = parseInt(cachedNoun, 10);
+    if (!(nounId >= 0 && nounId < 1200)) {
+      nounId = cheapHash(sessionId) % 1200;
+      lsSet('pc:visitor:noun', String(nounId));
+    }
+
+    if (!lsGet('pc:visitor:firstSeenAt')) {
+      lsSet('pc:visitor:firstSeenAt', new Date().toISOString());
+    }
+
+    var isAgent = /gptbot|claudebot|claude-user|anthropic-ai|perplexitybot|oai-searchbot|atlas|bingbot|googlebot/i.test(navigator.userAgent);
+
+    var youImg = document.getElementById('here-you-img');
+    if (youImg) {
+      youImg.src = nounUrl(nounId);
+      youImg.alt = 'your noun · ' + nounId;
+    }
+    var profileLink = document.getElementById('here-profile-link');
+    if (profileLink) {
+      profileLink.href = '/profile';
+      profileLink.setAttribute('aria-label', 'Your profile · noun ' + nounId);
+    }
+
+    strip.dataset.initial = 'ready';
+
+    var countEl = document.getElementById('here-count');
+    var otherSlots = Array.from(strip.querySelectorAll('.here-slot--ghost[data-slot]'));
+    var overflow = document.getElementById('here-overflow');
+    var overflowNum = document.getElementById('here-overflow-num');
+    var host = window.location.host;
+    var allowPresence = host.endsWith('pointcast.xyz') || host.endsWith('.pages.dev');
+    var ws = null;
+    var heartbeatTimer = 0;
+    var reconnectTimer = 0;
+
+    function describeSession(session) {
+      var parts = [];
+      var kind = session.kind === 'agent' ? 'AGENT' : (session.kind === 'wallet' ? 'WALLET' : 'HUMAN');
+      parts.push(kind);
+      if (session.mood) parts.push(session.mood);
+      if (session.listening) parts.push('listening ' + truncate(session.listening, 40));
+      if (session.where) parts.push('in ' + truncate(session.where, 28));
+      return parts.join(' · ');
+    }
+
+    function clearSlot(slot) {
+      if (!slot) return;
+      slot.classList.remove('here-slot--occupied');
+      slot.removeAttribute('data-kind');
+      slot.removeAttribute('title');
+      slot.removeAttribute('aria-label');
+      var img = slot.querySelector('.here-slot__noun');
+      var ghost = slot.querySelector('.here-slot__ghost');
+      if (img) {
+        img.hidden = true;
+        img.removeAttribute('src');
+        img.alt = '';
+      }
+      if (ghost) ghost.hidden = false;
+    }
+
+    function paintSlot(slot, session) {
+      if (!slot || !session) return;
+      var nextNounId = Number(session.nounId);
+      if (!(nextNounId >= 0 && nextNounId < 1200)) {
+        clearSlot(slot);
+        return;
+      }
+      slot.classList.add('here-slot--occupied');
+      slot.dataset.kind = session.kind || 'human';
+      var img = slot.querySelector('.here-slot__noun');
+      var ghost = slot.querySelector('.here-slot__ghost');
+      if (img) {
+        img.hidden = false;
+        img.src = nounUrl(nextNounId);
+        img.alt = 'visitor noun · ' + nextNounId;
+      }
+      if (ghost) ghost.hidden = true;
+      var label = describeSession(session);
+      if (label) {
+        slot.title = label;
+        slot.setAttribute('aria-label', label);
+      }
+    }
+
+    function otherSessionsFromPayload(payload) {
+      var sessions = Array.isArray(payload && payload.sessions) ? payload.sessions : [];
+      var others = [];
+      var removedSelf = false;
+      for (var i = 0; i < sessions.length; i++) {
+        var session = sessions[i];
+        if (!session || typeof session !== 'object') continue;
+        if (!removedSelf && Number(session.nounId) === nounId) {
+          removedSelf = true;
+          continue;
+        }
+        others.push(session);
+      }
+      return others;
+    }
+
+    function paintPresence(payload) {
+      var humans = Number(payload && payload.humans) || 0;
+      var agents = Number(payload && payload.agents) || 0;
+      var total = Math.max(1, humans + agents);
+      var others = otherSessionsFromPayload(payload);
+      if (countEl) countEl.textContent = '· ' + total + ' ·';
+      for (var i = 0; i < otherSlots.length; i++) {
+        if (i < others.length) paintSlot(otherSlots[i], others[i]);
+        else clearSlot(otherSlots[i]);
+      }
+      var shown = Math.min(otherSlots.length, others.length);
+      var overflowCount = Math.max(0, total - 1 - shown);
+      if (overflowCount > 0) {
+        if (overflow) overflow.hidden = false;
+        if (overflowNum) overflowNum.textContent = '+' + overflowCount;
+      } else {
+        if (overflow) overflow.hidden = true;
+      }
+    }
+
+    function sendPresence(type, extra) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+      try {
+        var payload = { type: type, nounId: nounId };
+        if (!isAgent && extra && typeof extra === 'object') {
+          if (Object.prototype.hasOwnProperty.call(extra, 'mood')) payload.mood = extra.mood;
+          if (Object.prototype.hasOwnProperty.call(extra, 'listening')) payload.listening = extra.listening;
+          if (Object.prototype.hasOwnProperty.call(extra, 'where')) payload.where = extra.where;
+        }
+        ws.send(JSON.stringify(payload));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function currentPresenceFields() {
+      return {
+        mood: lsGet('pc:visitor:mood'),
+        listening: lsGet('pc:visitor:listening'),
+        where: lsGet('pc:visitor:where'),
+      };
+    }
+
+    function stopHeartbeat() {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = 0;
+      }
+    }
+
+    function scheduleReconnect() {
+      stopHeartbeat();
+      if (reconnectTimer || !allowPresence) return;
+      reconnectTimer = window.setTimeout(function () {
+        reconnectTimer = 0;
+        connectPresence();
+      }, 3000);
+    }
+
+    function connectPresence() {
+      if (!allowPresence) return;
+      var wsURL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + host +
+        '/api/presence?sid=' + encodeURIComponent(sessionId) + '&kind=' + (isAgent ? 'agent' : 'human');
+      try {
+        ws = new WebSocket(wsURL);
+      } catch (e) {
+        scheduleReconnect();
+        return;
+      }
+      ws.addEventListener('open', function () {
+        stopHeartbeat();
+        sendPresence('identify', currentPresenceFields());
+        heartbeatTimer = window.setInterval(function () {
+          sendPresence('ping');
+        }, 30_000);
+      });
+      ws.addEventListener('message', function (evt) {
+        try {
+          paintPresence(JSON.parse(evt.data));
+        } catch (e) {}
+      });
+      ws.addEventListener('close', scheduleReconnect);
+      ws.addEventListener('error', scheduleReconnect);
+    }
+
+    paintPresence({
+      humans: isAgent ? 0 : 1,
+      agents: isAgent ? 1 : 0,
+      sessions: [{ nounId: nounId, kind: isAgent ? 'agent' : 'human', joinedAt: new Date().toISOString() }],
+    });
+    if (allowPresence) connectPresence();
+
+    // ── TELL THE PEOPLES panel ──────────────────────────────────
+    var STATE_KEYS = {
+      mood: 'pc:visitor:mood',
+      listening: 'pc:visitor:listening',
+      where: 'pc:visitor:where',
+    };
+    var panel = document.getElementById('here-tell-panel');
+    var tellBtn = document.getElementById('here-tell-btn');
+    var inputListening = document.getElementById('here-input-listening');
+    var inputWhere = document.getElementById('here-input-where');
+    var geoBtn = document.getElementById('here-geo-btn');
+    var moodRow = document.getElementById('here-mood-row');
+    var saveBtn = document.getElementById('here-save-btn');
+    var clearBtn = document.getElementById('here-clear-btn');
+    var saveHint = document.getElementById('here-save-hint');
+    var stateLine = document.getElementById('here-state');
+    var stateMood = document.getElementById('here-state-mood');
+    var stateListening = document.getElementById('here-state-listening');
+    var stateListeningText = document.getElementById('here-state-listening-text');
+    var stateWhere = document.getElementById('here-state-where');
+    var stateWhereText = document.getElementById('here-state-where-text');
+    var stateEdit = document.getElementById('here-state-edit');
+
+    var selectedMood = null;
+
+    function paintMoodPills(mood) {
+      if (!moodRow) return;
+      var pills = moodRow.querySelectorAll('.mood-pill');
+      pills.forEach(function (p) {
+        if (p.dataset.mood === mood) p.classList.add('mood-pill--active');
+        else p.classList.remove('mood-pill--active');
+      });
+    }
+
+    function paintStateLine() {
+      var mood = lsGet(STATE_KEYS.mood);
+      var listening = lsGet(STATE_KEYS.listening);
+      var where = lsGet(STATE_KEYS.where);
+      var any = mood || listening || where;
+      if (!stateLine) return;
+      if (!any) { stateLine.hidden = true; return; }
+      stateLine.hidden = false;
+      if (stateMood) {
+        if (mood) { stateMood.hidden = false; stateMood.textContent = mood; stateMood.dataset.mood = mood; }
+        else stateMood.hidden = true;
+      }
+      if (stateListening && stateListeningText) {
+        if (listening) { stateListening.hidden = false; stateListeningText.textContent = listening.length > 50 ? listening.slice(0, 49) + '…' : listening; }
+        else stateListening.hidden = true;
+      }
+      if (stateWhere && stateWhereText) {
+        if (where) { stateWhere.hidden = false; stateWhereText.textContent = where; }
+        else stateWhere.hidden = true;
+      }
+    }
+
+    function togglePanel(open) {
+      if (!panel || !tellBtn) return;
+      var nextOpen = typeof open === 'boolean' ? open : panel.hidden;
+      panel.hidden = !nextOpen;
+      tellBtn.setAttribute('aria-expanded', String(!panel.hidden));
+      var label = tellBtn.querySelector('.here-strip__tell-label');
+      if (label) label.textContent = panel.hidden ? '+ TELL' : '× CLOSE';
+    }
+
+    function loadIntoInputs() {
+      if (inputListening) inputListening.value = lsGet(STATE_KEYS.listening) || '';
+      if (inputWhere) inputWhere.value = lsGet(STATE_KEYS.where) || '';
+      selectedMood = lsGet(STATE_KEYS.mood);
+      paintMoodPills(selectedMood);
+    }
+
+    if (tellBtn) tellBtn.addEventListener('click', function () {
+      togglePanel();
+      if (!panel.hidden) loadIntoInputs();
+    });
+
+    if (moodRow) moodRow.addEventListener('click', function (ev) {
+      var t = ev.target.closest('.mood-pill');
+      if (!t) return;
+      var m = t.dataset.mood;
+      selectedMood = (selectedMood === m) ? null : m;
+      paintMoodPills(selectedMood);
+    });
+
+    if (geoBtn) geoBtn.addEventListener('click', function () {
+      if (!navigator.geolocation) {
+        saveHint.textContent = 'no geolocation support';
+        return;
+      }
+      saveHint.textContent = 'asking…';
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        var lat = pos.coords.latitude.toFixed(2);
+        var lng = pos.coords.longitude.toFixed(2);
+        // Simple: write coords as "lat,lng"; future tick can reverse-geocode to city.
+        if (inputWhere) inputWhere.value = lat + ',' + lng;
+        saveHint.textContent = '✓ got coords · reverse-geocode coming';
+      }, function (err) {
+        saveHint.textContent = 'denied (' + (err && err.code) + ')';
+      }, { enableHighAccuracy: false, timeout: 8000 });
+    });
+
+    if (saveBtn) saveBtn.addEventListener('click', function () {
+      var listening = (inputListening && inputListening.value || '').trim();
+      var where = (inputWhere && inputWhere.value || '').trim();
+      lsSet(STATE_KEYS.mood, selectedMood);
+      lsSet(STATE_KEYS.listening, listening);
+      lsSet(STATE_KEYS.where, where);
+      sendPresence('update', {
+        mood: selectedMood || null,
+        listening: listening || null,
+        where: where || null,
+      });
+      saveHint.textContent = '✓ saved · shown to you + peoples around';
+      paintStateLine();
+      setTimeout(function () {
+        saveHint.textContent = '';
+        togglePanel(false);
+      }, 1200);
+    });
+
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+      lsSet(STATE_KEYS.mood, null);
+      lsSet(STATE_KEYS.listening, null);
+      lsSet(STATE_KEYS.where, null);
+      selectedMood = null;
+      if (inputListening) inputListening.value = '';
+      if (inputWhere) inputWhere.value = '';
+      paintMoodPills(null);
+      sendPresence('update', { mood: null, listening: null, where: null });
+      saveHint.textContent = 'cleared';
+      paintStateLine();
+      setTimeout(function () { saveHint.textContent = ''; }, 900);
+    });
+
+    if (stateEdit) stateEdit.addEventListener('click', function () {
+      togglePanel(true);
+      loadIntoInputs();
+    });
+
+    paintStateLine();
+  })();
+</script>
+
+<style>
+  .here-strip {
+    margin: 4px 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-left: 4px solid #534AB7;
+    border-radius: 3px;
+    background: linear-gradient(to right, #f6f5fc 0%, #faf9f5 60%, #faf9f5 100%);
+  }
+  .here-strip[data-initial="hidden"] { opacity: 0; }
+  .here-strip[data-initial="ready"] {
+    opacity: 1;
+    transition: opacity 0.4s ease-out;
+  }
+
+  .here-strip__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .here-strip__kicker {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #332C7C;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .here-strip__kicker-sub {
+    color: var(--pc-ink-soft);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .here-strip__slots {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .here-slot {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .here-slot__noun {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+    background: #fff;
+  }
+  .here-slot__noun[hidden],
+  .here-slot__ghost[hidden] {
+    display: none;
+  }
+
+  /* YOU slot — larger + gold ring */
+  .here-slot--you {
+    width: 40px;
+    height: 40px;
+    margin-right: 4px;
+  }
+  .here-slot--you .here-slot__noun { border: 2px solid #F59F00; padding: 1px; }
+  .here-slot--you .here-slot__ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(245, 159, 0, 0.35);
+    animation: here-pulse 3s ease-in-out infinite;
+  }
+  .here-slot--you .here-slot__label {
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: #F59F00;
+    white-space: nowrap;
+  }
+  @keyframes here-pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.06); }
+  }
+
+  /* Ghost slots — unlit default, then fill with real nouns. */
+  .here-slot--ghost {
+    background: transparent;
+    border: 1px dashed rgba(83, 74, 183, 0.2);
+  }
+  .here-slot__ghost {
+    color: rgba(83, 74, 183, 0.3);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .here-slot--ghost.here-slot--occupied {
+    border-style: solid;
+    border-color: rgba(83, 74, 183, 0.28);
+    background: #fff;
+    animation: here-avatar-in 0.3s ease-out;
+  }
+  .here-slot__noun--other {
+    padding: 1px;
+    border: 1px solid rgba(83, 74, 183, 0.18);
+  }
+  .here-slot--ghost[data-kind="wallet"] .here-slot__noun--other {
+    border-color: rgba(245, 159, 0, 0.55);
+    box-shadow: 0 0 0 1px rgba(245, 159, 0, 0.18);
+  }
+  .here-slot--ghost[data-kind="agent"] .here-slot__noun--other {
+    border-color: rgba(138, 36, 50, 0.55);
+    filter: grayscale(1) contrast(1.04);
+  }
+  @keyframes here-avatar-in {
+    0%   { opacity: 0; transform: scale(0.72); }
+    75%  { opacity: 1; transform: scale(1.08); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  /* Overflow slot */
+  .here-slot--overflow {
+    background: #12110E;
+    color: #fef5e7;
+    width: 36px;
+    height: 32px;
+    border-radius: 16px;
+  }
+  .here-slot__overflow-num {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #F59F00;
+  }
+
+  .here-strip__profile {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid #534AB7;
+    background: #fff;
+    color: #332C7C;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+  }
+  .here-strip__profile:hover {
+    background: #534AB7;
+    color: #fef5e7;
+    text-decoration: none;
+  }
+
+  /* ── TELL button + panel + state line ────────────────────────── */
+  .here-strip__tell {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: 1px solid #F59F00;
+    background: #fff8e6;
+    color: #8a5a00;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+  }
+  .here-strip__tell:hover {
+    background: #F59F00;
+    color: #12110E;
+  }
+
+  .here-strip__panel {
+    margin-top: 10px;
+    padding: 14px;
+    border: 1px dashed #534AB7;
+    border-radius: 3px;
+    background: #fff;
+    display: grid;
+    gap: 10px;
+  }
+  .here-strip__panel[hidden] { display: none; }
+  .here-panel__eyebrow {
+    margin: 0 0 2px;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #534AB7;
+    font-weight: 700;
+  }
+
+  .here-panel__field {
+    display: grid;
+    gap: 4px;
+  }
+  .here-panel__label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #332C7C;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .here-panel__input {
+    padding: 7px 10px;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: 13px;
+    color: #12110E;
+    background: #faf9f5;
+  }
+  .here-panel__input:focus {
+    outline: none;
+    border-color: #534AB7;
+    background: #fff;
+  }
+  .here-panel__where-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .here-panel__where-row .here-panel__input { flex: 1; }
+  .here-panel__geo {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border: 1px solid #0F6E56;
+    background: #fff;
+    color: #0F6E56;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .here-panel__geo:hover {
+    background: #0F6E56;
+    color: #fff;
+  }
+
+  .here-panel__moods {
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .here-panel__mood-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .mood-pill {
+    padding: 5px 10px;
+    border: 1px solid #d6d4cd;
+    background: #fff;
+    color: #2a2925;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .mood-pill:hover { border-color: #534AB7; background: #f6f5fc; }
+  .mood-pill--active {
+    background: #12110E;
+    color: #fef5e7;
+    border-color: #12110E;
+  }
+
+  .here-panel__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .here-panel__save, .here-panel__clear {
+    padding: 6px 12px;
+    border: 1px solid #12110E;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .here-panel__save {
+    background: #12110E;
+    color: #fef5e7;
+  }
+  .here-panel__save:hover { background: #8a2432; border-color: #8a2432; }
+  .here-panel__clear {
+    background: #fff;
+    color: #12110E;
+  }
+  .here-panel__clear:hover { background: #f4f2ec; }
+  .here-panel__hint {
+    font-size: 10px;
+    color: #0F6E56;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+
+  /* State line — shown below main row once visitor has told us */
+  .here-strip__state {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    background: #faf9f5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #2a2925;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+  }
+  .here-strip__state[hidden] { display: none; }
+  .here-state__you {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #F59F00;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .here-state__sep { color: var(--pc-ink-muted); opacity: 0.5; }
+  .here-state__mood {
+    padding: 2px 8px;
+    background: #12110E;
+    color: #fef5e7;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border-radius: 10px;
+  }
+  .here-state__listening, .here-state__where {
+    color: #2a2925;
+  }
+  .here-state__edit {
+    margin-left: auto;
+    padding: 2px 7px;
+    border: 1px solid #d6d4cd;
+    background: transparent;
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .here-state__edit:hover { background: #fff; color: #12110E; border-color: #12110E; }
+
+  @media (max-width: 620px) {
+    .here-strip__kicker-label { font-size: 9.5px; }
+    .here-slot { width: 26px; height: 26px; }
+    .here-slot--you { width: 32px; height: 32px; }
+    .here-slot--you .here-slot__label { font-size: 7px; bottom: -12px; }
+    .here-strip__profile { padding: 4px 8px; font-size: 9.5px; }
+    .here-strip__tell { padding: 4px 8px; font-size: 9.5px; }
+    .here-strip__panel { padding: 10px; }
+  }
+</style>

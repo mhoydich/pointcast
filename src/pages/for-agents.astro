@@ -69,6 +69,15 @@ const jsonLd = {
         <li><code>/publish</code> + <code>/publish.json</code> + <code>/api/publish</code> — <strong>Tezos publishing v1.</strong> Signed-payload queue. Contract anchor pending.</li>
         <li><code>/beacon</code> + <code>/beacon.json</code> — 25-mile community-growth radius anchored in El Segundo.</li>
         <li><code>/ai-stack</code> + <code>/ai-stack.json</code> — best-practices guide to the 24 AI tools we reach for, tiered daily/weekly/occasional/watching.</li>
+        <li><code>/mesh</code> — the three meshes (local 25-mile, online channels + feeds, agent machine surface) — one map. Counts pulled from the block collection at build time.</li>
+        <li><code>/yee</code> + <code>/yee/{'{id}'}</code> — <strong>YeePlayer v0.</strong> Static rhythm-game overlay on any WATCH block with a <code>media.beats</code> array. Keyboard + pointer input. Launched with the Chakra Tune-Up (21 bija mantras).</li>
+        <li><code>/collabs</code> + <code>/collabs.json</code> — <strong>collaborators registry + federation spec.</strong> Who builds PointCast (humans + AI systems + federated sites), plus a 3-step rubric to plug in a compatible site.</li>
+        <li><code>/ping</code> + <code>/api/ping</code> — async inbox to Claude Code. POST messages; Claude Code reads at the start of each session along with <code>docs/inbox/*.md</code>. KV-backed when <code>PC_PING_KV</code> is bound.</li>
+        <li><code>/sprint</code> + <code>/sprint.json</code> + <code>/api/queue</code> — <strong>one-click directive picker.</strong> Mike (or any visitor) taps a sprint card; cc executes on the next cron tick. KV-backed when <code>PC_QUEUE_KV</code> is bound; falls back to <code>docs/queue/*.md</code>.</li>
+        <li><code>/sprints</code> + <code>/sprints.json</code> — <strong>autonomous work log.</strong> Every sprint cc has shipped (cron-fired or chat-fired) rendered chronologically from <code>docs/sprints/*.md</code>. Read by humans + agents.</li>
+        <li><code>/drop</code> + <code>/api/drop</code> — paste-a-URL inbox with live URL classification (Spotify → LISTEN, YouTube → WATCH, Good-Feels → /products, Maps → VISIT, etc.). Foursquare-flavored; v1 social-graph features documented in <code>docs/inspirations/foursquare.md</code>.</li>
+        <li><code>/api/presence</code> — <strong>live presence websocket.</strong> Query: <code>?sid={'{uuid}'}&amp;kind={'{human|agent|wallet}'}</code>. Broadcasts aggregate counts plus a capped per-visitor <code>sessions[]</code> array carrying <code>nounId</code>, <code>kind</code>, <code>joinedAt</code>, and optional opt-in mood/listening/where. Raw session ids never broadcast.</li>
+        <li><code>/products</code> + <code>/products.json</code> + <code>/products/{'{slug}'}</code> — <strong>Good Feels SEO foothold.</strong> Schema.org Product markup feeding shop.getgoodfeels.com. PointCast routes the read; checkout always at the shop. Empty on purpose at v0.</li>
         <li><code>/glossary</code> — dictionary of PointCast-specific terms. Each has a stable anchor URL (<code>/glossary#&lt;slug&gt;</code>).</li>
         <li><code>/subscribe</code> — RSS + JSON Feed + per-channel streams + socials. No email list.</li>
         <li><code>/changelog</code> — hand-curated version history.</li>
@@ -77,6 +86,13 @@ const jsonLd = {
         <li><code>/llms-full.txt</code> — long-form LLM-oriented content, companion to <code>/llms.txt</code>.</li>
         <li><code>/now</code> — live system snapshot. Card of the Day, next draw, latest blocks, contract state.</li>
         <li><code>/now.json</code> — same snapshot, machine-readable. Cache: 60s.</li>
+        <li><code>/today</code> + <code>/today.json</code> — <strong>daily drop.</strong> One block per PT calendar day, chosen deterministically (<code>daySeed = year*1000 + dayOfYearPT</code>, mod sorted collection size). Every visitor globally sees the same pick on the same day. Client-side <code>localStorage</code>-backed collect + streak counter. JSON payload includes today, tomorrow preview, and past-7-days.</li>
+        <li><code>/moods</code> + <code>/moods.json</code> — <strong>tonal atlas.</strong> Every mood slug with at least one entry across blocks + gallery, sorted by population with freshest-entry tie-break. Moods are editorial classifiers cutting across channels and types (e.g. <em>rainy-week</em>, <em>sprint-pulse</em>, <em>quiet</em>).</li>
+        <li><code>/mood/{'{slug}'}</code> + <code>/mood/{'{slug}'}.json</code> — <strong>per-mood filter.</strong> Blocks + gallery entries tagged with the given mood, newest-first. Dynamic route; new slug → route materializes on next build.</li>
+        <li><code>/local</code> + <code>/local.json</code> — <strong>100-mile lens anchored on El Segundo.</strong> Name-drops (Mike's verbatim list of ES institutions), 15 stations within range with cardinal direction + miles + coordinates, in-range blocks (filtered by <code>meta.location</code> against a SoCal-token list), and direct cast URLs for each station. Schema.org <code>Place</code> + <code>GeoCircle</code> JSON-LD with geometry.</li>
+        <li><code>/tv</code> — <strong>broadcast mode.</strong> Cross-platform ambient big-screen feed. Landscape-first (1920×1080 / 3840×2160). Auto-rotating slides: daily drop first, then recent blocks interleaved with live poll slides (QR → phone → vote → live tally). STATIONS mode adds a 15-city index + per-station local feed overlays. Presence readout with a live noun constellation and optional mood hover chips. AirPlay, Chromecast, HDMI-from-laptop, or native smart-TV browser.</li>
+        <li><code>/tv/{'{station}'}</code> — <strong>direct station tune-in.</strong> Castable / bookmarkable station URLs such as <code>/tv/manhattan-beach</code> or <code>/tv/santa-barbara</code>. Boots the same broadcast surface in a specific station feed.</li>
+        <li><code>/api/weather?station={'{slug}'}</code> — <strong>station weather proxy.</strong> Open-Meteo normalized to <code>{'{ tempF, condition, sunset, updatedAt }'}</code>, edge-cached for 10 minutes via Cloudflare <code>caches.default</code>. Used by <code>/tv</code> STATIONS mode.</li>
         <li><code>/search</code> — client-side search over every block. Accepts <code>?q=</code>.</li>
         <li><code>/random</code> — redirect to a random block. Each load = fresh pick.</li>
         <li><code>/random.json</code> — same random pick as JSON (no-store cache, fresh every request).</li>
@@ -107,6 +123,34 @@ const jsonLd = {
     </section>
 
     <section class="section">
+      <h2>Autonomous loop</h2>
+      <p class="section__lede">
+        cc (Claude Code) runs an hourly cron loop. At minute :11 of every
+        hour, when the REPL is idle, cc reads three inputs and either ships
+        work or holds. The loop is observable, recoverable, and bounded.
+      </p>
+      <ol class="section__steps">
+        <li><strong>Read inputs.</strong> <code>docs/queue/*.md</code> (git-native fallback), <code>docs/inbox/*.md</code> (Mike's async messages), and <code>GET /api/queue?action=list</code> (KV-backed picks from <a href="/sprint">/sprint</a> when <code>PC_QUEUE_KV</code> is bound).</li>
+        <li><strong>Execute or substitute.</strong> If a directive is pending, run the highest-priority one. Otherwise, grab the first <code>ready</code> sprint from <code>src/lib/sprints.ts</code>. If the next ready sprint has a known review-gate (e.g. schema-breaking change), <em>substitute</em> a smaller cc-only task and update the held sprint with a <code>needs-input</code> reason.</li>
+        <li><strong>Ship safely.</strong> Default <code>author: 'cc'</code>. Mike-byline requires <code>source</code> field. See <a href="https://github.com/MikeHoydich/pointcast/blob/main/VOICE.md" target="_blank" rel="noopener"><code>VOICE.md</code></a>.</li>
+        <li><strong>Recap.</strong> Append <code>docs/sprints/{'{date}'}-{'{slug}'}.md</code> per the format in <code>docs/sprints/README.md</code>. Visible at <a href="/sprints">/sprints</a> and <a href="/sprints.json">/sprints.json</a>.</li>
+        <li><strong>Idle.</strong> Until the next :11 tick (or a chat-tick from Mike).</li>
+      </ol>
+      <p class="section__lede">
+        <strong>What the loop won't do without Mike:</strong> schema-breaking
+        changes (new block types, new channels), brand claims about Good Feels
+        products, first-person Mike-voice content without a source, real-money
+        DAO transactions, smart-contract origination, anything that looks
+        like a permission grant.
+      </p>
+      <p class="section__lede">
+        Cron registered via <code>CronCreate</code>; session-only (in-memory),
+        7-day auto-expire. If the session dies, Mike chat-ticks once and the
+        loop re-registers.
+      </p>
+    </section>
+
+    <section class="section">
       <h2>Agent mode</h2>
       <p class="section__lede">
         Send a <code>User-Agent</code> starting with <code>ai:</code> (e.g.
@@ -122,6 +166,27 @@ const jsonLd = {
         Verified via the Cloudflare Pages middleware at
         <code>functions/_middleware.ts</code>. No IP detection, no
         fingerprinting — UA sniff only.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Presence WS</h2>
+      <p class="section__lede">
+        <code>/api/presence</code> is a shared WebSocket Durable Object used by the
+        home feed, <code>VisitorHereStrip</code>, and <code>/tv</code>. Clients connect
+        with <code>?sid={'{uuid}'}&amp;kind={'{human|agent|wallet}'}</code>, send
+        <code>{'{ type: "identify", nounId, mood?, listening?, where? }'}</code> once on
+        open, optional <code>{'{ type: "update", nounId, mood?, listening?, where? }'}</code>
+        messages whenever the visitor edits their state, and periodic
+        <code>{'{ type: "ping", nounId }'}</code> heartbeats.
+      </p>
+      <p class="section__lede">
+        Broadcast shape:
+        <code>{'{ humans, agents, sessions: [{ nounId, kind, joinedAt, mood?, listening?, where? }] }'}</code>.
+        <code>humans</code> includes both anonymous humans and wallet-tagged visitors;
+        <code>agents</code> is agent-only. The <code>sessions</code> array is capped to 50
+        visitors to prevent payload bloat. Raw session ids never leave the DO.
+        Agent entries omit <code>mood</code>, <code>listening</code>, and <code>where</code>.
       </p>
     </section>
 
@@ -283,6 +348,25 @@ https://pointcast.xyz/b/0205</pre>
     font-size: 14px;
     color: var(--pc-ink-soft);
     margin: 0 0 10px;
+  }
+
+  .section__steps {
+    margin: 8px 0 14px;
+    padding-left: 22px;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    display: grid;
+    gap: 6px;
+  }
+  .section__steps li { line-height: 1.5; }
+  .section__steps strong { color: var(--pc-ink); }
+  .section__steps a { color: var(--pc-accent); text-decoration: none; }
+  .section__steps a:hover { text-decoration: underline; }
+  .section__steps code {
+    background: #f0eee6;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 0.9em;
   }
 
   .endpoints {

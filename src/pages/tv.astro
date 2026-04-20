@@ -1,0 +1,2053 @@
+---
+/**
+ * /tv — PointCast broadcast mode. Cross-platform big-screen ambient
+ * surface. Designed for 1920×1080 / 3840×2160 landscape displays:
+ * cast from Chrome (Chromecast), AirPlay from any Apple device, or
+ * run natively in a smart TV browser. v0 per Mike 2026-04-19 morning
+ * directive — see /b/0282 for the arc framing.
+ *
+ * STATIONS mode (2026-04-19) adds two additive layers:
+ *   - STATIONS INDEX: 15 nearby channels, keyed like TV presets
+ *   - STATION FEED: same /tv chrome, but filtered to one place
+ *
+ * Global mode remains the default and preserves the original /tv
+ * behavior: daily drop first, recent blocks, live polls, presence,
+ * ticker, QR path to phone interaction.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import { pickDailyBlock } from '../lib/daily';
+import {
+  STATIONS,
+  STATION_SHORTCUTS,
+  filterBlocksForStation,
+  getStationPath,
+} from '../lib/local';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const heroBlocks = blocks.slice(0, 24);
+const tickerBlocks = blocks.slice(0, 60);
+
+const dailyBlock = pickDailyBlock(blocks);
+const prettyToday = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date()).toUpperCase();
+
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime())
+  .slice(0, 4);
+
+type SlideItem =
+  | { kind: 'block'; block: CollectionEntry<'blocks'> }
+  | { kind: 'poll'; poll: CollectionEntry<'polls'> }
+  | { kind: 'daily'; block: CollectionEntry<'blocks'> };
+
+const slides: SlideItem[] = [];
+if (dailyBlock) {
+  slides.push({ kind: 'daily', block: dailyBlock });
+}
+{
+  let blockIdx = 0;
+  let pollIdx = 0;
+  for (let i = slides.length; i < 28; i++) {
+    if (i > 0 && i % 5 === 0 && pollIdx < polls.length) {
+      slides.push({ kind: 'poll', poll: polls[pollIdx++] });
+      continue;
+    }
+    while (
+      blockIdx < heroBlocks.length &&
+      dailyBlock &&
+      heroBlocks[blockIdx].data.id === dailyBlock.data.id
+    ) {
+      blockIdx++;
+    }
+    if (blockIdx < heroBlocks.length) {
+      slides.push({ kind: 'block', block: heroBlocks[blockIdx++] });
+    }
+  }
+}
+
+const stationEntries = [...STATIONS]
+  .sort((a, b) => a.miles - b.miles)
+  .map((station, index) => {
+    const stationBlocks = filterBlocksForStation(blocks, station);
+    return {
+      station,
+      keyHint: STATION_SHORTCUTS[index] ?? String(index + 1),
+      blockCount: stationBlocks.length,
+      blocks: stationBlocks.slice(0, 8),
+    };
+  });
+
+const stationPayload = stationEntries.map(({ station, keyHint, blockCount, blocks }) => ({
+  name: station.name,
+  slug: station.slug,
+  miles: station.miles,
+  direction: station.direction,
+  blurb: station.blurb,
+  path: getStationPath(station),
+  keyHint,
+  blockCount,
+  blocks: blocks.map((block) => {
+    const channel = CHANNELS[block.data.channel];
+    return {
+      id: block.data.id,
+      title: block.data.title,
+      dek: block.data.dek ?? null,
+      type: block.data.type,
+      mood: block.data.mood ?? null,
+      location: block.data.meta?.location ?? null,
+      thumbnail: block.data.media?.thumbnail
+        ?? (block.data.noun ? `https://noun.pics/${block.data.noun}.svg` : null),
+      path: `/b/${block.data.id}`,
+      channel: {
+        code: channel.code,
+        name: channel.name,
+        color600: channel.color600,
+      },
+    };
+  }),
+}));
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#050404" />
+  <meta name="description" content="PointCast broadcast mode — ambient big-screen feed. Cast, AirPlay, or open on any smart TV." />
+  <meta property="og:title" content="PointCast · TV" />
+  <meta property="og:description" content="Ambient big-screen feed. Cast to any TV." />
+  <meta property="og:image" content="https://pointcast.xyz/images/og-home-v3.png" />
+  <title>PointCast · TV</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,500&family=JetBrains+Mono:wght@400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --tv-bg: #050404;
+      --tv-ink: #fef5e7;
+      --tv-ink-soft: #c4c2bc;
+      --tv-ink-dim: #5F5E5A;
+      --tv-accent: #F59F00;
+      --tv-warm: #8a2432;
+      --tv-rule: rgba(254, 245, 231, 0.14);
+      --tv-font-serif: 'Lora', Georgia, serif;
+      --tv-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--tv-bg);
+      color: var(--tv-ink);
+      font-family: var(--tv-font-serif);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+    body {
+      display: grid;
+      grid-template-rows: 70px 1fr 90px;
+      grid-template-columns: 1fr;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--tv-rule);
+      gap: 20px;
+      font-family: var(--tv-font-mono);
+    }
+    .top__brand {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.26em;
+      color: var(--tv-ink);
+    }
+    .top__brand em {
+      font-style: normal;
+      color: var(--tv-accent);
+      font-weight: 400;
+    }
+    .top__live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border: 1px solid var(--tv-warm);
+      background: rgba(138, 36, 50, 0.18);
+      color: var(--tv-ink);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      border-radius: 2px;
+    }
+    .top__live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #f66;
+      box-shadow: 0 0 8px 1px rgba(255, 102, 102, 0.8);
+      animation: tv-blink 2s ease-in-out infinite;
+    }
+    .top__stations-btn {
+      appearance: none;
+      border: 1px solid rgba(245, 159, 0, 0.35);
+      background: rgba(245, 159, 0, 0.08);
+      color: var(--tv-accent);
+      border-radius: 2px;
+      padding: 7px 12px;
+      font-family: var(--tv-font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.14s, border-color 0.14s, color 0.14s;
+    }
+    .top__stations-btn:hover,
+    .top__stations-btn:focus-visible {
+      background: rgba(245, 159, 0, 0.18);
+      border-color: var(--tv-accent);
+      color: var(--tv-ink);
+      outline: none;
+    }
+    @keyframes tv-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .top__presence {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      letter-spacing: 0.16em;
+      color: var(--tv-ink-soft);
+      font-weight: 500;
+    }
+    .top__presence-num {
+      color: var(--tv-accent);
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    .top__presence-constellation {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 4px;
+    }
+    .top__presence-avatar {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      border: 1px solid rgba(254, 245, 231, 0.2);
+      background: rgba(254, 245, 231, 0.08);
+      transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+    }
+    .top__presence-avatar-img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      border-radius: 50%;
+      background: #fff;
+      padding: 1px;
+    }
+    .top__presence-avatar-img[hidden],
+    .top__presence-avatar-dot[hidden],
+    .top__presence-avatar-chip[hidden] {
+      display: none;
+    }
+    .top__presence-avatar-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: rgba(254, 245, 231, 0.2);
+      box-shadow: 0 0 10px rgba(245, 159, 0, 0.12);
+    }
+    .top__presence-avatar--filled {
+      border-color: rgba(245, 159, 0, 0.26);
+      box-shadow: 0 0 10px rgba(245, 159, 0, 0.2);
+      animation: tv-star-pulse 3s ease-in-out infinite;
+    }
+    .top__presence-avatar--you {
+      border-color: rgba(245, 159, 0, 0.82);
+      box-shadow: 0 0 0 1px rgba(245, 159, 0, 0.18), 0 0 12px rgba(245, 159, 0, 0.3);
+    }
+    .top__presence-avatar[data-kind="agent"] .top__presence-avatar-img {
+      filter: grayscale(1) contrast(1.05);
+    }
+    .top__presence-avatar-chip {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 7px);
+      transform: translate(-50%, 4px);
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(245, 159, 0, 0.96);
+      color: #050404;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+    }
+    .top__presence-avatar:hover,
+    .top__presence-avatar:focus-within {
+      transform: translateY(-1px);
+    }
+    .top__presence-avatar:hover .top__presence-avatar-chip,
+    .top__presence-avatar:focus-within .top__presence-avatar-chip {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    @keyframes tv-star-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.8; }
+    }
+    .top__spacer { flex: 1; }
+    .top__date {
+      font-size: 13px;
+      color: var(--tv-ink-soft);
+      letter-spacing: 0.14em;
+    }
+    .top__time {
+      font-size: 16px;
+      color: var(--tv-ink);
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 64px 80px;
+    }
+    .progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--tv-rule);
+      overflow: hidden;
+      z-index: 4;
+    }
+    .progress__bar {
+      height: 100%;
+      width: 0%;
+      background: var(--tv-accent);
+      transition: width linear;
+    }
+    .hero__global {
+      width: 100%;
+      height: 100%;
+      animation: tv-drift 42s ease-in-out infinite;
+    }
+    @keyframes tv-drift {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(3px, -2px); }
+      50% { transform: translate(-2px, 3px); }
+      75% { transform: translate(-3px, -2px); }
+    }
+    .hero__global[hidden],
+    .stations-index[hidden],
+    .station-feed[hidden] {
+      display: none !important;
+    }
+
+    .slide {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+    .slide--active {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 56px;
+      align-items: center;
+      height: 100%;
+      animation: slide-in 900ms ease-out;
+    }
+    @keyframes slide-in {
+      0% { opacity: 0; transform: translateY(18px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide__col--text {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+    .slide__channel {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      border-radius: 2px;
+      font-family: var(--tv-font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+    .slide__channel-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .slide__kicker {
+      font-family: var(--tv-font-mono);
+      font-size: 13px;
+      letter-spacing: 0.20em;
+      color: var(--tv-ink-dim);
+      text-transform: uppercase;
+      font-weight: 500;
+      margin: 0;
+    }
+    .slide__title {
+      font-family: var(--tv-font-serif);
+      font-size: 64px;
+      line-height: 1.08;
+      font-weight: 500;
+      color: var(--tv-ink);
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .slide__dek {
+      font-size: 22px;
+      line-height: 1.45;
+      color: var(--tv-ink-soft);
+      margin: 0;
+      max-width: 26ch;
+    }
+    .slide__mood {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      font-family: var(--tv-font-mono);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: var(--tv-accent);
+      border: 1px solid rgba(245, 159, 0, 0.4);
+      border-radius: 999px;
+      width: fit-content;
+      text-transform: uppercase;
+    }
+    .slide__channel--poll {
+      background: var(--tv-warm);
+      color: var(--tv-ink);
+    }
+    .slide__channel--poll.slide__channel--utility { background: #0F6E56; }
+    .slide__channel--poll.slide__channel--coordination { background: #185FA5; }
+    .slide__channel--poll.slide__channel--editorial { background: #5F3DC4; }
+    .slide__channel--poll.slide__channel--decision { background: #C95019; }
+    .slide__channel--poll.slide__channel--state { background: #8A2432; }
+    .slide__channel--poll .slide__channel-dot {
+      background: var(--tv-accent);
+      animation: tv-blink 1.6s ease-in-out infinite;
+    }
+    .slide__title--poll {
+      font-size: 48px;
+      line-height: 1.12;
+    }
+    .slide__col--text-poll { gap: 16px; }
+    .slide__bars {
+      list-style: none;
+      margin: 4px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      max-width: 720px;
+    }
+    .slide__bar {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) 3fr 64px;
+      align-items: center;
+      gap: 14px;
+      font-size: 20px;
+      line-height: 1.2;
+      color: var(--tv-ink-soft);
+    }
+    .slide__bar-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .slide__bar-track {
+      position: relative;
+      height: 18px;
+      border: 1px solid rgba(254, 245, 231, 0.22);
+      border-radius: 2px;
+      background: rgba(254, 245, 231, 0.05);
+      overflow: hidden;
+    }
+    .slide__bar-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(245, 159, 0, 0.75), rgba(245, 159, 0, 0.3));
+      transition: width 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .slide__bar-pct {
+      font-family: var(--tv-font-mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--tv-ink);
+      text-align: right;
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+    .slide__bar--leader .slide__bar-label { color: var(--tv-ink); font-weight: 600; }
+    .slide__bar--leader .slide__bar-fill {
+      background: linear-gradient(90deg, var(--tv-accent), rgba(245, 159, 0, 0.55));
+      box-shadow: 0 0 14px rgba(245, 159, 0, 0.35);
+    }
+    .slide__bar--leader .slide__bar-pct { color: var(--tv-accent); }
+    .slide__poll-total {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: var(--tv-ink-dim);
+      text-transform: uppercase;
+    }
+    .slide__qr--poll { align-items: flex-end; }
+    .slide__qr--poll span {
+      color: var(--tv-accent);
+      font-weight: 700;
+      letter-spacing: 0.18em;
+    }
+    .slide__channel--daily {
+      background: linear-gradient(90deg, #F59F00 0%, #d4781a 100%);
+      color: #12110E;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.22em;
+      padding: 6px 14px;
+    }
+    .slide__channel-star {
+      font-size: 14px;
+      color: #8a2432;
+      animation: daily-spin 5s linear infinite;
+      display: inline-block;
+    }
+    @keyframes daily-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .slide__title--daily {
+      font-size: 72px;
+      line-height: 1.04;
+      letter-spacing: -0.015em;
+    }
+    .slide__col--text-daily { gap: 20px; }
+    .slide__art--daily {
+      width: min(460px, 100%);
+      border: 2px solid rgba(245, 159, 0, 0.4);
+      box-shadow: 0 0 34px rgba(245, 159, 0, 0.18);
+    }
+    .slide__qr--daily { align-items: flex-end; }
+    .slide__qr--daily img {
+      width: 120px;
+      height: 120px;
+      border: 2px solid #F59F00;
+    }
+    .slide__qr--daily span {
+      color: #F59F00;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+    }
+    .slide__daily-footnote {
+      margin-top: 6px;
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      color: var(--tv-ink-dim);
+    }
+    .slide--daily.slide--active {
+      background: radial-gradient(ellipse at right top, rgba(245, 159, 0, 0.08) 0%, transparent 50%);
+    }
+    .slide__col--side {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 18px;
+    }
+    .slide__art {
+      width: min(420px, 100%);
+      aspect-ratio: 1 / 1;
+      border-radius: 6px;
+      background: #12110E;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(254, 245, 231, 0.08);
+    }
+    .slide__art img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .slide__art--empty {
+      border-style: dashed;
+      border-color: rgba(245, 159, 0, 0.28);
+      color: var(--tv-ink-dim);
+      font-family: var(--tv-font-mono);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 28px;
+      text-align: center;
+    }
+    .slide__qr {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      font-family: var(--tv-font-mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      color: var(--tv-ink-dim);
+      text-transform: uppercase;
+    }
+    .slide__qr img {
+      width: 108px;
+      height: 108px;
+      background: #fff;
+      padding: 6px;
+      border-radius: 4px;
+    }
+
+    .stations-index {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 22px;
+    }
+    .stations-index__head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .stations-index__title {
+      margin: 0;
+      font-size: 40px;
+      line-height: 1;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    .stations-index__title em {
+      font-style: italic;
+      color: var(--tv-accent);
+    }
+    .stations-index__lede,
+    .stations-index__legend {
+      margin: 0;
+      font-family: var(--tv-font-mono);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--tv-ink-soft);
+    }
+    .stations-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      align-content: start;
+    }
+    .station-tile {
+      appearance: none;
+      border: 1px solid rgba(254, 245, 231, 0.12);
+      background: linear-gradient(180deg, rgba(18, 17, 14, 0.96), rgba(12, 11, 10, 0.98));
+      border-radius: 6px;
+      padding: 16px;
+      color: var(--tv-ink);
+      text-align: left;
+      display: grid;
+      gap: 12px;
+      cursor: pointer;
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+      min-height: 190px;
+    }
+    .station-tile:hover,
+    .station-tile:focus-visible {
+      transform: translateY(-1px);
+      border-color: rgba(245, 159, 0, 0.5);
+      background: linear-gradient(180deg, rgba(24, 22, 18, 0.98), rgba(12, 11, 10, 0.99));
+      outline: none;
+    }
+    .station-tile__top {
+      display: grid;
+      gap: 6px;
+    }
+    .station-tile__key {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--tv-accent);
+    }
+    .station-tile__name {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.05;
+      font-weight: 500;
+    }
+    .station-tile__meta,
+    .station-tile__count,
+    .station-tile__weather {
+      font-family: var(--tv-font-mono);
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--tv-ink-soft);
+    }
+    .station-tile__weather {
+      color: var(--tv-accent);
+      min-height: 1.2em;
+    }
+    .station-tile__preview {
+      display: grid;
+      grid-template-columns: 74px 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+    .station-tile__art {
+      width: 74px;
+      height: 74px;
+      border-radius: 4px;
+      background: #12110E;
+      border: 1px solid rgba(254, 245, 231, 0.08);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .station-tile__art img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .station-tile__fallback {
+      font-family: var(--tv-font-mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--tv-ink-dim);
+      text-align: center;
+      padding: 8px;
+    }
+    .station-tile__latest {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+    .station-tile__latest-meta {
+      font-family: var(--tv-font-mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--tv-ink-dim);
+    }
+    .station-tile__latest-title {
+      font-size: 16px;
+      line-height: 1.2;
+      color: var(--tv-ink);
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .station-tile__empty {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--tv-ink-soft);
+      max-width: 26ch;
+    }
+
+    .station-feed {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 26px;
+    }
+    .station-feed__banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .station-feed__banner-main {
+      display: grid;
+      gap: 6px;
+    }
+    .station-feed__eyebrow,
+    .station-feed__meta,
+    .station-feed__back {
+      font-family: var(--tv-font-mono);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    .station-feed__eyebrow {
+      color: var(--tv-accent);
+    }
+    .station-feed__name {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1;
+      font-weight: 500;
+    }
+    .station-feed__meta {
+      color: var(--tv-ink-soft);
+    }
+    .station-feed__back {
+      appearance: none;
+      border: 1px solid rgba(254, 245, 231, 0.18);
+      background: transparent;
+      color: var(--tv-ink-soft);
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    .station-feed__back:hover,
+    .station-feed__back:focus-visible {
+      border-color: rgba(245, 159, 0, 0.45);
+      color: var(--tv-ink);
+      outline: none;
+    }
+    .station-feed__slide {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 56px;
+      align-items: center;
+      height: 100%;
+      animation: slide-in 900ms ease-out;
+    }
+    .station-feed__dek:empty,
+    .station-feed__mood[hidden],
+    .station-feed__art[hidden],
+    .station-feed__art-empty[hidden] {
+      display: none !important;
+    }
+
+    .ticker {
+      border-top: 1px solid var(--tv-rule);
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      overflow: hidden;
+      font-family: var(--tv-font-mono);
+    }
+    .ticker__label {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      background: var(--tv-warm);
+      color: var(--tv-ink);
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      font-weight: 700;
+      text-transform: uppercase;
+      border-radius: 2px;
+    }
+    .ticker__reel {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      height: 30px;
+    }
+    .ticker__track {
+      display: inline-flex;
+      gap: 40px;
+      white-space: nowrap;
+      animation: ticker-run 160s linear infinite;
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    @keyframes ticker-run {
+      0% { transform: translate(0, -50%); }
+      100% { transform: translate(-50%, -50%); }
+    }
+    .ticker__item {
+      font-size: 14px;
+      color: var(--tv-ink-soft);
+      letter-spacing: 0.06em;
+    }
+    .ticker__item em {
+      font-style: normal;
+      color: var(--tv-accent);
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      margin-right: 10px;
+    }
+
+    .hint {
+      position: fixed;
+      bottom: 104px;
+      right: 24px;
+      font-family: var(--tv-font-mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--tv-ink-dim);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .hint--visible { opacity: 1; }
+
+    @media (max-width: 900px) {
+      body { grid-template-rows: 60px 1fr 70px; }
+      .top { padding: 12px 20px; gap: 12px; }
+      .top__brand { font-size: 16px; letter-spacing: 0.2em; }
+      .top__live { font-size: 10px; padding: 3px 8px; }
+      .top__stations-btn { font-size: 9px; padding: 6px 8px; }
+      .top__presence { font-size: 11px; }
+      .top__presence-avatar { width: 20px; height: 20px; }
+      .top__presence-avatar-dot { width: 7px; height: 7px; }
+      .top__presence-avatar-chip { font-size: 7px; }
+      .top__presence-num { font-size: 14px; }
+      .top__date { font-size: 11px; }
+      .top__time { font-size: 13px; }
+      .hero { padding: 24px; }
+      .slide--active,
+      .station-feed__slide {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      .slide__title { font-size: 34px; }
+      .slide__dek { font-size: 16px; }
+      .slide__col--side { align-items: flex-start; }
+      .slide__art { width: min(280px, 100%); }
+      .slide__qr img { width: 82px; height: 82px; }
+      .stations-grid { grid-template-columns: 1fr; }
+      .stations-index__title { font-size: 28px; }
+      .station-feed__name { font-size: 30px; }
+      .ticker { padding: 0 14px; }
+      .ticker__label { font-size: 10px; padding: 4px 8px; }
+      .ticker__item { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__live">
+      <span class="top__live-dot" aria-hidden="true"></span>
+      LIVE · TV
+    </div>
+    <button class="top__stations-btn" id="tv-stations-toggle" type="button" aria-controls="tv-stations-index">
+      STATIONS
+    </button>
+    <div class="top__presence" id="tv-presence" aria-live="polite">
+      <span class="top__presence-label">WATCHING</span>
+      <span class="top__presence-constellation" id="tv-presence-constellation" aria-label="Watcher noun constellation">
+        {Array.from({ length: 10 }).map((_, index) => (
+          <span class="top__presence-avatar" data-presence-slot={index}>
+            <img class="top__presence-avatar-img" alt="" src="" loading="lazy" hidden />
+            <span class="top__presence-avatar-dot" aria-hidden="true"></span>
+            <span class="top__presence-avatar-chip mono" hidden></span>
+          </span>
+        ))}
+      </span>
+      <span class="top__presence-num" id="tv-presence-num">—</span>
+    </div>
+    <div class="top__spacer"></div>
+    <div class="top__date" id="tv-date">—</div>
+    <div class="top__time" id="tv-time">—</div>
+  </header>
+
+  <main class="hero" aria-label="PointCast broadcast slides">
+    <div class="progress"><div class="progress__bar" id="tv-progress"></div></div>
+
+    <div class="hero__global" id="tv-global-layer">
+      {slides.map((item, idx) => {
+        if (item.kind === 'daily') {
+          const block = item.block;
+          const channel = CHANNELS[block.data.channel];
+          const thumbnail = block.data.media?.thumbnail
+            ?? (block.data.noun ? `https://noun.pics/${block.data.noun}.svg` : null);
+          const qrTarget = 'https://pointcast.xyz/today';
+          const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=2&data=${encodeURIComponent(qrTarget)}`;
+          return (
+            <section class={`slide slide--daily${idx === 0 ? ' slide--active' : ''}`} data-global-slide data-idx={idx} data-type="DAILY" aria-hidden={idx !== 0 ? 'true' : 'false'}>
+              <div class="slide__col--text slide__col--text-daily">
+                <span class="slide__channel slide__channel--daily">
+                  <span class="slide__channel-star" aria-hidden="true">✦</span>
+                  DAILY DROP · {prettyToday}
+                </span>
+                <p class="slide__kicker">№ {block.data.id} · CH.{channel.code} · {block.data.type}</p>
+                <h2 class="slide__title slide__title--daily">{block.data.title}</h2>
+                {block.data.dek && <p class="slide__dek">{block.data.dek}</p>}
+                {block.data.mood && (
+                  <span class="slide__mood">★ {block.data.mood.replace(/-/g, ' ')}</span>
+                )}
+                <div class="slide__daily-footnote">
+                  ONE BLOCK A DAY · ROTATES AT MIDNIGHT PT · COLLECT ON PHONE
+                </div>
+              </div>
+              <div class="slide__col--side">
+                {thumbnail && (
+                  <div class="slide__art slide__art--daily">
+                    <img src={thumbnail} alt="" loading={idx === 0 ? 'eager' : 'lazy'} />
+                  </div>
+                )}
+                <div class="slide__qr slide__qr--daily">
+                  <img src={qrSrc} alt="QR code — collect today's drop" />
+                  <span>→ SCAN · TAP TO COLLECT</span>
+                </div>
+              </div>
+            </section>
+          );
+        }
+
+        if (item.kind === 'block') {
+          const block = item.block;
+          const channel = CHANNELS[block.data.channel];
+          const thumbnail = block.data.media?.thumbnail
+            ?? (block.data.noun ? `https://noun.pics/${block.data.noun}.svg` : null);
+          const qrTarget = `https://pointcast.xyz/b/${block.data.id}`;
+          const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=216x216&margin=2&data=${encodeURIComponent(qrTarget)}`;
+          return (
+            <section class={`slide${idx === 0 ? ' slide--active' : ''}`} data-global-slide data-idx={idx} data-type={block.data.type} aria-hidden={idx !== 0 ? 'true' : 'false'}>
+              <div class="slide__col--text">
+                <span
+                  class="slide__channel"
+                  style={`background: color-mix(in oklab, ${channel.color600} 18%, transparent); color: ${channel.color600};`}
+                >
+                  <span class="slide__channel-dot" aria-hidden="true"></span>
+                  CH.{channel.code} · {channel.name}
+                </span>
+                <p class="slide__kicker">№ {block.data.id} · {block.data.type}</p>
+                <h2 class="slide__title">{block.data.title}</h2>
+                {block.data.dek && <p class="slide__dek">{block.data.dek}</p>}
+                {block.data.mood && (
+                  <span class="slide__mood">★ {block.data.mood.replace(/-/g, ' ')}</span>
+                )}
+              </div>
+              <div class="slide__col--side">
+                {thumbnail && (
+                  <div class="slide__art">
+                    <img src={thumbnail} alt="" loading={idx === 0 ? 'eager' : 'lazy'} />
+                  </div>
+                )}
+                <div class="slide__qr">
+                  <img src={qrSrc} alt={`QR code to ${qrTarget}`} />
+                  <span>→ phone · /b/{block.data.id}</span>
+                </div>
+              </div>
+            </section>
+          );
+        }
+
+        const poll = item.poll;
+        const purpose = poll.data.purpose ?? 'coordination';
+        const qrTarget = `https://pointcast.xyz/poll/${poll.data.slug}?via=tv`;
+        const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=216x216&margin=2&data=${encodeURIComponent(qrTarget)}`;
+        return (
+          <section class={`slide slide--poll${idx === 0 ? ' slide--active' : ''}`} data-global-slide data-idx={idx} data-type="POLL" data-poll-slug={poll.data.slug} aria-hidden={idx !== 0 ? 'true' : 'false'}>
+            <div class="slide__col--text slide__col--text-poll">
+              <span class={`slide__channel slide__channel--poll slide__channel--${purpose}`}>
+                <span class="slide__channel-dot" aria-hidden="true"></span>
+                LIVE POLL · {purpose.toUpperCase()}
+              </span>
+              <p class="slide__kicker">/poll/{poll.data.slug}</p>
+              <h2 class="slide__title slide__title--poll">{poll.data.question}</h2>
+              <ul class="slide__bars" data-poll-bars>
+                {poll.data.options.map((option) => (
+                  <li class="slide__bar" data-option-id={option.id}>
+                    <span class="slide__bar-label">{option.label}</span>
+                    <span class="slide__bar-track"><span class="slide__bar-fill" data-fill style="width:0%"></span></span>
+                    <span class="slide__bar-pct" data-pct>—</span>
+                  </li>
+                ))}
+              </ul>
+              <p class="slide__poll-total" data-poll-total>— votes</p>
+            </div>
+            <div class="slide__col--side">
+              <div class="slide__qr slide__qr--poll">
+                <img src={qrSrc} alt={`QR code — vote on ${poll.data.slug}`} />
+                <span>→ SCAN · TAP TO VOTE</span>
+              </div>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+
+    <section class="stations-index" id="tv-stations-index" hidden aria-label="Stations index">
+      <div class="stations-index__head">
+        <div>
+          <p class="stations-index__lede">15 nearby channels · keyed like presets</p>
+          <h2 class="stations-index__title">Stations <em>in range</em></h2>
+        </div>
+        <p class="stations-index__legend">S or swipe up · 1-9 then QWERTY · Esc to back out</p>
+      </div>
+      <div class="stations-grid">
+        {stationEntries.map(({ station, keyHint, blockCount, blocks }) => {
+          const latest = blocks[0];
+          const thumbnail = latest?.data.media?.thumbnail
+            ?? (latest?.data.noun ? `https://noun.pics/${latest.data.noun}.svg` : null);
+          return (
+            <button class="station-tile" type="button" data-station={station.slug} aria-label={`Open ${station.name} station`}>
+              <div class="station-tile__top">
+                <span class="station-tile__key">{keyHint} · {station.miles}MI {station.direction}</span>
+                <h3 class="station-tile__name">{station.name}</h3>
+                <span class="station-tile__count">
+                  {blockCount > 0 ? `${blockCount} block${blockCount === 1 ? '' : 's'} in range` : 'NO BLOCKS YET · COMING WHEN ONE LANDS'}
+                </span>
+                <span class="station-tile__weather" data-weather={station.slug}>WX · loading</span>
+              </div>
+
+              {latest ? (
+                <div class="station-tile__preview">
+                  <div class="station-tile__art">
+                    {thumbnail ? <img src={thumbnail} alt="" loading="lazy" /> : <div class="station-tile__fallback">NO ART</div>}
+                  </div>
+                  <div class="station-tile__latest">
+                    <span class="station-tile__latest-meta">№ {latest.data.id} · {latest.data.type}</span>
+                    <p class="station-tile__latest-title">{latest.data.title}</p>
+                  </div>
+                </div>
+              ) : (
+                <p class="station-tile__empty">{station.blurb}</p>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+
+    <section class="station-feed" id="tv-station-feed" hidden aria-label="Station feed">
+      <div class="station-feed__banner">
+        <div class="station-feed__banner-main">
+          <span class="station-feed__eyebrow">NOW VIEWING</span>
+          <h2 class="station-feed__name" id="tv-station-name">—</h2>
+          <span class="station-feed__meta" id="tv-station-meta">—</span>
+        </div>
+        <button class="station-feed__back" id="tv-station-back" type="button">← BACK TO GLOBAL</button>
+      </div>
+
+      <div class="station-feed__slide">
+        <div class="slide__col--text">
+          <span class="slide__channel" id="tv-station-channel">
+            <span class="slide__channel-dot" id="tv-station-channel-dot" aria-hidden="true"></span>
+            <span id="tv-station-channel-label">—</span>
+          </span>
+          <p class="slide__kicker" id="tv-station-kicker">—</p>
+          <h3 class="slide__title" id="tv-station-title">—</h3>
+          <p class="slide__dek station-feed__dek" id="tv-station-dek"></p>
+          <span class="slide__mood station-feed__mood" id="tv-station-mood" hidden>—</span>
+        </div>
+        <div class="slide__col--side">
+          <div class="slide__art station-feed__art" id="tv-station-art" hidden>
+            <img id="tv-station-art-img" src="" alt="" loading="eager" />
+          </div>
+          <div class="slide__art slide__art--empty station-feed__art-empty" id="tv-station-art-empty" hidden>
+            NO BLOCKS YET
+          </div>
+          <div class="slide__qr">
+            <img id="tv-station-qr" src="" alt="" />
+            <span id="tv-station-qr-label">→ phone</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ticker" aria-label="Block ticker">
+    <div class="ticker__label" id="tv-ticker-label">POINTCAST</div>
+    <div class="ticker__reel">
+      <div class="ticker__track" id="tv-ticker-track">
+        {tickerBlocks.concat(tickerBlocks).map((block) => (
+          <span class="ticker__item"><em>№{block.data.id} · {block.data.type}</em>{block.data.title}</span>
+        ))}
+      </div>
+    </div>
+  </footer>
+
+  <div class="hint" id="tv-hint">S · stations &nbsp; SPACE · pause &nbsp; ← / → · prev / next</div>
+
+  <script type="application/json" id="tv-stations-data" set:html={JSON.stringify({ stations: stationPayload })}></script>
+
+  <script is:inline>
+    (function () {
+      const dateEl = document.getElementById('tv-date');
+      const timeEl = document.getElementById('tv-time');
+      const progress = document.getElementById('tv-progress');
+      const stationsToggle = document.getElementById('tv-stations-toggle');
+      const hint = document.getElementById('tv-hint');
+      const tickerLabel = document.getElementById('tv-ticker-label');
+      const tickerTrack = document.getElementById('tv-ticker-track');
+      const stationsDataEl = document.getElementById('tv-stations-data');
+      const stationsData = stationsDataEl ? JSON.parse(stationsDataEl.textContent || '{"stations":[]}') : { stations: [] };
+      const stations = Array.isArray(stationsData.stations) ? stationsData.stations : [];
+      const stationsBySlug = Object.fromEntries(stations.map((station) => [station.slug, station]));
+
+      const globalLayer = document.getElementById('tv-global-layer');
+      const stationIndex = document.getElementById('tv-stations-index');
+      const stationFeed = document.getElementById('tv-station-feed');
+      const stationBack = document.getElementById('tv-station-back');
+      const stationTiles = Array.from(document.querySelectorAll('[data-station]'));
+      const globalSlides = Array.from(document.querySelectorAll('[data-global-slide]'));
+      const defaultTickerHTML = tickerTrack ? tickerTrack.innerHTML : '';
+
+      const stationNameEl = document.getElementById('tv-station-name');
+      const stationMetaEl = document.getElementById('tv-station-meta');
+      const stationChannelEl = document.getElementById('tv-station-channel');
+      const stationChannelLabel = document.getElementById('tv-station-channel-label');
+      const stationChannelDot = document.getElementById('tv-station-channel-dot');
+      const stationKicker = document.getElementById('tv-station-kicker');
+      const stationTitle = document.getElementById('tv-station-title');
+      const stationDek = document.getElementById('tv-station-dek');
+      const stationMood = document.getElementById('tv-station-mood');
+      const stationArt = document.getElementById('tv-station-art');
+      const stationArtImg = document.getElementById('tv-station-art-img');
+      const stationArtEmpty = document.getElementById('tv-station-art-empty');
+      const stationQr = document.getElementById('tv-station-qr');
+      const stationQrLabel = document.getElementById('tv-station-qr-label');
+
+      const dateFmt = new Intl.DateTimeFormat('en-US', {
+        weekday: 'short', month: 'short', day: '2-digit', year: 'numeric', timeZone: 'America/Los_Angeles'
+      });
+      const timeFmt = new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Los_Angeles'
+      });
+      const sunsetFmt = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles'
+      });
+
+      const BASE_DWELL = 12000;
+      const EMPTY_STATION_DWELL = 9000;
+      const STATION_AUTO_RETURN_MS = 5 * 60 * 1000;
+
+      let mode = 'global';
+      let globalIdx = 0;
+      let paused = false;
+      let slideStart = Date.now();
+      let lastInteractionAt = Date.now();
+      let stationSlug = null;
+      let stationIdx = 0;
+      let pollTallyTimer = null;
+      let touchStart = null;
+
+      const weatherByStation = {};
+      const weatherRequests = {};
+
+      function tickClock() {
+        const now = new Date();
+        if (dateEl) dateEl.textContent = dateFmt.format(now).toUpperCase().replace(/,/g, ' ·');
+        if (timeEl) timeEl.textContent = timeFmt.format(now) + ' PT';
+      }
+
+      function showHint(text, ms) {
+        if (!hint) return;
+        hint.textContent = text;
+        hint.classList.add('hint--visible');
+        window.clearTimeout(showHint._t);
+        showHint._t = window.setTimeout(function () {
+          hint.classList.remove('hint--visible');
+        }, ms || 1800);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"]/g, function (char) {
+          if (char === '&') return '&amp;';
+          if (char === '<') return '&lt;';
+          if (char === '>') return '&gt;';
+          return '&quot;';
+        });
+      }
+
+      function markInteraction() {
+        lastInteractionAt = Date.now();
+      }
+
+      function stationWeatherText(slug, detailed) {
+        const weather = weatherByStation[slug];
+        if (!weather || !weather.ok) return detailed ? 'WX loading' : 'WX · loading';
+        const parts = [weather.tempF + '°F', String(weather.condition || '').toUpperCase()];
+        if (detailed && weather.sunset) {
+          try {
+            parts.push('SUNSET ' + sunsetFmt.format(new Date(weather.sunset)).toUpperCase());
+          } catch (error) {}
+        }
+        return parts.join(' · ');
+      }
+
+      function paintWeather(slug) {
+        document.querySelectorAll('[data-weather="' + slug + '"]').forEach(function (node) {
+          node.textContent = stationWeatherText(slug, false);
+        });
+        if (mode === 'station-feed' && stationSlug === slug) {
+          paintStationMeta();
+        }
+      }
+
+      function ensureWeather(slug) {
+        if (!slug || weatherByStation[slug]) return Promise.resolve(weatherByStation[slug]);
+        if (weatherRequests[slug]) return weatherRequests[slug];
+
+        weatherRequests[slug] = fetch('/api/weather?station=' + encodeURIComponent(slug), { cache: 'no-store' })
+          .then(function (response) { return response.ok ? response.json() : null; })
+          .then(function (payload) {
+            if (payload) weatherByStation[slug] = payload;
+            paintWeather(slug);
+            return payload;
+          })
+          .catch(function () {
+            weatherByStation[slug] = { ok: false };
+            paintWeather(slug);
+            return null;
+          });
+
+        return weatherRequests[slug];
+      }
+
+      function ensureAllStationWeather() {
+        stations.forEach(function (station) { ensureWeather(station.slug); });
+      }
+
+      function dwellForGlobal(slideEl) {
+        const type = slideEl && slideEl.dataset ? slideEl.dataset.type || '' : '';
+        if (type === 'DAILY') return BASE_DWELL + 8000;
+        if (type === 'POLL') return BASE_DWELL + 6000;
+        if (type === 'READ') return BASE_DWELL + 8000;
+        if (type === 'WATCH' || type === 'LISTEN') return BASE_DWELL + 4000;
+        return BASE_DWELL;
+      }
+
+      function currentStation() {
+        return stationSlug ? stationsBySlug[stationSlug] : null;
+      }
+
+      function dwellForStation() {
+        const station = currentStation();
+        if (!station || !Array.isArray(station.blocks) || station.blocks.length === 0) return EMPTY_STATION_DWELL;
+        const block = station.blocks[stationIdx] || station.blocks[0];
+        if (!block) return EMPTY_STATION_DWELL;
+        if (block.type === 'READ') return BASE_DWELL + 8000;
+        if (block.type === 'WATCH' || block.type === 'LISTEN') return BASE_DWELL + 4000;
+        return BASE_DWELL;
+      }
+
+      function clearPollTimer() {
+        if (pollTallyTimer) {
+          window.clearInterval(pollTallyTimer);
+          pollTallyTimer = null;
+        }
+      }
+
+      function fetchAndPaintPoll(slideEl) {
+        const slug = slideEl && slideEl.dataset ? slideEl.dataset.pollSlug : null;
+        if (!slug) return;
+        fetch('/api/poll?slug=' + encodeURIComponent(slug), { cache: 'no-store' })
+          .then(function (response) { return response.ok ? response.json() : null; })
+          .then(function (payload) {
+            if (!payload || !payload.ok) return;
+            paintPoll(slideEl, payload.tally || {}, payload.total || 0);
+          })
+          .catch(function () {});
+      }
+
+      function paintPoll(slideEl, tally, total) {
+        const rows = slideEl.querySelectorAll('.slide__bar');
+        let max = 0;
+        for (const key in tally) {
+          if (tally[key] > max) max = tally[key];
+        }
+        rows.forEach(function (row) {
+          const id = row.getAttribute('data-option-id');
+          const count = tally[id] || 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          const fill = row.querySelector('[data-fill]');
+          const pctEl = row.querySelector('[data-pct]');
+          if (fill) fill.style.width = pct + '%';
+          if (pctEl) pctEl.textContent = pct + '%';
+          row.classList.toggle('slide__bar--leader', count === max && count > 0);
+        });
+        const totalEl = slideEl.querySelector('[data-poll-total]');
+        if (totalEl) totalEl.textContent = total + (total === 1 ? ' vote' : ' votes');
+      }
+
+      function showGlobal(next) {
+        const prev = globalSlides[globalIdx];
+        if (prev) {
+          prev.classList.remove('slide--active');
+          prev.setAttribute('aria-hidden', 'true');
+        }
+        globalIdx = (next + globalSlides.length) % globalSlides.length;
+        const active = globalSlides[globalIdx];
+        if (active) {
+          active.classList.add('slide--active');
+          active.setAttribute('aria-hidden', 'false');
+        }
+        slideStart = Date.now();
+        if (progress) progress.style.width = '0%';
+
+        clearPollTimer();
+        if (active && active.dataset.type === 'POLL') {
+          fetchAndPaintPoll(active);
+          pollTallyTimer = window.setInterval(function () {
+            fetchAndPaintPoll(active);
+          }, 5000);
+        }
+      }
+
+      function stationRoute(slug) {
+        return '/tv/' + encodeURIComponent(slug);
+      }
+
+      function setUrlForMode() {
+        try {
+          if (mode === 'station-feed' && stationSlug) history.replaceState(null, '', stationRoute(stationSlug));
+          else history.replaceState(null, '', '/tv');
+        } catch (error) {}
+      }
+
+      function paintTickerForMode() {
+        if (!tickerTrack || !tickerLabel) return;
+
+        if (mode === 'global') {
+          tickerLabel.textContent = 'POINTCAST';
+          tickerTrack.innerHTML = defaultTickerHTML;
+          return;
+        }
+
+        if (mode === 'stations-index') {
+          tickerLabel.textContent = 'STATIONS';
+          const items = stations.map(function (station) {
+            const count = station.blockCount > 0 ? station.blockCount + ' BLOCKS' : 'NO BLOCKS YET';
+            return '<span class="ticker__item"><em>' + station.keyHint + ' · ' + station.miles + 'MI ' + station.direction + '</em>' + escapeHtml(station.name + ' · ' + count) + '</span>';
+          });
+          tickerTrack.innerHTML = items.concat(items).join('');
+          return;
+        }
+
+        const station = currentStation();
+        if (!station) return;
+        tickerLabel.textContent = station.name.toUpperCase();
+        const source = station.blocks.length > 0
+          ? station.blocks.map(function (block) {
+              return '<span class="ticker__item"><em>№' + escapeHtml(block.id) + ' · ' + escapeHtml(block.type) + '</em>' + escapeHtml(block.title) + '</span>';
+            })
+          : ['<span class="ticker__item"><em>LOCAL FEED</em>' + escapeHtml(station.blurb) + '</span>'];
+        tickerTrack.innerHTML = source.concat(source).join('');
+      }
+
+      function paintHintForMode() {
+        if (mode === 'global') showHint('S · stations   SPACE · pause   ← / → · prev / next', 4000);
+        else if (mode === 'stations-index') showHint('1-9 / QWERTY · tune station   ESC · back', 2400);
+        else showHint('ESC/B · global   ↓ swipe · back   ← / → · prev / next', 2400);
+      }
+
+      function updateStationsToggle() {
+        if (!stationsToggle) return;
+        stationsToggle.textContent = mode === 'global' ? 'STATIONS' : 'BACK';
+      }
+
+      function enterGlobal() {
+        mode = 'global';
+        stationSlug = null;
+        stationIdx = 0;
+        if (globalLayer) globalLayer.hidden = false;
+        if (stationIndex) stationIndex.hidden = true;
+        if (stationFeed) stationFeed.hidden = true;
+        slideStart = Date.now();
+        if (progress) progress.style.width = '0%';
+        updateStationsToggle();
+        paintTickerForMode();
+        setUrlForMode();
+        paintHintForMode();
+        const active = globalSlides[globalIdx];
+        clearPollTimer();
+        if (active && active.dataset.type === 'POLL') {
+          fetchAndPaintPoll(active);
+          pollTallyTimer = window.setInterval(function () {
+            fetchAndPaintPoll(active);
+          }, 5000);
+        }
+      }
+
+      function enterStationsIndex() {
+        mode = 'stations-index';
+        if (globalLayer) globalLayer.hidden = true;
+        if (stationIndex) stationIndex.hidden = false;
+        if (stationFeed) stationFeed.hidden = true;
+        clearPollTimer();
+        slideStart = Date.now();
+        if (progress) progress.style.width = '0%';
+        updateStationsToggle();
+        paintTickerForMode();
+        setUrlForMode();
+        paintHintForMode();
+        ensureAllStationWeather();
+      }
+
+      function paintStationMeta() {
+        const station = currentStation();
+        if (!station || !stationMetaEl || !stationNameEl) return;
+        const countLabel = station.blockCount === 1 ? '1 BLOCK' : station.blockCount + ' BLOCKS';
+        const slideLabel = station.blocks.length > 0
+          ? (stationIdx + 1) + '/' + station.blocks.length
+          : '0/0';
+        stationNameEl.textContent = station.name.toUpperCase();
+        stationMetaEl.textContent = station.miles + 'MI ' + station.direction + ' · ' + countLabel + ' · ' + slideLabel + ' · ' + stationWeatherText(station.slug, true);
+      }
+
+      function paintStationFeed() {
+        const station = currentStation();
+        if (!station) return;
+
+        paintStationMeta();
+        ensureWeather(station.slug);
+
+        const block = station.blocks[stationIdx] || null;
+        if (!block) {
+          if (stationChannelEl) {
+            stationChannelEl.style.background = 'rgba(245, 159, 0, 0.08)';
+            stationChannelEl.style.color = 'var(--tv-accent)';
+          }
+          if (stationChannelLabel) stationChannelLabel.textContent = 'STATION FEED · HOLDING';
+          if (stationChannelDot) stationChannelDot.style.background = 'currentColor';
+          if (stationKicker) stationKicker.textContent = 'NO BLOCKS YET · LOCAL FEED STANDBY';
+          if (stationTitle) stationTitle.textContent = station.name + ' has not landed a block yet.';
+          if (stationDek) stationDek.textContent = station.blurb;
+          if (stationMood) stationMood.hidden = true;
+          if (stationArt) stationArt.hidden = true;
+          if (stationArtEmpty) stationArtEmpty.hidden = false;
+          if (stationQr) {
+            const qrTarget = 'https://pointcast.xyz' + station.path;
+            stationQr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=216x216&margin=2&data=' + encodeURIComponent(qrTarget);
+            stationQr.alt = 'QR code to ' + qrTarget;
+          }
+          if (stationQrLabel) stationQrLabel.textContent = '→ phone · ' + station.path;
+          return;
+        }
+
+        if (stationChannelEl) {
+          stationChannelEl.style.background = 'color-mix(in oklab, ' + block.channel.color600 + ' 18%, transparent)';
+          stationChannelEl.style.color = block.channel.color600;
+        }
+        if (stationChannelLabel) stationChannelLabel.textContent = 'CH.' + block.channel.code + ' · ' + block.channel.name;
+        if (stationChannelDot) stationChannelDot.style.background = 'currentColor';
+        if (stationKicker) {
+          const loc = block.location ? ' · ' + block.location.toUpperCase() : '';
+          stationKicker.textContent = '№ ' + block.id + ' · ' + block.type + loc;
+        }
+        if (stationTitle) stationTitle.textContent = block.title;
+        if (stationDek) stationDek.textContent = block.dek || station.blurb;
+        if (stationMood) {
+          if (block.mood) {
+            stationMood.hidden = false;
+            stationMood.textContent = '★ ' + block.mood.replace(/-/g, ' ');
+          } else {
+            stationMood.hidden = true;
+          }
+        }
+        if (stationArt && stationArtImg && stationArtEmpty) {
+          if (block.thumbnail) {
+            stationArt.hidden = false;
+            stationArtEmpty.hidden = true;
+            stationArtImg.src = block.thumbnail;
+          } else {
+            stationArt.hidden = true;
+            stationArtEmpty.hidden = false;
+          }
+        }
+        if (stationQr) {
+          const qrTarget = 'https://pointcast.xyz' + block.path;
+          stationQr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=216x216&margin=2&data=' + encodeURIComponent(qrTarget);
+          stationQr.alt = 'QR code to ' + qrTarget;
+        }
+        if (stationQrLabel) stationQrLabel.textContent = '→ phone · ' + block.path;
+      }
+
+      function enterStationFeed(nextSlug, resetIndex) {
+        const station = stationsBySlug[nextSlug];
+        if (!station) return;
+        mode = 'station-feed';
+        stationSlug = station.slug;
+        stationIdx = resetIndex === false ? stationIdx : 0;
+        if (globalLayer) globalLayer.hidden = true;
+        if (stationIndex) stationIndex.hidden = true;
+        if (stationFeed) stationFeed.hidden = false;
+        clearPollTimer();
+        slideStart = Date.now();
+        if (progress) progress.style.width = '0%';
+        updateStationsToggle();
+        paintStationFeed();
+        paintTickerForMode();
+        setUrlForMode();
+        paintHintForMode();
+      }
+
+      function stepStation(delta, autoAdvance) {
+        const station = currentStation();
+        if (!station) return;
+
+        if (!Array.isArray(station.blocks) || station.blocks.length === 0) {
+          enterGlobal();
+          return;
+        }
+
+        const next = stationIdx + delta;
+        if (next < 0 || next >= station.blocks.length) {
+          enterGlobal();
+          return;
+        }
+
+        stationIdx = next;
+        slideStart = Date.now();
+        if (progress) progress.style.width = '0%';
+        paintStationFeed();
+        paintTickerForMode();
+
+        if (!autoAdvance) markInteraction();
+      }
+
+      function handleStationShortcut(key) {
+        const upper = key.toUpperCase();
+        const station = stations.find(function (entry) { return entry.keyHint === upper; });
+        if (!station) return false;
+        enterStationFeed(station.slug, true);
+        return true;
+      }
+
+      function bootStationFromUrl() {
+        const url = new URL(window.location.href);
+        const queryStation = url.searchParams.get('station');
+        if (queryStation && stationsBySlug[queryStation]) return queryStation;
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        if (parts[0] === 'tv' && parts[1] && stationsBySlug[parts[1]]) return parts[1];
+        return null;
+      }
+
+      tickClock();
+      window.setInterval(tickClock, 1000);
+      paintHintForMode();
+
+      if (globalSlides[0] && globalSlides[0].dataset.type === 'POLL') {
+        fetchAndPaintPoll(globalSlides[0]);
+        pollTallyTimer = window.setInterval(function () {
+          fetchAndPaintPoll(globalSlides[globalIdx]);
+        }, 5000);
+      }
+
+      function tickProgress() {
+        if (!progress) return;
+        if (mode === 'stations-index') {
+          progress.style.width = '0%';
+          return;
+        }
+        if (paused) return;
+
+        if (mode === 'station-feed' && Date.now() - lastInteractionAt >= STATION_AUTO_RETURN_MS) {
+          enterGlobal();
+          return;
+        }
+
+        const dwell = mode === 'global' ? dwellForGlobal(globalSlides[globalIdx]) : dwellForStation();
+        const pct = Math.min(100, ((Date.now() - slideStart) / dwell) * 100);
+        progress.style.width = pct + '%';
+        if (pct < 100) return;
+
+        if (mode === 'global') showGlobal(globalIdx + 1);
+        else if (mode === 'station-feed') stepStation(1, true);
+      }
+
+      window.setInterval(tickProgress, 100);
+
+      if (stationsToggle) {
+        stationsToggle.addEventListener('click', function () {
+          markInteraction();
+          if (mode === 'global') enterStationsIndex();
+          else enterGlobal();
+        });
+      }
+
+      if (stationBack) {
+        stationBack.addEventListener('click', function () {
+          markInteraction();
+          enterGlobal();
+        });
+      }
+
+      stationTiles.forEach(function (tile) {
+        tile.addEventListener('click', function () {
+          const slug = tile.getAttribute('data-station');
+          if (!slug) return;
+          markInteraction();
+          enterStationFeed(slug, true);
+        });
+      });
+
+      window.addEventListener('keydown', function (event) {
+        const key = event.key;
+        const lower = key.toLowerCase();
+
+        if (key === ' ' || key === 'Enter' || key === 'Select') {
+          if (mode !== 'stations-index') {
+            paused = !paused;
+            markInteraction();
+            showHint(paused ? 'PAUSED' : 'PLAYING', 1400);
+            event.preventDefault();
+          }
+          return;
+        }
+
+        if (lower === 's') {
+          markInteraction();
+          if (mode === 'global') enterStationsIndex();
+          else if (mode === 'stations-index') enterGlobal();
+          else enterStationsIndex();
+          event.preventDefault();
+          return;
+        }
+
+        if (key === 'Escape' || lower === 'b') {
+          if (mode !== 'global') {
+            markInteraction();
+            enterGlobal();
+            event.preventDefault();
+          }
+          return;
+        }
+
+        if (mode === 'stations-index' && handleStationShortcut(key)) {
+          markInteraction();
+          event.preventDefault();
+          return;
+        }
+
+        if (key === 'ArrowRight' || key === 'MediaTrackNext') {
+          markInteraction();
+          if (mode === 'global') showGlobal(globalIdx + 1);
+          else if (mode === 'station-feed') stepStation(1, false);
+          event.preventDefault();
+          return;
+        }
+
+        if (key === 'ArrowLeft' || key === 'MediaTrackPrevious') {
+          markInteraction();
+          if (mode === 'global') showGlobal(globalIdx - 1);
+          else if (mode === 'station-feed') stepStation(-1, false);
+          event.preventDefault();
+        }
+      });
+
+      window.addEventListener('touchstart', function (event) {
+        const touch = event.touches && event.touches[0];
+        if (!touch) return;
+        touchStart = { x: touch.clientX, y: touch.clientY };
+      }, { passive: true });
+
+      window.addEventListener('touchend', function (event) {
+        if (!touchStart) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+
+        const dx = touch.clientX - touchStart.x;
+        const dy = touch.clientY - touchStart.y;
+        touchStart = null;
+
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 48) {
+          markInteraction();
+          if (dy < 0 && mode === 'global') enterStationsIndex();
+          else if (dy > 0 && mode !== 'global') enterGlobal();
+          return;
+        }
+
+        if (Math.abs(dx) > 40) {
+          markInteraction();
+          if (mode === 'global') showGlobal(globalIdx + (dx < 0 ? 1 : -1));
+          else if (mode === 'station-feed') stepStation(dx < 0 ? 1 : -1, false);
+        }
+      }, { passive: true });
+
+      const initialStation = bootStationFromUrl();
+      if (initialStation) enterStationFeed(initialStation, true);
+      else enterGlobal();
+
+      const presenceNum = document.getElementById('tv-presence-num');
+      const presenceConstellation = document.getElementById('tv-presence-constellation');
+      const MAX_DOTS = 10;
+      const host = window.location.host;
+      const allowPresence = host.endsWith('pointcast.xyz') || host.endsWith('.pages.dev');
+      const isPresenceAgent = /gptbot|claudebot|claude-user|anthropic-ai|perplexitybot|oai-searchbot|atlas|bingbot|googlebot/i.test(navigator.userAgent);
+      let presenceWs = null;
+      let presenceHeartbeat = 0;
+      let presenceReconnect = 0;
+
+      function cheapHash(input) {
+        let hash = 5381;
+        for (let i = 0; i < input.length; i++) {
+          hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
+        }
+        return hash >>> 0;
+      }
+
+      function nounUrl(nounId) {
+        return 'https://noun.pics/' + nounId + '.svg';
+      }
+
+      function lsGet(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function viewerSessionId() {
+        const key = 'pc:session';
+        let value = lsGet(key);
+        if (!value) {
+          value = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+          try { localStorage.setItem(key, value); } catch (error) {}
+        }
+        return value;
+      }
+
+      function viewerNounId(sessionId) {
+        let value = parseInt(lsGet('pc:visitor:noun') || '', 10);
+        if (!(value >= 0 && value < 1200)) {
+          value = cheapHash(sessionId) % 1200;
+          try { localStorage.setItem('pc:visitor:noun', String(value)); } catch (error) {}
+        }
+        return value;
+      }
+
+      function presenceFields() {
+        return {
+          mood: lsGet('pc:visitor:mood'),
+          listening: lsGet('pc:visitor:listening'),
+          where: lsGet('pc:visitor:where'),
+        };
+      }
+
+      function truncate(input, max) {
+        if (!input || input.length <= max) return input || '';
+        return input.slice(0, max - 1) + '…';
+      }
+
+      function presenceSummary(session, isYou) {
+        const parts = [];
+        if (isYou) parts.push('YOU');
+        parts.push(session.kind === 'agent' ? 'AGENT' : (session.kind === 'wallet' ? 'WALLET' : 'HUMAN'));
+        if (session.mood) parts.push(session.mood.replace(/-/g, ' '));
+        if (session.listening) parts.push('listening ' + truncate(session.listening, 28));
+        if (session.where) parts.push('in ' + truncate(session.where, 20));
+        return parts.join(' · ');
+      }
+
+      function clearPresenceSlot(slot) {
+        if (!slot) return;
+        slot.classList.remove('top__presence-avatar--filled', 'top__presence-avatar--you');
+        slot.removeAttribute('data-kind');
+        slot.removeAttribute('title');
+        slot.removeAttribute('aria-label');
+        const img = slot.querySelector('.top__presence-avatar-img');
+        const dot = slot.querySelector('.top__presence-avatar-dot');
+        const chip = slot.querySelector('.top__presence-avatar-chip');
+        if (img) {
+          img.hidden = true;
+          img.removeAttribute('src');
+          img.alt = '';
+        }
+        if (dot) dot.hidden = false;
+        if (chip) {
+          chip.hidden = true;
+          chip.textContent = '';
+        }
+      }
+
+      function paintPresenceSlot(slot, session, isYou) {
+        if (!slot || !session) return;
+        const nounId = Number(session.nounId);
+        if (!(nounId >= 0 && nounId < 1200)) {
+          clearPresenceSlot(slot);
+          return;
+        }
+        slot.classList.add('top__presence-avatar--filled');
+        if (isYou) slot.classList.add('top__presence-avatar--you');
+        else slot.classList.remove('top__presence-avatar--you');
+        slot.dataset.kind = session.kind || 'human';
+        const img = slot.querySelector('.top__presence-avatar-img');
+        const dot = slot.querySelector('.top__presence-avatar-dot');
+        const chip = slot.querySelector('.top__presence-avatar-chip');
+        if (img) {
+          img.hidden = false;
+          img.src = nounUrl(nounId);
+          img.alt = (isYou ? 'your noun · ' : 'watcher noun · ') + nounId;
+        }
+        if (dot) dot.hidden = true;
+        if (chip) {
+          const moodLabel = session.mood ? truncate(session.mood.replace(/-/g, ' '), 16) : '';
+          chip.textContent = moodLabel;
+          chip.hidden = !moodLabel;
+        }
+        const summary = presenceSummary(session, isYou);
+        if (summary) {
+          slot.title = summary;
+          slot.setAttribute('aria-label', summary);
+        }
+      }
+
+      function orderedPresenceEntries(payload, selfNounId) {
+        const sessions = Array.isArray(payload && payload.sessions) ? payload.sessions : [];
+        const entries = [];
+        const others = [];
+        let claimedSelf = false;
+
+        sessions.forEach(function (session) {
+          if (!session || typeof session !== 'object') return;
+          if (!claimedSelf && Number(session.nounId) === selfNounId) {
+            claimedSelf = true;
+            entries.push({ session: session, isYou: true });
+            return;
+          }
+          others.push({ session: session, isYou: false });
+        });
+
+        return entries.concat(others);
+      }
+
+      function paintConstellation(payload, selfNounId) {
+        if (!presenceConstellation) return;
+        const slots = Array.from(presenceConstellation.querySelectorAll('[data-presence-slot]'));
+        const total = Math.max(1, (Number(payload && payload.humans) || 0) + (Number(payload && payload.agents) || 0));
+        const entries = orderedPresenceEntries(payload, selfNounId);
+
+        slots.forEach(function (slot, index) {
+          if (index < entries.length) paintPresenceSlot(slot, entries[index].session, entries[index].isYou);
+          else clearPresenceSlot(slot);
+        });
+
+        if (presenceNum) {
+          presenceNum.textContent = total > MAX_DOTS ? total + '+' : String(total);
+        }
+      }
+
+      function sendPresence(type, selfNounId, extra) {
+        if (!presenceWs || presenceWs.readyState !== WebSocket.OPEN) return false;
+        try {
+          const payload = { type: type, nounId: selfNounId };
+          if (!isPresenceAgent && extra && typeof extra === 'object') {
+            if (Object.prototype.hasOwnProperty.call(extra, 'mood')) payload.mood = extra.mood;
+            if (Object.prototype.hasOwnProperty.call(extra, 'listening')) payload.listening = extra.listening;
+            if (Object.prototype.hasOwnProperty.call(extra, 'where')) payload.where = extra.where;
+          }
+          presenceWs.send(JSON.stringify(payload));
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function stopPresenceHeartbeat() {
+        if (presenceHeartbeat) {
+          clearInterval(presenceHeartbeat);
+          presenceHeartbeat = 0;
+        }
+      }
+
+      function schedulePresenceReconnect(selfSessionId, selfNounId) {
+        stopPresenceHeartbeat();
+        if (presenceReconnect || !allowPresence) return;
+        presenceReconnect = window.setTimeout(function () {
+          presenceReconnect = 0;
+          connectPresence(selfSessionId, selfNounId);
+        }, 3000);
+      }
+
+      function connectPresence(selfSessionId, selfNounId) {
+        if (!allowPresence || !presenceNum) return;
+        const wsURL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://')
+          + host + '/api/presence?sid=' + encodeURIComponent(selfSessionId) + '&kind=' + (isPresenceAgent ? 'agent' : 'human');
+        try {
+          presenceWs = new WebSocket(wsURL);
+        } catch (error) {
+          schedulePresenceReconnect(selfSessionId, selfNounId);
+          return;
+        }
+
+        presenceWs.addEventListener('open', function () {
+          stopPresenceHeartbeat();
+          sendPresence('identify', selfNounId, presenceFields());
+          presenceHeartbeat = window.setInterval(function () {
+            sendPresence('ping', selfNounId);
+          }, 30_000);
+        });
+
+        presenceWs.addEventListener('message', function (event) {
+          try {
+            paintConstellation(JSON.parse(event.data), selfNounId);
+          } catch (error) {}
+        });
+
+        presenceWs.addEventListener('close', function () {
+          schedulePresenceReconnect(selfSessionId, selfNounId);
+        });
+        presenceWs.addEventListener('error', function () {
+          schedulePresenceReconnect(selfSessionId, selfNounId);
+        });
+      }
+
+      const selfSessionId = viewerSessionId();
+      const selfNounId = viewerNounId(selfSessionId);
+      const selfFields = presenceFields();
+      paintConstellation({
+        humans: isPresenceAgent ? 0 : 1,
+        agents: isPresenceAgent ? 1 : 0,
+        sessions: [{
+          nounId: selfNounId,
+          kind: isPresenceAgent ? 'agent' : 'human',
+          joinedAt: new Date().toISOString(),
+          mood: isPresenceAgent ? undefined : selfFields.mood,
+          listening: isPresenceAgent ? undefined : selfFields.listening,
+          where: isPresenceAgent ? undefined : selfFields.where,
+        }],
+      }, selfNounId);
+
+      if (allowPresence && presenceNum) {
+        connectPresence(selfSessionId, selfNounId);
+      }
+    })();
+  </script>
+</body>
+</html>

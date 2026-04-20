@@ -3,9 +3,9 @@
  * PresenceBar — live "who's here" readout for the masthead.
  *
  * Opens a WebSocket to `/api/presence` (a Cloudflare Durable Object,
- * functions/api/presence.ts) that broadcasts an aggregate to every
- * connected client once per second. Server-side doesn't know identities;
- * the DO just counts unique session IDs and tags each as human vs. agent.
+ * functions/api/presence.ts) that broadcasts an aggregate once per second.
+ * The DO now carries richer session data for other clients, but this bar
+ * still reads only the backwards-compatible aggregate counts.
  *
  * Render:
  *   · HUMANS 3 · AGENTS 1 · YOU ·
@@ -43,6 +43,13 @@
     // vendor, tag the presence as AGENT. Server trusts the tag but clamps
     // to [human, agent] and dedupes on session id.
     const isAgent = /gptbot|claude|perplexity|atlas|bingbot|googlebot/i.test(navigator.userAgent);
+    const cheapHash = (input: string) => {
+      let hash = 5381;
+      for (let i = 0; i < input.length; i++) {
+        hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
+      }
+      return hash >>> 0;
+    };
     const sessionId = (() => {
       const KEY = 'pc:session';
       let v = localStorage.getItem(KEY);
@@ -52,14 +59,37 @@
       }
       return v;
     })();
+    const nounId = (() => {
+      const KEY = 'pc:visitor:noun';
+      const cached = parseInt(localStorage.getItem(KEY) || '', 10);
+      if (cached >= 0 && cached < 1200) return cached;
+      const next = cheapHash(sessionId) % 1200;
+      try { localStorage.setItem(KEY, String(next)); } catch {}
+      return next;
+    })();
 
     const wsURL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/api/presence';
     let ws: WebSocket | null = null;
     let connectTimer: number | null = null;
     let degrade: number | null = null;
+    let heartbeat: number | null = null;
 
     function setLabel(text: string) { label.textContent = text; }
-    function hide() { el.style.display = 'none'; if (ws) try { ws.close(); } catch {} }
+    function send(type: 'identify' | 'ping') {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try { ws.send(JSON.stringify({ type, nounId })); } catch {}
+    }
+    function stopHeartbeat() {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+    }
+    function hide() {
+      el.style.display = 'none';
+      stopHeartbeat();
+      if (ws) try { ws.close(); } catch {}
+    }
 
     degrade = window.setTimeout(() => hide(), 4000);
 
@@ -73,6 +103,9 @@
     ws.addEventListener('open', () => {
       if (degrade) clearTimeout(degrade);
       setLabel('ALONE');
+      send('identify');
+      stopHeartbeat();
+      heartbeat = window.setInterval(() => send('ping'), 30_000);
     });
 
     ws.addEventListener('message', (evt) => {
@@ -91,6 +124,7 @@
 
     ws.addEventListener('error', () => hide());
     ws.addEventListener('close', () => {
+      stopHeartbeat();
       // Silent backoff — try once after 10s, then give up.
       if (!connectTimer) {
         connectTimer = window.setTimeout(() => { /* one-shot retry no-op; keep it simple */ }, 10_000);
