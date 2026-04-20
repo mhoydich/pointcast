@@ -1,0 +1,362 @@
+---
+/**
+ * /clock/{id} — Collab Clock companion page.
+ *
+ * Live-ticking world clock that reads its zones from two sources:
+ *   1. src/lib/collaborators.ts — when clock.includeCollaborators !== false
+ *   2. block JSON clock.zones[] — manual extras
+ *
+ * Entirely client-side after first paint: Intl.DateTimeFormat handles DST
+ * and offsets, a setInterval(1s) updates the readouts, no deps.
+ *
+ * Distinct from /b/{id} — that page stays the canonical, agent-readable
+ * record. /clock/{id} is the live companion, same pattern as /yee/{id}.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { COLLABORATORS } from '../../lib/collaborators';
+import { resolveZones } from '../../lib/timezones';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) =>
+    !data.draft && data.clock !== undefined,
+  );
+  return blocks.map((block) => ({
+    params: { id: block.data.id },
+    props: { block },
+  }));
+}
+
+interface Props {
+  block: CollectionEntry<'blocks'>;
+}
+const { block } = Astro.props;
+const data = block.data;
+const ch = CHANNELS[data.channel];
+
+const zones = resolveZones(data.clock, COLLABORATORS);
+
+const title = `Collab Clock · ${data.title}`;
+const description = `Live world clock over the /collabs roster and manual zones. CH.${ch.code} № ${data.id} — ${zones.length} zones, ticking in the browser.`;
+const ogImage = `/images/og/b/${data.id}.png`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: title,
+  description,
+  applicationCategory: 'Utility',
+  operatingSystem: 'Web Browser (any)',
+  url: `https://pointcast.xyz/clock/${data.id}`,
+  isPartOf: {
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz/b/${data.id}`,
+  },
+};
+---
+
+<BlockLayout title={title} description={description} image={ogImage} jsonLd={jsonLd}>
+  <div
+    class="clock-page"
+    style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}
+  >
+    <header class="clock-head">
+      <p class="clock-head__kicker mono">
+        CH.{ch.code} · № {data.id} · COLLAB CLOCK
+      </p>
+      <h1 class="clock-head__title">{data.title}</h1>
+      {data.body && <p class="clock-head__body">{data.body}</p>}
+      <p class="clock-head__links mono">
+        <a href={`/b/${data.id}`}>← BLOCK</a>
+        <span aria-hidden="true">·</span>
+        <a href="/collabs">/COLLABS</a>
+        <span aria-hidden="true">·</span>
+        <a href={`/b/${data.id}.json`}>JSON</a>
+      </p>
+    </header>
+
+    <section class="clock-grid" aria-label="World clock">
+      {zones.map((z) => (
+        <article
+          class="clock-card"
+          data-tz={z.tz}
+          data-origin={z.origin}
+        >
+          <p class="clock-card__label">{z.label}</p>
+          <p class="clock-card__time mono" aria-live="off">
+            <span class="clock-card__hm" data-role="hm">—:—</span><span
+              class="clock-card__sec"
+              data-role="sec"
+            >:—</span>
+          </p>
+          <p class="clock-card__date mono" data-role="date">—</p>
+          {z.sublabel && <p class="clock-card__sub">{z.sublabel}</p>}
+          <p class="clock-card__tz mono" title={z.tz}>{z.tz}</p>
+        </article>
+      ))}
+    </section>
+
+    <footer class="clock-foot mono">
+      <p>
+        Tick interval · 1s · Uses <code>Intl.DateTimeFormat</code> — DST handled by the
+        browser. Zones auto-derived from the <a href="/collabs">roster</a> plus manual
+        extras from the block JSON. New collaborator → new clock, no edit required.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const cards = document.querySelectorAll('[data-tz]');
+    if (!cards.length) return;
+
+    const fmt = {};
+    const dateFmt = {};
+    for (const el of cards) {
+      const tz = el.getAttribute('data-tz');
+      if (!tz || fmt[tz]) continue;
+      try {
+        fmt[tz] = new Intl.DateTimeFormat('en-US', {
+          timeZone: tz,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+        dateFmt[tz] = new Intl.DateTimeFormat('en-US', {
+          timeZone: tz,
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+      } catch (err) {
+        console.warn('clock: bad timezone', tz, err);
+      }
+    }
+
+    function tick() {
+      const now = new Date();
+      for (const el of cards) {
+        const tz = el.getAttribute('data-tz');
+        if (!tz || !fmt[tz]) continue;
+        const parts = fmt[tz].formatToParts(now);
+        const pick = (t) => parts.find((p) => p.type === t)?.value ?? '';
+        const hm = `${pick('hour')}:${pick('minute')}`;
+        const sec = `:${pick('second')}`;
+        const hmEl = el.querySelector('[data-role="hm"]');
+        const secEl = el.querySelector('[data-role="sec"]');
+        const dateEl = el.querySelector('[data-role="date"]');
+        if (hmEl && hmEl.textContent !== hm) hmEl.textContent = hm;
+        if (secEl && secEl.textContent !== sec) secEl.textContent = sec;
+        if (dateEl) {
+          const d = dateFmt[tz].format(now);
+          if (dateEl.textContent !== d) dateEl.textContent = d;
+        }
+      }
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  })();
+</script>
+
+<style>
+  .clock-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    color: var(--pc-ink, #12110E);
+  }
+
+  .clock-head {
+    border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+
+  .clock-head__kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+    margin: 0 0 12px;
+  }
+
+  .clock-head__title {
+    font-family: var(--pc-font-sans);
+    font-size: 28px;
+    font-weight: 500;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    color: var(--pc-ink, #12110E);
+  }
+
+  .clock-head__body {
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--pc-ink-soft, #38373A);
+    max-width: 62ch;
+    margin: 0 0 16px;
+  }
+
+  .clock-head__links {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .clock-head__links a {
+    color: var(--ch-800);
+  }
+  .clock-head__links span {
+    opacity: 0.5;
+  }
+
+  .clock-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .clock-card {
+    background: #fff;
+    border: 1.5px solid var(--ch-600);
+    border-radius: 2px;
+    padding: 16px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 148px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .clock-card[data-origin="collab"]::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    background: var(--ch-600);
+    border-radius: 50%;
+    opacity: 0.6;
+  }
+
+  .clock-card__label {
+    font-family: var(--pc-font-sans);
+    font-size: 13.5px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--pc-ink, #12110E);
+    letter-spacing: 0.01em;
+  }
+
+  .clock-card__time {
+    font-family: var(--pc-font-mono);
+    font-size: 34px;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    line-height: 1.05;
+    margin: 4px 0 2px;
+    color: var(--ch-800);
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+  }
+
+  .clock-card__hm {
+    display: inline-block;
+  }
+
+  .clock-card__sec {
+    font-size: 0.55em;
+    opacity: 0.55;
+    margin-left: 2px;
+    letter-spacing: 0.02em;
+  }
+
+  .clock-card__date {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+  }
+
+  .clock-card__sub {
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--pc-ink-soft, #38373A);
+    margin: 2px 0 0;
+  }
+
+  .clock-card__tz {
+    margin-top: auto;
+    padding-top: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    opacity: 0.75;
+    border-top: 1px dashed color-mix(in oklab, var(--ch-600) 30%, #fff);
+  }
+
+  .clock-foot {
+    margin-top: 40px;
+    padding: 18px 0 0;
+    border-top: 1px solid var(--pc-rule-soft, #E5E3DE);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    line-height: 1.7;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 72ch;
+  }
+  .clock-foot code {
+    font-size: 0.95em;
+    background: #F2EFE9;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+  .clock-foot a {
+    color: var(--ch-800);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+  }
+
+  @media (max-width: 640px) {
+    .clock-page {
+      padding: 28px 16px 64px;
+    }
+    .clock-head__title {
+      font-size: 22px;
+    }
+    .clock-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .clock-card {
+      min-height: 128px;
+    }
+    .clock-card__time {
+      font-size: 30px;
+    }
+  }
+</style>

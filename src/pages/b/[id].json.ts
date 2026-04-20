@@ -54,6 +54,20 @@ export const GET: APIRoute<Props> = async ({ props }) => {
     external: block.data.external,
     visitor: block.data.visitor,
     meta: block.data.meta,
+    // Editorial + graph fields — added 2026-04-19 sprint `blocks-json-enrich`.
+    // Optional; default to null/[] when absent so existing consumers don't
+    // break on the new keys.
+    author: block.data.author,
+    source: block.data.source ?? null,
+    mood: block.data.mood ?? null,
+    moodUrl: block.data.mood ? `https://pointcast.xyz/mood/${block.data.mood}` : null,
+    companions: block.data.companions ?? [],
+    clock: block.data.clock
+      ? {
+          ...block.data.clock,
+          companionUrl: `https://pointcast.xyz/clock/${block.data.id}`,
+        }
+      : null,
   };
 
   return new Response(JSON.stringify(payload, null, 2), {
