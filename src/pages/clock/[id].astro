@@ -91,6 +91,7 @@ const jsonLd = {
             >:—</span>
           </p>
           <p class="clock-card__date mono" data-role="date">—</p>
+          <p class="clock-card__status mono" data-role="status" data-bucket="">—</p>
           {z.sublabel && <p class="clock-card__sub">{z.sublabel}</p>}
           <p class="clock-card__tz mono" title={z.tz}>{z.tz}</p>
         </article>
@@ -136,6 +137,17 @@ const jsonLd = {
       }
     }
 
+    /** Hour → register bucket. Tuned to a working rhythm rather than
+     *  textbook day/night: early morning gets its own register because
+     *  "pre-coffee" reads differently from "morning-meeting." */
+    function bucketFor(hour) {
+      if (hour >= 22 || hour < 6) return { key: 'night', glyph: '🌙', label: 'Late night' };
+      if (hour < 9)               return { key: 'early', glyph: '☕', label: 'Pre-coffee' };
+      if (hour < 12)              return { key: 'morning', glyph: '🌅', label: 'Morning' };
+      if (hour < 18)              return { key: 'work', glyph: '🟢', label: 'Working hours' };
+      return { key: 'evening', glyph: '🍷', label: 'Evening' };
+    }
+
     function tick() {
       const now = new Date();
       for (const el of cards) {
@@ -148,11 +160,20 @@ const jsonLd = {
         const hmEl = el.querySelector('[data-role="hm"]');
         const secEl = el.querySelector('[data-role="sec"]');
         const dateEl = el.querySelector('[data-role="date"]');
+        const statusEl = el.querySelector('[data-role="status"]');
         if (hmEl && hmEl.textContent !== hm) hmEl.textContent = hm;
         if (secEl && secEl.textContent !== sec) secEl.textContent = sec;
         if (dateEl) {
           const d = dateFmt[tz].format(now);
           if (dateEl.textContent !== d) dateEl.textContent = d;
+        }
+        if (statusEl) {
+          const b = bucketFor(parseInt(pick('hour'), 10));
+          const text = `${b.glyph} ${b.label}`;
+          if (statusEl.textContent !== text) statusEl.textContent = text;
+          if (statusEl.getAttribute('data-bucket') !== b.key) {
+            statusEl.setAttribute('data-bucket', b.key);
+          }
         }
       }
     }
@@ -294,6 +315,44 @@ const jsonLd = {
     text-transform: uppercase;
     color: var(--pc-ink-muted, #5F5E5A);
     margin: 0;
+  }
+
+  .clock-card__status {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin: 4px 0 0;
+    padding: 2px 7px;
+    border-radius: 10px;
+    align-self: flex-start;
+    border: 1px solid transparent;
+    font-weight: 500;
+  }
+  .clock-card__status[data-bucket="night"] {
+    background: #1a1a2e;
+    color: #c9c8f0;
+    border-color: #2b2b4a;
+  }
+  .clock-card__status[data-bucket="early"] {
+    background: #FBF1E1;
+    color: #834F0A;
+    border-color: #E7C88E;
+  }
+  .clock-card__status[data-bucket="morning"] {
+    background: #F9EEE3;
+    color: #993C1D;
+    border-color: #E7B896;
+  }
+  .clock-card__status[data-bucket="work"] {
+    background: #E7F4EF;
+    color: #074638;
+    border-color: #9CCBB9;
+  }
+  .clock-card__status[data-bucket="evening"] {
+    background: #F5E7EC;
+    color: #6B2139;
+    border-color: #D7A5B3;
   }
 
   .clock-card__sub {
