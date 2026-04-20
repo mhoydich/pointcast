@@ -110,11 +110,47 @@ function equatorRatio(lat: number): number {
   return Math.min(1, Math.abs(lat) / 90);
 }
 
+/** Parse "HH:MM" → minutes past midnight. Returns null on bad input. */
+function parseHHMM(s: string): number | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(s);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+/** Find the ritual whose window contains `nowMin` (local minutes past
+ *  midnight). Handles wrap-past-midnight via from > to. Returns null
+ *  when nothing matches. */
+function findRitual(nowMin: number, rituals: Array<{ from: string; to: string; label: string; glyph?: string }> | undefined) {
+  if (!rituals || !rituals.length) return null;
+  for (const r of rituals) {
+    const from = parseHHMM(r.from);
+    const to = parseHHMM(r.to);
+    if (from === null || to === null) continue;
+    if (from <= to) {
+      if (nowMin >= from && nowMin < to) return r;
+    } else {
+      if (nowMin >= from || nowMin < to) return r;
+    }
+  }
+  return null;
+}
+
+/** Default time format when a zone doesn't specify one: US + UK → 12h,
+ *  everything else → 24h. */
+function defaultTimeFormat(tz: string): '12' | '24' {
+  if (tz.startsWith('America/')) return '12';
+  if (tz === 'Europe/London') return '12';
+  return '24';
+}
+
 const zonesSky = zones.map((z) => {
   const s = sunTimes(renderNow, z.lat, z.lon, renderNow);
   const ph = planetaryHour(renderNow, z.lat, z.lon, z.tz);
   const se = season(renderNow, z.lat);
   const sunPt = skyPoint(s.altitudeDeg, s.azimuthDeg);
+  const nowMin = localMinutes(renderNow, z.tz) ?? 0;
+  const ritual = findRitual(nowMin, z.rituals);
+  const timeFormat = z.timeFormat ?? defaultTimeFormat(z.tz);
   return {
     zone: z,
     sun: {
@@ -127,13 +163,15 @@ const zonesSky = zones.map((z) => {
       isDay: s.isDay,
       domeX: sunPt.x,
       domeY: sunPt.y,
-      nowMin: localMinutes(renderNow, z.tz) ?? 0,
+      nowMin,
     },
     planetaryHour: ph,
     season: se,
     latHemi: z.lat >= 0 ? 'N' : 'S',
     latAbs: Math.abs(z.lat).toFixed(1),
     equator: equatorRatio(z.lat),
+    ritual,
+    timeFormat,
   };
 });
 
@@ -244,18 +282,30 @@ const jsonLd = {
     </aside>
 
     <section class="clock-grid" aria-label="World clock">
-      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se, latHemi, latAbs, equator }) => (
+      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se, latHemi, latAbs, equator, ritual, timeFormat }) => (
         <article
           class="clock-card"
           data-tz={z.tz}
           data-origin={z.origin}
           data-lat={z.lat}
           data-lon={z.lon}
+          data-time-format={timeFormat}
+          data-rituals={z.rituals ? JSON.stringify(z.rituals) : ''}
         >
           <div class="clock-card__top">
             <div class="clock-card__top-text">
               <p class="clock-card__label">{z.label}</p>
               {z.region && <p class="clock-card__region">{z.region}</p>}
+              {z.facts && Object.keys(z.facts).length > 0 && (
+                <ul class="clock-card__facts mono" aria-label="Place stats">
+                  {Object.entries(z.facts).map(([k, v]) => (
+                    <li>
+                      <span class="clock-card__fact-key">{k}</span>
+                      <span class="clock-card__fact-val">{v}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p class="clock-card__latline mono">
                 {latAbs}°{latHemi}
                 <span class="clock-card__sep" aria-hidden="true">·</span>
@@ -326,10 +376,23 @@ const jsonLd = {
             <span class="clock-card__hm" data-role="hm">—:—</span><span
               class="clock-card__sec"
               data-role="sec"
-            >:—</span>
+            >:—</span><span class="clock-card__ap" data-role="ap"></span>
           </p>
           <p class="clock-card__date mono" data-role="date">—</p>
           <p class="clock-card__status mono" data-role="status" data-bucket="">—</p>
+          <p
+            class={ritual ? 'clock-card__ritual clock-card__ritual--active' : 'clock-card__ritual'}
+            data-role="ritual"
+          >
+            {ritual ? (
+              <>
+                {ritual.glyph && <span class="clock-card__ritual-glyph" aria-hidden="true">{ritual.glyph}</span>}
+                <span class="clock-card__ritual-label">{ritual.label}</span>
+              </>
+            ) : (
+              <span class="clock-card__ritual-quiet">quiet hour</span>
+            )}
+          </p>
 
           <div class="clock-card__sky" aria-label="Sky here">
             <p class="clock-card__sky-line mono">
@@ -354,6 +417,9 @@ const jsonLd = {
               {se.name}
               <span class="clock-card__sky-muted">· day {se.dayOfSeason} of {se.lengthDays}</span>
             </p>
+            {z.seasonal && (
+              <p class="clock-card__seasonal">{z.seasonal}</p>
+            )}
           </div>
 
           <p class="clock-card__tz mono" title={z.tz}>{z.tz}</p>
@@ -377,33 +443,39 @@ const jsonLd = {
     const cards = document.querySelectorAll('[data-tz]');
     if (!cards.length) return;
 
-    const fmt = {};
-    const dateFmt = {};
-    for (const el of cards) {
-      const tz = el.getAttribute('data-tz');
-      if (!tz || fmt[tz]) continue;
-      try {
-        fmt[tz] = new Intl.DateTimeFormat('en-US', {
-          timeZone: tz,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        dateFmt[tz] = new Intl.DateTimeFormat('en-US', {
-          timeZone: tz,
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-        });
-      } catch (err) {
-        console.warn('clock: bad timezone', tz, err);
+    const fmtCache = {};
+    const dateFmtCache = {};
+
+    function getFmt(tz, hour12) {
+      const key = `${tz}:${hour12 ? '12' : '24'}`;
+      if (!fmtCache[key]) {
+        try {
+          fmtCache[key] = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz,
+            hour: hour12 ? 'numeric' : '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: !!hour12,
+          });
+        } catch (err) {
+          console.warn('clock: bad timezone', tz, err);
+          return null;
+        }
       }
+      return fmtCache[key];
     }
 
-    /** Hour → register bucket. Tuned to a working rhythm rather than
-     *  textbook day/night: early morning gets its own register because
-     *  "pre-coffee" reads differently from "morning-meeting." */
+    function getDateFmt(tz) {
+      if (!dateFmtCache[tz]) {
+        try {
+          dateFmtCache[tz] = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz, weekday: 'short', month: 'short', day: 'numeric',
+          });
+        } catch (err) { return null; }
+      }
+      return dateFmtCache[tz];
+    }
+
     function bucketFor(hour) {
       if (hour >= 22 || hour < 6) return { key: 'night', glyph: '🌙', label: 'Late night' };
       if (hour < 9)               return { key: 'early', glyph: '☕', label: 'Pre-coffee' };
@@ -412,31 +484,91 @@ const jsonLd = {
       return { key: 'evening', glyph: '🍷', label: 'Evening' };
     }
 
+    function parseHHMM(s) {
+      const m = /^(\d{2}):(\d{2})$/.exec(s);
+      return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+    }
+
+    function findRitual(nowMin, rituals) {
+      if (!rituals || !rituals.length) return null;
+      for (const r of rituals) {
+        const from = parseHHMM(r.from), to = parseHHMM(r.to);
+        if (from === null || to === null) continue;
+        if (from <= to) { if (nowMin >= from && nowMin < to) return r; }
+        else            { if (nowMin >= from || nowMin < to) return r; }
+      }
+      return null;
+    }
+
     function tick() {
       const now = new Date();
       for (const el of cards) {
         const tz = el.getAttribute('data-tz');
-        if (!tz || !fmt[tz]) continue;
-        const parts = fmt[tz].formatToParts(now);
+        if (!tz) continue;
+        const timeFormat = el.getAttribute('data-time-format') || '24';
+        const is12 = timeFormat === '12';
+        const fmt = getFmt(tz, is12);
+        if (!fmt) continue;
+        const parts = fmt.formatToParts(now);
         const pick = (t) => parts.find((p) => p.type === t)?.value ?? '';
         const hm = `${pick('hour')}:${pick('minute')}`;
         const sec = `:${pick('second')}`;
+        const ap = is12 ? (pick('dayPeriod') || '') : '';
+
         const hmEl = el.querySelector('[data-role="hm"]');
         const secEl = el.querySelector('[data-role="sec"]');
+        const apEl = el.querySelector('[data-role="ap"]');
         const dateEl = el.querySelector('[data-role="date"]');
         const statusEl = el.querySelector('[data-role="status"]');
         if (hmEl && hmEl.textContent !== hm) hmEl.textContent = hm;
         if (secEl && secEl.textContent !== sec) secEl.textContent = sec;
+        if (apEl && apEl.textContent !== ap) apEl.textContent = ap ? ' ' + ap : '';
         if (dateEl) {
-          const d = dateFmt[tz].format(now);
-          if (dateEl.textContent !== d) dateEl.textContent = d;
+          const df = getDateFmt(tz);
+          if (df) {
+            const d = df.format(now);
+            if (dateEl.textContent !== d) dateEl.textContent = d;
+          }
         }
+
+        // 24h-hour for bucket + ritual matching (ritual.from/to are 24h).
+        const fmt24 = getFmt(tz, false);
+        let hour24 = 0, nowMin = 0;
+        if (fmt24) {
+          const p24 = fmt24.formatToParts(now);
+          const h24 = parseInt(p24.find((p) => p.type === 'hour')?.value || '0', 10);
+          const m24 = parseInt(p24.find((p) => p.type === 'minute')?.value || '0', 10);
+          hour24 = h24;
+          nowMin = h24 * 60 + m24;
+        }
+
         if (statusEl) {
-          const b = bucketFor(parseInt(pick('hour'), 10));
+          const b = bucketFor(hour24);
           const text = `${b.glyph} ${b.label}`;
           if (statusEl.textContent !== text) statusEl.textContent = text;
           if (statusEl.getAttribute('data-bucket') !== b.key) {
             statusEl.setAttribute('data-bucket', b.key);
+          }
+        }
+
+        // Ritual — re-match each tick so the chip rolls over cleanly.
+        const ritualEl = el.querySelector('[data-role="ritual"]');
+        if (ritualEl) {
+          let rituals = null;
+          const raw = el.getAttribute('data-rituals');
+          if (raw) { try { rituals = JSON.parse(raw); } catch {} }
+          const r = findRitual(nowMin, rituals);
+          if (r) {
+            const next = (r.glyph ? r.glyph + ' ' : '') + r.label;
+            if (ritualEl.textContent?.trim() !== next.trim()) {
+              ritualEl.innerHTML = (r.glyph ? `<span class="clock-card__ritual-glyph" aria-hidden="true">${r.glyph}</span>` : '') + `<span class="clock-card__ritual-label">${r.label}</span>`;
+            }
+            ritualEl.classList.add('clock-card__ritual--active');
+          } else {
+            if (!ritualEl.querySelector('.clock-card__ritual-quiet')) {
+              ritualEl.innerHTML = '<span class="clock-card__ritual-quiet">quiet hour</span>';
+            }
+            ritualEl.classList.remove('clock-card__ritual--active');
           }
         }
       }
@@ -672,6 +804,91 @@ const jsonLd = {
     gap: 5px;
     align-items: baseline;
     flex-wrap: wrap;
+  }
+  .clock-card__facts {
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 2px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    color: var(--pc-ink-soft, #38373A);
+  }
+  .clock-card__facts li {
+    display: inline-flex;
+    gap: 4px;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .clock-card__facts li + li::before {
+    content: '·';
+    margin-right: 4px;
+    opacity: 0.45;
+    color: var(--pc-ink-muted);
+  }
+  .clock-card__fact-key {
+    color: var(--pc-ink-muted, #5F5E5A);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 8.5px;
+  }
+  .clock-card__fact-val {
+    color: var(--pc-ink, #12110E);
+    font-weight: 500;
+  }
+  .clock-card__ap {
+    font-size: 0.42em;
+    letter-spacing: 0.14em;
+    color: var(--ch-800);
+    margin-left: 2px;
+    opacity: 0.75;
+    text-transform: uppercase;
+  }
+  .clock-card__ritual {
+    margin: 3px 0 0;
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--pc-ink, #12110E);
+    padding: 4px 8px;
+    background: color-mix(in oklab, var(--ch-50) 60%, #fff);
+    border-left: 2px solid var(--ch-600);
+    border-radius: 2px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-height: 22px;
+  }
+  .clock-card__ritual--active {
+    background: color-mix(in oklab, var(--ch-50) 100%, transparent);
+    border-left-color: var(--ch-600);
+    color: var(--ch-800);
+    font-weight: 500;
+  }
+  .clock-card__ritual-glyph {
+    font-size: 13px;
+    line-height: 1;
+  }
+  .clock-card__ritual-quiet {
+    color: var(--pc-ink-muted, #5F5E5A);
+    font-style: italic;
+    opacity: 0.7;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .clock-card__seasonal {
+    margin: 6px 0 0;
+    font-family: var(--pc-font-sans);
+    font-size: 11.5px;
+    line-height: 1.45;
+    font-style: italic;
+    color: var(--pc-ink-soft, #38373A);
+    padding-top: 4px;
+    border-top: 1px dashed color-mix(in oklab, var(--ch-600) 18%, #fff);
   }
   .clock-card__sep {
     opacity: 0.45;

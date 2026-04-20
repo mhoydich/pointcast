@@ -13,6 +13,20 @@
 
 import type { Collaborator } from './collaborators';
 
+/** Local time-of-day ritual — a window (from→to) in that zone's local
+ *  clock when something characteristic happens. "from <= to" is a
+ *  normal same-day window; "from > to" wraps past midnight. */
+export interface ClockRitual {
+  /** "HH:MM" in the zone's local clock. */
+  from: string;
+  /** "HH:MM" in the zone's local clock. */
+  to: string;
+  /** Short label — "marine layer burning off", "Yamanote crush". */
+  label: string;
+  /** Optional leading glyph. */
+  glyph?: string;
+}
+
 /** Manual zone from block JSON (authoring surface). Lat/lon optional —
  *  falls back to a lookup against the location map by label. */
 export interface ClockZone {
@@ -25,9 +39,23 @@ export interface ClockZone {
    *  Rendered as a subline so cards don't read like generic time pills. */
   region?: string;
   /** Free-form tags for conditional UI — "coastal", "island", "bosphorus",
-   *  "hudson", "thames", "bay", "river", "inland". Drives whether we render
-   *  tide hints, river icons, etc. (future work). */
+   *  "hudson", "thames", "bay", "river", "inland". */
   tags?: string[];
+  /** Structured place stats — population, elevation, nearest-water, etc.
+   *  Rendered as a compact key:value strip. Keys + order are authorial. */
+  facts?: Record<string, string>;
+  /** Time-of-day rituals in local clock time. The ritual whose window
+   *  contains "now" shows up as a chip — "what's happening here right
+   *  now". If none match, the slot is quiet. */
+  rituals?: ClockRitual[];
+  /** One-line seasonal note pegged to this specific part of the year —
+   *  "April: jacarandas just starting". Static across the month; authors
+   *  update manually when the feeling changes. */
+  seasonal?: string;
+  /** '12' for AM/PM display ("11:33 AM"), '24' for 24-hour ("23:33").
+   *  Defaults to the local cultural convention: US + UK zones tend to
+   *  show 12h, continental Europe + Asia 24h. Each block can override. */
+  timeFormat?: '12' | '24';
 }
 
 /** Resolved zone rendered on the clock page. Always carries lat/lon so
@@ -41,6 +69,10 @@ export interface ResolvedZone {
   lon: number;
   region?: string;
   tags?: string[];
+  facts?: Record<string, string>;
+  rituals?: ClockRitual[];
+  seasonal?: string;
+  timeFormat?: '12' | '24';
   /** 'collab' when sourced from the roster; 'manual' when from block JSON. */
   origin: 'collab' | 'manual';
 }
@@ -174,8 +206,7 @@ export function resolveZones(
     lon: number,
     origin: 'collab' | 'manual',
     name?: string,
-    region?: string,
-    tags?: string[],
+    extra?: Partial<Pick<ResolvedZone, 'region' | 'tags' | 'facts' | 'rituals' | 'seasonal' | 'timeFormat'>>,
   ) => {
     const key = `${origin}:${tz}:${label}`;
     const existing = out.get(key) ?? (origin === 'collab' ? out.get(`collab:${tz}`) : undefined);
@@ -188,7 +219,21 @@ export function resolveZones(
     }
     out.set(
       origin === 'collab' ? `collab:${tz}` : key,
-      { tz, label, sublabel: sublabel ?? name, lat, lon, region, tags, origin, names: name ? [name] : [] },
+      {
+        tz,
+        label,
+        sublabel: sublabel ?? name,
+        lat,
+        lon,
+        region: extra?.region,
+        tags: extra?.tags,
+        facts: extra?.facts,
+        rituals: extra?.rituals,
+        seasonal: extra?.seasonal,
+        timeFormat: extra?.timeFormat,
+        origin,
+        names: name ? [name] : [],
+      },
     );
   };
 
@@ -216,7 +261,14 @@ export function resolveZones(
       lat = 0;
       lon = 0;
     }
-    push(z.tz, z.label, z.sublabel, lat, lon, 'manual', undefined, z.region, z.tags);
+    push(z.tz, z.label, z.sublabel, lat, lon, 'manual', undefined, {
+      region: z.region,
+      tags: z.tags,
+      facts: z.facts,
+      rituals: z.rituals,
+      seasonal: z.seasonal,
+      timeFormat: z.timeFormat,
+    });
   }
 
   return Array.from(out.values()).map(({ names: _, ...rest }) => rest);

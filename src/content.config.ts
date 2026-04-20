@@ -135,18 +135,32 @@ const blocks = defineCollection({
       .object({
         includeCollaborators: z.boolean().default(true),
         zones: z.array(z.object({
-          tz: z.string(),          // IANA timezone, e.g. "Asia/Tokyo"
-          label: z.string(),       // display label, e.g. "Tokyo"
+          tz: z.string(),
+          label: z.string(),
           sublabel: z.string().optional(),
-          /** Optional coordinates — override the curated LOCATION_MAP
-           *  lookup for this zone. Needed if the label doesn't match any
-           *  entry in src/lib/timezones.ts. North/east positive. */
           lat: z.number().min(-90).max(90).optional(),
           lon: z.number().min(-180).max(180).optional(),
-          /** Short poetic geography — "Pacific edge", "Bosphorus". */
           region: z.string().max(60).optional(),
-          /** Conditional-UI tags — "coastal", "island", "bay". */
           tags: z.array(z.string()).max(8).optional(),
+          /** Place stats — population, elevation, nearest-water, etc. */
+          facts: z.record(z.string(), z.string()).optional(),
+          /** Time-of-day rituals (local clock). "from <= to" = same-day
+           *  window; "from > to" = wraps past midnight. */
+          rituals: z
+            .array(
+              z.object({
+                from: z.string().regex(/^\d{2}:\d{2}$/),
+                to: z.string().regex(/^\d{2}:\d{2}$/),
+                label: z.string().max(80),
+                glyph: z.string().max(4).optional(),
+              }),
+            )
+            .max(16)
+            .optional(),
+          /** One-line seasonal flavor line. */
+          seasonal: z.string().max(120).optional(),
+          /** '12' (AM/PM) or '24' (hour). Defaults per zone at render. */
+          timeFormat: z.enum(['12', '24']).optional(),
         })).max(20).optional(),
         style: z.enum(['digital', 'analog', 'both']).default('digital'),
       })
@@ -242,7 +256,7 @@ const polls = defineCollection({
     /** When true, anyone can vote without an address. When false, address required. */
     anonymous: z.boolean().default(true),
     /** Poll purpose — does the result do something downstream? See /polls philosophy. */
-    purpose: z.enum(['coordination', 'utility', 'editorial', 'decision']).default('coordination'),
+    purpose: z.enum(['coordination', 'utility', 'editorial', 'decision', 'forecast']).default('coordination'),
     /** One-sentence concrete consequence when a leader emerges. */
     outcomeAction: z.string().max(280).optional(),
     /** Forecast mode — when set, poll has future resolution date. UI shows countdown. */
