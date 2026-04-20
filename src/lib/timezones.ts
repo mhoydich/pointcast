@@ -52,6 +52,10 @@ export interface ClockZone {
    *  "April: jacarandas just starting". Static across the month; authors
    *  update manually when the feeling changes. */
   seasonal?: string;
+  /** Iconic nearby places — landmarks, restaurants, institutions. Rendered
+   *  as a "NEARBY" strip at the bottom of the card, giving the zone a
+   *  sense of actual lived geography. 4–8 entries works well. */
+  landmarks?: string[];
   /** '12' for AM/PM display ("11:33 AM"), '24' for 24-hour ("23:33").
    *  Defaults to the local cultural convention: US + UK zones tend to
    *  show 12h, continental Europe + Asia 24h. Each block can override. */
@@ -72,6 +76,7 @@ export interface ResolvedZone {
   facts?: Record<string, string>;
   rituals?: ClockRitual[];
   seasonal?: string;
+  landmarks?: string[];
   timeFormat?: '12' | '24';
   /** 'collab' when sourced from the roster; 'manual' when from block JSON. */
   origin: 'collab' | 'manual';
@@ -206,7 +211,7 @@ export function resolveZones(
     lon: number,
     origin: 'collab' | 'manual',
     name?: string,
-    extra?: Partial<Pick<ResolvedZone, 'region' | 'tags' | 'facts' | 'rituals' | 'seasonal' | 'timeFormat'>>,
+    extra?: Partial<Pick<ResolvedZone, 'region' | 'tags' | 'facts' | 'rituals' | 'seasonal' | 'landmarks' | 'timeFormat'>>,
   ) => {
     const key = `${origin}:${tz}:${label}`;
     const existing = out.get(key) ?? (origin === 'collab' ? out.get(`collab:${tz}`) : undefined);
@@ -230,6 +235,7 @@ export function resolveZones(
         facts: extra?.facts,
         rituals: extra?.rituals,
         seasonal: extra?.seasonal,
+        landmarks: extra?.landmarks,
         timeFormat: extra?.timeFormat,
         origin,
         names: name ? [name] : [],
@@ -267,6 +273,7 @@ export function resolveZones(
       facts: z.facts,
       rituals: z.rituals,
       seasonal: z.seasonal,
+      landmarks: z.landmarks,
       timeFormat: z.timeFormat,
     });
   }

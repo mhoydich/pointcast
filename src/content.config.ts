@@ -159,6 +159,8 @@ const blocks = defineCollection({
             .optional(),
           /** One-line seasonal flavor line. */
           seasonal: z.string().max(120).optional(),
+          /** Iconic nearby places — landmarks, restaurants, institutions. */
+          landmarks: z.array(z.string().max(80)).max(10).optional(),
           /** '12' (AM/PM) or '24' (hour). Defaults per zone at render. */
           timeFormat: z.enum(['12', '24']).optional(),
         })).max(20).optional(),
