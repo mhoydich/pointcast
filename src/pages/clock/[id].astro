@@ -83,10 +83,38 @@ function localMinutes(d: Date | null, tz: string): number | null {
   return parseInt(h, 10) * 60 + parseInt(m, 10);
 }
 
+/**
+ * Polar projection onto a 100×100 viewBox. Zenith at center (50,50),
+ * horizon ring at radius 48. North at top, East at right (standard
+ * astronomer's dome: altitude=90° at center, 0° at edge).
+ */
+function skyPoint(altitudeDeg: number, azimuthDeg: number): { x: number; y: number } {
+  const altClamped = Math.max(0, altitudeDeg);
+  const r = ((90 - altClamped) / 90) * 48;
+  const az = (azimuthDeg * Math.PI) / 180;
+  // azimuth 0=N (up), 90=E (right). x = r·sin(az), y = -r·cos(az) (flip for SVG).
+  const x = 50 + r * Math.sin(az);
+  const y = 50 - r * Math.cos(az);
+  return { x, y };
+}
+
+/** Compass direction label from azimuth. */
+function bearing(az: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const idx = Math.round(((az % 360) / 45)) % 8;
+  return dirs[idx];
+}
+
+/** Distance from equator as a fraction (0 at equator, 1 at pole). */
+function equatorRatio(lat: number): number {
+  return Math.min(1, Math.abs(lat) / 90);
+}
+
 const zonesSky = zones.map((z) => {
   const s = sunTimes(renderNow, z.lat, z.lon, renderNow);
   const ph = planetaryHour(renderNow, z.lat, z.lon, z.tz);
   const se = season(renderNow, z.lat);
+  const sunPt = skyPoint(s.altitudeDeg, s.azimuthDeg);
   return {
     zone: z,
     sun: {
@@ -94,16 +122,18 @@ const zonesSky = zones.map((z) => {
       sunsetLocal: hhmm(s.sunset, z.tz),
       dayLength: dayLengthLabel(s.dayLengthMs),
       altitudeDeg: s.altitudeDeg,
+      azimuthDeg: s.azimuthDeg,
+      bearing: bearing(s.azimuthDeg),
       isDay: s.isDay,
-      // Positions on a 24h strip (0..1440 minutes past local midnight).
-      // Used by the <SunStrip> SVG so we can show the sun on its arc.
-      sunriseMin: localMinutes(s.sunrise, z.tz),
-      sunsetMin: localMinutes(s.sunset, z.tz),
+      domeX: sunPt.x,
+      domeY: sunPt.y,
       nowMin: localMinutes(renderNow, z.tz) ?? 0,
-      solarNoonMin: localMinutes(s.solarNoon, z.tz),
     },
     planetaryHour: ph,
     season: se,
+    latHemi: z.lat >= 0 ? 'N' : 'S',
+    latAbs: Math.abs(z.lat).toFixed(1),
+    equator: equatorRatio(z.lat),
   };
 });
 
@@ -214,7 +244,7 @@ const jsonLd = {
     </aside>
 
     <section class="clock-grid" aria-label="World clock">
-      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se }) => (
+      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se, latHemi, latAbs, equator }) => (
         <article
           class="clock-card"
           data-tz={z.tz}
@@ -222,7 +252,76 @@ const jsonLd = {
           data-lat={z.lat}
           data-lon={z.lon}
         >
-          <p class="clock-card__label">{z.label}</p>
+          <div class="clock-card__top">
+            <div class="clock-card__top-text">
+              <p class="clock-card__label">{z.label}</p>
+              {z.region && <p class="clock-card__region">{z.region}</p>}
+              <p class="clock-card__latline mono">
+                {latAbs}°{latHemi}
+                <span class="clock-card__sep" aria-hidden="true">·</span>
+                {sun.isDay
+                  ? <span>sun {Math.round(sun.altitudeDeg)}° up · {sun.bearing}</span>
+                  : <span>sun {Math.abs(Math.round(sun.altitudeDeg))}° below</span>}
+              </p>
+            </div>
+
+            {/* Per-zone sky dome — polar projection of the local sky RIGHT NOW.
+                Zenith at center, horizon at the ring. Sun plotted at its actual
+                azimuth + altitude. When sun is below horizon, it falls on the
+                outer "underworld" arc so the viewer sees how deep under. */}
+            <svg class="skydome" viewBox="0 0 100 100" aria-hidden="true" data-role="skydome">
+              {/* Below-horizon disc (visible when sun is down) */}
+              <circle cx="50" cy="50" r="48" fill="#0B0E1F" />
+              {/* Above-horizon disc — graded from zenith blue to horizon amber */}
+              <defs>
+                <radialGradient id={`sky-grad-${data.id}-${z.label.replace(/[^a-zA-Z0-9]/g, '')}`} cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#7FC5E8" />
+                  <stop offset="70%" stop-color="#D3E7F1" />
+                  <stop offset="95%" stop-color="#F7D7A8" />
+                  <stop offset="100%" stop-color="#D88A4A" />
+                </radialGradient>
+              </defs>
+              {sun.isDay && (
+                <circle cx="50" cy="50" r="48" fill={`url(#sky-grad-${data.id}-${z.label.replace(/[^a-zA-Z0-9]/g, '')})`} />
+              )}
+              {/* Horizon ring */}
+              <circle cx="50" cy="50" r="48" fill="none" stroke="#12110E" stroke-opacity="0.25" stroke-width="0.8" />
+              {/* Altitude rings at 30° and 60° */}
+              <circle cx="50" cy="50" r="32" fill="none" stroke="#12110E" stroke-opacity="0.08" stroke-width="0.5" stroke-dasharray="1 2" />
+              <circle cx="50" cy="50" r="16" fill="none" stroke="#12110E" stroke-opacity="0.08" stroke-width="0.5" stroke-dasharray="1 2" />
+              {/* Compass cardinal ticks */}
+              <g fill="var(--pc-ink-muted, #5F5E5A)" font-family="JetBrains Mono, monospace" font-size="7" text-anchor="middle">
+                <text x="50" y="5.5">N</text>
+                <text x="97" y="52.5">E</text>
+                <text x="50" y="99">S</text>
+                <text x="3" y="52.5">W</text>
+              </g>
+              {/* Sun body at its (alt, az) projection */}
+              <circle
+                data-role="sun-body"
+                cx={sun.domeX}
+                cy={sun.domeY}
+                r={sun.isDay ? 5.5 : 4}
+                fill={sun.isDay ? '#FFE65C' : '#4A4770'}
+                stroke={sun.isDay ? '#FBB040' : '#2A2748'}
+                stroke-width="1"
+                opacity={sun.isDay ? '1' : '0.55'}
+              />
+              {/* Sun rays when up high (altitude > 30°) — a subtle halo */}
+              {sun.isDay && sun.altitudeDeg > 30 && (
+                <circle
+                  cx={sun.domeX}
+                  cy={sun.domeY}
+                  r="9"
+                  fill="none"
+                  stroke="#FBB040"
+                  stroke-opacity="0.35"
+                  stroke-width="0.6"
+                />
+              )}
+            </svg>
+          </div>
+
           <p class="clock-card__time mono" aria-live="off">
             <span class="clock-card__hm" data-role="hm">—:—</span><span
               class="clock-card__sec"
@@ -233,76 +332,13 @@ const jsonLd = {
           <p class="clock-card__status mono" data-role="status" data-bucket="">—</p>
 
           <div class="clock-card__sky" aria-label="Sky here">
-            <div class="sun-strip-wrap">
-              <svg
-                class="sun-strip"
-                viewBox="0 0 1440 28"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-                data-role="sun-strip"
-                data-sunrise={sun.sunriseMin ?? ''}
-                data-sunset={sun.sunsetMin ?? ''}
-                data-solar-noon={sun.solarNoonMin ?? ''}
-                data-now={sun.nowMin}
-                data-is-day={sun.isDay ? '1' : '0'}
-              >
-                <defs>
-                  <linearGradient id={`sun-grad-${data.id}-${z.label.replace(/[^a-zA-Z0-9]/g, '')}`} x1="0" x2="1" y1="0" y2="0">
-                    <stop offset="0%" stop-color="#D88A4A" />
-                    <stop offset="15%" stop-color="#F5D563" />
-                    <stop offset="50%" stop-color="#FBF6D4" />
-                    <stop offset="85%" stop-color="#F5D563" />
-                    <stop offset="100%" stop-color="#C26040" />
-                  </linearGradient>
-                </defs>
-                {/* Night base — full 24h indigo slab. */}
-                <rect x="0" y="0" width="1440" height="28" fill="#0B0E1F" />
-                {/* Day band from sunrise to sunset — server-rendered; client-updated
-                    via data-sunrise/sunset attributes on rebuild. */}
-                {sun.sunriseMin !== null && sun.sunsetMin !== null && (
-                  <rect
-                    data-role="day-band"
-                    x={sun.sunriseMin}
-                    y="0"
-                    width={sun.sunsetMin - sun.sunriseMin}
-                    height="28"
-                    fill={`url(#sun-grad-${data.id}-${z.label.replace(/[^a-zA-Z0-9]/g, '')})`}
-                  />
-                )}
-                {/* Hour ticks at 06, 12, 18 */}
-                <g stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1">
-                  <line x1="360" y1="0" x2="360" y2="28" />
-                  <line x1="720" y1="0" x2="720" y2="28" />
-                  <line x1="1080" y1="0" x2="1080" y2="28" />
-                </g>
-                {/* Now marker */}
-                <line
-                  data-role="now-marker"
-                  x1={sun.nowMin}
-                  y1="-2"
-                  x2={sun.nowMin}
-                  y2="30"
-                  stroke="#12110E"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                />
-                {/* Sun or moon glyph at current position */}
-                <circle
-                  data-role="now-body"
-                  cx={sun.nowMin}
-                  cy="14"
-                  r={sun.isDay ? 9 : 7}
-                  fill={sun.isDay ? '#FFE65C' : '#D9D6EF'}
-                  stroke={sun.isDay ? '#FBB040' : '#8B85C3'}
-                  stroke-width="1.5"
-                />
-              </svg>
-              <p class="sun-strip__labels mono" aria-hidden="true">
-                <span class="sun-strip__rise" data-role="sunrise">{sun.sunriseLocal}</span>
-                <span class="sun-strip__daylen" data-role="daylen">{sun.dayLength}</span>
-                <span class="sun-strip__set" data-role="sunset">{sun.sunsetLocal}</span>
-              </p>
-            </div>
+            <p class="clock-card__sky-line mono">
+              <span aria-hidden="true">↑</span>
+              <span data-role="sunrise">{sun.sunriseLocal}</span>
+              <span class="clock-card__sky-muted">· {sun.dayLength}</span>
+              <span aria-hidden="true">↓</span>
+              <span data-role="sunset">{sun.sunsetLocal}</span>
+            </p>
             {ph && (
               <p class="clock-card__sky-line mono" data-role="phour">
                 <span aria-hidden="true">{ph.glyph}</span>
@@ -420,6 +456,18 @@ const jsonLd = {
    */
   import { sunTimes, planetaryHour } from '../../lib/sky';
 
+  function skyPoint(altitudeDeg: number, azimuthDeg: number): { x: number; y: number } {
+    const altClamped = Math.max(0, altitudeDeg);
+    const r = ((90 - altClamped) / 90) * 48;
+    const az = (azimuthDeg * Math.PI) / 180;
+    return { x: 50 + r * Math.sin(az), y: 50 - r * Math.cos(az) };
+  }
+
+  function bearing(az: number): string {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(((az % 360) / 45)) % 8];
+  }
+
   const CARDS = document.querySelectorAll<HTMLElement>('.clock-card[data-lat][data-lon]');
 
   function fmt(d: Date | null, tz: string, opts: Intl.DateTimeFormatOptions): string {
@@ -438,31 +486,21 @@ const jsonLd = {
       const s = sunTimes(now, lat, lon, now);
       const ph = planetaryHour(now, lat, lon, tz);
 
-      // Compute local minutes past midnight for the strip now-marker.
-      const nowParts = new Intl.DateTimeFormat('en-GB', {
-        timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
-      }).formatToParts(now);
-      const nowMin =
-        parseInt(nowParts.find((p) => p.type === 'hour')?.value ?? '0', 10) * 60 +
-        parseInt(nowParts.find((p) => p.type === 'minute')?.value ?? '0', 10);
-
       const sunriseEl = card.querySelector<HTMLElement>('[data-role="sunrise"]');
       const sunsetEl = card.querySelector<HTMLElement>('[data-role="sunset"]');
       if (sunriseEl) sunriseEl.textContent = fmt(s.sunrise, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
       if (sunsetEl) sunsetEl.textContent = fmt(s.sunset, tz, { hour: '2-digit', minute: '2-digit', hour12: false });
 
-      // Move the now-marker line + sun/moon body to the new nowMin position.
-      const marker = card.querySelector<SVGLineElement>('[data-role="now-marker"]');
-      const body = card.querySelector<SVGCircleElement>('[data-role="now-body"]');
-      if (marker) {
-        marker.setAttribute('x1', String(nowMin));
-        marker.setAttribute('x2', String(nowMin));
-      }
-      if (body) {
-        body.setAttribute('cx', String(nowMin));
-        body.setAttribute('r', s.isDay ? '9' : '7');
-        body.setAttribute('fill', s.isDay ? '#FFE65C' : '#D9D6EF');
-        body.setAttribute('stroke', s.isDay ? '#FBB040' : '#8B85C3');
+      // Re-plot the sun on the polar sky dome.
+      const sunBody = card.querySelector<SVGCircleElement>('[data-role="sun-body"]');
+      if (sunBody) {
+        const pt = skyPoint(s.altitudeDeg, s.azimuthDeg);
+        sunBody.setAttribute('cx', String(pt.x));
+        sunBody.setAttribute('cy', String(pt.y));
+        sunBody.setAttribute('r', s.isDay ? '5.5' : '4');
+        sunBody.setAttribute('fill', s.isDay ? '#FFE65C' : '#4A4770');
+        sunBody.setAttribute('stroke', s.isDay ? '#FBB040' : '#2A2748');
+        sunBody.setAttribute('opacity', s.isDay ? '1' : '0.55');
       }
 
       const phPlanet = card.querySelector<HTMLElement>('[data-role="phour-planet"]');
@@ -602,42 +640,52 @@ const jsonLd = {
     flex-direction: column;
     gap: 3px;
   }
-  .sun-strip-wrap {
-    margin-bottom: 4px;
-  }
-  .sun-strip {
-    display: block;
-    width: 100%;
-    height: 22px;
-    border-radius: 2px;
-    overflow: hidden;
-    box-shadow: inset 0 0 0 1px rgba(18, 17, 14, 0.15);
-  }
-  .sun-strip__labels {
-    margin: 3px 0 0;
+  .clock-card__top {
     display: flex;
+    align-items: flex-start;
+    gap: 10px;
     justify-content: space-between;
-    align-items: baseline;
+  }
+  .clock-card__top-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .clock-card__region {
+    font-family: var(--pc-font-sans);
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--pc-ink-soft, #38373A);
+    margin: 0;
+    font-style: italic;
+  }
+  .clock-card__latline {
     font-family: var(--pc-font-mono);
     font-size: 9px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--pc-ink-muted, #5F5E5A);
-    gap: 6px;
+    margin: 2px 0 0;
+    display: flex;
+    gap: 5px;
+    align-items: baseline;
+    flex-wrap: wrap;
   }
-  .sun-strip__rise,
-  .sun-strip__set {
-    color: var(--ch-800);
-    font-weight: 500;
+  .clock-card__sep {
+    opacity: 0.45;
   }
-  .sun-strip__daylen {
-    flex: 1;
-    text-align: center;
-    font-size: 8.5px;
-    opacity: 0.7;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .skydome {
+    flex: none;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: block;
+    box-shadow: inset 0 0 0 1px rgba(18, 17, 14, 0.12);
+  }
+  @media (max-width: 560px) {
+    .skydome { width: 60px; height: 60px; }
   }
   .clock-card__sky-line {
     font-family: var(--pc-font-mono);

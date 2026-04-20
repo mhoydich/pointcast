@@ -143,6 +143,10 @@ const blocks = defineCollection({
            *  entry in src/lib/timezones.ts. North/east positive. */
           lat: z.number().min(-90).max(90).optional(),
           lon: z.number().min(-180).max(180).optional(),
+          /** Short poetic geography — "Pacific edge", "Bosphorus". */
+          region: z.string().max(60).optional(),
+          /** Conditional-UI tags — "coastal", "island", "bay". */
+          tags: z.array(z.string()).max(8).optional(),
         })).max(20).optional(),
         style: z.enum(['digital', 'analog', 'both']).default('digital'),
       })

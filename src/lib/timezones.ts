@@ -21,6 +21,13 @@ export interface ClockZone {
   sublabel?: string;     // optional second line, e.g. "quiet hours"
   lat?: number;          // decimal degrees, north +
   lon?: number;          // decimal degrees, east +
+  /** Short poetic geography — "Pacific edge", "Bosphorus", "Balearic Sea".
+   *  Rendered as a subline so cards don't read like generic time pills. */
+  region?: string;
+  /** Free-form tags for conditional UI — "coastal", "island", "bosphorus",
+   *  "hudson", "thames", "bay", "river", "inland". Drives whether we render
+   *  tide hints, river icons, etc. (future work). */
+  tags?: string[];
 }
 
 /** Resolved zone rendered on the clock page. Always carries lat/lon so
@@ -32,6 +39,8 @@ export interface ResolvedZone {
   sublabel?: string;
   lat: number;
   lon: number;
+  region?: string;
+  tags?: string[];
   /** 'collab' when sourced from the roster; 'manual' when from block JSON. */
   origin: 'collab' | 'manual';
 }
@@ -165,6 +174,8 @@ export function resolveZones(
     lon: number,
     origin: 'collab' | 'manual',
     name?: string,
+    region?: string,
+    tags?: string[],
   ) => {
     const key = `${origin}:${tz}:${label}`;
     const existing = out.get(key) ?? (origin === 'collab' ? out.get(`collab:${tz}`) : undefined);
@@ -177,7 +188,7 @@ export function resolveZones(
     }
     out.set(
       origin === 'collab' ? `collab:${tz}` : key,
-      { tz, label, sublabel: sublabel ?? name, lat, lon, origin, names: name ? [name] : [] },
+      { tz, label, sublabel: sublabel ?? name, lat, lon, region, tags, origin, names: name ? [name] : [] },
     );
   };
 
@@ -202,13 +213,10 @@ export function resolveZones(
       }
     }
     if (lat === undefined || lon === undefined) {
-      // Last resort — use the prime meridian. Sun/planetary math will be
-      // wildly off but the card still renders. Shouldn't happen in
-      // practice; LOCATION_MAP covers every manual zone we author.
       lat = 0;
       lon = 0;
     }
-    push(z.tz, z.label, z.sublabel, lat, lon, 'manual');
+    push(z.tz, z.label, z.sublabel, lat, lon, 'manual', undefined, z.region, z.tags);
   }
 
   return Array.from(out.values()).map(({ names: _, ...rest }) => rest);

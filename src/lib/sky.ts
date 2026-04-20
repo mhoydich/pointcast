@@ -108,6 +108,8 @@ export interface SunTimes {
   dayLengthMs: number;
   /** Sun altitude right now, degrees above horizon (negative = below). */
   altitudeDeg: number;
+  /** Sun azimuth right now, 0°=N, 90°=E, 180°=S, 270°=W. */
+  azimuthDeg: number;
   /** True if the sun is currently above the horizon. */
   isDay: boolean;
 }
@@ -185,19 +187,31 @@ export function sunTimes(
     dayLengthMs = sunset.getTime() - sunrise.getTime();
   }
 
-  // Sun altitude at `now`. Hour angle in degrees from solar noon.
+  // Sun altitude + azimuth at `now`. Hour angle in degrees from solar noon.
   const nowMin = (now.getTime() - utc0Ms) / 60_000;
   const haNow = (nowMin - solarNoonMin) / 4;
-  const altitudeDeg = deg(
-    Math.asin(
-      Math.sin(rad(lat)) * Math.sin(rad(decl)) +
-        Math.cos(rad(lat)) * Math.cos(rad(decl)) * Math.cos(rad(haNow)),
-    ),
+  const altitudeRad = Math.asin(
+    Math.sin(rad(lat)) * Math.sin(rad(decl)) +
+      Math.cos(rad(lat)) * Math.cos(rad(decl)) * Math.cos(rad(haNow)),
   );
+  const altitudeDeg = deg(altitudeRad);
+
+  // Azimuth: 0°=N, 90°=E, 180°=S, 270°=W. Uses the Meeus formula:
+  //   cos(Az) = (sin(decl) - sin(alt)·sin(lat)) / (cos(alt)·cos(lat))
+  // Disambiguate morning vs afternoon by the sign of the hour angle.
+  const cosAz =
+    (Math.sin(rad(decl)) - Math.sin(altitudeRad) * Math.sin(rad(lat))) /
+    (Math.cos(altitudeRad) * Math.cos(rad(lat)));
+  // Clamp for safety — floating point can push |cosAz| slightly past 1.
+  const cosAzClamped = Math.max(-1, Math.min(1, cosAz));
+  let azimuthDeg = deg(Math.acos(cosAzClamped));
+  // In the morning (haNow < 0) azimuth is 0–180° (measured east of north).
+  // In the afternoon (haNow > 0) azimuth is 180–360° (reflected west).
+  if (haNow > 0) azimuthDeg = 360 - azimuthDeg;
 
   const isDay = altitudeDeg > -0.833;
 
-  return { sunrise, sunset, solarNoon, dayLengthMs, altitudeDeg, isDay };
+  return { sunrise, sunset, solarNoon, dayLengthMs, altitudeDeg, azimuthDeg, isDay };
 }
 
 // ────────────── planetary hour ──────────────
