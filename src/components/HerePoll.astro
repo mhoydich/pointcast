@@ -1,0 +1,270 @@
+---
+/**
+ * HerePoll — single-poll surface for /here, dark/amber themed.
+ *
+ * Mike 2026-04-20 13:00 PT: *"polls, see the latest polls work prototype."*
+ *
+ * Shows the most-recently-opened non-draft poll inline on /here.
+ * Tap an option → casts a vote via POST /api/poll, swaps card to
+ * distribution view. localStorage keyed "pc:poll:voted:{slug}" to
+ * dedup per browser.
+ *
+ * Visual language matches HereGrid + here.astro — dark background,
+ * amber accents, cream text.
+ *
+ * Author: cc. Source: Mike 2026-04-20 13:00 PT + sketches/polls-moment.html
+ * + sketches/polls-variants.html as design references.
+ */
+import { getCollection } from 'astro:content';
+
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+const poll = polls[0];
+if (!poll) {
+  // No poll to show — render nothing.
+}
+const data = poll?.data;
+---
+
+{data && (
+  <section class="here-poll" aria-label="Live poll on /here">
+    <header class="here-poll__head">
+      <p class="here-poll__kicker mono">
+        <span class="here-poll__live">LIVE POLL</span>
+        <span class="here-poll__sep" aria-hidden="true">·</span>
+        <span>tap an option · vote lands instantly</span>
+      </p>
+      <a class="here-poll__slug mono" href={`/poll/${data.slug}`}>/poll/{data.slug} →</a>
+    </header>
+
+    <h2 class="here-poll__q">{data.question}</h2>
+    {data.dek && <p class="here-poll__dek">{data.dek}</p>}
+
+    <ul class="here-poll__opts" data-slug={data.slug}>
+      {data.options.map((opt) => (
+        <li>
+          <button type="button" class="here-poll__opt" data-slug={data.slug} data-opt={opt.id}>
+            <span class="here-poll__opt-label">{opt.label}</span>
+            <span class="here-poll__opt-bar" aria-hidden="true"></span>
+            <span class="here-poll__opt-pct mono" hidden>—</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+
+    <p class="here-poll__status mono" id="here-poll-status"></p>
+  </section>
+)}
+
+<script is:inline>
+(function () {
+  'use strict';
+  if (typeof window === 'undefined') return;
+
+  var optsEl = document.querySelector('.here-poll__opts');
+  if (!optsEl) return;
+  var slug = optsEl.getAttribute('data-slug') || '';
+  var status = document.getElementById('here-poll-status');
+  var buttons = Array.prototype.slice.call(optsEl.querySelectorAll('.here-poll__opt'));
+
+  var lsKey = 'pc:poll:voted:' + slug;
+  var voted = null;
+  try { voted = localStorage.getItem(lsKey); } catch (e) {}
+
+  function setStatus(msg) {
+    if (status) status.textContent = msg || '';
+  }
+
+  function paintDistribution(tallies) {
+    // tallies = { optId: count, ... }
+    var total = 0;
+    Object.keys(tallies).forEach(function (k) { total += (tallies[k] || 0); });
+    if (total === 0) total = 1;
+    buttons.forEach(function (btn) {
+      var oid = btn.getAttribute('data-opt');
+      var n = tallies[oid] || 0;
+      var pct = Math.round((n / total) * 100);
+      var bar = btn.querySelector('.here-poll__opt-bar');
+      var pctEl = btn.querySelector('.here-poll__opt-pct');
+      if (bar) bar.style.width = pct + '%';
+      if (pctEl) { pctEl.textContent = pct + '%'; pctEl.hidden = false; }
+      if (oid === voted) btn.classList.add('here-poll__opt--voted');
+      btn.disabled = true;
+    });
+  }
+
+  function fetchResults() {
+    return fetch('/api/poll?slug=' + encodeURIComponent(slug), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  function onVote(btn) {
+    var opt = btn.getAttribute('data-opt') || '';
+    if (!opt || !slug) return;
+    try { localStorage.setItem(lsKey, opt); } catch (e) {}
+    voted = opt;
+    setStatus('voting…');
+    fetch('/api/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: slug, option: opt }),
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (data) {
+        if (data && data.tallies) {
+          paintDistribution(data.tallies);
+          setStatus('✓ vote in · thanks');
+        } else {
+          // Fallback — local-only paint
+          var localTallies = {};
+          localTallies[opt] = 1;
+          paintDistribution(localTallies);
+          setStatus('✓ vote recorded locally · server async');
+        }
+      });
+  }
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () { onVote(btn); });
+  });
+
+  if (voted) {
+    fetchResults().then(function (res) {
+      if (res && res.tallies) paintDistribution(res.tallies);
+      else {
+        var localTallies = {}; localTallies[voted] = 1;
+        paintDistribution(localTallies);
+      }
+      setStatus('you voted: ' + voted);
+    });
+  }
+})();
+</script>
+
+<style>
+  .here-poll {
+    width: 100%;
+    max-width: 1100px;
+    margin: 28px auto 0;
+    padding: 20px 20px 22px;
+    border: 1px solid rgba(232, 154, 45, 0.22);
+    border-radius: 4px;
+    background: rgba(232, 154, 45, 0.03);
+    color: #f3e6d8;
+  }
+  .here-poll__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+  }
+  .here-poll__kicker {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9a8571;
+    margin: 0;
+  }
+  .here-poll__live {
+    color: #e89a2d;
+    font-weight: 700;
+  }
+  .here-poll__sep { margin: 0 6px; opacity: 0.55; }
+  .here-poll__slug {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+    color: #e89a2d;
+    text-decoration: none;
+  }
+  .here-poll__slug:hover { text-decoration: underline; }
+
+  .here-poll__q {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 22px;
+    line-height: 1.2;
+    margin: 0 0 6px;
+    color: #f3e6d8;
+    font-weight: 700;
+  }
+  .here-poll__dek {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14px;
+    color: #d4c2ad;
+    margin: 0 0 14px;
+    line-height: 1.5;
+  }
+
+  .here-poll__opts {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .here-poll__opt {
+    position: relative;
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(243, 230, 216, 0.04);
+    border: 1px solid rgba(243, 230, 216, 0.14);
+    border-radius: 3px;
+    color: #f3e6d8;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .here-poll__opt:hover {
+    background: rgba(232, 154, 45, 0.08);
+    border-color: rgba(232, 154, 45, 0.45);
+  }
+  .here-poll__opt:disabled {
+    cursor: default;
+  }
+  .here-poll__opt-bar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: linear-gradient(90deg, rgba(232, 154, 45, 0.12), rgba(232, 154, 45, 0.28));
+    transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+    z-index: 0;
+  }
+  .here-poll__opt-label {
+    position: relative;
+    z-index: 1;
+  }
+  .here-poll__opt-pct {
+    position: relative;
+    z-index: 1;
+    font-size: 11px;
+    font-weight: 700;
+    color: #e89a2d;
+    letter-spacing: 0.06em;
+  }
+  .here-poll__opt--voted {
+    border-color: #e89a2d;
+  }
+  .here-poll__opt--voted .here-poll__opt-label::before {
+    content: '✓ ';
+    color: #e89a2d;
+  }
+  .here-poll__status {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #756249;
+    margin: 10px 0 0;
+    font-family: 'Monaco', 'Menlo', monospace;
+  }
+</style>

@@ -48,6 +48,19 @@ const MOODS = [
     var lsKey = 'pc:mood';
     var root = document.documentElement;
 
+    // Mood → hue map for the meditative color-field pulse.
+    // Per Mike 2026-04-20 13:00 PT: "when you click mode, animation and
+    // change of the ui to match, have lite visualizations that are
+    // meditative."
+    var MOOD_HUE = {
+      chill:   155,  // green-tea
+      hype:    8,    // warm red
+      focus:   215,  // cobalt
+      flow:    275,  // soft violet
+      curious: 28,   // amber
+      quiet:   220,  // deep slate-blue
+    };
+
     function applyMood(id) {
       if (!id) return;
       root.setAttribute('data-pc-mood', id);
@@ -56,7 +69,24 @@ const MOODS = [
       });
     }
 
-    // Paint prior choice
+    function meditativePulse(id) {
+      // Respect prefers-reduced-motion.
+      try {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      } catch (e) {}
+      var hue = MOOD_HUE[id] || 28;
+      var overlay = document.createElement('div');
+      overlay.className = 'mood-pulse';
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.setProperty('--mood-hue', String(hue));
+      document.body.appendChild(overlay);
+      // Cleanup after animation completes.
+      setTimeout(function () {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 1800);
+    }
+
+    // Paint prior choice (no pulse on initial load).
     try {
       var prior = localStorage.getItem(lsKey);
       if (prior) applyMood(prior);
@@ -67,6 +97,7 @@ const MOODS = [
         var id = b.getAttribute('data-mood-id');
         try { localStorage.setItem(lsKey, id); } catch (e) {}
         applyMood(id);
+        meditativePulse(id);
       });
     });
   })();
@@ -146,4 +177,36 @@ const MOODS = [
   :global(html[data-pc-mood="flow"]    body)  { background: linear-gradient(180deg, #f5f0ff 0%, #fff 200px); }
   :global(html[data-pc-mood="curious"] body)  { background: linear-gradient(180deg, #fff4ed 0%, #fff 200px); }
   :global(html[data-pc-mood="quiet"]   body)  { background: linear-gradient(180deg, #f5f5f2 0%, #fff 200px); }
+</style>
+
+<style is:global>
+  /* Meditative color-field pulse on mood click.
+     Injected by MoodChip click handler; fades in from center, blooms,
+     fades out. Hue comes from --mood-hue set inline by JS. */
+  .mood-pulse {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background:
+      radial-gradient(circle at 50% 50%,
+        hsla(var(--mood-hue, 28), 70%, 60%, 0.35) 0%,
+        hsla(var(--mood-hue, 28), 70%, 60%, 0.12) 32%,
+        hsla(var(--mood-hue, 28), 70%, 60%, 0.00) 62%);
+    opacity: 0;
+    animation: moodPulse 1.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    will-change: opacity, transform;
+    mix-blend-mode: multiply;
+  }
+
+  @keyframes moodPulse {
+    0%   { opacity: 0;   transform: scale(0.85); }
+    20%  { opacity: 0.9; transform: scale(1.00); }
+    55%  { opacity: 0.5; transform: scale(1.10); }
+    100% { opacity: 0;   transform: scale(1.25); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mood-pulse { display: none; }
+  }
 </style>

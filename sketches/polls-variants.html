@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Five Moments — PointCast Polls Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,500&family=Outfit:wght@300;400;500;600&family=Syne:wght@500;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #1f1b15;
+    --ink-soft: #6a6154;
+    --paper: #f5efe4;
+    --warm: #c4952e;
+    --rule: #d8cdb8;
+    --card: #fbf7ee;
+    --card-hover: #fff4dc;
+    --accent: #1b3a5b;
+    --live: #2f8f5f;
+    --live-bg: #e4efe5;
+    --nouns-red: #E84D6A;
+    --nouns-blue: #4A9EFF;
+    --nouns-yellow: #F7C325;
+    --nouns-green: #2CC5A0;
+    --nouns-purple: #8866cc;
+    --heading: 'Syne', sans-serif;
+    --serif: 'Lora', Georgia, serif;
+    --body: 'Outfit', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--warm); }
+  .shell { max-width: 1100px; margin: 0 auto; padding: 18px 24px 60px; }
+
+  /* Masthead */
+  .masthead {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 10px 0; border-bottom: 1px solid var(--rule); margin-bottom: 14px;
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .masthead .brand { font-family: var(--heading); font-weight: 700; font-size: 1rem; letter-spacing: 0.22em; color: var(--ink); }
+  .masthead .right { color: var(--ink-soft); }
+  .masthead .right b { color: var(--warm); font-weight: 600; }
+
+  .crumb { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin: 18px 0 14px; }
+  .crumb .sep { color: var(--warm); margin: 0 8px; }
+  .crumb a { color: var(--ink); }
+
+  .kicker { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); font-weight: 600; margin-bottom: 10px; }
+  .headline {
+    font-family: var(--serif); font-style: italic; font-weight: 500;
+    font-size: clamp(1.85rem, 3.6vw, 2.8rem); line-height: 1.1; letter-spacing: -0.01em;
+    margin-bottom: 14px;
+  }
+  .dek {
+    font-family: var(--serif); font-size: 1.02rem; line-height: 1.55;
+    color: var(--ink); opacity: 0.88; margin-bottom: 22px; max-width: 760px;
+  }
+  .dek em { color: var(--warm); font-style: normal; font-weight: 600; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    margin-bottom: 26px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 1; padding: 14px 14px; text-align: center;
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-soft); cursor: pointer; user-select: none; font-weight: 600;
+    border-right: 1px solid var(--rule);
+    transition: all 0.15s ease; position: relative;
+    white-space: nowrap;
+  }
+  .tab:last-child { border-right: none; }
+  .tab:hover { background: var(--card-hover); color: var(--ink); }
+  .tab.active { background: var(--ink); color: var(--paper); }
+  .tab.active .num { color: var(--warm); }
+  .tab .num { display: block; font-family: var(--heading); font-weight: 700; font-size: 1rem; letter-spacing: 0.02em; color: var(--ink); margin-bottom: 3px; }
+  .tab:hover .num { color: var(--warm); }
+  .tab .lbl { opacity: 0.85; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Shared poll-card look */
+  .poll {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 20px 22px 22px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+  }
+  .poll.voted { border-color: var(--warm); box-shadow: 0 4px 18px rgba(196,149,46,0.10); }
+  .poll-head {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
+    font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .poll-head .type { color: var(--warm); font-weight: 600; }
+  .poll-head .meta { color: var(--ink-soft); }
+  .poll-q {
+    font-family: var(--serif); font-weight: 600; font-size: 1.3rem; line-height: 1.28;
+    color: var(--ink); margin-bottom: 6px;
+  }
+  .poll-setup {
+    font-family: var(--serif); font-style: italic; font-size: 0.94rem;
+    color: var(--ink); opacity: 0.78; margin-bottom: 14px;
+  }
+  .poll-setup b { color: var(--warm); font-style: normal; font-weight: 600; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt {
+    position: relative; padding: 11px 16px 10px; background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 6px; overflow: hidden;
+    cursor: pointer; transition: all 0.18s ease;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--body); font-size: 0.94rem; font-weight: 500; color: var(--ink);
+  }
+  .opt::before {
+    content: ''; position: absolute; inset: 0 auto 0 0; width: 0%;
+    background: rgba(196,149,46,0.15);
+    transition: width 0.9s cubic-bezier(0.34, 1.16, 0.64, 1);
+    z-index: 0;
+  }
+  .opt > * { position: relative; z-index: 1; }
+  .opt:hover { border-color: var(--warm); background: var(--card-hover); }
+  .opt .hint { display: block; font-family: var(--mono); font-size: 0.6rem; color: var(--ink-soft); letter-spacing: 0.03em; margin-top: 2px; font-weight: 400; text-transform: none; }
+  .opt .right { font-family: var(--mono); font-size: 0.76rem; font-weight: 600; color: var(--accent); opacity: 0; transition: opacity 0.6s ease; letter-spacing: 0.04em; }
+  .opt.you { border: 1.5px solid var(--warm); background: #fff9ec; }
+  .poll.voted .opt:not(.you):not(.lead) { opacity: 0.62; }
+  .poll.voted .opt .right { opacity: 1; }
+  .opt.correct { border-color: var(--live); background: #eff7ef; }
+  .opt.correct .right { color: var(--live); }
+  .opt.wrong { border-color: var(--nouns-red); background: #fdf0f2; }
+  .opt.wrong .right { color: var(--nouns-red); }
+  .youtag {
+    display: inline-block; margin-left: 8px; padding: 1px 6px;
+    background: var(--warm); color: #fff;
+    font-family: var(--mono); font-size: 0.54rem; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600;
+    border-radius: 2px;
+  }
+  .opt .pre-pct { font-family: var(--mono); font-size: 0.74rem; color: var(--rule); letter-spacing: 0.08em; }
+  .poll.voted .opt .pre-pct { display: none; }
+
+  /* Mint CTA shared */
+  .mint-cta {
+    margin-top: 14px;
+    background: #fff; border: 1px solid var(--warm); border-radius: 6px;
+    padding: 14px 16px;
+    display: flex; justify-content: space-between; align-items: center; gap: 14px;
+    box-shadow: 0 3px 14px rgba(196,149,46,0.10);
+    flex-wrap: wrap;
+  }
+  .mint-cta .mint-l {
+    display: flex; gap: 12px; align-items: center; flex: 1; min-width: 200px;
+  }
+  .mint-cta .noggles-sm { width: 46px; height: 30px; flex-shrink: 0; }
+  .mint-cta .mint-copy .t {
+    font-family: var(--serif); font-weight: 600; font-size: 0.98rem; color: var(--ink); line-height: 1.2;
+  }
+  .mint-cta .mint-copy .s {
+    font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); margin-top: 3px;
+  }
+  .mint-btn {
+    background: var(--warm); color: #fff; border: none; border-radius: 4px;
+    padding: 9px 18px; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700;
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .mint-btn:hover { background: var(--ink); }
+  .mint-btn.done { background: var(--live); cursor: default; }
+  .mint-btn.done::before { content: '✓ '; }
+
+  /* === SCROLL view === */
+  #scroll .scroll-hint {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft);
+    margin-bottom: 10px; display: flex; justify-content: space-between;
+  }
+  .feed {
+    height: 620px; overflow-y: auto; scroll-snap-type: y mandatory;
+    border-radius: 8px; background: var(--card); border: 1px solid var(--rule);
+    position: relative;
+    scrollbar-width: thin; scrollbar-color: var(--rule) transparent;
+  }
+  .feed::-webkit-scrollbar { width: 4px; }
+  .feed::-webkit-scrollbar-thumb { background: var(--warm); border-radius: 2px; }
+  .feed-card {
+    scroll-snap-align: start;
+    min-height: 620px; padding: 30px 32px 28px;
+    display: flex; flex-direction: column; gap: 14px;
+    border-bottom: 2px dashed var(--rule);
+    position: relative;
+  }
+  .feed-card:last-child { border-bottom: none; }
+  .feed-card .poll-q { font-size: 1.6rem; }
+  .feed-progress {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 6px; z-index: 5;
+  }
+  .feed-progress .fp-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--rule); transition: all 0.2s ease;
+    border: none; cursor: pointer;
+  }
+  .feed-progress .fp-dot.active { background: var(--warm); transform: scale(1.5); }
+  .feed-progress .fp-dot.voted { background: var(--ink); }
+
+  /* === QUEST view === */
+  .quest-hero {
+    background: var(--ink); color: var(--paper);
+    border-radius: 10px; padding: 20px 24px;
+    margin-bottom: 18px; position: relative; overflow: hidden;
+    display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center;
+  }
+  .quest-hero::after {
+    content: ''; position: absolute; right: -30px; bottom: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(196,149,46,0.22), transparent 60%);
+  }
+  .quest-hero .qh-kicker {
+    font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--warm); font-weight: 600; margin-bottom: 6px;
+  }
+  .quest-hero .qh-title {
+    font-family: var(--serif); font-style: italic; font-size: 1.55rem; line-height: 1.1; color: var(--paper);
+  }
+  .quest-hero .qh-sub {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; color: rgba(245,239,228,0.6); margin-top: 6px;
+  }
+  .quest-progress {
+    display: flex; align-items: center; gap: 8px; position: relative; z-index: 2;
+  }
+  .quest-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid rgba(245,239,228,0.3); background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 0.64rem; font-weight: 700; color: rgba(245,239,228,0.5);
+  }
+  .quest-dot.done { background: var(--warm); border-color: var(--warm); color: #fff; }
+  .quest-dot.active { border-color: var(--warm); color: var(--warm); }
+
+  .quest-context {
+    background: var(--card); border-left: 3px solid var(--warm);
+    padding: 14px 18px 14px 20px; border-radius: 0 6px 6px 0;
+    margin-bottom: 14px;
+    font-family: var(--serif); font-size: 0.98rem; line-height: 1.55; color: var(--ink);
+  }
+  .quest-context .qk {
+    font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); font-weight: 600; margin-bottom: 6px;
+    display: block;
+  }
+  .quest-next {
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .next-btn {
+    background: var(--ink); color: var(--paper); border: none; border-radius: 4px;
+    padding: 10px 18px; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700;
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .next-btn:hover { background: var(--warm); }
+  .next-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .quest-reveal {
+    font-family: var(--serif); font-size: 0.96rem; color: var(--ink); line-height: 1.5;
+    margin-top: 12px;
+  }
+  .quest-reveal b { color: var(--warm); }
+
+  /* === STREAK view === */
+  .streak-top {
+    display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center;
+    background: var(--ink); color: var(--paper);
+    padding: 26px 28px; border-radius: 10px; margin-bottom: 20px;
+    position: relative; overflow: hidden;
+  }
+  .streak-top::after {
+    content: ''; position: absolute; right: -30px; bottom: -50px; width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(196,149,46,0.25), transparent 60%);
+  }
+  .streak-daynum {
+    font-family: var(--heading); font-weight: 700; font-size: 4.4rem; line-height: 0.9; color: var(--warm);
+    letter-spacing: -0.02em;
+  }
+  .streak-daynum .unit {
+    display: block; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(245,239,228,0.6);
+    margin-top: 4px; font-weight: 600;
+  }
+  .streak-flair { position: relative; z-index: 2; }
+  .streak-flair .fk {
+    font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); margin-bottom: 6px; font-weight: 600;
+  }
+  .streak-flair .ft {
+    font-family: var(--serif); font-style: italic; font-size: 1.3rem; color: var(--paper); line-height: 1.2; margin-bottom: 10px;
+  }
+  .streak-bar {
+    background: rgba(245,239,228,0.1); border-radius: 3px; height: 8px; overflow: hidden; position: relative; margin-top: 12px;
+  }
+  .streak-bar-fill {
+    position: absolute; inset: 0 auto 0 0; background: var(--warm); width: 40%;
+  }
+  .streak-milestones {
+    display: flex; justify-content: space-between; margin-top: 6px;
+    font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.14em; color: rgba(245,239,228,0.5); text-transform: uppercase;
+  }
+  .streak-milestones span.hit { color: var(--warm); }
+  .streak-milestones span.next { color: var(--paper); font-weight: 600; }
+
+  .calendar {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 22px; margin-bottom: 18px;
+  }
+  .calendar-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 12px;
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); font-weight: 600;
+  }
+  .calendar-head .m { color: var(--ink); }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  }
+  .cal-day-head, .cal-cell {
+    aspect-ratio: 1 / 1; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 0.66rem; color: var(--ink-soft);
+  }
+  .cal-day-head { font-size: 0.52rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: var(--warm); }
+  .cal-cell { background: var(--paper); border: 1px solid var(--rule); }
+  .cal-cell.voted { background: var(--warm); color: #fff; border-color: var(--warm); font-weight: 600; }
+  .cal-cell.today { border: 2px solid var(--ink); color: var(--ink); font-weight: 700; }
+  .cal-cell.future { opacity: 0.4; }
+  .cal-cell.mint { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .cal-cell.mint::after { content: '★'; position: absolute; color: var(--warm); font-size: 0.7rem; margin-top: -20px; margin-left: 10px; }
+
+  /* === CREW view === */
+  .crew-head {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 22px; margin-bottom: 18px;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
+  }
+  .crew-head .crew-label {
+    font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); font-weight: 600;
+  }
+  .crew-head .crew-name {
+    font-family: var(--serif); font-style: italic; font-size: 1.4rem; color: var(--ink); line-height: 1.1;
+  }
+  .crew-head .crew-tag {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; color: var(--accent); margin-top: 3px;
+  }
+  .crew-avatars { display: flex; gap: -10px; }
+  .crew-avatar {
+    width: 42px; height: 42px; border-radius: 6px; border: 2px solid var(--paper);
+    margin-left: -8px; background: var(--card-hover);
+  }
+  .crew-avatar:first-child { margin-left: 0; }
+
+  .convergence {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 22px; margin-bottom: 18px;
+  }
+  .conv-head {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); font-weight: 600;
+  }
+  .conv-meter {
+    background: var(--rule); height: 10px; border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 6px;
+  }
+  .conv-meter-fill {
+    position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--nouns-red), var(--warm), var(--live));
+    width: 71%;
+  }
+  .conv-meter-mark {
+    position: absolute; top: -4px; height: 18px; width: 2px; background: var(--ink);
+    left: 80%;
+  }
+  .conv-meter-mark::after {
+    content: 'MINT @ 80%'; position: absolute; top: -14px; left: 4px;
+    font-family: var(--mono); font-size: 0.5rem; letter-spacing: 0.14em; white-space: nowrap; color: var(--ink); font-weight: 600;
+  }
+  .conv-detail {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em; color: var(--ink-soft); margin-top: 12px;
+    display: flex; justify-content: space-between;
+  }
+  .conv-detail b { color: var(--warm); font-weight: 600; }
+
+  .members {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    overflow: hidden;
+  }
+  .member {
+    display: grid; grid-template-columns: 40px 1fr auto auto; gap: 12px; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--rule);
+  }
+  .member:last-child { border-bottom: none; }
+  .member .mav { width: 32px; height: 32px; border-radius: 4px; background: var(--card-hover); }
+  .member .mn { font-family: var(--body); font-weight: 600; color: var(--ink); font-size: 0.92rem; }
+  .member .mn .mh { display: block; font-family: var(--mono); font-size: 0.56rem; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 400; margin-top: 2px; text-transform: none; }
+  .member .pick {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; font-weight: 600;
+    padding: 4px 10px; border-radius: 3px;
+  }
+  .pick.wed { background: #fff9ec; color: var(--warm); border: 1px solid var(--warm); }
+  .pick.tue { background: #e4efe5; color: var(--live); border: 1px solid #a4c7ac; }
+  .pick.fri { background: #f5e4ec; color: var(--nouns-red); border: 1px solid #e0a8b9; }
+  .pick.nv { background: var(--rule); color: var(--ink-soft); border: 1px solid var(--rule); }
+  .member .at {
+    font-family: var(--mono); font-size: 0.56rem; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase;
+  }
+
+  /* === COLLECTION view === */
+  .col-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    padding: 14px 0; margin-bottom: 22px;
+  }
+  .col-stats .cs {
+    padding: 0 18px; border-right: 1px solid var(--rule);
+  }
+  .col-stats .cs:last-child { border-right: none; }
+  .col-stats .csv {
+    font-family: var(--heading); font-weight: 700; font-size: 1.6rem; line-height: 1; color: var(--ink);
+  }
+  .col-stats .csl {
+    font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-soft); margin-top: 6px;
+  }
+
+  .filter-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter {
+    padding: 6px 13px; border-radius: 999px; background: var(--card);
+    border: 1px solid var(--rule); font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink); cursor: pointer; transition: all 0.14s ease; user-select: none; font-weight: 600;
+  }
+  .filter:hover { background: var(--card-hover); border-color: var(--warm); }
+  .filter.active { background: var(--warm); color: #fff; border-color: var(--warm); }
+  .filter .ct { margin-left: 5px; opacity: 0.7; }
+
+  .collection-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px;
+  }
+  .mint-card {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px; cursor: pointer; transition: all 0.18s ease;
+    position: relative; overflow: hidden;
+    aspect-ratio: 3 / 4; display: flex; flex-direction: column;
+  }
+  .mint-card:hover {
+    transform: translateY(-2px); border-color: var(--warm); box-shadow: 0 8px 24px rgba(196,149,46,0.18);
+  }
+  .mint-card.pending { border-style: dashed; background: #fafaf6; }
+  .mint-card .mc-art {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: var(--paper); border-radius: 5px; padding: 14px; margin-bottom: 10px;
+    position: relative;
+  }
+  .mint-card .mc-art svg { width: 100%; height: auto; max-height: 70px; }
+  .mint-card.pending .mc-art { opacity: 0.35; filter: grayscale(1); }
+  .mint-card.pending::after {
+    content: 'PENDING RESOLUTION';
+    position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-12deg);
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.22em; font-weight: 700;
+    color: var(--nouns-red); border: 2px solid var(--nouns-red); padding: 4px 10px;
+    background: rgba(255,255,255,0.85);
+  }
+  .mint-card .mc-kind {
+    font-family: var(--mono); font-size: 0.52rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--warm); font-weight: 600; margin-bottom: 3px;
+  }
+  .mint-card.streak-mint .mc-kind { color: var(--nouns-purple); }
+  .mint-card.crew-mint .mc-kind { color: var(--nouns-blue); }
+  .mint-card.outcome-mint .mc-kind { color: var(--live); }
+  .mint-card.forecast-mint .mc-kind { color: var(--nouns-red); }
+  .mint-card .mc-title {
+    font-family: var(--serif); font-weight: 600; font-size: 0.92rem; line-height: 1.2; color: var(--ink);
+    margin-bottom: 3px;
+  }
+  .mint-card .mc-meta {
+    font-family: var(--mono); font-size: 0.54rem; letter-spacing: 0.1em; color: var(--ink-soft);
+  }
+  .mc-art.col-schelling { background: linear-gradient(135deg, #fff9ec 0%, #fbeed2 100%); }
+  .mc-art.col-forecast { background: linear-gradient(135deg, #fdf0f2 0%, #f5d8de 100%); }
+  .mc-art.col-outcome { background: linear-gradient(135deg, #e4efe5 0%, #c8dccc 100%); }
+  .mc-art.col-streak { background: linear-gradient(135deg, #ede6f8 0%, #d9cce8 100%); }
+  .mc-art.col-crew { background: linear-gradient(135deg, #e6f0fb 0%, #c8dcf0 100%); }
+  .mc-art.col-vibe { background: linear-gradient(135deg, #f5efe4 0%, #e0d4c0 100%); }
+
+  /* Footer */
+  footer.foot {
+    margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--rule);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+    font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .foot .sig { font-family: var(--serif); font-style: italic; text-transform: none; letter-spacing: 0.03em; font-size: 0.88rem; color: var(--ink-soft); }
+
+  /* Mint toast */
+  .mint-toast {
+    position: fixed; bottom: 22px; right: 22px; z-index: 100;
+    background: var(--ink); color: var(--paper); border-radius: 8px;
+    padding: 14px 18px 14px 14px;
+    display: flex; gap: 12px; align-items: center;
+    box-shadow: 0 10px 30px rgba(31,27,21,0.3);
+    transform: translateX(380px); opacity: 0;
+    transition: all 0.4s cubic-bezier(0.34, 1.16, 0.64, 1);
+    max-width: 340px;
+  }
+  .mint-toast.show { transform: translateX(0); opacity: 1; }
+  .mint-toast .mt-icon {
+    width: 40px; height: 40px; background: var(--warm); border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--heading); font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .mint-toast .mt-copy { flex: 1; }
+  .mint-toast .mt-head {
+    font-family: var(--mono); font-size: 0.54rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--warm); font-weight: 600;
+  }
+  .mint-toast .mt-name {
+    font-family: var(--serif); font-size: 0.94rem; font-weight: 600; margin-top: 2px;
+  }
+
+  @media (max-width: 680px) {
+    .tab .num { font-size: 0.85rem; }
+    .col-stats { grid-template-columns: 1fr 1fr; }
+    .col-stats .cs:nth-child(2) { border-right: none; }
+    .col-stats .cs { border-bottom: 1px solid var(--rule); padding: 10px 14px; }
+    .crew-head { grid-template-columns: 1fr; }
+    .streak-top { grid-template-columns: 1fr; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="masthead">
+    <span class="brand">POINTCAST</span>
+    <span class="right">POLLS · FIVE MOMENTS · <b id="mint-count">3 mints</b> · <a href="./polls-100mi.html">/100mi ↗</a></span>
+  </div>
+
+  <div class="crumb">
+    <a href="/">HOME</a>
+    <span class="sep">/</span>
+    <a href="/polls">POLLS</a>
+    <span class="sep">/</span>
+    <span>FIVE MOMENTS</span>
+  </div>
+
+  <div class="kicker">POLLS · REWARD MECHANICS · PROTOTYPE</div>
+  <h1 class="headline">Five shapes of the moment.</h1>
+  <p class="dek">
+    Five takes on what happens <em>after you vote</em> — scroll-to-vote feed, a learn-as-you-go quest with lessons,
+    a daily streak with milestone mints, a crew convergence board, and a full collection gallery.
+    Each one mints a different kind of receipt.
+  </p>
+
+  <div class="tabs">
+    <div class="tab active" data-view="scroll"><span class="num">01</span><span class="lbl">Scroll</span></div>
+    <div class="tab" data-view="quest"><span class="num">02</span><span class="lbl">Quest</span></div>
+    <div class="tab" data-view="streak"><span class="num">03</span><span class="lbl">Streak</span></div>
+    <div class="tab" data-view="crew"><span class="num">04</span><span class="lbl">Crew</span></div>
+    <div class="tab" data-view="collection"><span class="num">05</span><span class="lbl">Collection</span></div>
+  </div>
+
+  <!-- ============ SCROLL VIEW ============ -->
+  <section class="view active" data-view="scroll">
+    <div class="scroll-hint">
+      <span>VERTICAL FEED · SCROLL TO ADVANCE · TAP TO VOTE · MINT AT FINISH</span>
+      <span id="scroll-prog">0 / 4 voted</span>
+    </div>
+    <div class="feed" id="feed">
+      <!-- Card 1 -->
+      <div class="feed-card poll" data-type="schelling" data-id="f1">
+        <div class="poll-head"><span class="type">SCHELLING · MATCH THE ROOM</span><span class="meta">1 / 4</span></div>
+        <div class="poll-q">The weekend destination inside the ring.</div>
+        <div class="poll-setup">Two-hour rule applies. Pick the one most readers will pick.</div>
+        <div class="opts">
+          <div class="opt" data-r="28" data-label="Ojai"><span>Ojai<span class="hint">shangri-la · bookstore · hot springs</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="19" data-label="Catalina"><span>Catalina Island<span class="hint">Avalon ferry · snorkel</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="23" data-label="Santa Barbara" data-lead="1"><span>Santa Barbara<span class="hint">just inside · wine</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="16" data-label="Big Bear"><span>Big Bear<span class="hint">ski winter · lake summer</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="14" data-label="Idyllwild"><span>Idyllwild<span class="hint">pines · low-key · climb</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        </div>
+      </div>
+      <!-- Card 2 -->
+      <div class="feed-card poll" data-type="vibe" data-id="f2">
+        <div class="poll-head"><span class="type">VIBE · NO WINNER</span><span class="meta">2 / 4</span></div>
+        <div class="poll-q">The soundtrack to your Sunday night?</div>
+        <div class="poll-setup">What's actually playing — or what should be.</div>
+        <div class="opts">
+          <div class="opt" data-r="14" data-label="rain anthem"><span>rain anthem<span class="hint">November Rain · Purple Rain</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="11" data-label="meditation"><span>meditation<span class="hint">Alan Watts · long-form</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="19" data-label="hip-hop" data-lead="1"><span>hip-hop<span class="hint">90s east · De La · Wu</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="17" data-label="electronic"><span>electronic<span class="hint">Boards · Four Tet · ambient</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="14" data-label="silence"><span>silence<span class="hint">hum of the house</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        </div>
+      </div>
+      <!-- Card 3 -->
+      <div class="feed-card poll" data-type="forecast" data-id="f3">
+        <div class="poll-head"><span class="type">FORECAST · BADGE</span><span class="meta">3 / 4</span></div>
+        <div class="poll-q">Dodgers · where do they finish?</div>
+        <div class="poll-setup">Resolves October. Call it → CC0 badge mints. Miss it → no badge.</div>
+        <div class="opts">
+          <div class="opt" data-r="31" data-label="NL West · Won" data-lead="1"><span>Win NL West<span class="hint">division champs</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="22" data-label="Wild Card"><span>Wild Card spot<span class="hint">in via WC</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="26" data-label="World Series"><span>World Series<span class="hint">all the way</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="12" data-label="Missed playoffs"><span>Miss playoffs<span class="hint">shocker</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        </div>
+      </div>
+      <!-- Card 4 -->
+      <div class="feed-card poll" data-type="outcome" data-id="f4">
+        <div class="poll-head"><span class="type">OUTCOME · MATERIALIZES</span><span class="meta">4 / 4</span></div>
+        <div class="poll-q">Drop-in coffee morning spot.</div>
+        <div class="poll-setup">35% converges → we show up there next Tuesday, 8:00.</div>
+        <div class="opts">
+          <div class="opt" data-r="24" data-label="Dinosaur"><span>Dinosaur Coffee<span class="hint">Silver Lake · quiet at 8</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="37" data-label="Go Get Em Tiger" data-lead="1" data-threshold="1"><span>Go Get Em Tiger<span class="hint">Larchmont · biggest space</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="22" data-label="Moonwater"><span>Moonwater<span class="hint">SM · new · nounish</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+          <div class="opt" data-r="17" data-label="Blue Bottle"><span>Blue Bottle<span class="hint">Abbott Kinney</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top: 12px; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--ink-soft); text-transform: uppercase; display: flex; justify-content: space-between;">
+      <span>Scroll the feed above · vote to unlock mint</span>
+      <span id="scroll-mint-state">— after 4 votes, feed mint unlocks —</span>
+    </div>
+  </section>
+
+  <!-- ============ QUEST VIEW ============ -->
+  <section class="view" data-view="quest">
+    <div class="quest-hero">
+      <div>
+        <div class="qh-kicker">QUEST · LEARN-AS-YOU-GO · LESSON 5</div>
+        <div class="qh-title">Know your Nouns · a five-poll primer.</div>
+        <div class="qh-sub">Each vote unlocks a lesson · finish to mint the <b style="color:var(--warm)">Scholar · Vol 1</b> badge.</div>
+      </div>
+      <div class="quest-progress" id="qprog">
+        <div class="quest-dot done">1</div>
+        <div class="quest-dot done">2</div>
+        <div class="quest-dot done">3</div>
+        <div class="quest-dot done">4</div>
+        <div class="quest-dot active">5</div>
+      </div>
+    </div>
+
+    <article class="poll" data-type="quest" data-id="q1">
+      <div class="poll-head"><span class="type" style="color:var(--nouns-purple)">LESSON 5 · LEARN-AS-YOU-GO</span><span class="meta">/quest/nouns-primer</span></div>
+      <div class="quest-context">
+        <span class="qk">CONTEXT — THE ONE-PER-DAY RULE</span>
+        Nouns DAO runs a single English auction every day. A new noun is minted, auctioned for 24 hours, and 100% of the proceeds flow to the on-chain treasury. No pre-mint, no allocation, no drop schedule — just one a day forever.
+      </div>
+      <div class="poll-q">What percentage of auction proceeds goes to the treasury?</div>
+      <div class="poll-setup">Pick from context — this is the final lesson.</div>
+      <div class="opts" id="quest-opts">
+        <div class="opt" data-r="8" data-label="50%"><span>50%<span class="hint">split with founders</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="14" data-label="90%"><span>90%<span class="hint">most but not all</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="68" data-label="100%" data-correct="1" data-lead="1"><span>100%<span class="hint">every penny on-chain</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="10" data-label="Variable"><span>Variable · DAO vote<span class="hint">governance decides</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+      </div>
+      <div class="quest-reveal" id="quest-reveal" style="display:none"></div>
+      <div class="quest-next" id="quest-next" style="display:none">
+        <span style="font-family:var(--mono); font-size:0.62rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--live); font-weight:600">✓ QUEST COMPLETE · 5 OF 5</span>
+        <button class="next-btn" id="mint-scholar-btn">Mint Scholar Vol 1 →</button>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ STREAK VIEW ============ -->
+  <section class="view" data-view="streak">
+    <div class="streak-top">
+      <div class="streak-daynum" id="streak-days">12<span class="unit">DAY STREAK</span></div>
+      <div class="streak-flair">
+        <div class="fk">NEXT MILESTONE</div>
+        <div class="ft">Day 14 — weekly-regular mint unlocks.</div>
+        <div style="font-family:var(--mono); font-size:0.64rem; letter-spacing:0.12em; color:rgba(245,239,228,0.7)">
+          Vote in today's poll to extend the streak. Miss a day and it resets.
+        </div>
+        <div class="streak-bar"><div class="streak-bar-fill" style="width: 40%"></div></div>
+        <div class="streak-milestones">
+          <span class="hit">DAY 7 · novice ✓</span>
+          <span class="next">DAY 14 · regular</span>
+          <span>DAY 30 · core</span>
+          <span>DAY 90 · pillar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="calendar">
+      <div class="calendar-head"><span class="m">APRIL 2026</span><span>★ = milestone mint</span></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+
+    <!-- Today's poll -->
+    <article class="poll" data-type="streak" data-id="s1">
+      <div class="poll-head"><span class="type" style="color:var(--nouns-purple)">TODAY'S POLL · KEEP THE STREAK</span><span class="meta">/daily/2026-04-20</span></div>
+      <div class="poll-q">El Segundo weather feel — what does it read as right now?</div>
+      <div class="poll-setup">Super local. Just a pulse-check. Vote to add a flame to today's box.</div>
+      <div class="opts">
+        <div class="opt" data-r="24" data-label="marine layer"><span>marine layer<span class="hint">gray all morning</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="32" data-label="burning off" data-lead="1"><span>burning off<span class="hint">clearing by noon</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="22" data-label="crisp sun"><span>crisp sun<span class="hint">wide open skies</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="14" data-label="santa ana"><span>santa ana<span class="hint">dry warm wind</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+        <div class="opt" data-r="8" data-label="breezy cool"><span>breezy cool<span class="hint">sweater weather</span></span><span class="pre-pct">? %</span><span class="right"><b></b></span></div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ CREW VIEW ============ -->
+  <section class="view" data-view="crew">
+    <div class="crew-head">
+      <div>
+        <div class="crew-label">CREW · VIA-TAG</div>
+        <div class="crew-name">The Drum Room.</div>
+        <div class="crew-tag">?via=drum-room · 7 members · since 2026-03-14</div>
+      </div>
+      <div class="crew-avatars" id="crew-avatars"></div>
+      <div>
+        <button class="mint-btn" style="background:var(--accent)">Share Invite →</button>
+      </div>
+    </div>
+
+    <div class="convergence">
+      <div class="conv-head">
+        <span>LATEST POLL · DROP-IN DAY · CONVERGENCE</span>
+        <span id="conv-pct">71%</span>
+      </div>
+      <div class="conv-meter">
+        <div class="conv-meter-fill" id="conv-fill"></div>
+        <div class="conv-meter-mark"></div>
+      </div>
+      <div class="conv-detail">
+        <span><b id="conv-aligned">5 of 7</b> picked Wednesday · <b id="conv-gap">need 1 more</b> to trigger crew-sync mint</span>
+        <span>+9% since last poll</span>
+      </div>
+    </div>
+
+    <div class="members" id="members"></div>
+  </section>
+
+  <!-- ============ COLLECTION VIEW ============ -->
+  <section class="view" data-view="collection">
+    <div class="col-stats">
+      <div class="cs"><div class="csv" id="col-total">14</div><div class="csl">Total Mints</div></div>
+      <div class="cs"><div class="csv" style="color:var(--live)">9</div><div class="csl">Called Right</div></div>
+      <div class="cs"><div class="csv" style="color:var(--nouns-red)">2</div><div class="csl">Pending</div></div>
+      <div class="cs"><div class="csv" style="color:var(--warm)">3</div><div class="csl">Streak Badges</div></div>
+    </div>
+
+    <div class="filter-row" id="filter-row">
+      <div class="filter active" data-f="all">All<span class="ct" id="f-all">14</span></div>
+      <div class="filter" data-f="schelling">Schelling<span class="ct" id="f-schelling">4</span></div>
+      <div class="filter" data-f="forecast">Forecast<span class="ct" id="f-forecast">3</span></div>
+      <div class="filter" data-f="outcome">Outcome<span class="ct" id="f-outcome">2</span></div>
+      <div class="filter" data-f="streak">Streak<span class="ct" id="f-streak">3</span></div>
+      <div class="filter" data-f="crew">Crew<span class="ct" id="f-crew">1</span></div>
+      <div class="filter" data-f="vibe">Vibe<span class="ct" id="f-vibe">1</span></div>
+    </div>
+
+    <div class="collection-grid" id="collection-grid"></div>
+  </section>
+
+  <footer class="foot">
+    <div class="sig">Michael Hoydich — El Segundo, 2026</div>
+    <div>POINTCAST · POLLS · FIVE MOMENTS · CC0 · TEZOS FA2</div>
+  </footer>
+</div>
+
+<!-- toast -->
+<div class="mint-toast" id="toast">
+  <div class="mt-icon">✦</div>
+  <div class="mt-copy">
+    <div class="mt-head" id="toast-head">MINTED · CC0 TEZOS</div>
+    <div class="mt-name" id="toast-name">Badge minted.</div>
+  </div>
+</div>
+
+<!-- noggles symbol -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="noggles" viewBox="0 0 160 60">
+    <rect x="0"  y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="10" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="20" y="20" width="10" height="20" fill="#c4952e"/>
+    <rect x="60" y="20" width="20" height="10" fill="#1f1b15"/>
+    <rect x="80" y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="90" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="100" y="20" width="10" height="20" fill="#c4952e"/>
+  </symbol>
+  <symbol id="noggles-red" viewBox="0 0 160 60">
+    <rect x="0"  y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="10" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="20" y="20" width="10" height="20" fill="#E84D6A"/>
+    <rect x="60" y="20" width="20" height="10" fill="#1f1b15"/>
+    <rect x="80" y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="90" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="100" y="20" width="10" height="20" fill="#E84D6A"/>
+  </symbol>
+  <symbol id="noggles-blue" viewBox="0 0 160 60">
+    <rect x="0"  y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="10" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="20" y="20" width="10" height="20" fill="#4A9EFF"/>
+    <rect x="60" y="20" width="20" height="10" fill="#1f1b15"/>
+    <rect x="80" y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="90" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="100" y="20" width="10" height="20" fill="#4A9EFF"/>
+  </symbol>
+  <symbol id="noggles-green" viewBox="0 0 160 60">
+    <rect x="0"  y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="10" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="20" y="20" width="10" height="20" fill="#2CC5A0"/>
+    <rect x="60" y="20" width="20" height="10" fill="#1f1b15"/>
+    <rect x="80" y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="90" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="100" y="20" width="10" height="20" fill="#2CC5A0"/>
+  </symbol>
+  <symbol id="noggles-purple" viewBox="0 0 160 60">
+    <rect x="0"  y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="10" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="20" y="20" width="10" height="20" fill="#8866cc"/>
+    <rect x="60" y="20" width="20" height="10" fill="#1f1b15"/>
+    <rect x="80" y="10" width="60" height="40" fill="#1f1b15"/>
+    <rect x="90" y="20" width="30" height="20" fill="#fff"/>
+    <rect x="100" y="20" width="10" height="20" fill="#8866cc"/>
+  </symbol>
+</svg>
+
+<script>
+/* ───────── TABS ───────── */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    const v = t.dataset.view;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.view === v));
+    document.querySelectorAll('.view').forEach(x => x.classList.toggle('active', x.dataset.view === v));
+  });
+});
+
+/* ───────── SHARED VOTE BAR ANIMATION ───────── */
+if (!document.getElementById('dynfill')) {
+  const s = document.createElement('style');
+  s.id = 'dynfill';
+  s.textContent = `.poll.voted .opt::before { width: var(--fill, 0%) !important; }`;
+  document.head.appendChild(s);
+}
+function animateBars(poll, chosenLabel) {
+  const opts = poll.querySelectorAll('.opt');
+  const total = Array.from(opts).reduce((s, o) => s + parseFloat(o.dataset.r), 0);
+  const maxVal = Math.max(...Array.from(opts).map(o => parseFloat(o.dataset.r)));
+  opts.forEach(o => {
+    const v = parseFloat(o.dataset.r);
+    const pct = (v / total * 100).toFixed(1);
+    o.style.setProperty('--fill', (v / maxVal * 100).toFixed(1) + '%');
+    if (o.dataset.label === chosenLabel) o.classList.add('you');
+    if (o.dataset.lead === '1') o.classList.add('lead');
+    const rb = o.querySelector('.right b');
+    if (rb) rb.innerHTML = pct + '%' + (o.dataset.label === chosenLabel ? ' <span class="youtag">you</span>' : '');
+  });
+}
+
+/* ───────── MINT TOAST ───────── */
+const toast = document.getElementById('toast');
+function showToast(head, name) {
+  document.getElementById('toast-head').textContent = head;
+  document.getElementById('toast-name').textContent = name;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3200);
+}
+
+/* ───────── MINTS COLLECTION ───────── */
+const initialMints = [
+  { kind: 'schelling', title: 'El Segundo Meet · matched', date: '2026-04-18', type: 'CALLED THE ROOM', color: 'col-schelling', badge: 'noggles' },
+  { kind: 'schelling', title: 'Sunset Perch · matched', date: '2026-04-11', type: 'CALLED THE ROOM', color: 'col-schelling', badge: 'noggles' },
+  { kind: 'schelling', title: 'Fish Taco · matched', date: '2026-04-05', type: 'CALLED THE ROOM', color: 'col-schelling', badge: 'noggles' },
+  { kind: 'schelling', title: 'Overrated Nbhd · matched', date: '2026-03-28', type: 'CALLED THE ROOM', color: 'col-schelling', badge: 'noggles' },
+  { kind: 'forecast', title: 'Dodgers NL West · called', date: '2026-10-01', type: 'CALLED IT', color: 'col-forecast', badge: 'noggles-red', pending: true },
+  { kind: 'forecast', title: 'Next Model · Anthropic', date: '2026-05-31', type: 'PENDING', color: 'col-forecast', badge: 'noggles-red', pending: true },
+  { kind: 'forecast', title: 'March Madness · UConn called', date: '2026-04-07', type: 'CALLED IT', color: 'col-forecast', badge: 'noggles-red' },
+  { kind: 'outcome', title: 'Pickleball Drop-in · Wed', date: '2026-04-17', type: 'RSVP · REAL', color: 'col-outcome', badge: 'noggles-green' },
+  { kind: 'outcome', title: 'Coffee Meetup · GGET', date: '2026-04-10', type: 'RSVP · REAL', color: 'col-outcome', badge: 'noggles-green' },
+  { kind: 'streak', title: 'Week One · Novice', date: '2026-04-15', type: 'DAY 7 MILESTONE', color: 'col-streak', badge: 'noggles-purple' },
+  { kind: 'streak', title: 'March Complete', date: '2026-03-31', type: 'MONTHLY · 30 DAYS', color: 'col-streak', badge: 'noggles-purple' },
+  { kind: 'streak', title: 'First Vote', date: '2026-03-09', type: 'WELCOME · DAY 1', color: 'col-streak', badge: 'noggles-purple' },
+  { kind: 'crew', title: 'Drum Room · converged', date: '2026-04-12', type: 'CREW SYNC · 6 OF 7', color: 'col-crew', badge: 'noggles-blue' },
+  { kind: 'vibe', title: 'April 2026 · "signal"', date: '2026-04-30', type: 'ZEITGEIST · ARCHIVED', color: 'col-vibe', badge: 'noggles', pending: false },
+];
+
+let mints = [...initialMints];
+
+function renderCollection(filter = 'all') {
+  const grid = document.getElementById('collection-grid');
+  const filtered = filter === 'all' ? mints : mints.filter(m => m.kind === filter);
+  grid.innerHTML = filtered.map((m, i) => {
+    const tokenId = String(1200 - i).padStart(4, '0');
+    return `<div class="mint-card ${m.pending ? 'pending' : ''} ${m.kind}-mint">
+      <div class="mc-art ${m.color}">
+        <svg viewBox="0 0 160 60" aria-hidden="true"><use href="#${m.badge}"/></svg>
+      </div>
+      <div class="mc-kind">${m.type}</div>
+      <div class="mc-title">${m.title}</div>
+      <div class="mc-meta">${m.date} · № ${tokenId}</div>
+    </div>`;
+  }).join('');
+  // Update counts
+  document.getElementById('col-total').textContent = mints.length;
+  ['all','schelling','forecast','outcome','streak','crew','vibe'].forEach(k => {
+    const el = document.getElementById('f-' + k);
+    if (el) el.textContent = k === 'all' ? mints.length : mints.filter(m => m.kind === k).length;
+  });
+  document.getElementById('mint-count').textContent = mints.length + ' mints';
+}
+renderCollection();
+
+document.querySelectorAll('.filter').forEach(f => {
+  f.addEventListener('click', () => {
+    document.querySelectorAll('.filter').forEach(x => x.classList.remove('active'));
+    f.classList.add('active');
+    renderCollection(f.dataset.f);
+  });
+});
+
+function addMint(mint) {
+  mints = [mint, ...mints];
+  renderCollection(document.querySelector('.filter.active')?.dataset.f || 'all');
+  showToast(mint.type, mint.title);
+}
+
+/* ───────── SCROLL VIEW ───────── */
+let scrollVoted = 0;
+document.querySelectorAll('.feed .poll').forEach(p => {
+  p.querySelectorAll('.opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      if (p.classList.contains('voted')) return;
+      p.classList.add('voted');
+      animateBars(p, opt.dataset.label);
+      scrollVoted += 1;
+      document.getElementById('scroll-prog').textContent = `${scrollVoted} / 4 voted`;
+      // per-card inline mint prompt for forecast/outcome
+      const type = p.dataset.type;
+      if (type === 'forecast') {
+        const prompt = document.createElement('div');
+        prompt.className = 'mint-cta';
+        prompt.innerHTML = `
+          <div class="mint-l">
+            <svg class="noggles-sm" viewBox="0 0 160 60" aria-hidden="true"><use href="#noggles-red"/></svg>
+            <div class="mint-copy"><div class="t">Called-it badge preview</div><div class="s">MINTS IF IT RESOLVES YOUR WAY</div></div>
+          </div>
+          <button class="mint-btn">Mint Receipt</button>`;
+        p.appendChild(prompt);
+        prompt.querySelector('.mint-btn').addEventListener('click', (e) => {
+          e.target.textContent = 'MINTED'; e.target.classList.add('done');
+          addMint({ kind: 'forecast', title: `${opt.dataset.label} · called`, date: '2026-04-20', type: 'CALLED IT · PENDING', color: 'col-forecast', badge: 'noggles-red', pending: true });
+        });
+      }
+      if (type === 'outcome') {
+        const prompt = document.createElement('div');
+        prompt.className = 'mint-cta';
+        prompt.innerHTML = `
+          <div class="mint-l">
+            <svg class="noggles-sm" viewBox="0 0 160 60" aria-hidden="true"><use href="#noggles-green"/></svg>
+            <div class="mint-copy"><div class="t">RSVP mint · meetup happens</div><div class="s">GO GET EM TIGER · TUE 08:00</div></div>
+          </div>
+          <button class="mint-btn">Mint RSVP</button>`;
+        p.appendChild(prompt);
+        prompt.querySelector('.mint-btn').addEventListener('click', (e) => {
+          e.target.textContent = 'MINTED'; e.target.classList.add('done');
+          addMint({ kind: 'outcome', title: 'GGET Coffee · RSVP', date: '2026-04-20', type: 'RSVP · REAL', color: 'col-outcome', badge: 'noggles-green' });
+        });
+      }
+      // at end of feed, unlock feed-completion mint
+      if (scrollVoted === 4) {
+        document.getElementById('scroll-mint-state').innerHTML = `<b style="color:var(--warm)">✓ FEED COMPLETE ·</b> FEED BADGE MINTED`;
+        addMint({ kind: 'schelling', title: 'Four-in-a-Row Feed', date: '2026-04-20', type: 'FEED COMPLETE', color: 'col-schelling', badge: 'noggles' });
+      }
+    });
+  });
+});
+
+/* ───────── QUEST VIEW ───────── */
+const questPoll = document.querySelector('[data-view="quest"] .poll');
+questPoll.querySelectorAll('.opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    if (questPoll.classList.contains('voted')) return;
+    questPoll.classList.add('voted');
+    animateBars(questPoll, opt.dataset.label);
+    // mark correct/wrong
+    questPoll.querySelectorAll('.opt').forEach(o => {
+      if (o.dataset.correct === '1') o.classList.add('correct');
+      if (o === opt && o.dataset.correct !== '1') o.classList.add('wrong');
+    });
+    const correct = opt.dataset.correct === '1';
+    const reveal = document.getElementById('quest-reveal');
+    reveal.style.display = 'block';
+    reveal.innerHTML = correct
+      ? `<b>✓ Correct.</b> 100% of auction proceeds flow to the DAO treasury — a continuous funding engine that's now deployed over <b>27,000 ETH</b> across public goods, grants, and proliferation proposals.`
+      : `<b>Not quite.</b> The answer is <em>100%</em> — every penny of every auction hits the on-chain treasury. That's the Nouns founding bet: a perpetual public-goods fund that grows once per day forever.`;
+    document.getElementById('quest-next').style.display = 'flex';
+  });
+});
+document.getElementById('mint-scholar-btn').addEventListener('click', () => {
+  addMint({ kind: 'quest', title: 'Nouns Scholar · Vol 1', date: '2026-04-20', type: 'QUEST COMPLETE', color: 'col-streak', badge: 'noggles-purple' });
+  document.getElementById('mint-scholar-btn').textContent = '✓ MINTED';
+  document.getElementById('mint-scholar-btn').style.background = 'var(--live)';
+  document.getElementById('mint-scholar-btn').disabled = true;
+});
+
+/* ───────── STREAK VIEW ───────── */
+// Build calendar: April 2026, voted days marked
+const calGrid = document.getElementById('cal-grid');
+const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const votedDays = new Set([9,10,11,12,13,14,15,16,17,18,19]);
+const mintDays = new Set([15]); // week-one mint
+const todayDay = 20;
+let calHtml = days.map(d => `<div class="cal-day-head">${d}</div>`).join('');
+// April 1 2026 falls on a Wednesday (day 3). Add empty leading cells.
+for (let i = 0; i < 3; i++) calHtml += `<div class="cal-cell" style="opacity:0.2"></div>`;
+for (let d = 1; d <= 30; d++) {
+  const cls = [
+    'cal-cell',
+    votedDays.has(d) ? 'voted' : '',
+    d === todayDay ? 'today' : '',
+    mintDays.has(d) ? 'mint' : '',
+    d > todayDay ? 'future' : '',
+  ].filter(Boolean).join(' ');
+  calHtml += `<div class="${cls}">${d}</div>`;
+}
+calGrid.innerHTML = calHtml;
+
+// Today's poll vote
+const streakPoll = document.querySelector('[data-view="streak"] .poll');
+streakPoll.querySelectorAll('.opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    if (streakPoll.classList.contains('voted')) return;
+    streakPoll.classList.add('voted');
+    animateBars(streakPoll, opt.dataset.label);
+    // bump streak
+    document.getElementById('streak-days').innerHTML = '13<span class="unit">DAY STREAK</span>';
+    // mark today voted
+    Array.from(calGrid.querySelectorAll('.cal-cell')).forEach(c => {
+      if (c.textContent === '20') { c.classList.add('voted'); c.classList.remove('today'); }
+    });
+    // add cta
+    const cta = document.createElement('div');
+    cta.className = 'mint-cta';
+    cta.innerHTML = `
+      <div class="mint-l">
+        <svg class="noggles-sm" viewBox="0 0 160 60" aria-hidden="true"><use href="#noggles-purple"/></svg>
+        <div class="mint-copy"><div class="t">Daily streak extended → Day 13</div><div class="s">REGULAR MILESTONE IN 1 DAY</div></div>
+      </div>
+      <button class="mint-btn" style="background:var(--nouns-purple)">Continue</button>`;
+    streakPoll.appendChild(cta);
+    cta.querySelector('.mint-btn').addEventListener('click', (e) => { e.target.textContent = '✓ LOGGED'; e.target.classList.add('done'); });
+  });
+});
+
+/* ───────── CREW VIEW ───────── */
+const crewMembers = [
+  { name: 'mhoydich', handle: '@mike · el segundo', pick: 'Wednesday', pickClass: 'wed', at: '12h ago', badge: 'noggles' },
+  { name: 'kana', handle: '@kana · culver city', pick: 'Wednesday', pickClass: 'wed', at: '14h ago', badge: 'noggles-red' },
+  { name: 'ollis', handle: '@ollis · manhattan beach', pick: 'Wednesday', pickClass: 'wed', at: '15h ago', badge: 'noggles-blue' },
+  { name: 'ren', handle: '@ren · silver lake', pick: 'Wednesday', pickClass: 'wed', at: '16h ago', badge: 'noggles-green' },
+  { name: 'nico', handle: '@nico · venice', pick: 'Wednesday', pickClass: 'wed', at: '18h ago', badge: 'noggles-purple' },
+  { name: 'josie', handle: '@josie · pasadena', pick: 'Tuesday', pickClass: 'tue', at: '20h ago', badge: 'noggles-red' },
+  { name: 'taryn', handle: '@taryn · hermosa', pick: 'Friday', pickClass: 'fri', at: '22h ago', badge: 'noggles-blue' },
+];
+document.getElementById('crew-avatars').innerHTML = crewMembers.slice(0, 5).map(m =>
+  `<svg class="crew-avatar" viewBox="0 0 160 60" aria-hidden="true"><use href="#${m.badge}"/></svg>`
+).join('');
+
+document.getElementById('members').innerHTML = crewMembers.map(m => `
+  <div class="member">
+    <svg class="mav" viewBox="0 0 160 60" aria-hidden="true"><use href="#${m.badge}"/></svg>
+    <div class="mn">${m.name}<span class="mh">${m.handle}</span></div>
+    <span class="pick ${m.pickClass}">${m.pick.toUpperCase()}</span>
+    <span class="at">${m.at}</span>
+  </div>`).join('');
+
+document.getElementById('conv-fill').style.width = '71%';
+
+// Add crew-sync mint CTA after crew section
+const crewView = document.querySelector('section.view[data-view="crew"]');
+const crewCta = document.createElement('div');
+crewCta.className = 'mint-cta';
+crewCta.style.marginTop = '18px';
+crewCta.innerHTML = `
+  <div class="mint-l">
+    <svg class="noggles-sm" viewBox="0 0 160 60" aria-hidden="true"><use href="#noggles-blue"/></svg>
+    <div class="mint-copy"><div class="t">1 more crew vote triggers the sync mint</div><div class="s">NUDGE JOSIE OR TARYN · 7-OF-7 = RARE BADGE</div></div>
+  </div>
+  <button class="mint-btn" style="background:var(--nouns-blue)">Nudge Crew</button>`;
+crewView.appendChild(crewCta);
+crewCta.querySelector('.mint-btn').addEventListener('click', (e) => {
+  e.target.textContent = '✓ NUDGED'; e.target.classList.add('done');
+  // Simulate 1 more aligning
+  setTimeout(() => {
+    document.getElementById('conv-fill').style.width = '85%';
+    document.getElementById('conv-pct').textContent = '85%';
+    document.getElementById('conv-aligned').textContent = '6 of 7';
+    document.getElementById('conv-gap').textContent = 'sync UNLOCKED';
+    addMint({ kind: 'crew', title: 'Drum Room · 6/7 sync', date: '2026-04-20', type: 'CREW SYNC · RARE', color: 'col-crew', badge: 'noggles-blue' });
+  }, 900);
+});
+</script>
+</body>
+</html>

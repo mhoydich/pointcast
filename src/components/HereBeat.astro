@@ -1,0 +1,220 @@
+---
+/**
+ * HereBeat — small collaborative beat-pad surface for /here.
+ *
+ * Mike 2026-04-20 13:00 PT: *"lets have something like drum here, likely
+ * rebuild... have lite visualizations that are meditative."*
+ *
+ * Six soft-toned pads. Tap plays a gentle pentatonic tone via Web Audio
+ * and pulses a slow ripple. Meditative palette — warm amber + dim
+ * violet + dusk rose. Sounds are sine waves with slow ADSR, not drum
+ * kit hits — the intent is "hang out" not "play music."
+ *
+ * v1 is local-only. v2 wires to a collaborative DO (src/lib/multiplayer.ts
+ * base class already shipped — Pulse brief is the concrete extension)
+ * so every visitor's tap ripples on every other visitor's screen in
+ * real time. Until then, this is a single-user meditative interaction
+ * that gives /here something to do beyond watching noun counts.
+ *
+ * Author: cc. Source: Mike 2026-04-20 13:00 PT chat.
+ */
+---
+
+<section class="here-beat" aria-label="Meditative beat pad">
+  <header class="here-beat__head">
+    <p class="here-beat__kicker mono">BEAT · SOFT · TAP ANY PAD</p>
+    <p class="here-beat__dek">
+      A quiet room for when there aren't many peoples. Tap a pad;
+      listen. Six tones in A-minor pentatonic. Broadcast-to-others
+      coming — for now it's just you.
+    </p>
+  </header>
+
+  <div class="here-beat__pads" id="here-beat-pads">
+    <button type="button" class="here-beat__pad" data-tone="220.00" data-hue="28"  aria-label="A3 tone"><span class="here-beat__pad-ripple" aria-hidden="true"></span></button>
+    <button type="button" class="here-beat__pad" data-tone="261.63" data-hue="45"  aria-label="C4 tone"><span class="here-beat__pad-ripple" aria-hidden="true"></span></button>
+    <button type="button" class="here-beat__pad" data-tone="293.66" data-hue="320" aria-label="D4 tone"><span class="here-beat__pad-ripple" aria-hidden="true"></span></button>
+    <button type="button" class="here-beat__pad" data-tone="329.63" data-hue="280" aria-label="E4 tone"><span class="here-beat__pad-ripple" aria-hidden="true"></span></button>
+    <button type="button" class="here-beat__pad" data-tone="392.00" data-hue="210" aria-label="G4 tone"><span class="here-beat__pad-ripple" aria-hidden="true"></span></button>
+    <button type="button" class="here-beat__pad" data-tone="440.00" data-hue="155" aria-label="A4 tone"><span class="here-beat__pad-ripple" aria-hidden="true"></span></button>
+  </div>
+
+  <p class="here-beat__foot mono">
+    spacebar · 1-6 · tap. volume starts low. your device, your room.
+  </p>
+</section>
+
+<script is:inline>
+(function () {
+  'use strict';
+  if (typeof window === 'undefined') return;
+
+  var pads = Array.prototype.slice.call(document.querySelectorAll('#here-beat-pads .here-beat__pad'));
+  if (!pads.length) return;
+
+  var audioCtx = null;
+  function getCtx() {
+    if (audioCtx) return audioCtx;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    } catch (e) { audioCtx = null; }
+    return audioCtx;
+  }
+
+  function playTone(freq) {
+    var ctx = getCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+    var now = ctx.currentTime;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    // Gentle ADSR — slow attack, long tail.
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.7);
+  }
+
+  function ripple(pad) {
+    pad.classList.remove('here-beat__pad--lit');
+    // Force reflow to restart the animation.
+    // eslint-disable-next-line no-unused-expressions
+    void pad.offsetWidth;
+    pad.classList.add('here-beat__pad--lit');
+  }
+
+  function trigger(pad) {
+    var freq = parseFloat(pad.getAttribute('data-tone') || '0');
+    if (freq > 0) playTone(freq);
+    ripple(pad);
+  }
+
+  pads.forEach(function (pad) {
+    pad.addEventListener('click', function () { trigger(pad); });
+  });
+
+  // Keyboard: 1-6 for pads, space for random pad.
+  document.addEventListener('keydown', function (e) {
+    // Ignore when typing in inputs.
+    var target = e.target;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    if (e.key >= '1' && e.key <= '6') {
+      var i = parseInt(e.key, 10) - 1;
+      if (pads[i]) { e.preventDefault(); trigger(pads[i]); }
+    } else if (e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      trigger(pads[Math.floor(Math.random() * pads.length)]);
+    }
+  });
+})();
+</script>
+
+<style>
+  .here-beat {
+    width: 100%;
+    max-width: 1100px;
+    margin: 28px auto 0;
+    padding: 20px 20px 24px;
+    border: 1px solid rgba(232, 154, 45, 0.22);
+    border-radius: 4px;
+    background: rgba(232, 154, 45, 0.03);
+    color: #f3e6d8;
+  }
+  .here-beat__head { margin: 0 0 16px; }
+  .here-beat__kicker {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: #e89a2d;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+  }
+  .here-beat__dek {
+    font-size: 14px;
+    line-height: 1.55;
+    color: #d4c2ad;
+    margin: 0;
+    max-width: 600px;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .here-beat__pads {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin: 0 0 12px;
+  }
+  @media (max-width: 720px) {
+    .here-beat__pads {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+  }
+  .here-beat__pad {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    min-height: 64px;
+    background: rgba(243, 230, 216, 0.04);
+    border: 1px solid rgba(232, 154, 45, 0.18);
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: background 0.4s, border-color 0.4s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .here-beat__pad:hover {
+    background: rgba(243, 230, 216, 0.08);
+    border-color: rgba(232, 154, 45, 0.36);
+  }
+  .here-beat__pad:focus-visible {
+    outline: 2px solid #e89a2d;
+    outline-offset: 2px;
+  }
+  .here-beat__pad-ripple {
+    position: absolute;
+    inset: 50% 50% 50% 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      hsla(var(--pad-hue, 28), 70%, 60%, 0.55) 0%,
+      hsla(var(--pad-hue, 28), 70%, 60%, 0.0) 70%);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+  .here-beat__pad--lit .here-beat__pad-ripple {
+    animation: hereBeatRipple 1.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .here-beat__pad--lit {
+    background: hsla(var(--pad-hue, 28), 60%, 40%, 0.16);
+    border-color: hsla(var(--pad-hue, 28), 70%, 60%, 0.65);
+  }
+  @keyframes hereBeatRipple {
+    0%   { width: 0;       height: 0;       opacity: 0.9; }
+    40%  { width: 120%;    height: 120%;    opacity: 0.4; }
+    100% { width: 240%;    height: 240%;    opacity: 0;   }
+  }
+  /* Set --pad-hue from the data attribute via a tiny JS assignment? No —
+     do it the pure-CSS way by tying ripple + glow to data-hue via
+     attribute selectors instead. But 6 hues is manageable inline: */
+  .here-beat__pad[data-hue="28"]  { --pad-hue: 28; }
+  .here-beat__pad[data-hue="45"]  { --pad-hue: 45; }
+  .here-beat__pad[data-hue="320"] { --pad-hue: 320; }
+  .here-beat__pad[data-hue="280"] { --pad-hue: 280; }
+  .here-beat__pad[data-hue="210"] { --pad-hue: 210; }
+  .here-beat__pad[data-hue="155"] { --pad-hue: 155; }
+
+  .here-beat__foot {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #756249;
+    text-align: center;
+    text-transform: uppercase;
+  }
+</style>
