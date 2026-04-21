@@ -29,6 +29,91 @@ export const NAME_DROPS: NameDrop[] = [
   { name: 'Pickleball League',   kind: 'community',     one: 'Courts at Rec Park, drills Thursday, tournaments Sundays.' },
 ];
 
+export type NatureNote = {
+  slug: string;
+  name: string;
+  scientific?: string;
+  kind: 'plant' | 'pollinator' | 'habitat';
+  season: string;
+  signal: string;
+  localRead: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
+/**
+ * El Segundo nature signals: dune plants, one signature pollinator, and
+ * the coastal habitat grammar around LAX / Dockweiler / the South Bay.
+ * Sources are intentionally exposed in /local.json for agent readers.
+ */
+export const NATURE_NOTES: NatureNote[] = [
+  {
+    slug: 'seacliff-buckwheat',
+    name: 'Seacliff buckwheat',
+    scientific: 'Eriogonum parvifolium',
+    kind: 'plant',
+    season: 'summer bloom',
+    signal: 'Cream-pink flowerheads on sandy bluffs and restored dunes.',
+    localRead: 'The anchor plant: El Segundo blue larvae feed in buckwheat flowerheads, so more buckwheat means more possible butterfly.',
+    sourceLabel: 'U.S. Fish & Wildlife Service',
+    sourceUrl: 'https://www.fws.gov/story/2020-05/saving-socals-rarest-butterflies',
+  },
+  {
+    slug: 'el-segundo-blue',
+    name: 'El Segundo blue',
+    scientific: 'Euphilotes allyni',
+    kind: 'pollinator',
+    season: 'summer flight',
+    signal: 'Small blue butterflies moving low over buckwheat, mostly in protected dune habitat.',
+    localRead: 'The town-name species. Treat it like a broadcast from the dunes: watch from paths, leave habitat alone.',
+    sourceLabel: 'Xerces Society',
+    sourceUrl: 'https://xerces.org/endangered-species/species-profiles/at-risk-butterflies-moths/el-segundo-blue',
+  },
+  {
+    slug: 'beach-suncups',
+    name: 'Beach suncups',
+    scientific: 'Camissoniopsis cheiranthifolia',
+    kind: 'plant',
+    season: 'spring to summer',
+    signal: 'Low yellow flowers tucked into open sand.',
+    localRead: 'A small dune flash: the kind of plant you miss if you scan for trees instead of reading the ground.',
+    sourceLabel: 'LAX Dunes garden tour',
+    sourceUrl: 'https://www.2022.nativeplantgardentour.org/30-the-lax-dunes/',
+  },
+  {
+    slug: 'deerweed',
+    name: 'Deerweed',
+    scientific: 'Acmispon glaber',
+    kind: 'plant',
+    season: 'spring bloom',
+    signal: 'Fine green stems, yellow pea flowers, seed pods later.',
+    localRead: 'Restoration workhorse. It reads humble, but it helps rebuild a plant community in tired sand.',
+    sourceLabel: 'LAX Dunes garden tour',
+    sourceUrl: 'https://www.2022.nativeplantgardentour.org/30-the-lax-dunes/',
+  },
+  {
+    slug: 'coyote-brush',
+    name: 'Coyote brush',
+    scientific: 'Baccharis pilularis',
+    kind: 'plant',
+    season: 'late-season structure',
+    signal: 'Rounded coastal scrub, evergreen mass, pale seed fluff when it goes.',
+    localRead: 'The background note of coastal scrub: shelter, pollen, edge habitat, and wind-proof structure.',
+    sourceLabel: 'CNPS South Coast',
+    sourceUrl: 'https://sccnps.org/local-plants-suitable-for-gardening/',
+  },
+  {
+    slug: 'lax-dunes',
+    name: 'LAX dunes',
+    kind: 'habitat',
+    season: 'all year',
+    signal: 'One of the last big fragments of the old coastal dune system beside the runways.',
+    localRead: 'El Segundo nature is not wilderness over there; it is a protected remnant, still speaking through sand, buckwheat, and repair.',
+    sourceLabel: 'Native Plant Garden Tour',
+    sourceUrl: 'https://www.2022.nativeplantgardentour.org/30-the-lax-dunes/',
+  },
+];
+
 export const STATION_SHORTCUTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Q', 'W', 'E', 'R', 'T', 'Y'] as const;
 
 /** Cities within ~100 miles of El Segundo, cardinal-direction + approx mileage. */

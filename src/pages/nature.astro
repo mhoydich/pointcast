@@ -1,0 +1,488 @@
+---
+/**
+ * /nature - El Segundo field guide.
+ *
+ * A first-class local nature room built from the same shared data as
+ * /local#nature and /local.json. Human-readable, agent-mirrored by
+ * /nature.json, and connected back into the Blocks archive through
+ * Block 0320.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import {
+  ANCHOR,
+  NATURE_NOTES,
+  filterInRangeBlocks,
+} from '../lib/local';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const relatedBlocks = filterInRangeBlocks(blocks)
+  .filter((block) => block.data.channel === 'GDN' || block.data.meta?.series === 'local nature')
+  .slice(0, 10);
+
+const plantCount = NATURE_NOTES.filter((note) => note.kind === 'plant').length;
+const sourceCount = new Set(NATURE_NOTES.map((note) => note.sourceUrl)).size;
+
+const title = 'Nature · El Segundo field guide';
+const description = 'PointCast field guide for El Segundo local flora, dunes, and the El Segundo blue butterfly.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/nature',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/nature',
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+  about: NATURE_NOTES.map((note) => ({
+    '@type': note.kind === 'pollinator' ? 'Taxon' : 'Thing',
+    name: note.name,
+    alternateName: note.scientific,
+    url: `https://pointcast.xyz/nature#${note.slug}`,
+  })),
+  spatialCoverage: {
+    '@type': 'Place',
+    name: ANCHOR.name,
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: ANCHOR.coords.latitude,
+      longitude: ANCHOR.coords.longitude,
+    },
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og/nature.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/nature.json', title: 'El Segundo nature field guide (JSON)' },
+    { type: 'application/json', href: '/local.json', title: 'Local lens (JSON)' },
+  ]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/local">local</a>
+      <span aria-hidden="true">/</span>
+      <span>nature</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker">NATURE · EL SEGUNDO FIELD GUIDE</p>
+        <h1>Read the dunes first.</h1>
+        <p class="dek">
+          El Segundo nature is not a forest story. It is buckwheat, low
+          flowers, repaired sand, wind-shaped scrub, and one endangered
+          butterfly carrying the town name.
+        </p>
+      </div>
+      <div class="hero__signal" aria-label="Field guide summary">
+        <img src="https://noun.pics/313.svg" alt="" width="96" height="96" loading="eager" />
+        <dl>
+          <div><dt class="mono">PLANTS</dt><dd>{plantCount}</dd></div>
+          <div><dt class="mono">HABITAT</dt><dd>Dunes</dd></div>
+          <div><dt class="mono">SOURCES</dt><dd>{sourceCount}</dd></div>
+        </dl>
+      </div>
+    </header>
+
+    <section class="transect" aria-label="Coastal transect">
+      <p class="kicker">TRANSECT · OCEAN TO TOWN</p>
+      <ol class="transect__steps">
+        <li>
+          <span class="transect__mark mono">01</span>
+          <strong>Sand</strong>
+          <span>Open dune, beach suncups, wind, sparse growth.</span>
+        </li>
+        <li>
+          <span class="transect__mark mono">02</span>
+          <strong>Buckwheat</strong>
+          <span>Seacliff buckwheat anchors the butterfly story.</span>
+        </li>
+        <li>
+          <span class="transect__mark mono">03</span>
+          <strong>Scrub</strong>
+          <span>Coyote brush and deerweed hold structure.</span>
+        </li>
+        <li>
+          <span class="transect__mark mono">04</span>
+          <strong>Town</strong>
+          <span>Balconies, yards, parks, and tiny native patches.</span>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section" aria-label="Signals">
+      <div class="section__head">
+        <p class="kicker">SIGNALS · WHAT TO NOTICE</p>
+        <a href="/b/0320" class="section__link mono">BLOCK 0320</a>
+      </div>
+      <div class="guide-grid">
+        {NATURE_NOTES.map((note) => (
+          <article class={`guide-card guide-card--${note.kind}`} id={note.slug}>
+            <div class="guide-card__top">
+              <span class="guide-card__kind mono">{note.kind}</span>
+              <span class="guide-card__season mono">{note.season}</span>
+            </div>
+            <h2>{note.name}</h2>
+            {note.scientific && <p class="guide-card__latin">{note.scientific}</p>}
+            <p class="guide-card__signal">{note.signal}</p>
+            <p class="guide-card__read">{note.localRead}</p>
+            <a href={note.sourceUrl} target="_blank" rel="noopener" class="guide-card__source mono">
+              {note.sourceLabel}
+            </a>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section section--actions" aria-label="Field rules">
+      <p class="kicker">FIELD RULES · LOW IMPACT</p>
+      <div class="rules">
+        <article>
+          <h2>Stay on paths.</h2>
+          <p>Protected dune habitat reads fragile because it is fragile. Watch from edges, especially around buckwheat.</p>
+        </article>
+        <article>
+          <h2>Plant local.</h2>
+          <p>For yards and balcony pots, start with climate-matched California natives, then let the site decide what thrives.</p>
+        </article>
+        <article>
+          <h2>Notice small.</h2>
+          <p>The real signal is low to the ground: flowerheads, seed pods, wind shadow, and seasonal return.</p>
+        </article>
+      </div>
+    </section>
+
+    {relatedBlocks.length > 0 && (
+      <section class="section" aria-label="Related local Garden blocks">
+        <div class="section__head">
+          <p class="kicker">RELATED · LOCAL GARDEN BLOCKS</p>
+          <a href="/c/garden" class="section__link mono">CH.GDN</a>
+        </div>
+        <ul class="blocks">
+          {relatedBlocks.map((block) => {
+            const ch = CHANNELS[block.data.channel];
+            return (
+              <li>
+                <a href={`/b/${block.data.id}`}>
+                  <span class="blocks__meta mono" style={`color:${ch.color800}`}>CH.{ch.code} · {block.data.id}</span>
+                  <span class="blocks__title">{block.data.title}</span>
+                  {block.data.meta?.location && <span class="blocks__loc">{block.data.meta.location}</span>}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    )}
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/nature.json">/nature.json</a></li>
+        <li><a href="/local.json">/local.json</a></li>
+        <li><a href="/b/0320.json">/b/0320.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 18px 18px 80px;
+  }
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .kicker {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #074638;
+    font-weight: 500;
+  }
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 24px;
+    align-items: stretch;
+    padding-bottom: 20px;
+    margin-bottom: 22px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+  .hero h1 {
+    margin: 0 0 12px;
+    max-width: 9ch;
+    font-size: clamp(3rem, 9vw, 5.8rem);
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #12110E;
+  }
+  .dek {
+    margin: 0;
+    max-width: 56ch;
+    font-size: 16px;
+    line-height: 1.52;
+    color: var(--pc-ink-soft);
+  }
+  .hero__signal {
+    display: grid;
+    align-content: space-between;
+    gap: 18px;
+    padding: 16px;
+    border: 1.5px solid #0F6E56;
+    border-radius: 2px;
+    background: #f6faf7;
+  }
+  .hero__signal img {
+    width: 96px;
+    height: 96px;
+    image-rendering: pixelated;
+    border: 1px solid #0F6E56;
+    background: #fff;
+  }
+  .hero__signal dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+  .hero__signal div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid #cddbd0;
+    padding-top: 8px;
+  }
+  .hero__signal dt,
+  .hero__signal dd {
+    margin: 0;
+  }
+  .hero__signal dd {
+    color: #12110E;
+    font-weight: 500;
+  }
+  .transect,
+  .section {
+    margin: 26px 0;
+  }
+  .transect__steps {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+  }
+  .transect__steps li {
+    min-height: 142px;
+    display: grid;
+    align-content: space-between;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid #d4d8cf;
+    border-top: 4px solid #0F6E56;
+    border-radius: 2px;
+    background: #fbfcf9;
+  }
+  .transect__mark {
+    color: #074638;
+    font-weight: 500;
+  }
+  .transect__steps strong {
+    display: block;
+    font-size: 18px;
+  }
+  .transect__steps span:last-child {
+    font-size: 13px;
+    line-height: 1.42;
+    color: var(--pc-ink-soft);
+  }
+  .section__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .section__link {
+    color: var(--pc-accent);
+    font-weight: 500;
+  }
+  .guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px;
+  }
+  .guide-card {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid #ccd7cf;
+    border-left: 4px solid #0F6E56;
+    border-radius: 2px;
+    background: #fff;
+  }
+  .guide-card--pollinator {
+    border-left-color: #534AB7;
+    background: #f8f7fc;
+  }
+  .guide-card--habitat {
+    border-left-color: #BA7517;
+    background: #fffaf2;
+  }
+  .guide-card__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .guide-card__kind {
+    color: #074638;
+    font-weight: 500;
+  }
+  .guide-card__season {
+    color: var(--pc-ink-muted);
+    text-align: right;
+  }
+  .guide-card h2 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.08;
+    font-weight: 500;
+  }
+  .guide-card__latin {
+    margin: -4px 0 0;
+    font-family: Georgia, 'Iowan Old Style', serif;
+    font-size: 14px;
+    font-style: italic;
+    color: #45413b;
+  }
+  .guide-card__signal,
+  .guide-card__read,
+  .rules p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+  .guide-card__signal {
+    color: #12110E;
+  }
+  .guide-card__source {
+    align-self: end;
+    color: var(--pc-accent);
+    font-weight: 500;
+  }
+  .rules {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .rules article {
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .rules h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .blocks {
+    list-style: none;
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+  }
+  .blocks a {
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 8px 10px;
+    border-radius: 2px;
+    color: #12110E;
+  }
+  .blocks a:hover {
+    background: #f4faf5;
+    text-decoration: none;
+  }
+  .blocks__title {
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .blocks__loc {
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+  }
+  .agent-strip {
+    margin-top: 42px;
+    padding-top: 16px;
+    border-top: 1px solid var(--pc-rule);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+  }
+  .agent-strip__label {
+    margin: 0 0 6px;
+    font-weight: 500;
+  }
+  .agent-strip ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+  }
+
+  @media (max-width: 760px) {
+    .hero,
+    .transect__steps,
+    .rules {
+      grid-template-columns: 1fr;
+    }
+    .hero h1 {
+      max-width: none;
+    }
+    .blocks a {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+  }
+</style>

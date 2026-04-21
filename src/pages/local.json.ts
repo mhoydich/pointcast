@@ -16,6 +16,7 @@ import {
   RADIUS_MILES,
   RADIUS_METERS,
   NAME_DROPS,
+  NATURE_NOTES,
   STATIONS,
   filterInRangeBlocks,
   filterBlocksForStation,
@@ -54,6 +55,15 @@ export const GET: APIRoute = async () => {
     // Mike's verbatim ES institutions (from block 0276).
     nameDrops: NAME_DROPS,
 
+    // Dune / flora / local nature module shared with /local.
+    nature: {
+      moduleUrl: 'https://pointcast.xyz/local#nature',
+      fieldGuideUrl: 'https://pointcast.xyz/nature',
+      fieldGuideJson: 'https://pointcast.xyz/nature.json',
+      blockUrl: 'https://pointcast.xyz/b/0320',
+      notes: NATURE_NOTES,
+    },
+
     // Stations within the radius, sorted by distance to anchor.
     stations,
 
@@ -82,6 +92,9 @@ export const GET: APIRoute = async () => {
       beaconJson: 'https://pointcast.xyz/beacon.json',
       nameDropsEditorial: 'https://pointcast.xyz/b/0276',
       radiusEditorial: 'https://pointcast.xyz/b/0254',
+      nature: 'https://pointcast.xyz/nature',
+      natureJson: 'https://pointcast.xyz/nature.json',
+      elSegundoNature: 'https://pointcast.xyz/b/0320',
       esNameDropsPoll: 'https://pointcast.xyz/poll/es-name-drops',
       broadcastTv: 'https://pointcast.xyz/tv',
       goodFeelsShop: 'https://shop.getgoodfeels.com',

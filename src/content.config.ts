@@ -144,4 +144,25 @@ const drops = defineCollection({
   }),
 });
 
-export const collections = { blocks, posts, projects, drops };
+const polls = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/polls' }),
+  schema: z.object({
+    slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,80}$/),
+    question: z.string(),
+    dek: z.string().optional(),
+    options: z.array(z.object({
+      id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,80}$/),
+      label: z.string(),
+      hint: z.string().optional(),
+    })).min(2),
+    openedAt: z.coerce.date(),
+    anonymous: z.boolean().default(true),
+    purpose: z.string().default('coordination'),
+    outcomeAction: z.string().optional(),
+    author: z.enum(['cc', 'mike', 'mh+cc', 'codex', 'manus', 'guest']).default('cc'),
+    source: z.string().optional(),
+    draft: z.boolean().default(false),
+  }),
+});
+
+export const collections = { blocks, posts, projects, drops, polls };

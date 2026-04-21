@@ -79,6 +79,7 @@ export const GET: APIRoute = async () => {
         today: 'https://pointcast.xyz/today',
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
+        nature: 'https://pointcast.xyz/nature',
         tv: 'https://pointcast.xyz/tv',
         forAgents: 'https://pointcast.xyz/for-agents',
       },
@@ -106,6 +107,7 @@ export const GET: APIRoute = async () => {
         today: 'https://pointcast.xyz/today.json',
         moods: 'https://pointcast.xyz/moods.json',
         local: 'https://pointcast.xyz/local.json',
+        nature: 'https://pointcast.xyz/nature.json',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
