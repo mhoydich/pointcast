@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.6',
-    protocol_version: '0.6',
+    version: '0.7',
+    protocol_version: '0.7',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.3.0',
+        version: 'sparrow-v0.7.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -153,6 +153,21 @@ export const GET: APIRoute = async () => {
       key: 'sparrow:visited',
       shape: 'string[] — array of block IDs, newest-visited first, max 120',
       ui_signal: '.is-visited class on [data-sp-block-id] — softens title + adds "read" chip',
+    },
+
+    // v0.7 addition: named reactions keyed off block IDs. Local-only for
+    // v0.7; v0.8 will fan out via Nostr kind-7 when a signer is set up.
+    reactions: {
+      storage: 'localStorage',
+      key: 'sparrow:reactions',
+      shape: '{ [blockId: string]: Array<"ember" | "moss" | "lilac"> }',
+      kinds: [
+        { id: 'ember', label: 'lit', glyph: '🔥', accent: 'var(--sp-ember)' },
+        { id: 'moss',  label: 'evergreen', glyph: '🌿', accent: 'var(--sp-moss)' },
+        { id: 'lilac', label: 'rare', glyph: '💜', accent: 'var(--sp-lilac)' },
+      ],
+      ui: 'Three-chip toolbar on /sparrow/b/<id>, below the article body. Each chip toggles; active picks pulse their accent ring.',
+      future: 'v0.8 emits each pick as a Nostr kind-7 reaction event keyed by the block\'s canonical URL; relays mirror the sparrow/magpie pool. Counts aggregated server-side, surfaced under each receipt on the reel.',
     },
 
     // What Sparrow renders. Agents that want to build their own reader
@@ -302,9 +317,10 @@ export const GET: APIRoute = async () => {
       'v0.3': 'Scoped service worker at /sparrow/sw.js — precache shell + 9 channels + manifest + feed, cache-first block readers (48-entry cap). PWA install via /sparrow/manifest.webmanifest with Front Door / Saved / About shortcuts. Offline pill in HUD. Last-visited indicator on receipts. Offline fallback page.',
       'v0.4': 'Technical-memorandum overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling (EB Garamond + Courier Prime on cream paper, numbered sections, ASCII architecture diagram, figure plates, references, and a prompt appendix for generating hero images). Precached for offline.',
       'v0.5': 'Reader finesse — reading-progress bar (CSS view-timeline on .sp-article-body), keyboard cheatsheet overlay on `?`, copy-as-quote floating chip with attribution, hover + idle prefetch of block readers, drop caps on first paragraph, text-wrap: pretty for body copy, 0 / $ jump-to-top/bottom.',
-      'v0.6': 'Native macOS Sparrow.app companion shipped at github.com/mhoydich/sparrow-app (Swift 5.9, AppKit + URLSession + UserNotifications, no external deps). Menu-bar ✦ glyph with ember new-count, Notification Center alerts, preferences (feed URL, poll interval, notifications toggle). Paired with /sparrow/api/latest.json polling endpoint + /sparrow/connect landing. (current)',
-      'v0.7': 'Reading-list mirror — Sparrow.app reads + writes sparrow:saved via a small localhost HTTP bridge when the web reader is open; Nostr kind-7 reactions keyed off block ids; inline reply composer routed through Magpie.',
-      'v0.8': 'Cross-device sync of reading + visited lists via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
+      'v0.6': 'Native macOS Sparrow.app companion shipped at github.com/mhoydich/sparrow-app (Swift 5.9, AppKit + URLSession + UserNotifications, no external deps). Menu-bar ✦ glyph with ember new-count, Notification Center alerts, preferences (feed URL, poll interval, notifications toggle). Paired with /sparrow/api/latest.json polling endpoint + /sparrow/connect landing.',
+      'v0.7': 'Named reactions — three-chip toolbar on every block reader (🔥 lit · 🌿 evergreen · 💜 rare) backed by localStorage:sparrow:reactions. Local-only picks hydrate from storage on load; active states pulse their accent ring. (current)',
+      'v0.8': 'Reaction fan-out — emit each pick as a Nostr kind-7 event keyed off the block\'s canonical URL; aggregate counts surface under each reel receipt. Reading-list mirror via a small localhost HTTP bridge between Sparrow.app and the hosted reader. Inline reply composer routed through Magpie.',
+      'v0.9': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

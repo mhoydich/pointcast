@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.6</span>
+          <span class="sp-sub">pointcast reader · v0.7</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -252,6 +252,7 @@ const paletteData = {
         const KEY_THEME = 'sparrow:theme';
         const KEY_SAVED = 'sparrow:saved';
         const KEY_VISITED = 'sparrow:visited';
+        const KEY_REACTIONS = 'sparrow:reactions';
         const VISITED_MAX = 120;
         const htmlEl = document.documentElement;
 
@@ -566,6 +567,47 @@ const paletteData = {
           });
         };
         applyVisited();
+
+        // ─── v0.7 · REACTIONS ───────────────────────────────────────
+        // localStorage shape: { [blockId]: ["ember", "moss", ...] }.
+        // Local-only for v0.7 — v0.8 will fan these out as Nostr kind-7
+        // events when a signer is configured. Hydrate on load so the
+        // three react-chips on the reader show the prior pick state.
+        const readReactions = () => {
+          try { return JSON.parse(localStorage.getItem(KEY_REACTIONS) || '{}') || {}; } catch { return {}; }
+        };
+        const writeReactions = (obj) => localStorage.setItem(KEY_REACTIONS, JSON.stringify(obj));
+        const toggleReaction = (blockId, kind) => {
+          if (!blockId || !kind) return;
+          const map = readReactions();
+          const picks = new Set(Array.isArray(map[blockId]) ? map[blockId] : []);
+          if (picks.has(kind)) picks.delete(kind); else picks.add(kind);
+          map[blockId] = Array.from(picks);
+          if (map[blockId].length === 0) delete map[blockId];
+          writeReactions(map);
+          hydrateReactions();
+        };
+        const hydrateReactions = () => {
+          const map = readReactions();
+          document.querySelectorAll('[data-sp-reactions]').forEach((panel) => {
+            const id = panel.getAttribute('data-sp-block-id');
+            const picks = new Set(Array.isArray(map[id]) ? map[id] : []);
+            panel.querySelectorAll('[data-sp-react]').forEach((btn) => {
+              const kind = btn.getAttribute('data-sp-react');
+              const on = picks.has(kind);
+              btn.classList.toggle('is-on', on);
+              btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+          });
+        };
+        hydrateReactions();
+        document.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-sp-react]');
+          if (!btn) return;
+          const panel = btn.closest('[data-sp-reactions]');
+          const id = panel?.getAttribute('data-sp-block-id');
+          toggleReaction(id, btn.getAttribute('data-sp-react'));
+        });
 
         // ─── SERVICE WORKER REGISTRATION ────────────────────────────
         if ('serviceWorker' in navigator) {
@@ -1279,6 +1321,66 @@ const paletteData = {
       .sp-aside-list a { display: block; color: var(--sp-ash); font-size: 13px; line-height: 1.3; }
       .sp-aside-list a:hover { color: var(--sp-bone); text-decoration: none; }
       .sp-aside-mono { font-family: var(--sp-mono); font-size: 11px; color: var(--sp-mute); letter-spacing: 0.06em; }
+
+      /* ─── v0.7 · REACTIONS ──────────────────────────────────────── */
+      .sp-reactions {
+        margin: 28px 0 8px;
+        padding: 16px 18px;
+        border: 1px solid var(--sp-rule);
+        border-radius: var(--sp-rad);
+        background: color-mix(in oklch, var(--sp-blue-hour) 78%, transparent);
+      }
+      .sp-reactions-kicker {
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--sp-ember);
+        display: block;
+        margin-bottom: 10px;
+      }
+      .sp-reactions-row {
+        display: flex; gap: 8px; flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .sp-reactions-hint {
+        font-family: var(--sp-mono);
+        font-size: 10.5px;
+        color: var(--sp-mute);
+        letter-spacing: 0.04em;
+        margin: 0;
+        line-height: 1.5;
+      }
+      .sp-react {
+        --r-accent: var(--sp-ember);
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 14px;
+        border: 1px solid var(--sp-rule);
+        background: transparent;
+        color: var(--sp-ash);
+        border-radius: 999px;
+        font-family: var(--sp-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, color 140ms ease;
+      }
+      .sp-react:hover {
+        border-color: var(--r-accent);
+        color: var(--r-accent);
+        transform: translateY(-1px);
+      }
+      .sp-react.is-on {
+        border-color: var(--r-accent);
+        background: color-mix(in oklch, var(--r-accent) 22%, transparent);
+        color: var(--sp-bone);
+        box-shadow: 0 0 0 1px color-mix(in oklch, var(--r-accent) 40%, transparent);
+      }
+      .sp-react-glyph { font-size: 14px; line-height: 1; }
+      .sp-react--ember { --r-accent: var(--sp-ember); }
+      .sp-react--moss  { --r-accent: var(--sp-moss); }
+      .sp-react--lilac { --r-accent: var(--sp-lilac); }
 
       /* ─── CHANNEL HERO (per-channel page) ────────────────────────── */
       .sp-channel-hero {
