@@ -1,0 +1,443 @@
+---
+/**
+ * /polls — Schelling-point poll catalog.
+ *
+ * Per Mike 2026-04-18 (block 0272 directive via /ping form): "shelling
+ * points". A Schelling-point poll is a question where the WIN condition is
+ * "guess the most popular answer", not "guess the right answer". Reveals
+ * collective focal points.
+ *
+ * Authoring: drop a JSON file in src/content/polls/{slug}.json. Schema in
+ * src/content.config.ts. cc reads at build time, votes hit /api/poll
+ * (PC_POLLS_KV).
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import VoterStats from '../components/VoterStats.astro';
+
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+
+const title = 'Polls — Schelling-point coordination';
+const description = 'Pick a focal point. Win if you match the most-popular answer. Coordination game over content. Per Mike 2026-04-18 directive.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Polls',
+  description,
+  url: 'https://pointcast.xyz/polls',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/polls.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>polls</span>
+    </nav>
+
+    <VoterStats />
+
+    <header class="head">
+      <p class="kicker mono">POLLS · SCHELLING POINTS</p>
+      <h1 class="title">Pick the spot everyone else picks.</h1>
+      <p class="dek">
+        A Schelling-point poll is a coordination game disguised as a question.
+        You don't win by guessing right. You win by guessing what other
+        people will guess. Reveals where collective attention focuses
+        without anyone telling it to. From Thomas Schelling, who studied
+        what people converge on with no communication.
+      </p>
+    </header>
+
+    {/* Aggregate viz strip — total polls, total votes across all polls,
+        leader by participation. Client-fetches each poll tally + paints. */}
+    <section class="viz" id="polls-viz" aria-label="Polls activity">
+      <div class="viz__metric">
+        <span class="viz__num mono">{polls.length}</span>
+        <span class="viz__lbl mono">POLLS LIVE</span>
+      </div>
+      <div class="viz__metric">
+        <span class="viz__num mono" id="viz-total-votes">—</span>
+        <span class="viz__lbl mono">TOTAL VOTES</span>
+      </div>
+      <div class="viz__metric viz__metric--wide">
+        <span class="viz__lbl mono">MOST ACTIVE</span>
+        <span class="viz__leader mono" id="viz-most-active">—</span>
+      </div>
+      <div class="viz__metric viz__metric--wide">
+        <span class="viz__lbl mono">PURPOSE MIX</span>
+        <span class="viz__bar" id="viz-purpose-bar" aria-hidden="true"></span>
+        <span class="viz__legend mono" id="viz-purpose-legend"></span>
+      </div>
+    </section>
+
+    {/* Polls philosophy — the "what makes a good poll on PointCast" rule.
+        Per Mike 2026-04-18: "best baseball town does that go in a bad
+        direction, tho something there on local, information gathering". */}
+    <details class="philosophy">
+      <summary><span class="mono">POLLS PHILOSOPHY · WHAT MAKES A GOOD POINTCAST POLL</span></summary>
+      <div class="philosophy__body">
+        <p><strong>The test in one sentence:</strong> if the leader changes, what happens differently?</p>
+        <p>If the answer is "nothing", it's a clickbait poll — sorting people without doing anything with the result. PointCast polls have to belong to one of four categories:</p>
+        <dl>
+          <dt><span class="purpose-chip purpose-chip--coordination mono">COORDINATION</span></dt>
+          <dd>Schelling-point classics. The act of converging IS the win. (e.g. "where to meet")</dd>
+          <dt><span class="purpose-chip purpose-chip--utility mono">UTILITY</span></dt>
+          <dd>Local info-gathering. Result helps the consumer decide something. (e.g. "best South Bay sunset")</dd>
+          <dt><span class="purpose-chip purpose-chip--editorial mono">EDITORIAL</span></dt>
+          <dd>Feeds back into PointCast's loop — sprint routing, CotD picks, channel weighting.</dd>
+          <dt><span class="purpose-chip purpose-chip--decision mono">DECISION</span></dt>
+          <dd>Outcome materially changes a real-world thing. (e.g. shop hours, meetup time)</dd>
+        </dl>
+        <p>Every poll has a <code>purpose</code> field + an <code>outcomeAction</code> sentence describing the downstream use. Tap any card to see its outcome below the question. Polls without a credible <code>outcomeAction</code> don't ship.</p>
+      </div>
+    </details>
+
+    {polls.length === 0 ? (
+      <section class="empty">
+        <p class="empty__title">No polls yet.</p>
+        <p class="empty__body">Drop a JSON file in <code>src/content/polls/&#123;slug&#125;.json</code> to seed the first one.</p>
+      </section>
+    ) : (
+      <ul class="list">
+        {polls.map((p) => (
+          <li class="poll-card">
+            <a href={`/poll/${p.data.slug}`} class="poll-card__link" data-poll-slug={p.data.slug} data-poll-purpose={p.data.purpose}>
+              <div class="poll-card__top">
+                <span class={`purpose-chip purpose-chip--${p.data.purpose} mono`}>{(p.data.purpose || 'coordination').toUpperCase()}</span>
+                {p.data.zeitgeist && <span class="purpose-chip purpose-chip--zeitgeist mono">ZEITGEIST</span>}
+                {p.data.resolvesAt && !p.data.resolved && (
+                  <span class="purpose-chip purpose-chip--forecast mono" data-resolves-at={p.data.resolvesAt.toISOString()}>FORECAST · RESOLVES —</span>
+                )}
+                {p.data.resolved && <span class="purpose-chip purpose-chip--resolved mono">RESOLVED</span>}
+                <span class="poll-card__count mono">{p.data.options.length} OPTIONS</span>
+                <span class="poll-card__live mono" data-poll-live aria-live="polite">— votes</span>
+              </div>
+              <h2 class="poll-card__q">{p.data.question}</h2>
+              {p.data.dek && <p class="poll-card__dek">{p.data.dek}</p>}
+              {p.data.outcomeAction && <p class="poll-card__outcome"><span class="mono">OUTCOME ·</span> {p.data.outcomeAction}</p>}
+              <div class="poll-card__bottom">
+                <span class="poll-card__leader mono" data-poll-leader></span>
+                <span class="poll-card__cta mono">▶ VOTE</span>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <section class="how">
+      <p class="kicker mono">HOW IT WORKS</p>
+      <ul class="how__steps">
+        <li><strong>Pick one.</strong> Tap an option. Per-address dedup; anonymous voters dedup by UA+IP fingerprint.</li>
+        <li><strong>Distribution reveals after vote.</strong> See where the crowd converged.</li>
+        <li><strong>The "win" is matching the most-popular pick.</strong> Truth value irrelevant; coordination value is the point.</li>
+        <li><strong>No moderation surface.</strong> Polls are pre-authored JSON. No free-text submissions, no comments.</li>
+      </ul>
+    </section>
+
+    {polls.length > 0 && (
+      <script type="application/json" id="poll-options-by-slug" set:html={JSON.stringify(
+        Object.fromEntries(polls.map((p) => [
+          p.data.slug,
+          p.data.options.reduce((acc: Record<string, string>, o) => { acc[o.id] = o.label; return acc; }, {}),
+        ]))
+      )}></script>
+    )}
+    {polls.length > 0 && (
+      <script type="application/json" id="poll-purpose-by-slug" set:html={JSON.stringify(
+        Object.fromEntries(polls.map((p) => [p.data.slug, p.data.purpose]))
+      )}></script>
+    )}
+
+    <script is:inline>
+      // Paint RESOLVES IN N DAYS countdown on forecast poll chips.
+      (function () {
+        var chips = Array.from(document.querySelectorAll('.purpose-chip--forecast[data-resolves-at]'));
+        chips.forEach(function (el) {
+          var iso = el.getAttribute('data-resolves-at');
+          if (!iso) return;
+          var at = new Date(iso).getTime();
+          var now = Date.now();
+          var ms = at - now;
+          if (ms <= 0) { el.textContent = 'RESOLVING…'; return; }
+          var days = Math.ceil(ms / (24 * 3600 * 1000));
+          el.textContent = 'FORECAST · RESOLVES IN ' + days + 'D';
+        });
+      })();
+    </script>
+    <script is:inline>
+      (function () {
+        var optsScript = document.getElementById('poll-options-by-slug');
+        var purposeScript = document.getElementById('poll-purpose-by-slug');
+        if (!optsScript) return;
+        var labelMap = JSON.parse(optsScript.textContent || '{}');
+        var purposeMap = JSON.parse((purposeScript && purposeScript.textContent) || '{}');
+        var cards = Array.from(document.querySelectorAll('.poll-card__link[data-poll-slug]'));
+
+        // Aggregate viz state.
+        var aggregate = { total: 0, mostActive: { slug: null, n: 0, q: '' }, byPurpose: { coordination: 0, utility: 0, editorial: 0, decision: 0 } };
+        var pending = cards.length;
+
+        function paintAggregate() {
+          var totalEl = document.getElementById('viz-total-votes');
+          var mostEl = document.getElementById('viz-most-active');
+          var barEl = document.getElementById('viz-purpose-bar');
+          var legEl = document.getElementById('viz-purpose-legend');
+          if (totalEl) totalEl.textContent = String(aggregate.total);
+          if (mostEl) mostEl.textContent = aggregate.mostActive.slug
+            ? aggregate.mostActive.slug + ' · ' + aggregate.mostActive.n + ' VOTE' + (aggregate.mostActive.n === 1 ? '' : 'S')
+            : 'no votes yet';
+          // Purpose distribution bar — segments by share of polls (not votes), since votes per purpose is sparse early.
+          var purposeCounts = aggregate.byPurpose;
+          var purposeTotal = (purposeCounts.coordination + purposeCounts.utility + purposeCounts.editorial + purposeCounts.decision) || 1;
+          if (barEl) {
+            barEl.innerHTML = '';
+            var segs = [
+              { k: 'coordination', color: '#185FA5', n: purposeCounts.coordination },
+              { k: 'utility',      color: '#0F6E56', n: purposeCounts.utility },
+              { k: 'editorial',    color: '#5F3DC4', n: purposeCounts.editorial },
+              { k: 'decision',     color: '#C95019', n: purposeCounts.decision },
+            ];
+            segs.forEach(function (s) {
+              if (s.n === 0) return;
+              var span = document.createElement('span');
+              span.className = 'viz__bar-seg';
+              span.title = s.k + ': ' + s.n;
+              span.style.background = s.color;
+              span.style.width = (s.n / purposeTotal * 100) + '%';
+              barEl.appendChild(span);
+            });
+          }
+          if (legEl) {
+            var parts = [];
+            if (purposeCounts.coordination) parts.push(purposeCounts.coordination + ' COORD');
+            if (purposeCounts.utility)      parts.push(purposeCounts.utility + ' UTIL');
+            if (purposeCounts.editorial)    parts.push(purposeCounts.editorial + ' EDIT');
+            if (purposeCounts.decision)     parts.push(purposeCounts.decision + ' DEC');
+            legEl.textContent = parts.join(' · ');
+          }
+        }
+
+        // Pre-count purpose distribution from cards (don't need to wait for fetches).
+        cards.forEach(function (card) {
+          var p = card.getAttribute('data-poll-purpose');
+          if (p && aggregate.byPurpose[p] !== undefined) aggregate.byPurpose[p]++;
+        });
+        paintAggregate();
+
+        cards.forEach(function (card) {
+          var slug = card.getAttribute('data-poll-slug');
+          var liveEl = card.querySelector('[data-poll-live]');
+          var leaderEl = card.querySelector('[data-poll-leader]');
+          fetch('/api/poll?slug=' + encodeURIComponent(slug), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+              if (!j || !j.ok) return;
+              var total = j.total || 0;
+              if (liveEl) {
+                liveEl.textContent = total + ' VOTE' + (total === 1 ? '' : 'S');
+                liveEl.dataset.state = total > 0 ? 'active' : '';
+              }
+              if (leaderEl && total > 0) {
+                var tally = j.tally || {};
+                var bestId = null, bestN = 0;
+                for (var k in tally) { if (tally[k] > bestN) { bestN = tally[k]; bestId = k; } }
+                if (bestId) {
+                  var label = (labelMap[slug] && labelMap[slug][bestId]) || bestId;
+                  var pct = total > 0 ? Math.round((bestN / total) * 100) : 0;
+                  leaderEl.textContent = 'LEADER · ' + label + ' · ' + pct + '%';
+                }
+              }
+
+              // Aggregate update.
+              aggregate.total += total;
+              if (total > aggregate.mostActive.n) {
+                aggregate.mostActive = { slug: slug, n: total, q: '' };
+              }
+            })
+            .catch(function () {})
+            .finally(function () {
+              pending--;
+              if (pending <= 0) paintAggregate();
+            });
+        });
+      })();
+    </script>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/poll">/api/poll</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 760px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 22px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 5vw, 40px); font-weight: 700; line-height: 1.1; margin: 0 0 12px; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek a, .how a { color: #a02c2c; text-decoration: none; font-weight: 500; }
+    .dek a:hover, .how a:hover { text-decoration: underline; }
+
+    /* ── Aggregate viz strip ── */
+    .viz {
+      display: grid;
+      grid-template-columns: 1fr 1fr 2fr 2fr;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid #5F3DC4;
+      border-radius: 2px;
+      background: #fbf9ff;
+      margin-bottom: 12px;
+    }
+    .viz__metric { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .viz__metric--wide { grid-column: span 1; }
+    .viz__num { font-size: 22px; font-weight: 700; color: #12110E; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); letter-spacing: 0; }
+    .viz__lbl { font-size: 9px; color: #5F5E5A; letter-spacing: 0.16em; }
+    .viz__leader { font-size: 11px; color: #3A1F8B; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .viz__bar { display: flex; height: 10px; background: #f0eee6; border-radius: 999px; overflow: hidden; margin: 4px 0 2px; }
+    .viz__bar-seg { display: block; height: 100%; transition: width 0.4s ease-out; }
+    .viz__legend { font-size: 9px; color: #5F5E5A; letter-spacing: 0.12em; }
+    @media (max-width: 640px) {
+      .viz { grid-template-columns: 1fr 1fr; }
+      .viz__metric--wide { grid-column: span 2; }
+    }
+
+    /* ── Polls philosophy ── */
+    .philosophy {
+      margin-bottom: 14px;
+      padding: 0 12px;
+      border: 1px dashed #d6d4cd;
+      border-radius: 2px;
+      background: #fafaf5;
+    }
+    .philosophy summary {
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: #5F5E5A;
+      padding: 8px 0;
+      list-style: none;
+    }
+    .philosophy summary::-webkit-details-marker { display: none; }
+    .philosophy summary::before { content: '▸ '; color: #5F3DC4; font-weight: 700; }
+    .philosophy[open] summary::before { content: '▾ '; }
+    .philosophy__body { padding: 4px 0 12px; font-size: 13.5px; line-height: 1.55; color: #38373A; }
+    .philosophy__body p { margin: 0 0 8px; }
+    .philosophy__body strong { color: #12110E; }
+    .philosophy__body code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #f0eee6; padding: 1px 4px; border-radius: 2px; font-size: 0.92em;
+    }
+    .philosophy__body dl {
+      margin: 8px 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
+      align-items: baseline;
+    }
+    .philosophy__body dt { margin: 0; }
+    .philosophy__body dd { margin: 0; font-size: 13px; color: #38373A; }
+
+    /* ── Purpose chips ── */
+    .purpose-chip {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      border-radius: 2px;
+      color: #fff;
+    }
+    .purpose-chip--coordination { background: #185FA5; }
+    .purpose-chip--utility      { background: #0F6E56; }
+    .purpose-chip--editorial    { background: #5F3DC4; }
+    .purpose-chip--decision     { background: #C95019; }
+    .purpose-chip--zeitgeist    { background: #8A2432; }
+    .purpose-chip--forecast     { background: #E89A22; color: #12110E; }
+    .purpose-chip--resolved     { background: #1E7C2F; }
+
+    .poll-card__outcome {
+      margin: 6px 0 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #38373A;
+      padding: 6px 10px;
+      background: #faf9f5;
+      border-radius: 2px;
+      border-left: 2px solid #5F3DC4;
+    }
+    .poll-card__outcome .mono {
+      font-size: 9px;
+      color: #5F3DC4;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      margin-right: 6px;
+    }
+
+    .empty { padding: 24px 18px; border: 1.5px dashed #d6d4cd; border-radius: 2px; background: #faf9f5; }
+    .empty__title { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F3DC4; margin: 0 0 8px; font-weight: 700; }
+    .empty__body { margin: 0; color: #38373A; font-size: 14px; }
+    .empty code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.9em; }
+
+    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .poll-card__link {
+      display: block;
+      padding: 14px 16px;
+      border: 1.5px solid #12110E;
+      border-left: 5px solid #5F3DC4;
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      text-decoration: none;
+      transition: background 0.12s;
+    }
+    .poll-card__link:hover { background: #fbf9ff; }
+    .poll-card__top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .poll-card__count { font-size: 9.5px; color: #5F3DC4; font-weight: 700; }
+    .poll-card__live { font-size: 9.5px; color: #5F5E5A; }
+    .poll-card__live[data-state="active"] { color: #5F3DC4; font-weight: 700; }
+    .poll-card__q { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 18px; font-weight: 600; margin: 4px 0 4px; line-height: 1.25; }
+    .poll-card__dek { font-size: 13.5px; color: #5F5E5A; margin: 0 0 10px; line-height: 1.45; }
+    .poll-card__bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .poll-card__leader { font-size: 10px; color: #3A1F8B; font-weight: 600; flex: 1 1 auto; min-width: 0; }
+    .poll-card__leader:empty::before { content: ''; }
+    .poll-card__cta { display: inline-block; padding: 4px 10px; background: #5F3DC4; color: #fff; font-size: 10px; font-weight: 700; border-radius: 2px; flex: 0 0 auto; }
+
+    .how { margin-top: 24px; padding: 14px 16px; border: 1px dashed #d6d4cd; background: #fbfaf5; border-radius: 2px; }
+    .how__steps { list-style: none; counter-reset: how; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+    .how__steps li { position: relative; padding-left: 22px; font-size: 13.5px; line-height: 1.5; color: #38373A; }
+    .how__steps li::before { counter-increment: how; content: counter(how) '.'; position: absolute; left: 0; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); color: #5F3DC4; font-weight: 700; }
+    .how__steps strong { color: #12110E; font-weight: 600; }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

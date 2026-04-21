@@ -144,4 +144,42 @@ const drops = defineCollection({
   }),
 });
 
-export const collections = { blocks, posts, projects, drops };
+/**
+ * polls — Schelling-point coordination polls.
+ *
+ * A poll is a question with fixed options where the win condition is
+ * "guess what other people will guess." Author each poll as JSON at
+ * src/content/polls/{slug}.json. Votes go to /api/poll.
+ */
+const polls = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/polls' }),
+  schema: z.object({
+    slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,60}$/),
+    question: z.string().min(8).max(280),
+    options: z.array(z.object({
+      id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,30}$/),
+      label: z.string().min(1).max(120),
+      hint: z.string().max(200).optional(),
+    })).min(3).max(7),
+    dek: z.string().max(280).optional(),
+    closesAt: z.coerce.date().optional(),
+    openedAt: z.coerce.date(),
+    anonymous: z.boolean().default(true),
+    purpose: z.enum(['coordination', 'utility', 'editorial', 'decision', 'forecast']).default('coordination'),
+    outcomeAction: z.string().max(280).optional(),
+    resolvesAt: z.coerce.date().optional(),
+    resolved: z.object({
+      at: z.coerce.date(),
+      correctOption: z.string().optional(),
+      note: z.string().max(400).optional(),
+    }).optional(),
+    zeitgeist: z.boolean().default(false),
+    followUps: z.record(z.string(), z.string()).optional(),
+    related: z.array(z.string()).max(6).optional(),
+    author: z.enum(['cc', 'mike', 'mh+cc', 'codex', 'manus', 'guest']).default('cc'),
+    source: z.string().optional(),
+    draft: z.boolean().default(false),
+  }),
+});
+
+export const collections = { blocks, posts, projects, drops, polls };

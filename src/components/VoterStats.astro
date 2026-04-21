@@ -1,0 +1,311 @@
+---
+/**
+ * VoterStats — cookie-clicker-flavored voter chrome + JUICE layer.
+ *
+ * Mike 2026-04-18: "in an entertaining and fun way, cookie clicker,
+ * rewarding". Renders a tiny top-of-home / top-of-polls strip showing
+ * level + title + vote count + session streak + earned achievement
+ * emojis. Client-only, localStorage-backed.
+ *
+ * Also exports a global window hook (`window.pcVoter`) that other
+ * components call on successful vote:
+ *   window.pcVoter.record({ slug, mode, isUnique })
+ * Returns { count, newAchievements, leveledUp }.
+ *
+ * The JUICE (ripple, chime, vibrate, XP floats, toast) is triggered by
+ * the consuming component — this component owns state + animation
+ * surfaces.
+ */
+---
+
+<aside class="vstats" id="vstats" aria-label="Voter progression">
+  <div class="vstats__row">
+    <span class="vstats__emoji" id="vstats-emoji">🗳️</span>
+    <span class="vstats__title mono" id="vstats-title">NOVICE VOTER</span>
+    <span class="vstats__level mono" id="vstats-level">L1</span>
+    <span class="vstats__sep" aria-hidden="true">·</span>
+    <span class="vstats__count mono"><span id="vstats-count">0</span> votes</span>
+    <span class="vstats__sep" aria-hidden="true">·</span>
+    <span class="vstats__streak mono">streak <span id="vstats-streak">×0</span></span>
+    <span class="vstats__unlocks mono" id="vstats-unlocks" aria-label="Achievements earned"></span>
+  </div>
+</aside>
+
+<div class="vstats-toast" id="vstats-toast" hidden role="status" aria-live="polite">
+  <span class="vstats-toast__emoji" id="vstats-toast-emoji">🎉</span>
+  <span class="vstats-toast__label" id="vstats-toast-label">Milestone</span>
+</div>
+
+<script is:inline>
+  (function () {
+    var TITLES = [
+      { min: 0,  title: 'NOVICE VOTER',    emoji: '🗳️' },
+      { min: 3,  title: 'APPRENTICE',      emoji: '🎯' },
+      { min: 8,  title: 'SCOUT',           emoji: '🔍' },
+      { min: 15, title: 'REGULAR',         emoji: '📊' },
+      { min: 25, title: 'WITNESS',         emoji: '👁️' },
+      { min: 40, title: 'FORECASTER',      emoji: '🔮' },
+      { min: 60, title: 'SCHELLING POINT', emoji: '⚡' },
+      { min: 99, title: 'ORACLE',          emoji: '🌀' },
+    ];
+    var ACHIEVEMENTS = [
+      { id: 'first-vote',   label: 'First Vote',       emoji: '🗳️', check: function(s) { return s.count >= 1; } },
+      { id: 'five-votes',   label: 'Warmed Up',        emoji: '🔥', check: function(s) { return s.count >= 5; } },
+      { id: 'ten-votes',    label: 'Double Digits',    emoji: '🎯', check: function(s) { return s.count >= 10; } },
+      { id: 'thirty-votes', label: 'Dedicated',        emoji: '💪', check: function(s) { return s.count >= 30; } },
+      { id: 'first-zeit',   label: 'Zeitgeist Caught', emoji: '⚡', check: function(s) { return s.zeitgeist >= 1; } },
+      { id: 'first-cast',   label: 'First Forecast',   emoji: '🔮', check: function(s) { return s.forecast >= 1; } },
+      { id: 'five-polls',   label: 'Five Polls',       emoji: '📊', check: function(s) { return s.uniquePolls >= 5; } },
+      { id: 'streak-3',     label: 'Three in a Row',   emoji: '⚡', check: function(s) { return s.streak >= 3; } },
+      { id: 'streak-7',     label: 'Lucky Seven',      emoji: '🍀', check: function(s) { return s.streak >= 7; } },
+    ];
+
+    function readState() {
+      function lsNum(k) { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch(e) { return 0; } }
+      function lsArr(k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch(e) { return []; } }
+      return {
+        count: lsNum('pc:voter:count'),
+        uniquePolls: lsArr('pc:voter:polls').length,
+        zeitgeist: lsNum('pc:voter:zeitgeist'),
+        forecast: lsNum('pc:voter:forecast'),
+        streak: (function(){ try { return parseInt(sessionStorage.getItem('pc:voter:streak') || '0', 10) || 0; } catch(e) { return 0; } })(),
+        unlocks: lsArr('pc:voter:unlocks'),
+      };
+    }
+
+    function titleFor(n) {
+      var t = TITLES[0];
+      for (var i = 0; i < TITLES.length; i++) if (n >= TITLES[i].min) t = TITLES[i];
+      return t;
+    }
+    function levelFor(n) { return Math.min(Math.floor(n / 3) + 1, 20); }
+
+    function paint(s) {
+      var t = titleFor(s.count);
+      var el = function(id) { return document.getElementById(id); };
+      if (el('vstats-emoji')) el('vstats-emoji').textContent = t.emoji;
+      if (el('vstats-title')) el('vstats-title').textContent = t.title;
+      if (el('vstats-level')) el('vstats-level').textContent = 'L' + levelFor(s.count);
+      if (el('vstats-count')) el('vstats-count').textContent = String(s.count);
+      if (el('vstats-streak')) el('vstats-streak').textContent = '×' + s.streak;
+      if (el('vstats-unlocks')) {
+        var ids = s.unlocks || [];
+        var emojis = ids.map(function(id) {
+          var a = ACHIEVEMENTS.find(function(x) { return x.id === id; });
+          return a ? a.emoji : '';
+        }).filter(Boolean);
+        el('vstats-unlocks').textContent = emojis.join(' ');
+        el('vstats-unlocks').setAttribute('title', ids.join(', '));
+      }
+    }
+
+    function showToast(emoji, label) {
+      var t = document.getElementById('vstats-toast');
+      var e = document.getElementById('vstats-toast-emoji');
+      var l = document.getElementById('vstats-toast-label');
+      if (!t || !e || !l) return;
+      e.textContent = emoji;
+      l.textContent = label;
+      t.hidden = false;
+      t.classList.remove('vstats-toast--show');
+      void t.offsetWidth;  // reflow
+      t.classList.add('vstats-toast--show');
+      setTimeout(function() {
+        t.classList.remove('vstats-toast--show');
+        setTimeout(function() { t.hidden = true; }, 400);
+      }, 2400);
+    }
+
+    // Paint initial
+    paint(readState());
+
+    // Expose global hook for components to call
+    window.pcVoter = {
+      record: function(opts) {
+        opts = opts || {};
+        var slug = opts.slug || '';
+        var mode = opts.mode || 'coordination';  // coordination | forecast | zeitgeist
+        var prevCount = (function(){ try { return parseInt(localStorage.getItem('pc:voter:count') || '0', 10) || 0; } catch(e) { return 0; } })();
+        var prevLevel = levelFor(prevCount);
+
+        // Increment count
+        var newCount = prevCount + 1;
+        try { localStorage.setItem('pc:voter:count', String(newCount)); } catch(e) {}
+
+        // Track unique polls
+        try {
+          var polls = JSON.parse(localStorage.getItem('pc:voter:polls') || '[]');
+          if (slug && polls.indexOf(slug) === -1) {
+            polls.push(slug);
+            localStorage.setItem('pc:voter:polls', JSON.stringify(polls));
+          }
+        } catch(e) {}
+
+        // Mode counters
+        if (mode === 'zeitgeist') {
+          try { localStorage.setItem('pc:voter:zeitgeist', String(parseInt(localStorage.getItem('pc:voter:zeitgeist') || '0', 10) + 1)); } catch(e) {}
+        } else if (mode === 'forecast') {
+          try { localStorage.setItem('pc:voter:forecast', String(parseInt(localStorage.getItem('pc:voter:forecast') || '0', 10) + 1)); } catch(e) {}
+        }
+
+        // Session streak — sessionStorage so it resets per tab
+        var prevStreak = 0;
+        try { prevStreak = parseInt(sessionStorage.getItem('pc:voter:streak') || '0', 10) || 0; } catch(e) {}
+        var newStreak = prevStreak + 1;
+        try { sessionStorage.setItem('pc:voter:streak', String(newStreak)); } catch(e) {}
+
+        // Check for new achievements
+        var s = readState();
+        var priorUnlocks = s.unlocks.slice();
+        var newAchievements = [];
+        ACHIEVEMENTS.forEach(function(a) {
+          if (priorUnlocks.indexOf(a.id) === -1 && a.check(s)) {
+            priorUnlocks.push(a.id);
+            newAchievements.push(a);
+          }
+        });
+        try { localStorage.setItem('pc:voter:unlocks', JSON.stringify(priorUnlocks)); } catch(e) {}
+
+        // Level up?
+        var newLevel = levelFor(newCount);
+        var leveledUp = newLevel > prevLevel;
+
+        // Repaint — direct + event dispatch so any other listener (on this
+        // page or elsewhere) can repaint too. The event form is belt-and-
+        // suspenders: even if the IIFE-scoped paint() somehow doesn't fire,
+        // the event-listener below guarantees the top strip repaints.
+        paint(readState());
+        try { window.dispatchEvent(new CustomEvent('pc:voter-updated', { detail: readState() })); } catch(e) {}
+
+        // Toast for new achievement (first one) or level-up
+        if (newAchievements.length > 0) {
+          showToast(newAchievements[0].emoji, 'UNLOCKED · ' + newAchievements[0].label.toUpperCase());
+        } else if (leveledUp) {
+          var t = titleFor(newCount);
+          showToast(t.emoji, 'LEVEL ' + newLevel + ' · ' + t.title);
+        }
+
+        return { count: newCount, leveledUp: leveledUp, newAchievements: newAchievements };
+      },
+      // Public refresh hook — anyone can force a repaint after writing LS
+      refresh: function() { paint(readState()); },
+    };
+
+    // Also listen for the custom event so cross-script repaints work.
+    window.addEventListener('pc:voter-updated', function() { paint(readState()); });
+
+    // And listen for native `storage` events — if LS is modified from another
+    // tab, this tab repaints on return-focus. Doesn't fire for same-tab LS
+    // changes, but it's a cheap safety for multi-tab voters.
+    window.addEventListener('storage', function(e) {
+      if (e.key && e.key.indexOf('pc:voter:') === 0) paint(readState());
+    });
+
+    // Repaint on visibility change — if the user tabbed away, voted somewhere,
+    // came back, the top reflects reality.
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) paint(readState());
+    });
+  })();
+</script>
+
+<style>
+  .vstats {
+    margin: 4px 0 10px;
+    padding: 6px 12px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-left: 4px solid #E89A22;
+    border-radius: 3px;
+    background: linear-gradient(to right, #fffaf0 0%, #fbfaf5 60%);
+  }
+  .vstats__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: center;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; }
+  .vstats__emoji { font-size: 14px; line-height: 1; }
+  .vstats__title { color: #C95019; font-weight: 700; }
+  .vstats__level { color: #12110E; background: #E89A22; padding: 1px 5px; border-radius: 2px; font-weight: 700; }
+  .vstats__sep { color: #ccc; }
+  .vstats__count { color: #5F5E5A; }
+  .vstats__count span { color: #12110E; font-weight: 700; }
+  .vstats__streak { color: #5F5E5A; }
+  .vstats__streak span { color: #C95019; font-weight: 700; }
+  .vstats__unlocks {
+    margin-left: auto;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+
+  @media (max-width: 540px) {
+    .vstats__unlocks { margin-left: 0; flex: 1 1 100%; }
+  }
+
+  /* ═ Toast ═ */
+  .vstats-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-120%);
+    z-index: 9999;
+    padding: 10px 16px;
+    background: #12110E;
+    color: #fff;
+    border-radius: 4px;
+    border: 2px solid #E89A22;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s;
+  }
+  .vstats-toast--show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  .vstats-toast__emoji { font-size: 20px; line-height: 1; }
+  .vstats-toast__label { color: #E89A22; }
+
+  /* ═ Global CSS for per-tap ripple — consumed by PollsOnHome JUICE ═ */
+  :global(.juice-ripple) {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: rgba(232, 154, 34, 0.45);
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0);
+    animation: juice-ripple 0.6s ease-out forwards;
+  }
+  @keyframes juice-ripple {
+    0%   { transform: translate(-50%, -50%) scale(0);   opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(15);  opacity: 0; }
+  }
+
+  /* ═ XP float — "+1 XP" text that drifts up and fades ═ */
+  :global(.juice-xp) {
+    position: absolute;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 700;
+    color: #E89A22;
+    pointer-events: none;
+    animation: juice-xp 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    z-index: 10;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  }
+  @keyframes juice-xp {
+    0%   { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -40px); }
+  }
+</style>
