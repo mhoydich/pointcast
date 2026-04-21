@@ -86,6 +86,9 @@ const paletteData = {
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={`https://pointcast.xyz${canonicalPath}`} />
+    {/* SEO hreflang — parity with the rest of the site. */}
+    <link rel="alternate" hreflang="en-US" href={`https://pointcast.xyz${canonicalPath}`} />
+    <link rel="alternate" hreflang="x-default" href={`https://pointcast.xyz${canonicalPath}`} />
     <link rel="alternate" type="application/json" href="/sparrow.json" title="Sparrow manifest" />
     <link rel="alternate" type="application/atom+xml" href="/sparrow/feed.xml" title="Sparrow Atom feed" />
 
@@ -117,7 +120,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.4</span>
+          <span class="sp-sub">pointcast reader · v0.5</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -171,6 +174,70 @@ const paletteData = {
         </footer>
       </div>
     </div>
+
+    {/* v0.5: keyboard cheatsheet — opens on `?`. Read-only reference —
+        the palette is for doing, this is for remembering. */}
+    <div class="sp-cheatsheet" data-sp-cheatsheet hidden>
+      <div class="sp-palette-scrim" data-sp-cheatsheet-close></div>
+      <div class="sp-cheat-card" role="dialog" aria-label="keyboard shortcuts">
+        <header class="sp-cheat-head">
+          <span class="sp-kicker">✦ keyboard · sparrow shortcuts</span>
+          <button class="sp-cheat-close" type="button" data-sp-cheatsheet-close aria-label="close">esc ✕</button>
+        </header>
+        <div class="sp-cheat-body">
+          <section class="sp-cheat-group">
+            <h3>Discovery</h3>
+            <dl>
+              <dt><kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd></dt><dd>open the command palette</dd>
+              <dt><kbd>/</kbd></dt><dd>focus the reel search</dd>
+              <dt><kbd>1</kbd>…<kbd>9</kbd></dt><dd>jump to channel by index (1=FD … 9=BTL)</dd>
+              <dt><kbd>G</kbd> <kbd>F</kbd>…<kbd>G</kbd> <kbd>B</kbd></dt><dd>jump to channel by first letter</dd>
+            </dl>
+          </section>
+          <section class="sp-cheat-group">
+            <h3>Reading</h3>
+            <dl>
+              <dt><kbd>J</kbd></dt><dd>next receipt (reel) / older block (reader)</dd>
+              <dt><kbd>K</kbd></dt><dd>previous receipt / newer block</dd>
+              <dt><kbd>S</kbd></dt><dd>save or unsave the focused / now-tuned block</dd>
+              <dt><kbd>0</kbd></dt><dd>jump to top of page</dd>
+              <dt><kbd>$</kbd></dt><dd>jump to bottom of page</dd>
+            </dl>
+          </section>
+          <section class="sp-cheat-group">
+            <h3>Display</h3>
+            <dl>
+              <dt><kbd>T</kbd></dt><dd>toggle theme (blue-hour ↔ dawn)</dd>
+              <dt><kbd>?</kbd></dt><dd>show this cheatsheet</dd>
+              <dt><kbd>Esc</kbd></dt><dd>close overlays</dd>
+            </dl>
+          </section>
+          <section class="sp-cheat-group">
+            <h3>Reader extras</h3>
+            <dl>
+              <dt>select text</dt><dd>a ✎ chip appears — click to copy a quote block with attribution</dd>
+              <dt>hover receipt</dt><dd>prefetches the reader page so click/J/K feels instant</dd>
+            </dl>
+          </section>
+        </div>
+        <footer class="sp-cheat-foot">
+          <span class="sp-aside-mono">press <kbd>?</kbd> anywhere in Sparrow to re-open</span>
+        </footer>
+      </div>
+    </div>
+
+    {/* v0.5: floating "copy as quote" chip shown near text selection
+        inside a block reader. Populated + positioned by the script. */}
+    <button
+      type="button"
+      class="sp-quote-chip"
+      data-sp-quote-chip
+      hidden
+      aria-label="copy selection as attributed quote"
+    >
+      <span class="sp-quote-chip-icon" aria-hidden="true">✎</span>
+      copy as quote
+    </button>
 
     <script
       is:inline
@@ -341,6 +408,25 @@ const paletteData = {
             return;
           }
 
+          // v0.5: cheatsheet on `?` (shift-/)
+          if (e.key === '?') {
+            e.preventDefault();
+            showCheatsheet();
+            return;
+          }
+
+          // v0.5: scroll jumps — 0 to top, $ (shift-4) to bottom
+          if (e.key === '0') {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if (e.key === '$') {
+            e.preventDefault();
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+            return;
+          }
+
           const k = e.key.toLowerCase();
           if (k === 'j') { e.preventDefault(); focusReceipt(1); }
           else if (k === 'k') { e.preventDefault(); focusReceipt(-1); }
@@ -365,6 +451,92 @@ const paletteData = {
             );
             gPending = false; clearTimeout(gTimer);
             if (found) { e.preventDefault(); window.location.href = `/sparrow/ch/${found.slug}`; }
+          }
+        });
+
+        // ─── CHEATSHEET OVERLAY (? key) ──────────────────────────────
+        const cheatsheet = document.querySelector('[data-sp-cheatsheet]');
+        const showCheatsheet = () => { if (cheatsheet) cheatsheet.hidden = false; };
+        const hideCheatsheet = () => { if (cheatsheet) cheatsheet.hidden = true; };
+        document.querySelectorAll('[data-sp-cheatsheet-close]').forEach((el) =>
+          el.addEventListener('click', hideCheatsheet),
+        );
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && cheatsheet && !cheatsheet.hidden) hideCheatsheet();
+        });
+
+        // ─── HOVER / IDLE PREFETCH ───────────────────────────────────
+        // Hovering a receipt gets the browser to pre-fetch the block
+        // reader. Combined with the SW cache-first runtime strategy,
+        // J/K paging and click-through feel instant.
+        const prefetched = new Set();
+        const prefetchUrl = (url) => {
+          if (!url || prefetched.has(url)) return;
+          prefetched.add(url);
+          const link = document.createElement('link');
+          link.rel = 'prefetch';
+          link.href = url;
+          link.as = 'document';
+          document.head.appendChild(link);
+        };
+        document.addEventListener('mouseover', (e) => {
+          const a = e.target?.closest?.('[data-sp-block-id] a[href^="/sparrow/b/"]');
+          if (a) prefetchUrl(a.getAttribute('href'));
+        });
+        document.addEventListener('focusin', (e) => {
+          const a = e.target?.closest?.('[data-sp-block-id] a[href^="/sparrow/b/"]');
+          if (a) prefetchUrl(a.getAttribute('href'));
+        });
+
+        // ─── COPY-AS-QUOTE (reader pages only) ───────────────────────
+        // When the user highlights text inside .sp-article-body, float
+        // an ember chip near the end of the selection. Click: copy a
+        // quote block with attribution (title · № · canonical URL).
+        const quoteChip = document.querySelector('[data-sp-quote-chip]');
+        const articleEl = () => document.querySelector('.sp-article-body');
+        let lastQuote = null;
+        const positionChip = () => {
+          const sel = window.getSelection();
+          if (!quoteChip || !articleEl()) return;
+          const text = (sel?.toString() || '').trim();
+          if (!sel || !text || text.length < 6 || sel.rangeCount === 0) {
+            quoteChip.hidden = true; lastQuote = null; return;
+          }
+          const range = sel.getRangeAt(0);
+          if (!articleEl().contains(range.commonAncestorContainer)) {
+            quoteChip.hidden = true; lastQuote = null; return;
+          }
+          const rect = range.getBoundingClientRect();
+          quoteChip.hidden = false;
+          quoteChip.style.top = `${window.scrollY + rect.bottom + 8}px`;
+          quoteChip.style.left = `${Math.max(
+            8,
+            window.scrollX + Math.min(rect.right, window.innerWidth - 180) - 160,
+          )}px`;
+          lastQuote = text;
+        };
+        document.addEventListener('selectionchange', positionChip);
+        window.addEventListener('scroll', () => {
+          if (!quoteChip?.hidden) positionChip();
+        }, { passive: true });
+        quoteChip?.addEventListener('click', async () => {
+          if (!lastQuote) return;
+          const idMatch = location.pathname.match(/^\/sparrow\/b\/(\d{3,})/);
+          const id = idMatch ? idMatch[1] : '';
+          const title = document.querySelector('.sp-article-title')?.textContent?.trim() || 'PointCast block';
+          const url = id ? `https://pointcast.xyz/b/${id}` : location.href;
+          const quote = `"${lastQuote}"\n\n— ${title}${id ? ' · № ' + id : ''}\n${url}`;
+          try {
+            await navigator.clipboard.writeText(quote);
+            const original = quoteChip.innerHTML;
+            quoteChip.innerHTML = '<span class="sp-quote-chip-icon" aria-hidden="true">✓</span>copied';
+            quoteChip.classList.add('is-copied');
+            setTimeout(() => {
+              quoteChip.innerHTML = original;
+              quoteChip.classList.remove('is-copied');
+            }, 1400);
+          } catch {
+            quoteChip.textContent = 'copy failed';
           }
         });
 
@@ -913,6 +1085,154 @@ const paletteData = {
       .sp-palette-label { color: var(--sp-bone); font-size: 14px; }
       .sp-palette-hint { font-family: var(--sp-mono); font-size: 11px; color: var(--sp-mute); }
       .sp-palette-foot { padding: 10px 16px; border-top: 1px dotted var(--sp-rule); font-family: var(--sp-mono); font-size: 10px; color: var(--sp-mute); letter-spacing: 0.12em; text-transform: uppercase; }
+
+      /* ─── v0.5 · CHEATSHEET OVERLAY ─────────────────────────────── */
+      .sp-cheatsheet { position: fixed; inset: 0; z-index: 50; display: grid; place-items: start center; padding-top: 10vh; }
+      .sp-cheatsheet[hidden] { display: none; }
+      .sp-cheat-card {
+        position: relative;
+        width: min(720px, 94vw);
+        border: 1px solid var(--sp-ember);
+        border-radius: 4px;
+        background: var(--sp-blue-hour);
+        box-shadow: 0 30px 80px color-mix(in oklch, var(--sp-ink) 80%, transparent);
+        max-height: 80vh;
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+      .sp-cheat-head {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px dotted var(--sp-rule);
+      }
+      .sp-cheat-close {
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--sp-ash);
+        background: transparent;
+        border: 1px solid var(--sp-rule);
+        border-radius: 3px;
+        padding: 4px 8px;
+        cursor: pointer;
+        transition: border-color 140ms ease, color 140ms ease;
+      }
+      .sp-cheat-close:hover { border-color: var(--sp-ember); color: var(--sp-ember); }
+      .sp-cheat-body {
+        padding: 18px 22px;
+        overflow-y: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 24px 32px;
+      }
+      .sp-cheat-group h3 {
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--sp-ember);
+        margin: 0 0 10px;
+      }
+      .sp-cheat-group dl {
+        display: grid;
+        grid-template-columns: minmax(110px, auto) 1fr;
+        gap: 8px 14px;
+        margin: 0;
+      }
+      .sp-cheat-group dt {
+        display: flex; flex-wrap: wrap; gap: 4px;
+        align-items: center;
+        font-family: var(--sp-mono);
+        font-size: 11px;
+        color: var(--sp-bone);
+      }
+      .sp-cheat-group dd {
+        margin: 0;
+        font-size: 13px;
+        color: var(--sp-ash);
+        line-height: 1.4;
+      }
+      .sp-cheat-foot {
+        padding: 10px 16px;
+        border-top: 1px dotted var(--sp-rule);
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        color: var(--sp-mute);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .sp-cheat-foot kbd { margin: 0 2px; }
+
+      /* ─── v0.5 · COPY-AS-QUOTE CHIP ─────────────────────────────── */
+      .sp-quote-chip {
+        position: absolute;
+        z-index: 40;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid var(--sp-ember);
+        background: color-mix(in oklch, var(--sp-ember) 18%, var(--sp-blue-hour));
+        color: var(--sp-bone);
+        border-radius: 999px;
+        font-family: var(--sp-mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        box-shadow: 0 8px 24px color-mix(in oklch, var(--sp-ink) 70%, transparent);
+        cursor: pointer;
+        transition: transform 140ms ease, background 140ms ease;
+      }
+      .sp-quote-chip[hidden] { display: none; }
+      .sp-quote-chip:hover { transform: translateY(-1px); background: color-mix(in oklch, var(--sp-ember) 28%, var(--sp-blue-hour)); }
+      .sp-quote-chip.is-copied { border-color: var(--sp-moss); background: color-mix(in oklch, var(--sp-moss) 22%, var(--sp-blue-hour)); }
+      .sp-quote-chip-icon { font-family: var(--sp-display); font-size: 13px; line-height: 1; color: var(--sp-ember); }
+      .sp-quote-chip.is-copied .sp-quote-chip-icon { color: var(--sp-moss); }
+
+      /* ─── v0.5 · READER TYPOGRAPHY POLISH ───────────────────────── */
+      .sp-article-body { text-wrap: pretty; hanging-punctuation: first last; }
+      .sp-article-body > p:first-of-type::first-letter {
+        font-family: var(--sp-display);
+        font-size: 4.2em;
+        line-height: 0.82;
+        float: left;
+        margin: 0.12em 0.12em 0 -0.06em;
+        padding-right: 6px;
+        color: var(--sp-ember);
+      }
+      .sp-article-title { text-wrap: balance; }
+      .sp-article-dek { text-wrap: pretty; }
+
+      /* Reading progress bar on /sparrow/b/<id> pages. Uses the modern
+         view-timeline CSS — in unsupported browsers the bar simply
+         stays at its initial width (transform: scaleX(0)), which is
+         graceful and invisible. */
+      .sp-reading-progress {
+        position: fixed;
+        top: 2px; /* sits just below the global tune-progress bar */
+        left: 0; right: 0;
+        height: 3px;
+        z-index: 19;
+        background: color-mix(in oklch, var(--sp-ember) 14%, transparent);
+        pointer-events: none;
+      }
+      .sp-reading-progress__bar {
+        height: 100%;
+        width: 100%;
+        transform-origin: 0 50%;
+        transform: scaleX(0);
+        background: linear-gradient(90deg, var(--sp-ember), color-mix(in oklch, var(--sp-ember) 60%, var(--sp-bone)));
+        animation: sp-read-fill linear;
+        animation-timeline: --sp-read;
+        animation-range: contain 0% contain 100%;
+      }
+      @keyframes sp-read-fill { to { transform: scaleX(1); } }
+      .sp-article-body { view-timeline-name: --sp-read; view-timeline-axis: block; }
+      @media (prefers-reduced-motion: reduce) {
+        .sp-reading-progress__bar { animation: none; transform: scaleX(0); }
+      }
       .sp-palette-foot kbd { margin: 0 2px; }
 
       /* ─── READER (block detail) ─────────────────────────────────── */

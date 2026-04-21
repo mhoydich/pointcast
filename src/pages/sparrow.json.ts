@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.4',
-    protocol_version: '0.4',
+    version: '0.5',
+    protocol_version: '0.5',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -183,6 +183,19 @@ export const GET: APIRoute = async () => {
       saved_list: {
         purpose: '/sparrow/saved — local-first reading list rendered from localStorage',
       },
+      cheatsheet: {
+        purpose: 'Global keyboard cheatsheet modal — opens on `?`, grouped by Discovery / Reading / Display / Reader extras. Read-only reference; palette is for doing.',
+      },
+      reading_progress: {
+        purpose: 'Thin ember bar fixed below the tuning progress on /sparrow/b/<id>, filled via CSS view-timeline on .sp-article-body. Degrades silently on browsers without scroll-timeline.',
+      },
+      copy_as_quote: {
+        purpose: 'Floating chip near a text selection inside .sp-article-body. Click: copies a formatted quote block with title + № + canonical URL via navigator.clipboard.',
+      },
+      prefetch: {
+        hover: 'mouseover / focusin on [data-sp-block-id] a[href^=\'/sparrow/b/\'] injects <link rel="prefetch"> — works with the SW runtime cache so J/K and click feel instant.',
+        idle: 'on /sparrow/b/<id>, requestIdleCallback prefetches prev + next block readers with a 2s timeout fallback.',
+      },
     },
 
     // Keyboard contract — clients that mirror this get muscle memory
@@ -193,6 +206,9 @@ export const GET: APIRoute = async () => {
       focus_search: '/',
       theme_toggle: 'T',
       save_toggle: 'S',
+      scroll_top: '0',
+      scroll_bottom: '$',
+      cheatsheet: '?',
       channel_jump_by_letter: 'G then <first letter of channel>',
       channel_jump_by_number: '1=FD, 2=CRT, 3=SPN, 4=GF, 5=GDN, 6=ESC, 7=FCT, 8=VST, 9=BTL',
       palette_open: ['⌘K', 'Ctrl+K'],
@@ -252,8 +268,8 @@ export const GET: APIRoute = async () => {
       'v0.1': 'Reader home + rosette + reel + palette + keyboard shortcuts. Atom feed. Theme toggle.',
       'v0.2': 'Per-channel pages /sparrow/ch/<slug>. Block reader /sparrow/b/<id> with view-transition morph from the reel. Reading list /sparrow/saved (localStorage). Numeric channel shortcuts 1-9. Mood filter chips. Now-tuned IntersectionObserver. Save-toggle via S.',
       'v0.3': 'Scoped service worker at /sparrow/sw.js — precache shell + 9 channels + manifest + feed, cache-first block readers (48-entry cap). PWA install via /sparrow/manifest.webmanifest with Front Door / Saved / About shortcuts. Offline pill in HUD. Last-visited indicator on receipts. Offline fallback page.',
-      'v0.4': 'Technical-memorandum overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling (EB Garamond + Courier Prime on cream paper, numbered sections, ASCII architecture diagram, figure plates, references, and a prompt appendix for generating hero images). Precached for offline. (current)',
-      'v0.5': 'Reader finesse — reading-progress bar (scroll-timeline), keyboard cheatsheet overlay (?), copy-as-quote, prefetch-on-hover, drop caps + text-wrap: pretty.',
+      'v0.4': 'Technical-memorandum overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling (EB Garamond + Courier Prime on cream paper, numbered sections, ASCII architecture diagram, figure plates, references, and a prompt appendix for generating hero images). Precached for offline.',
+      'v0.5': 'Reader finesse — reading-progress bar (CSS view-timeline on .sp-article-body), keyboard cheatsheet overlay on `?`, copy-as-quote floating chip with attribution, hover + idle prefetch of block readers, drop caps on first paragraph, text-wrap: pretty for body copy, 0 / $ jump-to-top/bottom. (current)',
       'v0.6': 'Native macOS Sparrow.app companion — menu-bar dot that pulses when a new block lands; reading list mirrored over Bonjour to the web reader.',
       'v0.7': 'Nostr kind-7 reactions keyed off block ids; inline reply composer routed through Magpie.',
       'v0.8': 'Cross-device sync of reading + visited lists via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export.',

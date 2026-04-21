@@ -66,6 +66,8 @@ function renderInlineCode(s: string): string {
   canonicalPath={`/sparrow/b/${block.data.id}`}
   homeHref="/sparrow"
 >
+  <div class="sp-reading-progress" aria-hidden="true"><div class="sp-reading-progress__bar"></div></div>
+
   <article
     class="sp-reader"
     data-sp-block-id={block.data.id}
@@ -215,6 +217,28 @@ function renderInlineCode(s: string): string {
         const k = e.key.toLowerCase();
         if (k === 'j' && nextUrl) { e.preventDefault(); window.location.href = nextUrl; }
         else if (k === 'k' && prevUrl) { e.preventDefault(); window.location.href = prevUrl; }
+      });
+
+      // v0.5: idle prefetch of neighboring readers so K/J paging is
+      // instant (combines with the SW cache-first runtime strategy).
+      const prefetch = (url) => {
+        if (!url) return;
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.as = 'document';
+        link.href = url;
+        document.head.appendChild(link);
+      };
+      const queueIdle = (fn) => {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(fn, { timeout: 2000 });
+        } else {
+          setTimeout(fn, 600);
+        }
+      };
+      queueIdle(() => {
+        prefetch(prevUrl);
+        prefetch(nextUrl);
       });
     })();
   </script>
