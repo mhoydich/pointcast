@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.9',
-    protocol_version: '0.9',
+    version: '0.10',
+    protocol_version: '0.10',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.9.0',
+        version: 'sparrow-v0.10.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -207,17 +207,28 @@ export const GET: APIRoute = async () => {
       },
       ui_states: ['local', 'available', 'connected', 'emitting'],
 
-      // v0.9: aggregation — subscribe to the relay pool for kind-7
-      // events r-tagged to each reader's canonical URL. No NIP-07
-      // signer required for reading (public relays). Client-side dedupe
-      // by event id; counts paint on each reaction chip as events
-      // arrive or from stored history up to `limit: 200` per relay.
+      // v0.9 + v0.10: aggregation — subscribe to the relay pool for
+      // kind-7 events r-tagged to visible block URLs. No NIP-07 signer
+      // required for reading (public relays). Client-side dedupe by
+      // event id; counts paint wherever a block is visible.
       aggregation: {
         enabled: true,
-        mechanism: 'Nostr REQ subscription per reactions panel',
-        filter: { kinds: [7], '#r': ['https://pointcast.xyz/b/<id>'], limit: 200 },
-        count_ui: '.sp-react-count badge appended to each chip as events arrive; size scales with raw count',
-        deduplication: 'By Nostr event.id (Set<string> per blockId × kind)',
+        modes: {
+          reader: {
+            mechanism: 'One REQ per [data-sp-reactions] panel',
+            filter: { kinds: [7], '#r': ['https://pointcast.xyz/b/<id>'], limit: 200 },
+            count_ui: '.sp-react-count badge appended to each reaction chip',
+            since: 'v0.9',
+          },
+          reel: {
+            mechanism: 'One REQ per relay with every visible block URL in #r (bulk fan-in)',
+            filter: { kinds: [7], '#r': ['https://pointcast.xyz/b/<id1>', 'https://pointcast.xyz/b/<id2>', '...'], limit: 500 },
+            count_ui: 'Compact "🔥 3 · 🌿 1" row painted into .sp-r-foot on each receipt (.sp-r-react-counts). Hidden until at least one pick lands.',
+            scope: 'Any page with [data-sp-block-id] receipts outside a [data-sp-reactions] panel — index, channel, saved, drawer, etc.',
+            since: 'v0.10',
+          },
+        },
+        deduplication: 'By Nostr event.id (Set<string> per blockId × kind), shared state between reader + reel paint paths',
         kind_resolution: 'Glyph-in-content first (🔥/🌿/💜); t=sparrow-<kind> tag as fallback for non-glyph reactions',
         cleanup: 'beforeunload closes every open WebSocket — no leaks across navigation',
         signer_required: false,
@@ -392,9 +403,10 @@ export const GET: APIRoute = async () => {
       'v0.6': 'Native macOS Sparrow.app companion shipped at github.com/mhoydich/sparrow-app (Swift 5.9, AppKit + URLSession + UserNotifications, no external deps). Menu-bar ✦ glyph with ember new-count, Notification Center alerts, preferences (feed URL, poll interval, notifications toggle). Paired with /sparrow/api/latest.json polling endpoint + /sparrow/connect landing.',
       'v0.7': 'Named reactions — three-chip toolbar on every block reader (🔥 lit · 🌿 evergreen · 💜 rare) backed by localStorage:sparrow:reactions. Local-only picks hydrate from storage on load; active states pulse their accent ring.',
       'v0.8': 'Reaction fan-out via NIP-07. Detects window.nostr, offers a "connect signer" pill next to the reactions toolbar; on reaction ADD, signs a kind-7 event r-tagged to https://pointcast.xyz/b/<id> and fire-and-forget publishes to a configurable relay pool (default: damus, primal, nos.lol). Emitted log prevents duplicate re-broadcasts on reload. Signer status surface states: local · available · connected · emitting.',
-      'v0.9': 'Reaction aggregation (read side). Per-reader REQ subscription against the relay pool filtered by {kinds:[7], #r:[canonical-block-url]}. Client-side dedupe by event id; count badges paint on each chip as events arrive or from the last 200 stored per relay. Reading works without a signer. Kind-5 delete events fire on unreact when the local emitted log has the original event id, with optimistic local state. (current)',
-      'v0.10': 'Reading-list mirror via a small localhost HTTP bridge between Sparrow.app and the hosted reader. Inline reply composer routed through Magpie. Cross-reel count badges under every receipt (aggregated via a single multi-r-tag REQ).',
-      'v0.11': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
+      'v0.9': 'Reaction aggregation (read side). Per-reader REQ subscription against the relay pool filtered by {kinds:[7], #r:[canonical-block-url]}. Client-side dedupe by event id; count badges paint on each chip as events arrive or from the last 200 stored per relay. Reading works without a signer. Kind-5 delete events fire on unreact when the local emitted log has the original event id, with optimistic local state.',
+      'v0.10': 'Cross-reel count badges. One REQ per relay filtered by every visible block URL in #r, paints a compact "🔥 3 · 🌿 1" row into each receipt footer as events arrive. Shared state with reader aggregation so reader + reel stay in sync. Works on index, channel, saved — anywhere receipts render. (current)',
+      'v0.11': 'Reading-list mirror via a small localhost HTTP bridge between Sparrow.app and the hosted reader. Inline reply composer routed through Magpie.',
+      'v0.12': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

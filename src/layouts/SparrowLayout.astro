@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.9</span>
+          <span class="sp-sub">pointcast reader · v0.10</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -786,6 +786,7 @@ const paletteData = {
           if (!byKind.has(kind)) byKind.set(kind, new Set());
           byKind.get(kind).add(event.id);
           paintReactionCounts(blockId);
+          paintReelCounts(blockId);
         }
 
         function paintReactionCounts(blockId) {
@@ -842,6 +843,100 @@ const paletteData = {
           const id = panel.getAttribute('data-sp-block-id');
           if (id) subscribeReactionsForBlock(id);
         });
+
+        // ─── v0.10 · CROSS-REEL COUNT BADGES ────────────────────────
+        // On index / channel / saved pages, receipts carry only a
+        // [data-sp-block-id] — no reactions panel. Instead of opening
+        // N subs, open ONE subscription per relay with every visible
+        // block URL in the filter's #r tag. Paint a compact
+        // "🔥 3 · 🌿 1" row in each receipt's footer as events arrive.
+        const GLYPH_OUT = { ember: '🔥', moss: '🌿', lilac: '💜' };
+
+        function paintReelCounts(blockId) {
+          if (!blockId) return;
+          const byKind = reactionCounts.get(blockId);
+          if (!byKind) return;
+          const els = document.querySelectorAll(`[data-sp-block-id="${blockId}"]`);
+          els.forEach((el) => {
+            // Skip the full reader panel — paintReactionCounts handles it.
+            if (el.matches('[data-sp-reactions]')) return;
+            if (el.classList.contains('sp-reader') || el.querySelector('[data-sp-reactions]')) return;
+            const foot = el.querySelector('.sp-r-foot');
+            if (!foot) return;
+            let row = foot.querySelector('[data-sp-r-react-counts]');
+            if (!row) {
+              row = document.createElement('span');
+              row.setAttribute('data-sp-r-react-counts', '');
+              row.className = 'sp-r-react-counts';
+              foot.appendChild(row);
+            }
+            const parts = [];
+            for (const k of ['ember', 'moss', 'lilac']) {
+              const n = byKind.get(k)?.size ?? 0;
+              if (n > 0) parts.push(`${GLYPH_OUT[k]} ${n}`);
+            }
+            if (parts.length === 0) { row.hidden = true; row.textContent = ''; }
+            else { row.hidden = false; row.textContent = parts.join(' · '); }
+          });
+        }
+
+        function subscribeReelReactions() {
+          // Collect block IDs from receipts that are NOT already being
+          // subscribed-to via a per-reader subscription.
+          const readerIds = new Set(
+            Array.from(document.querySelectorAll('[data-sp-reactions]'))
+              .map((el) => el.getAttribute('data-sp-block-id'))
+              .filter(Boolean),
+          );
+          const reelIds = Array.from(
+            new Set(
+              Array.from(document.querySelectorAll('[data-sp-block-id]'))
+                .map((el) => el.getAttribute('data-sp-block-id'))
+                .filter((id) => id && !readerIds.has(id)),
+            ),
+          );
+          if (!reelIds.length) return;
+
+          const relays = getRelays();
+          if (!relays.length) return;
+
+          const urls = reelIds.map((id) => `https://pointcast.xyz/b/${id}`);
+          const subId = `sparrow-reel-${Date.now().toString(36)}`;
+          // Some relays cap filter size; keep limit generous but bounded.
+          const filter = { kinds: [7], '#r': urls, limit: 500 };
+          const req = JSON.stringify(['REQ', subId, filter]);
+
+          for (const relay of relays) {
+            try {
+              const ws = new WebSocket(relay);
+              ws.addEventListener('open', () => { try { ws.send(req); } catch {} });
+              ws.addEventListener('message', (e) => {
+                try {
+                  const frame = JSON.parse(e.data);
+                  if (!Array.isArray(frame)) return;
+                  if (frame[0] !== 'EVENT' || frame[1] !== subId) {
+                    if (frame[0] === 'CLOSED' && frame[1] === subId) { try { ws.close(); } catch {} }
+                    return;
+                  }
+                  const event = frame[2];
+                  if (!event || !Array.isArray(event.tags)) return;
+                  // Recover block id from the r-tag
+                  for (const tag of event.tags) {
+                    if (!Array.isArray(tag) || tag[0] !== 'r' || typeof tag[1] !== 'string') continue;
+                    const m = /\/b\/(\d{3,})/.exec(tag[1]);
+                    if (!m) continue;
+                    const id = m[1];
+                    ingestReactionEvent(id, event);
+                    break;
+                  }
+                } catch {}
+              });
+              ws.addEventListener('error', () => { try { ws.close(); } catch {} });
+              openSockets.push(ws);
+            } catch {}
+          }
+        }
+        subscribeReelReactions();
 
         window.addEventListener('beforeunload', () => {
           for (const ws of openSockets) {
@@ -1693,6 +1788,19 @@ const paletteData = {
         background: color-mix(in oklch, var(--r-accent) 38%, var(--sp-blue-hour));
         color: var(--sp-bone);
       }
+
+      /* v0.10: compact reaction-count row on receipts. Painted client-
+         side by paintReelCounts as kind-7 events arrive from the pool. */
+      .sp-r-react-counts {
+        margin-left: auto;
+        font-family: var(--sp-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        color: var(--sp-mute);
+        padding: 2px 0;
+        white-space: nowrap;
+      }
+      .sp-r-react-counts[hidden] { display: none; }
 
       /* ─── v0.8 · NOSTR STATUS + CONNECT ─────────────────────────── */
       .sp-reactions-head {
