@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.7',
-    protocol_version: '0.7',
+    version: '0.8',
+    protocol_version: '0.8',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.7.0',
+        version: 'sparrow-v0.8.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -155,8 +155,9 @@ export const GET: APIRoute = async () => {
       ui_signal: '.is-visited class on [data-sp-block-id] — softens title + adds "read" chip',
     },
 
-    // v0.7 addition: named reactions keyed off block IDs. Local-only for
-    // v0.7; v0.8 will fan out via Nostr kind-7 when a signer is set up.
+    // v0.7 addition: named reactions keyed off block IDs. v0.8 adds
+    // optional Nostr kind-7 fan-out via NIP-07 when a browser extension
+    // signer is connected — see the `nostr` block below.
     reactions: {
       storage: 'localStorage',
       key: 'sparrow:reactions',
@@ -167,7 +168,45 @@ export const GET: APIRoute = async () => {
         { id: 'lilac', label: 'rare', glyph: '💜', accent: 'var(--sp-lilac)' },
       ],
       ui: 'Three-chip toolbar on /sparrow/b/<id>, below the article body. Each chip toggles; active picks pulse their accent ring.',
-      future: 'v0.8 emits each pick as a Nostr kind-7 reaction event keyed by the block\'s canonical URL; relays mirror the sparrow/magpie pool. Counts aggregated server-side, surfaced under each receipt on the reel.',
+      emit_policy: 'On ADD only (v0.8). Deletion does not emit a kind-5 delete event yet — deferred to v0.9 alongside cross-device sync.',
+    },
+
+    // v0.8 addition: Nostr reaction fan-out. Entirely client-side —
+    // Sparrow never holds the signing key. If the user installs a
+    // NIP-07 browser extension (Alby, nos2x, Flamingo) and clicks
+    // "connect signer", each toggled reaction becomes a signed kind-7
+    // event broadcast to the configured relay pool. Aggregation /
+    // subscription for receipt-under-reel counts lands in v0.9.
+    nostr: {
+      client_protocol: 'NIP-07 (window.nostr.signEvent)',
+      event_kind: 7,
+      tag_convention: [
+        ['r', 'https://pointcast.xyz/b/<id>', 'canonical block URL the reaction targets'],
+        ['t', 'sparrow'],
+        ['t', 'sparrow-<kind>'],
+        ['client', 'sparrow', 'https://pointcast.xyz/sparrow'],
+      ],
+      content: 'Unicode glyph for the chosen kind (🔥 | 🌿 | 💜).',
+      relay_pool: {
+        storage_key: 'sparrow:nostr-relays',
+        default: [
+          'wss://relay.damus.io',
+          'wss://relay.primal.net',
+          'wss://nos.lol',
+        ],
+        transport: 'WebSocket — one connection per emit, fire-and-forget with 4s timeout',
+      },
+      pubkey_cache: {
+        storage_key: 'sparrow:nostr-pubkey',
+        note: 'Cached hex x-only pubkey after first getPublicKey(); Sparrow never persists secret material.',
+      },
+      emitted_log: {
+        storage_key: 'sparrow:nostr-emitted',
+        shape: '{ [`${blockId}:${kind}`]: { id: string, at: number } }',
+        purpose: 'Prevents accidental re-broadcast on hydrate/reload.',
+      },
+      ui_states: ['local', 'available', 'connected', 'emitting'],
+      future: 'v0.9: subscribe to relay pool for kind-7 counts per block, aggregate client-side, surface under each reel receipt. Kind-5 delete events on unreact. NIP-44-encrypted sync of the pick log across devices.',
     },
 
     // What Sparrow renders. Agents that want to build their own reader
@@ -318,9 +357,10 @@ export const GET: APIRoute = async () => {
       'v0.4': 'Technical-memorandum overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling (EB Garamond + Courier Prime on cream paper, numbered sections, ASCII architecture diagram, figure plates, references, and a prompt appendix for generating hero images). Precached for offline.',
       'v0.5': 'Reader finesse — reading-progress bar (CSS view-timeline on .sp-article-body), keyboard cheatsheet overlay on `?`, copy-as-quote floating chip with attribution, hover + idle prefetch of block readers, drop caps on first paragraph, text-wrap: pretty for body copy, 0 / $ jump-to-top/bottom.',
       'v0.6': 'Native macOS Sparrow.app companion shipped at github.com/mhoydich/sparrow-app (Swift 5.9, AppKit + URLSession + UserNotifications, no external deps). Menu-bar ✦ glyph with ember new-count, Notification Center alerts, preferences (feed URL, poll interval, notifications toggle). Paired with /sparrow/api/latest.json polling endpoint + /sparrow/connect landing.',
-      'v0.7': 'Named reactions — three-chip toolbar on every block reader (🔥 lit · 🌿 evergreen · 💜 rare) backed by localStorage:sparrow:reactions. Local-only picks hydrate from storage on load; active states pulse their accent ring. (current)',
-      'v0.8': 'Reaction fan-out — emit each pick as a Nostr kind-7 event keyed off the block\'s canonical URL; aggregate counts surface under each reel receipt. Reading-list mirror via a small localhost HTTP bridge between Sparrow.app and the hosted reader. Inline reply composer routed through Magpie.',
-      'v0.9': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
+      'v0.7': 'Named reactions — three-chip toolbar on every block reader (🔥 lit · 🌿 evergreen · 💜 rare) backed by localStorage:sparrow:reactions. Local-only picks hydrate from storage on load; active states pulse their accent ring.',
+      'v0.8': 'Reaction fan-out via NIP-07. Detects window.nostr, offers a "connect signer" pill next to the reactions toolbar; on reaction ADD, signs a kind-7 event r-tagged to https://pointcast.xyz/b/<id> and fire-and-forget publishes to a configurable relay pool (default: damus, primal, nos.lol). Emitted log prevents duplicate re-broadcasts on reload. Signer status surface states: local · available · connected · emitting. (current)',
+      'v0.9': 'Reaction aggregation — subscribe to relay pool for kind-7 counts per block, surface under each reel receipt. Kind-5 delete events on unreact. Reading-list mirror via a small localhost HTTP bridge between Sparrow.app and the hosted reader. Inline reply composer routed through Magpie.',
+      'v0.10': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

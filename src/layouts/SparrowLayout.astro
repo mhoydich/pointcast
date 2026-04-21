@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.7</span>
+          <span class="sp-sub">pointcast reader · v0.8</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -581,11 +581,16 @@ const paletteData = {
           if (!blockId || !kind) return;
           const map = readReactions();
           const picks = new Set(Array.isArray(map[blockId]) ? map[blockId] : []);
-          if (picks.has(kind)) picks.delete(kind); else picks.add(kind);
+          const willAdd = !picks.has(kind);
+          if (willAdd) picks.add(kind); else picks.delete(kind);
           map[blockId] = Array.from(picks);
           if (map[blockId].length === 0) delete map[blockId];
           writeReactions(map);
           hydrateReactions();
+          // v0.8: if a NIP-07 signer is connected, fan this pick out as
+          // a Nostr kind-7 reaction event. Only emit on ADD — deletion
+          // would require a kind-5 event (v0.9). Non-blocking.
+          if (willAdd) { nostrEmitReaction(blockId, kind).catch(() => {}); }
         };
         const hydrateReactions = () => {
           const map = readReactions();
@@ -608,6 +613,138 @@ const paletteData = {
           const id = panel?.getAttribute('data-sp-block-id');
           toggleReaction(id, btn.getAttribute('data-sp-react'));
         });
+
+        // ─── v0.8 · NOSTR REACTION FAN-OUT (NIP-07) ─────────────────
+        // If the page has a NIP-07 browser extension installed
+        // (Alby, nos2x, Flamingo), the user can connect it and each
+        // reaction pick becomes a signed kind-7 event r-tagged to the
+        // block's canonical URL. Relays live in localStorage:
+        // sparrow:nostr-relays; defaults are the same pool Magpie uses.
+        const KEY_NOSTR_RELAYS = 'sparrow:nostr-relays';
+        const KEY_NOSTR_EMITTED = 'sparrow:nostr-emitted';
+        const KEY_NOSTR_PUBKEY  = 'sparrow:nostr-pubkey';
+        const DEFAULT_RELAYS = [
+          'wss://relay.damus.io',
+          'wss://relay.primal.net',
+          'wss://nos.lol',
+        ];
+        const GLYPH_BY_KIND = { ember: '🔥', moss: '🌿', lilac: '💜' };
+
+        const hasNip07 = () => typeof window !== 'undefined' && !!window.nostr && typeof window.nostr.signEvent === 'function';
+        const getRelays = () => {
+          try {
+            const raw = localStorage.getItem(KEY_NOSTR_RELAYS);
+            const list = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(list) && list.length) return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+          } catch {}
+          return DEFAULT_RELAYS;
+        };
+        const cachedPubkey = { value: localStorage.getItem(KEY_NOSTR_PUBKEY) || null };
+
+        const paintNostrState = (state) => {
+          document.querySelectorAll('[data-sp-nostr-status]').forEach((el) => {
+            el.setAttribute('data-state', state);
+            const label = el.querySelector('[data-sp-nostr-label]');
+            if (!label) return;
+            if (state === 'connected') {
+              const pk = cachedPubkey.value || '';
+              label.textContent = pk ? `signer · ${pk.slice(0, 8)}…${pk.slice(-4)}` : 'signer connected';
+            } else if (state === 'available') {
+              label.textContent = 'NIP-07 detected';
+            } else if (state === 'emitting') {
+              label.textContent = 'publishing…';
+            } else {
+              label.textContent = 'local only';
+            }
+          });
+          document.querySelectorAll('[data-sp-nostr-connect]').forEach((btn) => {
+            btn.hidden = !(state === 'available');
+          });
+        };
+
+        const initNostr = async () => {
+          if (!hasNip07()) { paintNostrState('local'); return; }
+          if (cachedPubkey.value) {
+            paintNostrState('connected');
+            return;
+          }
+          paintNostrState('available');
+        };
+        initNostr();
+        // The extension may inject window.nostr after DOMContentLoaded.
+        setTimeout(initNostr, 800);
+        setTimeout(initNostr, 2400);
+
+        document.addEventListener('click', async (e) => {
+          const btn = e.target.closest('[data-sp-nostr-connect]');
+          if (!btn) return;
+          if (!hasNip07()) { paintNostrState('local'); return; }
+          try {
+            const pk = await window.nostr.getPublicKey();
+            if (typeof pk === 'string' && /^[0-9a-f]{64}$/i.test(pk)) {
+              cachedPubkey.value = pk;
+              localStorage.setItem(KEY_NOSTR_PUBKEY, pk);
+              paintNostrState('connected');
+            }
+          } catch {
+            paintNostrState('available');
+          }
+        });
+
+        async function nostrEmitReaction(blockId, kind) {
+          if (!hasNip07() || !cachedPubkey.value) return;
+          const relays = getRelays();
+          if (!relays.length) return;
+
+          const glyph = GLYPH_BY_KIND[kind] || '+';
+          const url = `https://pointcast.xyz/b/${blockId}`;
+          const unsigned = {
+            kind: 7,
+            pubkey: cachedPubkey.value,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ['r', url],
+              ['t', 'sparrow'],
+              ['t', `sparrow-${kind}`],
+              ['client', 'sparrow', 'https://pointcast.xyz/sparrow'],
+            ],
+            content: glyph,
+          };
+
+          let signed;
+          paintNostrState('emitting');
+          try {
+            signed = await window.nostr.signEvent(unsigned);
+          } catch {
+            paintNostrState('connected');
+            return;
+          }
+          if (!signed || typeof signed.id !== 'string' || typeof signed.sig !== 'string') {
+            paintNostrState('connected');
+            return;
+          }
+
+          // Remember emission so we don't re-broadcast on rehydrate/reload.
+          try {
+            const map = JSON.parse(localStorage.getItem(KEY_NOSTR_EMITTED) || '{}');
+            map[`${blockId}:${kind}`] = { id: signed.id, at: signed.created_at };
+            localStorage.setItem(KEY_NOSTR_EMITTED, JSON.stringify(map));
+          } catch {}
+
+          // Fire-and-forget relay fan-out.
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['EVENT', signed])); } catch {}
+              });
+              ws.addEventListener('message', () => { try { ws.close(); } catch {} });
+              setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 4000);
+            } catch {}
+          }
+
+          paintNostrState('connected');
+        }
 
         // ─── SERVICE WORKER REGISTRATION ────────────────────────────
         if ('serviceWorker' in navigator) {
@@ -1381,6 +1518,61 @@ const paletteData = {
       .sp-react--ember { --r-accent: var(--sp-ember); }
       .sp-react--moss  { --r-accent: var(--sp-moss); }
       .sp-react--lilac { --r-accent: var(--sp-lilac); }
+
+      /* ─── v0.8 · NOSTR STATUS + CONNECT ─────────────────────────── */
+      .sp-reactions-head {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .sp-reactions-head .sp-reactions-kicker { margin: 0; flex: 0 0 auto; }
+
+      .sp-nostr-status {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 3px 10px;
+        border: 1px solid var(--sp-rule);
+        border-radius: 999px;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sp-ash);
+        transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+      }
+      .sp-nostr-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: currentColor;
+      }
+      .sp-nostr-status[data-state="local"]     { color: var(--sp-mute); }
+      .sp-nostr-status[data-state="available"] { color: var(--sp-ember); border-color: var(--sp-ember); }
+      .sp-nostr-status[data-state="connected"] {
+        color: var(--sp-moss);
+        border-color: var(--sp-moss);
+        background: color-mix(in oklch, var(--sp-moss) 14%, transparent);
+      }
+      .sp-nostr-status[data-state="connected"] .sp-nostr-dot { box-shadow: 0 0 8px currentColor; }
+      .sp-nostr-status[data-state="emitting"] {
+        color: var(--sp-lilac);
+        border-color: var(--sp-lilac);
+      }
+      .sp-nostr-status[data-state="emitting"] .sp-nostr-dot {
+        animation: sp-pulse 1s ease-in-out infinite;
+      }
+
+      .sp-nostr-connect {
+        font-family: var(--sp-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        border: 1px solid var(--sp-ember);
+        color: var(--sp-ember);
+        background: color-mix(in oklch, var(--sp-ember) 14%, transparent);
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background 140ms ease;
+      }
+      .sp-nostr-connect[hidden] { display: none; }
+      .sp-nostr-connect:hover { background: color-mix(in oklch, var(--sp-ember) 24%, transparent); }
 
       /* ─── CHANNEL HERO (per-channel page) ────────────────────────── */
       .sp-channel-hero {
