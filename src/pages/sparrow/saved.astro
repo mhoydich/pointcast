@@ -1,0 +1,169 @@
+---
+/**
+ * /sparrow/saved — reading list.
+ *
+ * Entirely client-rendered from localStorage (sparrow:saved). Server
+ * ships an index of every block so the client can resolve saved ids
+ * to their title/channel/type/date and render receipts. Empty state
+ * is a soft prompt pointing back at the reel.
+ */
+import SparrowLayout from '../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../../lib/channels';
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const lookup = Object.fromEntries(
+  all.map((b) => [
+    b.data.id,
+    {
+      id: b.data.id,
+      title: b.data.title,
+      dek: b.data.dek ?? '',
+      channel: b.data.channel,
+      type: b.data.type,
+      mood: b.data.mood ?? '',
+      timestamp: b.data.timestamp.toISOString(),
+    },
+  ]),
+);
+
+const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.name]));
+---
+
+<SparrowLayout
+  title="Saved — reading list"
+  description="Your Sparrow reading list, kept local in this browser."
+  canonicalPath="/sparrow/saved"
+  homeHref="/sparrow"
+>
+  <section class="sp-reel" aria-label="reading list">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ saved · reading list · local to this browser</span>
+      <span class="sp-aside-mono" style="margin-left: auto;">
+        <span data-sp-saved-total>0</span> saved · press <kbd>S</kbd> on any block to toggle
+      </span>
+    </header>
+
+    <ol class="sp-receipts" data-sp-receipts data-sp-saved-list></ol>
+
+    <div class="sp-saved-empty" data-sp-saved-empty>
+      <p class="sp-kicker">∅ empty</p>
+      <h2>Nothing saved yet.</h2>
+      <p>
+        Press <kbd>S</kbd> while reading any block, or tap the
+        "add to reading list" button in the reader aside. The list lives in
+        your browser's localStorage — Sparrow doesn't phone home.
+      </p>
+      <p style="margin-top: 16px;">
+        <a class="sp-link" href="/sparrow">← back to the reel</a>
+      </p>
+    </div>
+  </section>
+
+  <script
+    is:inline
+    type="application/json"
+    id="sp-saved-lookup"
+    set:html={JSON.stringify({ lookup, channels: channelNameByCode })}
+  />
+
+  <script is:inline>
+    (() => {
+      const DATA = JSON.parse(document.getElementById('sp-saved-lookup')?.textContent || '{}');
+      const lookup = DATA.lookup || {};
+      const channelNames = DATA.channels || {};
+
+      const KEY = 'sparrow:saved';
+      const readSaved = () => {
+        try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; }
+      };
+
+      const list = document.querySelector('[data-sp-saved-list]');
+      const empty = document.querySelector('[data-sp-saved-empty]');
+      const total = document.querySelector('[data-sp-saved-total]');
+      const ids = readSaved();
+
+      if (total) total.textContent = String(ids.length);
+      if (!ids.length) {
+        list.hidden = true;
+        return;
+      }
+      empty.hidden = true;
+
+      const fmtDate = (iso) => new Date(iso).toISOString().slice(0, 10).replaceAll('-', '.');
+      const esc = (s) => (s || '').replace(/[&<>"']/g, (c) => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+      }[c]));
+
+      const receipts = ids.map((id, i) => {
+        const b = lookup[id];
+        if (!b) {
+          return `<li class="sp-receipt" style="--ch: var(--sp-mute);"
+              data-sp-block-id="${id}">
+            <a href="/sparrow/b/${id}">
+              <header class="sp-r-head">
+                <span class="sp-r-meta"><span class="sp-r-id">№ ${id}</span> · saved</span>
+              </header>
+              <h3 class="sp-r-title">block ${id}</h3>
+              <p class="sp-r-dek sp-aside-mono">not in current archive — may have been retired.</p>
+            </a></li>`;
+        }
+        const chCode = b.channel.toLowerCase();
+        return `<li class="sp-receipt is-saved"
+            style="--ch: var(--ch-${chCode});"
+            data-sp-block-id="${b.id}"
+            data-sp-mood="${esc(b.mood)}">
+          <a href="/sparrow/b/${b.id}">
+            <header class="sp-r-head">
+              <span class="sp-r-stamp" aria-hidden="true">
+                <span class="sp-r-stamp__ch">${b.channel}</span>
+                <span class="sp-r-stamp__type">${esc(b.type)}</span>
+              </span>
+              <span class="sp-r-meta">
+                <span class="sp-r-id">№ ${b.id}</span>
+                <span class="sp-r-sep">·</span>
+                <time datetime="${b.timestamp}">${fmtDate(b.timestamp)}</time>
+              </span>
+            </header>
+            <h3 class="sp-r-title">${esc(b.title)}</h3>
+            ${b.dek ? `<p class="sp-r-dek">${esc(b.dek)}</p>` : ''}
+            <footer class="sp-r-foot">
+              <span class="sp-r-bars" data-bars="4" aria-hidden="true">
+                <i></i><i></i><i></i><i></i><i></i>
+              </span>
+              <span class="sp-r-channel-name">${esc(channelNames[b.channel] || b.channel)}</span>
+              ${b.mood ? `<span class="sp-r-mood">· mood <code>${esc(b.mood)}</code></span>` : ''}
+              <button type="button"
+                class="sp-mood-chip"
+                data-sp-save="${b.id}"
+                style="margin-left: auto;">
+                ☆ remove
+              </button>
+            </footer>
+          </a>
+        </li>`;
+      }).join('');
+
+      list.innerHTML = receipts;
+
+      // Delegated save-toggle — works because buttons have data-sp-save;
+      // the layout script already handles that, but we also need to
+      // re-render the list when something's removed.
+      list.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-sp-save]');
+        if (!btn) return;
+        // Let the layout toggle; then refresh this list on next tick.
+        requestAnimationFrame(() => {
+          const remaining = readSaved();
+          if (total) total.textContent = String(remaining.length);
+          if (remaining.length !== ids.length) {
+            // Full re-render is simplest.
+            window.location.reload();
+          }
+        });
+      });
+    })();
+  </script>
+</SparrowLayout>

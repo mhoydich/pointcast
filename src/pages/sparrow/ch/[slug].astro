@@ -1,0 +1,144 @@
+---
+/**
+ * /sparrow/ch/<slug> — per-channel reader page.
+ *
+ * Builds statically for every channel in /lib/channels.ts. Hero strip
+ * is channel-tinted (the only page where --ch bleeds outside a card),
+ * with a big Gloock name, the channel's purpose in italic, and a
+ * receipt count. Below: mood chips (if the channel has varied moods),
+ * then every block in that channel in one reel.
+ */
+import SparrowLayout from '../../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST, getChannel } from '../../../lib/channels';
+
+export async function getStaticPaths() {
+  return CHANNEL_LIST.map((ch) => ({ params: { slug: ch.slug } }));
+}
+
+const { slug } = Astro.params;
+const ch = getChannel(slug || '');
+if (!ch) {
+  return Astro.redirect('/sparrow');
+}
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const blocks = all.filter((b) => b.data.channel === ch.code);
+
+// Oldest → newest bookending for the meta strip.
+const firstBlock = blocks[blocks.length - 1];
+const lastBlock = blocks[0];
+
+const moods = Array.from(
+  new Set(blocks.map((b) => b.data.mood).filter((m): m is string => Boolean(m))),
+).slice(0, 10);
+
+const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replaceAll('-', '.');
+const signalBars = (mood: string | undefined | null) => (mood ? 4 : 3);
+---
+
+<SparrowLayout
+  title={`${ch.name} — ${ch.code}`}
+  description={`${ch.name} on Sparrow — ${ch.purpose}`}
+  canonicalPath={`/sparrow/ch/${ch.slug}`}
+  homeHref="/sparrow"
+>
+  <section class="sp-channel-hero" style={`--ch: var(--ch-${ch.code.toLowerCase()});`}>
+    <span class="sp-channel-code">CH · {ch.code}</span>
+    <h1 class="sp-channel-name">{ch.name}</h1>
+    <p class="sp-channel-purpose">{ch.purpose}</p>
+    <div class="sp-channel-meta">
+      <span><strong>{blocks.length}</strong> blocks</span>
+      {firstBlock && lastBlock && (
+        <span>
+          window · <code>{fmtDate(firstBlock.data.timestamp)}</code> → <code>{fmtDate(lastBlock.data.timestamp)}</code>
+        </span>
+      )}
+      <span>
+        <a href={`/c/${ch.slug}`} class="sp-link">pointcast channel →</a>
+      </span>
+      <span>
+        <a href={`/c/${ch.slug}.rss`} class="sp-link">rss →</a>
+      </span>
+    </div>
+  </section>
+
+  <section class="sp-reel" aria-label={`${ch.name} broadcasts`}>
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ all broadcasts in {ch.code}</span>
+      <input
+        type="search"
+        class="sp-reel-search"
+        placeholder={`filter ${ch.name.toLowerCase()} — title, dek, mood`}
+        data-sp-search
+        autocomplete="off"
+      />
+    </header>
+
+    {moods.length > 0 && (
+      <div class="sp-moods" aria-label="mood filter">
+        <span class="sp-kicker" style="color: var(--sp-mute); margin-right: 6px;">moods</span>
+        {moods.map((m) => (
+          <button type="button" class="sp-mood-chip" data-sp-mood={m}>{m}</button>
+        ))}
+      </div>
+    )}
+
+    {blocks.length === 0 ? (
+      <div class="sp-saved-empty">
+        <p class="sp-kicker">∅ silence</p>
+        <h2>No broadcasts in {ch.name} yet.</h2>
+        <p>Check back — or tune in to <a class="sp-link" href="/sparrow">all channels</a>.</p>
+      </div>
+    ) : (
+      <ol class="sp-receipts" data-sp-receipts>
+        {blocks.map((b, i) => (
+          <li
+            class="sp-receipt"
+            style={`--ch: var(--ch-${b.data.channel.toLowerCase()});`}
+            data-sp-ch={b.data.channel}
+            data-sp-idx={i}
+            data-sp-block-id={b.data.id}
+            data-sp-mood={b.data.mood ?? ''}
+          >
+            <a href={`/sparrow/b/${b.data.id}`} transition:name={`b-${b.data.id}`}>
+              <header class="sp-r-head">
+                <span class="sp-r-stamp" aria-hidden="true">
+                  <span class="sp-r-stamp__ch">{b.data.channel}</span>
+                  <span class="sp-r-stamp__type">{b.data.type}</span>
+                </span>
+                <span class="sp-r-meta">
+                  <span class="sp-r-id">№ {b.data.id}</span>
+                  <span class="sp-r-sep">·</span>
+                  <time datetime={b.data.timestamp.toISOString()}>{fmtDate(b.data.timestamp)}</time>
+                </span>
+              </header>
+              <h3 class="sp-r-title">{b.data.title}</h3>
+              {b.data.dek && <p class="sp-r-dek">{b.data.dek}</p>}
+              <footer class="sp-r-foot">
+                <span class="sp-r-bars" data-bars={signalBars(b.data.mood)} aria-hidden="true">
+                  <i></i><i></i><i></i><i></i><i></i>
+                </span>
+                <span class="sp-r-channel-name">{ch.name}</span>
+                {b.data.mood && (
+                  <span class="sp-r-mood">· mood <code>{b.data.mood}</code></span>
+                )}
+              </footer>
+            </a>
+          </li>
+        ))}
+      </ol>
+    )}
+  </section>
+
+  <aside class="sp-beacon" aria-label="back to rosette">
+    <span class="sp-beacon-sweep" aria-hidden="true"></span>
+    <span class="sp-beacon-kicker">✦ rosette</span>
+    <span class="sp-beacon-body">
+      jump to another channel — press <kbd>1</kbd>…<kbd>9</kbd> or <kbd>G</kbd>
+    </span>
+    <a href="/sparrow" class="sp-link sp-beacon-cta">back to rosette →</a>
+  </aside>
+</SparrowLayout>

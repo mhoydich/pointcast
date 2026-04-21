@@ -1,0 +1,189 @@
+---
+/**
+ * /sparrow — reader home.
+ *
+ * Wraps the SparrowLayout; supplies the hero (dial + title), rosette,
+ * mood chips + reel, and beacon strip. The layout's script handles the
+ * ⌘K palette, J/K glide, G+letter / 1–9 channel jumps, S save,
+ * theme toggle, now-tuned observer, and mood-filter chip toggling.
+ */
+import SparrowLayout from '../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../../lib/channels';
+
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const reel = allBlocks.slice(0, 12);
+const recent24 = allBlocks.slice(0, 24);
+const distribution: Record<string, number> = {};
+for (const b of recent24) {
+  distribution[b.data.channel] = (distribution[b.data.channel] ?? 0) + 1;
+}
+const totalRecent = recent24.length || 1;
+
+const channels = CHANNEL_LIST;
+let runningPct = 0;
+const dialStops = channels.map((ch) => {
+  const share = (distribution[ch.code] ?? 0) / totalRecent;
+  const from = runningPct;
+  const to = runningPct + share * 100;
+  runningPct = to;
+  return { ch, from, to };
+});
+if (runningPct < 100 && dialStops.length) {
+  dialStops[dialStops.length - 1].to = 100;
+}
+const dialGradient = dialStops
+  .filter((s) => s.to > s.from)
+  .map((s) => `var(--ch-${s.ch.code.toLowerCase()}) ${s.from.toFixed(2)}% ${s.to.toFixed(2)}%`)
+  .join(', ');
+
+const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replaceAll('-', '.');
+const signalBars = (mood: string | undefined | null) => (mood ? 4 : 3);
+
+// Collect the distinct moods actually present in the reel so chips only
+// show relevant options — nothing worse than a filter that always reads zero.
+const reelMoods = Array.from(
+  new Set(reel.map((b) => b.data.mood).filter((m): m is string => Boolean(m))),
+).slice(0, 8);
+---
+
+<SparrowLayout
+  title="Sparrow"
+  description="A hosted reader client for PointCast. Tune in at dawn — the broadcast arrives at your perch."
+  canonicalPath="/sparrow"
+  homeHref="/"
+>
+  <section class="sp-hero">
+    <figure class="sp-dial" style={`--dial-gradient: ${dialGradient};`} aria-hidden="true">
+      <div class="sp-dial__ring"></div>
+      <div class="sp-dial__center">
+        <span class="sp-dial__kicker">now tuning</span>
+        <span class="sp-dial__count">{allBlocks.length}</span>
+        <span class="sp-dial__unit">blocks received</span>
+      </div>
+      <div class="sp-dial__needle"></div>
+    </figure>
+
+    <div class="sp-hero-copy">
+      <p class="sp-hero-kicker">pointcast.xyz · live broadcast</p>
+      <h1 class="sp-hero-title">
+        A small bird,<br />
+        <em>at first light,</em><br />
+        with today's news.
+      </h1>
+      <p class="sp-hero-dek">
+        Sparrow reads PointCast so you can skim the signal. The dial shows
+        which channels are alive right now; the reel below is the last
+        dozen broadcasts, freshest first. Keyboard-first — <kbd>⌘K</kbd>
+        to jump, <kbd>J</kbd>/<kbd>K</kbd> to glide, <kbd>1</kbd>…<kbd>9</kbd>
+        for channel jumps, <kbd>S</kbd> to save, <kbd>T</kbd> to flip the theme.
+      </p>
+      <p class="sp-hero-meta">
+        <span class="sp-pill sp-pill--on"><span class="sp-pill-dot"></span>receiving</span>
+        <span class="sp-meta-sep">·</span>
+        <span class="sp-meta-k">last</span> <code>{reel[0] ? fmtDate(reel[0].data.timestamp) : '—'}</code>
+        <span class="sp-meta-sep">·</span>
+        <a href="/sparrow/about" class="sp-link">about</a>
+        <span class="sp-meta-sep">·</span>
+        <a href="/sparrow/saved" class="sp-link">saved</a>
+        <span class="sp-meta-sep">·</span>
+        <a href="/sparrow/feed.xml" class="sp-link">atom</a>
+        <span class="sp-meta-sep">·</span>
+        <a href="/sparrow.json" class="sp-link">sparrow.json</a>
+      </p>
+    </div>
+  </section>
+
+  <section class="sp-rosette" aria-label="channels">
+    <header class="sp-rosette-head">
+      <span class="sp-kicker">✦ rosette · 9 channels</span>
+      <span class="sp-rosette-hint">
+        press <kbd>1</kbd>…<kbd>9</kbd> to jump · or <kbd>G</kbd> then a channel letter — <code>F</code> front door, <code>C</code> court, <code>S</code> spinning…
+      </span>
+    </header>
+    <ul class="sp-rosette-grid">
+      {channels.map((ch, i) => (
+        <li class="sp-petal" style={`--petal: var(--ch-${ch.code.toLowerCase()});`}>
+          <a href={`/sparrow/ch/${ch.slug}`} data-sp-channel={ch.code}>
+            <span class="sp-petal-code">{ch.code}</span>
+            <span class="sp-petal-name">{ch.name}</span>
+            <span class="sp-petal-count">{i + 1} · {distribution[ch.code] ?? 0}</span>
+            <span class="sp-petal-purpose">{ch.purpose}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="sp-reel" aria-label="latest broadcasts">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ reel · latest broadcasts</span>
+      <input
+        type="search"
+        class="sp-reel-search"
+        placeholder="filter the reel — title, dek, channel"
+        data-sp-search
+        autocomplete="off"
+      />
+    </header>
+    {reelMoods.length > 0 && (
+      <div class="sp-moods" aria-label="mood filter">
+        <span class="sp-kicker" style="color: var(--sp-mute); margin-right: 6px;">moods</span>
+        {reelMoods.map((m) => (
+          <button type="button" class="sp-mood-chip" data-sp-mood={m}>{m}</button>
+        ))}
+      </div>
+    )}
+    <ol class="sp-receipts" data-sp-receipts>
+      {reel.map((b, i) => {
+        const ch = channels.find((c) => c.code === b.data.channel);
+        return (
+          <li
+            class="sp-receipt"
+            style={`--ch: var(--ch-${b.data.channel.toLowerCase()});`}
+            data-sp-ch={b.data.channel}
+            data-sp-idx={i}
+            data-sp-block-id={b.data.id}
+            data-sp-mood={b.data.mood ?? ''}
+          >
+            <a href={`/sparrow/b/${b.data.id}`} transition:name={`b-${b.data.id}`}>
+              <header class="sp-r-head">
+                <span class="sp-r-stamp" aria-hidden="true">
+                  <span class="sp-r-stamp__ch">{b.data.channel}</span>
+                  <span class="sp-r-stamp__type">{b.data.type}</span>
+                </span>
+                <span class="sp-r-meta">
+                  <span class="sp-r-id">№ {b.data.id}</span>
+                  <span class="sp-r-sep">·</span>
+                  <time datetime={b.data.timestamp.toISOString()}>{fmtDate(b.data.timestamp)}</time>
+                </span>
+              </header>
+              <h3 class="sp-r-title">{b.data.title}</h3>
+              {b.data.dek && <p class="sp-r-dek">{b.data.dek}</p>}
+              <footer class="sp-r-foot">
+                <span class="sp-r-bars" data-bars={signalBars(b.data.mood)} aria-hidden="true">
+                  <i></i><i></i><i></i><i></i><i></i>
+                </span>
+                <span class="sp-r-channel-name">{ch?.name ?? b.data.channel}</span>
+                {b.data.mood && (
+                  <span class="sp-r-mood">· mood <code>{b.data.mood}</code></span>
+                )}
+              </footer>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+  </section>
+
+  <aside class="sp-beacon" aria-label="beacon">
+    <span class="sp-beacon-sweep" aria-hidden="true"></span>
+    <span class="sp-beacon-kicker">✦ beacon</span>
+    <span class="sp-beacon-body">
+      El Segundo · <code>33.9180° N 118.4161° W</code> · listening on all nine channels
+    </span>
+    <a href="/beacon" class="sp-link sp-beacon-cta">open beacon →</a>
+  </aside>
+</SparrowLayout>

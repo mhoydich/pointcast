@@ -83,8 +83,11 @@ const blocks = defineCollection({
       .optional(),
 
     // Agent-readable tags. Free-form, but keys used consistently become a
-    // de-facto tag taxonomy over time.
-    meta: z.record(z.string(), z.string()).optional(),
+    // de-facto tag taxonomy over time. Values accept strings, numbers,
+    // booleans, or arrays of those — blocks like 0362 (AgarChat) stash
+    // structured config here (modes[], features[], sprints as number),
+    // and locking meta to string-only would force callers to stringify.
+    meta: z.record(z.string(), z.any()).optional(),
 
     // READ-type specifics
     readingTime: z.string().optional(),   // e.g. "4 min"
@@ -217,6 +220,15 @@ const products = defineCollection({
     ingredients: z.array(z.string()).optional(),
     /** Optional one-line subtitle. */
     dek: z.string().max(200).optional(),
+    /** Mood slugs this product pairs with. Drives /pairings/{mood} cross-index —
+     *  a block with mood `late-night-calm` and a product with that slug in
+     *  pairsWithMood co-surface on the same pairing page. Same slug shape
+     *  as block.mood (lowercase-hyphen, max 40 chars). */
+    pairsWithMood: z.array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,38}$/)).max(8).optional(),
+    /** Optional Sonic Postcard profile slug OR block id — the soundtrack
+     *  this product plays against. Procedural profiles: el-segundo, medway,
+     *  nyc, london, mallorca, istanbul, tokyo, mexico-city. */
+    vibeProfile: z.string().max(60).optional(),
     /** When this entry was first added to PointCast. */
     addedAt: z.coerce.date(),
     /** Author + source — same VOICE.md rules as blocks. Default cc; if
@@ -271,6 +283,16 @@ const polls = defineCollection({
     }).optional(),
     /** Zeitgeist mode — cultural snapshot, never resolves. Persists as a record of the moment. */
     zeitgeist: z.boolean().default(false),
+    /** Per-option follow-ups. Keys are option.id, values are poll slugs.
+     *  When a voter picks option X, /poll/{slug} reveals a "next on this
+     *  pathway" card linking to followUps[X]. Creates branching poll graphs
+     *  without mutating the linear vote flow. Invalid slugs are dropped at
+     *  render time (no hard error). Max 7 (matches options). */
+    followUps: z.record(z.string(), z.string()).optional(),
+    /** Sibling polls — rendered as an "other ways in" rail on the poll page.
+     *  Multiple start points into the same zeitgeist network. Always visible
+     *  (not gated by vote). Poll slugs only; missing slugs are skipped. */
+    related: z.array(z.string()).max(6).optional(),
     author: z.enum(['cc', 'mike', 'mh+cc', 'codex', 'manus', 'guest']).default('cc'),
     source: z.string().optional(),
     draft: z.boolean().default(false),

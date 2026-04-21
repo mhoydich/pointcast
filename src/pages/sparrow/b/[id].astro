@@ -1,0 +1,221 @@
+---
+/**
+ * /sparrow/b/<id> — block reader in Sparrow chrome.
+ *
+ * Distinct from the canonical /b/<id> page: this is the reading-mode
+ * version that lives inside Sparrow's palette/keyboard/HUD. The card
+ * on the reel morphs into this via `transition:name="b-<id>"`.
+ *
+ * Aside surfaces: back-to-channel, companion blocks, external link
+ * (if the block has one), save-to-reading-list button, canonical link
+ * to the /b/<id> version. Footer: prev/next within Sparrow's ordering,
+ * plus keyboard hints.
+ */
+import SparrowLayout from '../../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { getChannel } from '../../../lib/channels';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  return blocks.map((b) => ({ params: { id: b.data.id } }));
+}
+
+const { id } = Astro.params;
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const idx = all.findIndex((b) => b.data.id === id);
+if (idx < 0) {
+  return Astro.redirect('/sparrow');
+}
+
+const block = all[idx];
+const prev = all[idx - 1]; // newer
+const next = all[idx + 1]; // older
+const ch = getChannel(block.data.channel);
+
+const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replaceAll('-', '.');
+
+// Normalize body paragraphs — our JSON blocks use "\n\n" between paragraphs.
+const bodyParas = (block.data.body ?? '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+
+// Resolve declared companions, if any, to fuller records.
+const companionRecords = (block.data.companions ?? []).map((c: any) => {
+  const ref = c.refId || c.id || '';
+  const match = all.find((b) => b.data.id === ref);
+  return {
+    id: ref,
+    title: match?.data.title ?? ref,
+    channel: match?.data.channel ?? c.channel ?? null,
+    note: c.note ?? null,
+  };
+});
+
+// Render a simple inline-code replacement in body paragraphs so backtick
+// runs in the JSON show up as <code>. Anything more serious (links,
+// markdown) stays plain text — reader-mode is deliberately minimal.
+function renderInlineCode(s: string): string {
+  return s.replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+---
+
+<SparrowLayout
+  title={`№ ${block.data.id} — ${block.data.title}`}
+  description={block.data.dek ?? block.data.title}
+  canonicalPath={`/sparrow/b/${block.data.id}`}
+  homeHref="/sparrow"
+>
+  <article
+    class="sp-reader"
+    data-sp-block-id={block.data.id}
+    style={`--ch: var(--ch-${block.data.channel.toLowerCase()});`}
+  >
+    <div class="sp-article">
+      <header class="sp-article-head" transition:name={`b-${block.data.id}`}>
+        <div class="sp-article-meta">
+          <span class="sp-r-stamp" aria-hidden="true">
+            <span class="sp-r-stamp__ch">{block.data.channel}</span>
+            <span class="sp-r-stamp__type">{block.data.type}</span>
+          </span>
+          <span class="sp-r-id">№ {block.data.id}</span>
+          <span>·</span>
+          <time datetime={block.data.timestamp.toISOString()}>{fmtDate(block.data.timestamp)}</time>
+          {block.data.readingTime && (
+            <>
+              <span>·</span>
+              <span>{block.data.readingTime}</span>
+            </>
+          )}
+          <span>·</span>
+          <span>by <code>{block.data.author}</code></span>
+          {block.data.mood && (
+            <>
+              <span>·</span>
+              <span>mood <code>{block.data.mood}</code></span>
+            </>
+          )}
+        </div>
+
+        <h1 class="sp-article-title">{block.data.title}</h1>
+        {block.data.dek && <p class="sp-article-dek">{block.data.dek}</p>}
+      </header>
+
+      <div class="sp-article-body">
+        {bodyParas.length === 0 && (
+          <p class="sp-aside-mono">
+            This block doesn't carry a body on Sparrow — it lives as a card.
+            Open <a class="sp-link" href={`/b/${block.data.id}`}>the canonical block</a> for the
+            full render.
+          </p>
+        )}
+        {bodyParas.map((p) => (
+          <p set:html={renderInlineCode(p)}></p>
+        ))}
+      </div>
+
+      <footer class="sp-article-foot">
+        {prev && (
+          <a class="sp-nav-btn" href={`/sparrow/b/${prev.data.id}`}>
+            ← <kbd>K</kbd> newer · № {prev.data.id}
+          </a>
+        )}
+        {next && (
+          <a class="sp-nav-btn" href={`/sparrow/b/${next.data.id}`} style="margin-left: auto;">
+            older · № {next.data.id} <kbd>J</kbd> →
+          </a>
+        )}
+      </footer>
+    </div>
+
+    <aside class="sp-aside" aria-label="block meta">
+      <div class="sp-aside-box" style={`border-color: color-mix(in oklch, var(--ch) 50%, var(--sp-rule));`}>
+        <h3>✦ channel</h3>
+        <a href={`/sparrow/ch/${ch?.slug}`} class="sp-link" style="font-family: var(--sp-display); font-size: 18px;">
+          {block.data.channel} · {ch?.name}
+        </a>
+        <p class="sp-aside-mono" style="margin-top: 8px;">{ch?.purpose}</p>
+      </div>
+
+      <div class="sp-aside-box">
+        <h3>✦ save</h3>
+        <button
+          type="button"
+          class="sp-save-btn"
+          data-sp-save={block.data.id}
+          aria-pressed="false"
+        >
+          ☆ add to reading list
+        </button>
+        <p class="sp-aside-mono" style="margin-top: 10px;">
+          also: press <kbd>S</kbd> anywhere in Sparrow.
+        </p>
+      </div>
+
+      {companionRecords.length > 0 && (
+        <div class="sp-aside-box">
+          <h3>✦ companions</h3>
+          <ul class="sp-aside-list">
+            {companionRecords.map((c) => (
+              <li>
+                <a href={`/sparrow/b/${c.id}`}>
+                  {c.title}
+                  {c.channel && <span class="sp-aside-mono" style="display: block; margin-top: 2px;">{c.channel}</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {block.data.external && (
+        <div class="sp-aside-box">
+          <h3>✦ external</h3>
+          <a href={block.data.external.url} class="sp-link" target="_blank" rel="noopener">
+            {block.data.external.label} →
+          </a>
+        </div>
+      )}
+
+      <div class="sp-aside-box">
+        <h3>✦ canonical</h3>
+        <a href={`/b/${block.data.id}`} class="sp-link">/b/{block.data.id}</a>
+        <p class="sp-aside-mono" style="margin-top: 8px;">
+          the full pointcast render, outside sparrow's chrome.
+        </p>
+      </div>
+    </aside>
+  </article>
+
+  <aside class="sp-beacon" aria-label="back to reel">
+    <span class="sp-beacon-sweep" aria-hidden="true"></span>
+    <span class="sp-beacon-kicker">✦ reel</span>
+    <span class="sp-beacon-body">
+      <kbd>J</kbd> older · <kbd>K</kbd> newer · <kbd>S</kbd> save · <kbd>⌘K</kbd> jump
+    </span>
+    <a href="/sparrow" class="sp-link sp-beacon-cta">back to reel →</a>
+  </aside>
+
+  <script
+    is:inline
+    define:vars={{
+      prevUrl: prev ? `/sparrow/b/${prev.data.id}` : null,
+      nextUrl: next ? `/sparrow/b/${next.data.id}` : null,
+    }}
+  >
+    (() => {
+      // On the reader, J/K nav to next/prev block. The layout's J/K
+      // focus-receipt handler is a no-op here (no receipts present),
+      // so this listener takes over cleanly.
+      document.addEventListener('keydown', (e) => {
+        const inField =
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) ||
+          e.target?.isContentEditable;
+        if (inField) return;
+        const k = e.key.toLowerCase();
+        if (k === 'j' && nextUrl) { e.preventDefault(); window.location.href = nextUrl; }
+        else if (k === 'k' && prevUrl) { e.preventDefault(); window.location.href = prevUrl; }
+      });
+    })();
+  </script>
+</SparrowLayout>
