@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.11</span>
+          <span class="sp-sub">pointcast reader · v0.12</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -1017,6 +1017,97 @@ const paletteData = {
             }
           });
         });
+
+        // ─── v0.12 · MAGPIE BRIDGE DETECTION ────────────────────────
+        // Composer reports whether a local Magpie peer-node is alive
+        // and which of its destinations are ready (pulled from the
+        // Magpie /config.json schema). v0.13 will route the composer
+        // through Magpie's /broadcast for real multi-destination posts;
+        // v0.12 is awareness + a deep link into /magpie.
+        const MAGPIE_ORIGIN = 'http://127.0.0.1:38473';
+        const DEST_META = {
+          pointcast: { code: 'PC', name: 'PointCast' },
+          mastodon:  { code: 'MA', name: 'Mastodon' },
+          farcaster: { code: 'FC', name: 'Farcaster' },
+          bitchat:   { code: 'BC', name: 'bitchat' },
+          bluesky:   { code: 'BS', name: 'Bluesky' },
+          twitter:   { code: 'TW', name: 'Twitter / X' },
+          linkedin:  { code: 'LI', name: 'LinkedIn' },
+          instagram: { code: 'IG', name: 'Instagram' },
+          zora:      { code: 'ZO', name: 'Zora' },
+          objkt:     { code: 'OB', name: 'Objkt' },
+          opensea:   { code: 'OS', name: 'OpenSea' },
+        };
+
+        async function probeMagpie() {
+          const bridges = document.querySelectorAll('[data-sp-magpie-bridge]');
+          if (!bridges.length) return;
+          bridges.forEach((b) => { b.hidden = false; });
+          const paintPill = (state, label) => {
+            bridges.forEach((b) => {
+              const pill = b.querySelector('[data-sp-magpie-pill]');
+              if (!pill) return;
+              pill.setAttribute('data-state', state);
+              const lbl = pill.querySelector('[data-sp-magpie-label]');
+              if (lbl) lbl.textContent = label;
+            });
+          };
+          const paintDests = (rows) => {
+            bridges.forEach((b) => {
+              const list = b.querySelector('[data-sp-magpie-dests]');
+              if (!list) return;
+              list.innerHTML = rows.map((r) => `
+                <li class="sp-bridge-dest ${r.ready ? 'is-ready' : 'is-dim'}">
+                  <span class="sp-bridge-dest-code">${r.code}</span>
+                  <span class="sp-bridge-dest-name">${r.name}</span>
+                  <span class="sp-bridge-dest-state">${r.ready ? 'ready' : 'set up'}</span>
+                </li>
+              `).join('');
+            });
+          };
+
+          paintPill('probing', 'magpie · probing');
+          // 1.2s abort — don't block the reader when no Magpie is running.
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 1200);
+          let health;
+          try {
+            const r = await fetch(MAGPIE_ORIGIN + '/health', { signal: ctrl.signal, cache: 'no-store' });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            health = await r.json();
+          } catch {
+            clearTimeout(timer);
+            paintPill('offline', 'magpie · offline');
+            paintDests([]);
+            return;
+          }
+          clearTimeout(timer);
+
+          // Config → enabled + ready destinations. Magpie's /config.json
+          // returns { pointcast: {...}, publishers: {<id>: { ready, enabled, ... }} }
+          let config;
+          try {
+            const r = await fetch(MAGPIE_ORIGIN + '/config.json', { cache: 'no-store' });
+            config = r.ok ? await r.json() : {};
+          } catch { config = {}; }
+
+          const pubs = (config && config.publishers) || {};
+          const rows = [];
+          // PointCast first — always canonical.
+          rows.push({ id: 'pointcast', code: 'PC', name: 'PointCast', ready: true });
+          for (const id of Object.keys(DEST_META)) {
+            if (id === 'pointcast') continue;
+            const meta = DEST_META[id];
+            const entry = pubs[id];
+            if (!entry) continue;
+            rows.push({ id, code: meta.code, name: meta.name, ready: !!entry.ready });
+          }
+
+          const readyN = rows.filter((r) => r.ready).length;
+          paintPill('connected', `magpie · connected · ${readyN} ready`);
+          paintDests(rows);
+        }
+        probeMagpie();
 
         window.addEventListener('beforeunload', () => {
           for (const ws of openSockets) {
@@ -2027,6 +2118,94 @@ const paletteData = {
         font-size: 10.5px;
         color: var(--sp-mute);
         margin: 4px 0 0;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+      }
+
+      /* ─── v0.12 · MAGPIE BRIDGE AWARENESS ───────────────────────── */
+      .sp-compose-bridge {
+        border-top: 1px dotted var(--sp-rule);
+        padding-top: 14px;
+        margin-top: 4px;
+        display: grid;
+        gap: 10px;
+      }
+      .sp-compose-bridge[hidden] { display: none; }
+      .sp-bridge-head {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      }
+      .sp-bridge-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 3px 10px;
+        border: 1px solid var(--sp-rule);
+        border-radius: 999px;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-mute);
+      }
+      .sp-bridge-dot {
+        width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+      }
+      .sp-bridge-pill[data-state="probing"]   { color: var(--sp-ember); }
+      .sp-bridge-pill[data-state="probing"] .sp-bridge-dot { animation: sp-pulse 1s ease-in-out infinite; }
+      .sp-bridge-pill[data-state="connected"] {
+        color: var(--sp-moss); border-color: var(--sp-moss);
+        background: color-mix(in oklch, var(--sp-moss) 14%, transparent);
+      }
+      .sp-bridge-pill[data-state="connected"] .sp-bridge-dot { box-shadow: 0 0 8px currentColor; }
+      .sp-bridge-pill[data-state="offline"]   { color: var(--sp-mute); }
+
+      .sp-bridge-cta {
+        margin-left: auto;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        padding: 3px 10px;
+        border: 1px solid var(--sp-rule);
+        border-radius: 3px;
+        color: var(--sp-ash);
+        text-decoration: none;
+        transition: border-color 140ms ease, color 140ms ease;
+      }
+      .sp-bridge-cta:hover { border-color: var(--sp-ember); color: var(--sp-ember); text-decoration: none; }
+
+      .sp-bridge-dests {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; gap: 6px; flex-wrap: wrap;
+      }
+      .sp-bridge-dest {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 3px 8px;
+        border: 1px solid var(--sp-rule);
+        border-radius: 999px;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        color: var(--sp-ash);
+      }
+      .sp-bridge-dest.is-ready { border-color: var(--sp-moss); color: var(--sp-bone); }
+      .sp-bridge-dest.is-dim { opacity: 0.55; border-style: dashed; }
+      .sp-bridge-dest-code {
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--sp-ember);
+      }
+      .sp-bridge-dest.is-ready .sp-bridge-dest-code { color: var(--sp-moss); }
+      .sp-bridge-dest-name { color: inherit; }
+      .sp-bridge-dest-state {
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-mute);
+        font-size: 9px;
+      }
+
+      .sp-bridge-note {
+        font-family: var(--sp-mono);
+        font-size: 10.5px;
+        color: var(--sp-mute);
+        margin: 0;
         line-height: 1.5;
         letter-spacing: 0.02em;
       }
