@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.8</span>
+          <span class="sp-sub">pointcast reader · v0.9</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -587,10 +587,15 @@ const paletteData = {
           if (map[blockId].length === 0) delete map[blockId];
           writeReactions(map);
           hydrateReactions();
-          // v0.8: if a NIP-07 signer is connected, fan this pick out as
-          // a Nostr kind-7 reaction event. Only emit on ADD — deletion
-          // would require a kind-5 event (v0.9). Non-blocking.
-          if (willAdd) { nostrEmitReaction(blockId, kind).catch(() => {}); }
+          // v0.8: on ADD, fan out as a kind-7 Nostr reaction event.
+          // v0.9: on REMOVE, emit a kind-5 delete that references the
+          // previously-published event id (if we emitted one). Both
+          // non-blocking — local state wins either way.
+          if (willAdd) {
+            nostrEmitReaction(blockId, kind).catch(() => {});
+          } else {
+            nostrDeleteReaction(blockId, kind).catch(() => {});
+          }
         };
         const hydrateReactions = () => {
           const map = readReactions();
@@ -743,6 +748,158 @@ const paletteData = {
             } catch {}
           }
 
+          paintNostrState('connected');
+        }
+
+        // ─── v0.9 · REACTION AGGREGATION (read) + KIND-5 UNREACT ────
+        // For each reactions panel on the page, open a REQ subscription
+        // against every configured relay, filter for kind:7 events
+        // r-tagged to the block's canonical URL, count by content glyph,
+        // paint a small count badge on each chip. Subscription works
+        // without a NIP-07 signer — reading is public — but emits still
+        // require a signer (see v0.8).
+        const KIND_BY_GLYPH = { '🔥': 'ember', '🌿': 'moss', '💜': 'lilac' };
+        const reactionCounts = new Map();   // blockId -> Map<kind, Set<eventId>>
+        const openSockets = [];
+
+        function ingestReactionEvent(blockId, event) {
+          if (!event || event.kind !== 7 || typeof event.id !== 'string') return;
+          if (typeof event.content !== 'string') return;
+          // Deduce kind from content glyph first; fall back to a
+          // sparrow-<kind> tag if the content is non-glyph (some
+          // clients emit "+" or "like" as NIP-25 default).
+          let kind = null;
+          for (const g of Object.keys(KIND_BY_GLYPH)) {
+            if (event.content.includes(g)) { kind = KIND_BY_GLYPH[g]; break; }
+          }
+          if (!kind && Array.isArray(event.tags)) {
+            for (const t of event.tags) {
+              if (Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string') {
+                const m = /^sparrow-(ember|moss|lilac)$/.exec(t[1]);
+                if (m) { kind = m[1]; break; }
+              }
+            }
+          }
+          if (!kind) return;
+          if (!reactionCounts.has(blockId)) reactionCounts.set(blockId, new Map());
+          const byKind = reactionCounts.get(blockId);
+          if (!byKind.has(kind)) byKind.set(kind, new Set());
+          byKind.get(kind).add(event.id);
+          paintReactionCounts(blockId);
+        }
+
+        function paintReactionCounts(blockId) {
+          const panel = document.querySelector(`[data-sp-reactions][data-sp-block-id="${blockId}"]`);
+          if (!panel) return;
+          const byKind = reactionCounts.get(blockId) || new Map();
+          panel.querySelectorAll('[data-sp-react]').forEach((btn) => {
+            const kind = btn.getAttribute('data-sp-react');
+            const count = byKind.get(kind)?.size ?? 0;
+            let badge = btn.querySelector('[data-sp-react-count]');
+            if (count > 0) {
+              if (!badge) {
+                badge = document.createElement('span');
+                badge.setAttribute('data-sp-react-count', '');
+                badge.className = 'sp-react-count';
+                btn.appendChild(badge);
+              }
+              badge.textContent = String(count);
+            } else if (badge) {
+              badge.remove();
+            }
+          });
+        }
+
+        function subscribeReactionsForBlock(blockId) {
+          const relays = getRelays();
+          if (!relays.length) return;
+          const url = `https://pointcast.xyz/b/${blockId}`;
+          const subId = `sparrow-r-${blockId}-${Date.now().toString(36)}`;
+          const filter = { kinds: [7], '#r': [url], limit: 200 };
+          const req = JSON.stringify(['REQ', subId, filter]);
+          for (const relay of relays) {
+            try {
+              const ws = new WebSocket(relay);
+              ws.addEventListener('open', () => { try { ws.send(req); } catch {} });
+              ws.addEventListener('message', (e) => {
+                try {
+                  const frame = JSON.parse(e.data);
+                  if (!Array.isArray(frame)) return;
+                  if (frame[0] === 'EVENT' && frame[1] === subId) {
+                    ingestReactionEvent(blockId, frame[2]);
+                  } else if (frame[0] === 'CLOSED' && frame[1] === subId) {
+                    try { ws.close(); } catch {}
+                  }
+                } catch {}
+              });
+              ws.addEventListener('error', () => { try { ws.close(); } catch {} });
+              openSockets.push(ws);
+            } catch {}
+          }
+        }
+
+        document.querySelectorAll('[data-sp-reactions]').forEach((panel) => {
+          const id = panel.getAttribute('data-sp-block-id');
+          if (id) subscribeReactionsForBlock(id);
+        });
+
+        window.addEventListener('beforeunload', () => {
+          for (const ws of openSockets) {
+            try { ws.close(1000, 'sparrow nav'); } catch {}
+          }
+        });
+
+        // ─── Kind-5 unreact — wired into the existing toggleReaction
+        // branch (willAdd === false). We keep the local delete optimistic;
+        // if the signer call throws, the emit log entry stays so we can
+        // retry the retraction later. Non-blocking.
+        async function nostrDeleteReaction(blockId, kind) {
+          if (!hasNip07() || !cachedPubkey.value) return;
+          let emittedMap;
+          try { emittedMap = JSON.parse(localStorage.getItem(KEY_NOSTR_EMITTED) || '{}'); } catch { return; }
+          const key = `${blockId}:${kind}`;
+          const entry = emittedMap[key];
+          if (!entry?.id) return;
+
+          const unsigned = {
+            kind: 5,
+            pubkey: cachedPubkey.value,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ['e', entry.id],
+              ['k', '7'],
+              ['t', 'sparrow'],
+              ['client', 'sparrow', 'https://pointcast.xyz/sparrow'],
+            ],
+            content: 'sparrow: unreact',
+          };
+
+          paintNostrState('emitting');
+          let signed;
+          try { signed = await window.nostr.signEvent(unsigned); }
+          catch { paintNostrState('connected'); return; }
+          if (!signed?.id || !signed?.sig) { paintNostrState('connected'); return; }
+
+          for (const url of getRelays()) {
+            try {
+              const ws = new WebSocket(url);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['EVENT', signed])); } catch {}
+              });
+              ws.addEventListener('message', () => { try { ws.close(); } catch {} });
+              setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 4000);
+            } catch {}
+          }
+
+          // Local bookkeeping: drop the emitted log entry + the observed
+          // event from the count map so the chip stops claiming it.
+          delete emittedMap[key];
+          try { localStorage.setItem(KEY_NOSTR_EMITTED, JSON.stringify(emittedMap)); } catch {}
+          const byKind = reactionCounts.get(blockId);
+          if (byKind) {
+            byKind.get(kind)?.delete(entry.id);
+            paintReactionCounts(blockId);
+          }
           paintNostrState('connected');
         }
 
@@ -1518,6 +1675,24 @@ const paletteData = {
       .sp-react--ember { --r-accent: var(--sp-ember); }
       .sp-react--moss  { --r-accent: var(--sp-moss); }
       .sp-react--lilac { --r-accent: var(--sp-lilac); }
+
+      /* v0.9: count badge — aggregated from relay kind-7 events, painted
+         by the layout script on each chip that has seen ≥1 event. */
+      .sp-react-count {
+        font-family: var(--sp-mono);
+        font-size: 10.5px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: color-mix(in oklch, var(--r-accent) 22%, var(--sp-blue-hour));
+        color: var(--sp-bone);
+        min-width: 18px;
+        text-align: center;
+        line-height: 1.2;
+      }
+      .sp-react.is-on .sp-react-count {
+        background: color-mix(in oklch, var(--r-accent) 38%, var(--sp-blue-hour));
+        color: var(--sp-bone);
+      }
 
       /* ─── v0.8 · NOSTR STATUS + CONNECT ─────────────────────────── */
       .sp-reactions-head {
