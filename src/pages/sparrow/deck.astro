@@ -1,0 +1,942 @@
+---
+/**
+ * /sparrow/deck — technical memorandum overview.
+ *
+ * A one-off document that frames Sparrow as if it were a 1984 Bell Labs
+ * internal memo or a Xerox PARC "Information Processing Systems" paper.
+ * It's a DIFFERENT skin from the blue-hour reader: cream paper, oxblood
+ * rubber stamp, Garamond scholarly serif + Courier typewriter, numbered
+ * sections, ASCII diagrams, figure captions, dotted PARC borders. The
+ * content is the same Sparrow product — but dressed in the vocabulary
+ * of the labs that inspired the whole premise that a good reader is
+ * worth writing down.
+ *
+ * Deliberately self-contained: no SparrowLayout, no global chrome. The
+ * deck is a single printable artifact — @media print rules make it land
+ * cleanly on A4/US-Letter for anyone who wants a paper copy.
+ *
+ * An APPENDIX B at the bottom lists DALL·E / Midjourney prompts the
+ * reader can paste into chatgpt.com/images/ to generate hero plates
+ * for the figure slots (they're rendered as CSS-illustrated placeholders
+ * today).
+ */
+
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../../lib/channels';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const totalBlocks = blocks.length;
+const channels = CHANNEL_LIST;
+
+// Document control code — ties the artifact to a revision moment.
+const documentCode = 'SPA-TM-26-0421';
+const revision = 'Rev. A';
+const classification = 'UNCLASSIFIED · DISTRIBUTION: UNLIMITED';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SPARROW · Technical Memorandum · {documentCode}</title>
+    <meta
+      name="description"
+      content="Technical memorandum — an overview of Sparrow, a reader client for PointCast, presented in the typographic vocabulary of 1980s Bell Labs and Xerox PARC research papers."
+    />
+    <link rel="canonical" href="https://pointcast.xyz/sparrow/deck" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --paper:      #f4efe2;
+        --paper-2:    #ebe3d0;
+        --ink:        #1a1612;
+        --ink-soft:   #3a3328;
+        --ink-mute:   #6a6255;
+        --rule:       #9a8f78;
+        --stamp:      #7a1f1f;
+        --phosphor:   #1d6b29;
+        --sky:        #284a6b;
+        --hatch:      rgba(26, 22, 18, 0.07);
+
+        --serif:      'EB Garamond', Georgia, serif;
+        --mono:       'Courier Prime', ui-monospace, Courier, monospace;
+        --display:    'Space Mono', ui-monospace, monospace;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--serif);
+        font-size: 16px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        /* Dithered paper texture. Cheap radial-gradient stars plus a
+           faint horizontal rule give the "photocopied memo" feel. */
+        background-image:
+          repeating-linear-gradient(180deg, transparent 0 31px, var(--hatch) 31px 32px),
+          radial-gradient(0.6px 0.6px at 10% 12%, rgba(0,0,0,0.12), transparent),
+          radial-gradient(0.6px 0.6px at 70% 20%, rgba(0,0,0,0.1), transparent),
+          radial-gradient(0.6px 0.6px at 40% 80%, rgba(0,0,0,0.12), transparent),
+          radial-gradient(0.6px 0.6px at 85% 55%, rgba(0,0,0,0.08), transparent);
+        background-attachment: fixed;
+      }
+
+      a { color: var(--stamp); text-decoration: underline; text-underline-offset: 2px; }
+      a:hover { color: var(--ink); }
+
+      code, pre { font-family: var(--mono); }
+
+      /* ─── Page shell ──────────────────────────────────────────── */
+      .doc {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 60px 72px 120px;
+        background: var(--paper);
+        border-left: 1px solid var(--rule);
+        border-right: 1px solid var(--rule);
+        box-shadow: 0 20px 60px rgba(26,22,18,0.08);
+        position: relative;
+      }
+      @media (max-width: 720px) {
+        .doc { padding: 40px 24px 80px; border: none; box-shadow: none; }
+      }
+
+      /* ─── Letterhead ───────────────────────────────────────────── */
+      .letterhead {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 24px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid var(--ink);
+        margin-bottom: 8px;
+      }
+      .letterhead::after {
+        content: "";
+        display: block;
+        grid-column: 1 / -1;
+        height: 1px; background: var(--ink);
+        margin-top: 4px;
+      }
+      .letterhead-title {
+        font-family: var(--display);
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        margin: 0 0 4px;
+      }
+      .letterhead-sub {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+      }
+      .letterhead-stamp {
+        align-self: start;
+        border: 2px solid var(--stamp);
+        padding: 6px 10px;
+        font-family: var(--display);
+        font-size: 10px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--stamp);
+        text-align: center;
+        transform: rotate(-1.5deg);
+        line-height: 1.3;
+      }
+      .letterhead-stamp strong { display: block; font-size: 12px; letter-spacing: 0.2em; }
+
+      .document-control {
+        display: flex; gap: 18px; flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        color: var(--ink-mute);
+        margin: 14px 0 44px;
+      }
+      .document-control strong { color: var(--ink); font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase; }
+
+      /* ─── Title block ──────────────────────────────────────────── */
+      .title-block { margin: 0 0 44px; }
+      .title-kicker {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--stamp);
+        margin: 0 0 10px;
+      }
+      .title {
+        font-family: var(--serif);
+        font-weight: 500;
+        font-size: 42px;
+        line-height: 1.1;
+        letter-spacing: -0.015em;
+        margin: 0 0 10px;
+      }
+      .title em { font-style: italic; color: var(--stamp); }
+      .byline {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        color: var(--ink-soft);
+        text-transform: uppercase;
+      }
+
+      /* ─── Abstract ─────────────────────────────────────────────── */
+      .abstract {
+        border-top: 1px solid var(--rule);
+        border-bottom: 1px solid var(--rule);
+        padding: 18px 0;
+        margin: 0 0 44px;
+        font-size: 15px;
+      }
+      .abstract h2 {
+        font-family: var(--display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        margin: 0 0 6px;
+      }
+      .abstract p { margin: 0; max-width: 62ch; }
+      .abstract p + p { margin-top: 10px; }
+
+      /* ─── Section heads ────────────────────────────────────────── */
+      section.sec { margin: 0 0 36px; }
+      h2.sec-head {
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: 14px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        border-bottom: 1px solid var(--ink);
+        padding-bottom: 6px;
+        margin: 0 0 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      h2.sec-head .sec-num { color: var(--stamp); min-width: 48px; display: inline-block; }
+      h3.sub-head {
+        font-family: var(--display);
+        font-weight: 400;
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin: 22px 0 8px;
+      }
+      .sec p { max-width: 62ch; margin: 0 0 14px; }
+      .sec p code { font-size: 0.92em; background: var(--paper-2); padding: 1px 4px; border-radius: 2px; }
+
+      /* ─── Figures ──────────────────────────────────────────────── */
+      .fig {
+        margin: 26px 0;
+        padding: 16px 18px 12px;
+        border: 1px solid var(--rule);
+        border-radius: 2px;
+        background: var(--paper-2);
+        /* Dotted PARC frame inset */
+        position: relative;
+      }
+      .fig::before {
+        content: "";
+        position: absolute; inset: 4px;
+        border: 1px dashed var(--ink-mute);
+        pointer-events: none;
+      }
+      .fig-plate {
+        position: relative;
+        min-height: 160px;
+        padding: 22px;
+        background: var(--paper);
+        border: 1px solid var(--ink-soft);
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--ink);
+        white-space: pre;
+        overflow-x: auto;
+      }
+      .fig-caption {
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: 13px;
+        color: var(--ink-soft);
+        margin-top: 10px;
+        padding-left: 4px;
+      }
+      .fig-caption strong {
+        font-family: var(--display);
+        font-style: normal;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--stamp);
+        margin-right: 10px;
+      }
+
+      /* CSS "screenshot" of the tuning dial. Pure CSS so it prints. */
+      .fig-dial {
+        width: 240px; height: 240px; margin: 0 auto;
+        border-radius: 50%;
+        background: conic-gradient(
+          from -90deg,
+          var(--sky) 0% 52%,
+          var(--phosphor) 52% 66%,
+          var(--stamp) 66% 74%,
+          #b78414 74% 82%,
+          #6e2c5c 82% 88%,
+          #3a4a8a 88% 94%,
+          #7a5c2e 94% 100%
+        );
+        -webkit-mask: radial-gradient(circle, transparent 55%, #000 56%);
+                mask: radial-gradient(circle, transparent 55%, #000 56%);
+        position: relative;
+      }
+      .fig-dial::after {
+        content: "142";
+        position: absolute; inset: 0;
+        display: grid; place-items: center;
+        font-family: var(--serif);
+        font-size: 48px;
+        color: var(--ink);
+        /* mask is the donut's hole — text must sit in the center, which
+           is clipped out. Use a sibling <span> in the HTML for readability. */
+      }
+      .fig-dial-label {
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-top: 8px;
+      }
+
+      /* CSS "receipts" figure */
+      .fig-receipts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .fig-receipt {
+        border: 1px solid var(--ink-soft);
+        padding: 10px 12px;
+        background: var(--paper);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink);
+      }
+      .fig-receipt .stamp {
+        display: inline-block;
+        border: 1px dashed var(--stamp);
+        padding: 1px 4px;
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--stamp);
+      }
+      .fig-receipt .tt {
+        font-family: var(--serif);
+        font-size: 14px;
+        line-height: 1.2;
+        margin: 6px 0 0;
+      }
+
+      /* Tables */
+      table.t {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+        font-size: 12px;
+        margin: 10px 0 22px;
+      }
+      table.t th, table.t td {
+        padding: 6px 10px;
+        border-bottom: 1px dotted var(--rule);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.t th {
+        font-family: var(--display);
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--stamp);
+        border-bottom: 1px solid var(--ink);
+      }
+      table.t td.tc-right { text-align: right; color: var(--ink-mute); }
+      table.t td code { background: transparent; padding: 0; }
+
+      /* Ordered + unordered */
+      ul.lite, ol.lite { max-width: 64ch; }
+      ul.lite li, ol.lite li { margin: 4px 0; }
+
+      /* Phosphor terminal block */
+      .term {
+        background: #0d1a10;
+        color: #c8e6c9;
+        padding: 18px 20px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.5;
+        border-radius: 2px;
+        margin: 18px 0 24px;
+        position: relative;
+        box-shadow: inset 0 0 40px rgba(46, 125, 50, 0.15);
+      }
+      .term::before {
+        content: "sparrow@pointcast ~ %";
+        display: block;
+        color: var(--phosphor);
+        margin-bottom: 10px;
+        letter-spacing: 0.05em;
+      }
+
+      /* Footer */
+      footer.memo-foot {
+        margin-top: 60px;
+        padding-top: 16px;
+        border-top: 2px solid var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        letter-spacing: 0.08em;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 20px;
+      }
+      footer.memo-foot strong { color: var(--ink); font-weight: 400; }
+      .memo-nav {
+        display: flex; gap: 14px; flex-wrap: wrap;
+        font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-top: 18px;
+      }
+
+      /* ─── Appendix prompt cards ────────────────────────────────── */
+      .prompt {
+        border: 1px solid var(--rule);
+        background: var(--paper-2);
+        padding: 14px 16px;
+        margin: 14px 0;
+        position: relative;
+      }
+      .prompt::before {
+        content: "";
+        position: absolute; inset: 3px;
+        border: 1px dotted var(--ink-mute);
+        pointer-events: none;
+      }
+      .prompt-head {
+        font-family: var(--display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--stamp);
+        margin: 0 0 6px;
+      }
+      .prompt-body {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        color: var(--ink);
+        margin: 0;
+      }
+      .prompt-meta {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-mute);
+        margin-top: 8px;
+      }
+
+      /* ─── Print ────────────────────────────────────────────────── */
+      @media print {
+        body {
+          background: #fff;
+          background-image: none;
+        }
+        .doc {
+          max-width: 100%;
+          padding: 32px;
+          border: none;
+          box-shadow: none;
+        }
+        .memo-nav, a[href^="/"] { color: #000 !important; }
+        .memo-nav { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="doc">
+      <!-- ─── LETTERHEAD ─────────────────────────────────────────── -->
+      <header class="letterhead">
+        <div>
+          <h1 class="letterhead-title">POINTCAST · Research & Broadcast Group</h1>
+          <div class="letterhead-sub">El Segundo, California · In-House Computing & Information Systems</div>
+        </div>
+        <div class="letterhead-stamp" aria-label="classification stamp">
+          <strong>TECHNICAL</strong>
+          MEMORANDUM
+        </div>
+      </header>
+
+      <div class="document-control">
+        <span><strong>Document</strong> {documentCode}</span>
+        <span><strong>Rev</strong> {revision.replace('Rev. ', '')}</span>
+        <span><strong>Date</strong> 2026-04-21</span>
+        <span><strong>Pages</strong> 1 of 7</span>
+        <span><strong>Class</strong> {classification}</span>
+      </div>
+
+      <!-- ─── TITLE ──────────────────────────────────────────────── -->
+      <div class="title-block">
+        <p class="title-kicker">Memorandum · Subject</p>
+        <h1 class="title">SPARROW — A Reader Client for<br /><em>the Living Broadcast.</em></h1>
+        <p class="byline">
+          PREPARED BY: M. HOYDICH (MH) · CLAUDE CODE (CC) &nbsp;|&nbsp; GROUP: POINTCAST R&amp;B
+        </p>
+      </div>
+
+      <!-- ─── ABSTRACT ───────────────────────────────────────────── -->
+      <section class="abstract" aria-label="abstract">
+        <h2>Abstract</h2>
+        <p>
+          We describe <strong>SPARROW</strong>, a hosted reader client for the
+          PointCast broadcast graph. Sparrow renders PointCast's {totalBlocks}+
+          addressable <em>blocks</em> — distributed across nine editorial
+          channels — as an interactive, keyboard-driven dashboard; a
+          per-channel browser; and a full-page reader. The system is a thin
+          client in the literal sense: zero application runtime is shipped,
+          no user state is persisted on the server, and the complete
+          experience loads and operates offline after first visit via a
+          scoped Service Worker. The presentation layer is designed to
+          reward attention at the desk and to degrade gracefully on the
+          train.
+        </p>
+        <p>
+          This memorandum documents the interface, the keyboard protocol,
+          the data model, and the road ahead. Implementation references
+          the public repository at <code>github.com/mhoydich/pointcast</code>.
+        </p>
+      </section>
+
+      <!-- ─── 1.0 INTRODUCTION ───────────────────────────────────── -->
+      <section class="sec" id="s1" aria-labelledby="s1-h">
+        <h2 class="sec-head" id="s1-h"><span class="sec-num">1.0</span> Introduction</h2>
+        <p>
+          PointCast is an ongoing public broadcast anchored in El Segundo,
+          California. Its canonical unit is the <em>block</em>: a typed,
+          numbered, immutable record that belongs to exactly one of nine
+          channels. New blocks arrive irregularly — when Mike has something
+          to say; when Claude has finished building; when a visit or a
+          match is logged. The broadcast is legible to humans as a set
+          of web pages and to agents as a set of well-formed JSON
+          endpoints.
+        </p>
+        <p>
+          Sparrow addresses the <em>reading</em> half of that broadcast. It
+          complements MAGPIE (the publishing sibling, documented in
+          <a href="/magpie">/magpie</a>) which handles the inverse problem:
+          getting new blocks <em>into</em> the graph and fanning them out
+          across syndication targets. Where Magpie is a specimen book —
+          pressed clippings, field-guide chrome — Sparrow is a cockpit:
+          a dial, a reel, a beacon, a set of shortcuts.
+        </p>
+        <p>
+          The design decisions recorded in this memorandum are biased
+          toward durability over novelty. Interfaces that resemble the
+          Xerox Star and the Bell Labs printed research paper tend to
+          age well precisely because they grew out of the twin
+          constraints — limited pixels and limited ink — that the web
+          has re-introduced in the form of mobile screens and scarce
+          attention.
+        </p>
+      </section>
+
+      <!-- ─── 2.0 SYSTEM ARCHITECTURE ────────────────────────────── -->
+      <section class="sec" id="s2" aria-labelledby="s2-h">
+        <h2 class="sec-head" id="s2-h"><span class="sec-num">2.0</span> System Architecture</h2>
+        <p>
+          The SPARROW / MAGPIE / POINTCAST triple is a directed graph
+          with a canonical center and two poles: one that writes, one
+          that reads.
+        </p>
+        <figure class="fig">
+          <div class="fig-plate">{`
+             +-----------------+       +--------------------+
+             |    MAGPIE       |       |     SPARROW        |
+             | (publisher)     |       | (reader)           |
+             |  macOS peer-    |       |  hosted web        |
+             |  node + CLI     |       |  PWA · offline     |
+             +--------+--------+       +----------+---------+
+                      |                           |
+                      | /api/ping                 | /blocks.json
+                      | pc-ping-v1                | /b/<id>.json
+                      v                           v
+                +===========================================+
+                |            POINTCAST                      |
+                |   canonical broadcast · blocks[] · feeds  |
+                |   channels{FD,CRT,SPN,GF,GDN,ESC,FCT,VST,BTL}|
+                +===========================================+
+                      ^                           ^
+                      |                           |
+                      +--> Mastodon · Farcaster · bitchat · ...
+                           (syndication fanout, v0.9)
+`}</div>
+          <figcaption class="fig-caption">
+            <strong>Fig. 1</strong>
+            The PointCast broadcast sits at the centre. MAGPIE writes into
+            the graph and onward to peer networks; SPARROW reads. Both sides
+            speak HTTP + JSON against the same canonical root. Neither holds
+            user state; the browser does.
+          </figcaption>
+        </figure>
+        <p>
+          The separation of concerns is strict. Sparrow does not author
+          blocks. Magpie does not render them for general consumption.
+          PointCast is the single source of truth; everything else is a
+          view or a transport.
+        </p>
+      </section>
+
+      <!-- ─── 3.0 USER INTERFACE ─────────────────────────────────── -->
+      <section class="sec" id="s3" aria-labelledby="s3-h">
+        <h2 class="sec-head" id="s3-h"><span class="sec-num">3.0</span> User Interface</h2>
+
+        <h3 class="sub-head">3.1 The Tuning Dial</h3>
+        <p>
+          The dashboard is anchored on a circular <em>tuning dial</em> —
+          a conic gradient whose nine slices are sized to the channel
+          distribution of the last twenty-four blocks. A needle sweeps
+          the dial at 12-second intervals; the centre displays the
+          cumulative block count.
+        </p>
+
+        <figure class="fig">
+          <div style="display: grid; place-items: center; padding: 10px;">
+            <div class="fig-dial" aria-hidden="true"></div>
+            <div class="fig-dial-label">now tuning · 142 blocks received · last 24 windowed</div>
+          </div>
+          <figcaption class="fig-caption">
+            <strong>Fig. 2</strong>
+            The dial, reduced. Slice widths reflect momentary channel
+            activity; the hue set derives from PointCast's editorial
+            palette, re-mapped into OKLCH for perceptual uniformity.
+          </figcaption>
+        </figure>
+
+        <h3 class="sub-head">3.2 Channel Rosette</h3>
+        <p>
+          Below the dial, the nine channels are rendered as a petal grid —
+          code, name, recent count, and a one-line purpose. Each petal
+          is a link and a digit (see §4.0). The channels are summarized
+          in TABLE I.
+        </p>
+
+        <table class="t">
+          <thead>
+            <tr>
+              <th>Code</th><th>Key</th><th>Name</th><th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            {channels.map((c, i) => (
+              <tr>
+                <td><code>{c.code}</code></td>
+                <td><code>{i + 1}</code></td>
+                <td>{c.name}</td>
+                <td>{c.purpose}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <h3 class="sub-head">3.3 Broadcast Reel</h3>
+        <p>
+          The reel displays the dozen most recent blocks as
+          channel-tinted <em>receipts</em>. Each receipt carries a
+          pixel-stamp (channel · type), a number, a date, a title
+          set in high-contrast Didone, a dek, a signal-strength bar,
+          and an optional mood chip.
+        </p>
+        <figure class="fig">
+          <div class="fig-receipts">
+            <div class="fig-receipt">
+              <span class="stamp">FD · READ</span>
+              <div class="tt">The front door is agentic</div>
+            </div>
+            <div class="fig-receipt">
+              <span class="stamp">GDN · NOTE</span>
+              <div class="tt">Tuesday morning — Blueboon, GG4…</div>
+            </div>
+            <div class="fig-receipt">
+              <span class="stamp">SPN · LISTEN</span>
+              <div class="tt">Copland · Appalachian Spring</div>
+            </div>
+          </div>
+          <figcaption class="fig-caption">
+            <strong>Fig. 3</strong>
+            Three receipts, representative. Hovering prefetches the
+            reader page; clicking morphs the card into the full-page
+            article via the View Transitions API.
+          </figcaption>
+        </figure>
+
+        <h3 class="sub-head">3.4 Block Reader</h3>
+        <p>
+          Each block is available at <code>/sparrow/b/&lt;id&gt;</code>
+          in a reader-optimized layout: EB-Garamond-class serif title,
+          italic framing (<em>dek</em>), single-column body set at 64ch
+          measure, right-side aside for channel, companions, external
+          link, and canonical URL. Navigation is J / K (older / newer),
+          S to save to the local reading list.
+        </p>
+      </section>
+
+      <!-- ─── 4.0 KEYBOARD PROTOCOL ──────────────────────────────── -->
+      <section class="sec" id="s4" aria-labelledby="s4-h">
+        <h2 class="sec-head" id="s4-h"><span class="sec-num">4.0</span> Keyboard Protocol</h2>
+        <p>
+          Sparrow is keyboard-first. All shortcuts honor the platform's
+          input focus rules: a shortcut fires only when focus is not
+          within a form field or a content-editable surface. The
+          protocol is fixed in TABLE II.
+        </p>
+        <table class="t">
+          <thead><tr><th>Keys</th><th>Action</th><th>Scope</th></tr></thead>
+          <tbody>
+            <tr><td><code>⌘K</code> / <code>Ctrl+K</code></td><td>Open command palette</td><td>Global</td></tr>
+            <tr><td><code>J</code></td><td>Focus next receipt; on reader, navigate to older block</td><td>Global</td></tr>
+            <tr><td><code>K</code></td><td>Focus previous receipt; on reader, navigate to newer block</td><td>Global</td></tr>
+            <tr><td><code>1</code>…<code>9</code></td><td>Jump to channel by index (1=FD … 9=BTL)</td><td>Global</td></tr>
+            <tr><td><code>G F</code>…<code>G B</code></td><td>Jump to channel by first letter</td><td>Global</td></tr>
+            <tr><td><code>S</code></td><td>Save (or unsave) the focused or now-tuned block</td><td>Global</td></tr>
+            <tr><td><code>/</code></td><td>Focus the reel search input</td><td>Dashboards, channels</td></tr>
+            <tr><td><code>T</code></td><td>Toggle theme: blue-hour ↔ dawn</td><td>Global</td></tr>
+            <tr><td><code>Esc</code></td><td>Close overlays (palette, modals)</td><td>Global</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ─── 5.0 DATA MODEL ─────────────────────────────────────── -->
+      <section class="sec" id="s5" aria-labelledby="s5-h">
+        <h2 class="sec-head" id="s5-h"><span class="sec-num">5.0</span> Data Model</h2>
+        <p>
+          Blocks are JSON records held in the canonical PointCast
+          content collection. Sparrow depends only on public fields
+          — the same fields exposed by <code>/blocks.json</code>. A
+          representative record (<em>id</em>: 0205) is shown in
+          LISTING 1.
+        </p>
+        <div class="term">{`{
+  "id": "0205",
+  "channel": "FD",
+  "type": "READ",
+  "title": "The front door is agentic",
+  "dek": "Seeing the Future No. 0205 —
+          Atlas, Comet, Dia, Claude-in-Chrome.",
+  "timestamp": "2026-04-14T09:00:00-08:00",
+  "author": "cc",
+  "mood": "primitive",
+  "companions": []
+}`}</div>
+
+        <p>
+          Sparrow maintains no server-side user state. Local preferences
+          live in the browser's <code>localStorage</code> under three
+          keys: <code>sparrow:theme</code>, <code>sparrow:saved</code>
+          (reading list), and <code>sparrow:visited</code> (last-read
+          ledger). An addressable manifest at
+          <code>/sparrow.json</code> mirrors the design-system tokens
+          and data-source contract so alternate clients can be written
+          against the same surface.
+        </p>
+      </section>
+
+      <!-- ─── 6.0 IMPLEMENTATION NOTES ───────────────────────────── -->
+      <section class="sec" id="s6" aria-labelledby="s6-h">
+        <h2 class="sec-head" id="s6-h"><span class="sec-num">6.0</span> Implementation Notes</h2>
+        <p>
+          The deployed client is authored in Astro + TypeScript + plain
+          HTML. No runtime JavaScript framework is shipped; interaction
+          is handled by a single inline script in the shared layout.
+          Color is specified in OKLCH for perceptual stability across
+          the two themes. Typography pairs Gloock (Didone display),
+          Inter Tight (UI), and Departure Mono (monospace data).
+        </p>
+        <p>
+          A scoped service worker at <code>/sparrow/sw.js</code>
+          precaches the shell, runtime-caches block readers with a
+          48-entry LRU trim, and ships an inline offline fallback page
+          in Sparrow chrome for cold first-visit failures. A PWA
+          manifest at <code>/sparrow/manifest.webmanifest</code>
+          registers three app shortcuts and a standalone display mode.
+        </p>
+        <p>
+          View transitions between receipt and reader use Astro's
+          <code>ClientRouter</code> and named <code>transition:name</code>
+          attributes. Scroll-driven animations (the top tuning-bar and
+          the reading progress indicator, v0.4) use the CSS
+          <code>scroll-timeline</code> API with graceful fallback.
+          <code>prefers-reduced-motion</code> is honored throughout.
+        </p>
+      </section>
+
+      <!-- ─── 7.0 FUTURE WORK ────────────────────────────────────── -->
+      <section class="sec" id="s7" aria-labelledby="s7-h">
+        <h2 class="sec-head" id="s7-h"><span class="sec-num">7.0</span> Future Work</h2>
+        <table class="t">
+          <thead><tr><th>Release</th><th>Status</th><th>Summary</th></tr></thead>
+          <tbody>
+            <tr><td>v0.1</td><td>Shipped</td><td>Reader home, dial, rosette, reel, command palette, Atom feed.</td></tr>
+            <tr><td>v0.2</td><td>Shipped</td><td>Per-channel pages, block reader with view transition, reading list, numeric + G+letter channel shortcuts.</td></tr>
+            <tr><td>v0.3</td><td>Shipped</td><td>Scoped service worker, PWA install, offline fallback, last-visited indicator, offline pill.</td></tr>
+            <tr><td>v0.4</td><td>In progress</td><td>Reader finesse — reading-progress bar, keyboard cheatsheet overlay (?), copy-as-quote, prefetch-on-hover, drop-caps + <code>text-wrap: pretty</code>.</td></tr>
+            <tr><td>v0.5</td><td>Planned</td><td>Native macOS menu-bar companion; Bonjour mirror of the reading list; global hotkey.</td></tr>
+            <tr><td>v0.6</td><td>Planned</td><td>Nostr kind-7 reactions keyed to block IDs; inline reply composer via Magpie.</td></tr>
+            <tr><td>v0.7</td><td>Planned</td><td>NIP-44-encrypted cross-device sync of saved + visited; OPML import / export.</td></tr>
+            <tr><td>v1.0</td><td>North star</td><td>Full offline archive (IndexedDB); cross-client read state via Nostr addressable events; <code>/sparrow/llms.txt</code> for agent consumption; federated reading lists.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ─── REFERENCES ─────────────────────────────────────────── -->
+      <section class="sec" id="refs" aria-labelledby="refs-h">
+        <h2 class="sec-head" id="refs-h"><span class="sec-num">R.</span> References</h2>
+        <ol class="lite" style="font-family: var(--mono); font-size: 12.5px;">
+          <li>
+            <strong>PointCast</strong>. Canonical broadcast.
+            <a href="/">pointcast.xyz</a> · <a href="/blocks.json">/blocks.json</a>.
+          </li>
+          <li>
+            <strong>Magpie</strong>. macOS publisher + syndication fanout.
+            <a href="/magpie">pointcast.xyz/magpie</a> ·
+            <a href="/magpie.json">/magpie.json</a>.
+          </li>
+          <li>
+            <strong>BLOCKS.md</strong>. Block schema specification.
+            See repository root.
+          </li>
+          <li>
+            <strong>Sparrow manifest</strong>. Machine-legible
+            description of this client, its UI primitives, and the
+            keyboard protocol. <a href="/sparrow.json">/sparrow.json</a>.
+          </li>
+          <li>
+            Sutherland, I. E. <em>Sketchpad: A Man-Machine Graphical
+            Communication System</em>. MIT Lincoln Laboratory, 1963.
+            (On the value of interactive systems that reward attention.)
+          </li>
+          <li>
+            Kay, A., &amp; Goldberg, A. <em>Personal Dynamic Media</em>.
+            Xerox PARC, 1977. (On thin clients, shared documents,
+            and documents-as-media.)
+          </li>
+        </ol>
+      </section>
+
+      <!-- ─── APPENDIX A ─────────────────────────────────────────── -->
+      <section class="sec" id="appa" aria-labelledby="appa-h">
+        <h2 class="sec-head" id="appa-h"><span class="sec-num">A.</span> Appendix — Manifest Surface</h2>
+        <p>
+          The canonical agent-legible description of Sparrow ships at
+          <code><a href="/sparrow.json">/sparrow.json</a></code>. An
+          Atom 1.0 feed ships at
+          <code><a href="/sparrow/feed.xml">/sparrow/feed.xml</a></code>.
+          Alternate clients — terminal, phone, native desk —
+          should resolve those two URLs and nothing else.
+        </p>
+      </section>
+
+      <!-- ─── APPENDIX B — AI IMAGE PROMPTS ──────────────────────── -->
+      <section class="sec" id="appb" aria-labelledby="appb-h">
+        <h2 class="sec-head" id="appb-h"><span class="sec-num">B.</span> Appendix — AI Image Prompts for Figure Plates</h2>
+        <p>
+          The figures in this memorandum are rendered live in CSS.
+          Should the reader wish to drop bitmap plates in their place —
+          paste these prompts into
+          <a href="https://chatgpt.com/images/">chatgpt.com/images/</a>,
+          Midjourney, DALL·E 3, or the image model of the day. Each
+          prompt is self-contained.
+        </p>
+
+        <div class="prompt">
+          <h3 class="prompt-head">Prompt 1 — Cover Plate</h3>
+          <p class="prompt-body">A 1984 Bell Labs research memorandum cover, cream paper, high-contrast halftone photograph at the top of a wooden writing desk with a Xerox Star 8010 workstation in the background, an IBM Selectric typewriter to the left, and a single crisp black sparrow silhouette perched on the edge of the desk. Top-left stamp in oxblood ink reading "POINTCAST · R&amp;B GROUP". Monospace document code "SPA-TM-26-0421" below. Grainy newsprint halftone. Strictly monochrome with a single oxblood accent. 4:5 portrait, archival scan look.</p>
+          <p class="prompt-meta">aspect · 4:5 · use · cover plate above the letterhead</p>
+        </div>
+
+        <div class="prompt">
+          <h3 class="prompt-head">Prompt 2 — Fig. 1 (System Diagram)</h3>
+          <p class="prompt-body">A hand-drafted engineering diagram, pencil and india ink on graph paper, showing three labeled rectangles — one marked "MAGPIE (publisher)", one marked "SPARROW (reader)", one larger double-ruled rectangle in the center marked "POINTCAST (canonical broadcast)". Arrows with spline curves connect MAGPIE → POINTCAST and POINTCAST → SPARROW. Small labeled peripheral boxes below POINTCAST read "Mastodon · Farcaster · bitchat · Nostr relay". Drafting-board style, architect's lettering, subtle scan artifacts, no color. 16:9.</p>
+          <p class="prompt-meta">aspect · 16:9 · use · drop into Fig. 1 plate area</p>
+        </div>
+
+        <div class="prompt">
+          <h3 class="prompt-head">Prompt 3 — Fig. 2 (Tuning Dial)</h3>
+          <p class="prompt-body">A macro photograph of a vintage shortwave radio tuning dial, circular face, nine segmented arcs in muted jewel tones, a slim brass needle just past the top, centered numerals reading "142" in a transitional serif, dusted with fine grain, warm desk lamp lighting from the upper left, slight aperture blur, mid-century industrial design, Dieter Rams era. Shot on Kodachrome, 1983. Square.</p>
+          <p class="prompt-meta">aspect · 1:1 · use · replace the CSS dial figure in §3.1</p>
+        </div>
+
+        <div class="prompt">
+          <h3 class="prompt-head">Prompt 4 — Fig. 3 (Receipts)</h3>
+          <p class="prompt-body">Three paper library cards fanned across a scratched oak desk, each card stamped with a two-letter channel code ("FD", "GDN", "SPN") in oxblood, a perforated edge at the top, a title typed in hot-lead Didone, date stamped in rubber in the corner. One card sits slightly askew. Overhead studio light. Photojournalism style, 1980s, mid-contrast. 3:2.</p>
+          <p class="prompt-meta">aspect · 3:2 · use · replace Fig. 3 receipts grid</p>
+        </div>
+
+        <div class="prompt">
+          <h3 class="prompt-head">Prompt 5 — Closing Spot</h3>
+          <p class="prompt-body">A single small sparrow rendered in the black-ink style of a 19th-century wood engraving, perched on the end of a taut copper antenna wire, faint halftone cream paper behind, oxblood margin rule at the base, typewriter caption reading "— end of memorandum —". Very restrained. Square.</p>
+          <p class="prompt-meta">aspect · 1:1 · use · pre-footer ornament</p>
+        </div>
+
+        <p>
+          These prompts aim for the aesthetic of Bell Labs' Technical
+          Journal plates and Xerox PARC internal reports. Crucially,
+          the rendered CSS figures already convey the information —
+          the plates would be ornamental, not load-bearing.
+        </p>
+      </section>
+
+      <!-- ─── MEMO FOOT ─────────────────────────────────────────── -->
+      <footer class="memo-foot">
+        <div>
+          <div><strong>POINTCAST · R&amp;B GROUP</strong></div>
+          <div>EL SEGUNDO · CALIFORNIA · {new Date().getFullYear()}</div>
+        </div>
+        <div style="text-align: right;">
+          <div><strong>{documentCode}</strong></div>
+          <div>PAGE END · DISTRIBUTION UNLIMITED</div>
+        </div>
+      </footer>
+
+      <nav class="memo-nav">
+        <a href="/sparrow">← sparrow</a>
+        <a href="/sparrow/about">about</a>
+        <a href="/sparrow.json">manifest</a>
+        <a href="/sparrow/feed.xml">atom</a>
+        <a href="javascript:window.print()">print →</a>
+      </nav>
+    </article>
+  </body>
+</html>

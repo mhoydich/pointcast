@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.3',
-    protocol_version: '0.3',
+    version: '0.4',
+    protocol_version: '0.4',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -48,6 +48,7 @@ export const GET: APIRoute = async () => {
     routes: {
       home: '/sparrow',
       about: '/sparrow/about',
+      deck: '/sparrow/deck',
       channel: '/sparrow/ch/<slug>',
       block_reader: '/sparrow/b/<id>',
       saved: '/sparrow/saved',
@@ -55,6 +56,34 @@ export const GET: APIRoute = async () => {
       atom: '/sparrow/feed.xml',
       pwa_manifest: '/sparrow/manifest.webmanifest',
       service_worker: '/sparrow/sw.js',
+    },
+
+    // v0.4 addition: overview presentation in 1980s Bell Labs / Xerox
+    // PARC technical-memorandum styling. Self-contained page (no
+    // SparrowLayout chrome) with 7 sections + references + two
+    // appendices. Appendix B carries paste-ready prompts for AI image
+    // generators that want to replace the CSS figure plates with
+    // generated artwork.
+    deck: {
+      url: '/sparrow/deck',
+      format: 'single-page technical memorandum',
+      typography: 'EB Garamond · Courier Prime · Space Mono',
+      palette: 'cream paper · oxblood stamp · CRT phosphor · weathered ink',
+      sections: [
+        'abstract',
+        '1.0 introduction',
+        '2.0 system architecture',
+        '3.0 user interface',
+        '4.0 keyboard protocol',
+        '5.0 data model',
+        '6.0 implementation notes',
+        '7.0 future work',
+        'references',
+        'appendix A · manifest surface',
+        'appendix B · AI image prompts for figure plates',
+      ],
+      print_ready: true,
+      document_code: 'SPA-TM-26-0421',
     },
 
     // v0.3 — scoped service worker for offline reading + PWA install.
@@ -222,10 +251,12 @@ export const GET: APIRoute = async () => {
     roadmap: {
       'v0.1': 'Reader home + rosette + reel + palette + keyboard shortcuts. Atom feed. Theme toggle.',
       'v0.2': 'Per-channel pages /sparrow/ch/<slug>. Block reader /sparrow/b/<id> with view-transition morph from the reel. Reading list /sparrow/saved (localStorage). Numeric channel shortcuts 1-9. Mood filter chips. Now-tuned IntersectionObserver. Save-toggle via S.',
-      'v0.3': 'Scoped service worker at /sparrow/sw.js — precache shell + 9 channels + manifest + feed, cache-first block readers (48-entry cap). PWA install via /sparrow/manifest.webmanifest with Front Door / Saved / About shortcuts. Offline pill in HUD. Last-visited indicator on receipts. Offline fallback page. (current)',
-      'v0.4': 'Native macOS Sparrow.app companion — menu bar dot that pulses when a new block lands; mirrors reading list over Bonjour to the web reader.',
-      'v0.5': 'Reactions (Nostr kind 7 keyed off block ids). Inline Nouns-style reply composer that routes through Magpie.',
-      'v0.6': 'Cross-device sync of reading + visited lists via Nostr relay pool. End-to-end encrypted (NIP-44). OPML import/export.',
+      'v0.3': 'Scoped service worker at /sparrow/sw.js — precache shell + 9 channels + manifest + feed, cache-first block readers (48-entry cap). PWA install via /sparrow/manifest.webmanifest with Front Door / Saved / About shortcuts. Offline pill in HUD. Last-visited indicator on receipts. Offline fallback page.',
+      'v0.4': 'Technical-memorandum overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling (EB Garamond + Courier Prime on cream paper, numbered sections, ASCII architecture diagram, figure plates, references, and a prompt appendix for generating hero images). Precached for offline. (current)',
+      'v0.5': 'Reader finesse — reading-progress bar (scroll-timeline), keyboard cheatsheet overlay (?), copy-as-quote, prefetch-on-hover, drop caps + text-wrap: pretty.',
+      'v0.6': 'Native macOS Sparrow.app companion — menu-bar dot that pulses when a new block lands; reading list mirrored over Bonjour to the web reader.',
+      'v0.7': 'Nostr kind-7 reactions keyed off block ids; inline reply composer routed through Magpie.',
+      'v0.8': 'Cross-device sync of reading + visited lists via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
