@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.5',
-    protocol_version: '0.5',
+    version: '0.6',
+    protocol_version: '0.6',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -49,13 +49,40 @@ export const GET: APIRoute = async () => {
       home: '/sparrow',
       about: '/sparrow/about',
       deck: '/sparrow/deck',
+      connect: '/sparrow/connect',
       channel: '/sparrow/ch/<slug>',
       block_reader: '/sparrow/b/<id>',
       saved: '/sparrow/saved',
       manifest: '/sparrow.json',
       atom: '/sparrow/feed.xml',
+      latest_api: '/sparrow/api/latest.json',
       pwa_manifest: '/sparrow/manifest.webmanifest',
       service_worker: '/sparrow/sw.js',
+    },
+
+    // v0.6: native macOS menu-bar companion at github.com/mhoydich/sparrow-app.
+    // Lightweight polling client for /sparrow/api/latest.json —
+    // designed so anyone can reproduce or replace it (single executable,
+    // URLSession + AppKit + UserNotifications, no external deps).
+    companion_app: {
+      name: 'Sparrow.app',
+      role: 'native macOS menu-bar companion',
+      platform: 'macOS 13+',
+      language: 'Swift 5.9',
+      distribution: 'source (github.com/mhoydich/sparrow-app)',
+      landing: 'https://pointcast.xyz/sparrow/connect',
+      repository: 'https://github.com/mhoydich/sparrow-app',
+      polls: '/sparrow/api/latest.json',
+      default_poll_interval_seconds: 300,
+      poll_range_seconds: [30, 3600],
+      features: [
+        'Menu-bar ✦ glyph; ember new-count appears when fresh blocks arrive',
+        'Notification Center alerts (one per block up to 3; digest beyond)',
+        'Preferences panel — feed URL, poll interval, notifications toggle',
+        'LSUIElement: no Dock icon, no Cmd-Tab presence',
+        'First-run seeds last-seen store from archive (no alert avalanche)',
+      ],
+      privacy: 'Opens one network connection to the configured feed URL. No telemetry, no phone-home.',
     },
 
     // v0.4 addition: overview presentation in 1980s Bell Labs / Xerox
@@ -147,6 +174,11 @@ export const GET: APIRoute = async () => {
       atom_feed: {
         url: '/sparrow/feed.xml',
         note: 'Sparrow-branded Atom feed (same content, sparrow kicker). Generic feed at /feed.xml.',
+      },
+      polling_api: {
+        url: '/sparrow/api/latest.json',
+        shape: '{ total, updated_at, window, origin, blocks: [{ id, title, dek, channel, type, mood, timestamp, author, url, sparrow_url }] }',
+        purpose: 'Polling-shaped companion feed for Sparrow.app and other lightweight clients. Top 24 blocks, snake_case keys, summary-only. Cache: public, max-age=120.',
       },
     },
 
@@ -269,18 +301,19 @@ export const GET: APIRoute = async () => {
       'v0.2': 'Per-channel pages /sparrow/ch/<slug>. Block reader /sparrow/b/<id> with view-transition morph from the reel. Reading list /sparrow/saved (localStorage). Numeric channel shortcuts 1-9. Mood filter chips. Now-tuned IntersectionObserver. Save-toggle via S.',
       'v0.3': 'Scoped service worker at /sparrow/sw.js — precache shell + 9 channels + manifest + feed, cache-first block readers (48-entry cap). PWA install via /sparrow/manifest.webmanifest with Front Door / Saved / About shortcuts. Offline pill in HUD. Last-visited indicator on receipts. Offline fallback page.',
       'v0.4': 'Technical-memorandum overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling (EB Garamond + Courier Prime on cream paper, numbered sections, ASCII architecture diagram, figure plates, references, and a prompt appendix for generating hero images). Precached for offline.',
-      'v0.5': 'Reader finesse — reading-progress bar (CSS view-timeline on .sp-article-body), keyboard cheatsheet overlay on `?`, copy-as-quote floating chip with attribution, hover + idle prefetch of block readers, drop caps on first paragraph, text-wrap: pretty for body copy, 0 / $ jump-to-top/bottom. (current)',
-      'v0.6': 'Native macOS Sparrow.app companion — menu-bar dot that pulses when a new block lands; reading list mirrored over Bonjour to the web reader.',
-      'v0.7': 'Nostr kind-7 reactions keyed off block ids; inline reply composer routed through Magpie.',
-      'v0.8': 'Cross-device sync of reading + visited lists via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export.',
+      'v0.5': 'Reader finesse — reading-progress bar (CSS view-timeline on .sp-article-body), keyboard cheatsheet overlay on `?`, copy-as-quote floating chip with attribution, hover + idle prefetch of block readers, drop caps on first paragraph, text-wrap: pretty for body copy, 0 / $ jump-to-top/bottom.',
+      'v0.6': 'Native macOS Sparrow.app companion shipped at github.com/mhoydich/sparrow-app (Swift 5.9, AppKit + URLSession + UserNotifications, no external deps). Menu-bar ✦ glyph with ember new-count, Notification Center alerts, preferences (feed URL, poll interval, notifications toggle). Paired with /sparrow/api/latest.json polling endpoint + /sparrow/connect landing. (current)',
+      'v0.7': 'Reading-list mirror — Sparrow.app reads + writes sparrow:saved via a small localhost HTTP bridge when the web reader is open; Nostr kind-7 reactions keyed off block ids; inline reply composer routed through Magpie.',
+      'v0.8': 'Cross-device sync of reading + visited lists via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
     install_steps: [
       'Open https://pointcast.xyz/sparrow — no install required.',
-      'Press ⌘K to see the palette; / to filter the reel; 1-9 to jump to channels; T to flip the theme.',
+      'Press ⌘K to see the palette; / to filter the reel; 1-9 to jump to channels; T to flip the theme; ? for the cheatsheet.',
       'Open any block (via the reel, a channel page, or the palette) — press S to save it. Saved list lives at /sparrow/saved.',
       '(Optional) install as a PWA when your browser offers it — Sparrow becomes a standalone app and keeps working offline.',
+      '(Optional) get the native companion at /sparrow/connect — a menu-bar ✦ that pulses when new blocks land. macOS 13+.',
       '(Optional) subscribe to /sparrow/feed.xml in your feed reader of choice.',
     ],
 

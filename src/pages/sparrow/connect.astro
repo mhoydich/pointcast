@@ -1,0 +1,258 @@
+---
+/**
+ * /sparrow/connect — landing page for the native Sparrow.app menu-bar
+ * companion. Mirrors the hosted reader's design system (SparrowLayout)
+ * so the page feels continuous with the web UI, but the content is all
+ * about getting a `.app` running on the user's Mac.
+ */
+import SparrowLayout from '../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+
+export const prerender = true;
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const totalBlocks = blocks.length;
+
+const features = [
+  { kicker: 'menu bar', title: '✦ in the status bar', body: 'A single glyph. Grows an ember "new" count when fresh blocks land.' },
+  { kicker: 'polling', title: 'Quiet, on a cadence', body: 'Hits /sparrow/api/latest.json every 5 minutes by default (30 s floor, 1 h ceiling).' },
+  { kicker: 'notifications', title: 'One per block · digest beyond three', body: 'Notification Center alerts for arrivals; a single digest when more than three land at once.' },
+  { kicker: 'preferences', title: 'Endpoint, interval, notifications', body: 'A small AppKit panel — no onboarding flow, no account. Point it at a fork or local dev if you want.' },
+  { kicker: 'privacy', title: 'One URL, no telemetry', body: 'Sparrow.app opens exactly one network connection: the feed URL you chose. Nothing else leaves the device.' },
+  { kicker: 'footprint', title: 'No dock icon, no cmd-tab', body: 'LSUIElement = true. Lives in the menu bar and the menu bar only.' },
+];
+
+const steps = [
+  {
+    kicker: 'one',
+    title: 'Clone or download the source',
+    body: 'github.com/mhoydich/sparrow-app — self-contained Swift package, no external dependencies.',
+  },
+  {
+    kicker: 'two',
+    title: 'Build with Xcode or SPM',
+    body: '`open Package.swift` for a proper bundled `.app` (recommended), or `swift run SparrowApp` for a quick menu-bar-visible test from the terminal.',
+  },
+  {
+    kicker: 'three',
+    title: 'Grant notification permission',
+    body: 'On first run macOS asks once. Decline safely — the app still works, it just stops posting alerts.',
+  },
+  {
+    kicker: 'four',
+    title: 'Open Preferences if you want',
+    body: '⌘, from the menu. Feed URL defaults to https://pointcast.xyz/sparrow/api/latest.json; change it if you\'re running a fork.',
+  },
+];
+---
+
+<SparrowLayout
+  title="Connect — native companion"
+  description="Get the native macOS menu-bar companion for Sparrow. Swift 5.9+, macOS 13+, no external dependencies."
+  canonicalPath="/sparrow/connect"
+  homeHref="/sparrow"
+>
+  <section class="sp-connect-hero">
+    <span class="sp-kicker">✦ sparrow.app · native companion · v0.6</span>
+    <h1 class="sp-connect-title">
+      A second ✦ in the menu bar<br />
+      <em>that pulses when new blocks land.</em>
+    </h1>
+    <p class="sp-connect-dek">
+      Sparrow.app is a small macOS menu-bar app that polls
+      <code>/sparrow/api/latest.json</code> at a cadence you choose, shows
+      the latest block and a "new since last open" count, and posts a
+      Notification Center alert when fresh broadcasts arrive. No Dock
+      icon, no Cmd-Tab entry — just <code>✦</code> in the status bar,
+      same glyph as the hosted HUD.
+    </p>
+    <div class="sp-connect-cta">
+      <a href="https://github.com/mhoydich/sparrow-app" class="sp-connect-cta-primary">
+        github.com/mhoydich/sparrow-app →
+      </a>
+      <a href="/sparrow/api/latest.json" class="sp-connect-cta-ghost">api/latest.json →</a>
+    </div>
+  </section>
+
+  <section class="sp-about-section">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ what it does</span>
+    </header>
+    <ul class="sp-about-features">
+      {features.map((f) => (
+        <li class="sp-feature">
+          <span class="sp-feature-kbd">{f.kicker}</span>
+          <div class="sp-feature-text">
+            <h3 class="sp-feature-title">{f.title}</h3>
+            <p class="sp-feature-body">{f.body}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="sp-about-section">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ build + run</span>
+    </header>
+    <ol class="sp-connect-steps">
+      {steps.map((s) => (
+        <li>
+          <span class="sp-connect-step-n">{s.kicker}</span>
+          <div>
+            <h3>{s.title}</h3>
+            <p set:html={s.body.replace(/`([^`]+)`/g, '<code>$1</code>')} />
+          </div>
+        </li>
+      ))}
+    </ol>
+
+    <pre class="sp-connect-shell"><code>cd sparrow-app
+open Package.swift       # Xcode — recommended, signs + bundles
+# or
+swift run SparrowApp     # terminal — live menu-bar item, no bundle</code></pre>
+
+    <p class="sp-aside-mono" style="color: var(--sp-mute); margin-top: 14px;">
+      Tiny package — one executable target, one Resources/Info.plist,
+      about 500 lines of Swift split across seven files. Reads in one
+      sitting. Source: <a class="sp-link" href="https://github.com/mhoydich/sparrow-app">mhoydich/sparrow-app</a>.
+    </p>
+  </section>
+
+  <section class="sp-about-section">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ the feed it polls</span>
+    </header>
+    <p style="margin: 0 0 12px; color: var(--sp-ash);">
+      The endpoint at <code>/sparrow/api/latest.json</code> is a
+      polling-shaped companion to the Atom feed: snake_case keys,
+      summary-only fields, last 24 blocks, cache-friendly. The native
+      app decodes it directly into the same <code>Block</code> struct
+      the menu bar renders.
+    </p>
+    <pre class="sp-connect-shell"><code>{`{
+  "total": ${totalBlocks},
+  "updated_at": "2026-04-21T...",
+  "window": 24,
+  "origin": "https://pointcast.xyz",
+  "blocks": [
+    {
+      "id": "0362",
+      "title": "AgarChat — instant messenger meets agar.io",
+      "dek": "...",
+      "channel": "FD",
+      "type": "LINK",
+      "mood": null,
+      "timestamp": "2026-04-21T12:00:00-08:00",
+      "author": "mh+cc",
+      "url": "/b/0362",
+      "sparrow_url": "/sparrow/b/0362"
+    }
+  ]
+}`}</code></pre>
+  </section>
+
+  <aside class="sp-beacon">
+    <span class="sp-beacon-sweep" aria-hidden="true"></span>
+    <span class="sp-beacon-kicker">✦ sibling projects</span>
+    <span class="sp-beacon-body">
+      <a class="sp-link" href="/">pointcast</a> broadcasts ·
+      <a class="sp-link" href="/magpie">magpie</a> publishes ·
+      sparrow reads · sparrow.app perches in the menu bar
+    </span>
+    <a href="/sparrow" class="sp-link sp-beacon-cta">back to reel →</a>
+  </aside>
+
+  <style>
+    .sp-connect-hero { padding: 28px 0 36px; border-bottom: 1px solid var(--sp-rule); }
+    .sp-connect-title {
+      font-family: var(--sp-display);
+      font-weight: 400;
+      font-size: clamp(40px, 6.5vw, 80px);
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+      color: var(--sp-bone);
+      margin: 12px 0 16px;
+    }
+    .sp-connect-title em { font-style: italic; color: var(--sp-ember); }
+    .sp-connect-dek {
+      font-size: 17px;
+      color: var(--sp-ash);
+      max-width: 64ch;
+      margin: 0 0 22px;
+    }
+    .sp-connect-cta {
+      display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .sp-connect-cta-primary {
+      display: inline-flex; align-items: center;
+      padding: 10px 18px;
+      border: 1px solid var(--sp-ember);
+      background: color-mix(in oklch, var(--sp-ember) 18%, transparent);
+      border-radius: var(--sp-rad);
+      font-family: var(--sp-display);
+      font-size: 17px;
+      color: var(--sp-bone);
+      text-decoration: none;
+    }
+    .sp-connect-cta-primary:hover {
+      background: color-mix(in oklch, var(--sp-ember) 28%, transparent);
+      text-decoration: none;
+    }
+    .sp-connect-cta-ghost {
+      display: inline-flex; align-items: center;
+      padding: 10px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: var(--sp-rad);
+      font-family: var(--sp-mono);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--sp-ash);
+      text-decoration: none;
+    }
+    .sp-connect-cta-ghost:hover { border-color: var(--sp-ember); color: var(--sp-ember); text-decoration: none; }
+
+    .sp-connect-steps {
+      list-style: none; padding: 0; margin: 0;
+      display: grid; gap: 12px;
+    }
+    .sp-connect-steps li {
+      display: grid; grid-template-columns: 88px 1fr; gap: 14px;
+      padding: 14px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: var(--sp-rad);
+      background: color-mix(in oklch, var(--sp-blue-hour) 80%, transparent);
+    }
+    .sp-connect-step-n {
+      font-family: var(--sp-mono);
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--sp-ember);
+      align-self: start;
+    }
+    .sp-connect-steps h3 {
+      font-family: var(--sp-display); font-weight: 400;
+      font-size: 20px; line-height: 1.15;
+      color: var(--sp-bone);
+      margin: 0 0 4px;
+      letter-spacing: -0.01em;
+    }
+    .sp-connect-steps p { margin: 0; color: var(--sp-ash); font-size: 13.5px; line-height: 1.5; }
+
+    .sp-connect-shell {
+      background: #0d1a10;
+      color: #c8e6c9;
+      padding: 16px 18px;
+      font-family: var(--sp-mono);
+      font-size: 12.5px;
+      line-height: 1.5;
+      border-radius: var(--sp-rad);
+      overflow-x: auto;
+      margin: 14px 0 0;
+      box-shadow: inset 0 0 40px rgba(46, 125, 50, 0.15);
+    }
+    .sp-connect-shell code { color: inherit; font-family: inherit; }
+  </style>
+</SparrowLayout>
