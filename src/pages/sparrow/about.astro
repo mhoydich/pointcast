@@ -83,6 +83,30 @@ const features = [
     body: 'Reel card → reader morph via Astro ClientRouter + transition:name. Back works the same way. No JS framework bundled.',
     kbd: '—',
   },
+  {
+    kicker: 'offline',
+    title: 'Works on the subway',
+    body: 'Scoped service worker at /sparrow/sw.js precaches the shell + 9 channels + manifest + feed, then stale-while-revalidates. Block readers runtime-cache up to 48 entries. Offline fallback carries Sparrow chrome.',
+    kbd: 'sw.js',
+  },
+  {
+    kicker: 'install',
+    title: 'PWA · standalone window',
+    body: 'Installable via the browser install prompt. App shortcuts go to Front Door, your saved list, and this page. Runs in its own window, cached for cold reads.',
+    kbd: 'install',
+  },
+  {
+    kicker: 'visited',
+    title: 'Last-visited receipts',
+    body: 'Block readers log visits to localStorage. The reel softens titles you\'ve already read and adds a small "read" chip — the saved star always wins if both apply.',
+    kbd: '—',
+  },
+  {
+    kicker: 'network',
+    title: 'Offline pill',
+    body: 'The HUD grows an oxblood "offline" pill when navigator.onLine flips. Auto-clears when the network comes back.',
+    kbd: '—',
+  },
 ];
 
 const roadmap = [
@@ -116,19 +140,23 @@ const roadmap = [
   },
   {
     v: 'v0.3',
-    status: 'next',
-    when: 'planned',
+    status: 'shipped',
+    when: '2026-04-21',
     title: 'Offline & PWA',
     items: [
-      'Service Worker caching the last 24 blocks — read on the subway',
-      'Install as a PWA (Add to Home Screen, standalone window)',
-      'Last-visited indicator on each receipt',
-      'Pre-fetch adjacent blocks when idle so J/K paging is instant',
+      'Scoped service worker at /sparrow/sw.js — precaches home + about + saved + all 9 channel pages + manifest + feed',
+      'Stale-while-revalidate for the shell, cache-first for block readers (48-entry cap) and Astro / Google Fonts assets',
+      'Offline fallback page with Sparrow chrome for first-visit cold navigation',
+      'PWA install via /sparrow/manifest.webmanifest — standalone window, FD/Saved/About shortcuts',
+      'Offline pill in the HUD (pulses when navigator.onLine flips)',
+      'Install button appears when the browser fires beforeinstallprompt',
+      'Last-visited indicator on receipts — subtle desaturation + "read" chip',
     ],
   },
   {
     v: 'v0.4',
-    status: 'planned',
+    status: 'next',
+    when: 'planned',
     title: 'Native companion',
     items: [
       'Sparrow.app for macOS — menu bar companion',
@@ -156,7 +184,7 @@ const roadmap = [
       'Reading list sync across devices via Nostr relay pool',
       'End-to-end encrypted via NIP-44',
       'Import/export OPML for feed-reader interop',
-      'Optional "mark as read" state, deletable on any device',
+      'Optional "mark as read" state, deletable on any device (graduates v0.3\'s local tracking to cross-device)',
     ],
   },
   {
@@ -175,7 +203,7 @@ const roadmap = [
 const stats = {
   channels: CHANNEL_LIST.length,
   kbShortcuts: 13,
-  routes: 4, // /sparrow + ch + b + saved
+  routes: 5, // /sparrow + ch + b + saved + about
   cssTokens: 22,
 };
 ---
@@ -208,11 +236,17 @@ const stats = {
       <li><strong>OKLCH</strong><span>color space</span></li>
       <li><strong>0 kB</strong><span>framework<br/>runtime</span></li>
     </ul>
+
+    <button type="button" class="sp-install-cta" data-sp-install-cta hidden>
+      <span class="sp-install-cta-icon">↓</span>
+      <span class="sp-install-cta-label">Install Sparrow as an app</span>
+      <span class="sp-install-cta-hint">runs offline · appears when your browser offers it</span>
+    </button>
   </section>
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.2 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.3 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
@@ -352,6 +386,48 @@ const stats = {
     .sp-stats span {
       display: block;
       margin-top: 6px;
+      font-family: var(--sp-mono);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+
+    .sp-install-cta {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-areas: "icon label" "icon hint";
+      gap: 2px 14px;
+      align-items: center;
+      margin-top: 24px;
+      padding: 14px 20px;
+      border: 1px solid var(--sp-ember);
+      background: color-mix(in oklch, var(--sp-ember) 12%, transparent);
+      color: var(--sp-bone);
+      border-radius: var(--sp-rad);
+      cursor: pointer;
+      text-align: left;
+      transition: background 180ms ease, transform 180ms ease;
+    }
+    .sp-install-cta:hover {
+      background: color-mix(in oklch, var(--sp-ember) 22%, transparent);
+      transform: translateY(-1px);
+    }
+    .sp-install-cta[hidden] { display: none; }
+    .sp-install-cta-icon {
+      grid-area: icon;
+      font-family: var(--sp-display);
+      font-size: 32px; line-height: 1;
+      color: var(--sp-ember);
+    }
+    .sp-install-cta-label {
+      grid-area: label;
+      font-family: var(--sp-display);
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .sp-install-cta-hint {
+      grid-area: hint;
       font-family: var(--sp-mono);
       font-size: 10px;
       letter-spacing: 0.18em;

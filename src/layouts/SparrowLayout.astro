@@ -87,6 +87,14 @@ const paletteData = {
     <link rel="alternate" type="application/json" href="/sparrow.json" title="Sparrow manifest" />
     <link rel="alternate" type="application/atom+xml" href="/sparrow/feed.xml" title="Sparrow Atom feed" />
 
+    <!-- PWA: installable app with its own scoped service worker. -->
+    <link rel="manifest" href="/sparrow/manifest.webmanifest" />
+    <meta name="theme-color" content="#16182a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4ead8" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Sparrow" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -107,9 +115,15 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.2</span>
+          <span class="sp-sub">pointcast reader · v0.3</span>
         </div>
         <div class="sp-hud-actions">
+          <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
+            <span class="sp-offline-dot" aria-hidden="true"></span>offline
+          </span>
+          <button class="sp-install-btn" type="button" data-sp-install hidden aria-label="install Sparrow">
+            install ↓
+          </button>
           <a href="/sparrow/saved" class="sp-saved-count" data-sp-saved-count aria-label="reading list">
             <span class="sp-saved-icon" aria-hidden="true">☆</span>
             <span class="sp-saved-n" data-sp-saved-n>0</span>
@@ -167,6 +181,8 @@ const paletteData = {
       (() => {
         const KEY_THEME = 'sparrow:theme';
         const KEY_SAVED = 'sparrow:saved';
+        const KEY_VISITED = 'sparrow:visited';
+        const VISITED_MAX = 120;
         const htmlEl = document.documentElement;
 
         // ─── THEME ──────────────────────────────────────────────────
@@ -349,6 +365,79 @@ const paletteData = {
             if (found) { e.preventDefault(); window.location.href = `/sparrow/ch/${found.slug}`; }
           }
         });
+
+        // ─── LAST-VISITED TRACKING ──────────────────────────────────
+        const readVisited = () => {
+          try { return JSON.parse(localStorage.getItem(KEY_VISITED) || '[]'); } catch { return []; }
+        };
+        const writeVisited = (ids) => localStorage.setItem(KEY_VISITED, JSON.stringify(ids));
+        const markVisited = (id) => {
+          const list = readVisited();
+          const i = list.indexOf(id);
+          if (i !== -1) list.splice(i, 1);
+          list.unshift(id);
+          while (list.length > VISITED_MAX) list.pop();
+          writeVisited(list);
+        };
+        // If we're on a block reader, mark this block as visited now.
+        const pathMatch = location.pathname.match(/^\/sparrow\/b\/(\d{3,})/);
+        if (pathMatch) markVisited(pathMatch[1]);
+        // Reflect visited state on any receipts already in the DOM.
+        const applyVisited = () => {
+          const visited = new Set(readVisited());
+          document.querySelectorAll('[data-sp-block-id]').forEach((el) => {
+            const id = el.getAttribute('data-sp-block-id');
+            if (visited.has(id)) el.classList.add('is-visited');
+          });
+        };
+        applyVisited();
+
+        // ─── SERVICE WORKER REGISTRATION ────────────────────────────
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker
+              .register('/sparrow/sw.js', { scope: '/sparrow/' })
+              .catch(() => { /* SW registration failed — offline features degrade gracefully */ });
+          });
+        }
+
+        // ─── ONLINE / OFFLINE PILL ──────────────────────────────────
+        const offlinePill = document.querySelector('[data-sp-offline-pill]');
+        const syncOnline = () => {
+          if (!offlinePill) return;
+          offlinePill.hidden = navigator.onLine;
+        };
+        window.addEventListener('online', syncOnline);
+        window.addEventListener('offline', syncOnline);
+        syncOnline();
+
+        // ─── PWA INSTALL PROMPT ─────────────────────────────────────
+        let deferredPrompt = null;
+        const installBtn = document.querySelector('[data-sp-install]');
+        const installCTAs = document.querySelectorAll('[data-sp-install-cta]');
+        const showInstall = () => {
+          if (installBtn) installBtn.hidden = false;
+          installCTAs.forEach((el) => (el.hidden = false));
+        };
+        const hideInstall = () => {
+          if (installBtn) installBtn.hidden = true;
+          installCTAs.forEach((el) => (el.hidden = true));
+        };
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          showInstall();
+        });
+        const triggerInstall = async () => {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          try { await deferredPrompt.userChoice; } catch {}
+          deferredPrompt = null;
+          hideInstall();
+        };
+        installBtn?.addEventListener('click', triggerInstall);
+        installCTAs.forEach((el) => el.addEventListener('click', triggerInstall));
+        window.addEventListener('appinstalled', hideInstall);
 
         // ─── NOW-TUNED INTERSECTION OBSERVER ────────────────────────
         const tunables = document.querySelectorAll('[data-sp-block-id]');
@@ -552,6 +641,52 @@ const paletteData = {
         width: 10px; height: 10px; border-radius: 50%;
         background: radial-gradient(circle at 30% 30%, var(--sp-bone), var(--sp-ember) 80%);
       }
+
+      /* Offline + install HUD badges */
+      .sp-offline-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--sp-mono); font-size: 10px;
+        letter-spacing: 0.2em; text-transform: uppercase;
+        padding: 3px 10px; border-radius: 999px;
+        border: 1px solid var(--sp-oxblood); color: var(--sp-oxblood);
+        background: color-mix(in oklch, var(--sp-oxblood) 14%, transparent);
+      }
+      .sp-offline-pill[hidden] { display: none; }
+      .sp-offline-dot {
+        width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+        box-shadow: 0 0 8px currentColor;
+        animation: sp-pulse 2s ease-in-out infinite;
+      }
+      .sp-install-btn {
+        font-family: var(--sp-mono); font-size: 11px;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        padding: 4px 10px; border-radius: 3px;
+        border: 1px solid var(--sp-ember); color: var(--sp-ember);
+        background: color-mix(in oklch, var(--sp-ember) 12%, transparent);
+        cursor: pointer; transition: background 140ms ease;
+      }
+      .sp-install-btn:hover { background: color-mix(in oklch, var(--sp-ember) 22%, transparent); }
+      .sp-install-btn[hidden] { display: none; }
+
+      /* Visited marker on receipts — subtle desaturation + small read tick.
+         Does not fire alongside .is-saved or .is-now-tuned — those override. */
+      .sp-receipt.is-visited:not(.is-saved):not(.is-now-tuned) .sp-r-title {
+        color: color-mix(in oklch, var(--sp-bone) 74%, var(--sp-mute));
+      }
+      .sp-receipt.is-visited:not(.is-saved):not(.is-now-tuned) .sp-r-dek {
+        color: color-mix(in oklch, var(--sp-ash) 70%, var(--sp-mute));
+      }
+      .sp-receipt.is-visited:not(.is-saved)::before {
+        content: "read"; position: absolute; top: 8px; right: 10px;
+        font-family: var(--sp-mono); font-size: 9px; letter-spacing: 0.22em;
+        text-transform: uppercase; color: var(--sp-mute);
+        padding: 2px 7px; border: 1px solid var(--sp-rule);
+        border-radius: 999px;
+        pointer-events: none;
+      }
+      /* When both saved + visited, the "saved" chip wins visually.
+         The :has() guard above is insurance; explicit override here. */
+      .sp-receipt.is-visited.is-saved::before { content: none; }
 
       .sp-hero {
         display: grid;

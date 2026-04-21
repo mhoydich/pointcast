@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.2',
-    protocol_version: '0.2',
+    version: '0.3',
+    protocol_version: '0.3',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -47,11 +47,39 @@ export const GET: APIRoute = async () => {
     // (no server state — lives in the browser's localStorage).
     routes: {
       home: '/sparrow',
+      about: '/sparrow/about',
       channel: '/sparrow/ch/<slug>',
       block_reader: '/sparrow/b/<id>',
       saved: '/sparrow/saved',
       manifest: '/sparrow.json',
       atom: '/sparrow/feed.xml',
+      pwa_manifest: '/sparrow/manifest.webmanifest',
+      service_worker: '/sparrow/sw.js',
+    },
+
+    // v0.3 — scoped service worker for offline reading + PWA install.
+    pwa: {
+      installable: true,
+      manifest: '/sparrow/manifest.webmanifest',
+      service_worker: {
+        url: '/sparrow/sw.js',
+        scope: '/sparrow/',
+        version: 'sparrow-v0.3.0',
+      },
+      cache_policy: {
+        shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
+        block_readers: 'cache-first, max 48 entries, LRU-style trim',
+        assets: 'cache-first, max 120 entries (Astro hashed assets + per-block OG images + Google Fonts)',
+        non_sparrow: 'network-only (SW does not shadow the rest of pointcast.xyz)',
+      },
+      offline_fallback: {
+        mode: 'navigation-only',
+        chrome: 'inline Sparrow-styled HTML shipped with the SW so cold cache first-visit still lands',
+      },
+      install_triggers: [
+        'browser-native beforeinstallprompt event surfaces "install ↓" button in the HUD + a larger CTA on /sparrow/about',
+        'app shortcuts pre-seeded in the manifest: Front Door, Saved, About',
+      ],
     },
 
     // Reading list is browser-local. No server, no sync (yet — v0.6).
@@ -59,7 +87,16 @@ export const GET: APIRoute = async () => {
       storage: 'localStorage',
       key: 'sparrow:saved',
       shape: 'string[] — array of block IDs, newest-added first',
-      sync: 'none in v0.2; v0.6 plans Nostr kind 7 reactions',
+      sync: 'none in v0.3; v0.6 plans Nostr kind-7 cross-device sync via NIP-44',
+    },
+
+    // v0.3 addition: track which blocks the user has opened so the
+    // reel can soften already-read receipts. Capped at 120 entries.
+    visited_list: {
+      storage: 'localStorage',
+      key: 'sparrow:visited',
+      shape: 'string[] — array of block IDs, newest-visited first, max 120',
+      ui_signal: '.is-visited class on [data-sp-block-id] — softens title + adds "read" chip',
     },
 
     // What Sparrow renders. Agents that want to build their own reader
@@ -184,17 +221,19 @@ export const GET: APIRoute = async () => {
     // writeable affordances (reactions, reading list, offline cache).
     roadmap: {
       'v0.1': 'Reader home + rosette + reel + palette + keyboard shortcuts. Atom feed. Theme toggle.',
-      'v0.2': 'Per-channel pages /sparrow/ch/<slug>. Block reader /sparrow/b/<id> with view-transition morph from the reel. Reading list /sparrow/saved (localStorage). Numeric channel shortcuts 1-9. Mood filter chips. Now-tuned IntersectionObserver. Save-toggle via S. (current)',
-      'v0.3': 'Offline cache via Service Worker — read last 24 blocks on the subway. Install as PWA. Last-visited indicator.',
+      'v0.2': 'Per-channel pages /sparrow/ch/<slug>. Block reader /sparrow/b/<id> with view-transition morph from the reel. Reading list /sparrow/saved (localStorage). Numeric channel shortcuts 1-9. Mood filter chips. Now-tuned IntersectionObserver. Save-toggle via S.',
+      'v0.3': 'Scoped service worker at /sparrow/sw.js — precache shell + 9 channels + manifest + feed, cache-first block readers (48-entry cap). PWA install via /sparrow/manifest.webmanifest with Front Door / Saved / About shortcuts. Offline pill in HUD. Last-visited indicator on receipts. Offline fallback page. (current)',
       'v0.4': 'Native macOS Sparrow.app companion — menu bar dot that pulses when a new block lands; mirrors reading list over Bonjour to the web reader.',
       'v0.5': 'Reactions (Nostr kind 7 keyed off block ids). Inline Nouns-style reply composer that routes through Magpie.',
-      'v0.6': 'Cross-device sync of the reading list via Nostr relay pool. End-to-end encrypted (NIP-44).',
+      'v0.6': 'Cross-device sync of reading + visited lists via Nostr relay pool. End-to-end encrypted (NIP-44). OPML import/export.',
+      'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
     install_steps: [
       'Open https://pointcast.xyz/sparrow — no install required.',
       'Press ⌘K to see the palette; / to filter the reel; 1-9 to jump to channels; T to flip the theme.',
       'Open any block (via the reel, a channel page, or the palette) — press S to save it. Saved list lives at /sparrow/saved.',
+      '(Optional) install as a PWA when your browser offers it — Sparrow becomes a standalone app and keeps working offline.',
       '(Optional) subscribe to /sparrow/feed.xml in your feed reader of choice.',
     ],
 
