@@ -1,0 +1,357 @@
+---
+/**
+ * /poll/{slug} — single Schelling-point poll page.
+ *
+ * Vote UI on first load; post-vote, the bar chart of distribution.
+ * Vote sticks per-device via localStorage (in addition to KV-backed dedup).
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+export async function getStaticPaths() {
+  const polls = await getCollection('polls', ({ data }) => !data.draft);
+  return polls.map((p) => ({ params: { slug: p.data.slug }, props: { poll: p } }));
+}
+
+interface Props { poll: CollectionEntry<'polls'>; }
+const { poll } = Astro.props;
+const d = poll.data;
+
+const title = `Poll · ${d.question}`;
+const description = d.dek || `${d.options.length}-option Schelling-point poll on PointCast. Pick the option you think most other readers will pick.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Question',
+  name: d.question,
+  text: d.question,
+  url: `https://pointcast.xyz/poll/${d.slug}`,
+  dateCreated: d.openedAt.toISOString(),
+  suggestedAnswer: d.options.map((o) => ({
+    '@type': 'Answer',
+    text: o.label,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/polls.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/polls">polls</a>
+      <span aria-hidden="true">›</span>
+      <span>{d.slug}</span>
+    </nav>
+
+    <article class="poll" data-slug={d.slug}>
+      <header class="poll__head">
+        <p class="kicker mono">SCHELLING POINT · {d.options.length} OPTIONS</p>
+        <h1 class="question">{d.question}</h1>
+        {d.dek && <p class="dek">{d.dek}</p>}
+      </header>
+
+      <ol class="options" id="poll-options">
+        {d.options.map((o, i) => (
+          <li class="option">
+            <button
+              type="button"
+              class="option__btn"
+              data-option-id={o.id}
+              data-poll-slug={d.slug}
+            >
+              <span class="option__rank mono">{String(i + 1).padStart(2, '0')}</span>
+              <span class="option__label">
+                <span class="option__title">{o.label}</span>
+                {o.hint && <span class="option__hint">{o.hint}</span>}
+              </span>
+              <span class="option__bar" aria-hidden="true"><span class="option__bar-fill" style="width: 0%"></span></span>
+              <span class="option__pct mono">—</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      <p class="status mono" id="poll-status">tap an option to lock in your pick</p>
+
+      <details class="details">
+        <summary>How is this counted?</summary>
+        <p>Vote goes to <code>/api/poll</code> → KV namespace <code>PC_POLLS_KV</code>. Per-address dedup; anonymous voters dedup by User-Agent + IP fingerprint. After your vote lands, the bar chart shows the live distribution. You can't change your vote without clearing your browser data + connecting from a different IP.</p>
+      </details>
+
+      <p class="meta mono">
+        opened {new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(d.openedAt)}
+        {d.closesAt ? ` · closes ${new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(d.closesAt)}` : ' · open'}
+        {d.author && d.author !== 'cc' ? ` · author: ${d.author}` : ''}
+      </p>
+    </article>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href={`/api/poll?slug=${d.slug}`}>/api/poll?slug={d.slug}</a></li>
+        <li><a href="/polls">/polls</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <script is:inline>
+    (function () {
+      const article = document.querySelector('.poll[data-slug]');
+      if (!article) return;
+      const slug = article.getAttribute('data-slug');
+      const status = document.getElementById('poll-status');
+      const buttons = Array.from(document.querySelectorAll('.option__btn'));
+
+      // Read cohort tag from URL (?via=kana). Slug-shape the value so
+      // pasted marketing UTMs don't get stored as cohort labels.
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawVia = (urlParams.get('via') || '').toLowerCase().trim();
+      const via = /^[a-z0-9][a-z0-9-]{0,40}$/.test(rawVia) ? rawVia : '';
+
+      // Surface cohort context to voters when present — builds trust + reminds
+      // them who shared the link.
+      if (via) {
+        const hint = document.createElement('p');
+        hint.className = 'cohort-hint mono';
+        hint.textContent = 'INVITED VIA · ' + via.toUpperCase();
+        article.insertBefore(hint, article.querySelector('.options'));
+      }
+
+      function setStatus(msg, kind) {
+        status.textContent = msg;
+        status.dataset.kind = kind || '';
+      }
+
+      function paintTally(tally, total, votedFor) {
+        const safeTotal = Math.max(total || 0, 1);
+        // Find max for relative-to-leader bar scaling.
+        let max = 0;
+        for (const k in tally) if (tally[k] > max) max = tally[k];
+        max = Math.max(max, 1);
+        buttons.forEach((b) => {
+          const id = b.dataset.optionId;
+          const count = tally[id] || 0;
+          const pct = total ? Math.round((count / total) * 100) : 0;
+          const fillWidth = (count / max) * 100;
+          b.querySelector('.option__bar-fill').style.width = fillWidth + '%';
+          b.querySelector('.option__pct').textContent = pct + '%';
+          b.classList.toggle('option--leader', count === max && count > 0);
+          b.classList.toggle('option--voted', id === votedFor);
+        });
+      }
+
+      async function fetchTally(votedFor) {
+        try {
+          const r = await fetch('/api/poll?slug=' + encodeURIComponent(slug), { cache: 'no-store' });
+          const j = await r.json();
+          if (j && j.ok) paintTally(j.tally || {}, j.total || 0, votedFor);
+        } catch {}
+      }
+
+      const lsKey = 'pc:poll:voted:' + slug;
+      const priorVote = (function () { try { return localStorage.getItem(lsKey); } catch { return null; } })();
+
+      if (priorVote) {
+        buttons.forEach((b) => { b.disabled = true; b.classList.add('option--locked'); });
+        setStatus('your pick: ' + priorVote + ' · live distribution below', 'voted');
+        fetchTally(priorVote);
+      } else {
+        // Show the current distribution lightly even before voting (helps the
+        // Schelling intuition — you can see where momentum is).
+        fetchTally(null);
+      }
+
+      // JUICE helpers (mirror of PollsOnHome) — chime, vibrate, ripple, XP float
+      var actx = null;
+      function chime(freq, dur) {
+        try {
+          if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+          var o = actx.createOscillator(), g = actx.createGain();
+          o.type = 'sine'; o.frequency.value = freq || 720;
+          g.gain.setValueAtTime(0, actx.currentTime);
+          g.gain.linearRampToValueAtTime(0.09, actx.currentTime + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0005, actx.currentTime + (dur || 0.18));
+          o.connect(g).connect(actx.destination);
+          o.start(); o.stop(actx.currentTime + (dur || 0.18) + 0.05);
+        } catch(e) {}
+      }
+      function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e) {} }
+      function ripple(btn, ev) {
+        try {
+          var r = document.createElement('span');
+          r.className = 'juice-ripple';
+          var rect = btn.getBoundingClientRect();
+          var x = ev && ev.clientX ? ev.clientX - rect.left : rect.width / 2;
+          var y = ev && ev.clientY ? ev.clientY - rect.top : rect.height / 2;
+          r.style.left = x + 'px';
+          r.style.top = y + 'px';
+          btn.style.position = 'relative';
+          btn.style.overflow = 'hidden';
+          btn.appendChild(r);
+          setTimeout(function() { if (r.parentNode) r.parentNode.removeChild(r); }, 700);
+        } catch(e) {}
+      }
+      function xpFloat(btn, text) {
+        try {
+          var x = document.createElement('span');
+          x.className = 'juice-xp';
+          x.textContent = text || '+1 XP';
+          var rect = btn.getBoundingClientRect();
+          x.style.left = (rect.width / 2) + 'px';
+          x.style.top = '0';
+          btn.style.position = 'relative';
+          btn.appendChild(x);
+          setTimeout(function() { if (x.parentNode) x.parentNode.removeChild(x); }, 950);
+        } catch(e) {}
+      }
+      // Mode inference — zeitgeist / forecast / coordination / etc.
+      function inferMode() {
+        if (document.querySelector('.purpose-chip--zeitgeist')) return 'zeitgeist';
+        if (document.querySelector('.purpose-chip--forecast')) return 'forecast';
+        return 'coordination';
+      }
+
+      buttons.forEach((b) => {
+        b.addEventListener('click', async (ev) => {
+          if (b.disabled) return;
+          const optionId = b.dataset.optionId;
+          buttons.forEach((x) => { x.disabled = true; });
+          ripple(b, ev);
+          chime(720, 0.14);
+          buzz(10);
+          setStatus('locking in ' + optionId + '…', '');
+          try {
+            const r = await fetch('/api/poll', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'pc-poll-v1',
+                slug: slug,
+                optionId: optionId,
+                via: via || undefined,
+                timestamp: new Date().toISOString(),
+              }),
+            });
+            const j = await r.json();
+            if (r.status === 200 && j.ok) {
+              try { localStorage.setItem(lsKey, optionId); } catch {}
+              xpFloat(b, '+1 XP');
+              chime(880, 0.16);
+              if (window.pcVoter && window.pcVoter.record) {
+                window.pcVoter.record({ slug: slug, mode: inferMode() });
+              } else {
+                try { window.dispatchEvent(new CustomEvent('pc:voter-updated')); } catch(e) {}
+              }
+              setStatus('locked: ' + optionId + ' · live distribution below', 'voted');
+              fetchTally(optionId);
+            } else if (r.status === 409 && j.error === 'already-voted') {
+              try { localStorage.setItem(lsKey, j.votedFor); } catch {}
+              setStatus('already voted: ' + j.votedFor + ' · live distribution below', 'warn');
+              fetchTally(j.votedFor);
+            } else if (r.status === 503) {
+              setStatus('KV not bound — vote not recorded yet', 'err');
+              buttons.forEach((x) => { x.disabled = false; });
+            } else {
+              setStatus('vote failed: ' + (j.error || r.status), 'err');
+              buttons.forEach((x) => { x.disabled = false; });
+            }
+          } catch (err) {
+            setStatus('network error: ' + (err && err.message ? err.message : 'offline'), 'err');
+            buttons.forEach((x) => { x.disabled = false; });
+          }
+        });
+      });
+    })();
+  </script>
+
+  <style>
+    .page { max-width: 720px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .poll__head { margin-bottom: 18px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .question { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(24px, 5vw, 32px); font-weight: 700; line-height: 1.15; margin: 0 0 8px; }
+    .dek { margin: 0; color: #38373A; font-size: 14.5px; line-height: 1.55; }
+
+    .options { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .option__btn {
+      display: grid;
+      grid-template-columns: 32px 1fr 100px 50px;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #d6d4cd;
+      border-radius: 2px;
+      background: #fff;
+      color: #12110E;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s;
+      font: inherit;
+    }
+    .option__btn:hover:not(:disabled) {
+      border-color: #5F3DC4;
+      background: #fbf9ff;
+    }
+    .option__btn:disabled { cursor: default; opacity: 0.92; }
+    .option__btn.option--locked { border-color: #d6d4cd; }
+    .option__btn.option--leader { border-color: #5F3DC4; background: #f5f0ff; }
+    .option__btn.option--voted { border-color: #5F3DC4; border-width: 2px; background: #f5f0ff; }
+
+    .option__rank { color: #8a8878; font-size: 10px; font-weight: 700; }
+    .option__label { display: flex; flex-direction: column; gap: 2px; }
+    .option__title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 15px; font-weight: 600; line-height: 1.25; }
+    .option__hint { color: #5F5E5A; font-size: 12px; line-height: 1.4; }
+    .option__bar { display: block; height: 8px; background: #f0eee6; border-radius: 999px; overflow: hidden; }
+    .option__bar-fill { display: block; height: 100%; background: #5F3DC4; transition: width 0.5s ease-out; }
+    .option__pct { color: #12110E; font-size: 11px; font-weight: 700; text-align: right; }
+
+    @media (max-width: 540px) {
+      .option__btn { grid-template-columns: 24px 1fr 56px 40px; padding: 10px 12px; gap: 8px; }
+      .option__title { font-size: 14px; }
+      .option__hint { font-size: 11.5px; }
+    }
+
+    .status {
+      margin: 12px 0 0;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: #5F5E5A;
+      background: #faf9f5;
+      border-radius: 2px;
+      letter-spacing: 0.08em;
+    }
+    .status[data-kind="voted"] { background: #f5f0ff; color: #3A1F8B; }
+    .status[data-kind="warn"]  { background: #FFF4E5; color: #6A3E05; }
+    .status[data-kind="err"]   { background: #FCE8EA; color: #8A2432; }
+
+    .details { margin-top: 14px; padding: 8px 12px; border: 1px dashed #d6d4cd; border-radius: 2px; font-size: 13px; color: #5F5E5A; }
+    .details summary { cursor: pointer; font-weight: 600; color: #12110E; }
+    .details code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); background: #f0eee6; padding: 1px 4px; border-radius: 2px; font-size: 0.9em; }
+
+    .meta { margin: 12px 0 0; font-size: 9.5px; color: #8a8878; letter-spacing: 0.14em; }
+
+    .cohort-hint {
+      margin: 0 0 10px;
+      padding: 4px 10px;
+      background: #fff4e5;
+      border-left: 3px solid #E89A22;
+      border-radius: 2px;
+      font-size: 9.5px;
+      color: #6A3E05;
+      letter-spacing: 0.18em;
+      font-weight: 700;
+    }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>
