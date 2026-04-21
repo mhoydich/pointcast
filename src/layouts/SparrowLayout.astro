@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.10</span>
+          <span class="sp-sub">pointcast reader · v0.11</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -937,6 +937,86 @@ const paletteData = {
           }
         }
         subscribeReelReactions();
+
+        // ─── v0.11 · INLINE REPLY COMPOSER ──────────────────────────
+        // Collapsible composer on the block reader. Submit POSTs a
+        // pc-ping-v1 draft to /api/ping on pointcast.xyz (same endpoint
+        // Magpie uses for push-to-PointCast). Gives readers a one-hop
+        // reply path without installing anything; Magpie-routed multi-
+        // destination reply lands in v0.12.
+        document.querySelectorAll('[data-sp-compose]').forEach((panel) => {
+          const body = panel.querySelector('[data-sp-compose-body]');
+          const subject = panel.querySelector('[data-sp-compose-subject]');
+          const counter = panel.querySelector('[data-sp-compose-counter]');
+          const submit = panel.querySelector('[data-sp-compose-submit]');
+          const result = panel.querySelector('[data-sp-compose-result]');
+          const blockId = panel.getAttribute('data-sp-block-id');
+          const channel = panel.getAttribute('data-sp-channel') || 'FD';
+          if (!body || !submit) return;
+
+          const repaintCounter = () => {
+            const len = body.value.length;
+            counter && (counter.textContent = `${len} / 3800`);
+            const tooLong = len > 3800;
+            counter?.classList.toggle('is-over', tooLong);
+          };
+          body.addEventListener('input', repaintCounter);
+          repaintCounter();
+
+          submit.addEventListener('click', async () => {
+            const text = (body.value || '').trim();
+            if (!text) {
+              result.textContent = '⚠ body is empty';
+              result.setAttribute('data-state', 'error');
+              return;
+            }
+            if (text.length > 3800) {
+              result.textContent = '⚠ body over 3800 chars';
+              result.setAttribute('data-state', 'error');
+              return;
+            }
+            const subjectVal = (subject?.value || '').trim().slice(0, 120);
+            submit.disabled = true;
+            result.textContent = 'posting…';
+            result.setAttribute('data-state', 'pending');
+            try {
+              const resp = await fetch('https://pointcast.xyz/api/ping', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'pc-ping-v1',
+                  subject: subjectVal || undefined,
+                  body: text,
+                  expand: true,
+                  channel,
+                  blockType: 'NOTE',
+                  dek: subjectVal ? undefined : `Re: ${blockId}`,
+                  sourceUrl: `https://pointcast.xyz/b/${blockId}`,
+                  sourceApp: 'sparrow',
+                  from: 'sparrow-reader',
+                  timestamp: new Date().toISOString(),
+                }),
+              });
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              result.textContent = 'posted · staging as a block';
+              result.setAttribute('data-state', 'ok');
+              body.value = '';
+              if (subject) subject.value = '';
+              repaintCounter();
+              setTimeout(() => {
+                result.textContent = '';
+                result.removeAttribute('data-state');
+                submit.disabled = false;
+                // collapse after a successful post
+                if (panel instanceof HTMLDetailsElement) panel.open = false;
+              }, 2200);
+            } catch (err) {
+              result.textContent = `× ${err?.message || 'failed'}`;
+              result.setAttribute('data-state', 'error');
+              submit.disabled = false;
+            }
+          });
+        });
 
         window.addEventListener('beforeunload', () => {
           for (const ws of openSockets) {
@@ -1801,6 +1881,155 @@ const paletteData = {
         white-space: nowrap;
       }
       .sp-r-react-counts[hidden] { display: none; }
+
+      /* ─── v0.11 · INLINE REPLY COMPOSER ─────────────────────────── */
+      .sp-compose {
+        margin: 20px 0 8px;
+        padding: 0;
+        border: 1px solid var(--sp-rule);
+        border-radius: var(--sp-rad);
+        background: color-mix(in oklch, var(--sp-blue-hour) 78%, transparent);
+        overflow: hidden;
+      }
+      .sp-compose[open] {
+        border-color: color-mix(in oklch, var(--sp-ember) 45%, var(--sp-rule));
+      }
+      .sp-compose-summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 14px 18px;
+        display: flex; align-items: center; gap: 10px;
+        font-family: var(--sp-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sp-ash);
+        transition: background 140ms ease;
+      }
+      .sp-compose-summary::-webkit-details-marker { display: none; }
+      .sp-compose-summary::marker { display: none; }
+      .sp-compose-summary:hover { background: color-mix(in oklch, var(--sp-ember) 8%, transparent); color: var(--sp-ember); }
+      .sp-compose[open] .sp-compose-summary {
+        border-bottom: 1px dotted var(--sp-rule);
+        color: var(--sp-ember);
+      }
+      .sp-compose-glyph {
+        font-family: var(--sp-display);
+        font-size: 18px;
+        line-height: 1;
+        color: var(--sp-ember);
+      }
+      .sp-compose-label { font-weight: 600; letter-spacing: 0.18em; }
+      .sp-compose-hint {
+        margin-left: auto;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        color: var(--sp-mute);
+        text-transform: none;
+      }
+
+      .sp-compose-body { padding: 16px 18px 18px; display: grid; gap: 12px; }
+      .sp-compose-row { display: block; }
+      .sp-compose-field { display: block; }
+      .sp-compose-field > span {
+        display: block;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-mute);
+        margin-bottom: 6px;
+      }
+      .sp-compose-field > span em {
+        font-style: italic;
+        color: var(--sp-ash);
+        letter-spacing: 0.04em;
+        text-transform: none;
+      }
+      .sp-compose-field input,
+      .sp-compose-field textarea {
+        width: 100%;
+        background: color-mix(in oklch, var(--sp-blue-hour) 90%, var(--sp-ink));
+        border: 1px solid var(--sp-rule);
+        border-radius: var(--sp-rad);
+        padding: 10px 12px;
+        color: var(--sp-bone);
+        font-family: var(--sp-ui);
+        font-size: 14px;
+        line-height: 1.5;
+        resize: vertical;
+        transition: border-color 140ms ease, background 140ms ease;
+      }
+      .sp-compose-field input:focus,
+      .sp-compose-field textarea:focus {
+        outline: none;
+        border-color: var(--sp-ember);
+        background: var(--sp-blue-hour);
+      }
+      .sp-compose-field textarea { min-height: 110px; }
+
+      .sp-compose-meta {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        color: var(--sp-ash);
+      }
+      .sp-compose-chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 3px 8px;
+        border: 1px dashed var(--sp-rule);
+        border-radius: 999px;
+      }
+      .sp-compose-chip-k {
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-mute);
+      }
+      .sp-compose-counter {
+        margin-left: auto;
+        font-family: var(--sp-mono);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        color: var(--sp-mute);
+      }
+      .sp-compose-counter.is-over { color: var(--sp-oxblood); }
+
+      .sp-compose-actions {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      }
+      .sp-compose-submit {
+        font-family: var(--sp-mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        padding: 8px 16px;
+        border: 1px solid var(--sp-ember);
+        color: var(--sp-bone);
+        background: color-mix(in oklch, var(--sp-ember) 22%, transparent);
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background 140ms ease, transform 140ms ease;
+      }
+      .sp-compose-submit:hover { background: color-mix(in oklch, var(--sp-ember) 36%, transparent); }
+      .sp-compose-submit:disabled { opacity: 0.5; cursor: progress; transform: none; }
+      .sp-compose-result {
+        font-family: var(--sp-mono);
+        font-size: 11px;
+        color: var(--sp-mute);
+      }
+      .sp-compose-result[data-state="pending"] { color: var(--sp-ember); }
+      .sp-compose-result[data-state="ok"]      { color: var(--sp-moss); }
+      .sp-compose-result[data-state="error"]   { color: var(--sp-oxblood); }
+
+      .sp-compose-foot {
+        font-family: var(--sp-mono);
+        font-size: 10.5px;
+        color: var(--sp-mute);
+        margin: 4px 0 0;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+      }
 
       /* ─── v0.8 · NOSTR STATUS + CONNECT ─────────────────────────── */
       .sp-reactions-head {

@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.10',
-    protocol_version: '0.10',
+    version: '0.11',
+    protocol_version: '0.11',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.10.0',
+        version: 'sparrow-v0.11.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -251,6 +251,32 @@ export const GET: APIRoute = async () => {
       },
 
       future: 'v0.10: NIP-44-encrypted sync of saved + visited + reactions across devices; cross-reel count badges under every receipt; OPML import/export.',
+    },
+
+    // v0.11: inline reply composer on the block reader. Direct POST to
+    // PointCast's /api/ping (pc-ping-v1). Magpie-routed multi-
+    // destination reply (for users with Magpie installed) lands in
+    // v0.12 — needs Magpie peer-node integration + destination picker.
+    compose: {
+      surface: 'Collapsible <details> panel on /sparrow/b/<id>, below the reactions toolbar',
+      transport: 'POST https://pointcast.xyz/api/ping',
+      schema: 'pc-ping-v1',
+      payload_shape: {
+        type: 'pc-ping-v1',
+        subject: 'optional string (≤120 chars)',
+        body: 'string (≤3800 chars)',
+        expand: true,
+        channel: '<parent block channel code>',
+        blockType: 'NOTE',
+        sourceUrl: 'https://pointcast.xyz/b/<parent-id>',
+        sourceApp: 'sparrow',
+        from: 'sparrow-reader',
+        timestamp: 'ISO 8601',
+        dek: '"Re: <parent-id>" when subject is empty',
+      },
+      result_states: ['pending', 'ok', 'error'],
+      collapses_on: 'successful post (2.2s after ok state shows)',
+      future: 'v0.12 adds destination selection via detected Magpie peer-node: title/body go to Magpie /broadcast with destinations[] (PointCast + Mastodon + Farcaster + bitchat + Bluesky + Twitter + LinkedIn per the Magpie manifest). When Magpie is offline, Sparrow falls back to this direct /api/ping path.',
     },
 
     // What Sparrow renders. Agents that want to build their own reader
@@ -404,9 +430,10 @@ export const GET: APIRoute = async () => {
       'v0.7': 'Named reactions — three-chip toolbar on every block reader (🔥 lit · 🌿 evergreen · 💜 rare) backed by localStorage:sparrow:reactions. Local-only picks hydrate from storage on load; active states pulse their accent ring.',
       'v0.8': 'Reaction fan-out via NIP-07. Detects window.nostr, offers a "connect signer" pill next to the reactions toolbar; on reaction ADD, signs a kind-7 event r-tagged to https://pointcast.xyz/b/<id> and fire-and-forget publishes to a configurable relay pool (default: damus, primal, nos.lol). Emitted log prevents duplicate re-broadcasts on reload. Signer status surface states: local · available · connected · emitting.',
       'v0.9': 'Reaction aggregation (read side). Per-reader REQ subscription against the relay pool filtered by {kinds:[7], #r:[canonical-block-url]}. Client-side dedupe by event id; count badges paint on each chip as events arrive or from the last 200 stored per relay. Reading works without a signer. Kind-5 delete events fire on unreact when the local emitted log has the original event id, with optimistic local state.',
-      'v0.10': 'Cross-reel count badges. One REQ per relay filtered by every visible block URL in #r, paints a compact "🔥 3 · 🌿 1" row into each receipt footer as events arrive. Shared state with reader aggregation so reader + reel stay in sync. Works on index, channel, saved — anywhere receipts render. (current)',
-      'v0.11': 'Reading-list mirror via a small localhost HTTP bridge between Sparrow.app and the hosted reader. Inline reply composer routed through Magpie.',
-      'v0.12': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
+      'v0.10': 'Cross-reel count badges. One REQ per relay filtered by every visible block URL in #r, paints a compact "🔥 3 · 🌿 1" row into each receipt footer as events arrive. Shared state with reader aggregation so reader + reel stay in sync. Works on index, channel, saved — anywhere receipts render.',
+      'v0.11': 'Inline reply composer on /sparrow/b/<id>. Collapsible panel below the reactions toolbar; body + optional subject; POSTs pc-ping-v1 to https://pointcast.xyz/api/ping with the parent block as sourceUrl, channel + expand=true. Shows pending/ok/error states and auto-collapses after a successful post. (current)',
+      'v0.12': 'Magpie-routed multi-destination reply — detect the local Magpie peer-node, surface a destinations picker in the composer (PointCast · Mastodon · Farcaster · bitchat · Bluesky · Twitter · LinkedIn). Fallback to direct /api/ping when Magpie is offline. Reading-list mirror via the same localhost HTTP bridge.',
+      'v0.13': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
