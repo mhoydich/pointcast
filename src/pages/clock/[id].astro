@@ -144,6 +144,16 @@ function defaultTimeFormat(tz: string): '12' | '24' {
   return '24';
 }
 
+/** Sonic postcards — one procedural Web Audio patch per zone, synthesized
+ *  entirely in the browser (no external files). Each zone label maps to a
+ *  profile slug; unknown labels skip the audio toggle. */
+const AUDIO_PROFILES = ['el-segundo', 'medway', 'nyc', 'london', 'mallorca', 'istanbul', 'tokyo', 'mexico-city'] as const;
+type AudioProfile = typeof AUDIO_PROFILES[number];
+function audioProfileFor(label: string): AudioProfile | null {
+  const slug = label.toLowerCase().split(',')[0].trim().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+  return (AUDIO_PROFILES as readonly string[]).includes(slug) ? (slug as AudioProfile) : null;
+}
+
 const zonesSky = zones.map((z) => {
   const s = sunTimes(renderNow, z.lat, z.lon, renderNow);
   const ph = planetaryHour(renderNow, z.lat, z.lon, z.tz);
@@ -173,8 +183,11 @@ const zonesSky = zones.map((z) => {
     equator: equatorRatio(z.lat),
     ritual,
     timeFormat,
+    audioProfile: audioProfileFor(z.label),
   };
 });
+
+const hasAnyAudio = zonesSky.some((z) => z.audioProfile !== null);
 
 // Global sky ribbon data — computed once for the page (moon + shower + marker
 // are location-independent except for hemisphere nuance we don't track here).
@@ -311,8 +324,26 @@ const jsonLd = {
       </aside>
     )}
 
+    {hasAnyAudio && (
+      <section class="clock-audio-master" aria-label="Sonic postcards" id="clock-audio-master">
+        <div class="clock-audio-master__text">
+          <p class="clock-audio-master__kicker mono">SONIC POSTCARDS · BETA</p>
+          <p class="clock-audio-master__dek">Every zone carries a procedural ambient synthesized in your browser — wind over the Strand, Choate peepers, Istanbul ferry horn. No files, no licensing. Tap a <span class="mono">▶</span> on any card, or play the whole sky at once.</p>
+        </div>
+        <div class="clock-audio-master__controls">
+          <button type="button" class="clock-audio-master__btn" data-role="audio-all" aria-pressed="false">
+            <span class="mono">▶ PLAY ALL</span>
+          </button>
+          <button type="button" class="clock-audio-master__btn clock-audio-master__btn--mute" data-role="audio-mute" aria-pressed="false" hidden>
+            <span class="mono">⏹ MUTE ALL</span>
+          </button>
+          <span class="clock-audio-master__count mono" data-role="audio-count" aria-live="polite">0 playing</span>
+        </div>
+      </section>
+    )}
+
     <section class="clock-grid" aria-label="World clock">
-      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se, latHemi, latAbs, equator, ritual, timeFormat }) => (
+      {zonesSky.map(({ zone: z, sun, planetaryHour: ph, season: se, latHemi, latAbs, equator, ritual, timeFormat, audioProfile }) => (
         <article
           class="clock-card"
           data-tz={z.tz}
@@ -321,10 +352,26 @@ const jsonLd = {
           data-lon={z.lon}
           data-time-format={timeFormat}
           data-rituals={z.rituals ? JSON.stringify(z.rituals) : ''}
+          data-audio-profile={audioProfile ?? undefined}
         >
           <div class="clock-card__top">
             <div class="clock-card__top-text">
-              <p class="clock-card__label">{z.label}</p>
+              <p class="clock-card__label">
+                {z.label}
+                {audioProfile && (
+                  <button
+                    type="button"
+                    class="clock-card__audio"
+                    data-role="audio-toggle"
+                    aria-label={`Play ambient sound of ${z.label}`}
+                    aria-pressed="false"
+                    title={`Procedural ambient — ${z.label}`}
+                  >
+                    <span data-role="audio-icon" aria-hidden="true">▶</span>
+                    <span class="clock-card__audio-dot" data-role="audio-dot" aria-hidden="true"></span>
+                  </button>
+                )}
+              </p>
               {z.region && <p class="clock-card__region">{z.region}</p>}
               {z.facts && Object.keys(z.facts).length > 0 && (
                 <ul class="clock-card__facts mono" aria-label="Place stats">
@@ -343,6 +390,7 @@ const jsonLd = {
                   ? <span>sun {Math.round(sun.altitudeDeg)}° up · {sun.bearing}</span>
                   : <span>sun {Math.abs(Math.round(sun.altitudeDeg))}° below</span>}
               </p>
+              <p class="clock-card__live-weather mono" data-role="live-weather" hidden>—</p>
             </div>
 
             {/* Per-zone sky dome — polar projection of the local sky RIGHT NOW.
@@ -702,6 +750,651 @@ const jsonLd = {
 
   refresh();
   setInterval(refresh, 60_000);
+</script>
+
+<script is:inline>
+  /* ========================================================================
+   * Live weather — Open-Meteo free tier, no API key, browser-side fetch.
+   * Cached per lat/lon for 15 min in localStorage so the API stays polite.
+   * Graceful fail: if fetch errors, the slot just stays hidden.
+   * ====================================================================== */
+  (() => {
+    const cards = Array.from(document.querySelectorAll('[data-lat][data-lon][data-role-cb]'));
+    // Above selector is empty — intentionally loose: reselect below.
+    const allCards = Array.from(document.querySelectorAll('[data-lat][data-lon]'));
+    if (!allCards.length) return;
+
+    // WMO weather code → glyph + short label.
+    function codeToLabel(code) {
+      if (code === 0) return ['☀', 'clear'];
+      if (code >= 1 && code <= 2) return ['🌤', 'mostly clear'];
+      if (code === 3) return ['☁', 'overcast'];
+      if (code >= 45 && code <= 48) return ['🌫', 'fog'];
+      if (code >= 51 && code <= 57) return ['🌦', 'drizzle'];
+      if (code >= 61 && code <= 67) return ['🌧', 'rain'];
+      if (code >= 71 && code <= 77) return ['❄', 'snow'];
+      if (code >= 80 && code <= 82) return ['🌦', 'showers'];
+      if (code >= 85 && code <= 86) return ['🌨', 'snow showers'];
+      if (code >= 95 && code <= 99) return ['⛈', 'thunder'];
+      return ['~', 'unknown'];
+    }
+
+    function bearingOf(deg) {
+      if (deg == null || Number.isNaN(deg)) return '—';
+      const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+      return dirs[Math.round(deg / 45) % 8];
+    }
+
+    async function fetchWeather(lat, lon) {
+      const key = 'pc:weather:' + lat.toFixed(2) + ':' + lon.toFixed(2);
+      const ttl = 15 * 60 * 1000;
+      try {
+        const cached = JSON.parse(localStorage.getItem(key) || 'null');
+        if (cached && Date.now() - cached.at < ttl) return cached.data;
+      } catch (e) {}
+      try {
+        const url = 'https://api.open-meteo.com/v1/forecast'
+          + '?latitude=' + lat
+          + '&longitude=' + lon
+          + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m'
+          + '&wind_speed_unit=kmh'
+          + '&timezone=auto';
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const j = await r.json();
+        if (!j || !j.current) return null;
+        const data = {
+          tempC: j.current.temperature_2m,
+          code: j.current.weather_code,
+          windKmh: j.current.wind_speed_10m,
+          windDir: j.current.wind_direction_10m,
+          fetchedAt: j.current.time || null,
+        };
+        try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), data })); } catch (e) {}
+        return data;
+      } catch (e) { return null; }
+    }
+
+    allCards.forEach(async (card) => {
+      const lat = parseFloat(card.getAttribute('data-lat'));
+      const lon = parseFloat(card.getAttribute('data-lon'));
+      if (Number.isNaN(lat) || Number.isNaN(lon)) return;
+      const slot = card.querySelector('[data-role="live-weather"]');
+      if (!slot) return;
+      const w = await fetchWeather(lat, lon);
+      if (!w) return;
+      const [glyph, label] = codeToLabel(w.code);
+      const tempC = Math.round(w.tempC);
+      const tempF = Math.round(w.tempC * 9 / 5 + 32);
+      const windKmh = Math.round(w.windKmh || 0);
+      const windMph = Math.round((w.windKmh || 0) * 0.621371);
+      const bearing = bearingOf(w.windDir);
+      slot.innerHTML =
+        '<span class="live-weather__chip">LIVE</span> '
+        + '<span class="live-weather__cond">' + glyph + ' ' + label + '</span>'
+        + ' · ' + tempC + '°C / ' + tempF + '°F'
+        + ' · wind ' + bearing + ' ' + windKmh + ' km/h';
+      slot.setAttribute('title', 'Open-Meteo · cached 15 min · updated ' + (w.fetchedAt || 'just now'));
+      slot.hidden = false;
+    });
+  })();
+</script>
+
+<script is:inline>
+  /* ========================================================================
+   * YOU ARE HERE — detect viewer timezone and highlight the matching zone
+   * card. Fallback to the same continent/region prefix when no exact match.
+   * ====================================================================== */
+  (() => {
+    try {
+      const viewerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!viewerTz) return;
+      let exact = null, fallback = null;
+      document.querySelectorAll('[data-tz]').forEach((card) => {
+        const tz = card.getAttribute('data-tz');
+        if (!tz) return;
+        if (tz === viewerTz) exact = exact || card;
+        else if (tz.split('/')[0] === viewerTz.split('/')[0]) fallback = fallback || card;
+      });
+      const hit = exact || fallback;
+      if (!hit) return;
+      hit.setAttribute('data-here', exact ? 'exact' : 'near');
+      const chip = document.createElement('span');
+      chip.className = 'clock-card__here-chip mono';
+      chip.textContent = exact ? 'YOU ARE HERE' : 'CLOSEST TO YOU';
+      chip.setAttribute('title', 'Detected tz: ' + viewerTz);
+      const top = hit.querySelector('.clock-card__top-text');
+      if (top) top.prepend(chip);
+    } catch (e) {}
+  })();
+</script>
+
+<script is:inline>
+  /* ========================================================================
+   * Sonic Postcards — procedural Web Audio ambient per zone.
+   *
+   * Zero external assets. Each profile synthesizes a distinct ambient bed
+   * (wind, peepers, traffic, rain, waves, drones, neon) + signature
+   * periodic events (jets, train horns, sirens, bells, gulls, ferry horns,
+   * station chimes). Master + per-zone gain envelopes, click-to-start
+   * (browsers require a gesture before AudioContext can play).
+   * ====================================================================== */
+  (() => {
+    const cards = Array.from(document.querySelectorAll('[data-audio-profile]'));
+    if (!cards.length) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+
+    let ctx = null;
+    let masterGain = null;
+    const zones = new Map(); // profile -> { card, zoneGain, handle }
+
+    function ensureCtx() {
+      if (ctx) return ctx;
+      ctx = new AC();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.7;
+      masterGain.connect(ctx.destination);
+      return ctx;
+    }
+
+    // --- audio graph helpers ---
+    function whiteNoise(seconds) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
+      return s;
+    }
+    function brownNoise(seconds) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < d.length; i++) {
+        const w = Math.random() * 2 - 1;
+        last = (last + 0.02 * w) / 1.02;
+        d[i] = last * 3.5;
+      }
+      const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
+      return s;
+    }
+    function osc(freq, type) {
+      const o = ctx.createOscillator();
+      o.type = type || 'sine';
+      o.frequency.value = freq;
+      return o;
+    }
+    function biquad(type, freq, q) {
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      if (q != null) f.Q.value = q;
+      return f;
+    }
+    function gain(v) { const g = ctx.createGain(); g.gain.value = v; return g; }
+    function rand(a, b) { return a + Math.random() * (b - a); }
+
+    // --- profiles ---
+    const PROFILES = {
+      'el-segundo': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Wind bed
+        const wind = brownNoise(4);
+        const bp = biquad('bandpass', 400, 0.5);
+        const g = gain(0.35);
+        wind.connect(bp).connect(g).connect(out);
+        wind.start(); oscs.push(wind); nodes.push(bp, g);
+        // Wind LFO on bandpass freq
+        const lfo = osc(0.08, 'sine'); const lfoG = gain(200);
+        lfo.connect(lfoG).connect(bp.frequency); lfo.start();
+        oscs.push(lfo); nodes.push(lfoG);
+        // Periodic jet sweep
+        const jet = () => {
+          const t = ctx.currentTime;
+          const saw = osc(80, 'sawtooth');
+          const lp = biquad('lowpass', 600, 0.8);
+          const jg = gain(0);
+          saw.connect(lp).connect(jg).connect(out);
+          saw.frequency.setValueAtTime(80, t);
+          saw.frequency.linearRampToValueAtTime(50, t + 4);
+          jg.gain.setValueAtTime(0, t);
+          jg.gain.linearRampToValueAtTime(0.16, t + 1);
+          jg.gain.linearRampToValueAtTime(0, t + 4);
+          saw.start(t); saw.stop(t + 4.2);
+          setTimeout(() => { try { lp.disconnect(); jg.disconnect(); } catch(e) {} }, 5000);
+          timers.push(setTimeout(jet, rand(15000, 40000)));
+        };
+        timers.push(setTimeout(jet, rand(5000, 12000)));
+        // Gulls
+        const gull = () => {
+          const t = ctx.currentTime;
+          const n = whiteNoise(0.3);
+          const gbp = biquad('bandpass', 2200, 10);
+          const gg = gain(0);
+          n.connect(gbp).connect(gg).connect(out);
+          gg.gain.setValueAtTime(0, t);
+          gg.gain.linearRampToValueAtTime(0.14, t + 0.04);
+          gg.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+          n.start(t); n.stop(t + 0.45);
+          setTimeout(() => { try { gbp.disconnect(); gg.disconnect(); } catch(e) {} }, 700);
+          timers.push(setTimeout(gull, rand(20000, 60000)));
+        };
+        timers.push(setTimeout(gull, rand(8000, 20000)));
+        return { oscs, nodes, timers };
+      },
+
+      'medway': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Peepers — three pulsed triangles
+        [2800, 3020, 3200].forEach((f, i) => {
+          const o = osc(f, 'triangle');
+          const g = gain(0.04);
+          o.connect(g).connect(out);
+          const l = osc(4 + i * 1.2, 'sine');
+          const lg = gain(0.035);
+          l.connect(lg).connect(g.gain);
+          o.start(); l.start();
+          oscs.push(o, l); nodes.push(g, lg);
+        });
+        // Pond background
+        const bg = brownNoise(4); const bgG = gain(0.11);
+        bg.connect(bgG).connect(out); bg.start();
+        oscs.push(bg); nodes.push(bgG);
+        // Distant train horn — minor second
+        const horn = () => {
+          const t = ctx.currentTime;
+          const o1 = osc(65, 'triangle'), o2 = osc(98, 'triangle');
+          const hg = gain(0); const lp = biquad('lowpass', 500, 0.6);
+          o1.connect(hg); o2.connect(hg); hg.connect(lp).connect(out);
+          hg.gain.setValueAtTime(0, t);
+          hg.gain.linearRampToValueAtTime(0.2, t + 0.8);
+          hg.gain.linearRampToValueAtTime(0, t + 3);
+          o1.start(t); o2.start(t); o1.stop(t + 3.2); o2.stop(t + 3.2);
+          setTimeout(() => { try { lp.disconnect(); hg.disconnect(); } catch(e) {} }, 3500);
+          timers.push(setTimeout(horn, rand(30000, 90000)));
+        };
+        timers.push(setTimeout(horn, rand(10000, 25000)));
+        return { oscs, nodes, timers };
+      },
+
+      'nyc': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Traffic
+        const tr = whiteNoise(4);
+        const trLP = biquad('lowpass', 800, 0.5);
+        const trG = gain(0.28);
+        tr.connect(trLP).connect(trG).connect(out);
+        tr.start();
+        oscs.push(tr); nodes.push(trLP, trG);
+        // Subway rumble
+        const rum = osc(42, 'sine');
+        const rumG = gain(0.16);
+        rum.connect(rumG).connect(out);
+        const rumLFO = osc(0.15, 'sine');
+        const rumLFOG = gain(0.07);
+        rumLFO.connect(rumLFOG).connect(rumG.gain);
+        rum.start(); rumLFO.start();
+        oscs.push(rum, rumLFO); nodes.push(rumG, rumLFOG);
+        // Siren
+        const siren = () => {
+          const t = ctx.currentTime;
+          const s1 = osc(600, 'sawtooth'), s2 = osc(603, 'sawtooth');
+          const bp = biquad('bandpass', 800, 4);
+          const sg = gain(0);
+          s1.connect(bp); s2.connect(bp); bp.connect(sg).connect(out);
+          [s1, s2].forEach((s, i) => {
+            const base = 600 + i * 3;
+            s.frequency.setValueAtTime(base, t);
+            s.frequency.linearRampToValueAtTime(base + 300, t + 0.6);
+            s.frequency.linearRampToValueAtTime(base, t + 1.2);
+            s.frequency.linearRampToValueAtTime(base + 300, t + 1.8);
+          });
+          sg.gain.setValueAtTime(0, t);
+          sg.gain.linearRampToValueAtTime(0.09, t + 0.3);
+          sg.gain.linearRampToValueAtTime(0, t + 2.5);
+          s1.start(t); s2.start(t);
+          s1.stop(t + 2.6); s2.stop(t + 2.6);
+          setTimeout(() => { try { bp.disconnect(); sg.disconnect(); } catch(e) {} }, 3000);
+          timers.push(setTimeout(siren, rand(40000, 90000)));
+        };
+        timers.push(setTimeout(siren, rand(15000, 35000)));
+        return { oscs, nodes, timers };
+      },
+
+      'london': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Rain
+        const rain = brownNoise(4);
+        const rainHP = biquad('highpass', 2000, 0.5);
+        const rainG = gain(0.32);
+        rain.connect(rainHP).connect(rainG).connect(out);
+        rain.start();
+        oscs.push(rain); nodes.push(rainHP, rainG);
+        // Pub murmur
+        const pub = whiteNoise(4);
+        const pubBP = biquad('bandpass', 400, 0.8);
+        const pubG = gain(0.09);
+        pub.connect(pubBP).connect(pubG).connect(out);
+        const pLFO = osc(0.3, 'sine'); const pLFOG = gain(0.05);
+        pLFO.connect(pLFOG).connect(pubG.gain);
+        pub.start(); pLFO.start();
+        oscs.push(pub, pLFO); nodes.push(pubBP, pubG, pLFOG);
+        // Glass clink
+        const clink = () => {
+          const t = ctx.currentTime;
+          const o = osc(7500 + Math.random() * 1500, 'sine');
+          const cg = gain(0);
+          o.connect(cg).connect(out);
+          cg.gain.setValueAtTime(0, t);
+          cg.gain.linearRampToValueAtTime(0.07, t + 0.01);
+          cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+          o.start(t); o.stop(t + 0.35);
+          setTimeout(() => { try { cg.disconnect(); } catch(e) {} }, 500);
+          timers.push(setTimeout(clink, rand(10000, 30000)));
+        };
+        timers.push(setTimeout(clink, rand(5000, 15000)));
+        return { oscs, nodes, timers };
+      },
+
+      'mallorca': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Waves with slow amp LFO
+        const w = brownNoise(4);
+        const wLP = biquad('lowpass', 1200, 0.4);
+        const wG = gain(0.3);
+        w.connect(wLP).connect(wG).connect(out);
+        const wLFO = osc(0.12, 'sine'); const wLFOG = gain(0.18);
+        wLFO.connect(wLFOG).connect(wG.gain);
+        w.start(); wLFO.start();
+        oscs.push(w, wLFO); nodes.push(wLP, wG, wLFOG);
+        // Crickets
+        const cr = whiteNoise(4);
+        const crBP = biquad('bandpass', 4500, 14);
+        const crG = gain(0.035);
+        cr.connect(crBP).connect(crG).connect(out);
+        cr.start();
+        oscs.push(cr); nodes.push(crBP, crG);
+        // Church bell
+        const bell = () => {
+          const t = ctx.currentTime;
+          const f = osc(130, 'sine'), p = osc(520, 'sine');
+          const fg = gain(0), pg = gain(0);
+          f.connect(fg).connect(out); p.connect(pg).connect(out);
+          fg.gain.setValueAtTime(0, t);
+          fg.gain.linearRampToValueAtTime(0.14, t + 0.05);
+          fg.gain.exponentialRampToValueAtTime(0.001, t + 3);
+          pg.gain.setValueAtTime(0, t);
+          pg.gain.linearRampToValueAtTime(0.045, t + 0.05);
+          pg.gain.exponentialRampToValueAtTime(0.001, t + 2);
+          f.start(t); p.start(t);
+          f.stop(t + 3.1); p.stop(t + 2.1);
+          setTimeout(() => { try { fg.disconnect(); pg.disconnect(); } catch(e) {} }, 3500);
+          timers.push(setTimeout(bell, rand(40000, 90000)));
+        };
+        timers.push(setTimeout(bell, rand(12000, 30000)));
+        return { oscs, nodes, timers };
+      },
+
+      'istanbul': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // D minor drone + 3rd harmonics
+        [146.83, 174.61, 220].forEach((f, i) => {
+          const o = osc(f, 'sine');
+          const g = gain(0.075);
+          o.connect(g).connect(out);
+          const l = osc(0.08 + i * 0.03, 'sine');
+          const lg = gain(f * 0.004);
+          l.connect(lg).connect(o.frequency);
+          o.start(); l.start();
+          oscs.push(o, l); nodes.push(g, lg);
+          const h = osc(f * 3, 'sine');
+          const hg = gain(0.018);
+          h.connect(hg).connect(out);
+          h.start();
+          oscs.push(h); nodes.push(hg);
+        });
+        // Seagulls
+        const gull = () => {
+          const t = ctx.currentTime;
+          const n = whiteNoise(0.4);
+          const bp = biquad('bandpass', 2500, 10);
+          const gg = gain(0);
+          n.connect(bp).connect(gg).connect(out);
+          gg.gain.setValueAtTime(0, t);
+          gg.gain.linearRampToValueAtTime(0.16, t + 0.03);
+          gg.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+          n.start(t); n.stop(t + 0.4);
+          setTimeout(() => { try { bp.disconnect(); gg.disconnect(); } catch(e) {} }, 600);
+          timers.push(setTimeout(gull, rand(15000, 45000)));
+        };
+        timers.push(setTimeout(gull, rand(6000, 15000)));
+        // Ferry horn
+        const ferry = () => {
+          const t = ctx.currentTime;
+          const o1 = osc(55, 'triangle'), o2 = osc(82, 'triangle');
+          const fg = gain(0);
+          o1.connect(fg); o2.connect(fg); fg.connect(out);
+          fg.gain.setValueAtTime(0, t);
+          fg.gain.linearRampToValueAtTime(0.22, t + 1.2);
+          fg.gain.linearRampToValueAtTime(0, t + 4);
+          o1.start(t); o2.start(t);
+          o1.stop(t + 4.2); o2.stop(t + 4.2);
+          setTimeout(() => { try { fg.disconnect(); } catch(e) {} }, 4500);
+          timers.push(setTimeout(ferry, rand(60000, 120000)));
+        };
+        timers.push(setTimeout(ferry, rand(20000, 50000)));
+        return { oscs, nodes, timers };
+      },
+
+      'mexico-city': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Market murmur — filtered noise at conversation range
+        const market = whiteNoise(4);
+        const marketBP = biquad('bandpass', 450, 0.7);
+        const marketG = gain(0.18);
+        market.connect(marketBP).connect(marketG).connect(out);
+        const mLFO = osc(0.22, 'sine'); const mLFOG = gain(0.1);
+        mLFO.connect(mLFOG).connect(marketG.gain);
+        market.start(); mLFO.start();
+        oscs.push(market, mLFO); nodes.push(marketBP, marketG, mLFOG);
+        // Altitude hiss — thin, high-pass
+        const hiss = whiteNoise(3);
+        const hissHP = biquad('highpass', 3000, 0.3);
+        const hissG = gain(0.025);
+        hiss.connect(hissHP).connect(hissG).connect(out);
+        hiss.start();
+        oscs.push(hiss); nodes.push(hissHP, hissG);
+        // Distant mariachi hint — D minor triad via triangles (trumpet-ish)
+        [293.66, 349.23, 440].forEach((f, i) => {
+          const o = osc(f, 'triangle');
+          const g = gain(0.015);
+          o.connect(g).connect(out);
+          const l = osc(0.1 + i * 0.04, 'sine');
+          const lg = gain(f * 0.003);
+          l.connect(lg).connect(o.frequency);
+          o.start(); l.start();
+          oscs.push(o, l); nodes.push(g, lg);
+        });
+        // Street dog bark
+        const bark = () => {
+          const t = ctx.currentTime;
+          const n = whiteNoise(0.12);
+          const bp = biquad('bandpass', 900, 6);
+          const bg = gain(0);
+          n.connect(bp).connect(bg).connect(out);
+          bg.gain.setValueAtTime(0, t);
+          bg.gain.linearRampToValueAtTime(0.14, t + 0.015);
+          bg.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+          n.start(t); n.stop(t + 0.14);
+          setTimeout(() => { try { bp.disconnect(); bg.disconnect(); } catch(e) {} }, 300);
+          timers.push(setTimeout(bark, rand(18000, 50000)));
+        };
+        timers.push(setTimeout(bark, rand(7000, 20000)));
+        // Catedral bell at :00 (random interval stand-in)
+        const bell = () => {
+          const t = ctx.currentTime;
+          const f = osc(98, 'sine');   // G2 — big bell
+          const p = osc(294, 'sine');  // 3rd harmonic of D
+          const fg = gain(0), pg = gain(0);
+          f.connect(fg).connect(out); p.connect(pg).connect(out);
+          fg.gain.setValueAtTime(0, t);
+          fg.gain.linearRampToValueAtTime(0.12, t + 0.04);
+          fg.gain.exponentialRampToValueAtTime(0.001, t + 3.5);
+          pg.gain.setValueAtTime(0, t);
+          pg.gain.linearRampToValueAtTime(0.035, t + 0.05);
+          pg.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+          f.start(t); p.start(t);
+          f.stop(t + 3.6); p.stop(t + 2.6);
+          setTimeout(() => { try { fg.disconnect(); pg.disconnect(); } catch(e) {} }, 4000);
+          timers.push(setTimeout(bell, rand(45000, 90000)));
+        };
+        timers.push(setTimeout(bell, rand(15000, 35000)));
+        return { oscs, nodes, timers };
+      },
+
+      'tokyo': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // 50Hz AC hum (East Japan)
+        const hum = osc(50, 'square');
+        const humLP = biquad('lowpass', 200, 0.5);
+        const humG = gain(0.04);
+        hum.connect(humLP).connect(humG).connect(out);
+        hum.start();
+        oscs.push(hum); nodes.push(humLP, humG);
+        // Neon whine
+        const neon = osc(12000, 'sine');
+        const neonG = gain(0.012);
+        neon.connect(neonG).connect(out);
+        neon.start();
+        oscs.push(neon); nodes.push(neonG);
+        // City bed
+        const city = whiteNoise(4);
+        const cLP = biquad('lowpass', 600, 0.4);
+        const cG = gain(0.14);
+        city.connect(cLP).connect(cG).connect(out);
+        city.start();
+        oscs.push(city); nodes.push(cLP, cG);
+        // Station chime (E C A descending)
+        const chime = () => {
+          [659.25, 523.25, 440].forEach((f, i) => {
+            const t = ctx.currentTime + i * 0.3;
+            const o = osc(f, 'sine');
+            const cg = gain(0);
+            o.connect(cg).connect(out);
+            cg.gain.setValueAtTime(0, t);
+            cg.gain.linearRampToValueAtTime(0.1, t + 0.02);
+            cg.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+            o.start(t); o.stop(t + 0.85);
+            setTimeout(() => { try { cg.disconnect(); } catch(e) {} }, 1200);
+          });
+          timers.push(setTimeout(chime, rand(25000, 60000)));
+        };
+        timers.push(setTimeout(chime, rand(8000, 20000)));
+        return { oscs, nodes, timers };
+      },
+    };
+
+    // --- controller ---
+    function startZone(card) {
+      const profile = card.getAttribute('data-audio-profile');
+      if (!profile || !PROFILES[profile]) return;
+      if (zones.has(profile)) return;
+      ensureCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const zoneGain = ctx.createGain();
+      zoneGain.gain.value = 0;
+      zoneGain.connect(masterGain);
+
+      const handle = PROFILES[profile](zoneGain);
+      zoneGain.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.6);
+      zones.set(profile, { card, zoneGain, handle });
+
+      card.setAttribute('data-audio-on', 'true');
+      const btn = card.querySelector('[data-role="audio-toggle"]');
+      if (btn) {
+        btn.setAttribute('aria-pressed', 'true');
+        const icon = btn.querySelector('[data-role="audio-icon"]');
+        if (icon) icon.textContent = '■';
+      }
+      updateMasterCount();
+    }
+
+    function stopZone(card) {
+      const profile = card.getAttribute('data-audio-profile');
+      const state = zones.get(profile);
+      if (!state) return;
+      const { zoneGain, handle } = state;
+      zoneGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4);
+      setTimeout(() => {
+        handle.oscs.forEach((o) => { try { o.stop(); } catch(e) {} });
+        handle.timers.forEach((t) => clearTimeout(t));
+        handle.nodes.forEach((n) => { try { n.disconnect(); } catch(e) {} });
+        try { zoneGain.disconnect(); } catch(e) {}
+      }, 500);
+      zones.delete(profile);
+      card.removeAttribute('data-audio-on');
+      const btn = card.querySelector('[data-role="audio-toggle"]');
+      if (btn) {
+        btn.setAttribute('aria-pressed', 'false');
+        const icon = btn.querySelector('[data-role="audio-icon"]');
+        if (icon) icon.textContent = '▶';
+      }
+      updateMasterCount();
+    }
+
+    function updateMasterCount() {
+      const el = document.querySelector('[data-role="audio-count"]');
+      if (el) el.textContent = zones.size + ' playing';
+      const muteBtn = document.querySelector('[data-role="audio-mute"]');
+      if (muteBtn) muteBtn.hidden = zones.size === 0;
+      const allBtn = document.querySelector('[data-role="audio-all"]');
+      if (allBtn) {
+        const allPossible = cards.length;
+        allBtn.setAttribute('aria-pressed', zones.size === allPossible ? 'true' : 'false');
+      }
+    }
+
+    // Per-card toggles
+    cards.forEach((card) => {
+      const btn = card.querySelector('[data-role="audio-toggle"]');
+      if (!btn) return;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (card.getAttribute('data-audio-on') === 'true') stopZone(card);
+        else startZone(card);
+      });
+    });
+
+    // Master controls
+    const allBtn = document.querySelector('[data-role="audio-all"]');
+    const muteBtn = document.querySelector('[data-role="audio-mute"]');
+    if (allBtn) {
+      allBtn.addEventListener('click', () => {
+        ensureCtx();
+        if (ctx.state === 'suspended') ctx.resume();
+        cards.forEach((c) => {
+          if (c.getAttribute('data-audio-on') !== 'true') startZone(c);
+        });
+        // Dial master down — 7 zones at once needs headroom.
+        if (masterGain) masterGain.gain.linearRampToValueAtTime(0.32, ctx.currentTime + 0.4);
+      });
+    }
+    if (muteBtn) {
+      muteBtn.addEventListener('click', () => {
+        cards.forEach((c) => stopZone(c));
+        if (masterGain && ctx) masterGain.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 0.4);
+      });
+    }
+
+    // Suspend audio when tab is hidden — polite to battery + attention.
+    document.addEventListener('visibilitychange', () => {
+      if (!ctx) return;
+      if (document.hidden && ctx.state === 'running') ctx.suspend();
+      else if (!document.hidden && ctx.state === 'suspended' && zones.size > 0) ctx.resume();
+    });
+  })();
 </script>
 
 <style>
@@ -1268,7 +1961,188 @@ const jsonLd = {
     font-family: var(--pc-font-mono);
   }
 
+  /* ── Live weather — per-zone progressive enhancement ───────────────── */
+  .clock-card__live-weather {
+    display: block;
+    margin-top: 4px;
+    padding: 3px 8px;
+    background: color-mix(in oklab, var(--ch-400) 12%, #fff);
+    border-left: 2px solid var(--ch-600);
+    border-radius: 2px;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: color-mix(in oklab, var(--ch-800) 90%, #12110E);
+    line-height: 1.4;
+    animation: weather-fade-in 0.6s ease-out;
+  }
+  .clock-card__live-weather .live-weather__chip {
+    display: inline-block;
+    padding: 1px 5px;
+    margin-right: 5px;
+    background: var(--ch-800);
+    color: #fff;
+    border-radius: 2px;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    vertical-align: baseline;
+  }
+  .clock-card__live-weather .live-weather__cond {
+    font-weight: 600;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+  }
+  @keyframes weather-fade-in {
+    from { opacity: 0; transform: translateY(-3px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── YOU ARE HERE — viewer-tz highlight ────────────────────────────── */
+  .clock-card[data-here] {
+    box-shadow: 0 0 0 2px #FBB040, 0 4px 16px rgba(251, 176, 64, 0.25);
+    position: relative;
+  }
+  .clock-card[data-here="near"] {
+    box-shadow: 0 0 0 1.5px #FBB040, 0 2px 10px rgba(251, 176, 64, 0.15);
+  }
+  .clock-card__here-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    margin-bottom: 6px;
+    background: #FBB040;
+    color: #12110E;
+    border-radius: 2px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    animation: here-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes here-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 176, 64, 0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(251, 176, 64, 0); }
+  }
+
+  /* ── Sonic postcards — master strip ─────────────────────────────────── */
+  .clock-audio-master {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+    margin: 18px 0 22px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #12110E 0%, #2A2748 100%);
+    color: #F7F5EE;
+    border-radius: 4px;
+    border: 1px solid #3A3760;
+  }
+  .clock-audio-master__kicker {
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    color: #FBB040;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  .clock-audio-master__dek {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #D3D1C9;
+  }
+  .clock-audio-master__dek .mono {
+    color: #FFE65C;
+    font-weight: 700;
+  }
+  .clock-audio-master__controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .clock-audio-master__btn {
+    appearance: none;
+    border: 1.5px solid #FBB040;
+    background: transparent;
+    color: #FBB040;
+    padding: 8px 14px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .clock-audio-master__btn:hover { background: #FBB040; color: #12110E; }
+  .clock-audio-master__btn--mute {
+    border-color: #8A2432;
+    color: #F2B8BE;
+  }
+  .clock-audio-master__btn--mute:hover { background: #8A2432; color: #fff; }
+  .clock-audio-master__count {
+    font-size: 9.5px;
+    color: #8A8876;
+    letter-spacing: 0.14em;
+  }
+
+  /* ── Per-card audio toggle ──────────────────────────────────────────── */
+  .clock-card__audio {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    padding: 3px 7px 3px 6px;
+    background: transparent;
+    border: 1px solid color-mix(in oklab, var(--ch-600) 35%, #c4c2bc);
+    border-radius: 999px;
+    color: color-mix(in oklab, var(--ch-800) 80%, #2a2a28);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .clock-card__audio:hover {
+    background: color-mix(in oklab, var(--ch-400) 25%, #fff);
+    border-color: var(--ch-600);
+  }
+  .clock-card[data-audio-on="true"] .clock-card__audio {
+    background: var(--ch-600);
+    color: #fff;
+    border-color: var(--ch-800);
+    animation: audio-pulse 1.8s ease-in-out infinite;
+  }
+  .clock-card__audio-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.35;
+  }
+  .clock-card[data-audio-on="true"] .clock-card__audio-dot {
+    opacity: 1;
+    background: #FFE65C;
+    box-shadow: 0 0 6px #FFE65C;
+    animation: audio-dot-pulse 0.9s ease-in-out infinite alternate;
+  }
+  @keyframes audio-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ch-600) 40%, transparent); }
+    50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ch-600) 0%, transparent); }
+  }
+  @keyframes audio-dot-pulse {
+    from { transform: scale(0.7); opacity: 0.7; }
+    to   { transform: scale(1.2); opacity: 1; }
+  }
+
   @media (max-width: 640px) {
+    .clock-audio-master {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .clock-audio-master__controls {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+    }
     .clock-page {
       padding: 28px 16px 64px;
     }

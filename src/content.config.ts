@@ -426,4 +426,50 @@ const family = defineCollection({
   }),
 });
 
-export const collections = { blocks, posts, projects, drops, products, polls, gallery, ethLegacy, family };
+/**
+ * mesh — federated-follow primitive.
+ *
+ * External PointCast-adjacent nodes (friend blogs, noun-adjacent projects,
+ * sibling broadcasts) that PointCast points at. The complement to the
+ * in-HUD imagined-peer list — mesh entries are real cross-links with
+ * structured metadata so /mesh can render them as a network, and
+ * /api/mesh.jsonl can syndicate the list to agents.
+ *
+ * Imagined peers stay valid as placeholders: set `status: 'imagined'`
+ * when the node isn't real yet. Promote to `'live'` when the URL resolves.
+ */
+const mesh = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/mesh' }),
+  schema: z.object({
+    slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,60}$/),
+    name: z.string().min(1).max(80),
+    url: z.string().url(),
+    feedUrl: z.string().url().optional(),
+    /** What kind of node — broadcast, zine, gallery, dev bench, agent. */
+    kind: z.enum(['blog', 'zine', 'broadcast', 'gallery', 'feed', 'bench', 'agent', 'node']).default('node'),
+    /** Current reality status. 'imagined' = placeholder we're describing as
+     *  if it exists; 'live' = real node resolving; 'archived' = was live,
+     *  retired but kept for history. */
+    status: z.enum(['imagined', 'live', 'archived']).default('imagined'),
+    description: z.string().min(1).max(280),
+    /** Trust/closeness tier — drives node ordering on the map. */
+    trust: z.enum(['close', 'known', 'interesting', 'watching']).default('known'),
+    /** Geographic hint (free text) and optional coordinates for /mesh geo view. */
+    region: z.string().max(60).optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lon: z.number().min(-180).max(180).optional(),
+    /** Optional Sonic Postcard profile — if set, /mesh pipes its ambient. */
+    vibeProfile: z.string().max(60).optional(),
+    /** Optional Nouns avatar seed. */
+    noun: z.number().int().min(0).optional(),
+    /** Optional Tezos address — for future on-chain attestation. */
+    tezosAddress: z.string().regex(/^(tz|KT)[1-3][1-9A-HJ-NP-Za-km-z]{33}$/).optional(),
+    addedAt: z.coerce.date(),
+    /** When false, hidden from /mesh — kept in collection but not rendered. */
+    listed: z.boolean().default(true),
+    author: z.enum(['cc', 'mike', 'mh+cc', 'codex', 'manus', 'guest']).default('cc'),
+    source: z.string().optional(),
+  }),
+});
+
+export const collections = { blocks, posts, projects, drops, products, polls, gallery, ethLegacy, family, mesh };

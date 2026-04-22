@@ -18,6 +18,17 @@ import VoterStats from '../components/VoterStats.astro';
 const polls = (await getCollection('polls', ({ data }) => !data.draft))
   .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
 
+// Reverse-followUps: childSlug → parentSlug. First hit wins (a child can
+// have only one displayed parent on the card; if the graph converges, we
+// show the lexicographically-first parent seen).
+const parentBySlug = new Map<string, string>();
+polls.forEach((p) => {
+  const fu = p.data.followUps ?? {};
+  for (const childSlug of Object.values(fu)) {
+    if (!parentBySlug.has(childSlug)) parentBySlug.set(childSlug, p.data.slug);
+  }
+});
+
 const title = 'Polls — Schelling-point coordination';
 const description = 'Pick a focal point. Win if you match the most-popular answer. Coordination game over content. Per Mike 2026-04-18 directive.';
 
@@ -41,7 +52,10 @@ const jsonLd = {
     <VoterStats />
 
     <header class="head">
-      <p class="kicker mono">POLLS · SCHELLING POINTS</p>
+      <p class="kicker mono">
+        POLLS · SCHELLING POINTS
+        <a href="/zeitgeist-map" class="map-link">▣ VIEW AS CONSTELLATION MAP →</a>
+      </p>
       <h1 class="title">Pick the spot everyone else picks.</h1>
       <p class="dek">
         A Schelling-point poll is a coordination game disguised as a question.
@@ -110,6 +124,16 @@ const jsonLd = {
               <div class="poll-card__top">
                 <span class={`purpose-chip purpose-chip--${p.data.purpose} mono`}>{(p.data.purpose || 'coordination').toUpperCase()}</span>
                 {p.data.zeitgeist && <span class="purpose-chip purpose-chip--zeitgeist mono">ZEITGEIST</span>}
+                {Object.keys(p.data.followUps ?? {}).length > 0 && (
+                  <span class="purpose-chip purpose-chip--pathway mono" title="This poll branches — picking mapped options reveals a next poll">
+                    PATHWAY · {Object.keys(p.data.followUps ?? {}).length}
+                  </span>
+                )}
+                {parentBySlug.has(p.data.slug) && (
+                  <span class="purpose-chip purpose-chip--followup mono" title={`Follow-up from ${parentBySlug.get(p.data.slug)}`}>
+                    FOLLOW-UP
+                  </span>
+                )}
                 {p.data.resolvesAt && !p.data.resolved && (
                   <span class="purpose-chip purpose-chip--forecast mono" data-resolves-at={p.data.resolvesAt.toISOString()}>FORECAST · RESOLVES —</span>
                 )}
@@ -287,7 +311,20 @@ const jsonLd = {
     .crumb a { color: #a02c2c; text-decoration: none; }
 
     .head { margin-bottom: 22px; }
-    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .map-link {
+      margin-left: auto;
+      padding: 3px 8px;
+      background: #12110E;
+      color: #FBB040;
+      border-radius: 2px;
+      text-decoration: none;
+      letter-spacing: 0.14em;
+      font-size: 9.5px;
+      font-weight: 700;
+      transition: background 0.12s;
+    }
+    .map-link:hover { background: #2A2748; }
     .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 5vw, 40px); font-weight: 700; line-height: 1.1; margin: 0 0 12px; }
     .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
     .dek a, .how a { color: #a02c2c; text-decoration: none; font-weight: 500; }
@@ -371,6 +408,8 @@ const jsonLd = {
     .purpose-chip--zeitgeist    { background: #8A2432; }
     .purpose-chip--forecast     { background: #E89A22; color: #12110E; }
     .purpose-chip--resolved     { background: #1E7C2F; }
+    .purpose-chip--pathway      { background: #3A1F8B; }
+    .purpose-chip--followup     { background: #fbf9ff; color: #5F3DC4; border: 1px solid #5F3DC4; }
 
     .poll-card__outcome {
       margin: 6px 0 10px;

@@ -1,0 +1,648 @@
+---
+/**
+ * /zeitgeist-map — the Poll Constellation.
+ *
+ * Every non-draft poll rendered as a node in a 2D graph. Edges are followUps
+ * (solid arrow) + related (dashed). Layout is computed at BUILD time via a
+ * tiny spring-embedder — no runtime simulation cost, no libraries. The SVG
+ * is just math.
+ *
+ * Interactions (client-side):
+ *   - Hover a node → raise its edges, dim everything else, populate a
+ *     tooltip card with the question + dek.
+ *   - localStorage `pc:poll:voted:{slug}` → outline the nodes the viewer
+ *     has voted on with a gold ring ("your path").
+ *   - Click → navigate to /poll/{slug}.
+ *
+ * This is the visual payoff of the pathway primitive: "multiple start
+ * points and potential paths" becomes literal.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+
+// ─── Force-directed layout ────────────────────────────────────────────────
+// Simple spring-embedder: all pairs repel (Coulomb-ish), edges attract
+// toward a target distance, soft center-pull prevents drift. 80 iterations
+// is enough to settle 20–40 nodes into a readable graph on a 960×720 canvas.
+const W = 1040;
+const H = 720;
+
+type NodePos = { x: number; y: number };
+const positions = new Map<string, NodePos>();
+
+// Seed: scatter across the canvas with a deterministic PRNG so the layout
+// is reproducible. Zeitgeist polls bias toward center; others toward the edge.
+const cx = W / 2, cy = H / 2;
+let seed = 42;
+const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+polls.forEach((p) => {
+  const ringFactor = p.data.zeitgeist ? 0.18 : 0.38;
+  const angle = rand() * Math.PI * 2;
+  const r = Math.min(W, H) * ringFactor * (0.6 + rand() * 0.8);
+  positions.set(p.data.slug, {
+    x: cx + r * Math.cos(angle),
+    y: cy + r * Math.sin(angle),
+  });
+});
+
+// Edges (de-duplicated — a pair only gets one edge even if both related+followUp)
+type Edge = { from: string; to: string; kind: 'followUp' | 'related'; optionId?: string };
+const edgeKey = (a: string, b: string) => a < b ? `${a}__${b}` : `${b}__${a}`;
+const edgeMap = new Map<string, Edge>();
+polls.forEach((p) => {
+  Object.entries(p.data.followUps ?? {}).forEach(([optId, slug]) => {
+    if (!positions.has(slug)) return;
+    const key = edgeKey(p.data.slug, slug);
+    // followUp wins over related if both declared.
+    edgeMap.set(key, { from: p.data.slug, to: slug, kind: 'followUp', optionId: optId });
+  });
+  (p.data.related ?? []).forEach((slug) => {
+    if (!positions.has(slug)) return;
+    const key = edgeKey(p.data.slug, slug);
+    if (!edgeMap.has(key)) {
+      edgeMap.set(key, { from: p.data.slug, to: slug, kind: 'related' });
+    }
+  });
+});
+const edges: Edge[] = Array.from(edgeMap.values());
+
+// Fruchterman-Reingold spring-embedder.
+//   k = sqrt(area / n)    ideal edge length
+//   repulsive  force = k² / d   between all pairs
+//   attractive force = d² / k   between connected pairs
+// Temperature cools linearly from t₀ = min(W,H)/8 toward 0, capping each
+// node's per-iter displacement so the graph settles.
+const n = polls.length;
+const area = W * H;
+const k = Math.sqrt(area / Math.max(n, 1)) * 0.85;
+const ITER = 300;
+const T_START = Math.min(W, H) / 8;
+
+for (let iter = 0; iter < ITER; iter++) {
+  const t = T_START * (1 - iter / ITER);
+  const forces = new Map<string, { x: number; y: number }>();
+  polls.forEach((p) => forces.set(p.data.slug, { x: 0, y: 0 }));
+
+  // Pairwise repulsion.
+  const slugs = polls.map((p) => p.data.slug);
+  for (let i = 0; i < slugs.length; i++) {
+    for (let j = i + 1; j < slugs.length; j++) {
+      const a = positions.get(slugs[i])!;
+      const b = positions.get(slugs[j])!;
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.01) { dist = 0.01; dx = (rand() - 0.5); dy = (rand() - 0.5); }
+      const f = (k * k) / dist;
+      const fx = (dx / dist) * f;
+      const fy = (dy / dist) * f;
+      forces.get(slugs[i])!.x += fx;
+      forces.get(slugs[i])!.y += fy;
+      forces.get(slugs[j])!.x -= fx;
+      forces.get(slugs[j])!.y -= fy;
+    }
+  }
+
+  // Edge attraction.
+  edges.forEach((e) => {
+    const a = positions.get(e.from)!;
+    const b = positions.get(e.to)!;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    // followUp edges pull harder → shorter target distance
+    const scale = e.kind === 'followUp' ? 1.4 : 0.7;
+    const f = (dist * dist) / k * scale;
+    forces.get(e.from)!.x += (dx / dist) * f;
+    forces.get(e.from)!.y += (dy / dist) * f;
+    forces.get(e.to)!.x -= (dx / dist) * f;
+    forces.get(e.to)!.y -= (dy / dist) * f;
+  });
+
+  // Soft zeitgeist bias toward center (gentle, so it only nudges).
+  polls.forEach((p) => {
+    if (!p.data.zeitgeist) return;
+    const pos = positions.get(p.data.slug)!;
+    const dx = cx - pos.x, dy = cy - pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const f = dist * 0.05;
+    forces.get(p.data.slug)!.x += (dx / dist) * f;
+    forces.get(p.data.slug)!.y += (dy / dist) * f;
+  });
+
+  // Cap displacement by temperature + clamp to canvas.
+  polls.forEach((p) => {
+    const pos = positions.get(p.data.slug)!;
+    const f = forces.get(p.data.slug)!;
+    const fmag = Math.sqrt(f.x * f.x + f.y * f.y) || 1;
+    const capped = Math.min(fmag, t);
+    pos.x += (f.x / fmag) * capped;
+    pos.y += (f.y / fmag) * capped;
+    pos.x = Math.max(60, Math.min(W - 60, pos.x));
+    pos.y = Math.max(50, Math.min(H - 50, pos.y));
+  });
+}
+
+// ─── Derived helpers for render ──────────────────────────────────────────
+const purposeColor: Record<string, string> = {
+  coordination: '#185FA5',
+  utility: '#0F6E56',
+  editorial: '#5F3DC4',
+  decision: '#C95019',
+  forecast: '#E89A22',
+};
+
+function nodeRadius(optionCount: number): number {
+  // 3 → 8px, 7 → 14px
+  return 7 + optionCount * 1.0;
+}
+
+function initials(slug: string): string {
+  const parts = slug.split('-');
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+// Cluster counters for the legend.
+const clusterStats = {
+  zeitgeist: polls.filter((p) => p.data.zeitgeist).length,
+  pathway: polls.filter((p) => Object.keys(p.data.followUps ?? {}).length > 0).length,
+  followUp: new Set(polls.flatMap((p) => Object.values(p.data.followUps ?? {}))).size,
+  edges: edges.length,
+  followUpEdges: edges.filter((e) => e.kind === 'followUp').length,
+};
+
+const title = 'Zeitgeist Map · poll constellation';
+const description = 'Every PointCast poll positioned by how it connects. Zeitgeist polls glow red. Solid arrows are pathways (pick this option → get next poll). Dashed lines are related polls. Click any node to vote.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/zeitgeist-map',
+};
+
+// Serialize poll data for client-side tooltip hydration (small enough to inline).
+const clientPolls = polls.map((p) => ({
+  slug: p.data.slug,
+  question: p.data.question,
+  dek: p.data.dek ?? '',
+  purpose: p.data.purpose,
+  zeitgeist: p.data.zeitgeist ?? false,
+  options: p.data.options.length,
+  hasPathway: Object.keys(p.data.followUps ?? {}).length > 0,
+}));
+---
+
+<BlockLayout title={title} description={description} image="/images/og/polls.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/polls">polls</a>
+      <span aria-hidden="true">›</span>
+      <span>zeitgeist map</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">MAP · {polls.length} POLLS · {clusterStats.edges} CONNECTIONS</p>
+      <h1 class="title">The Poll Constellation</h1>
+      <p class="dek">
+        Every poll, positioned by how they connect. Zeitgeist polls glow red.
+        Solid arrows are <strong>pathways</strong> — pick that option, get the
+        next poll. Dashed lines are <strong>related</strong> — sideways jumps.
+        Gold rings mark polls <strong>you've voted on</strong>. Click any node.
+      </p>
+    </header>
+
+    <section class="constellation-wrap" aria-label="Poll graph">
+      <svg
+        class="constellation"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={`Graph of ${polls.length} polls and ${clusterStats.edges} connections`}
+      >
+        <defs>
+          {/* Arrowhead for followUp edges */}
+          <marker id="arrow-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#5F3DC4" />
+          </marker>
+          <marker id="arrow-weak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#a8a6a0" opacity="0.5" />
+          </marker>
+          <filter id="zeitgeist-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Edges layer first (below nodes) */}
+        <g class="edges" aria-hidden="true">
+          {edges.map((e) => {
+            const a = positions.get(e.from)!;
+            const b = positions.get(e.to)!;
+            // Shorten endpoints so arrows don't overlap node circles
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const ux = dx / len, uy = dy / len;
+            const fromP = polls.find((p) => p.data.slug === e.from)!;
+            const toP = polls.find((p) => p.data.slug === e.to)!;
+            const ra = nodeRadius(fromP.data.options.length) + 2;
+            const rb = nodeRadius(toP.data.options.length) + 4;
+            const x1 = a.x + ux * ra;
+            const y1 = a.y + uy * ra;
+            const x2 = b.x - ux * rb;
+            const y2 = b.y - uy * rb;
+            return (
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                class={`edge edge--${e.kind}`}
+                data-from={e.from}
+                data-to={e.to}
+                marker-end={e.kind === 'followUp' ? 'url(#arrow-strong)' : 'url(#arrow-weak)'}
+              />
+            );
+          })}
+        </g>
+
+        {/* Nodes */}
+        <g class="nodes">
+          {polls.map((p) => {
+            const pos = positions.get(p.data.slug)!;
+            const r = nodeRadius(p.data.options.length);
+            const fill = purposeColor[p.data.purpose] ?? '#5F3DC4';
+            return (
+              <g class="node" data-slug={p.data.slug} data-zeitgeist={String(p.data.zeitgeist ?? false)}>
+                <a href={`/poll/${p.data.slug}`}>
+                  {/* Your-path ring (hidden by default, revealed via JS per localStorage) */}
+                  <circle
+                    class="node__ring"
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={r + 5}
+                    fill="none"
+                    stroke="#FBB040"
+                    stroke-width="2"
+                    opacity="0"
+                  />
+                  <circle
+                    class={`node__dot${p.data.zeitgeist ? ' node__dot--zeitgeist' : ''}`}
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={r}
+                    fill={fill}
+                    filter={p.data.zeitgeist ? 'url(#zeitgeist-glow)' : undefined}
+                  />
+                  <text
+                    class="node__initials"
+                    x={pos.x}
+                    y={pos.y + 3.5}
+                    text-anchor="middle"
+                    font-size={Math.max(7, r * 0.75)}
+                    fill="#fff"
+                    font-weight="700"
+                  >{initials(p.data.slug)}</text>
+                  <title>{p.data.question}</title>
+                </a>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+
+      {/* Tooltip card — hidden until hover */}
+      <div class="tooltip" id="constellation-tooltip" aria-live="polite" hidden>
+        <p class="tooltip__kicker mono" data-role="tooltip-kicker">—</p>
+        <p class="tooltip__q" data-role="tooltip-q">—</p>
+        <p class="tooltip__dek" data-role="tooltip-dek">—</p>
+        <p class="tooltip__cta mono">click to open →</p>
+      </div>
+
+      {/* Legend */}
+      <aside class="legend" aria-label="Legend">
+        <div class="legend__row">
+          <span class="legend__swatch legend__swatch--zeit" aria-hidden="true"></span>
+          <span>ZEITGEIST · {clusterStats.zeitgeist} polls</span>
+        </div>
+        <div class="legend__row">
+          <span class="legend__swatch legend__swatch--coord" aria-hidden="true"></span>
+          <span>COORDINATION</span>
+        </div>
+        <div class="legend__row">
+          <span class="legend__swatch legend__swatch--util" aria-hidden="true"></span>
+          <span>UTILITY</span>
+        </div>
+        <div class="legend__row">
+          <span class="legend__swatch legend__swatch--ed" aria-hidden="true"></span>
+          <span>EDITORIAL</span>
+        </div>
+        <div class="legend__row">
+          <span class="legend__swatch legend__swatch--dec" aria-hidden="true"></span>
+          <span>DECISION</span>
+        </div>
+        <hr />
+        <div class="legend__row legend__row--line">
+          <svg viewBox="0 0 40 10" width="40" height="10" aria-hidden="true">
+            <line x1="2" y1="5" x2="34" y2="5" stroke="#5F3DC4" stroke-width="1.6" marker-end="url(#legend-arrow)"/>
+            <defs>
+              <marker id="legend-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 Z" fill="#5F3DC4"/>
+              </marker>
+            </defs>
+          </svg>
+          <span>PATHWAY · {clusterStats.followUpEdges}</span>
+        </div>
+        <div class="legend__row legend__row--line">
+          <svg viewBox="0 0 40 10" width="40" height="10" aria-hidden="true">
+            <line x1="2" y1="5" x2="38" y2="5" stroke="#a8a6a0" stroke-width="1.4" stroke-dasharray="3 3"/>
+          </svg>
+          <span>RELATED · {clusterStats.edges - clusterStats.followUpEdges}</span>
+        </div>
+        <hr />
+        <div class="legend__row">
+          <span class="legend__ring" aria-hidden="true"></span>
+          <span>YOUR PATH · <span data-role="path-count">0</span> voted</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="how">
+      <p class="kicker mono">READING THE MAP</p>
+      <ul class="how__list">
+        <li><strong>Node size</strong> = number of options.</li>
+        <li><strong>Node color</strong> = poll purpose (see legend).</li>
+        <li><strong>Red glow</strong> = zeitgeist poll — cultural snapshot, never resolves.</li>
+        <li><strong>Gold ring</strong> = you've voted on that poll. Your path, local to this device.</li>
+        <li><strong>Center bias</strong> — zeitgeist polls pull toward the middle; entry polls anchor there.</li>
+        <li><strong>The layout is deterministic</strong> — built by a spring-embedder at publish time. Same graph every visit.</li>
+      </ul>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/poll">/api/poll</a></li>
+        <li><a href="/polls">/polls</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+
+    {/* Hydrate the tooltip + your-path ring via a compact JSON blob */}
+    <script type="application/json" id="constellation-polls" set:html={JSON.stringify(clientPolls)}></script>
+
+    <script is:inline>
+      (() => {
+        const blob = document.getElementById('constellation-polls');
+        if (!blob) return;
+        let pollMeta = {};
+        try { pollMeta = JSON.parse(blob.textContent || '[]').reduce((a, p) => (a[p.slug] = p, a), {}); } catch(e) {}
+
+        const nodes = Array.from(document.querySelectorAll('.node[data-slug]'));
+        const tooltip = document.getElementById('constellation-tooltip');
+        const tK = tooltip?.querySelector('[data-role="tooltip-kicker"]');
+        const tQ = tooltip?.querySelector('[data-role="tooltip-q"]');
+        const tD = tooltip?.querySelector('[data-role="tooltip-dek"]');
+        const pathCountEl = document.querySelector('[data-role="path-count"]');
+
+        // Your-path rings — reveal for any localStorage-voted slug.
+        let pathCount = 0;
+        nodes.forEach((n) => {
+          const slug = n.getAttribute('data-slug');
+          const ring = n.querySelector('.node__ring');
+          try {
+            if (localStorage.getItem('pc:poll:voted:' + slug)) {
+              if (ring) ring.setAttribute('opacity', '1');
+              n.setAttribute('data-voted', 'true');
+              pathCount++;
+            }
+          } catch (e) {}
+        });
+        if (pathCountEl) pathCountEl.textContent = String(pathCount);
+
+        // Hover behavior — raise edges that touch the hovered node, dim others.
+        const edges = Array.from(document.querySelectorAll('.edge'));
+
+        function focusNode(slug) {
+          nodes.forEach((n) => n.classList.toggle('node--dim', n.getAttribute('data-slug') !== slug));
+          nodes.forEach((n) => n.classList.toggle('node--focus', n.getAttribute('data-slug') === slug));
+          edges.forEach((e) => {
+            const hit = e.getAttribute('data-from') === slug || e.getAttribute('data-to') === slug;
+            e.classList.toggle('edge--focus', hit);
+            e.classList.toggle('edge--dim', !hit);
+          });
+        }
+        function clearFocus() {
+          nodes.forEach((n) => { n.classList.remove('node--dim'); n.classList.remove('node--focus'); });
+          edges.forEach((e) => { e.classList.remove('edge--focus'); e.classList.remove('edge--dim'); });
+        }
+
+        function showTooltip(slug, x, y) {
+          const p = pollMeta[slug];
+          if (!p || !tooltip) return;
+          if (tK) {
+            const chips = [];
+            chips.push(p.purpose.toUpperCase());
+            if (p.zeitgeist) chips.push('ZEITGEIST');
+            if (p.hasPathway) chips.push('PATHWAY');
+            chips.push(p.options + ' OPTIONS');
+            tK.textContent = chips.join(' · ');
+          }
+          if (tQ) tQ.textContent = p.question;
+          if (tD) tD.textContent = p.dek || '';
+          tooltip.hidden = false;
+          // Position near pointer, clamped to wrap.
+          const wrap = tooltip.parentElement;
+          if (wrap) {
+            const rect = wrap.getBoundingClientRect();
+            const tw = 280;
+            const th = 120;
+            let tx = x - rect.left + 14;
+            let ty = y - rect.top + 14;
+            if (tx + tw > rect.width) tx = x - rect.left - tw - 14;
+            if (ty + th > rect.height) ty = y - rect.top - th - 14;
+            tooltip.style.left = Math.max(6, tx) + 'px';
+            tooltip.style.top = Math.max(6, ty) + 'px';
+          }
+        }
+        function hideTooltip() {
+          if (tooltip) tooltip.hidden = true;
+        }
+
+        nodes.forEach((n) => {
+          const slug = n.getAttribute('data-slug');
+          n.addEventListener('mouseenter', (ev) => {
+            focusNode(slug);
+            showTooltip(slug, ev.clientX, ev.clientY);
+          });
+          n.addEventListener('mousemove', (ev) => {
+            showTooltip(slug, ev.clientX, ev.clientY);
+          });
+          n.addEventListener('mouseleave', () => {
+            clearFocus();
+            hideTooltip();
+          });
+          n.addEventListener('focus', () => focusNode(slug), true);
+          n.addEventListener('blur', () => clearFocus(), true);
+        });
+
+        // Sonic postcards tie-in — hover plays a short sine blip keyed off
+        // the slug hash. Distinct tone per poll, <50ms, gentle. Disabled if
+        // the user hasn't interacted yet (autoplay policy).
+        let ctx = null;
+        let armed = false;
+        const arm = () => { armed = true; };
+        window.addEventListener('pointerdown', arm, { once: true });
+        window.addEventListener('keydown', arm, { once: true });
+
+        function slugHash(s) {
+          let h = 0;
+          for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+          return Math.abs(h);
+        }
+
+        function blip(slug) {
+          if (!armed) return;
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          if (!ctx) ctx = new AC();
+          if (ctx.state === 'suspended') ctx.resume();
+          const now = ctx.currentTime;
+          const h = slugHash(slug);
+          // Pentatonic-ish frequencies (A minor): 220, 261.6, 329.6, 392, 440, 523, 659, 784
+          const scale = [220, 261.6, 329.6, 392, 440, 523.25, 659.25, 783.99];
+          const f = scale[h % scale.length] * (1 + ((h >> 3) % 3) * 0.5);
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0, now);
+          g.gain.linearRampToValueAtTime(0.04, now + 0.005);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+          o.connect(g).connect(ctx.destination);
+          o.start(now);
+          o.stop(now + 0.25);
+        }
+
+        nodes.forEach((n) => {
+          const slug = n.getAttribute('data-slug');
+          n.addEventListener('mouseenter', () => blip(slug));
+        });
+      })();
+    </script>
+  </main>
+
+  <style>
+    .page { max-width: 1140px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 20px; max-width: 720px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(30px, 5vw, 44px); font-weight: 700; line-height: 1.05; margin: 0 0 12px; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek strong { color: #12110E; }
+
+    .constellation-wrap {
+      position: relative;
+      margin: 18px 0;
+      padding: 0;
+      background: radial-gradient(ellipse at center, #FAF9F5 0%, #F2EFE7 100%);
+      border: 1px solid #D6D4CD;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .constellation {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 78vh;
+    }
+
+    /* Edges */
+    .edge { stroke-linecap: round; transition: opacity 0.2s, stroke-width 0.2s; }
+    .edge--followUp { stroke: #5F3DC4; stroke-width: 1.6; opacity: 0.55; }
+    .edge--related { stroke: #a8a6a0; stroke-width: 1.2; stroke-dasharray: 3 3; opacity: 0.4; }
+    .edge--focus { opacity: 1; stroke-width: 2.4; }
+    .edge--dim { opacity: 0.12; }
+
+    /* Nodes */
+    .node { cursor: pointer; transition: opacity 0.18s; }
+    .node a { outline: none; }
+    .node__dot { transition: transform 0.15s, r 0.15s; transform-origin: center; transform-box: fill-box; }
+    .node__dot--zeitgeist { filter: drop-shadow(0 0 8px rgba(138, 36, 50, 0.5)); }
+    .node__initials { pointer-events: none; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); letter-spacing: 0; }
+    .node--focus .node__dot { transform: scale(1.25); }
+    .node--dim { opacity: 0.25; }
+    .node__ring { transition: opacity 0.2s; }
+    .node[data-voted="true"] .node__dot { stroke: #FBB040; stroke-width: 1.5; }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      z-index: 10;
+      pointer-events: none;
+      max-width: 280px;
+      padding: 10px 12px;
+      background: #12110E;
+      color: #F7F5EE;
+      border-radius: 3px;
+      border: 1px solid #3A3760;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    }
+    .tooltip__kicker { font-size: 9.5px; color: #FBB040; margin: 0 0 5px; font-weight: 700; }
+    .tooltip__q { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); margin: 0 0 4px; font-size: 14px; font-weight: 600; line-height: 1.3; }
+    .tooltip__dek { margin: 0 0 8px; font-size: 12.5px; color: #D3D1C9; line-height: 1.4; }
+    .tooltip__cta { font-size: 9.5px; color: #8A8876; letter-spacing: 0.14em; }
+
+    /* Legend */
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #D6D4CD;
+      border-radius: 3px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: #38373A;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .legend hr { margin: 6px 0; border: 0; border-top: 1px dashed #D6D4CD; }
+    .legend__row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+    .legend__row--line { gap: 6px; }
+    .legend__swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .legend__swatch--zeit  { background: #8A2432; box-shadow: 0 0 4px rgba(138,36,50,0.6); }
+    .legend__swatch--coord { background: #185FA5; }
+    .legend__swatch--util  { background: #0F6E56; }
+    .legend__swatch--ed    { background: #5F3DC4; }
+    .legend__swatch--dec   { background: #C95019; }
+    .legend__ring { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #FBB040; }
+
+    /* How */
+    .how { margin-top: 24px; padding: 14px 16px; border: 1px dashed #D6D4CD; background: #FBFAF5; border-radius: 2px; max-width: 760px; }
+    .how__list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.5; color: #38373A; }
+    .how__list strong { color: #12110E; font-weight: 600; }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #D6D4CD; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+
+    @media (max-width: 640px) {
+      .page { padding: 20px 12px 72px; }
+      .legend { font-size: 9px; padding: 8px 10px; }
+      .legend { right: 10px; }
+    }
+  </style>
+</BlockLayout>

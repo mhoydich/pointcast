@@ -17,6 +17,80 @@ interface Props { poll: CollectionEntry<'polls'>; }
 const { poll } = Astro.props;
 const d = poll.data;
 
+// Resolve followUps + related into render-ready entries. Missing slugs are
+// silently skipped (invalid cross-links don't break the page).
+const allPolls = await getCollection('polls', ({ data }) => !data.draft);
+const pollBySlug = new Map(allPolls.map((p) => [p.data.slug, p]));
+
+type FollowUpCard = {
+  optionId: string;
+  optionLabel: string;
+  nextSlug: string;
+  nextQuestion: string;
+  nextDek?: string;
+  nextOptionCount: number;
+};
+
+const followUps: FollowUpCard[] = Object.entries(d.followUps ?? {}).flatMap(([optionId, nextSlug]) => {
+  const opt = d.options.find((o) => o.id === optionId);
+  const next = pollBySlug.get(nextSlug);
+  if (!opt || !next) return [];
+  return [{
+    optionId,
+    optionLabel: opt.label,
+    nextSlug,
+    nextQuestion: next.data.question,
+    nextDek: next.data.dek,
+    nextOptionCount: next.data.options.length,
+  }];
+});
+
+type RelatedCard = {
+  slug: string;
+  question: string;
+  dek?: string;
+  optionCount: number;
+  zeitgeist: boolean;
+};
+
+const related: RelatedCard[] = (d.related ?? []).flatMap((slug) => {
+  const p = pollBySlug.get(slug);
+  return p ? [{
+    slug: p.data.slug,
+    question: p.data.question,
+    dek: p.data.dek,
+    optionCount: p.data.options.length,
+    zeitgeist: p.data.zeitgeist ?? false,
+  }] : [];
+});
+
+// Back-refs: which parent polls point HERE via a followUp? Script reveals
+// the matching breadcrumb iff the viewer actually voted on the parent's
+// corresponding option (tracked in localStorage), so the trail is
+// personalized — no "from X" shown to cold readers.
+type BackRef = {
+  parentSlug: string;
+  parentQuestion: string;
+  viaOptionId: string;
+  viaOptionLabel: string;
+};
+const backRefs: BackRef[] = [];
+for (const parent of allPolls) {
+  if (parent.data.slug === d.slug) continue;
+  const fu = parent.data.followUps ?? {};
+  for (const [optId, childSlug] of Object.entries(fu)) {
+    if (childSlug === d.slug) {
+      const opt = parent.data.options.find((o) => o.id === optId);
+      backRefs.push({
+        parentSlug: parent.data.slug,
+        parentQuestion: parent.data.question,
+        viaOptionId: optId,
+        viaOptionLabel: opt?.label ?? optId,
+      });
+    }
+  }
+}
+
 const title = `Poll · ${d.question}`;
 const description = d.dek || `${d.options.length}-option Schelling-point poll on PointCast. Pick the option you think most other readers will pick.`;
 
@@ -43,6 +117,23 @@ const jsonLd = {
       <span aria-hidden="true">›</span>
       <span>{d.slug}</span>
     </nav>
+
+    {backRefs.length > 0 && (
+      <aside class="trail" id="poll-trail" hidden>
+        {backRefs.map((b) => (
+          <a
+            class="trail__link"
+            href={`/poll/${b.parentSlug}`}
+            data-parent-slug={b.parentSlug}
+            data-parent-option={b.viaOptionId}
+            hidden
+          >
+            <span class="trail__kicker mono">← YOU CAME FROM · {b.viaOptionLabel.split(' · ')[0]}</span>
+            <span class="trail__q">{b.parentQuestion}</span>
+          </a>
+        ))}
+      </aside>
+    )}
 
     <article class="poll" data-slug={d.slug}>
       <header class="poll__head">
@@ -85,6 +176,40 @@ const jsonLd = {
         {d.author && d.author !== 'cc' ? ` · author: ${d.author}` : ''}
       </p>
     </article>
+
+    {followUps.length > 0 && (
+      <aside class="pathway" id="pathway-cards" aria-live="polite" hidden>
+        {followUps.map((fu) => (
+          <article class="pathway__card" data-for-option={fu.optionId} hidden>
+            <p class="pathway__kicker mono">YOU PICKED · {fu.optionLabel.split(' · ')[0]}</p>
+            <h2 class="pathway__q">{fu.nextQuestion}</h2>
+            {fu.nextDek && <p class="pathway__dek">{fu.nextDek}</p>}
+            <a class="pathway__cta mono" href={`/poll/${fu.nextSlug}`}>
+              continue → {fu.nextOptionCount} options
+            </a>
+          </article>
+        ))}
+      </aside>
+    )}
+
+    {related.length > 0 && (
+      <section class="related">
+        <p class="related__label mono">OTHER WAYS IN</p>
+        <ul class="related__list">
+          {related.map((r) => (
+            <li>
+              <a class="related__card" href={`/poll/${r.slug}`}>
+                <span class="related__q">{r.question}</span>
+                {r.dek && <span class="related__dek">{r.dek}</span>}
+                <span class="related__meta mono">
+                  {r.zeitgeist ? 'ZEITGEIST · ' : ''}{r.optionCount} OPTIONS
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     <section class="agent-strip">
       <p class="agent-strip__label mono">MACHINE-READABLE</p>
@@ -150,6 +275,37 @@ const jsonLd = {
         } catch {}
       }
 
+      // Personalized trail: if the viewer voted on a parent poll whose
+      // followUps point here, show the breadcrumb linking back.
+      (function () {
+        var trail = document.getElementById('poll-trail');
+        if (!trail) return;
+        var links = Array.from(trail.querySelectorAll('[data-parent-slug]'));
+        var revealed = false;
+        links.forEach(function (link) {
+          var parentSlug = link.getAttribute('data-parent-slug');
+          var parentOption = link.getAttribute('data-parent-option');
+          try {
+            var voted = localStorage.getItem('pc:poll:voted:' + parentSlug);
+            if (voted === parentOption) {
+              link.hidden = false;
+              revealed = true;
+            }
+          } catch (e) {}
+        });
+        if (revealed) trail.hidden = false;
+      })();
+
+      // Reveal the pathway card matching the picked option (if any mapped).
+      function revealPathway(optionId) {
+        const container = document.getElementById('pathway-cards');
+        if (!container) return;
+        const card = container.querySelector('[data-for-option="' + optionId + '"]');
+        if (!card) return;
+        container.hidden = false;
+        card.hidden = false;
+      }
+
       const lsKey = 'pc:poll:voted:' + slug;
       const priorVote = (function () { try { return localStorage.getItem(lsKey); } catch { return null; } })();
 
@@ -157,6 +313,7 @@ const jsonLd = {
         buttons.forEach((b) => { b.disabled = true; b.classList.add('option--locked'); });
         setStatus('your pick: ' + priorVote + ' · live distribution below', 'voted');
         fetchTally(priorVote);
+        revealPathway(priorVote);
       } else {
         // Show the current distribution lightly even before voting (helps the
         // Schelling intuition — you can see where momentum is).
@@ -246,10 +403,12 @@ const jsonLd = {
               }
               setStatus('locked: ' + optionId + ' · live distribution below', 'voted');
               fetchTally(optionId);
+              revealPathway(optionId);
             } else if (r.status === 409 && j.error === 'already-voted') {
               try { localStorage.setItem(lsKey, j.votedFor); } catch {}
               setStatus('already voted: ' + j.votedFor + ' · live distribution below', 'warn');
               fetchTally(j.votedFor);
+              revealPathway(j.votedFor);
             } else if (r.status === 503) {
               setStatus('KV not bound — vote not recorded yet', 'err');
               buttons.forEach((x) => { x.disabled = false; });
@@ -346,6 +505,70 @@ const jsonLd = {
       color: #6A3E05;
       letter-spacing: 0.18em;
       font-weight: 700;
+    }
+
+    .trail { margin-bottom: 14px; }
+    .trail__link {
+      display: grid;
+      gap: 4px;
+      padding: 10px 14px;
+      background: #fbf9ff;
+      border: 1px solid #d6d4cd;
+      border-left: 3px solid #5F3DC4;
+      border-radius: 2px;
+      color: #12110E;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .trail__link:hover { background: #f5f0ff; border-left-color: #3A1F8B; }
+    .trail__kicker { font-size: 10px; color: #5F3DC4; letter-spacing: 0.16em; font-weight: 700; }
+    .trail__q { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 13.5px; color: #38373A; line-height: 1.35; }
+
+    .pathway { margin-top: 26px; }
+    .pathway__card {
+      padding: 16px 18px;
+      background: #f5f0ff;
+      border: 1.5px solid #5F3DC4;
+      border-radius: 2px;
+    }
+    .pathway__kicker { font-size: 10px; color: #5F3DC4; margin: 0 0 6px; letter-spacing: 0.18em; font-weight: 700; }
+    .pathway__q { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 20px; font-weight: 700; line-height: 1.2; margin: 0 0 6px; color: #12110E; }
+    .pathway__dek { margin: 0 0 12px; color: #38373A; font-size: 13.5px; line-height: 1.5; }
+    .pathway__cta {
+      display: inline-block;
+      padding: 8px 14px;
+      background: #5F3DC4;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 2px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      transition: background 0.12s;
+    }
+    .pathway__cta:hover { background: #3A1F8B; }
+
+    .related { margin-top: 22px; padding-top: 14px; border-top: 1px dashed #d6d4cd; }
+    .related__label { margin: 0 0 10px; font-size: 10px; color: #5F5E5A; letter-spacing: 0.16em; font-weight: 500; }
+    .related__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+    .related__card {
+      display: grid;
+      gap: 4px;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #d6d4cd;
+      border-radius: 2px;
+      color: #12110E;
+      text-decoration: none;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .related__card:hover { border-color: #5F3DC4; background: #fbf9ff; }
+    .related__q { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+    .related__dek { font-size: 11.5px; color: #5F5E5A; line-height: 1.4; }
+    .related__meta { font-size: 9.5px; color: #8a8878; letter-spacing: 0.14em; }
+
+    @media (max-width: 540px) {
+      .related__list { grid-template-columns: 1fr; }
     }
 
     .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }

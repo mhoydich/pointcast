@@ -1,0 +1,362 @@
+---
+/**
+ * /pairings/{mood} — the commerce-editorial loop.
+ *
+ * For a given mood slug, cross-index every block carrying that mood with
+ * every product whose `pairsWithMood` includes it. If any product carries
+ * a `vibeProfile` pointing at a Sonic Postcard, the pairing page renders
+ * a one-click ambient player at the top — hemp seltzer with a soundtrack.
+ *
+ * Static generation over every mood that appears on at least one block OR
+ * in any product's pairsWithMood. A mood only exists because something on
+ * PointCast chose it.
+ */
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../../lib/channels';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  const products = await getCollection('products', ({ data }) => !data.draft);
+
+  const moods = new Set<string>();
+  blocks.forEach((b) => { if (b.data.mood) moods.add(b.data.mood); });
+  products.forEach((p) => {
+    (p.data.pairsWithMood ?? []).forEach((m) => moods.add(m));
+  });
+
+  return Array.from(moods).map((mood) => ({
+    params: { mood },
+    props: { mood },
+  }));
+}
+
+interface Props { mood: string; }
+const { mood } = Astro.props;
+
+const [allBlocks, allProducts] = await Promise.all([
+  getCollection('blocks', ({ data }) => !data.draft),
+  getCollection('products', ({ data }) => !data.draft),
+]);
+
+const blocks = allBlocks
+  .filter((b) => b.data.mood === mood)
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const products = allProducts
+  .filter((p) => (p.data.pairsWithMood ?? []).includes(mood))
+  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+
+// Surface the dominant vibeProfile — first product's, or any block's
+// embedded Sonic Postcard reference. Drives the ambient player.
+const vibeProfile = products.find((p) => p.data.vibeProfile)?.data.vibeProfile ?? null;
+
+// Adjacent moods: top 4 other moods sorted by shared-block adjacency.
+// For now just the 6 most-used other moods on the site (quick nav).
+const moodCounts = new Map<string, number>();
+allBlocks.forEach((b) => {
+  if (!b.data.mood || b.data.mood === mood) return;
+  moodCounts.set(b.data.mood, (moodCounts.get(b.data.mood) ?? 0) + 1);
+});
+allProducts.forEach((p) => {
+  (p.data.pairsWithMood ?? []).forEach((m) => {
+    if (m === mood) return;
+    moodCounts.set(m, (moodCounts.get(m) ?? 0) + 1);
+  });
+});
+const adjacentMoods = Array.from(moodCounts.entries())
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 6)
+  .map(([m, n]) => ({ mood: m, count: n }));
+
+const moodTitle = mood.replace(/-/g, ' ');
+const title = `Pairings · ${moodTitle}`;
+const description = `${blocks.length} block${blocks.length === 1 ? '' : 's'} and ${products.length} Good Feels product${products.length === 1 ? '' : 's'} keyed to "${moodTitle}". Cross-index of the editorial feed and the catalog.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: title,
+  description,
+  url: `https://pointcast.xyz/pairings/${mood}`,
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/polls.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/pairings">pairings</a>
+      <span aria-hidden="true">›</span>
+      <span>{mood}</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">PAIRING · MOOD</p>
+      <h1 class="title">{moodTitle}</h1>
+      <p class="dek">
+        Every PointCast surface keyed to <code class="mono">{mood}</code> — the blocks on the editorial side, the Good Feels products on the commerce side, and (when it fits) a procedural soundtrack. Same mood, different grammars.
+      </p>
+    </header>
+
+    {vibeProfile && (
+      <section class="vibe" data-vibe-profile={vibeProfile}>
+        <div class="vibe__text">
+          <p class="vibe__kicker mono">VIBE · SONIC POSTCARD</p>
+          <p class="vibe__profile mono">{vibeProfile}</p>
+          <p class="vibe__dek">Procedural ambient synthesized in-browser. Plays while you browse this pairing.</p>
+        </div>
+        <button type="button" class="vibe__btn mono" data-role="vibe-toggle" aria-pressed="false">▶ PLAY VIBE</button>
+      </section>
+    )}
+
+    <section class="grid">
+      <div class="col col--blocks">
+        <p class="col__kicker mono">EDITORIAL · {blocks.length} BLOCK{blocks.length === 1 ? '' : 'S'}</p>
+        {blocks.length === 0 ? (
+          <p class="empty">No blocks yet for <code>{mood}</code>. A block tagged with this mood will surface here on next publish.</p>
+        ) : (
+          <ul class="cards">
+            {blocks.map((b) => {
+              const ch = CHANNELS[b.data.channel];
+              const date = new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: '2-digit' }).format(b.data.timestamp);
+              return (
+                <li class="card card--block">
+                  <a href={`/b/${b.data.id}`} class="card__link" style={`--ch-600:${ch.color600};--ch-50:${ch.color50};--ch-800:${ch.color800}`}>
+                    <span class="card__chip mono">CH.{ch.code} · {b.data.type}</span>
+                    <h2 class="card__title">{b.data.title}</h2>
+                    {b.data.dek && <p class="card__dek">{b.data.dek}</p>}
+                    <p class="card__meta mono">№{b.data.id} · {date.toUpperCase()}</p>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div class="col col--products">
+        <p class="col__kicker mono">COMMERCE · {products.length} GOOD FEELS PRODUCT{products.length === 1 ? '' : 'S'}</p>
+        {products.length === 0 ? (
+          <p class="empty">No Good Feels products pair with <code>{mood}</code> yet.</p>
+        ) : (
+          <ul class="cards">
+            {products.map((p) => (
+              <li class="card card--product">
+                <a href={p.data.url} class="card__link card__link--shop" rel="noopener">
+                  <span class="card__chip mono">{(p.data.category || 'PRODUCT').toUpperCase()} · ${p.data.priceUsd ?? '—'}</span>
+                  <h2 class="card__title">{p.data.name}</h2>
+                  {p.data.dek && <p class="card__dek">{p.data.dek}</p>}
+                  {p.data.effects && p.data.effects.length > 0 && (
+                    <p class="card__effects mono">{p.data.effects.join(' · ')}</p>
+                  )}
+                  {p.data.vibeProfile && (
+                    <p class="card__vibe mono">♫ VIBE · {p.data.vibeProfile}</p>
+                  )}
+                  <p class="card__meta mono">→ shop.getgoodfeels.com</p>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+
+    {adjacentMoods.length > 0 && (
+      <section class="adjacent">
+        <p class="kicker mono">OTHER MOODS</p>
+        <ul class="adjacent__list">
+          {adjacentMoods.map(({ mood: m, count }) => (
+            <li><a class="adjacent__chip mono" href={`/pairings/${m}`}>{m} · {count}</a></li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/products.jsonl">/api/products.jsonl</a></li>
+        <li><a href="/api/blocks.jsonl">/api/blocks.jsonl</a></li>
+        <li><a href={`/mood/${mood}`}>/mood/{mood} (blocks-only)</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+
+    {vibeProfile && (
+      <script is:inline>
+        (() => {
+          const vibe = document.querySelector('.vibe[data-vibe-profile]');
+          if (!vibe) return;
+          const profile = vibe.getAttribute('data-vibe-profile');
+          const btn = vibe.querySelector('[data-role="vibe-toggle"]');
+          if (!btn) return;
+
+          // The Sonic Postcard profiles live on /clock/0324. Rather than
+          // re-implement the synth graph here, we open the clock in a new
+          // tab with ?play={profile} as a hint, and fall back to a tiny
+          // inline synth for the pairing page itself — a single minor
+          // chord pulse keyed to the profile hash. Low-fidelity preview;
+          // full patch lives on the clock page.
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) { btn.disabled = true; btn.textContent = 'AUDIO UNAVAILABLE'; return; }
+
+          let ctx = null, stack = [];
+          function pulse() {
+            if (!ctx) ctx = new AC();
+            if (ctx.state === 'suspended') ctx.resume();
+            // Minor triad, one shimmer per 8s. Simple preview.
+            const roots = { 'el-segundo': 146.83, 'medway': 164.81, 'nyc': 174.61, 'london': 196, 'mallorca': 146.83, 'istanbul': 146.83, 'tokyo': 220, 'mexico-city': 174.61 };
+            const root = roots[profile] ?? 146.83;
+            const t = ctx.currentTime;
+            [root, root * 1.189, root * 1.498].forEach((f, i) => {
+              const o = ctx.createOscillator();
+              const g = ctx.createGain();
+              o.type = 'sine';
+              o.frequency.value = f;
+              o.connect(g).connect(ctx.destination);
+              g.gain.setValueAtTime(0, t);
+              g.gain.linearRampToValueAtTime(0.035, t + 0.4 + i * 0.15);
+              g.gain.exponentialRampToValueAtTime(0.0008, t + 6);
+              o.start(t); o.stop(t + 6.1);
+              stack.push({ o, g });
+            });
+          }
+          let timer = null;
+          let on = false;
+          btn.addEventListener('click', () => {
+            on = !on;
+            btn.setAttribute('aria-pressed', String(on));
+            if (on) {
+              btn.textContent = '⏹ STOP VIBE';
+              pulse();
+              timer = setInterval(pulse, 8000);
+            } else {
+              btn.textContent = '▶ PLAY VIBE';
+              if (timer) clearInterval(timer);
+              stack.forEach(({ o, g }) => {
+                try { o.stop(); } catch(e) {}
+                try { g.disconnect(); } catch(e) {}
+              });
+              stack = [];
+            }
+          });
+        })();
+      </script>
+    )}
+  </main>
+
+  <style>
+    .page { max-width: 980px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 22px; max-width: 640px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(30px, 5vw, 44px); font-weight: 700; line-height: 1.05; margin: 0 0 12px; text-transform: lowercase; letter-spacing: -0.01em; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek code { background: #f0eee6; padding: 1px 5px; border-radius: 2px; font-size: 0.92em; }
+
+    .vibe {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+      margin: 0 0 20px;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #12110E 0%, #2A2748 100%);
+      color: #F7F5EE;
+      border-radius: 4px;
+      border: 1px solid #3A3760;
+    }
+    .vibe__kicker { font-size: 9.5px; color: #FBB040; margin: 0 0 4px; font-weight: 700; letter-spacing: 0.18em; }
+    .vibe__profile { font-size: 18px; font-weight: 700; margin: 0 0 6px; color: #fff; letter-spacing: 0.02em; text-transform: none; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+    .vibe__dek { margin: 0; color: #D3D1C9; font-size: 13px; line-height: 1.45; }
+    .vibe__btn {
+      appearance: none;
+      background: transparent;
+      border: 1.5px solid #FBB040;
+      color: #FBB040;
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .vibe__btn:hover { background: #FBB040; color: #12110E; }
+    .vibe__btn[aria-pressed="true"] { background: #FBB040; color: #12110E; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+
+    .col__kicker { font-size: 10px; color: #5F3DC4; margin: 0 0 12px; font-weight: 600; letter-spacing: 0.18em; }
+
+    .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .card__link {
+      display: block;
+      padding: 12px 14px;
+      background: #fff;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid var(--ch-600, #5F3DC4);
+      border-radius: 2px;
+      color: #12110E;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .card__link:hover { background: var(--ch-50, #fbf9ff); }
+    .card--product .card__link {
+      border-left-color: #0F6E56;
+    }
+    .card--product .card__link:hover { background: #e6f5ee; }
+    .card__link--shop { cursor: pointer; }
+
+    .card__chip { display: inline-block; font-size: 9.5px; color: var(--ch-800, #5F3DC4); margin: 0 0 6px; font-weight: 700; letter-spacing: 0.14em; }
+    .card--product .card__chip { color: #0F6E56; }
+    .card__title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 15.5px; font-weight: 600; line-height: 1.25; margin: 0 0 6px; }
+    .card__dek { margin: 0 0 8px; font-size: 13px; color: #38373A; line-height: 1.45; }
+    .card__effects { font-size: 9.5px; color: #0F6E56; margin: 0 0 4px; letter-spacing: 0.12em; font-weight: 600; }
+    .card__vibe { font-size: 9.5px; color: #5F3DC4; margin: 0 0 4px; letter-spacing: 0.14em; font-weight: 600; }
+    .card__meta { font-size: 9.5px; color: #8a8878; margin: 0; letter-spacing: 0.14em; }
+
+    .empty {
+      padding: 12px 14px;
+      background: #fafaf5;
+      border: 1px dashed #d6d4cd;
+      border-radius: 2px;
+      color: #5F5E5A;
+      font-size: 13.5px;
+    }
+    .empty code { background: #f0eee6; padding: 1px 5px; border-radius: 2px; }
+
+    .adjacent { margin-top: 26px; padding-top: 16px; border-top: 1px dashed #d6d4cd; }
+    .adjacent__list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .adjacent__chip {
+      display: inline-block;
+      padding: 4px 10px;
+      background: #fff;
+      border: 1px solid #d6d4cd;
+      border-radius: 999px;
+      font-size: 10px;
+      color: #38373A;
+      text-decoration: none;
+      letter-spacing: 0.12em;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .adjacent__chip:hover { background: #12110E; color: #FBB040; border-color: #12110E; }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

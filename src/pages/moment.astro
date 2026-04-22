@@ -1,0 +1,512 @@
+---
+/**
+ * /moment — Today's Moment, composed.
+ *
+ * A single generative page that composes the day's shape from every
+ * primitive PointCast carries: date + moon phase + season + zodiac,
+ * a featured Sky Clock zone vignette (viewer-matched client-side),
+ * the newest zeitgeist poll, a Good Feels pairing keyed to a mood,
+ * and a Sonic Postcard soundtrack.
+ *
+ * The moment composes into an AI image prompt in Mike's visual voice —
+ * El Segundo / mid-century / CC0 pixel / Rothko color fields. One click
+ * copies the prompt to clipboard and opens chatgpt.com/images in a new
+ * tab. User pastes, generates, downloads; optionally pastes the image
+ * URL back into the Save slot to render it inline and stash in
+ * localStorage.
+ *
+ * Static base + client enhancement. Re-renders on every publish so the
+ * prompt composition stays honest with the current archive.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { moonPhase, season, zodiacOfDate, nextEquinoxOrSolstice } from '../lib/sky';
+
+const now = new Date();
+
+// ─── Global sky data ────────────────────────────────────────────────────
+const moon = moonPhase(now);
+const zodiac = zodiacOfDate(now);
+const nextMarker = nextEquinoxOrSolstice(now);
+const se = season(now, 33.919); // default to El Segundo lat
+
+const dateLong = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+}).format(now);
+const dateShort = new Intl.DateTimeFormat('en-US', {
+  month: 'short', day: '2-digit'
+}).format(now).toUpperCase();
+
+// ─── Featured zeitgeist poll ────────────────────────────────────────────
+const zeitgeistPolls = (await getCollection('polls', ({ data }) => !data.draft && data.zeitgeist))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+const featuredPoll = zeitgeistPolls[0] ?? null;
+
+// ─── Featured Sky Clock zone (default El Segundo; client can shift) ─────
+const clockBlock = (await getCollection('blocks', ({ data }) => data.id === '0324' && !data.draft))[0];
+const clockZones = clockBlock?.data.clock?.zones ?? [];
+const featuredZone = clockZones.find((z) => z.label === 'El Segundo') ?? clockZones[0];
+
+// ─── Featured Good Feels pairing ────────────────────────────────────────
+const [allProducts, allBlocks] = await Promise.all([
+  getCollection('products', ({ data }) => !data.draft),
+  getCollection('blocks', ({ data }) => !data.draft),
+]);
+
+// Find a mood shared by ≥1 block and ≥1 product — prefer good-feels if available
+const productMoods = new Set<string>();
+allProducts.forEach((p) => (p.data.pairsWithMood ?? []).forEach((m) => productMoods.add(m)));
+const blockMoodCounts = new Map<string, number>();
+allBlocks.forEach((b) => {
+  if (b.data.mood && productMoods.has(b.data.mood)) {
+    blockMoodCounts.set(b.data.mood, (blockMoodCounts.get(b.data.mood) ?? 0) + 1);
+  }
+});
+const sharedMoods = Array.from(blockMoodCounts.entries()).sort((a, b) => b[1] - a[1]);
+const featuredMood = sharedMoods[0]?.[0] ?? 'good-feels';
+const featuredProduct = allProducts.find((p) => (p.data.pairsWithMood ?? []).includes(featuredMood)) ?? allProducts[0];
+
+// ─── Compose the AI art prompt ──────────────────────────────────────────
+// Mike's visual voice: El Segundo / mid-century / CC0 pixel / Rothko color fields / nounish accents
+function composePrompt(): string {
+  const zoneLabel = featuredZone?.label ?? 'El Segundo';
+  const zoneRegion = featuredZone?.region ?? 'Pacific edge · marine-layer coast';
+  const zoneSeasonal = featuredZone?.seasonal ?? '';
+  const pollQ = featuredPoll?.data.question ?? '';
+  const productHint = featuredProduct ? `, nod to ${featuredProduct.data.name}` : '';
+
+  return [
+    `A Rothko-inspired horizontal color-field composition capturing "${dateLong}" — a single moment from PointCast, the living broadcast from El Segundo.`,
+    ``,
+    `FRAME: cinematic 16:9. Three horizontal bands of color, each a mood: top band the dawn sky as ${moon.glyph} ${moon.label} light (${Math.round(moon.illumination * 100)}% illuminated), middle band the midday light of ${se.name} (day ${se.dayOfSeason} of ${se.lengthDays}), bottom band the Pacific at ${zoneLabel} — ${zoneRegion}.`,
+    ``,
+    `SEASON: ${zoneSeasonal}`,
+    ``,
+    `OVERLAY (very subtle, at edges only): a CC0 pixel-art noun avatar silhouette bottom-left at small scale; a ${zodiac.glyph} ${zodiac.name} sigil top-right at small scale; mid-century-modern sans-serif date stamp "${dateShort} 2026" in a single corner.`,
+    ``,
+    `MOOD: "${featuredMood}"${productHint}.`,
+    featuredPoll ? `ZEITGEIST ECHO: the question "${pollQ}" is nowhere written, but the image feels like a hesitation before picking.` : '',
+    ``,
+    `VISUAL REGISTER: painterly color fields (Rothko, Agnes Martin), with only a tiny pixel-art signature at the edge. No people, no literal objects, no words unless I specified them above. Depth comes from color temperature, not from detail.`,
+    `PALETTE: if ${moon.illumination > 0.7 ? 'bright moon' : 'dim moon'} → cooler top band; if ${se.name === 'spring' ? 'spring' : se.name} → greens + soft ochres in the middle band; if coastal → pale blue-gray-amber lower band.`,
+    ``,
+    `STYLE: cinematic, meditative, tactile paint texture. Feels like an editorial postcard from a slow day in Southern California that somehow captures the current planetary mood.`,
+  ].filter(Boolean).join('\n');
+}
+
+const prompt = composePrompt();
+const promptChars = prompt.length;
+
+const title = `Moment · ${dateLong}`;
+const description = `Today's PointCast moment composed from moon, season, zone, zeitgeist, and a Good Feels pairing — ready to render in chatgpt.com/images with one paste.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/moment',
+  datePublished: now.toISOString(),
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/polls.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>moment</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">MOMENT · {dateShort} 2026</p>
+      <h1 class="title">Today, composed.</h1>
+      <p class="dek">
+        Every PointCast primitive collapses into a single generative postcard
+        for today. Moon phase, season, zodiac, the featured zone, the newest
+        zeitgeist poll, a Good Feels pairing. The AI prompt is pre-composed.
+        One click copies and drops you into ChatGPT Images. Paste, generate,
+        save. The slot below remembers the image per-device.
+      </p>
+    </header>
+
+    {/* ───── The composed moment — facts strip ───── */}
+    <section class="facts">
+      <div class="fact">
+        <p class="fact__kicker mono">MOON</p>
+        <p class="fact__val"><span class="fact__glyph">{moon.glyph}</span> {moon.label}</p>
+        <p class="fact__sub mono">{Math.round(moon.illumination * 100)}% LIT</p>
+      </div>
+      <div class="fact">
+        <p class="fact__kicker mono">ZODIAC</p>
+        <p class="fact__val"><span class="fact__glyph">{zodiac.glyph}</span> {zodiac.name}</p>
+        <p class="fact__sub mono">DAY {zodiac.dayInSign}</p>
+      </div>
+      <div class="fact">
+        <p class="fact__kicker mono">SEASON</p>
+        <p class="fact__val"><span class="fact__glyph">{se.glyph}</span> {se.name}</p>
+        <p class="fact__sub mono">DAY {se.dayOfSeason} OF {se.lengthDays}</p>
+      </div>
+      <div class="fact">
+        <p class="fact__kicker mono">NEXT</p>
+        <p class="fact__val"><span class="fact__glyph">☼</span> {nextMarker.label}</p>
+        <p class="fact__sub mono">IN {nextMarker.daysUntil} D</p>
+      </div>
+    </section>
+
+    {/* ───── Featured zone ───── */}
+    {featuredZone && (
+      <section class="featured featured--zone" data-featured-zone data-tz={featuredZone.tz}>
+        <p class="featured__kicker mono">FEATURED ZONE</p>
+        <h2 class="featured__name">{featuredZone.label}</h2>
+        <p class="featured__sub">{featuredZone.region}</p>
+        {featuredZone.seasonal && <p class="featured__seasonal">{featuredZone.seasonal}</p>}
+      </section>
+    )}
+
+    {/* ───── Featured poll ───── */}
+    {featuredPoll && (
+      <section class="featured featured--poll">
+        <p class="featured__kicker mono">ZEITGEIST · TODAY'S QUESTION</p>
+        <h2 class="featured__name">{featuredPoll.data.question}</h2>
+        {featuredPoll.data.dek && <p class="featured__sub">{featuredPoll.data.dek}</p>}
+        <p class="featured__cta mono"><a href={`/poll/${featuredPoll.data.slug}`}>Answer it →</a></p>
+      </section>
+    )}
+
+    {/* ───── Featured pairing ───── */}
+    {featuredProduct && (
+      <section class="featured featured--pairing">
+        <p class="featured__kicker mono">PAIRING · {featuredMood.toUpperCase()}</p>
+        <h2 class="featured__name">{featuredProduct.data.name}</h2>
+        {featuredProduct.data.dek && <p class="featured__sub">{featuredProduct.data.dek}</p>}
+        <p class="featured__cta mono">
+          <a href={`/pairings/${featuredMood}`}>Open pairing →</a>
+          <span class="featured__sep" aria-hidden="true">·</span>
+          <a href={featuredProduct.data.url} rel="noopener">Shop →</a>
+        </p>
+      </section>
+    )}
+
+    {/* ───── The prompt + handoff ───── */}
+    <section class="prompt-section">
+      <p class="kicker mono">PROMPT · {promptChars} CHARS · FOR chatgpt.com/images</p>
+      <h2 class="prompt-title">Generate today's moment.</h2>
+      <p class="prompt-dek">
+        The prompt below composes Mike's visual voice — mid-century color
+        fields, CC0 pixel signatures, El Segundo light — with the exact
+        planetary state right now. Copy, paste, generate. The image slot
+        at the bottom of this page remembers your URL per-device.
+      </p>
+
+      <pre class="prompt" id="moment-prompt"><code>{prompt}</code></pre>
+
+      <div class="actions">
+        <button type="button" class="btn btn--primary" id="copy-open-btn" data-role="copy-open">
+          <span class="mono">⎘ COPY + OPEN CHATGPT IMAGES</span>
+        </button>
+        <button type="button" class="btn btn--ghost" id="copy-btn" data-role="copy-only">
+          <span class="mono">⎘ COPY PROMPT ONLY</span>
+        </button>
+        <a class="btn btn--link mono" href="https://chatgpt.com/images/" target="_blank" rel="noopener">
+          → chatgpt.com/images (new tab)
+        </a>
+      </div>
+      <p class="actions__status mono" id="copy-status" aria-live="polite">&nbsp;</p>
+    </section>
+
+    {/* ───── Image slot (localStorage-backed) ───── */}
+    <section class="slot">
+      <p class="kicker mono">YOUR GENERATED MOMENT · LOCAL ONLY</p>
+      <div class="slot__wrap" id="slot-wrap">
+        <div class="slot__empty" id="slot-empty">
+          <p class="slot__empty-text">After you generate in ChatGPT, right-click → Copy image address, then paste it below.</p>
+          <form id="slot-form" class="slot__form">
+            <input
+              type="url"
+              id="slot-url"
+              name="url"
+              placeholder="https://files.chatgpt.com/… (your generated image URL)"
+              aria-label="Image URL from ChatGPT"
+              autocomplete="off"
+            />
+            <button type="submit" class="btn btn--primary"><span class="mono">SAVE</span></button>
+          </form>
+        </div>
+        <div class="slot__filled" id="slot-filled" hidden>
+          <img id="slot-img" src="" alt={`PointCast moment · ${dateLong}`} />
+          <p class="slot__meta mono">
+            <span id="slot-meta-text">—</span>
+            <button type="button" class="btn btn--text mono" id="slot-clear">CLEAR</button>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/moment.json">/api/moment.json</a></li>
+        <li><a href="/clock/0324">/clock/0324 (sky clock)</a></li>
+        <li><a href="/zeitgeist-map">/zeitgeist-map</a></li>
+        <li><a href="/pairings">/pairings</a></li>
+      </ul>
+    </section>
+
+    <script is:inline define:vars={{ prompt }}>
+      (() => {
+        const copyOnly = document.getElementById('copy-btn');
+        const copyOpen = document.getElementById('copy-open-btn');
+        const status = document.getElementById('copy-status');
+
+        async function copyPrompt() {
+          try {
+            await navigator.clipboard.writeText(prompt);
+            return true;
+          } catch (e) {
+            // Fallback: select + execCommand
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = prompt;
+              ta.style.position = 'fixed';
+              ta.style.left = '-9999px';
+              document.body.appendChild(ta);
+              ta.select();
+              const ok = document.execCommand('copy');
+              document.body.removeChild(ta);
+              return ok;
+            } catch (e2) { return false; }
+          }
+        }
+
+        function flash(msg, kind) {
+          status.textContent = msg;
+          status.dataset.kind = kind || '';
+          setTimeout(() => { status.textContent = '\u00a0'; status.dataset.kind = ''; }, 3600);
+        }
+
+        copyOnly.addEventListener('click', async () => {
+          const ok = await copyPrompt();
+          flash(ok ? 'copied · paste into chatgpt.com/images' : 'copy blocked by browser — select the prompt manually', ok ? 'ok' : 'err');
+        });
+
+        copyOpen.addEventListener('click', async () => {
+          const ok = await copyPrompt();
+          flash(ok ? 'copied · opening chatgpt.com/images in new tab…' : 'copy blocked — opening anyway, paste manually', ok ? 'ok' : 'warn');
+          window.open('https://chatgpt.com/images/', '_blank', 'noopener');
+        });
+
+        // ─── Image slot (localStorage) ───
+        const SLOT_KEY = 'pc:moment:image:' + new Date().toISOString().slice(0, 10);
+        const form = document.getElementById('slot-form');
+        const input = document.getElementById('slot-url');
+        const empty = document.getElementById('slot-empty');
+        const filled = document.getElementById('slot-filled');
+        const img = document.getElementById('slot-img');
+        const meta = document.getElementById('slot-meta-text');
+        const clear = document.getElementById('slot-clear');
+
+        function renderFilled(url, savedAt) {
+          if (!url) return;
+          img.src = url;
+          meta.textContent = 'SAVED ' + (savedAt ? new Date(savedAt).toLocaleTimeString() : 'NOW') + ' · LOCAL TO THIS DEVICE';
+          empty.hidden = true;
+          filled.hidden = false;
+        }
+        function renderEmpty() {
+          empty.hidden = false;
+          filled.hidden = true;
+          input.value = '';
+        }
+
+        try {
+          const cached = JSON.parse(localStorage.getItem(SLOT_KEY) || 'null');
+          if (cached && cached.url) renderFilled(cached.url, cached.at);
+        } catch (e) {}
+
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const url = (input.value || '').trim();
+          if (!url) return;
+          if (!/^https?:\/\//.test(url)) {
+            flash('needs to be a full https:// URL', 'err');
+            return;
+          }
+          const payload = { url, at: Date.now() };
+          try { localStorage.setItem(SLOT_KEY, JSON.stringify(payload)); } catch (e) {}
+          renderFilled(url, payload.at);
+          flash('saved · local to this device', 'ok');
+        });
+
+        clear.addEventListener('click', () => {
+          try { localStorage.removeItem(SLOT_KEY); } catch (e) {}
+          renderEmpty();
+        });
+      })();
+    </script>
+  </main>
+
+  <style>
+    .page { max-width: 900px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 22px; max-width: 640px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(32px, 5vw, 52px); font-weight: 700; line-height: 1.02; margin: 0 0 12px; letter-spacing: -0.02em; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+
+    /* Facts strip */
+    .facts {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 0 0 22px;
+      padding: 14px;
+      background: linear-gradient(135deg, #FAF9F5 0%, #F2EFE7 100%);
+      border: 1px solid #D6D4CD;
+      border-radius: 4px;
+    }
+    .fact { display: flex; flex-direction: column; gap: 2px; }
+    .fact__kicker { font-size: 9px; color: #5F3DC4; margin: 0; letter-spacing: 0.18em; font-weight: 700; }
+    .fact__val { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 15px; font-weight: 600; margin: 0; color: #12110E; }
+    .fact__glyph { margin-right: 4px; font-size: 16px; }
+    .fact__sub { font-size: 9px; color: #5F5E5A; margin: 0; letter-spacing: 0.12em; }
+
+    @media (max-width: 640px) {
+      .facts { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Featured blocks */
+    .featured {
+      padding: 14px 18px;
+      margin: 0 0 14px;
+      background: #fff;
+      border: 1px solid #D6D4CD;
+      border-left: 4px solid #5F3DC4;
+      border-radius: 2px;
+    }
+    .featured--zone { border-left-color: #FBB040; }
+    .featured--poll { border-left-color: #8A2432; }
+    .featured--pairing { border-left-color: #0F6E56; }
+    .featured__kicker { font-size: 9.5px; margin: 0 0 5px; color: #5F3DC4; letter-spacing: 0.18em; font-weight: 700; }
+    .featured--zone .featured__kicker { color: #6A3E05; }
+    .featured--poll .featured__kicker { color: #8A2432; }
+    .featured--pairing .featured__kicker { color: #0F6E56; }
+    .featured__name { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 19px; font-weight: 700; margin: 0 0 4px; line-height: 1.2; }
+    .featured__sub { margin: 0 0 6px; color: #38373A; font-size: 13.5px; line-height: 1.5; }
+    .featured__seasonal { margin: 4px 0 0; color: #5F5E5A; font-size: 12.5px; line-height: 1.45; font-style: italic; }
+    .featured__cta { margin: 6px 0 0; font-size: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .featured__cta a { color: #a02c2c; text-decoration: none; letter-spacing: 0.14em; }
+    .featured__cta a:hover { text-decoration: underline; }
+    .featured__sep { color: #D6D4CD; }
+
+    /* Prompt section */
+    .prompt-section { margin-top: 28px; }
+    .prompt-title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 24px; font-weight: 700; margin: 8px 0 6px; }
+    .prompt-dek { margin: 0 0 14px; color: #38373A; font-size: 14px; line-height: 1.5; max-width: 640px; }
+    .prompt {
+      background: #12110E;
+      color: #F7F5EE;
+      padding: 16px 18px;
+      border-radius: 3px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 12.5px;
+      line-height: 1.55;
+      overflow-x: auto;
+      max-height: 360px;
+      overflow-y: auto;
+      margin: 0 0 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid #3A3760;
+    }
+    .prompt code { color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .btn--primary {
+      background: #FBB040;
+      color: #12110E;
+      border: 1.5px solid #FBB040;
+    }
+    .btn--primary:hover { background: #C78828; border-color: #C78828; }
+    .btn--ghost {
+      background: transparent;
+      color: #12110E;
+      border: 1.5px solid #12110E;
+    }
+    .btn--ghost:hover { background: #12110E; color: #FBB040; }
+    .btn--link { color: #a02c2c; border: none; background: transparent; padding: 10px 8px; }
+    .btn--link:hover { text-decoration: underline; }
+    .btn--text { background: transparent; border: none; color: #a02c2c; padding: 2px 4px; font-size: 10px; }
+
+    .actions__status {
+      margin: 8px 0 0;
+      padding: 4px 8px;
+      font-size: 10px;
+      color: #5F5E5A;
+      min-height: 18px;
+    }
+    .actions__status[data-kind="ok"] { color: #0F6E56; }
+    .actions__status[data-kind="warn"] { color: #C78828; }
+    .actions__status[data-kind="err"] { color: #8A2432; }
+
+    /* Slot */
+    .slot { margin-top: 28px; }
+    .slot__wrap {
+      padding: 14px;
+      border: 1px dashed #D6D4CD;
+      background: #FAFAF5;
+      border-radius: 3px;
+    }
+    .slot__empty-text { margin: 0 0 10px; color: #38373A; font-size: 14px; line-height: 1.5; }
+    .slot__form { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+    .slot__form input {
+      flex: 1 1 280px;
+      padding: 9px 12px;
+      border: 1.5px solid #D6D4CD;
+      border-radius: 3px;
+      font-size: 13px;
+      background: #fff;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    }
+    .slot__form input:focus { outline: none; border-color: #5F3DC4; }
+
+    .slot__filled img {
+      display: block;
+      width: 100%;
+      max-height: 560px;
+      object-fit: contain;
+      border-radius: 2px;
+      background: #12110E;
+    }
+    .slot__meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 8px 0 0;
+      font-size: 10px;
+      color: #5F5E5A;
+    }
+
+    .agent-strip { margin-top: 28px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>

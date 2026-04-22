@@ -1,0 +1,386 @@
+---
+/**
+ * /federation — the federated-follow roster.
+ *
+ * PointCast at center, federation nodes orbiting by trust tier. Radial
+ * layout (no force sim at this scale) — `close` at the inner ring,
+ * `watching` at the outer. Node color = kind; dashed edge = imagined
+ * peer placeholder. Deterministic: same layout every visit.
+ *
+ * Clicking a node opens its URL. Hovering plays a short sine blip keyed
+ * off the node's vibeProfile — carrying Sonic Postcards out to the
+ * federation layer. Sprint 5 · v1 of the mesh primitive.
+ *
+ * NOTE: /mesh (existing) describes PointCast's own three meshes —
+ * local, online, agent. This page describes external peers specifically.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const mesh = (await getCollection('mesh', ({ data }) => data.listed))
+  .sort((a, b) => {
+    const order: Record<string, number> = { close: 0, known: 1, interesting: 2, watching: 3 };
+    return (order[a.data.trust] ?? 4) - (order[b.data.trust] ?? 4);
+  });
+
+// Radial layout at build time.
+const W = 1040;
+const H = 640;
+const cx = W / 2;
+const cy = H / 2;
+const ringR: Record<string, number> = { close: 120, known: 200, interesting: 270, watching: 330 };
+
+const tiers: Record<string, typeof mesh> = { close: [], known: [], interesting: [], watching: [] };
+mesh.forEach((n) => { tiers[n.data.trust]?.push(n); });
+
+type NodePos = { slug: string; x: number; y: number; node: typeof mesh[0] };
+const positions: NodePos[] = [];
+(['close', 'known', 'interesting', 'watching'] as const).forEach((tier) => {
+  const group = tiers[tier];
+  if (!group.length) return;
+  const r = ringR[tier];
+  const baseAngle = { close: 0, known: 0.4, interesting: 0.8, watching: 1.1 }[tier];
+  group.forEach((n, i) => {
+    const angle = baseAngle + (i / group.length) * Math.PI * 2;
+    positions.push({
+      slug: n.data.slug,
+      x: cx + r * Math.cos(angle),
+      y: cy + r * Math.sin(angle),
+      node: n,
+    });
+  });
+});
+
+const kindColor: Record<string, string> = {
+  blog: '#185FA5',
+  zine: '#5F3DC4',
+  broadcast: '#C95019',
+  gallery: '#8A2432',
+  feed: '#0F6E56',
+  bench: '#3A1F8B',
+  agent: '#E89A22',
+  node: '#5F5E5A',
+};
+
+const statusDash: Record<string, string> = {
+  imagined: '4 4',
+  live: '',
+  archived: '1 4',
+};
+
+const clientNodes = mesh.map((n) => ({
+  slug: n.data.slug,
+  name: n.data.name,
+  url: n.data.url,
+  kind: n.data.kind,
+  status: n.data.status,
+  trust: n.data.trust,
+  description: n.data.description,
+  vibeProfile: n.data.vibeProfile ?? null,
+}));
+
+const title = 'Federation · the node roster';
+const description = `PointCast as a node in a network of ${mesh.length} PointCast-adjacent nodes — friend blogs, zines, benches, broadcasts, feeds. Cross-linked, structured, ambient.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/federation',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/polls.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/mesh">mesh</a>
+      <span aria-hidden="true">›</span>
+      <span>federation</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">FEDERATION · {mesh.length} NODES · {mesh.filter(m => m.data.status === 'imagined').length} IMAGINED</p>
+      <h1 class="title">PointCast is a node.</h1>
+      <p class="dek">
+        Most blogs are islands. A federation is a network. Every dot below is a
+        PointCast-adjacent node — real, imagined, or somewhere between. Inner
+        ring is <em>close</em>; outer ring is <em>watching</em>. Colors are kinds: blog,
+        zine, bench, broadcast, feed. Dashed edges mean imagined — a
+        placeholder describing what a node <em>would</em> be if it existed.
+        Promote to live when the URL resolves.
+      </p>
+    </header>
+
+    <section class="fed-wrap" aria-label="Federation graph">
+      <svg
+        class="fed-svg"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={`Graph of PointCast + ${mesh.length} federated nodes`}
+      >
+        <defs>
+          <radialGradient id="me-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FBB040" />
+            <stop offset="100%" stop-color="#8A2432" />
+          </radialGradient>
+        </defs>
+
+        {(['close', 'known', 'interesting', 'watching'] as const).map((tier) => (
+          <circle cx={cx} cy={cy} r={ringR[tier]} fill="none" stroke="#D6D4CD" stroke-width="0.8" stroke-dasharray="1 3" opacity="0.6" />
+        ))}
+
+        {positions.map((p) => (
+          <line
+            x1={cx} y1={cy} x2={p.x} y2={p.y}
+            class="edge"
+            data-slug={p.slug}
+            stroke="#a8a6a0"
+            stroke-width="1.2"
+            stroke-dasharray={statusDash[p.node.data.status] || ''}
+            opacity="0.5"
+          />
+        ))}
+
+        <circle cx={cx} cy={cy} r="28" fill="url(#me-grad)" stroke="#12110E" stroke-width="2" />
+        <text x={cx} y={cy + 4} text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#fff" font-weight="700">ME</text>
+        <text x={cx} y={cy + 46} text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="0.1em" fill="#5F5E5A">POINTCAST.XYZ</text>
+
+        {positions.map((p) => {
+          const color = kindColor[p.node.data.kind] ?? '#5F5E5A';
+          const r = p.node.data.trust === 'close' ? 18 : p.node.data.trust === 'known' ? 15 : 13;
+          return (
+            <g class="node" data-slug={p.slug}>
+              <a href={p.node.data.url} rel="noopener" target="_blank">
+                <circle cx={p.x} cy={p.y} r={r + 4} fill="none" stroke={color} stroke-width="1" opacity="0.3" />
+                <circle cx={p.x} cy={p.y} r={r} fill={color} stroke="#12110E" stroke-width="1" />
+                <text x={p.x} y={p.y + 3} text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#fff" font-weight="700">
+                  {p.node.data.name.slice(0, 2).toUpperCase()}
+                </text>
+                <text x={p.x} y={p.y + r + 14} text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="0.08em" fill="#38373A">
+                  {p.node.data.name.toUpperCase()}
+                </text>
+                <title>{p.node.data.name} · {p.node.data.description}</title>
+              </a>
+            </g>
+          );
+        })}
+      </svg>
+
+      <div class="tooltip" id="fed-tooltip" hidden>
+        <p class="tooltip__kicker mono" data-role="tt-kicker">—</p>
+        <p class="tooltip__name" data-role="tt-name">—</p>
+        <p class="tooltip__dek" data-role="tt-dek">—</p>
+        <p class="tooltip__cta mono">visit →</p>
+      </div>
+
+      <aside class="legend" aria-label="Legend">
+        <p class="legend__kicker mono">KIND</p>
+        {Object.entries(kindColor).filter(([k]) => mesh.some(m => m.data.kind === k)).map(([k, c]) => (
+          <div class="legend__row">
+            <span class="legend__swatch" style={`background:${c}`} aria-hidden="true"></span>
+            <span>{k.toUpperCase()}</span>
+          </div>
+        ))}
+        <hr />
+        <p class="legend__kicker mono">STATUS</p>
+        <div class="legend__row legend__row--line">
+          <svg viewBox="0 0 30 6" width="30" height="6" aria-hidden="true"><line x1="1" y1="3" x2="29" y2="3" stroke="#8a8878" stroke-width="1.6"/></svg>
+          <span>LIVE</span>
+        </div>
+        <div class="legend__row legend__row--line">
+          <svg viewBox="0 0 30 6" width="30" height="6" aria-hidden="true"><line x1="1" y1="3" x2="29" y2="3" stroke="#8a8878" stroke-width="1.6" stroke-dasharray="4 4"/></svg>
+          <span>IMAGINED</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="nodelist">
+      <p class="kicker mono">THE NODES · IN FULL</p>
+      <ul class="nodelist__list">
+        {mesh.map((n) => (
+          <li class={`noderow noderow--${n.data.status}`}>
+            <a class="noderow__link" href={n.data.url} rel="noopener" target="_blank">
+              <span class="noderow__chips mono">
+                <span class="chip chip--kind" style={`background:${kindColor[n.data.kind]};color:#fff`}>{n.data.kind.toUpperCase()}</span>
+                <span class={`chip chip--status-${n.data.status}`}>{n.data.status.toUpperCase()}</span>
+                <span class="chip chip--trust">TRUST · {n.data.trust.toUpperCase()}</span>
+                {n.data.vibeProfile && <span class="chip chip--vibe">♪ {n.data.vibeProfile}</span>}
+              </span>
+              <h2 class="noderow__name">{n.data.name}</h2>
+              <p class="noderow__url mono">{n.data.url}</p>
+              <p class="noderow__dek">{n.data.description}</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="embed">
+      <p class="kicker mono">EMBED · "SEEN ON POINTCAST"</p>
+      <p class="embed__dek">Other nodes can embed this badge to indicate a PointCast citation. Compact SVG, cacheable, degrades cleanly. Paste the line below on your own page.</p>
+      <div class="embed__preview">
+        <img src="/api/badge.svg" alt="Seen on PointCast" width="110" height="28" />
+      </div>
+      <pre class="embed__code mono"><code>&lt;a href="https://pointcast.xyz"&gt;&lt;img src="https://pointcast.xyz/api/badge.svg" alt="Seen on PointCast" width="110" height="28"&gt;&lt;/a&gt;</code></pre>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/mesh.jsonl">/api/mesh.jsonl</a></li>
+        <li><a href="/api/badge.svg">/api/badge.svg</a></li>
+        <li><a href="/mesh">/mesh (three layers)</a></li>
+        <li><a href="/for-nodes">/for-nodes</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+
+    <script type="application/json" id="fed-nodes" set:html={JSON.stringify(clientNodes)}></script>
+
+    <script is:inline>
+      (() => {
+        const blob = document.getElementById('fed-nodes');
+        if (!blob) return;
+        let meta = {};
+        try { meta = JSON.parse(blob.textContent || '[]').reduce((a, n) => (a[n.slug] = n, a), {}); } catch(e) {}
+
+        const tooltip = document.getElementById('fed-tooltip');
+        const tK = tooltip?.querySelector('[data-role="tt-kicker"]');
+        const tN = tooltip?.querySelector('[data-role="tt-name"]');
+        const tD = tooltip?.querySelector('[data-role="tt-dek"]');
+
+        const nodes = Array.from(document.querySelectorAll('.fed-svg .node[data-slug]'));
+        const edges = Array.from(document.querySelectorAll('.fed-svg .edge[data-slug]'));
+
+        function showTip(slug, x, y) {
+          const n = meta[slug]; if (!n || !tooltip) return;
+          if (tK) tK.textContent = [n.kind.toUpperCase(), n.status.toUpperCase(), 'TRUST · ' + n.trust.toUpperCase()].join(' · ');
+          if (tN) tN.textContent = n.name;
+          if (tD) tD.textContent = n.description;
+          const wrap = tooltip.parentElement;
+          if (wrap) {
+            const rect = wrap.getBoundingClientRect();
+            const tw = 300, th = 130;
+            let tx = x - rect.left + 14, ty = y - rect.top + 14;
+            if (tx + tw > rect.width) tx = x - rect.left - tw - 14;
+            if (ty + th > rect.height) ty = y - rect.top - th - 14;
+            tooltip.style.left = Math.max(6, tx) + 'px';
+            tooltip.style.top = Math.max(6, ty) + 'px';
+          }
+          tooltip.hidden = false;
+        }
+        function hideTip() { if (tooltip) tooltip.hidden = true; }
+
+        function focus(slug) {
+          nodes.forEach((n) => n.classList.toggle('node--dim', n.getAttribute('data-slug') !== slug));
+          edges.forEach((e) => e.classList.toggle('edge--focus', e.getAttribute('data-slug') === slug));
+        }
+        function clearFocus() {
+          nodes.forEach((n) => n.classList.remove('node--dim'));
+          edges.forEach((e) => e.classList.remove('edge--focus'));
+        }
+
+        let ctx = null, armed = false;
+        const arm = () => { armed = true; };
+        window.addEventListener('pointerdown', arm, { once: true });
+        window.addEventListener('keydown', arm, { once: true });
+        function blip(slug) {
+          if (!armed) return;
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          if (!ctx) ctx = new AC();
+          if (ctx.state === 'suspended') ctx.resume();
+          const n = meta[slug]; if (!n) return;
+          const profileTone = { 'el-segundo': 440, 'medway': 392, 'nyc': 523.25, 'london': 349.23, 'mallorca': 329.63, 'istanbul': 293.66, 'tokyo': 659.25, 'mexico-city': 493.88 };
+          let h = 0; for (let i = 0; i < slug.length; i++) h = ((h << 5) - h + slug.charCodeAt(i)) | 0;
+          const f = n.vibeProfile && profileTone[n.vibeProfile] ? profileTone[n.vibeProfile] : 220 + (Math.abs(h) % 8) * 60;
+          const t = ctx.currentTime;
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.05, t + 0.005);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+          o.connect(g).connect(ctx.destination);
+          o.start(t); o.stop(t + 0.32);
+        }
+
+        nodes.forEach((n) => {
+          const slug = n.getAttribute('data-slug');
+          n.addEventListener('mouseenter', (ev) => { focus(slug); showTip(slug, ev.clientX, ev.clientY); blip(slug); });
+          n.addEventListener('mousemove', (ev) => showTip(slug, ev.clientX, ev.clientY));
+          n.addEventListener('mouseleave', () => { clearFocus(); hideTip(); });
+        });
+      })();
+    </script>
+  </main>
+
+  <style>
+    .page { max-width: 1100px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 20px; max-width: 720px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(30px, 5vw, 46px); font-weight: 700; line-height: 1.05; margin: 0 0 12px; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 15px; }
+    .dek em { font-style: italic; }
+
+    .fed-wrap { position: relative; margin: 16px 0 28px; padding: 0; background: radial-gradient(ellipse at center, #FAF9F5 0%, #F2EFE7 100%); border: 1px solid #D6D4CD; border-radius: 4px; overflow: hidden; }
+    .fed-svg { display: block; width: 100%; height: auto; max-height: 72vh; }
+
+    .edge { transition: opacity 0.2s, stroke-width 0.2s; }
+    .edge--focus { opacity: 1 !important; stroke-width: 2.2 !important; stroke: #5F3DC4 !important; }
+    .node { cursor: pointer; transition: opacity 0.18s; }
+    .node--dim { opacity: 0.3; }
+
+    .tooltip { position: absolute; z-index: 10; pointer-events: none; max-width: 300px; padding: 10px 12px; background: #12110E; color: #F7F5EE; border-radius: 3px; border: 1px solid #3A3760; box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
+    .tooltip__kicker { font-size: 9.5px; color: #FBB040; margin: 0 0 5px; font-weight: 700; }
+    .tooltip__name { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+    .tooltip__dek { margin: 0 0 8px; font-size: 12.5px; color: #D3D1C9; line-height: 1.4; }
+    .tooltip__cta { font-size: 9.5px; color: #8A8876; letter-spacing: 0.14em; }
+
+    .legend { position: absolute; top: 10px; right: 10px; padding: 10px 12px; background: rgba(255,255,255,0.94); border: 1px solid #D6D4CD; border-radius: 3px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 9.5px; letter-spacing: 0.1em; color: #38373A; }
+    .legend__kicker { margin: 0 0 4px; font-size: 9px; color: #5F3DC4; letter-spacing: 0.16em; }
+    .legend hr { margin: 6px 0; border: 0; border-top: 1px dashed #D6D4CD; }
+    .legend__row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+    .legend__swatch { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid #12110E; }
+
+    .nodelist { margin-top: 28px; }
+    .nodelist__list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+    .noderow__link { display: block; padding: 12px 14px; background: #fff; border: 1px solid #d6d4cd; border-left: 4px solid #5F3DC4; border-radius: 2px; color: #12110E; text-decoration: none; transition: background 0.12s, border-color 0.12s; }
+    .noderow__link:hover { background: #fbf9ff; border-color: #3A1F8B; }
+    .noderow--imagined .noderow__link { border-left-style: dashed; }
+    .noderow__chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 6px; }
+    .chip { display: inline-block; padding: 2px 6px; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; border-radius: 2px; background: #f0eee6; color: #38373A; }
+    .chip--trust { background: #fffaf0; color: #6A3E05; }
+    .chip--vibe { background: #1a1933; color: #FBB040; }
+    .chip--status-imagined { background: transparent; color: #5F5E5A; border: 1px dashed #d6d4cd; }
+    .chip--status-live { background: #e6f5ee; color: #0F6E56; }
+    .chip--status-archived { background: #f5f3ed; color: #8a8878; }
+    .noderow__name { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 17px; font-weight: 600; margin: 0 0 2px; }
+    .noderow__url { margin: 0 0 6px; font-size: 10px; color: #a02c2c; }
+    .noderow__dek { margin: 0; font-size: 13.5px; color: #38373A; line-height: 1.5; }
+
+    .embed { margin-top: 28px; padding: 16px; border: 1px solid #d6d4cd; background: #fafaf5; border-radius: 2px; }
+    .embed__dek { margin: 6px 0 12px; font-size: 13.5px; color: #38373A; line-height: 1.5; }
+    .embed__preview { padding: 10px 0 14px; }
+    .embed__code { background: #12110E; color: #F7F5EE; padding: 10px 14px; border-radius: 2px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .legend { position: static; margin: 10px; }
+    }
+  </style>
+</BlockLayout>
