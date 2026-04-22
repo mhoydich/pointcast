@@ -10,7 +10,7 @@ const payload = {
   status: 'alpha operating board',
   human: 'https://pointcast.xyz/nouns-cola',
   image: 'https://pointcast.xyz/images/nouns-cola/nouns-cola-pack.png',
-  intent: 'Create a Nouns Cola pilot on PointCast covering formulation, fundraising, production, profit, and yield.',
+  intent: 'Create a Nouns Cola pilot on PointCast covering formulation, contributions, inventory financing, production, profit, and yield.',
   formulation: {
     product: '12 oz carbonated cola concept',
     targets: {
@@ -35,6 +35,78 @@ const payload = {
       { item: 'Compliance, reserve, surprises', amountUsd: 10000 },
     ],
     routes: ['preorder crates', 'sponsor pallets', 'DAO-style proposal', 'direct community support'],
+  },
+  contributionPlan: {
+    principle: 'Separate product/community contributions from any inventory-financing facility.',
+    lanes: [
+      {
+        lane: 'Taste panel',
+        ask: '$0 / time',
+        unlocks: 'Formula feedback, blind tasting notes, reorder signal',
+        status: 'open',
+        financialClaim: false,
+      },
+      {
+        lane: 'Case preorder',
+        ask: '$72',
+        unlocks: 'One 24-can case reserved from the pilot run',
+        status: 'draft',
+        financialClaim: false,
+      },
+      {
+        lane: 'Crate sponsor',
+        ask: '$576',
+        unlocks: 'Eight cases for team, studio, shop, event, or local door',
+        status: 'draft',
+        financialClaim: false,
+      },
+      {
+        lane: 'Retail door',
+        ask: '10-case PO',
+        unlocks: 'Wholesale demand proof before production cash is locked',
+        status: 'target',
+        financialClaim: false,
+      },
+      {
+        lane: 'Pallet sponsor',
+        ask: '$3,456',
+        unlocks: 'Forty-eight cases plus sponsor credit on PointCast',
+        status: 'target',
+        financialClaim: false,
+      },
+      {
+        lane: 'Inventory facility',
+        ask: '$5k+ draft',
+        unlocks: 'Short-term inventory float repaid from receipts if approved',
+        status: 'legal review',
+        financialClaim: 'not live; requires counsel approval',
+      },
+    ],
+  },
+  inventoryFinancingPlan: {
+    status: 'draft term sheet for legal review; not live',
+    targetFacilityUsd: 120000,
+    uses: [
+      { use: 'Co-packer deposit', amountUsd: 38000, source: 'facility + crate sponsors' },
+      { use: 'Landed inventory', amountUsd: 44000, source: 'facility + case preorders' },
+      { use: 'Fulfillment float', amountUsd: 14000, source: 'case preorders' },
+      { use: 'Retail terms buffer', amountUsd: 14000, source: 'facility reserve' },
+      { use: 'First-loss reserve', amountUsd: 10000, source: 'treasury / sponsor holdback' },
+    ],
+    gatesBeforeRelease: [
+      'formula locked',
+      'co-packer quote received',
+      'label and nutrition review complete',
+      'pilot purchase order packet complete',
+      'counsel signs off on any financing terms',
+    ],
+    receiptWaterfall: [
+      'Product preorders and sponsor crates reserve product, not financial upside.',
+      'Inventory facility funds are released only after gates are complete.',
+      'Sales receipts first replenish fulfillment costs and pay supplier balances.',
+      'If counsel approves an inventory facility, receipts then repay approved facility principal before surplus routing.',
+      'Remaining surplus follows the yield policy: next run, PointCast treasury, growth, and team pool.',
+    ],
   },
   production: {
     pilotCases: 2400,

@@ -382,7 +382,7 @@ const PAGES = [
     kind: 'product board',
     kicker: 'NOUNS COLA · POINTCAST',
     title: 'Nouns Cola.',
-    dek: 'Formulation, fundraising, production, profit, and surplus yield in one operating board.',
+    dek: 'Formulation, contributions, inventory financing, production, profit, and surplus yield in one board.',
     color600: '#E84D6A',
     color800: '#8A2432',
     glyph: 'COLA',
