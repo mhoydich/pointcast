@@ -75,6 +75,13 @@ const channelList = CHANNEL_LIST.map((c) => ({
     <nav class="sp-sig-nav">
       <a href="/sparrow/friends" class="sp-sig-nav-link">← /sparrow/friends</a>
       <a href="/sparrow/friends/activity" class="sp-sig-nav-link">activity timeline →</a>
+      <button
+        type="button"
+        class="sp-sig-export-btn"
+        data-sp-sig-export
+        aria-label="download signals recap as JSON"
+        title="download this recap as sparrow-signals-<date>.json"
+      >⤓ export JSON</button>
     </nav>
 
     <section class="sp-sig-panel" aria-label="most co-saved">
@@ -256,15 +263,32 @@ const channelList = CHANNEL_LIST.map((c) => ({
         }
 
         // ── 1. Most co-saved ─────────────────────────────────────────
-        const counts = new Map(); // blockId → { count, savers: Set<pubkey> }
+        // v0.29: also track first-picker per block — the friend with
+        // the earliest created_at among those who currently have the
+        // block in their saved list. Caveat: this is the timestamp of
+        // that friend's LATEST published list, so it's a proxy for
+        // "when I most recently saw this friend saving it" — not a
+        // historical save-order record. Still useful: across a group
+        // re-publishing regularly, the pattern stabilizes to "who
+        // put this on my radar first." Rendered as a small ⭐ chip.
+        const counts = new Map(); // blockId → { count, savers: Set<pubkey>, firstPicker: pubkey, firstAt: created_at }
         for (const [pubkey, entry] of newestByAuthor) {
           const seenInThisList = new Set();
           for (const id of entry.saved) {
             if (typeof id !== 'string' || seenInThisList.has(id)) continue;
             seenInThisList.add(id);
-            const slot = counts.get(id) || { count: 0, savers: new Set() };
+            const slot = counts.get(id) || {
+              count: 0,
+              savers: new Set(),
+              firstPicker: pubkey,
+              firstAt: entry.created_at,
+            };
             slot.count += 1;
             slot.savers.add(pubkey);
+            if (entry.created_at < slot.firstAt) {
+              slot.firstPicker = pubkey;
+              slot.firstAt = entry.created_at;
+            }
             counts.set(id, slot);
           }
         }
@@ -287,6 +311,13 @@ const channelList = CHANNEL_LIST.map((c) => ({
             const more = names.length > 4 ? `<span class="sp-sig-saver-more">+${names.length - 4}</span>` : '';
             const channelName = meta?.channelName || meta?.channel || '—';
             const channelCode = meta?.channel ? meta.channel.toLowerCase() : '';
+            // v0.29: first-picker chip. Earliest created_at among the
+            // current savers wins. Only shown when count >= 2 (which
+            // is always true at this point) and the picker isn't the
+            // same as a single solo saver — which can't happen since
+            // filtering requires count >= 2.
+            const pickerFriend = friendsLive.find((f) => f.pubkey === info.firstPicker);
+            const pickerName = pickerFriend ? nameFor(info.firstPicker, pickerFriend) : shortPk(info.firstPicker);
             const li = document.createElement('li');
             li.className = 'sp-sig-top-row';
             if (channelCode) li.style.setProperty('--ch', `var(--ch-${channelCode})`);
@@ -297,7 +328,10 @@ const channelList = CHANNEL_LIST.map((c) => ({
                 <span class="sp-sig-top-title">${escapeHTML(meta?.title || 'unknown block')}</span>
                 <span class="sp-sig-top-chip">${escapeHTML(channelName)}</span>
               </a>
-              <div class="sp-sig-savers">${saversHTML}${more}</div>
+              <div class="sp-sig-savers">
+                <span class="sp-sig-picker" title="earliest published by ${escapeHTML(pickerName)}">⭐ ${escapeHTML(pickerName)}</span>
+                ${saversHTML}${more}
+              </div>
             `;
             topEl.appendChild(li);
           }
@@ -415,6 +449,88 @@ const channelList = CHANNEL_LIST.map((c) => ({
       }
       setTimeout(repaint, 2500);
 
+      // v0.29: export the current signals recap as a JSON bundle.
+      // Client-side only — Blob download, no server round-trip.
+      // Schema is namespaced + versioned so future shape changes can
+      // be handled by consumers (including the user's own future self).
+      document.querySelector('[data-sp-sig-export]')?.addEventListener('click', () => {
+        const friendsLive = readFriends();
+        const profileMap = readProfiles();
+        const keepSet = new Set(friendsLive.map((f) => f.pubkey));
+        for (const pk of Array.from(newestByAuthor.keys())) {
+          if (!keepSet.has(pk)) newestByAuthor.delete(pk);
+        }
+
+        // Recompute a compact snapshot — no DOM reads, no truncation.
+        const exportCounts = new Map();
+        for (const [pubkey, entry] of newestByAuthor) {
+          const seen = new Set();
+          for (const id of entry.saved) {
+            if (typeof id !== 'string' || seen.has(id)) continue;
+            seen.add(id);
+            const slot = exportCounts.get(id) || {
+              count: 0, savers: [], first_picker: pubkey, first_at: entry.created_at,
+            };
+            slot.count += 1;
+            slot.savers.push(pubkey);
+            if (entry.created_at < slot.first_at) {
+              slot.first_picker = pubkey;
+              slot.first_at = entry.created_at;
+            }
+            exportCounts.set(id, slot);
+          }
+        }
+        const top = Array.from(exportCounts.entries())
+          .filter(([, v]) => v.count >= 2)
+          .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]));
+
+        const bundle = {
+          schema: 'sparrow-signals-v1',
+          generated_at: new Date().toISOString(),
+          boot_origin: location.origin,
+          friends: friendsLive.map((f) => ({
+            pubkey: f.pubkey,
+            alias: f.alias || undefined,
+            display_name: profileMap[f.pubkey]?.display_name || profileMap[f.pubkey]?.name || undefined,
+            nip05: profileMap[f.pubkey]?.nip05 || undefined,
+            has_published: newestByAuthor.has(f.pubkey),
+          })),
+          relays: getRelays(),
+          newest_events: Array.from(newestByAuthor.entries()).map(([pubkey, entry]) => ({
+            pubkey,
+            created_at: entry.created_at,
+            saved_count: entry.saved.length,
+          })),
+          top_co_saved: top.map(([id, v]) => {
+            const meta = lookup[id];
+            return {
+              id,
+              title: meta?.title ?? null,
+              channel: meta?.channel ?? null,
+              count: v.count,
+              savers: v.savers,
+              first_picker: v.first_picker,
+              first_picker_at: v.first_at,
+            };
+          }),
+          notes: {
+            first_picker: 'Earliest created_at among current savers. Proxy — kind-30078 is replaceable, so this reflects when each friend most recently republished, not the true first-save moment.',
+            scope: 'Top co-saved includes blocks saved by ≥ 2 followed signers. Visited state, reactions, and private sync state are NOT included.',
+          },
+        };
+
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const stamp = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `sparrow-signals-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 2000);
+      });
+
       window.addEventListener('beforeunload', () => {
         for (const ws of openSockets) { try { ws.close(); } catch {} }
       });
@@ -423,8 +539,9 @@ const channelList = CHANNEL_LIST.map((c) => ({
 
   <style is:global>
     .sp-sig-nav {
-      display: flex; gap: 16px;
+      display: flex; gap: 16px; align-items: center;
       margin: 0 0 14px;
+      flex-wrap: wrap;
     }
     .sp-sig-nav-link {
       font-family: var(--sp-mono); font-size: 10px;
@@ -433,6 +550,22 @@ const channelList = CHANNEL_LIST.map((c) => ({
       text-decoration: none;
     }
     .sp-sig-nav-link:hover { text-decoration: underline; }
+    /* v0.29 JSON export */
+    .sp-sig-export-btn {
+      margin-left: auto;
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--sp-ember);
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+    .sp-sig-export-btn:hover {
+      background: color-mix(in oklch, var(--sp-ember) 12%, transparent);
+    }
     .sp-sig-panel {
       margin: 18px 0 26px;
       padding: 16px 18px;
@@ -508,6 +641,18 @@ const channelList = CHANNEL_LIST.map((c) => ({
       border: 1px solid var(--sp-rule);
     }
     .sp-sig-saver-more { color: var(--sp-ember); border-color: color-mix(in oklch, var(--sp-ember) 40%, transparent); }
+    /* v0.29: first-picker chip — the friend whose kind-30078 event
+       has the earliest created_at among current savers. Marked with
+       a saffron star so it reads as attribution, not another count. */
+    .sp-sig-picker {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--sp-ember);
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+      background: color-mix(in oklch, var(--sp-ember) 8%, transparent);
+    }
 
     .sp-sig-recent-row {
       display: grid;

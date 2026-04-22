@@ -37,6 +37,14 @@ const moods = Array.from(
 
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replaceAll('-', '.');
 const signalBars = (mood: string | undefined | null) => (mood ? 4 : 3);
+
+// v0.29: friends-in-this-channel panel. Server ships the set of block
+// ids that belong to this channel plus a compact title map; the
+// client filters friends' saves to just those ids and aggregates.
+const channelBlockIds = blocks.map((b) => b.data.id);
+const channelLookup: Record<string, { title: string }> = Object.fromEntries(
+  blocks.map((b) => [b.data.id, { title: b.data.title }]),
+);
 ---
 
 <SparrowLayout
@@ -64,6 +72,34 @@ const signalBars = (mood: string | undefined | null) => (mood ? 4 : 3);
       </span>
     </div>
   </section>
+
+  {/* v0.29: friends co-saved on THIS channel. Hidden until a) you
+      follow at least one non-muted signer and b) at least one of
+      their public saved-list events contains a block that lives in
+      this channel. Purely client-side — reuses the relay pool +
+      sparrow:profiles cache. Opt-out via
+      localStorage["sparrow:ch-friends-hidden"]. */}
+  <section class="sp-ch-friends" data-sp-ch-friends hidden aria-label={`friends on ${ch.code}`}>
+    <header class="sp-ch-friends-head">
+      <span class="sp-kicker">✦ friends on {ch.code}</span>
+      <span class="sp-ch-friends-meta" data-sp-ch-friends-meta></span>
+      <a class="sp-ch-friends-cta" href="/sparrow/signals">full signals →</a>
+      <button
+        type="button"
+        class="sp-ch-friends-dismiss"
+        data-sp-ch-friends-dismiss
+        aria-label="hide friends panel on this channel"
+        title="hide · re-enable from localStorage"
+      >×</button>
+    </header>
+    <ol class="sp-ch-friends-rows" data-sp-ch-friends-rows></ol>
+  </section>
+
+  <script
+    id="sp-ch-friends-data"
+    type="application/json"
+    set:html={JSON.stringify({ channelBlockIds, channelLookup, channelCode: ch.code })}
+  />
 
   <section class="sp-reel" aria-label={`${ch.name} broadcasts`}>
     <header class="sp-reel-head">
@@ -141,4 +177,279 @@ const signalBars = (mood: string | undefined | null) => (mood ? 4 : 3);
     </span>
     <a href="/sparrow" class="sp-link sp-beacon-cta">back to rosette →</a>
   </aside>
+
+  <script is:inline>
+    // v0.29: per-channel friends panel controller. Pulls followed
+    // (non-muted) friends' latest public saved lists, filters saves
+    // to this channel's block id set, aggregates count + first-picker,
+    // renders the top 6. No new endpoint — same kind-30078 d-tag as
+    // /sparrow/signals and /sparrow/friends.
+    (function () {
+      const KEY_FRIENDS      = 'sparrow:friends';
+      const KEY_PROFILES     = 'sparrow:profiles';
+      const KEY_RELAYS       = 'sparrow:nostr-relays';
+      const KEY_HIDDEN       = 'sparrow:ch-friends-hidden';
+      const D_TAG            = 'sparrow-public-saved-v1';
+      const SYNC_KIND        = 30078;
+      const MAX_ROWS         = 6;
+      const DEFAULT_RELAYS = [
+        'wss://relay.damus.io',
+        'wss://relay.primal.net',
+        'wss://nos.lol',
+      ];
+      try { if (localStorage.getItem(KEY_HIDDEN) === '1') return; } catch {}
+
+      const dataBlob = document.getElementById('sp-ch-friends-data');
+      const data = dataBlob ? (() => { try { return JSON.parse(dataBlob.textContent || '{}'); } catch { return {}; } })() : {};
+      const channelBlockIds = Array.isArray(data.channelBlockIds) ? data.channelBlockIds : [];
+      const channelLookup = data.channelLookup || {};
+      const channelCode = data.channelCode || '';
+      if (!channelBlockIds.length) return;
+      const channelBlockSet = new Set(channelBlockIds);
+
+      const sectionEl = document.querySelector('[data-sp-ch-friends]');
+      const rowsEl    = document.querySelector('[data-sp-ch-friends-rows]');
+      const metaEl    = document.querySelector('[data-sp-ch-friends-meta]');
+      const dismissEl = document.querySelector('[data-sp-ch-friends-dismiss]');
+      if (!sectionEl || !rowsEl) return;
+
+      const readFriends = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_FRIENDS) || '[]');
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((f) => (typeof f === 'string'
+              ? { pubkey: f, alias: '', muted: false }
+              : (f && typeof f === 'object' && typeof f.pubkey === 'string')
+                ? { pubkey: f.pubkey.toLowerCase(), alias: (f.alias || '').slice(0, 40), muted: !!f.muted }
+                : null))
+            .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted);
+        } catch { return []; }
+      };
+      const readProfiles = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_PROFILES) || '{}');
+          return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+        } catch { return {}; }
+      };
+      const getRelays = () => {
+        try {
+          const raw = localStorage.getItem(KEY_RELAYS);
+          const list = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(list) && list.length) return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+        } catch {}
+        return DEFAULT_RELAYS;
+      };
+      function escapeHTML(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+      const shortPk = (pk) => (pk ? `${pk.slice(0, 8)}…${pk.slice(-4)}` : '—');
+      function nameFor(pubkey, friend) {
+        const prof = readProfiles()[pubkey];
+        return friend?.alias || (prof && (prof.display_name || prof.name)) || shortPk(pubkey);
+      }
+
+      const friends = readFriends();
+      if (!friends.length) return;
+
+      dismissEl?.addEventListener('click', () => {
+        try { localStorage.setItem(KEY_HIDDEN, '1'); } catch {}
+        sectionEl.hidden = true;
+      });
+
+      const newestByAuthor = new Map();
+      const openSockets = [];
+      const authors = friends.map((f) => f.pubkey);
+      const subId = `sp-chfr-${Math.random().toString(36).slice(2, 10)}`;
+      const filter = { kinds: [SYNC_KIND], authors, '#d': [D_TAG], limit: authors.length * 2 };
+      const relays = getRelays();
+
+      function ingest(ev) {
+        if (!ev || ev.kind !== SYNC_KIND || typeof ev.content !== 'string') return;
+        if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+        const isOurs = Array.isArray(ev.tags) && ev.tags.some((t) => Array.isArray(t) && t[0] === 'd' && t[1] === D_TAG);
+        if (!isOurs) return;
+        let body;
+        try { body = JSON.parse(ev.content); } catch { return; }
+        const saved = Array.isArray(body?.saved?.value) ? body.saved.value : [];
+        const prior = newestByAuthor.get(ev.pubkey);
+        if (!prior || ev.created_at > prior.created_at) {
+          newestByAuthor.set(ev.pubkey, { created_at: ev.created_at, saved });
+        }
+      }
+
+      function paint() {
+        const friendsLive = readFriends();
+        const counts = new Map(); // blockId → { count, savers:Set, firstPicker, firstAt }
+        for (const [pubkey, entry] of newestByAuthor) {
+          if (!friendsLive.some((f) => f.pubkey === pubkey)) continue;
+          const seen = new Set();
+          for (const id of entry.saved) {
+            if (typeof id !== 'string' || seen.has(id) || !channelBlockSet.has(id)) continue;
+            seen.add(id);
+            const slot = counts.get(id) || { count: 0, savers: new Set(), firstPicker: pubkey, firstAt: entry.created_at };
+            slot.count += 1;
+            slot.savers.add(pubkey);
+            if (entry.created_at < slot.firstAt) {
+              slot.firstPicker = pubkey;
+              slot.firstAt = entry.created_at;
+            }
+            counts.set(id, slot);
+          }
+        }
+        const rows = Array.from(counts.entries())
+          .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+          .slice(0, MAX_ROWS);
+
+        if (!rows.length) {
+          sectionEl.hidden = true;
+          return;
+        }
+        sectionEl.hidden = false;
+        if (metaEl) metaEl.textContent = `${rows.length} in ${channelCode} · ${friendsLive.length} following`;
+
+        rowsEl.innerHTML = '';
+        for (const [id, info] of rows) {
+          const meta = channelLookup[id] || {};
+          const pickerFriend = friendsLive.find((f) => f.pubkey === info.firstPicker);
+          const pickerName = pickerFriend ? nameFor(info.firstPicker, pickerFriend) : shortPk(info.firstPicker);
+          const saverCount = info.savers.size;
+          const li = document.createElement('li');
+          li.className = 'sp-ch-friends-row';
+          li.innerHTML = `
+            <a href="/sparrow/b/${escapeHTML(id)}" class="sp-ch-friends-link">
+              <span class="sp-ch-friends-badge">×${saverCount}</span>
+              <span class="sp-ch-friends-id">№ ${escapeHTML(id)}</span>
+              <span class="sp-ch-friends-title">${escapeHTML(meta.title || 'unknown block')}</span>
+              <span class="sp-ch-friends-picker">⭐ ${escapeHTML(pickerName)}</span>
+            </a>
+          `;
+          rowsEl.appendChild(li);
+        }
+      }
+
+      for (const url of relays) {
+        try {
+          const ws = new WebSocket(url);
+          openSockets.push(ws);
+          ws.addEventListener('open', () => {
+            try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+          });
+          ws.addEventListener('message', (msg) => {
+            let frame;
+            try { frame = JSON.parse(msg.data); } catch { return; }
+            if (!Array.isArray(frame)) return;
+            if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+              ingest(frame[2]);
+            } else if (frame[0] === 'EOSE' && frame[1] === subId) {
+              try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+              try { ws.close(); } catch {}
+              paint();
+            }
+          });
+          setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 6000);
+        } catch {}
+      }
+      setTimeout(paint, 2500);
+
+      window.addEventListener('beforeunload', () => {
+        for (const ws of openSockets) { try { ws.close(); } catch {} }
+      });
+    })();
+  </script>
+
+  <style is:global>
+    .sp-ch-friends {
+      margin: 18px 0 26px;
+      padding: 14px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+    }
+    .sp-ch-friends[hidden] { display: none; }
+    .sp-ch-friends-head {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 10px;
+    }
+    .sp-ch-friends-meta {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+      margin-left: auto;
+    }
+    .sp-ch-friends-cta {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--sp-ember);
+      text-decoration: none;
+      padding: 2px 8px;
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+      border-radius: 3px;
+    }
+    .sp-ch-friends-cta:hover {
+      background: color-mix(in oklch, var(--sp-ember) 12%, transparent);
+    }
+    .sp-ch-friends-dismiss {
+      width: 24px; height: 24px;
+      border-radius: 999px;
+      border: 1px solid var(--sp-rule);
+      background: transparent;
+      color: var(--sp-mute);
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .sp-ch-friends-dismiss:hover {
+      border-color: var(--sp-oxblood);
+      color: var(--sp-oxblood);
+    }
+    .sp-ch-friends-rows {
+      list-style: none;
+      padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .sp-ch-friends-row {
+      border-left: 2px solid var(--ch, var(--sp-rule));
+      border-radius: 0 3px 3px 0;
+      background: color-mix(in oklch, var(--sp-bone) 2%, transparent);
+    }
+    .sp-ch-friends-link {
+      display: grid;
+      grid-template-columns: auto 70px 1fr auto;
+      gap: 10px;
+      align-items: baseline;
+      padding: 6px 10px;
+      color: var(--sp-bone);
+      text-decoration: none;
+    }
+    .sp-ch-friends-link:hover { background: color-mix(in oklch, var(--sp-ember) 8%, transparent); }
+    .sp-ch-friends-badge {
+      font-family: var(--sp-mono); font-size: 10px; font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: color-mix(in oklch, var(--sp-ember) 18%, transparent);
+      color: var(--sp-ember);
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+    }
+    .sp-ch-friends-id {
+      font-family: var(--sp-mono); font-size: 11px; color: var(--sp-mute);
+    }
+    .sp-ch-friends-title {
+      font-family: var(--sp-ui); font-size: 14px; line-height: 1.35;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-ch-friends-picker {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--sp-ember);
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+      background: color-mix(in oklch, var(--sp-ember) 8%, transparent);
+    }
+    @media (max-width: 640px) {
+      .sp-ch-friends-link { grid-template-columns: auto 1fr auto; }
+      .sp-ch-friends-id { display: none; }
+    }
+  </style>
 </SparrowLayout>

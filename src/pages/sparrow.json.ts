@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.28',
-    protocol_version: '0.28',
+    version: '0.29',
+    protocol_version: '0.29',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -426,7 +426,41 @@ export const GET: APIRoute = async () => {
             },
           },
           shared_state: 'reads the same sparrow:profiles cache + block lookup the rest of /sparrow federation surfaces use; no extra round-trips',
-          not_yet: 'opt-in email digest (requires sidecar infra), per-channel top-N surfaces on /sparrow/ch/<slug>, first-picker attribution (who saved each block first — needs event created_at comparison across authors)',
+
+          // v0.29 extensions
+          first_picker_attribution: {
+            since: 'v0.29',
+            computation: 'among current savers of a block, the one whose newest kind-30078 event has the earliest created_at wins the ⭐ attribution',
+            caveat: 'kind-30078 is replaceable — this reflects "most recently re-published" per author, not the true first-save moment; across a group re-publishing regularly, the pattern stabilizes',
+            surface: 'top co-saved panel: ⭐ <name> chip in the savers row',
+          },
+          export_json: {
+            since: 'v0.29',
+            trigger: '⤓ export JSON button in the signals nav',
+            filename: 'sparrow-signals-<YYYY-MM-DD>.json',
+            schema: 'sparrow-signals-v1',
+            payload_keys: ['generated_at', 'boot_origin', 'friends[]', 'relays[]', 'newest_events[]', 'top_co_saved[]', 'notes'],
+            privacy_posture: 'bundle contains pubkeys + aliases + profile metadata the user already has cached locally; no secret material. Entirely client-side Blob download.',
+          },
+          not_yet: 'opt-in email digest (still requires sidecar worker infra — now the ONLY remaining v0.28 bundle item)',
+        },
+
+        // v0.29: per-channel friends top-N surface on /sparrow/ch/<slug>.
+        // Scoped aggregation — the same kind-30078 corpus filtered to
+        // just the block ids that live in the current channel, sorted
+        // by count of distinct friends who saved it, with first-picker
+        // attribution matching the /sparrow/signals surface.
+        channel_friends: {
+          since: 'v0.29',
+          surface: '/sparrow/ch/<slug> (above the main reel)',
+          scope: 'filter friends\' saved ids to the server-shipped channelBlockSet for the current channel',
+          subscribe_filter: '{ kinds:[30078], authors:<non-muted friends>, "#d":["sparrow-public-saved-v1"], limit: friends.length * 2 }',
+          sort: 'count desc, then block id asc for stability',
+          max_rows: 6,
+          row: 'badge ×N · block № · title · ⭐ first-picker chip',
+          hides_when: 'no followed friends, all muted, or no saves intersect this channel',
+          opt_out_storage: 'localStorage["sparrow:ch-friends-hidden"] === "1" hides the panel across every channel page until re-enabled',
+          lookup_shipped: '{ [id]: { title } } for every block in the current channel only — keeps per-page payload minimal',
         },
 
         friends_activity: {
@@ -857,7 +891,8 @@ export const GET: APIRoute = async () => {
       'v0.25': 'Friends lane on the dashboard. New compact section between /sparrow rosette and reel shows freshest save from each followed npub — avatar · name · block № · title · channel chip — sorted by event created_at desc, capped at 6 rows. Shares the kind-30078 consumer flow with /sparrow/friends and reads the same sparrow:profiles cache so hydration stays one-pass. Server inlines a block lookup (id → title + channel + channelName) so titles resolve without per-block fetches. Opt-out via localStorage["sparrow:friends-lane-hidden"]; dismiss button lives on the lane header. Hidden entirely by default when no friends have been added.',
       'v0.26': 'Friends in motion. SparrowLayout gains a persistent streaming kind-30078 REQ with `since: bootTime` so only events published after the tab loaded fire a bottom-right "just saved" toast (avatar + name + № id · click opens). Max 3 visible, 7s TTL, fades on leave. Opt-in Web Audio chime (two-note fifth, ~450ms, no asset) via sparrow:friends-chime-enabled. Per-friend mute — sparrow:friends entries gain an optional `muted` field that drops the friend from every consumer path (subscribe, feed, lane, toasts) without unfollowing. New 🔈/🔇 mute button in /sparrow/friends. Global motion opt-out via sparrow:friends-motion-disabled.',
       'v0.27': 'Friends activity timeline at /sparrow/friends/activity. Dual subscription — bounded initial pull (limit 50) for history + `since: bootTime` live pull kept open until beforeunload. Events render newest-first as per-event cards (avatar + name + "saved N blocks" + relative timestamp + first 3 saved-block receipts with title/channel chips + "+N more"). New events splice at the top with a moss pulse animation + "new" pill that fades after 12 seconds. Respects mute — muted friends filtered from the authors list and re-checked on ingest. CTA added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated.',
-      'v0.28': 'Signals recap at /sparrow/signals. Three-panel aggregation over the same kind-30078 corpus the rest of the federation surface reads. Panel 1 — most co-saved (blocks hit by 2+ signers, count-sorted, top 12, inline saver chips). Panel 2 — recent adds (friends who published a fresh saved list in the last 7 days, newest first, with avatar + freshest receipt). Panel 3 — channel distribution (proportional bars across all 9 channels derived from saved-block channel codes, each linking to its /sparrow/ch/<slug>). Client-side aggregation only; reuses sparrow:profiles cache + server-shipped block lookup. Signals nav links added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated. Stats bumped to 10 routes. (current)',
+      'v0.28': 'Signals recap at /sparrow/signals. Three-panel aggregation over the same kind-30078 corpus the rest of the federation surface reads. Panel 1 — most co-saved (blocks hit by 2+ signers, count-sorted, top 12, inline saver chips). Panel 2 — recent adds (friends who published a fresh saved list in the last 7 days, newest first, with avatar + freshest receipt). Panel 3 — channel distribution (proportional bars across all 9 channels derived from saved-block channel codes, each linking to its /sparrow/ch/<slug>). Client-side aggregation only; reuses sparrow:profiles cache + server-shipped block lookup. Signals nav links added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated. Stats bumped to 10 routes.',
+      'v0.29': 'Signals, extended. Three of the four v0.29-bundled items land today; opt-in email digest deferred to v0.30 (needs sidecar worker infra). (1) First-picker attribution — in /sparrow/signals Panel 1, each co-saved block now surfaces ⭐ <name> — the friend with the earliest created_at among current savers. (2) Export JSON — new ⤓ button in signals nav dumps the current recap as sparrow-signals-<date>.json with schema sparrow-signals-v1 (friends, relays, newest_events, top_co_saved with saver lists + first_picker_at, notes documenting caveats). (3) Channel friends panel — new client-side strip on every /sparrow/ch/<slug> above the main reel showing which blocks in this channel your followed friends have co-saved, count-sorted, top 6, with first-picker chip. Hides when irrelevant; opt-out via localStorage["sparrow:ch-friends-hidden"]. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
