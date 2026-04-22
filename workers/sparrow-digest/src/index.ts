@@ -28,6 +28,8 @@
  */
 
 import { buildUnsubUrl } from './signing';
+import { sendViaMailChannels as sendMail, type SendResult } from './send';
+import { collectAcrossRelays, newestPerAuthorByDTag, type NostrEvent } from './nostr';
 
 export interface Env {
   SPARROW_DIGEST_KV: KVNamespace;
@@ -87,10 +89,16 @@ async function listAllSubscriptions(env: Env): Promise<Subscription[]> {
 }
 
 /**
- * Placeholder renderer. Real version will assemble the signals bundle.
+ * Render the weekly digest email.
  *
- * v0.34: the unsubscribe link is now a signed token (HMAC-SHA256 over
- * `<email>.<expiresAt>`). The Pages Function verifies before deleting.
+ * v0.34: signed unsubscribe link.
+ * v0.35: when the subscriber has an npub, fetch their followed-pubkeys
+ * from Nostr (their own kind-3 contact list) and show "your N friends
+ * have published M saved-list events since last digest." Full signals
+ * aggregation (co-saves, channel distribution) still to come in v0.36
+ * — this is the first sprint where the digest has ANY real content.
+ *
+ * Subscribers without an npub get a short "open signals" prompt only.
  */
 async function renderDigestEmail(
   sub: Subscription,
@@ -98,59 +106,126 @@ async function renderDigestEmail(
 ): Promise<{ subject: string; html: string; text: string }> {
   const subject = 'Sparrow · your federation recap';
   const signalsUrl = `${env.SPARROW_ORIGIN}/sparrow/signals`;
+  const friendsUrl = `${env.SPARROW_ORIGIN}/sparrow/friends`;
   const unsubHref = env.SPARROW_DIGEST_SIGNING_KEY
     ? await buildUnsubUrl(env.SPARROW_ORIGIN, sub.email, env.SPARROW_DIGEST_SIGNING_KEY)
     : `${env.SPARROW_ORIGIN}/api/sparrow/digest-subscribe?email=${encodeURIComponent(sub.email)}`;
+
+  // v0.35: best-effort live fetch. We don't have the subscriber's
+  // follow list server-side (it lives in their browser localStorage
+  // or in their Nostr kind-3). Fetching kind-3 for the subscriber's
+  // own pubkey gives us their follow list from their signer-of-record.
+  let friendsSummary = '';
+  let friendsSummaryText = '';
+  if (sub.npub && sub.relays?.length) {
+    try {
+      const { collectAcrossRelays } = await import('./nostr');
+      const { events: contactsEvents } = await collectAcrossRelays(
+        sub.relays.slice(0, 4),
+        { kinds: [3], authors: [sub.npub], limit: 1 },
+        { timeoutMs: 5_000, maxEvents: 3 },
+      );
+      const contacts = contactsEvents[0];
+      const followedPubkeys = contacts
+        ? contacts.tags.filter((t) => t[0] === 'p' && typeof t[1] === 'string').map((t) => t[1])
+        : [];
+      if (followedPubkeys.length) {
+        const { newestPerAuthor, relayCount } = await fetchFriendsSavedLists(
+          sub.relays,
+          followedPubkeys,
+        );
+        const activeFriends = newestPerAuthor.size;
+        const totalSaves = Array.from(newestPerAuthor.values()).reduce((acc, ev) => {
+          try {
+            const body = JSON.parse(ev.content);
+            const list = body?.saved?.value;
+            return acc + (Array.isArray(list) ? list.length : 0);
+          } catch { return acc; }
+        }, 0);
+        friendsSummary = `<p><strong>${activeFriends}</strong> of <strong>${followedPubkeys.length}</strong> followed signers published public saved lists in the last cycle, ` +
+          `totaling <strong>${totalSaves}</strong> saved-block references across ${relayCount} relays.</p>`;
+        friendsSummaryText = `${activeFriends} of ${followedPubkeys.length} followed signers published public saved lists · ${totalSaves} total saved-block references.`;
+      }
+    } catch {
+      // Network hiccup — email still sends, just without the summary.
+    }
+  }
+
   const text = [
     `Sparrow · ${sub.frequency} digest`,
     '',
-    `Latest federation signals: ${signalsUrl}`,
+    friendsSummaryText || 'Your digest is ready.',
+    '',
+    `Federation signals: ${signalsUrl}`,
+    `Your friends: ${friendsUrl}`,
     '',
     `Unsubscribe: ${unsubHref}`,
   ].join('\n');
   const html = `
 <!doctype html>
-<html><body style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:24px;">
-  <h1 style="font-family:'Gloock',Georgia,serif;">Sparrow · your federation recap</h1>
-  <p>Your ${sub.frequency} digest.</p>
-  <p><a href="${signalsUrl}">Open signals in Sparrow →</a></p>
-  <hr>
-  <p style="font-size:11px;color:#666;">
-    <a href="${unsubHref}">Unsubscribe</a> · sent by Sparrow · pointcast.xyz
+<html><body style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:24px;color:#1a1a2e;">
+  <h1 style="font-family:'Gloock',Georgia,serif;font-weight:400;">Sparrow · your federation recap</h1>
+  <p style="color:#555;">Your ${sub.frequency} digest.</p>
+  ${friendsSummary}
+  <p>
+    <a href="${signalsUrl}" style="color:#c8742a;">Open signals in Sparrow →</a><br>
+    <a href="${friendsUrl}" style="color:#c8742a;">Manage your friends →</a>
+  </p>
+  <hr style="border:none;border-top:1px solid #ddd;margin:24px 0;">
+  <p style="font-size:11px;color:#888;">
+    <a href="${unsubHref}" style="color:#888;">Unsubscribe</a> · sent by Sparrow · pointcast.xyz
   </p>
 </body></html>`;
   return { subject, html, text };
 }
 
 /**
- * MailChannels transport. When running under the Cloudflare Workers
- * runtime on a domain with proper DKIM + DMARC + the MailChannels
- * lockdown TXT record, this hop authenticates without a key.
+ * MailChannels transport. v0.35 extracted to workers/sparrow-digest/
+ * src/send.ts with retry-with-jitter + dead-letter classification. Wrap
+ * it here so the legacy-shape call site in scheduled() stays readable.
  */
 async function sendViaMailChannels(
   sub: Subscription,
   env: Env,
-  { subject, html, text }: { subject: string; html: string; text: string }
-): Promise<boolean> {
-  const body = {
-    personalizations: [{ to: [{ email: sub.email }] }],
-    from: { email: env.DIGEST_FROM, name: env.DIGEST_FROM_NAME },
-    subject,
-    content: [
-      { type: 'text/plain', value: text },
-      { type: 'text/html',  value: html  },
-    ],
-  };
-  try {
-    const r = await fetch('https://api.mailchannels.net/tx/v1/send', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return r.ok;
-  } catch {
-    return false;
+  payload: { subject: string; html: string; text: string },
+): Promise<SendResult> {
+  return sendMail(env, { to: sub.email, ...payload });
+}
+
+/**
+ * v0.35: fetch the newest public saved-list event per followed-pubkey
+ * across the subscriber's relay pool. Returns the raw kind-30078
+ * events keyed by pubkey. Caller is responsible for parsing the JSON
+ * content + applying the sparrow-public-saved-v1 schema.
+ *
+ * Why cap authors: each REQ filter carries every author in one shot;
+ * most relays cap `authors` at 512. We defensively trim.
+ */
+async function fetchFriendsSavedLists(
+  relays: string[],
+  authorPubkeys: string[],
+): Promise<{ newestPerAuthor: Map<string, NostrEvent>; relayCount: number; totalSeen: number }> {
+  const defaultRelays = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'];
+  const pool = relays.length ? relays.slice(0, 8) : defaultRelays;
+  const authors = authorPubkeys.slice(0, 256);
+  if (!authors.length) {
+    return { newestPerAuthor: new Map(), relayCount: pool.length, totalSeen: 0 };
   }
+  const { events } = await collectAcrossRelays(
+    pool,
+    {
+      kinds: [30078],
+      authors,
+      '#d': ['sparrow-public-saved-v1'],
+      limit: authors.length * 2,
+    },
+    { timeoutMs: 6_000, maxEvents: authors.length * 3 },
+  );
+  return {
+    newestPerAuthor: newestPerAuthorByDTag(events, 'sparrow-public-saved-v1'),
+    relayCount: pool.length,
+    totalSeen: events.length,
+  };
 }
 
 export default {
@@ -163,10 +238,11 @@ export default {
 
     let sent = 0;
     let failed = 0;
+    let retriableFailed = 0;
     for (const sub of due) {
       const email = await renderDigestEmail(sub, env);
-      const ok = await sendViaMailChannels(sub, env, email);
-      if (ok) {
+      const result = await sendViaMailChannels(sub, env, email);
+      if (result.ok) {
         sub.last_sent_at = now.toISOString();
         await env.SPARROW_DIGEST_KV.put(`${PREFIX}${sub.email}`, JSON.stringify(sub), {
           expirationTtl: 60 * 60 * 24 * 400,
@@ -175,11 +251,24 @@ export default {
         sent += 1;
       } else {
         failed += 1;
+        if (result.retriable) retriableFailed += 1;
+        // v0.35: retriable failures do NOT update last_sent_at, so the
+        // next cron tick tries again. Permanent failures (401/403/422)
+        // also don't update last_sent_at here — ops needs to see them;
+        // a future sprint may add a dead-letter KV bucket and
+        // exponential-backoff across cron ticks.
+        console.warn(
+          `[sparrow-digest] send failed for ${sub.email} · status=${result.status} · ` +
+          `attempts=${result.attempts} · retriable=${result.retriable} · ${result.finalError ?? ''}`,
+        );
       }
     }
 
     ctx.waitUntil(Promise.resolve());
-    console.log(`[sparrow-digest] done · sent ${sent} · failed ${failed} · elapsed ${Date.now() - started}ms`);
+    console.log(
+      `[sparrow-digest] done · sent ${sent} · failed ${failed} ` +
+      `(${retriableFailed} retriable) · elapsed ${Date.now() - started}ms`,
+    );
   },
 
   async fetch(request: Request, env: Env) {
@@ -196,12 +285,12 @@ export default {
         total: subs.length,
         due: due.length,
         now: now.toISOString(),
-        worker_version: 'v0.33',
+        worker_version: 'v0.35',
       }, null, 2), {
         headers: { 'content-type': 'application/json; charset=utf-8' },
       });
     }
-    return new Response('sparrow-digest cron worker · v0.33\nsee README.md for deploy instructions.\n', {
+    return new Response('sparrow-digest cron worker · v0.35\nsee README.md for deploy instructions.\n', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     });
   },
