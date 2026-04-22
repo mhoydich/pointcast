@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.22',
-    protocol_version: '0.22',
+    version: '0.23',
+    protocol_version: '0.23',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -296,8 +296,23 @@ export const GET: APIRoute = async () => {
           title_resolution: 'server ships a { [id]: {id, title, dek, channel, type} } lookup for every non-draft block in the Astro content collection; client hydrates each saved id against it. Blocks absent from the current Sparrow build render as "unknown block · not in this Sparrow build" with a dead-but-valid link.',
           render_cap: 'first 24 block receipts per author; "+ N more" footer if the list is longer',
         },
-        accepted_formats: 'pubkey input accepts 64-hex only for v0.22; npub1… bech32 decode is a v0.23 polish once a bech32 helper is in the layout bundle',
+        accepted_formats: 'v0.23 · pubkey input accepts both 64-hex AND npub1… (NIP-19 bech32). parsePubkey() in /sparrow/friends normalizes to lowercase hex. Self-pubkey display in the HUD + publisher signature line also renders as short-npub1 instead of hex.',
         privacy_story: 'Two distinct opt-ins: cross-device sync (v0.21, NIP-44 self-encrypted) and public saved list (v0.22, unencrypted). Either can be on without the other. No visited/reaction data ever leaves the device unencrypted.',
+
+        // v0.23: NIP-01 kind-0 metadata hydration. Purely for the
+        // friends UI — never mutates our outbound events. Cached
+        // locally to avoid re-fetching on every visit.
+        profile_lookup: {
+          since: 'v0.23',
+          event_kind: 0,
+          subscribe_filter: '{ kinds: [0], authors: <friends>, limit: friends.length }',
+          cache_storage: 'localStorage["sparrow:profiles"] — { [hex]: { name?, display_name?, picture?, nip05?, fetched_at } }',
+          ttl_ms: 86400000,
+          fields_read: ['name', 'display_name', 'picture', 'nip05'],
+          alias_priority: 'local alias (sparrow:friends[].alias) > kind-0 display_name > kind-0 name > nothing',
+          render: 'friends list + feed card header both show the resolved display name; a 🛰 glyph appears next to names sourced from the relay so users can tell what\'s local vs federated',
+          not_yet: 'picture rendering (v0.24) and NIP-05 verification round-trip',
+        },
       },
 
       future: 'v1.0: Federated reading lists across more surfaces (reel lane injection, "signals" digest), agent-mode view at /sparrow/llms.txt for machine readers, full offline archive in IndexedDB.',
@@ -674,7 +689,8 @@ export const GET: APIRoute = async () => {
       'v0.19': 'Magpie Swift-side Bonjour advertisement shipped. NWListener.service publishes "Magpie" of type _magpie._tcp on port 38473 with a TXT record carrying version, /health path, schema id, composer + mirror endpoint hints. macOS mDNS responder transparently resolves magpie.local to the host, so Sparrow\'s v0.18 ladder picks it up on the second rung without any web-side changes. Listener stays loopback-bound — advertisement is metadata-only.',
       'v0.20': 'Sparrow.app peer-node shipped. Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on port 38474 exposing GET /health + GET /reader-state.json + POST /reader-state with byte-identical sparrow-reader-state-v1 merge logic to Magpie\'s. NWListener.service advertises _sparrow._tcp "Sparrow" with a TXT record (version/path/schema/mirror/peer). Web resolver ladder extended to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474. window.__sparrow.magpiePeerKind records which peer answered so the bridge pill can label it accurately. Composer stays Magpie-only and falls back to direct /api/ping when Sparrow.app is the resolved peer.',
       'v0.21': 'Cross-device sync of saved + visited + reactions via NIP-44-encrypted kind-30078 addressable events. Opt-in HUD pill (sync · on/off/n/a); self-encryption via window.nostr.nip44 means only the same npub can decrypt. Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, both use the same newest-wins-per-key merge policy so state stays coherent across device + peer. 4s throttle between relay pushes; on page load subscribes with limit:1 against each relay to pull latest.',
-      'v0.22': 'Federated reading lists. New /sparrow/friends route. Opt-in "publish my saved list publicly" flag emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted, narrow scope — just the saved ids + a client-id profile; no visited/reaction data). Friends management UI stores {pubkey,alias?}[] in sparrow:friends; on load, REQs the relay pool for each friend\'s latest public saved event and renders their list with server-shipped block lookups so titles and channels resolve. Hex-only for now; npub1… bech32 decode lands in a polish pass. (current)',
+      'v0.22': 'Federated reading lists. New /sparrow/friends route. Opt-in "publish my saved list publicly" flag emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted, narrow scope — just the saved ids + a client-id profile; no visited/reaction data). Friends management UI stores {pubkey,alias?}[] in sparrow:friends; on load, REQs the relay pool for each friend\'s latest public saved event and renders their list with server-shipped block lookups so titles and channels resolve. Hex-only for now; npub1… bech32 decode lands in a polish pass.',
+      'v0.23': 'Federation polish. Self-contained NIP-19 bech32 codec in /sparrow/friends — npubToHex/hexToNpub/parsePubkey — so the add-form accepts npub1… alongside hex and the HUD self-pubkey display renders as a short npub. NIP-01 kind-0 profile lookup REQs {kinds:[0], authors:<friends>} on load, caches {name, display_name, picture, nip05, fetched_at} in sparrow:profiles (24h TTL), and uses display_name/name as auto-alias when the local alias is empty. Friends list + feed cards show a 🛰 glyph on names pulled from the relay so federated vs local is legible. Picture rendering + NIP-05 verification round-trip are explicitly v0.24. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

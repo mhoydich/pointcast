@@ -86,14 +86,13 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       <span class="sp-friends-kicker">✦ people I'm following</span>
       <form class="sp-friends-form" data-sp-friends-form>
         <label>
-          <span>pubkey (hex, 64 chars)</span>
+          <span>pubkey (hex or npub1…)</span>
           <input
             type="text"
             name="pubkey"
             autocomplete="off"
             spellcheck="false"
-            pattern="[0-9a-fA-F]{64}"
-            placeholder="e.g. 3bf0c63f…"
+            placeholder="3bf0c63f… or npub1…"
             required
           />
         </label>
@@ -142,13 +141,119 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       const KEY_PUBLIC_SAVED     = 'sparrow:public-saved-enabled';
       const KEY_SELF_PUBKEY      = 'sparrow:nostr-pubkey';
       const KEY_RELAYS           = 'sparrow:nostr-relays';
+      const KEY_PROFILES         = 'sparrow:profiles';
       const D_TAG                = 'sparrow-public-saved-v1';
       const SYNC_KIND            = 30078;
+      const PROFILE_KIND         = 0;                 // NIP-01 kind-0 metadata
+      const PROFILE_TTL_MS       = 24 * 60 * 60 * 1000; // 24h cache
       const DEFAULT_RELAYS = [
         'wss://relay.damus.io',
         'wss://relay.primal.net',
         'wss://nos.lol',
       ];
+
+      // ─── v0.23 · NIP-19 bech32 (npub1…) ──────────────────────────
+      // Self-contained bech32 codec so users can paste npub1… from
+      // any Nostr client into the friends form, and we can render the
+      // HUD self-pubkey as a short npub1 instead of hex. Follows BIP-173.
+      const BECH32_ALPHABET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+      const BECH32_CHARMAP = {};
+      for (let i = 0; i < BECH32_ALPHABET.length; i++) BECH32_CHARMAP[BECH32_ALPHABET[i]] = i;
+
+      function bech32Polymod(values) {
+        const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+        let chk = 1;
+        for (const v of values) {
+          const top = chk >>> 25;
+          chk = ((chk & 0x1ffffff) << 5) ^ v;
+          for (let i = 0; i < 5; i++) if ((top >>> i) & 1) chk ^= GEN[i];
+        }
+        return chk;
+      }
+      function bech32HrpExpand(hrp) {
+        const out = [];
+        for (let i = 0; i < hrp.length; i++) out.push(hrp.charCodeAt(i) >>> 5);
+        out.push(0);
+        for (let i = 0; i < hrp.length; i++) out.push(hrp.charCodeAt(i) & 31);
+        return out;
+      }
+      function bech32Verify(hrp, data) {
+        return bech32Polymod(bech32HrpExpand(hrp).concat(data)) === 1;
+      }
+      function bech32Decode(str) {
+        if (typeof str !== 'string') return null;
+        str = str.toLowerCase();
+        const pos = str.lastIndexOf('1');
+        if (pos < 1 || pos + 7 > str.length || str.length > 90) return null;
+        const hrp = str.substring(0, pos);
+        const dataPart = str.substring(pos + 1);
+        const data = [];
+        for (const c of dataPart) {
+          const v = BECH32_CHARMAP[c];
+          if (v === undefined) return null;
+          data.push(v);
+        }
+        if (!bech32Verify(hrp, data)) return null;
+        return { hrp, data: data.slice(0, -6) };
+      }
+      function convertBits(data, fromBits, toBits, pad) {
+        let acc = 0, bits = 0;
+        const out = [];
+        const maxv = (1 << toBits) - 1;
+        for (const v of data) {
+          if (v < 0 || (v >>> fromBits) !== 0) return null;
+          acc = (acc << fromBits) | v;
+          bits += fromBits;
+          while (bits >= toBits) {
+            bits -= toBits;
+            out.push((acc >>> bits) & maxv);
+          }
+        }
+        if (pad) { if (bits > 0) out.push((acc << (toBits - bits)) & maxv); }
+        else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) return null;
+        return out;
+      }
+      function bech32CreateChecksum(hrp, data) {
+        const values = bech32HrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+        const polymod = bech32Polymod(values) ^ 1;
+        const out = [];
+        for (let i = 0; i < 6; i++) out.push((polymod >>> (5 * (5 - i))) & 31);
+        return out;
+      }
+      function bech32Encode(hrp, data) {
+        const combined = data.concat(bech32CreateChecksum(hrp, data));
+        let out = hrp + '1';
+        for (const v of combined) out += BECH32_ALPHABET[v];
+        return out;
+      }
+
+      // Public helpers. Return hex|npub string, or null on any failure.
+      function npubToHex(npub) {
+        if (typeof npub !== 'string') return null;
+        const s = npub.trim().toLowerCase();
+        if (!s.startsWith('npub1')) return null;
+        const decoded = bech32Decode(s);
+        if (!decoded || decoded.hrp !== 'npub') return null;
+        const bytes = convertBits(decoded.data, 5, 8, false);
+        if (!bytes || bytes.length !== 32) return null;
+        return bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+      }
+      function hexToNpub(hex) {
+        if (!/^[0-9a-f]{64}$/i.test(hex)) return null;
+        const h = hex.toLowerCase();
+        const bytes = [];
+        for (let i = 0; i < h.length; i += 2) bytes.push(parseInt(h.substring(i, i + 2), 16));
+        const words = convertBits(bytes, 8, 5, true);
+        if (!words) return null;
+        return bech32Encode('npub', words);
+      }
+      // Accept either hex-64 or npub1…; return normalized hex or null.
+      function parsePubkey(input) {
+        const raw = String(input || '').trim();
+        if (/^[0-9a-f]{64}$/i.test(raw)) return raw.toLowerCase();
+        if (raw.toLowerCase().startsWith('npub1')) return npubToHex(raw);
+        return null;
+      }
 
       const lookupBlob = document.getElementById('sp-friends-lookup');
       const state = lookupBlob ? JSON.parse(lookupBlob.textContent || '{}') : { lookup: {}, channelNameByCode: {} };
@@ -205,13 +310,15 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       function paintState() {
         const friends = readFriends();
         const selfPk  = (localStorage.getItem(KEY_SELF_PUBKEY) || '').toLowerCase();
+        const selfNpub = selfPk ? hexToNpub(selfPk) : null;
+        const selfDisplay = selfNpub ? `${selfNpub.slice(0, 12)}…${selfNpub.slice(-4)}` : shortPk(selfPk);
         if (countEl) countEl.textContent = String(friends.length);
         if (stateEl) {
           stateEl.textContent = hasNip07()
-            ? (selfPk ? `signed in · ${shortPk(selfPk)}` : 'signer detected · open the HUD pill to connect')
+            ? (selfPk ? `signed in · ${selfDisplay}` : 'signer detected · open the HUD pill to connect')
             : 'needs a NIP-07 signer';
         }
-        if (pubSigNpub && selfPk) pubSigNpub.textContent = shortPk(selfPk);
+        if (pubSigNpub && selfPk) pubSigNpub.textContent = selfDisplay;
         if (pubToggle) pubToggle.checked = localStorage.getItem(KEY_PUBLIC_SAVED) === '1';
         if (pubHint) {
           pubHint.textContent = pubToggle?.checked
@@ -227,12 +334,21 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         listEl.innerHTML = '';
         if (emptyEl) emptyEl.hidden = friends.length > 0;
         for (const f of friends) {
+          // Prefer local alias, fall back to kind-0 profile name.
+          const prof = profileFor(f.pubkey);
+          const profName = profileName(f.pubkey);
+          const displayName = f.alias || profName || '';
+          const aliasSource = f.alias ? 'local' : (profName ? 'nostr' : 'none');
+          const npubShort = (hexToNpub(f.pubkey) || f.pubkey).slice(0, 14) + '…';
           const li = document.createElement('li');
           li.className = 'sp-friends-row';
           li.innerHTML = `
             <span class="sp-friends-pk">
-              ${f.alias ? `<strong>${escapeHTML(f.alias)}</strong> · ` : ''}
-              <code>${shortPk(f.pubkey)}</code>
+              ${displayName ? `<strong>${escapeHTML(displayName)}</strong>` : ''}
+              ${displayName && aliasSource === 'nostr' ? '<span class="sp-friends-src" title="name pulled from NIP-01 kind-0 profile">🛰</span>' : ''}
+              ${displayName ? ' · ' : ''}
+              <code title="${f.pubkey}">${escapeHTML(npubShort)}</code>
+              ${prof?.nip05 ? `<span class="sp-friends-nip05">${escapeHTML(prof.nip05)}</span>` : ''}
             </span>
             <button type="button" class="sp-friends-unfollow" data-pubkey="${f.pubkey}">unfollow</button>
           `;
@@ -250,9 +366,20 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       form?.addEventListener('submit', (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        const pubkey = String(fd.get('pubkey') || '').trim().toLowerCase();
+        const raw    = String(fd.get('pubkey') || '').trim();
         const alias  = String(fd.get('alias')  || '').trim().slice(0, 40);
-        if (!/^[0-9a-f]{64}$/.test(pubkey)) return;
+        const pubkey = parsePubkey(raw);
+        const input  = form.querySelector('input[name="pubkey"]');
+        if (!pubkey) {
+          // Nudge the user: bad hex or bad npub1 checksum.
+          if (input) {
+            input.setCustomValidity('Need 64 hex chars or a valid npub1…');
+            input.reportValidity();
+            setTimeout(() => input.setCustomValidity(''), 1500);
+          }
+          return;
+        }
+        if (input) input.setCustomValidity('');
         const friends = readFriends();
         if (!friends.some((f) => f.pubkey === pubkey)) {
           friends.unshift({ pubkey, alias });
@@ -266,6 +393,7 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         paintFriendsList();
         paintState();
         subscribeToFriends();
+        refreshProfiles();
       });
 
       listEl?.addEventListener('click', (e) => {
@@ -362,14 +490,16 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         for (const { friend, entry } of rows) {
           const savedIds = (entry.body?.saved?.value || []).filter((id) => typeof id === 'string');
           const updatedAt = entry.body?.saved?.updated_at || '';
+          const profName  = profileName(friend.pubkey);
+          const displayName = friend.alias || profName || '';
           const card = document.createElement('article');
           card.className = 'sp-friends-card';
           const header = document.createElement('header');
           header.className = 'sp-friends-card-head';
           header.innerHTML = `
             <span class="sp-friends-card-name">
-              ${friend.alias ? `<strong>${escapeHTML(friend.alias)}</strong> · ` : ''}
-              <code>${shortPk(friend.pubkey)}</code>
+              ${displayName ? `<strong>${escapeHTML(displayName)}</strong> · ` : ''}
+              <code title="${friend.pubkey}">${shortPk(friend.pubkey)}</code>
             </span>
             <span class="sp-friends-card-meta">
               ${savedIds.length} saved
@@ -415,10 +545,120 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         }
       }
 
+      // ─── v0.23 · NIP-01 kind-0 profile lookup ─────────────────────
+      // Best-effort metadata hydration. Cache is a flat map
+      //   { [hex]: { name?, display_name?, picture?, nip05?, fetched_at } }
+      // in sparrow:profiles. TTL 24h so repeat visits avoid the relay
+      // round-trip. Profiles never mutate our outbound events — they
+      // are purely for the friends UI (name autofill, display tweaks).
+      const readProfiles = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_PROFILES) || '{}');
+          return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+        } catch { return {}; }
+      };
+      const writeProfiles = (map) => {
+        try { localStorage.setItem(KEY_PROFILES, JSON.stringify(map)); } catch {}
+      };
+
+      function profileFor(pubkey) {
+        const map = readProfiles();
+        const p = map[pubkey];
+        if (!p || typeof p !== 'object') return null;
+        return p;
+      }
+
+      function profileName(pubkey) {
+        const p = profileFor(pubkey);
+        if (!p) return null;
+        return (typeof p.display_name === 'string' && p.display_name.trim())
+          || (typeof p.name === 'string' && p.name.trim())
+          || null;
+      }
+
+      // Fresh if fetched within TTL; we still re-fetch on page load to
+      // pick up name changes, but only show the "loading" state on
+      // truly cold entries so the UI doesn't flicker.
+      function profileIsFresh(pubkey) {
+        const p = profileFor(pubkey);
+        return !!(p && p.fetched_at && Date.now() - p.fetched_at < PROFILE_TTL_MS);
+      }
+
+      function refreshProfiles() {
+        const friends = readFriends();
+        if (!friends.length) return;
+        const relays = getRelays();
+        const subId  = `sp-pr-${Math.random().toString(36).slice(2, 10)}`;
+        const authors = friends.map((f) => f.pubkey);
+        const filter = { kinds: [PROFILE_KIND], authors, limit: authors.length };
+
+        // Track newest kind-0 per author (relays return a few older
+        // copies; we want the freshest metadata).
+        const newestByAuthor = new Map();
+
+        for (const url of relays) {
+          try {
+            const ws = new WebSocket(url);
+            openSockets.push(ws);
+            ws.addEventListener('open', () => {
+              try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+            });
+            ws.addEventListener('message', (msg) => {
+              let frame;
+              try { frame = JSON.parse(msg.data); } catch { return; }
+              if (!Array.isArray(frame)) return;
+              if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+                const ev = frame[2];
+                if (typeof ev.content !== 'string' || typeof ev.pubkey !== 'string') return;
+                if (typeof ev.created_at !== 'number') return;
+                const prior = newestByAuthor.get(ev.pubkey);
+                if (!prior || ev.created_at > prior.created_at) {
+                  newestByAuthor.set(ev.pubkey, ev);
+                }
+              } else if (frame[0] === 'EOSE' && frame[1] === subId) {
+                try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+                try { ws.close(); } catch {}
+                commitProfiles(newestByAuthor);
+              }
+            });
+            setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 6000);
+          } catch {}
+        }
+        // Safety repaint if no EOSE lands within 3s.
+        setTimeout(() => commitProfiles(newestByAuthor), 3000);
+      }
+
+      function commitProfiles(newestByAuthor) {
+        if (!newestByAuthor || !newestByAuthor.size) return;
+        const map = readProfiles();
+        let changed = false;
+        for (const [pubkey, ev] of newestByAuthor) {
+          let content;
+          try { content = JSON.parse(ev.content); } catch { continue; }
+          if (!content || typeof content !== 'object') continue;
+          const next = {
+            name:         typeof content.name === 'string' ? content.name.slice(0, 80) : undefined,
+            display_name: typeof content.display_name === 'string' ? content.display_name.slice(0, 80) : undefined,
+            picture:      typeof content.picture === 'string' && /^https?:\/\//i.test(content.picture) ? content.picture.slice(0, 400) : undefined,
+            nip05:        typeof content.nip05 === 'string' ? content.nip05.slice(0, 120) : undefined,
+            fetched_at:   Date.now(),
+          };
+          map[pubkey] = next;
+          changed = true;
+        }
+        if (changed) {
+          writeProfiles(map);
+          paintFriendsList();
+          repaintFeed();
+          paintState();
+        }
+      }
+
       // ─── Boot ─────────────────────────────────────────────────────
       paintState();
       paintFriendsList();
       subscribeToFriends();
+      refreshProfiles();
 
       // Re-paint if the signer injects late (NIP-07 extensions often do).
       setTimeout(paintState, 800);
@@ -523,6 +763,21 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
     .sp-friends-pk code {
       font-family: var(--sp-mono); font-size: 12px;
       color: var(--sp-ember);
+    }
+    .sp-friends-src {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 11px;
+      color: var(--sp-mute);
+      vertical-align: middle;
+      cursor: help;
+    }
+    .sp-friends-nip05 {
+      display: inline-block;
+      margin-left: 8px;
+      font-family: var(--sp-mono); font-size: 10px;
+      color: var(--sp-moss);
+      letter-spacing: 0.04em;
     }
     .sp-friends-unfollow {
       font-family: var(--sp-mono); font-size: 10px;
