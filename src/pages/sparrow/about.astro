@@ -251,6 +251,12 @@ const features = [
     body: 'v0.20 ships a second peer-node inside the menu-bar companion: Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on 38474 exposing /health + /reader-state GET/POST with byte-identical newest-wins merge logic to Magpie. Advertises _sparrow._tcp via Bonjour. The web resolver ladder grows to 5 rungs (user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474) and tags the resolved peer kind so the bridge pill can label it. Reader-state sync works with just Sparrow.app running — Magpie is no longer a mirror prerequisite.',
     kbd: '_sparrow._tcp · :38474',
   },
+  {
+    kicker: 'cross-device',
+    title: 'Saved, visited, reactions — everywhere',
+    body: 'v0.21 closes the multi-machine loop. With a NIP-07 signer that supports NIP-44 (nos2x, recent Alby), the HUD gains a "sync · on/off" pill. Turning it on publishes an encrypted kind-30078 addressable event (d-tag sparrow-reader-state-v1) carrying the same {saved, visited, reactions} blob — self-encrypted to your own npub so only your signer can decrypt. On load, Sparrow REQs the newest event across the relay pool and merges newest-wins per key. Runs side-by-side with the LAN peer-node mirror; both fire on the same debounce. 4s floor between relay pushes to keep bandwidth polite.',
+    kbd: 'kind 30078 · NIP-44',
+  },
 ];
 
 const roadmap = [
@@ -536,14 +542,29 @@ const roadmap = [
   },
   {
     v: 'v0.21',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Cross-device sync (NIP-44 + kind 30078)',
+    items: [
+      'Opt-in "sync · on/off" pill in the HUD — three visual states: unavailable (no NIP-44 signer) / off / on',
+      'Encrypts the sparrow-reader-state-v1 blob via window.nostr.nip44.encrypt(selfPubkey, plaintext) — self-encryption, only the same npub can decrypt',
+      'Publishes kind-30078 addressable events (d-tag: sparrow-reader-state-v1) so one event replaces the previous — no garbage pile on the relays',
+      'On page load + signer connect: REQ limit:1 across each configured relay, takes newest created_at, merges newest-wins per top-level key via the same MIRROR_KEYS apply callbacks the LAN mirror uses',
+      'Stacked debounce: 600ms LAN mirror → 1.2s Nostr queue → 4s relay floor (sparrow:sync-last-emitted-at) so rapid toggles coalesce',
+      'Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, state stays coherent because both use newest-wins-by-updated_at',
+      'Relay pool reuses the one already configured for reactions (damus + primal + nos.lol by default; sparrow:nostr-relays override)',
+    ],
+  },
+  {
+    v: 'v0.22',
     status: 'next',
     when: 'planned',
-    title: 'Cross-device sync',
+    title: 'Federated reading lists',
     items: [
-      'Same sparrow-reader-state-v1 blob, but distributed over a Nostr relay pool',
-      'End-to-end encrypted via NIP-44 · key derived from the npub the user already connected in v0.8',
-      'Closes the multi-machine loop that localhost mirror can\'t reach',
-      '"mark as read" state deletable on any device (graduates v0.3\'s local tracking to cross-device)',
+      'Subscribe to another user\'s npub + d-tag as a feed — "see what this person is reading"',
+      'Shows up as a new channel-like lane in the reel with per-post attribution',
+      'Built on the same kind-30078 infra; no encryption when the list is public',
+      'Opt-in per npub; revocable anytime; zero cross-talk with private sync',
     ],
   },
   {
@@ -623,7 +644,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.20 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.21 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (

@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.20',
-    protocol_version: '0.20',
+    version: '0.21',
+    protocol_version: '0.21',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -250,7 +250,25 @@ export const GET: APIRoute = async () => {
         content: 'sparrow: unreact',
       },
 
-      future: 'v0.10: NIP-44-encrypted sync of saved + visited + reactions across devices; cross-reel count badges under every receipt; OPML import/export.',
+      // v0.21: cross-device sync of saved + visited + reactions via
+      // NIP-44-encrypted kind-30078 addressable events on the same
+      // relay pool used for reactions. Opt-in — off by default.
+      cross_device_sync: {
+        since: 'v0.21',
+        event_kind: 30078,
+        d_tag: 'sparrow-reader-state-v1',
+        encryption: 'NIP-44 self-encryption (window.nostr.nip44.encrypt(selfPubkey, plaintext)); only the same npub can decrypt',
+        payload: 'JSON body — same shape as /reader-state POST: { saved, visited, reactions }, each with { value, updated_at }',
+        opt_in_storage: 'localStorage["sparrow:sync-enabled"] ("1" | "0")',
+        throttle: 'at most one relay push per 4 seconds (sparrow:sync-last-emitted-at floor) plus the 1.2s debounce stacked on top of the 600ms LAN mirror debounce',
+        pull_strategy: 'On page load (when enabled) + on signer connect, one REQ per relay filtered by {kinds:[30078], authors:[self], #d:[sparrow-reader-state-v1], limit:1}. Newest created_at across relays wins; merge applied per top-level key via the same MIRROR_KEYS apply callbacks the LAN mirror uses.',
+        coexistence: 'Nostr sync and the LAN peer-node mirror are orthogonal — both run when enabled. On save/visit/react, scheduleReaderMirror() fires both the LAN push and (if enabled) the Nostr push. On load, mirrorPull() populates from the LAN peer; subscribeNostrSync() then merges in anything newer from the relay pool.',
+        requires: ['NIP-07 signer connected (window.nostr.getPublicKey)', 'NIP-44 support on the signer (window.nostr.nip44.{encrypt,decrypt}) — nos2x, Alby recent builds'],
+        ui_toggle: '.sp-sync-toggle pill in the HUD · states: unavailable (no signer / no NIP-44) · off · on',
+        not_shipped_yet: 'Cross-device conflict UX beyond newest-wins; per-key opt-out (e.g. "sync saved only"); key rotation after an NIP-44 change',
+      },
+
+      future: 'v1.0: Federated reading lists (subscribe to a friend\'s npub + d-tag as a feed), agent-mode view at /sparrow/llms.txt for machine readers, full offline archive in IndexedDB.',
     },
 
     // v0.11: inline reply composer on the block reader. Direct POST to
@@ -622,8 +640,8 @@ export const GET: APIRoute = async () => {
       'v0.17': 'OPML import/export on /sparrow/saved. Export bundles Sparrow\'s Atom feed + the nine channel RSS feeds + one <outline> per saved block (/b/<id>) into an OPML 2.0 file any feed reader can swallow. Import DOMParses the uploaded text and unions /b/<id> matches with sparrow:saved (additive, never destructive; unknown outlines ignored). Entirely client-side.',
       'v0.18': 'Bridge discovery (web side). Shared resolveMagpieOrigin() probes a ranked ladder — localStorage["sparrow:magpie-origin"] override → http://magpie.local:38473 → http://127.0.0.1:38473 — and caches the first /health responder on window.__sparrow. Used by every Magpie-bound fetch (mirror, bridge awareness, composer). Sets the stage for Magpie v0.19\'s Bonjour advertisement: the `.local` host just starts resolving once Magpie advertises via NWListener.',
       'v0.19': 'Magpie Swift-side Bonjour advertisement shipped. NWListener.service publishes "Magpie" of type _magpie._tcp on port 38473 with a TXT record carrying version, /health path, schema id, composer + mirror endpoint hints. macOS mDNS responder transparently resolves magpie.local to the host, so Sparrow\'s v0.18 ladder picks it up on the second rung without any web-side changes. Listener stays loopback-bound — advertisement is metadata-only.',
-      'v0.20': 'Sparrow.app peer-node shipped. Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on port 38474 exposing GET /health + GET /reader-state.json + POST /reader-state with byte-identical sparrow-reader-state-v1 merge logic to Magpie\'s. NWListener.service advertises _sparrow._tcp "Sparrow" with a TXT record (version/path/schema/mirror/peer). Web resolver ladder extended to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474. window.__sparrow.magpiePeerKind records which peer answered so the bridge pill can label it accurately. Composer stays Magpie-only and falls back to direct /api/ping when Sparrow.app is the resolved peer. (current)',
-      'v0.21': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44). Closes the multi-machine loop that localhost mirror can\'t reach.',
+      'v0.20': 'Sparrow.app peer-node shipped. Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on port 38474 exposing GET /health + GET /reader-state.json + POST /reader-state with byte-identical sparrow-reader-state-v1 merge logic to Magpie\'s. NWListener.service advertises _sparrow._tcp "Sparrow" with a TXT record (version/path/schema/mirror/peer). Web resolver ladder extended to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474. window.__sparrow.magpiePeerKind records which peer answered so the bridge pill can label it accurately. Composer stays Magpie-only and falls back to direct /api/ping when Sparrow.app is the resolved peer.',
+      'v0.21': 'Cross-device sync of saved + visited + reactions via NIP-44-encrypted kind-30078 addressable events. Opt-in HUD pill (sync · on/off/n/a); self-encryption via window.nostr.nip44 means only the same npub can decrypt. Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, both use the same newest-wins-per-key merge policy so state stays coherent across device + peer. 4s throttle between relay pushes; on page load subscribes with limit:1 against each relay to pull latest. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

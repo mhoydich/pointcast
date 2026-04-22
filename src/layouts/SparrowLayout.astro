@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.20</span>
+          <span class="sp-sub">pointcast reader · v0.21</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -129,6 +129,18 @@ const paletteData = {
           </span>
           <button class="sp-install-btn" type="button" data-sp-install hidden aria-label="install Sparrow">
             install ↓
+          </button>
+          <button
+            class="sp-sync-toggle"
+            type="button"
+            data-sp-sync-toggle
+            data-state="unavailable"
+            aria-pressed="false"
+            aria-label="toggle cross-device sync"
+            title="cross-device sync needs a NIP-07 signer with NIP-44 support"
+          >
+            <span class="sp-sync-dot" aria-hidden="true"></span>
+            <span data-sp-sync-label>sync · n/a</span>
           </button>
           <a href="/sparrow/saved" class="sp-saved-count" data-sp-saved-count aria-label="reading list">
             <span class="sp-saved-icon" aria-hidden="true">☆</span>
@@ -746,15 +758,19 @@ const paletteData = {
         function scheduleReaderMirror() {
           clearTimeout(mirrorTimer);
           mirrorTimer = setTimeout(async () => {
-            // Only try to push if we've ever seen the peer-node alive
-            // in this session — avoids firing off dead requests on
-            // every save when Magpie isn't running.
-            if (!mirrorEverConnected && !(await mirrorProbe())) return;
-            mirrorPush();
+            // LAN peer-node push — only if we've seen a peer alive.
+            if (mirrorEverConnected || (await mirrorProbe())) {
+              mirrorPush();
+            }
+            // v0.21: cross-device Nostr push. Runs independently —
+            // works when Magpie/Sparrow.app isn't installed too.
+            scheduleNostrSyncPush();
           }, 600);
         }
 
-        // One-shot initial sync — probe then pull.
+        // One-shot initial sync — probe then pull. Nostr pull runs
+        // independently via subscribeNostrSync() once the signer is
+        // ready; see v0.21 section below.
         (async () => {
           if (await mirrorProbe()) await mirrorPull();
         })();
@@ -884,6 +900,12 @@ const paletteData = {
               cachedPubkey.value = pk;
               localStorage.setItem(KEY_NOSTR_PUBKEY, pk);
               paintNostrState('connected');
+              // v0.21: re-paint the sync toggle now that we have a
+              // pubkey (state may jump from "n/a" to "off" if NIP-44
+              // is available). If sync was previously enabled,
+              // re-subscribe to pull the latest state.
+              try { paintSyncState(); } catch {}
+              if (syncEnabled()) subscribeNostrSync().catch(() => {});
             }
           } catch {
             paintNostrState('available');
@@ -1449,6 +1471,234 @@ const paletteData = {
           paintNostrState('connected');
         }
 
+        // ─── v0.21 · CROSS-DEVICE SYNC (NIP-78 + NIP-44) ────────────
+        // Opt-in. When the user enables sync and a NIP-07 signer with
+        // NIP-44 support is present, Sparrow publishes a single
+        // replaceable kind-30078 event per browser whose content is the
+        // sparrow-reader-state-v1 JSON, NIP-44-encrypted to the user's
+        // own pubkey (self-encryption — only the same npub can read).
+        // On load, subscribes to the same event and merges newest-wins
+        // per top-level key, same policy as the LAN mirror.
+        //
+        // Why kind-30078 (NIP-78 arbitrary app data): addressable
+        // replaceable events are the right shape for "user's current
+        // state". The `d` tag scopes it to this app, so one event
+        // replaces the previous on the same relay — no garbage pile.
+        //
+        // Why self-encrypt with NIP-44 rather than clear kind-30078:
+        // saved blocks + reaction history are mildly sensitive — same
+        // posture as a browser history. Nothing in the relay pool
+        // should see them in the clear.
+        //
+        // Why opt-in: Nostr signers are still a niche tool and the
+        // relay list is global; we don't want silent behavior for
+        // users who connected the signer for reactions only.
+        const KEY_SYNC_ENABLED     = 'sparrow:sync-enabled';
+        const KEY_SYNC_LAST_AT     = 'sparrow:sync-last-emitted-at';
+        const SYNC_KIND            = 30078;
+        const SYNC_D_TAG           = 'sparrow-reader-state-v1';
+        const SYNC_PUSH_MIN_GAP_MS = 4000;  // floor between relay pushes
+        let   syncPushTimer        = null;
+        let   syncPullStarted      = false;
+
+        const syncEnabled = () => {
+          try { return localStorage.getItem(KEY_SYNC_ENABLED) === '1'; }
+          catch { return false; }
+        };
+        const setSyncEnabled = (on) => {
+          try { localStorage.setItem(KEY_SYNC_ENABLED, on ? '1' : '0'); } catch {}
+          paintSyncState();
+          if (on) {
+            // Kick off a pull + push on first enable.
+            subscribeNostrSync().catch(() => {});
+            scheduleNostrSyncPush();
+          }
+        };
+
+        const hasNip44 = () =>
+          hasNip07()
+          && window.nostr.nip44
+          && typeof window.nostr.nip44.encrypt === 'function'
+          && typeof window.nostr.nip44.decrypt === 'function';
+
+        function paintSyncState() {
+          const on = syncEnabled();
+          const ready = hasNip44() && !!cachedPubkey.value;
+          document.querySelectorAll('[data-sp-sync-toggle]').forEach((btn) => {
+            btn.dataset.state = on ? 'on' : (ready ? 'off' : 'unavailable');
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            const label = btn.querySelector('[data-sp-sync-label]');
+            if (label) {
+              label.textContent =
+                on    ? 'sync · on'
+              : ready ? 'sync · off'
+              :         'sync · n/a';
+            }
+            btn.title = on
+              ? 'cross-device sync is on (NIP-44 to relays). Click to turn off.'
+              : ready
+                ? 'click to turn on cross-device sync (signs + encrypts with your npub, pushes to relay pool)'
+                : 'cross-device sync needs a NIP-07 signer with NIP-44 support (nos2x, Alby ≥2024)';
+          });
+        }
+
+        // Click handler for the toggle pill.
+        document.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-sp-sync-toggle]');
+          if (!btn) return;
+          if (!hasNip44() || !cachedPubkey.value) {
+            paintSyncState();
+            return;
+          }
+          setSyncEnabled(!syncEnabled());
+        });
+
+        function collectReaderStateForSync() {
+          const body = {};
+          for (const k of MIRROR_KEYS) {
+            body[k.remote] = {
+              value: k.read(),
+              updated_at: localStorage.getItem(k.tsKey) || new Date().toISOString(),
+            };
+          }
+          return body;
+        }
+
+        async function emitNostrSync() {
+          if (!syncEnabled() || !hasNip44() || !cachedPubkey.value) return;
+          const relays = getRelays();
+          if (!relays.length) return;
+
+          // Throttle: at most one push every SYNC_PUSH_MIN_GAP_MS.
+          const lastAt = Number(localStorage.getItem(KEY_SYNC_LAST_AT) || '0');
+          const now = Date.now();
+          if (lastAt && now - lastAt < SYNC_PUSH_MIN_GAP_MS) return;
+
+          const plaintext = JSON.stringify(collectReaderStateForSync());
+          let ciphertext;
+          try {
+            ciphertext = await window.nostr.nip44.encrypt(cachedPubkey.value, plaintext);
+          } catch {
+            return;
+          }
+          const unsigned = {
+            kind: SYNC_KIND,
+            pubkey: cachedPubkey.value,
+            created_at: Math.floor(now / 1000),
+            tags: [
+              ['d', SYNC_D_TAG],
+              ['t', 'sparrow'],
+              ['client', 'sparrow', 'https://pointcast.xyz/sparrow'],
+            ],
+            content: ciphertext,
+          };
+          let signed;
+          try { signed = await window.nostr.signEvent(unsigned); }
+          catch { return; }
+          if (!signed?.id || !signed?.sig) return;
+
+          try { localStorage.setItem(KEY_SYNC_LAST_AT, String(now)); } catch {}
+
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['EVENT', signed])); } catch {}
+              });
+              ws.addEventListener('message', () => { try { ws.close(); } catch {} });
+              setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 4000);
+            } catch {}
+          }
+        }
+
+        function scheduleNostrSyncPush() {
+          if (!syncEnabled()) return;
+          clearTimeout(syncPushTimer);
+          // Stacked debounce: LAN mirror fires at 600ms; we wait an
+          // additional beat to coalesce rapid toggles before going to
+          // relays. Floor is enforced separately by SYNC_PUSH_MIN_GAP_MS.
+          syncPushTimer = setTimeout(() => { emitNostrSync().catch(() => {}); }, 1200);
+        }
+
+        // Pull: open one REQ per relay for our own replaceable event,
+        // decrypt, apply newest-wins. Closes each socket on EOSE.
+        async function subscribeNostrSync() {
+          if (syncPullStarted) return;
+          if (!syncEnabled() || !hasNip44() || !cachedPubkey.value) return;
+          syncPullStarted = true;
+
+          const relays = getRelays();
+          const subId = `sp-sync-${Math.random().toString(36).slice(2, 10)}`;
+          const filter = {
+            kinds: [SYNC_KIND],
+            authors: [cachedPubkey.value],
+            '#d': [SYNC_D_TAG],
+            limit: 1,
+          };
+          let newestAt = 0;
+          let newestEvent = null;
+
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              openSockets.push(ws);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+              });
+              ws.addEventListener('message', async (msg) => {
+                let frame;
+                try { frame = JSON.parse(msg.data); } catch { return; }
+                if (!Array.isArray(frame)) return;
+                if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+                  const ev = frame[2];
+                  if (typeof ev.created_at !== 'number' || typeof ev.content !== 'string') return;
+                  if (ev.created_at > newestAt) {
+                    newestAt = ev.created_at;
+                    newestEvent = ev;
+                  }
+                } else if (frame[0] === 'EOSE' && frame[1] === subId) {
+                  try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+                  try { ws.close(); } catch {}
+                  if (newestEvent) applyNostrSyncEvent(newestEvent);
+                }
+              });
+              setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 6000);
+            } catch {}
+          }
+        }
+
+        async function applyNostrSyncEvent(ev) {
+          if (!hasNip44() || !cachedPubkey.value) return;
+          let plaintext;
+          try { plaintext = await window.nostr.nip44.decrypt(cachedPubkey.value, ev.content); }
+          catch { return; }
+          let body;
+          try { body = JSON.parse(plaintext); } catch { return; }
+          if (!body || typeof body !== 'object') return;
+
+          for (const k of MIRROR_KEYS) {
+            const remote = body[k.remote];
+            if (!remote || typeof remote !== 'object') continue;
+            const remoteAt = String(remote.updated_at || '');
+            const localAt  = localStorage.getItem(k.tsKey) || '';
+            if (remoteAt && remoteAt > localAt && k.validate(remote.value)) {
+              localStorage.setItem(k.tsKey, remoteAt);
+              k.apply(remote.value);
+            }
+          }
+        }
+
+        // Initial sync on load — gated behind the opt-in flag. Also
+        // re-run whenever the signer finishes connecting (the hook is
+        // in the existing 'click' handler for [data-sp-nostr-connect],
+        // plus a setTimeout-driven initNostr in case the extension
+        // injects late).
+        (async () => {
+          paintSyncState();
+          if (syncEnabled()) await subscribeNostrSync();
+        })();
+        setTimeout(() => { paintSyncState(); if (syncEnabled()) subscribeNostrSync().catch(()=>{}); }, 1600);
+
         // ─── SERVICE WORKER REGISTRATION ────────────────────────────
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
@@ -1724,6 +1974,45 @@ const paletteData = {
       }
       .sp-install-btn:hover { background: color-mix(in oklch, var(--sp-ember) 22%, transparent); }
       .sp-install-btn[hidden] { display: none; }
+
+      /* v0.21 sync toggle — matches the install/offline pill footprint.
+         Three visual states: unavailable (no signer / no NIP-44) sits
+         quiet in mute gray; off is dim ember ("ready but not on"); on
+         pulses the moss accent. Hidden entirely on small screens to
+         keep the HUD uncluttered. */
+      .sp-sync-toggle {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--sp-mono); font-size: 10px;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        padding: 4px 9px; border-radius: 999px;
+        border: 1px solid var(--sp-rule); color: var(--sp-mute);
+        background: transparent; cursor: pointer;
+        transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+      }
+      .sp-sync-dot {
+        width: 6px; height: 6px; border-radius: 999px;
+        background: currentColor; opacity: 0.55;
+      }
+      .sp-sync-toggle[data-state="unavailable"] { cursor: default; opacity: 0.6; }
+      .sp-sync-toggle[data-state="off"] {
+        color: color-mix(in oklch, var(--sp-ember) 70%, var(--sp-mute));
+        border-color: color-mix(in oklch, var(--sp-ember) 40%, var(--sp-rule));
+      }
+      .sp-sync-toggle[data-state="off"]:hover {
+        color: var(--sp-ember);
+        background: color-mix(in oklch, var(--sp-ember) 10%, transparent);
+      }
+      .sp-sync-toggle[data-state="on"] {
+        color: var(--sp-moss);
+        border-color: color-mix(in oklch, var(--sp-moss) 64%, transparent);
+        background: color-mix(in oklch, var(--sp-moss) 10%, transparent);
+      }
+      .sp-sync-toggle[data-state="on"] .sp-sync-dot {
+        opacity: 1; box-shadow: 0 0 6px currentColor;
+      }
+      @media (max-width: 720px) {
+        .sp-sync-toggle { display: none; }
+      }
 
       /* Visited marker on receipts — subtle desaturation + small read tick.
          Does not fire alongside .is-saved or .is-now-tuned — those override. */
