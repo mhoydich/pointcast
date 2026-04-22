@@ -285,8 +285,8 @@ export const GET: APIRoute = async () => {
       applies: [
         '/agents.json', '/blocks.json', '/archive.json', '/editions.json',
         '/now.json', '/cast.json', '/battle.json', '/timeline.json',
-        '/stack.json', '/feed.json', '/feed.xml', '/garden-yield.json',
-        '/meditate.json', '/b/*.json',
+        '/stack.json', '/feed.json', '/feed.xml', '/nature-yield.json',
+        '/garden-yield.json', '/meditate.json', '/b/*.json',
         '/c/*.json', '/c/*.rss', '/llms.txt', '/llms-full.txt',
       ],
       note: 'Agents can fetch from any origin. No preflight needed for GETs.',
