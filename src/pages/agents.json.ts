@@ -54,6 +54,7 @@ export const GET: APIRoute = async () => {
         yeePlayer: 'https://pointcast.xyz/yee',
         collabs: 'https://pointcast.xyz/collabs',
         collabsRelay: 'https://pointcast.xyz/collabs/relay',
+        collabsArena: 'https://pointcast.xyz/collabs/arena',
         ping: 'https://pointcast.xyz/ping',
         sprint: 'https://pointcast.xyz/sprint',
         sprints: 'https://pointcast.xyz/sprints',
