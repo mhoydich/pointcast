@@ -27,11 +27,17 @@
  *     monthly if within 28d.
  */
 
+import { buildUnsubUrl } from './signing';
+
 export interface Env {
   SPARROW_DIGEST_KV: KVNamespace;
   DIGEST_FROM: string;
   DIGEST_FROM_NAME: string;
   SPARROW_ORIGIN: string;
+  /** v0.34: shared HMAC signing secret. Must be bound with the same
+   *  value on the Pages Function (`functions/api/sparrow/digest-subscribe.ts`)
+   *  so the unsubscribe link in the email footer verifies on click. */
+  SPARROW_DIGEST_SIGNING_KEY: string;
 }
 
 interface Subscription {
@@ -82,17 +88,25 @@ async function listAllSubscriptions(env: Env): Promise<Subscription[]> {
 
 /**
  * Placeholder renderer. Real version will assemble the signals bundle.
+ *
+ * v0.34: the unsubscribe link is now a signed token (HMAC-SHA256 over
+ * `<email>.<expiresAt>`). The Pages Function verifies before deleting.
  */
-function renderDigestEmail(sub: Subscription, env: Env): { subject: string; html: string; text: string } {
+async function renderDigestEmail(
+  sub: Subscription,
+  env: Env,
+): Promise<{ subject: string; html: string; text: string }> {
   const subject = 'Sparrow · your federation recap';
   const signalsUrl = `${env.SPARROW_ORIGIN}/sparrow/signals`;
-  const unsubHref = `${env.SPARROW_ORIGIN}/api/sparrow/digest-subscribe?email=${encodeURIComponent(sub.email)}`;
+  const unsubHref = env.SPARROW_DIGEST_SIGNING_KEY
+    ? await buildUnsubUrl(env.SPARROW_ORIGIN, sub.email, env.SPARROW_DIGEST_SIGNING_KEY)
+    : `${env.SPARROW_ORIGIN}/api/sparrow/digest-subscribe?email=${encodeURIComponent(sub.email)}`;
   const text = [
     `Sparrow · ${sub.frequency} digest`,
     '',
     `Latest federation signals: ${signalsUrl}`,
     '',
-    `Unsubscribe (token-verified): ${unsubHref}`,
+    `Unsubscribe: ${unsubHref}`,
   ].join('\n');
   const html = `
 <!doctype html>
@@ -150,7 +164,7 @@ export default {
     let sent = 0;
     let failed = 0;
     for (const sub of due) {
-      const email = renderDigestEmail(sub, env);
+      const email = await renderDigestEmail(sub, env);
       const ok = await sendViaMailChannels(sub, env, email);
       if (ok) {
         sub.last_sent_at = now.toISOString();

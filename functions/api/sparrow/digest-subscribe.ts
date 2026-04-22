@@ -29,6 +29,64 @@
 
 export interface Env {
   SPARROW_DIGEST_KV?: KVNamespace;
+  /** v0.34: shared HMAC secret; same value bound on the digest cron
+   *  worker so the footer link it signs will verify here. */
+  SPARROW_DIGEST_SIGNING_KEY?: string;
+}
+
+// ─── v0.34 · signed-token unsubscribe helpers ─────────────────────
+// Inlined here (not imported from workers/sparrow-digest/src/signing.ts)
+// because Pages Functions and Workers are separate deploy targets. The
+// implementations are byte-for-byte identical to signing.ts — see that
+// file for the canonical version + comments.
+
+function bufferToHex(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
+  return hex;
+}
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function hmacHex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return bufferToHex(sig);
+}
+interface UnsubVerifyResult {
+  ok: boolean;
+  email?: string;
+  reason?: 'malformed' | 'expired' | 'bad-hmac' | 'missing-secret';
+}
+async function verifyUnsubToken(
+  token: string,
+  secret: string | undefined,
+): Promise<UnsubVerifyResult> {
+  if (!secret) return { ok: false, reason: 'missing-secret' };
+  if (typeof token !== 'string') return { ok: false, reason: 'malformed' };
+  const parts = token.split('.');
+  if (parts.length !== 3) return { ok: false, reason: 'malformed' };
+  const [encodedEmail, expiresStr, providedHmac] = parts;
+  let email: string;
+  try { email = decodeURIComponent(encodedEmail).toLowerCase(); }
+  catch { return { ok: false, reason: 'malformed' }; }
+  const expiresAt = Number(expiresStr);
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) return { ok: false, reason: 'malformed' };
+  if (expiresAt < Math.floor(Date.now() / 1000)) return { ok: false, reason: 'expired', email };
+  if (!/^[0-9a-f]{64}$/i.test(providedHmac)) return { ok: false, reason: 'malformed' };
+  const expected = await hmacHex(secret, `${email}.${expiresAt}`);
+  if (!timingSafeEqual(expected, providedHmac.toLowerCase())) return { ok: false, reason: 'bad-hmac' };
+  return { ok: true, email };
 }
 
 interface SubscriptionPayload {
@@ -130,28 +188,64 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => docResponse(e
  *     email subscription; considered acceptable since the data here is
  *     just email + npub).
  *
- * Token verification is stubbed in v0.33 — the signing key ships
- * alongside the cron worker in v0.34. Until then: DELETE works with
- * the `local-clear` intent header; token-verified DELETE returns 501.
+ * v0.34: token-verified unsubscribe is live. Footer links from the
+ * digest cron worker are HMAC-SHA256 signed with SPARROW_DIGEST_SIGNING_KEY
+ * (same value bound on both the worker and this function). 30-day TTL.
  */
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
+  const url = new URL(request.url);
+
+  // Token may arrive via header (x-unsub-token) OR query string
+  // (?unsub_token=…) — the email-footer link uses the query string so
+  // the subscriber can click it from any browser without needing
+  // custom headers.
+  const headerToken = request.headers.get('x-unsub-token') || '';
+  const queryToken  = url.searchParams.get('unsub_token') || '';
+  const token = headerToken || queryToken;
+
   let payload: { email?: string } = {};
   try {
     payload = (await request.json()) as { email?: string };
   } catch {
-    // DELETE may have no body; that's fine as long as email is
-    // provided via query string.
-    const url = new URL(request.url);
     const q = url.searchParams.get('email');
     if (q) payload = { email: q };
   }
+  const intent = request.headers.get('x-unsub-intent') || '';
+
+  // ─── Token-verified path (email-footer link) ────────────────────
+  if (token) {
+    const v = await verifyUnsubToken(token, env.SPARROW_DIGEST_SIGNING_KEY);
+    if (!v.ok) {
+      return jsonResponse(v.reason === 'expired' ? 410 : 400, {
+        ok: false,
+        reason: v.reason || 'token verification failed',
+        note: v.reason === 'missing-secret'
+          ? 'Pages Function is missing SPARROW_DIGEST_SIGNING_KEY binding — ops needs to bind the same value the cron worker uses.'
+          : undefined,
+      });
+    }
+    const verifiedEmail = v.email!;
+    let removed = false;
+    if (env.SPARROW_DIGEST_KV) {
+      try {
+        await env.SPARROW_DIGEST_KV.delete(`sub:${verifiedEmail}`);
+        removed = true;
+      } catch { /* silent */ }
+    }
+    return jsonResponse(200, {
+      ok: true,
+      removed,
+      email: verifiedEmail,
+      mode: 'token-verified',
+      note: 'Unsubscribed via signed token from digest email. No further emails will send.',
+    });
+  }
+
+  // ─── Local-clear path (web-initiated) ────────────────────────────
   const email = normalizeEmail(payload.email);
   if (!email) {
     return jsonResponse(400, { ok: false, reason: 'email required' });
   }
-  const intent = request.headers.get('x-unsub-intent') || '';
-  const token = request.headers.get('x-unsub-token') || '';
-
   if (intent === 'local-clear') {
     let removed = false;
     if (env.SPARROW_DIGEST_KV) {
@@ -168,18 +262,9 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
     });
   }
 
-  if (token) {
-    // TODO(v0.34): verify the signed token against the cron worker's
-    // signing key. Once verified, delete `sub:${email}` from KV.
-    return jsonResponse(501, {
-      ok: false,
-      reason: 'token-verified unsubscribe lands in v0.34 alongside the cron worker',
-    });
-  }
-
   return jsonResponse(400, {
     ok: false,
-    reason: 'DELETE requires either x-unsub-intent: local-clear (web-initiated) or x-unsub-token header (email-footer link)',
+    reason: 'DELETE requires one of: x-unsub-intent: local-clear (web-initiated), x-unsub-token header, or ?unsub_token query (email-footer link)',
   });
 };
 
