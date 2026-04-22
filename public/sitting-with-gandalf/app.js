@@ -2,9 +2,10 @@
   "use strict";
 
   const STORAGE_KEY = "sitting-with-gandalf-log";
+  const SETTINGS_KEY = "sitting-with-gandalf-settings";
   const DEFAULT_MINUTES = 15;
 
-  const lines = {
+  const modeLines = {
     fire: [
       "Sit down, then. Haste has already had its say.",
       "A fire is a very old kind of clock. Listen until it names the hour.",
@@ -25,8 +26,28 @@
       "Pack lightly, but keep one song where you can reach it.",
       "Mountains look smaller after a proper pause.",
       "Not every journey improves by beginning at once."
+    ],
+    stars: [
+      "Old light arrives late and still finds the window.",
+      "Let the constellations do the remembering for a while.",
+      "A quiet room can be larger than a kingdom.",
+      "Stars are patient witnesses. Borrow their manners.",
+      "Even night keeps a few small lamps lit."
     ]
   };
+
+  const modeTones = {
+    fire: { low: 82.41, high: 123.47, drone: 0.18 },
+    rain: { low: 73.42, high: 110.0, drone: 0.13 },
+    road: { low: 65.41, high: 98.0, drone: 0.15 },
+    stars: { low: 92.5, high: 138.59, drone: 0.1 }
+  };
+
+  const phases = [
+    { threshold: 0, name: "Settle", hint: "Shoulders down. Let the room find you." },
+    { threshold: 0.22, name: "Drift", hint: "No errands here. Just the fire and the next breath." },
+    { threshold: 0.72, name: "Return", hint: "Bring one useful thing back from the quiet." }
+  ];
 
   const pace = [
     { label: "Draw", seconds: 4 },
@@ -34,22 +55,30 @@
     { label: "Exhale", seconds: 6 }
   ];
 
+  const savedSettings = loadSettings();
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
     running: false,
-    mode: "fire",
+    mode: savedSettings.mode || "fire",
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
-    soundOn: false
+    soundOn: false,
+    warmth: savedSettings.warmth ?? 0.62,
+    smoke: savedSettings.smoke ?? 0.58,
+    lantern: false,
+    phaseName: "Settle"
   };
 
   const dom = {
+    body: document.body,
     timerFace: document.getElementById("timerFace"),
     timerText: document.getElementById("timerText"),
     timerCaption: document.getElementById("timerCaption"),
     wizardLine: document.getElementById("wizardLine"),
+    phaseName: document.getElementById("phaseName"),
+    phaseHint: document.getElementById("phaseHint"),
     durationButtons: Array.from(document.querySelectorAll(".duration-button")),
     modeButtons: Array.from(document.querySelectorAll(".mode-button")),
     startButton: document.getElementById("startButton"),
@@ -60,6 +89,11 @@
     exhaleButton: document.getElementById("exhaleButton"),
     wisdomButton: document.getElementById("wisdomButton"),
     soundButton: document.getElementById("soundButton"),
+    lanternButton: document.getElementById("lanternButton"),
+    lanternExitButton: document.getElementById("lanternExitButton"),
+    hushButton: document.getElementById("hushButton"),
+    warmthSlider: document.getElementById("warmthSlider"),
+    smokeSlider: document.getElementById("smokeSlider"),
     paceLabel: document.getElementById("paceLabel"),
     paceCount: document.getElementById("paceCount"),
     paceBar: document.getElementById("paceBar"),
@@ -74,15 +108,23 @@
   };
 
   const ctx = dom.canvas.getContext("2d");
-  const smoke = {
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const visuals = {
     rings: [],
+    particles: [],
     lastFrame: performance.now(),
-    nextWisp: performance.now() + 2200
+    nextWisp: performance.now() + 1600,
+    nextParticle: performance.now() + 300
   };
 
-  let audioContext = null;
-  let masterGain = null;
-  let crackleTimer = null;
+  const audio = {
+    context: null,
+    masterGain: null,
+    droneGain: null,
+    low: null,
+    high: null,
+    timers: []
+  };
 
   function formatTime(totalSeconds) {
     const safeSeconds = Math.max(0, Math.ceil(totalSeconds));
@@ -100,12 +142,32 @@
     }
   }
 
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
   function saveLog() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.log.slice(0, 12)));
   }
 
+  function saveSettings() {
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        mode: state.mode,
+        warmth: state.warmth,
+        smoke: state.smoke
+      })
+    );
+  }
+
   function chooseLine() {
-    const pool = lines[state.mode];
+    const pool = modeLines[state.mode];
     const next = pool[Math.floor(Math.random() * pool.length)];
     dom.wizardLine.textContent = next;
   }
@@ -116,6 +178,21 @@
     dom.timerFace.style.setProperty("--progress", `${degrees}deg`);
     dom.timerText.textContent = formatTime(state.remaining);
     dom.timerCaption.textContent = state.running ? "keeping watch" : "pipe pause";
+    updatePhase(progress);
+  }
+
+  function updatePhase(progress) {
+    const active = phases.reduce((current, phase) => (progress >= phase.threshold ? phase : current), phases[0]);
+
+    if (active.name !== state.phaseName) {
+      state.phaseName = active.name;
+      if (state.running) {
+        addSmoke({ count: 4, power: 0.8, spread: 54, countTowardSession: false });
+      }
+    }
+
+    dom.phaseName.textContent = active.name;
+    dom.phaseHint.textContent = active.hint;
   }
 
   function updateStats() {
@@ -143,11 +220,12 @@
       const note = document.createElement("p");
       const left = document.createElement("span");
       const right = document.createElement("span");
+      const mode = entry.mode ? ` / ${entry.mode}` : "";
 
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${entry.minutes} min / ${entry.blend}`;
+      left.textContent = `${entry.minutes} min / ${entry.blend}${mode}`;
       right.textContent = entry.date;
       note.textContent = entry.note || "A quiet bowl, kept well.";
 
@@ -159,7 +237,7 @@
     updateStats();
   }
 
-  function startSession() {
+  async function startSession() {
     if (state.remaining <= 0) {
       state.remaining = state.duration;
     }
@@ -170,6 +248,10 @@
     dom.startButton.disabled = true;
     dom.pauseButton.disabled = false;
     chooseLine();
+
+    if (!state.soundOn) {
+      await setSound(true);
+    }
   }
 
   function pauseSession() {
@@ -182,6 +264,7 @@
   function resetSession() {
     state.running = false;
     state.remaining = state.duration;
+    state.phaseName = "";
     dom.startButton.textContent = "Start";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
@@ -197,7 +280,8 @@
     state.remaining = 0;
     updateTimer();
     dom.wizardLine.textContent = "There. A little more room in the world.";
-    addSmoke({ count: 10, power: 1.2, spread: 90, countTowardSession: true });
+    addSmoke({ count: 12, power: 1.2, spread: 100, countTowardSession: true });
+    spawnParticles(18);
   }
 
   function setDuration(minutes) {
@@ -211,11 +295,29 @@
 
   function setMode(mode) {
     state.mode = mode;
-    document.body.dataset.mode = mode;
+    dom.body.dataset.mode = mode;
     dom.modeButtons.forEach((button) => {
       button.classList.toggle("active", button.dataset.mode === mode);
     });
+    saveSettings();
     chooseLine();
+    tuneDrone();
+
+    if (state.soundOn) {
+      clearSoundTimers();
+      scheduleAmbience();
+    }
+  }
+
+  function setWarmth(value) {
+    state.warmth = Number(value) / 100;
+    saveSettings();
+    updateAudioLevels();
+  }
+
+  function setSmoke(value) {
+    state.smoke = Number(value) / 100;
+    saveSettings();
   }
 
   function sealEntry() {
@@ -232,6 +334,7 @@
       minutes,
       blend: dom.blendSelect.value,
       rings: state.rings,
+      mode: state.mode,
       note: dom.noteInput.value.trim()
     });
 
@@ -303,18 +406,20 @@
   }
 
   function addSmoke(options) {
-    const count = options.count || 1;
+    const baseCount = options.count || 1;
+    const intensity = 0.35 + state.smoke * 0.95;
+    const count = Math.max(1, Math.round(baseCount * intensity));
     const power = options.power || 0.7;
     const spread = options.spread || 24;
     const originX = options.x || window.innerWidth * 0.68;
     const originY = options.y || window.innerHeight * 0.72;
 
     for (let index = 0; index < count; index += 1) {
-      smoke.rings.push({
+      visuals.rings.push({
         x: originX + (Math.random() - 0.5) * spread,
         y: originY + (Math.random() - 0.5) * spread * 0.45,
         radius: 10 + Math.random() * 14,
-        alpha: 0.36 + Math.random() * 0.2,
+        alpha: (0.26 + Math.random() * 0.22) * intensity,
         vx: (Math.random() - 0.5) * 0.2,
         vy: -0.22 - Math.random() * 0.38 - power * 0.08,
         wobble: Math.random() * 200,
@@ -323,7 +428,7 @@
       });
     }
 
-    smoke.rings = smoke.rings.slice(-130);
+    visuals.rings = visuals.rings.slice(-150);
 
     if (options.countTowardSession) {
       state.rings += count;
@@ -331,17 +436,133 @@
     }
   }
 
-  function drawSmoke(now) {
-    const delta = Math.min(42, now - smoke.lastFrame || 16);
-    smoke.lastFrame = now;
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-    if (state.running && now > smoke.nextWisp) {
-      addSmoke({ count: 1, power: 0.4, spread: 32, countTowardSession: false });
-      smoke.nextWisp = now + 3200 + Math.random() * 4200;
+  function spawnParticles(count) {
+    if (reducedMotion) {
+      return;
     }
 
-    smoke.rings.forEach((ring) => {
+    for (let index = 0; index < count; index += 1) {
+      const type = state.mode;
+
+      if (type === "rain") {
+        visuals.particles.push({
+          type,
+          x: Math.random() * window.innerWidth,
+          y: -30 - Math.random() * 160,
+          vx: -0.8 - Math.random() * 0.6,
+          vy: 8 + Math.random() * 7,
+          length: 14 + Math.random() * 34,
+          alpha: 0.16 + Math.random() * 0.22,
+          life: 1
+        });
+        continue;
+      }
+
+      if (type === "road") {
+        visuals.particles.push({
+          type,
+          x: window.innerWidth * (0.35 + Math.random() * 0.48),
+          y: window.innerHeight * (0.58 + Math.random() * 0.3),
+          vx: -0.16 + Math.random() * 0.34,
+          vy: -0.06 - Math.random() * 0.22,
+          radius: 1.2 + Math.random() * 3.8,
+          alpha: 0.12 + Math.random() * 0.16,
+          life: 1
+        });
+        continue;
+      }
+
+      if (type === "stars") {
+        visuals.particles.push({
+          type,
+          x: window.innerWidth * (0.24 + Math.random() * 0.66),
+          y: window.innerHeight * (0.08 + Math.random() * 0.52),
+          vx: -0.02 + Math.random() * 0.04,
+          vy: -0.02 + Math.random() * 0.04,
+          radius: 0.9 + Math.random() * 2.4,
+          alpha: 0.16 + Math.random() * 0.28,
+          twinkle: Math.random() * 1000,
+          life: 1
+        });
+        continue;
+      }
+
+      visuals.particles.push({
+        type: "fire",
+        x: window.innerWidth * (0.62 + Math.random() * 0.34),
+        y: window.innerHeight * (0.72 + Math.random() * 0.22),
+        vx: -0.08 + Math.random() * 0.18,
+        vy: -0.36 - Math.random() * 0.74,
+        radius: 1.4 + Math.random() * 3.8,
+        alpha: 0.18 + Math.random() * 0.32,
+        life: 1
+      });
+    }
+
+    visuals.particles = visuals.particles.slice(-220);
+  }
+
+  function drawParticles(delta, now) {
+    visuals.particles.forEach((particle) => {
+      particle.x += particle.vx * delta;
+      particle.y += particle.vy * delta;
+      particle.life -= delta * (particle.type === "rain" ? 0.00038 : 0.00012);
+
+      if (particle.type === "rain") {
+        ctx.beginPath();
+        ctx.moveTo(particle.x, particle.y);
+        ctx.lineTo(particle.x + particle.vx * particle.length, particle.y + particle.length);
+        ctx.strokeStyle = `rgba(176, 196, 207, ${Math.max(0, particle.alpha * particle.life)})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        return;
+      }
+
+      if (particle.type === "stars") {
+        const pulse = 0.6 + Math.sin((now + particle.twinkle) / 460) * 0.4;
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(221, 226, 207, ${Math.max(0, particle.alpha * particle.life * pulse)})`;
+        ctx.shadowColor = "rgba(157, 179, 213, 0.38)";
+        ctx.shadowBlur = 10;
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+
+      const color = particle.type === "road" ? "209, 168, 91" : "232, 156, 67";
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${color}, ${Math.max(0, particle.alpha * particle.life)})`;
+      ctx.shadowColor = `rgba(${color}, 0.26)`;
+      ctx.shadowBlur = particle.type === "road" ? 6 : 12;
+      ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    visuals.particles = visuals.particles.filter((particle) => {
+      return particle.life > 0 && particle.y < window.innerHeight + 80 && particle.y > -180 && particle.x > -120 && particle.x < window.innerWidth + 120;
+    });
+  }
+
+  function drawSmoke(now) {
+    const delta = Math.min(42, now - visuals.lastFrame || 16);
+    visuals.lastFrame = now;
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    ctx.shadowBlur = 0;
+
+    if (!reducedMotion && now > visuals.nextParticle) {
+      const count = state.mode === "rain" ? 7 : state.mode === "stars" ? 2 : 3;
+      spawnParticles(count);
+      visuals.nextParticle = now + (state.mode === "rain" ? 110 : state.mode === "stars" ? 900 : 420);
+    }
+
+    if (state.running && now > visuals.nextWisp) {
+      addSmoke({ count: 1, power: 0.4, spread: 32, countTowardSession: false });
+      visuals.nextWisp = now + 1900 + Math.random() * (5200 - state.smoke * 2600);
+    }
+
+    drawParticles(delta, now);
+
+    visuals.rings.forEach((ring) => {
       ring.radius += delta * 0.018;
       ring.x += ring.vx * delta + Math.sin((now + ring.wobble) / 760) * 0.08;
       ring.y += ring.vy * delta;
@@ -356,83 +577,195 @@
       ctx.stroke();
     });
 
-    smoke.rings = smoke.rings.filter((ring) => ring.alpha > 0 && ring.y > -120);
+    visuals.rings = visuals.rings.filter((ring) => ring.alpha > 0 && ring.y > -120);
     requestAnimationFrame(drawSmoke);
   }
 
   function createAudioGraph() {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.08;
-    masterGain.connect(audioContext.destination);
+    audio.context = new (window.AudioContext || window.webkitAudioContext)();
+    audio.masterGain = audio.context.createGain();
+    audio.droneGain = audio.context.createGain();
+    audio.low = audio.context.createOscillator();
+    audio.high = audio.context.createOscillator();
 
-    const low = audioContext.createOscillator();
-    const fifth = audioContext.createOscillator();
-    const lowGain = audioContext.createGain();
-    const fifthGain = audioContext.createGain();
+    audio.low.type = "sine";
+    audio.high.type = "triangle";
+    audio.low.connect(audio.droneGain);
+    audio.high.connect(audio.droneGain);
+    audio.droneGain.connect(audio.masterGain);
+    audio.masterGain.connect(audio.context.destination);
 
-    low.type = "sine";
-    fifth.type = "triangle";
-    low.frequency.value = 82.41;
-    fifth.frequency.value = 123.47;
-    lowGain.gain.value = 0.18;
-    fifthGain.gain.value = 0.05;
-
-    low.connect(lowGain).connect(masterGain);
-    fifth.connect(fifthGain).connect(masterGain);
-    low.start();
-    fifth.start();
+    tuneDrone();
+    updateAudioLevels();
+    audio.low.start();
+    audio.high.start();
   }
 
-  function scheduleCrackle() {
-    if (!state.soundOn || !audioContext || !masterGain) {
+  function updateAudioLevels() {
+    if (!audio.context || !audio.masterGain || !audio.droneGain) {
       return;
     }
 
-    const duration = 0.035 + Math.random() * 0.09;
-    const samples = Math.floor(audioContext.sampleRate * duration);
-    const buffer = audioContext.createBuffer(1, samples, audioContext.sampleRate);
+    const now = audio.context.currentTime;
+    const tone = modeTones[state.mode];
+    audio.masterGain.gain.setTargetAtTime(state.warmth * 0.18, now, 0.08);
+    audio.droneGain.gain.setTargetAtTime(tone.drone * (0.35 + state.warmth), now, 0.14);
+  }
+
+  function tuneDrone() {
+    if (!audio.context || !audio.low || !audio.high) {
+      return;
+    }
+
+    const now = audio.context.currentTime;
+    const tone = modeTones[state.mode];
+    audio.low.frequency.setTargetAtTime(tone.low, now, 0.22);
+    audio.high.frequency.setTargetAtTime(tone.high, now, 0.22);
+    updateAudioLevels();
+  }
+
+  function clearSoundTimers() {
+    audio.timers.forEach((timer) => window.clearTimeout(timer));
+    audio.timers = [];
+  }
+
+  function queueSound(callback, delay) {
+    const timer = window.setTimeout(callback, delay);
+    audio.timers.push(timer);
+  }
+
+  function noiseBuffer(duration) {
+    const samples = Math.floor(audio.context.sampleRate * duration);
+    const buffer = audio.context.createBuffer(1, samples, audio.context.sampleRate);
     const channel = buffer.getChannelData(0);
 
     for (let index = 0; index < samples; index += 1) {
-      const fade = 1 - index / samples;
-      channel[index] = (Math.random() * 2 - 1) * fade * fade;
+      channel[index] = Math.random() * 2 - 1;
     }
 
-    const source = audioContext.createBufferSource();
-    const filter = audioContext.createBiquadFilter();
-    const gain = audioContext.createGain();
-
-    filter.type = "bandpass";
-    filter.frequency.value = 550 + Math.random() * 1800;
-    gain.gain.value = 0.08 + Math.random() * 0.18;
-
-    source.buffer = buffer;
-    source.connect(filter).connect(gain).connect(masterGain);
-    source.start();
-
-    crackleTimer = window.setTimeout(scheduleCrackle, 120 + Math.random() * 850);
+    return buffer;
   }
 
-  async function toggleSound() {
-    state.soundOn = !state.soundOn;
+  function playNoise(options) {
+    const now = audio.context.currentTime;
+    const source = audio.context.createBufferSource();
+    const filter = audio.context.createBiquadFilter();
+    const gain = audio.context.createGain();
+
+    source.buffer = noiseBuffer(options.duration);
+    filter.type = options.filterType;
+    filter.frequency.value = options.frequency;
+    filter.Q.value = options.q || 0.7;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(options.gain * state.warmth, now + options.attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + options.duration);
+
+    source.connect(filter).connect(gain).connect(audio.masterGain);
+    source.start(now);
+    source.stop(now + options.duration + 0.02);
+  }
+
+  function playBell() {
+    const now = audio.context.currentTime;
+    const oscillator = audio.context.createOscillator();
+    const gain = audio.context.createGain();
+    const frequencies = [329.63, 392.0, 493.88, 587.33];
+
+    oscillator.type = "sine";
+    oscillator.frequency.value = frequencies[Math.floor(Math.random() * frequencies.length)];
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.025 * state.warmth, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+
+    oscillator.connect(gain).connect(audio.masterGain);
+    oscillator.start(now);
+    oscillator.stop(now + 2.4);
+  }
+
+  function playRoadStep() {
+    const now = audio.context.currentTime;
+    const oscillator = audio.context.createOscillator();
+    const gain = audio.context.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(82 + Math.random() * 18, now);
+    oscillator.frequency.exponentialRampToValueAtTime(46, now + 0.18);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.025 * state.warmth, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+    oscillator.connect(gain).connect(audio.masterGain);
+    oscillator.start(now);
+    oscillator.stop(now + 0.25);
+  }
+
+  function scheduleAmbience() {
+    if (!state.soundOn || !audio.context || audio.context.state === "suspended") {
+      return;
+    }
+
+    if (state.mode === "rain") {
+      playNoise({ duration: 0.18, filterType: "highpass", frequency: 1500, q: 0.6, gain: 0.018, attack: 0.018 });
+      queueSound(scheduleAmbience, 70 + Math.random() * 180);
+      return;
+    }
+
+    if (state.mode === "road") {
+      playNoise({ duration: 0.62, filterType: "lowpass", frequency: 620, q: 0.5, gain: 0.012, attack: 0.12 });
+      if (Math.random() > 0.55) {
+        playRoadStep();
+      }
+      queueSound(scheduleAmbience, 480 + Math.random() * 1400);
+      return;
+    }
+
+    if (state.mode === "stars") {
+      if (Math.random() > 0.32) {
+        playBell();
+      }
+      queueSound(scheduleAmbience, 1800 + Math.random() * 4200);
+      return;
+    }
+
+    playNoise({ duration: 0.035 + Math.random() * 0.09, filterType: "bandpass", frequency: 550 + Math.random() * 1800, q: 1.4, gain: 0.12 + Math.random() * 0.12, attack: 0.006 });
+    queueSound(scheduleAmbience, 120 + Math.random() * 850);
+  }
+
+  async function setSound(nextOn) {
+    state.soundOn = nextOn;
 
     if (!state.soundOn) {
       dom.soundButton.textContent = "Ambience off";
-      window.clearTimeout(crackleTimer);
-      if (audioContext) {
-        await audioContext.suspend();
+      clearSoundTimers();
+      if (audio.context) {
+        await audio.context.suspend();
       }
       return;
     }
 
-    if (!audioContext) {
+    if (!audio.context) {
       createAudioGraph();
     }
 
-    await audioContext.resume();
     dom.soundButton.textContent = "Ambience on";
-    scheduleCrackle();
+    await audio.context.resume();
+    tuneDrone();
+    updateAudioLevels();
+    clearSoundTimers();
+    scheduleAmbience();
+  }
+
+  function hush() {
+    setSound(false);
+    visuals.rings = [];
+    visuals.particles = [];
+    dom.wizardLine.textContent = "A good silence asks for nothing.";
+  }
+
+  function toggleLantern(force) {
+    state.lantern = typeof force === "boolean" ? force : !state.lantern;
+    dom.body.classList.toggle("lantern-mode", state.lantern);
+    dom.lanternButton.textContent = state.lantern ? "Companion view" : "Lantern view";
   }
 
   dom.durationButtons.forEach((button) => {
@@ -449,13 +782,27 @@
   dom.drawButton.addEventListener("click", () => addSmoke({ count: 2, power: 0.8, spread: 28, countTowardSession: true }));
   dom.exhaleButton.addEventListener("click", () => addSmoke({ count: 7, power: 1.2, spread: 72, countTowardSession: true }));
   dom.wisdomButton.addEventListener("click", chooseLine);
-  dom.soundButton.addEventListener("click", toggleSound);
+  dom.soundButton.addEventListener("click", () => setSound(!state.soundOn));
+  dom.hushButton.addEventListener("click", hush);
+  dom.lanternButton.addEventListener("click", () => toggleLantern());
+  dom.lanternExitButton.addEventListener("click", () => toggleLantern(false));
+  dom.warmthSlider.addEventListener("input", (event) => setWarmth(event.target.value));
+  dom.smokeSlider.addEventListener("input", (event) => setSmoke(event.target.value));
   dom.sealEntryButton.addEventListener("click", sealEntry);
   dom.clearLogButton.addEventListener("click", clearLog);
   window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.lantern) {
+      toggleLantern(false);
+    }
+  });
+
+  dom.warmthSlider.value = String(Math.round(state.warmth * 100));
+  dom.smokeSlider.value = String(Math.round(state.smoke * 100));
 
   resizeCanvas();
   renderLog();
+  setMode(state.mode);
   updateTimer();
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
