@@ -512,6 +512,60 @@
         opacity: 0.18;
       }
 
+      .map-resolution {
+        color: var(--burst-color, var(--blue));
+      }
+
+      .map-burst-route {
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-width: 8;
+        opacity: 0.58;
+      }
+
+      .map-burst-ring,
+      .map-burst-ping {
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+      }
+
+      .map-burst-ring {
+        stroke-width: 4;
+        opacity: 0.86;
+      }
+
+      .map-burst-ping {
+        stroke-width: 2;
+        opacity: 0.52;
+      }
+
+      .map-ribbon {
+        fill: rgba(7, 16, 21, 0.84);
+        stroke: currentColor;
+        stroke-width: 1.5;
+      }
+
+      .map-ribbon-label {
+        fill: #f8fbf8;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .map-ribbon-score {
+        fill: currentColor;
+        font-family: var(--sans);
+        font-size: 22px;
+        font-weight: 800;
+        paint-order: stroke;
+        stroke: rgba(7, 16, 21, 0.9);
+        stroke-linejoin: round;
+        stroke-width: 3px;
+      }
+
       .route-options {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -761,6 +815,26 @@
         background: var(--surface-2);
       }
 
+      .result.is-hit {
+        border-color: rgba(22, 122, 102, 0.52);
+        background: #f1faf6;
+      }
+
+      .result.is-partial {
+        border-color: rgba(185, 137, 20, 0.52);
+        background: #fff9e8;
+      }
+
+      .result.is-miss {
+        border-color: rgba(197, 81, 63, 0.52);
+        background: #fff4f1;
+      }
+
+      .result.is-clue {
+        border-color: rgba(24, 95, 165, 0.42);
+        background: #f3f8fc;
+      }
+
       .result.is-visible {
         display: block;
       }
@@ -770,11 +844,56 @@
         margin-bottom: 4px;
       }
 
+      .result-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .result-badge {
+        display: inline-flex;
+        min-height: 24px;
+        align-items: center;
+        padding: 3px 7px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        color: var(--result-color, var(--blue));
+        white-space: nowrap;
+      }
+
+      .result-score {
+        display: block;
+        color: var(--result-color, var(--blue));
+        font-size: 1.55rem;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
       .result p {
         margin: 0;
         color: var(--ink-soft);
         font-size: 0.9rem;
         line-height: 1.4;
+      }
+
+      .result-path {
+        display: block;
+        margin-top: 7px;
+        overflow: hidden;
+        color: var(--ink);
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .result-note {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.35;
       }
 
       .shift-meter {
@@ -3113,6 +3232,63 @@
           })
           .join("");
 
+        const activeResult =
+          state.locked &&
+          state.result &&
+          !["clue", "complete"].includes(state.result.status)
+            ? state.result
+            : null;
+        const resultTone = activeResult
+          ? activeResult.status === "hit" || activeResult.status === "drill-hit"
+            ? "hit"
+            : activeResult.status === "partial" || activeResult.status === "drill-partial"
+              ? "partial"
+              : "miss"
+          : "";
+        const resultTargetPath =
+          activeResult && activeResult.target
+            ? routePaths.find((item) => item.collab.slug === activeResult.target.slug)
+            : null;
+        const resultColor =
+          resultTone === "hit"
+            ? activeResult?.target?.color || blockColor
+            : resultTone === "partial"
+              ? "#b98914"
+              : "#c5513f";
+        const resultLabel =
+          resultTone === "hit"
+            ? "CLEAN LOCK"
+            : resultTone === "partial"
+              ? "SAME DESK"
+              : activeResult?.reason === "timeout"
+                ? "FADED"
+                : "REROUTE";
+        const resultScore = activeResult?.drill
+          ? "DRILL"
+          : activeResult?.points
+            ? `+${activeResult.points}`
+            : "0";
+        const resolutionBurst =
+          activeResult && resultTargetPath
+            ? `
+              <g class="map-resolution is-${escapeHtml(resultTone)}" style="--burst-color:${escapeHtml(
+                resultColor
+              )}">
+                <path class="map-burst-route" d="${resultTargetPath.path}">
+                  <animate attributeName="opacity" values="0.15;0.72;0.5" dur="900ms" repeatCount="1"></animate>
+                </path>
+                <circle class="map-burst-ring" cx="${resultTargetPath.pos.x}" cy="${resultTargetPath.pos.y}" r="35"></circle>
+                <circle class="map-burst-ping" cx="${resultTargetPath.pos.x}" cy="${resultTargetPath.pos.y}" r="44">
+                  <animate attributeName="r" values="30;58;44" dur="900ms" repeatCount="1"></animate>
+                  <animate attributeName="opacity" values="0.82;0.12;0.46" dur="900ms" repeatCount="1"></animate>
+                </circle>
+                <rect class="map-ribbon" x="214" y="22" width="132" height="42" rx="8"></rect>
+                <text class="map-ribbon-label" x="228" y="39">${escapeHtml(resultLabel)}</text>
+                <text class="map-ribbon-score" x="228" y="59">${escapeHtml(resultScore)}</text>
+              </g>
+            `
+            : "";
+
         dom.relayMap.innerHTML = `
           <title id="relay-map-title">PointCast signal routing map</title>
           <defs>
@@ -3140,6 +3316,7 @@
           <path d="M486 48 L486 312" stroke="#d8d3c8" stroke-width="2"></path>
           ${beams}
           ${paths}
+          ${resolutionBurst}
           <circle class="signal-halo" cx="${start.x}" cy="${start.y}" r="49" style="--signal-color:${escapeHtml(
           blockColor
         )}">
@@ -3775,31 +3952,65 @@
         }
       }
 
+      function showResult(html, tone, color) {
+        dom.resultPanel.className = ["result", "is-visible", tone ? `is-${tone}` : ""]
+          .filter(Boolean)
+          .join(" ");
+        if (color) {
+          dom.resultPanel.style.setProperty("--result-color", color);
+        } else {
+          dom.resultPanel.style.removeProperty("--result-color");
+        }
+        dom.resultPanel.innerHTML = html;
+      }
+
       function renderResult() {
         if (!state.result) {
-          dom.resultPanel.classList.remove("is-visible");
+          dom.resultPanel.className = "result";
+          dom.resultPanel.style.removeProperty("--result-color");
           dom.resultPanel.innerHTML = "";
           return;
         }
         const { status, points, selected, target, reason, route } = state.result;
         if (status === "complete") {
           const summary = state.result.summary;
-          dom.resultPanel.innerHTML = `
-            <strong>${escapeHtml(`Shift complete · ${summary.score}`)}</strong>
-            <p>${escapeHtml(`${summary.correct}/${state.shiftLength} clean relays · ${summary.hitRate}% hit rate · best streak ${summary.bestStreak}`)}</p>
-          `;
-          dom.resultPanel.classList.add("is-visible");
+          showResult(
+            `
+              <div class="result-head">
+                <span>
+                  <span class="result-badge mono">Complete</span>
+                  <strong>${escapeHtml("Shift complete")}</strong>
+                </span>
+                <span class="result-score">${escapeHtml(String(summary.score))}</span>
+              </div>
+              <p>${escapeHtml(`${summary.correct}/${state.shiftLength} clean relays · ${summary.hitRate}% hit rate · best streak ${summary.bestStreak}`)}</p>
+            `,
+            "hit",
+            "#167a66"
+          );
           return;
         }
         if (status === "clue") {
-          dom.resultPanel.innerHTML = `
-            <strong>${escapeHtml(`Clue burned · -${CLUE_SCORE_COST} ceiling`)}</strong>
-            <p>${escapeHtml(`${target?.roleLabel || "Registry"} desk · ${route.reason}`)}</p>
-          `;
-          dom.resultPanel.classList.add("is-visible");
+          showResult(
+            `
+              <div class="result-head">
+                <span>
+                  <span class="result-badge mono">Clue</span>
+                  <strong>${escapeHtml(`Clue burned`)}</strong>
+                </span>
+                <span class="result-score">${escapeHtml(`-${CLUE_SCORE_COST}`)}</span>
+              </div>
+              <p>${escapeHtml(`${target?.roleLabel || "Registry"} desk`)}</p>
+              <span class="result-note">${escapeHtml(route.reason)}</span>
+            `,
+            "clue",
+            "#185fa5"
+          );
           return;
         }
         if (state.result.drill) {
+          const tone =
+            status === "drill-hit" ? "hit" : status === "drill-partial" ? "partial" : "miss";
           const title =
             status === "drill-hit"
               ? "Drill cleared"
@@ -3810,15 +4021,26 @@
                   : "Drill missed";
           const selectedName = selected ? selected.name : reason === "timeout" ? "No route" : "Skip";
           const fallbackName = state.routeMode === "surface" ? "Surface" : "Registry";
-          dom.resultPanel.innerHTML = `
-            <strong>${escapeHtml(title)}</strong>
-            <p>${escapeHtml(selectedName)} -> ${escapeHtml(target?.name || fallbackName)} · ${escapeHtml(
-            route.reason
-          )}</p>
-          `;
-          dom.resultPanel.classList.add("is-visible");
+          showResult(
+            `
+              <div class="result-head">
+                <span>
+                  <span class="result-badge mono">Review Drill</span>
+                  <strong>${escapeHtml(title)}</strong>
+                </span>
+                <span class="result-score">DRILL</span>
+              </div>
+              <span class="result-path">${escapeHtml(selectedName)} -> ${escapeHtml(
+              target?.name || fallbackName
+            )}</span>
+              <span class="result-note">${escapeHtml(route.reason)}</span>
+            `,
+            tone,
+            tone === "hit" ? target?.color || "#167a66" : tone === "partial" ? "#b98914" : "#c5513f"
+          );
           return;
         }
+        const tone = status === "hit" ? "hit" : status === "partial" ? "partial" : "miss";
         const title =
           status === "hit"
             ? `Clean relay +${points}`
@@ -3832,13 +4054,26 @@
         const selectedName = selected ? selected.name : reason === "timeout" ? "No route" : "Skip";
         const clueNote = state.result.clueUsed ? ` · clue cost ${CLUE_SCORE_COST}` : "";
         const fallbackName = state.routeMode === "surface" ? "Surface" : "Registry";
-        dom.resultPanel.innerHTML = `
-          <strong>${escapeHtml(title)}</strong>
-          <p>${escapeHtml(selectedName)} -> ${escapeHtml(target?.name || fallbackName)} · ${escapeHtml(
-          route.reason
-        )}${escapeHtml(clueNote)}</p>
-        `;
-        dom.resultPanel.classList.add("is-visible");
+        const scoreText = points ? `+${points}` : "0";
+        showResult(
+          `
+            <div class="result-head">
+              <span>
+                <span class="result-badge mono">${escapeHtml(
+                  tone === "hit" ? "Clean Lock" : tone === "partial" ? "Same Desk" : "Reroute"
+                )}</span>
+                <strong>${escapeHtml(title)}</strong>
+              </span>
+              <span class="result-score">${escapeHtml(scoreText)}</span>
+            </div>
+            <span class="result-path">${escapeHtml(selectedName)} -> ${escapeHtml(
+            target?.name || fallbackName
+          )}</span>
+            <span class="result-note">${escapeHtml(route.reason)}${escapeHtml(clueNote)}</span>
+          `,
+          tone,
+          tone === "hit" ? target?.color || "#167a66" : tone === "partial" ? "#b98914" : "#c5513f"
+        );
       }
 
       function renderControls() {
