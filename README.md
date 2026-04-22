@@ -141,6 +141,19 @@ Adding a Block: drop a new file in `src/content/blocks/` named
 The sitemap, per-channel feeds, archive, and OG card regenerate
 automatically.
 
+## Publishing live
+
+`pointcast.xyz` deploys from `origin/main` through Cloudflare Pages.
+Codex and Claude can work from any local branch or worktree, but the site
+only updates after the shippable HEAD reaches GitHub main.
+
+```sh
+npm run publish:live -- "feat(scope): describe the ship"
+```
+
+The command fetches `origin/main`, refuses if the current HEAD is behind,
+runs the full build, commits local changes, and pushes `HEAD:main`.
+
 ---
 
 ## Contributing
