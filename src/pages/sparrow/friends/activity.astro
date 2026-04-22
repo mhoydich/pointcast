@@ -1,0 +1,465 @@
+---
+/**
+ * /sparrow/friends/activity — v0.27
+ *
+ * Timeline view over followed (non-muted) npubs' public saved-list
+ * events. Pure client-rendered. Two subscriptions run in parallel:
+ *
+ *  · Initial — kind-30078 + d-tag sparrow-public-saved-v1,
+ *    authors = non-muted friends, limit 50. Populates the timeline
+ *    newest-first.
+ *  · Live — same filter with since=bootTime, kept open. New events
+ *    splice in at the top without a full repaint; animated fade-in
+ *    chips make the "new since you arrived" feel tangible.
+ *
+ * Server ships a block lookup so saved ids resolve to title + channel
+ * without per-block round-trips. We reuse sparrow:profiles (populated
+ * by /sparrow/friends earlier visits) for avatars + display names —
+ * hydration stays one-pass across the federation surfaces.
+ */
+import SparrowLayout from '../../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../../../lib/channels';
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const lookup: Record<string, { title: string; channel: string; channelName: string }> =
+  Object.fromEntries(
+    all.map((b) => {
+      const ch = CHANNEL_LIST.find((c) => c.code === b.data.channel);
+      return [
+        b.data.id,
+        {
+          title: b.data.title,
+          channel: b.data.channel,
+          channelName: ch?.name ?? b.data.channel,
+        },
+      ];
+    }),
+  );
+---
+
+<SparrowLayout
+  title="Friends activity — timeline"
+  description="Timeline of what your followed npubs have been saving on Sparrow."
+  canonicalPath="/sparrow/friends/activity"
+  homeHref="/sparrow"
+>
+  <section class="sp-reel" aria-label="activity timeline">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ activity · followed npubs · last 50 events</span>
+      <span class="sp-aside-mono" style="margin-left: auto;">
+        <span data-sp-act-meta>…</span>
+      </span>
+    </header>
+
+    <p class="sp-about-dek" style="margin: 4px 0 14px;">
+      Streaming view over every <code>kind 30078</code>
+      (<code>d-tag sparrow-public-saved-v1</code>) event your followed,
+      non-muted npubs have published. New events arriving while this
+      page is open splice in at the top.
+    </p>
+
+    <nav class="sp-act-nav">
+      <a href="/sparrow/friends" class="sp-act-nav-link">← back to /sparrow/friends</a>
+    </nav>
+
+    <ol class="sp-act-feed" data-sp-act-feed></ol>
+
+    <p class="sp-act-empty" data-sp-act-empty>
+      Nothing yet. Either nobody you follow has published a public
+      saved list, or the relays haven't responded yet.
+    </p>
+  </section>
+
+  <script id="sp-act-lookup" type="application/json" set:html={JSON.stringify(lookup)} />
+
+  <script is:inline>
+    (function () {
+      const KEY_FRIENDS   = 'sparrow:friends';
+      const KEY_PROFILES  = 'sparrow:profiles';
+      const KEY_RELAYS    = 'sparrow:nostr-relays';
+      const D_TAG         = 'sparrow-public-saved-v1';
+      const SYNC_KIND     = 30078;
+      const MAX_EVENTS    = 50;
+      const PREVIEW_BLOCKS = 3;
+      const DEFAULT_RELAYS = [
+        'wss://relay.damus.io',
+        'wss://relay.primal.net',
+        'wss://nos.lol',
+      ];
+
+      const blob = document.getElementById('sp-act-lookup');
+      const lookup = blob ? (() => { try { return JSON.parse(blob.textContent || '{}'); } catch { return {}; } })() : {};
+
+      const feedEl  = document.querySelector('[data-sp-act-feed]');
+      const emptyEl = document.querySelector('[data-sp-act-empty]');
+      const metaEl  = document.querySelector('[data-sp-act-meta]');
+      if (!feedEl) return;
+
+      const readFriends = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_FRIENDS) || '[]');
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((f) => (typeof f === 'string'
+              ? { pubkey: f, alias: '', muted: false }
+              : (f && typeof f === 'object' && typeof f.pubkey === 'string')
+                ? {
+                    pubkey: f.pubkey.toLowerCase(),
+                    alias:  (f.alias || '').slice(0, 40),
+                    muted:  !!f.muted,
+                  }
+                : null))
+            .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted);
+        } catch { return []; }
+      };
+      const readProfiles = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_PROFILES) || '{}');
+          return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+        } catch { return {}; }
+      };
+      const getRelays = () => {
+        try {
+          const raw = localStorage.getItem(KEY_RELAYS);
+          const list = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(list) && list.length) return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+        } catch {}
+        return DEFAULT_RELAYS;
+      };
+      function escapeHTML(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+      }
+      const shortPk = (pk) => (pk ? `${pk.slice(0, 8)}…${pk.slice(-4)}` : '—');
+      function nameFor(pubkey, friend) {
+        const prof = readProfiles()[pubkey];
+        return friend?.alias
+          || (prof && (prof.display_name || prof.name))
+          || shortPk(pubkey);
+      }
+      function pictureFor(pubkey) {
+        const prof = readProfiles()[pubkey];
+        return prof?.picture || '';
+      }
+      function fmtRelative(epochSeconds) {
+        if (typeof epochSeconds !== 'number') return '';
+        const diff = Math.floor(Date.now() / 1000) - epochSeconds;
+        if (diff < 60) return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        const days = Math.floor(diff / 86400);
+        if (days < 14) return `${days}d ago`;
+        const d = new Date(epochSeconds * 1000);
+        return d.toISOString().slice(0, 10);
+      }
+
+      // Per-event state. Keyed by event.id so we dedup across relays
+      // AND handle the same author replaceable (new created_at + new id).
+      const events = new Map();   // event.id -> { pubkey, created_at, saved[], isNew? }
+      const openSockets = [];
+      const friends = readFriends();
+      const relays  = getRelays();
+      const bootTime = Math.floor(Date.now() / 1000);
+
+      if (metaEl) {
+        metaEl.textContent = friends.length
+          ? `${friends.length} following · listening on ${relays.length} relays`
+          : 'nobody followed · add someone on /sparrow/friends first';
+      }
+      if (!friends.length) {
+        if (emptyEl) {
+          emptyEl.hidden = false;
+          emptyEl.innerHTML = 'You haven\'t followed anyone yet. <a class="sp-link" href="/sparrow/friends">Open /sparrow/friends →</a> to add a pubkey.';
+        }
+        return;
+      }
+
+      function ingestEvent(ev, { isLive } = { isLive: false }) {
+        if (!ev || typeof ev.id !== 'string' || events.has(ev.id)) return;
+        if (ev.kind !== SYNC_KIND || typeof ev.content !== 'string') return;
+        if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+        const isOurs = Array.isArray(ev.tags) && ev.tags.some(
+          (t) => Array.isArray(t) && t[0] === 'd' && t[1] === D_TAG,
+        );
+        if (!isOurs) return;
+        // Ensure author is still followed and not muted (user could
+        // have muted between subscription and ingest).
+        const liveFriends = readFriends();
+        const friend = liveFriends.find((f) => f.pubkey === ev.pubkey);
+        if (!friend) return;
+        let body;
+        try { body = JSON.parse(ev.content); } catch { return; }
+        const saved = Array.isArray(body?.saved?.value) ? body.saved.value : [];
+        events.set(ev.id, {
+          id: ev.id,
+          pubkey: ev.pubkey,
+          created_at: ev.created_at,
+          saved,
+          isNew: isLive && ev.created_at >= bootTime,
+        });
+      }
+
+      function sortedEvents() {
+        return Array.from(events.values())
+          .sort((a, b) => b.created_at - a.created_at)
+          .slice(0, MAX_EVENTS);
+      }
+
+      function renderEvent(ev) {
+        const friendsLive = readFriends();
+        const friend = friendsLive.find((f) => f.pubkey === ev.pubkey);
+        const name = nameFor(ev.pubkey, friend);
+        const pic  = pictureFor(ev.pubkey);
+        const savedIds = ev.saved.filter((id) => typeof id === 'string');
+        const preview = savedIds.slice(0, PREVIEW_BLOCKS);
+        const remainder = Math.max(0, savedIds.length - preview.length);
+
+        const blocks = preview.map((id) => {
+          const meta = lookup[id];
+          if (meta) {
+            return `
+              <li>
+                <a href="/sparrow/b/${escapeHTML(id)}" class="sp-act-block">
+                  <span class="sp-act-block-id">№ ${escapeHTML(id)}</span>
+                  <span class="sp-act-block-title">${escapeHTML(meta.title || '—')}</span>
+                  <span class="sp-act-block-chip">${escapeHTML(meta.channelName)}</span>
+                </a>
+              </li>
+            `;
+          }
+          return `
+            <li>
+              <a href="/sparrow/b/${escapeHTML(id)}" class="sp-act-block is-unknown">
+                <span class="sp-act-block-id">№ ${escapeHTML(id)}</span>
+                <span class="sp-act-block-title"><em>unknown block</em></span>
+              </a>
+            </li>
+          `;
+        }).join('');
+
+        return `
+          <li class="sp-act-event${ev.isNew ? ' is-new' : ''}" data-sp-act-event="${ev.id}">
+            <header class="sp-act-event-head">
+              ${pic
+                ? `<img class="sp-act-avatar" src="${escapeHTML(pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display='none'" />`
+                : `<span class="sp-act-avatar sp-act-avatar-placeholder" aria-hidden="true">✦</span>`}
+              <span class="sp-act-event-name">${escapeHTML(name)}</span>
+              <span class="sp-act-event-action">saved ${savedIds.length} ${savedIds.length === 1 ? 'block' : 'blocks'}</span>
+              <span class="sp-act-event-time" title="${new Date(ev.created_at * 1000).toISOString()}">${fmtRelative(ev.created_at)}</span>
+              ${ev.isNew ? '<span class="sp-act-badge-new">new</span>' : ''}
+            </header>
+            <ul class="sp-act-block-list">${blocks}</ul>
+            ${remainder > 0 ? `<p class="sp-act-event-more">+ ${remainder} more</p>` : ''}
+          </li>
+        `;
+      }
+
+      function repaint() {
+        const list = sortedEvents();
+        if (emptyEl) emptyEl.hidden = list.length > 0;
+        feedEl.innerHTML = list.map(renderEvent).join('');
+      }
+
+      // Subscribe — initial (limit 50) + live (since: bootTime).
+      function openReq(url, subId, filter, liveFlag) {
+        try {
+          const ws = new WebSocket(url);
+          openSockets.push(ws);
+          ws.addEventListener('open', () => {
+            try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+          });
+          ws.addEventListener('message', (msg) => {
+            let frame;
+            try { frame = JSON.parse(msg.data); } catch { return; }
+            if (!Array.isArray(frame)) return;
+            if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+              ingestEvent(frame[2], { isLive: liveFlag });
+              repaint();
+            } else if (frame[0] === 'EOSE' && frame[1] === subId && !liveFlag) {
+              // Close the historical subscription on EOSE; the live
+              // one stays open until beforeunload.
+              try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+              try { ws.close(); } catch {}
+              repaint();
+            }
+          });
+          if (!liveFlag) {
+            setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 8000);
+          }
+        } catch {}
+      }
+
+      const authors = friends.map((f) => f.pubkey);
+      const initSubId = `sp-act-init-${Math.random().toString(36).slice(2, 10)}`;
+      const liveSubId = `sp-act-live-${Math.random().toString(36).slice(2, 10)}`;
+      const initFilter = { kinds: [SYNC_KIND], authors, '#d': [D_TAG], limit: MAX_EVENTS };
+      const liveFilter = { kinds: [SYNC_KIND], authors, '#d': [D_TAG], since: bootTime };
+
+      for (const url of relays) {
+        openReq(url, initSubId, initFilter, false);
+        openReq(url, liveSubId, liveFilter, true);
+      }
+
+      // Safety repaint after 3s in case no EOSE lands.
+      setTimeout(repaint, 3000);
+
+      // Clear the `is-new` badge 12s after first appearance to keep
+      // the timeline honest — "new" should mean "JUST now."
+      setInterval(() => {
+        let changed = false;
+        const cutoff = Math.floor(Date.now() / 1000) - 12;
+        for (const ev of events.values()) {
+          if (ev.isNew && ev.created_at < cutoff) {
+            ev.isNew = false;
+            changed = true;
+          }
+        }
+        if (changed) repaint();
+      }, 4000);
+
+      window.addEventListener('beforeunload', () => {
+        for (const ws of openSockets) { try { ws.close(); } catch {} }
+      });
+    })();
+  </script>
+
+  <style is:global>
+    .sp-act-nav {
+      margin: 0 0 12px;
+    }
+    .sp-act-nav-link {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--sp-ember);
+      text-decoration: none;
+    }
+    .sp-act-nav-link:hover { text-decoration: underline; }
+    .sp-act-feed {
+      list-style: none;
+      padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .sp-act-event {
+      padding: 14px 16px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+      animation: sp-act-splice 280ms ease-out both;
+    }
+    .sp-act-event.is-new {
+      border-color: color-mix(in oklch, var(--sp-moss) 50%, var(--sp-rule));
+      background: color-mix(in oklch, var(--sp-moss) 5%, var(--sp-blue-hour));
+      animation: sp-act-splice-new 340ms ease-out both;
+    }
+    @keyframes sp-act-splice {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes sp-act-splice-new {
+      0%   { opacity: 0; transform: translateY(-8px); box-shadow: 0 0 0 0 color-mix(in oklch, var(--sp-moss) 40%, transparent); }
+      60%  { box-shadow: 0 0 0 8px color-mix(in oklch, var(--sp-moss) 0%, transparent); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .sp-act-event-head {
+      display: grid;
+      grid-template-columns: 28px 1fr auto auto auto;
+      align-items: center; gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--sp-rule);
+    }
+    .sp-act-avatar {
+      width: 28px; height: 28px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 1px solid var(--sp-rule);
+      background: var(--sp-ink);
+    }
+    .sp-act-avatar-placeholder {
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--sp-mute); font-size: 14px;
+    }
+    .sp-act-event-name {
+      font-family: var(--sp-ui); font-size: 14px; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-act-event-action {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--sp-ember);
+    }
+    .sp-act-event-time {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--sp-mute);
+    }
+    .sp-act-badge-new {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: color-mix(in oklch, var(--sp-moss) 30%, transparent);
+      color: var(--sp-moss);
+      border: 1px solid color-mix(in oklch, var(--sp-moss) 40%, transparent);
+    }
+    .sp-act-block-list {
+      list-style: none;
+      padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .sp-act-block {
+      display: grid;
+      grid-template-columns: 70px 1fr auto;
+      gap: 10px;
+      align-items: baseline;
+      padding: 6px 8px;
+      border-radius: 3px;
+      color: var(--sp-bone);
+      text-decoration: none;
+      transition: background 120ms ease;
+    }
+    .sp-act-block:hover {
+      background: color-mix(in oklch, var(--sp-ember) 8%, transparent);
+    }
+    .sp-act-block.is-unknown { color: var(--sp-mute); }
+    .sp-act-block-id {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+    }
+    .sp-act-block-title {
+      font-family: var(--sp-ui); font-size: 14px;
+      line-height: 1.35;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-act-block-chip {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--sp-mute);
+      border: 1px solid var(--sp-rule);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .sp-act-event-more {
+      margin: 8px 0 0;
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+      text-align: right;
+    }
+    .sp-act-empty {
+      margin: 14px 0 0;
+      color: var(--sp-mute);
+      font-size: 13px;
+      font-style: italic;
+    }
+    @media (max-width: 640px) {
+      .sp-act-event-head {
+        grid-template-columns: 28px 1fr auto;
+      }
+      .sp-act-event-action, .sp-act-badge-new { display: none; }
+    }
+  </style>
+</SparrowLayout>

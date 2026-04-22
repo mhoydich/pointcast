@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.26',
-    protocol_version: '0.26',
+    version: '0.27',
+    protocol_version: '0.27',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -54,6 +54,7 @@ export const GET: APIRoute = async () => {
       block_reader: '/sparrow/b/<id>',
       saved: '/sparrow/saved',
       friends: '/sparrow/friends',
+      friends_activity: '/sparrow/friends/activity',
       manifest: '/sparrow.json',
       atom: '/sparrow/feed.xml',
       latest_api: '/sparrow/api/latest.json',
@@ -386,6 +387,27 @@ export const GET: APIRoute = async () => {
           applied_in: ['/sparrow/friends subscribe filter', '/sparrow/friends feed render', '/sparrow dashboard lane', 'SparrowLayout live motion watcher'],
           ui: '🔈 mute / 🔇 unmute button per row · row fades to 45% opacity when muted · "muted" pill next to the pubkey',
           why_not_unfollow: 'unfollow is destructive (loses the alias, loses future reinstate) — mute lets users quiet noisy signers without losing track of them',
+        },
+
+        // v0.27: dedicated timeline view. Dual-subscription — a bounded
+        // initial pull (limit 50) for history + a `since: bootTime` live
+        // subscription that splices new events at the top without a
+        // full repaint. Events newer than bootTime pulse green ("new"
+        // badge) for 12 seconds, then fade to normal styling.
+        friends_activity: {
+          since: 'v0.27',
+          surface: '/sparrow/friends/activity',
+          subscriptions: {
+            initial: '{ kinds:[30078], authors:<non-muted friends>, "#d":["sparrow-public-saved-v1"], limit: 50 } — closed on EOSE',
+            live:    '{ kinds:[30078], authors:<non-muted friends>, "#d":["sparrow-public-saved-v1"], since: <bootTime seconds> } — kept open until beforeunload',
+          },
+          dedup_strategy: 'per-event.id Map so the same event across multiple relays only renders once; author replaceable events land as distinct entries by their event id',
+          render_policy: 'newest-wins sort by created_at desc, capped at 50 visible entries',
+          per_event_card: 'avatar + display name + "saved N blocks" + relative timestamp + first 3 saved-block receipts (title + channel chip) + "+N more" footer',
+          new_badge: 'events with created_at >= bootTime get .is-new styling (moss border + shadow pulse animation + "new" pill). Interval tick demotes them 12s after arrival.',
+          title_resolution: 'server-shipped lookup { [id]: { title, channel, channelName } } for every non-draft block',
+          share_with: '/sparrow/friends + /sparrow dashboard lane + SparrowLayout motion watcher all read the same sparrow:profiles cache, so avatars/names are one-pass',
+          mute_respected: 'muted friends filtered out of the authors list AND re-checked on ingest (mute can happen mid-subscribe)',
         },
 
         friends_lane: {
@@ -798,7 +820,8 @@ export const GET: APIRoute = async () => {
       'v0.23': 'Federation polish. Self-contained NIP-19 bech32 codec in /sparrow/friends — npubToHex/hexToNpub/parsePubkey — so the add-form accepts npub1… alongside hex and the HUD self-pubkey display renders as a short npub. NIP-01 kind-0 profile lookup REQs {kinds:[0], authors:<friends>} on load, caches {name, display_name, picture, nip05, fetched_at} in sparrow:profiles (24h TTL), and uses display_name/name as auto-alias when the local alias is empty. Friends list + feed cards show a 🛰 glyph on names pulled from the relay so federated vs local is legible. Picture rendering + NIP-05 verification round-trip are explicitly v0.24.',
       'v0.24': 'Federation finish. Profile pictures render as 28px circles on /sparrow/friends list (18px inline on feed cards) with lazy loading + referrerpolicy=no-referrer + onerror hide. NIP-05 verification hits https://<domain>/.well-known/nostr.json?name=<user> and checks names[user] equals the pubkey; results cached on the profile with a 7-day TTL. Moss-pill ✓ when verified, oxblood-pill ! on mismatch, dot while pending. Keyboard shortcut F jumps to /sparrow/friends from any page; palette + cheatsheet entries added. Friends reel-lane on /sparrow dashboard is explicitly deferred to v0.25 to keep this sprint coherent.',
       'v0.25': 'Friends lane on the dashboard. New compact section between /sparrow rosette and reel shows freshest save from each followed npub — avatar · name · block № · title · channel chip — sorted by event created_at desc, capped at 6 rows. Shares the kind-30078 consumer flow with /sparrow/friends and reads the same sparrow:profiles cache so hydration stays one-pass. Server inlines a block lookup (id → title + channel + channelName) so titles resolve without per-block fetches. Opt-out via localStorage["sparrow:friends-lane-hidden"]; dismiss button lives on the lane header. Hidden entirely by default when no friends have been added.',
-      'v0.26': 'Friends in motion. SparrowLayout gains a persistent streaming kind-30078 REQ with `since: bootTime` so only events published after the tab loaded fire a bottom-right "just saved" toast (avatar + name + № id · click opens). Max 3 visible, 7s TTL, fades on leave. Opt-in Web Audio chime (two-note fifth, ~450ms, no asset) via sparrow:friends-chime-enabled. Per-friend mute — sparrow:friends entries gain an optional `muted` field that drops the friend from every consumer path (subscribe, feed, lane, toasts) without unfollowing. New 🔈/🔇 mute button in /sparrow/friends. Global motion opt-out via sparrow:friends-motion-disabled. (current)',
+      'v0.26': 'Friends in motion. SparrowLayout gains a persistent streaming kind-30078 REQ with `since: bootTime` so only events published after the tab loaded fire a bottom-right "just saved" toast (avatar + name + № id · click opens). Max 3 visible, 7s TTL, fades on leave. Opt-in Web Audio chime (two-note fifth, ~450ms, no asset) via sparrow:friends-chime-enabled. Per-friend mute — sparrow:friends entries gain an optional `muted` field that drops the friend from every consumer path (subscribe, feed, lane, toasts) without unfollowing. New 🔈/🔇 mute button in /sparrow/friends. Global motion opt-out via sparrow:friends-motion-disabled.',
+      'v0.27': 'Friends activity timeline at /sparrow/friends/activity. Dual subscription — bounded initial pull (limit 50) for history + `since: bootTime` live pull kept open until beforeunload. Events render newest-first as per-event cards (avatar + name + "saved N blocks" + relative timestamp + first 3 saved-block receipts with title/channel chips + "+N more"). New events splice at the top with a moss pulse animation + "new" pill that fades after 12 seconds. Respects mute — muted friends filtered from the authors list and re-checked on ingest. CTA added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
