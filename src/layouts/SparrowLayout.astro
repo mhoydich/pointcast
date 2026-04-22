@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.19</span>
+          <span class="sp-sub">pointcast reader · v0.20</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -588,17 +588,29 @@ const paletteData = {
         //     reactions: { value: { [id]: string[] }, updated_at: ISO8601 } }
         // Merge policy on both sides is newest-wins by updated_at.
 
-        // ─── v0.18 · BRIDGE ORIGIN DISCOVERY (mDNS-friendly) ─────────
-        // Single resolver shared by every Magpie-bound fetch on the
+        // ─── v0.18+v0.20 · PEER-NODE ORIGIN DISCOVERY (mDNS-friendly) ─
+        // Single resolver shared by every peer-node-bound fetch on the
         // page (mirror + composer Magpie route + bridge awareness pill).
         // Ladder, in order, first 200 on /health wins:
-        //   1. localStorage['sparrow:magpie-origin']  (user override — LAN, VM, reverse proxy)
-        //   2. http://magpie.local:38473              (Bonjour-published .local name when Magpie advertises, v0.19+)
-        //   3. http://127.0.0.1:38473                 (hardcoded default)
+        //   1. localStorage['sparrow:magpie-origin']  (user override — LAN, VM, reverse proxy; kept as the
+        //                                              canonical key for backward compat with v0.18 users)
+        //   2. http://magpie.local:38473              (Magpie peer-node, Bonjour-published .local name, v0.19+)
+        //   3. http://127.0.0.1:38473                 (Magpie loopback default)
+        //   4. http://sparrow.local:38474             (Sparrow.app peer-node, Bonjour _sparrow._tcp, v0.20+)
+        //   5. http://127.0.0.1:38474                 (Sparrow.app loopback default)
+        // Magpie comes first because when both are installed, Magpie
+        // is the canonical publisher (composer routes through it, not
+        // Sparrow.app). Sparrow.app is the graceful fallback for users
+        // who just want the reader + mirror without the publisher.
+        // The reader-state mirror works identically against both; the
+        // composer route naturally 404s on Sparrow.app and falls back
+        // to direct /api/ping.
+        //
         // Resolved origin is cached on window.__sparrow.magpieOrigin
         // for the life of the page; a null cache means "probed, none
         // alive" — we don't re-probe until the next navigation.
         const MAGPIE_DEFAULT_PORT = 38473;
+        const SPARROW_PEER_PORT   = 38474;
         const MAGPIE_ORIGIN_STORAGE = 'sparrow:magpie-origin';
         window.__sparrow = window.__sparrow || {};
 
@@ -610,6 +622,8 @@ const paletteData = {
           } catch {}
           out.push(`http://magpie.local:${MAGPIE_DEFAULT_PORT}`);
           out.push(`http://127.0.0.1:${MAGPIE_DEFAULT_PORT}`);
+          out.push(`http://sparrow.local:${SPARROW_PEER_PORT}`);
+          out.push(`http://127.0.0.1:${SPARROW_PEER_PORT}`);
           return out;
         }
 
@@ -632,11 +646,18 @@ const paletteData = {
             if (ok) {
               window.__sparrow.magpieOrigin = ok;
               window.__sparrow.magpieOriginResolved = true;
+              // v0.20: tag the kind of peer we resolved to so the
+              // bridge pill can render accurately ("magpie · connected"
+              // vs "sparrow.app · connected") instead of pretending
+              // every peer is Magpie.
+              window.__sparrow.magpiePeerKind =
+                /\b38474\b|sparrow\.local/i.test(ok) ? 'sparrow-app' : 'magpie';
               return ok;
             }
           }
           window.__sparrow.magpieOrigin = null;
           window.__sparrow.magpieOriginResolved = true;
+          window.__sparrow.magpiePeerKind = null;
           return null;
         }
 

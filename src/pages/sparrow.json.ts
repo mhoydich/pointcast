@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.19',
-    protocol_version: '0.19',
+    version: '0.20',
+    protocol_version: '0.20',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -288,14 +288,16 @@ export const GET: APIRoute = async () => {
       probe_order: [
         { rank: 1, source: 'localStorage["sparrow:magpie-origin"]', why: 'user override — LAN, VM, reverse proxy, non-default port' },
         { rank: 2, source: 'http://magpie.local:38473', why: 'mDNS-published .local name once Magpie advertises via Bonjour (v0.19)' },
-        { rank: 3, source: 'http://127.0.0.1:38473', why: 'hardcoded loopback default — always present when Magpie is running locally' },
+        { rank: 3, source: 'http://127.0.0.1:38473', why: 'Magpie hardcoded loopback default — always present when Magpie is running locally' },
+        { rank: 4, source: 'http://sparrow.local:38474', why: 'Sparrow.app peer-node Bonjour name — v0.20 fallback when Magpie is absent but the menu-bar companion is running' },
+        { rank: 5, source: 'http://127.0.0.1:38474', why: 'Sparrow.app hardcoded loopback default — last-resort fallback before giving up on peer mirror' },
       ],
       health_endpoint: '/health',
       probe_timeout_ms: 1200,
-      resolved_cache: 'window.__sparrow.magpieOrigin (plus magpieOriginResolved flag so we don\'t re-probe mid-session)',
+      resolved_cache: 'window.__sparrow.magpieOrigin + window.__sparrow.magpiePeerKind ("magpie" | "sparrow-app") so the bridge pill can render the right peer label',
       override_setter: 'set localStorage["sparrow:magpie-origin"] to e.g. "http://magpie.box.lan:38473" and reload',
-      why_not_direct_mdns: 'Browsers do not expose Bonjour / mDNS-SD APIs; .local name resolution is handled by the OS stack and works transparently once the service advertises. v0.19 ships the Swift-side NWListener advertisement on the Magpie side.',
-      shared_by: ['reader_state_mirror (GET/POST)', 'magpie_bridge (GET /health + /config.json)', 'compose (POST /compose)'],
+      why_not_direct_mdns: 'Browsers do not expose Bonjour / mDNS-SD APIs; .local name resolution is handled by the OS stack and works transparently once the service advertises. v0.19 shipped the Swift-side NWListener advertisement on the Magpie side; v0.20 ships the parallel advertisement on Sparrow.app.',
+      shared_by: ['reader_state_mirror (GET/POST, either peer)', 'magpie_bridge (GET /health + /config.json — Magpie-only routes naturally 404 on Sparrow.app)', 'compose (POST /compose — Magpie-only; falls back to direct /api/ping on Sparrow.app)'],
 
       // v0.19: Magpie advertises via Bonjour. Other Bonjour-aware clients
       // (CLI tools, Sparrow.app, dev utilities) can discover the
@@ -316,6 +318,32 @@ export const GET: APIRoute = async () => {
         listener_binding: 'loopback — advertisement is metadata-only; traffic still flows over 127.0.0.1',
         publisher: 'Magpie v0.19 via NWListener.service + NWTXTRecord',
         discovery_ui: 'Any `dns-sd -B _magpie._tcp` on macOS shows the active Magpie instance',
+      },
+
+      // v0.20: Sparrow.app (native macOS menu-bar companion) runs a
+      // parallel peer-node on loopback port 38474 with the same
+      // sparrow-reader-state-v1 mirror shape. The reader-state endpoints
+      // are byte-compatible with Magpie's, so the web client's mirror
+      // works against either. Composer still routes through Magpie
+      // because only Magpie has the PublisherRegistry; when Sparrow.app
+      // is the resolved peer, /compose 404s and the composer gracefully
+      // falls back to direct /api/ping.
+      sparrow_peer_advertisement: {
+        service_type: '_sparrow._tcp',
+        service_name: 'Sparrow',
+        port: 38474,
+        txt_record: {
+          version: '0.20',
+          path:    '/health',
+          schema:  'sparrow-reader-state-v1',
+          mirror:  '/reader-state',
+          peer:    'sparrow-app',
+        },
+        listener_binding: 'loopback — same posture as Magpie: advertisement is metadata-only, traffic is 127.0.0.1-bound',
+        publisher: 'Sparrow.app v0.20 via NWListener.service + NWTXTRecord (Sources/SparrowApp/SparrowServer.swift)',
+        discovery_ui: '`dns-sd -B _sparrow._tcp` shows the active Sparrow.app instance; running both peers simultaneously is fine',
+        enabled_toggle: 'Settings.peerServerEnabled (defaults to true); port override via Settings.peerServerPort',
+        when_active: 'Resolver falls through to Sparrow.app as rank 4/5 only when Magpie isn\'t responding — so both can coexist without thrashing',
       },
     },
 
@@ -593,8 +621,8 @@ export const GET: APIRoute = async () => {
       'v0.16': 'Visited + reactions extend the sparrow-reader-state-v1 schema. writeVisited + writeReactions both debounce into the same 600ms scheduleReaderMirror(); on pull, Sparrow repaints .is-visited and rehydrates reaction chips from remote state. Magpie-side merge logic unchanged — its per-key newest-wins already handled any shape.',
       'v0.17': 'OPML import/export on /sparrow/saved. Export bundles Sparrow\'s Atom feed + the nine channel RSS feeds + one <outline> per saved block (/b/<id>) into an OPML 2.0 file any feed reader can swallow. Import DOMParses the uploaded text and unions /b/<id> matches with sparrow:saved (additive, never destructive; unknown outlines ignored). Entirely client-side.',
       'v0.18': 'Bridge discovery (web side). Shared resolveMagpieOrigin() probes a ranked ladder — localStorage["sparrow:magpie-origin"] override → http://magpie.local:38473 → http://127.0.0.1:38473 — and caches the first /health responder on window.__sparrow. Used by every Magpie-bound fetch (mirror, bridge awareness, composer). Sets the stage for Magpie v0.19\'s Bonjour advertisement: the `.local` host just starts resolving once Magpie advertises via NWListener.',
-      'v0.19': 'Magpie Swift-side Bonjour advertisement shipped. NWListener.service publishes "Magpie" of type _magpie._tcp on port 38473 with a TXT record carrying version, /health path, schema id, composer + mirror endpoint hints. macOS mDNS responder transparently resolves magpie.local to the host, so Sparrow\'s v0.18 ladder picks it up on the second rung without any web-side changes. Listener stays loopback-bound — advertisement is metadata-only. (current)',
-      'v0.20': 'Sparrow.app HTTP server + Bonjour advertisement for native ↔ web reading-list mirror. Companion exposes GET/POST /saved on its own port with service type _sparrow-reader._tcp so Sparrow web tabs discover it alongside Magpie.',
+      'v0.19': 'Magpie Swift-side Bonjour advertisement shipped. NWListener.service publishes "Magpie" of type _magpie._tcp on port 38473 with a TXT record carrying version, /health path, schema id, composer + mirror endpoint hints. macOS mDNS responder transparently resolves magpie.local to the host, so Sparrow\'s v0.18 ladder picks it up on the second rung without any web-side changes. Listener stays loopback-bound — advertisement is metadata-only.',
+      'v0.20': 'Sparrow.app peer-node shipped. Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on port 38474 exposing GET /health + GET /reader-state.json + POST /reader-state with byte-identical sparrow-reader-state-v1 merge logic to Magpie\'s. NWListener.service advertises _sparrow._tcp "Sparrow" with a TXT record (version/path/schema/mirror/peer). Web resolver ladder extended to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474. window.__sparrow.magpiePeerKind records which peer answered so the bridge pill can label it accurately. Composer stays Magpie-only and falls back to direct /api/ping when Sparrow.app is the resolved peer. (current)',
       'v0.21': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44). Closes the multi-machine loop that localhost mirror can\'t reach.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },

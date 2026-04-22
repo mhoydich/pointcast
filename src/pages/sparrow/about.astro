@@ -245,6 +245,12 @@ const features = [
     body: 'Magpie v0.19 attaches NWListener.service — type _magpie._tcp, name "Magpie", port 38473, TXT record carrying version + /health + schema id + composer + mirror endpoints. macOS mDNS responder makes magpie.local resolve to the host; Sparrow\'s v0.18 ladder picks it up on the second rung. dns-sd -B _magpie._tcp shows the active instance.',
     kbd: '_magpie._tcp',
   },
+  {
+    kicker: 'peer-node',
+    title: 'Sparrow.app mirrors on its own port',
+    body: 'v0.20 ships a second peer-node inside the menu-bar companion: Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on 38474 exposing /health + /reader-state GET/POST with byte-identical newest-wins merge logic to Magpie. Advertises _sparrow._tcp via Bonjour. The web resolver ladder grows to 5 rungs (user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474) and tags the resolved peer kind so the bridge pill can label it. Reader-state sync works with just Sparrow.app running — Magpie is no longer a mirror prerequisite.',
+    kbd: '_sparrow._tcp · :38474',
+  },
 ];
 
 const roadmap = [
@@ -514,19 +520,24 @@ const roadmap = [
   },
   {
     v: 'v0.20',
-    status: 'next',
-    when: 'planned',
-    title: 'Sparrow.app Bonjour + HTTP server',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Sparrow.app peer-node (Bonjour + HTTP)',
     items: [
-      'Native menu-bar companion gains its own NWListener advertising _sparrow._tcp',
-      'Mirrors the shape Magpie uses so the discovery ladder generalizes to multiple peers',
-      'Opens the door to Sparrow.app hosting a local reader-state mirror independent of Magpie',
-      'Lets multiple Mac apps on the same LAN cross-aggregate reading state',
+      'Sources/SparrowApp/SparrowServer.swift — loopback NWListener on port 38474 with hand-rolled HTTP/1.1 parser',
+      'Routes: GET /health, GET /reader-state.json, POST /reader-state — same sparrow-reader-state-v1 shape as Magpie',
+      'Newest-wins merge logic (mergeReaderState) is byte-identical to Magpie\'s, so state is portable between peers',
+      'NWListener.service advertises _sparrow._tcp "Sparrow" with TXT record (version, /health, schema, /reader-state, peer: sparrow-app)',
+      'Web resolver ladder expands to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474',
+      'window.__sparrow.magpiePeerKind records "magpie" vs "sparrow-app" so the bridge pill labels the active peer accurately',
+      'Composer still Magpie-only (needs PublisherRegistry) — falls back to direct /api/ping when Sparrow.app is the resolved peer',
+      'Settings.peerServerEnabled toggle (default: on); Settings.peerServerPort override',
     ],
   },
   {
     v: 'v0.21',
-    status: 'planned',
+    status: 'next',
+    when: 'planned',
     title: 'Cross-device sync',
     items: [
       'Same sparrow-reader-state-v1 blob, but distributed over a Nostr relay pool',
@@ -612,7 +623,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.19 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.20 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
