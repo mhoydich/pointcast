@@ -1,0 +1,398 @@
+---
+/**
+ * /tezos — PointCast's Tezos pillar.
+ *
+ * Target keywords: "pointcast tezos", "tezos fa2 nft", "tezos dapp",
+ * "beacon wallet kukai temple umami", "visit nouns tezos", "tezos cc0".
+ *
+ * SEO / GEO strategy:
+ *   - TechArticle overview + keywords-dense copy for the top half
+ *   - Product + Offer schema per live mainnet contract
+ *   - DefinedTerm sub-graph for every Tezos standard used
+ *   - FAQPage (10 Q&A) for featured-snippet eligibility
+ *   - BreadcrumbList
+ *   - Wallet compatibility table + TZIP standards table as visible
+ *     structured content that humans + LLMs can both extract
+ *
+ * Machine companion at /tezos.json (and /.well-known/tezos alias).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { TEZOS_CONTRACTS, TEZOS_STANDARDS, TEZOS_WALLETS, TEZOS_TOOLS, NETWORK_LABEL, liveContracts } from '../lib/tezos-ecosystem';
+
+const live = liveContracts();
+
+const faqs = [
+  {
+    q: 'What is PointCast on Tezos?',
+    a: 'PointCast uses Tezos as its on-chain layer for NFTs, attention tokens, and a planned no-loss savings pool. Visit Nouns is a live FA2 NFT contract (KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh) where every Nouns seed 0-1199 is mintable on demand. DRUM (FA1.2 attention token) and Prize Cast (no-loss savings) are written and pending origination. Everything is CC0-flavored and open-source.',
+  },
+  {
+    q: 'Which Tezos wallet should I use on pointcast.xyz?',
+    a: 'Any Beacon-compatible wallet works. Kukai (browser-based, social-login recovery) is the easiest first-time wallet. Temple Wallet (browser extension + mobile) is the most popular. Umami is best for desktop + ledger integration. Altme is mobile-first with credential features.',
+  },
+  {
+    q: 'What Tezos standards does PointCast implement?',
+    a: 'FA2 (TZIP-012) for multi-asset NFTs — Visit Nouns is the live example. FA1.2 (TZIP-007) for fungible tokens — DRUM and Bun Token use this. TZIP-016 for contract metadata. TZIP-021 for token metadata. Contracts written in SmartPy, compiled to Michelson.',
+  },
+  {
+    q: 'How much does it cost to mint on PointCast?',
+    a: 'Approximately 0.003 ꜩ (3,000 mutez) in Tezos network fees. The mint itself is free — the contract has no additional price. Fractions of a cent at typical XTZ prices.',
+  },
+  {
+    q: 'Where can I see Visit Nouns on a marketplace?',
+    a: 'Primary mint: https://pointcast.xyz/collection/visit-nouns. Secondary: objkt at https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh. Chain explorer: https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh.',
+  },
+  {
+    q: 'Why did PointCast choose Tezos over Ethereum?',
+    a: 'Four reasons: (1) Gas — Tezos mint costs are milli-cent equivalents. (2) Standards — FA2 and FA1.2 are simpler than ERC matrices. (3) Wallet standard — Beacon covers Kukai/Temple/Umami/Altme in one protocol. (4) Baking yield — Tezos validators pay ~5% APY, which funds downstream mechanics like Prize Cast without bridging.',
+  },
+  {
+    q: 'How do I build on Tezos with SmartPy?',
+    a: 'SmartPy (smartpy.io) is a Python-like contract language that compiles to Michelson. Write a contract in a .py file, compile via SmartPy\'s online IDE or CLI, originate via Taquito (scripts/deploy-*.mjs in our repo). For frontend: Taquito + Beacon SDK.',
+  },
+  {
+    q: 'What is baking and how does Prize Cast use it?',
+    a: 'Baking is Tezos\'s proof-of-stake validation. Bakers stake XTZ and earn ~5% APY. Prize Cast pools depositor tez with a baker; accumulated yield funds a weekly Sunday 18:00 UTC draw. PoolTogether-flavored but Tezos-native.',
+  },
+  {
+    q: 'What testnets does PointCast use?',
+    a: 'Ghostnet (long-lived public testnet), Paris-net (proto-testing), Shadownet (PointCast-private). Visit Nouns went ghostnet → shadownet → mainnet.',
+  },
+  {
+    q: 'How is PointCast part of the Tezos ecosystem?',
+    a: 'First active Nouns-derivative project on Tezos in 2026 after Teznouns (2023). Contributes to CC0 proliferation culture alongside fxhash and objkt. Also a reference site for agent-native Tezos dapps (llms.txt + agents.json + stripped-HTML middleware integrated with Beacon + FA2). Full manifest at /tezos.json.',
+  },
+];
+
+const standardTerms = TEZOS_STANDARDS.map((s) => ({
+  '@type': 'DefinedTerm',
+  '@id': `https://pointcast.xyz/tezos#term-${s.id}`,
+  name: s.name,
+  description: s.summary,
+  url: s.url,
+  ...(s.sameAs ? { sameAs: s.sameAs } : {}),
+  termCode: s.id,
+  inDefinedTermSet: 'https://pointcast.xyz/glossary#terms',
+}));
+
+const productSchemas = live.map((c) => ({
+  '@type': 'Product',
+  '@id': `https://pointcast.xyz/tezos#contract-${c.slug}`,
+  name: c.name,
+  description: c.description,
+  url: c.pageUrl,
+  category: c.standard === 'FA2' ? 'NFT / Tezos FA2' : c.standard === 'FA1.2' ? 'Fungible Token / Tezos FA1.2' : 'Tezos contract',
+  brand: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+  sameAs: [c.tzktUrl, c.objktUrl].filter(Boolean) as string[],
+  ...(c.address ? { identifier: c.address } : {}),
+  ...(c.symbol ? { model: c.symbol } : {}),
+  ...(c.mintPriceMutez !== undefined
+    ? {
+        offers: {
+          '@type': 'Offer',
+          url: c.pageUrl,
+          price: (c.mintPriceMutez / 1_000_000).toFixed(6),
+          priceCurrency: 'XTZ',
+          availability: 'https://schema.org/InStock',
+          seller: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org' },
+        },
+      }
+    : {}),
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': 'https://pointcast.xyz/tezos',
+      headline: 'PointCast on Tezos — FA2 NFTs, Beacon wallet, SmartPy contracts, and a no-loss savings pool',
+      name: 'PointCast on Tezos',
+      description: 'PointCast\'s Tezos hub. Live FA2 contracts (Visit Nouns), Beacon wallet compatibility matrix (Kukai, Temple, Umami, Altme), SmartPy and Taquito tooling, TZIP standards, testnet faucets, and a Nouns proliferation posture grounded in CC0.',
+      url: 'https://pointcast.xyz/tezos',
+      author: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person', name: 'Mike Hoydich' },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      image: 'https://pointcast.xyz/images/og-home-v3.png',
+      datePublished: '2026-04-21',
+      dateModified: new Date().toISOString().slice(0, 10),
+      inLanguage: 'en-US',
+      mainEntityOfPage: 'https://pointcast.xyz/tezos',
+      keywords: 'Tezos, FA2, FA1.2, Beacon wallet, Kukai, Temple wallet, Umami, Altme, Taquito, SmartPy, Michelson, baking, XTZ, Tezos NFT, Visit Nouns, CC0, agent-native Tezos dapp, TZIP-012, TZIP-021',
+      articleSection: 'Tezos',
+      about: [
+        { '@type': 'Thing', name: 'Tezos', sameAs: 'https://en.wikipedia.org/wiki/Tezos' },
+        { '@type': 'Thing', name: 'Non-fungible token', sameAs: 'https://en.wikipedia.org/wiki/Non-fungible_token' },
+        { '@type': 'Thing', name: 'Nouns DAO', sameAs: 'https://en.wikipedia.org/wiki/Nouns_(NFT)' },
+      ],
+    },
+    ...productSchemas,
+    ...standardTerms,
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/tezos#faq',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/tezos#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Tezos', item: 'https://pointcast.xyz/tezos' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="PointCast on Tezos"
+  description="PointCast's Tezos hub. Live FA2 NFT contract (Visit Nouns, KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh), Beacon wallet compatibility matrix, SmartPy contracts, TZIP standards, how-to-mint walkthrough. Nouns-on-Tezos proliferation grounded in CC0."
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/tezos.json', title: 'Tezos manifest (JSON)' }]}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Tezos</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">TEZOS · FA2 · BEACON · CC0</p>
+      <h1 class="display">PointCast on Tezos.</h1>
+      <p class="dek">
+        PointCast uses <a href="https://en.wikipedia.org/wiki/Tezos" target="_blank" rel="noopener">Tezos</a>
+        as its on-chain layer. <strong>Visit Nouns</strong> is a live
+        FA2 NFT contract (KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh) where
+        every <a href="/nouns">Nouns</a> seed 0-1199 is mintable for
+        ~0.003 ꜩ in network fees. CC0 art. Open-supply. DRUM (FA1.2
+        attention token) and Prize Cast (no-loss savings on Tezos
+        baking yield) are written and pending origination.
+      </p>
+      <p class="dek">
+        New to Tezos? Start at <a href="/tezos/how-to-mint">/tezos/how-to-mint</a>
+        — 10 minutes, end to end. Machine manifest at
+        <a href="/tezos.json"><code>/tezos.json</code></a>.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="contracts">Live contracts</h2>
+      <p>{live.length} contract{live.length === 1 ? '' : 's'} originated on Tezos mainnet. Pending contracts are listed below with current status.</p>
+      <ul class="contracts">
+        {TEZOS_CONTRACTS.map((c) => (
+          <li class={`contract contract--${c.network}`}>
+            <header class="contract__head">
+              <h3 class="contract__name">
+                {c.pageUrl ? <a href={c.pageUrl}>{c.name}</a> : c.name}
+              </h3>
+              <span class="contract__network mono">{NETWORK_LABEL[c.network]}</span>
+            </header>
+            {c.address && (
+              <p class="contract__addr mono"><code>{c.address}</code></p>
+            )}
+            <p class="contract__desc">{c.description}</p>
+            <p class="contract__meta mono">
+              Standard: <strong>{c.standard}</strong>
+              {c.symbol && <> · Symbol: <strong>{c.symbol}</strong></>}
+              {c.mintPriceMutez !== undefined && <> · Fee: <strong>~{(c.mintPriceMutez / 1_000_000).toFixed(3)} ꜩ</strong></>}
+            </p>
+            {(c.tzktUrl || c.objktUrl) && (
+              <p class="contract__links mono">
+                {c.tzktUrl && <a href={c.tzktUrl} target="_blank" rel="noopener">TzKT ↗</a>}
+                {c.tzktUrl && c.objktUrl && <span aria-hidden="true"> · </span>}
+                {c.objktUrl && <a href={c.objktUrl} target="_blank" rel="noopener">objkt ↗</a>}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="wallets">Wallet compatibility</h2>
+      <p>All four wallets below speak the <a href="https://walletbeacon.io" target="_blank" rel="noopener">Beacon protocol</a>. Pick any one.</p>
+      <ul class="wallets">
+        {TEZOS_WALLETS.map((w) => (
+          <li class="wallet">
+            <header class="wallet__head">
+              <h3 class="wallet__name"><a href={w.url} target="_blank" rel="noopener">{w.name} ↗</a></h3>
+              <span class="wallet__platforms mono">{w.platforms.join(' · ')}</span>
+            </header>
+            <p class="wallet__note">{w.note}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="standards">TZIP standards in use</h2>
+      <dl class="standards">
+        {TEZOS_STANDARDS.map((s) => (
+          <>
+            <dt>
+              <a href={s.url} target="_blank" rel="noopener">{s.name} ↗</a>
+            </dt>
+            <dd>
+              <p>{s.summary}</p>
+              {s.adoptedBy.length > 0 && (
+                <p class="standards__adoption mono">Adopted: {s.adoptedBy.join(' · ')}</p>
+              )}
+            </dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <section class="section">
+      <h2 id="tooling">Tooling</h2>
+      <ul class="tools">
+        {TEZOS_TOOLS.map((t) => (
+          <li class="tool">
+            <h3 class="tool__name"><a href={t.url} target="_blank" rel="noopener">{t.name} ↗</a></h3>
+            <p class="tool__purpose">{t.purpose}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="faq">FAQ</h2>
+      <dl class="faq">
+        {faqs.map((f) => (
+          <>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">RELATED</p>
+      <ul>
+        <li><a href="/tezos/how-to-mint">/tezos/how-to-mint — step-by-step mint walkthrough</a></li>
+        <li><a href="/tezos.json">/tezos.json — machine-readable manifest</a></li>
+        <li><a href="/nouns">/nouns — Nouns-on-Tezos pillar</a></li>
+        <li><a href="/collection/visit-nouns">/collection/visit-nouns — live gallery + mint UI</a></li>
+        <li><a href="/collection">/collection — every token PointCast has live</a></li>
+        <li><a href="/cast">/cast — Prize Cast (no-loss savings, pending)</a></li>
+        <li><a href="/drum">/drum — DRUM token earn loop</a></li>
+        <li><a href="https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">Visit Nouns on TzKT ↗</a></li>
+        <li><a href="https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">Visit Nouns on objkt ↗</a></li>
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 820px; margin: 0 auto; padding: 18px 18px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+    margin: 0 0 10px;
+  }
+  .display { font-family: var(--pc-font-sans); font-size: 40px; font-weight: 500; line-height: 1.05; margin: 0 0 12px; }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 16px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0 0 10px; max-width: 64ch; }
+  .dek a { color: var(--pc-accent); }
+  .dek code { font-family: var(--pc-font-mono); font-size: 13px; background: #f4f2ed; padding: 1px 5px; border-radius: 2px; }
+  .dek strong { font-weight: 500; color: var(--pc-ink); }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+  .section p {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--pc-ink);
+    margin: 0 0 12px;
+    max-width: 64ch;
+  }
+
+  .contracts, .wallets, .tools { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .contract, .wallet, .tool {
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .contract--mainnet { border-left: 3px solid #0F6E56; }
+  .contract--pending { border-left: 3px solid var(--pc-ink-muted); background: #fafaf8; }
+  .contract__head, .wallet__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .contract__name, .wallet__name, .tool__name {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .contract__name a, .wallet__name a, .tool__name a { color: var(--pc-ink); text-decoration: none; }
+  .contract__name a:hover, .wallet__name a:hover, .tool__name a:hover { color: var(--pc-accent); }
+  .contract__network, .wallet__platforms { color: var(--pc-ink-muted); font-size: 10px; }
+  .contract__addr { margin: 0 0 6px; color: var(--pc-ink-muted); font-size: 11px; word-break: break-all; }
+  .contract__addr code { font-family: var(--pc-font-mono); }
+  .contract__desc, .wallet__note, .tool__purpose {
+    margin: 0 0 6px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+  .contract__meta, .contract__links { margin: 0; color: var(--pc-ink-muted); font-size: 10px; }
+  .contract__meta strong { color: var(--pc-ink); font-weight: 500; }
+  .contract__links a { color: var(--pc-accent); }
+
+  .standards { margin: 0; display: grid; gap: 12px; }
+  .standards dt { font-family: var(--pc-font-sans); font-size: 15px; font-weight: 500; }
+  .standards dt a { color: var(--pc-accent); }
+  .standards dd { margin: 0 0 4px; font-size: 13.5px; line-height: 1.55; color: var(--pc-ink-soft); max-width: 64ch; }
+  .standards dd p { margin: 0 0 4px; font-size: 13.5px; }
+  .standards__adoption { color: var(--pc-ink-muted); font-size: 10px; letter-spacing: 0.1em; }
+
+  .faq { margin: 0; display: grid; gap: 14px; }
+  .faq dt { font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500; }
+  .faq dd { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft); max-width: 64ch; }
+
+  .related {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

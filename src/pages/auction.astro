@@ -1,0 +1,329 @@
+---
+/**
+ * /auction — live Visit Nouns daily auction.
+ *
+ * The missing Tezos primitive: a self-perpetuating daily auction. This page
+ * is the live UI for the DailyAuction contract (contracts/v2/daily_auction.py).
+ * Every 24h one Visit Nouns token mints to the top bidder; settlement rolls
+ * the next auction automatically.
+ *
+ * v0 scope — see docs/briefs/2026-04-21-daily-auction-spec.md.
+ * Research memo — docs/research/2026-04-21-tezos-nouns-builder.md.
+ *
+ * State flow:
+ *   - Page fetches auction storage via TzKT on mount.
+ *   - Polls every 10s while tab visible.
+ *   - Countdown ticks locally (no server round-trip).
+ *   - Bid + settle use Beacon wallet (loaded on demand, not at boot).
+ *
+ * Author: cc. Source: Mike chat "tezos nouns builder" + "keep going"
+ * (cc picks defaults on brief's 5 open questions).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
+
+// Read current auction address from contracts.json. Shadownet for now;
+// swap to mainnet after origination.
+const auctionAddrMainnet = (contracts as Record<string, unknown>).daily_auction
+  ? ((contracts as Record<string, Record<string, string>>).daily_auction?.mainnet ?? '')
+  : '';
+const auctionAddrShadownet = (contracts as Record<string, unknown>).daily_auction
+  ? ((contracts as Record<string, Record<string, string>>).daily_auction?.shadownet ?? '')
+  : '';
+const network = auctionAddrMainnet ? 'mainnet' : 'shadownet';
+const auctionAddr = auctionAddrMainnet || auctionAddrShadownet;
+const visitNounsAddr =
+  (contracts as Record<string, Record<string, string>>).visit_nouns?.[network] ?? '';
+
+const title = 'Auction — daily Visit Nouns mint (Tezos)';
+const description =
+  "Every 24h, one new Visit Nouns token mints to the top bidder on Tezos. Proceeds flow to a multisig treasury. Self-perpetuating. The missing Nouns primitive on Tezos, shipped as v0 of the Tezos Nouns Builder.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'PointCast Visit Nouns Auction',
+  description,
+  url: 'https://pointcast.xyz/auction',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="auction">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>auction</span>
+    </nav>
+
+    <header class="auction__head">
+      <p class="kicker mono">TEZOS NOUNS BUILDER · V0 · DAILY AUCTION</p>
+      <h1 class="title">Every 24h, one Visit Noun.</h1>
+      <p class="dek">
+        The self-perpetuating daily auction on Tezos — <b>the missing Nouns
+        primitive on this chain</b>. Bid in XTZ; winning bidder receives a
+        freshly minted <a href="/b/0330">Visit Nouns</a> token; proceeds flow
+        to a multisig treasury. Spec at <a href="https://github.com/mhoydich/pointcast/blob/main/docs/briefs/2026-04-21-daily-auction-spec.md"><code>docs/briefs/2026-04-21-daily-auction-spec.md</code></a>.
+      </p>
+    </header>
+
+    {auctionAddr ? (
+      <section class="auction__live" data-network={network} data-contract={auctionAddr} data-fa2={visitNounsAddr}>
+        <div class="hero">
+          <div class="hero__noun" id="hero-noun">
+            <div class="hero__noun-placeholder mono">loading…</div>
+          </div>
+          <div class="hero__info">
+            <p class="hero__label mono">NOUN № <span id="current-noun-id">—</span></p>
+            <p class="hero__countdown" id="countdown">—</p>
+            <p class="hero__phase mono" id="phase">—</p>
+            <dl class="hero__bid">
+              <dt class="mono">TOP BID</dt>
+              <dd id="top-bid">—</dd>
+              <dt class="mono">BY</dt>
+              <dd id="top-bidder" class="mono">—</dd>
+              <dt class="mono">MIN NEXT</dt>
+              <dd id="min-next">—</dd>
+            </dl>
+          </div>
+        </div>
+
+        <form class="bid-form" id="bid-form" autocomplete="off">
+          <label for="bid-amount" class="mono">YOUR BID (XTZ)</label>
+          <div class="bid-form__row">
+            <input
+              type="number"
+              id="bid-amount"
+              name="bid-amount"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              aria-describedby="bid-hint"
+            />
+            <button type="submit" class="btn btn-bid" id="btn-bid" disabled>
+              <span id="bid-label">connect wallet to bid</span>
+            </button>
+          </div>
+          <p id="bid-hint" class="mono bid-hint">
+            must beat current top by <span id="min-inc-pct">—</span>%.
+            bidding refunds the previous top bidder in the same op.
+          </p>
+          <button type="button" class="btn btn-settle" id="btn-settle" hidden>
+            ⚙ settle + create next (earn <span id="keeper-pct">—</span>%)
+          </button>
+        </form>
+
+        <aside class="history">
+          <h3 class="mono">RECENT SETTLEMENTS</h3>
+          <ul id="history-list">
+            <li class="history__empty mono">— (loading…)</li>
+          </ul>
+        </aside>
+
+        <footer class="contract-info mono">
+          <p>
+            Contract: <a id="contract-link" href={`https://tzkt.io/${auctionAddr}`} target="_blank" rel="noopener"><code>{auctionAddr}</code></a> ·
+            Network: <code>{network}</code> ·
+            Visit Nouns FA2: <a href={`https://tzkt.io/${visitNounsAddr}`} target="_blank" rel="noopener"><code>{visitNounsAddr || '—'}</code></a> ·
+            Agent manifest: <a href="/auction.json"><code>/auction.json</code></a>
+          </p>
+        </footer>
+      </section>
+    ) : (
+      <section class="auction__pending">
+        <h2 class="mono pending__kicker">NOT YET ORIGINATED</h2>
+        <p>
+          The DailyAuction contract lives at
+          <code>contracts/v2/daily_auction.py</code> and is ready for
+          origination. Until it's deployed, this page is a placeholder — the
+          research memo and build spec explain the shape.
+        </p>
+        <ul class="pending__links mono">
+          <li><a href="https://github.com/mhoydich/pointcast/blob/main/contracts/v2/daily_auction.py">contracts/v2/daily_auction.py</a></li>
+          <li><a href="https://github.com/mhoydich/pointcast/blob/main/docs/briefs/2026-04-21-daily-auction-spec.md">docs/briefs/2026-04-21-daily-auction-spec.md</a></li>
+          <li><a href="https://github.com/mhoydich/pointcast/blob/main/docs/research/2026-04-21-tezos-nouns-builder.md">docs/research/2026-04-21-tezos-nouns-builder.md</a></li>
+          <li><a href="/b/0330">block 0330 — the research editorial</a></li>
+        </ul>
+        <p class="pending__next mono">
+          Deploy sequence: <code>node scripts/deploy-daily-auction-shadownet.mjs</code>,
+          verify on Ghostnet TzKT, then <code>deploy-daily-auction-mainnet.mjs</code>.
+          Populate <code>daily_auction.mainnet</code> in <code>src/data/contracts.json</code>
+          → this page switches to live mode on next build.
+        </p>
+      </section>
+    )}
+  </main>
+</BlockLayout>
+
+<script>
+  import {
+    fetchAuctionStorage,
+    toView,
+    countdown,
+    mutezToTezDisplay,
+    shortAddr,
+    type AuctionStorage,
+    type AuctionView,
+  } from '../lib/auction';
+
+  const root = document.querySelector('.auction__live') as HTMLElement | null;
+  if (!root) {
+    // Not-yet-originated state. Page is static; nothing to do.
+    console.info('[auction] not originated yet');
+  } else {
+    const network = root.dataset.network as 'mainnet' | 'shadownet';
+    const contractAddr = root.dataset.contract!;
+    const fa2Addr = root.dataset.fa2!;
+
+    let storage: AuctionStorage | null = null;
+    let view: AuctionView | null = null;
+
+    function noun_svg_url(id: number): string {
+      return `https://noun.pics/${id}.svg`;
+    }
+
+    function render() {
+      if (!storage) return;
+      view = toView(storage);
+      (document.getElementById('current-noun-id') as HTMLElement).textContent = String(view.current_noun_id);
+      (document.getElementById('countdown') as HTMLElement).textContent = countdown(view.time_left_sec);
+      const phase = document.getElementById('phase')!;
+      phase.textContent = view.phase;
+      phase.dataset.phase = view.phase;
+      (document.getElementById('top-bid') as HTMLElement).textContent = view.has_bid
+        ? `${mutezToTezDisplay(view.highest_bid)} ꜩ`
+        : '— (no bid yet)';
+      (document.getElementById('top-bidder') as HTMLElement).textContent = view.has_bid
+        ? shortAddr(view.highest_bidder)
+        : '—';
+      (document.getElementById('min-next') as HTMLElement).textContent =
+        `${mutezToTezDisplay(view.min_next_bid_mutez)} ꜩ`;
+      (document.getElementById('min-inc-pct') as HTMLElement).textContent =
+        (view.min_increment_bps / 100).toFixed(1);
+      (document.getElementById('keeper-pct') as HTMLElement).textContent =
+        (view.keeper_tip_bps / 100).toFixed(2);
+      // Render noun svg
+      const heroNoun = document.getElementById('hero-noun')!;
+      heroNoun.innerHTML = `<img src="${noun_svg_url(view.current_noun_id)}" alt="Noun ${view.current_noun_id}" width="240" height="240" />`;
+      // Show settle button if ended
+      const settleBtn = document.getElementById('btn-settle') as HTMLButtonElement;
+      settleBtn.hidden = view.phase !== 'ended' || view.paused;
+    }
+
+    async function tick() {
+      storage = await fetchAuctionStorage(contractAddr, network);
+      if (storage) render();
+    }
+
+    // Countdown ticker — updates the displayed time every second locally
+    // without re-fetching storage.
+    setInterval(() => {
+      if (!storage) return;
+      const s = storage!;
+      const endsAt = new Date(s.ends_at).getTime();
+      const left = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
+      (document.getElementById('countdown') as HTMLElement).textContent = countdown(left);
+    }, 1000);
+
+    tick();
+    const pollInterval = setInterval(tick, 10_000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      tick();
+    });
+
+    // Bid button is disabled in v0 until Beacon integration is wired.
+    // Placeholder; actual bid flow lands in a follow-up sprint along with
+    // Taquito + Beacon dynamic import. For now, the button reads
+    // "connect wallet to bid" and stays disabled. This keeps the page
+    // useful as a live-state viewer while the wallet flow is in review.
+    const btn = document.getElementById('btn-bid') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.title = 'Beacon wallet flow ships in a follow-up sprint; this is v0 display only.';
+
+    const settleBtn = document.getElementById('btn-settle') as HTMLButtonElement;
+    settleBtn.addEventListener('click', () => {
+      alert('Settle button is wired in the follow-up sprint alongside bid. For v0, any tz address can call settle_and_create_next directly via better-call.dev or a CLI.');
+    });
+
+    // Fetch settlement history best-effort
+    (async () => {
+      const mod = await import('../lib/auction');
+      const history = await mod.fetchSettlementHistory(contractAddr, network, 10);
+      const ul = document.getElementById('history-list')!;
+      if (history.length === 0) {
+        ul.innerHTML = '<li class="history__empty mono">— (no settlements yet)</li>';
+        return;
+      }
+      ul.innerHTML = history
+        .map((h) => {
+          const dt = new Date(h.settled_at).toLocaleString();
+          return `<li><span class="mono">${dt}</span> · keeper <code class="mono">${shortAddr(h.settled_by)}</code> · <a class="mono" href="https://tzkt.io/${h.op_hash}" target="_blank" rel="noopener">op →</a></li>`;
+        })
+        .join('');
+    })();
+  }
+</script>
+
+<style>
+  .auction { max-width: 880px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  .crumb { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.82rem; opacity: 0.6; margin-bottom: 1.5rem; }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { text-decoration: underline; }
+
+  .auction__head { border-bottom: 2px solid currentColor; padding-bottom: 2rem; margin-bottom: 2.5rem; }
+  .kicker { font-size: 0.78rem; letter-spacing: 0.26em; text-transform: uppercase; opacity: 0.68; margin-bottom: 0.8rem; }
+  .mono { font-family: ui-monospace, 'JetBrains Mono', monospace; }
+  .title { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(2.2rem, 4.8vw, 3.8rem); line-height: 1; letter-spacing: -0.02em; margin-bottom: 1rem; }
+  .dek { font-size: 1.02rem; line-height: 1.55; max-width: 62ch; opacity: 0.88; }
+  .dek a, .dek code, .dek b { color: inherit; }
+  .dek code { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.92em; padding: 0 0.3em; }
+
+  .hero { display: grid; grid-template-columns: 240px 1fr; gap: 2rem; align-items: start; margin-bottom: 2rem; }
+  @media (max-width: 600px) { .hero { grid-template-columns: 1fr; } }
+  .hero__noun { width: 240px; height: 240px; border: 1px solid currentColor; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(0, 0, 0, 0.03); }
+  .hero__noun img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .hero__noun-placeholder { opacity: 0.4; font-size: 0.8rem; }
+  .hero__info { display: flex; flex-direction: column; gap: 0.4rem; }
+  .hero__label { font-size: 0.82rem; letter-spacing: 0.18em; opacity: 0.65; }
+  .hero__countdown { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(2.2rem, 5vw, 3.6rem); line-height: 1; letter-spacing: -0.02em; margin: 0.4rem 0 0.1rem; }
+  .hero__phase { font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; padding: 0.2rem 0.5rem; border-radius: 999px; border: 1px solid currentColor; width: fit-content; margin-bottom: 0.8rem; }
+  .hero__phase[data-phase="active"] { color: #3a9a4a; }
+  .hero__phase[data-phase="ending-soon"] { color: #c88040; }
+  .hero__phase[data-phase="ended"] { color: #b85050; }
+  .hero__phase[data-phase="paused"] { color: #888; }
+  .hero__bid { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 0.9rem; font-size: 0.95rem; }
+  .hero__bid dt { opacity: 0.55; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; align-self: center; }
+  .hero__bid dd { margin: 0; }
+
+  .bid-form { border: 1px solid currentColor; border-radius: 4px; padding: 1.2rem; margin-bottom: 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+  .bid-form label { font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.65; }
+  .bid-form__row { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; }
+  .bid-form input { padding: 0.7rem 0.9rem; border: 1px solid currentColor; border-radius: 2px; background: transparent; color: inherit; font: inherit; font-size: 1.1rem; }
+  .btn { border: 1px solid currentColor; background: rgba(0, 0, 0, 0.04); padding: 0.7rem 1rem; border-radius: 2px; font: inherit; cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; color: inherit; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); background: rgba(0, 0, 0, 0.08); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-bid { font-weight: 600; letter-spacing: 0.04em; }
+  .btn-settle { margin-top: 0.4rem; background: rgba(240, 185, 74, 0.15); border-color: #b88020; color: #b88020; font-weight: 600; }
+  .bid-hint { opacity: 0.65; font-size: 0.78rem; }
+
+  .history { margin-bottom: 2rem; }
+  .history h3 { font-size: 0.76rem; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.62; margin-bottom: 0.7rem; font-weight: 600; }
+  .history ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+  .history li { font-size: 0.86rem; line-height: 1.4; padding: 0.35rem 0; border-bottom: 1px dashed currentColor; opacity: 0.88; }
+  .history li a { color: inherit; }
+  .history__empty { opacity: 0.4; font-style: italic; border: none; }
+
+  .contract-info { font-size: 0.76rem; opacity: 0.58; padding-top: 1rem; border-top: 1px dashed currentColor; }
+  .contract-info a, .contract-info code { color: inherit; }
+
+  .auction__pending { padding: 2rem; border: 1px dashed currentColor; border-radius: 4px; opacity: 0.92; }
+  .pending__kicker { font-size: 0.78rem; letter-spacing: 0.22em; color: #c88040; margin-bottom: 1rem; }
+  .auction__pending p { font-size: 1rem; line-height: 1.55; margin-bottom: 0.9rem; max-width: 64ch; }
+  .auction__pending code { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.92em; padding: 0 0.3em; }
+  .pending__links { list-style: disc inside; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.86rem; margin: 1rem 0; }
+  .pending__links a { color: inherit; }
+  .pending__next { font-size: 0.82rem; opacity: 0.82; padding-top: 1rem; border-top: 1px dashed currentColor; }
+</style>

@@ -1,51 +1,54 @@
 /**
- * /feed.json — unified JSON Feed v1.1 covering every Block.
+ * /feed.json — unified JSON Feed v1.1 covering the latest 50 Blocks.
  *
  * Sibling of /feed.xml in the jsonfeed.org v1.1 format. Most modern RSS
  * clients and agents speak this natively.
  *
  * Differs from /blocks.json: this is the canonical "feed" shape
- * (standards-compliant, items[], image, url), whereas /blocks.json
+ * (standards-compliant, items[], authors[], tags[]), whereas /blocks.json
  * is PointCast's native shape (blocks[], richer metadata).
  */
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import type { APIRoute } from 'astro';
 
+function htmlEscape(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export const GET: APIRoute = async () => {
   const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
-    .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+    .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
+    .slice(0, 50);
 
   const items = blocks.map((b) => {
     const ch = CHANNELS[b.data.channel];
+    const body = b.data.body ?? b.data.dek ?? b.data.title;
+    const tags = [ch.code];
+    if (b.data.mood) tags.push(b.data.mood);
+    const prefixedTitle = `${ch.name} \u00b7 ${b.data.title}`;
     return {
       id: `https://pointcast.xyz/b/${b.data.id}`,
       url: `https://pointcast.xyz/b/${b.data.id}`,
-      external_url: b.data.external?.url ?? undefined,
-      title: b.data.title,
-      content_text: b.data.dek ?? b.data.body?.slice(0, 320) ?? b.data.title,
+      title: prefixedTitle,
+      content_html: `<p>${htmlEscape(body)}</p>`,
+      content_text: body,
       summary: b.data.dek ?? undefined,
       date_published: b.data.timestamp.toISOString(),
-      tags: [`CH.${ch.code}`, ch.name, b.data.type],
-      image: `https://pointcast.xyz/images/og/b/${b.data.id}.png`,
-      _pointcast: {
-        id: b.data.id,
-        channel: { code: ch.code, slug: ch.slug, name: ch.name, color: ch.color600 },
-        type: b.data.type,
-        edition: b.data.edition ?? null,
-      },
+      authors: [{ name: b.data.author }],
+      tags,
     };
   });
 
   const payload = {
     version: 'https://jsonfeed.org/version/1.1',
     title: 'PointCast',
-    description: 'A living broadcast from El Segundo. Every piece of content is a Block.',
     home_page_url: 'https://pointcast.xyz/',
     feed_url: 'https://pointcast.xyz/feed.json',
-    icon: 'https://pointcast.xyz/images/og/og-home-v2.png',
-    favicon: 'https://pointcast.xyz/favicon.svg',
-    authors: [{ name: 'Mike Hoydich', url: 'https://pointcast.xyz/about' }],
+    description: 'A living broadcast from El Segundo. Every piece of content is a Block.',
     language: 'en-US',
     items,
   };

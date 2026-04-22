@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>九龍點心 v0.1 · KOWLOON DIM SUM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+HK:wght@400;700;900&family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0314;
+    --ink: #e8e3ff;
+    --pink: #ff2d95;
+    --cyan: #00e0ff;
+    --amber: #ffb800;
+    --blood: #c8102e;
+    --jade: #aaffd0;
+    --gold: #ffd54a;
+  }
+  html, body {
+    height: 100vh;
+    overflow: hidden;
+    background: #000;
+    color: var(--ink);
+    font-family: 'VT323', 'Courier New', monospace;
+    user-select: none;
+    cursor: crosshair;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(255,45,149,0.18) 0%, transparent 45%),
+      radial-gradient(ellipse at 80% 90%, rgba(0,224,255,0.14) 0%, transparent 45%),
+      radial-gradient(ellipse at 50% 50%, rgba(255,184,0,0.08) 0%, transparent 60%),
+      var(--bg);
+    position: relative;
+  }
+  /* Blue-hour variant (tea time): lift mid-tones slightly */
+  body.morning {
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(255,200,120,0.15) 0%, transparent 45%),
+      radial-gradient(ellipse at 80% 90%, rgba(130,180,255,0.18) 0%, transparent 45%),
+      radial-gradient(ellipse at 50% 50%, rgba(255,240,200,0.07) 0%, transparent 60%),
+      #0a0318;
+  }
+  #rain {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      110deg,
+      transparent 0px, transparent 8px,
+      rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.05) 9px,
+      transparent 10px);
+    animation: rain 0.6s linear infinite;
+    z-index: 1;
+  }
+  @keyframes rain { from { background-position: 0 0; } to { background-position: -40px 80px; } }
+  #crt {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(to bottom,
+        rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+        rgba(0,0,0,0.35) 3px, rgba(0,0,0,0) 4px),
+      radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.82) 100%);
+    z-index: 999;
+    mix-blend-mode: multiply;
+  }
+  .neon-sign {
+    position: fixed;
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 900;
+    font-size: 6rem;
+    opacity: 0.14;
+    pointer-events: none;
+    z-index: 0;
+    animation: flicker 3s infinite;
+    writing-mode: vertical-rl;
+  }
+  .neon-sign.s1 { top: 4%;  left: 1%;  color: var(--gold); text-shadow: 0 0 18px var(--gold); }
+  .neon-sign.s2 { top: 8%;  right: 1%; color: var(--cyan); font-size: 4.5rem; text-shadow: 0 0 16px var(--cyan); }
+  .neon-sign.s3 { bottom: 5%; left: 1.5%; color: var(--pink); font-size: 4.5rem; text-shadow: 0 0 14px var(--pink); }
+  .neon-sign.s4 { bottom: 18%; right: 1%; color: var(--jade); font-size: 3.5rem; text-shadow: 0 0 14px var(--jade); }
+  @keyframes flicker {
+    0%, 100% { opacity: 0.18; }
+    50% { opacity: 0.07; }
+    55% { opacity: 0.24; }
+    57% { opacity: 0.04; }
+    60% { opacity: 0.18; }
+  }
+  /* Game layout */
+  #game {
+    position: relative;
+    z-index: 2;
+    width: 100vw;
+    height: 100vh;
+    padding: 0.8rem;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 0.8rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  /* HUD */
+  .hud {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1.4rem;
+    border: 1px solid rgba(255,213,74,0.4);
+    background: rgba(10,3,20,0.78);
+    backdrop-filter: blur(3px);
+    box-shadow: 0 0 20px rgba(255,213,74,0.18) inset;
+  }
+  .title {
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 900;
+    font-size: 1.9rem;
+    color: var(--gold);
+    text-shadow: 0 0 10px var(--gold), 0 0 22px rgba(255,213,74,0.6);
+    letter-spacing: 0.05em;
+    position: relative;
+  }
+  .title .en {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.6rem;
+    color: var(--cyan);
+    text-shadow: 0 0 5px var(--cyan);
+    margin-top: 0.2rem;
+    letter-spacing: 0.18em;
+  }
+  .title .v {
+    position: absolute; top: -4px; right: -28px;
+    font-size: 0.65rem; color: var(--pink); text-shadow: 0 0 5px var(--pink);
+    font-family: 'VT323', monospace;
+  }
+  .goal {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    justify-content: center;
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1.15rem;
+    color: var(--ink);
+  }
+  .goal .g-face { font-size: 2rem; filter: drop-shadow(0 0 6px var(--jade)); }
+  .goal .g-text { color: var(--jade); text-shadow: 0 0 5px var(--jade); }
+  .goal .g-count { font-family: 'Press Start 2P', monospace; font-size: 0.95rem; color: var(--gold); text-shadow: 0 0 5px var(--gold); }
+  .goal .bar {
+    width: 160px;
+    height: 10px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--jade);
+    position: relative;
+    overflow: hidden;
+  }
+  .goal .bar > span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(to right, var(--jade), var(--gold));
+    width: 0%;
+    transition: width 0.3s;
+    box-shadow: 0 0 5px var(--jade);
+  }
+  .stats {
+    display: flex;
+    gap: 1rem;
+    font-family: 'Press Start 2P', monospace;
+    align-items: center;
+  }
+  .stats .score { color: var(--amber); text-shadow: 0 0 8px var(--amber); font-size: 1.05rem; }
+  .stats .moves { color: var(--pink); text-shadow: 0 0 8px var(--pink); font-size: 1rem; }
+  .stats .label { font-size: 0.5rem; color: rgba(232,227,255,0.5); letter-spacing: 0.2em; display: block; }
+  /* Board */
+  .board-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .board {
+    --tile: 68px;
+    display: grid;
+    grid-template-columns: repeat(8, var(--tile));
+    grid-template-rows: repeat(8, var(--tile));
+    gap: 4px;
+    padding: 12px;
+    background:
+      linear-gradient(135deg, rgba(255,213,74,0.06), rgba(0,224,255,0.04)),
+      rgba(10,3,20,0.78);
+    border: 1px solid rgba(255,213,74,0.4);
+    box-shadow: 0 0 28px rgba(255,213,74,0.2), 0 0 60px rgba(255,45,149,0.12);
+    position: relative;
+  }
+  .tile {
+    background: rgba(232,227,255,0.04);
+    border: 1px solid rgba(255,213,74,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--tile) * 0.62);
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s, filter 0.15s;
+    filter: drop-shadow(0 0 6px rgba(255,213,74,0.25));
+  }
+  .tile:hover { transform: scale(1.06); box-shadow: 0 0 12px rgba(255,213,74,0.45); }
+  .tile.selected {
+    border-color: var(--pink);
+    box-shadow: 0 0 20px rgba(255,45,149,0.7), 0 0 0 3px rgba(255,45,149,0.25) inset;
+    animation: selPulse 0.9s infinite alternate;
+  }
+  @keyframes selPulse {
+    from { box-shadow: 0 0 15px rgba(255,45,149,0.55), 0 0 0 2px rgba(255,45,149,0.3) inset; }
+    to   { box-shadow: 0 0 28px rgba(255,45,149,0.9), 0 0 0 4px rgba(255,45,149,0.5) inset; }
+  }
+  .tile.matched {
+    animation: matchPop 0.32s forwards;
+  }
+  @keyframes matchPop {
+    0%   { transform: scale(1); filter: brightness(1); }
+    40%  { transform: scale(1.3); filter: brightness(1.8) drop-shadow(0 0 18px var(--jade)); }
+    100% { transform: scale(0); opacity: 0; filter: blur(4px); }
+  }
+  .tile.falling {
+    animation: fall 0.25s ease-out;
+  }
+  @keyframes fall {
+    from { transform: translateY(-30px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+  .tile.goal-tile {
+    background: rgba(170,255,208,0.08);
+    border-color: rgba(170,255,208,0.35);
+  }
+
+  /* Combo + chain label */
+  .combo-pop {
+    position: absolute;
+    font-family: 'Press Start 2P', monospace;
+    color: var(--gold);
+    text-shadow: 0 0 10px var(--gold);
+    font-size: 1.4rem;
+    pointer-events: none;
+    animation: comboFloat 1.1s ease-out forwards;
+    z-index: 5;
+    letter-spacing: 0.1em;
+  }
+  @keyframes comboFloat {
+    from { transform: translate(-50%, 0) scale(0.7); opacity: 0; }
+    25%  { transform: translate(-50%, -20px) scale(1.1); opacity: 1; }
+    100% { transform: translate(-50%, -60px) scale(1); opacity: 0; }
+  }
+
+  /* Subtitles */
+  .subs {
+    border-top: 1px dashed rgba(232,227,255,0.22);
+    padding: 0.5rem 1rem;
+    text-align: center;
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1.2rem;
+    min-height: 2.8rem;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    line-height: 1.35;
+  }
+  .subs .en {
+    display: block;
+    font-family: 'VT323', monospace;
+    font-size: 0.98rem;
+    color: #ffee88;
+    font-style: italic;
+    text-shadow: 1px 1px 0 #000, -1px 1px 0 #000;
+  }
+
+  /* Screens */
+  .screen {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background:
+      radial-gradient(ellipse at center, rgba(255,213,74,0.18) 0%, rgba(0,0,0,0.95) 60%),
+      var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.4rem;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+  }
+  .screen h1 {
+    font-family: 'Noto Serif HK', serif;
+    font-size: 7rem;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 16px var(--gold), 0 0 44px rgba(255,213,74,0.7);
+    letter-spacing: 0.1em;
+    line-height: 1;
+    animation: flicker 2.2s infinite;
+  }
+  .screen h2 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 1.3rem;
+    color: var(--cyan);
+    text-shadow: 0 0 12px var(--cyan);
+    letter-spacing: 0.3em;
+  }
+  .screen .tagline {
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1.4rem;
+    color: var(--jade);
+    text-shadow: 0 0 10px var(--jade);
+  }
+  .screen .tagline .en {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--pink);
+    letter-spacing: 0.2em;
+    margin-top: 0.35rem;
+    font-family: 'Press Start 2P', monospace;
+  }
+  .screen .lore {
+    max-width: 560px;
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1.15rem;
+    line-height: 1.55;
+    color: rgba(232,227,255,0.9);
+    border-left: 2px solid var(--gold);
+    padding-left: 1rem;
+    text-align: left;
+  }
+  .screen .lore .en {
+    display: block;
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    color: rgba(232,227,255,0.6);
+    font-style: italic;
+    margin-top: 0.4rem;
+  }
+  .screen .menu { display: flex; gap: 0.7rem; flex-wrap: wrap; justify-content: center; margin-top: 0.4rem; }
+  .screen.hidden { display: none; }
+  .menu-btn {
+    padding: 0.7rem 1.4rem;
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    background: transparent;
+    border: 2px solid var(--jade);
+    color: var(--jade);
+    text-shadow: 0 0 8px var(--jade);
+    box-shadow: 0 0 15px rgba(170,255,208,0.35);
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.15s;
+  }
+  .menu-btn:hover { background: rgba(170,255,208,0.1); transform: translateY(-2px); box-shadow: 0 0 25px rgba(170,255,208,0.6); }
+  .menu-btn.primary { border-color: var(--gold); color: var(--gold); text-shadow: 0 0 8px var(--gold); box-shadow: 0 0 15px rgba(255,213,74,0.4); }
+  .menu-btn.primary:hover { background: rgba(255,213,74,0.1); box-shadow: 0 0 26px rgba(255,213,74,0.7); }
+  .menu-btn .en {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    margin-top: 0.2rem;
+  }
+  .press {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 1rem;
+    color: var(--cyan);
+    animation: blink 1s infinite;
+    text-shadow: 0 0 8px var(--cyan);
+    letter-spacing: 0.2em;
+    margin-top: 0.4rem;
+  }
+  @keyframes blink {
+    0%, 55% { opacity: 1; }
+    56%, 100% { opacity: 0.2; }
+  }
+  /* Sibling link pill */
+  .sibling-pill {
+    position: fixed;
+    bottom: 1rem; right: 1rem;
+    z-index: 600;
+    font-family: 'VT323', monospace;
+    font-size: 0.95rem;
+    color: var(--pink);
+    text-shadow: 0 0 5px var(--pink);
+    border: 1px dashed rgba(255,45,149,0.4);
+    padding: 0.35rem 0.7rem;
+    background: rgba(10,3,20,0.65);
+    text-decoration: none;
+    letter-spacing: 0.1em;
+    transition: all 0.2s;
+  }
+  .sibling-pill:hover { background: rgba(255,45,149,0.15); border-color: var(--pink); }
+
+  /* TUTORIAL */
+  #tutorial-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 470;
+    display: none;
+  }
+  #tutorial-layer.on { display: block; }
+  #tutorial-layer .dim {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    transition: opacity 0.3s;
+  }
+  #tutorial-layer .spotlight {
+    position: absolute;
+    border: 3px solid var(--jade);
+    border-radius: 10px;
+    box-shadow: 0 0 40px rgba(170,255,208,0.9), 0 0 0 9999px rgba(0,0,0,0.58);
+    animation: spotPulse 1.1s infinite alternate;
+    transition: all 0.35s cubic-bezier(0.3,0.8,0.4,1);
+    pointer-events: none;
+  }
+  @keyframes spotPulse {
+    from { box-shadow: 0 0 30px rgba(170,255,208,0.55), 0 0 0 9999px rgba(0,0,0,0.58); }
+    to   { box-shadow: 0 0 55px rgba(170,255,208,1), 0 0 0 9999px rgba(0,0,0,0.58); }
+  }
+  #tutorial-layer .tutor-bubble {
+    position: absolute;
+    left: 50%; bottom: 10vh;
+    transform: translateX(-50%);
+    background: rgba(10,3,20,0.96);
+    border: 2px solid var(--cyan);
+    box-shadow: 0 0 22px rgba(0,224,255,0.4);
+    padding: 1rem 1.5rem;
+    max-width: 560px;
+    text-align: center;
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1.25rem;
+    color: var(--ink);
+    line-height: 1.4;
+    pointer-events: all;
+  }
+  #tutorial-layer .tutor-bubble .step {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.65rem;
+    color: var(--cyan);
+    text-shadow: 0 0 5px var(--cyan);
+    letter-spacing: 0.22em;
+    margin-bottom: 0.4rem;
+  }
+  #tutorial-layer .tutor-bubble .en {
+    display: block;
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    color: rgba(232,227,255,0.65);
+    font-style: italic;
+    margin-top: 0.3rem;
+  }
+  #tutorial-layer .tutor-bubble .next-hint {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.55rem;
+    color: var(--amber);
+    text-shadow: 0 0 5px var(--amber);
+    letter-spacing: 0.2em;
+    margin-top: 0.55rem;
+    animation: blink 1s infinite;
+  }
+  #tutorial-layer .skip-tut {
+    position: absolute;
+    top: 9vh; right: 2vw;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.6rem;
+    color: rgba(232,227,255,0.55);
+    border: 1px solid rgba(232,227,255,0.35);
+    padding: 0.3rem 0.7rem;
+    background: transparent;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+    pointer-events: all;
+  }
+  #tutorial-layer .skip-tut:hover { color: var(--cyan); border-color: var(--cyan); }
+  #tutorial-layer .finger {
+    position: absolute;
+    font-size: 2.4rem;
+    pointer-events: none;
+    filter: drop-shadow(0 0 10px var(--jade));
+    animation: fingerBounce 0.9s infinite alternate;
+    z-index: 472;
+  }
+  @keyframes fingerBounce {
+    from { transform: translate(0, 0); }
+    to   { transform: translate(0, 10px); }
+  }
+
+  /* Game-over */
+  #game-over h1 { color: var(--pink); text-shadow: 0 0 15px var(--pink), 0 0 40px var(--pink); }
+  #game-over.win h1 { color: var(--jade); text-shadow: 0 0 15px var(--jade), 0 0 40px var(--jade); }
+  .stats-line {
+    font-family: 'Press Start 2P', monospace;
+    color: var(--amber);
+    text-shadow: 0 0 8px var(--amber);
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+  <div id="rain"></div>
+  <div id="crt"></div>
+
+  <div class="neon-sign s1">點心</div>
+  <div class="neon-sign s2">茶餐廳</div>
+  <div class="neon-sign s3">九龍</div>
+  <div class="neon-sign s4">早茶</div>
+
+  <main id="game">
+    <header class="hud">
+      <div class="title">九龍點心<span class="v">v0.1</span><span class="en">KOWLOON DIM SUM</span></div>
+      <div class="goal">
+        <span class="g-face" id="goal-face">🥧</span>
+        <div>
+          <div class="g-text"><span class="g-count" id="goal-count">0</span> / <span id="goal-target">15</span> <span id="goal-name">蛋撻</span></div>
+          <div class="bar"><span id="goal-bar"></span></div>
+        </div>
+      </div>
+      <div class="stats">
+        <div>
+          <div class="score" id="score">0</div>
+          <div class="label">分數 · SCORE</div>
+        </div>
+        <div>
+          <div class="moves" id="moves">25</div>
+          <div class="label">步數 · MOVES</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="board-wrap">
+      <div class="board" id="board"></div>
+    </div>
+
+    <footer class="subs" id="subs">
+      "早茶嘅節奏。撳糕點配成三個。"
+      <span class="en">"The tempo of morning tea. Match three or more."</span>
+    </footer>
+  </main>
+
+  <a class="sibling-pill" href="http://localhost:8765/" target="_blank">← 九龍廚房 KOWLOON KITCHEN</a>
+
+  <div class="screen" id="title-screen">
+    <h1>九龍點心</h1>
+    <h2>KOWLOON DIM SUM · V0.1</h2>
+    <div class="tagline">
+      早茶嘅節奏。配三個起。
+      <span class="en">THE TEMPO OF MORNING TEA · MATCH 3+</span>
+    </div>
+    <div class="lore">
+      一九八九年,九龍。阿姐嘅茶餐廳搬上樓。早茶嘅時候,車仔推出一籠籠點心,你
+      要同街坊配對 — 蛋撻、菠蘿包、叉燒包、馬拉糕、老婆餅、月餅。配三個或以上
+      清走。清夠蛋撻,完成。
+      <span class="en">1989 Kowloon. Auntie's back-alley bakery is now a teahouse upstairs. The breakfast cart comes out and you match the dim sum — pineapple buns, egg tarts, char siu bao, malai gao, wife cakes, mooncakes. Three in a row clears. Clear enough egg tarts, win the level.</span>
+    </div>
+    <div class="menu">
+      <button class="menu-btn primary" id="start-btn">▶ 開波<span class="en">PLAY</span></button>
+      <button class="menu-btn" id="tut-btn">教學<span class="en">TUTORIAL</span></button>
+    </div>
+    <div class="press">第一關 LEVEL 1 · 廟街清晨 · TEMPLE ST MORNING</div>
+  </div>
+
+  <div class="screen hidden" id="game-over">
+    <h1 id="go-title">過關!</h1>
+    <h2 id="go-sub">LEVEL CLEARED</h2>
+    <div class="tagline" id="go-reason">你清咗阿姐嘅蛋撻單。<span class="en">You finished auntie's egg tart order.</span></div>
+    <div class="stats-line" id="go-stats">SCORE 0 · MOVES LEFT 0</div>
+    <div class="menu">
+      <button class="menu-btn primary" id="again-btn">▶ 再嚟<span class="en">PLAY AGAIN</span></button>
+      <button class="menu-btn" id="back-to-title">◀ 返回<span class="en">BACK</span></button>
+    </div>
+  </div>
+
+  <div id="tutorial-layer">
+    <div class="dim"></div>
+    <div class="spotlight" id="tut-spot" style="display:none"></div>
+    <div class="finger" id="tut-finger" style="display:none">👇</div>
+    <div class="tutor-bubble">
+      <span class="step" id="tut-step">STEP 1 / 5</span>
+      <span id="tut-line">歡迎嚟到九龍點心。<span class="en">Welcome to Kowloon Dim Sum.</span></span>
+      <span class="next-hint" id="tut-hint">▶ CLICK TO CONTINUE</span>
+    </div>
+    <button class="skip-tut" id="tut-skip">▶ 跳過教學 · SKIP</button>
+  </div>
+
+<script>
+(() => {
+  const SIZE = 8;
+  const TILES = [
+    { id: 'bolo', emoji: '🍞', name: '菠蘿包', en: 'Pineapple Bun' },
+    { id: 'tart', emoji: '🥧', name: '蛋撻',   en: 'Egg Tart' },
+    { id: 'csb',  emoji: '🥟', name: '叉燒包', en: 'Char Siu Bao' },
+    { id: 'mala', emoji: '🧁', name: '馬拉糕', en: 'Malai Gao' },
+    { id: 'wife', emoji: '🍪', name: '老婆餅', en: 'Wife Cake' },
+    { id: 'moon', emoji: '🥮', name: '月餅',   en: 'Mooncake' },
+  ];
+  const SUBS = [
+    { zh: '連三個清走。', en: "Match three to clear." },
+    { zh: '蛋撻易清,菠蘿包難啲。', en: "Egg tarts are everywhere. Buns are shy." },
+    { zh: '阿姐話要清 15 個蛋撻。', en: "Auntie wants 15 egg tarts cleared." },
+    { zh: '早茶最忙。', en: "Breakfast is the busiest." },
+    { zh: '廟街啲街坊早起身。', en: "Temple Street's up early." },
+    { zh: '連環配對分數高啲。', en: "Cascades score bigger." },
+    { zh: '下雨喇。', en: "It's raining." },
+    { zh: '車仔推近啦。', en: "Cart's coming closer." },
+  ];
+
+  const STATE = {
+    board: [],
+    selected: null,
+    score: 0,
+    moves: 25,
+    goalType: 'tart',
+    goalCount: 0,
+    goalTarget: 15,
+    animating: false,
+    running: false,
+    tutorial: false,
+    tutorialStep: 0,
+  };
+
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+  const boardEl = $('#board');
+  const scoreEl = $('#score');
+  const movesEl = $('#moves');
+  const goalCountEl = $('#goal-count');
+  const goalTargetEl = $('#goal-target');
+  const goalNameEl = $('#goal-name');
+  const goalFaceEl = $('#goal-face');
+  const goalBarEl = $('#goal-bar');
+  const subsEl = $('#subs');
+  const titleScreen = $('#title-screen');
+  const gameOverScreen = $('#game-over');
+  const tutLayer = $('#tutorial-layer');
+  const tutSpot = $('#tut-spot');
+  const tutFinger = $('#tut-finger');
+  const tutStep = $('#tut-step');
+  const tutLine = $('#tut-line');
+  const tutHint = $('#tut-hint');
+
+  // ===== Audio =====
+  let audioCtx;
+  const beep = (freq = 440, dur = 0.06, type = 'triangle', vol = 0.06) => {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      o.stop(audioCtx.currentTime + dur);
+    } catch (e) {}
+  };
+  const chord = (freqs, dur = 0.18, type = 'triangle', vol = 0.06) => {
+    freqs.forEach((f, i) => setTimeout(() => beep(f, dur, type, vol), i * 60));
+  };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ===== Board =====
+  const tileAt = (r, c) => STATE.board[r] && STATE.board[r][c];
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  function initBoard() {
+    STATE.board = [];
+    for (let r = 0; r < SIZE; r++) {
+      STATE.board[r] = [];
+      for (let c = 0; c < SIZE; c++) {
+        let tile, tries = 0;
+        do {
+          tile = Math.floor(Math.random() * TILES.length);
+          tries++;
+        } while (
+          tries < 16 && (
+            (c >= 2 && STATE.board[r][c-1] === tile && STATE.board[r][c-2] === tile) ||
+            (r >= 2 && STATE.board[r-1][c] === tile && STATE.board[r-2][c] === tile)
+          )
+        );
+        STATE.board[r][c] = tile;
+      }
+    }
+  }
+
+  function render(newTiles = null) {
+    boardEl.innerHTML = '';
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const idx = STATE.board[r][c];
+        const t = document.createElement('div');
+        t.className = 'tile';
+        t.dataset.r = r;
+        t.dataset.c = c;
+        t.textContent = TILES[idx].emoji;
+        if (STATE.selected && STATE.selected.r === r && STATE.selected.c === c) {
+          t.classList.add('selected');
+        }
+        if (TILES[idx].id === STATE.goalType) t.classList.add('goal-tile');
+        if (newTiles && newTiles.has(`${r},${c}`)) t.classList.add('falling');
+        t.addEventListener('click', () => onTileClick(r, c));
+        boardEl.appendChild(t);
+      }
+    }
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = STATE.score;
+    movesEl.textContent = STATE.moves;
+    goalCountEl.textContent = STATE.goalCount;
+    goalTargetEl.textContent = STATE.goalTarget;
+    const tile = TILES.find(t => t.id === STATE.goalType);
+    if (tile) {
+      goalFaceEl.textContent = tile.emoji;
+      goalNameEl.textContent = tile.name;
+    }
+    goalBarEl.style.width = Math.min(100, (STATE.goalCount / STATE.goalTarget) * 100) + '%';
+  }
+
+  function setSub(custom) {
+    const s = custom || pick(SUBS);
+    subsEl.innerHTML = `"${s.zh}"<span class="en">"${s.en}"</span>`;
+  }
+
+  // ===== Game logic =====
+  function swapCells(a, b) {
+    const tmp = STATE.board[a.r][a.c];
+    STATE.board[a.r][a.c] = STATE.board[b.r][b.c];
+    STATE.board[b.r][b.c] = tmp;
+  }
+
+  function findMatches() {
+    const hits = new Set();
+    for (let r = 0; r < SIZE; r++) {
+      let runStart = 0;
+      for (let c = 1; c <= SIZE; c++) {
+        if (c === SIZE || STATE.board[r][c] !== STATE.board[r][runStart]) {
+          const runLen = c - runStart;
+          if (runLen >= 3) {
+            for (let k = runStart; k < c; k++) hits.add(`${r},${k}`);
+          }
+          runStart = c;
+        }
+      }
+    }
+    for (let c = 0; c < SIZE; c++) {
+      let runStart = 0;
+      for (let r = 1; r <= SIZE; r++) {
+        if (r === SIZE || STATE.board[r][c] !== STATE.board[runStart][c]) {
+          const runLen = r - runStart;
+          if (runLen >= 3) {
+            for (let k = runStart; k < r; k++) hits.add(`${k},${c}`);
+          }
+          runStart = r;
+        }
+      }
+    }
+    return [...hits].map(k => {
+      const [r, c] = k.split(',').map(Number);
+      return { r, c };
+    });
+  }
+
+  async function resolveMatches() {
+    STATE.animating = true;
+    let chain = 0;
+    while (true) {
+      const matches = findMatches();
+      if (matches.length === 0) break;
+      chain++;
+      // Count goal-type matches
+      for (const m of matches) {
+        const tileId = TILES[STATE.board[m.r][m.c]].id;
+        if (tileId === STATE.goalType) STATE.goalCount++;
+      }
+      STATE.score += matches.length * 10 * chain;
+      // Combo popup
+      if (chain >= 2) showComboPop(`×${chain} CHAIN!`);
+      // Animate match disappearance
+      for (const m of matches) {
+        const el = document.querySelector(`.tile[data-r="${m.r}"][data-c="${m.c}"]`);
+        if (el) el.classList.add('matched');
+      }
+      chord([660, 880, 1100].slice(0, chain + 1), 0.1, 'triangle', 0.06);
+      await sleep(320);
+      // Clear matched cells
+      for (const m of matches) STATE.board[m.r][m.c] = -1;
+      // Drop + refill
+      const newTiles = new Set();
+      for (let c = 0; c < SIZE; c++) {
+        let write = SIZE - 1;
+        for (let r = SIZE - 1; r >= 0; r--) {
+          if (STATE.board[r][c] !== -1) {
+            if (write !== r) {
+              STATE.board[write][c] = STATE.board[r][c];
+              STATE.board[r][c] = -1;
+            }
+            write--;
+          }
+        }
+        for (let r = write; r >= 0; r--) {
+          STATE.board[r][c] = Math.floor(Math.random() * TILES.length);
+          newTiles.add(`${r},${c}`);
+        }
+      }
+      render(newTiles);
+      updateHUD();
+      await sleep(240);
+    }
+    STATE.animating = false;
+    checkEnd();
+    render();
+  }
+
+  function showComboPop(text) {
+    const r = boardEl.getBoundingClientRect();
+    const pop = document.createElement('div');
+    pop.className = 'combo-pop';
+    pop.textContent = text;
+    pop.style.left = '50%';
+    pop.style.top = (r.top + r.height / 2 - 40) + 'px';
+    pop.style.position = 'fixed';
+    document.body.appendChild(pop);
+    setTimeout(() => pop.remove(), 1100);
+  }
+
+  async function onTileClick(r, c) {
+    if (!STATE.running || STATE.animating) return;
+    // Tutorial step intercept
+    if (STATE.tutorial) advanceTutorialOnClick(r, c);
+    if (!STATE.selected) {
+      STATE.selected = { r, c };
+      beep(660, 0.03, 'triangle', 0.04);
+      render();
+      return;
+    }
+    if (STATE.selected.r === r && STATE.selected.c === c) {
+      STATE.selected = null;
+      render();
+      return;
+    }
+    const dist = Math.abs(STATE.selected.r - r) + Math.abs(STATE.selected.c - c);
+    if (dist !== 1) {
+      STATE.selected = { r, c };
+      beep(660, 0.03, 'triangle', 0.04);
+      render();
+      return;
+    }
+    const a = STATE.selected;
+    const b = { r, c };
+    swapCells(a, b);
+    const matches = findMatches();
+    if (matches.length === 0) {
+      // Invalid — revert
+      swapCells(a, b);
+      STATE.selected = null;
+      beep(180, 0.14, 'sawtooth', 0.06);
+      setSub({ zh: '唔配合。試第二啲。', en: "No match. Try another pair." });
+      render();
+      return;
+    }
+    STATE.selected = null;
+    STATE.moves--;
+    beep(520, 0.05, 'square', 0.05);
+    render();
+    await resolveMatches();
+    if (Math.random() < 0.35) setSub();
+  }
+
+  function checkEnd() {
+    if (STATE.goalCount >= STATE.goalTarget) {
+      // WIN
+      STATE.running = false;
+      setTimeout(() => {
+        gameOverScreen.classList.remove('hidden');
+        gameOverScreen.classList.add('win');
+        $('#go-title').textContent = '過關!';
+        $('#go-sub').textContent = 'LEVEL CLEARED';
+        const bonus = STATE.moves * 50;
+        STATE.score += bonus;
+        $('#go-reason').innerHTML = `你清咗阿姐嘅蛋撻單。 多 ${STATE.moves} 步 → 獎 ${bonus} 分。<span class="en">Auntie's order filled. ${STATE.moves} moves left → ${bonus} bonus.</span>`;
+        $('#go-stats').textContent = `SCORE ${STATE.score} · MOVES LEFT ${STATE.moves}`;
+      }, 500);
+    } else if (STATE.moves <= 0) {
+      STATE.running = false;
+      setTimeout(() => {
+        gameOverScreen.classList.remove('hidden');
+        gameOverScreen.classList.remove('win');
+        $('#go-title').textContent = '唔夠步';
+        $('#go-sub').textContent = 'OUT OF MOVES';
+        $('#go-reason').innerHTML = `差 ${STATE.goalTarget - STATE.goalCount} 個蛋撻。阿姐有啲失望。<span class="en">Short ${STATE.goalTarget - STATE.goalCount} egg tarts. Auntie's a bit down.</span>`;
+        $('#go-stats').textContent = `SCORE ${STATE.score} · ${STATE.goalCount}/${STATE.goalTarget} TARTS`;
+      }, 500);
+    }
+  }
+
+  // ===== Lifecycle =====
+  function newGame() {
+    STATE.score = 0;
+    STATE.moves = 25;
+    STATE.goalCount = 0;
+    STATE.goalTarget = 15;
+    STATE.goalType = 'tart';
+    STATE.selected = null;
+    STATE.animating = false;
+    STATE.running = true;
+    initBoard();
+    render();
+    updateHUD();
+    setSub({ zh: '早茶嘅節奏。撳糕點配成三個。', en: 'The tempo of morning tea. Match three or more.' });
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    chord([523, 659, 784, 1046], 0.15, 'triangle', 0.06);
+  }
+
+  // ===== TUTORIAL =====
+  const TUT_STEPS = [
+    {
+      zh: '歡迎嚟到九龍點心。呢個係你嘅板。',
+      en: 'Welcome to Kowloon Dim Sum. This is your board.',
+      hint: '▶ CLICK TO CONTINUE',
+      target: '.board',
+      waitForClick: true,
+    },
+    {
+      zh: '撳一個糕點揀佢。',
+      en: 'Tap a piece to select it.',
+      hint: '▶ CLICK ANY TILE',
+      target: '.tile',
+      waitForAction: 'select',
+    },
+    {
+      zh: '撳隔離位嘅糕點交換 — 只可以左右上下。',
+      en: 'Tap an adjacent tile to swap. Only up/down/left/right.',
+      hint: '▶ SWAP WITH A NEIGHBOR',
+      target: '.tile',
+      waitForAction: 'swap',
+    },
+    {
+      zh: '配三個同樣嘅糕點,清走 + 跌下嚟新嘅。',
+      en: 'Three or more of the same kind clears them. New tiles drop in.',
+      hint: '▶ CLICK TO CONTINUE',
+      target: '.board',
+      waitForClick: true,
+    },
+    {
+      zh: '目標:清 15 個蛋撻 🥧,25 步以內。阿姐等緊。',
+      en: 'Goal: clear 15 🥧 egg tarts within 25 moves. Auntie\'s waiting.',
+      hint: '▶ CLICK TO PLAY',
+      target: '.goal',
+      waitForClick: true,
+      final: true,
+    },
+  ];
+
+  function positionSpot(sel) {
+    if (!sel) { tutSpot.style.display = 'none'; tutFinger.style.display = 'none'; return; }
+    const t = document.querySelector(sel);
+    if (!t) { tutSpot.style.display = 'none'; tutFinger.style.display = 'none'; return; }
+    const r = t.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) { tutSpot.style.display = 'none'; tutFinger.style.display = 'none'; return; }
+    tutSpot.style.display = 'block';
+    tutSpot.style.left = (r.left - 6) + 'px';
+    tutSpot.style.top = (r.top - 6) + 'px';
+    tutSpot.style.width = (r.width + 12) + 'px';
+    tutSpot.style.height = (r.height + 12) + 'px';
+    tutFinger.style.display = 'block';
+    tutFinger.style.left = (r.left + r.width / 2 - 20) + 'px';
+    tutFinger.style.top = (r.top - 52) + 'px';
+  }
+
+  function renderTutStep() {
+    const step = TUT_STEPS[STATE.tutorialStep];
+    if (!step) { endTutorial(); return; }
+    tutStep.textContent = `STEP ${STATE.tutorialStep + 1} / ${TUT_STEPS.length}`;
+    tutLine.innerHTML = `${step.zh}<span class="en">${step.en}</span>`;
+    tutHint.textContent = step.hint || '';
+    positionSpot(step.target);
+  }
+
+  function advanceTutorialOnClick() {
+    const step = TUT_STEPS[STATE.tutorialStep];
+    if (!step) return;
+    if (step.waitForAction === 'select' && STATE.selected) {
+      STATE.tutorialStep++;
+      setTimeout(renderTutStep, 140);
+    } else if (step.waitForAction === 'swap' && !STATE.selected && !STATE.animating) {
+      // Check after swap completes
+      setTimeout(() => {
+        if (STATE.animating) return;
+        STATE.tutorialStep++;
+        renderTutStep();
+      }, 800);
+    }
+  }
+
+  function startTutorial() {
+    titleScreen.classList.add('hidden');
+    newGame();
+    STATE.tutorial = true;
+    STATE.tutorialStep = 0;
+    tutLayer.classList.add('on');
+    renderTutStep();
+    // Bubble click advances for waitForClick steps
+    const bubble = tutLayer.querySelector('.tutor-bubble');
+    const bubbleClick = () => {
+      const step = TUT_STEPS[STATE.tutorialStep];
+      if (!step) return;
+      if (step.waitForClick) {
+        if (step.final) { endTutorial(); return; }
+        STATE.tutorialStep++;
+        renderTutStep();
+      }
+    };
+    bubble.addEventListener('click', bubbleClick);
+    STATE.__tutBubbleFn = bubbleClick;
+  }
+
+  function endTutorial() {
+    tutLayer.classList.remove('on');
+    STATE.tutorial = false;
+    const bubble = tutLayer.querySelector('.tutor-bubble');
+    if (STATE.__tutBubbleFn) bubble.removeEventListener('click', STATE.__tutBubbleFn);
+    try { localStorage.setItem('kowloon-dimsum-tut-seen', '1'); } catch (e) {}
+  }
+
+  $('#tut-skip').addEventListener('click', (e) => { e.stopPropagation(); endTutorial(); });
+  window.addEventListener('resize', () => { if (STATE.tutorial) { const s = TUT_STEPS[STATE.tutorialStep]; if (s) positionSpot(s.target); } });
+
+  // ===== Wiring =====
+  $('#start-btn').addEventListener('click', () => {
+    titleScreen.classList.add('hidden');
+    newGame();
+  });
+  $('#tut-btn').addEventListener('click', startTutorial);
+  $('#again-btn').addEventListener('click', () => {
+    gameOverScreen.classList.add('hidden');
+    gameOverScreen.classList.remove('win');
+    newGame();
+  });
+  $('#back-to-title').addEventListener('click', () => {
+    gameOverScreen.classList.add('hidden');
+    gameOverScreen.classList.remove('win');
+    STATE.running = false;
+    titleScreen.classList.remove('hidden');
+  });
+
+  // First render
+  initBoard();
+  render();
+  updateHUD();
+})();
+</script>
+</body>
+</html>

@@ -63,21 +63,93 @@ const mintedAtFmt = mintedAt
   ? new Date(mintedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   : '—';
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Collection',
-  '@id': 'https://pointcast.xyz/collection/visit-nouns',
-  name: 'PointCast Visit Nouns',
-  description: 'Visit Nouns FA2 on Tezos mainnet. One 1/1 per Noun seed. CC0 imagery via noun.pics.',
-  url: 'https://pointcast.xyz/collection/visit-nouns',
-  hasPart: tokens.map((t) => ({
+// SEO / GEO: upgraded from generic Collection to a full @graph with
+// CollectionPage + Product (the mintable edition itself) + Offer
+// (free-to-claim semantics with XTZ pricing) + ItemList (per-token
+// listing with sameAs to objkt) + BreadcrumbList. Each token is
+// represented as a CreativeWork with image + identifier + creator.
+// This is the canonical rich-result entry point for Visit Nouns.
+const itemList = tokens.map((t, i) => ({
+  '@type': 'ListItem',
+  position: i + 1,
+  item: {
     '@type': 'CreativeWork',
+    '@id': `https://objkt.com/tokens/${KT1}/${t.tokenId}`,
     name: `Visit Noun #${t.tokenId}`,
     url: `https://objkt.com/tokens/${KT1}/${t.tokenId}`,
     image: `https://noun.pics/${t.tokenId}.svg`,
     identifier: String(t.tokenId),
     datePublished: t.firstTime,
-  })),
+    creator: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person' },
+    publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org' },
+    license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    sameAs: [
+      `https://objkt.com/tokens/${KT1}/${t.tokenId}`,
+      `https://tzkt.io/${KT1}/tokens/${t.tokenId}`,
+    ],
+  },
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': 'https://pointcast.xyz/collection/visit-nouns',
+      name: 'PointCast Visit Nouns — Tezos FA2 NFT collection',
+      description: `Visit Nouns FA2 NFT contract on Tezos mainnet (${KT1}). Open-supply: every Nouns seed 0-1199 is mintable on demand for ~0.003 ꜩ network fees. CC0 art via noun.pics. ${tokens.length} tokens minted so far.`,
+      url: 'https://pointcast.xyz/collection/visit-nouns',
+      isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website' },
+      inLanguage: 'en-US',
+      keywords: 'Tezos NFT, FA2, Visit Nouns, Nouns on Tezos, CC0 NFT, open-supply mint',
+      sameAs: [
+        `https://tzkt.io/${KT1}`,
+        `https://objkt.com/collection/${KT1}`,
+      ],
+    },
+    {
+      '@type': 'Product',
+      '@id': 'https://pointcast.xyz/collection/visit-nouns#product',
+      name: 'Visit Nouns (PCVN)',
+      description: 'An open-supply FA2 NFT edition on Tezos mainnet. Each tokenId 0-1199 corresponds to a Nouns seed. CC0 art sourced from noun.pics. Free to claim; pay only Tezos network fees (~0.003 ꜩ).',
+      url: 'https://pointcast.xyz/collection/visit-nouns',
+      identifier: KT1,
+      model: 'PCVN',
+      category: 'NFT / Tezos FA2',
+      brand: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      image: `https://noun.pics/${tokens[0]?.tokenId ?? 0}.svg`,
+      sameAs: [
+        `https://tzkt.io/${KT1}`,
+        `https://objkt.com/collection/${KT1}`,
+      ],
+      offers: {
+        '@type': 'Offer',
+        url: 'https://pointcast.xyz/collection/visit-nouns',
+        price: '0.003',
+        priceCurrency: 'XTZ',
+        availability: 'https://schema.org/InStock',
+        seller: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org' },
+        priceValidUntil: '2099-12-31',
+      },
+    },
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/collection/visit-nouns#items',
+      numberOfItems: tokens.length,
+      itemListOrder: 'https://schema.org/ItemListOrderAscending',
+      itemListElement: itemList,
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/collection/visit-nouns#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Tezos', item: 'https://pointcast.xyz/tezos' },
+        { '@type': 'ListItem', position: 3, name: 'Nouns', item: 'https://pointcast.xyz/nouns' },
+        { '@type': 'ListItem', position: 4, name: 'Visit Nouns', item: 'https://pointcast.xyz/collection/visit-nouns' },
+      ],
+    },
+  ],
 };
 ---
 

@@ -147,10 +147,17 @@ function defaultTimeFormat(tz: string): '12' | '24' {
 /** Sonic postcards — one procedural Web Audio patch per zone, synthesized
  *  entirely in the browser (no external files). Each zone label maps to a
  *  profile slug; unknown labels skip the audio toggle. */
-const AUDIO_PROFILES = ['el-segundo', 'medway', 'nyc', 'london', 'mallorca', 'istanbul', 'tokyo', 'mexico-city'] as const;
+const AUDIO_PROFILES = ['el-segundo', 'medway', 'nyc', 'london', 'mallorca', 'istanbul', 'tokyo', 'mexico-city', 'reykjavik', 'lisbon', 'cape-town'] as const;
 type AudioProfile = typeof AUDIO_PROFILES[number];
 function audioProfileFor(label: string): AudioProfile | null {
-  const slug = label.toLowerCase().split(',')[0].trim().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+  const slug = label
+    .toLowerCase()
+    .split(',')[0]
+    .trim()
+    .normalize('NFD')                 // decompose accented chars (Reykjavík → Reykjavi + ◌́)
+    .replace(/[\u0300-\u036f]/g, '')   // strip combining marks
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+$/, '');
   return (AUDIO_PROFILES as readonly string[]).includes(slug) ? (slug as AudioProfile) : null;
 }
 

@@ -30,6 +30,14 @@
 import { buildUnsubUrl } from './signing';
 import { sendViaMailChannels as sendMail, type SendResult } from './send';
 import { collectAcrossRelays, newestPerAuthorByDTag, type NostrEvent } from './nostr';
+import {
+  aggregate,
+  renderTopCoSavedHTML,
+  renderTopCoSavedText,
+  renderChannelDistHTML,
+  renderChannelDistText,
+  type BlockLookup,
+} from './aggregate';
 
 export interface Env {
   SPARROW_DIGEST_KV: KVNamespace;
@@ -92,17 +100,18 @@ async function listAllSubscriptions(env: Env): Promise<Subscription[]> {
  * Render the weekly digest email.
  *
  * v0.34: signed unsubscribe link.
- * v0.35: when the subscriber has an npub, fetch their followed-pubkeys
- * from Nostr (their own kind-3 contact list) and show "your N friends
- * have published M saved-list events since last digest." Full signals
- * aggregation (co-saves, channel distribution) still to come in v0.36
- * — this is the first sprint where the digest has ANY real content.
+ * v0.35: minimal friends-saved summary line when subscriber has npub.
+ * v0.36: full signals aggregation — top co-saved (≥2 friends) + channel
+ *        distribution, rendered as table rows + progress bars in HTML
+ *        (+ plain-text mirrors). Mirrors /sparrow/signals Panels 1 + 3.
  *
- * Subscribers without an npub get a short "open signals" prompt only.
+ * Subscribers without an npub still get the short "open signals"
+ * prompt — signals aggregation requires knowing their follow list.
  */
 async function renderDigestEmail(
   sub: Subscription,
   env: Env,
+  lookup: BlockLookup,
 ): Promise<{ subject: string; html: string; text: string }> {
   const subject = 'Sparrow · your federation recap';
   const signalsUrl = `${env.SPARROW_ORIGIN}/sparrow/signals`;
@@ -111,15 +120,16 @@ async function renderDigestEmail(
     ? await buildUnsubUrl(env.SPARROW_ORIGIN, sub.email, env.SPARROW_DIGEST_SIGNING_KEY)
     : `${env.SPARROW_ORIGIN}/api/sparrow/digest-subscribe?email=${encodeURIComponent(sub.email)}`;
 
-  // v0.35: best-effort live fetch. We don't have the subscriber's
-  // follow list server-side (it lives in their browser localStorage
-  // or in their Nostr kind-3). Fetching kind-3 for the subscriber's
-  // own pubkey gives us their follow list from their signer-of-record.
   let friendsSummary = '';
   let friendsSummaryText = '';
+  let topCoSavedHTML = '';
+  let topCoSavedText = '';
+  let channelDistHTML = '';
+  let channelDistText = '';
+
   if (sub.npub && sub.relays?.length) {
     try {
-      const { collectAcrossRelays } = await import('./nostr');
+      // Subscriber's follow list, from their own kind-3.
       const { events: contactsEvents } = await collectAcrossRelays(
         sub.relays.slice(0, 4),
         { kinds: [3], authors: [sub.npub], limit: 1 },
@@ -134,6 +144,8 @@ async function renderDigestEmail(
           sub.relays,
           followedPubkeys,
         );
+
+        // v0.35 summary line.
         const activeFriends = newestPerAuthor.size;
         const totalSaves = Array.from(newestPerAuthor.values()).reduce((acc, ev) => {
           try {
@@ -142,32 +154,47 @@ async function renderDigestEmail(
             return acc + (Array.isArray(list) ? list.length : 0);
           } catch { return acc; }
         }, 0);
-        friendsSummary = `<p><strong>${activeFriends}</strong> of <strong>${followedPubkeys.length}</strong> followed signers published public saved lists in the last cycle, ` +
+        friendsSummary = `<p><strong>${activeFriends}</strong> of <strong>${followedPubkeys.length}</strong> followed signers published public saved lists this cycle, ` +
           `totaling <strong>${totalSaves}</strong> saved-block references across ${relayCount} relays.</p>`;
         friendsSummaryText = `${activeFriends} of ${followedPubkeys.length} followed signers published public saved lists · ${totalSaves} total saved-block references.`;
+
+        // v0.36 full aggregation.
+        if (activeFriends >= 2) {
+          const bundle = aggregate(newestPerAuthor, lookup, { topN: 5, channelsTopN: 5 });
+          topCoSavedHTML = renderTopCoSavedHTML(bundle, env.SPARROW_ORIGIN);
+          topCoSavedText = renderTopCoSavedText(bundle);
+          channelDistHTML = renderChannelDistHTML(bundle, env.SPARROW_ORIGIN);
+          channelDistText = renderChannelDistText(bundle);
+        }
       }
     } catch {
-      // Network hiccup — email still sends, just without the summary.
+      // Network hiccup — email still sends, just without aggregation.
     }
   }
 
-  const text = [
+  const textSections = [
     `Sparrow · ${sub.frequency} digest`,
     '',
     friendsSummaryText || 'Your digest is ready.',
+    topCoSavedText,
+    channelDistText,
     '',
     `Federation signals: ${signalsUrl}`,
     `Your friends: ${friendsUrl}`,
     '',
     `Unsubscribe: ${unsubHref}`,
-  ].join('\n');
+  ].filter((s) => s !== '');
+
+  const text = textSections.join('\n\n');
   const html = `
 <!doctype html>
 <html><body style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:24px;color:#1a1a2e;">
   <h1 style="font-family:'Gloock',Georgia,serif;font-weight:400;">Sparrow · your federation recap</h1>
   <p style="color:#555;">Your ${sub.frequency} digest.</p>
   ${friendsSummary}
-  <p>
+  ${topCoSavedHTML}
+  ${channelDistHTML}
+  <p style="margin-top:28px;">
     <a href="${signalsUrl}" style="color:#c8742a;">Open signals in Sparrow →</a><br>
     <a href="${friendsUrl}" style="color:#c8742a;">Manage your friends →</a>
   </p>
@@ -190,6 +217,42 @@ async function sendViaMailChannels(
   payload: { subject: string; html: string; text: string },
 ): Promise<SendResult> {
   return sendMail(env, { to: sub.email, ...payload });
+}
+
+/**
+ * v0.36: one-shot block lookup fetch at cron start. Pulls /blocks.json
+ * once per cron tick + passes the `{[id]: {title, channel}}` shape
+ * down to every subscriber's renderDigestEmail. Beats 300+ /b/<id>.json
+ * requests per subscriber.
+ *
+ * Returns {} on any failure — aggregation degrades to "unknown block"
+ * rows but the email still sends.
+ */
+async function fetchBlockLookup(origin: string): Promise<BlockLookup> {
+  try {
+    const r = await fetch(`${origin}/blocks.json`, { cf: { cacheTtl: 300 } as RequestInitCfProperties });
+    if (!r.ok) return {};
+    const body = (await r.json()) as {
+      blocks?: Array<{
+        id?: string;
+        title?: string;
+        channel?: string | { code?: string; name?: string };
+        channel_name?: string;
+      }>;
+    };
+    const out: BlockLookup = {};
+    for (const b of body.blocks ?? []) {
+      if (!b?.id || !b?.title) continue;
+      const channelCode =
+        typeof b.channel === 'string' ? b.channel : b.channel?.code ?? '—';
+      const channelName =
+        (typeof b.channel === 'object' && b.channel?.name) || b.channel_name || channelCode;
+      out[b.id] = { title: b.title, channel: channelCode, channel_name: channelName };
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -236,11 +299,21 @@ export default {
     const due = subs.filter((s) => isDue(s, now));
     console.log(`[sparrow-digest] ${due.length} of ${subs.length} subscribers due at ${now.toISOString()}`);
 
+    // v0.36: block lookup is fetched ONCE per cron tick and passed to
+    // every subscriber's renderDigestEmail. Saves 300+ /b/<id>.json
+    // requests per subscriber; also gives the aggregation the channel
+    // metadata it needs for Panel 3.
+    const lookup = due.length ? await fetchBlockLookup(env.SPARROW_ORIGIN) : {};
+    const lookupSize = Object.keys(lookup).length;
+    if (lookupSize > 0) {
+      console.log(`[sparrow-digest] block-lookup hydrated · ${lookupSize} entries`);
+    }
+
     let sent = 0;
     let failed = 0;
     let retriableFailed = 0;
     for (const sub of due) {
-      const email = await renderDigestEmail(sub, env);
+      const email = await renderDigestEmail(sub, env, lookup);
       const result = await sendViaMailChannels(sub, env, email);
       if (result.ok) {
         sub.last_sent_at = now.toISOString();
@@ -285,12 +358,12 @@ export default {
         total: subs.length,
         due: due.length,
         now: now.toISOString(),
-        worker_version: 'v0.35',
+        worker_version: 'v0.36',
       }, null, 2), {
         headers: { 'content-type': 'application/json; charset=utf-8' },
       });
     }
-    return new Response('sparrow-digest cron worker · v0.35\nsee README.md for deploy instructions.\n', {
+    return new Response('sparrow-digest cron worker · v0.36\nsee README.md for deploy instructions.\n', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     });
   },

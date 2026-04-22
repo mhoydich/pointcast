@@ -26,6 +26,18 @@
 const ENDPOINT = 'https://pointcast.xyz/api/indexnow';
 const SITEMAP_URL = 'https://pointcast.xyz/sitemap-0.xml';
 const HOST = 'pointcast.xyz';
+const PRIORITY_URLS = [
+  'https://pointcast.xyz/',
+  'https://pointcast.xyz/start',
+  'https://pointcast.xyz/share',
+  'https://pointcast.xyz/share.json',
+  'https://pointcast.xyz/for-agents',
+  'https://pointcast.xyz/agents.json',
+  'https://pointcast.xyz/collection/visit-nouns',
+  'https://pointcast.xyz/local',
+  'https://pointcast.xyz/battle',
+  'https://pointcast.xyz/ai-stack',
+];
 
 async function fetchSitemapUrls() {
   const r = await fetch(SITEMAP_URL);
@@ -56,10 +68,10 @@ async function main() {
   if (argv.length > 0) {
     urls = argv;
   } else {
-    console.log('[indexnow] no URLs specified — pulling all /b/* from sitemap');
+    console.log('[indexnow] no URLs specified — pulling priority URLs + all /b/* from sitemap');
     const all = await fetchSitemapUrls();
-    urls = all.filter((u) => /\/b\/\d{4}\//.test(u));
-    console.log(`[indexnow] found ${urls.length} block URLs`);
+    urls = [...new Set([...PRIORITY_URLS, ...all.filter((u) => /\/b\/\d{4}\//.test(u))])];
+    console.log(`[indexnow] found ${urls.length} URLs`);
   }
 
   if (urls.length === 0) {

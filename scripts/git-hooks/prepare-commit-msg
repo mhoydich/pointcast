@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# prepare-commit-msg — auto-append Co-Authored-By trailer based on the
+# active branch's prefix.
+#
+# Convention (per block 0388 + the branch-attribution mapper):
+#   codex/*    → Co-Authored-By: Codex   <codex@pointcast.xyz>
+#   manus/*    → Co-Authored-By: Manus   <manus@pointcast.xyz>
+#   chatgpt/*  → Co-Authored-By: ChatGPT <chatgpt@pointcast.xyz>
+#   cc/*, feat/*, main, blocks-rebuild → no trailer (cc is the default author)
+#
+# Idempotent: if the commit message already contains a `Co-Authored-By:`
+# line for the detected agent, skips re-appending.
+#
+# Skips:
+#   - merge / squash / amend / template commits ($2 is non-empty)
+#   - if the commit message looks like a revert, cherry-pick, or fixup
+#   - if there's no attribution JSON at docs/notes/git-branch-attribution.json
+#     (the hook is opportunistic — not running the mapper blocks nothing)
+#
+# Install via: npm run install:hooks
+# Uninstall: rm .git/hooks/prepare-commit-msg
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Skip if this is a merge / squash / template / amend — commit sources other
+# than empty or "message" shouldn't get auto-trailers.
+case "$COMMIT_SOURCE" in
+  merge|squash|template|commit) exit 0 ;;
+esac
+
+# Skip revert / cherry-pick / fixup (git sets these in the first line).
+FIRST_LINE=$(head -n 1 "$COMMIT_MSG_FILE" 2>/dev/null)
+case "$FIRST_LINE" in
+  "Revert "*|"cherry-pick"*|"fixup!"*|"squash!"*|"amend!"*) exit 0 ;;
+esac
+
+# Get current branch name.
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+if [ -z "$BRANCH" ]; then exit 0; fi
+
+# Map branch prefix → collab.
+COLLAB=""
+case "$BRANCH" in
+  codex/*)   COLLAB="Codex"; EMAIL="codex@pointcast.xyz" ;;
+  manus/*)   COLLAB="Manus"; EMAIL="manus@pointcast.xyz" ;;
+  chatgpt/*) COLLAB="ChatGPT"; EMAIL="chatgpt@pointcast.xyz" ;;
+  *)         exit 0 ;;
+esac
+
+# Idempotence: if a trailer for this collab is already present, skip.
+if grep -qi "^Co-Authored-By: $COLLAB " "$COMMIT_MSG_FILE"; then
+  exit 0
+fi
+
+# Append the trailer. Preserve any existing trailers; add a blank line if
+# the message doesn't already end with one.
+if [ -s "$COMMIT_MSG_FILE" ]; then
+  LAST_CHAR=$(tail -c 1 "$COMMIT_MSG_FILE" 2>/dev/null)
+  if [ "$LAST_CHAR" != "" ] && [ "$LAST_CHAR" != $'\n' ]; then
+    echo >> "$COMMIT_MSG_FILE"
+  fi
+fi
+
+# Blank line before trailer block if message has content and no trailing blank.
+if [ -s "$COMMIT_MSG_FILE" ]; then
+  # Check if the last non-empty line is already a trailer-style "Key: value".
+  LAST_NONEMPTY=$(awk 'NF {last=$0} END {print last}' "$COMMIT_MSG_FILE")
+  if ! echo "$LAST_NONEMPTY" | grep -qE '^[A-Za-z-]+:[[:space:]]'; then
+    echo >> "$COMMIT_MSG_FILE"
+  fi
+fi
+
+echo "Co-Authored-By: $COLLAB <$EMAIL>" >> "$COMMIT_MSG_FILE"
+
+exit 0

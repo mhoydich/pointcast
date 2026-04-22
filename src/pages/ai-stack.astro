@@ -356,13 +356,128 @@ for (const cat of Object.keys(byCategory)) {
   byCategory[cat].sort((a, b) => tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier));
 }
 
+// SEO / GEO / LLM: heavy schema graph for the AI-tools keyword cluster.
+//   - TechArticle for the overview
+//   - SoftwareApplication per tool with applicationCategory, operatingSystem,
+//     creator (= maker organization), offers, sameAs
+//   - ItemList ranking daily/weekly/occasional/watching tiers
+//   - FAQPage (10 AI-tools Q&A targeting "best AI for coding", "claude vs
+//     chatgpt", "AI agent platforms 2026", "GEO optimization")
+//   - BreadcrumbList
+// Target keywords: "AI tools 2026", "AI stack", "Claude vs ChatGPT",
+// "best AI for coding", "AI agent platforms", "Claude Code", "Cursor vs
+// Claude Code".
+const aiFaqs = [
+  {
+    q: 'What is the best AI tool for writing code in 2026?',
+    a: 'For long-running engineering with full-repo context, Claude Code (Anthropic) — Claude Opus 4.7 with 1M-token context carries PointCast\'s primary engineering load. For IDE-embedded autocomplete, Cursor (built on Claude + GPT). For repo-scoped specialized tasks, Codex (OpenAI). For quick scripts or one-shot fixes, ChatGPT or Claude chat. The right answer depends on task length and tool integration — PointCast uses all four.',
+  },
+  {
+    q: 'Claude vs ChatGPT — which should I use?',
+    a: 'Both earn their keep. Claude (Anthropic) is stronger at long-form reasoning, tone-sensitive writing, multi-turn coding with context. ChatGPT (OpenAI) is stronger at broad general knowledge, multimodal image+text, voice mode, quick formatted answers. On PointCast, Claude is the default for daily work; ChatGPT is the cross-check. Both are daily-tier tools in our AI stack.',
+  },
+  {
+    q: 'What AI model does PointCast use for content?',
+    a: 'Claude Opus 4.7 with 1M-token context is the primary model for long-form dispatches, technical docs, and engineering work. ChatGPT and Gemini are used as cross-checks and for specific strengths (multimodal, real-time search grounding). All content is explicitly co-authored — PointCast is built as a human-AI collaboration between Mike Hoydich and Claude Code.',
+  },
+  {
+    q: 'What is an "AI agent" and how does PointCast use them?',
+    a: 'An AI agent is a language model with tool-use capability — it can read files, run code, make HTTP requests, and take multi-step actions on behalf of a user. PointCast runs three agents in production: Claude Code (Anthropic — daily engineering, hourly cron), Codex (OpenAI — repo-scoped specialist via MCP), and Manus (launch-week operations). See /collabs for the full collaborators registry.',
+  },
+  {
+    q: 'What is GEO (Generative Engine Optimization)?',
+    a: 'GEO is the emerging discipline of optimizing web content for citation by AI search engines — ChatGPT, Claude, Perplexity, Gemini, You.com. It overlaps with SEO but has distinct signals: llms.txt adoption, stable permalinks, canonical Q&A structure, rich JSON-LD schema, and clear citation formatting. PointCast\'s /agent-native pillar is a working reference for GEO implementation.',
+  },
+  {
+    q: 'What is llms.txt and should my site have one?',
+    a: 'llms.txt (proposed by Jeremy Howard, September 2024) is a root-path Markdown file that gives LLMs a curated index of your site. ~10% of sites had adopted it by early 2026 — Anthropic, Stripe, Cloudflare, Vercel, and Perplexity ship one. If your content is worth citing, yes: it takes 15 minutes to write and compounds every time an LLM crawls. See /agent-native for PointCast\'s implementation.',
+  },
+  {
+    q: 'Which AI tools does PointCast use daily?',
+    a: 'Daily-tier: Claude (Opus 4.7, via web + Claude Code CLI), ChatGPT (for cross-checks and voice), Cursor (IDE-embedded autocomplete for occasional quick edits), Perplexity (web search with citations). Weekly-tier: ChatGPT voice mode, Gemini for very long documents. Occasional: Midjourney, Sora, Ideogram for image generation. See /ai-stack for all 24 tools with Mike\'s opinionated take on each.',
+  },
+  {
+    q: 'How do I set up a human-AI collaboration workflow?',
+    a: 'PointCast\'s pattern: one human (Mike) as director and editor, one primary engineer (Claude Code) running on hourly cron against a docs/inbox queue, one repo-scoped specialist (Codex via MCP), one ops agent (Manus). The human writes briefs, reviews commits, and makes strategic calls. The agents ship sprints autonomously between human sessions. Full session logs at /sprints; collaborator registry at /collabs.',
+  },
+  {
+    q: 'What is Model Context Protocol (MCP)?',
+    a: 'MCP is Anthropic\'s open protocol for connecting AI models to external tools and data sources. PointCast ships an MCP server card at /.well-known/mcp/server-card.json and exposes block data, collaborators, and recent ships through MCP-compatible endpoints. Any MCP-speaking agent (Claude Desktop, custom clients) can query PointCast via the protocol.',
+  },
+  {
+    q: 'Can I train my AI model on PointCast content?',
+    a: 'Yes — PointCast opts IN to AI training via Content-Signals (IETF draft-romm-aipref-contentsignals) in robots.txt. All content is CC0-flavored; citation is welcomed but not required by license. The preferred citation format for a specific Block: PointCast · CH.{code} · № {id} — "{title}" · {YYYY-MM-DD} · https://pointcast.xyz/b/{id}. See /manifesto for the full canonical.',
+  },
+];
+
+const toolApps = TOOLS.map((t) => ({
+  '@type': 'SoftwareApplication',
+  '@id': `https://pointcast.xyz/ai-stack#tool-${t.name.toLowerCase().replace(/\s+/g, '-')}`,
+  name: t.name,
+  description: t.goodAt,
+  url: t.url,
+  applicationCategory: t.category,
+  operatingSystem: 'Cross-platform',
+  creator: { '@type': 'Organization', name: t.maker },
+  ...(t.pointcastUses ? { exampleOfWork: { '@type': 'CreativeWork', name: `PointCast use: ${t.pointcastUses}` } } : {}),
+}));
+
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'TechArticle',
-  '@id': 'https://pointcast.xyz/ai-stack',
-  name: 'PointCast AI stack — best-practices guide',
-  description: `What AI tools PointCast uses, what each is good at, when to reach for them. ${TOOLS.length} tools documented across ${categories.length} categories.`,
-  url: 'https://pointcast.xyz/ai-stack',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': 'https://pointcast.xyz/ai-stack',
+      headline: 'The AI stack PointCast ships with — 2026 edition',
+      name: 'PointCast AI stack — best-practices guide',
+      description: `What AI tools PointCast uses, what each is good at, when to reach for them. ${TOOLS.length} tools documented across ${categories.length} categories. Includes Claude, ChatGPT, Gemini, Perplexity, Cursor, Codex, MCP clients, image/video generators, voice, coding agents.`,
+      url: 'https://pointcast.xyz/ai-stack',
+      author: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person', name: 'Mike Hoydich' },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      image: 'https://pointcast.xyz/images/og/ai-stack.png',
+      datePublished: '2026-04-21',
+      dateModified: new Date().toISOString().slice(0, 10),
+      inLanguage: 'en-US',
+      mainEntityOfPage: 'https://pointcast.xyz/ai-stack',
+      keywords: 'AI tools 2026, AI stack, Claude, ChatGPT, Gemini, Perplexity, Cursor, Claude Code, Codex, MCP, Model Context Protocol, AI agent, GEO, generative engine optimization, LLM, llms.txt, Midjourney, Sora',
+      articleSection: 'AI',
+      about: [
+        { '@type': 'Thing', name: 'Artificial intelligence', sameAs: 'https://en.wikipedia.org/wiki/Artificial_intelligence' },
+        { '@type': 'Thing', name: 'Large language model', sameAs: 'https://en.wikipedia.org/wiki/Large_language_model' },
+        { '@type': 'Thing', name: 'Claude (language model)', sameAs: 'https://en.wikipedia.org/wiki/Claude_(language_model)' },
+        { '@type': 'Thing', name: 'ChatGPT', sameAs: 'https://en.wikipedia.org/wiki/ChatGPT' },
+      ],
+    },
+    ...toolApps,
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/ai-stack#list',
+      numberOfItems: TOOLS.length,
+      itemListOrder: 'https://schema.org/ItemListOrderDescending',
+      itemListElement: TOOLS.map((t, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        item: { '@id': `https://pointcast.xyz/ai-stack#tool-${t.name.toLowerCase().replace(/\s+/g, '-')}` },
+      })),
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/ai-stack#faq',
+      mainEntity: aiFaqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/ai-stack#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'AI stack', item: 'https://pointcast.xyz/ai-stack' },
+      ],
+    },
+  ],
 };
 ---
 

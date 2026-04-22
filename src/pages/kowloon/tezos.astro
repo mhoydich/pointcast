@@ -1,0 +1,462 @@
+---
+/**
+ * /kowloon/tezos — wallet connect + $BUN claim + Pastry + Achievement NFTs.
+ *
+ * Loads Taquito + Beacon lazily (~700KB code-split). Single-file games
+ * never load this; they use a window.open + postMessage bridge.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import contracts from '../../data/contracts.json';
+
+const bunKt1 = (contracts as any)?.bun_token?.mainnet ?? '';
+const pastryKt1 = (contracts as any)?.kowloon_pastry?.mainnet ?? '';
+const achvKt1 = (contracts as any)?.kowloon_achievements?.mainnet ?? '';
+
+const PASTRIES = [
+  { id: 0, face: '🍞', name: '菠蘿包', en: 'Pineapple Bun' },
+  { id: 1, face: '🥧', name: '蛋撻',   en: 'Egg Tart' },
+  { id: 2, face: '🥟', name: '叉燒包', en: 'Char Siu Bao' },
+  { id: 3, face: '🧁', name: '馬拉糕', en: 'Malai Gao' },
+  { id: 4, face: '🍪', name: '老婆餅', en: 'Wife Cake' },
+  { id: 5, face: '🥮', name: '月餅',   en: 'Mooncake' },
+];
+---
+<BaseLayout
+  title="Kowloon Tezos — connect + claim"
+  description="Connect your Tezos wallet to claim $BUN earned in Kowloon Kitchen and Kowloon Dim Sum. Plus the CC0 Pastry NFT drop + on-chain achievement receipts."
+>
+  <main class="ktz">
+    <div class="rain"></div><div class="crt"></div>
+
+    <section class="hero">
+      <div class="kicker">KOWLOON · ON-CHAIN BRIDGE</div>
+      <h1>Tezos</h1>
+      <p class="tagline">
+        連錢包。領 <span class="accent-gold">$BUN</span>。攞 <span class="accent-pink">糕點 NFT</span>。收 <span class="accent-jade">成就證書</span>。
+        <span class="en">Connect · claim $BUN · collect Pastry · mint Achievement receipts</span>
+      </p>
+      <p class="lede">
+        Real Tezos. <a href="https://kukai.app" target="_blank">Kukai</a>, <a href="https://templewallet.com/" target="_blank">Temple</a>, <a href="https://umamiwallet.com/" target="_blank">Umami</a> — all supported via Beacon.
+        Three contracts, one wallet: <strong>$BUN</strong> (FA1.2 fungible, voucher-signed mint, 2.00 daily cap), <strong>Kowloon Pastry</strong> (FA2, 6 CC0 NFTs), <strong>Achievement Receipts</strong> (FA2, 1 NFT per slug per wallet).
+      </p>
+    </section>
+
+    <section class="status">
+      <div class="status-row">
+        <div class="status-cell">
+          <div class="sc-label">CONTRACTS</div>
+          <div class="sc-value">
+            <div><span class="sc-key">$BUN</span> <code id="bun-kt">{bunKt1 || '— not deployed —'}</code></div>
+            <div><span class="sc-key">PASTRY</span> <code id="pastry-kt">{pastryKt1 || '— not deployed —'}</code></div>
+            <div><span class="sc-key">ACHV</span> <code id="achv-kt">{achvKt1 || '— not deployed —'}</code></div>
+          </div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">WALLET</div>
+          <div class="sc-value" id="wallet-state">— not connected —</div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">$BUN · EARNED / ON-CHAIN</div>
+          <div class="sc-value">
+            <span class="earned" id="earned-bun">0.00</span>
+            <span class="slash">/</span>
+            <span class="chain" id="chain-bun">?</span>
+          </div>
+        </div>
+      </div>
+      <div class="cta-row">
+        <button class="cta cta-cyan" id="connect-btn">▶ 連 Kukai · CONNECT WALLET</button>
+        <button class="cta cta-gold" id="claim-bun-btn" disabled>
+          ⬇ Claim <span id="claim-amount">0.00</span> $BUN
+        </button>
+        <button class="cta cta-muted" id="signout-btn" style="display:none">✕ Disconnect</button>
+      </div>
+      <div class="toast" id="toast"></div>
+    </section>
+
+    <section class="pastry">
+      <div class="section-tag">S1 FINALE · GENESIS PASTRY NFTs · 6 EDITIONS</div>
+      <div class="pastry-grid">
+        {PASTRIES.map((p) => (
+          <div class="pastry-card" data-tokenid={p.id}>
+            <div class="p-face">{p.face}</div>
+            <div class="p-zh">{p.name}</div>
+            <div class="p-en">{p.en} · #{p.id}</div>
+            <div class="p-state">checking…</div>
+            <button class="pastry-claim" data-tokenid={p.id} disabled>Claim</button>
+          </div>
+        ))}
+      </div>
+      <p class="pastry-note">Eligibility: Daily Shift top-50 on Apr 28, 20:00 PT. 10% royalty. CC0 art — NFT is the receipt, art is yours to remix.</p>
+    </section>
+
+    <section class="achievements">
+      <div class="section-tag">ACHIEVEMENT RECEIPTS · 成就證書 · ON-CHAIN</div>
+      <p class="achv-lede">
+        Every achievement you've unlocked can be minted as a CC0 on-chain receipt — one per wallet per slug, 0% royalty. Reads <code>localStorage['kowloon-ach-v4']</code>, mints to <code>KACHV</code> FA2.
+      </p>
+      <div class="achv-grid" id="achv-grid"></div>
+    </section>
+
+    <p class="back-link"><a href="/kowloon">← 返回 KOWLOON HUB</a></p>
+  </main>
+
+<script type="module">
+  const BUN_KEY = 'kowloon-bun-v5';
+  const USER_KEY = 'kowloon-user-v5';
+  const ACHV_KEY = 'kowloon-ach-v4';
+  const PASTRIES = [
+    { id: 0, face: '🍞', name: '菠蘿包' }, { id: 1, face: '🥧', name: '蛋撻' },
+    { id: 2, face: '🥟', name: '叉燒包' }, { id: 3, face: '🧁', name: '馬拉糕' },
+    { id: 4, face: '🍪', name: '老婆餅' }, { id: 5, face: '🥮', name: '月餅' },
+  ];
+  const ACHV_SLUGS = {
+    0:'first_bake',1:'first_bullseye',2:'vip_done',3:'boss_done',4:'combo_10',
+    5:'combo_20',6:'cash_stash',7:'bribe_lord',8:'shop_goer',9:'four_ovens',
+    10:'daily_shifter',11:'wallet_connect',12:'bun_collector',13:'theme_chameleon',
+    14:'developed_gluten',15:'auntie_hands',16:'regular',17:'five_stars',
+    18:'all_hands',19:'outran_chan',20:'vendetta_done',21:'right_hand',
+    22:'no_mans_land',23:'sidejob_done',24:'everyone_knows',25:'local_hero',
+    26:'typhoon_hero',27:'storm_drop',28:'ch7_started',29:'truth_kept',
+    30:'truth_uncovered',31:'sepia_runner',32:'typhoon_survivor',33:'triad_paid',
+    34:'night_5',35:'night_10',
+  };
+  const ACHV_LABELS = {
+    first_bake:{f:'🍞',zh:'第一爐'},first_bullseye:{f:'🎯',zh:'正中紅心'},
+    vip_done:{f:'⭐',zh:'VIP 到手'},boss_done:{f:'👑',zh:'Boss 單完成'},
+    combo_10:{f:'🔥',zh:'連擊十'},combo_20:{f:'💥',zh:'連擊二十'},
+    cash_stash:{f:'💰',zh:'夾錢佬'},bribe_lord:{f:'💸',zh:'賄賂神'},
+    shop_goer:{f:'🛒',zh:'夜半市客'},four_ovens:{f:'🔥',zh:'四爐開工'},
+    daily_shifter:{f:'📅',zh:'每日開工'},wallet_connect:{f:'💎',zh:'連錢包'},
+    bun_collector:{f:'🍞',zh:'囤包券'},theme_chameleon:{f:'🎨',zh:'換皮大師'},
+    developed_gluten:{f:'💪',zh:'揉到起筋'},auntie_hands:{f:'🤲',zh:'阿姐之手'},
+    regular:{f:'🥇',zh:'熟客'},five_stars:{f:'⭐',zh:'五大街坊'},
+    all_hands:{f:'🤝',zh:'全街認得你'},outran_chan:{f:'🏃🏻',zh:'擺甩阿Sir'},
+    vendetta_done:{f:'🕵🏻',zh:'陳仇了結'},right_hand:{f:'👑',zh:'阿爺心腹'},
+    no_mans_land:{f:'💀',zh:'冇人保你'},sidejob_done:{f:'✉️',zh:'走單成功'},
+    everyone_knows:{f:'🏘️',zh:'全街認得你'},local_hero:{f:'🌆',zh:'街坊英雄'},
+    typhoon_hero:{f:'🌀',zh:'打風夜嘅英雄'},storm_drop:{f:'⚡',zh:'暴雨送達'},
+    ch7_started:{f:'📜',zh:'阿姐嘅過去'},truth_kept:{f:'🤐',zh:'秘密保住'},
+    truth_uncovered:{f:'🔓',zh:'秘密揭穿'},sepia_runner:{f:'🎞️',zh:'黃金歲月'},
+    typhoon_survivor:{f:'🌊',zh:'打風倖存'},triad_paid:{f:'🧧',zh:'交陀'},
+    night_5:{f:'5⃣',zh:'捱到第五晚'},night_10:{f:'🌌',zh:'捱到第十晚'},
+  };
+
+  const $ = (s) => document.querySelector(s);
+  const walletStateEl = $('#wallet-state');
+  const earnedEl = $('#earned-bun');
+  const chainEl = $('#chain-bun');
+  const connectBtn = $('#connect-btn');
+  const claimBtn = $('#claim-bun-btn');
+  const claimAmountEl = $('#claim-amount');
+  const signoutBtn = $('#signout-btn');
+  const toastEl = $('#toast');
+  let activeAddress = null;
+  let clients = null;
+
+  const readEarned = () => { const v = parseFloat(localStorage.getItem(BUN_KEY) || '0'); return isNaN(v) ? 0 : v; };
+  const readAchv = () => { try { return JSON.parse(localStorage.getItem(ACHV_KEY) || '[]'); } catch { return []; } };
+  const toast = (msg, kind='info') => { toastEl.className='toast show '+kind; toastEl.textContent=msg; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.classList.remove('show'),4000); };
+  const refreshEarned = () => { const v=readEarned(); earnedEl.textContent=v.toFixed(2); claimAmountEl.textContent=v.toFixed(2); claimBtn.disabled=!activeAddress||v<=0; };
+  const shortAddr = (a) => a ? a.slice(0,5)+'…'+a.slice(-4) : '';
+  const postToOpener = (address) => { if (window.opener && !window.opener.closed) window.opener.postMessage({ type: 'kowloon-tezos', address, ts: Date.now() }, '*'); };
+
+  async function getClients() {
+    if (clients) return clients;
+    const [taquito, beacon] = await Promise.all([import('@taquito/taquito'), import('@taquito/beacon-wallet')]);
+    const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+    const wallet = new beacon.BeaconWallet({ name: 'Kowloon', network: { type: 'mainnet' }, preferredNetwork: 'mainnet' });
+    tezos.setWalletProvider(wallet);
+    clients = { tezos, wallet };
+    return clients;
+  }
+
+  async function connect() {
+    try {
+      const { wallet } = await getClients();
+      const existing = await wallet.client.getActiveAccount();
+      if (existing) { onConnected(existing.address); return; }
+      await wallet.requestPermissions();
+      const acct = await wallet.client.getActiveAccount();
+      if (acct?.address) onConnected(acct.address);
+    } catch (e) { toast('Could not connect. Is your wallet unlocked?', 'err'); }
+  }
+
+  function onConnected(addr) {
+    activeAddress = addr;
+    walletStateEl.textContent = shortAddr(addr);
+    walletStateEl.classList.add('connected');
+    connectBtn.style.display = 'none';
+    signoutBtn.style.display = 'inline-block';
+    try { localStorage.setItem(USER_KEY, JSON.stringify({ type: 'tezos', name: addr })); } catch {}
+    postToOpener(addr);
+    refreshEarned(); refreshChainBalance(); refreshPastryEligibility(); renderAchvGrid();
+  }
+
+  async function disconnect() {
+    try { const { wallet } = await getClients(); await wallet.clearActiveAccount(); } catch {}
+    activeAddress = null;
+    walletStateEl.textContent = '— not connected —';
+    walletStateEl.classList.remove('connected');
+    connectBtn.style.display = 'inline-block';
+    signoutBtn.style.display = 'none';
+    claimBtn.disabled = true;
+    chainEl.textContent = '?';
+    try { localStorage.removeItem(USER_KEY); } catch {}
+    renderAchvGrid();
+  }
+
+  async function refreshChainBalance() {
+    const kt1 = document.getElementById('bun-kt').textContent.trim();
+    if (!kt1.startsWith('KT1')) { chainEl.textContent = 'contract not deployed'; return; }
+    try {
+      const { tezos } = await getClients();
+      const contract = await tezos.contract.at(kt1);
+      const ledger = await contract.storage().then((s) => s.ledger);
+      const bal = await ledger.get(activeAddress);
+      chainEl.textContent = (bal ? Number(bal) / 100 : 0).toFixed(2);
+    } catch { chainEl.textContent = 'err'; }
+  }
+
+  async function claimBun() {
+    if (!activeAddress) return;
+    const earned = readEarned();
+    if (earned <= 0) { toast('Nothing earned yet. Go play.', 'info'); return; }
+    claimBtn.disabled = true;
+    toast('Requesting voucher…', 'info');
+    try {
+      const resp = await fetch('/api/kowloon-voucher', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ kind:'bun', wallet:activeAddress, earned }) });
+      if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || resp.statusText); }
+      const voucher = await resp.json();
+      toast('Voucher signed. Approve in your wallet.', 'info');
+      const kt1 = document.getElementById('bun-kt').textContent.trim();
+      const { tezos } = await getClients();
+      const contract = await tezos.wallet.at(kt1);
+      const op = await contract.methodsObject.claim({
+        recipient: activeAddress, amount: voucher.amount, nonce: voucher.nonce,
+        expiry: Math.floor(new Date(voucher.expiry).getTime()/1000).toString(),
+        signature: voucher.signature,
+      }).send();
+      toast('Sent ' + op.opHash.slice(0,10) + '… confirming…', 'info');
+      await op.confirmation();
+      toast('✓ Claimed ' + (Number(voucher.amount)/100).toFixed(2) + ' $BUN', 'ok');
+      refreshChainBalance();
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : 'unknown';
+      if (msg === 'daily-cap-met') toast('Daily cap (2.00) already met.', 'warn');
+      else if (msg === 'nothing-to-claim') toast('Nothing to claim.', 'info');
+      else toast('Claim failed: ' + msg, 'err');
+    } finally { refreshEarned(); }
+  }
+
+  async function refreshPastryEligibility() {
+    if (!activeAddress) return;
+    for (const p of PASTRIES) {
+      const card = document.querySelector(`.pastry-card[data-tokenid="${p.id}"]`);
+      const state = card.querySelector('.p-state');
+      const btn = card.querySelector('.pastry-claim');
+      try {
+        const resp = await fetch('/api/kowloon-voucher', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ kind:'pastry', wallet:activeAddress, tokenId:p.id }) });
+        if (resp.status === 403) { state.textContent='not eligible'; btn.disabled=true; card.classList.remove('eligible'); }
+        else if (resp.status === 409) { state.textContent='✓ claimed'; btn.disabled=true; card.classList.add('claimed'); }
+        else if (resp.ok) { state.textContent='★ eligible'; btn.disabled=false; card.classList.add('eligible'); }
+        else state.textContent='— err —';
+      } catch { state.textContent='— err —'; }
+    }
+  }
+
+  async function claimPastry(tokenId) {
+    if (!activeAddress) return;
+    const kt1 = document.getElementById('pastry-kt').textContent.trim();
+    if (!kt1.startsWith('KT1')) { toast('Pastry contract not deployed yet.', 'warn'); return; }
+    toast('Requesting pastry voucher…', 'info');
+    try {
+      const resp = await fetch('/api/kowloon-voucher', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ kind:'pastry', wallet:activeAddress, tokenId }) });
+      if (!resp.ok) throw new Error((await resp.json().catch(()=>({}))).error || resp.statusText);
+      const voucher = await resp.json();
+      const { tezos } = await getClients();
+      const contract = await tezos.wallet.at(kt1);
+      const op = await contract.methodsObject.claim_pastry({
+        recipient: activeAddress, token_id: voucher.tokenId, nonce: voucher.nonce,
+        expiry: Math.floor(new Date(voucher.expiry).getTime()/1000).toString(),
+        signature: voucher.signature,
+      }).send();
+      toast('Sent ' + op.opHash.slice(0,10) + '… confirming…', 'info');
+      await op.confirmation();
+      toast('✓ Claimed pastry #' + tokenId, 'ok');
+      refreshPastryEligibility();
+    } catch (e) { toast('Pastry claim failed: ' + ((e && e.message) || 'unknown'), 'err'); }
+  }
+
+  function renderAchvGrid() {
+    const grid = document.getElementById('achv-grid');
+    if (!grid) return;
+    const unlocked = new Set(readAchv());
+    const rows = Object.entries(ACHV_SLUGS).map(([id, slug]) => ({ tokenId: Number(id), slug })).sort((a,b)=>a.tokenId-b.tokenId);
+    grid.innerHTML = rows.map(({ tokenId, slug }) => {
+      const lbl = ACHV_LABELS[slug] || { f: '🏆', zh: slug };
+      const un = unlocked.has(slug);
+      return `<div class="achv-cell ${un?'unlocked':'locked'}" data-slug="${slug}" data-tokenid="${tokenId}">
+        <div class="achv-face">${lbl.f}</div>
+        <div class="achv-zh">${lbl.zh}</div>
+        <div class="achv-slug">${slug}</div>
+        <button class="achv-mint" data-slug="${slug}" data-tokenid="${tokenId}" ${un?'':'disabled'}>${un?'mint receipt':'locked'}</button>
+      </div>`;
+    }).join('');
+    if (activeAddress) checkAchvClaimed();
+  }
+
+  async function checkAchvClaimed() {
+    if (!activeAddress) return;
+    for (const slug of readAchv()) {
+      const tokenId = Object.entries(ACHV_SLUGS).find(([,s])=>s===slug)?.[0];
+      if (tokenId == null) continue;
+      try {
+        const resp = await fetch('/api/kowloon-voucher', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ kind:'achievement', wallet:activeAddress, tokenId:Number(tokenId), achievementSlug:slug }) });
+        if (resp.status === 409) {
+          const cell = document.querySelector(`.achv-cell[data-slug="${slug}"]`);
+          cell?.classList.add('claimed');
+          const btn = cell?.querySelector('.achv-mint');
+          if (btn) { btn.textContent = '✓ on-chain'; btn.disabled = true; }
+        }
+      } catch {}
+    }
+  }
+
+  async function claimAchv(slug, tokenId) {
+    if (!activeAddress) { toast('Connect wallet first.', 'warn'); return; }
+    const kt1 = document.getElementById('achv-kt').textContent.trim();
+    if (!kt1.startsWith('KT1')) { toast('Achievements contract not deployed yet.', 'warn'); return; }
+    toast(`Requesting voucher for "${slug}"…`, 'info');
+    try {
+      const resp = await fetch('/api/kowloon-voucher', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ kind:'achievement', wallet:activeAddress, tokenId, achievementSlug:slug }) });
+      if (!resp.ok) throw new Error((await resp.json().catch(()=>({}))).error || resp.statusText);
+      const voucher = await resp.json();
+      const { tezos } = await getClients();
+      const contract = await tezos.wallet.at(kt1);
+      const op = await contract.methodsObject.claim_achievement({
+        recipient: activeAddress, token_id: voucher.tokenId, nonce: voucher.nonce,
+        expiry: Math.floor(new Date(voucher.expiry).getTime()/1000).toString(),
+        signature: voucher.signature,
+      }).send();
+      toast('Sent ' + op.opHash.slice(0,10) + '… confirming…', 'info');
+      await op.confirmation();
+      toast('✓ Minted ' + slug, 'ok');
+      const cell = document.querySelector(`.achv-cell[data-slug="${slug}"]`);
+      cell?.classList.add('claimed');
+      const btn = cell?.querySelector('.achv-mint');
+      if (btn) { btn.textContent = '✓ on-chain'; btn.disabled = true; }
+    } catch (e) {
+      const msg = (e && e.message) || 'unknown';
+      if (msg === 'already-claimed') toast('Already on-chain for this wallet.', 'info');
+      else toast('Mint failed: ' + msg, 'err');
+    }
+  }
+
+  // Wire
+  connectBtn.addEventListener('click', connect);
+  signoutBtn.addEventListener('click', disconnect);
+  claimBtn.addEventListener('click', claimBun);
+  document.querySelectorAll('.pastry-claim').forEach(btn => btn.addEventListener('click', () => claimPastry(Number(btn.getAttribute('data-tokenid')))));
+  document.getElementById('achv-grid').addEventListener('click', (e) => {
+    const btn = e.target.closest('.achv-mint');
+    if (!btn || btn.disabled) return;
+    claimAchv(btn.dataset.slug, Number(btn.dataset.tokenid));
+  });
+
+  // Boot
+  (async () => {
+    refreshEarned(); renderAchvGrid();
+    try {
+      const { wallet } = await getClients();
+      const acct = await wallet.client.getActiveAccount();
+      if (acct?.address) onConnected(acct.address);
+    } catch {}
+  })();
+  setInterval(refreshEarned, 3000);
+</script>
+
+<style>
+  :root {
+    --ktz-bg:#0a0314;--ktz-ink:#e8e3ff;--ktz-pink:#ff2d95;--ktz-cyan:#00e0ff;
+    --ktz-amber:#ffb800;--ktz-jade:#aaffd0;--ktz-gold:#ffd54a;--ktz-blood:#c8102e;
+  }
+  .ktz { min-height:100vh; background: radial-gradient(ellipse at 20% 10%, rgba(255,45,149,0.16) 0%, transparent 45%), radial-gradient(ellipse at 80% 90%, rgba(0,224,255,0.14) 0%, transparent 45%), var(--ktz-bg); color:var(--ktz-ink); font-family:'JetBrains Mono Variable',ui-monospace,monospace; padding:2.5rem 1.4rem 3rem; position:relative; overflow-x:hidden; }
+  .ktz .rain, .ktz .crt { position:fixed; inset:0; pointer-events:none; }
+  .ktz .rain { background-image: repeating-linear-gradient(110deg, transparent 0 8px, rgba(255,255,255,0.03) 8px, rgba(255,255,255,0.07) 9px, transparent 10px); animation:ktz-rain 0.55s linear infinite; z-index:1; }
+  @keyframes ktz-rain { from { background-position:0 0 } to { background-position:-40px 80px } }
+  .ktz .crt { background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.32) 3px, rgba(0,0,0,0) 4px), radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.8) 100%); z-index:2; mix-blend-mode:multiply; }
+  .ktz section, .ktz .hero { position:relative; z-index:3; max-width:1000px; margin:0 auto; }
+  .hero { text-align:center; padding:1.5rem 0 2rem; }
+  .kicker { font-size:0.75rem; letter-spacing:0.35em; color:var(--ktz-gold); text-shadow:0 0 6px var(--ktz-gold); text-transform:uppercase; margin-bottom:1rem; }
+  .hero h1 { font-family:'Noto Serif HK',serif; font-weight:900; font-size:clamp(4rem, 10vw, 8rem); color:var(--ktz-cyan); text-shadow:0 0 20px var(--ktz-cyan), 0 0 50px rgba(0,224,255,0.4); line-height:0.9; margin:0; }
+  .tagline { font-family:'Noto Serif HK',serif; font-size:1.2rem; color:var(--ktz-jade); margin:1rem 0 0.5rem; }
+  .tagline .en { display:block; font-size:0.75rem; letter-spacing:0.3em; color:rgba(232,227,255,0.6); margin-top:0.35rem; }
+  .accent-gold { color:var(--ktz-gold); text-shadow:0 0 8px var(--ktz-gold); }
+  .accent-pink { color:var(--ktz-pink); text-shadow:0 0 8px var(--ktz-pink); }
+  .accent-jade { color:var(--ktz-jade); text-shadow:0 0 8px var(--ktz-jade); }
+  .lede { max-width:760px; margin:1rem auto; font-size:0.95rem; line-height:1.6; color:rgba(232,227,255,0.78); }
+  .lede a { color:var(--ktz-cyan); text-decoration:underline; text-decoration-style:dashed; }
+  .lede strong { color:var(--ktz-gold); text-shadow:0 0 5px var(--ktz-gold); }
+  .section-tag { font-size:0.72rem; letter-spacing:0.3em; color:var(--ktz-cyan); text-shadow:0 0 5px var(--ktz-cyan); text-transform:uppercase; padding:0.5rem 0; border-top:1px dashed rgba(0,224,255,0.3); border-bottom:1px dashed rgba(0,224,255,0.3); margin:1.8rem 0 1rem; }
+  .status { padding:1.2rem 1.4rem; border:1px solid rgba(255,213,74,0.4); background:rgba(10,3,20,0.82); box-shadow:0 0 20px rgba(255,213,74,0.15); }
+  .status-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; padding-bottom:1rem; border-bottom:1px dashed rgba(232,227,255,0.15); margin-bottom:1rem; }
+  .sc-label { font-size:0.6rem; letter-spacing:0.28em; color:var(--ktz-cyan); text-shadow:0 0 4px var(--ktz-cyan); margin-bottom:0.35rem; text-transform:uppercase; }
+  .sc-value { font-size:0.92rem; color:var(--ktz-ink); }
+  .sc-value code { font-size:0.76rem; color:var(--ktz-gold); text-shadow:0 0 4px var(--ktz-gold); word-break:break-all; }
+  .sc-key { font-size:0.52rem; letter-spacing:0.2em; color:rgba(232,227,255,0.5); text-transform:uppercase; margin-right:0.4rem; }
+  #wallet-state.connected { color:var(--ktz-jade); text-shadow:0 0 5px var(--ktz-jade); font-weight:700; }
+  .earned { color:var(--ktz-gold); text-shadow:0 0 5px var(--ktz-gold); font-size:1.25rem; font-weight:700; }
+  .slash { color:rgba(232,227,255,0.4); margin:0 0.3rem; }
+  .chain { color:var(--ktz-jade); text-shadow:0 0 4px var(--ktz-jade); }
+  .cta-row { display:flex; gap:0.7rem; flex-wrap:wrap; justify-content:center; margin-top:0.8rem; }
+  .cta { padding:0.9rem 1.4rem; font-family:'Noto Serif HK',serif; font-size:1.05rem; font-weight:700; letter-spacing:0.1em; background:transparent; border:2px solid currentColor; cursor:pointer; transition:all 0.15s; }
+  .cta:disabled { opacity:0.3; cursor:not-allowed; }
+  .cta-cyan { color:var(--ktz-cyan); text-shadow:0 0 6px var(--ktz-cyan); box-shadow:0 0 15px rgba(0,224,255,0.3); }
+  .cta-cyan:hover:not(:disabled) { background:var(--ktz-cyan); color:#0a0314; text-shadow:none; transform:translateY(-2px); }
+  .cta-gold { color:var(--ktz-gold); text-shadow:0 0 6px var(--ktz-gold); box-shadow:0 0 15px rgba(255,213,74,0.3); }
+  .cta-gold:hover:not(:disabled) { background:var(--ktz-gold); color:#0a0314; text-shadow:none; transform:translateY(-2px); }
+  .cta-muted { color:rgba(232,227,255,0.55); border-color:rgba(232,227,255,0.4); box-shadow:none; font-size:0.85rem; }
+  .cta-muted:hover { color:var(--ktz-pink); border-color:var(--ktz-pink); }
+  .toast { margin-top:0.8rem; padding:0.5rem 0.9rem; font-size:0.88rem; min-height:1.6rem; opacity:0; transition:opacity 0.2s; border-left:2px solid var(--ktz-cyan); background:rgba(0,224,255,0.06); }
+  .toast.show { opacity:1; }
+  .toast.ok { border-color:var(--ktz-jade); color:var(--ktz-jade); background:rgba(170,255,208,0.06); }
+  .toast.warn { border-color:var(--ktz-amber); color:var(--ktz-amber); background:rgba(255,184,0,0.06); }
+  .toast.err { border-color:var(--ktz-blood); color:var(--ktz-blood); background:rgba(200,16,46,0.06); }
+  .pastry-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.6rem; }
+  .pastry-card { padding:0.9rem 0.6rem 0.8rem; border:1px solid rgba(232,227,255,0.2); background:rgba(10,3,20,0.75); text-align:center; opacity:0.6; }
+  .pastry-card.eligible { opacity:1; border-color:var(--ktz-gold); box-shadow:0 0 15px rgba(255,213,74,0.3); }
+  .pastry-card.claimed { opacity:1; border-color:var(--ktz-jade); background:rgba(20,50,30,0.5); }
+  .p-face { font-size:2.6rem; filter:drop-shadow(0 0 10px var(--ktz-gold)); margin-bottom:0.3rem; }
+  .p-zh { font-family:'Noto Serif HK',serif; font-size:1.1rem; font-weight:700; color:var(--ktz-gold); text-shadow:0 0 4px var(--ktz-gold); }
+  .p-en { font-size:0.68rem; letter-spacing:0.15em; color:rgba(232,227,255,0.5); text-transform:uppercase; margin-top:0.2rem; }
+  .p-state { margin-top:0.5rem; font-size:0.7rem; letter-spacing:0.18em; text-transform:uppercase; color:rgba(232,227,255,0.55); }
+  .pastry-card.eligible .p-state { color:var(--ktz-gold); }
+  .pastry-card.claimed .p-state { color:var(--ktz-jade); }
+  .pastry-claim { margin-top:0.5rem; padding:0.35rem 0.9rem; font-family:inherit; font-size:0.75rem; letter-spacing:0.15em; background:transparent; border:1px solid currentColor; color:rgba(232,227,255,0.5); cursor:pointer; text-transform:uppercase; }
+  .pastry-card.eligible .pastry-claim { color:var(--ktz-gold); }
+  .pastry-card.eligible .pastry-claim:hover { background:var(--ktz-gold); color:#0a0314; }
+  .pastry-claim:disabled { opacity:0.45; cursor:not-allowed; }
+  .pastry-note { font-size:0.82rem; color:rgba(232,227,255,0.55); line-height:1.5; margin-top:0.9rem; }
+  .achv-lede { font-size:0.88rem; line-height:1.55; color:rgba(232,227,255,0.75); margin-bottom:1rem; }
+  .achv-lede strong { color:var(--ktz-gold); text-shadow:0 0 5px var(--ktz-gold); }
+  .achv-lede code { font-size:0.85em; color:var(--ktz-cyan); background:rgba(0,224,255,0.08); padding:0.1em 0.3em; }
+  .achv-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; }
+  .achv-cell { position:relative; padding:0.7rem 0.5rem 0.55rem; border:1px solid rgba(255,213,74,0.25); background:rgba(10,3,20,0.72); text-align:center; display:flex; flex-direction:column; gap:0.3rem; }
+  .achv-cell.claimed { border-color:var(--ktz-jade); background:rgba(20,40,28,0.5); }
+  .achv-cell.locked { opacity:0.4; }
+  .achv-face { font-size:1.8rem; line-height:1; filter:drop-shadow(0 0 6px var(--ktz-gold)); }
+  .achv-cell.claimed .achv-face { filter:drop-shadow(0 0 8px var(--ktz-jade)); }
+  .achv-cell.locked .achv-face { filter:grayscale(1); }
+  .achv-zh { font-family:'Noto Serif HK',serif; font-size:0.92rem; color:var(--ktz-gold); text-shadow:0 0 3px var(--ktz-gold); }
+  .achv-cell.claimed .achv-zh { color:var(--ktz-jade); text-shadow:0 0 4px var(--ktz-jade); }
+  .achv-cell.locked .achv-zh { color:rgba(232,227,255,0.4); text-shadow:none; }
+  .achv-slug { font-family:'JetBrains Mono Variable',ui-monospace,monospace; font-size:0.58rem; color:rgba(232,227,255,0.45); letter-spacing:0.08em; }
+  .achv-mint { margin-top:0.4rem; padding:0.25rem 0.55rem; font-family:'JetBrains Mono Variable',ui-monospace,monospace; font-size:0.68rem; letter-spacing:0.18em; background:transparent; border:1px solid currentColor; color:var(--ktz-gold); cursor:pointer; text-transform:uppercase; }
+  .achv-mint:hover:not(:disabled) { background:var(--ktz-gold); color:#0a0314; }
+  .achv-mint:disabled { opacity:0.45; cursor:not-allowed; color:rgba(232,227,255,0.45); border-color:rgba(232,227,255,0.2); }
+  .achv-cell.claimed .achv-mint { color:var(--ktz-jade); }
+  .back-link { text-align:center; margin-top:2rem; }
+  .back-link a { color:var(--ktz-pink); text-shadow:0 0 5px var(--ktz-pink); text-decoration:none; font-size:0.95rem; letter-spacing:0.1em; }
+</style>
+</BaseLayout>
