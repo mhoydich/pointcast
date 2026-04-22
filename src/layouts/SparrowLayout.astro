@@ -124,7 +124,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.31</span>
+          <span class="sp-sub">pointcast reader · v0.32</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -708,6 +708,31 @@ const paletteData = {
         function currentMagpieOrigin() {
           return window.__sparrow.magpieOrigin || `http://127.0.0.1:${MAGPIE_DEFAULT_PORT}`;
         }
+        // v0.32: friends + profiles join the mirror so a user who
+        // follows someone on laptop sees them on desktop. Read helpers
+        // pull the raw localStorage blobs; apply writes them back and
+        // leaves the /sparrow/friends page to repaint when the user
+        // next visits (no DOM here to repaint — SparrowLayout runs
+        // globally, friends UI is route-local).
+        const readFriendsRaw = () => {
+          try {
+            const raw = JSON.parse(localStorage.getItem('sparrow:friends') || '[]');
+            return Array.isArray(raw) ? raw : [];
+          } catch { return []; }
+        };
+        const writeFriendsRaw = (value) => {
+          try { localStorage.setItem('sparrow:friends', JSON.stringify(value)); } catch {}
+        };
+        const readProfilesRaw = () => {
+          try {
+            const raw = JSON.parse(localStorage.getItem('sparrow:profiles') || '{}');
+            return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+          } catch { return {}; }
+        };
+        const writeProfilesRaw = (value) => {
+          try { localStorage.setItem('sparrow:profiles', JSON.stringify(value)); } catch {}
+        };
+
         const MIRROR_KEYS = [
           {
             remote: 'saved',
@@ -737,6 +762,20 @@ const paletteData = {
               // Repaint chip state if the reader is showing.
               hydrateReactions();
             },
+            validate: (v) => v && typeof v === 'object' && !Array.isArray(v),
+          },
+          {
+            remote: 'friends',
+            tsKey:  'sparrow:friends:updated_at',
+            read:   () => readFriendsRaw(),
+            apply:  (value) => writeFriendsRaw(Array.isArray(value) ? value : []),
+            validate: (v) => Array.isArray(v),
+          },
+          {
+            remote: 'profiles',
+            tsKey:  'sparrow:profiles:updated_at',
+            read:   () => readProfilesRaw(),
+            apply:  (value) => writeProfilesRaw((value && typeof value === 'object' && !Array.isArray(value)) ? value : {}),
             validate: (v) => v && typeof v === 'object' && !Array.isArray(v),
           },
         ];
@@ -799,6 +838,14 @@ const paletteData = {
             scheduleNostrSyncPush();
           }, 600);
         }
+
+        // v0.32: expose the scheduler so route-local pages (/sparrow/
+        // friends, future /sparrow/settings) can trigger a push when
+        // they mutate a mirror-tracked key without reaching into the
+        // layout module. Contract: call it after you've bumped the
+        // corresponding `sparrow:<key>:updated_at`.
+        window.__sparrow = window.__sparrow || {};
+        window.__sparrow.scheduleReaderMirror = scheduleReaderMirror;
 
         // One-shot initial sync — probe then pull. Nostr pull runs
         // independently via subscribeNostrSync() once the signer is

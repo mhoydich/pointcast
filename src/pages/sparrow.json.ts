@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.31',
-    protocol_version: '0.31',
+    version: '0.32',
+    protocol_version: '0.32',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -56,6 +56,8 @@ export const GET: APIRoute = async () => {
       friends: '/sparrow/friends',
       friends_activity: '/sparrow/friends/activity',
       signals: '/sparrow/signals',
+      federation_json: '/sparrow/federation.json',
+      digest_subscribe_api: '/api/sparrow/digest-subscribe',
       manifest: '/sparrow.json',
       atom: '/sparrow/feed.xml',
       latest_api: '/sparrow/api/latest.json',
@@ -529,7 +531,7 @@ export const GET: APIRoute = async () => {
         // contract when ready.
         digest_sidecar: {
           since: 'v0.30',
-          status: 'scaffold · worker not live yet',
+          status: 'v0.32: endpoint live (ack only · no cron yet)',
           signup_ui: '/sparrow/signals weekly-digest panel',
           storage_key: 'sparrow:digest-subscription',
           subscription_shape: {
@@ -540,11 +542,37 @@ export const GET: APIRoute = async () => {
             relays: 'string[] · copies getRelays() so the worker can re-aggregate from the same relay pool',
             created_at: 'ISO 8601',
           },
-          future_endpoint: 'POST /api/sparrow/digest-subscribe',
-          expected_response: '{ ok: true } when live; 501 ("worker not live") is the current placeholder',
-          unsubscribe_plan: 'DELETE /api/sparrow/digest-subscribe with a signed token from the email footer; local clear of sparrow:digest-subscription',
+          endpoint: 'POST /api/sparrow/digest-subscribe (v0.32 · Cloudflare Pages Function)',
+          responses: {
+            '202': 'intent accepted · stored in SPARROW_DIGEST_KV if bound',
+            '400': 'malformed body (invalid JSON, unknown schema, bad email, bad frequency)',
+            '413': 'body exceeds 8 KB',
+          },
+          kv_binding: 'SPARROW_DIGEST_KV · optional · when missing, responses still 202 with { stored: false, note } so the client stops retrying',
+          unsubscribe_plan: 'DELETE /api/sparrow/digest-subscribe with a signed token from the email footer; local clear of sparrow:digest-subscription. Lands with the cron worker.',
           worker_security_posture: 'never holds secret material — stores email + npub + relay list + frequency only. Recomputes signals bundle at send time by subscribing to the same public kind-30078 d-tag the web client uses.',
-          why_client_first: 'We ship the intent capture + schema doc before the worker goes live so early users are queued, not blocked. When the worker is up, an on-load sync step will flush queued intents.',
+          why_client_first: 'We shipped the intent capture + schema doc in v0.30 before the worker went live so early users were queued, not blocked. v0.32 lands the endpoint; a separate cron deploy lands the actual email dispatch.',
+        },
+
+        // v0.32: editorial curator-list for starter federation seeds.
+        // Decoupled from friends.astro so curation is a data edit, not
+        // a code deploy. friends.astro fetches this on boot and falls
+        // back to a tiny internal seed on failure.
+        federation_json: {
+          since: 'v0.32',
+          endpoint: 'GET /sparrow/federation.json',
+          schema: 'sparrow-federation-v1',
+          cache_control: 'public, max-age=900',
+          shape: {
+            schema: 'sparrow-federation-v1',
+            version: '0.32',
+            curated_at: 'ISO date',
+            starters: 'Array<{ hex: 64-hex, alias: string (≤40), note?: string (≤160) }>',
+            notes: 'object · scope + caveat + editing instructions',
+          },
+          consumer: '/sparrow/friends fetches on boot; sanitizes entries (requires valid hex); falls back to a 2-item internal seed on fetch failure',
+          curation_flow: 'add a line to starters[] in src/pages/sparrow/federation.json.ts, ship. No friends.astro change needed.',
+          not_a_whitelist: 'Starter seeds are suggestions, not gatekeeping. Follow-/-unfollow is always one click.',
         },
 
         // v0.29: per-channel friends top-N surface on /sparrow/ch/<slug>.
@@ -748,6 +776,8 @@ export const GET: APIRoute = async () => {
         saved:     { value: 'string[] · block IDs (newest-saved first)', updated_at: 'ISO 8601', since: 'v0.15' },
         visited:   { value: 'string[] · block IDs (last 120, newest-visited first)', updated_at: 'ISO 8601', since: 'v0.16' },
         reactions: { value: '{ [blockId: string]: Array<"ember" | "moss" | "lilac"> }', updated_at: 'ISO 8601', since: 'v0.16' },
+        friends:   { value: 'Array<{ pubkey: hex-64, alias?: string (≤40), muted?: bool }>', updated_at: 'ISO 8601', since: 'v0.32' },
+        profiles:  { value: '{ [hex: string]: { name?, display_name?, picture?, nip05?, nip05_verified?, nip05_verified_at?, fetched_at } }', updated_at: 'ISO 8601', since: 'v0.32' },
       },
       merge_policy: 'Newest-wins per top-level key. On the Magpie server, mergeReaderState() compares stored updated_at against incoming and incoming-newer replaces wholesale. On the Sparrow client, mirrorPull() writes only when remote updated_at is later than the local sparrow:<key>:updated_at. Apply callbacks use skipMirror: true to avoid push-loops, then re-paint the DOM (hydrateReactions + applyVisited) so the UI follows the remote state immediately.',
       signer_required: false,
@@ -757,7 +787,10 @@ export const GET: APIRoute = async () => {
         'sparrow:saved', 'sparrow:saved:updated_at',
         'sparrow:visited', 'sparrow:visited:updated_at',
         'sparrow:reactions', 'sparrow:reactions:updated_at',
+        'sparrow:friends', 'sparrow:friends:updated_at',
+        'sparrow:profiles', 'sparrow:profiles:updated_at',
       ],
+      scheduler_handle: 'v0.32: window.__sparrow.scheduleReaderMirror() is exposed by SparrowLayout so route-local pages (e.g. /sparrow/friends) can trigger a push after mutating a mirror-tracked key without reaching into the layout module.',
     },
 
     // v0.12: Magpie bridge awareness. Probe the local peer-node at
@@ -996,7 +1029,8 @@ export const GET: APIRoute = async () => {
       'v0.28': 'Signals recap at /sparrow/signals. Three-panel aggregation over the same kind-30078 corpus the rest of the federation surface reads. Panel 1 — most co-saved (blocks hit by 2+ signers, count-sorted, top 12, inline saver chips). Panel 2 — recent adds (friends who published a fresh saved list in the last 7 days, newest first, with avatar + freshest receipt). Panel 3 — channel distribution (proportional bars across all 9 channels derived from saved-block channel codes, each linking to its /sparrow/ch/<slug>). Client-side aggregation only; reuses sparrow:profiles cache + server-shipped block lookup. Signals nav links added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated. Stats bumped to 10 routes.',
       'v0.29': 'Signals, extended. Three of the four v0.29-bundled items land today; opt-in email digest deferred to v0.30 (needs sidecar worker infra). (1) First-picker attribution — in /sparrow/signals Panel 1, each co-saved block now surfaces ⭐ <name> — the friend with the earliest created_at among current savers. (2) Export JSON — new ⤓ button in signals nav dumps the current recap as sparrow-signals-<date>.json with schema sparrow-signals-v1 (friends, relays, newest_events, top_co_saved with saver lists + first_picker_at, notes documenting caveats). (3) Channel friends panel — new client-side strip on every /sparrow/ch/<slug> above the main reel showing which blocks in this channel your followed friends have co-saved, count-sorted, top 6, with first-picker chip. Hides when irrelevant; opt-out via localStorage["sparrow:ch-friends-hidden"].',
       'v0.30': 'Ambient friends + digest sidecar scaffold. (1) Ambient presence — SparrowLayout now publishes an ephemeral kind-20078 event tagged t:sparrow-presence every 60s while the tab is foregrounded (opt-in via sparrow:ambient-enabled). A streaming subscriber tracks friends\' presence via kinds:[20078] #t:sparrow-presence and paints a fixed bottom-left "✦ here now" avatar strip of friends seen in the last 90s. Uses NIP-16 ephemeral-kind range so relays never persist presence. (2) Digest sidecar scaffold — new panel in /sparrow/signals for email-digest subscription (schema sparrow-digest-subscription-v1). Worker isn\'t live yet; intents stored locally in sparrow:digest-subscription and POSTed to /api/sparrow/digest-subscribe with 501 handled as "queued, worker pending." Contract fully documented in /sparrow.json.nostr.federated_lists.digest_sidecar so the worker can pick up the shape when infra is ready. Toggle for ambient added to /sparrow/friends publisher panel.',
-      'v0.31': 'Participation onramps. Turns the federation surface into a joinable layer instead of a feature people have to discover. /sparrow/friends gains (1) a "join the federation" checklist — 4 live-updating steps (signer connected, public list on, at least one follow, ambient on) with ✓/○ ticks that repaint across tabs via storage events. (2) An invite card — builds a shareable URL (/sparrow/friends?follow=<npub1>) with a one-click copy button, shown once the signer is connected. (3) Follow-by-URL — ?follow=<npub|hex> pre-fills the add-form, scrolls, pulses the submit button. (4) Starter seeds — a scaffolded list of suggested pubkeys (edit STARTERS to curate) with one-click follow. (5) OPML friends round-trip — export bundles sparrow:friends as <outline type="nostr" xmlUrl="nostr:npub1…" x-sparrow-pubkey="<hex>"> elements; import parses either attribute and unions with existing. Schema documented at /sparrow.json.nostr.participation. (current)',
+      'v0.31': 'Participation onramps. Turns the federation surface into a joinable layer instead of a feature people have to discover. /sparrow/friends gains (1) a "join the federation" checklist — 4 live-updating steps (signer connected, public list on, at least one follow, ambient on) with ✓/○ ticks that repaint across tabs via storage events. (2) An invite card — builds a shareable URL (/sparrow/friends?follow=<npub1>) with a one-click copy button, shown once the signer is connected. (3) Follow-by-URL — ?follow=<npub|hex> pre-fills the add-form, scrolls, pulses the submit button. (4) Starter seeds — a scaffolded list of suggested pubkeys (edit STARTERS to curate) with one-click follow. (5) OPML friends round-trip — export bundles sparrow:friends as <outline type="nostr" xmlUrl="nostr:npub1…" x-sparrow-pubkey="<hex>"> elements; import parses either attribute and unions with existing. Schema documented at /sparrow.json.nostr.participation.',
+      'v0.32': 'Digest worker live + federation.json + friends/profiles in reader-state. (1) POST /api/sparrow/digest-subscribe (Cloudflare Pages Function) validates sparrow-digest-subscription-v1 shape, returns 202 Accept with { stored, key, echo } — stores in SPARROW_DIGEST_KV if bound, otherwise still acks so the v0.30 client stops retrying. Cron dispatch ships separately. (2) GET /sparrow/federation.json carries an editorial starters list (sparrow-federation-v1 · hex + alias + optional note) so curation is a data edit in src/pages/sparrow/federation.json.ts; friends.astro fetches on boot, falls back to a 2-item internal seed. (3) Reader-state mirror gains two new keys: friends + profiles, each with their own :updated_at timestamp — cross-device federation follows the same newest-wins contract the other MIRROR_KEYS use. window.__sparrow.scheduleReaderMirror is exposed so route-local pages can trigger a push after mutating those keys. Sparrow.app ambient pickup deferred to v0.33 — native Swift Nostr client + tray UI deserves focus. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

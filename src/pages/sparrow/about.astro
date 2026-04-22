@@ -317,6 +317,12 @@ const features = [
     body: 'v0.31 closes the on-ramp gap. /sparrow/friends now opens with a live checklist — signer connected, public list on, at least one follow, ambient on — with ✓/○ ticks that repaint across tabs. Below it, an invite card builds a shareable link (/sparrow/friends?follow=<npub>) with one-click copy. The same URL, when opened on someone else\'s Sparrow, pre-fills the add-form and pulses the submit button so following is a single click. A starter seed card offers suggested pubkeys to one-click-follow so new users never land on an empty federation. OPML round-trip exports sparrow:friends as <outline type="nostr"> elements for portability between clients.',
     kbd: '/sparrow/friends?follow=npub1…',
   },
+  {
+    kicker: 'digest · curation · cross-device',
+    title: 'Worker live · federation.json · friends in the mirror',
+    body: 'v0.32 backs the federation layer with persistence. POST /api/sparrow/digest-subscribe is a real Cloudflare Pages Function now — validates sparrow-digest-subscription-v1, returns 202 Accept, stores in SPARROW_DIGEST_KV when bound (still acks without, so the v0.30 client stops retrying). GET /sparrow/federation.json is a new editorial endpoint carrying the starter seeds (hex + alias + note) so curation is a data edit, not a code change; friends.astro fetches on boot with a tiny internal fallback. The reader-state mirror learns two new keys — friends + profiles — so a user who follows someone on laptop sees them on desktop; window.__sparrow.scheduleReaderMirror is exposed so route-local pages can trigger a push after mutating those keys.',
+    kbd: '/api/sparrow/digest-subscribe · /sparrow/federation.json',
+  },
 ];
 
 const roadmap = [
@@ -770,14 +776,30 @@ const roadmap = [
   },
   {
     v: 'v0.32',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Digest worker · federation.json · friends in the mirror',
+    items: [
+      'POST /api/sparrow/digest-subscribe — Cloudflare Pages Function validates sparrow-digest-subscription-v1 and returns 202; stores in SPARROW_DIGEST_KV when bound, still acks without so the v0.30 client stops retrying',
+      'GET + HEAD + OPTIONS handlers documented; 400 on malformed body (bad JSON, unknown schema, invalid email, bad frequency); 413 past 8 KB',
+      'GET /sparrow/federation.json — editorial sparrow-federation-v1 payload with starters: [{hex, alias, note?}] — curator-maintained in src/pages/sparrow/federation.json.ts',
+      'friends.astro fetches /sparrow/federation.json on boot, sanitizes entries (requires valid 64-hex), falls back to a 2-item internal seed on failure',
+      'Reader-state mirror extends MIRROR_KEYS: friends (Array<{pubkey, alias?, muted?}>) + profiles ({[hex]: {name?, display_name?, picture?, nip05?, ...}}) each with own :updated_at',
+      'window.__sparrow.scheduleReaderMirror exposed by SparrowLayout so route-local pages can trigger push after mutating mirror-tracked keys',
+      'writeFriends + writeProfiles in friends.astro bump their ts-keys AND call the exposed scheduler so every change propagates',
+      'Sparrow.app ambient pickup deferred to v0.33 — native Swift Nostr client + tray UI work deserves its own sprint',
+    ],
+  },
+  {
+    v: 'v0.33',
     status: 'next',
     when: 'planned',
-    title: 'Native round trip + digest worker',
+    title: 'Native ambient pickup + digest cron',
     items: [
-      'Sparrow.app (native menu-bar) subscribes to the ambient + public-saved kind-30078 feed and bubbles friend avatars onto the tray dropdown',
-      'Minimal Cloudflare Worker at /api/sparrow/digest-subscribe — ack endpoint that validates the sparrow-digest-subscription-v1 schema and stores intent in KV (no cron yet)',
-      'Reader-state mirror learns two new keys: friends + profiles, so a user who follows someone on laptop sees them on desktop',
-      'Curator-sourced starter list — replace the hard-coded STARTERS with an editorially-maintained /sparrow/federation.json',
+      'Sparrow.app gains a minimal Nostr WebSocket client (NWConnection + JSON) subscribing to kind-30078 + kind-20078 for the user\'s friends list',
+      'Tray dropdown shows "N friends here" + first 3 avatars pulled from sparrow:profiles mirror',
+      'Cloudflare cron worker (separate deploy) reads SPARROW_DIGEST_KV, re-aggregates each subscriber\'s signals bundle from their relays, sends via MailChannels',
+      'Unsubscribe link + signed-token DELETE endpoint',
     ],
   },
   {
@@ -857,7 +879,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.31 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.32 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (

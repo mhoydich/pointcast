@@ -97,7 +97,7 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
     <div class="sp-friends-starters" data-sp-starters aria-label="starter pubkeys">
       <header class="sp-friends-gs-head">
         <span class="sp-friends-kicker">✦ starters · suggested follows</span>
-        <span class="sp-friends-gs-meta">scaffold · edit <code>STARTERS</code> to curate</span>
+        <span class="sp-friends-gs-meta" data-sp-starters-meta>loading /sparrow/federation.json…</span>
       </header>
       <ul class="sp-friends-starters-list" data-sp-starters-list></ul>
     </div>
@@ -354,7 +354,15 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         } catch { return []; }
       };
       const writeFriends = (list) => {
-        try { localStorage.setItem(KEY_FRIENDS, JSON.stringify(list)); } catch {}
+        try {
+          localStorage.setItem(KEY_FRIENDS, JSON.stringify(list));
+          // v0.32: bump ts-key so the reader-state mirror picks up the
+          // new friends list on the next debounce. Same pattern used
+          // for saved / visited / reactions in MIRROR_KEYS.
+          localStorage.setItem('sparrow:friends:updated_at', new Date().toISOString());
+        } catch {}
+        // Fire the mirror push if the SparrowLayout has exposed it.
+        try { window.__sparrow?.scheduleReaderMirror?.(); } catch {}
       };
       const getRelays = () => {
         try {
@@ -726,7 +734,11 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         } catch { return {}; }
       };
       const writeProfiles = (map) => {
-        try { localStorage.setItem(KEY_PROFILES, JSON.stringify(map)); } catch {}
+        try {
+          localStorage.setItem(KEY_PROFILES, JSON.stringify(map));
+          localStorage.setItem('sparrow:profiles:updated_at', new Date().toISOString());
+        } catch {}
+        try { window.__sparrow?.scheduleReaderMirror?.(); } catch {}
       };
 
       function profileFor(pubkey) {
@@ -918,13 +930,34 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       // new server endpoint. The federation layer becomes joinable
       // by any visitor who has a Nostr signer, with zero docs in
       // between.
-      const STARTERS = [
-        // Scaffold only. Real curation is an editorial task —
-        // these are examples of famous Nostr pubkeys (jack, fiatjaf)
-        // so the page never looks empty to a first-time visitor.
+      // v0.32: starters now pulled from /sparrow/federation.json (an
+      // editorially-maintained endpoint). We keep a tiny fallback so
+      // the card still renders for offline first-timers; the fetch
+      // overrides it on success.
+      let STARTERS = [
         { hex: '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2', alias: 'jack' },
         { hex: '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d', alias: 'fiatjaf' },
       ];
+      async function loadFederationStarters() {
+        try {
+          const r = await fetch('/sparrow/federation.json', { cache: 'no-store' });
+          if (!r.ok) return;
+          const json = await r.json();
+          if (json && json.schema === 'sparrow-federation-v1' && Array.isArray(json.starters)) {
+            const sanitized = json.starters
+              .filter((s) => s && typeof s === 'object' && /^[0-9a-f]{64}$/i.test(String(s.hex || '')))
+              .map((s) => ({
+                hex: String(s.hex).toLowerCase(),
+                alias: String(s.alias || '').slice(0, 40),
+                note: typeof s.note === 'string' ? s.note.slice(0, 160) : undefined,
+              }));
+            if (sanitized.length) {
+              STARTERS = sanitized;
+              paintStarters();
+            }
+          }
+        } catch { /* fall back quietly */ }
+      }
 
       function paintGettingStarted() {
         const gsList = document.querySelector('[data-sp-gs-list]');
@@ -989,6 +1022,7 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
           li.innerHTML = `
             <span class="sp-friends-starters-name">${escapeHTML(s.alias)}</span>
             <code>${shortPk(s.hex)}</code>
+            ${s.note ? `<span class="sp-friends-starters-note">${escapeHTML(s.note)}</span>` : '<span class="sp-friends-starters-note"></span>'}
             <button type="button" class="sp-friends-starters-btn" data-starter-follow="${s.hex}" data-starter-alias="${escapeHTML(s.alias)}">+ follow</button>
           `;
           ul.appendChild(li);
@@ -996,6 +1030,14 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         // Hide the whole card if there's nothing to suggest.
         const starterBox = document.querySelector('[data-sp-starters]');
         if (starterBox) starterBox.hidden = ul.children.length === 0;
+        const metaEl = document.querySelector('[data-sp-starters-meta]');
+        if (metaEl) {
+          const total = STARTERS.length;
+          const remaining = ul.children.length;
+          metaEl.textContent = total === 0
+            ? 'curator list empty · /sparrow/federation.json'
+            : `${remaining} of ${total} suggested · /sparrow/federation.json`;
+        }
       }
 
       document.querySelector('[data-sp-starters-list]')?.addEventListener('click', (e) => {
@@ -1176,6 +1218,7 @@ ${outlines}
       paintInviteKit();
       paintStarters();
       applyFollowDeepLink();
+      loadFederationStarters();
 
       // v0.24: kick NIP-05 verification for any cached friend whose
       // nip05 hasn't been verified yet (or whose verify cache is
@@ -1494,7 +1537,7 @@ ${outlines}
     }
     .sp-friends-starters-row {
       display: grid;
-      grid-template-columns: 120px 1fr auto;
+      grid-template-columns: 110px 110px 1fr auto;
       gap: 10px; align-items: center;
       padding: 6px 10px;
       border: 1px solid var(--sp-rule);
@@ -1507,6 +1550,18 @@ ${outlines}
     .sp-friends-starters-row code {
       font-family: var(--sp-mono); font-size: 11px;
       color: var(--sp-mute);
+    }
+    .sp-friends-starters-note {
+      font-family: var(--sp-ui); font-size: 12px;
+      color: color-mix(in oklch, var(--sp-bone) 72%, var(--sp-mute));
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    @media (max-width: 720px) {
+      .sp-friends-starters-row {
+        grid-template-columns: 1fr auto;
+      }
+      .sp-friends-starters-row code,
+      .sp-friends-starters-note { display: none; }
     }
     .sp-friends-starters-btn {
       font-family: var(--sp-mono); font-size: 10px;
