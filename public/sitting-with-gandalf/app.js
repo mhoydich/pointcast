@@ -50,8 +50,8 @@
   ];
 
   const pace = [
-    { label: "Draw", seconds: 4 },
-    { label: "Rest", seconds: 2 },
+    { label: "Inhale", seconds: 4 },
+    { label: "Hold", seconds: 2 },
     { label: "Exhale", seconds: 6 }
   ];
 
@@ -208,7 +208,7 @@
     if (state.log.length === 0) {
       const empty = document.createElement("li");
       empty.className = "empty";
-      empty.textContent = "No entries sealed yet.";
+      empty.textContent = "No notes saved yet.";
       dom.logList.append(empty);
       updateStats();
       return;
@@ -244,7 +244,7 @@
 
     state.running = true;
     state.paceStartedAt = performance.now();
-    dom.startButton.textContent = "Resume";
+    dom.startButton.textContent = "Running";
     dom.startButton.disabled = true;
     dom.pauseButton.disabled = false;
     chooseLine();
@@ -256,6 +256,7 @@
 
   function pauseSession() {
     state.running = false;
+    dom.startButton.textContent = "Resume quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.timerCaption.textContent = "pipe pause";
@@ -265,7 +266,7 @@
     state.running = false;
     state.remaining = state.duration;
     state.phaseName = "";
-    dom.startButton.textContent = "Start";
+    dom.startButton.textContent = "Start quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.paceLabel.textContent = "Settle";
@@ -276,7 +277,7 @@
 
   function completeSession() {
     pauseSession();
-    dom.startButton.textContent = "Start";
+    dom.startButton.textContent = "Start quiet sit";
     state.remaining = 0;
     updateTimer();
     dom.wizardLine.textContent = "There. A little more room in the world.";
@@ -735,7 +736,7 @@
     state.soundOn = nextOn;
 
     if (!state.soundOn) {
-      dom.soundButton.textContent = "Ambience off";
+      dom.soundButton.textContent = "Turn ambience on";
       clearSoundTimers();
       if (audio.context) {
         await audio.context.suspend();
@@ -747,7 +748,7 @@
       createAudioGraph();
     }
 
-    dom.soundButton.textContent = "Ambience on";
+    dom.soundButton.textContent = "Mute ambience";
     await audio.context.resume();
     tuneDrone();
     updateAudioLevels();
@@ -765,7 +766,7 @@
   function toggleLantern(force) {
     state.lantern = typeof force === "boolean" ? force : !state.lantern;
     dom.body.classList.toggle("lantern-mode", state.lantern);
-    dom.lanternButton.textContent = state.lantern ? "Companion view" : "Lantern view";
+    dom.lanternButton.textContent = state.lantern ? "Exit focus" : "Focus view";
   }
 
   dom.durationButtons.forEach((button) => {

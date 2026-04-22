@@ -12,6 +12,7 @@ Open `index.html` in a browser. The page has no build step and references only l
 - Warmth and Smoke sliders stored locally.
 - Lantern view for a quieter timer-only room.
 - Session phases that shift from Settle to Drift to Return.
+- Simplified control hierarchy: choose a room, set ambience, then use pipe ritual extras only when wanted.
 
 ## Asset
 
