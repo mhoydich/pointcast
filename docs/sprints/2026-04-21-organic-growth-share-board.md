@@ -1,7 +1,7 @@
 # Organic Growth Share Board
 
-Date: 2026-04-22  
-Author: Codex  
+Date: 2026-04-22
+Author: Codex
 Status: built and ready to publish
 
 Mike asked for research on creating more organic visitors to pointcast.xyz,

@@ -1,7 +1,7 @@
 # Organic Visitor Plan for PointCast
 
-Date: 2026-04-22  
-Owner: Codex  
+Date: 2026-04-22
+Owner: Codex
 Status: sprint plan plus first build
 
 ## Goal
