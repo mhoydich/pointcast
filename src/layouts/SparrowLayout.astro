@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.12</span>
+          <span class="sp-sub">pointcast reader · v0.13</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -963,6 +963,51 @@ const paletteData = {
           body.addEventListener('input', repaintCounter);
           repaintCounter();
 
+          // v0.13: read the destinations picker. PointCast is always
+          // included (locked); other checkboxes reflect Magpie
+          // readiness pulled by probeMagpie().
+          const selectedDestinations = () => {
+            const boxes = panel.querySelectorAll('[data-sp-dest-input]');
+            const ids = new Set(['pointcast']);
+            boxes.forEach((cb) => {
+              if (cb.checked && !cb.disabled) ids.add(cb.getAttribute('data-sp-dest-input'));
+            });
+            return Array.from(ids);
+          };
+          const magpieIsOnline = () => {
+            const pill = panel.querySelector('[data-sp-magpie-pill]');
+            return pill?.getAttribute('data-state') === 'connected';
+          };
+
+          async function postDirectPing(payload) {
+            const resp = await fetch('https://pointcast.xyz/api/ping', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (!resp.ok) throw new Error(`ping HTTP ${resp.status}`);
+          }
+          async function postMagpieCompose(payload) {
+            // Short timeout — if Magpie doesn't recognize /compose, we
+            // want to fall back quickly to the direct path.
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 6000);
+            try {
+              const resp = await fetch('http://127.0.0.1:38473/compose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: ctrl.signal,
+              });
+              clearTimeout(timer);
+              if (!resp.ok) throw new Error(`compose HTTP ${resp.status}`);
+              const json = await resp.json().catch(() => ({}));
+              return json;
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+
           submit.addEventListener('click', async () => {
             const text = (body.value || '').trim();
             if (!text) {
@@ -976,40 +1021,79 @@ const paletteData = {
               return;
             }
             const subjectVal = (subject?.value || '').trim().slice(0, 120);
+            const dests = selectedDestinations();
+            const hasExtras = dests.some((d) => d !== 'pointcast');
+            const useMagpie = hasExtras && magpieIsOnline();
+
             submit.disabled = true;
-            result.textContent = 'posting…';
+            result.textContent = useMagpie ? 'routing via magpie…' : 'posting…';
             result.setAttribute('data-state', 'pending');
+
+            const pingPayload = {
+              type: 'pc-ping-v1',
+              subject: subjectVal || undefined,
+              body: text,
+              expand: true,
+              channel,
+              blockType: 'NOTE',
+              dek: subjectVal ? undefined : `Re: ${blockId}`,
+              sourceUrl: `https://pointcast.xyz/b/${blockId}`,
+              sourceApp: 'sparrow',
+              from: 'sparrow-reader',
+              timestamp: new Date().toISOString(),
+            };
+
+            const composePayload = {
+              body: text,
+              title: subjectVal || undefined,
+              dek: subjectVal ? undefined : `Re: ${blockId}`,
+              destinations: dests,
+              channel,
+              blockType: 'NOTE',
+              sourceUrl: `https://pointcast.xyz/b/${blockId}`,
+              sourceApp: 'sparrow',
+              subject: subjectVal || undefined,
+              timestamp: new Date().toISOString(),
+            };
+
             try {
-              const resp = await fetch('https://pointcast.xyz/api/ping', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  type: 'pc-ping-v1',
-                  subject: subjectVal || undefined,
-                  body: text,
-                  expand: true,
-                  channel,
-                  blockType: 'NOTE',
-                  dek: subjectVal ? undefined : `Re: ${blockId}`,
-                  sourceUrl: `https://pointcast.xyz/b/${blockId}`,
-                  sourceApp: 'sparrow',
-                  from: 'sparrow-reader',
-                  timestamp: new Date().toISOString(),
-                }),
-              });
-              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-              result.textContent = 'posted · staging as a block';
-              result.setAttribute('data-state', 'ok');
+              if (useMagpie) {
+                try {
+                  const out = await postMagpieCompose(composePayload);
+                  const successes = (out.results || []).filter((r) => r.success);
+                  const summaries = successes.map((r) => r.publisher).join(' · ');
+                  if (successes.length > 0) {
+                    result.textContent = `magpie → ${summaries || `${successes.length} destination${successes.length === 1 ? '' : 's'}`}`;
+                    result.setAttribute('data-state', 'ok');
+                  } else {
+                    // Magpie accepted the request but everything failed.
+                    // Treat as fallback trigger.
+                    throw new Error('magpie: all destinations failed');
+                  }
+                } catch (magErr) {
+                  // Fallback — still land the reply in PointCast.
+                  await postDirectPing(pingPayload);
+                  result.textContent = `direct (magpie fallback: ${magErr?.message || 'unreachable'})`;
+                  result.setAttribute('data-state', 'ok');
+                }
+              } else {
+                await postDirectPing(pingPayload);
+                result.textContent = 'posted · staging as a block';
+                result.setAttribute('data-state', 'ok');
+              }
               body.value = '';
               if (subject) subject.value = '';
               repaintCounter();
+              // Reset non-PC checkboxes
+              panel.querySelectorAll('[data-sp-dest-input]').forEach((cb) => {
+                if (cb.getAttribute('data-sp-dest-input') !== 'pointcast') cb.checked = false;
+              });
               setTimeout(() => {
                 result.textContent = '';
                 result.removeAttribute('data-state');
                 submit.disabled = false;
-                // collapse after a successful post
                 if (panel instanceof HTMLDetailsElement) panel.open = false;
-              }, 2200);
+              }, 2600);
             } catch (err) {
               result.textContent = `× ${err?.message || 'failed'}`;
               result.setAttribute('data-state', 'error');
@@ -1056,13 +1140,20 @@ const paletteData = {
             bridges.forEach((b) => {
               const list = b.querySelector('[data-sp-magpie-dests]');
               if (!list) return;
-              list.innerHTML = rows.map((r) => `
-                <li class="sp-bridge-dest ${r.ready ? 'is-ready' : 'is-dim'}">
+              // Preserve the server-rendered PointCast lock-on chip; we
+              // only replace the OTHER rows (rows excluding pointcast).
+              const pcChip = list.querySelector('[data-sp-dest="pointcast"]');
+              const extras = rows.filter((r) => r.id !== 'pointcast').map((r) => `
+                <label class="sp-bridge-dest ${r.ready ? 'is-ready' : 'is-dim'}"
+                       data-sp-dest="${r.id}"
+                       title="${r.ready ? 'ready — will broadcast' : 'not configured in Magpie yet'}">
+                  <input type="checkbox" data-sp-dest-input="${r.id}" ${r.ready ? '' : 'disabled'} />
                   <span class="sp-bridge-dest-code">${r.code}</span>
                   <span class="sp-bridge-dest-name">${r.name}</span>
                   <span class="sp-bridge-dest-state">${r.ready ? 'ready' : 'set up'}</span>
-                </li>
+                </label>
               `).join('');
+              list.innerHTML = (pcChip ? pcChip.outerHTML : '') + extras;
             });
           };
 
@@ -2173,20 +2264,52 @@ const paletteData = {
       .sp-bridge-cta:hover { border-color: var(--sp-ember); color: var(--sp-ember); text-decoration: none; }
 
       .sp-bridge-dests {
-        list-style: none; padding: 0; margin: 0;
+        list-style: none; padding: 0; margin: 0; border: 0;
         display: flex; gap: 6px; flex-wrap: wrap;
       }
       .sp-bridge-dest {
         display: inline-flex; align-items: center; gap: 6px;
-        padding: 3px 8px;
+        padding: 3px 10px;
         border: 1px solid var(--sp-rule);
         border-radius: 999px;
         font-family: var(--sp-mono);
         font-size: 10px;
         color: var(--sp-ash);
+        cursor: pointer;
+        user-select: none;
+        transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+      }
+      .sp-bridge-dest input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 10px; height: 10px;
+        border: 1px solid currentColor;
+        border-radius: 2px;
+        margin: 0;
+        display: inline-grid; place-items: center;
+        background: transparent;
+      }
+      .sp-bridge-dest input[type="checkbox"]:checked::after {
+        content: "✓";
+        font-size: 9px; line-height: 1;
+        color: currentColor;
+      }
+      .sp-bridge-dest input[type="checkbox"]:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
       }
       .sp-bridge-dest.is-ready { border-color: var(--sp-moss); color: var(--sp-bone); }
-      .sp-bridge-dest.is-dim { opacity: 0.55; border-style: dashed; }
+      .sp-bridge-dest.is-ready:has(input:checked) {
+        background: color-mix(in oklch, var(--sp-moss) 16%, transparent);
+        border-color: var(--sp-moss);
+      }
+      .sp-bridge-dest.is-locked {
+        background: color-mix(in oklch, var(--sp-ember) 14%, transparent);
+        border-color: var(--sp-ember);
+      }
+      .sp-bridge-dest.is-locked .sp-bridge-dest-code { color: var(--sp-ember); }
+      .sp-bridge-dest.is-dim { opacity: 0.55; border-style: dashed; cursor: not-allowed; }
+      .sp-bridge-dest:hover:not(.is-dim):not(.is-locked) { border-color: var(--sp-ember); }
       .sp-bridge-dest-code {
         font-weight: 700;
         letter-spacing: 0.14em;

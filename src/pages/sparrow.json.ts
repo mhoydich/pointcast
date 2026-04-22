@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.12',
-    protocol_version: '0.12',
+    version: '0.13',
+    protocol_version: '0.13',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.12.0',
+        version: 'sparrow-v0.13.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -276,7 +276,7 @@ export const GET: APIRoute = async () => {
       },
       result_states: ['pending', 'ok', 'error'],
       collapses_on: 'successful post (2.2s after ok state shows)',
-      future: 'v0.12 adds Magpie bridge awareness (this sprint); v0.13 upgrades the composer to route multi-destination replies through Magpie /broadcast when the peer-node is alive, falling back to direct /api/ping otherwise.',
+      future: 'v0.13 routes multi-destination replies through Magpie /compose when any non-PointCast destination is selected (this sprint); when Magpie is unreachable or /compose 4xx/5xx, Sparrow automatically falls back to direct /api/ping so the reply always lands in PointCast.',
     },
 
     // v0.12: Magpie bridge awareness. Probe the local peer-node at
@@ -298,14 +298,45 @@ export const GET: APIRoute = async () => {
         purpose: 'derive the destination readiness chips the composer displays',
       },
       pill_states: ['probing', 'connected', 'offline'],
-      ui_surface: 'sp-compose-bridge row inside the reply composer on /sparrow/b/<id> — pill + destination chips + "compose in magpie" deep link',
-      submit_path_v12: 'Still POST https://pointcast.xyz/api/ping (pc-ping-v1); Magpie awareness is informational only in v0.12.',
-      submit_path_v13: 'POST http://127.0.0.1:38473/compose (new Magpie endpoint that accepts body + destinations[] without a clipID) when the user selects more than PointCast AND the bridge is connected; fall back to the direct path otherwise.',
+      ui_surface: 'sp-compose-bridge row inside the reply composer on /sparrow/b/<id> — pill + destination checkboxes (PC locked on) + "compose in magpie" deep link',
+      submit_path: 'v0.13: POST http://127.0.0.1:38473/compose when any non-PointCast destination is checked AND the pill is in "connected" state. Any non-2xx or network error falls back to direct https://pointcast.xyz/api/ping (pc-ping-v1) so the reply still lands in PointCast. PointCast-only posts always use the direct path — no Magpie round-trip needed.',
       destinations_surfaced: Object.keys({
         pointcast: 1, mastodon: 1, farcaster: 1, bitchat: 1,
         bluesky: 1, twitter: 1, linkedin: 1, instagram: 1,
         zora: 1, objkt: 1, opensea: 1,
       }),
+
+      // Contract Sparrow targets on the Magpie peer-node. Magpie's own
+      // /broadcast endpoint requires a clipID; this new clip-less
+      // route is the counterpart designed for composer-originated
+      // posts (Sparrow web reader or other thin clients). Native-side
+      // handler lives in the Magpie repo; Sparrow is the reference
+      // client.
+      endpoint_contract: {
+        method: 'POST',
+        path: '/compose',
+        origin: 'http://127.0.0.1:38473',
+        request_body: {
+          body: 'string · required · plain text',
+          title: 'string · optional · ≤120 chars',
+          dek: 'string · optional · one-line framing',
+          destinations: 'string[] · required · PublisherID raw values (pointcast, mastodon, farcaster, bitchat, bluesky, twitter, linkedin, instagram, zora, objkt, opensea)',
+          channel: 'string · optional · PointCast channel code (FD/CRT/SPN/GF/GDN/ESC/FCT/VST/BTL)',
+          blockType: 'string · optional · READ/NOTE/LISTEN/WATCH/LINK/VISIT/MINT/FAUCET',
+          sourceUrl: 'string · optional · canonical URL of the thing being replied to',
+          sourceApp: 'string · optional · "sparrow" by default',
+          subject: 'string · optional · alias of title',
+          timestamp: 'ISO 8601 · optional · client-side wall clock',
+        },
+        response_body: {
+          ok: 'bool · true if at least one destination succeeded',
+          clipID: 'Int64? · ephemeral clip id if Magpie created one for bookkeeping',
+          results: 'Array<{ publisher, success, summary?, permalink?, remoteID?, error? }>',
+        },
+        native_side_shape:
+          'Create an ephemeral ClipItem (not persisted), build a PublishDraft with the given body/title/dek/hints, call PublisherRegistry.publish(draft, to: destinations.compactMap(PublisherID.init(rawValue:))). Return per-destination outcomes — same result envelope shape as /broadcast so downstream clients can reuse parsing.',
+        fallback_contract: 'When /compose 404s (Magpie version pre-v0.13) or any network error, Sparrow posts the body to https://pointcast.xyz/api/ping directly. PointCast always lands; extras may be missed. The composer surfaces this clearly: "direct (magpie fallback: <reason>)".',
+      },
     },
 
     // What Sparrow renders. Agents that want to build their own reader
@@ -461,9 +492,10 @@ export const GET: APIRoute = async () => {
       'v0.9': 'Reaction aggregation (read side). Per-reader REQ subscription against the relay pool filtered by {kinds:[7], #r:[canonical-block-url]}. Client-side dedupe by event id; count badges paint on each chip as events arrive or from the last 200 stored per relay. Reading works without a signer. Kind-5 delete events fire on unreact when the local emitted log has the original event id, with optimistic local state.',
       'v0.10': 'Cross-reel count badges. One REQ per relay filtered by every visible block URL in #r, paints a compact "🔥 3 · 🌿 1" row into each receipt footer as events arrive. Shared state with reader aggregation so reader + reel stay in sync. Works on index, channel, saved — anywhere receipts render.',
       'v0.11': 'Inline reply composer on /sparrow/b/<id>. Collapsible panel below the reactions toolbar; body + optional subject; POSTs pc-ping-v1 to https://pointcast.xyz/api/ping with the parent block as sourceUrl, channel + expand=true. Shows pending/ok/error states and auto-collapses after a successful post.',
-      'v0.12': 'Magpie bridge awareness. Composer probes 127.0.0.1:38473/health on load; when alive, fetches /config.json and paints a status pill + destination chips (reading state from publishers[id].ready). Deep link opens a fresh /magpie tab. Submit path stays on direct /api/ping — real multi-destination routing lands in v0.13 once the Magpie native side has a clip-less compose endpoint. (current)',
-      'v0.13': 'Magpie-routed multi-destination reply (real broadcast) + Sparrow.app ↔ web reading-list mirror via localhost HTTP. Requires a new Magpie /compose endpoint that accepts body + destinations[] without a clipID.',
-      'v0.14': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
+      'v0.12': 'Magpie bridge awareness. Composer probes 127.0.0.1:38473/health on load; when alive, fetches /config.json and paints a status pill + destination chips (reading state from publishers[id].ready). Deep link opens a fresh /magpie tab. Submit path stays on direct /api/ping — real multi-destination routing lands in v0.13 once the Magpie native side has a clip-less compose endpoint.',
+      'v0.13': 'Magpie-routed multi-destination reply (web side). Destination chips are now checkboxes; PointCast is locked on. When any non-PC box is checked AND the Magpie bridge is connected, Sparrow POSTs to http://127.0.0.1:38473/compose with { body, title, destinations[], channel, hints }. Graceful fallback: any /compose failure (404 on older Magpie, network error, or all-destinations-failed) routes the reply to direct /api/ping instead. Per-destination result painted in the composer result span. Endpoint contract spec\'d in sparrow.json.magpie_bridge.endpoint_contract for the native side to implement. (current)',
+      'v0.14': 'Magpie native /compose endpoint ships (Swift side of v0.13) + Sparrow.app ↔ web reader reading-list mirror via the same localhost HTTP bridge.',
+      'v0.15': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44); OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
