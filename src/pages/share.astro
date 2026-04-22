@@ -1,0 +1,814 @@
+---
+/**
+ * /share - organic visitor campaign board.
+ *
+ * Built after Mike asked for research, a plan, and the first build toward
+ * more organic visitors to pointcast.xyz. The page is both a human board
+ * and a copy surface for narrow launch packets.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  DISTRIBUTION_LOOP,
+  SHARE_ACTION_CHECKLIST,
+  SHARE_AUDIENCES,
+  SHARE_CAMPAIGN_PACKETS,
+  SHARE_KIT_UPDATED,
+  SHARE_LANDING_PAGES,
+  SHARE_LAUNCH_ASSETS,
+  SHARE_PLAN_PATH,
+  SHARE_SNIPPETS,
+} from '../lib/share-kit';
+
+const SITE_URL = 'https://pointcast.xyz';
+const repoUrl = (path: string) => `https://github.com/MikeHoydich/pointcast/blob/main/${path}`;
+const absolute = (path: string) => new URL(path, SITE_URL).href;
+
+function formatCampaignPacket(packet: (typeof SHARE_CAMPAIGN_PACKETS)[number]) {
+  return [
+    `${packet.title}`,
+    `Target: ${absolute(packet.targetPath)}`,
+    `Audience: ${packet.audience}`,
+    `Goal: ${packet.goal}`,
+    `Hook: ${packet.hook}`,
+    '',
+    'Proof links:',
+    ...packet.proofLinks.map((link) => `- ${absolute(link)}`),
+    '',
+    'Channels:',
+    ...packet.channels.map((channel) => `- ${channel}`),
+    '',
+    'Next steps:',
+    ...packet.steps.map((step, index) => `${index + 1}. ${step}`),
+  ].join('\n');
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': 'https://pointcast.xyz/share',
+      name: 'PointCast share kit',
+      description: 'Organic visitor plan, audience routers, copy snippets, and campaign packets for pointcast.xyz.',
+      url: 'https://pointcast.xyz/share',
+      dateModified: SHARE_KIT_UPDATED,
+      isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website' },
+    },
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/share#landing-pages',
+      name: 'PointCast organic landing pages',
+      itemListElement: SHARE_LANDING_PAGES.map((page, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: absolute(page.path),
+        name: page.title,
+        description: page.hook,
+      })),
+    },
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/share#campaigns',
+      name: 'PointCast campaign packets',
+      itemListElement: SHARE_CAMPAIGN_PACKETS.map((packet, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: absolute(packet.targetPath),
+        name: packet.title,
+        description: packet.goal,
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Share kit"
+  description="Organic visitor plan, audience routers, copy snippets, and campaign packets for pointcast.xyz."
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/share.json', title: 'PointCast share kit JSON' }]}
+>
+  <div class="share-page">
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span>/</span>
+      <span>share</span>
+      <a href="/share.json">JSON</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker mono">ORGANIC VISITOR SPRINT · UPDATED {SHARE_KIT_UPDATED}</p>
+      <h1>Make PointCast easier to find, cite, and send.</h1>
+      <p class="hero__lede">
+        The growth plan is not paid traffic. It is narrower and more useful:
+        route each audience to the page that gives them a reason to care,
+        keep the machine surface clean, and turn every deploy into a small
+        distribution loop.
+      </p>
+      <div class="hero__actions">
+        <a class="button button--primary" href={repoUrl(SHARE_PLAN_PATH)}>Read plan</a>
+        <a class="button" href="/share.json">Fetch JSON</a>
+        <button type="button" class="button" data-copy={absolute('/share')}>Copy URL</button>
+      </div>
+      <img class="hero__image" src="/images/og-home-v3.png" alt="PointCast home grid preview" width="1200" height="630" loading="eager" />
+    </header>
+
+    <section class="section section--band" aria-labelledby="landing-pages">
+      <div class="section__head">
+        <p class="section__eyebrow mono">ROUTES</p>
+        <h2 id="landing-pages">Send people to the right door.</h2>
+        <p>
+          The homepage can stay the living feed. These routes are the
+          first-click options when someone arrives from a specific context.
+        </p>
+      </div>
+      <div class="route-grid">
+        {SHARE_LANDING_PAGES.map((page) => (
+          <article class="route-card">
+            <p class="route-card__audience mono">{page.audience}</p>
+            <h3><a href={page.path}>{page.title}</a></h3>
+            <p>{page.hook}</p>
+            <p class="route-card__proof">{page.proof}</p>
+            <div class="route-card__actions">
+              <a href={page.path}>Open</a>
+              <button type="button" data-copy={absolute(page.path)}>Copy</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="audiences">
+      <div class="section__head">
+        <p class="section__eyebrow mono">AUDIENCES</p>
+        <h2 id="audiences">Five lanes, five different asks.</h2>
+      </div>
+      <div class="audience-grid">
+        {SHARE_AUDIENCES.map((audience) => (
+          <article class="audience">
+            <h3>{audience.title}</h3>
+            <p>{audience.angle}</p>
+            <p><strong>Ask:</strong> {audience.ask}</p>
+            <p class="chips">
+              {audience.channels.map((channel) => <span>{channel}</span>)}
+            </p>
+            <a href={audience.path}>Use {audience.path}</a>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section section--band" aria-labelledby="snippets">
+      <div class="section__head">
+        <p class="section__eyebrow mono">COPY</p>
+        <h2 id="snippets">Ready-to-send snippets.</h2>
+      </div>
+      <div class="snippet-grid">
+        {SHARE_SNIPPETS.map((snippet) => (
+          <article class="snippet">
+            <div class="snippet__top">
+              <h3>{snippet.label}</h3>
+              <button type="button" data-copy={snippet.text}>Copy</button>
+            </div>
+            <p>{snippet.text}</p>
+            <a href={snippet.target}>Open target</a>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="campaigns">
+      <div class="section__head">
+        <p class="section__eyebrow mono">CAMPAIGNS</p>
+        <h2 id="campaigns">The board for the next sprint.</h2>
+        <p>
+          Each packet has one audience, one canonical URL, and one next step.
+          Copy the packet, personalize it, then record what happens.
+        </p>
+      </div>
+      <div class="campaign-list">
+        {SHARE_CAMPAIGN_PACKETS.map((packet, index) => (
+          <article class="campaign">
+            <div class="campaign__num mono">{String(index + 1).padStart(2, '0')}</div>
+            <div class="campaign__body">
+              <p class="campaign__status mono">{packet.status}</p>
+              <h3>{packet.title}</h3>
+              <p class="campaign__goal">{packet.goal}</p>
+              <p><strong>Hook:</strong> {packet.hook}</p>
+              <p><strong>Audience:</strong> {packet.audience}</p>
+              <div class="chips">
+                {packet.channels.map((channel) => <span>{channel}</span>)}
+              </div>
+              <div class="proof-links">
+                {packet.proofLinks.map((link) => <a href={link}>{link}</a>)}
+              </div>
+            </div>
+            <div class="campaign__actions">
+              <a class="button button--small" href={packet.targetPath}>Open URL</a>
+              <a class="button button--small" href={repoUrl(packet.docPath)}>Doc</a>
+              <button type="button" class="button button--small" data-copy={formatCampaignPacket(packet)}>Copy packet</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="launch-assets">
+      <div class="section__head">
+        <p class="section__eyebrow mono">LAUNCH DESK</p>
+        <h2 id="launch-assets">Copy assets that are ready to use.</h2>
+        <p>
+          These are the next publishable artifacts: drafts, briefs, and pitch
+          decks that turn the share plan into actual distribution work.
+        </p>
+      </div>
+      <div class="asset-grid">
+        {SHARE_LAUNCH_ASSETS.map((asset) => (
+          <article class="asset">
+            <p class="asset__kind mono">{asset.kind}</p>
+            <h3>{asset.title}</h3>
+            <p>{asset.summary}</p>
+            <p class="asset__audience"><strong>Audience:</strong> {asset.audience}</p>
+            <div class="asset__copy">
+              <code>{asset.primaryCopy}</code>
+              <button type="button" data-copy={asset.primaryCopy}>Copy</button>
+            </div>
+            <div class="route-card__actions">
+              <a href={asset.url}>Open URL</a>
+              <a href={repoUrl(asset.docPath)}>Open doc</a>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section section--split" aria-labelledby="next-ten">
+      <div>
+        <p class="section__eyebrow mono">NEXT 10</p>
+        <h2 id="next-ten">Checklist.</h2>
+        <p>
+          Browser-local state only. It is a sprint board, not an account.
+        </p>
+      </div>
+      <ol class="checklist">
+        {SHARE_ACTION_CHECKLIST.map((item) => (
+          <li>
+            <input type="checkbox" id={`action-${item.id}`} data-action-check={item.id} />
+            <label for={`action-${item.id}`}>
+              <span>{item.label}</span>
+              <small>{item.detail}</small>
+            </label>
+            <a href={item.url}>open</a>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="section section--band" aria-labelledby="loop">
+      <div class="section__head">
+        <p class="section__eyebrow mono">LOOP</p>
+        <h2 id="loop">Repeat after every meaningful deploy.</h2>
+      </div>
+      <ol class="loop-list">
+        {DISTRIBUTION_LOOP.map((item) => <li>{item}</li>)}
+      </ol>
+    </section>
+
+    <aside class="machine">
+      <div>
+        <p class="machine__label mono">MACHINE SURFACE</p>
+        <h2>Same board as JSON.</h2>
+        <p>
+          Agents, crawlers, and future automation can read the campaign
+          packet list directly from <code>/share.json</code>.
+        </p>
+      </div>
+      <div class="machine__links">
+        <a href="/share.json">/share.json</a>
+        <a href="/agents.json">/agents.json</a>
+        <a href="/llms.txt">/llms.txt</a>
+      </div>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    function mark(button, text) {
+      var old = button.textContent;
+      button.textContent = text;
+      button.setAttribute('data-copied', 'true');
+      window.setTimeout(function () {
+        button.textContent = old;
+        button.removeAttribute('data-copied');
+      }, 1400);
+    }
+
+    function fallbackCopy(text) {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.top = '-9999px';
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      document.body.removeChild(area);
+    }
+
+    document.querySelectorAll('[data-copy]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var text = button.getAttribute('data-copy') || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            function () { mark(button, 'Copied'); },
+            function () { fallbackCopy(text); mark(button, 'Copied'); },
+          );
+        } else {
+          fallbackCopy(text);
+          mark(button, 'Copied');
+        }
+      });
+    });
+
+    var key = 'pc:share-actions:v1';
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+
+    document.querySelectorAll('[data-action-check]').forEach(function (input) {
+      var id = input.getAttribute('data-action-check');
+      input.checked = Boolean(saved[id]);
+      input.addEventListener('change', function () {
+        saved[id] = input.checked;
+        try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {}
+      });
+    });
+  })();
+</script>
+
+<style>
+  .share-page {
+    color: var(--pc-ink);
+  }
+
+  .mono,
+  code {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0;
+  }
+
+  .crumb,
+  .hero,
+  .section,
+  .machine {
+    width: min(1120px, calc(100% - 32px));
+    margin: 0 auto;
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 0 0;
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+  }
+
+  .crumb a:last-child {
+    margin-left: auto;
+  }
+
+  .hero {
+    padding: 54px 0 34px;
+  }
+
+  .kicker,
+  .section__eyebrow,
+  .machine__label {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #7b321f;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    letter-spacing: 0;
+  }
+
+  h1 {
+    max-width: 850px;
+    margin: 0;
+    font-size: 54px;
+    line-height: 0.98;
+    font-weight: 500;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.08;
+    font-weight: 500;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.2;
+    font-weight: 500;
+  }
+
+  .hero__lede {
+    max-width: 740px;
+    margin: 20px 0 0;
+    font-size: 20px;
+    line-height: 1.48;
+    color: var(--pc-ink-soft);
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .button,
+  button {
+    min-height: 40px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--pc-ink);
+    padding: 10px 14px;
+    font: 500 14px/1 var(--pc-font-sans);
+    letter-spacing: 0;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .button:hover,
+  button:hover {
+    border-color: #185fa5;
+    text-decoration: none;
+  }
+
+  .button--primary {
+    background: #12110e;
+    color: #fff;
+    border-color: #12110e;
+  }
+
+  .button--small {
+    min-height: 34px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  button[data-copied="true"] {
+    border-color: #0f6e56;
+    color: #0f6e56;
+  }
+
+  .hero__image {
+    width: 100%;
+    max-height: 430px;
+    object-fit: cover;
+    object-position: top center;
+    margin-top: 34px;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+    background: #f6f5f1;
+  }
+
+  .section {
+    padding: 54px 0;
+  }
+
+  .section--band {
+    width: 100%;
+    max-width: none;
+    padding: 54px max(16px, calc((100% - 1120px) / 2));
+    background: #f7f7f2;
+    border-top: 1px solid var(--pc-rule-soft);
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+
+  .section__head {
+    max-width: 780px;
+    margin-bottom: 24px;
+  }
+
+  .section__head p,
+  .section--split > div > p,
+  .machine p {
+    color: var(--pc-ink-soft);
+    line-height: 1.55;
+  }
+
+  .route-grid,
+  .audience-grid,
+  .snippet-grid,
+  .asset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .route-card,
+  .audience,
+  .snippet,
+  .asset {
+    min-width: 0;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+    background: #fff;
+    padding: 18px;
+  }
+
+  .route-card__audience,
+  .asset__kind,
+  .campaign__status {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: #185fa5;
+    text-transform: uppercase;
+  }
+
+  .route-card p,
+  .audience p,
+  .snippet p,
+  .asset p,
+  .campaign p {
+    line-height: 1.5;
+  }
+
+  .asset__audience {
+    color: var(--pc-ink-soft);
+  }
+
+  .asset__copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    margin: 14px 0;
+    padding: 10px;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+    background: #fbfaf6;
+  }
+
+  .asset__copy code {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    color: #423f38;
+  }
+
+  .route-card__proof {
+    color: var(--pc-ink-muted);
+    font-size: 14px;
+  }
+
+  .route-card__actions,
+  .snippet__top,
+  .campaign__actions,
+  .machine__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .route-card__actions a,
+  .route-card__actions button,
+  .snippet__top button {
+    min-height: 32px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chips span {
+    border: 1px solid #d7d4ca;
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: #423f38;
+    background: #fbfaf6;
+  }
+
+  .snippet__top {
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .snippet p {
+    white-space: pre-line;
+    color: var(--pc-ink-soft);
+  }
+
+  .campaign-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .campaign {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 18px;
+    padding: 18px;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .campaign__num {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #f5efe9;
+    color: #7b321f;
+  }
+
+  .campaign__goal {
+    font-size: 17px;
+    color: var(--pc-ink-soft);
+  }
+
+  .campaign__actions {
+    align-content: start;
+    justify-content: flex-end;
+    max-width: 260px;
+  }
+
+  .proof-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .proof-links a {
+    font-size: 13px;
+  }
+
+  .section--split {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 34px;
+  }
+
+  .checklist {
+    display: grid;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .checklist li {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+    padding: 12px;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+  }
+
+  .checklist input {
+    margin-top: 3px;
+  }
+
+  .checklist label span,
+  .checklist label small {
+    display: block;
+  }
+
+  .checklist label small {
+    margin-top: 3px;
+    color: var(--pc-ink-muted);
+    line-height: 1.35;
+  }
+
+  .loop-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    counter-reset: loop;
+  }
+
+  .loop-list li {
+    counter-increment: loop;
+    min-height: 120px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+    background: #fff;
+    line-height: 1.45;
+  }
+
+  .loop-list li::before {
+    content: counter(loop, decimal-leading-zero);
+    display: block;
+    margin-bottom: 12px;
+    font-family: var(--pc-font-mono);
+    color: #0f6e56;
+  }
+
+  .machine {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 22px;
+    align-items: center;
+    margin-top: 54px;
+    margin-bottom: 80px;
+    padding: 20px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 8px;
+    background: #fbfaf6;
+  }
+
+  .machine__links a {
+    border: 1px solid var(--pc-rule-soft);
+    border-radius: 8px;
+    padding: 9px 10px;
+    background: #fff;
+  }
+
+  @media (max-width: 900px) {
+    h1 {
+      font-size: 42px;
+    }
+
+    .route-grid,
+    .audience-grid,
+    .snippet-grid,
+    .asset-grid,
+    .loop-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .campaign,
+    .section--split,
+    .machine {
+      grid-template-columns: 1fr;
+    }
+
+    .campaign__actions {
+      justify-content: flex-start;
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 620px) {
+    h1 {
+      font-size: 34px;
+      line-height: 1.04;
+    }
+
+    .hero__lede {
+      font-size: 17px;
+    }
+
+    .route-grid,
+    .audience-grid,
+    .snippet-grid,
+    .asset-grid,
+    .loop-list {
+      grid-template-columns: 1fr;
+    }
+
+    .section,
+    .section--band {
+      padding-top: 38px;
+      padding-bottom: 38px;
+    }
+
+    .hero {
+      padding-top: 38px;
+    }
+
+    .checklist li {
+      grid-template-columns: 24px minmax(0, 1fr);
+    }
+
+    .checklist li a {
+      grid-column: 2;
+    }
+  }
+</style>

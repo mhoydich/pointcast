@@ -1,0 +1,640 @@
+---
+/**
+ * /moment/editor — canvas-based text-over-image editor.
+ *
+ * A lightweight companion to /moment. Paste any image URL (your ChatGPT
+ * generation, an Unsplash photo, a file-hosted PNG) and the page renders
+ * the image into a 1200×675 canvas with composable text overlays:
+ * kicker, title, subtitle, PointCast watermark. Live preview, PNG
+ * download, optional localStorage preset save.
+ *
+ * Unsplash handoff: clicking "BROWSE UNSPLASH" pre-composes a search
+ * query from today's moment (mood / zone / season) and opens
+ * unsplash.com/s/photos/{query} in a new tab. Right-click the photo →
+ * Copy image address → paste back into the URL field.
+ *
+ * Same shape as the /moment → chatgpt.com/images handoff. Two sources,
+ * same editor. Static page — all composition happens in the browser via
+ * the Canvas 2D API.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { moonPhase, season, zodiacOfDate } from '../../lib/sky';
+
+const now = new Date();
+const moon = moonPhase(now);
+const zodiac = zodiacOfDate(now);
+const se = season(now, 33.919);
+
+// Reuse the /moment composition so the editor starts with a sensible preset.
+const zeitgeistPolls = (await getCollection('polls', ({ data }) => !data.draft && data.zeitgeist))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+const featuredPoll = zeitgeistPolls[0] ?? null;
+
+const clockBlock = (await getCollection('blocks', ({ data }) => data.id === '0324' && !data.draft))[0];
+const clockZones = clockBlock?.data.clock?.zones ?? [];
+const featuredZone = clockZones.find((z) => z.label === 'El Segundo') ?? clockZones[0];
+
+const [allProducts, allBlocks] = await Promise.all([
+  getCollection('products', ({ data }) => !data.draft),
+  getCollection('blocks', ({ data }) => !data.draft),
+]);
+const productMoods = new Set<string>();
+allProducts.forEach((p) => (p.data.pairsWithMood ?? []).forEach((m) => productMoods.add(m)));
+const moodCounts = new Map<string, number>();
+allBlocks.forEach((b) => {
+  if (b.data.mood && productMoods.has(b.data.mood)) {
+    moodCounts.set(b.data.mood, (moodCounts.get(b.data.mood) ?? 0) + 1);
+  }
+});
+const featuredMood = Array.from(moodCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'good-feels';
+
+const dateLong = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+}).format(now);
+const dateShort = new Intl.DateTimeFormat('en-US', {
+  month: 'short', day: '2-digit'
+}).format(now).toUpperCase();
+
+// Unsplash search query — keywords stitched from moment components.
+const unsplashKeywords = [
+  featuredZone?.label?.toLowerCase().split(',')[0] ?? 'el segundo',
+  se.name,
+  featuredMood.replace(/-/g, ' '),
+].filter(Boolean).join(' ');
+const unsplashUrl = `https://unsplash.com/s/photos/${encodeURIComponent(unsplashKeywords)}`;
+
+// Presets seeded into the editor on first load.
+const presetKicker = `POINTCAST · ${dateShort} 2026`;
+const presetTitle = featuredPoll?.data.question ?? 'Today, composed.';
+const presetSubtitle = featuredZone
+  ? `${featuredZone.label} · ${featuredZone.region ?? ''}`
+  : `${moon.glyph} ${moon.label} · ${zodiac.glyph} ${zodiac.name}`;
+
+const title = 'Moment · Editor';
+const description = 'Compose a PointCast postcard from any image URL — ChatGPT-generated, Unsplash photo, or anything hosted. Text overlays, live canvas, PNG export.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/moment">moment</a>
+      <span aria-hidden="true">›</span>
+      <span>editor</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">MOMENT · EDITOR · {dateShort} 2026</p>
+      <h1 class="title">Image in, postcard out.</h1>
+      <p class="dek">
+        Paste any image URL — <a href="https://chatgpt.com/images/" target="_blank" rel="noopener">ChatGPT Images</a>, <a href={unsplashUrl} target="_blank" rel="noopener">Unsplash</a>, or anything hosted — and compose a PointCast postcard. Text overlays are live. Download as PNG. All rendering happens in your browser.
+      </p>
+    </header>
+
+    <section class="editor">
+      <div class="editor__controls">
+        <label class="field">
+          <span class="field__label mono">IMAGE URL</span>
+          <input type="url" id="f-src" placeholder="https://… (paste ChatGPT or Unsplash URL)" />
+        </label>
+
+        <div class="sources">
+          <a class="btn btn--ghost mono" href="https://chatgpt.com/images/" target="_blank" rel="noopener">▶ CHATGPT IMAGES</a>
+          <a class="btn btn--ghost mono" href={unsplashUrl} target="_blank" rel="noopener">▶ UNSPLASH · {unsplashKeywords}</a>
+          <button type="button" class="btn btn--text mono" id="load-saved">↺ LOAD TODAY'S /MOMENT URL</button>
+        </div>
+
+        <label class="field">
+          <span class="field__label mono">KICKER</span>
+          <input type="text" id="f-kicker" maxlength="80" value={presetKicker} />
+        </label>
+        <label class="field">
+          <span class="field__label mono">TITLE</span>
+          <input type="text" id="f-title" maxlength="140" value={presetTitle} />
+        </label>
+        <label class="field">
+          <span class="field__label mono">SUBTITLE</span>
+          <input type="text" id="f-subtitle" maxlength="200" value={presetSubtitle} />
+        </label>
+
+        <fieldset class="group">
+          <legend class="field__label mono">LAYOUT</legend>
+          <div class="chips">
+            <label class="chip">
+              <input type="radio" name="anchor" value="bottom-left" checked />
+              <span>BOTTOM-LEFT</span>
+            </label>
+            <label class="chip">
+              <input type="radio" name="anchor" value="top-left" />
+              <span>TOP-LEFT</span>
+            </label>
+            <label class="chip">
+              <input type="radio" name="anchor" value="center" />
+              <span>CENTER</span>
+            </label>
+            <label class="chip">
+              <input type="radio" name="anchor" value="bottom-right" />
+              <span>BOTTOM-RIGHT</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="field__label mono">COLOR</legend>
+          <div class="chips">
+            <label class="chip chip--swatch"><input type="radio" name="color" value="#F7F5EE" checked /><span style="background:#F7F5EE;color:#12110E">CREAM</span></label>
+            <label class="chip chip--swatch"><input type="radio" name="color" value="#FBB040" /><span style="background:#FBB040;color:#12110E">AMBER</span></label>
+            <label class="chip chip--swatch"><input type="radio" name="color" value="#8A2432" /><span style="background:#8A2432;color:#fff">CRIMSON</span></label>
+            <label class="chip chip--swatch"><input type="radio" name="color" value="#12110E" /><span style="background:#12110E;color:#fff">INK</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="field__label mono">ASPECT</legend>
+          <div class="chips">
+            <label class="chip"><input type="radio" name="aspect" value="16:9" checked /><span>16:9 · 1200×675</span></label>
+            <label class="chip"><input type="radio" name="aspect" value="1:1" /><span>1:1 · 1080×1080</span></label>
+            <label class="chip"><input type="radio" name="aspect" value="4:5" /><span>4:5 · 1080×1350</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="field__label mono">OVERLAY</legend>
+          <label class="inline">
+            <input type="checkbox" id="f-gradient" checked />
+            <span>DARKEN GRADIENT BEHIND TEXT</span>
+          </label>
+          <label class="inline">
+            <input type="checkbox" id="f-watermark" checked />
+            <span>POINTCAST WATERMARK CORNER</span>
+          </label>
+        </fieldset>
+
+        <div class="actions">
+          <button type="button" class="btn btn--primary" id="download">⬇ DOWNLOAD PNG</button>
+          <button type="button" class="btn btn--ghost" id="copy-data-url">⎘ COPY DATA URL</button>
+        </div>
+        <p class="status mono" id="status" aria-live="polite">&nbsp;</p>
+      </div>
+
+      <div class="editor__preview">
+        <p class="preview__kicker mono">PREVIEW · LIVE</p>
+        <div class="canvas-wrap">
+          <canvas id="canvas" width="1200" height="675"></canvas>
+          <div class="canvas-empty" id="canvas-empty">
+            <p>Paste an image URL above<br/>to start composing.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/api/moment.json">/api/moment.json</a></li>
+        <li><a href="/moment">/moment</a></li>
+        <li><a href="/clock/0324">/clock/0324</a></li>
+      </ul>
+    </section>
+
+    <script is:inline>
+      (() => {
+        const canvas = document.getElementById('canvas');
+        const emptyOverlay = document.getElementById('canvas-empty');
+        const ctx = canvas.getContext('2d');
+
+        const fSrc = document.getElementById('f-src');
+        const fKicker = document.getElementById('f-kicker');
+        const fTitle = document.getElementById('f-title');
+        const fSubtitle = document.getElementById('f-subtitle');
+        const fGradient = document.getElementById('f-gradient');
+        const fWatermark = document.getElementById('f-watermark');
+        const status = document.getElementById('status');
+        const download = document.getElementById('download');
+        const copyDataUrl = document.getElementById('copy-data-url');
+        const loadSaved = document.getElementById('load-saved');
+
+        let currentImage = null;
+
+        const ASPECTS = {
+          '16:9': { w: 1200, h: 675 },
+          '1:1':  { w: 1080, h: 1080 },
+          '4:5':  { w: 1080, h: 1350 },
+        };
+
+        function getAspect() {
+          const r = document.querySelector('input[name="aspect"]:checked');
+          return ASPECTS[r?.value || '16:9'];
+        }
+        function getAnchor() {
+          return document.querySelector('input[name="anchor"]:checked')?.value || 'bottom-left';
+        }
+        function getColor() {
+          return document.querySelector('input[name="color"]:checked')?.value || '#F7F5EE';
+        }
+
+        function setStatus(msg, kind) {
+          status.textContent = msg;
+          status.dataset.kind = kind || '';
+          if (msg) setTimeout(() => { if (status.textContent === msg) { status.textContent = '\u00a0'; status.dataset.kind = ''; } }, 4000);
+        }
+
+        function draw() {
+          const { w, h } = getAspect();
+          if (canvas.width !== w) canvas.width = w;
+          if (canvas.height !== h) canvas.height = h;
+
+          // Background
+          ctx.fillStyle = '#12110E';
+          ctx.fillRect(0, 0, w, h);
+
+          if (currentImage) {
+            // Object-fit: cover
+            const ir = currentImage.naturalWidth / currentImage.naturalHeight;
+            const cr = w / h;
+            let sx = 0, sy = 0, sw = currentImage.naturalWidth, sh = currentImage.naturalHeight;
+            if (ir > cr) {
+              sw = sh * cr;
+              sx = (currentImage.naturalWidth - sw) / 2;
+            } else {
+              sh = sw / cr;
+              sy = (currentImage.naturalHeight - sh) / 2;
+            }
+            try { ctx.drawImage(currentImage, sx, sy, sw, sh, 0, 0, w, h); } catch (e) {}
+          }
+
+          // Darken gradient
+          if (fGradient.checked && currentImage) {
+            const anchor = getAnchor();
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            if (anchor.startsWith('top')) {
+              grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+              grad.addColorStop(0.55, 'rgba(0,0,0,0)');
+            } else if (anchor === 'center') {
+              grad.addColorStop(0, 'rgba(0,0,0,0)');
+              grad.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+              grad.addColorStop(0.55, 'rgba(0,0,0,0.55)');
+              grad.addColorStop(1, 'rgba(0,0,0,0)');
+            } else {
+              // bottom-*
+              grad.addColorStop(0.45, 'rgba(0,0,0,0)');
+              grad.addColorStop(1, 'rgba(0,0,0,0.65)');
+            }
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+          }
+
+          // Text composition
+          const color = getColor();
+          const anchor = getAnchor();
+          const kicker = (fKicker.value || '').trim();
+          const title = (fTitle.value || '').trim();
+          const subtitle = (fSubtitle.value || '').trim();
+
+          const pad = Math.round(Math.min(w, h) * 0.06);
+          const maxTextWidth = w - pad * 2;
+
+          // Sizes relative to canvas height
+          const kickerSize = Math.round(h * 0.024);
+          const titleSize = Math.round(h * 0.08);
+          const subtitleSize = Math.round(h * 0.032);
+
+          // Text alignment from anchor
+          const align = anchor === 'bottom-right' ? 'right' : anchor === 'center' ? 'center' : 'left';
+          ctx.textAlign = align;
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillStyle = color;
+
+          // Compute text block origin (y for title baseline)
+          let textX, titleY;
+          if (anchor === 'top-left' || anchor === 'top-right') {
+            textX = anchor === 'top-right' ? (w - pad) : pad;
+            titleY = pad + kickerSize * 2 + titleSize;
+          } else if (anchor === 'center') {
+            textX = w / 2;
+            titleY = h / 2;
+          } else {
+            // bottom-*
+            textX = anchor === 'bottom-right' ? (w - pad) : pad;
+            titleY = h - pad - subtitleSize * 2;
+          }
+
+          // Kicker
+          if (kicker) {
+            ctx.font = `700 ${kickerSize}px "JetBrains Mono", "Menlo", monospace`;
+            const letterSpacing = 0.16; // emulated via manual spacing if needed
+            // Native canvas doesn't support letter-spacing; fallback via char-by-char draw
+            const kText = kicker.toUpperCase();
+            const spacing = kickerSize * letterSpacing * 0.5;
+            const trackedWidth = ctx.measureText(kText).width + spacing * (kText.length - 1);
+            let kx = textX;
+            if (align === 'right') kx = textX - trackedWidth;
+            if (align === 'center') kx = textX - trackedWidth / 2;
+            ctx.textAlign = 'left';
+            let cx = kx;
+            for (const ch of kText) {
+              ctx.fillText(ch, cx, titleY - titleSize - subtitleSize * 0.9);
+              cx += ctx.measureText(ch).width + spacing;
+            }
+            ctx.textAlign = align;
+          }
+
+          // Title
+          if (title) {
+            ctx.font = `800 ${titleSize}px "Inter", "Inter Tight", system-ui, sans-serif`;
+            wrapText(ctx, title, textX, titleY, maxTextWidth, titleSize * 1.08, 3);
+          }
+
+          // Subtitle
+          if (subtitle) {
+            ctx.font = `500 ${subtitleSize}px "Inter", "Inter Tight", system-ui, sans-serif`;
+            ctx.fillStyle = color === '#12110E' ? 'rgba(18,17,14,0.78)' : 'rgba(247,245,238,0.82)';
+            if (color !== '#F7F5EE' && color !== '#12110E') ctx.fillStyle = color;
+            const subY = titleY + subtitleSize * 1.2;
+            wrapText(ctx, subtitle, textX, subY, maxTextWidth, subtitleSize * 1.25, 2);
+          }
+
+          // Watermark
+          if (fWatermark.checked) {
+            const wmW = Math.round(w * 0.12);
+            const wmH = Math.round(wmW * 0.28);
+            const wmX = anchor === 'bottom-right' ? pad : w - pad - wmW;
+            const wmY = anchor === 'top-right' ? h - pad - wmH : pad;
+            // Dark pill with amber dot + POINTCAST
+            ctx.fillStyle = 'rgba(18,17,14,0.85)';
+            roundRect(ctx, wmX, wmY, wmW, wmH, wmH * 0.2);
+            ctx.fill();
+            // dot
+            ctx.beginPath();
+            const cx = wmX + wmH * 0.55;
+            const cy = wmY + wmH * 0.5;
+            const r = wmH * 0.24;
+            const dotGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+            dotGrad.addColorStop(0, '#FBB040');
+            dotGrad.addColorStop(1, '#8A2432');
+            ctx.fillStyle = dotGrad;
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.fill();
+            // wordmark
+            ctx.fillStyle = '#F7F5EE';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.font = `700 ${Math.round(wmH * 0.38)}px "JetBrains Mono", monospace`;
+            ctx.fillText('POINTCAST', wmX + wmH * 1.0, cy);
+          }
+
+          if (currentImage) emptyOverlay.hidden = true;
+          else emptyOverlay.hidden = false;
+        }
+
+        function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+          const words = text.split(/\s+/);
+          const lines = [];
+          let current = '';
+          for (const w of words) {
+            const test = current ? current + ' ' + w : w;
+            if (ctx.measureText(test).width > maxWidth && current) {
+              lines.push(current);
+              current = w;
+            } else {
+              current = test;
+            }
+            if (lines.length >= maxLines - 1 && ctx.measureText(current + '…').width > maxWidth) {
+              while (ctx.measureText(current + '…').width > maxWidth && current.length > 1) {
+                current = current.slice(0, -1);
+              }
+              current = current + '…';
+              break;
+            }
+          }
+          if (current) lines.push(current);
+          lines.slice(0, maxLines).forEach((line, i) => {
+            ctx.fillText(line, x, y + i * lineHeight);
+          });
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        }
+
+        // Image loading
+        function loadImage(url) {
+          if (!url) return;
+          setStatus('loading image…', '');
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            currentImage = img;
+            draw();
+            setStatus('loaded · text overlays apply live', 'ok');
+          };
+          img.onerror = () => {
+            currentImage = null;
+            draw();
+            setStatus('image failed to load (CORS or 404) · try a direct .png/.jpg URL', 'err');
+          };
+          img.src = url;
+        }
+
+        // Events — redraw on any input change
+        [fSrc, fKicker, fTitle, fSubtitle, fGradient, fWatermark].forEach((el) => {
+          el.addEventListener('input', () => {
+            if (el === fSrc) loadImage(fSrc.value.trim());
+            else draw();
+          });
+        });
+        document.querySelectorAll('input[name="anchor"], input[name="color"], input[name="aspect"]').forEach((r) => {
+          r.addEventListener('change', draw);
+        });
+
+        download.addEventListener('click', () => {
+          if (!currentImage) { setStatus('load an image first', 'warn'); return; }
+          try {
+            const url = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            const today = new Date().toISOString().slice(0, 10);
+            a.download = `pointcast-moment-${today}.png`;
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setStatus('downloaded · pointcast-moment-' + today + '.png', 'ok');
+          } catch (e) {
+            setStatus('export blocked — image origin denies canvas read. try a direct hosted URL.', 'err');
+          }
+        });
+
+        copyDataUrl.addEventListener('click', async () => {
+          if (!currentImage) { setStatus('load an image first', 'warn'); return; }
+          try {
+            const url = canvas.toDataURL('image/png');
+            await navigator.clipboard.writeText(url);
+            setStatus('data URL copied · paste anywhere images are accepted', 'ok');
+          } catch (e) {
+            setStatus('export blocked — CORS prevents reading canvas pixels', 'err');
+          }
+        });
+
+        loadSaved.addEventListener('click', () => {
+          const key = 'pc:moment:image:' + new Date().toISOString().slice(0, 10);
+          try {
+            const cached = JSON.parse(localStorage.getItem(key) || 'null');
+            if (cached && cached.url) {
+              fSrc.value = cached.url;
+              loadImage(cached.url);
+              setStatus('loaded today\u2019s saved moment URL', 'ok');
+            } else {
+              setStatus('no saved URL for today on this device · save one on /moment first', 'warn');
+            }
+          } catch (e) {
+            setStatus('localStorage blocked', 'err');
+          }
+        });
+
+        // Initial paint (no image)
+        draw();
+
+        // Seed from ?src= URL param
+        const params = new URLSearchParams(window.location.search);
+        const seed = params.get('src');
+        if (seed) { fSrc.value = seed; loadImage(seed); }
+      })();
+    </script>
+  </main>
+
+  <style>
+    .page { max-width: 1180px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #a02c2c; text-decoration: none; }
+
+    .head { margin-bottom: 20px; max-width: 720px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #5F3DC4; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 4.5vw, 42px); font-weight: 700; line-height: 1.05; margin: 0 0 10px; }
+    .dek { margin: 0; color: #38373A; line-height: 1.55; font-size: 14.5px; }
+    .dek a { color: #a02c2c; text-decoration: none; font-weight: 500; }
+    .dek a:hover { text-decoration: underline; }
+
+    .editor { display: grid; grid-template-columns: 360px 1fr; gap: 24px; align-items: start; }
+    @media (max-width: 900px) { .editor { grid-template-columns: 1fr; } }
+
+    .editor__controls { display: grid; gap: 12px; }
+    .field { display: grid; gap: 4px; }
+    .field__label { font-size: 9.5px; color: #5F3DC4; font-weight: 700; letter-spacing: 0.16em; }
+    .field input[type="text"], .field input[type="url"] {
+      padding: 8px 10px;
+      border: 1.5px solid #D6D4CD;
+      border-radius: 3px;
+      font-size: 13.5px;
+      background: #fff;
+      font-family: inherit;
+    }
+    .field input:focus { outline: none; border-color: #5F3DC4; }
+
+    .sources { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+
+    .group {
+      display: grid;
+      gap: 6px;
+      padding: 8px 10px;
+      border: 1px solid #D6D4CD;
+      border-radius: 3px;
+    }
+    .group .field__label { margin-bottom: 2px; padding: 0; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip { position: relative; }
+    .chip input { position: absolute; opacity: 0; }
+    .chip span {
+      display: inline-block;
+      padding: 4px 8px;
+      background: #fff;
+      border: 1px solid #D6D4CD;
+      border-radius: 2px;
+      font-family: var(--pc-font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      color: #38373A;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .chip input:checked + span {
+      background: #12110E;
+      color: #FBB040;
+      border-color: #12110E;
+    }
+    .chip--swatch input:checked + span { box-shadow: 0 0 0 2px #FBB040; }
+
+    .inline { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #38373A; letter-spacing: 0.12em; text-transform: uppercase; font-family: var(--pc-font-mono); }
+    .inline input[type="checkbox"] { accent-color: #5F3DC4; }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 3px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .btn--primary { background: #FBB040; color: #12110E; border: 1.5px solid #FBB040; }
+    .btn--primary:hover { background: #C78828; border-color: #C78828; }
+    .btn--ghost { background: transparent; color: #12110E; border: 1.5px solid #12110E; }
+    .btn--ghost:hover { background: #12110E; color: #FBB040; }
+    .btn--text { background: transparent; border: none; color: #a02c2c; font-family: var(--pc-font-mono); padding: 4px 0; }
+    .btn--text:hover { text-decoration: underline; }
+
+    .status { margin: 4px 0 0; font-size: 10px; color: #5F5E5A; min-height: 14px; }
+    .status[data-kind="ok"] { color: #0F6E56; }
+    .status[data-kind="warn"] { color: #C78828; }
+    .status[data-kind="err"] { color: #8A2432; }
+
+    .editor__preview { position: sticky; top: 16px; }
+    .preview__kicker { font-size: 10px; margin: 0 0 8px; color: #5F3DC4; font-weight: 700; letter-spacing: 0.18em; }
+    .canvas-wrap {
+      position: relative;
+      border: 1px solid #D6D4CD;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #12110E;
+      box-shadow: 0 6px 30px rgba(0,0,0,0.06);
+    }
+    #canvas { display: block; width: 100%; height: auto; }
+    .canvas-empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #D3D1C9;
+      text-align: center;
+      font-size: 14px;
+      line-height: 1.5;
+      pointer-events: none;
+    }
+    .canvas-empty[hidden] { display: none; }
+
+    .agent-strip { margin-top: 28px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #a02c2c; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+  </style>
+</BlockLayout>
