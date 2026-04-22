@@ -122,7 +122,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.25</span>
+          <span class="sp-sub">pointcast reader · v0.26</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -253,6 +253,13 @@ const paletteData = {
       <span class="sp-quote-chip-icon" aria-hidden="true">✎</span>
       copy as quote
     </button>
+
+    {/* v0.26: live "friend just saved" toasts. Container lives in the
+        layout so any page benefits; watcher script is gated on the
+        sparrow:friends localStorage list being non-empty. Toasts
+        animate in bottom-right, auto-dismiss after ~7s, capped at 3
+        concurrent. Click a toast to open the block. */}
+    <aside class="sp-motion-toasts" data-sp-motion-toasts aria-live="polite"></aside>
 
     <script
       is:inline
@@ -1790,6 +1797,203 @@ const paletteData = {
         })();
         setTimeout(() => { paintSyncState(); if (syncEnabled()) subscribeNostrSync().catch(()=>{}); }, 1600);
 
+        // ─── v0.26 · FRIENDS IN MOTION (live toasts + chime) ─────────
+        // Gated on sparrow:friends being non-empty (and not globally
+        // disabled via sparrow:friends-motion-disabled). Opens one
+        // persistent streaming REQ per configured relay with
+        //   { kinds:[30078], authors:<non-muted friends>,
+        //     '#d':['sparrow-public-saved-v1'], since: bootTime }
+        // so only *new* events land — no historical flood on load.
+        // For each arriving event, a short-lived toast slides into the
+        // bottom-right corner with name + block id + title. Optional
+        // chime (Web Audio, off by default) plays on arrival.
+        const KEY_MOTION_DISABLED = 'sparrow:friends-motion-disabled';
+        const KEY_CHIME_ENABLED   = 'sparrow:friends-chime-enabled';
+        const KEY_FRIENDS_LOCAL   = 'sparrow:friends';
+        const KEY_PROFILES_LOCAL  = 'sparrow:profiles';
+        const MOTION_MAX_TOASTS   = 3;
+        const MOTION_TOAST_TTL_MS = 7000;
+        const motionToastsEl = document.querySelector('[data-sp-motion-toasts]');
+
+        const readFriendsForMotion = () => {
+          try {
+            const raw = JSON.parse(localStorage.getItem(KEY_FRIENDS_LOCAL) || '[]');
+            if (!Array.isArray(raw)) return [];
+            return raw
+              .map((f) => (typeof f === 'string'
+                ? { pubkey: f, alias: '', muted: false }
+                : (f && typeof f === 'object' && typeof f.pubkey === 'string')
+                  ? {
+                      pubkey: f.pubkey.toLowerCase(),
+                      alias:  (f.alias || '').slice(0, 40),
+                      muted:  !!f.muted,
+                    }
+                  : null))
+              .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey));
+          } catch { return []; }
+        };
+        const readProfilesForMotion = () => {
+          try {
+            const raw = JSON.parse(localStorage.getItem(KEY_PROFILES_LOCAL) || '{}');
+            return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+          } catch { return {}; }
+        };
+        const motionRelays = () => {
+          try {
+            const raw = localStorage.getItem(KEY_NOSTR_RELAYS);
+            const list = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(list) && list.length) {
+              return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+            }
+          } catch {}
+          return DEFAULT_RELAYS;
+        };
+
+        // Tiny Web Audio chord — two quick notes, fade out. No asset
+        // request, no network. Gated on opt-in.
+        function playFriendsChime() {
+          if (localStorage.getItem(KEY_CHIME_ENABLED) !== '1') return;
+          try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const now = ctx.currentTime;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.12, now + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+            gain.connect(ctx.destination);
+            // Two overlapping sines — a soft perfect fifth (A5 + E6).
+            for (const [freq, delay] of [[880, 0], [1318.5, 0.09]]) {
+              const o = ctx.createOscillator();
+              o.type = 'sine';
+              o.frequency.setValueAtTime(freq, now + delay);
+              o.connect(gain);
+              o.start(now + delay);
+              o.stop(now + 0.5);
+            }
+            setTimeout(() => { try { ctx.close(); } catch {} }, 800);
+          } catch { /* silent */ }
+        }
+
+        function motionShortPk(pk) {
+          return pk ? `${pk.slice(0, 8)}…${pk.slice(-4)}` : '—';
+        }
+        function motionNameFor(pubkey, friend) {
+          const prof = readProfilesForMotion()[pubkey];
+          return friend?.alias
+            || (prof && (prof.display_name || prof.name))
+            || motionShortPk(pubkey);
+        }
+        function motionPictureFor(pubkey) {
+          const prof = readProfilesForMotion()[pubkey];
+          return prof?.picture || '';
+        }
+
+        function dismissMotionToast(el) {
+          if (!el) return;
+          el.classList.add('is-leaving');
+          setTimeout(() => { try { el.remove(); } catch {} }, 320);
+        }
+
+        function pushMotionToast({ pubkey, blockId, bodyTitle, bodyChannel }) {
+          if (!motionToastsEl) return;
+          const friend = readFriendsForMotion().find((f) => f.pubkey === pubkey);
+          const name = motionNameFor(pubkey, friend);
+          const pic  = motionPictureFor(pubkey);
+          const toast = document.createElement('a');
+          toast.className = 'sp-motion-toast';
+          toast.href = `/sparrow/b/${blockId}`;
+          toast.setAttribute('role', 'status');
+          toast.innerHTML = `
+            ${pic
+              ? `<img class="sp-motion-toast-pic" src="${pic.replace(/[<>"']/g, '')}" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display='none'" />`
+              : `<span class="sp-motion-toast-pic sp-motion-toast-pic-placeholder" aria-hidden="true">✦</span>`}
+            <span class="sp-motion-toast-body">
+              <span class="sp-motion-toast-name">${String(name).replace(/[<>&"']/g, '')}</span>
+              <span class="sp-motion-toast-action">just saved</span>
+              <span class="sp-motion-toast-title">№ ${blockId}${bodyTitle ? ' · ' + String(bodyTitle).replace(/[<>&"']/g, '') : ''}</span>
+            </span>
+            <button class="sp-motion-toast-close" type="button" aria-label="dismiss">×</button>
+          `;
+          toast.querySelector('.sp-motion-toast-close')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dismissMotionToast(toast);
+          });
+          motionToastsEl.appendChild(toast);
+
+          // Prune to MOTION_MAX_TOASTS visible — oldest first.
+          while (motionToastsEl.children.length > MOTION_MAX_TOASTS) {
+            dismissMotionToast(motionToastsEl.firstElementChild);
+          }
+          setTimeout(() => dismissMotionToast(toast), MOTION_TOAST_TTL_MS);
+          playFriendsChime();
+        }
+
+        (function startMotionWatcher() {
+          try { if (localStorage.getItem(KEY_MOTION_DISABLED) === '1') return; } catch {}
+          const friends = readFriendsForMotion().filter((f) => !f.muted);
+          if (!friends.length) return;
+
+          const bootTime = Math.floor(Date.now() / 1000);
+          const seenEventIds = new Set();
+          const relays = motionRelays();
+          const subId = `sp-mot-${Math.random().toString(36).slice(2, 10)}`;
+          const filter = {
+            kinds: [SYNC_KIND],
+            authors: friends.map((f) => f.pubkey),
+            '#d': [PUBLIC_SAVED_D_TAG],
+            since: bootTime,
+          };
+          const sockets = [];
+
+          function onEvent(ev) {
+            if (!ev || typeof ev.id !== 'string' || seenEventIds.has(ev.id)) return;
+            if (ev.kind !== SYNC_KIND || typeof ev.content !== 'string') return;
+            if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+            if (ev.created_at < bootTime) return; // belt-and-suspenders
+            const live = readFriendsForMotion();
+            if (live.find((f) => f.pubkey === ev.pubkey)?.muted) return;
+            seenEventIds.add(ev.id);
+            let body;
+            try { body = JSON.parse(ev.content); } catch { return; }
+            const savedValue = body?.saved?.value;
+            if (!Array.isArray(savedValue) || !savedValue.length) return;
+            const blockId = savedValue.find((id) => typeof id === 'string');
+            if (!blockId) return;
+            pushMotionToast({
+              pubkey: ev.pubkey,
+              blockId,
+              bodyTitle: '',
+              bodyChannel: '',
+            });
+          }
+
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              sockets.push(ws);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+              });
+              ws.addEventListener('message', (msg) => {
+                let frame;
+                try { frame = JSON.parse(msg.data); } catch { return; }
+                if (Array.isArray(frame) && frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+                  onEvent(frame[2]);
+                }
+                // We intentionally ignore EOSE — this is a streaming
+                // watcher, we want to keep receiving after history.
+              });
+              // No explicit idle timeout; beforeunload closes them.
+            } catch {}
+          }
+          window.addEventListener('beforeunload', () => {
+            for (const ws of sockets) { try { ws.close(); } catch {} }
+          });
+        })();
+
         // ─── SERVICE WORKER REGISTRATION ────────────────────────────
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
@@ -2453,6 +2657,92 @@ const paletteData = {
       .sp-quote-chip.is-copied { border-color: var(--sp-moss); background: color-mix(in oklch, var(--sp-moss) 22%, var(--sp-blue-hour)); }
       .sp-quote-chip-icon { font-family: var(--sp-display); font-size: 13px; line-height: 1; color: var(--sp-ember); }
       .sp-quote-chip.is-copied .sp-quote-chip-icon { color: var(--sp-moss); }
+
+      /* v0.26 live-motion toasts — bottom-right stack, up to 3 visible.
+         Slide in from the right, fade out on leave. Clicking the toast
+         opens the block; the × button dismisses. */
+      .sp-motion-toasts {
+        position: fixed;
+        right: 20px; bottom: 20px;
+        display: flex; flex-direction: column-reverse; gap: 10px;
+        z-index: 70;
+        pointer-events: none;
+      }
+      .sp-motion-toast {
+        pointer-events: auto;
+        display: grid;
+        grid-template-columns: 28px 1fr auto;
+        align-items: center; gap: 10px;
+        min-width: 280px; max-width: 380px;
+        padding: 10px 12px;
+        border: 1px solid color-mix(in oklch, var(--sp-moss) 40%, var(--sp-rule));
+        border-radius: 4px;
+        background: color-mix(in oklch, var(--sp-blue-hour) 92%, var(--sp-moss));
+        color: var(--sp-bone);
+        text-decoration: none;
+        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.35);
+        animation: sp-motion-in 260ms ease-out both;
+      }
+      .sp-motion-toast:hover {
+        background: color-mix(in oklch, var(--sp-blue-hour) 84%, var(--sp-moss));
+      }
+      .sp-motion-toast.is-leaving {
+        animation: sp-motion-out 300ms ease-in both;
+      }
+      @keyframes sp-motion-in {
+        from { transform: translateX(20px); opacity: 0; }
+        to   { transform: translateX(0);    opacity: 1; }
+      }
+      @keyframes sp-motion-out {
+        from { transform: translateX(0);    opacity: 1; }
+        to   { transform: translateX(20px); opacity: 0; }
+      }
+      .sp-motion-toast-pic {
+        width: 28px; height: 28px;
+        border-radius: 999px;
+        object-fit: cover;
+        border: 1px solid var(--sp-rule);
+        background: var(--sp-ink);
+      }
+      .sp-motion-toast-pic-placeholder {
+        display: inline-flex; align-items: center; justify-content: center;
+        color: var(--sp-moss); font-size: 14px;
+      }
+      .sp-motion-toast-body {
+        display: flex; flex-direction: column; gap: 2px;
+        min-width: 0;
+      }
+      .sp-motion-toast-name {
+        font-family: var(--sp-ui); font-size: 13px; font-weight: 600;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .sp-motion-toast-action {
+        font-family: var(--sp-mono); font-size: 9px;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        color: var(--sp-moss);
+      }
+      .sp-motion-toast-title {
+        font-family: var(--sp-ui); font-size: 12px;
+        color: color-mix(in oklch, var(--sp-bone) 85%, var(--sp-mute));
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .sp-motion-toast-close {
+        width: 22px; height: 22px;
+        border-radius: 999px;
+        border: 1px solid var(--sp-rule);
+        background: transparent;
+        color: var(--sp-mute);
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .sp-motion-toast-close:hover {
+        border-color: var(--sp-oxblood);
+        color: var(--sp-oxblood);
+      }
+      @media (max-width: 520px) {
+        .sp-motion-toasts { right: 12px; bottom: 12px; left: 12px; }
+        .sp-motion-toast { min-width: 0; max-width: none; }
+      }
 
       /* ─── v0.5 · READER TYPOGRAPHY POLISH ───────────────────────── */
       .sp-article-body { text-wrap: pretty; hanging-punctuation: first last; }

@@ -80,6 +80,15 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         Events signed by <code data-sp-self-npub>…</code> ·
         d-tag <code>sparrow-public-saved-v1</code> · kind <code>30078</code>
       </p>
+      <label class="sp-friends-toggle sp-friends-toggle-sub">
+        <input type="checkbox" data-sp-chime-toggle />
+        <span class="sp-friends-toggle-label">chime when a friend saves something</span>
+      </label>
+      <p class="sp-friends-publisher-hint">
+        Off by default. Plays a soft two-note tone (Web Audio, no
+        asset) when a live "just saved" toast lands. Toasts appear
+        regardless — muting this just silences them.
+      </p>
     </div>
 
     <div class="sp-friends-manage" data-sp-manage aria-label="following">
@@ -265,9 +274,13 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
           if (!Array.isArray(raw)) return [];
           return raw
             .map((f) => (typeof f === 'string'
-              ? { pubkey: f, alias: '' }
+              ? { pubkey: f, alias: '', muted: false }
               : (f && typeof f === 'object' && typeof f.pubkey === 'string')
-                ? { pubkey: f.pubkey.toLowerCase(), alias: (f.alias || '').slice(0, 40) }
+                ? {
+                    pubkey: f.pubkey.toLowerCase(),
+                    alias:  (f.alias || '').slice(0, 40),
+                    muted:  !!f.muted,
+                  }
                 : null))
             .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey));
         } catch { return []; }
@@ -365,7 +378,7 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
               />`
             : `<span class="sp-friends-pic sp-friends-pic-placeholder" aria-hidden="true">✦</span>`;
           const li = document.createElement('li');
-          li.className = 'sp-friends-row';
+          li.className = 'sp-friends-row' + (f.muted ? ' is-muted' : '');
           li.innerHTML = `
             ${pictureHTML}
             <span class="sp-friends-pk">
@@ -374,8 +387,18 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
               ${displayName ? ' · ' : ''}
               <code title="${f.pubkey}">${escapeHTML(npubShort)}</code>
               ${prof?.nip05 ? `<span class="sp-friends-nip05">${escapeHTML(prof.nip05)}${verifyGlyph}</span>` : ''}
+              ${f.muted ? '<span class="sp-friends-muted-tag">muted</span>' : ''}
             </span>
-            <button type="button" class="sp-friends-unfollow" data-pubkey="${f.pubkey}">unfollow</button>
+            <span class="sp-friends-row-actions">
+              <button
+                type="button"
+                class="sp-friends-mute"
+                data-sp-mute="${f.pubkey}"
+                aria-pressed="${f.muted ? 'true' : 'false'}"
+                title="${f.muted ? 'unmute — resume showing saves from this friend' : 'mute — keep following but hide saves from the lane / feed / toasts'}"
+              >${f.muted ? '🔇 unmute' : '🔈 mute'}</button>
+              <button type="button" class="sp-friends-unfollow" data-pubkey="${f.pubkey}">unfollow</button>
+            </span>
           `;
           listEl.appendChild(li);
         }
@@ -422,6 +445,18 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       });
 
       listEl?.addEventListener('click', (e) => {
+        const mute = e.target.closest('[data-sp-mute]');
+        if (mute) {
+          const pubkey = mute.getAttribute('data-sp-mute');
+          const list = readFriends();
+          for (const f of list) {
+            if (f.pubkey === pubkey) f.muted = !f.muted;
+          }
+          writeFriends(list);
+          paintFriendsList();
+          repaintFeed();
+          return;
+        }
         const btn = e.target.closest('[data-sp--unfollow], .sp-friends-unfollow');
         if (!btn) return;
         const pubkey = btn.getAttribute('data-pubkey');
@@ -437,13 +472,26 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         paintState();
       });
 
+      // v0.26: chime opt-in. Cheap — just a localStorage flag the
+      // SparrowLayout watcher reads on each toast.
+      const chimeToggle = document.querySelector('[data-sp-chime-toggle]');
+      if (chimeToggle) {
+        chimeToggle.checked = localStorage.getItem('sparrow:friends-chime-enabled') === '1';
+        chimeToggle.addEventListener('change', () => {
+          try { localStorage.setItem('sparrow:friends-chime-enabled', chimeToggle.checked ? '1' : '0'); } catch {}
+        });
+      }
+
       // ─── Feed subscription ────────────────────────────────────────
       // Per-author newest kind-30078 event under #d = sparrow-public-saved-v1.
       const newestByAuthor = new Map(); // pubkey -> { created_at, body, event_id }
       const openSockets    = [];
 
       function subscribeToFriends() {
-        const friends = readFriends();
+        // Non-muted friends only drive the subscription authors list;
+        // muted entries are kept in sparrow:friends so users don't lose
+        // them, but no relay cycles spent fetching their events.
+        const friends = readFriends().filter((f) => !f.muted);
         if (!friends.length) { repaintFeed(); return; }
         const relays = getRelays();
         const subId  = `sp-fr-${Math.random().toString(36).slice(2, 10)}`;
@@ -505,8 +553,12 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         if (!feedBody) return;
         feedBody.innerHTML = '';
         const friends = readFriends();
-        const followed = new Set(friends.map((f) => f.pubkey));
-        const rows = friends
+        // Muted friends stay in the manage list but never render a
+        // card here. The subscription above also skips them so no
+        // relay data is wasted on muted authors.
+        const active = friends.filter((f) => !f.muted);
+        const followed = new Set(active.map((f) => f.pubkey));
+        const rows = active
           .map((f) => ({ friend: f, entry: newestByAuthor.get(f.pubkey) }))
           .filter((x) => x.entry && followed.has(x.friend.pubkey));
 
@@ -976,6 +1028,45 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
     .sp-friends-unfollow:hover {
       border-color: var(--sp-oxblood);
       color: var(--sp-oxblood);
+    }
+    /* v0.26: mute button + row state. Muted rows fade to ~45% so
+       they stay scannable but clearly deprioritized. The mute chip
+       mirrors the unfollow style but pulses moss on hover (since it's
+       reversible, not destructive). */
+    .sp-friends-row.is-muted {
+      opacity: 0.45;
+      background: color-mix(in oklch, var(--sp-bone) 1.5%, transparent);
+    }
+    .sp-friends-row-actions {
+      display: inline-flex; gap: 6px; align-items: center;
+    }
+    .sp-friends-mute {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-rule);
+      background: transparent;
+      color: var(--sp-mute);
+      cursor: pointer;
+    }
+    .sp-friends-mute:hover {
+      border-color: var(--sp-moss);
+      color: var(--sp-moss);
+    }
+    .sp-friends-muted-tag {
+      display: inline-block;
+      margin-left: 8px;
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--sp-mute);
+      border: 1px solid var(--sp-rule);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .sp-friends-toggle-sub {
+      margin-top: 10px;
+      font-size: 13px;
     }
     .sp-friends-empty,
     .sp-friends-feed-empty {

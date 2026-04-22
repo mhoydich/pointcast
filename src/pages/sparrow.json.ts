@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.25',
-    protocol_version: '0.25',
+    version: '0.26',
+    protocol_version: '0.26',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -341,6 +341,53 @@ export const GET: APIRoute = async () => {
         // shallow. Server ships a minimal block lookup (id → title +
         // channel + channelName) for title resolution without per-
         // block fetches.
+        // v0.26: live "friend just saved" toasts driven by a streaming
+        // kind-30078 REQ opened once per SparrowLayout load (globally —
+        // the toast stack is page-agnostic). Filter uses `since:
+        // bootTime` so we never flood the user with history on load.
+        // Opt-in chime (Web Audio, no asset) plays alongside toasts.
+        // Per-friend mute (sparrow:friends[i].muted: true) hides
+        // the friend from the lane + /sparrow/friends feed + toasts
+        // without removing them from the managed list.
+        friends_motion: {
+          since: 'v0.26',
+          watcher: {
+            transport: 'persistent WebSocket REQ per relay (never limited, never closed until beforeunload)',
+            filter: '{ kinds:[30078], authors:<non-muted friends>, "#d":["sparrow-public-saved-v1"], since: <bootTime seconds> }',
+            since_policy: 'bootTime = Math.floor(Date.now() / 1000) on script run → only events newer than the current tab fire toasts',
+            dedup: 'Set<event.id> so the same event seen across multiple relays only toasts once',
+            gated_on: ['sparrow:friends non-empty', 'sparrow:friends-motion-disabled !== "1"', 'friend not flagged muted'],
+          },
+          toast: {
+            container: 'aside.sp-motion-toasts fixed bottom-right; column-reverse stack',
+            max_visible: 3,
+            ttl_ms: 7000,
+            shape: 'avatar + "<name> · just saved · № <id>" — click opens the block, × dismisses',
+            animation: 'sp-motion-in 260ms (slide-from-right + fade) on mount, sp-motion-out 300ms on leave',
+            profile_source: 'same sparrow:profiles cache populated by /sparrow/friends (one-pass hydration)',
+          },
+          chime: {
+            opt_in_storage: 'localStorage["sparrow:friends-chime-enabled"] ("1" | "0")',
+            sound: 'two overlapping sine oscillators (A5 880Hz + E6 1318.5Hz) · exponential fade · ~450ms total · Web Audio only · no asset request',
+            default: 'off',
+            scope: 'plays only alongside a toast — never on historical events, never when friend is muted',
+          },
+          disable_all: 'localStorage["sparrow:friends-motion-disabled"] === "1" short-circuits the watcher entirely (keeps toasts off for privacy-minded sessions without unfollowing)',
+        },
+
+        // v0.26: per-friend mute. Friend shape extends from
+        //   { pubkey, alias? }  →  { pubkey, alias?, muted? }
+        // Muted friends stay in sparrow:friends but drop out of every
+        // consumer path (subscribe authors list, feed render, dashboard
+        // lane, motion watcher). Reversible from the friends list UI.
+        per_friend_mute: {
+          since: 'v0.26',
+          storage_shape_change: 'sparrow:friends[] now accepts an optional `muted: boolean` field on each entry; legacy entries without the field are treated as unmuted',
+          applied_in: ['/sparrow/friends subscribe filter', '/sparrow/friends feed render', '/sparrow dashboard lane', 'SparrowLayout live motion watcher'],
+          ui: '🔈 mute / 🔇 unmute button per row · row fades to 45% opacity when muted · "muted" pill next to the pubkey',
+          why_not_unfollow: 'unfollow is destructive (loses the alias, loses future reinstate) — mute lets users quiet noisy signers without losing track of them',
+        },
+
         friends_lane: {
           since: 'v0.25',
           surface: '/sparrow (dashboard) · between rosette and reel',
@@ -750,7 +797,8 @@ export const GET: APIRoute = async () => {
       'v0.22': 'Federated reading lists. New /sparrow/friends route. Opt-in "publish my saved list publicly" flag emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted, narrow scope — just the saved ids + a client-id profile; no visited/reaction data). Friends management UI stores {pubkey,alias?}[] in sparrow:friends; on load, REQs the relay pool for each friend\'s latest public saved event and renders their list with server-shipped block lookups so titles and channels resolve. Hex-only for now; npub1… bech32 decode lands in a polish pass.',
       'v0.23': 'Federation polish. Self-contained NIP-19 bech32 codec in /sparrow/friends — npubToHex/hexToNpub/parsePubkey — so the add-form accepts npub1… alongside hex and the HUD self-pubkey display renders as a short npub. NIP-01 kind-0 profile lookup REQs {kinds:[0], authors:<friends>} on load, caches {name, display_name, picture, nip05, fetched_at} in sparrow:profiles (24h TTL), and uses display_name/name as auto-alias when the local alias is empty. Friends list + feed cards show a 🛰 glyph on names pulled from the relay so federated vs local is legible. Picture rendering + NIP-05 verification round-trip are explicitly v0.24.',
       'v0.24': 'Federation finish. Profile pictures render as 28px circles on /sparrow/friends list (18px inline on feed cards) with lazy loading + referrerpolicy=no-referrer + onerror hide. NIP-05 verification hits https://<domain>/.well-known/nostr.json?name=<user> and checks names[user] equals the pubkey; results cached on the profile with a 7-day TTL. Moss-pill ✓ when verified, oxblood-pill ! on mismatch, dot while pending. Keyboard shortcut F jumps to /sparrow/friends from any page; palette + cheatsheet entries added. Friends reel-lane on /sparrow dashboard is explicitly deferred to v0.25 to keep this sprint coherent.',
-      'v0.25': 'Friends lane on the dashboard. New compact section between /sparrow rosette and reel shows freshest save from each followed npub — avatar · name · block № · title · channel chip — sorted by event created_at desc, capped at 6 rows. Shares the kind-30078 consumer flow with /sparrow/friends and reads the same sparrow:profiles cache so hydration stays one-pass. Server inlines a block lookup (id → title + channel + channelName) so titles resolve without per-block fetches. Opt-out via localStorage["sparrow:friends-lane-hidden"]; dismiss button lives on the lane header. Hidden entirely by default when no friends have been added. (current)',
+      'v0.25': 'Friends lane on the dashboard. New compact section between /sparrow rosette and reel shows freshest save from each followed npub — avatar · name · block № · title · channel chip — sorted by event created_at desc, capped at 6 rows. Shares the kind-30078 consumer flow with /sparrow/friends and reads the same sparrow:profiles cache so hydration stays one-pass. Server inlines a block lookup (id → title + channel + channelName) so titles resolve without per-block fetches. Opt-out via localStorage["sparrow:friends-lane-hidden"]; dismiss button lives on the lane header. Hidden entirely by default when no friends have been added.',
+      'v0.26': 'Friends in motion. SparrowLayout gains a persistent streaming kind-30078 REQ with `since: bootTime` so only events published after the tab loaded fire a bottom-right "just saved" toast (avatar + name + № id · click opens). Max 3 visible, 7s TTL, fades on leave. Opt-in Web Audio chime (two-note fifth, ~450ms, no asset) via sparrow:friends-chime-enabled. Per-friend mute — sparrow:friends entries gain an optional `muted` field that drops the friend from every consumer path (subscribe, feed, lane, toasts) without unfollowing. New 🔈/🔇 mute button in /sparrow/friends. Global motion opt-out via sparrow:friends-motion-disabled. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
