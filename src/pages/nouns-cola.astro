@@ -1,0 +1,1113 @@
+---
+/**
+ * /nouns-cola - operating page for a Nouns Cola pilot on PointCast.
+ *
+ * This is deliberately a product board, not a marketing splash:
+ * formulation targets, raise plan, production sequence, profit model,
+ * and yield/surplus routing live together with one client-side calculator.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const FORMULA = [
+  { label: 'Serving', value: '12 oz can', note: 'Carbonated cola, chilled' },
+  { label: 'Sweetness', value: '10.8 Brix', note: 'Classic cane profile, not syrup-heavy' },
+  { label: 'Acid target', value: 'pH 2.8-3.2', note: 'Cola snap with citrus lift' },
+  { label: 'Caffeine', value: '34 mg', note: 'Per 12 oz pilot can' },
+  { label: 'Sodium', value: '35 mg', note: 'Small salt line for finish' },
+  { label: 'QA gate', value: '3 rounds', note: 'Bench, forced-carb, co-packer sample' },
+];
+
+const STAGES = [
+  {
+    id: 'formulation',
+    title: 'Formulation',
+    kicker: 'FORMULA 01',
+    copy: 'Crisp cola, cane sugar, light citrus, gentle salt, and a Nouns label system. Final recipe still needs a beverage scientist and co-packer validation before sale.',
+    metric: '3 QA rounds',
+  },
+  {
+    id: 'fundraising',
+    title: 'Fundraising',
+    kicker: 'RAISE',
+    copy: 'Preorder crates, sponsor pallets, and one DAO-style proposal. Capital funds R&D, pilot inventory, legal/compliance review, launch media, and reserve.',
+    metric: '$120k target',
+  },
+  {
+    id: 'financing',
+    title: 'Contribute',
+    kicker: 'STACK',
+    copy: 'Taste panel, case preorder, crate sponsor, retail door, pallet sponsor, or a legal-reviewed inventory facility.',
+    metric: '6 lanes',
+  },
+  {
+    id: 'production',
+    title: 'Production',
+    kicker: 'BUILD',
+    copy: 'Pilot through a beverage co-packer: formula lock, label approval, cans, carbonation, pack-out, freight, and PointCast shipment updates.',
+    metric: '2.4k case pilot',
+  },
+  {
+    id: 'profit',
+    title: 'Profit',
+    kicker: 'MODEL',
+    copy: 'Blend direct-to-community cases with wholesale doors. The model below exposes unit economics instead of hiding them.',
+    metric: 'live calculator',
+  },
+  {
+    id: 'yield',
+    title: 'Yield',
+    kicker: 'SURPLUS',
+    copy: 'Yield here means project surplus routing: replenish production, fund the PointCast treasury, bonus the team, and seed the next drop. Not an investment product.',
+    metric: 'split by policy',
+  },
+];
+
+const RAISE = [
+  { item: 'Recipe R&D and lab validation', amount: '$12,000' },
+  { item: 'Pilot can run deposit', amount: '$38,000' },
+  { item: 'Inventory, freight, cold storage', amount: '$44,000' },
+  { item: 'PointCast launch media and sampling', amount: '$16,000' },
+  { item: 'Compliance, reserve, surprises', amount: '$10,000' },
+];
+
+const CONTRIBUTIONS = [
+  { lane: 'Taste panel', ask: '$0 / time', unlocks: 'Formula feedback, blind tasting notes, reorder signal', status: 'open' },
+  { lane: 'Case preorder', ask: '$72', unlocks: 'One 24-can case reserved from the pilot run', status: 'draft' },
+  { lane: 'Crate sponsor', ask: '$576', unlocks: 'Eight cases for team, studio, shop, event, or local door', status: 'draft' },
+  { lane: 'Retail door', ask: '10-case PO', unlocks: 'Wholesale demand proof before production cash is locked', status: 'target' },
+  { lane: 'Pallet sponsor', ask: '$3,456', unlocks: 'Forty-eight cases plus sponsor credit on PointCast', status: 'target' },
+  { lane: 'Inventory facility', ask: '$5k+ draft', unlocks: 'Short-term inventory float repaid from receipts if approved', status: 'legal review' },
+];
+
+const INVENTORY_FINANCING = [
+  { use: 'Co-packer deposit', amount: '$38,000', source: 'facility + crate sponsors' },
+  { use: 'Landed inventory', amount: '$44,000', source: 'facility + case preorders' },
+  { use: 'Fulfillment float', amount: '$14,000', source: 'case preorders' },
+  { use: 'Retail terms buffer', amount: '$14,000', source: 'facility reserve' },
+  { use: 'First-loss reserve', amount: '$10,000', source: 'treasury / sponsor holdback' },
+];
+
+const WATERFALL = [
+  'Preorders and sponsor crates reserve product, not financial upside.',
+  'Inventory facility funds are released only after formula lock, co-packer quote, label review, and purchase order packet.',
+  'Sales receipts first replenish fulfillment costs and pay supplier balances.',
+  'If counsel approves an inventory facility, receipts then repay approved facility principal before surplus routing.',
+  'Remaining surplus follows the yield policy: next run, PointCast treasury, growth, and team pool.',
+];
+
+const PRODUCTION = [
+  { step: '01', title: 'Bench formula', detail: 'Taste map, caffeine target, acid balance, shelf-life questions.' },
+  { step: '02', title: 'Co-packer sample', detail: 'Forced-carbonated samples, ingredient substitutions, process notes.' },
+  { step: '03', title: 'Label and carton', detail: 'Nouns Cola can art, nutrition panel placeholder, barcode, shipper.' },
+  { step: '04', title: 'Pilot run', detail: 'Can, pack, palletize, QC holds, freight release.' },
+  { step: '05', title: 'PointCast drop', detail: 'Preorders, sponsor crates, shop handoff, weekly production updates.' },
+];
+
+const DEFAULTS = {
+  cases: 2400,
+  directShare: 64,
+  directPrice: 3.75,
+  wholesalePrice: 1.85,
+  productionCost: 0.82,
+  fixedCost: 42000,
+  raiseTarget: 120000,
+  yieldSplit: 30,
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': 'https://pointcast.xyz/nouns-cola',
+      name: 'Nouns Cola',
+      description: 'A PointCast operating page for Nouns Cola: formulation, contributions, inventory financing, production, profit, and yield.',
+      url: 'https://pointcast.xyz/nouns-cola',
+      inLanguage: 'en-US',
+    },
+    {
+      '@type': 'Product',
+      '@id': 'https://pointcast.xyz/nouns-cola#product',
+      name: 'Nouns Cola',
+      brand: { '@type': 'Brand', name: 'Nouns Cola' },
+      category: 'Carbonated soft drink concept',
+      image: 'https://pointcast.xyz/images/nouns-cola/nouns-cola-pack.png',
+      description: 'A concept cola pilot using Nouns-inspired CC0 art language and a transparent PointCast production model.',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/nouns-cola#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Nouns Cola', item: 'https://pointcast.xyz/nouns-cola' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Nouns Cola"
+  description="Nouns Cola on PointCast: formulation, contributions, inventory financing, production, profit, and yield in one operating page."
+  image="/images/og/nouns-cola.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/nouns-cola.json', title: 'Nouns Cola operating plan (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/nouns-cola.png',
+    buttons: [
+      { label: 'Open Nouns Cola', action: 'link', target: 'https://pointcast.xyz/nouns-cola' },
+      { label: 'Run the model', action: 'link', target: 'https://pointcast.xyz/nouns-cola#model' },
+      { label: 'Agent JSON', action: 'link', target: 'https://pointcast.xyz/nouns-cola.json' },
+      { label: 'Yield sandbox', action: 'link', target: 'https://pointcast.xyz/yield' },
+    ],
+  }}
+>
+  <div class="cola-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>Nouns Cola</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker">NOUNS COLA / POINTCAST PILOT</p>
+        <h1 class="display">Nouns Cola</h1>
+        <p class="dek">
+          A working operating page for the drink: formulation, contributions,
+          inventory financing, production, profit, and surplus yield. One place
+          to tune the can run, see the economics, and get the team pointed at
+          the same board.
+        </p>
+        <div class="hero__actions" aria-label="Primary actions">
+          <a class="btn btn--primary" href="#model">Run model</a>
+          <a class="btn btn--ghost" href="#financing">Financing plan</a>
+          <a class="btn btn--ghost" href="/nouns-cola.json">Agent JSON</a>
+        </div>
+      </div>
+      <figure class="hero__visual">
+        <img src="/images/nouns-cola/nouns-cola-pack.png" alt="Nouns Cola cans and pilot pack" width="1600" height="1200" />
+        <figcaption class="mono">FORMULA 01 / 12 OZ CAN / GO TEAM</figcaption>
+      </figure>
+    </header>
+
+    <section class="status" aria-label="Pilot status">
+      <div><span class="mono">STATUS</span><strong>Alpha board</strong></div>
+      <div><span class="mono">PILOT</span><strong>2,400 cases</strong></div>
+      <div><span class="mono">RAISE</span><strong>$120k target</strong></div>
+      <div><span class="mono">INVENTORY</span><strong>$120k stack</strong></div>
+      <div><span class="mono">ROUTE</span><strong>PointCast</strong></div>
+    </section>
+
+    <section class="flow" aria-label="Operating flow">
+      {STAGES.map((stage) => (
+        <a class="flow__item" href={`#${stage.id}`}>
+          <span class="flow__kicker mono">{stage.kicker}</span>
+          <strong>{stage.title}</strong>
+          <span>{stage.metric}</span>
+        </a>
+      ))}
+    </section>
+
+    <section class="band" id="formulation">
+      <div class="section-head">
+        <p class="kicker">FORMULATION</p>
+        <h2>Cola target, not mystery syrup.</h2>
+        <p>
+          Formula 01 is a practical pilot spec: a familiar cola body, a crisp
+          acid line, a little citrus, and a can identity that feels native to
+          Nouns without needing permission. Final ingredient and nutrition
+          details should be locked with a qualified beverage formulator.
+        </p>
+      </div>
+      <div class="formula-grid">
+        {FORMULA.map((item) => (
+          <article class="spec">
+            <span class="mono">{item.label}</span>
+            <strong>{item.value}</strong>
+            <p>{item.note}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="band band--split" id="fundraising">
+      <div class="section-head">
+        <p class="kicker">FUNDRAISING</p>
+        <h2>Raise only what the pilot can explain.</h2>
+        <p>
+          The clean raise is operational: prove the formula, buy the run, ship
+          the cans, and report back through PointCast. No vague hype pool.
+          Every dollar has a job before the first pallet moves.
+        </p>
+      </div>
+      <div class="raise-table" aria-label="Fundraising uses">
+        {RAISE.map((row) => (
+          <div class="raise-row">
+            <span>{row.item}</span>
+            <strong>{row.amount}</strong>
+          </div>
+        ))}
+        <div class="raise-row raise-row--total">
+          <span>Total target</span>
+          <strong>$120,000</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="band finance" id="financing">
+      <div class="section-head">
+        <p class="kicker">CONTRIBUTION / INVENTORY FINANCING</p>
+        <h2>Separate the help from the float.</h2>
+        <p>
+          Contributions should be simple: taste, preorder, sponsor, open a door,
+          or help move product. Inventory financing is a separate draft facility
+          that only moves after quotes, compliance, and legal review.
+        </p>
+      </div>
+
+      <div class="contribution-grid" aria-label="Contribution lanes">
+        {CONTRIBUTIONS.map((item) => (
+          <article class="contribution">
+            <span class="mono">{item.status}</span>
+            <strong>{item.lane}</strong>
+            <p>{item.unlocks}</p>
+            <em>{item.ask}</em>
+          </article>
+        ))}
+      </div>
+
+      <div class="finance__split">
+        <div class="finance-stack">
+          <p class="kicker">USES OF CAPITAL</p>
+          {INVENTORY_FINANCING.map((row) => (
+            <div class="finance-row">
+              <span>{row.use}</span>
+              <strong>{row.amount}</strong>
+              <small>{row.source}</small>
+            </div>
+          ))}
+        </div>
+
+        <div class="waterfall">
+          <p class="kicker">RECEIPT WATERFALL</p>
+          <ol>
+            {WATERFALL.map((step) => <li>{step}</li>)}
+          </ol>
+          <p class="finance-note">
+            Draft only: no inventory note, repayment premium, revenue share, or
+            contributor return is live until reviewed and approved by qualified
+            counsel. Product preorders can ship product; they do not create a
+            financial claim.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="production">
+      <div class="section-head">
+        <p class="kicker">PRODUCTION</p>
+        <h2>Five moves from bench to broadcast.</h2>
+      </div>
+      <ol class="timeline">
+        {PRODUCTION.map((item) => (
+          <li>
+            <span class="timeline__step mono">{item.step}</span>
+            <div>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="model" id="model" data-calculator>
+      <div class="section-head">
+        <p class="kicker">PROFIT / YIELD MODEL</p>
+        <h2>Move the sliders. Watch the run breathe.</h2>
+        <p>
+          Planning math only. Revenue, margin, and surplus routing are estimates,
+          not an offering, investment promise, or final production quote.
+        </p>
+      </div>
+
+      <div class="model__grid">
+        <div class="controls" aria-label="Pilot model controls">
+          <label class="ctrl">
+            <span class="ctrl__label mono">Pilot cases</span>
+            <input type="range" min="600" max="10000" step="100" value={DEFAULTS.cases} data-input="cases" />
+            <output class="ctrl__value mono" data-value="cases">{DEFAULTS.cases}</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Direct sell-through %</span>
+            <input type="range" min="0" max="100" step="1" value={DEFAULTS.directShare} data-input="directShare" />
+            <output class="ctrl__value mono" data-value="directShare">{DEFAULTS.directShare}%</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Direct price / can</span>
+            <input type="range" min="2.5" max="6" step="0.05" value={DEFAULTS.directPrice} data-input="directPrice" />
+            <output class="ctrl__value mono" data-value="directPrice">${DEFAULTS.directPrice}</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Wholesale price / can</span>
+            <input type="range" min="1.1" max="3.25" step="0.05" value={DEFAULTS.wholesalePrice} data-input="wholesalePrice" />
+            <output class="ctrl__value mono" data-value="wholesalePrice">${DEFAULTS.wholesalePrice}</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Production cost / can</span>
+            <input type="range" min="0.45" max="1.8" step="0.01" value={DEFAULTS.productionCost} data-input="productionCost" />
+            <output class="ctrl__value mono" data-value="productionCost">${DEFAULTS.productionCost}</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Fixed launch cost</span>
+            <input type="range" min="10000" max="100000" step="1000" value={DEFAULTS.fixedCost} data-input="fixedCost" />
+            <output class="ctrl__value mono" data-value="fixedCost">${DEFAULTS.fixedCost}</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Raise target</span>
+            <input type="range" min="40000" max="250000" step="5000" value={DEFAULTS.raiseTarget} data-input="raiseTarget" />
+            <output class="ctrl__value mono" data-value="raiseTarget">${DEFAULTS.raiseTarget}</output>
+          </label>
+          <label class="ctrl">
+            <span class="ctrl__label mono">Surplus yield split %</span>
+            <input type="range" min="0" max="60" step="1" value={DEFAULTS.yieldSplit} data-input="yieldSplit" />
+            <output class="ctrl__value mono" data-value="yieldSplit">{DEFAULTS.yieldSplit}%</output>
+          </label>
+        </div>
+
+        <div class="readouts" aria-live="polite">
+          <article class="readout readout--hero">
+            <span class="mono">PROJECTED PROFIT</span>
+            <strong data-out="profit">$0</strong>
+            <p data-out="profitNote">After production, freight, fees, and fixed launch costs.</p>
+          </article>
+          <article class="readout">
+            <span class="mono">CANS</span>
+            <strong data-out="cans">0</strong>
+          </article>
+          <article class="readout">
+            <span class="mono">REVENUE</span>
+            <strong data-out="revenue">$0</strong>
+          </article>
+          <article class="readout">
+            <span class="mono">TOTAL COST</span>
+            <strong data-out="cost">$0</strong>
+          </article>
+          <article class="readout">
+            <span class="mono">GROSS MARGIN</span>
+            <strong data-out="margin">0%</strong>
+          </article>
+          <article class="readout">
+            <span class="mono">RAISE GAP</span>
+            <strong data-out="raiseGap">$0</strong>
+          </article>
+          <article class="readout">
+            <span class="mono">SURPLUS YIELD POOL</span>
+            <strong data-out="yieldPool">$0</strong>
+          </article>
+          <article class="readout">
+            <span class="mono">BREAK-EVEN</span>
+            <strong data-out="breakEven">0 cases</strong>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="yield">
+      <div class="section-head">
+        <p class="kicker">YIELD POLICY</p>
+        <h2>Surplus routes before vibes.</h2>
+        <p>
+          If the pilot clears its costs, the default policy splits the upside
+          into working capital and community-visible pools. This keeps Nouns
+          Cola from becoming a one-run novelty.
+        </p>
+      </div>
+      <div class="policy">
+        <div><span class="mono">40%</span><strong>Next production run</strong><p>Cans, ingredients, freight, storage.</p></div>
+        <div><span class="mono">30%</span><strong>PointCast treasury</strong><p>Broadcast ops, blocks, creative proofs.</p></div>
+        <div><span class="mono">20%</span><strong>Nouns Cola growth</strong><p>Sampling, wholesale doors, collabs.</p></div>
+        <div><span class="mono">10%</span><strong>Team bonus pool</strong><p>Formulation, operations, design, sales.</p></div>
+      </div>
+    </section>
+
+    <section class="team">
+      <div>
+        <p class="kicker">GO TEAM</p>
+        <h2>PointCast gets the board moving.</h2>
+      </div>
+      <ul>
+        <li><strong>Formulator</strong><span>lock taste and QA gates</span></li>
+        <li><strong>Fundraiser</strong><span>preorders, sponsors, DAO brief</span></li>
+        <li><strong>Producer</strong><span>co-packer, cans, freight</span></li>
+        <li><strong>PointCast</strong><span>updates, JSON, public operating log</span></li>
+      </ul>
+    </section>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const root = document.querySelector('[data-calculator]');
+      if (!root) return;
+
+      const money = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      });
+      const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+      const valueFormats = {
+        cases: (v) => number.format(v),
+        directShare: (v) => v.toFixed(0) + '%',
+        directPrice: (v) => '$' + v.toFixed(2),
+        wholesalePrice: (v) => '$' + v.toFixed(2),
+        productionCost: (v) => '$' + v.toFixed(2),
+        fixedCost: (v) => money.format(v),
+        raiseTarget: (v) => money.format(v),
+        yieldSplit: (v) => v.toFixed(0) + '%',
+      };
+
+      function getInputs() {
+        const values = {};
+        root.querySelectorAll('[data-input]').forEach(function (input) {
+          const key = input.getAttribute('data-input');
+          values[key] = Number(input.value);
+          const out = root.querySelector('[data-value="' + key + '"]');
+          if (out && valueFormats[key]) out.textContent = valueFormats[key](values[key]);
+        });
+        return values;
+      }
+
+      function setOut(key, value) {
+        const el = root.querySelector('[data-out="' + key + '"]');
+        if (el) el.textContent = value;
+      }
+
+      function recalc() {
+        const v = getInputs();
+        const cansPerCase = 24;
+        const freightPerCase = 4.2;
+        const paymentAndSpoilagePerCan = 0.16;
+        const cans = v.cases * cansPerCase;
+        const direct = v.directShare / 100;
+        const blendedPrice = direct * v.directPrice + (1 - direct) * v.wholesalePrice;
+        const revenue = cans * blendedPrice;
+        const variableCost = cans * (v.productionCost + paymentAndSpoilagePerCan) + v.cases * freightPerCase;
+        const cost = variableCost + v.fixedCost;
+        const profit = revenue - cost;
+        const margin = revenue > 0 ? profit / revenue : 0;
+        const yieldPool = Math.max(0, profit) * (v.yieldSplit / 100);
+        const raiseGap = Math.max(0, v.raiseTarget - revenue * 0.35);
+        const perCaseContribution = cansPerCase * blendedPrice - cansPerCase * (v.productionCost + paymentAndSpoilagePerCan) - freightPerCase;
+        const breakEven = perCaseContribution > 0 ? Math.ceil(v.fixedCost / perCaseContribution) : Infinity;
+
+        setOut('cans', number.format(cans));
+        setOut('revenue', money.format(revenue));
+        setOut('cost', money.format(cost));
+        setOut('profit', money.format(profit));
+        setOut('margin', (margin * 100).toFixed(1) + '%');
+        setOut('yieldPool', money.format(yieldPool));
+        setOut('raiseGap', money.format(raiseGap));
+        setOut('breakEven', Number.isFinite(breakEven) ? number.format(breakEven) + ' cases' : 'no break-even');
+        setOut('profitNote', profit >= 0
+          ? 'Positive run. Surplus can route to treasury, next production, growth, and team pool.'
+          : 'Negative run. Lower fixed cost, raise price, improve direct sales, or resize the pilot.');
+      }
+
+      root.querySelectorAll('[data-input]').forEach(function (input) {
+        input.addEventListener('input', recalc);
+      });
+      recalc();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .cola-page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 18px 86px;
+  }
+
+  .mono,
+  .kicker,
+  .crumb,
+  .btn,
+  .flow__kicker {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .mono {
+    font-size: 10px;
+    color: var(--pc-ink-muted);
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-size: 10px;
+    color: #8a2432;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 10px;
+    color: var(--pc-ink-muted);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 0.88fr) minmax(360px, 1.12fr);
+    gap: clamp(24px, 5vw, 62px);
+    align-items: center;
+    min-height: min(760px, calc(100vh - 42px));
+    padding: 18px 0 32px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__copy,
+  .hero__visual,
+  .model__grid > *,
+  .team > * {
+    min-width: 0;
+  }
+
+  .display {
+    margin: 0 0 16px;
+    max-width: 10ch;
+    font-size: clamp(4.2rem, 14vw, 10.5rem);
+    font-weight: 500;
+    line-height: 0.86;
+    letter-spacing: 0;
+  }
+
+  .dek {
+    max-width: 58ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  .hero__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    font-size: 10px;
+    color: var(--pc-ink);
+    background: #fff;
+  }
+
+  .btn:hover {
+    text-decoration: none;
+    background: #f7c325;
+  }
+
+  .btn--primary {
+    color: #fff;
+    background: #12110e;
+  }
+
+  .btn--primary:hover {
+    color: #12110e;
+  }
+
+  .hero__visual {
+    margin: 0;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .hero__visual img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    background: #fff;
+  }
+
+  .hero__visual figcaption {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-top: 1.5px solid var(--pc-ink);
+    color: var(--pc-ink);
+  }
+
+  .status {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .status div {
+    min-height: 78px;
+    padding: 12px;
+    border-right: 1px solid var(--pc-rule);
+  }
+
+  .status div:last-child {
+    border-right: 0;
+  }
+
+  .status strong {
+    display: block;
+    margin-top: 7px;
+    font-size: clamp(18px, 3vw, 27px);
+    line-height: 1.05;
+  }
+
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    padding: 18px 0 40px;
+  }
+
+  .flow__item {
+    display: grid;
+    gap: 6px;
+    min-height: 116px;
+    padding: 12px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    color: var(--pc-ink);
+  }
+
+  .flow__item:nth-child(1) { border-color: #e84d6a; }
+  .flow__item:nth-child(2) { border-color: #185fa5; }
+  .flow__item:nth-child(3) { border-color: #2cc5a0; }
+  .flow__item:nth-child(4) { border-color: #ba7517; }
+  .flow__item:nth-child(5) { border-color: #8a2432; }
+  .flow__item:nth-child(6) { border-color: #12110e; }
+
+  .flow__item:hover {
+    text-decoration: none;
+    background: #f8f8f6;
+  }
+
+  .flow__item strong {
+    font-size: 19px;
+  }
+
+  .flow__item span:last-child {
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+  }
+
+  .band,
+  .model,
+  .team {
+    padding: 44px 0;
+    border-top: 1.5px solid var(--pc-ink);
+  }
+
+  .band--split {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1fr);
+    gap: clamp(24px, 5vw, 58px);
+    align-items: start;
+  }
+
+  .section-head {
+    margin-bottom: 22px;
+  }
+
+  .section-head h2,
+  .team h2 {
+    margin: 0 0 10px;
+    font-size: clamp(2rem, 6vw, 4.5rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  .section-head p:not(.kicker) {
+    max-width: 68ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 15.5px;
+    line-height: 1.58;
+  }
+
+  .formula-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .spec,
+  .contribution,
+  .readout,
+  .policy div {
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    padding: 14px;
+    background: #fff;
+  }
+
+  .spec strong,
+  .contribution strong,
+  .readout strong,
+  .policy strong {
+    display: block;
+    margin-top: 8px;
+    font-size: clamp(22px, 4vw, 34px);
+    line-height: 1;
+  }
+
+  .spec p,
+  .contribution p,
+  .policy p {
+    margin: 10px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
+  .contribution-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .contribution {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    min-height: 172px;
+  }
+
+  .contribution:nth-child(1) { border-color: #2cc5a0; }
+  .contribution:nth-child(2) { border-color: #185fa5; }
+  .contribution:nth-child(3) { border-color: #e84d6a; }
+  .contribution:nth-child(4) { border-color: #ba7517; }
+  .contribution:nth-child(5) { border-color: #8a2432; }
+  .contribution:nth-child(6) { border-color: #12110e; }
+
+  .contribution em {
+    align-self: end;
+    font-style: normal;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+  }
+
+  .finance__split {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .finance-stack,
+  .waterfall {
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    padding: 16px;
+  }
+
+  .finance-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--pc-rule);
+  }
+
+  .finance-row strong {
+    font-size: 20px;
+  }
+
+  .finance-row small {
+    grid-column: 1 / -1;
+    color: var(--pc-ink-muted);
+    font-size: 12px;
+  }
+
+  .waterfall ol {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-left: 22px;
+  }
+
+  .waterfall li {
+    color: var(--pc-ink-soft);
+    line-height: 1.5;
+  }
+
+  .finance-note {
+    margin: 16px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--pc-rule);
+    color: var(--pc-ink);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  .raise-table {
+    border-top: 1.5px solid var(--pc-ink);
+  }
+
+  .raise-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--pc-rule);
+    color: var(--pc-ink-soft);
+  }
+
+  .raise-row strong {
+    color: var(--pc-ink);
+  }
+
+  .raise-row--total {
+    color: var(--pc-ink);
+    border-bottom-color: var(--pc-ink);
+    font-size: 20px;
+  }
+
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .timeline li {
+    min-height: 190px;
+    padding: 14px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+  }
+
+  .timeline__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 18px;
+    border: 1.5px solid var(--pc-ink);
+    color: var(--pc-ink);
+  }
+
+  .timeline strong {
+    display: block;
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .timeline p {
+    margin: 10px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
+  .model__grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .controls,
+  .readouts {
+    display: grid;
+    gap: 10px;
+  }
+
+  .controls {
+    padding: 16px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+  }
+
+  .ctrl {
+    display: grid;
+    grid-template-columns: 1fr 96px;
+    gap: 8px 12px;
+    align-items: center;
+  }
+
+  .ctrl__label {
+    grid-column: 1 / -1;
+  }
+
+  .ctrl input {
+    width: 100%;
+    accent-color: #e84d6a;
+  }
+
+  .ctrl__value {
+    text-align: right;
+    color: var(--pc-ink);
+    font-size: 11px;
+  }
+
+  .readouts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .readout--hero {
+    grid-column: 1 / -1;
+    border-color: #e84d6a;
+    background: #fff8f0;
+  }
+
+  .readout p {
+    margin: 10px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
+  .policy {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  .policy div:nth-child(1) { border-color: #2cc5a0; }
+  .policy div:nth-child(2) { border-color: #185fa5; }
+  .policy div:nth-child(3) { border-color: #f7c325; }
+  .policy div:nth-child(4) { border-color: #e84d6a; }
+
+  .team {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  .team ul {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .team li {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+  }
+
+  .team li span {
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+  }
+
+  @media (max-width: 900px) {
+    .hero,
+    .band--split,
+    .finance__split,
+    .model__grid,
+    .team {
+      grid-template-columns: 1fr;
+    }
+
+    .hero {
+      min-height: 0;
+    }
+
+    .status,
+    .flow,
+    .timeline,
+    .policy {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .formula-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .contribution-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .cola-page {
+      padding-inline: 14px;
+      overflow-x: hidden;
+    }
+
+    .hero,
+    .status,
+    .flow,
+    .band,
+    .model,
+    .team {
+      width: 100%;
+      max-width: 360px;
+      justify-self: start;
+    }
+
+    .hero__copy,
+    .hero__visual {
+      width: 100%;
+      max-width: 360px;
+      justify-self: start;
+    }
+
+    .dek {
+      max-width: 31ch;
+    }
+
+    .display {
+      font-size: clamp(3.7rem, 22vw, 6rem);
+    }
+
+    .status,
+    .flow,
+    .formula-grid,
+    .contribution-grid,
+    .timeline,
+    .readouts,
+    .policy,
+    .team ul {
+      grid-template-columns: 1fr;
+    }
+
+    .status div {
+      border-right: 0;
+      border-bottom: 1px solid var(--pc-rule);
+    }
+
+    .ctrl {
+      grid-template-columns: 1fr 82px;
+    }
+
+  }
+</style>

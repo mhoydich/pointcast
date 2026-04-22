@@ -79,6 +79,10 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 | [/](https://pointcast.xyz/)                       | Home feed — dense auto-fit grid of every Block                |
 | [/manifesto](https://pointcast.xyz/manifesto)     | Canonical Q&A, FAQPage + DefinedTerm JSON-LD                  |
 | [/glossary](https://pointcast.xyz/glossary)       | Dictionary of PointCast-specific terms with stable anchors    |
+| [/local](https://pointcast.xyz/local)             | 100-mile El Segundo lens: institutions, stations, local blocks |
+| [/nature](https://pointcast.xyz/nature)           | El Segundo flora, dune habitat, field guide                   |
+| [/nouns-cola](https://pointcast.xyz/nouns-cola)   | Nouns Cola pilot operating board + live planning model        |
+| [/collabs/relay](https://pointcast.xyz/collabs/relay) | Playable collaborator-routing room                         |
 | [/archive](https://pointcast.xyz/archive)         | Chronological index with channel + type + search filters      |
 | [/editions](https://pointcast.xyz/editions)       | Mintable dashboard: live supply + listed market + planned     |
 | [/timeline](https://pointcast.xyz/timeline)       | Publication cadence viz (SVG, sparklines + heatmap)           |

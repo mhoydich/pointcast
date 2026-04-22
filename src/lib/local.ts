@@ -29,6 +29,203 @@ export const NAME_DROPS: NameDrop[] = [
   { name: 'Pickleball League',   kind: 'community',     one: 'Courts at Rec Park, drills Thursday, tournaments Sundays.' },
 ];
 
+export type NatureNote = {
+  slug: string;
+  name: string;
+  scientific?: string;
+  kind: 'plant' | 'pollinator' | 'habitat';
+  season: string;
+  signal: string;
+  localRead: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
+/**
+ * El Segundo nature signals: dune plants, one signature pollinator, and
+ * the coastal habitat grammar around LAX / Dockweiler / the South Bay.
+ * Sources are intentionally exposed in /local.json for agent readers.
+ */
+export const NATURE_NOTES: NatureNote[] = [
+  {
+    slug: 'seacliff-buckwheat',
+    name: 'Seacliff buckwheat',
+    scientific: 'Eriogonum parvifolium',
+    kind: 'plant',
+    season: 'summer bloom',
+    signal: 'Cream-pink flowerheads on sandy bluffs and restored dunes.',
+    localRead: 'The anchor plant: El Segundo blue larvae feed in buckwheat flowerheads, so more buckwheat means more possible butterfly.',
+    sourceLabel: 'U.S. Fish & Wildlife Service',
+    sourceUrl: 'https://www.fws.gov/story/2020-05/saving-socals-rarest-butterflies',
+  },
+  {
+    slug: 'el-segundo-blue',
+    name: 'El Segundo blue',
+    scientific: 'Euphilotes allyni',
+    kind: 'pollinator',
+    season: 'summer flight',
+    signal: 'Small blue butterflies moving low over buckwheat, mostly in protected dune habitat.',
+    localRead: 'The town-name species. Treat it like a broadcast from the dunes: watch from paths, leave habitat alone.',
+    sourceLabel: 'Xerces Society',
+    sourceUrl: 'https://xerces.org/endangered-species/species-profiles/at-risk-butterflies-moths/el-segundo-blue',
+  },
+  {
+    slug: 'beach-suncups',
+    name: 'Beach suncups',
+    scientific: 'Camissoniopsis cheiranthifolia',
+    kind: 'plant',
+    season: 'spring to summer',
+    signal: 'Low yellow flowers tucked into open sand.',
+    localRead: 'A small dune flash: the kind of plant you miss if you scan for trees instead of reading the ground.',
+    sourceLabel: 'LAX Dunes garden tour',
+    sourceUrl: 'https://www.2022.nativeplantgardentour.org/30-the-lax-dunes/',
+  },
+  {
+    slug: 'deerweed',
+    name: 'Deerweed',
+    scientific: 'Acmispon glaber',
+    kind: 'plant',
+    season: 'spring bloom',
+    signal: 'Fine green stems, yellow pea flowers, seed pods later.',
+    localRead: 'Restoration workhorse. It reads humble, but it helps rebuild a plant community in tired sand.',
+    sourceLabel: 'LAX Dunes garden tour',
+    sourceUrl: 'https://www.2022.nativeplantgardentour.org/30-the-lax-dunes/',
+  },
+  {
+    slug: 'coyote-brush',
+    name: 'Coyote brush',
+    scientific: 'Baccharis pilularis',
+    kind: 'plant',
+    season: 'late-season structure',
+    signal: 'Rounded coastal scrub, evergreen mass, pale seed fluff when it goes.',
+    localRead: 'The background note of coastal scrub: shelter, pollen, edge habitat, and wind-proof structure.',
+    sourceLabel: 'CNPS South Coast',
+    sourceUrl: 'https://sccnps.org/local-plants-suitable-for-gardening/',
+  },
+  {
+    slug: 'lax-dunes',
+    name: 'LAX dunes',
+    kind: 'habitat',
+    season: 'all year',
+    signal: 'One of the last big fragments of the old coastal dune system beside the runways.',
+    localRead: 'El Segundo nature is not wilderness over there; it is a protected remnant, still speaking through sand, buckwheat, and repair.',
+    sourceLabel: 'Native Plant Garden Tour',
+    sourceUrl: 'https://www.2022.nativeplantgardentour.org/30-the-lax-dunes/',
+  },
+];
+
+export type NativePlantPick = {
+  slug: string;
+  name: string;
+  scientific: string;
+  form: 'groundcover' | 'perennial' | 'shrub' | 'tree';
+  place: string;
+  why: string;
+  caution?: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
+export const NATIVE_PLANTING_PALETTE: NativePlantPick[] = [
+  {
+    slug: 'seacliff-buckwheat',
+    name: 'Seacliff buckwheat',
+    scientific: 'Eriogonum parvifolium',
+    form: 'shrub',
+    place: 'Sunny coastal edge, sandy strip, or dry front yard.',
+    why: 'Pollinator magnet and the strongest symbolic link to the El Segundo blue.',
+    caution: 'Best treated as habitat planting, not a clipped ornamental.',
+    sourceLabel: 'CNPS coastal native garden',
+    sourceUrl: 'https://www.cnps.org/gardening/the-coastal-native-garden-5526',
+  },
+  {
+    slug: 'beach-suncups',
+    name: 'Beach suncups',
+    scientific: 'Camissoniopsis cheiranthifolia',
+    form: 'groundcover',
+    place: 'Open sandy pocket, parkway edge, or low pot with fast drainage.',
+    why: 'Low yellow bloom that keeps the dune register close to the ground.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+  {
+    slug: 'deerweed',
+    name: 'Deerweed',
+    scientific: 'Acmispon glaber',
+    form: 'perennial',
+    place: 'Dry slope, sandy border, or restoration patch that can look loose.',
+    why: 'Fast, useful structure for rebuilding poor soil and feeding insects.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+  {
+    slug: 'coyote-brush',
+    name: 'Coyote brush',
+    scientific: 'Baccharis pilularis',
+    form: 'shrub',
+    place: 'Wind-facing hedge, slope, or rear edge where structure matters.',
+    why: 'Evergreen mass, late-season pollen, and shelter for small wildlife.',
+    caution: 'Give it room or choose a prostrate form for smaller spaces.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+  {
+    slug: 'lemonade-berry',
+    name: 'Lemonade berry',
+    scientific: 'Rhus integrifolia',
+    form: 'shrub',
+    place: 'Larger yard edge, privacy screen, or coastal slope.',
+    why: 'Classic coastal scrub mass: glossy leaves, flowers, berries, bird value.',
+    caution: 'Too large for most balcony containers.',
+    sourceLabel: 'CNPS coastal native garden',
+    sourceUrl: 'https://www.cnps.org/gardening/the-coastal-native-garden-5526',
+  },
+  {
+    slug: 'coast-sunflower',
+    name: 'Coast sunflower',
+    scientific: 'Encelia californica',
+    form: 'shrub',
+    place: 'Sunny dry bed where a bright, informal bloom is welcome.',
+    why: 'South Coast scrub signal: yellow flowers, pollinator traffic, easy visual read.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+];
+
+export type SeasonalSignal = {
+  season: string;
+  months: string;
+  read: string;
+  fieldNote: string;
+};
+
+export const SEASONAL_SIGNALS: SeasonalSignal[] = [
+  {
+    season: 'Winter setup',
+    months: 'Dec-Feb',
+    read: 'Cool-season rain wakes roots before the visible show.',
+    fieldNote: 'Planting and light establishment work belong here when rain is helping.',
+  },
+  {
+    season: 'Spring push',
+    months: 'Mar-May',
+    read: 'Deerweed, suncups, and scrub flowers start making the ground legible.',
+    fieldNote: 'Watch for yellow first, then seed pods and insect traffic.',
+  },
+  {
+    season: 'Buckwheat summer',
+    months: 'Jun-Aug',
+    read: 'Seacliff buckwheat becomes the headline; El Segundo blue flight season sits close to it.',
+    fieldNote: 'Stay on paths near dune habitat. Small movement matters.',
+  },
+  {
+    season: 'Dry structure',
+    months: 'Sep-Nov',
+    read: 'Flower color drops; seedheads, coyote brush, and wind-shaped forms carry the page.',
+    fieldNote: 'This is when the scrub looks quiet but still holds shelter and food.',
+  },
+];
+
 export const STATION_SHORTCUTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Q', 'W', 'E', 'R', 'T', 'Y'] as const;
 
 /** Cities within ~100 miles of El Segundo, cardinal-direction + approx mileage. */
