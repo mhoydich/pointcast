@@ -47,6 +47,26 @@ const signalBars = (mood: string | undefined | null) => (mood ? 4 : 3);
 const reelMoods = Array.from(
   new Set(reel.map((b) => b.data.mood).filter((m): m is string => Boolean(m))),
 ).slice(0, 8);
+
+// v0.25: compact lookup for the friends lane. Each friend's public
+// saved list arrives as block ids over kind-30078; we resolve them
+// to title + channel here so the lane doesn't have to per-block fetch.
+// Shape intentionally minimal — this is a display lane, not a full
+// reader — so we don't bloat the HTML payload.
+const friendsLaneLookup: Record<string, { title: string; channel: string; channelName: string }> =
+  Object.fromEntries(
+    allBlocks.map((b) => {
+      const ch = CHANNEL_LIST.find((c) => c.code === b.data.channel);
+      return [
+        b.data.id,
+        {
+          title: b.data.title,
+          channel: b.data.channel,
+          channelName: ch?.name ?? b.data.channel,
+        },
+      ];
+    }),
+  );
 ---
 
 <SparrowLayout
@@ -119,6 +139,34 @@ const reelMoods = Array.from(
     </ul>
   </section>
 
+  {/* v0.25: friends lane — mixed-attribution receipts from followed
+      npubs who've opted to publish their saved list (kind 30078,
+      d-tag sparrow-public-saved-v1). Hidden by default when the user
+      hasn't added friends yet; collapsible via a dismiss button that
+      sets sparrow:friends-lane-hidden. Rendered entirely client-side;
+      the server only supplies the block lookup. */}
+  <section class="sp-friends-lane" data-sp-friends-lane hidden aria-label="friends reading">
+    <header class="sp-friends-lane-head">
+      <span class="sp-kicker">✦ friends · what signers you follow are saving</span>
+      <span class="sp-friends-lane-meta" data-sp-friends-lane-meta></span>
+      <a class="sp-friends-lane-cta" href="/sparrow/friends">manage →</a>
+      <button
+        type="button"
+        class="sp-friends-lane-dismiss"
+        data-sp-friends-lane-dismiss
+        aria-label="hide the friends lane"
+        title="hide · re-enable from /sparrow/friends"
+      >×</button>
+    </header>
+    <ol class="sp-friends-lane-rows" data-sp-friends-lane-rows></ol>
+    <p class="sp-friends-lane-empty" data-sp-friends-lane-empty hidden>
+      Nobody you follow is publishing a public saved list yet.
+      <a class="sp-link" href="/sparrow/friends">Add friends →</a>
+    </p>
+  </section>
+
+  <script id="sp-friends-lane-lookup" type="application/json" set:html={JSON.stringify(friendsLaneLookup)} />
+
   <section class="sp-reel" aria-label="latest broadcasts">
     <header class="sp-reel-head">
       <span class="sp-kicker">✦ reel · latest broadcasts</span>
@@ -188,4 +236,351 @@ const reelMoods = Array.from(
     </span>
     <a href="/beacon" class="sp-link sp-beacon-cta">open beacon →</a>
   </aside>
+
+  <script is:inline>
+    // v0.25: friends lane controller.
+    //
+    // Pulls localStorage["sparrow:friends"] + localStorage["sparrow:profiles"]
+    // (populated by /sparrow/friends on a prior visit), opens a short-lived
+    // REQ against each configured relay for each friend's latest public
+    // saved list (kind 30078 + d-tag sparrow-public-saved-v1), keeps the
+    // newest event per author, then renders the top N most-recent saves
+    // as receipt rows with profile-picture avatars + resolved titles from
+    // the server-shipped sp-friends-lane-lookup blob.
+    //
+    // Opt-out: localStorage["sparrow:friends-lane-hidden"] === "1" hides
+    // the entire section forever (until the user re-enables from
+    // /sparrow/friends). Also hidden when the reader hasn't added any
+    // friends yet — no point nagging empty.
+    (function () {
+      const KEY_FRIENDS    = 'sparrow:friends';
+      const KEY_PROFILES   = 'sparrow:profiles';
+      const KEY_RELAYS     = 'sparrow:nostr-relays';
+      const KEY_HIDDEN     = 'sparrow:friends-lane-hidden';
+      const D_TAG          = 'sparrow-public-saved-v1';
+      const SYNC_KIND      = 30078;
+      const MAX_ROWS       = 6;
+      const DEFAULT_RELAYS = [
+        'wss://relay.damus.io',
+        'wss://relay.primal.net',
+        'wss://nos.lol',
+      ];
+
+      const laneEl    = document.querySelector('[data-sp-friends-lane]');
+      const rowsEl    = document.querySelector('[data-sp-friends-lane-rows]');
+      const metaEl    = document.querySelector('[data-sp-friends-lane-meta]');
+      const emptyEl   = document.querySelector('[data-sp-friends-lane-empty]');
+      const dismissEl = document.querySelector('[data-sp-friends-lane-dismiss]');
+      if (!laneEl || !rowsEl) return;
+
+      const lookupBlob = document.getElementById('sp-friends-lane-lookup');
+      const lookup = lookupBlob ? (() => { try { return JSON.parse(lookupBlob.textContent || '{}'); } catch { return {}; } })() : {};
+
+      const readFriends = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_FRIENDS) || '[]');
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((f) => (typeof f === 'string'
+              ? { pubkey: f, alias: '' }
+              : (f && typeof f === 'object' && typeof f.pubkey === 'string')
+                ? { pubkey: f.pubkey.toLowerCase(), alias: (f.alias || '').slice(0, 40) }
+                : null))
+            .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey));
+        } catch { return []; }
+      };
+      const readProfiles = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_PROFILES) || '{}');
+          return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+        } catch { return {}; }
+      };
+      const getRelays = () => {
+        try {
+          const raw = localStorage.getItem(KEY_RELAYS);
+          const list = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(list) && list.length) {
+            return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+          }
+        } catch {}
+        return DEFAULT_RELAYS;
+      };
+
+      // Honor explicit opt-out.
+      try {
+        if (localStorage.getItem(KEY_HIDDEN) === '1') return;
+      } catch {}
+
+      const friends = readFriends();
+      if (!friends.length) return; // Nothing to render and no point prompting unconditionally.
+
+      // Reveal the section; contents populate as REQ frames land.
+      laneEl.hidden = false;
+      if (metaEl) metaEl.textContent = `${friends.length} following · listening on ${getRelays().length} relays`;
+
+      dismissEl?.addEventListener('click', () => {
+        try { localStorage.setItem(KEY_HIDDEN, '1'); } catch {}
+        laneEl.hidden = true;
+      });
+
+      // Per-author newest event map; same shape as /sparrow/friends.
+      const newestByAuthor = new Map();
+      const openSockets = [];
+      const subId  = `sp-ln-${Math.random().toString(36).slice(2, 10)}`;
+      const filter = {
+        kinds: [SYNC_KIND],
+        authors: friends.map((f) => f.pubkey),
+        '#d': [D_TAG],
+        limit: friends.length * 2,
+      };
+      const relays = getRelays();
+      let eoseCount = 0;
+
+      function escapeHTML(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+      }
+      const shortPk = (pk) => (pk ? `${pk.slice(0, 8)}…${pk.slice(-4)}` : '—');
+
+      function nameFor(pubkey, friend) {
+        const prof = readProfiles()[pubkey];
+        return friend?.alias
+          || (prof && (prof.display_name || prof.name))
+          || shortPk(pubkey);
+      }
+      function pictureFor(pubkey) {
+        const prof = readProfiles()[pubkey];
+        return prof?.picture || '';
+      }
+
+      function ingestEvent(ev) {
+        if (!ev || ev.kind !== SYNC_KIND || typeof ev.content !== 'string') return;
+        if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+        const isOurs = Array.isArray(ev.tags) && ev.tags.some(
+          (t) => Array.isArray(t) && t[0] === 'd' && t[1] === D_TAG,
+        );
+        if (!isOurs) return;
+        let body;
+        try { body = JSON.parse(ev.content); } catch { return; }
+        if (!body || typeof body !== 'object') return;
+        const savedValue = body?.saved?.value;
+        if (!Array.isArray(savedValue)) return;
+        const prior = newestByAuthor.get(ev.pubkey);
+        if (!prior || ev.created_at > prior.created_at) {
+          newestByAuthor.set(ev.pubkey, { created_at: ev.created_at, saved: savedValue });
+        }
+      }
+
+      // Build + paint the lane. Strategy: take each friend's freshest
+      // saved[0] (their most recent save) and render one row per
+      // friend — up to MAX_ROWS — sorted by event created_at desc so
+      // the most-recently-updated friend is on top. This keeps the
+      // lane compact AND honors "show me what my friends just saved."
+      function paintLane() {
+        const friendsLive = readFriends(); // refetch in case a paint happens after edits
+        const rows = [];
+        for (const f of friendsLive) {
+          const entry = newestByAuthor.get(f.pubkey);
+          if (!entry) continue;
+          const firstId = entry.saved.find((id) => typeof id === 'string');
+          if (!firstId) continue;
+          rows.push({
+            friend: f,
+            created_at: entry.created_at,
+            blockId: firstId,
+            saved_count: entry.saved.length,
+          });
+        }
+        rows.sort((a, b) => b.created_at - a.created_at);
+        const visible = rows.slice(0, MAX_ROWS);
+
+        if (emptyEl) emptyEl.hidden = visible.length > 0;
+        rowsEl.innerHTML = '';
+
+        for (const r of visible) {
+          const meta = lookup[r.blockId] || null;
+          const name = nameFor(r.friend.pubkey, r.friend);
+          const pic  = pictureFor(r.friend.pubkey);
+          const li = document.createElement('li');
+          li.className = 'sp-friends-lane-row';
+          if (meta?.channel) li.style.setProperty('--ch', `var(--ch-${meta.channel.toLowerCase()})`);
+          li.innerHTML = `
+            <a href="/sparrow/b/${r.blockId}" class="sp-friends-lane-link" data-sp-block-id="${r.blockId}">
+              ${pic
+                ? `<img class="sp-friends-lane-pic" src="${escapeHTML(pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display='none'" />`
+                : `<span class="sp-friends-lane-pic sp-friends-lane-pic-placeholder" aria-hidden="true">✦</span>`}
+              <span class="sp-friends-lane-name" title="${escapeHTML(r.friend.pubkey)}">${escapeHTML(name)}</span>
+              <span class="sp-friends-lane-arrow">saved</span>
+              <span class="sp-friends-lane-id">№ ${escapeHTML(r.blockId)}</span>
+              <span class="sp-friends-lane-title">${escapeHTML(meta?.title || 'unknown block')}</span>
+              ${meta ? `<span class="sp-friends-lane-chip">${escapeHTML(meta.channelName)}</span>` : ''}
+              ${r.saved_count > 1 ? `<span class="sp-friends-lane-more">+ ${r.saved_count - 1}</span>` : ''}
+            </a>
+          `;
+          rowsEl.appendChild(li);
+        }
+      }
+
+      for (const url of relays) {
+        try {
+          const ws = new WebSocket(url);
+          openSockets.push(ws);
+          ws.addEventListener('open', () => {
+            try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+          });
+          ws.addEventListener('message', (msg) => {
+            let frame;
+            try { frame = JSON.parse(msg.data); } catch { return; }
+            if (!Array.isArray(frame)) return;
+            if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+              ingestEvent(frame[2]);
+            } else if (frame[0] === 'EOSE' && frame[1] === subId) {
+              try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+              try { ws.close(); } catch {}
+              eoseCount++;
+              paintLane();
+            }
+          });
+          setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 6000);
+        } catch {}
+      }
+
+      // Safety paint so the lane doesn't sit blank if no EOSE lands.
+      setTimeout(() => { if (!eoseCount) paintLane(); }, 2500);
+
+      window.addEventListener('beforeunload', () => {
+        for (const ws of openSockets) { try { ws.close(); } catch {} }
+      });
+    })();
+  </script>
+
+  <style is:global>
+    /* v0.25: friends lane. Compact single-row receipts under the rosette
+       — mixed attribution (avatar + name + block id + title + channel
+       chip). Uses the same --ch accent the rosette does so the color
+       story is consistent across the page. */
+    .sp-friends-lane {
+      margin: 20px 0 26px;
+      padding: 14px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+    }
+    .sp-friends-lane[hidden] { display: none; }
+    .sp-friends-lane-head {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 10px;
+    }
+    .sp-friends-lane-meta {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+      margin-left: auto;
+    }
+    .sp-friends-lane-cta {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--sp-ember);
+      text-decoration: none;
+      padding: 2px 8px;
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+      border-radius: 3px;
+      transition: background 120ms ease;
+    }
+    .sp-friends-lane-cta:hover {
+      background: color-mix(in oklch, var(--sp-ember) 12%, transparent);
+    }
+    .sp-friends-lane-dismiss {
+      width: 24px; height: 24px;
+      border-radius: 999px;
+      border: 1px solid var(--sp-rule);
+      background: transparent;
+      color: var(--sp-mute);
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .sp-friends-lane-dismiss:hover {
+      border-color: var(--sp-oxblood);
+      color: var(--sp-oxblood);
+    }
+    .sp-friends-lane-rows {
+      list-style: none;
+      padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .sp-friends-lane-row {
+      border-left: 2px solid var(--ch, var(--sp-rule));
+      background: color-mix(in oklch, var(--sp-bone) 2%, transparent);
+      border-radius: 0 3px 3px 0;
+      transition: background 120ms ease;
+    }
+    .sp-friends-lane-row:hover {
+      background: color-mix(in oklch, var(--sp-ember) 6%, transparent);
+    }
+    .sp-friends-lane-link {
+      display: grid;
+      grid-template-columns: 24px auto auto 68px 1fr auto auto;
+      align-items: center; gap: 10px;
+      padding: 6px 10px;
+      color: var(--sp-bone);
+      text-decoration: none;
+    }
+    .sp-friends-lane-pic {
+      width: 24px; height: 24px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 1px solid var(--sp-rule);
+      background: var(--sp-ink);
+    }
+    .sp-friends-lane-pic-placeholder {
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--sp-mute); font-size: 12px;
+    }
+    .sp-friends-lane-name {
+      font-family: var(--sp-ui); font-size: 13px; font-weight: 600;
+      max-width: 120px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-friends-lane-arrow {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+    .sp-friends-lane-id {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+    }
+    .sp-friends-lane-title {
+      font-family: var(--sp-ui); font-size: 13px;
+      line-height: 1.4;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-friends-lane-chip {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--ch, var(--sp-mute));
+      border: 1px solid color-mix(in oklch, var(--ch, var(--sp-rule)) 40%, transparent);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .sp-friends-lane-more {
+      font-family: var(--sp-mono); font-size: 10px;
+      color: var(--sp-mute);
+    }
+    .sp-friends-lane-empty {
+      margin: 8px 0 0;
+      font-size: 13px; font-style: italic;
+      color: var(--sp-mute);
+    }
+    @media (max-width: 760px) {
+      .sp-friends-lane-link {
+        grid-template-columns: 24px auto 1fr auto;
+      }
+      .sp-friends-lane-arrow,
+      .sp-friends-lane-id,
+      .sp-friends-lane-more { display: none; }
+    }
+  </style>
 </SparrowLayout>

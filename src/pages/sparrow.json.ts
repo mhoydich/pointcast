@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.24',
-    protocol_version: '0.24',
+    version: '0.25',
+    protocol_version: '0.25',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -334,6 +334,26 @@ export const GET: APIRoute = async () => {
         // cache on the profile with a 7-day TTL. Any non-2xx, parse
         // error, CORS failure, or mismatch lands as "mismatch" so a
         // silent failure doesn't masquerade as verified.
+        // v0.25: compact friends lane on /sparrow (dashboard). Lives
+        // between the rosette and the 12-latest reel. Shares the
+        // kind-30078 consumer flow with /sparrow/friends but renders
+        // one row per friend (their freshest save) to keep the strip
+        // shallow. Server ships a minimal block lookup (id → title +
+        // channel + channelName) for title resolution without per-
+        // block fetches.
+        friends_lane: {
+          since: 'v0.25',
+          surface: '/sparrow (dashboard) · between rosette and reel',
+          max_rows: 6,
+          sort: 'freshest friend event first (created_at desc)',
+          row_contents: 'avatar (kind-0 picture) · display name · "saved" · block № · title · channel chip · "+N more" (when friend has >1 saved)',
+          lookup: 'inline <script id="sp-friends-lane-lookup" type="application/json"> carrying { [id]: { title, channel, channelName } } for every non-draft block',
+          opt_out_storage: 'localStorage["sparrow:friends-lane-hidden"] === "1" hides the section until re-enabled from /sparrow/friends',
+          empty_state: 'when friends list is non-empty but no public-saved events arrived, a prompt links to /sparrow/friends',
+          when_hidden_by_default: 'when sparrow:friends localStorage is empty (no one followed yet) — no nag',
+          shared_logic_with: '/sparrow/friends (subscribe filter identical; profile picture/name resolution reads the same sparrow:profiles cache written by /sparrow/friends)',
+        },
+
         nip05_verification: {
           since: 'v0.24',
           protocol: 'NIP-05',
@@ -729,7 +749,8 @@ export const GET: APIRoute = async () => {
       'v0.21': 'Cross-device sync of saved + visited + reactions via NIP-44-encrypted kind-30078 addressable events. Opt-in HUD pill (sync · on/off/n/a); self-encryption via window.nostr.nip44 means only the same npub can decrypt. Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, both use the same newest-wins-per-key merge policy so state stays coherent across device + peer. 4s throttle between relay pushes; on page load subscribes with limit:1 against each relay to pull latest.',
       'v0.22': 'Federated reading lists. New /sparrow/friends route. Opt-in "publish my saved list publicly" flag emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted, narrow scope — just the saved ids + a client-id profile; no visited/reaction data). Friends management UI stores {pubkey,alias?}[] in sparrow:friends; on load, REQs the relay pool for each friend\'s latest public saved event and renders their list with server-shipped block lookups so titles and channels resolve. Hex-only for now; npub1… bech32 decode lands in a polish pass.',
       'v0.23': 'Federation polish. Self-contained NIP-19 bech32 codec in /sparrow/friends — npubToHex/hexToNpub/parsePubkey — so the add-form accepts npub1… alongside hex and the HUD self-pubkey display renders as a short npub. NIP-01 kind-0 profile lookup REQs {kinds:[0], authors:<friends>} on load, caches {name, display_name, picture, nip05, fetched_at} in sparrow:profiles (24h TTL), and uses display_name/name as auto-alias when the local alias is empty. Friends list + feed cards show a 🛰 glyph on names pulled from the relay so federated vs local is legible. Picture rendering + NIP-05 verification round-trip are explicitly v0.24.',
-      'v0.24': 'Federation finish. Profile pictures render as 28px circles on /sparrow/friends list (18px inline on feed cards) with lazy loading + referrerpolicy=no-referrer + onerror hide. NIP-05 verification hits https://<domain>/.well-known/nostr.json?name=<user> and checks names[user] equals the pubkey; results cached on the profile with a 7-day TTL. Moss-pill ✓ when verified, oxblood-pill ! on mismatch, dot while pending. Keyboard shortcut F jumps to /sparrow/friends from any page; palette + cheatsheet entries added. Friends reel-lane on /sparrow dashboard is explicitly deferred to v0.25 to keep this sprint coherent. (current)',
+      'v0.24': 'Federation finish. Profile pictures render as 28px circles on /sparrow/friends list (18px inline on feed cards) with lazy loading + referrerpolicy=no-referrer + onerror hide. NIP-05 verification hits https://<domain>/.well-known/nostr.json?name=<user> and checks names[user] equals the pubkey; results cached on the profile with a 7-day TTL. Moss-pill ✓ when verified, oxblood-pill ! on mismatch, dot while pending. Keyboard shortcut F jumps to /sparrow/friends from any page; palette + cheatsheet entries added. Friends reel-lane on /sparrow dashboard is explicitly deferred to v0.25 to keep this sprint coherent.',
+      'v0.25': 'Friends lane on the dashboard. New compact section between /sparrow rosette and reel shows freshest save from each followed npub — avatar · name · block № · title · channel chip — sorted by event created_at desc, capped at 6 rows. Shares the kind-30078 consumer flow with /sparrow/friends and reads the same sparrow:profiles cache so hydration stays one-pass. Server inlines a block lookup (id → title + channel + channelName) so titles resolve without per-block fetches. Opt-out via localStorage["sparrow:friends-lane-hidden"]; dismiss button lives on the lane header. Hidden entirely by default when no friends have been added. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
