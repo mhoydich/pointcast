@@ -1,0 +1,605 @@
+---
+/**
+ * /sparrow/signals — v0.28
+ *
+ * Federation recap. Pulls each followed (non-muted) friend's latest
+ * public saved-list event (kind 30078, d-tag sparrow-public-saved-v1)
+ * from the relay pool, then aggregates client-side into three
+ * windows that answer three distinct questions:
+ *
+ *  1. Most co-saved — "which blocks keep showing up across my circle?"
+ *     A block saved by 3 of my 5 friends matters differently than one
+ *     only one person saved.
+ *  2. Recently added — "what did my circle pick up in the last 7 days?"
+ *     Uses event created_at as the arrival proxy; won't catch
+ *     individual saves that aren't in a friend's latest snapshot.
+ *  3. Channel distribution — "what is my circle listening to right now?"
+ *     Summed saves per channel across all friends, rendered as a
+ *     proportional bar so the dominant channel reads at a glance.
+ *
+ * Entirely client-rendered. Server ships the block lookup so ids
+ * resolve to title + channel without per-block round-trips. Reuses
+ * sparrow:profiles for avatars / display names — same one-pass
+ * hydration as the rest of the federation surface.
+ */
+import SparrowLayout from '../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../../lib/channels';
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const lookup: Record<string, { title: string; channel: string; channelName: string }> =
+  Object.fromEntries(
+    all.map((b) => {
+      const ch = CHANNEL_LIST.find((c) => c.code === b.data.channel);
+      return [
+        b.data.id,
+        {
+          title: b.data.title,
+          channel: b.data.channel,
+          channelName: ch?.name ?? b.data.channel,
+        },
+      ];
+    }),
+  );
+
+const channelList = CHANNEL_LIST.map((c) => ({
+  code: c.code,
+  slug: c.slug,
+  name: c.name,
+  purpose: c.purpose,
+}));
+---
+
+<SparrowLayout
+  title="Signals — federation recap"
+  description="What your followed Sparrow readers have been saving — most co-saved blocks, recent adds, channel distribution."
+  canonicalPath="/sparrow/signals"
+  homeHref="/sparrow"
+>
+  <section class="sp-reel" aria-label="federation signals">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ signals · what your circle is listening to</span>
+      <span class="sp-aside-mono" style="margin-left: auto;">
+        <span data-sp-sig-meta>…</span>
+      </span>
+    </header>
+
+    <p class="sp-about-dek" style="margin: 4px 0 18px;">
+      Aggregates every followed (non-muted) signer's latest public saved
+      list into three readings. Empty when nobody you follow has
+      published, or when you haven't followed anyone yet.
+    </p>
+
+    <nav class="sp-sig-nav">
+      <a href="/sparrow/friends" class="sp-sig-nav-link">← /sparrow/friends</a>
+      <a href="/sparrow/friends/activity" class="sp-sig-nav-link">activity timeline →</a>
+    </nav>
+
+    <section class="sp-sig-panel" aria-label="most co-saved">
+      <header class="sp-sig-panel-head">
+        <span class="sp-friends-kicker">✦ most co-saved</span>
+        <span class="sp-sig-panel-meta" data-sp-sig-top-meta>—</span>
+      </header>
+      <ol class="sp-sig-top" data-sp-sig-top></ol>
+      <p class="sp-sig-empty" data-sp-sig-top-empty>
+        Nothing overlaps yet. Co-saved means two or more followed
+        signers independently saved the same block.
+      </p>
+    </section>
+
+    <section class="sp-sig-panel" aria-label="recent adds">
+      <header class="sp-sig-panel-head">
+        <span class="sp-friends-kicker">✦ added in the last 7 days</span>
+        <span class="sp-sig-panel-meta" data-sp-sig-recent-meta>—</span>
+      </header>
+      <ol class="sp-sig-recent" data-sp-sig-recent></ol>
+      <p class="sp-sig-empty" data-sp-sig-recent-empty>
+        Nobody's published a fresh saved list this week. Signal is
+        based on event created_at — bulk historical lists don't
+        count as "new."
+      </p>
+    </section>
+
+    <section class="sp-sig-panel" aria-label="channel distribution">
+      <header class="sp-sig-panel-head">
+        <span class="sp-friends-kicker">✦ channel distribution</span>
+        <span class="sp-sig-panel-meta" data-sp-sig-dist-meta>—</span>
+      </header>
+      <ul class="sp-sig-dist" data-sp-sig-dist></ul>
+      <p class="sp-sig-empty" data-sp-sig-dist-empty>
+        No saves tallied yet.
+      </p>
+    </section>
+  </section>
+
+  <script
+    id="sp-sig-data"
+    type="application/json"
+    set:html={JSON.stringify({ lookup, channels: channelList })}
+  />
+
+  <script is:inline>
+    (function () {
+      const KEY_FRIENDS   = 'sparrow:friends';
+      const KEY_PROFILES  = 'sparrow:profiles';
+      const KEY_RELAYS    = 'sparrow:nostr-relays';
+      const D_TAG         = 'sparrow-public-saved-v1';
+      const SYNC_KIND     = 30078;
+      const RECENT_WINDOW_S = 7 * 24 * 60 * 60;  // 7 days
+      const TOP_N          = 12;
+      const DEFAULT_RELAYS = [
+        'wss://relay.damus.io',
+        'wss://relay.primal.net',
+        'wss://nos.lol',
+      ];
+
+      const blob = document.getElementById('sp-sig-data');
+      const state = blob ? (() => { try { return JSON.parse(blob.textContent || '{}'); } catch { return {}; } })() : {};
+      const lookup = state.lookup || {};
+      const channels = Array.isArray(state.channels) ? state.channels : [];
+      const channelByCode = Object.fromEntries(channels.map((c) => [c.code, c]));
+
+      const metaEl        = document.querySelector('[data-sp-sig-meta]');
+      const topEl         = document.querySelector('[data-sp-sig-top]');
+      const topMetaEl     = document.querySelector('[data-sp-sig-top-meta]');
+      const topEmptyEl    = document.querySelector('[data-sp-sig-top-empty]');
+      const recentEl      = document.querySelector('[data-sp-sig-recent]');
+      const recentMetaEl  = document.querySelector('[data-sp-sig-recent-meta]');
+      const recentEmptyEl = document.querySelector('[data-sp-sig-recent-empty]');
+      const distEl        = document.querySelector('[data-sp-sig-dist]');
+      const distMetaEl    = document.querySelector('[data-sp-sig-dist-meta]');
+      const distEmptyEl   = document.querySelector('[data-sp-sig-dist-empty]');
+
+      const readFriends = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_FRIENDS) || '[]');
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((f) => (typeof f === 'string'
+              ? { pubkey: f, alias: '', muted: false }
+              : (f && typeof f === 'object' && typeof f.pubkey === 'string')
+                ? {
+                    pubkey: f.pubkey.toLowerCase(),
+                    alias:  (f.alias || '').slice(0, 40),
+                    muted:  !!f.muted,
+                  }
+                : null))
+            .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted);
+        } catch { return []; }
+      };
+      const readProfiles = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_PROFILES) || '{}');
+          return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+        } catch { return {}; }
+      };
+      const getRelays = () => {
+        try {
+          const raw = localStorage.getItem(KEY_RELAYS);
+          const list = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(list) && list.length) return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+        } catch {}
+        return DEFAULT_RELAYS;
+      };
+      function escapeHTML(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+      }
+      const shortPk = (pk) => (pk ? `${pk.slice(0, 8)}…${pk.slice(-4)}` : '—');
+      function nameFor(pubkey, friend) {
+        const prof = readProfiles()[pubkey];
+        return friend?.alias
+          || (prof && (prof.display_name || prof.name))
+          || shortPk(pubkey);
+      }
+      function pictureFor(pubkey) {
+        const prof = readProfiles()[pubkey];
+        return prof?.picture || '';
+      }
+
+      const friends = readFriends();
+      const relays  = getRelays();
+      if (metaEl) {
+        metaEl.textContent = friends.length
+          ? `${friends.length} following · ${relays.length} relays`
+          : 'nobody followed · add someone on /sparrow/friends';
+      }
+      if (!friends.length) {
+        [topEmptyEl, recentEmptyEl, distEmptyEl].forEach((el) => {
+          if (!el) return;
+          el.hidden = false;
+          el.innerHTML = 'You haven\'t followed anyone yet. <a class="sp-link" href="/sparrow/friends">Open /sparrow/friends →</a>.';
+        });
+        return;
+      }
+
+      // Newest kind-30078 per author.
+      const newestByAuthor = new Map();
+      const openSockets = [];
+      const authors = friends.map((f) => f.pubkey);
+      const subId = `sp-sig-${Math.random().toString(36).slice(2, 10)}`;
+      const filter = {
+        kinds: [SYNC_KIND],
+        authors,
+        '#d': [D_TAG],
+        limit: authors.length * 2,
+      };
+
+      function ingestEvent(ev) {
+        if (!ev || ev.kind !== SYNC_KIND || typeof ev.content !== 'string') return;
+        if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+        const isOurs = Array.isArray(ev.tags) && ev.tags.some(
+          (t) => Array.isArray(t) && t[0] === 'd' && t[1] === D_TAG,
+        );
+        if (!isOurs) return;
+        let body;
+        try { body = JSON.parse(ev.content); } catch { return; }
+        const saved = Array.isArray(body?.saved?.value) ? body.saved.value : [];
+        const prior = newestByAuthor.get(ev.pubkey);
+        if (!prior || ev.created_at > prior.created_at) {
+          newestByAuthor.set(ev.pubkey, {
+            created_at: ev.created_at,
+            saved,
+          });
+        }
+      }
+
+      function repaint() {
+        const friendsLive = readFriends();
+        const keepSet = new Set(friendsLive.map((f) => f.pubkey));
+        // Prune muted/unfollowed mid-session.
+        for (const pk of Array.from(newestByAuthor.keys())) {
+          if (!keepSet.has(pk)) newestByAuthor.delete(pk);
+        }
+
+        // ── 1. Most co-saved ─────────────────────────────────────────
+        const counts = new Map(); // blockId → { count, savers: Set<pubkey> }
+        for (const [pubkey, entry] of newestByAuthor) {
+          const seenInThisList = new Set();
+          for (const id of entry.saved) {
+            if (typeof id !== 'string' || seenInThisList.has(id)) continue;
+            seenInThisList.add(id);
+            const slot = counts.get(id) || { count: 0, savers: new Set() };
+            slot.count += 1;
+            slot.savers.add(pubkey);
+            counts.set(id, slot);
+          }
+        }
+        const top = Array.from(counts.entries())
+          .filter(([, v]) => v.count >= 2)
+          .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+          .slice(0, TOP_N);
+
+        if (topMetaEl) topMetaEl.textContent = top.length ? `${top.length} block${top.length === 1 ? '' : 's'} overlap` : '0 overlaps';
+        if (topEmptyEl) topEmptyEl.hidden = top.length > 0;
+        if (topEl) {
+          topEl.innerHTML = '';
+          for (const [id, info] of top) {
+            const meta = lookup[id];
+            const names = Array.from(info.savers).map((pk) => {
+              const friend = friendsLive.find((f) => f.pubkey === pk);
+              return nameFor(pk, friend);
+            });
+            const saversHTML = names.slice(0, 4).map((n) => `<span class="sp-sig-saver">${escapeHTML(n)}</span>`).join('');
+            const more = names.length > 4 ? `<span class="sp-sig-saver-more">+${names.length - 4}</span>` : '';
+            const channelName = meta?.channelName || meta?.channel || '—';
+            const channelCode = meta?.channel ? meta.channel.toLowerCase() : '';
+            const li = document.createElement('li');
+            li.className = 'sp-sig-top-row';
+            if (channelCode) li.style.setProperty('--ch', `var(--ch-${channelCode})`);
+            li.innerHTML = `
+              <a href="/sparrow/b/${escapeHTML(id)}" class="sp-sig-top-link">
+                <span class="sp-sig-badge">×${info.count}</span>
+                <span class="sp-sig-top-id">№ ${escapeHTML(id)}</span>
+                <span class="sp-sig-top-title">${escapeHTML(meta?.title || 'unknown block')}</span>
+                <span class="sp-sig-top-chip">${escapeHTML(channelName)}</span>
+              </a>
+              <div class="sp-sig-savers">${saversHTML}${more}</div>
+            `;
+            topEl.appendChild(li);
+          }
+        }
+
+        // ── 2. Added in the last 7 days ──────────────────────────────
+        const now = Math.floor(Date.now() / 1000);
+        const recentCutoff = now - RECENT_WINDOW_S;
+        const recentRows = [];
+        for (const [pubkey, entry] of newestByAuthor) {
+          if (entry.created_at < recentCutoff) continue;
+          const friend = friendsLive.find((f) => f.pubkey === pubkey);
+          const firstId = entry.saved.find((id) => typeof id === 'string');
+          if (!firstId) continue;
+          recentRows.push({
+            pubkey,
+            friend,
+            blockId: firstId,
+            created_at: entry.created_at,
+            savedCount: entry.saved.length,
+          });
+        }
+        recentRows.sort((a, b) => b.created_at - a.created_at);
+        if (recentMetaEl) recentMetaEl.textContent = recentRows.length ? `${recentRows.length} friend${recentRows.length === 1 ? '' : 's'} active` : '0 updates this week';
+        if (recentEmptyEl) recentEmptyEl.hidden = recentRows.length > 0;
+        if (recentEl) {
+          recentEl.innerHTML = '';
+          for (const r of recentRows) {
+            const meta = lookup[r.blockId];
+            const name = nameFor(r.pubkey, r.friend);
+            const pic  = pictureFor(r.pubkey);
+            const rel  = (() => {
+              const diff = now - r.created_at;
+              if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}m ago`;
+              if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+              return `${Math.floor(diff / 86400)}d ago`;
+            })();
+            const li = document.createElement('li');
+            li.className = 'sp-sig-recent-row';
+            li.innerHTML = `
+              ${pic
+                ? `<img class="sp-sig-avatar" src="${escapeHTML(pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display='none'" />`
+                : `<span class="sp-sig-avatar sp-sig-avatar-placeholder" aria-hidden="true">✦</span>`}
+              <span class="sp-sig-recent-name">${escapeHTML(name)}</span>
+              <span class="sp-sig-recent-action">published ${r.savedCount} · ${rel}</span>
+              <a href="/sparrow/b/${escapeHTML(r.blockId)}" class="sp-sig-recent-link">
+                <span class="sp-sig-top-id">№ ${escapeHTML(r.blockId)}</span>
+                ${meta ? `<span class="sp-sig-top-title">${escapeHTML(meta.title || '—')}</span>` : '<span class="sp-sig-top-title"><em>unknown block</em></span>'}
+              </a>
+            `;
+            recentEl.appendChild(li);
+          }
+        }
+
+        // ── 3. Channel distribution ──────────────────────────────────
+        const dist = new Map(); // channelCode → count
+        let totalSaves = 0;
+        for (const [, entry] of newestByAuthor) {
+          const seen = new Set();
+          for (const id of entry.saved) {
+            if (typeof id !== 'string' || seen.has(id)) continue;
+            seen.add(id);
+            const meta = lookup[id];
+            const ch = meta?.channel || '—';
+            dist.set(ch, (dist.get(ch) || 0) + 1);
+            totalSaves += 1;
+          }
+        }
+        const distRows = Array.from(dist.entries()).sort((a, b) => b[1] - a[1]);
+        if (distMetaEl) distMetaEl.textContent = totalSaves ? `${totalSaves} saves across ${distRows.length} channels` : '0 saves';
+        if (distEmptyEl) distEmptyEl.hidden = distRows.length > 0;
+        if (distEl) {
+          distEl.innerHTML = '';
+          for (const [code, count] of distRows) {
+            const info = channelByCode[code];
+            const name = info?.name || code;
+            const pct = totalSaves ? (count / totalSaves) * 100 : 0;
+            const li = document.createElement('li');
+            li.className = 'sp-sig-dist-row';
+            if (info) li.style.setProperty('--ch', `var(--ch-${code.toLowerCase()})`);
+            li.innerHTML = `
+              <a class="sp-sig-dist-link" href="${info ? `/sparrow/ch/${escapeHTML(info.slug)}` : '#'}">
+                <span class="sp-sig-dist-code">${escapeHTML(code)}</span>
+                <span class="sp-sig-dist-name">${escapeHTML(name)}</span>
+                <span class="sp-sig-dist-bar"><span style="width:${pct.toFixed(1)}%"></span></span>
+                <span class="sp-sig-dist-count">${count}</span>
+              </a>
+            `;
+            distEl.appendChild(li);
+          }
+        }
+      }
+
+      for (const url of relays) {
+        try {
+          const ws = new WebSocket(url);
+          openSockets.push(ws);
+          ws.addEventListener('open', () => {
+            try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+          });
+          ws.addEventListener('message', (msg) => {
+            let frame;
+            try { frame = JSON.parse(msg.data); } catch { return; }
+            if (!Array.isArray(frame)) return;
+            if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+              ingestEvent(frame[2]);
+            } else if (frame[0] === 'EOSE' && frame[1] === subId) {
+              try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+              try { ws.close(); } catch {}
+              repaint();
+            }
+          });
+          setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 8000);
+        } catch {}
+      }
+      setTimeout(repaint, 2500);
+
+      window.addEventListener('beforeunload', () => {
+        for (const ws of openSockets) { try { ws.close(); } catch {} }
+      });
+    })();
+  </script>
+
+  <style is:global>
+    .sp-sig-nav {
+      display: flex; gap: 16px;
+      margin: 0 0 14px;
+    }
+    .sp-sig-nav-link {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--sp-ember);
+      text-decoration: none;
+    }
+    .sp-sig-nav-link:hover { text-decoration: underline; }
+    .sp-sig-panel {
+      margin: 18px 0 26px;
+      padding: 16px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+    }
+    .sp-sig-panel-head {
+      display: flex; align-items: baseline; gap: 14px;
+      margin-bottom: 12px;
+    }
+    .sp-sig-panel-meta {
+      margin-left: auto;
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+    .sp-sig-top, .sp-sig-recent, .sp-sig-dist {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .sp-sig-top-row {
+      border-left: 2px solid var(--ch, var(--sp-rule));
+      border-radius: 0 3px 3px 0;
+      background: color-mix(in oklch, var(--sp-bone) 2%, transparent);
+      padding: 0;
+    }
+    .sp-sig-top-link {
+      display: grid;
+      grid-template-columns: auto 70px 1fr auto;
+      gap: 10px;
+      align-items: baseline;
+      padding: 8px 10px;
+      color: var(--sp-bone);
+      text-decoration: none;
+    }
+    .sp-sig-top-link:hover { background: color-mix(in oklch, var(--sp-ember) 8%, transparent); }
+    .sp-sig-badge {
+      font-family: var(--sp-mono); font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: color-mix(in oklch, var(--sp-ember) 18%, transparent);
+      color: var(--sp-ember);
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+    }
+    .sp-sig-top-id {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+    }
+    .sp-sig-top-title {
+      font-family: var(--sp-ui); font-size: 14px; line-height: 1.35;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-sig-top-chip {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--ch, var(--sp-mute));
+      border: 1px solid color-mix(in oklch, var(--ch, var(--sp-rule)) 40%, transparent);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .sp-sig-savers {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding: 0 12px 8px 40px;
+    }
+    .sp-sig-saver, .sp-sig-saver-more {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--sp-mute);
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-rule);
+    }
+    .sp-sig-saver-more { color: var(--sp-ember); border-color: color-mix(in oklch, var(--sp-ember) 40%, transparent); }
+
+    .sp-sig-recent-row {
+      display: grid;
+      grid-template-columns: 24px auto auto 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-rule);
+      background: color-mix(in oklch, var(--sp-bone) 2%, transparent);
+    }
+    .sp-sig-avatar {
+      width: 24px; height: 24px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 1px solid var(--sp-rule);
+      background: var(--sp-ink);
+    }
+    .sp-sig-avatar-placeholder {
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--sp-mute); font-size: 12px;
+    }
+    .sp-sig-recent-name {
+      font-family: var(--sp-ui); font-size: 13px; font-weight: 600;
+      max-width: 140px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sp-sig-recent-action {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--sp-mute);
+    }
+    .sp-sig-recent-link {
+      display: inline-flex; gap: 8px; align-items: baseline;
+      min-width: 0; overflow: hidden;
+      color: var(--sp-bone);
+      text-decoration: none;
+    }
+    .sp-sig-recent-link:hover { text-decoration: underline; }
+
+    .sp-sig-dist-row {
+      border-radius: 3px;
+      background: color-mix(in oklch, var(--sp-bone) 1.5%, transparent);
+    }
+    .sp-sig-dist-link {
+      display: grid;
+      grid-template-columns: 40px 130px 1fr 40px;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 10px;
+      color: var(--sp-bone);
+      text-decoration: none;
+    }
+    .sp-sig-dist-link:hover { background: color-mix(in oklch, var(--ch, var(--sp-ember)) 10%, transparent); }
+    .sp-sig-dist-code {
+      font-family: var(--sp-mono); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--ch, var(--sp-bone));
+    }
+    .sp-sig-dist-name {
+      font-family: var(--sp-ui); font-size: 13px;
+      color: color-mix(in oklch, var(--sp-bone) 85%, var(--sp-mute));
+    }
+    .sp-sig-dist-bar {
+      display: block;
+      height: 6px;
+      border-radius: 3px;
+      background: color-mix(in oklch, var(--sp-rule) 60%, transparent);
+      overflow: hidden;
+    }
+    .sp-sig-dist-bar > span {
+      display: block;
+      height: 100%;
+      background: var(--ch, var(--sp-ember));
+      transition: width 260ms ease;
+    }
+    .sp-sig-dist-count {
+      font-family: var(--sp-mono); font-size: 12px;
+      text-align: right;
+      color: var(--sp-mute);
+    }
+    .sp-sig-empty {
+      margin: 4px 0 0;
+      color: var(--sp-mute); font-size: 13px; font-style: italic;
+    }
+    @media (max-width: 680px) {
+      .sp-sig-top-link { grid-template-columns: auto 60px 1fr; }
+      .sp-sig-top-chip { display: none; }
+      .sp-sig-recent-row { grid-template-columns: 24px 1fr auto; }
+      .sp-sig-recent-action { display: none; }
+      .sp-sig-dist-link { grid-template-columns: 36px 1fr 40px; }
+      .sp-sig-dist-name { display: none; }
+    }
+  </style>
+</SparrowLayout>

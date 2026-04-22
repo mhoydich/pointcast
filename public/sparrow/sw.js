@@ -17,7 +17,7 @@
 // stale caches. Astro bumps asset hashes on its own, so we don't touch
 // those entries — they age out when their URLs change.
 
-const SW_VERSION = 'sparrow-v0.27.0';
+const SW_VERSION = 'sparrow-v0.28.0';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const BLOCK_CACHE = `${SW_VERSION}-blocks`;
 const ASSET_CACHE = `${SW_VERSION}-assets`;
@@ -31,6 +31,7 @@ const SHELL_URLS = [
   '/sparrow/saved',
   '/sparrow/friends',
   '/sparrow/friends/activity',
+  '/sparrow/signals',
   '/sparrow.json',
   '/sparrow/feed.xml',
   '/sparrow/api/latest.json',
