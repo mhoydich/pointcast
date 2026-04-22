@@ -17,6 +17,8 @@ import {
   RADIUS_METERS,
   NAME_DROPS,
   NATURE_NOTES,
+  NATIVE_PLANTING_PALETTE,
+  SEASONAL_SIGNALS,
   STATIONS,
   filterInRangeBlocks,
   filterBlocksForStation,
@@ -61,7 +63,10 @@ export const GET: APIRoute = async () => {
       fieldGuideUrl: 'https://pointcast.xyz/nature',
       fieldGuideJson: 'https://pointcast.xyz/nature.json',
       blockUrl: 'https://pointcast.xyz/b/0320',
+      plantingBlockUrl: 'https://pointcast.xyz/b/0321',
       notes: NATURE_NOTES,
+      plantingPalette: NATIVE_PLANTING_PALETTE,
+      seasonalSignals: SEASONAL_SIGNALS,
     },
 
     // Stations within the radius, sorted by distance to anchor.

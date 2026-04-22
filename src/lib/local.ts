@@ -114,6 +114,118 @@ export const NATURE_NOTES: NatureNote[] = [
   },
 ];
 
+export type NativePlantPick = {
+  slug: string;
+  name: string;
+  scientific: string;
+  form: 'groundcover' | 'perennial' | 'shrub' | 'tree';
+  place: string;
+  why: string;
+  caution?: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
+export const NATIVE_PLANTING_PALETTE: NativePlantPick[] = [
+  {
+    slug: 'seacliff-buckwheat',
+    name: 'Seacliff buckwheat',
+    scientific: 'Eriogonum parvifolium',
+    form: 'shrub',
+    place: 'Sunny coastal edge, sandy strip, or dry front yard.',
+    why: 'Pollinator magnet and the strongest symbolic link to the El Segundo blue.',
+    caution: 'Best treated as habitat planting, not a clipped ornamental.',
+    sourceLabel: 'CNPS coastal native garden',
+    sourceUrl: 'https://www.cnps.org/gardening/the-coastal-native-garden-5526',
+  },
+  {
+    slug: 'beach-suncups',
+    name: 'Beach suncups',
+    scientific: 'Camissoniopsis cheiranthifolia',
+    form: 'groundcover',
+    place: 'Open sandy pocket, parkway edge, or low pot with fast drainage.',
+    why: 'Low yellow bloom that keeps the dune register close to the ground.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+  {
+    slug: 'deerweed',
+    name: 'Deerweed',
+    scientific: 'Acmispon glaber',
+    form: 'perennial',
+    place: 'Dry slope, sandy border, or restoration patch that can look loose.',
+    why: 'Fast, useful structure for rebuilding poor soil and feeding insects.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+  {
+    slug: 'coyote-brush',
+    name: 'Coyote brush',
+    scientific: 'Baccharis pilularis',
+    form: 'shrub',
+    place: 'Wind-facing hedge, slope, or rear edge where structure matters.',
+    why: 'Evergreen mass, late-season pollen, and shelter for small wildlife.',
+    caution: 'Give it room or choose a prostrate form for smaller spaces.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+  {
+    slug: 'lemonade-berry',
+    name: 'Lemonade berry',
+    scientific: 'Rhus integrifolia',
+    form: 'shrub',
+    place: 'Larger yard edge, privacy screen, or coastal slope.',
+    why: 'Classic coastal scrub mass: glossy leaves, flowers, berries, bird value.',
+    caution: 'Too large for most balcony containers.',
+    sourceLabel: 'CNPS coastal native garden',
+    sourceUrl: 'https://www.cnps.org/gardening/the-coastal-native-garden-5526',
+  },
+  {
+    slug: 'coast-sunflower',
+    name: 'Coast sunflower',
+    scientific: 'Encelia californica',
+    form: 'shrub',
+    place: 'Sunny dry bed where a bright, informal bloom is welcome.',
+    why: 'South Coast scrub signal: yellow flowers, pollinator traffic, easy visual read.',
+    sourceLabel: 'CNPS South Coast plant list',
+    sourceUrl: 'https://chapters.cnps.org/southcoast/2024/10/07/ca-native-plants-for-the-s-ca-habitat-garden/',
+  },
+];
+
+export type SeasonalSignal = {
+  season: string;
+  months: string;
+  read: string;
+  fieldNote: string;
+};
+
+export const SEASONAL_SIGNALS: SeasonalSignal[] = [
+  {
+    season: 'Winter setup',
+    months: 'Dec-Feb',
+    read: 'Cool-season rain wakes roots before the visible show.',
+    fieldNote: 'Planting and light establishment work belong here when rain is helping.',
+  },
+  {
+    season: 'Spring push',
+    months: 'Mar-May',
+    read: 'Deerweed, suncups, and scrub flowers start making the ground legible.',
+    fieldNote: 'Watch for yellow first, then seed pods and insect traffic.',
+  },
+  {
+    season: 'Buckwheat summer',
+    months: 'Jun-Aug',
+    read: 'Seacliff buckwheat becomes the headline; El Segundo blue flight season sits close to it.',
+    fieldNote: 'Stay on paths near dune habitat. Small movement matters.',
+  },
+  {
+    season: 'Dry structure',
+    months: 'Sep-Nov',
+    read: 'Flower color drops; seedheads, coyote brush, and wind-shaped forms carry the page.',
+    fieldNote: 'This is when the scrub looks quiet but still holds shelter and food.',
+  },
+];
+
 export const STATION_SHORTCUTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Q', 'W', 'E', 'R', 'T', 'Y'] as const;
 
 /** Cities within ~100 miles of El Segundo, cardinal-direction + approx mileage. */

@@ -7,6 +7,8 @@ import { CHANNELS } from '../lib/channels';
 import {
   ANCHOR,
   NATURE_NOTES,
+  NATIVE_PLANTING_PALETTE,
+  SEASONAL_SIGNALS,
   filterInRangeBlocks,
 } from '../lib/local';
 
@@ -34,10 +36,17 @@ export const GET: APIRoute = async () => {
       url: 'https://pointcast.xyz/b/0320',
       jsonUrl: 'https://pointcast.xyz/b/0320.json',
     },
+    plantingBlock: {
+      id: '0321',
+      url: 'https://pointcast.xyz/b/0321',
+      jsonUrl: 'https://pointcast.xyz/b/0321.json',
+    },
     notes: NATURE_NOTES,
-    sources: [...new Map(NATURE_NOTES.map((note) => [
-      note.sourceUrl,
-      { label: note.sourceLabel, url: note.sourceUrl },
+    plantingPalette: NATIVE_PLANTING_PALETTE,
+    seasonalSignals: SEASONAL_SIGNALS,
+    sources: [...new Map([...NATURE_NOTES, ...NATIVE_PLANTING_PALETTE].map((item) => [
+      item.sourceUrl,
+      { label: item.sourceLabel, url: item.sourceUrl },
     ])).values()],
     transect: [
       { step: 1, label: 'Sand', signal: 'Open dune, beach suncups, wind, sparse growth.' },
