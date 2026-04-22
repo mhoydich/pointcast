@@ -13,7 +13,7 @@ import {
 } from '../lib/share-kit';
 
 const SITE_URL = 'https://pointcast.xyz';
-const repoUrl = (path: string) => `https://github.com/MikeHoydich/pointcast/blob/main/${path}`;
+const repoUrl = (path: string) => `https://github.com/mhoydich/pointcast/blob/main/${path}`;
 const absolute = (path: string) => new URL(path, SITE_URL).href;
 
 export const GET: APIRoute = async () => {

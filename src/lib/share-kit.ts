@@ -166,17 +166,6 @@ export const SHARE_LAUNCH_ASSETS = [
     primaryCopy:
       'Specific observation + one question + one link. No generic launch copy.',
   },
-  {
-    key: 'tezos-pitches',
-    title: 'Tezos ecosystem pitch templates',
-    kind: 'copy deck',
-    docPath: 'docs/outreach/tezos-ecosystem-pitches.md',
-    url: '/collection/visit-nouns',
-    audience: 'Tezos ecosystem editors, TzKT, objkt, fxhash, devrel',
-    summary: 'A focused outreach packet for Visit Nouns, Tezos metadata, and ecosystem listing asks.',
-    primaryCopy:
-      'Visit Nouns is live on Tezos mainnet with a collection page, objkt proof, and machine-readable /tezos.json.',
-  },
 ] as const;
 
 export const SHARE_CAMPAIGN_PACKETS = [

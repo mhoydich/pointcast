@@ -4,9 +4,10 @@ One focused outreach drop targeting the Tezos-native discovery graph.
 Goal: get pointcast.xyz / Visit Nouns / /tezos listed or spotlighted
 on every Tezos-community surface that curates projects.
 
-All linked URLs are live: https://pointcast.xyz/tezos,
-/tezos.json, /tezos/how-to-mint, /nouns, /collection/visit-nouns,
-/b/0205 (sample block).
+Status: draft. Use https://pointcast.xyz/collection/visit-nouns for
+manual outreach today. References below to /tezos, /tezos.json, and
+/tezos/how-to-mint are placeholders for the Tezos surface sprint and
+should not be sent until those routes are live.
 
 ---
 
