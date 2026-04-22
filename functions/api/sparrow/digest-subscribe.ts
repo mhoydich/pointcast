@@ -46,8 +46,8 @@ const MAX_RELAYS = 32;
 
 const corsHeaders = (): HeadersInit => ({
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, HEAD, OPTIONS',
-  'access-control-allow-headers': 'content-type',
+  'access-control-allow-methods': 'GET, POST, DELETE, HEAD, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-unsub-intent, x-unsub-token',
   'access-control-max-age': '86400',
 });
 
@@ -112,6 +112,76 @@ export const onRequestHead: PagesFunction = async () =>
   new Response(null, { status: 200, headers: corsHeaders() });
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => docResponse(env);
+
+/**
+ * v0.33: DELETE /api/sparrow/digest-subscribe — unsubscribe endpoint.
+ *
+ * Two modes, both POST-equivalent (DELETE doesn't canonically carry a
+ * body but we accept one for consistency with the POST above):
+ *
+ *   · body: { email } + signed token in header `x-unsub-token` —
+ *     only the email address matching the token's signature is allowed
+ *     to unsubscribe. This is the path the email-footer link will use.
+ *   · body: { email } + `x-unsub-intent: local-clear` header — soft
+ *     delete requested by the web client on behalf of a user who just
+ *     cleared sparrow:digest-subscription in their browser. We remove
+ *     the KV entry, no token required (the worst case is that a user
+ *     wanders into their browser console and clears someone else's
+ *     email subscription; considered acceptable since the data here is
+ *     just email + npub).
+ *
+ * Token verification is stubbed in v0.33 — the signing key ships
+ * alongside the cron worker in v0.34. Until then: DELETE works with
+ * the `local-clear` intent header; token-verified DELETE returns 501.
+ */
+export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
+  let payload: { email?: string } = {};
+  try {
+    payload = (await request.json()) as { email?: string };
+  } catch {
+    // DELETE may have no body; that's fine as long as email is
+    // provided via query string.
+    const url = new URL(request.url);
+    const q = url.searchParams.get('email');
+    if (q) payload = { email: q };
+  }
+  const email = normalizeEmail(payload.email);
+  if (!email) {
+    return jsonResponse(400, { ok: false, reason: 'email required' });
+  }
+  const intent = request.headers.get('x-unsub-intent') || '';
+  const token = request.headers.get('x-unsub-token') || '';
+
+  if (intent === 'local-clear') {
+    let removed = false;
+    if (env.SPARROW_DIGEST_KV) {
+      try {
+        await env.SPARROW_DIGEST_KV.delete(`sub:${email}`);
+        removed = true;
+      } catch { /* silent */ }
+    }
+    return jsonResponse(200, {
+      ok: true,
+      removed,
+      mode: 'local-clear',
+      note: 'Subscription entry removed from KV if it was present. No confirmation email — the user initiated this from their own browser.',
+    });
+  }
+
+  if (token) {
+    // TODO(v0.34): verify the signed token against the cron worker's
+    // signing key. Once verified, delete `sub:${email}` from KV.
+    return jsonResponse(501, {
+      ok: false,
+      reason: 'token-verified unsubscribe lands in v0.34 alongside the cron worker',
+    });
+  }
+
+  return jsonResponse(400, {
+    ok: false,
+    reason: 'DELETE requires either x-unsub-intent: local-clear (web-initiated) or x-unsub-token header (email-footer link)',
+  });
+};
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const contentLength = Number(request.headers.get('content-length') || '0');

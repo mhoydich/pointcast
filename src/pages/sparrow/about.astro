@@ -323,6 +323,12 @@ const features = [
     body: 'v0.32 backs the federation layer with persistence. POST /api/sparrow/digest-subscribe is a real Cloudflare Pages Function now — validates sparrow-digest-subscription-v1, returns 202 Accept, stores in SPARROW_DIGEST_KV when bound (still acks without, so the v0.30 client stops retrying). GET /sparrow/federation.json is a new editorial endpoint carrying the starter seeds (hex + alias + note) so curation is a data edit, not a code change; friends.astro fetches on boot with a tiny internal fallback. The reader-state mirror learns two new keys — friends + profiles — so a user who follows someone on laptop sees them on desktop; window.__sparrow.scheduleReaderMirror is exposed so route-local pages can trigger a push after mutating those keys.',
     kbd: '/api/sparrow/digest-subscribe · /sparrow/federation.json',
   },
+  {
+    kicker: 'native ambient · cron scaffold · DELETE',
+    title: 'Sparrow.app hears the federation · worker shell lands',
+    body: 'v0.33 extends the federation layer into the native menu-bar companion. NostrRelayClient.swift (URLSessionWebSocketTask, zero dependencies) + FriendsService.swift (reads followed pubkeys from the SparrowServer reader-state mirror, subscribes to kind-20078 presence + kind-30078 saved events against the default relay pool) surface a live "✦ N friends here" menu item with aliases. The digest cron scaffold lands in workers/sparrow-digest/ — wrangler.toml (weekly Mon 08:00 UTC, MailChannels transport), src/index.ts (listAllSubscriptions + frequency gate + placeholder email + /dry-run), README documenting deploy + DNS lockdown + what ships in v0.34. DELETE /api/sparrow/digest-subscribe adds two unsubscribe modes: x-unsub-intent: local-clear (web-initiated, no token) and x-unsub-token (email-footer, 501 until v0.34).',
+    kbd: 'macOS · workers/ · DELETE',
+  },
 ];
 
 const roadmap = [
@@ -792,14 +798,31 @@ const roadmap = [
   },
   {
     v: 'v0.33',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Native ambient pickup · digest cron scaffold · unsubscribe',
+    items: [
+      'Sparrow.app: NostrRelayClient.swift — URLSessionWebSocketTask-based Nostr client; REQ/EVENT/EOSE + CLOSE; zero dependencies; ~170 LOC',
+      'Sparrow.app: FriendsService.swift — reads followed pubkeys from SparrowServer\'s sparrow.readerState UserDefaults (mirrored by v0.32), subscribes to kind-20078 presence + kind-30078 saved events, tracks 90s freshness window with 20s decay',
+      'MenuBarController.setFriendsPresence(count, aliases) adds a "✦ N here · alias1, alias2, +K" menu item above the separator — hidden when zero',
+      'workers/sparrow-digest/ scaffold: wrangler.toml (weekly Mon 08 UTC cron, SPARROW_DIGEST_KV binding, MailChannels transport)',
+      'workers/sparrow-digest/src/index.ts: listAllSubscriptions + isDue frequency gate (weekly/biweekly/monthly) + renderDigestEmail placeholder + MailChannels POST + /dry-run fetch route for testing',
+      'DELETE /api/sparrow/digest-subscribe · two modes: x-unsub-intent: local-clear (web-initiated, 200 ok) and x-unsub-token (email-footer, 501 until v0.34 signing key lands)',
+      'CORS on the Pages Function now allows DELETE + x-unsub-intent + x-unsub-token headers',
+    ],
+  },
+  {
+    v: 'v0.34',
     status: 'next',
     when: 'planned',
-    title: 'Native ambient pickup + digest cron',
+    title: 'Cron worker goes live · signed unsub tokens',
     items: [
-      'Sparrow.app gains a minimal Nostr WebSocket client (NWConnection + JSON) subscribing to kind-30078 + kind-20078 for the user\'s friends list',
-      'Tray dropdown shows "N friends here" + first 3 avatars pulled from sparrow:profiles mirror',
-      'Cloudflare cron worker (separate deploy) reads SPARROW_DIGEST_KV, re-aggregates each subscriber\'s signals bundle from their relays, sends via MailChannels',
-      'Unsubscribe link + signed-token DELETE endpoint',
+      'Port NostrRelayClient.swift to TypeScript for the worker runtime',
+      'Signals aggregation logic (top co-saved + recent adds + channel distribution) mirroring /sparrow/signals, run inside the cron',
+      'Block-lookup prefetch into KV so the cron doesn\'t fan out 300+ /b/<id>.json requests per subscriber',
+      'HMAC-SHA256 unsubscribe token — 7-day rotation, embedded in every digest email footer',
+      'Retry with jitter + dead-letter bucket for MailChannels failures',
+      'Native Sparrow.app gains profile name lookup (NIP-01 kind-0) so aliases auto-populate without going through the web',
     ],
   },
   {
@@ -879,7 +902,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.32 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.33 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
