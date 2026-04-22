@@ -31,10 +31,14 @@ import MorningPara from '../components/MorningPara.astro';
 import { CHANNEL_LIST } from '../lib/channels';
 import { getCollection } from 'astro:content';
 
-const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+const HELLO_MIKE_BLOCK_ID = '0334';
+
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-const blockCount = blocks.length;
+const helloMikeBlock = allBlocks.find((block) => block.data.id === HELLO_MIKE_BLOCK_ID);
+const blocks = allBlocks.filter((block) => block.data.id !== HELLO_MIKE_BLOCK_ID);
+const blockCount = allBlocks.length;
 
 // JSON-LD — make the home a CollectionPage so agents can parse the list.
 const jsonLd = {
@@ -45,7 +49,7 @@ const jsonLd = {
   description: 'A living broadcast from El Segundo. Every piece is a Block.',
   url: 'https://pointcast.xyz/',
   inLanguage: 'en-US',
-  hasPart: blocks.slice(0, 20).map((b) => ({
+  hasPart: allBlocks.slice(0, 20).map((b) => ({
     '@type': 'CreativeWork',
     '@id': `https://pointcast.xyz/b/${b.data.id}`,
     name: b.data.title,
@@ -96,6 +100,12 @@ const alternates = [
       <WalletChip />
       <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
+
+    {helloMikeBlock && (
+      <section class="hello-module" aria-label="Hello Mike module">
+        <BlockCard block={helloMikeBlock} />
+      </section>
+    )}
 
     <!-- Fresh strip — top-of-page freshness signal + one-tap action.
          Per Mike 2026-04-19 morning feedback "top not fresh enough and
@@ -335,6 +345,17 @@ const alternates = [
   .spacer { flex: 1; }
 
   .agent-link { color: var(--pc-accent); font-weight: 500; }
+
+  .hello-module {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 14px 0;
+  }
+
+  .hello-module :global(.block-card) {
+    min-height: 168px;
+  }
 
   /* Channel chip bar — flex-wrap desktop, horizontal-scroll + sticky on mobile */
   .channels {
