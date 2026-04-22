@@ -66,6 +66,42 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       else — visited state, reactions, private sync — stays private.
     </p>
 
+    <div class="sp-friends-getting-started" data-sp-gs aria-label="getting started checklist">
+      <header class="sp-friends-gs-head">
+        <span class="sp-friends-kicker">✦ join the federation</span>
+        <span class="sp-friends-gs-meta" data-sp-gs-meta>0 of 4 steps done</span>
+      </header>
+      <ol class="sp-friends-gs-list" data-sp-gs-list>
+        <li data-sp-gs-step="signer"><span class="sp-friends-gs-tick">○</span> <strong>Connect a NIP-07 signer</strong> — install Alby or nos2x, then click the <em>sync</em> pill in the HUD</li>
+        <li data-sp-gs-step="public"><span class="sp-friends-gs-tick">○</span> <strong>Turn on "publish my saved list publicly"</strong> below so friends can find what you're reading</li>
+        <li data-sp-gs-step="follow"><span class="sp-friends-gs-tick">○</span> <strong>Follow at least one npub</strong> — paste a hex pubkey or npub1… into the form further down (or try the starters)</li>
+        <li data-sp-gs-step="ambient"><span class="sp-friends-gs-tick">○</span> <strong>(Optional) Enable ambient presence</strong> so friends see you're reading in the bottom-left strip</li>
+      </ol>
+    </div>
+
+    <div class="sp-friends-invite" data-sp-invite aria-label="invite friends" hidden>
+      <header class="sp-friends-gs-head">
+        <span class="sp-friends-kicker">✦ invite others</span>
+        <span class="sp-friends-gs-meta">one-click follow link</span>
+      </header>
+      <p class="sp-friends-publisher-hint" style="margin:0 0 8px;">
+        Share this URL. When someone opens it in Sparrow, the add-friend form
+        pre-fills with your pubkey — they just click <em>follow →</em>.
+      </p>
+      <div class="sp-friends-invite-row">
+        <input type="text" data-sp-invite-url readonly />
+        <button type="button" class="sp-friends-invite-copy" data-sp-invite-copy>copy</button>
+      </div>
+    </div>
+
+    <div class="sp-friends-starters" data-sp-starters aria-label="starter pubkeys">
+      <header class="sp-friends-gs-head">
+        <span class="sp-friends-kicker">✦ starters · suggested follows</span>
+        <span class="sp-friends-gs-meta">scaffold · edit <code>STARTERS</code> to curate</span>
+      </header>
+      <ul class="sp-friends-starters-list" data-sp-starters-list></ul>
+    </div>
+
     <div class="sp-friends-publisher" data-sp-publisher aria-label="publisher controls">
       <span class="sp-friends-kicker">✦ my public saved list</span>
       <label class="sp-friends-toggle">
@@ -132,6 +168,17 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       <p class="sp-friends-empty" data-sp-friends-empty>
         Nobody followed yet. Add a pubkey above to start pulling their public saved lists.
       </p>
+      <div class="sp-friends-opml">
+        <span class="sp-friends-kicker">✦ opml · federation portability</span>
+        <div class="sp-friends-opml-row">
+          <button type="button" class="sp-friends-opml-btn" data-sp-opml-friends-export>export friends ↓</button>
+          <label class="sp-friends-opml-btn">
+            <input type="file" accept=".opml,.xml,application/xml,text/xml" data-sp-opml-friends-import hidden />
+            import ↑
+          </label>
+          <span class="sp-friends-opml-status" data-sp-opml-friends-status></span>
+        </div>
+      </div>
     </div>
 
     <div class="sp-friends-feed" data-sp-friends-feed aria-label="their reading">
@@ -865,11 +912,270 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         repaintFeed();
       }
 
+      // ─── v0.31 · PARTICIPATION ONRAMPS ───────────────────────────
+      // Getting-started checklist, invite share-link, starter seeds,
+      // OPML round-trip, ?follow= deep link. All client-side — no
+      // new server endpoint. The federation layer becomes joinable
+      // by any visitor who has a Nostr signer, with zero docs in
+      // between.
+      const STARTERS = [
+        // Scaffold only. Real curation is an editorial task —
+        // these are examples of famous Nostr pubkeys (jack, fiatjaf)
+        // so the page never looks empty to a first-time visitor.
+        { hex: '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2', alias: 'jack' },
+        { hex: '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d', alias: 'fiatjaf' },
+      ];
+
+      function paintGettingStarted() {
+        const gsList = document.querySelector('[data-sp-gs-list]');
+        const gsMeta = document.querySelector('[data-sp-gs-meta]');
+        if (!gsList) return;
+        const selfPk = (localStorage.getItem(KEY_SELF_PUBKEY) || '').toLowerCase();
+        const publicOn = localStorage.getItem(KEY_PUBLIC_SAVED) === '1';
+        const friendCount = readFriends().length;
+        const ambientOn = localStorage.getItem('sparrow:ambient-enabled') === '1';
+        const steps = {
+          signer:  !!selfPk,
+          public:  publicOn,
+          follow:  friendCount >= 1,
+          ambient: ambientOn,
+        };
+        let done = 0;
+        for (const [key, ok] of Object.entries(steps)) {
+          const li = gsList.querySelector(`[data-sp-gs-step="${key}"]`);
+          if (!li) continue;
+          const tick = li.querySelector('.sp-friends-gs-tick');
+          if (tick) tick.textContent = ok ? '✓' : '○';
+          li.classList.toggle('is-done', ok);
+          if (ok) done += 1;
+        }
+        if (gsMeta) gsMeta.textContent = `${done} of 4 steps done${done === 4 ? ' · you\'re set' : ''}`;
+      }
+
+      function paintInviteKit() {
+        const box = document.querySelector('[data-sp-invite]');
+        const urlEl = document.querySelector('[data-sp-invite-url]');
+        if (!box) return;
+        const selfPk = (localStorage.getItem(KEY_SELF_PUBKEY) || '').toLowerCase();
+        if (!selfPk) { box.hidden = true; return; }
+        box.hidden = false;
+        const npub = hexToNpub(selfPk) || selfPk;
+        const url = `${location.origin}/sparrow/friends?follow=${encodeURIComponent(npub)}`;
+        if (urlEl) urlEl.value = url;
+      }
+
+      document.querySelector('[data-sp-invite-copy]')?.addEventListener('click', async () => {
+        const urlEl = document.querySelector('[data-sp-invite-url]');
+        if (!urlEl) return;
+        urlEl.select();
+        try { await navigator.clipboard.writeText(urlEl.value); }
+        catch { document.execCommand('copy'); }
+        const btn = document.querySelector('[data-sp-invite-copy]');
+        if (btn) {
+          btn.textContent = '✓ copied';
+          setTimeout(() => { btn.textContent = 'copy'; }, 1600);
+        }
+      });
+
+      function paintStarters() {
+        const ul = document.querySelector('[data-sp-starters-list]');
+        if (!ul) return;
+        const followed = new Set(readFriends().map((f) => f.pubkey));
+        ul.innerHTML = '';
+        for (const s of STARTERS) {
+          if (followed.has(s.hex)) continue; // already following — don't nag
+          const li = document.createElement('li');
+          li.className = 'sp-friends-starters-row';
+          li.innerHTML = `
+            <span class="sp-friends-starters-name">${escapeHTML(s.alias)}</span>
+            <code>${shortPk(s.hex)}</code>
+            <button type="button" class="sp-friends-starters-btn" data-starter-follow="${s.hex}" data-starter-alias="${escapeHTML(s.alias)}">+ follow</button>
+          `;
+          ul.appendChild(li);
+        }
+        // Hide the whole card if there's nothing to suggest.
+        const starterBox = document.querySelector('[data-sp-starters]');
+        if (starterBox) starterBox.hidden = ul.children.length === 0;
+      }
+
+      document.querySelector('[data-sp-starters-list]')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-starter-follow]');
+        if (!btn) return;
+        const pubkey = btn.getAttribute('data-starter-follow');
+        const alias  = btn.getAttribute('data-starter-alias') || '';
+        if (!pubkey) return;
+        const friendsList = readFriends();
+        if (!friendsList.some((f) => f.pubkey === pubkey)) {
+          friendsList.unshift({ pubkey, alias, muted: false });
+          writeFriends(friendsList);
+        }
+        paintFriendsList();
+        paintState();
+        paintStarters();
+        paintGettingStarted();
+        subscribeToFriends();
+        refreshProfiles();
+      });
+
+      // v0.31: ?follow=<npub|hex> deep link. Pre-fills the add-form
+      // and — if valid — offers the user a one-click submit by
+      // focusing the follow button.
+      function applyFollowDeepLink() {
+        const params = new URLSearchParams(location.search);
+        const raw = params.get('follow');
+        if (!raw) return;
+        const hex = parsePubkey(raw);
+        if (!hex || !form) return;
+        const pkInput = form.querySelector('input[name="pubkey"]');
+        const already = readFriends().some((f) => f.pubkey === hex);
+        if (pkInput && !already) {
+          pkInput.value = hex;
+          pkInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          pkInput.focus();
+          // Soft hint that their action is one click away.
+          const submit = form.querySelector('button[type="submit"]');
+          if (submit) {
+            submit.classList.add('sp-friends-submit-hint');
+            submit.textContent = `follow ${shortPk(hex)} →`;
+          }
+        }
+      }
+
+      // v0.31: OPML round-trip for friends. Export bundles the
+      // current sparrow:friends list as OPML 2.0; import parses
+      // any <outline> with nostr:… xmlUrl or htmlUrl + pubkey
+      // attribute and unions with the existing list.
+      function buildFriendsOPML() {
+        const friendsList = readFriends();
+        const profileMap = readProfiles();
+        const when = new Date().toISOString();
+        const outlines = friendsList.map((f) => {
+          const prof = profileMap[f.pubkey] || {};
+          const name = f.alias || prof.display_name || prof.name || `friend:${f.pubkey.slice(0, 8)}`;
+          const npub = hexToNpub(f.pubkey) || f.pubkey;
+          const muted = f.muted ? ' x-sparrow-muted="true"' : '';
+          return `      <outline type="nostr" text="${escapeHTML(name)}" title="${escapeHTML(name)}" xmlUrl="nostr:${npub}" htmlUrl="${location.origin}/sparrow/friends?follow=${encodeURIComponent(npub)}" x-sparrow-pubkey="${f.pubkey}"${muted} />`;
+        }).join('\n');
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>Sparrow friends · federation list</title>
+    <dateCreated>${when}</dateCreated>
+    <ownerName>sparrow</ownerName>
+    <docs>https://pointcast.xyz/sparrow.json</docs>
+  </head>
+  <body>
+    <outline text="Sparrow friends" title="Sparrow friends">
+${outlines}
+    </outline>
+  </body>
+</opml>
+`;
+      }
+
+      document.querySelector('[data-sp-opml-friends-export]')?.addEventListener('click', () => {
+        const xml = buildFriendsOPML();
+        const blob = new Blob([xml], { type: 'text/x-opml; charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sparrow-friends-${new Date().toISOString().slice(0, 10)}.opml`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 2000);
+        const status = document.querySelector('[data-sp-opml-friends-status]');
+        if (status) {
+          status.textContent = `exported · ${readFriends().length} friends`;
+          setTimeout(() => { status.textContent = ''; }, 2600);
+        }
+      });
+
+      document.querySelector('[data-sp-opml-friends-import]')?.addEventListener('change', async (e) => {
+        const input = e.target;
+        const file = input.files?.[0];
+        if (!file) return;
+        const status = document.querySelector('[data-sp-opml-friends-status]');
+        try {
+          const text = await file.text();
+          const doc = new DOMParser().parseFromString(text, 'application/xml');
+          const outlines = doc.querySelectorAll('outline');
+          const existing = readFriends();
+          const existingSet = new Set(existing.map((f) => f.pubkey));
+          let added = 0;
+          for (const o of outlines) {
+            // Prefer the explicit sparrow pubkey attribute, fall back
+            // to extracting from nostr:npub1… xmlUrl.
+            let hex = o.getAttribute('x-sparrow-pubkey');
+            if (!hex) {
+              const xmlUrl = o.getAttribute('xmlUrl') || '';
+              const m = /^nostr:(npub1\w+)$/i.exec(xmlUrl.trim());
+              if (m) hex = npubToHex(m[1]);
+            }
+            if (!hex || !/^[0-9a-f]{64}$/i.test(hex)) continue;
+            hex = hex.toLowerCase();
+            if (existingSet.has(hex)) continue;
+            existing.unshift({
+              pubkey: hex,
+              alias:  (o.getAttribute('text') || o.getAttribute('title') || '').slice(0, 40),
+              muted:  o.getAttribute('x-sparrow-muted') === 'true',
+            });
+            existingSet.add(hex);
+            added += 1;
+          }
+          writeFriends(existing);
+          paintFriendsList();
+          paintState();
+          paintStarters();
+          paintGettingStarted();
+          subscribeToFriends();
+          refreshProfiles();
+          if (status) {
+            status.textContent = added ? `imported · +${added}` : 'nothing new to import';
+            setTimeout(() => { status.textContent = ''; }, 2800);
+          }
+        } catch (err) {
+          if (status) status.textContent = `error · ${String(err).slice(0, 60)}`;
+        } finally {
+          input.value = '';
+        }
+      });
+
+      // Re-paint participation surfaces whenever friends or profiles
+      // change. Cheap — small DOM.
+      const originalPaintFriendsList = paintFriendsList;
+      paintFriendsList = function () {
+        originalPaintFriendsList();
+        paintStarters();
+        paintGettingStarted();
+      };
+      const originalPaintState = paintState;
+      paintState = function () {
+        originalPaintState();
+        paintInviteKit();
+        paintGettingStarted();
+      };
+
+      // Hook public-saved toggle to refresh the checklist.
+      pubToggle?.addEventListener('change', paintGettingStarted);
+
+      // Hook signer-connect (fires in the HUD) to refresh checklist.
+      window.addEventListener('storage', (ev) => {
+        if (!ev.key) return;
+        if (ev.key === KEY_SELF_PUBKEY || ev.key === KEY_PUBLIC_SAVED || ev.key === 'sparrow:ambient-enabled' || ev.key === KEY_FRIENDS) {
+          paintGettingStarted();
+          paintInviteKit();
+          paintStarters();
+        }
+      });
+
       // ─── Boot ─────────────────────────────────────────────────────
       paintState();
       paintFriendsList();
       subscribeToFriends();
       refreshProfiles();
+      paintGettingStarted();
+      paintInviteKit();
+      paintStarters();
+      applyFollowDeepLink();
 
       // v0.24: kick NIP-05 verification for any cached friend whose
       // nip05 hasn't been verified yet (or whose verify cache is
@@ -1110,6 +1416,150 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
     }
     .sp-friends-feed-ctas {
       display: inline-flex; gap: 8px; flex-wrap: wrap;
+    }
+
+    /* v0.31 participation onramps */
+    .sp-friends-getting-started,
+    .sp-friends-invite,
+    .sp-friends-starters {
+      margin: 18px 0 0;
+      padding: 14px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+    }
+    .sp-friends-getting-started[hidden],
+    .sp-friends-invite[hidden],
+    .sp-friends-starters[hidden] { display: none; }
+    .sp-friends-gs-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+    }
+    .sp-friends-gs-meta {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+    .sp-friends-gs-list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-direction: column; gap: 6px;
+      font-size: 13px; line-height: 1.5;
+    }
+    .sp-friends-gs-list li {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 8px; align-items: baseline;
+      color: color-mix(in oklch, var(--sp-bone) 85%, var(--sp-mute));
+    }
+    .sp-friends-gs-tick {
+      font-family: var(--sp-mono);
+      color: var(--sp-mute);
+      text-align: center;
+      font-weight: 700;
+    }
+    .sp-friends-gs-list li.is-done { color: var(--sp-moss); }
+    .sp-friends-gs-list li.is-done .sp-friends-gs-tick { color: var(--sp-moss); }
+    .sp-friends-gs-list li strong { color: inherit; }
+    .sp-friends-gs-list em { color: var(--sp-ember); font-style: normal; }
+
+    .sp-friends-invite-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px;
+    }
+    .sp-friends-invite-row input {
+      font-family: var(--sp-mono); font-size: 11px;
+      padding: 8px 10px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 3px;
+      background: var(--sp-ink);
+      color: var(--sp-ember);
+      min-width: 0;
+    }
+    .sp-friends-invite-copy {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 8px 14px;
+      border: 1px solid var(--sp-moss);
+      color: var(--sp-moss);
+      background: color-mix(in oklch, var(--sp-moss) 10%, transparent);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .sp-friends-invite-copy:hover {
+      background: color-mix(in oklch, var(--sp-moss) 22%, transparent);
+    }
+
+    .sp-friends-starters-list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .sp-friends-starters-row {
+      display: grid;
+      grid-template-columns: 120px 1fr auto;
+      gap: 10px; align-items: center;
+      padding: 6px 10px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 3px;
+      background: color-mix(in oklch, var(--sp-bone) 1.5%, transparent);
+    }
+    .sp-friends-starters-name {
+      font-family: var(--sp-ui); font-size: 13px; font-weight: 600;
+    }
+    .sp-friends-starters-row code {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+    }
+    .sp-friends-starters-btn {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent);
+      color: var(--sp-ember);
+      background: color-mix(in oklch, var(--sp-ember) 10%, transparent);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .sp-friends-starters-btn:hover {
+      background: color-mix(in oklch, var(--sp-ember) 22%, transparent);
+    }
+
+    .sp-friends-opml {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border: 1px dashed var(--sp-rule);
+      border-radius: 3px;
+    }
+    .sp-friends-opml-row {
+      display: flex; gap: 10px; align-items: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .sp-friends-opml-btn {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 6px 12px;
+      border: 1px solid var(--sp-rule);
+      background: transparent;
+      color: var(--sp-ember);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .sp-friends-opml-btn:hover {
+      border-color: var(--sp-ember);
+      background: color-mix(in oklch, var(--sp-ember) 10%, transparent);
+    }
+    .sp-friends-opml-status {
+      font-family: var(--sp-mono); font-size: 10px;
+      color: var(--sp-moss);
+    }
+
+    .sp-friends-submit-hint {
+      animation: sp-friends-hint-pulse 1.2s ease-in-out 2;
+      border-color: var(--sp-moss) !important;
+      color: var(--sp-moss) !important;
+    }
+    @keyframes sp-friends-hint-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--sp-moss) 50%, transparent); }
+      50%      { box-shadow: 0 0 0 6px color-mix(in oklch, var(--sp-moss) 0%, transparent); }
     }
     .sp-friends-activity-cta {
       font-family: var(--sp-mono); font-size: 10px;

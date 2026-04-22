@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.30',
-    protocol_version: '0.30',
+    version: '0.31',
+    protocol_version: '0.31',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -269,6 +269,58 @@ export const GET: APIRoute = async () => {
         requires: ['NIP-07 signer connected (window.nostr.getPublicKey)', 'NIP-44 support on the signer (window.nostr.nip44.{encrypt,decrypt}) — nos2x, Alby recent builds'],
         ui_toggle: '.sp-sync-toggle pill in the HUD · states: unavailable (no signer / no NIP-44) · off · on',
         not_shipped_yet: 'Cross-device conflict UX beyond newest-wins; per-key opt-out (e.g. "sync saved only"); key rotation after an NIP-44 change',
+      },
+
+      // v0.31: participation onramps. Treats the federation layer as
+      // an explicit on-ramp rather than a feature. Every surface the
+      // first-time visitor sees on /sparrow/friends should tell them
+      // what to do next.
+      participation: {
+        since: 'v0.31',
+        surface: '/sparrow/friends (top of page, before publisher + following list)',
+        components: {
+          getting_started: {
+            steps: [
+              'signer: has a NIP-07 pubkey cached (sparrow:nostr-pubkey)',
+              'public: sparrow:public-saved-enabled === "1"',
+              'follow: sparrow:friends[] has at least one entry',
+              'ambient: sparrow:ambient-enabled === "1" (optional)',
+            ],
+            ui: 'ordered list · ○ default, ✓ on done · moss color when complete · "N of 4 steps done" meta · repaints on any storage change via window.addEventListener("storage",…) cross-tab',
+          },
+          share_invite: {
+            surface: 'card below getting-started, shown only when signer is connected',
+            link_shape: '${origin}/sparrow/friends?follow=<npub1…>',
+            copy_button: 'navigator.clipboard.writeText with execCommand fallback; ✓ copied feedback for 1.6s',
+          },
+          starters: {
+            surface: 'card below invite',
+            storage: 'hard-coded STARTERS array in the page — scaffold only, edit this array to curate',
+            one_click_follow: '+ follow button writes to sparrow:friends[] with the starter alias',
+            hides_when: 'every starter is already followed, or the entire list is empty',
+          },
+          follow_deep_link: {
+            param: '?follow=<npub1… | hex-64>',
+            accepts_both: 'parsePubkey normalizes to hex — same codec the add-form uses',
+            behavior: 'pre-fills the add-form pubkey input + scrolls into view + pulses the submit button ("follow <short-pk> →") for 2 cycles. User still clicks to confirm — no silent follow.',
+            no_op_when: 'already following, or param is malformed',
+          },
+          opml_round_trip: {
+            surface: 'dashed panel inside the "people I\'m following" card',
+            export: {
+              filename: 'sparrow-friends-<YYYY-MM-DD>.opml',
+              element_shape: '<outline type="nostr" text="<alias>" xmlUrl="nostr:<npub1>" htmlUrl="<origin>/sparrow/friends?follow=<npub1>" x-sparrow-pubkey="<hex>" x-sparrow-muted="true|absent" />',
+              root: '<opml version="2.0"> with <head> carrying title/dateCreated/ownerName/docs → /sparrow.json',
+            },
+            import: {
+              accepts: '.opml, .xml, application/xml, text/xml',
+              parser: 'DOMParser · walks every <outline> · prefers x-sparrow-pubkey attr, falls back to npubToHex(xmlUrl match)',
+              merge: 'union with existing sparrow:friends[]; preserves mute state via x-sparrow-muted',
+              privacy: 'entirely client-side — no upload leaves the browser beyond the user-initiated file selection',
+            },
+          },
+        },
+        why_this_sprint: 'The federation surface shipped end-to-end from v0.22 → v0.30 but had no obvious on-ramp. v0.31 collapses the "now what?" gap between first page load and actually seeing friends\' reads.',
       },
 
       // v0.22: federated reading lists. Public, opt-in counterpart to
@@ -943,7 +995,8 @@ export const GET: APIRoute = async () => {
       'v0.27': 'Friends activity timeline at /sparrow/friends/activity. Dual subscription — bounded initial pull (limit 50) for history + `since: bootTime` live pull kept open until beforeunload. Events render newest-first as per-event cards (avatar + name + "saved N blocks" + relative timestamp + first 3 saved-block receipts with title/channel chips + "+N more"). New events splice at the top with a moss pulse animation + "new" pill that fades after 12 seconds. Respects mute — muted friends filtered from the authors list and re-checked on ingest. CTA added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated.',
       'v0.28': 'Signals recap at /sparrow/signals. Three-panel aggregation over the same kind-30078 corpus the rest of the federation surface reads. Panel 1 — most co-saved (blocks hit by 2+ signers, count-sorted, top 12, inline saver chips). Panel 2 — recent adds (friends who published a fresh saved list in the last 7 days, newest first, with avatar + freshest receipt). Panel 3 — channel distribution (proportional bars across all 9 channels derived from saved-block channel codes, each linking to its /sparrow/ch/<slug>). Client-side aggregation only; reuses sparrow:profiles cache + server-shipped block lookup. Signals nav links added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated. Stats bumped to 10 routes.',
       'v0.29': 'Signals, extended. Three of the four v0.29-bundled items land today; opt-in email digest deferred to v0.30 (needs sidecar worker infra). (1) First-picker attribution — in /sparrow/signals Panel 1, each co-saved block now surfaces ⭐ <name> — the friend with the earliest created_at among current savers. (2) Export JSON — new ⤓ button in signals nav dumps the current recap as sparrow-signals-<date>.json with schema sparrow-signals-v1 (friends, relays, newest_events, top_co_saved with saver lists + first_picker_at, notes documenting caveats). (3) Channel friends panel — new client-side strip on every /sparrow/ch/<slug> above the main reel showing which blocks in this channel your followed friends have co-saved, count-sorted, top 6, with first-picker chip. Hides when irrelevant; opt-out via localStorage["sparrow:ch-friends-hidden"].',
-      'v0.30': 'Ambient friends + digest sidecar scaffold. (1) Ambient presence — SparrowLayout now publishes an ephemeral kind-20078 event tagged t:sparrow-presence every 60s while the tab is foregrounded (opt-in via sparrow:ambient-enabled). A streaming subscriber tracks friends\' presence via kinds:[20078] #t:sparrow-presence and paints a fixed bottom-left "✦ here now" avatar strip of friends seen in the last 90s. Uses NIP-16 ephemeral-kind range so relays never persist presence. (2) Digest sidecar scaffold — new panel in /sparrow/signals for email-digest subscription (schema sparrow-digest-subscription-v1). Worker isn\'t live yet; intents stored locally in sparrow:digest-subscription and POSTed to /api/sparrow/digest-subscribe with 501 handled as "queued, worker pending." Contract fully documented in /sparrow.json.nostr.federated_lists.digest_sidecar so the worker can pick up the shape when infra is ready. Toggle for ambient added to /sparrow/friends publisher panel. (current)',
+      'v0.30': 'Ambient friends + digest sidecar scaffold. (1) Ambient presence — SparrowLayout now publishes an ephemeral kind-20078 event tagged t:sparrow-presence every 60s while the tab is foregrounded (opt-in via sparrow:ambient-enabled). A streaming subscriber tracks friends\' presence via kinds:[20078] #t:sparrow-presence and paints a fixed bottom-left "✦ here now" avatar strip of friends seen in the last 90s. Uses NIP-16 ephemeral-kind range so relays never persist presence. (2) Digest sidecar scaffold — new panel in /sparrow/signals for email-digest subscription (schema sparrow-digest-subscription-v1). Worker isn\'t live yet; intents stored locally in sparrow:digest-subscription and POSTed to /api/sparrow/digest-subscribe with 501 handled as "queued, worker pending." Contract fully documented in /sparrow.json.nostr.federated_lists.digest_sidecar so the worker can pick up the shape when infra is ready. Toggle for ambient added to /sparrow/friends publisher panel.',
+      'v0.31': 'Participation onramps. Turns the federation surface into a joinable layer instead of a feature people have to discover. /sparrow/friends gains (1) a "join the federation" checklist — 4 live-updating steps (signer connected, public list on, at least one follow, ambient on) with ✓/○ ticks that repaint across tabs via storage events. (2) An invite card — builds a shareable URL (/sparrow/friends?follow=<npub1>) with a one-click copy button, shown once the signer is connected. (3) Follow-by-URL — ?follow=<npub|hex> pre-fills the add-form, scrolls, pulses the submit button. (4) Starter seeds — a scaffolded list of suggested pubkeys (edit STARTERS to curate) with one-click follow. (5) OPML friends round-trip — export bundles sparrow:friends as <outline type="nostr" xmlUrl="nostr:npub1…" x-sparrow-pubkey="<hex>"> elements; import parses either attribute and unions with existing. Schema documented at /sparrow.json.nostr.participation. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

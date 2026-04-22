@@ -311,6 +311,12 @@ const features = [
     body: 'v0.30 adds co-presence and a scaffold for email digests. Opt in via /sparrow/friends and Sparrow publishes an ephemeral kind-20078 event tagged t:sparrow-presence every 60s while the tab is foregrounded — relays in the 20000-29999 NIP-16 range never persist these, so liveness is moot the instant it\'s stale. A streaming subscriber paints a fixed bottom-left "✦ here now" strip with avatars of friends seen in the last 90s. Separately, /sparrow/signals gets a weekly-digest opt-in panel — worker not live yet, but subscription intent is captured locally with a documented shape so the sidecar can pick up the contract when infra ships. Worker never holds secret material — signed-payload pointers only.',
     kbd: '✦ here now · digest·worker',
   },
+  {
+    kicker: 'participation onramps',
+    title: 'Join the federation — four visible steps',
+    body: 'v0.31 closes the on-ramp gap. /sparrow/friends now opens with a live checklist — signer connected, public list on, at least one follow, ambient on — with ✓/○ ticks that repaint across tabs. Below it, an invite card builds a shareable link (/sparrow/friends?follow=<npub>) with one-click copy. The same URL, when opened on someone else\'s Sparrow, pre-fills the add-form and pulses the submit button so following is a single click. A starter seed card offers suggested pubkeys to one-click-follow so new users never land on an empty federation. OPML round-trip exports sparrow:friends as <outline type="nostr"> elements for portability between clients.',
+    kbd: '/sparrow/friends?follow=npub1…',
+  },
 ];
 
 const roadmap = [
@@ -748,14 +754,30 @@ const roadmap = [
   },
   {
     v: 'v0.31',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Participation onramps for the federation layer',
+    items: [
+      '"Join the federation" checklist on /sparrow/friends — 4 live-updating steps (signer · public list · follow · ambient) with ✓/○ ticks that repaint across tabs via storage events',
+      'Invite card with copy-to-clipboard shareable link: /sparrow/friends?follow=<npub1…> — shown once signer is connected',
+      'Follow-by-URL deep link: ?follow=<npub|hex> pre-fills add-form, scrolls into view, pulses the submit button for 2 cycles (user still clicks to confirm)',
+      'Starter seed list — scaffolded suggested pubkeys with one-click follow; hides when every starter is already followed',
+      'OPML friends round-trip: export bundles sparrow:friends[] as <outline type="nostr" xmlUrl="nostr:npub1…" x-sparrow-pubkey="<hex>"> elements with alias + mute state',
+      'Import accepts either x-sparrow-pubkey attribute or nostr:npub1… xmlUrl; unions with existing; preserves mute state',
+      'parsePubkey shared by add-form + deep-link — accepts npub1… AND hex-64, normalizes to lowercase hex',
+      'Sparrow.app ambient pickup + digest worker stub both deferred to v0.32 (native work + worker infra deserve their own sprints)',
+    ],
+  },
+  {
+    v: 'v0.32',
     status: 'next',
     when: 'planned',
-    title: 'Sparrow.app round trip + OPML export of friends',
+    title: 'Native round trip + digest worker',
     items: [
-      'Sparrow.app (native menu-bar) picks up the ambient presence feed and bubbles friend avatars onto the tray dropdown',
-      'OPML export of your followed npubs so you can move federation lists between Sparrow tabs or other Nostr clients',
-      'Refresh Sparrow.app to read sparrow:friends + sparrow:profiles via the same /reader-state Magpie bridge',
-      'Digest sidecar worker — first minimal Cloudflare Worker stub (ack endpoint, no cron yet)',
+      'Sparrow.app (native menu-bar) subscribes to the ambient + public-saved kind-30078 feed and bubbles friend avatars onto the tray dropdown',
+      'Minimal Cloudflare Worker at /api/sparrow/digest-subscribe — ack endpoint that validates the sparrow-digest-subscription-v1 schema and stores intent in KV (no cron yet)',
+      'Reader-state mirror learns two new keys: friends + profiles, so a user who follows someone on laptop sees them on desktop',
+      'Curator-sourced starter list — replace the hard-coded STARTERS with an editorially-maintained /sparrow/federation.json',
     ],
   },
   {
@@ -835,7 +857,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.30 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.31 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
