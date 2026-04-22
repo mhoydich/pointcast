@@ -345,9 +345,30 @@
         overflow: hidden;
       }
 
+      .map-backdrop {
+        fill: #fbfaf6;
+      }
+
+      .map-glow {
+        fill: url(#signal-glow);
+        opacity: 0.72;
+      }
+
       .map-grid {
         stroke: #e3ded3;
         stroke-width: 1;
+      }
+
+      .relay-beam {
+        fill: none;
+        stroke: var(--beam-color, var(--blue));
+        stroke-linecap: round;
+        stroke-width: var(--beam-width, 2);
+        opacity: var(--beam-opacity, 0.14);
+      }
+
+      .relay-beam.is-leading {
+        opacity: var(--beam-opacity, 0.32);
       }
 
       .relay-line {
@@ -390,8 +411,57 @@
         stroke-width: 2;
       }
 
+      .confidence-ring {
+        fill: none;
+        stroke: var(--node-color, var(--blue));
+        stroke-width: var(--confidence-width, 2);
+        opacity: var(--confidence-opacity, 0.22);
+      }
+
+      .confidence-orbit {
+        fill: none;
+        stroke: var(--node-color, var(--blue));
+        stroke-dasharray: 3 6;
+        stroke-linecap: round;
+        stroke-width: 1.5;
+        opacity: 0.45;
+      }
+
+      .confidence-track {
+        fill: #eee9de;
+      }
+
+      .confidence-fill {
+        fill: var(--node-color, var(--blue));
+        opacity: 0.76;
+      }
+
+      .confidence-label {
+        fill: var(--muted);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+      }
+
       .node-core {
         fill: var(--node-color, var(--blue));
+      }
+
+      .signal-halo {
+        fill: none;
+        stroke: var(--signal-color, var(--blue));
+        stroke-width: 2;
+        opacity: 0.28;
+      }
+
+      .signal-card {
+        fill: #ffffff;
+        stroke-width: 2;
+      }
+
+      .signal-card-soft {
+        fill: var(--signal-color, var(--blue));
+        opacity: 0.08;
       }
 
       .route-options {
@@ -2872,6 +2942,7 @@
         const block = state.current;
         const route = block ? computeRoute(block) : null;
         const targets = getRouteTargets();
+        const blockColor = block?.channelColor || "#185fa5";
         const routePositions = [
           { x: 374, y: 72 },
           { x: 402, y: 146 },
@@ -2880,6 +2951,12 @@
           { x: 360, y: 328 },
           { x: 420, y: 36 },
         ];
+        const routeVisuals = targets.map((collab) => ({
+          collab,
+          score: route?.scores.get(collab.slug) || 0,
+        }));
+        const maxScore = Math.max(1, ...routeVisuals.map((item) => item.score));
+        const topSlug = route?.ranked?.[0]?.collab?.slug || route?.target?.slug || "";
         const grid = Array.from({ length: 8 })
           .map((_, index) => {
             const x = 42 + index * 66;
@@ -2894,14 +2971,31 @@
           .join("");
 
         const start = { x: 128, y: 180 };
-        const paths = targets
+        const routePaths = targets.map((collab, index) => {
+          const pos = routePositions[index % routePositions.length];
+          const path = `M ${start.x + 34} ${start.y} C ${240 + index * 8} ${78 + index * 32}, ${
+            pos.x - 112
+          } ${pos.y}, ${pos.x - 28} ${pos.y}`;
+          const score = route?.scores.get(collab.slug) || 0;
+          const ratio = score / maxScore;
+          return { collab, index, path, pos, score, ratio };
+        });
+        const beams = routePaths
+          .map(({ collab, path, ratio }) => {
+            const width = (2 + ratio * 9).toFixed(1);
+            const opacity = (0.08 + ratio * 0.27).toFixed(2);
+            const leading = collab.slug === topSlug;
+            return `<path
+              class="relay-beam ${leading ? "is-leading" : ""}"
+              d="${path}"
+              style="--beam-color:${escapeHtml(collab.color)};--beam-width:${width};--beam-opacity:${opacity}"
+            ></path>`;
+          })
+          .join("");
+        const paths = routePaths
           .map((collab, index) => {
-            const pos = routePositions[index % routePositions.length];
-            const path = `M ${start.x + 34} ${start.y} C ${240 + index * 8} ${78 + index * 32}, ${
-              pos.x - 112
-            } ${pos.y}, ${pos.x - 28} ${pos.y}`;
-            const isSelected = state.selectedSlug === collab.slug;
-            const isCorrect = state.locked && route?.target?.slug === collab.slug;
+            const isSelected = state.selectedSlug === collab.collab.slug;
+            const isCorrect = state.locked && route?.target?.slug === collab.collab.slug;
             const isWrong = state.locked && isSelected && !isCorrect;
             const classes = [
               "relay-line",
@@ -2913,17 +3007,23 @@
               .join(" ");
             const pulse =
               !state.locked && index < 4
-                ? `<circle r="4" fill="${collab.color}">
-                    <animateMotion dur="${2.2 + index * 0.24}s" repeatCount="indefinite" path="${path}"></animateMotion>
+                ? `<circle r="${4 + collab.ratio * 3}" fill="${escapeHtml(collab.collab.color)}">
+                    <animateMotion dur="${2.2 + index * 0.24}s" repeatCount="indefinite" path="${collab.path}"></animateMotion>
                   </circle>`
                 : "";
-            return `<path class="${classes}" d="${path}"></path>${pulse}`;
+            return `<path class="${classes}" d="${collab.path}"></path>${pulse}`;
           })
           .join("");
 
         const nodes = targets
           .map((collab, index) => {
             const pos = routePositions[index % routePositions.length];
+            const score = route?.scores.get(collab.slug) || 0;
+            const ratio = score / maxScore;
+            const ringRadius = 29 + Math.round(ratio * 14);
+            const barWidth = Math.max(5, Math.round(ratio * 42));
+            const confidenceLabel = score > 0 ? `${Math.round(ratio * 100)}%` : "base";
+            const leading = collab.slug === topSlug;
             const initials = collab.name
               .split(/\s+/)
               .map((part) => part[0])
@@ -2932,6 +3032,20 @@
               .toUpperCase();
             return `
               <g style="--node-color:${collab.color}">
+                <circle
+                  class="confidence-ring"
+                  cx="${pos.x}"
+                  cy="${pos.y}"
+                  r="${ringRadius}"
+                  style="--confidence-width:${leading ? 3.5 : 2};--confidence-opacity:${(0.18 + ratio * 0.34).toFixed(
+                    2
+                  )}"
+                ></circle>
+                ${
+                  leading
+                    ? `<circle class="confidence-orbit" cx="${pos.x}" cy="${pos.y}" r="${ringRadius + 5}"></circle>`
+                    : ""
+                }
                 <circle class="node-ring" cx="${pos.x}" cy="${pos.y}" r="26" stroke="${collab.color}"></circle>
                 <circle class="node-core" cx="${pos.x}" cy="${pos.y}" r="15"></circle>
                 <text class="svg-small" x="${pos.x}" y="${pos.y + 4}" text-anchor="middle" fill="#fff">${escapeHtml(
@@ -2941,6 +3055,11 @@
                 <text class="svg-small node-role" x="${pos.x + 36}" y="${pos.y + 15}">${escapeHtml(
               collab.roleLabel
             )}</text>
+                <rect class="confidence-track node-role" x="${pos.x + 36}" y="${pos.y + 24}" width="42" height="5" rx="2.5"></rect>
+                <rect class="confidence-fill node-role" x="${pos.x + 36}" y="${pos.y + 24}" width="${barWidth}" height="5" rx="2.5"></rect>
+                <text class="confidence-label node-role" x="${pos.x + 84}" y="${pos.y + 29}">${escapeHtml(
+              confidenceLabel
+            )}</text>
               </g>
             `;
           })
@@ -2948,23 +3067,49 @@
 
         dom.relayMap.innerHTML = `
           <title id="relay-map-title">PointCast signal routing map</title>
-          <rect x="0" y="0" width="560" height="360" fill="#fbfaf6"></rect>
+          <defs>
+            <radialGradient id="signal-glow" cx="22%" cy="50%" r="58%">
+              <stop offset="0%" stop-color="${escapeHtml(blockColor)}" stop-opacity="0.18"></stop>
+              <stop offset="56%" stop-color="${escapeHtml(blockColor)}" stop-opacity="0.06"></stop>
+              <stop offset="100%" stop-color="#fbfaf6" stop-opacity="0"></stop>
+            </radialGradient>
+          </defs>
+          <rect class="map-backdrop" x="0" y="0" width="560" height="360"></rect>
+          <rect class="map-glow" x="0" y="0" width="560" height="360"></rect>
           ${grid}
           ${gridRows}
           <path d="M74 48 L74 312" stroke="#d8d3c8" stroke-width="2"></path>
           <path d="M486 48 L486 312" stroke="#d8d3c8" stroke-width="2"></path>
+          ${beams}
           ${paths}
+          <circle class="signal-halo" cx="${start.x}" cy="${start.y}" r="49" style="--signal-color:${escapeHtml(
+          blockColor
+        )}">
+            <animate attributeName="r" values="44;58;44" dur="3.2s" repeatCount="indefinite"></animate>
+            <animate attributeName="opacity" values="0.32;0.12;0.32" dur="3.2s" repeatCount="indefinite"></animate>
+          </circle>
+          <circle class="signal-halo" cx="${start.x}" cy="${start.y}" r="65" style="--signal-color:${escapeHtml(
+          blockColor
+        )}"></circle>
           <g>
-            <rect x="46" y="132" width="128" height="96" rx="8" fill="#ffffff" stroke="${escapeHtml(
-              block?.channelColor || "#185fa5"
-            )}" stroke-width="2"></rect>
-            <circle cx="74" cy="162" r="13" fill="${escapeHtml(block?.channelColor || "#185fa5")}"></circle>
+            <rect class="signal-card" x="46" y="132" width="128" height="96" rx="8" stroke="${escapeHtml(
+              blockColor
+            )}"></rect>
+            <rect class="signal-card-soft" x="52" y="138" width="116" height="84" rx="6" style="--signal-color:${escapeHtml(
+              blockColor
+            )}"></rect>
+            <circle cx="74" cy="162" r="13" fill="${escapeHtml(blockColor)}"></circle>
             <text class="svg-small" x="74" y="166" text-anchor="middle" fill="#fff">${escapeHtml(
               block?.channelCode || "PC"
             )}</text>
             <text class="svg-label" x="96" y="161">${escapeHtml(block?.type || "NOTE")}</text>
             <text class="svg-small" x="96" y="181">${escapeHtml(`B/${block?.id || "----"}`)}</text>
             <text class="svg-small" x="58" y="210">${escapeHtml(block?.channelName || "PointCast")}</text>
+            ${
+              state.drill.active
+                ? `<text class="svg-small" x="140" y="148" text-anchor="middle" fill="${escapeHtml(blockColor)}">DRILL</text>`
+                : ""
+            }
           </g>
           ${nodes}
         `;
