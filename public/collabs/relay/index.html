@@ -975,6 +975,28 @@
         font-size: 0.74rem;
       }
 
+      .review-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        justify-self: start;
+        min-height: 28px;
+        margin-top: 7px;
+        padding: 0 9px;
+        border: 1px solid var(--rule);
+        border-radius: 7px;
+        background: var(--surface);
+        color: var(--ink);
+        cursor: pointer;
+        font-size: 0.68rem;
+      }
+
+      .review-button:hover,
+      .review-button:focus-visible {
+        border-color: var(--blue);
+        outline: 0;
+      }
+
       .route-tape {
         display: grid;
         gap: 8px;
@@ -1876,6 +1898,7 @@
         selectedSlug: null,
         result: null,
         log: [],
+        reviewed: new Set(),
         dataMode: "loading",
         socket: null,
         pingId: null,
@@ -2127,6 +2150,7 @@
         state.clueUsed = false;
         state.finished = false;
         state.log = [];
+        state.reviewed = new Set();
         state.result = null;
         state.paused = false;
         dealNext();
@@ -2310,6 +2334,7 @@
           reason,
           route,
           clueUsed: state.clueUsed,
+          reviewId: `${state.routeMode}:${state.shiftResolved}:${state.current.id}:${state.log.length}`,
         });
         state.log = state.log.slice(0, 12);
 
@@ -3028,17 +3053,33 @@
           .join("");
       }
 
-      function getReviewItems() {
+      function getOpenReviewItems() {
         return state.log
-          .filter((item) => item.status !== "hit")
-          .slice(0, 4);
+          .filter((item) => item.status !== "hit" && !state.reviewed.has(item.reviewId));
+      }
+
+      function getReviewItems() {
+        return getOpenReviewItems().slice(0, 4);
+      }
+
+      function getReviewStats() {
+        const total = state.log.filter((item) => item.status !== "hit").length;
+        const open = getOpenReviewItems().length;
+        return {
+          total,
+          open,
+          cleared: Math.max(0, total - open),
+        };
       }
 
       function renderReviewStack() {
         const items = getReviewItems();
-        dom.reviewCountLabel.textContent = String(items.length);
+        const stats = getReviewStats();
+        dom.reviewCountLabel.textContent = stats.open ? String(stats.open) : stats.total ? "Clear" : "0";
         if (!items.length) {
-          dom.reviewStack.innerHTML = `<p class="empty-state">Misses and same-desk calls will queue here.</p>`;
+          dom.reviewStack.innerHTML = `<p class="empty-state">${
+            stats.total ? "Review stack clear." : "Misses and same-desk calls will queue here."
+          }</p>`;
           return;
         }
 
@@ -3047,19 +3088,34 @@
             const partial = item.status === "partial";
             const token = partial ? "PART" : item.reason === "timeout" ? "TIME" : item.reason === "skip" ? "SKIP" : "MISS";
             const fallbackName = item.mode === "surface" ? "Surface" : "Registry";
+            const selectedName = item.selected?.name || (item.reason === "timeout" ? "No route" : "Skip");
             return `
               <div class="review-item">
                 <span class="review-token ${partial ? "is-partial" : ""}">${escapeHtml(token)}</span>
                 <span class="review-copy">
                   <strong>${escapeHtml(item.block.title)}</strong>
-                  <span>${escapeHtml(item.target?.name || fallbackName)} · ${escapeHtml(
-              item.route?.reason || item.reason || "review route"
-            )}</span>
+                  <span>${escapeHtml(selectedName)} -> ${escapeHtml(item.target?.name || fallbackName)}</span>
+                  <span>${escapeHtml(`Cue: ${item.route?.reason || item.reason || "review route"}`)}</span>
+                  <button class="review-button mono" type="button" data-review-id="${escapeHtml(
+                    item.reviewId
+                  )}">Clear</button>
                 </span>
               </div>
             `;
           })
           .join("");
+        dom.reviewStack.querySelectorAll("[data-review-id]").forEach((button) => {
+          button.addEventListener("click", () => clearReviewItem(button.dataset.reviewId));
+        });
+      }
+
+      function clearReviewItem(reviewId) {
+        if (!reviewId) {
+          return;
+        }
+        state.reviewed.add(reviewId);
+        renderReviewStack();
+        renderRunReport();
       }
 
       function renderScoreboard() {
@@ -3235,8 +3291,10 @@
         const tapeLine = topRow
           ? `Tape: ${topRow.target.name} ${topRow.hits}/${topRow.resolved} hit routes`
           : "Tape: no resolved routes yet";
-        const reviewCount = getReviewItems().length;
-        const reviewLine = reviewCount ? `Review: ${reviewCount} queued` : "Review: clear";
+        const reviewStats = getReviewStats();
+        const reviewLine = reviewStats.open
+          ? `Review: ${reviewStats.open} queued / ${reviewStats.cleared} cleared`
+          : "Review: clear";
         const contracts = getDailyContracts();
         const contractLine = `Contract: ${
           contracts.filter((contract) => contract.value >= contract.target).length
