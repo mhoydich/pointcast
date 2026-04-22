@@ -215,6 +215,12 @@ const features = [
     body: 'The Swift counterpart to v0.13 landed in Magpie v0.14 — AppState.handleComposeRequest builds an ephemeral ClipItem (not persisted) + PublishDraft and fans out via PublisherRegistry, returning the same result envelope as /broadcast so Sparrow\'s parser is unchanged. Upgrade Magpie; next time you tick extras, the first hop succeeds.',
     kbd: 'swift',
   },
+  {
+    kicker: 'mirror',
+    title: 'Reading-list mirror',
+    body: 'When Magpie\'s peer-node is alive, sparrow:saved mirrors to it via POST /reader-state on every toggle (600ms debounce). Fresh tabs pull GET /reader-state.json on load and apply newest-wins by updated_at. Your saved receipts stay in sync across Sparrow tabs on the same machine — no sign-in, no server-of-record, no telemetry.',
+    kbd: 'mirror',
+  },
 ];
 
 const roadmap = [
@@ -416,26 +422,39 @@ const roadmap = [
   },
   {
     v: 'v0.15',
-    status: 'next',
-    when: 'planned',
-    title: 'Reading-list mirror',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Reading-list mirror (via Magpie peer-node)',
     items: [
-      'Sparrow.app exposes GET/POST /saved on its native HTTP server',
-      'SparrowLayout polls + pushes sparrow:saved changes when the bridge pill is connected',
-      'Newest-wins conflict resolution',
-      'Same pattern extends to sparrow:visited and sparrow:reactions once it\'s proven out',
+      'MagpieServer: GET /reader-state.json returns the stored { saved, ... } blob + schema tag "sparrow-reader-state-v1"',
+      'MagpieServer: POST /reader-state merges incoming with UserDefaults store using per-key updated_at (newest wins)',
+      'SparrowLayout debounces 600 ms then POSTs sparrow:saved as { saved: { value, updated_at } }',
+      'On load, if Magpie is probed alive, Sparrow GETs /reader-state.json and pulls newer-than-local saved with skipMirror flag (no loop)',
+      'sparrow:saved:updated_at is the local tie-breaker so offline toggles don\'t lose to stale remote state',
+      'Only fires when the peer-node has been seen alive this session — no dead-socket spam on solo browsers',
     ],
   },
   {
     v: 'v0.16',
-    status: 'planned',
-    title: 'Sync + end-to-end',
+    status: 'next',
+    when: 'planned',
+    title: 'Visited + reactions on the same rails',
     items: [
-      'Cross-device sync of saved + visited + reactions via a Nostr relay pool',
-      'End-to-end encrypted via NIP-44',
-      'Import/export OPML for feed-reader interop',
+      'Extend sparrow-reader-state-v1 payload with { visited, reactions } entries',
+      'Same debounce + merge flow; SparrowLayout mirrors three keys instead of one',
+      'OPML import/export for feed-reader interop',
+      'Bonjour discovery of the peer-node for dev environments (mDNS advertisement from Magpie)',
+    ],
+  },
+  {
+    v: 'v0.17',
+    status: 'planned',
+    title: 'Cross-device sync',
+    items: [
+      'Same sparrow-reader-state-v1 blob, but distributed over a Nostr relay pool',
+      'End-to-end encrypted via NIP-44 · key derived from the npub the user already connected in v0.8',
+      'Closes the multi-machine loop that localhost mirror can\'t reach',
       '"mark as read" state deletable on any device (graduates v0.3\'s local tracking to cross-device)',
-      'Bonjour discovery of local hosted Sparrow instances for dev environments',
     ],
   },
   {
@@ -515,7 +534,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.14 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.15 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
