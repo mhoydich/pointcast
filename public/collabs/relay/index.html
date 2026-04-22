@@ -991,10 +991,26 @@
         font-size: 0.68rem;
       }
 
+      .review-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .review-button.is-primary {
+        border-color: var(--blue);
+        color: var(--blue);
+      }
+
       .review-button:hover,
       .review-button:focus-visible {
         border-color: var(--blue);
         outline: 0;
+      }
+
+      .review-button:disabled {
+        cursor: default;
+        opacity: 0.5;
       }
 
       .route-tape {
@@ -1899,6 +1915,13 @@
         result: null,
         log: [],
         reviewed: new Set(),
+        drill: {
+          active: false,
+          source: null,
+          previous: null,
+          attempted: 0,
+          cleared: 0,
+        },
         dataMode: "loading",
         socket: null,
         pingId: null,
@@ -2151,6 +2174,13 @@
         state.finished = false;
         state.log = [];
         state.reviewed = new Set();
+        state.drill = {
+          active: false,
+          source: null,
+          previous: null,
+          attempted: 0,
+          cleared: 0,
+        };
         state.result = null;
         state.paused = false;
         dealNext();
@@ -2236,6 +2266,10 @@
       }
 
       function skipSignal() {
+        if (state.drill.active) {
+          finishReviewDrill();
+          return;
+        }
         if (state.finished) {
           startNewGame();
           return;
@@ -2292,6 +2326,10 @@
       }
 
       function lockRound(slug, reason) {
+        if (state.drill.active) {
+          lockDrillRound(slug, reason);
+          return;
+        }
         const route = computeRoute(state.current);
         const selected = getRouteTargets().find((targetItem) => targetItem.slug === slug) || null;
         const target = route.target;
@@ -2359,6 +2397,135 @@
         if (state.shiftResolved >= state.shiftLength) {
           window.setTimeout(finishShift, 900);
         }
+      }
+
+      function startReviewDrill(reviewId) {
+        if (!reviewId || state.drill.active || !state.locked) {
+          return;
+        }
+        const source = state.log.find((item) => item.reviewId === reviewId);
+        if (!source || source.status === "hit") {
+          return;
+        }
+
+        stopTimer();
+        state.drill.active = true;
+        state.drill.source = source;
+        state.drill.previous = {
+          current: state.current,
+          locked: state.locked,
+          selectedSlug: state.selectedSlug,
+          result: state.result,
+          clueUsed: state.clueUsed,
+          paused: state.paused,
+          finished: state.finished,
+          timeLeft: state.timeLeft,
+        };
+        state.current = source.block;
+        state.locked = false;
+        state.selectedSlug = null;
+        state.result = null;
+        state.clueUsed = false;
+        state.finished = false;
+        state.paused = false;
+        state.timeLeft = Math.min(state.timeTotal, 18);
+
+        renderCurrentBlock();
+        renderRoutes();
+        renderSignalMap();
+        renderConsensus();
+        renderMission();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderShift();
+        renderRouteTape();
+        renderRunReport();
+        renderResult();
+        renderControls();
+        updatePresenceWhere("review drill");
+        startTimer();
+      }
+
+      function lockDrillRound(slug, reason) {
+        const source = state.drill.source;
+        const route = computeRoute(state.current);
+        const selected = getRouteTargets().find((targetItem) => targetItem.slug === slug) || null;
+        const target = route.target;
+        const exact = Boolean(selected && target && selected.slug === target.slug);
+        const roleMatch = Boolean(selected && target && selected.role === target.role);
+        const status = exact ? "drill-hit" : reason === "answer" && roleMatch ? "drill-partial" : "drill-miss";
+
+        stopTimer();
+        state.locked = true;
+        state.selectedSlug = slug;
+        state.drill.attempted += 1;
+        if (exact && source?.reviewId) {
+          state.reviewed.add(source.reviewId);
+          state.drill.cleared += 1;
+        }
+        state.result = {
+          status,
+          points: 0,
+          selected,
+          target,
+          reason,
+          route,
+          clueUsed: false,
+          drill: true,
+          source,
+        };
+
+        renderCurrentBlock();
+        renderRoutes();
+        renderSignalMap();
+        renderConsensus();
+        renderMission();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderResult();
+        renderRunReport();
+        renderControls();
+        updatePresenceWhere(exact ? "drill cleared" : "review drill");
+      }
+
+      function finishReviewDrill() {
+        if (!state.drill.active) {
+          return;
+        }
+        stopTimer();
+        const previous = state.drill.previous;
+        state.drill.active = false;
+        state.drill.source = null;
+        state.drill.previous = null;
+        if (previous) {
+          state.current = previous.current;
+          state.locked = previous.locked;
+          state.selectedSlug = previous.selectedSlug;
+          state.result = previous.result;
+          state.clueUsed = previous.clueUsed;
+          state.paused = previous.paused;
+          state.finished = previous.finished;
+          state.timeLeft = previous.timeLeft;
+        }
+
+        renderCurrentBlock();
+        renderRoutes();
+        renderSignalMap();
+        renderConsensus();
+        renderMission();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderScoreboard();
+        renderShift();
+        renderRouteTape();
+        renderResult();
+        renderLog();
+        renderRunReport();
+        renderControls();
+        updatePresenceWhere(state.finished ? "shift complete" : "reviewing route");
       }
 
       function finishShift() {
@@ -2600,16 +2767,26 @@
         if (!block) {
           return;
         }
-        dom.roundLabel.textContent = `${Math.min(state.shiftResolved + 1, state.shiftLength)}/${state.shiftLength}`;
+        dom.roundLabel.textContent = state.drill.active
+          ? "DRILL"
+          : `${Math.min(state.shiftResolved + 1, state.shiftLength)}/${state.shiftLength}`;
         dom.targetLabel.textContent =
-          state.finished
+          state.drill.active
+            ? state.locked && state.result?.target
+              ? state.result.target.name
+              : "Review"
+            : state.finished
             ? "Complete"
             : state.locked && state.result?.target
               ? state.result.target.name
               : state.routeMode === "surface"
                 ? "Surface"
                 : "Registry";
-        dom.sourceLabel.textContent = state.dataMode === "live" ? "Live feed" : "Fallback";
+        dom.sourceLabel.textContent = state.drill.active
+          ? "Drill"
+          : state.dataMode === "live"
+            ? "Live feed"
+            : "Fallback";
         dom.blockChannel.textContent = block.channelCode || "PC";
         dom.blockChannel.style.setProperty("--channel-color", block.channelColor || "#185fa5");
         dom.blockType.textContent = block.type || "NOTE";
@@ -2829,8 +3006,18 @@
         dom.modeAgentButton.classList.toggle("is-active", !isSurface);
         dom.modeSurfaceButton.classList.toggle("is-active", isSurface);
         const route = state.current ? computeRoute(state.current) : null;
-        const activeTarget = state.locked && route?.target ? route.target.name : `${targets.length} targets`;
-        const missionName = isSurface ? "PointCast surfaces" : "Collaborator registry";
+        const activeTarget = state.drill.active
+          ? state.locked && route?.target
+            ? route.target.name
+            : "retry queued route"
+          : state.locked && route?.target
+            ? route.target.name
+            : `${targets.length} targets`;
+        const missionName = state.drill.active
+          ? "Review drill"
+          : isSurface
+            ? "PointCast surfaces"
+            : "Collaborator registry";
         dom.missionReadout.innerHTML = `
           <strong>${escapeHtml(missionName)}</strong>
           <span class="mono">${escapeHtml(activeTarget)}</span>
@@ -2952,10 +3139,14 @@
 
       function renderDocket() {
         const currentItem = state.current ? [{ block: state.current, current: true }] : [];
-        const upcomingSlots = Math.max(0, state.shiftLength - state.shiftResolved - currentItem.length);
-        const upcoming = state.deck
-          .slice(state.deckCursor, state.deckCursor + Math.min(3, upcomingSlots))
-          .map((block) => ({ block, current: false }));
+        const upcomingSlots = state.drill.active
+          ? 0
+          : Math.max(0, state.shiftLength - state.shiftResolved - currentItem.length);
+        const upcoming = state.drill.active
+          ? []
+          : state.deck
+              .slice(state.deckCursor, state.deckCursor + Math.min(3, upcomingSlots))
+              .map((block) => ({ block, current: false }));
         const items = [...currentItem, ...upcoming];
         dom.docketCountLabel.textContent = String(items.length);
 
@@ -2968,7 +3159,11 @@
           .map(({ block, current }) => {
             const route = current && state.locked && state.result?.target ? state.result.target.name : null;
             const meta = current
-              ? route
+              ? state.drill.active
+                ? state.locked
+                  ? "drill locked"
+                  : "review drill"
+                : route
                 ? `resolved to ${route}`
                 : state.finished
                   ? "shift complete"
@@ -3089,6 +3284,7 @@
             const token = partial ? "PART" : item.reason === "timeout" ? "TIME" : item.reason === "skip" ? "SKIP" : "MISS";
             const fallbackName = item.mode === "surface" ? "Surface" : "Registry";
             const selectedName = item.selected?.name || (item.reason === "timeout" ? "No route" : "Skip");
+            const canDrill = state.locked && !state.drill.active;
             return `
               <div class="review-item">
                 <span class="review-token ${partial ? "is-partial" : ""}">${escapeHtml(token)}</span>
@@ -3096,14 +3292,25 @@
                   <strong>${escapeHtml(item.block.title)}</strong>
                   <span>${escapeHtml(selectedName)} -> ${escapeHtml(item.target?.name || fallbackName)}</span>
                   <span>${escapeHtml(`Cue: ${item.route?.reason || item.reason || "review route"}`)}</span>
-                  <button class="review-button mono" type="button" data-review-id="${escapeHtml(
-                    item.reviewId
-                  )}">Clear</button>
+                  <span class="review-actions">
+                    <button
+                      class="review-button is-primary mono"
+                      type="button"
+                      data-drill-id="${escapeHtml(item.reviewId)}"
+                      ${canDrill ? "" : "disabled"}
+                    >Drill</button>
+                    <button class="review-button mono" type="button" data-review-id="${escapeHtml(
+                      item.reviewId
+                    )}">Clear</button>
+                  </span>
                 </span>
               </div>
             `;
           })
           .join("");
+        dom.reviewStack.querySelectorAll("[data-drill-id]").forEach((button) => {
+          button.addEventListener("click", () => startReviewDrill(button.dataset.drillId));
+        });
         dom.reviewStack.querySelectorAll("[data-review-id]").forEach((button) => {
           button.addEventListener("click", () => clearReviewItem(button.dataset.reviewId));
         });
@@ -3295,6 +3502,9 @@
         const reviewLine = reviewStats.open
           ? `Review: ${reviewStats.open} queued / ${reviewStats.cleared} cleared`
           : "Review: clear";
+        const drillLine = state.drill.active
+          ? `Drill: active on B/${state.current?.id || "----"}`
+          : `Drill: ${state.drill.cleared}/${state.drill.attempted} cleared`;
         const contracts = getDailyContracts();
         const contractLine = `Contract: ${
           contracts.filter((contract) => contract.value >= contract.target).length
@@ -3309,6 +3519,7 @@
           contractLine,
           `Track: ${getShiftTrackSummary()}`,
           reviewLine,
+          drillLine,
           nowLine,
           lastLine,
           tapeLine,
@@ -3385,6 +3596,26 @@
           dom.resultPanel.classList.add("is-visible");
           return;
         }
+        if (state.result.drill) {
+          const title =
+            status === "drill-hit"
+              ? "Drill cleared"
+              : status === "drill-partial"
+                ? "Same desk, drill again"
+                : reason === "timeout"
+                  ? "Drill timed out"
+                  : "Drill missed";
+          const selectedName = selected ? selected.name : reason === "timeout" ? "No route" : "Skip";
+          const fallbackName = state.routeMode === "surface" ? "Surface" : "Registry";
+          dom.resultPanel.innerHTML = `
+            <strong>${escapeHtml(title)}</strong>
+            <p>${escapeHtml(selectedName)} -> ${escapeHtml(target?.name || fallbackName)} · ${escapeHtml(
+            route.reason
+          )}</p>
+          `;
+          dom.resultPanel.classList.add("is-visible");
+          return;
+        }
         const title =
           status === "hit"
             ? `Clean relay +${points}`
@@ -3408,11 +3639,24 @@
       }
 
       function renderControls() {
-        dom.pauseButton.disabled = state.locked || state.finished;
+        dom.pauseButton.disabled = state.drill.active || state.locked || state.finished;
         dom.pauseButton.querySelector("span").textContent = state.paused ? "Resume" : "Pause";
         dom.clueButton.disabled =
-          state.locked || state.paused || state.finished || state.clueUsed || state.cluesLeft <= 0;
-        dom.nextButtonLabel.textContent = state.finished ? "New" : state.locked ? "Next" : "Skip";
+          state.drill.active ||
+          state.locked ||
+          state.paused ||
+          state.finished ||
+          state.clueUsed ||
+          state.cluesLeft <= 0;
+        dom.nextButtonLabel.textContent = state.drill.active
+          ? state.locked
+            ? "Return"
+            : "Exit"
+          : state.finished
+            ? "New"
+            : state.locked
+              ? "Next"
+              : "Skip";
         dom.nextButton.disabled = !state.current;
       }
 
