@@ -11,6 +11,12 @@ const payload = {
   human: 'https://pointcast.xyz/nouns-cola',
   image: 'https://pointcast.xyz/images/nouns-cola/nouns-cola-pack.png',
   intent: 'Create a Nouns Cola pilot on PointCast covering formulation, contributions, inventory financing, production, profit, and yield.',
+  companionGame: {
+    name: 'Nouns Cola Crush',
+    human: 'https://pointcast.xyz/nouns-cola-crush',
+    manifest: 'https://pointcast.xyz/nouns-cola-crush.json',
+    role: 'playable match-3 arcade surface for the Nouns Cola pilot',
+  },
   formulation: {
     product: '12 oz carbonated cola concept',
     targets: {
@@ -144,6 +150,8 @@ const payload = {
   ],
   links: {
     human: 'https://pointcast.xyz/nouns-cola',
+    game: 'https://pointcast.xyz/nouns-cola-crush',
+    gameManifest: 'https://pointcast.xyz/nouns-cola-crush.json',
     yieldSandbox: 'https://pointcast.xyz/yield',
     pointcast: 'https://pointcast.xyz/',
   },

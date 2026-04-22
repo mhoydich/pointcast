@@ -1,0 +1,1112 @@
+---
+/**
+ * /nouns-cola-crush - playable match-3 game for the Nouns Cola pilot.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const GOALS = [
+  { type: 'can', label: 'Cola cans', short: 'CAN', target: 20 },
+  { type: 'cap', label: 'Bottle caps', short: 'CAP', target: 18 },
+  { type: 'fizz', label: 'Fizz drops', short: 'FIZ', target: 16 },
+];
+
+const PIECES = [
+  { type: 'can', label: 'Cola can', short: 'CAN' },
+  { type: 'cap', label: 'Bottle cap', short: 'CAP' },
+  { type: 'fizz', label: 'Fizz drop', short: 'FIZ' },
+  { type: 'cherry', label: 'Cherry pop', short: 'POP' },
+  { type: 'lemon', label: 'Lemon bolt', short: 'ZIP' },
+  { type: 'noggles', label: 'Nouns glasses', short: 'NOG' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': 'https://pointcast.xyz/nouns-cola-crush#game',
+      name: 'Nouns Cola Crush',
+      description: 'A browser-playable Nouns Cola match-3 puzzle game on PointCast.',
+      url: 'https://pointcast.xyz/nouns-cola-crush',
+      image: 'https://pointcast.xyz/images/nouns-cola-crush/super-graphics.png',
+      gamePlatform: 'Web browser',
+      genre: 'Match-3 puzzle',
+      inLanguage: 'en-US',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/nouns-cola-crush#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Nouns Cola', item: 'https://pointcast.xyz/nouns-cola' },
+        { '@type': 'ListItem', position: 3, name: 'Nouns Cola Crush', item: 'https://pointcast.xyz/nouns-cola-crush' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Nouns Cola Crush"
+  description="A playable Nouns Cola match-3 puzzle game with generator-made arcade graphics, cascades, goals, score, moves, and local high score."
+  image="/images/og/nouns-cola-crush.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/nouns-cola-crush.json', title: 'Nouns Cola Crush game manifest (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/nouns-cola-crush.png',
+    buttons: [
+      { label: 'Play game', action: 'link', target: 'https://pointcast.xyz/nouns-cola-crush' },
+      { label: 'Nouns Cola', action: 'link', target: 'https://pointcast.xyz/nouns-cola' },
+      { label: 'Game JSON', action: 'link', target: 'https://pointcast.xyz/nouns-cola-crush.json' },
+      { label: 'Home feed', action: 'link', target: 'https://pointcast.xyz/' },
+    ],
+  }}
+>
+  <div class="crush-page" data-crush-game>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nouns-cola">Nouns Cola</a>
+      <span aria-hidden="true">/</span>
+      <span>Crush</span>
+    </nav>
+
+    <section class="game-shell">
+      <div class="mast">
+        <div class="mast__copy">
+          <p class="kicker">NOUNS COLA / ARCADE PILOT</p>
+          <h1>Nouns Cola Crush</h1>
+          <p>Batch 01 is live: clear cans, caps, and fizz before the moves run out.</p>
+        </div>
+        <div class="hud" aria-label="Game status">
+          <div><span class="mono">SCORE</span><strong data-score>0</strong></div>
+          <div><span class="mono">MOVES</span><strong data-moves>28</strong></div>
+          <div><span class="mono">TARGET</span><strong data-target>2,600</strong></div>
+          <div><span class="mono">HIGH</span><strong data-high>0</strong></div>
+        </div>
+      </div>
+
+      <div class="game-layout">
+        <section class="board-panel" aria-label="Puzzle board">
+          <div class="board-top">
+            <span class="mono" data-status>Batch 01 ready.</span>
+            <strong data-combo>COMBO x1</strong>
+          </div>
+          <div class="board" data-board role="grid" aria-label="Nouns Cola Crush board"></div>
+        </section>
+
+        <aside class="side-panel" aria-label="Run goals">
+          <figure class="super-art">
+            <img src="/images/nouns-cola-crush/super-graphics.png" alt="Nouns Cola arcade art with cans, bubbles, candy gems, and Nouns glasses" width="1672" height="941" />
+          </figure>
+
+          <div class="goal-stack" aria-label="Collection goals">
+            {GOALS.map((goal) => (
+              <div class={`goal goal--${goal.type}`} data-goal={goal.type} data-goal-target={goal.target}>
+                <div class="goal__head">
+                  <span><i>{goal.short}</i>{goal.label}</span>
+                  <strong data-goal-value>{goal.target} left</strong>
+                </div>
+                <div class="goal__bar" aria-hidden="true"><span></span></div>
+              </div>
+            ))}
+          </div>
+
+          <div class="button-row" aria-label="Game controls">
+            <button type="button" class="btn btn--primary" data-action="new">New board</button>
+            <button type="button" class="btn" data-action="shuffle">Shuffle</button>
+          </div>
+
+          <div class="piece-strip" aria-label="Piece legend">
+            {PIECES.map((piece) => (
+              <span class={`piece-chip piece-chip--${piece.type}`}>{piece.short}</span>
+            ))}
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const root = document.querySelector('[data-crush-game]');
+      if (!root) return;
+
+      const SIZE = 8;
+      const MOVES = 28;
+      const TARGET = 2600;
+      const TYPES = [
+        { type: 'can', label: 'Cola can', short: 'CAN' },
+        { type: 'cap', label: 'Bottle cap', short: 'CAP' },
+        { type: 'fizz', label: 'Fizz drop', short: 'FIZ' },
+        { type: 'cherry', label: 'Cherry pop', short: 'POP' },
+        { type: 'lemon', label: 'Lemon bolt', short: 'ZIP' },
+        { type: 'noggles', label: 'Nouns glasses', short: 'NOG' },
+      ];
+      const GOALS = [
+        { type: 'can', target: 20 },
+        { type: 'cap', target: 18 },
+        { type: 'fizz', target: 16 },
+      ];
+
+      const byType = Object.fromEntries(TYPES.map((piece) => [piece.type, piece]));
+      const boardEl = root.querySelector('[data-board]');
+      const scoreEl = root.querySelector('[data-score]');
+      const movesEl = root.querySelector('[data-moves]');
+      const targetEl = root.querySelector('[data-target]');
+      const highEl = root.querySelector('[data-high]');
+      const statusEl = root.querySelector('[data-status]');
+      const comboEl = root.querySelector('[data-combo]');
+      const number = new Intl.NumberFormat('en-US');
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      const state = {
+        board: [],
+        selected: null,
+        clearing: new Set(),
+        score: 0,
+        moves: MOVES,
+        combo: 1,
+        high: Number(localStorage.getItem('pc:nouns-cola-crush:high') || 0),
+        goals: Object.fromEntries(GOALS.map((goal) => [goal.type, 0])),
+        busy: false,
+        done: false,
+      };
+
+      function randomType() {
+        return TYPES[Math.floor(Math.random() * TYPES.length)].type;
+      }
+
+      function sameLineWouldMatch(board, index, type) {
+        const row = Math.floor(index / SIZE);
+        const col = index % SIZE;
+        const leftMatch = col >= 2 && board[index - 1] === type && board[index - 2] === type;
+        const upMatch = row >= 2 && board[index - SIZE] === type && board[index - SIZE * 2] === type;
+        return leftMatch || upMatch;
+      }
+
+      function createBoard() {
+        const board = [];
+        for (let index = 0; index < SIZE * SIZE; index++) {
+          let type = randomType();
+          let guard = 0;
+          while (sameLineWouldMatch(board, index, type) && guard < 30) {
+            type = randomType();
+            guard++;
+          }
+          board[index] = type;
+        }
+        return hasLegalMove(board) ? board : createBoard();
+      }
+
+      function rowOf(index) {
+        return Math.floor(index / SIZE);
+      }
+
+      function colOf(index) {
+        return index % SIZE;
+      }
+
+      function isAdjacent(a, b) {
+        const sameRow = rowOf(a) === rowOf(b) && Math.abs(colOf(a) - colOf(b)) === 1;
+        const sameCol = colOf(a) === colOf(b) && Math.abs(rowOf(a) - rowOf(b)) === 1;
+        return sameRow || sameCol;
+      }
+
+      function swapped(board, a, b) {
+        const next = board.slice();
+        [next[a], next[b]] = [next[b], next[a]];
+        return next;
+      }
+
+      function findMatches(board) {
+        const matched = new Set();
+
+        for (let row = 0; row < SIZE; row++) {
+          let runStart = 0;
+          for (let col = 1; col <= SIZE; col++) {
+            const current = col < SIZE ? board[row * SIZE + col] : null;
+            const previous = board[row * SIZE + col - 1];
+            if (current !== previous) {
+              const runLength = col - runStart;
+              if (previous && runLength >= 3) {
+                for (let c = runStart; c < col; c++) matched.add(row * SIZE + c);
+              }
+              runStart = col;
+            }
+          }
+        }
+
+        for (let col = 0; col < SIZE; col++) {
+          let runStart = 0;
+          for (let row = 1; row <= SIZE; row++) {
+            const current = row < SIZE ? board[row * SIZE + col] : null;
+            const previous = board[(row - 1) * SIZE + col];
+            if (current !== previous) {
+              const runLength = row - runStart;
+              if (previous && runLength >= 3) {
+                for (let r = runStart; r < row; r++) matched.add(r * SIZE + col);
+              }
+              runStart = row;
+            }
+          }
+        }
+
+        return matched;
+      }
+
+      function hasLegalMove(board) {
+        for (let index = 0; index < board.length; index++) {
+          const right = colOf(index) < SIZE - 1 ? index + 1 : null;
+          const down = rowOf(index) < SIZE - 1 ? index + SIZE : null;
+          if (right !== null && findMatches(swapped(board, index, right)).size > 0) return true;
+          if (down !== null && findMatches(swapped(board, index, down)).size > 0) return true;
+        }
+        return false;
+      }
+
+      function dropBoard() {
+        for (let col = 0; col < SIZE; col++) {
+          const kept = [];
+          for (let row = SIZE - 1; row >= 0; row--) {
+            const value = state.board[row * SIZE + col];
+            if (value) kept.push(value);
+          }
+          for (let row = SIZE - 1; row >= 0; row--) {
+            const value = kept.shift() || randomType();
+            state.board[row * SIZE + col] = value;
+          }
+        }
+      }
+
+      function goalsMet() {
+        return GOALS.every((goal) => state.goals[goal.type] >= goal.target);
+      }
+
+      function setStatus(message) {
+        if (statusEl) statusEl.textContent = message;
+      }
+
+      function updateHud() {
+        scoreEl.textContent = number.format(state.score);
+        movesEl.textContent = String(state.moves);
+        targetEl.textContent = number.format(TARGET);
+        highEl.textContent = number.format(state.high);
+        comboEl.textContent = 'COMBO x' + state.combo;
+
+        root.querySelectorAll('[data-goal]').forEach((goalEl) => {
+          const type = goalEl.getAttribute('data-goal');
+          const target = Number(goalEl.getAttribute('data-goal-target'));
+          const collected = state.goals[type] || 0;
+          const remaining = Math.max(0, target - collected);
+          const fill = Math.min(100, (collected / target) * 100);
+          goalEl.style.setProperty('--fill', fill + '%');
+          const value = goalEl.querySelector('[data-goal-value]');
+          if (value) value.textContent = remaining > 0 ? remaining + ' left' : 'done';
+        });
+      }
+
+      function render() {
+        boardEl.textContent = '';
+        state.board.forEach((type, index) => {
+          const piece = byType[type];
+          const button = document.createElement('button');
+          const mark = document.createElement('span');
+          const gleam = document.createElement('span');
+          button.type = 'button';
+          button.className = 'tile';
+          button.dataset.index = String(index);
+          button.dataset.piece = type;
+          button.setAttribute('role', 'gridcell');
+          button.setAttribute('aria-label', piece.label + ', row ' + (rowOf(index) + 1) + ', column ' + (colOf(index) + 1));
+          button.disabled = state.busy || state.done;
+          if (state.selected === index) button.classList.add('is-selected');
+          if (state.clearing.has(index)) button.classList.add('is-clearing');
+          gleam.className = 'tile__gleam';
+          mark.className = 'tile__mark';
+          mark.textContent = piece.short;
+          button.append(gleam, mark);
+          boardEl.append(button);
+        });
+        updateHud();
+      }
+
+      function shuffleBoard() {
+        const copy = state.board.slice();
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        state.board = hasLegalMove(copy) && findMatches(copy).size === 0 ? copy : createBoard();
+        state.selected = null;
+        state.combo = 1;
+        setStatus('Fresh fizz in the grid.');
+        render();
+      }
+
+      async function resolveMatches(firstMatches) {
+        state.busy = true;
+        let matches = firstMatches;
+        let chain = 0;
+
+        while (matches.size > 0) {
+          chain++;
+          state.combo = chain;
+          state.clearing = matches;
+          const clearedByType = {};
+          matches.forEach((index) => {
+            const type = state.board[index];
+            clearedByType[type] = (clearedByType[type] || 0) + 1;
+          });
+          render();
+          await sleep(170);
+
+          matches.forEach((index) => {
+            const type = state.board[index];
+            if (type in state.goals) state.goals[type] += 1;
+            state.board[index] = null;
+          });
+
+          const cleared = matches.size;
+          const goalBonus = Object.values(clearedByType).reduce((sum, count) => sum + Math.max(0, count - 3) * 45, 0);
+          state.score += cleared * 80 * chain + goalBonus;
+          dropBoard();
+          state.clearing = new Set();
+          render();
+          await sleep(120);
+          matches = findMatches(state.board);
+        }
+
+        state.combo = Math.max(1, chain);
+        state.busy = false;
+
+        if (state.score > state.high) {
+          state.high = state.score;
+          localStorage.setItem('pc:nouns-cola-crush:high', String(state.high));
+        }
+
+        if (state.score >= TARGET && goalsMet()) {
+          state.done = true;
+          setStatus('Pilot batch cleared.');
+        } else if (state.moves <= 0) {
+          state.done = true;
+          setStatus('Run complete. Start a new board.');
+        } else if (!hasLegalMove(state.board)) {
+          shuffleBoard();
+          return;
+        } else {
+          setStatus(chain > 1 ? 'Cascade chain x' + chain + '.' : 'Good pop.');
+        }
+
+        render();
+      }
+
+      async function attemptSwap(a, b) {
+        if (state.busy || state.done) return;
+        state.board = swapped(state.board, a, b);
+        const matches = findMatches(state.board);
+
+        if (matches.size === 0) {
+          state.board = swapped(state.board, a, b);
+          state.selected = null;
+          state.combo = 1;
+          setStatus('No match.');
+          render();
+          return;
+        }
+
+        state.moves -= 1;
+        state.selected = null;
+        setStatus('Fizz break.');
+        render();
+        await resolveMatches(matches);
+      }
+
+      function newGame() {
+        state.board = createBoard();
+        state.selected = null;
+        state.clearing = new Set();
+        state.score = 0;
+        state.moves = MOVES;
+        state.combo = 1;
+        state.goals = Object.fromEntries(GOALS.map((goal) => [goal.type, 0]));
+        state.busy = false;
+        state.done = false;
+        setStatus('Batch 01 ready.');
+        render();
+      }
+
+      boardEl.addEventListener('click', (event) => {
+        const tile = event.target.closest('[data-index]');
+        if (!tile || state.busy || state.done) return;
+        const index = Number(tile.getAttribute('data-index'));
+
+        if (state.selected === null) {
+          state.selected = index;
+          setStatus('Tile locked.');
+          render();
+          return;
+        }
+
+        if (state.selected === index) {
+          state.selected = null;
+          setStatus('Batch 01 ready.');
+          render();
+          return;
+        }
+
+        if (!isAdjacent(state.selected, index)) {
+          state.selected = index;
+          setStatus('Tile locked.');
+          render();
+          return;
+        }
+
+        attemptSwap(state.selected, index);
+      });
+
+      root.querySelector('[data-action="new"]').addEventListener('click', newGame);
+      root.querySelector('[data-action="shuffle"]').addEventListener('click', () => {
+        if (!state.busy && !state.done) shuffleBoard();
+      });
+
+      newGame();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .crush-page {
+    min-height: 100vh;
+    color: #130f12;
+    background: #f8fbff;
+  }
+
+  .crumb {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 14px 18px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .crumb a {
+    color: #ffffff;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.42);
+  }
+
+  .crumb span {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .game-shell {
+    min-height: 100vh;
+    padding: 56px 20px 28px;
+    background:
+      linear-gradient(90deg, rgba(7, 12, 19, 0.82), rgba(7, 12, 19, 0.36) 44%, rgba(7, 12, 19, 0.76)),
+      url('/images/nouns-cola-crush/super-graphics.png') center / cover no-repeat;
+  }
+
+  .mast,
+  .game-layout {
+    width: min(1320px, 100%);
+    margin: 0 auto;
+  }
+
+  .mast {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 0.72fr);
+    gap: 18px;
+    align-items: end;
+    margin-bottom: 16px;
+  }
+
+  .mast__copy {
+    color: #ffffff;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.46);
+  }
+
+  .kicker,
+  .mono {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: #ffdf5d;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 4.6rem;
+    line-height: 0.92;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .mast__copy p:last-child {
+    max-width: 620px;
+    margin: 16px 0 0;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 1.08rem;
+    line-height: 1.5;
+  }
+
+  .hud {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .hud div,
+  .board-panel,
+  .side-panel {
+    border: 2px solid rgba(255, 255, 255, 0.84);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(16px);
+  }
+
+  .hud div {
+    min-width: 0;
+    padding: 12px 10px;
+    border-radius: 8px;
+  }
+
+  .hud span,
+  .board-top span {
+    display: block;
+    color: #554a42;
+    font-size: 10px;
+  }
+
+  .hud strong {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 1.28rem;
+    line-height: 1;
+    color: #111111;
+    overflow-wrap: anywhere;
+  }
+
+  .game-layout {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .board-panel,
+  .side-panel {
+    border-radius: 8px;
+  }
+
+  .board-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .board-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 4px 12px;
+  }
+
+  .board-top strong {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    color: #8a2432;
+  }
+
+  .board {
+    container-type: inline-size;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 8px;
+    width: min(100%, 690px);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    justify-self: center;
+    align-self: start;
+    padding: 10px;
+    border: 2px solid #171717;
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, rgba(24, 95, 165, 0.92), rgba(18, 17, 14, 0.94)),
+      #12110e;
+  }
+
+  .tile {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 1;
+    border: 2px solid rgba(255, 255, 255, 0.78);
+    border-radius: 8px;
+    color: var(--piece-ink, #ffffff);
+    font-family: var(--pc-font-mono);
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-align: center;
+    cursor: pointer;
+    overflow: hidden;
+    transform: translateZ(0);
+    transition: transform 120ms ease, border-color 120ms ease, filter 120ms ease, opacity 120ms ease;
+    background:
+      radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.96) 0 13%, transparent 14%),
+      radial-gradient(circle at 72% 80%, rgba(0, 0, 0, 0.18) 0 18%, transparent 19%),
+      linear-gradient(145deg, var(--piece-a), var(--piece-b));
+    box-shadow: inset 0 -8px 18px rgba(0, 0, 0, 0.22), 0 4px 0 rgba(0, 0, 0, 0.22);
+  }
+
+  .tile:hover:not(:disabled),
+  .tile:focus-visible {
+    transform: translateY(-3px);
+    border-color: #ffdf5d;
+    outline: none;
+    filter: saturate(1.18) brightness(1.06);
+  }
+
+  .tile:disabled {
+    cursor: default;
+  }
+
+  .tile.is-selected {
+    border-color: #12110e;
+    outline: 4px solid #ffdf5d;
+    z-index: 2;
+  }
+
+  .tile.is-clearing {
+    opacity: 0.22;
+    transform: scale(0.74) rotate(4deg);
+  }
+
+  .tile__gleam {
+    position: absolute;
+    inset: 8%;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 7px;
+    pointer-events: none;
+  }
+
+  .tile__mark {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 4px;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.34);
+  }
+
+  .tile[data-piece="can"],
+  .goal--can,
+  .piece-chip--can {
+    --piece-a: #ff5b6d;
+    --piece-b: #8a1230;
+    --piece-ink: #ffffff;
+  }
+
+  .tile[data-piece="cap"],
+  .goal--cap,
+  .piece-chip--cap {
+    --piece-a: #ffdf5d;
+    --piece-b: #b65b00;
+    --piece-ink: #1d1405;
+  }
+
+  .tile[data-piece="fizz"],
+  .goal--fizz,
+  .piece-chip--fizz {
+    --piece-a: #58d9ff;
+    --piece-b: #185fa5;
+    --piece-ink: #ffffff;
+  }
+
+  .tile[data-piece="cherry"],
+  .goal--cherry,
+  .piece-chip--cherry {
+    --piece-a: #ff6cb3;
+    --piece-b: #993556;
+    --piece-ink: #ffffff;
+  }
+
+  .tile[data-piece="lemon"],
+  .goal--lemon,
+  .piece-chip--lemon {
+    --piece-a: #b7f25a;
+    --piece-b: #0f6e56;
+    --piece-ink: #102016;
+  }
+
+  .tile[data-piece="noggles"],
+  .goal--noggles,
+  .piece-chip--noggles {
+    --piece-a: #ffffff;
+    --piece-b: #534ab7;
+    --piece-ink: #12110e;
+  }
+
+  .side-panel {
+    flex: 0 0 360px;
+    max-width: 360px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .super-art {
+    margin: 0;
+    border: 2px solid #12110e;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #12110e;
+  }
+
+  .super-art img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+
+  .goal-stack {
+    display: grid;
+    gap: 8px;
+  }
+
+  .goal {
+    --fill: 0%;
+    padding: 10px;
+    border: 2px solid #12110e;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  .goal__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    font-size: 0.92rem;
+  }
+
+  .goal__head span {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .goal__head i {
+    flex: 0 0 auto;
+    min-width: 38px;
+    padding: 5px 6px;
+    border-radius: 6px;
+    background: linear-gradient(145deg, var(--piece-a), var(--piece-b));
+    color: var(--piece-ink, #fff);
+    font-family: var(--pc-font-mono);
+    font-style: normal;
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .goal__head strong {
+    flex: 0 0 auto;
+    font-family: var(--pc-font-mono);
+    font-size: 0.82rem;
+    color: #8a2432;
+  }
+
+  .goal__bar {
+    height: 8px;
+    margin-top: 10px;
+    border-radius: 6px;
+    background: #e5e3de;
+    overflow: hidden;
+  }
+
+  .goal__bar span {
+    display: block;
+    width: var(--fill);
+    height: 100%;
+    background: linear-gradient(90deg, #185fa5, #ffdf5d, #e84d6a);
+  }
+
+  .button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .btn {
+    min-height: 44px;
+    border: 2px solid #12110e;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #12110e;
+    font: 500 0.92rem/1 var(--pc-font-sans);
+    letter-spacing: 0;
+    cursor: pointer;
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    outline: none;
+    background: #ffdf5d;
+  }
+
+  .btn--primary {
+    background: #12110e;
+    color: #ffffff;
+  }
+
+  .piece-strip {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .piece-chip {
+    min-width: 0;
+    padding: 8px 4px;
+    border: 2px solid rgba(18, 17, 14, 0.9);
+    border-radius: 8px;
+    background: linear-gradient(145deg, var(--piece-a), var(--piece-b));
+    color: var(--piece-ink, #fff);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 980px) {
+    .game-shell {
+      padding: 54px 12px 18px;
+    }
+
+    .mast,
+    .game-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .game-layout {
+      display: grid;
+    }
+
+    .mast {
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 3.15rem;
+    }
+
+    .hud {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .game-layout {
+      gap: 12px;
+    }
+
+    .side-panel {
+      grid-column: auto;
+      max-width: none;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .board-panel {
+      grid-column: auto;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .crumb {
+      padding: 12px;
+      font-size: 10px;
+    }
+
+    .game-shell {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
+    h1 {
+      font-size: 2.42rem;
+    }
+
+    .mast__copy p:last-child {
+      font-size: 0.95rem;
+    }
+
+    .hud div {
+      padding: 10px 8px;
+    }
+
+    .hud strong {
+      font-size: 1.02rem;
+    }
+
+    .board-panel,
+    .side-panel {
+      padding: 8px;
+    }
+
+    .board {
+      gap: 4px;
+      padding: 6px;
+    }
+
+    .tile {
+      border-width: 1.5px;
+      font-size: 0.56rem;
+      box-shadow: inset 0 -5px 12px rgba(0, 0, 0, 0.22), 0 2px 0 rgba(0, 0, 0, 0.22);
+    }
+
+    .tile__gleam {
+      display: none;
+    }
+
+    .goal__head {
+      font-size: 0.84rem;
+    }
+
+    .piece-strip {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+</style>
+
+<style is:global>
+  [data-crush-game] .tile {
+    appearance: none;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 1;
+    border: 2px solid rgba(255, 255, 255, 0.78);
+    border-radius: 8px;
+    color: var(--piece-ink, #ffffff);
+    font-family: var(--pc-font-mono);
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-align: center;
+    cursor: pointer;
+    overflow: hidden;
+    transform: translateZ(0);
+    transition: transform 120ms ease, border-color 120ms ease, filter 120ms ease, opacity 120ms ease;
+    background:
+      radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.96) 0 13%, transparent 14%),
+      radial-gradient(circle at 72% 80%, rgba(0, 0, 0, 0.18) 0 18%, transparent 19%),
+      linear-gradient(145deg, var(--piece-a), var(--piece-b));
+    box-shadow: inset 0 -8px 18px rgba(0, 0, 0, 0.22), 0 4px 0 rgba(0, 0, 0, 0.22);
+  }
+
+  [data-crush-game] .tile:hover:not(:disabled),
+  [data-crush-game] .tile:focus-visible {
+    transform: translateY(-3px);
+    border-color: #ffdf5d;
+    outline: none;
+    filter: saturate(1.18) brightness(1.06);
+  }
+
+  [data-crush-game] .tile:disabled {
+    cursor: default;
+  }
+
+  [data-crush-game] .tile.is-selected {
+    border-color: #12110e;
+    outline: 4px solid #ffdf5d;
+    z-index: 2;
+  }
+
+  [data-crush-game] .tile.is-clearing {
+    opacity: 0.22;
+    transform: scale(0.74) rotate(4deg);
+  }
+
+  [data-crush-game] .tile__gleam {
+    position: absolute;
+    inset: 8%;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 7px;
+    pointer-events: none;
+  }
+
+  [data-crush-game] .tile__mark {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 4px;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.34);
+  }
+
+  [data-crush-game] .tile[data-piece="can"] {
+    --piece-a: #ff5b6d;
+    --piece-b: #8a1230;
+    --piece-ink: #ffffff;
+  }
+
+  [data-crush-game] .tile[data-piece="cap"] {
+    --piece-a: #ffdf5d;
+    --piece-b: #b65b00;
+    --piece-ink: #1d1405;
+  }
+
+  [data-crush-game] .tile[data-piece="fizz"] {
+    --piece-a: #58d9ff;
+    --piece-b: #185fa5;
+    --piece-ink: #ffffff;
+  }
+
+  [data-crush-game] .tile[data-piece="cherry"] {
+    --piece-a: #ff6cb3;
+    --piece-b: #993556;
+    --piece-ink: #ffffff;
+  }
+
+  [data-crush-game] .tile[data-piece="lemon"] {
+    --piece-a: #b7f25a;
+    --piece-b: #0f6e56;
+    --piece-ink: #102016;
+  }
+
+  [data-crush-game] .tile[data-piece="noggles"] {
+    --piece-a: #ffffff;
+    --piece-b: #534ab7;
+    --piece-ink: #12110e;
+  }
+
+  @media (max-width: 560px) {
+    [data-crush-game] .tile {
+      border-width: 1.5px;
+      font-size: 0.56rem;
+      box-shadow: inset 0 -5px 12px rgba(0, 0, 0, 0.22), 0 2px 0 rgba(0, 0, 0, 0.22);
+    }
+
+    [data-crush-game] .tile__gleam {
+      display: none;
+    }
+  }
+</style>
