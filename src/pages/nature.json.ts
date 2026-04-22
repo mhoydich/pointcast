@@ -74,6 +74,11 @@ export const GET: APIRoute = async () => {
         jsonUrl: `https://pointcast.xyz/b/${block.data.id}.json`,
       };
     }),
+    adjacent: {
+      houseplants: 'https://pointcast.xyz/houseplants',
+      houseplantsJson: 'https://pointcast.xyz/houseplants.json',
+      houseplantBlock: 'https://pointcast.xyz/b/0333',
+    },
   };
 
   return new Response(JSON.stringify(payload, null, 2), {

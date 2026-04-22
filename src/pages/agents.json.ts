@@ -83,6 +83,7 @@ export const GET: APIRoute = async () => {
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
         nature: 'https://pointcast.xyz/nature',
+        houseplants: 'https://pointcast.xyz/houseplants',
         tv: 'https://pointcast.xyz/tv',
         here: 'https://pointcast.xyz/here',
         forAgents: 'https://pointcast.xyz/for-agents',
@@ -114,6 +115,7 @@ export const GET: APIRoute = async () => {
         moods: 'https://pointcast.xyz/moods.json',
         local: 'https://pointcast.xyz/local.json',
         nature: 'https://pointcast.xyz/nature.json',
+        houseplants: 'https://pointcast.xyz/houseplants.json',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
