@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.21</span>
+          <span class="sp-sub">pointcast reader · v0.22</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -1612,12 +1612,94 @@ const paletteData = {
         }
 
         function scheduleNostrSyncPush() {
-          if (!syncEnabled()) return;
           clearTimeout(syncPushTimer);
           // Stacked debounce: LAN mirror fires at 600ms; we wait an
           // additional beat to coalesce rapid toggles before going to
           // relays. Floor is enforced separately by SYNC_PUSH_MIN_GAP_MS.
-          syncPushTimer = setTimeout(() => { emitNostrSync().catch(() => {}); }, 1200);
+          syncPushTimer = setTimeout(() => {
+            if (syncEnabled()) emitNostrSync().catch(() => {});
+            // v0.22: public saved-list publisher runs on the same
+            // timer. Opt-in separately (distinct event + d-tag from
+            // the private sync), so a user can publish one without
+            // the other.
+            if (publicSavedEnabled()) emitPublicSavedList().catch(() => {});
+          }, 1200);
+        }
+
+        // ─── v0.22 · PUBLIC SAVED-LIST PUBLISHER ────────────────────
+        // Kind-30078 (addressable/replaceable) with d-tag
+        // `sparrow-public-saved-v1`, UNENCRYPTED content — opt-in,
+        // independent of the v0.21 private sync. Friends can REQ this
+        // event from the same relay pool and render the user's saved
+        // list as a reading feed (see /sparrow/friends).
+        //
+        // Content is deliberately limited to the saved block ids and a
+        // small profile. We do NOT publish visited state or reactions
+        // here; those stay private. If the user wants cross-device
+        // state, that's v0.21 (NIP-44). Public list is a separate,
+        // narrower consent.
+        const KEY_PUBLIC_SAVED_ENABLED = 'sparrow:public-saved-enabled';
+        const KEY_PUBLIC_SAVED_LAST_AT = 'sparrow:public-saved-last-emitted-at';
+        const PUBLIC_SAVED_D_TAG       = 'sparrow-public-saved-v1';
+        const PUBLIC_SAVED_MAX_ITEMS   = 240;
+
+        const publicSavedEnabled = () => {
+          try { return localStorage.getItem(KEY_PUBLIC_SAVED_ENABLED) === '1'; }
+          catch { return false; }
+        };
+
+        async function emitPublicSavedList() {
+          if (!publicSavedEnabled() || !hasNip07() || !cachedPubkey.value) return;
+          const relays = getRelays();
+          if (!relays.length) return;
+
+          // Same 4s floor as the private sync so we don't spam relays.
+          const lastAt = Number(localStorage.getItem(KEY_PUBLIC_SAVED_LAST_AT) || '0');
+          const now = Date.now();
+          if (lastAt && now - lastAt < SYNC_PUSH_MIN_GAP_MS) return;
+
+          const saved = readSaved().slice(0, PUBLIC_SAVED_MAX_ITEMS);
+          const body = {
+            schema: 'sparrow-public-saved-v1',
+            saved: {
+              value: saved,
+              updated_at: localStorage.getItem('sparrow:saved:updated_at') || new Date(now).toISOString(),
+            },
+            profile: {
+              client: 'sparrow',
+              client_url: 'https://pointcast.xyz/sparrow',
+              version: '0.22',
+            },
+          };
+          const unsigned = {
+            kind: SYNC_KIND,
+            pubkey: cachedPubkey.value,
+            created_at: Math.floor(now / 1000),
+            tags: [
+              ['d', PUBLIC_SAVED_D_TAG],
+              ['t', 'sparrow'],
+              ['t', 'sparrow-saved'],
+              ['client', 'sparrow', 'https://pointcast.xyz/sparrow'],
+            ],
+            content: JSON.stringify(body),
+          };
+          let signed;
+          try { signed = await window.nostr.signEvent(unsigned); }
+          catch { return; }
+          if (!signed?.id || !signed?.sig) return;
+
+          try { localStorage.setItem(KEY_PUBLIC_SAVED_LAST_AT, String(now)); } catch {}
+
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['EVENT', signed])); } catch {}
+              });
+              ws.addEventListener('message', () => { try { ws.close(); } catch {} });
+              setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 4000);
+            } catch {}
+          }
         }
 
         // Pull: open one REQ per relay for our own replaceable event,

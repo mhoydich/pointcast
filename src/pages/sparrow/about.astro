@@ -257,6 +257,12 @@ const features = [
     body: 'v0.21 closes the multi-machine loop. With a NIP-07 signer that supports NIP-44 (nos2x, recent Alby), the HUD gains a "sync · on/off" pill. Turning it on publishes an encrypted kind-30078 addressable event (d-tag sparrow-reader-state-v1) carrying the same {saved, visited, reactions} blob — self-encrypted to your own npub so only your signer can decrypt. On load, Sparrow REQs the newest event across the relay pool and merges newest-wins per key. Runs side-by-side with the LAN peer-node mirror; both fire on the same debounce. 4s floor between relay pushes to keep bandwidth polite.',
     kbd: 'kind 30078 · NIP-44',
   },
+  {
+    kicker: 'federation',
+    title: '/sparrow/friends — see what others are reading',
+    body: 'v0.22 adds a federated reading-list surface. Flip "publish my saved list publicly" and Sparrow emits a separate unencrypted kind-30078 event (d-tag sparrow-public-saved-v1, scope-limited to just the saved block ids + a small client profile — no visited state, no reactions). Add friends by pasting a hex pubkey; Sparrow REQs each friend\'s latest public list from the relay pool and renders their saved blocks with titles + channel chips resolved via a server-shipped lookup. Two distinct consents: cross-device sync and public list — turn either on without the other.',
+    kbd: '/sparrow/friends',
+  },
 ];
 
 const roadmap = [
@@ -557,14 +563,28 @@ const roadmap = [
   },
   {
     v: 'v0.22',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Federated reading lists (/sparrow/friends)',
+    items: [
+      'New route /sparrow/friends with three panels: publisher toggle · following list · their reading',
+      'Publisher emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted) — narrower scope than the private sync, just saved ids + client profile',
+      'Two distinct consents: cross-device sync (v0.21, NIP-44) and public list (v0.22, unencrypted) — either can be on without the other',
+      'sparrow:friends localStorage holds {pubkey: hex, alias?}[]. Add/remove with a tiny form; alias is local-only, never broadcast',
+      'On load: REQs each configured relay for {kinds:[30078], authors:[friends], "#d":["sparrow-public-saved-v1"]} and renders the newest per author',
+      'Server ships a block lookup so saved ids resolve to title + channel chip; unknown blocks (from older Sparrow builds) degrade to a stub receipt',
+      'Hex-only for v0.22; npub1… bech32 decode is the tiny polish that lands next',
+    ],
+  },
+  {
+    v: 'v0.23',
     status: 'next',
     when: 'planned',
-    title: 'Federated reading lists',
+    title: 'npub1… + reel lane + signer profiles',
     items: [
-      'Subscribe to another user\'s npub + d-tag as a feed — "see what this person is reading"',
-      'Shows up as a new channel-like lane in the reel with per-post attribution',
-      'Built on the same kind-30078 infra; no encryption when the list is public',
-      'Opt-in per npub; revocable anytime; zero cross-talk with private sync',
+      'Inline bech32 (npub1…) decode on the friends form so pubkeys paste from any Nostr client',
+      'Render a "friends" lane in the main reel alongside the 12 latest blocks — mixed attribution',
+      'Optional NIP-01 kind-0 profile lookup so aliases auto-populate from on-chain metadata',
     ],
   },
   {
@@ -583,7 +603,7 @@ const roadmap = [
 const stats = {
   channels: CHANNEL_LIST.length,
   kbShortcuts: 16, // + ? cheatsheet, 0 top, $ bottom
-  routes: 7, // /sparrow + ch + b + saved + about + deck + connect
+  routes: 8, // /sparrow + ch + b + saved + about + deck + connect + friends
   cssTokens: 22,
 };
 ---
@@ -644,7 +664,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.21 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.22 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (

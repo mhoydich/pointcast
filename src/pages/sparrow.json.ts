@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.21',
-    protocol_version: '0.21',
+    version: '0.22',
+    protocol_version: '0.22',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -53,6 +53,7 @@ export const GET: APIRoute = async () => {
       channel: '/sparrow/ch/<slug>',
       block_reader: '/sparrow/b/<id>',
       saved: '/sparrow/saved',
+      friends: '/sparrow/friends',
       manifest: '/sparrow.json',
       atom: '/sparrow/feed.xml',
       latest_api: '/sparrow/api/latest.json',
@@ -268,7 +269,38 @@ export const GET: APIRoute = async () => {
         not_shipped_yet: 'Cross-device conflict UX beyond newest-wins; per-key opt-out (e.g. "sync saved only"); key rotation after an NIP-44 change',
       },
 
-      future: 'v1.0: Federated reading lists (subscribe to a friend\'s npub + d-tag as a feed), agent-mode view at /sparrow/llms.txt for machine readers, full offline archive in IndexedDB.',
+      // v0.22: federated reading lists. Public, opt-in counterpart to
+      // v0.21's private sync. Different d-tag (sparrow-public-saved-v1),
+      // NO NIP-44 — just signed-JSON content so any other Sparrow (or
+      // any Nostr client that understands the payload) can read.
+      federated_lists: {
+        since: 'v0.22',
+        surface: '/sparrow/friends',
+        publisher: {
+          opt_in_storage: 'localStorage["sparrow:public-saved-enabled"] ("1" | "0")',
+          event_kind: 30078,
+          d_tag: 'sparrow-public-saved-v1',
+          encryption: 'none — content is clear JSON so any follower can read without a signer',
+          payload_shape: {
+            schema: 'sparrow-public-saved-v1',
+            saved: { value: 'string[] · saved block ids (newest-saved first, capped at 240)', updated_at: 'ISO 8601 — mirrors sparrow:saved:updated_at' },
+            profile: { client: '"sparrow"', client_url: '"https://pointcast.xyz/sparrow"', version: '"0.22"' },
+          },
+          throttle: 'shares the 4s floor with private sync (sparrow:public-saved-last-emitted-at), runs on the same scheduleReaderMirror() debounce',
+          scope_guarantee: 'ONLY the saved list is in this event — visited state, reactions, and private kind-30078 (sparrow-reader-state-v1) stay untouched. Visibility is a separate consent from cross-device sync.',
+        },
+        consumer: {
+          friends_storage: 'localStorage["sparrow:friends"] · Array<{ pubkey: "64-hex", alias?: string (≤40 chars) }>',
+          subscribe_filter: '{ kinds: [30078], authors: <friends>, "#d": ["sparrow-public-saved-v1"], limit: friends.length * 2 }',
+          dedup_policy: 'newest created_at per author wins; earlier events ignored',
+          title_resolution: 'server ships a { [id]: {id, title, dek, channel, type} } lookup for every non-draft block in the Astro content collection; client hydrates each saved id against it. Blocks absent from the current Sparrow build render as "unknown block · not in this Sparrow build" with a dead-but-valid link.',
+          render_cap: 'first 24 block receipts per author; "+ N more" footer if the list is longer',
+        },
+        accepted_formats: 'pubkey input accepts 64-hex only for v0.22; npub1… bech32 decode is a v0.23 polish once a bech32 helper is in the layout bundle',
+        privacy_story: 'Two distinct opt-ins: cross-device sync (v0.21, NIP-44 self-encrypted) and public saved list (v0.22, unencrypted). Either can be on without the other. No visited/reaction data ever leaves the device unencrypted.',
+      },
+
+      future: 'v1.0: Federated reading lists across more surfaces (reel lane injection, "signals" digest), agent-mode view at /sparrow/llms.txt for machine readers, full offline archive in IndexedDB.',
     },
 
     // v0.11: inline reply composer on the block reader. Direct POST to
@@ -641,7 +673,8 @@ export const GET: APIRoute = async () => {
       'v0.18': 'Bridge discovery (web side). Shared resolveMagpieOrigin() probes a ranked ladder — localStorage["sparrow:magpie-origin"] override → http://magpie.local:38473 → http://127.0.0.1:38473 — and caches the first /health responder on window.__sparrow. Used by every Magpie-bound fetch (mirror, bridge awareness, composer). Sets the stage for Magpie v0.19\'s Bonjour advertisement: the `.local` host just starts resolving once Magpie advertises via NWListener.',
       'v0.19': 'Magpie Swift-side Bonjour advertisement shipped. NWListener.service publishes "Magpie" of type _magpie._tcp on port 38473 with a TXT record carrying version, /health path, schema id, composer + mirror endpoint hints. macOS mDNS responder transparently resolves magpie.local to the host, so Sparrow\'s v0.18 ladder picks it up on the second rung without any web-side changes. Listener stays loopback-bound — advertisement is metadata-only.',
       'v0.20': 'Sparrow.app peer-node shipped. Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on port 38474 exposing GET /health + GET /reader-state.json + POST /reader-state with byte-identical sparrow-reader-state-v1 merge logic to Magpie\'s. NWListener.service advertises _sparrow._tcp "Sparrow" with a TXT record (version/path/schema/mirror/peer). Web resolver ladder extended to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474. window.__sparrow.magpiePeerKind records which peer answered so the bridge pill can label it accurately. Composer stays Magpie-only and falls back to direct /api/ping when Sparrow.app is the resolved peer.',
-      'v0.21': 'Cross-device sync of saved + visited + reactions via NIP-44-encrypted kind-30078 addressable events. Opt-in HUD pill (sync · on/off/n/a); self-encryption via window.nostr.nip44 means only the same npub can decrypt. Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, both use the same newest-wins-per-key merge policy so state stays coherent across device + peer. 4s throttle between relay pushes; on page load subscribes with limit:1 against each relay to pull latest. (current)',
+      'v0.21': 'Cross-device sync of saved + visited + reactions via NIP-44-encrypted kind-30078 addressable events. Opt-in HUD pill (sync · on/off/n/a); self-encryption via window.nostr.nip44 means only the same npub can decrypt. Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, both use the same newest-wins-per-key merge policy so state stays coherent across device + peer. 4s throttle between relay pushes; on page load subscribes with limit:1 against each relay to pull latest.',
+      'v0.22': 'Federated reading lists. New /sparrow/friends route. Opt-in "publish my saved list publicly" flag emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted, narrow scope — just the saved ids + a client-id profile; no visited/reaction data). Friends management UI stores {pubkey,alias?}[] in sparrow:friends; on load, REQs the relay pool for each friend\'s latest public saved event and renders their list with server-shipped block lookups so titles and channels resolve. Hex-only for now; npub1… bech32 decode lands in a polish pass. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
@@ -652,6 +685,7 @@ export const GET: APIRoute = async () => {
       '(Optional) install as a PWA when your browser offers it — Sparrow becomes a standalone app and keeps working offline.',
       '(Optional) get the native companion at /sparrow/connect — a menu-bar ✦ that pulses when new blocks land. macOS 13+.',
       '(Optional) subscribe to /sparrow/feed.xml in your feed reader of choice.',
+      '(Optional, v0.22) connect a NIP-07 signer (Alby / nos2x), flip the sync pill in the HUD, and add friends at /sparrow/friends to see what other readers are saving.',
     ],
 
     companions: {

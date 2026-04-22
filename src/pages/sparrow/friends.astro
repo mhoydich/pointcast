@@ -1,0 +1,616 @@
+---
+/**
+ * /sparrow/friends — federated reading lists (v0.22).
+ *
+ * Pure client-rendered. Two halves:
+ *
+ *  · Top — a "publish my saved list publicly" toggle + a management
+ *    UI for adding/removing friend pubkeys. Friends are stored as
+ *    { pubkey: <64-hex>, alias?: string } in localStorage under
+ *    `sparrow:friends`. Alias is optional — purely for the UI; it's
+ *    never broadcast anywhere.
+ *
+ *  · Bottom — on load we REQ kind-30078 events with authors = friend
+ *    pubkeys and #d = sparrow-public-saved-v1 from each configured
+ *    relay. Each event's content is expected to be a JSON body
+ *    matching { saved: { value: string[], updated_at }, profile?: {...} }.
+ *    We take the newest event per author, resolve block ids to their
+ *    title/channel via a server-shipped lookup, and render a grouped
+ *    feed of their saved blocks.
+ *
+ * v0.22 is intentionally hex-only. npub1… (bech32) decode is a future
+ * polish — Sparrow doesn't ship a bech32 helper yet, and pasting hex
+ * is fine for the first users.
+ */
+import SparrowLayout from '../../layouts/SparrowLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../../lib/channels';
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const lookup = Object.fromEntries(
+  all.map((b) => [
+    b.data.id,
+    {
+      id: b.data.id,
+      title: b.data.title,
+      dek: b.data.dek ?? '',
+      channel: b.data.channel,
+      type: b.data.type,
+    },
+  ]),
+);
+const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.name]));
+---
+
+<SparrowLayout
+  title="Friends — federated reading lists"
+  description="See what other Sparrow readers are saving. Opt-in on both sides."
+  canonicalPath="/sparrow/friends"
+  homeHref="/sparrow"
+>
+  <section class="sp-reel" aria-label="friends">
+    <header class="sp-reel-head">
+      <span class="sp-kicker">✦ friends · federated reading lists</span>
+      <span class="sp-aside-mono" style="margin-left: auto;">
+        <span data-sp-friends-count>0</span> following ·
+        <span data-sp-friends-state>needs a NIP-07 signer</span>
+      </span>
+    </header>
+
+    <p class="sp-about-dek" style="margin: 4px 0 18px;">
+      Sparrow v0.22 opens a narrow two-way door: opt in to publish
+      <em>just your saved list</em> as a public Nostr event, and/or
+      subscribe to someone else's by pasting their pubkey. Everything
+      else — visited state, reactions, private sync — stays private.
+    </p>
+
+    <div class="sp-friends-publisher" data-sp-publisher aria-label="publisher controls">
+      <span class="sp-friends-kicker">✦ my public saved list</span>
+      <label class="sp-friends-toggle">
+        <input type="checkbox" data-sp-public-saved-toggle />
+        <span class="sp-friends-toggle-label">publish my saved list publicly</span>
+      </label>
+      <p class="sp-friends-publisher-hint" data-sp-publisher-hint>
+        Off. Your saved list stays on this device (plus any peer-node /
+        private sync channels you've enabled).
+      </p>
+      <p class="sp-friends-publisher-hint sp-friends-publisher-sig" data-sp-publisher-sig hidden>
+        Events signed by <code data-sp-self-npub>…</code> ·
+        d-tag <code>sparrow-public-saved-v1</code> · kind <code>30078</code>
+      </p>
+    </div>
+
+    <div class="sp-friends-manage" data-sp-manage aria-label="following">
+      <span class="sp-friends-kicker">✦ people I'm following</span>
+      <form class="sp-friends-form" data-sp-friends-form>
+        <label>
+          <span>pubkey (hex, 64 chars)</span>
+          <input
+            type="text"
+            name="pubkey"
+            autocomplete="off"
+            spellcheck="false"
+            pattern="[0-9a-fA-F]{64}"
+            placeholder="e.g. 3bf0c63f…"
+            required
+          />
+        </label>
+        <label>
+          <span>alias (optional)</span>
+          <input
+            type="text"
+            name="alias"
+            autocomplete="off"
+            maxlength="40"
+            placeholder="e.g. mhoydich"
+          />
+        </label>
+        <button type="submit">follow →</button>
+      </form>
+      <ul class="sp-friends-list" data-sp-friends-list></ul>
+      <p class="sp-friends-empty" data-sp-friends-empty>
+        Nobody followed yet. Add a pubkey above to start pulling their public saved lists.
+      </p>
+    </div>
+
+    <div class="sp-friends-feed" data-sp-friends-feed aria-label="their reading">
+      <span class="sp-friends-kicker">✦ what they're reading</span>
+      <div class="sp-friends-feed-body" data-sp-friends-feed-body></div>
+      <p class="sp-friends-feed-empty" data-sp-friends-feed-empty>
+        Nothing to show yet. When you follow someone who's opted to
+        publish their saved list, their receipts land here.
+      </p>
+    </div>
+  </section>
+
+  <script id="sp-friends-lookup" type="application/json" set:html={JSON.stringify({ lookup, channelNameByCode })} />
+
+  <script is:inline>
+    // Client-side controller for /sparrow/friends.
+    //
+    // Everything here hangs off localStorage + the Nostr relay pool.
+    // We reuse the relay list from the main SparrowLayout via
+    // `sparrow:nostr-relays` (falls back to the same default pool:
+    // damus + primal + nos.lol). We do NOT re-implement NIP-07 connect
+    // flow — the HUD sync pill already owns that; when it's lit, the
+    // self-pubkey is in `sparrow:nostr-pubkey`.
+
+    (function () {
+      const KEY_FRIENDS          = 'sparrow:friends';
+      const KEY_PUBLIC_SAVED     = 'sparrow:public-saved-enabled';
+      const KEY_SELF_PUBKEY      = 'sparrow:nostr-pubkey';
+      const KEY_RELAYS           = 'sparrow:nostr-relays';
+      const D_TAG                = 'sparrow-public-saved-v1';
+      const SYNC_KIND            = 30078;
+      const DEFAULT_RELAYS = [
+        'wss://relay.damus.io',
+        'wss://relay.primal.net',
+        'wss://nos.lol',
+      ];
+
+      const lookupBlob = document.getElementById('sp-friends-lookup');
+      const state = lookupBlob ? JSON.parse(lookupBlob.textContent || '{}') : { lookup: {}, channelNameByCode: {} };
+      const { lookup, channelNameByCode } = state;
+
+      const readFriends = () => {
+        try {
+          const raw = JSON.parse(localStorage.getItem(KEY_FRIENDS) || '[]');
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((f) => (typeof f === 'string'
+              ? { pubkey: f, alias: '' }
+              : (f && typeof f === 'object' && typeof f.pubkey === 'string')
+                ? { pubkey: f.pubkey.toLowerCase(), alias: (f.alias || '').slice(0, 40) }
+                : null))
+            .filter((f) => f && /^[0-9a-f]{64}$/.test(f.pubkey));
+        } catch { return []; }
+      };
+      const writeFriends = (list) => {
+        try { localStorage.setItem(KEY_FRIENDS, JSON.stringify(list)); } catch {}
+      };
+      const getRelays = () => {
+        try {
+          const raw = localStorage.getItem(KEY_RELAYS);
+          const list = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(list) && list.length) {
+            return list.filter((u) => typeof u === 'string' && u.startsWith('ws'));
+          }
+        } catch {}
+        return DEFAULT_RELAYS;
+      };
+
+      const hasNip07 = () =>
+        typeof window !== 'undefined'
+        && !!window.nostr
+        && typeof window.nostr.signEvent === 'function';
+
+      const shortPk = (pk) => (pk ? `${pk.slice(0, 8)}…${pk.slice(-4)}` : '—');
+
+      // ─── DOM refs ─────────────────────────────────────────────────
+      const countEl         = document.querySelector('[data-sp-friends-count]');
+      const stateEl         = document.querySelector('[data-sp-friends-state]');
+      const listEl          = document.querySelector('[data-sp-friends-list]');
+      const emptyEl         = document.querySelector('[data-sp-friends-empty]');
+      const form            = document.querySelector('[data-sp-friends-form]');
+      const pubToggle       = document.querySelector('[data-sp-public-saved-toggle]');
+      const pubHint         = document.querySelector('[data-sp-publisher-hint]');
+      const pubSig          = document.querySelector('[data-sp-publisher-sig]');
+      const pubSigNpub      = document.querySelector('[data-sp-self-npub]');
+      const feedBody        = document.querySelector('[data-sp-friends-feed-body]');
+      const feedEmpty       = document.querySelector('[data-sp-friends-feed-empty]');
+
+      // ─── UI rendering ─────────────────────────────────────────────
+      function paintState() {
+        const friends = readFriends();
+        const selfPk  = (localStorage.getItem(KEY_SELF_PUBKEY) || '').toLowerCase();
+        if (countEl) countEl.textContent = String(friends.length);
+        if (stateEl) {
+          stateEl.textContent = hasNip07()
+            ? (selfPk ? `signed in · ${shortPk(selfPk)}` : 'signer detected · open the HUD pill to connect')
+            : 'needs a NIP-07 signer';
+        }
+        if (pubSigNpub && selfPk) pubSigNpub.textContent = shortPk(selfPk);
+        if (pubToggle) pubToggle.checked = localStorage.getItem(KEY_PUBLIC_SAVED) === '1';
+        if (pubHint) {
+          pubHint.textContent = pubToggle?.checked
+            ? 'On. Every save/unsave re-publishes a kind-30078 addressable event carrying just the saved ids. The event replaces the previous one on every relay — no garbage pile.'
+            : 'Off. Your saved list stays on this device (plus any peer-node / private sync channels you\'ve enabled).';
+        }
+        if (pubSig) pubSig.hidden = !(pubToggle?.checked && selfPk);
+      }
+
+      function paintFriendsList() {
+        const friends = readFriends();
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        if (emptyEl) emptyEl.hidden = friends.length > 0;
+        for (const f of friends) {
+          const li = document.createElement('li');
+          li.className = 'sp-friends-row';
+          li.innerHTML = `
+            <span class="sp-friends-pk">
+              ${f.alias ? `<strong>${escapeHTML(f.alias)}</strong> · ` : ''}
+              <code>${shortPk(f.pubkey)}</code>
+            </span>
+            <button type="button" class="sp-friends-unfollow" data-pubkey="${f.pubkey}">unfollow</button>
+          `;
+          listEl.appendChild(li);
+        }
+      }
+
+      function escapeHTML(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+      }
+
+      // ─── Form handling ────────────────────────────────────────────
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const pubkey = String(fd.get('pubkey') || '').trim().toLowerCase();
+        const alias  = String(fd.get('alias')  || '').trim().slice(0, 40);
+        if (!/^[0-9a-f]{64}$/.test(pubkey)) return;
+        const friends = readFriends();
+        if (!friends.some((f) => f.pubkey === pubkey)) {
+          friends.unshift({ pubkey, alias });
+          writeFriends(friends);
+        } else if (alias) {
+          // Update alias on an already-followed friend.
+          for (const f of friends) if (f.pubkey === pubkey) f.alias = alias;
+          writeFriends(friends);
+        }
+        form.reset();
+        paintFriendsList();
+        paintState();
+        subscribeToFriends();
+      });
+
+      listEl?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-sp--unfollow], .sp-friends-unfollow');
+        if (!btn) return;
+        const pubkey = btn.getAttribute('data-pubkey');
+        if (!pubkey) return;
+        writeFriends(readFriends().filter((f) => f.pubkey !== pubkey));
+        paintFriendsList();
+        paintState();
+        repaintFeed(); // drop any rendered cards from the removed author
+      });
+
+      pubToggle?.addEventListener('change', () => {
+        try { localStorage.setItem(KEY_PUBLIC_SAVED, pubToggle.checked ? '1' : '0'); } catch {}
+        paintState();
+      });
+
+      // ─── Feed subscription ────────────────────────────────────────
+      // Per-author newest kind-30078 event under #d = sparrow-public-saved-v1.
+      const newestByAuthor = new Map(); // pubkey -> { created_at, body, event_id }
+      const openSockets    = [];
+
+      function subscribeToFriends() {
+        const friends = readFriends();
+        if (!friends.length) { repaintFeed(); return; }
+        const relays = getRelays();
+        const subId  = `sp-fr-${Math.random().toString(36).slice(2, 10)}`;
+        const authors = friends.map((f) => f.pubkey);
+        const filter = { kinds: [SYNC_KIND], authors, '#d': [D_TAG], limit: authors.length * 2 };
+
+        for (const url of relays) {
+          try {
+            const ws = new WebSocket(url);
+            openSockets.push(ws);
+            ws.addEventListener('open', () => {
+              try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+            });
+            ws.addEventListener('message', (msg) => {
+              let frame;
+              try { frame = JSON.parse(msg.data); } catch { return; }
+              if (!Array.isArray(frame)) return;
+              if (frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+                ingestEvent(frame[2]);
+              } else if (frame[0] === 'EOSE' && frame[1] === subId) {
+                try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+                try { ws.close(); } catch {}
+                repaintFeed();
+              }
+            });
+            setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 8000);
+          } catch {}
+        }
+        // Best-effort: repaint after a brief delay even if no EOSE lands.
+        setTimeout(repaintFeed, 2500);
+      }
+
+      function ingestEvent(ev) {
+        if (!ev || ev.kind !== SYNC_KIND || typeof ev.content !== 'string') return;
+        if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+        // Confirm d-tag (relay may be permissive).
+        const isOurs = Array.isArray(ev.tags) && ev.tags.some(
+          (t) => Array.isArray(t) && t[0] === 'd' && t[1] === D_TAG,
+        );
+        if (!isOurs) return;
+
+        let body;
+        try { body = JSON.parse(ev.content); } catch { return; }
+        if (!body || typeof body !== 'object') return;
+        const savedValue = body?.saved?.value;
+        if (!Array.isArray(savedValue)) return;
+
+        const prior = newestByAuthor.get(ev.pubkey);
+        if (!prior || ev.created_at > prior.created_at) {
+          newestByAuthor.set(ev.pubkey, {
+            created_at: ev.created_at,
+            event_id:   ev.id,
+            body,
+          });
+        }
+      }
+
+      function repaintFeed() {
+        if (!feedBody) return;
+        feedBody.innerHTML = '';
+        const friends = readFriends();
+        const followed = new Set(friends.map((f) => f.pubkey));
+        const rows = friends
+          .map((f) => ({ friend: f, entry: newestByAuthor.get(f.pubkey) }))
+          .filter((x) => x.entry && followed.has(x.friend.pubkey));
+
+        if (feedEmpty) feedEmpty.hidden = rows.length > 0;
+
+        for (const { friend, entry } of rows) {
+          const savedIds = (entry.body?.saved?.value || []).filter((id) => typeof id === 'string');
+          const updatedAt = entry.body?.saved?.updated_at || '';
+          const card = document.createElement('article');
+          card.className = 'sp-friends-card';
+          const header = document.createElement('header');
+          header.className = 'sp-friends-card-head';
+          header.innerHTML = `
+            <span class="sp-friends-card-name">
+              ${friend.alias ? `<strong>${escapeHTML(friend.alias)}</strong> · ` : ''}
+              <code>${shortPk(friend.pubkey)}</code>
+            </span>
+            <span class="sp-friends-card-meta">
+              ${savedIds.length} saved
+              ${updatedAt ? ` · updated ${escapeHTML(String(updatedAt).slice(0, 10))}` : ''}
+            </span>
+          `;
+          card.appendChild(header);
+
+          const list = document.createElement('ul');
+          list.className = 'sp-friends-blocks';
+          const rendered = savedIds.slice(0, 24);
+          for (const id of rendered) {
+            const meta = lookup[id];
+            const li = document.createElement('li');
+            if (meta) {
+              const channelName = channelNameByCode[meta.channel] || meta.channel;
+              li.innerHTML = `
+                <a href="/sparrow/b/${meta.id}" class="sp-friends-block-link">
+                  <span class="sp-friends-block-id">№ ${meta.id}</span>
+                  <span class="sp-friends-block-title">${escapeHTML(meta.title || '—')}</span>
+                  <span class="sp-friends-block-chip">${escapeHTML(channelName)}</span>
+                </a>
+              `;
+            } else {
+              li.innerHTML = `
+                <a href="/sparrow/b/${id}" class="sp-friends-block-link is-unknown">
+                  <span class="sp-friends-block-id">№ ${id}</span>
+                  <span class="sp-friends-block-title"><em>unknown block · not in this Sparrow build</em></span>
+                </a>
+              `;
+            }
+            list.appendChild(li);
+          }
+          card.appendChild(list);
+
+          if (savedIds.length > rendered.length) {
+            const more = document.createElement('p');
+            more.className = 'sp-friends-more';
+            more.textContent = `+ ${savedIds.length - rendered.length} more`;
+            card.appendChild(more);
+          }
+          feedBody.appendChild(card);
+        }
+      }
+
+      // ─── Boot ─────────────────────────────────────────────────────
+      paintState();
+      paintFriendsList();
+      subscribeToFriends();
+
+      // Re-paint if the signer injects late (NIP-07 extensions often do).
+      setTimeout(paintState, 800);
+      setTimeout(paintState, 2400);
+
+      window.addEventListener('beforeunload', () => {
+        for (const ws of openSockets) { try { ws.close(); } catch {} }
+      });
+    })();
+  </script>
+
+  <style is:global>
+    .sp-friends-publisher,
+    .sp-friends-manage,
+    .sp-friends-feed {
+      margin: 18px 0 26px;
+      padding: 16px 18px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-bone) 4%, transparent);
+    }
+    .sp-friends-kicker {
+      display: inline-block;
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--sp-ember);
+      margin-bottom: 10px;
+    }
+    .sp-friends-toggle {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: var(--sp-ui); font-size: 14px;
+      cursor: pointer;
+    }
+    .sp-friends-toggle input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--sp-moss);
+    }
+    .sp-friends-publisher-hint {
+      margin: 10px 0 0;
+      color: color-mix(in oklch, var(--sp-bone) 70%, var(--sp-mute));
+      font-size: 13px; line-height: 1.5;
+    }
+    .sp-friends-publisher-sig code {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-ember);
+    }
+    .sp-friends-form {
+      display: grid;
+      grid-template-columns: 2fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .sp-friends-form label {
+      display: grid; gap: 4px;
+    }
+    .sp-friends-form span {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+    .sp-friends-form input {
+      font-family: var(--sp-mono); font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-rule);
+      background: var(--sp-ink);
+      color: var(--sp-bone);
+    }
+    .sp-friends-form input:focus {
+      outline: none;
+      border-color: var(--sp-ember);
+    }
+    .sp-friends-form button {
+      padding: 8px 14px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-ember);
+      color: var(--sp-ember);
+      background: color-mix(in oklch, var(--sp-ember) 10%, transparent);
+      font-family: var(--sp-mono); font-size: 11px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      cursor: pointer;
+    }
+    .sp-friends-form button:hover {
+      background: color-mix(in oklch, var(--sp-ember) 22%, transparent);
+    }
+    @media (max-width: 640px) {
+      .sp-friends-form { grid-template-columns: 1fr; }
+    }
+    .sp-friends-list {
+      list-style: none;
+      padding: 0;
+      margin: 14px 0 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .sp-friends-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 3px;
+      background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+    }
+    .sp-friends-pk code {
+      font-family: var(--sp-mono); font-size: 12px;
+      color: var(--sp-ember);
+    }
+    .sp-friends-unfollow {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-rule);
+      background: transparent;
+      color: var(--sp-mute);
+      cursor: pointer;
+    }
+    .sp-friends-unfollow:hover {
+      border-color: var(--sp-oxblood);
+      color: var(--sp-oxblood);
+    }
+    .sp-friends-empty,
+    .sp-friends-feed-empty {
+      margin: 14px 0 0;
+      color: var(--sp-mute);
+      font-size: 13px;
+      font-style: italic;
+    }
+    .sp-friends-card {
+      margin: 16px 0 0;
+      padding: 14px 16px;
+      border: 1px solid var(--sp-rule);
+      border-radius: 4px;
+      background: var(--sp-ink);
+    }
+    .sp-friends-card-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--sp-rule);
+    }
+    .sp-friends-card-name code {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-ember);
+    }
+    .sp-friends-card-meta {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+    .sp-friends-blocks {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .sp-friends-block-link {
+      display: grid;
+      grid-template-columns: 70px 1fr auto;
+      gap: 10px;
+      align-items: baseline;
+      padding: 6px 8px;
+      border-radius: 3px;
+      color: var(--sp-bone);
+      text-decoration: none;
+      transition: background 120ms ease;
+    }
+    .sp-friends-block-link:hover {
+      background: color-mix(in oklch, var(--sp-ember) 8%, transparent);
+    }
+    .sp-friends-block-link.is-unknown {
+      color: var(--sp-mute);
+    }
+    .sp-friends-block-id {
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+    }
+    .sp-friends-block-title {
+      font-family: var(--sp-ui); font-size: 14px;
+      line-height: 1.4;
+    }
+    .sp-friends-block-chip {
+      font-family: var(--sp-mono); font-size: 9px;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--sp-mute);
+      border: 1px solid var(--sp-rule);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .sp-friends-more {
+      margin: 8px 0 0;
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-mute);
+      text-align: right;
+    }
+  </style>
+</SparrowLayout>
