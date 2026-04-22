@@ -15,7 +15,11 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://pointcast.xyz/collabs/arena" />
+    <meta property="og:image" content="https://pointcast.xyz/collabs/arena/graphics/arena-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://pointcast.xyz/collabs/arena/graphics/arena-og.jpg" />
     <title>PointCast Arena</title>
     <style>
       :root {
@@ -35,6 +39,7 @@
         --violet: #6761b8;
         --teal: #0f7f86;
         --shadow: 0 18px 38px rgba(20, 17, 12, 0.08);
+        --arena-art: url("graphics/40-flagship-splash.webp");
         --sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
         --mono: "JetBrains Mono Variable", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
           monospace;
@@ -383,7 +388,14 @@
         height: auto;
         aspect-ratio: 1.72 / 1;
         border: 1px solid var(--rule);
-        background: #fbf8f0;
+        background:
+          radial-gradient(circle at 50% 48%, rgba(255, 253, 248, 0.2), rgba(251, 248, 240, 0.9) 68%),
+          var(--arena-art) center / cover no-repeat,
+          #fbf8f0;
+      }
+
+      .svg-art {
+        pointer-events: none;
       }
 
       .svg-grid {
@@ -821,6 +833,84 @@
         font-size: 1rem;
       }
 
+      .art-preview {
+        display: grid;
+        gap: 8px;
+        margin: 0 0 10px;
+      }
+
+      .art-preview img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1.72 / 1;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-3);
+        object-fit: cover;
+      }
+
+      .art-caption {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .art-caption strong,
+      .art-caption span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .art-caption strong {
+        font-size: 0.9rem;
+      }
+
+      .art-caption span {
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      .art-controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .art-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+        max-height: 176px;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .art-thumb {
+        min-width: 0;
+        aspect-ratio: 1 / 1;
+        padding: 0;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background:
+          linear-gradient(rgba(255, 253, 248, 0.08), rgba(255, 253, 248, 0.08)),
+          var(--thumb-art) center / cover no-repeat,
+          var(--surface-2);
+        cursor: pointer;
+      }
+
+      .art-thumb:hover,
+      .art-thumb:focus-visible {
+        border-color: var(--blue);
+        outline: 0;
+      }
+
+      .art-thumb.is-active {
+        border-color: var(--ink);
+        box-shadow: inset 0 0 0 2px var(--ink);
+      }
+
       .leader-list,
       .roster-list,
       .queue-list,
@@ -1225,6 +1315,11 @@
         .stat-row {
           grid-template-columns: 62px minmax(0, 1fr) 28px;
         }
+
+        .art-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          max-height: 222px;
+        }
       }
     </style>
   </head>
@@ -1402,6 +1497,29 @@
 
           <section class="rail-section">
             <div class="rail-heading">
+              <h2>Graphics Deck</h2>
+              <span class="mono" id="art-count">40 cards</span>
+            </div>
+            <figure class="art-preview">
+              <img
+                id="art-preview-img"
+                src="graphics/40-flagship-splash.webp"
+                alt="PointCast Arena flagship splash graphic"
+              />
+              <figcaption class="art-caption">
+                <strong id="art-title">Flagship Splash</strong>
+                <span id="art-detail">Tournament poster deck</span>
+              </figcaption>
+            </figure>
+            <div class="art-controls" aria-label="Graphics deck controls">
+              <button class="command mono" id="art-prev-button" type="button">Prev</button>
+              <button class="command mono" id="art-next-button" type="button">Next</button>
+            </div>
+            <div class="art-grid" id="art-grid" aria-label="Generated arena graphics"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
               <h2>Broadcast</h2>
               <span class="mono" id="broadcast-label">0 calls</span>
             </div>
@@ -1522,6 +1640,209 @@
         presenceSnapshot: "https://pointcast.xyz/api/presence/snapshot",
         presence: "wss://pointcast.xyz/api/presence",
       };
+
+      const ART_DECK = [
+        {
+          label: "PointCast Arena",
+          detail: "Hero table / red-blue duel field",
+          src: "graphics/01-pointcast-arena.webp",
+        },
+        {
+          label: "Bout Night",
+          detail: "Poster card for match openers",
+          src: "graphics/02-bout-night.webp",
+        },
+        {
+          label: "Agent Bracket",
+          detail: "Tournament bracket board",
+          src: "graphics/03-agent-bracket.webp",
+        },
+        {
+          label: "Relay Set",
+          detail: "Routing game-set badge",
+          src: "graphics/04-relay-set.webp",
+        },
+        {
+          label: "Audit Set",
+          detail: "Proof-heavy challenge badge",
+          src: "graphics/05-audit-set.webp",
+        },
+        {
+          label: "Blitz Set",
+          detail: "Speed and variance badge",
+          src: "graphics/06-blitz-set.webp",
+        },
+        {
+          label: "Rush Tactic",
+          detail: "Fast attack tactic card",
+          src: "graphics/07-rush-tactic.webp",
+        },
+        {
+          label: "Cite Tactic",
+          detail: "Proof citation tactic card",
+          src: "graphics/08-cite-tactic.webp",
+        },
+        {
+          label: "Mesh Tactic",
+          detail: "Federation tactic card",
+          src: "graphics/09-mesh-tactic.webp",
+        },
+        {
+          label: "Live Desk",
+          detail: "Control booth broadcast card",
+          src: "graphics/10-live-desk.webp",
+        },
+        {
+          label: "Receipts",
+          detail: "Bout receipt printer card",
+          src: "graphics/11-receipts.webp",
+        },
+        {
+          label: "Champion",
+          detail: "Winner lock-in poster",
+          src: "graphics/12-champion.webp",
+        },
+        {
+          label: "Scout Tape",
+          detail: "Favorite-agent readout",
+          src: "graphics/13-scout-tape.webp",
+        },
+        {
+          label: "Ledger Audit",
+          detail: "Arena condition poster",
+          src: "graphics/14-ledger-audit.webp",
+        },
+        {
+          label: "Sprint Rush",
+          detail: "Arena condition poster",
+          src: "graphics/15-sprint-rush.webp",
+        },
+        {
+          label: "Federation Window",
+          detail: "Arena condition poster",
+          src: "graphics/16-federation-window.webp",
+        },
+        {
+          label: "Story Weight",
+          detail: "Arena condition poster",
+          src: "graphics/17-story-weight.webp",
+        },
+        {
+          label: "Auto Bracket",
+          detail: "Autoplay tournament card",
+          src: "graphics/18-auto-bracket.webp",
+        },
+        {
+          label: "Control Room",
+          detail: "Director console card",
+          src: "graphics/19-control-room.webp",
+        },
+        {
+          label: "Arena Boot",
+          detail: "Startup scene card",
+          src: "graphics/20-arena-boot.webp",
+        },
+        {
+          label: "Block Prompt",
+          detail: "Prompt deck card",
+          src: "graphics/21-block-prompt.webp",
+        },
+        {
+          label: "Trial Board",
+          detail: "Scored trial columns",
+          src: "graphics/22-trial-board.webp",
+        },
+        {
+          label: "Stance Round",
+          detail: "Strike / guard / focus poster",
+          src: "graphics/23-stance-round.webp",
+        },
+        {
+          label: "Leaderboard",
+          detail: "Ranking board poster",
+          src: "graphics/24-leaderboard.webp",
+        },
+        {
+          label: "Crowd Live",
+          detail: "Presence rail poster",
+          src: "graphics/25-crowd-live.webp",
+        },
+        {
+          label: "Hall",
+          detail: "Saved champions poster",
+          src: "graphics/26-hall.webp",
+        },
+        {
+          label: "Contenders",
+          detail: "Roster token board",
+          src: "graphics/27-contenders.webp",
+        },
+        {
+          label: "Daily Mode",
+          detail: "Director mode card",
+          src: "graphics/28-daily-mode.webp",
+        },
+        {
+          label: "Live Mode",
+          detail: "Director mode card",
+          src: "graphics/29-live-mode.webp",
+        },
+        {
+          label: "Chaos Mode",
+          detail: "Director mode card",
+          src: "graphics/30-chaos-mode.webp",
+        },
+        {
+          label: "Open Graph",
+          detail: "Share-card composition",
+          src: "graphics/31-open-graph-card.webp",
+        },
+        {
+          label: "Hero Background",
+          detail: "No-text arena field",
+          src: "graphics/32-hero-background.webp",
+        },
+        {
+          label: "Arena Emblem",
+          detail: "Icon-style crest",
+          src: "graphics/33-arena-emblem.webp",
+        },
+        {
+          label: "Green Agent Token",
+          detail: "Roster identity token",
+          src: "graphics/34-green-agent-token.webp",
+        },
+        {
+          label: "Red Challenger Token",
+          detail: "Roster identity token",
+          src: "graphics/35-red-challenger-token.webp",
+        },
+        {
+          label: "Blue Strategist Token",
+          detail: "Roster identity token",
+          src: "graphics/36-blue-strategist-token.webp",
+        },
+        {
+          label: "Winner Trophy",
+          detail: "Sticker-style victory mark",
+          src: "graphics/37-winner-trophy.webp",
+        },
+        {
+          label: "Manifest",
+          detail: "JSON tournament crystal",
+          src: "graphics/38-manifest.webp",
+        },
+        {
+          label: "Mobile Splash",
+          detail: "Tall launch poster",
+          src: "graphics/39-mobile-splash.webp",
+        },
+        {
+          label: "Flagship Splash",
+          detail: "Full tournament spread",
+          src: "graphics/40-flagship-splash.webp",
+        },
+      ];
 
       const ARENA_SEEDS = [
         {
@@ -1820,6 +2141,13 @@
         tapeList: document.querySelector("#tape-list"),
         tacticLabel: document.querySelector("#tactic-label"),
         tacticModes: document.querySelector("#tactic-modes"),
+        artCount: document.querySelector("#art-count"),
+        artPreviewImg: document.querySelector("#art-preview-img"),
+        artTitle: document.querySelector("#art-title"),
+        artDetail: document.querySelector("#art-detail"),
+        artPrevButton: document.querySelector("#art-prev-button"),
+        artNextButton: document.querySelector("#art-next-button"),
+        artGrid: document.querySelector("#art-grid"),
         broadcastLabel: document.querySelector("#broadcast-label"),
         broadcastList: document.querySelector("#broadcast-list"),
         rulesLabel: document.querySelector("#rules-label"),
@@ -1876,6 +2204,13 @@
         tactic: TACTICS[localStorage.getItem("pc-arena-tactic")]
           ? localStorage.getItem("pc-arena-tactic")
           : "",
+        artIndex: (() => {
+          const savedRaw = localStorage.getItem("pc-arena-art-index");
+          const saved = Number(savedRaw);
+          return savedRaw !== null && Number.isFinite(saved)
+            ? Math.max(0, Math.min(ART_DECK.length - 1, saved))
+            : ART_DECK.length - 1;
+        })(),
         challengeIndex: 0,
         backedSlug: localStorage.getItem("pc-arena-backed") || "",
         autoId: null,
@@ -2249,6 +2584,55 @@
         return TACTICS[state.tactic] || null;
       }
 
+      function getCurrentArt() {
+        return ART_DECK[state.artIndex] || ART_DECK[ART_DECK.length - 1];
+      }
+
+      function selectArt(index, announce = false) {
+        const next = ((index % ART_DECK.length) + ART_DECK.length) % ART_DECK.length;
+        state.artIndex = next;
+        localStorage.setItem("pc-arena-art-index", String(next));
+        if (announce) {
+          const art = getCurrentArt();
+          addCast("ART", art.label, art.detail);
+        }
+        renderArenaSvg();
+        renderArtDeck();
+      }
+
+      function advanceArenaArt(result) {
+        const conditionArt = {
+          "ledger-audit": 13,
+          "sprint-rush": 14,
+          "federation-window": 15,
+          "story-weight": 16,
+        };
+        const gameArt = {
+          relay: 3,
+          audit: 4,
+          blitz: 5,
+        };
+        const tacticArt = {
+          rush: 6,
+          cite: 7,
+          mesh: 8,
+        };
+        const pool = [0, 2, 9, 10, 12, 17, 18, 20, 21, 22, 23, 24, 26, 30, 37, 39];
+        const score = result.totals.left + result.totals.right + hashString(`${result.matchId}:${result.challenge.id}`);
+        const next =
+          state.champion
+            ? 36
+            : result.bonuses.tactic?.activeSide && tacticArt[state.tactic] !== undefined
+              ? tacticArt[state.tactic]
+              : conditionArt[result.bonuses.condition] !== undefined
+                ? conditionArt[result.bonuses.condition]
+                : gameArt[state.gameSet] !== undefined
+                  ? gameArt[state.gameSet]
+                  : pool[score % pool.length];
+        state.artIndex = next;
+        localStorage.setItem("pc-arena-art-index", String(next));
+      }
+
       function getTacticImpact(match = state.current) {
         const tactic = getTactic();
         const base = { speed: 0, context: 0, proof: 0, federation: 0 };
@@ -2362,6 +2746,7 @@
         state.receiptCopiedAt = 0;
         state.receiptCopyFailed = false;
         state.challengeIndex += 1;
+        advanceArenaArt(result);
         renderAll();
         broadcastPresence("bout-complete");
       }
@@ -2815,6 +3200,7 @@
         renderBracket();
         renderLeaderboard();
         renderScoutTape();
+        renderArtDeck();
         renderBroadcast();
         renderRules();
         renderDirector();
@@ -2938,14 +3324,18 @@
         const rightScore = state.result?.totals?.right || 0;
         const leftBeam = clamp(leftScore / 5, 18, 78);
         const rightBeam = clamp(rightScore / 5, 18, 78);
+        const art = getCurrentArt();
         dom.arenaSvg.style.setProperty("--left-color", leftColor);
         dom.arenaSvg.style.setProperty("--right-color", rightColor);
+        dom.arenaSvg.style.setProperty("--arena-art", `url("${art.src}")`);
         dom.arenaSvg.innerHTML = `
           <defs>
             <pattern id="arena-grid-pattern" width="32" height="32" patternUnits="userSpaceOnUse">
               <path class="svg-grid" d="M32 0H0V32" fill="none"></path>
             </pattern>
           </defs>
+          <image class="svg-art" href="${escapeHtml(art.src)}" width="720" height="418" preserveAspectRatio="xMidYMid slice" opacity="0.32"></image>
+          <rect width="720" height="418" fill="#fffdf8" opacity="0.68"></rect>
           <rect width="720" height="418" fill="url(#arena-grid-pattern)"></rect>
           <path class="svg-beam ${winnerSide === "left" ? "is-a" : ""}" d="M124 210 C236 132, 308 132, 360 210"></path>
           <path class="svg-beam ${winnerSide === "right" ? "is-b" : ""}" d="M596 210 C484 132, 412 132, 360 210"></path>
@@ -3287,6 +3677,10 @@
             tactic: state.tactic || null,
             condition: getActiveCondition(),
             rules: state.battleRules.format,
+            graphics: {
+              count: ART_DECK.length,
+              current: getCurrentArt(),
+            },
           },
           summary: {
             champion: state.champion ? summarizeAgent(state.champion) : null,
@@ -3619,6 +4013,26 @@
         `;
       }
 
+      function renderArtDeck() {
+        const art = getCurrentArt();
+        dom.artCount.textContent = `${state.artIndex + 1} / ${ART_DECK.length}`;
+        dom.artPreviewImg.src = art.src;
+        dom.artPreviewImg.alt = `PointCast Arena generated graphic: ${art.label}`;
+        dom.artTitle.textContent = art.label;
+        dom.artDetail.textContent = art.detail;
+        dom.artGrid.innerHTML = ART_DECK.map((item, index) => `
+          <button
+            class="art-thumb ${index === state.artIndex ? "is-active" : ""}"
+            type="button"
+            data-art-index="${index}"
+            style="--thumb-art: url(${escapeHtml(item.src)})"
+            title="${escapeHtml(item.label)}"
+            aria-label="Show ${escapeHtml(item.label)} graphic"
+            aria-pressed="${index === state.artIndex}"
+          ></button>
+        `).join("");
+      }
+
       function backFavorite() {
         const tape = getMatchTape();
         if (!tape?.favorite?.slug) {
@@ -3924,6 +4338,15 @@
           }
           switchTactic(button.getAttribute("data-tactic"));
         });
+        dom.artPrevButton.addEventListener("click", () => selectArt(state.artIndex - 1, true));
+        dom.artNextButton.addEventListener("click", () => selectArt(state.artIndex + 1, true));
+        dom.artGrid.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-art-index]");
+          if (!button) {
+            return;
+          }
+          selectArt(Number(button.getAttribute("data-art-index")) || 0, true);
+        });
         dom.rosterList.addEventListener("click", (event) => {
           const button = event.target.closest("[data-back]");
           if (!button) {
@@ -3989,6 +4412,8 @@
           const tactics = ["", ...Object.keys(TACTICS)];
           const current = tactics.indexOf(state.tactic);
           switchTactic(tactics[(current + 1) % tactics.length] || "");
+        } else if (key === "v") {
+          selectArt(state.artIndex + 1, true);
         } else if (key === "m") {
           copyManifest();
         } else if (key === "f") {
