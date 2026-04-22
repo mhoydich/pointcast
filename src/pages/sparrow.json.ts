@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.15',
-    protocol_version: '0.15',
+    version: '0.16',
+    protocol_version: '0.16',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.15.0',
+        version: 'sparrow-v0.16.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -292,14 +292,19 @@ export const GET: APIRoute = async () => {
         post: 'POST http://127.0.0.1:38473/reader-state · body: { [key]: { value, updated_at } } → { ok, state, updated_at }',
       },
       payload_shape: {
-        saved: { value: 'string[] · block IDs', updated_at: 'ISO 8601' },
-        note: 'future: visited + reactions follow the same { value, updated_at } pattern in v0.16',
+        saved:     { value: 'string[] · block IDs (newest-saved first)', updated_at: 'ISO 8601', since: 'v0.15' },
+        visited:   { value: 'string[] · block IDs (last 120, newest-visited first)', updated_at: 'ISO 8601', since: 'v0.16' },
+        reactions: { value: '{ [blockId: string]: Array<"ember" | "moss" | "lilac"> }', updated_at: 'ISO 8601', since: 'v0.16' },
       },
-      merge_policy: 'Newest-wins per top-level key. On the Magpie server, mergeReaderState() compares stored updated_at against incoming; incoming-newer wins. On the Sparrow client, mirrorPull() only writes when remote updated_at is later than local sparrow:saved:updated_at.',
+      merge_policy: 'Newest-wins per top-level key. On the Magpie server, mergeReaderState() compares stored updated_at against incoming and incoming-newer replaces wholesale. On the Sparrow client, mirrorPull() writes only when remote updated_at is later than the local sparrow:<key>:updated_at. Apply callbacks use skipMirror: true to avoid push-loops, then re-paint the DOM (hydrateReactions + applyVisited) so the UI follows the remote state immediately.',
       signer_required: false,
       auth: 'none · localhost-bound only; Magpie never exposes this port externally',
       debounce_ms: 600,
-      web_state_keys: ['sparrow:saved', 'sparrow:saved:updated_at'],
+      web_state_keys: [
+        'sparrow:saved', 'sparrow:saved:updated_at',
+        'sparrow:visited', 'sparrow:visited:updated_at',
+        'sparrow:reactions', 'sparrow:reactions:updated_at',
+      ],
     },
 
     // v0.12: Magpie bridge awareness. Probe the local peer-node at
@@ -521,9 +526,10 @@ export const GET: APIRoute = async () => {
       'v0.12': 'Magpie bridge awareness. Composer probes 127.0.0.1:38473/health on load; when alive, fetches /config.json and paints a status pill + destination chips (reading state from publishers[id].ready). Deep link opens a fresh /magpie tab. Submit path stays on direct /api/ping — real multi-destination routing lands in v0.13 once the Magpie native side has a clip-less compose endpoint.',
       'v0.13': 'Magpie-routed multi-destination reply (web side). Destination chips are now checkboxes; PointCast is locked on. When any non-PC box is checked AND the Magpie bridge is connected, Sparrow POSTs to http://127.0.0.1:38473/compose with { body, title, destinations[], channel, hints }. Graceful fallback: any /compose failure (404 on older Magpie, network error, or all-destinations-failed) routes the reply to direct /api/ping instead. Per-destination result painted in the composer result span. Endpoint contract spec\'d in sparrow.json.magpie_bridge.endpoint_contract for the native side to implement.',
       'v0.14': 'Magpie native /compose endpoint shipped. Swift-side handler in Magpie/Services/MagpieServer.swift decodes ComposeRequest { body, title?, dek?, destinations[], channel?, blockType?, sourceUrl?, sourceApp?, subject?, timestamp?, overrides? }; AppState.handleComposeRequest builds an ephemeral ClipItem (id: nil, not persisted) + PublishDraft and fans out via PublisherRegistry. Results envelope mirrors /broadcast so existing parsers work unchanged. Sparrow\'s v0.13 /compose attempts now succeed on the first hop when Magpie is ≥v0.14; older versions still graceful-fallback.',
-      'v0.15': 'Reading-list mirror via the Magpie peer-node. MagpieServer adds GET /reader-state.json + POST /reader-state (UserDefaults-backed blob store). SparrowLayout debounces POSTs on saved-list writes + pulls on load. Newest-wins per top-level key via updated_at timestamps. Single-machine today; Sparrow.app HTTP server for true native ↔ web mirror lands later alongside the v0.6 app reshape. (current)',
-      'v0.16': 'Visited + reactions ride the same /reader-state rails (added to the sparrow-reader-state-v1 schema). OPML import/export; Bonjour discovery of local hosted Sparrow instances for dev environments.',
-      'v0.17': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44). Closes the multi-machine loop that localhost mirror can\'t reach.',
+      'v0.15': 'Reading-list mirror via the Magpie peer-node. MagpieServer adds GET /reader-state.json + POST /reader-state (UserDefaults-backed blob store). SparrowLayout debounces POSTs on saved-list writes + pulls on load. Newest-wins per top-level key via updated_at timestamps. Single-machine today; Sparrow.app HTTP server for true native ↔ web mirror lands later alongside the v0.6 app reshape.',
+      'v0.16': 'Visited + reactions extend the sparrow-reader-state-v1 schema. writeVisited + writeReactions both debounce into the same 600ms scheduleReaderMirror(); on pull, Sparrow repaints .is-visited and rehydrates reaction chips from remote state. Magpie-side merge logic unchanged — its per-key newest-wins already handled any shape. (current)',
+      'v0.17': 'OPML import/export for feed-reader interop; Bonjour (mDNS) discovery of local hosted Sparrow / Magpie peer-nodes for dev environments.',
+      'v0.18': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44). Closes the multi-machine loop that localhost mirror can\'t reach.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

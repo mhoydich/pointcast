@@ -121,7 +121,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.15</span>
+          <span class="sp-sub">pointcast reader · v0.16</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -550,7 +550,10 @@ const paletteData = {
         const readVisited = () => {
           try { return JSON.parse(localStorage.getItem(KEY_VISITED) || '[]'); } catch { return []; }
         };
-        const writeVisited = (ids) => localStorage.setItem(KEY_VISITED, JSON.stringify(ids));
+        const writeVisited = (ids, opts = {}) => {
+          localStorage.setItem(KEY_VISITED, JSON.stringify(ids));
+          if (!opts.skipMirror) scheduleReaderMirror();
+        };
         const markVisited = (id) => {
           const list = readVisited();
           const i = list.indexOf(id);
@@ -572,16 +575,51 @@ const paletteData = {
         };
         applyVisited();
 
-        // ─── v0.15 · READER-STATE MIRROR (via Magpie peer-node) ──────
-        // When the Magpie bridge is up, mirror sparrow:saved to the
+        // ─── v0.15 / v0.16 · READER-STATE MIRROR (via Magpie peer-node)
+        // When the Magpie bridge is up, mirror all three reader-state
+        // keys — saved (v0.15) + visited + reactions (v0.16) — to the
         // local peer-node at /reader-state (POST) and pull any existing
         // state on load (GET /reader-state.json). Single-machine sync
-        // only — cross-device is v0.16 over Nostr.
+        // only — cross-device is v0.17 over Nostr.
         //
-        // Payload shape: { saved: { value: string[], updated_at: ISO8601 } }
+        // Payload shape (sparrow-reader-state-v1):
+        //   { saved:     { value: string[], updated_at: ISO8601 },
+        //     visited:   { value: string[], updated_at: ISO8601 },
+        //     reactions: { value: { [id]: string[] }, updated_at: ISO8601 } }
         // Merge policy on both sides is newest-wins by updated_at.
         const MIRROR_ORIGIN = 'http://127.0.0.1:38473';
-        const KEY_SAVED_UPDATED_AT = 'sparrow:saved:updated_at';
+        const MIRROR_KEYS = [
+          {
+            remote: 'saved',
+            tsKey:  'sparrow:saved:updated_at',
+            read:   () => readSaved(),
+            apply:  (value) => writeSaved(Array.isArray(value) ? value : [], { skipMirror: true }),
+            validate: (v) => Array.isArray(v),
+          },
+          {
+            remote: 'visited',
+            tsKey:  'sparrow:visited:updated_at',
+            read:   () => readVisited(),
+            apply:  (value) => {
+              writeVisited(Array.isArray(value) ? value : [], { skipMirror: true });
+              // Re-paint .is-visited on any receipts already in the DOM.
+              applyVisited();
+            },
+            validate: (v) => Array.isArray(v),
+          },
+          {
+            remote: 'reactions',
+            tsKey:  'sparrow:reactions:updated_at',
+            read:   () => readReactions(),
+            apply:  (value) => {
+              const obj = (value && typeof value === 'object') ? value : {};
+              writeReactions(obj, { skipMirror: true });
+              // Repaint chip state if the reader is showing.
+              hydrateReactions();
+            },
+            validate: (v) => v && typeof v === 'object' && !Array.isArray(v),
+          },
+        ];
 
         let mirrorEverConnected = false;
         let mirrorTimer = null;
@@ -600,28 +638,33 @@ const paletteData = {
             const r = await fetch(MIRROR_ORIGIN + '/reader-state.json', { cache: 'no-store' });
             if (!r.ok) return;
             const json = await r.json();
-            const remote = json?.state?.saved;
-            if (!remote || typeof remote !== 'object') return;
-            const remoteAt = String(remote.updated_at || '');
-            const localAt  = localStorage.getItem(KEY_SAVED_UPDATED_AT) || '';
-            if (remoteAt && remoteAt > localAt && Array.isArray(remote.value)) {
-              localStorage.setItem(KEY_SAVED_UPDATED_AT, remoteAt);
-              writeSaved(remote.value, { skipMirror: true });
+            const state = json?.state || {};
+            for (const k of MIRROR_KEYS) {
+              const remote = state[k.remote];
+              if (!remote || typeof remote !== 'object') continue;
+              const remoteAt = String(remote.updated_at || '');
+              const localAt  = localStorage.getItem(k.tsKey) || '';
+              if (remoteAt && remoteAt > localAt && k.validate(remote.value)) {
+                localStorage.setItem(k.tsKey, remoteAt);
+                k.apply(remote.value);
+              }
             }
           } catch { /* offline or not a Magpie — leave local state alone */ }
         }
 
         async function mirrorPush() {
-          const ids = readSaved();
           const at = new Date().toISOString();
-          localStorage.setItem(KEY_SAVED_UPDATED_AT, at);
+          const body = {};
+          for (const k of MIRROR_KEYS) {
+            const value = k.read();
+            body[k.remote] = { value, updated_at: at };
+            localStorage.setItem(k.tsKey, at);
+          }
           try {
             await fetch(MIRROR_ORIGIN + '/reader-state', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                saved: { value: ids, updated_at: at },
-              }),
+              body: JSON.stringify(body),
             });
           } catch { /* silently degrade; next toggle will retry */ }
         }
@@ -650,7 +693,10 @@ const paletteData = {
         const readReactions = () => {
           try { return JSON.parse(localStorage.getItem(KEY_REACTIONS) || '{}') || {}; } catch { return {}; }
         };
-        const writeReactions = (obj) => localStorage.setItem(KEY_REACTIONS, JSON.stringify(obj));
+        const writeReactions = (obj, opts = {}) => {
+          localStorage.setItem(KEY_REACTIONS, JSON.stringify(obj));
+          if (!opts.skipMirror) scheduleReaderMirror();
+        };
         const toggleReaction = (blockId, kind) => {
           if (!blockId || !kind) return;
           const map = readReactions();

@@ -221,6 +221,12 @@ const features = [
     body: 'When Magpie\'s peer-node is alive, sparrow:saved mirrors to it via POST /reader-state on every toggle (600ms debounce). Fresh tabs pull GET /reader-state.json on load and apply newest-wins by updated_at. Your saved receipts stay in sync across Sparrow tabs on the same machine — no sign-in, no server-of-record, no telemetry.',
     kbd: 'mirror',
   },
+  {
+    kicker: 'sync',
+    title: 'Visited + reactions ride the same rails',
+    body: 'v0.16 extends the mirror beyond saved. writeVisited and writeReactions debounce into the same scheduleReaderMirror(); pulls apply newest-wins to visited IDs and the reactions map, then repaint .is-visited + rehydrate reaction chips. One POST carries all three keys; each key has its own updated_at so a stale tab can\'t clobber a live one.',
+    kbd: 'sync',
+  },
 ];
 
 const roadmap = [
@@ -436,18 +442,30 @@ const roadmap = [
   },
   {
     v: 'v0.16',
-    status: 'next',
-    when: 'planned',
+    status: 'shipped',
+    when: '2026-04-21',
     title: 'Visited + reactions on the same rails',
     items: [
-      'Extend sparrow-reader-state-v1 payload with { visited, reactions } entries',
-      'Same debounce + merge flow; SparrowLayout mirrors three keys instead of one',
-      'OPML import/export for feed-reader interop',
-      'Bonjour discovery of the peer-node for dev environments (mDNS advertisement from Magpie)',
+      'writeVisited and writeReactions accept opts.skipMirror and trigger the same 600ms-debounced scheduleReaderMirror()',
+      'mirrorPush() sends all three keys in one POST: saved / visited / reactions each with its own { value, updated_at }',
+      'mirrorPull() iterates MIRROR_KEYS, applies newest-wins, and re-runs applyVisited + hydrateReactions so the DOM catches up with remote state',
+      'Three new localStorage tie-breaker keys: sparrow:visited:updated_at, sparrow:reactions:updated_at (joining sparrow:saved:updated_at from v0.15)',
+      'Magpie server code unchanged — its per-key newest-wins merge already handles any shape',
     ],
   },
   {
     v: 'v0.17',
+    status: 'next',
+    when: 'planned',
+    title: 'OPML + Bonjour',
+    items: [
+      'Import/export OPML — saved receipts and subscribed channels round-trip into any feed reader',
+      'Bonjour advertisement from Magpie (mDNS) so dev setups auto-discover the peer-node instead of hardcoding 127.0.0.1:38473',
+      'Sparrow client probes the local mDNS responder before falling back to the port default',
+    ],
+  },
+  {
+    v: 'v0.18',
     status: 'planned',
     title: 'Cross-device sync',
     items: [
@@ -534,7 +552,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.15 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.16 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
