@@ -212,7 +212,7 @@ export const SHARE_CAMPAIGN_PACKETS = [
     goal: 'Bring the on-chain collection and daily-auction research into the right small circles.',
     hook: 'Visit Nouns is already live on Tezos; the missing primitive is the self-perpetuating daily auction loop.',
     channels: ['Farcaster Nouns', 'Tezos Discord', 'objkt collector DMs', 'X Tezos threads'],
-    proofLinks: ['/collection/visit-nouns', '/battle', '/editions', '/b/0330'],
+    proofLinks: ['/collection/visit-nouns', '/battle', '/editions', '/b/0205'],
     steps: [
       'Share the collection page with the contract address and objkt link.',
       'Point technical readers to the daily-auction brief instead of pitching a vague roadmap.',
