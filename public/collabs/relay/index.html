@@ -1,0 +1,3632 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="PointCast Relay is a live routing game for PointCast blocks, collaborators, and presence."
+    />
+    <meta name="theme-color" content="#f6f4ee" />
+    <meta property="og:title" content="PointCast Relay" />
+    <meta
+      property="og:description"
+      content="Route live PointCast blocks to the right collaborator before the signal fades."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pointcast.xyz/collabs/relay" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>PointCast Relay</title>
+    <style>
+      :root {
+        --bg: #f6f4ee;
+        --surface: #ffffff;
+        --surface-2: #fbfaf6;
+        --ink: #15130f;
+        --ink-soft: #3d3a34;
+        --muted: #6d6960;
+        --rule: #d8d3c8;
+        --rule-strong: #bcb5a7;
+        --blue: #185fa5;
+        --red: #c5513f;
+        --green: #167a66;
+        --gold: #b98914;
+        --violet: #6761b8;
+        --teal: #0f7f86;
+        --shadow: 0 20px 48px rgba(22, 18, 12, 0.08);
+        --sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --mono: "JetBrains Mono Variable", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+          monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+
+      body {
+        min-height: 100vh;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      a:hover,
+      a:focus-visible {
+        text-decoration: underline;
+      }
+
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .app {
+        width: min(1280px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 22px 0 72px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      .crumb {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      .title-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 16px;
+        align-items: end;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 2.75rem;
+        line-height: 0.96;
+      }
+
+      .build-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 6px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-soft);
+      }
+
+      .status-strip {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-soft);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--muted);
+      }
+
+      .status-dot.is-live {
+        background: var(--green);
+      }
+
+      .status-dot.is-fallback {
+        background: var(--gold);
+      }
+
+      .game-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(310px, 0.34fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .surface,
+      .rail-section {
+        border: 1px solid var(--rule);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .surface {
+        min-width: 0;
+      }
+
+      .round-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 15px 18px;
+        border-right: 1px solid var(--rule);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        overflow: hidden;
+        font-size: 1.15rem;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .desk {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.86fr) minmax(300px, 1fr);
+        gap: 0;
+        min-height: 416px;
+      }
+
+      .block-panel {
+        display: grid;
+        align-content: space-between;
+        min-width: 0;
+        padding: 22px;
+        border-right: 1px solid var(--rule);
+        background: var(--surface-2);
+      }
+
+      .block-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        min-height: 26px;
+        padding: 4px 8px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-soft);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tag.is-channel {
+        border-color: var(--channel-color, var(--blue));
+        color: var(--channel-color, var(--blue));
+      }
+
+      .block-title {
+        display: -webkit-box;
+        min-height: 4.2em;
+        margin: 0 0 14px;
+        overflow: hidden;
+        font-size: 1.72rem;
+        line-height: 1.04;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+      }
+
+      .block-dek {
+        display: -webkit-box;
+        margin: 0;
+        overflow: hidden;
+        color: var(--ink-soft);
+        font-size: 0.98rem;
+        line-height: 1.55;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 6;
+      }
+
+      .block-footer {
+        display: grid;
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .timer-track {
+        position: relative;
+        overflow: hidden;
+        height: 12px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: #eee9de;
+      }
+
+      .timer-fill {
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--blue);
+        transform-origin: left center;
+        transition: transform 250ms linear, background-color 200ms ease;
+      }
+
+      .timer-fill.is-low {
+        background: var(--red);
+      }
+
+      .block-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        align-items: center;
+        min-height: 24px;
+      }
+
+      .block-links a,
+      .block-links span {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .relay-panel {
+        display: grid;
+        grid-template-rows: minmax(230px, 1fr) auto;
+        min-width: 0;
+      }
+
+      .relay-visual {
+        padding: 18px 18px 8px;
+        min-width: 0;
+      }
+
+      .relay-map {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1.56 / 1;
+        border: 1px solid var(--rule);
+        background: #fbfaf6;
+        overflow: hidden;
+      }
+
+      .map-grid {
+        stroke: #e3ded3;
+        stroke-width: 1;
+      }
+
+      .relay-line {
+        fill: none;
+        stroke: #c8c1b3;
+        stroke-linecap: round;
+        stroke-width: 3;
+      }
+
+      .relay-line.is-selected {
+        stroke: var(--blue);
+        stroke-width: 5;
+      }
+
+      .relay-line.is-correct {
+        stroke: var(--green);
+        stroke-width: 5;
+      }
+
+      .relay-line.is-wrong {
+        stroke: var(--red);
+        stroke-width: 5;
+      }
+
+      .svg-label {
+        fill: var(--ink);
+        font-family: var(--sans);
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .svg-small {
+        fill: var(--muted);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .node-ring {
+        fill: var(--surface);
+        stroke-width: 2;
+      }
+
+      .node-core {
+        fill: var(--node-color, var(--blue));
+      }
+
+      .route-options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 10px 18px 18px;
+      }
+
+      .route-button {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        width: 100%;
+        min-height: 118px;
+        padding: 12px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        cursor: pointer;
+        text-align: left;
+        transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease,
+          background-color 160ms ease;
+      }
+
+      .route-button:hover,
+      .route-button:focus-visible {
+        border-color: var(--route-color, var(--blue));
+        box-shadow: 0 8px 20px rgba(22, 18, 12, 0.08);
+        outline: 0;
+      }
+
+      .route-button:active {
+        transform: translateY(1px);
+      }
+
+      .route-button[disabled] {
+        cursor: default;
+      }
+
+      .route-button.is-correct {
+        border-color: var(--green);
+        background: #f1faf6;
+      }
+
+      .route-button.is-wrong {
+        border-color: var(--red);
+        background: #fff4f1;
+      }
+
+      .route-button.is-target:not(.is-correct) {
+        border-color: var(--green);
+        background: #f7fcf9;
+      }
+
+      .route-token {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--route-color, var(--blue));
+        border-radius: 7px;
+        color: var(--route-color, var(--blue));
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+      }
+
+      .route-button > span:last-child {
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .route-name {
+        display: block;
+        overflow: hidden;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .route-role {
+        display: block;
+        margin-top: 2px;
+        color: var(--route-color, var(--blue));
+      }
+
+      .route-intro {
+        display: -webkit-box;
+        margin: 7px 0 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
+
+      .rail {
+        display: grid;
+        gap: 14px;
+      }
+
+      .rail-section {
+        padding: 16px;
+      }
+
+      .rail-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .rail-heading h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .score-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .mode-switch {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .mode-button {
+        min-width: 0;
+        min-height: 42px;
+        padding: 9px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        cursor: pointer;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mode-button:hover,
+      .mode-button:focus-visible {
+        border-color: var(--blue);
+        outline: 0;
+      }
+
+      .mode-button.is-active {
+        border-color: var(--green);
+        background: #f1faf6;
+      }
+
+      .mission-readout {
+        display: grid;
+        gap: 4px;
+        margin-top: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .mission-readout strong {
+        overflow: hidden;
+        font-size: 0.95rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mission-readout span {
+        overflow: hidden;
+        color: var(--muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .score-tile {
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .score-tile span {
+        display: block;
+        color: var(--muted);
+      }
+
+      .score-tile strong {
+        display: block;
+        margin-top: 6px;
+        overflow: hidden;
+        font-size: 1.35rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .control-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .icon-button {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        min-height: 38px;
+        padding: 8px 9px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        cursor: pointer;
+      }
+
+      .icon-button:hover,
+      .icon-button:focus-visible {
+        border-color: var(--blue);
+        outline: 0;
+      }
+
+      .icon-button:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+
+      .button-icon {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+      }
+
+      .result {
+        display: none;
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .result.is-visible {
+        display: block;
+      }
+
+      .result strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .result p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+        line-height: 1.4;
+      }
+
+      .shift-meter {
+        display: grid;
+        gap: 10px;
+      }
+
+      .shift-track {
+        height: 12px;
+        overflow: hidden;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: #eee9de;
+      }
+
+      .shift-fill {
+        width: var(--shift-fill, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--green);
+        transition: width 220ms ease;
+      }
+
+      .shift-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        color: var(--muted);
+      }
+
+      .shift-slots {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .shift-slot {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        min-width: 0;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        background: var(--surface-2);
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.58rem;
+        font-weight: 800;
+      }
+
+      .shift-slot.is-current {
+        border-color: var(--blue);
+        background: #f3f8fc;
+        color: var(--blue);
+      }
+
+      .shift-slot.is-hit {
+        border-color: var(--green);
+        background: #dff3e9;
+        color: #0e674f;
+      }
+
+      .shift-slot.is-partial {
+        border-color: var(--blue);
+        background: #e1edf8;
+        color: var(--blue);
+      }
+
+      .shift-slot.is-miss {
+        border-color: var(--red);
+        background: #f8dfd8;
+        color: #9b3526;
+      }
+
+      .badge-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .badge {
+        min-width: 0;
+        padding: 8px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--muted);
+      }
+
+      .badge.is-active {
+        border-color: var(--green);
+        background: #f1faf6;
+        color: var(--ink);
+      }
+
+      .badge strong {
+        display: block;
+        overflow: hidden;
+        font-size: 0.86rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge span {
+        display: block;
+        margin-top: 2px;
+        overflow: hidden;
+        font-size: 0.72rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .contract-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .contract-card {
+        display: grid;
+        gap: 7px;
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .contract-card.is-complete {
+        border-color: var(--green);
+        background: #f1faf6;
+      }
+
+      .contract-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .contract-name {
+        overflow: hidden;
+        font-size: 0.84rem;
+        font-weight: 750;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .contract-count {
+        color: var(--muted);
+        font-size: 0.72rem;
+        white-space: nowrap;
+      }
+
+      .contract-track {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #eee9de;
+      }
+
+      .contract-fill {
+        width: var(--contract-fill, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--blue);
+      }
+
+      .docket-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .docket-item {
+        display: grid;
+        grid-template-columns: 50px minmax(0, 1fr);
+        gap: 10px;
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .docket-item.is-current {
+        border-color: var(--blue);
+        background: #f3f8fc;
+      }
+
+      .docket-code {
+        display: grid;
+        place-items: center;
+        min-height: 34px;
+        border: 1px solid var(--docket-color, var(--blue));
+        border-radius: 7px;
+        color: var(--docket-color, var(--blue));
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        font-weight: 800;
+      }
+
+      .docket-copy {
+        min-width: 0;
+      }
+
+      .docket-title {
+        display: block;
+        overflow: hidden;
+        font-size: 0.86rem;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .docket-meta {
+        display: block;
+        overflow: hidden;
+        margin-top: 3px;
+        color: var(--muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .evidence-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .evidence-row {
+        display: grid;
+        grid-template-columns: minmax(82px, 0.35fr) minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .evidence-row.is-target {
+        border-color: var(--green);
+        background: #f1faf6;
+      }
+
+      .evidence-key,
+      .evidence-value {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .evidence-key {
+        color: var(--muted);
+      }
+
+      .evidence-value {
+        color: var(--ink-soft);
+        font-size: 0.84rem;
+      }
+
+      .review-stack {
+        display: grid;
+        gap: 8px;
+      }
+
+      .review-item {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 9px;
+        align-items: start;
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .review-token {
+        display: grid;
+        place-items: center;
+        min-height: 32px;
+        border-radius: 7px;
+        background: #f8dfd8;
+        color: #9b3526;
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 800;
+      }
+
+      .review-token.is-partial {
+        background: #e1edf8;
+        color: var(--blue);
+      }
+
+      .review-copy {
+        min-width: 0;
+      }
+
+      .review-copy strong,
+      .review-copy span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .review-copy strong {
+        font-size: 0.84rem;
+      }
+
+      .review-copy span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      .route-tape {
+        display: grid;
+        gap: 8px;
+      }
+
+      .tape-row {
+        display: grid;
+        grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr) 54px;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .tape-name {
+        overflow: hidden;
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tape-bar {
+        height: 9px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #eee9de;
+      }
+
+      .tape-fill {
+        width: var(--fill, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--bar-color, var(--blue));
+      }
+
+      .tape-value {
+        color: var(--muted);
+        font-size: 0.7rem;
+        text-align: right;
+      }
+
+      .run-report {
+        display: grid;
+        gap: 8px;
+      }
+
+      .report-box {
+        min-height: 116px;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+        line-height: 1.46;
+        white-space: pre-wrap;
+      }
+
+      .consensus {
+        display: grid;
+        gap: 8px;
+      }
+
+      .consensus-row {
+        display: grid;
+        grid-template-columns: minmax(92px, 0.36fr) minmax(0, 1fr) 36px;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .consensus-name {
+        overflow: hidden;
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .consensus-bar {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #eee9de;
+      }
+
+      .consensus-fill {
+        width: var(--fill, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--bar-color, var(--blue));
+      }
+
+      .consensus-value {
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-align: right;
+      }
+
+      .presence-counts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .presence-pill {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .presence-list {
+        display: grid;
+        gap: 8px;
+        max-height: 170px;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .presence-item {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr);
+        gap: 9px;
+        align-items: center;
+      }
+
+      .noun-chip {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 1px solid rgba(0, 0, 0, 0.16);
+        border-radius: 7px;
+        background: var(--noun-bg, #f0f0f0);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 800;
+      }
+
+      .presence-copy {
+        min-width: 0;
+      }
+
+      .presence-copy strong {
+        display: block;
+        overflow: hidden;
+        font-size: 0.86rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .presence-copy span {
+        display: block;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .log-list {
+        display: grid;
+        gap: 9px;
+        max-height: 260px;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .log-item {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding-bottom: 9px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .log-item:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .log-score {
+        display: grid;
+        place-items: center;
+        min-height: 30px;
+        border-radius: 7px;
+        background: #eee9de;
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        font-weight: 800;
+      }
+
+      .log-score.is-hit {
+        background: #dff3e9;
+        color: #0e674f;
+      }
+
+      .log-score.is-miss {
+        background: #f8dfd8;
+        color: #9b3526;
+      }
+
+      .log-copy {
+        min-width: 0;
+      }
+
+      .log-copy strong {
+        display: block;
+        overflow: hidden;
+        font-size: 0.84rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .log-copy span {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .empty-state {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+        line-height: 1.45;
+      }
+
+      @media (max-width: 1080px) {
+        .topbar,
+        .game-grid,
+        .desk {
+          grid-template-columns: 1fr;
+        }
+
+        .status-strip {
+          justify-content: flex-start;
+        }
+
+        .block-panel {
+          border-right: 0;
+          border-bottom: 1px solid var(--rule);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .app {
+          width: min(100% - 20px, 1280px);
+          padding-top: 14px;
+        }
+
+        h1 {
+          font-size: 2.15rem;
+        }
+
+        .round-strip,
+        .route-options,
+        .score-grid,
+        .badge-list,
+        .presence-counts {
+          grid-template-columns: 1fr;
+        }
+
+        .game-grid,
+        .surface,
+        .desk,
+        .relay-panel,
+        .rail,
+        .rail-section,
+        .mode-switch {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+        }
+
+        .metric {
+          border-right: 0;
+          border-bottom: 1px solid var(--rule);
+        }
+
+        .metric:last-child {
+          border-bottom: 0;
+        }
+
+        .block-panel,
+        .relay-visual,
+        .route-options,
+        .rail-section {
+          padding-left: 14px;
+          padding-right: 14px;
+        }
+
+        .control-row {
+          grid-template-columns: 1fr;
+        }
+
+        .shift-slots {
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+
+        .relay-visual {
+          overflow: hidden;
+        }
+
+        .relay-map {
+          aspect-ratio: 1.08 / 1;
+          width: calc(100vw - 48px);
+          max-width: 100%;
+        }
+
+        .node-name,
+        .node-role {
+          display: none;
+        }
+
+        .route-button {
+          min-height: 64px;
+        }
+
+        .route-intro {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <nav class="crumb" aria-label="Breadcrumb">
+            <a href="https://pointcast.xyz/">Home</a>
+            <span aria-hidden="true">&gt;</span>
+            <a href="https://pointcast.xyz/collabs/">collabs</a>
+            <span aria-hidden="true">&gt;</span>
+            <span>relay</span>
+          </nav>
+          <div class="title-row">
+            <h1>PointCast Relay</h1>
+            <span class="build-chip mono" id="day-chip">Tuesday build</span>
+          </div>
+        </div>
+        <div class="status-strip" aria-label="Connection status">
+          <span class="status-pill mono">
+            <span class="status-dot" id="data-dot"></span>
+            <span id="data-status">Booting</span>
+          </span>
+          <span class="status-pill mono">
+            <span class="status-dot" id="presence-dot"></span>
+            <span id="presence-status">Presence idle</span>
+          </span>
+        </div>
+      </header>
+
+      <section class="game-grid" aria-label="PointCast Relay game">
+        <section class="surface" aria-labelledby="signal-title">
+          <div class="round-strip" aria-label="Round metrics">
+            <div class="metric">
+              <span class="mono">Signal</span>
+              <strong id="round-label">0</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Timer</span>
+              <strong id="timer-label">--</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Target</span>
+              <strong id="target-label">Registry</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Source</span>
+              <strong id="source-label">Manifest</strong>
+            </div>
+          </div>
+
+          <div class="desk">
+            <article class="block-panel" aria-labelledby="signal-title">
+              <div>
+                <div class="block-kicker">
+                  <span class="tag mono is-channel" id="block-channel">FD</span>
+                  <span class="tag mono" id="block-type">NOTE</span>
+                  <span class="tag mono" id="block-id">B/---- </span>
+                </div>
+                <h2 class="block-title" id="signal-title">Loading PointCast blocks...</h2>
+                <p class="block-dek" id="block-dek">
+                  The relay desk is opening a live feed from the PointCast manifest.
+                </p>
+              </div>
+
+              <div class="block-footer">
+                <div class="timer-track" aria-hidden="true">
+                  <div class="timer-fill" id="timer-fill"></div>
+                </div>
+                <div class="block-links" id="block-links"></div>
+              </div>
+            </article>
+
+            <div class="relay-panel">
+              <div class="relay-visual">
+                <svg
+                  class="relay-map"
+                  id="relay-map"
+                  viewBox="0 0 560 360"
+                  role="img"
+                  aria-labelledby="relay-map-title"
+                >
+                  <title id="relay-map-title">PointCast signal routing map</title>
+                </svg>
+              </div>
+              <div class="route-options" id="route-options" aria-label="Collaborator routes"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="rail" aria-label="Relay side rail">
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Mission</h2>
+              <span class="mono" id="mode-status-label">Agent</span>
+            </div>
+            <div class="mode-switch" role="group" aria-label="Route mode">
+              <button class="mode-button mono is-active" id="mode-agent-button" type="button">
+                Agent
+              </button>
+              <button class="mode-button mono" id="mode-surface-button" type="button">
+                Surface
+              </button>
+            </div>
+            <div class="mission-readout" id="mission-readout"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Daily Contract</h2>
+              <span class="mono" id="contract-status-label">0/3</span>
+            </div>
+            <div class="contract-list" id="contract-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Signal Docket</h2>
+              <span class="mono" id="docket-count-label">0</span>
+            </div>
+            <div class="docket-list" id="docket-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Signal Evidence</h2>
+              <span class="mono" id="evidence-status-label">Hidden</span>
+            </div>
+            <div class="evidence-list" id="evidence-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Review Stack</h2>
+              <span class="mono" id="review-count-label">0</span>
+            </div>
+            <div class="review-stack" id="review-stack"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Scoreboard</h2>
+              <span class="mono" id="best-label">Best 0</span>
+            </div>
+            <div class="score-grid">
+              <div class="score-tile">
+                <span class="mono">Score</span>
+                <strong id="score-label">0</strong>
+              </div>
+              <div class="score-tile">
+                <span class="mono">Streak</span>
+                <strong id="streak-label">0</strong>
+              </div>
+              <div class="score-tile">
+                <span class="mono">Hit rate</span>
+                <strong id="hit-rate-label">0%</strong>
+              </div>
+              <div class="score-tile">
+                <span class="mono">Shift</span>
+                <strong id="shift-label">0/12</strong>
+              </div>
+              <div class="score-tile">
+                <span class="mono">Clues</span>
+                <strong id="clue-label">3</strong>
+              </div>
+              <div class="score-tile">
+                <span class="mono">Deck</span>
+                <strong id="deck-label">0</strong>
+              </div>
+            </div>
+
+            <div class="control-row">
+              <button class="icon-button" id="new-game-button" type="button">
+                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6M18 3v5h-5M6 21v-5h5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  ></path>
+                </svg>
+                <span>Reset</span>
+              </button>
+              <button class="icon-button" id="pause-button" type="button">
+                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M8 5h3v14H8zM13 5h3v14h-3z"
+                    fill="currentColor"
+                  ></path>
+                </svg>
+                <span>Pause</span>
+              </button>
+              <button class="icon-button" id="clue-button" type="button">
+                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M9 18h6M10 22h4M8.8 14.3A6 6 0 1 1 15.2 14c-.8.6-1.2 1.4-1.2 2h-4c0-.7-.4-1.3-1.2-1.7Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  ></path>
+                </svg>
+                <span>Clue</span>
+              </button>
+              <button class="icon-button" id="next-button" type="button">
+                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M5 12h11M12 6l6 6-6 6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  ></path>
+                </svg>
+                <span id="next-button-label">Skip</span>
+              </button>
+            </div>
+
+            <div class="result" id="result-panel" aria-live="polite"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Shift Run</h2>
+              <span class="mono" id="shift-status-label">Open</span>
+            </div>
+            <div class="shift-meter">
+              <div class="shift-track" aria-hidden="true">
+                <div class="shift-fill" id="shift-fill"></div>
+              </div>
+              <div class="shift-meta mono">
+                <span id="shift-progress-label">0 of 12</span>
+                <span id="last-run-label">No prior run</span>
+              </div>
+              <div class="shift-slots" id="shift-slots" aria-label="Shift signal track"></div>
+            </div>
+            <div class="badge-list" id="badge-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Route Tape</h2>
+              <span class="mono" id="tape-count-label">0</span>
+            </div>
+            <div class="route-tape" id="route-tape"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Run Report</h2>
+              <span class="mono" id="report-status-label">Draft</span>
+            </div>
+            <div class="run-report">
+              <div class="report-box" id="run-report" aria-live="polite"></div>
+              <button class="icon-button" id="copy-report-button" type="button">
+                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M8 8h10v12H8zM6 16H4V4h12v2"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  ></path>
+                </svg>
+                <span>Copy report</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Consensus</h2>
+              <span class="mono" id="consensus-label">Open</span>
+            </div>
+            <div class="consensus" id="consensus-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Presence</h2>
+              <button class="icon-button mono" id="refresh-button" type="button">Refresh</button>
+            </div>
+            <div class="presence-counts">
+              <div class="presence-pill">
+                <span class="mono">Humans</span>
+                <strong id="humans-label">0</strong>
+              </div>
+              <div class="presence-pill">
+                <span class="mono">Agents</span>
+                <strong id="agents-label">0</strong>
+              </div>
+            </div>
+            <div class="presence-list" id="presence-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Dispatch Log</h2>
+              <span class="mono" id="log-count-label">0</span>
+            </div>
+            <div class="log-list" id="log-list"></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const DEFAULT_ENDPOINTS = {
+        agents: "https://pointcast.xyz/agents.json",
+        blocks: "https://pointcast.xyz/blocks.json",
+        collabs: "https://pointcast.xyz/collabs.json",
+        presenceSnapshot: "https://pointcast.xyz/api/presence/snapshot",
+        presence: "wss://pointcast.xyz/api/presence",
+      };
+
+      const FALLBACK_COLLABS = [
+        {
+          slug: "mike-hoydich",
+          name: "Mike Hoydich",
+          role: "director",
+          roleLabel: "Director",
+          location: "El Segundo, California, USA",
+          intro:
+            "Founder and director. Writes the blocks, picks the playlist, takes the photos, makes the calls.",
+        },
+        {
+          slug: "claude-code",
+          name: "Claude Code",
+          role: "engineer",
+          roleLabel: "Engineer",
+          location: "cloud",
+          intro:
+            "Primary engineer. Ships sprints overnight while the team sleeps. Checks docs and inboxes at the start of every session.",
+        },
+        {
+          slug: "codex",
+          name: "Codex",
+          role: "engineer",
+          roleLabel: "Engineer",
+          location: "cloud",
+          intro:
+            "Repo-scoped engineering specialist. Ships agent-ready plumbing, APIs, presence work, and local prototypes.",
+        },
+        {
+          slug: "manus",
+          name: "Manus",
+          role: "operations",
+          roleLabel: "Operations",
+          location: "cloud",
+          intro:
+            "Launch-week operations, platform matrix, email routing, search console, IndexNow, and curation setup.",
+        },
+      ];
+
+      const FALLBACK_BLOCKS = [
+        {
+          id: "0366",
+          url: "https://pointcast.xyz/b/0366",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "NOTE",
+          title: "Tuesday afternoon pulse - BTC, Dodgers, weather clock, games",
+          dek:
+            "Mike asked for fresh before the sprint ends: bitcoin price, sport scores, weather, and games. The snapshot is honest even if the numbers drift.",
+          timestamp: "2026-04-21T21:35:00.000Z",
+          author: "mh+cc",
+          source: "Mike chat, cc fetched fresh public data and published the pulse.",
+          companions: [],
+        },
+        {
+          id: "0365",
+          url: "https://pointcast.xyz/b/0365",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "NOTE",
+          title: "Four agents, one ledger - where the collaboration actually stands",
+          dek:
+            "Manus, ChatGPT, Codex, and Claude threads are now contributing. The ledger shows what shipped, what is queued, and what is stuck.",
+          timestamp: "2026-04-21T21:15:00.000Z",
+          author: "mh+cc",
+          source: "Mike asked for status across agents; cc scanned the ledger and published the report.",
+          companions: [],
+        },
+        {
+          id: "0364",
+          url: "https://pointcast.xyz/b/0364",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "NOTE",
+          title: "/decks is a surface now",
+          dek:
+            "The versioned narrative gets a reading room with an index page, agent manifest, og image meta, and build-pipeline wire.",
+          timestamp: "2026-04-21T20:30:00.000Z",
+          author: "cc",
+          source: "cc editorial from Sprint 90 recap.",
+          companions: [],
+        },
+        {
+          id: "0362",
+          url: "https://pointcast.xyz/b/0362",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "LINK",
+          title: "AgarChat - instant messenger meets agar.io",
+          dek:
+            "A web-native game-chat hybrid: eat, grow, split, and talk in real time. Built in one session with Claude.",
+          timestamp: "2026-04-21T20:00:00.000Z",
+          author: "mh+cc",
+          source: "Mike asked to build a block and TV version for PointCast.",
+          companions: [],
+        },
+      ];
+
+      const ROUTE_COLORS = ["#185fa5", "#c5513f", "#167a66", "#7d6f56", "#6761b8", "#0f7f86"];
+      const SURFACE_ROUTES = [
+        {
+          slug: "compute",
+          name: "Compute Ledger",
+          role: "protocol",
+          roleLabel: "Protocol",
+          intro: "RFCs, attribution, WebMCP, agent manifests, compute accounting.",
+          path: "/compute",
+          keywords:
+            "compute ledger rfc attribution webmcp mcp agent passport federation protocol worker api endpoint manifest",
+        },
+        {
+          slug: "wallet",
+          name: "Wallet + Auth",
+          role: "identity",
+          roleLabel: "Identity",
+          intro: "Beacon, Tezos wallets, profile state, Google auth, session chips.",
+          path: "/profile",
+          keywords:
+            "beacon wallet tezos kukai temple umami airgap profile auth logout google session sign-in sign-out passport",
+        },
+        {
+          slug: "play",
+          name: "TV + Games",
+          role: "play",
+          roleLabel: "Playable",
+          intro: "AgarChat, YeePlayer, rhythm maps, TV shows, battle surfaces.",
+          path: "/tv",
+          keywords:
+            "game games agar agarchat yee yeeplayer noundrum drum battle watch show shows rhythm track playable tv petri",
+        },
+        {
+          slug: "editorial",
+          name: "Editorial Desk",
+          role: "editorial",
+          roleLabel: "Blocks",
+          intro: "Blocks, decks, sprint notes, research memos, status and daily pulse.",
+          path: "/archive",
+          keywords:
+            "block blocks deck decks sprint research memo editorial status pulse brief report read note front door story roadmap",
+        },
+        {
+          slug: "field",
+          name: "Local Field",
+          role: "field",
+          roleLabel: "Place",
+          intro: "El Segundo, weather, visits, stations, garden notes, local context.",
+          path: "/local",
+          keywords:
+            "el segundo weather local coffee visit station stations garden south bay bath sky place map route faucet",
+        },
+      ];
+      const MODE_KEY = "pc-relay-route-mode";
+      const LAST_RUN_KEY = "pc-relay-last-run";
+      const SHIFT_LENGTH = 12;
+      const CLUES_PER_SHIFT = 3;
+      const CLUE_TIME_COST = 4;
+      const CLUE_SCORE_COST = 25;
+
+      const dom = {
+        dataDot: document.querySelector("#data-dot"),
+        dataStatus: document.querySelector("#data-status"),
+        presenceDot: document.querySelector("#presence-dot"),
+        presenceStatus: document.querySelector("#presence-status"),
+        dayChip: document.querySelector("#day-chip"),
+        modeStatusLabel: document.querySelector("#mode-status-label"),
+        modeAgentButton: document.querySelector("#mode-agent-button"),
+        modeSurfaceButton: document.querySelector("#mode-surface-button"),
+        missionReadout: document.querySelector("#mission-readout"),
+        contractStatusLabel: document.querySelector("#contract-status-label"),
+        contractList: document.querySelector("#contract-list"),
+        docketCountLabel: document.querySelector("#docket-count-label"),
+        docketList: document.querySelector("#docket-list"),
+        evidenceStatusLabel: document.querySelector("#evidence-status-label"),
+        evidenceList: document.querySelector("#evidence-list"),
+        reviewCountLabel: document.querySelector("#review-count-label"),
+        reviewStack: document.querySelector("#review-stack"),
+        roundLabel: document.querySelector("#round-label"),
+        timerLabel: document.querySelector("#timer-label"),
+        targetLabel: document.querySelector("#target-label"),
+        sourceLabel: document.querySelector("#source-label"),
+        blockChannel: document.querySelector("#block-channel"),
+        blockType: document.querySelector("#block-type"),
+        blockId: document.querySelector("#block-id"),
+        blockTitle: document.querySelector("#signal-title"),
+        blockDek: document.querySelector("#block-dek"),
+        blockLinks: document.querySelector("#block-links"),
+        timerFill: document.querySelector("#timer-fill"),
+        relayMap: document.querySelector("#relay-map"),
+        routeOptions: document.querySelector("#route-options"),
+        scoreLabel: document.querySelector("#score-label"),
+        streakLabel: document.querySelector("#streak-label"),
+        hitRateLabel: document.querySelector("#hit-rate-label"),
+        shiftLabel: document.querySelector("#shift-label"),
+        clueLabel: document.querySelector("#clue-label"),
+        deckLabel: document.querySelector("#deck-label"),
+        bestLabel: document.querySelector("#best-label"),
+        newGameButton: document.querySelector("#new-game-button"),
+        pauseButton: document.querySelector("#pause-button"),
+        clueButton: document.querySelector("#clue-button"),
+        nextButton: document.querySelector("#next-button"),
+        nextButtonLabel: document.querySelector("#next-button-label"),
+        resultPanel: document.querySelector("#result-panel"),
+        shiftStatusLabel: document.querySelector("#shift-status-label"),
+        shiftFill: document.querySelector("#shift-fill"),
+        shiftProgressLabel: document.querySelector("#shift-progress-label"),
+        shiftSlots: document.querySelector("#shift-slots"),
+        lastRunLabel: document.querySelector("#last-run-label"),
+        badgeList: document.querySelector("#badge-list"),
+        tapeCountLabel: document.querySelector("#tape-count-label"),
+        routeTape: document.querySelector("#route-tape"),
+        reportStatusLabel: document.querySelector("#report-status-label"),
+        runReport: document.querySelector("#run-report"),
+        copyReportButton: document.querySelector("#copy-report-button"),
+        consensusLabel: document.querySelector("#consensus-label"),
+        consensusList: document.querySelector("#consensus-list"),
+        refreshButton: document.querySelector("#refresh-button"),
+        humansLabel: document.querySelector("#humans-label"),
+        agentsLabel: document.querySelector("#agents-label"),
+        presenceList: document.querySelector("#presence-list"),
+        logList: document.querySelector("#log-list"),
+        logCountLabel: document.querySelector("#log-count-label"),
+      };
+
+      const state = {
+        endpoints: { ...DEFAULT_ENDPOINTS },
+        collaborators: [],
+        surfaces: buildSurfaceRoutes({}),
+        blocks: [],
+        deck: [],
+        deckCursor: 0,
+        deckCycle: 0,
+        routeMode: getStoredRouteMode(),
+        current: null,
+        score: 0,
+        streak: 0,
+        bestStreak: 0,
+        answered: 0,
+        correct: 0,
+        skipped: 0,
+        shiftLength: SHIFT_LENGTH,
+        shiftResolved: 0,
+        cluesLeft: CLUES_PER_SHIFT,
+        clueUsed: false,
+        finished: false,
+        timeTotal: 24,
+        timeLeft: 24,
+        timerId: null,
+        locked: true,
+        paused: false,
+        selectedSlug: null,
+        result: null,
+        log: [],
+        dataMode: "loading",
+        socket: null,
+        pingId: null,
+        presence: { humans: 0, agents: 0, sessions: [] },
+        player: getPlayerIdentity(),
+      };
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function getPlayerIdentity() {
+        const sidKey = "pc-relay-sid";
+        const nounKey = "pc-relay-noun-id";
+        let sid = localStorage.getItem(sidKey);
+        if (!sid) {
+          sid = crypto.randomUUID ? crypto.randomUUID() : `relay-${Date.now()}-${Math.random()}`;
+          localStorage.setItem(sidKey, sid);
+        }
+        let nounId = Number(localStorage.getItem(nounKey));
+        if (!Number.isFinite(nounId) || nounId < 0 || nounId > 1199) {
+          nounId = Math.floor(Math.random() * 1200);
+          localStorage.setItem(nounKey, String(nounId));
+        }
+        return { sid, nounId };
+      }
+
+      function getStoredRouteMode() {
+        try {
+          const queryMode = new URLSearchParams(window.location.search).get("mode");
+          if (queryMode === "surface") {
+            return "surface";
+          }
+          if (queryMode === "agent") {
+            return "agent";
+          }
+          const mode = localStorage.getItem(MODE_KEY);
+          return mode === "surface" ? "surface" : "agent";
+        } catch (error) {
+          return "agent";
+        }
+      }
+
+      function buildSurfaceRoutes(manifest) {
+        const human = manifest?.endpoints?.human || {};
+        const homepage = manifest?.homepage || "https://pointcast.xyz";
+        const pathToUrl = (path) => {
+          if (path === "/compute") {
+            return human.compute || `${homepage}/compute`;
+          }
+          if (path === "/profile") {
+            return human.profile || `${homepage}/profile`;
+          }
+          if (path === "/tv") {
+            return human.tv || `${homepage}/tv`;
+          }
+          if (path === "/archive") {
+            return human.archive || `${homepage}/archive`;
+          }
+          if (path === "/local") {
+            return human.local || `${homepage}/local`;
+          }
+          return `${homepage}${path}`;
+        };
+
+        return SURFACE_ROUTES.map((surface, index) => ({
+          ...surface,
+          color: ROUTE_COLORS[index % ROUTE_COLORS.length],
+          url: pathToUrl(surface.path),
+        }));
+      }
+
+      function getRouteTargets() {
+        return state.routeMode === "surface" ? state.surfaces : state.collaborators;
+      }
+
+      function setRouteMode(mode) {
+        const nextMode = mode === "surface" ? "surface" : "agent";
+        if (state.routeMode === nextMode) {
+          return;
+        }
+        state.routeMode = nextMode;
+        try {
+          localStorage.setItem(MODE_KEY, nextMode);
+        } catch (error) {}
+        if (state.blocks.length) {
+          state.deckCycle += 1;
+          startNewGame();
+        } else {
+          renderMission();
+          renderDailyContract();
+          renderRunReport();
+        }
+      }
+
+      function setDataStatus(mode, label) {
+        state.dataMode = mode;
+        dom.dataStatus.textContent = label;
+        dom.dataDot.classList.toggle("is-live", mode === "live");
+        dom.dataDot.classList.toggle("is-fallback", mode === "fallback");
+      }
+
+      function setPresenceStatus(mode, label) {
+        dom.presenceStatus.textContent = label;
+        dom.presenceDot.classList.toggle("is-live", mode === "live");
+        dom.presenceDot.classList.toggle("is-fallback", mode === "fallback");
+      }
+
+      async function fetchJson(url, timeoutMs = 5500) {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+          }
+          return await response.json();
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
+      }
+
+      async function loadRemoteData() {
+        stopTimer();
+        state.locked = true;
+        renderControls();
+        setDataStatus("loading", "Loading");
+        setPresenceStatus("fallback", "Presence idle");
+
+        try {
+          const manifest = await fetchJson(DEFAULT_ENDPOINTS.agents);
+          state.endpoints = {
+            agents: manifest?.endpoints?.json?.agents || DEFAULT_ENDPOINTS.agents,
+            blocks: manifest?.endpoints?.json?.blocks || DEFAULT_ENDPOINTS.blocks,
+            collabs: manifest?.endpoints?.json?.collabs || DEFAULT_ENDPOINTS.collabs,
+            presenceSnapshot:
+              manifest?.endpoints?.api?.presenceSnapshot || DEFAULT_ENDPOINTS.presenceSnapshot,
+            presence: manifest?.endpoints?.api?.presence || DEFAULT_ENDPOINTS.presence,
+          };
+          state.surfaces = buildSurfaceRoutes(manifest);
+
+          const [collabsResult, blocksResult, presenceResult] = await Promise.allSettled([
+            fetchJson(state.endpoints.collabs),
+            fetchJson(state.endpoints.blocks),
+            fetchJson(state.endpoints.presenceSnapshot, 3500),
+          ]);
+
+          if (collabsResult.status !== "fulfilled" || blocksResult.status !== "fulfilled") {
+            throw new Error("Core PointCast feeds did not return");
+          }
+
+          state.collaborators = normalizeCollaborators(collabsResult.value);
+          state.blocks = normalizeBlocks(blocksResult.value);
+
+          if (!state.collaborators.length || !state.blocks.length) {
+            throw new Error("PointCast feeds were empty");
+          }
+
+          if (presenceResult.status === "fulfilled") {
+            updatePresence(presenceResult.value);
+          }
+
+          setDataStatus("live", "Live JSON");
+          connectPresence();
+        } catch (error) {
+          console.warn("PointCast Relay fallback:", error);
+          state.endpoints = { ...DEFAULT_ENDPOINTS };
+          state.surfaces = buildSurfaceRoutes({});
+          state.collaborators = normalizeCollaborators({ collaborators: FALLBACK_COLLABS });
+          state.blocks = normalizeBlocks({ blocks: FALLBACK_BLOCKS });
+          updatePresence({ humans: 1, agents: 2, sessions: [] });
+          setDataStatus("fallback", "Local deck");
+          setPresenceStatus("fallback", "Snapshot only");
+        }
+
+        startNewGame();
+      }
+
+      function normalizeCollaborators(payload) {
+        const source = Array.isArray(payload) ? payload : payload?.collaborators || [];
+        return source.map((item, index) => ({
+          slug: item.slug || `collab-${index + 1}`,
+          name: item.name || `Collaborator ${index + 1}`,
+          role: item.role || "collaborator",
+          roleLabel: item.roleLabel || item.role || "Collaborator",
+          location: item.location || "pointcast",
+          vendor: item.vendor || "",
+          intro: item.intro || "",
+          url: item.url || item.anchor || "",
+          color: ROUTE_COLORS[index % ROUTE_COLORS.length],
+        }));
+      }
+
+      function normalizeBlocks(payload) {
+        const source = Array.isArray(payload) ? payload : payload?.blocks || [];
+        return source
+          .map((block, index) => {
+            const channel =
+              typeof block.channel === "object" && block.channel
+                ? block.channel
+                : { code: String(block.channel || "PC").slice(0, 3), name: block.channel || "PointCast" };
+            return {
+              id: block.id || String(index + 1).padStart(4, "0"),
+              url: block.url || block.htmlUrl || "",
+              jsonUrl: block.jsonUrl || "",
+              channelCode: channel.code || String(channel.slug || "PC").slice(0, 3).toUpperCase(),
+              channelName: channel.name || channel.slug || "PointCast",
+              channelSlug: channel.slug || "pointcast",
+              channelColor: channel.color600 || channel.color || "#185fa5",
+              type: block.type || "NOTE",
+              title: block.title || "Untitled PointCast block",
+              dek: block.dek || block.description || "",
+              timestamp: block.timestamp || block.date || "",
+              author: block.author || "",
+              source: block.source || "",
+              mood: block.mood || "",
+              external: block.external || null,
+              companions: Array.isArray(block.companions) ? block.companions : [],
+            };
+          })
+          .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+      }
+
+      function startNewGame() {
+        stopTimer();
+        const seed = hashString(new Date().toISOString().slice(0, 10));
+        state.deck = seededShuffle(state.blocks, seed + state.deckCycle);
+        state.deckCursor = 0;
+        state.score = 0;
+        state.streak = 0;
+        state.bestStreak = 0;
+        state.answered = 0;
+        state.correct = 0;
+        state.skipped = 0;
+        state.shiftResolved = 0;
+        state.cluesLeft = CLUES_PER_SHIFT;
+        state.clueUsed = false;
+        state.finished = false;
+        state.log = [];
+        state.result = null;
+        state.paused = false;
+        dealNext();
+        renderMission();
+        renderDailyContract();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderScoreboard();
+        renderShift();
+        renderRouteTape();
+        renderRunReport();
+        renderLog();
+      }
+
+      function dealNext() {
+        if (!state.deck.length) {
+          return;
+        }
+        if (state.shiftResolved >= state.shiftLength) {
+          finishShift();
+          return;
+        }
+        if (state.deckCursor >= state.deck.length) {
+          state.deckCycle += 1;
+          state.deck = seededShuffle(state.blocks, hashString(String(Date.now())) + state.deckCycle);
+          state.deckCursor = 0;
+        }
+        state.current = state.deck[state.deckCursor];
+        state.deckCursor += 1;
+        state.timeLeft = state.timeTotal;
+        state.locked = false;
+        state.selectedSlug = null;
+        state.result = null;
+        state.clueUsed = false;
+        state.finished = false;
+        state.paused = false;
+        renderCurrentBlock();
+        renderRoutes();
+        renderSignalMap();
+        renderConsensus();
+        renderMission();
+        renderDailyContract();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderScoreboard();
+        renderShift();
+        renderRouteTape();
+        renderRunReport();
+        renderControls();
+        updatePresenceWhere("routing");
+        startTimer();
+      }
+
+      function startTimer() {
+        stopTimer();
+        renderTimer();
+        state.timerId = window.setInterval(() => {
+          if (state.paused || state.locked) {
+            return;
+          }
+          state.timeLeft = clamp(state.timeLeft - 0.25, 0, state.timeTotal);
+          renderTimer();
+          if (state.timeLeft <= 0) {
+            handleTimeout();
+          }
+        }, 250);
+      }
+
+      function stopTimer() {
+        if (state.timerId) {
+          window.clearInterval(state.timerId);
+          state.timerId = null;
+        }
+      }
+
+      function handleTimeout() {
+        if (state.locked) {
+          return;
+        }
+        lockRound(null, "timeout");
+      }
+
+      function skipSignal() {
+        if (state.finished) {
+          startNewGame();
+          return;
+        }
+        if (state.locked) {
+          dealNext();
+          return;
+        }
+        state.skipped += 1;
+        lockRound(null, "skip");
+      }
+
+      function togglePause() {
+        if (state.locked) {
+          return;
+        }
+        state.paused = !state.paused;
+        renderControls();
+        renderRoutes();
+        updatePresenceWhere(state.paused ? "paused" : "routing");
+      }
+
+      function chooseRoute(slug) {
+        if (state.locked || state.paused) {
+          return;
+        }
+        lockRound(slug, "answer");
+      }
+
+      function useClue() {
+        if (state.locked || state.paused || state.clueUsed || state.cluesLeft <= 0 || !state.current) {
+          return;
+        }
+        const route = computeRoute(state.current);
+        state.cluesLeft -= 1;
+        state.clueUsed = true;
+        state.timeLeft = clamp(state.timeLeft - CLUE_TIME_COST, 0, state.timeTotal);
+        state.result = {
+          status: "clue",
+          points: -CLUE_SCORE_COST,
+          selected: null,
+          target: route.target,
+          reason: "clue",
+          route,
+        };
+        renderTimer();
+        renderScoreboard();
+        renderDailyContract();
+        renderEvidence();
+        renderResult();
+        renderRunReport();
+        renderControls();
+        updatePresenceWhere("reading clue");
+      }
+
+      function lockRound(slug, reason) {
+        const route = computeRoute(state.current);
+        const selected = getRouteTargets().find((targetItem) => targetItem.slug === slug) || null;
+        const target = route.target;
+        const exact = Boolean(selected && target && selected.slug === target.slug);
+        const roleMatch = Boolean(selected && target && selected.role === target.role);
+        const speed = exact ? Math.round((state.timeLeft / state.timeTotal) * 80) : 0;
+        const streakBonus = exact ? Math.min(70, state.streak * 10) : 0;
+        const partial = !exact && roleMatch ? 40 : 0;
+        const cluePenalty = state.clueUsed && reason === "answer" ? CLUE_SCORE_COST : 0;
+        const baseScore = reason === "answer" ? (exact ? 120 + speed + streakBonus : partial) : 0;
+        const roundScore = Math.max(0, baseScore - cluePenalty);
+
+        stopTimer();
+        state.locked = true;
+        state.selectedSlug = slug;
+        state.shiftResolved = Math.min(state.shiftLength, state.shiftResolved + 1);
+        state.answered += reason === "answer" ? 1 : 0;
+        state.correct += exact ? 1 : 0;
+        state.score += roundScore;
+        state.streak = exact ? state.streak + 1 : 0;
+        state.bestStreak = Math.max(state.bestStreak, state.streak);
+
+        const status = exact ? "hit" : reason === "answer" && roleMatch ? "partial" : "miss";
+        state.result = {
+          status,
+          points: roundScore,
+          selected,
+          target,
+          reason,
+          route,
+          clueUsed: state.clueUsed,
+        };
+        state.log.unshift({
+          block: state.current,
+          mode: state.routeMode,
+          status,
+          points: roundScore,
+          selected,
+          target,
+          reason,
+          route,
+          clueUsed: state.clueUsed,
+        });
+        state.log = state.log.slice(0, 12);
+
+        persistBest();
+        renderCurrentBlock();
+        renderRoutes();
+        renderSignalMap();
+        renderConsensus();
+        renderMission();
+        renderDailyContract();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderScoreboard();
+        renderShift();
+        renderRouteTape();
+        renderResult();
+        renderLog();
+        renderRunReport();
+        renderControls();
+        updatePresenceWhere(status === "hit" ? "clean relay" : "reviewing route");
+        if (state.shiftResolved >= state.shiftLength) {
+          window.setTimeout(finishShift, 900);
+        }
+      }
+
+      function finishShift() {
+        if (state.finished) {
+          return;
+        }
+        stopTimer();
+        state.locked = true;
+        state.paused = false;
+        state.finished = true;
+        const summary = {
+          mode: state.routeMode,
+          score: state.score,
+          correct: state.correct,
+          answered: state.answered,
+          hitRate: getHitRate(),
+          bestStreak: state.bestStreak,
+          skipped: state.skipped,
+          completedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(LAST_RUN_KEY, JSON.stringify(summary));
+        persistBest();
+        state.result = {
+          status: "complete",
+          points: state.score,
+          selected: null,
+          target: null,
+          reason: "complete",
+          route: null,
+          summary,
+        };
+        renderCurrentBlock();
+        renderRoutes();
+        renderSignalMap();
+        renderConsensus();
+        renderMission();
+        renderDailyContract();
+        renderDocket();
+        renderEvidence();
+        renderReviewStack();
+        renderScoreboard();
+        renderShift();
+        renderRouteTape();
+        renderResult();
+        renderRunReport();
+        renderControls();
+        updatePresenceWhere("shift complete");
+      }
+
+      function computeRoute(block) {
+        return state.routeMode === "surface" ? computeSurfaceRoute(block) : computeAgentRoute(block);
+      }
+
+      function computeAgentRoute(block) {
+        const text = [
+          block.title,
+          block.dek,
+          block.source,
+          block.author,
+          block.type,
+          block.channelName,
+          block.mood,
+          block.external?.label,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        const details = new Map();
+        const scores = new Map(state.collaborators.map((collab) => [collab.slug, 0]));
+
+        function award(slug, weight, label) {
+          if (!scores.has(slug)) {
+            return;
+          }
+          scores.set(slug, scores.get(slug) + weight);
+          if (!details.has(slug)) {
+            details.set(slug, []);
+          }
+          details.get(slug).push(label);
+        }
+
+        const patterns = [
+          ["codex", /\bcodex\b|openai|mcp|webmcp|api|presence|cloudflare|function|endpoint|agent-ready|prototype|local route/i, 8, "system build signal"],
+          ["claude-code", /\bclaude\b|\bcc\b|sprint|overnight|ship|repo|docs|astro|component|build pipeline|recap/i, 7, "sprint engineering signal"],
+          ["manus", /\bmanus\b|operations|launch|email routing|resend|gsc|indexnow|platform matrix|curation|setup/i, 8, "operations signal"],
+          ["mike-hoydich", /\bmike\b|\bmh\b|director|founder|asked|chat|photo|playlist|editorial|calls|fresh|weather|games/i, 6, "director signal"],
+        ];
+
+        patterns.forEach(([slug, pattern, weight, label]) => {
+          if (pattern.test(text)) {
+            award(slug, weight, label);
+          }
+        });
+
+        if (/\bcc\b/.test(String(block.author).toLowerCase())) {
+          award("claude-code", 5, "author cc");
+        }
+        if (/\bmh\b/.test(String(block.author).toLowerCase())) {
+          award("mike-hoydich", 4, "author mh");
+        }
+        if (/\bcodex\b/.test(text)) {
+          award("codex", 6, "explicit Codex mention");
+        }
+        if (/\bmanus\b/.test(text)) {
+          award("manus", 6, "explicit Manus mention");
+        }
+
+        if (block.type === "LINK") {
+          award("mike-hoydich", 2, "link curation");
+        }
+        if (block.type === "READ") {
+          award("claude-code", 2, "long-form ship");
+        }
+        if (block.companions.length >= 2) {
+          award("claude-code", 1, "companion stitching");
+        }
+
+        state.collaborators.forEach((collab) => {
+          const name = collab.name.toLowerCase();
+          const role = collab.role.toLowerCase();
+          if (text.includes(name)) {
+            award(collab.slug, 10, "name match");
+          }
+          if (role && text.includes(role)) {
+            award(collab.slug, 1, "role match");
+          }
+        });
+
+        const ranked = state.collaborators
+          .map((collab) => ({
+            collab,
+            score: scores.get(collab.slug) || 0,
+            details: details.get(collab.slug) || [],
+          }))
+          .sort((a, b) => b.score - a.score || a.collab.name.localeCompare(b.collab.name));
+
+        const fallbackTarget =
+          state.collaborators.find((collab) => collab.slug === "mike-hoydich") ||
+          state.collaborators[0];
+        const target = ranked[0]?.score > 0 ? ranked[0].collab : fallbackTarget;
+        const targetDetails = details.get(target.slug) || ["general PointCast editorial"];
+
+        return {
+          target,
+          scores,
+          ranked,
+          reason: targetDetails.slice(0, 2).join(", "),
+        };
+      }
+
+      function computeSurfaceRoute(block) {
+        const companionText = (block.companions || []).map((item) => item.label || "").join(" ");
+        const text = [
+          block.title,
+          block.dek,
+          block.source,
+          block.author,
+          block.type,
+          block.channelName,
+          block.channelSlug,
+          block.mood,
+          block.external?.label,
+          block.external?.url,
+          companionText,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        const details = new Map();
+        const scores = new Map(state.surfaces.map((surface) => [surface.slug, 0]));
+
+        function award(slug, weight, label) {
+          if (!scores.has(slug)) {
+            return;
+          }
+          scores.set(slug, scores.get(slug) + weight);
+          if (!details.has(slug)) {
+            details.set(slug, []);
+          }
+          details.get(slug).push(label);
+        }
+
+        state.surfaces.forEach((surface) => {
+          const terms = surface.keywords.split(/\s+/).filter(Boolean);
+          terms.forEach((term) => {
+            if (text.includes(term.toLowerCase())) {
+              award(surface.slug, term.length > 6 ? 2 : 1, term);
+            }
+          });
+          if (text.includes(surface.name.toLowerCase())) {
+            award(surface.slug, 8, "name match");
+          }
+        });
+
+        const type = String(block.type || "").toUpperCase();
+        const channel = String(block.channelSlug || block.channelName || "").toLowerCase();
+        if (type === "WATCH" || channel.includes("court")) {
+          award("play", 8, "watch/play channel");
+        }
+        if (type === "READ") {
+          award("editorial", 3, "long read");
+        }
+        if (channel.includes("garden") || channel.includes("visit") || channel.includes("el-segundo")) {
+          award("field", 7, "field channel");
+        }
+        if (/\b(wallet|beacon|tezos|auth|profile|passport)\b/.test(text)) {
+          award("wallet", 8, "identity term");
+        }
+        if (/\b(compute|ledger|rfc|webmcp|agent-passport|federat)/.test(text)) {
+          award("compute", 8, "compute term");
+        }
+        if (/\b(sprint|block|deck|research|memo|pulse|status|front door)\b/.test(text)) {
+          award("editorial", 4, "editorial term");
+        }
+
+        const ranked = state.surfaces
+          .map((surface) => ({
+            collab: surface,
+            score: scores.get(surface.slug) || 0,
+            details: details.get(surface.slug) || [],
+          }))
+          .sort((a, b) => b.score - a.score || a.collab.name.localeCompare(b.collab.name));
+
+        const fallbackTarget =
+          state.surfaces.find((surface) => surface.slug === "editorial") || state.surfaces[0];
+        const target = ranked[0]?.score > 0 ? ranked[0].collab : fallbackTarget;
+        const targetDetails = details.get(target.slug) || ["general PointCast surface"];
+
+        return {
+          target,
+          scores,
+          ranked,
+          reason: targetDetails.slice(0, 2).join(", "),
+        };
+      }
+
+      function renderCurrentBlock() {
+        const block = state.current;
+        if (!block) {
+          return;
+        }
+        dom.roundLabel.textContent = `${Math.min(state.shiftResolved + 1, state.shiftLength)}/${state.shiftLength}`;
+        dom.targetLabel.textContent =
+          state.finished
+            ? "Complete"
+            : state.locked && state.result?.target
+              ? state.result.target.name
+              : state.routeMode === "surface"
+                ? "Surface"
+                : "Registry";
+        dom.sourceLabel.textContent = state.dataMode === "live" ? "Live feed" : "Fallback";
+        dom.blockChannel.textContent = block.channelCode || "PC";
+        dom.blockChannel.style.setProperty("--channel-color", block.channelColor || "#185fa5");
+        dom.blockType.textContent = block.type || "NOTE";
+        dom.blockId.textContent = `B/${block.id}`;
+        dom.blockTitle.textContent = block.title;
+        dom.blockDek.textContent = block.dek || block.source || "No deck copy for this block.";
+        const date = block.timestamp ? new Date(block.timestamp) : null;
+        const pieces = [];
+        if (block.url) {
+          pieces.push(`<a href="${escapeHtml(block.url)}" target="_blank" rel="noopener">Open block</a>`);
+        }
+        if (block.external?.url) {
+          pieces.push(
+            `<a href="${escapeHtml(block.external.url)}" target="_blank" rel="noopener">${escapeHtml(
+              block.external.label || "External"
+            )}</a>`
+          );
+        }
+        if (date && !Number.isNaN(date.getTime())) {
+          pieces.push(`<span>${escapeHtml(formatShortDate(date))}</span>`);
+        }
+        if (block.author) {
+          pieces.push(`<span>${escapeHtml(block.author)}</span>`);
+        }
+        dom.blockLinks.innerHTML = pieces.join("");
+        renderTimer();
+      }
+
+      function renderTimer() {
+        const ratio = state.timeTotal ? state.timeLeft / state.timeTotal : 0;
+        const seconds = Math.ceil(state.timeLeft);
+        dom.timerLabel.textContent = state.locked ? "Locked" : state.paused ? "Paused" : `${seconds}s`;
+        dom.timerFill.style.transform = `scaleX(${clamp(ratio, 0, 1)})`;
+        dom.timerFill.classList.toggle("is-low", ratio < 0.28 && !state.locked);
+      }
+
+      function renderRoutes() {
+        const route = state.current ? computeRoute(state.current) : null;
+        const targets = getRouteTargets();
+        dom.routeOptions.innerHTML = targets
+          .map((collab, index) => {
+            const isSelected = state.selectedSlug === collab.slug;
+            const isTarget = state.locked && route?.target?.slug === collab.slug;
+            const classNames = [
+              "route-button",
+              isSelected && isTarget ? "is-correct" : "",
+              isSelected && !isTarget ? "is-wrong" : "",
+              isTarget ? "is-target" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const initials = collab.name
+              .split(/\s+/)
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+            return `
+              <button
+                class="${classNames}"
+                type="button"
+                data-route="${escapeHtml(collab.slug)}"
+                style="--route-color:${collab.color}"
+                ${state.locked || state.paused ? "disabled" : ""}
+              >
+                <span class="route-token" aria-hidden="true">${escapeHtml(initials)}</span>
+                <span>
+                  <span class="route-name">${escapeHtml(collab.name)}</span>
+                  <span class="route-role mono">${escapeHtml(collab.roleLabel)}</span>
+                  <span class="route-intro">${escapeHtml(collab.intro)}</span>
+                </span>
+              </button>
+            `;
+          })
+          .join("");
+
+        dom.routeOptions.querySelectorAll("[data-route]").forEach((button) => {
+          button.addEventListener("click", () => chooseRoute(button.dataset.route));
+        });
+      }
+
+      function renderSignalMap() {
+        const block = state.current;
+        const route = block ? computeRoute(block) : null;
+        const targets = getRouteTargets();
+        const routePositions = [
+          { x: 374, y: 72 },
+          { x: 402, y: 146 },
+          { x: 374, y: 220 },
+          { x: 402, y: 294 },
+          { x: 360, y: 328 },
+          { x: 420, y: 36 },
+        ];
+        const grid = Array.from({ length: 8 })
+          .map((_, index) => {
+            const x = 42 + index * 66;
+            return `<line class="map-grid" x1="${x}" y1="24" x2="${x}" y2="336"></line>`;
+          })
+          .join("");
+        const gridRows = Array.from({ length: 5 })
+          .map((_, index) => {
+            const y = 46 + index * 66;
+            return `<line class="map-grid" x1="28" y1="${y}" x2="532" y2="${y}"></line>`;
+          })
+          .join("");
+
+        const start = { x: 128, y: 180 };
+        const paths = targets
+          .map((collab, index) => {
+            const pos = routePositions[index % routePositions.length];
+            const path = `M ${start.x + 34} ${start.y} C ${240 + index * 8} ${78 + index * 32}, ${
+              pos.x - 112
+            } ${pos.y}, ${pos.x - 28} ${pos.y}`;
+            const isSelected = state.selectedSlug === collab.slug;
+            const isCorrect = state.locked && route?.target?.slug === collab.slug;
+            const isWrong = state.locked && isSelected && !isCorrect;
+            const classes = [
+              "relay-line",
+              isSelected ? "is-selected" : "",
+              isCorrect ? "is-correct" : "",
+              isWrong ? "is-wrong" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const pulse =
+              !state.locked && index < 4
+                ? `<circle r="4" fill="${collab.color}">
+                    <animateMotion dur="${2.2 + index * 0.24}s" repeatCount="indefinite" path="${path}"></animateMotion>
+                  </circle>`
+                : "";
+            return `<path class="${classes}" d="${path}"></path>${pulse}`;
+          })
+          .join("");
+
+        const nodes = targets
+          .map((collab, index) => {
+            const pos = routePositions[index % routePositions.length];
+            const initials = collab.name
+              .split(/\s+/)
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+            return `
+              <g style="--node-color:${collab.color}">
+                <circle class="node-ring" cx="${pos.x}" cy="${pos.y}" r="26" stroke="${collab.color}"></circle>
+                <circle class="node-core" cx="${pos.x}" cy="${pos.y}" r="15"></circle>
+                <text class="svg-small" x="${pos.x}" y="${pos.y + 4}" text-anchor="middle" fill="#fff">${escapeHtml(
+              initials
+            )}</text>
+                <text class="svg-label node-name" x="${pos.x + 36}" y="${pos.y - 2}">${escapeHtml(collab.name)}</text>
+                <text class="svg-small node-role" x="${pos.x + 36}" y="${pos.y + 15}">${escapeHtml(
+              collab.roleLabel
+            )}</text>
+              </g>
+            `;
+          })
+          .join("");
+
+        dom.relayMap.innerHTML = `
+          <title id="relay-map-title">PointCast signal routing map</title>
+          <rect x="0" y="0" width="560" height="360" fill="#fbfaf6"></rect>
+          ${grid}
+          ${gridRows}
+          <path d="M74 48 L74 312" stroke="#d8d3c8" stroke-width="2"></path>
+          <path d="M486 48 L486 312" stroke="#d8d3c8" stroke-width="2"></path>
+          ${paths}
+          <g>
+            <rect x="46" y="132" width="128" height="96" rx="8" fill="#ffffff" stroke="${escapeHtml(
+              block?.channelColor || "#185fa5"
+            )}" stroke-width="2"></rect>
+            <circle cx="74" cy="162" r="13" fill="${escapeHtml(block?.channelColor || "#185fa5")}"></circle>
+            <text class="svg-small" x="74" y="166" text-anchor="middle" fill="#fff">${escapeHtml(
+              block?.channelCode || "PC"
+            )}</text>
+            <text class="svg-label" x="96" y="161">${escapeHtml(block?.type || "NOTE")}</text>
+            <text class="svg-small" x="96" y="181">${escapeHtml(`B/${block?.id || "----"}`)}</text>
+            <text class="svg-small" x="58" y="210">${escapeHtml(block?.channelName || "PointCast")}</text>
+          </g>
+          ${nodes}
+        `;
+      }
+
+      function renderConsensus() {
+        if (!state.current) {
+          dom.consensusList.innerHTML = `<p class="empty-state">No signal loaded.</p>`;
+          return;
+        }
+        const route = computeRoute(state.current);
+        const raw = getRouteTargets().map((collab) => {
+          const score = route.scores.get(collab.slug) || 0;
+          return { collab, score: score + 2 };
+        });
+        const total = raw.reduce((sum, item) => sum + item.score, 0) || 1;
+        dom.consensusLabel.textContent = state.locked ? "Resolved" : "Open";
+        dom.consensusList.innerHTML = raw
+          .sort((a, b) => b.score - a.score)
+          .map(({ collab, score }) => {
+            const pct = Math.round((score / total) * 100);
+            return `
+              <div class="consensus-row">
+                <span class="consensus-name">${escapeHtml(collab.name)}</span>
+                <span class="consensus-bar">
+                  <span class="consensus-fill" style="--fill:${pct}%;--bar-color:${collab.color}"></span>
+                </span>
+                <span class="consensus-value mono">${pct}%</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderMission() {
+        const isSurface = state.routeMode === "surface";
+        const targets = getRouteTargets();
+        dom.modeStatusLabel.textContent = isSurface ? "Surface" : "Agent";
+        dom.modeAgentButton.classList.toggle("is-active", !isSurface);
+        dom.modeSurfaceButton.classList.toggle("is-active", isSurface);
+        const route = state.current ? computeRoute(state.current) : null;
+        const activeTarget = state.locked && route?.target ? route.target.name : `${targets.length} targets`;
+        const missionName = isSurface ? "PointCast surfaces" : "Collaborator registry";
+        dom.missionReadout.innerHTML = `
+          <strong>${escapeHtml(missionName)}</strong>
+          <span class="mono">${escapeHtml(activeTarget)}</span>
+        `;
+      }
+
+      function getContractMetrics() {
+        const routed = state.log.filter((item) => item.target);
+        const uniqueTargets = new Set(routed.map((item) => item.target.slug)).size;
+        const uniqueChannels = new Set(
+          state.log
+            .map((item) => item.block?.channelSlug || item.block?.channelCode)
+            .filter(Boolean)
+        ).size;
+        const noClueHits = state.log.filter((item) => item.status === "hit" && !item.clueUsed).length;
+        const fastHits = state.log.filter((item) => item.status === "hit" && item.points >= 170).length;
+        const keptSignals = state.shiftResolved - state.skipped;
+
+        return {
+          bestStreak: state.bestStreak,
+          uniqueTargets,
+          uniqueChannels,
+          noClueHits,
+          fastHits,
+          keptSignals,
+          correct: state.correct,
+          score: state.score,
+        };
+      }
+
+      function getDailyContracts() {
+        const metrics = getContractMetrics();
+        const pool = [
+          {
+            slug: "clean-chain",
+            name: "Clean chain",
+            value: metrics.bestStreak,
+            target: 3,
+            unit: "streak",
+          },
+          {
+            slug: "wide-net",
+            name: "Wide net",
+            value: metrics.uniqueTargets,
+            target: Math.min(4, Math.max(3, getRouteTargets().length)),
+            unit: "routes",
+          },
+          {
+            slug: "channel-sweep",
+            name: "Channel sweep",
+            value: metrics.uniqueChannels,
+            target: 4,
+            unit: "channels",
+          },
+          {
+            slug: "quiet-hands",
+            name: "Quiet hands",
+            value: metrics.noClueHits,
+            target: 4,
+            unit: "clean",
+          },
+          {
+            slug: "fast-locks",
+            name: "Fast locks",
+            value: metrics.fastHits,
+            target: 2,
+            unit: "fast",
+          },
+          {
+            slug: "signal-stack",
+            name: "Signal stack",
+            value: metrics.keptSignals,
+            target: 8,
+            unit: "kept",
+          },
+          {
+            slug: "desk-read",
+            name: "Desk read",
+            value: metrics.correct,
+            target: 5,
+            unit: "hits",
+          },
+          {
+            slug: "point-run",
+            name: "Point run",
+            value: metrics.score,
+            target: 600,
+            unit: "pts",
+          },
+        ];
+        const dayKey = new Date().toISOString().slice(0, 10);
+        const seed = hashString(`${dayKey}:${state.routeMode}:daily-contract`);
+        return seededShuffle(pool, seed).slice(0, 3);
+      }
+
+      function renderDailyContract() {
+        const contracts = getDailyContracts();
+        const complete = contracts.filter((contract) => contract.value >= contract.target).length;
+        dom.contractStatusLabel.textContent = `${complete}/${contracts.length}`;
+        dom.contractList.innerHTML = contracts
+          .map((contract) => {
+            const capped = Math.min(contract.value, contract.target);
+            const fill = Math.round((capped / contract.target) * 100);
+            const done = contract.value >= contract.target;
+            return `
+              <div class="contract-card ${done ? "is-complete" : ""}">
+                <div class="contract-top">
+                  <span class="contract-name">${escapeHtml(contract.name)}</span>
+                  <span class="contract-count mono">${escapeHtml(`${capped}/${contract.target} ${contract.unit}`)}</span>
+                </div>
+                <span class="contract-track" aria-hidden="true">
+                  <span class="contract-fill" style="--contract-fill:${fill}%"></span>
+                </span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderDocket() {
+        const currentItem = state.current ? [{ block: state.current, current: true }] : [];
+        const upcomingSlots = Math.max(0, state.shiftLength - state.shiftResolved - currentItem.length);
+        const upcoming = state.deck
+          .slice(state.deckCursor, state.deckCursor + Math.min(3, upcomingSlots))
+          .map((block) => ({ block, current: false }));
+        const items = [...currentItem, ...upcoming];
+        dom.docketCountLabel.textContent = String(items.length);
+
+        if (!items.length) {
+          dom.docketList.innerHTML = `<p class="empty-state">Signals will queue here.</p>`;
+          return;
+        }
+
+        dom.docketList.innerHTML = items
+          .map(({ block, current }) => {
+            const route = current && state.locked && state.result?.target ? state.result.target.name : null;
+            const meta = current
+              ? route
+                ? `resolved to ${route}`
+                : state.finished
+                  ? "shift complete"
+                  : "now routing"
+              : `${block.channelCode} · ${block.type}`;
+            return `
+              <div class="docket-item ${current ? "is-current" : ""}" style="--docket-color:${escapeHtml(
+              block.channelColor || "#185fa5"
+            )}">
+                <span class="docket-code">${escapeHtml(current ? "NOW" : `B/${block.id}`)}</span>
+                <span class="docket-copy">
+                  <span class="docket-title">${escapeHtml(block.title)}</span>
+                  <span class="docket-meta mono">${escapeHtml(meta)}</span>
+                </span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderEvidence() {
+        if (!state.current) {
+          dom.evidenceStatusLabel.textContent = "Idle";
+          dom.evidenceList.innerHTML = `<p class="empty-state">Evidence appears with each signal.</p>`;
+          return;
+        }
+
+        const block = state.current;
+        const route = computeRoute(block);
+        const clueActive = state.result?.status === "clue";
+        const reveal = state.locked && state.result && state.result.status !== "clue";
+
+        if (reveal) {
+          dom.evidenceStatusLabel.textContent = "Revealed";
+          dom.evidenceList.innerHTML = route.ranked
+            .slice(0, 3)
+            .map((item) => {
+              const isTarget = item.collab.slug === route.target?.slug;
+              const details = item.details.length ? item.details.slice(0, 2).join(", ") : "baseline";
+              return `
+                <div class="evidence-row ${isTarget ? "is-target" : ""}">
+                  <span class="evidence-key mono">${escapeHtml(`${item.score} pts`)}</span>
+                  <span class="evidence-value">${escapeHtml(`${item.collab.name} · ${details}`)}</span>
+                </div>
+              `;
+            })
+            .join("");
+          return;
+        }
+
+        if (clueActive) {
+          dom.evidenceStatusLabel.textContent = "Clue";
+          dom.evidenceList.innerHTML = `
+            <div class="evidence-row">
+              <span class="evidence-key mono">Desk</span>
+              <span class="evidence-value">${escapeHtml(route.target?.roleLabel || "Registry")}</span>
+            </div>
+            <div class="evidence-row">
+              <span class="evidence-key mono">Signal</span>
+              <span class="evidence-value">${escapeHtml(route.reason)}</span>
+            </div>
+          `;
+          return;
+        }
+
+        dom.evidenceStatusLabel.textContent = "Masked";
+        const rows = [
+          ["Channel", block.channelName || block.channelCode || "PointCast"],
+          ["Type", block.type || "NOTE"],
+          ["Author", block.author || "unknown"],
+          ["Companions", String(block.companions.length)],
+        ];
+        dom.evidenceList.innerHTML = rows
+          .map(
+            ([key, value]) => `
+              <div class="evidence-row">
+                <span class="evidence-key mono">${escapeHtml(key)}</span>
+                <span class="evidence-value">${escapeHtml(value)}</span>
+              </div>
+            `
+          )
+          .join("");
+      }
+
+      function getReviewItems() {
+        return state.log
+          .filter((item) => item.status !== "hit")
+          .slice(0, 4);
+      }
+
+      function renderReviewStack() {
+        const items = getReviewItems();
+        dom.reviewCountLabel.textContent = String(items.length);
+        if (!items.length) {
+          dom.reviewStack.innerHTML = `<p class="empty-state">Misses and same-desk calls will queue here.</p>`;
+          return;
+        }
+
+        dom.reviewStack.innerHTML = items
+          .map((item) => {
+            const partial = item.status === "partial";
+            const token = partial ? "PART" : item.reason === "timeout" ? "TIME" : item.reason === "skip" ? "SKIP" : "MISS";
+            const fallbackName = item.mode === "surface" ? "Surface" : "Registry";
+            return `
+              <div class="review-item">
+                <span class="review-token ${partial ? "is-partial" : ""}">${escapeHtml(token)}</span>
+                <span class="review-copy">
+                  <strong>${escapeHtml(item.block.title)}</strong>
+                  <span>${escapeHtml(item.target?.name || fallbackName)} · ${escapeHtml(
+              item.route?.reason || item.reason || "review route"
+            )}</span>
+                </span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderScoreboard() {
+        const best = Number(localStorage.getItem(getBestKey()) || 0);
+        const hitRate = getHitRate();
+        dom.scoreLabel.textContent = String(state.score);
+        dom.streakLabel.textContent = String(state.streak);
+        dom.hitRateLabel.textContent = `${hitRate}%`;
+        dom.shiftLabel.textContent = `${state.shiftResolved}/${state.shiftLength}`;
+        dom.clueLabel.textContent = String(state.cluesLeft);
+        dom.deckLabel.textContent = String(state.blocks.length);
+        dom.bestLabel.textContent = `Best ${best}`;
+      }
+
+      function renderShift() {
+        const fill = Math.round((state.shiftResolved / state.shiftLength) * 100);
+        dom.shiftFill.style.setProperty("--shift-fill", `${fill}%`);
+        dom.shiftProgressLabel.textContent = `${state.shiftResolved}/${state.shiftLength}`;
+        dom.shiftStatusLabel.textContent = state.finished ? "Complete" : state.locked ? "Review" : "Open";
+        const lastRun = getLastRun();
+        dom.lastRunLabel.textContent = lastRun
+          ? `Last ${lastRun.mode === "surface" ? "surf" : "agent"} ${lastRun.score} / ${lastRun.hitRate}%`
+          : "No prior run";
+
+        const badges = [
+          {
+            name: "Clean three",
+            detail: `${Math.min(state.bestStreak, 3)}/3 streak`,
+            active: state.bestStreak >= 3,
+          },
+          {
+            name: "Half clear",
+            detail: `${Math.min(state.correct, 6)}/6 hits`,
+            active: state.correct >= 6,
+          },
+          {
+            name: "Sharp desk",
+            detail: `${getHitRate()}% hit rate`,
+            active: state.answered >= 4 && getHitRate() >= 75,
+          },
+          {
+            name: "Full shift",
+            detail: `${state.shiftResolved}/${state.shiftLength} signals`,
+            active: state.finished,
+          },
+        ];
+
+        dom.badgeList.innerHTML = badges
+          .map(
+            (badge) => `
+              <div class="badge ${badge.active ? "is-active" : ""}">
+                <strong>${escapeHtml(badge.name)}</strong>
+                <span class="mono">${escapeHtml(badge.detail)}</span>
+              </div>
+            `
+          )
+          .join("");
+        renderShiftSlots();
+      }
+
+      function getShiftTrackItems() {
+        const resolved = [...state.log].reverse();
+        return Array.from({ length: state.shiftLength }, (_, index) => {
+          const item = resolved[index] || null;
+          const isCurrent = !item && !state.finished && !state.locked && index === state.shiftResolved;
+          return {
+            index,
+            item,
+            status: item?.status || (isCurrent ? "current" : "empty"),
+          };
+        });
+      }
+
+      function renderShiftSlots() {
+        dom.shiftSlots.innerHTML = getShiftTrackItems()
+          .map(({ index, item, status }) => {
+            const statusLabel =
+              status === "hit"
+                ? "hit"
+                : status === "partial"
+                  ? "partial"
+                  : status === "miss"
+                    ? item?.reason || "miss"
+                    : status === "current"
+                      ? "routing"
+                      : "open";
+            const slotText =
+              status === "hit" ? "H" : status === "partial" ? "P" : status === "miss" ? "M" : index + 1;
+            return `
+              <span
+                class="shift-slot is-${escapeHtml(status)}"
+                title="${escapeHtml(`Signal ${index + 1}: ${statusLabel}`)}"
+              >${escapeHtml(slotText)}</span>
+            `;
+          })
+          .join("");
+      }
+
+      function getShiftTrackSummary() {
+        const counts = state.log.reduce(
+          (summary, item) => {
+            if (item.status === "hit") {
+              summary.hit += 1;
+            } else if (item.status === "partial") {
+              summary.partial += 1;
+            } else if (item.status === "miss") {
+              summary.miss += 1;
+            }
+            return summary;
+          },
+          { hit: 0, partial: 0, miss: 0 }
+        );
+        return `${counts.hit} hit / ${counts.partial} partial / ${counts.miss} miss`;
+      }
+
+      function getRouteTapeRows() {
+        return getRouteTargets()
+          .map((target) => {
+            const resolved = state.log.filter((item) => item.target?.slug === target.slug);
+            const hits = resolved.filter((item) => item.status === "hit").length;
+            return {
+              target,
+              resolved: resolved.length,
+              hits,
+            };
+          })
+          .sort(
+            (a, b) => b.resolved - a.resolved || b.hits - a.hits || a.target.name.localeCompare(b.target.name)
+          );
+      }
+
+      function renderRouteTape() {
+        const rows = getRouteTapeRows();
+        const totalResolved = rows.reduce((sum, row) => sum + row.resolved, 0);
+        dom.tapeCountLabel.textContent = String(totalResolved);
+
+        if (!totalResolved) {
+          dom.routeTape.innerHTML = `<p class="empty-state">Resolved routes will accumulate here.</p>`;
+          return;
+        }
+
+        dom.routeTape.innerHTML = rows
+          .filter((row) => row.resolved > 0)
+          .map((row) => {
+            const fill = Math.max(8, Math.round((row.resolved / state.shiftLength) * 100));
+            return `
+              <div class="tape-row">
+                <span class="tape-name">${escapeHtml(row.target.name)}</span>
+                <span class="tape-bar">
+                  <span class="tape-fill" style="--fill:${fill}%;--bar-color:${row.target.color || "#185fa5"}"></span>
+                </span>
+                <span class="tape-value mono">${row.hits}/${row.resolved}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function buildRunReport() {
+        const modeLabel = state.routeMode === "surface" ? "surface" : "agent";
+        const targetLabel = state.routeMode === "surface" ? "surfaces" : "collaborators";
+        const currentTarget =
+          state.locked && state.result?.target ? ` -> ${state.result.target.name}` : "";
+        const nowLine = state.current
+          ? `Now: B/${state.current.id} ${state.current.title}${currentTarget}`
+          : `Now: waiting for ${targetLabel}`;
+        const last = state.log[0];
+        const lastFallback = last?.mode === "surface" ? "Surface" : "Registry";
+        const lastLine = last
+          ? `Last: ${last.selected?.name || "No route"} -> ${last.target?.name || lastFallback} (${last.status} +${last.points})`
+          : "Last: no resolved signal yet";
+        const topRow = getRouteTapeRows().find((row) => row.resolved > 0);
+        const tapeLine = topRow
+          ? `Tape: ${topRow.target.name} ${topRow.hits}/${topRow.resolved} hit routes`
+          : "Tape: no resolved routes yet";
+        const reviewCount = getReviewItems().length;
+        const reviewLine = reviewCount ? `Review: ${reviewCount} queued` : "Review: clear";
+        const contracts = getDailyContracts();
+        const contractLine = `Contract: ${
+          contracts.filter((contract) => contract.value >= contract.target).length
+        }/${contracts.length} | ${contracts
+          .map((contract) => `${contract.name} ${Math.min(contract.value, contract.target)}/${contract.target}`)
+          .join(", ")}`;
+
+        return [
+          `PointCast Relay ${modeLabel} shift`,
+          `${state.shiftResolved}/${state.shiftLength} signals | ${state.score} pts | ${state.correct}/${state.answered || 0} hits (${getHitRate()}%)`,
+          `Streak ${state.streak} | best ${state.bestStreak} | clues ${state.cluesLeft}/${CLUES_PER_SHIFT}`,
+          contractLine,
+          `Track: ${getShiftTrackSummary()}`,
+          reviewLine,
+          nowLine,
+          lastLine,
+          tapeLine,
+        ].join("\n");
+      }
+
+      function renderRunReport() {
+        dom.runReport.textContent = buildRunReport();
+        dom.reportStatusLabel.textContent = state.finished
+          ? "Final"
+          : state.current && !state.locked
+            ? "Live"
+            : state.log.length
+              ? "Review"
+              : "Draft";
+      }
+
+      async function copyRunReport() {
+        const text = buildRunReport();
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            copyTextFallback(text);
+          }
+          dom.reportStatusLabel.textContent = "Copied";
+        } catch (error) {
+          try {
+            copyTextFallback(text);
+            dom.reportStatusLabel.textContent = "Copied";
+          } catch (fallbackError) {
+            dom.reportStatusLabel.textContent = "Manual";
+          }
+        }
+      }
+
+      function copyTextFallback(text) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.setAttribute("readonly", "");
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        if (!copied) {
+          throw new Error("copy failed");
+        }
+      }
+
+      function renderResult() {
+        if (!state.result) {
+          dom.resultPanel.classList.remove("is-visible");
+          dom.resultPanel.innerHTML = "";
+          return;
+        }
+        const { status, points, selected, target, reason, route } = state.result;
+        if (status === "complete") {
+          const summary = state.result.summary;
+          dom.resultPanel.innerHTML = `
+            <strong>${escapeHtml(`Shift complete · ${summary.score}`)}</strong>
+            <p>${escapeHtml(`${summary.correct}/${state.shiftLength} clean relays · ${summary.hitRate}% hit rate · best streak ${summary.bestStreak}`)}</p>
+          `;
+          dom.resultPanel.classList.add("is-visible");
+          return;
+        }
+        if (status === "clue") {
+          dom.resultPanel.innerHTML = `
+            <strong>${escapeHtml(`Clue burned · -${CLUE_SCORE_COST} ceiling`)}</strong>
+            <p>${escapeHtml(`${target?.roleLabel || "Registry"} desk · ${route.reason}`)}</p>
+          `;
+          dom.resultPanel.classList.add("is-visible");
+          return;
+        }
+        const title =
+          status === "hit"
+            ? `Clean relay +${points}`
+            : status === "partial"
+              ? `Same desk +${points}`
+              : reason === "timeout"
+                ? "Signal faded"
+                : reason === "skip"
+                  ? "Skipped"
+                  : "Route missed";
+        const selectedName = selected ? selected.name : reason === "timeout" ? "No route" : "Skip";
+        const clueNote = state.result.clueUsed ? ` · clue cost ${CLUE_SCORE_COST}` : "";
+        const fallbackName = state.routeMode === "surface" ? "Surface" : "Registry";
+        dom.resultPanel.innerHTML = `
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml(selectedName)} -> ${escapeHtml(target?.name || fallbackName)} · ${escapeHtml(
+          route.reason
+        )}${escapeHtml(clueNote)}</p>
+        `;
+        dom.resultPanel.classList.add("is-visible");
+      }
+
+      function renderControls() {
+        dom.pauseButton.disabled = state.locked || state.finished;
+        dom.pauseButton.querySelector("span").textContent = state.paused ? "Resume" : "Pause";
+        dom.clueButton.disabled =
+          state.locked || state.paused || state.finished || state.clueUsed || state.cluesLeft <= 0;
+        dom.nextButtonLabel.textContent = state.finished ? "New" : state.locked ? "Next" : "Skip";
+        dom.nextButton.disabled = !state.current;
+      }
+
+      function renderLog() {
+        dom.logCountLabel.textContent = String(state.log.length);
+        if (!state.log.length) {
+          dom.logList.innerHTML = `<p class="empty-state">Routes will land here.</p>`;
+          return;
+        }
+        dom.logList.innerHTML = state.log
+          .map((item) => {
+            const hit = item.status === "hit";
+            const miss = item.status === "miss";
+            const label = hit ? `+${item.points}` : item.status === "partial" ? `+${item.points}` : "0";
+            return `
+              <div class="log-item">
+                <span class="log-score ${hit ? "is-hit" : ""} ${miss ? "is-miss" : ""}">${escapeHtml(
+              label
+            )}</span>
+                <span class="log-copy">
+                  <strong>${escapeHtml(item.block.title)}</strong>
+                  <span>${escapeHtml(item.selected?.name || "No route")} -> ${escapeHtml(
+              item.target?.name || (item.mode === "surface" ? "Surface" : "Registry")
+            )}${item.clueUsed ? " · clue" : ""}</span>
+                </span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function updatePresence(payload) {
+        const sessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
+        state.presence = {
+          humans: Number(payload?.humans || 0),
+          agents: Number(payload?.agents || 0),
+          sessions,
+        };
+        renderPresence();
+      }
+
+      function renderPresence() {
+        dom.humansLabel.textContent = String(state.presence.humans);
+        dom.agentsLabel.textContent = String(state.presence.agents);
+        if (!state.presence.sessions.length) {
+          dom.presenceList.innerHTML = `<p class="empty-state">Waiting for live sessions.</p>`;
+          return;
+        }
+        dom.presenceList.innerHTML = state.presence.sessions
+          .slice(0, 10)
+          .map((session) => {
+            const nounId = Number(session.nounId || 0);
+            const hue = (nounId * 47) % 360;
+            const bg = `hsl(${hue} 68% 84%)`;
+            const joined = session.joinedAt ? formatShortTime(new Date(session.joinedAt)) : "now";
+            const where = session.where || session.listening || joined;
+            return `
+              <div class="presence-item">
+                <span class="noun-chip" style="--noun-bg:${bg}">N${escapeHtml(nounId)}</span>
+                <span class="presence-copy">
+                  <strong>${escapeHtml(session.kind || "human")}</strong>
+                  <span>${escapeHtml(where)}</span>
+                </span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function connectPresence() {
+        closePresence();
+        if (!state.endpoints.presence) {
+          return;
+        }
+        try {
+          const url = `${state.endpoints.presence}?sid=${encodeURIComponent(
+            state.player.sid
+          )}&kind=human`;
+          const socket = new WebSocket(url);
+          state.socket = socket;
+
+          socket.addEventListener("open", () => {
+            setPresenceStatus("live", "Presence live");
+            sendPresence({
+              type: "identify",
+              nounId: state.player.nounId,
+              mood: "relay",
+              listening: "PointCast Relay",
+              where: "/collabs/relay",
+            });
+            state.pingId = window.setInterval(() => {
+              sendPresence({ type: "ping", nounId: state.player.nounId });
+            }, 20000);
+          });
+
+          socket.addEventListener("message", (event) => {
+            try {
+              const payload = JSON.parse(event.data);
+              if (payload && Array.isArray(payload.sessions)) {
+                updatePresence(payload);
+              }
+            } catch (error) {
+              console.warn("Presence parse failed:", error);
+            }
+          });
+
+          socket.addEventListener("close", () => {
+            closePresence(false);
+            setPresenceStatus("fallback", "Snapshot only");
+          });
+
+          socket.addEventListener("error", () => {
+            setPresenceStatus("fallback", "Snapshot only");
+          });
+        } catch (error) {
+          console.warn("Presence unavailable:", error);
+          setPresenceStatus("fallback", "Snapshot only");
+        }
+      }
+
+      function sendPresence(payload) {
+        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+          state.socket.send(JSON.stringify(payload));
+        }
+      }
+
+      function updatePresenceWhere(where) {
+        sendPresence({
+          type: "update",
+          nounId: state.player.nounId,
+          mood: "relay",
+          listening: state.current ? `B/${state.current.id}` : "PointCast Relay",
+          where,
+        });
+      }
+
+      function closePresence(closeSocket = true) {
+        if (state.pingId) {
+          window.clearInterval(state.pingId);
+          state.pingId = null;
+        }
+        if (closeSocket && state.socket) {
+          state.socket.close();
+        }
+        state.socket = null;
+      }
+
+      function persistBest() {
+        const currentBest = Number(localStorage.getItem(getBestKey()) || 0);
+        if (state.score > currentBest) {
+          localStorage.setItem(getBestKey(), String(state.score));
+        }
+      }
+
+      function getBestKey() {
+        return `pc-relay-best:${new Date().toISOString().slice(0, 10)}:${state.routeMode}`;
+      }
+
+      function getHitRate() {
+        return state.answered ? Math.round((state.correct / state.answered) * 100) : 0;
+      }
+
+      function getLastRun() {
+        try {
+          const raw = localStorage.getItem(LAST_RUN_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function seededShuffle(items, seed) {
+        const copy = [...items];
+        const random = mulberry32(seed || 1);
+        for (let index = copy.length - 1; index > 0; index -= 1) {
+          const swapIndex = Math.floor(random() * (index + 1));
+          [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+        }
+        return copy;
+      }
+
+      function hashString(input) {
+        let hash = 2166136261;
+        for (let index = 0; index < input.length; index += 1) {
+          hash ^= input.charCodeAt(index);
+          hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+        }
+        return hash >>> 0;
+      }
+
+      function mulberry32(seed) {
+        return function random() {
+          let t = (seed += 0x6d2b79f5);
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function formatShortDate(date) {
+        return new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(date);
+      }
+
+      function formatShortTime(date) {
+        if (Number.isNaN(date.getTime())) {
+          return "now";
+        }
+        return new Intl.DateTimeFormat(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(date);
+      }
+
+      function setDayChip() {
+        const label = new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(new Date());
+        dom.dayChip.textContent = `${label} build`;
+      }
+
+      dom.newGameButton.addEventListener("click", startNewGame);
+      dom.pauseButton.addEventListener("click", togglePause);
+      dom.clueButton.addEventListener("click", useClue);
+      dom.nextButton.addEventListener("click", skipSignal);
+      dom.refreshButton.addEventListener("click", loadRemoteData);
+      dom.copyReportButton.addEventListener("click", copyRunReport);
+      dom.modeAgentButton.addEventListener("click", () => setRouteMode("agent"));
+      dom.modeSurfaceButton.addEventListener("click", () => setRouteMode("surface"));
+      window.addEventListener("keydown", (event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey || event.target.closest("input, textarea, select")) {
+          return;
+        }
+        if (/^[1-9]$/.test(event.key)) {
+          const index = Number(event.key) - 1;
+          const route = getRouteTargets()[index];
+          if (route) {
+            event.preventDefault();
+            chooseRoute(route.slug);
+          }
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          if (state.locked || state.finished) {
+            skipSignal();
+          }
+        } else if (event.key.toLowerCase() === "p") {
+          event.preventDefault();
+          togglePause();
+        } else if (event.key.toLowerCase() === "r") {
+          event.preventDefault();
+          startNewGame();
+        } else if (event.key.toLowerCase() === "c") {
+          event.preventDefault();
+          useClue();
+        }
+      });
+      window.addEventListener("beforeunload", () => closePresence(true));
+
+      setDayChip();
+      renderPresence();
+      renderMission();
+      renderDailyContract();
+      renderDocket();
+      renderEvidence();
+      renderReviewStack();
+      renderShift();
+      renderRouteTape();
+      renderRunReport();
+      renderLog();
+      loadRemoteData();
+    </script>
+  </body>
+</html>
