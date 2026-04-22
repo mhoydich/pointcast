@@ -21,6 +21,12 @@
  * blocks filed today.
  */
 
+// Per Mike ping 2026-04-20 21:27 UTC: "today on pointcast has been the
+// same all days refresh on top." Rotating pool of curated stops; pick 3
+// per day (Phase 3 home collapse 2026-04-20 21:30 PT — was 6) using a
+// day-of-year seed. Same 3 all day, different 3 tomorrow. Append new
+// entries to POOL; old entries continue to rotate unless removed. 3 is
+// tight on purpose — visitors should hit 3 clean picks, not a lobby.
 const prettyToday = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
   month: 'long',
@@ -35,44 +41,69 @@ interface Stop {
   href: string;
 }
 
-const STOPS: Stop[] = [
-  {
-    kicker: 'TODAY · 4/20',
-    title: 'Happy 4/20',
-    dek: 'The cultural artifact, the Waldos origin story, the 2026 beverage shape — and Good Feels specials running today.',
-    href: '/b/0328',
-  },
-  {
-    kicker: 'MARKETS · BTC',
-    title: 'Bitcoin at $75K · ETF gravity vs. Iran risk-off',
-    dek: 'Red candle on geopolitics + $1B weekly ETF inflows underneath. Structural demand vs headline risk, in a single Monday tape.',
-    href: '/b/0329',
-  },
-  {
-    kicker: 'SHIPPED · LIVE',
-    title: 'Presence is live · the DO is finally bound',
-    dek: 'Months-deferred Durable Object deploy landed this morning. /here now renders real connected visitors, not a placeholder.',
-    href: '/b/0327',
-  },
-  {
-    kicker: 'FEATURE · CLOCK',
-    title: 'Collab clock — the roster in timezones',
-    dek: 'Ticking digital readout over /collabs. Mike in El Segundo; Kenzo in Mallorca; cc + Codex in cloud/UTC.',
-    href: '/clock/0324',
-  },
-  {
-    kicker: 'LEARN · AI LANDSCAPE',
-    title: 'Kimi K2.6 + Qwen 3.6 Max — what shipped + what it means',
-    dek: 'Open-weights SOTA on agentic benches + closed incremental from Alibaba. Where they fit (and don\'t) in PointCast\'s stack.',
-    href: '/b/0325',
-  },
-  {
-    kicker: 'TRY · FIRST-TIME',
-    title: 'Start here · 5-stop tour',
-    dek: 'See who\'s here → collect today\'s drop → vote a poll → play a round → back to feed. About 5 minutes, every step an action.',
-    href: '/start',
-  },
+const POOL: Stop[] = [
+  // ---- 2026-04-21 Tue afternoon 13:40 PT (freshness pass) — Mike: "lets get fresh, also check bitcoin price, sport scores from yesterday, something from weather clock, games." Three new chips up top. ----
+  { kicker: 'AFTERNOON · PULSE', title: 'BTC 75.7k · Dodgers 12 · El Segundo 63°', dek: 'Live Tuesday afternoon readout — bitcoin spot, Monday NBA + MLB scores, El Segundo weather, what\'s live on every game surface. Fresh fetch.', href: '/b/0366' },
+  { kicker: 'COLLAB · STATUS', title: 'Four agents, one ledger', dek: 'cc + codex + manus + chatgpt — what each shipped in the last 36h, who\'s briefed, what\'s queued. The network is actually a network now.', href: '/b/0365' },
+  { kicker: 'SPORTS · /sports', title: 'Full scoreboard — NBA, MLB, MLS', dek: 'SportsStrip on /sports carries yesterday\'s 10-game MLB slate + 3 NBA Monday results. Dodgers 12-3 Rockies the headline.', href: '/sports' },
+  { kicker: 'CLOCK · EL SEGUNDO', title: 'Sky Clock · sunset 19:32 PT', dek: 'Wind 12mph onshore · humidity 64% · Hue warms past sunset. The Sky Clock carries 14+ rituals + landmarks per zone across a dozen cities.', href: '/clock' },
+  { kicker: 'PRIMITIVE · COMPUTE', title: 'Compute is the currency · federated ledger', dek: 'Who did what, how heavy, paid in what rail. /compute is the receipt; /compute.json is the feed.', href: '/b/0330' },
+  { kicker: 'PRIMITIVE · x402', title: 'x402 + Agentic.Market + the compute ledger', dek: 'Coinbase shipped the payment rail for agent commerce; PointCast shipped the attribution layer. They compose.', href: '/b/0331' },
+  { kicker: 'RETRO · CODEX', title: 'Codex, one month in — second engineer on PointCast', dek: 'Atomic single-file specs, Chronicle memory, where Codex fits and where it doesn\'t.', href: '/b/0332' },
+  { kicker: 'JOIN · CONTRIBUTE', title: 'Five ways to contribute compute', dek: 'Pledge a sprint · review a PR · federate a ledger · run a node · fund a brief.', href: '/contribute' },
+  { kicker: 'TODAY · 4/20', title: 'Happy 4/20', dek: 'Waldos origin, 2026 beverage shape, Good Feels specials.', href: '/b/0328' },
+  { kicker: 'MARKETS · BTC', title: 'Bitcoin at $75K · ETF gravity vs. Iran risk-off', dek: 'Red candle on geopolitics, $1B weekly ETF inflows underneath. Structural demand vs headline risk.', href: '/b/0329' },
+  { kicker: 'SHIPPED · LIVE', title: 'Presence is live · the DO is bound', dek: 'Durable Object deploy landed this morning. /here renders real connected visitors.', href: '/b/0327' },
+  { kicker: 'FEATURE · CLOCK', title: 'Collab clock — roster in timezones', dek: 'Ticking digital readout over /collabs. Mike in El Segundo; cc + Codex in cloud/UTC.', href: '/clock/0324' },
+  { kicker: 'LEARN · AI LANDSCAPE', title: 'Kimi K2.6 + Qwen 3.6 Max — field survey', dek: 'Open-weights SOTA agentic benches + closed incremental from Alibaba. Where they fit in the stack.', href: '/b/0325' },
+  { kicker: 'TRY · FIRST-TIME', title: 'Start here · 5-stop tour', dek: 'See who\'s here → collect today\'s drop → vote a poll → play a round → back to feed. ~5 minutes.', href: '/start' },
+  { kicker: 'NEW · BATH', title: 'A digital bath · four modes, color fields, audio', dek: 'Full-viewport meditative experience — bathe, breathe, drift, release. Stacked color fields drift in slow parallax; the breath ring follows a 4-7-8 cadence; audio tray plays Mike\'s sent track. Designed to be left open on a second monitor.', href: '/bath' },
+  { kicker: 'NEW · COS', title: 'Chief of Staff — talk to the team from your phone', dek: 'Mobile-friendly chat front door. Drop a thought, cc reads at session start, the ledger answers as ships land. Optional expand-and-publish turns a message into a block topic.', href: '/cos' },
+  { kicker: 'PLAY · HUB', title: 'Eight tiny games, one URL', dek: 'Drum, cards, quiz, here, polls, today\'s drop, battle, prize-cast — all in one place. The URL to send a friend if you want them to see what PointCast is in 30 seconds.', href: '/play' },
+  { kicker: 'QUIZ · DAILY', title: "Today's PointCast quiz", dek: 'One question a day, four choices, a playful explanation. Streaks persist locally. Learn the site while you play.', href: '/quiz' },
+  { kicker: 'HOORAY · DRUM', title: 'Drum cookie clicker', dek: 'Tap the drum. Accumulate beats. Unlock snare → hi-hat → auto-drummer → polyrhythm → prestige. Web Audio synth, mobile-first, space = tap. Get to 25,000 to cast a rhythm.', href: '/drum/click' },
+  { kicker: 'NEW · CARDS', title: 'One card a day, yours to keep', dek: 'Each visit generates a collectible — mood + noun + date + rarity tier. Legendary cards shimmer. Deck lives in your browser. Come back tomorrow for card #2.', href: '/cards' },
+  { kicker: 'PLAY · HERE', title: 'HereBeat · 6-pad meditative beat', dek: 'A-minor pentatonic, Web Audio sine, hue-coded ripples. Solo or with whoever else is connected.', href: '/here' },
+  { kicker: 'POLL · MONDAY', title: 'Weekly polls on home', dek: 'Shelling-point, sky-clock, april-register, BTC-trend. Vote once, see the distribution update live.', href: '/polls' },
+  { kicker: 'COLLECT · MINT', title: 'On-chain blocks on Tezos', dek: 'Mike\'s FA2 contract at KT1Qc77…MrP · 20 tokens, 7 actively listed on objkt.', href: '/collection' },
+  { kicker: 'MESH · NODES', title: 'Become a node — 3-step federation spec', dek: 'Host /agents.json + a feed, PR the registry, DAO ratification. Boring, cheap, composable.', href: '/for-nodes' },
+  { kicker: 'WORK · BENCH', title: 'Workbench — who\'s building what', dek: 'Live view of open sprints, shipped primitives, and briefs-in-flight across cc, Codex, Manus, ChatGPT.', href: '/workbench' },
+  { kicker: 'CHANNEL · GARDEN', title: 'Garden channel — walks + weather + El Segundo', dek: 'The slow-tempo editorial feed. Recent entries on salt air, clock-face plants, and neighborhood drift.', href: '/c/garden' },
+  { kicker: 'CHANNEL · GOOD FEELS', title: 'Good Feels channel — hemp-THC beverage arc', dek: 'Long-form on the November 2025 Farm Bill window + shop rollouts + the beverage shape that survives.', href: '/c/gf' },
+  { kicker: 'DROP · DAILY', title: 'Today\'s daily drop — collect your noun', dek: 'One block per day, one collect button. Streak counter compounds. No wallet required — it\'s localStorage.', href: '/today' },
+  { kicker: 'SPORTS · DAILY', title: 'Sports — last night\'s results, tonight\'s matchups', dek: 'NBA/NHL/MLB/Prem/Liga/Ligue-1 results with records + upset detection, plus tonight\'s tipoffs. Moved off home 4/20 — /sports is its own page.', href: '/sports' },
+  { kicker: 'NEW · BATH v2', title: 'Bath v2 — seven color fields, eleven tracks', dek: 'More layers, more parallax, more songs. Eleven tracks curated across bathe/breathe/drift/release. Reading room: block 0339.', href: '/bath' },
+  { kicker: 'MORNING · OVERNIGHT WRAP', title: 'Overnight wrap — seventeen ticks shipped while you slept', dek: 'cc ran an overnight fifteen-minute cadence from 01:08 to 05:50 PT. Block 0356 sums every ship + three honest gaps to address when back at the terminal.', href: '/b/0356' },
+  { kicker: 'GAME · NEW', title: 'Noundrum — drum to claim land, decorate, make art', dek: 'Multiplayer-feeling cookie-clicker drum where every visitor is a Noun cursor. Click empty tiles to claim, decorate with trees lamps fountains stars towers. Art mode hides the grid so the placed decorations read as a collective canvas.', href: '/noundrum' },
+  { kicker: 'WATCH · NEW', title: 'Three commercial artifacts + a tiny guess-the-decade game', dek: 'A 1967 anachronistic Japanese PointCast spot, a Magpie commercial, a Magpie × Lego crossover. Editorial framing on /commercials; fullscreen carousel on /tv/shows/commercials.', href: '/commercials' },
 ];
+
+// Daily rotation: pick 6 from the pool using a day-of-year seed so the
+// same slice renders all day (TZ: PT), a different slice renders
+// tomorrow. 4/20 is always included if present in the pool on its day.
+function pickTodays(pool: Stop[], when = new Date()): Stop[] {
+  const day = Math.floor(when.getTime() / (24 * 3600 * 1000));
+  const want = 3;
+  const n = pool.length;
+  if (n <= want) return pool;
+  // Stable pseudo-random shuffle seeded by day number. Fisher-Yates with
+  // a linear-congruential PRNG keyed by `day` — deterministic per day.
+  const seeded = (() => {
+    let s = (day * 2654435761) >>> 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 0x100000000;
+    };
+  })();
+  const idx = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(seeded() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return idx.slice(0, want).map((i) => pool[i]);
+}
+
+const STOPS: Stop[] = pickTodays(POOL);
 ---
 
 <aside class="today-strip" aria-label="Today on PointCast">
@@ -100,7 +131,7 @@ const STOPS: Stop[] = [
   </ol>
 
   <p class="today-strip__footer mono">
-    also today · <a href="/workbench">who's building what</a> · <a href="/here">who's here</a> · <a href="/for-nodes">become a node</a>
+    &nbsp;
   </p>
 </aside>
 

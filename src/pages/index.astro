@@ -14,14 +14,39 @@ import PresenceBar from '../components/PresenceBar.astro';
 import WalletChip from '../components/WalletChip.astro';
 import HomeMajors from '../components/HomeMajors.astro';
 import FreshDeck from '../components/FreshDeck.astro';
-import PollsOnHome from '../components/PollsOnHome.astro';
-import MoodChip from '../components/MoodChip.astro';
+// PollsOnHome removed from home 2026-04-20 21:30 PT (Phase 3 collapse) —
+// polls live in ActionDrawers now. Component file stays on disk for /polls.
+// MoodChip import removed 2026-04-20 15:30 PT per Mike: "have this in
+// the bar, and then once you select it goes away, ... mood is gone from
+// the homepage". Mood selection now lives in CoNavigator's left zone —
+// the inline mood picker popover opens when the mood chip is tapped
+// before a mood is set. File src/components/MoodChip.astro stays on
+// disk in case the top-of-home surface returns.
 import FreshStrip from '../components/FreshStrip.astro';
 import VisitorHereStrip from '../components/VisitorHereStrip.astro';
 import NetworkStrip from '../components/NetworkStrip.astro';
 import TodayOnPointCast from '../components/TodayOnPointCast.astro';
-import DailyDropStrip from '../components/DailyDropStrip.astro';
+// DailyDropStrip removed from home 2026-04-20 21:30 PT (Phase 3 collapse)
+// — daily drop lives in ActionDrawers. Component file stays on disk.
+// SportsStrip moved to /sports 2026-04-20 21:30 PT — dedicated page;
+// import stays so /sports can keep rendering the same component.
 import SportsStrip from '../components/SportsStrip.astro';
+// ComputeStrip was already collapsed into PulseStrip Phase 1 — import
+// kept for future dedicated surface; PingStrip removed from home
+// 2026-04-20 21:30 PT (Phase 3 collapse) in favor of ActionDrawers.
+import PulseStrip from '../components/PulseStrip.astro';
+import HeroBlock from '../components/HeroBlock.astro';
+import TopOfMorning from '../components/TopOfMorning.astro';
+import ActionDrawers from '../components/ActionDrawers.astro';
+import TankStrip from '../components/TankStrip.astro';
+// Phase 1 of home rethink 2026-04-20 18:20 PT: StateStrip + FreshStrip
+// + VisitorHereStrip + ComputeStrip collapse into one PulseStrip.
+// These components stay on disk in case the expanded surfaces get their
+// own pages later (e.g. /state for the full state-strip view).
+// import StateStrip from '../components/StateStrip.astro';
+// import FreshStrip from '../components/FreshStrip.astro';
+// import VisitorHereStrip from '../components/VisitorHereStrip.astro';
+// import ComputeStrip from '../components/ComputeStrip.astro';
 import MorningPara from '../components/MorningPara.astro';
 
 // Removed 2026-04-19 21:55 PT per Mike: "six things isn't working,
@@ -36,22 +61,69 @@ const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
 
 const blockCount = blocks.length;
 
-// JSON-LD — make the home a CollectionPage so agents can parse the list.
+// SEO: emit an @graph with CollectionPage + SiteNavigationElement so
+// Google gets an explicit site-structure signal. The nav element lists
+// the 9 channels plus the 3 SEO pillars (/el-segundo, /agent-native,
+// /nouns) and the major tools (/manifesto, /glossary, /archive) — the
+// primary navigation crawlers should treat as the skeleton of the site.
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'CollectionPage',
-  '@id': 'https://pointcast.xyz/#home',
-  name: 'PointCast',
-  description: 'A living broadcast from El Segundo. Every piece is a Block.',
-  url: 'https://pointcast.xyz/',
-  inLanguage: 'en-US',
-  hasPart: blocks.slice(0, 20).map((b) => ({
-    '@type': 'CreativeWork',
-    '@id': `https://pointcast.xyz/b/${b.data.id}`,
-    name: b.data.title,
-    datePublished: b.data.timestamp.toISOString(),
-    url: `https://pointcast.xyz/b/${b.data.id}`,
-  })),
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': 'https://pointcast.xyz/#home',
+      name: 'PointCast',
+      description: 'A living broadcast from El Segundo. Every piece is a Block.',
+      url: 'https://pointcast.xyz/',
+      inLanguage: 'en-US',
+      isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website' },
+      hasPart: blocks.slice(0, 20).map((b) => ({
+        '@type': 'CreativeWork',
+        '@id': `https://pointcast.xyz/b/${b.data.id}`,
+        name: b.data.title,
+        datePublished: b.data.timestamp.toISOString(),
+        url: `https://pointcast.xyz/b/${b.data.id}`,
+      })),
+    },
+    // Primary navigation — channels, pillars, tools. Google treats
+    // SiteNavigationElement as a hint about what the site's top-level
+    // structure actually is (vs. all the incidental internal links).
+    {
+      '@type': 'SiteNavigationElement',
+      '@id': 'https://pointcast.xyz/#nav-channels',
+      name: 'Channels',
+      hasPart: CHANNEL_LIST.map((c) => ({
+        '@type': 'SiteNavigationElement',
+        name: c.name,
+        description: c.intro ?? c.purpose,
+        url: `https://pointcast.xyz/c/${c.slug}`,
+      })),
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      '@id': 'https://pointcast.xyz/#nav-pillars',
+      name: 'Pillars',
+      hasPart: [
+        { '@type': 'SiteNavigationElement', name: 'El Segundo', url: 'https://pointcast.xyz/el-segundo', description: 'Local SEO pillar for El Segundo, California (ZIP 90245) — things to do, South Bay creative/tech scene, the 25-mile beacon.' },
+        { '@type': 'SiteNavigationElement', name: 'Agent-native', url: 'https://pointcast.xyz/agent-native', description: 'How PointCast implements llms.txt, agents.json, stripped-HTML crawl mode, Content-Signals, and Farcaster Frames.' },
+        { '@type': 'SiteNavigationElement', name: 'Nouns on Tezos', url: 'https://pointcast.xyz/nouns', description: 'Visit Nouns FA2 open-supply NFT, Nouns Battler deterministic fighter, and CC0 proliferation culture on Tezos.' },
+      ],
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      '@id': 'https://pointcast.xyz/#nav-tools',
+      name: 'Tools',
+      hasPart: [
+        { '@type': 'SiteNavigationElement', name: 'Manifesto', url: 'https://pointcast.xyz/manifesto' },
+        { '@type': 'SiteNavigationElement', name: 'Start here', url: 'https://pointcast.xyz/start' },
+        { '@type': 'SiteNavigationElement', name: 'Share kit', url: 'https://pointcast.xyz/share' },
+        { '@type': 'SiteNavigationElement', name: 'Glossary', url: 'https://pointcast.xyz/glossary' },
+        { '@type': 'SiteNavigationElement', name: 'Archive', url: 'https://pointcast.xyz/archive' },
+        { '@type': 'SiteNavigationElement', name: 'Resources', url: 'https://pointcast.xyz/resources' },
+        { '@type': 'SiteNavigationElement', name: 'For agents', url: 'https://pointcast.xyz/for-agents' },
+      ],
+    },
+  ],
 };
 
 const alternates = [
@@ -68,6 +140,7 @@ const alternates = [
 
 <BlockLayout
   title="Home"
+  description={`A living broadcast from El Segundo — ${blockCount} Blocks across 9 channels, on-chain editions on Tezos, agent-native by design. Built by Mike Hoydich × Claude.`}
   jsonLd={jsonLd}
   alternates={alternates}
   frame={{
@@ -97,24 +170,39 @@ const alternates = [
       <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
 
-    <!-- Fresh strip — top-of-page freshness signal + one-tap action.
-         Per Mike 2026-04-19 morning feedback "top not fresh enough and
-         nothing to do". Shows HELLO / N NEW / CAUGHT UP badges based on
-         localStorage lastVisit; CTA routes to newest or random older. -->
-    <FreshStrip />
+    <!-- Hero Block — Phase 2 of home rethink. Daily deterministic pick
+         from a curated pool rendered as a full editorial card above
+         everything else. Codex shipped 2026-04-20 17:40 PT (3rd Codex
+         single-file win of the night). Plan: docs/plans/2026-04-20-
+         home-rethink.md Option A Phase 2. -->
+    <HeroBlock />
 
-    <!-- MoodChip — moved to top per Mike 2026-04-20 13:55 PT: "yah let
-         move mood up, and then yah make the selection of the mood change
-         the mood, that animation, and yah the ability to play music,
-         neater ui and then you are rolling thru the site in that mood."
-         Setting your mood first means every page that follows renders
-         with the tint + the soundtrack follows you. -->
-    <MoodChip />
+    <!-- TOP OF THE MORNING — 3 auto-curated fresh blocks from the last 24h,
+         sits right under the hero. Sprint #91 Theme E-1 (2026-04-21). -->
+    <TopOfMorning />
 
-    <!-- Visitor "peoples here" strip — represents YOU as a noun avatar +
-         ghost slots that light up when other visitors connect. Per Mike
-         2026-04-19 20:30 PT. -->
-    <VisitorHereStrip />
+    <!-- PULSE — one-line home signal strip. Phase 1 of home rethink
+         (docs/plans/2026-04-20-home-rethink.md, Option A). Collapses
+         five prior strips (StateStrip + FreshStrip + VisitorHereStrip
+         + ComputeStrip + masthead-PresenceBar) into one scannable line
+         answering "is PointCast alive right now?" Signals: n here · cc
+         working/idle · last ship · next ship · you last back. -->
+    <PulseStrip />
+
+    {/* PingStrip removed 2026-04-20 21:30 PT (Phase 3 collapse) — the
+        ping composer lives in ActionDrawers at the bottom of home now,
+        and in /cos which is a dedicated phone surface. Also in the
+        CoNavigator bar bench→ping chip. Three places is enough. */}
+
+    {/* MoodChip removed from home 2026-04-20 15:30 PT per Mike: "have
+        this in the bar, and then once you select it goes away ... mood
+        is gone from the homepage". Mood selection is now an inline
+        popover in CoNavigator's left zone. */}
+
+    {/* FreshStrip / VisitorHereStrip / ComputeStrip / StateStrip all
+        collapsed into PulseStrip above — Phase 1 of home rethink per
+        docs/plans/2026-04-20-home-rethink.md. Components stay on disk
+        for future dedicated pages if needed. */}
 
     <!-- Network strip — surfaces /here (live congregation), /for-nodes
          (become a node), /workbench (who's building what). Per Mike
@@ -132,16 +220,12 @@ const alternates = [
          and very monday stuffs as, today is monday." -->
     <TodayOnPointCast />
 
-    <!-- Daily drop collect inline. Per Mike 2026-04-20 13:20 PT:
-         "have on homepage, ability to collect daily drop." Shared
-         localStorage with /today so claim here, claim there, same count. -->
-    <DailyDropStrip />
+    {/* DailyDropStrip removed 2026-04-20 21:30 PT (Phase 3 collapse) —
+        the daily drop claim button lives in ActionDrawers now. */}
 
-    <!-- Sports — recent global-major results. Per Mike 2026-04-20
-         13:20 PT: "try a couple of sports updates of the latest results
-         from last night or today, start with global major." Client-side
-         fetches ESPN scoreboards, 10-min cache. -->
-    <SportsStrip />
+    {/* SportsStrip moved to /sports 2026-04-20 21:30 PT (Phase 3
+        collapse). A chip in TodayOnPointCast's daily rotation pool
+        points visitors to it; home stays tight. */}
 
     {/* MoodChip moved above VisitorHereStrip per Mike 2026-04-20 13:55 PT. */}
 
@@ -150,10 +234,8 @@ const alternates = [
          surface; the morning paragraph was redundant. Component file
          stays on disk. */}
 
-    <!-- Live polls strip — pool now includes 4 fresh polls (codex-project
-         bet, sunday-ES, april-register, sunday-soundtrack) on top of the
-         existing 12. Per Mike 2026-04-19 21:55 PT "more fresh polls". -->
-    <PollsOnHome />
+    {/* PollsOnHome removed 2026-04-20 21:30 PT (Phase 3 collapse) —
+        polls live in ActionDrawers below + in /polls. */}
 
     <!-- Fresh deck — 3 random blocks cloned client-side from the grid below
          so every page-view gets a different top. Per Mike 2026-04-18 block
@@ -185,10 +267,32 @@ const alternates = [
       </section>
     </BlockReorder>
 
+    <!-- Action Drawers — Phase 2 of home rethink. Collapses ping +
+         drop + polls + contribute into one accordion after the grid.
+         Discoverable on scroll without taking constant real estate
+         above the fold. Per docs/plans/2026-04-20-home-rethink.md. -->
+    <ActionDrawers />
+
+    {/* TankStrip — ambient preview of /play/tank below the fold.
+        Lazy-mounted via IntersectionObserver so it does not fetch
+        /api/tank/state until it scrolls into view. Mike 2026-04-21
+        "cc picks go": placement = below the fold (default). */}
+    <TankStrip />
+
     <!-- Footer — endpoint list. Agent-oriented, no social nav. -->
     <footer class="endpoints">
       <p class="endpoints__label">ENDPOINTS</p>
       <ul class="endpoints__list">
+        {/* SEO pillar pages — surfaced first so crawlers see the
+            keyword-targeted landing pages before the utility endpoints. */}
+        <li><a href="/el-segundo">/el-segundo ★</a></li>
+        <li><a href="/agent-native">/agent-native ★</a></li>
+        <li><a href="/nouns">/nouns ★</a></li>
+        <li><a href="/start">/start ★</a></li>
+        <li><a href="/share">/share ★</a></li>
+        {/* Federation — growth loop. */}
+        <li><a href="/federated">/federated ★</a></li>
+        <li><a href="/federate">/federate ★</a></li>
         <li><a href="/manifesto">/manifesto</a></li>
         <li><a href="/dao">/dao</a></li>
         <li><a href="/yield">/yield</a></li>
@@ -205,6 +309,7 @@ const alternates = [
         <li><a href="/changelog">/changelog</a></li>
         <li><a href="/stack">/stack</a></li>
         <li><a href="/ai-stack">/ai-stack</a></li>
+        <li><a href="/resources">/resources</a></li>
         <li><a href="/yee">/yee</a></li>
         <li><a href="/mesh">/mesh</a></li>
         <li><a href="/collabs">/collabs</a></li>
@@ -218,6 +323,7 @@ const alternates = [
         <li><a href="/gallery">/gallery</a></li>
         <li><a href="/moods">/moods</a></li>
         <li><a href="/local">/local</a></li>
+        <li><a href="/passport">/passport</a></li>
         <li><a href="/today">/today ★</a></li>
         <li><a href="/tv">/tv ↗</a></li>
         <li><a href="/eth-legacy">/eth-legacy</a></li>

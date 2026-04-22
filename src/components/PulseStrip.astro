@@ -1,0 +1,554 @@
+---
+/**
+ * PulseStrip — one-line home signal strip.
+ *
+ * Mike 2026-04-20 17:55 PT: *"lets go option a"* — Phase 1 of the home
+ * rethink. PulseStrip collapses 5 prior home strips (StateStrip,
+ * FreshStrip, VisitorHereStrip, ComputeStrip, masthead-PresenceBar)
+ * into one scannable line answering: is PointCast alive right now?
+ *
+ * Six signal pieces, inline:
+ *   1. LIVE · n here   (from /api/presence/snapshot)
+ *   2. cc WORKING/IDLE (derived from compute-ledger last cc entry)
+ *   3. last ship · Xm  (ledger most-recent overall)
+ *   4. next ship · Xm  (ship-queue next upcoming item)
+ *   5. you · Xm back   (localStorage pc:visit:last)
+ *   6. small links: /compute · /state · /cadence (deep surfaces)
+ *
+ * Refreshes every 60s client-side for relative times + every 15s for
+ * live-count from presence API. Builds entirely from build-time data +
+ * thin client hydration.
+ *
+ * Author: cc. Source: Mike 2026-04-20 17:55 PT chat · docs/plans/2026-04-20-home-rethink.md.
+ */
+import { COMPUTE_LEDGER } from '../lib/compute-ledger';
+import { nextShip } from '../lib/ship-queue';
+
+const latestOverall = [...COMPUTE_LEDGER].sort(
+  (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+)[0] ?? null;
+
+const latestCc = COMPUTE_LEDGER
+  .filter((e) => e.collab === 'claude-code' || e.collab === 'mh+cc')
+  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0] ?? null;
+
+// Per Mike 2026-04-20 17:32 PT: "add a codex working if codex working
+// and manus". PULSE now shows cc + codex + manus dots side-by-side.
+const latestCodex = COMPUTE_LEDGER
+  .filter((e) => e.collab === 'codex')
+  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0] ?? null;
+
+const latestManus = COMPUTE_LEDGER
+  .filter((e) => e.collab === 'manus')
+  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0] ?? null;
+
+const latestChatgpt = COMPUTE_LEDGER
+  .filter((e) => e.collab === 'chatgpt')
+  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0] ?? null;
+
+const upcoming = nextShip();
+
+// Sprint #93 T1 — per-collab detail panels. 3 most-recent ships per dot,
+// plus total count + last-24h active flag. Clicking a dot expands a panel.
+const COLLABS = ['claude-code', 'codex', 'manus', 'chatgpt'] as const;
+type CollabSlug = typeof COLLABS[number];
+const nowMs = Date.now();
+const MS_24H = 24 * 60 * 60 * 1000;
+const collabDetails: Record<CollabSlug, {
+  count: number;
+  active24h: boolean;
+  recent: Array<{ at: string; title: string; artifact?: string; kind: string; signature: string }>;
+}> = {} as any;
+
+for (const slug of COLLABS) {
+  const entries = COMPUTE_LEDGER.filter((e) => {
+    if (slug === 'claude-code') return e.collab === 'claude-code' || e.collab === 'mh+cc';
+    return e.collab === slug;
+  }).sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  const active = entries.length > 0 && (nowMs - new Date(entries[0].at).getTime()) < MS_24H;
+  collabDetails[slug] = {
+    count: entries.length,
+    active24h: active,
+    recent: entries.slice(0, 3).map((e) => ({
+      at: e.at,
+      title: e.title,
+      artifact: e.artifact,
+      kind: e.kind,
+      signature: e.signature,
+    })),
+  };
+}
+---
+
+<aside class="pulse-strip" aria-label="PointCast pulse — is the network alive right now">
+  <p class="pulse-strip__line mono">
+    <span class="pulse-strip__label">PULSE</span>
+    <span class="pulse-strip__sep" aria-hidden="true">·</span>
+
+    <span class="pulse-strip__stat">
+      <span class="pulse-strip__dot pulse-strip__dot--live" aria-hidden="true"></span>
+      <b id="pulse-here">—</b> here
+    </span>
+    <span class="pulse-strip__sep" aria-hidden="true">·</span>
+
+    <span class="pulse-strip__agents" aria-label="collaborator activity">
+      <button type="button" class="pulse-strip__agent pulse-strip__agent--btn" data-collab="claude-code" aria-expanded="false" aria-controls="pulse-detail-panel" title="cc — click for recent ships">
+        <span class="pulse-strip__dot" id="pulse-cc-dot" data-state="unknown" data-last-at={latestCc?.at ?? ''} aria-hidden="true"></span>
+        <span class="pulse-strip__agent-name">cc</span>
+      </button>
+      <button type="button" class="pulse-strip__agent pulse-strip__agent--btn" data-collab="codex" aria-expanded="false" aria-controls="pulse-detail-panel" title="codex — click for recent ships">
+        <span class="pulse-strip__dot" id="pulse-codex-dot" data-state="unknown" data-last-at={latestCodex?.at ?? ''} aria-hidden="true"></span>
+        <span class="pulse-strip__agent-name">codex</span>
+      </button>
+      <button type="button" class="pulse-strip__agent pulse-strip__agent--btn" data-collab="manus" aria-expanded="false" aria-controls="pulse-detail-panel" title="manus — click for recent ships">
+        <span class="pulse-strip__dot" id="pulse-manus-dot" data-state="unknown" data-last-at={latestManus?.at ?? ''} aria-hidden="true"></span>
+        <span class="pulse-strip__agent-name">manus</span>
+      </button>
+      {latestChatgpt && (
+        <button type="button" class="pulse-strip__agent pulse-strip__agent--btn" data-collab="chatgpt" aria-expanded="false" aria-controls="pulse-detail-panel" title="chatgpt — click for recent ships">
+          <span class="pulse-strip__dot" id="pulse-chatgpt-dot" data-state="unknown" data-last-at={latestChatgpt.at} aria-hidden="true"></span>
+          <span class="pulse-strip__agent-name">chatgpt</span>
+        </button>
+      )}
+    </span>
+    <span class="pulse-strip__sep" aria-hidden="true">·</span>
+
+    {latestOverall && (
+      <span class="pulse-strip__stat">
+        last ship <b data-iso={latestOverall.at} class="pulse-strip__rel">—</b>
+      </span>
+    )}
+    <span class="pulse-strip__sep" aria-hidden="true">·</span>
+
+    {upcoming && (
+      <span class="pulse-strip__stat">
+        next <b data-iso-future={upcoming.dueAt} class="pulse-strip__rel-future">—</b>
+        <span class="pulse-strip__next-chip" aria-label={`next ship: ${upcoming.size} · ${upcoming.collab}`}>
+          {upcoming.size}·{upcoming.collab}
+        </span>
+      </span>
+    )}
+    <span class="pulse-strip__sep" aria-hidden="true">·</span>
+
+    <span class="pulse-strip__stat">
+      you <b id="pulse-you" class="pulse-strip__rel-you">just now</b>
+    </span>
+  </p>
+
+  <p class="pulse-strip__links mono">
+    <a href="/compute">/compute</a>
+    <span aria-hidden="true">·</span>
+    <a href="/cadence">/cadence</a>
+    <span aria-hidden="true">·</span>
+    <a href="/sprints">/sprints</a>
+    <span aria-hidden="true">·</span>
+    <a href="/collabs">/collabs</a>
+  </p>
+
+  <!-- Sprint #93 T1: expandable detail panel. Shown when a collab dot is
+       clicked. Data is pre-rendered per collab; visible one at a time. -->
+  <div class="pulse-strip__detail" id="pulse-detail-panel" hidden>
+    <button type="button" class="pulse-strip__detail-close" id="pulse-detail-close" aria-label="Close detail panel">×</button>
+    {COLLABS.map((slug) => {
+      const d = collabDetails[slug];
+      const label = slug === 'claude-code' ? 'cc' : slug;
+      return (
+        <div class="pulse-strip__detail-card" data-collab={slug} hidden>
+          <header class="pulse-strip__detail-head">
+            <span class="pulse-strip__detail-name mono">{label}</span>
+            <span class="pulse-strip__detail-meta mono">
+              {d.count} total · {d.active24h ? 'active 24h' : 'idle'}
+            </span>
+          </header>
+          {d.recent.length === 0 ? (
+            <p class="pulse-strip__detail-empty mono">no ships yet — waiting</p>
+          ) : (
+            <ol class="pulse-strip__detail-ships">
+              {d.recent.map((s) => (
+                <li class="pulse-strip__detail-ship">
+                  <span class="pulse-strip__detail-when mono" data-iso={s.at}>—</span>
+                  {s.artifact ? (
+                    <a class="pulse-strip__detail-title" href={s.artifact}>{s.title}</a>
+                  ) : (
+                    <span class="pulse-strip__detail-title">{s.title}</span>
+                  )}
+                  <span class="pulse-strip__detail-kind mono">{s.kind}·{s.signature}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</aside>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var WORKING_MS = 20 * 60 * 1000;
+    var LS_LAST_VISIT = 'pc:visit:last';
+
+    function fmtAgo(ms) {
+      if (ms < 60 * 1000) return 'just now';
+      if (ms < 60 * 60 * 1000) return Math.round(ms / 60000) + 'm';
+      if (ms < 24 * 60 * 60 * 1000) return Math.round(ms / 3600000) + 'h';
+      if (ms < 7 * 24 * 60 * 60 * 1000) return Math.round(ms / (24 * 3600000)) + 'd';
+      return Math.round(ms / (7 * 24 * 3600000)) + 'w';
+    }
+    function fmtUntil(ms) {
+      if (ms < 0) return 'now';
+      if (ms < 60 * 1000) return '<1m';
+      if (ms < 60 * 60 * 1000) return Math.round(ms / 60000) + 'm';
+      if (ms < 24 * 60 * 60 * 1000) return Math.round(ms / 3600000) + 'h';
+      return Math.round(ms / (24 * 3600000)) + 'd';
+    }
+
+    function paint() {
+      var now = Date.now();
+      // Relative-past labels
+      document.querySelectorAll('.pulse-strip__rel[data-iso]').forEach(function (el) {
+        var iso = el.getAttribute('data-iso');
+        if (!iso) return;
+        var delta = now - new Date(iso).getTime();
+        if (delta >= 0 && !isNaN(delta)) el.textContent = fmtAgo(delta) + ' ago';
+      });
+      // Relative-future (next ship)
+      document.querySelectorAll('.pulse-strip__rel-future[data-iso-future]').forEach(function (el) {
+        var iso = el.getAttribute('data-iso-future');
+        if (!iso) return;
+        var delta = new Date(iso).getTime() - now;
+        if (!isNaN(delta)) el.textContent = delta < 0 ? 'due' : 'in ' + fmtUntil(delta);
+      });
+      // Agent-status dots: cc · codex · manus · (chatgpt if recent).
+      // Each dot carries data-last-at with that collaborator's most-recent
+      // ledger entry. Within WORKING_MS → working (green pulse), else idle.
+      ['cc', 'codex', 'manus', 'chatgpt'].forEach(function (name) {
+        var dot = document.getElementById('pulse-' + name + '-dot');
+        if (!dot) return;
+        var iso = dot.getAttribute('data-last-at');
+        if (!iso) { dot.setAttribute('data-state', 'idle'); return; }
+        var d = now - new Date(iso).getTime();
+        if (isNaN(d)) { dot.setAttribute('data-state', 'unknown'); return; }
+        var state = d < WORKING_MS ? 'working' : 'idle';
+        dot.setAttribute('data-state', state);
+        dot.setAttribute('title', name + ' · ' + state + ' · ' + fmtAgo(d) + ' ago');
+      });
+      // You: relative last-visit
+      try {
+        var prev = localStorage.getItem(LS_LAST_VISIT);
+        var youEl = document.getElementById('pulse-you');
+        if (prev && youEl) {
+          var ms = now - parseInt(prev, 10);
+          youEl.textContent = isFinite(ms) && ms > 30000 ? fmtAgo(ms) + ' back' : 'just now';
+        }
+        localStorage.setItem(LS_LAST_VISIT, String(now));
+      } catch (e) {}
+    }
+
+    function paintPresence() {
+      fetch('/api/presence/snapshot', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j) return;
+          var total = (j.humans || 0) + (j.agents || 0);
+          var el = document.getElementById('pulse-here');
+          if (el) el.textContent = String(Math.max(total, 1));
+        })
+        .catch(function () { /* no-op */ });
+    }
+
+    paint();
+    paintPresence();
+    setInterval(paint, 60 * 1000);
+    setInterval(paintPresence, 30 * 1000);
+
+    // ---- Sprint #93 T1 — collab dot click → detail panel ----
+    var detailPanel = document.getElementById('pulse-detail-panel');
+    var detailClose = document.getElementById('pulse-detail-close');
+    var agentBtns = document.querySelectorAll('.pulse-strip__agent--btn');
+    var detailCards = document.querySelectorAll('.pulse-strip__detail-card');
+
+    function closeDetail() {
+      if (detailPanel) detailPanel.setAttribute('hidden', '');
+      for (var i = 0; i < agentBtns.length; i++) agentBtns[i].setAttribute('aria-expanded', 'false');
+      for (var j = 0; j < detailCards.length; j++) detailCards[j].setAttribute('hidden', '');
+    }
+    function showDetail(collab) {
+      if (!detailPanel) return;
+      detailPanel.removeAttribute('hidden');
+      for (var i = 0; i < detailCards.length; i++) {
+        if (detailCards[i].getAttribute('data-collab') === collab) detailCards[i].removeAttribute('hidden');
+        else detailCards[i].setAttribute('hidden', '');
+      }
+      for (var j = 0; j < agentBtns.length; j++) {
+        var matches = agentBtns[j].getAttribute('data-collab') === collab;
+        agentBtns[j].setAttribute('aria-expanded', matches ? 'true' : 'false');
+      }
+    }
+    for (var k = 0; k < agentBtns.length; k++) {
+      (function (btn) {
+        btn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var collab = btn.getAttribute('data-collab');
+          var currentlyExpanded = btn.getAttribute('aria-expanded') === 'true';
+          if (currentlyExpanded) { closeDetail(); return; }
+          showDetail(collab);
+          // After revealing, paint relative-time inside the detail card.
+          var card = document.querySelector('.pulse-strip__detail-card[data-collab="' + collab + '"]');
+          if (card) {
+            var whens = card.querySelectorAll('[data-iso]');
+            for (var m = 0; m < whens.length; m++) {
+              var iso = whens[m].getAttribute('data-iso');
+              var ms = iso ? (Date.now() - new Date(iso).getTime()) : NaN;
+              if (!isNaN(ms)) {
+                var mins = Math.floor(ms / 60000);
+                var txt = mins < 60 ? (mins + 'm ago') : (Math.floor(mins / 60) + 'h ago');
+                whens[m].textContent = txt;
+              }
+            }
+          }
+        });
+      })(agentBtns[k]);
+    }
+    if (detailClose) detailClose.addEventListener('click', closeDetail);
+    document.addEventListener('click', function (ev) {
+      if (!detailPanel || detailPanel.hasAttribute('hidden')) return;
+      if (detailPanel.contains(ev.target)) return;
+      var inBtn = false;
+      for (var i = 0; i < agentBtns.length; i++) if (agentBtns[i].contains(ev.target)) { inBtn = true; break; }
+      if (!inBtn) closeDetail();
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && detailPanel && !detailPanel.hasAttribute('hidden')) closeDetail();
+    });
+  })();
+</script>
+
+<style>
+  .pulse-strip {
+    margin: 10px 0 12px;
+    padding: 8px 14px 10px;
+    background: rgba(232, 154, 45, 0.04);
+    border: 1px solid rgba(232, 154, 45, 0.22);
+    border-left: 3px solid #E89A2D;
+    border-radius: 2px;
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+  }
+
+  .pulse-strip__line {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink-soft, #38373A);
+    margin: 0 0 4px;
+    line-height: 1.6;
+  }
+  .pulse-strip__label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #7a4d0c;
+  }
+  .pulse-strip__sep { margin: 0 5px; opacity: 0.45; }
+  .pulse-strip__stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .pulse-strip__stat b {
+    font-weight: 600;
+    color: var(--pc-ink, #12110E);
+  }
+
+  .pulse-strip__dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #c4c2bc;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  /* Multi-agent cluster: cc · codex · manus · chatgpt inline */
+  .pulse-strip__agents {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pulse-strip__agent {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  /* Sprint #93 T1 — make agents clickable + show they're interactive */
+  .pulse-strip__agent--btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 2px 5px;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    transition: background 0.14s ease, border-color 0.14s ease;
+  }
+  .pulse-strip__agent--btn:hover { background: rgba(18, 17, 14, 0.06); border-color: rgba(18, 17, 14, 0.18); }
+  .pulse-strip__agent--btn[aria-expanded="true"] { background: #12110e; border-color: #12110e; color: #fef5e7; }
+  .pulse-strip__agent--btn[aria-expanded="true"] .pulse-strip__agent-name { color: #fef5e7; }
+  .pulse-strip__agent-name {
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink-soft, #38373A);
+  }
+
+  /* Detail panel — shown when a collab dot is clicked */
+  .pulse-strip__detail {
+    margin-top: 10px;
+    padding: 12px 14px 14px;
+    background: #fffdfa;
+    border: 1px solid var(--pc-rule, #C4C2BC);
+    border-top: 3px solid #12110e;
+    border-radius: 2px;
+    position: relative;
+  }
+  .pulse-strip__detail[hidden] { display: none !important; }
+  .pulse-strip__detail-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--pc-ink-muted, #5F5E5A);
+    padding: 4px 8px;
+    border-radius: 2px;
+    transition: background 0.14s ease, color 0.14s ease;
+  }
+  .pulse-strip__detail-close:hover { background: #8a2432; color: #fef5e7; }
+  .pulse-strip__detail-card[hidden] { display: none; }
+  .pulse-strip__detail-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed var(--pc-rule-soft, #E5E3DE);
+  }
+  .pulse-strip__detail-name {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+  }
+  .pulse-strip__detail-meta {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted);
+  }
+  .pulse-strip__detail-empty {
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+  .pulse-strip__detail-ships {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pulse-strip__detail-ship {
+    display: grid;
+    grid-template-columns: 70px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    padding-bottom: 6px;
+    border-bottom: 1px dotted var(--pc-rule-soft);
+  }
+  .pulse-strip__detail-ship:last-child { border-bottom: none; }
+  .pulse-strip__detail-when {
+    font-size: 9.5px;
+    color: var(--pc-ink-muted);
+    letter-spacing: 0.06em;
+  }
+  .pulse-strip__detail-title {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--pc-ink);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  a.pulse-strip__detail-title { border-bottom-color: var(--pc-rule-soft); }
+  a.pulse-strip__detail-title:hover { border-bottom-color: #8a2432; color: #8a2432; }
+  .pulse-strip__detail-kind {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .pulse-strip__dot--live { background: #C92A2A; animation: pulse-red 1.6s ease-in-out infinite; }
+  @keyframes pulse-red {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.82); }
+  }
+  .pulse-strip__dot[data-state="working"] {
+    background: #2f8f5f;
+    animation: pulse-green 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .pulse-strip__dot[data-state="idle"] { background: #8a7e6c; }
+  @keyframes pulse-green {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55); }
+    70%  { box-shadow: 0 0 0 6px rgba(47, 143, 95, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+
+  .pulse-strip__next-chip {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: #7a4d0c;
+    background: rgba(232, 154, 45, 0.12);
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-left: 2px;
+    text-transform: lowercase;
+  }
+
+  .pulse-strip__links {
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  .pulse-strip__links a {
+    color: #7a4d0c;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(122, 77, 12, 0.35);
+  }
+  .pulse-strip__links a:hover { color: #e89a2d; border-bottom-color: currentColor; }
+
+  @media (max-width: 720px) {
+    .pulse-strip__line { font-size: 10.5px; }
+    .pulse-strip__sep { margin: 0 3px; }
+    .pulse-strip__next-chip { font-size: 9px; }
+    .pulse-strip__links { font-size: 9px; letter-spacing: 0.08em; }
+  }
+  @media (max-width: 480px) {
+    /* On very small screens, hide the "next ship" stat to keep the line readable */
+    .pulse-strip__line .pulse-strip__stat:nth-of-type(4) { display: none; }
+    .pulse-strip__line .pulse-strip__sep:nth-of-type(4) { display: none; }
+  }
+</style>

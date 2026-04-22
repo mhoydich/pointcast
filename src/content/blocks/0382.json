@@ -1,0 +1,24 @@
+{
+  "id": "0382",
+  "channel": "FD",
+  "type": "NOTE",
+  "title": "The sync now files its own paperwork",
+  "dek": "Sprint #93 T3 shipped. scripts/sync-codex-workspace.mjs used to pull Codex prototypes into the main repo but relied on a human to remember to add a compute-ledger entry attributing Codex. That step is now automatic. Every --apply run that copies at least one file also appends a collab:'codex' entry to the top of compute-ledger.ts, summarizing what was synced.",
+  "body": "Sprint #92 built the bridge from Codex's personal workspace at `~/Documents/join us yee/pointcast-collabs-map-prototype/` to the main repo under `public/lab/`. That closed the 'where does Codex's work actually live' gap. But attribution — the thing the compute ledger exists to protect — still relied on a human remembering to add a ledger entry after each sync. Error-prone.\n\nSprint #93 T3 closes that. `scripts/sync-codex-workspace.mjs` grows a new `appendLedgerEntry()` function at the bottom. On any `--apply` run that actually copies files (`copiedCount > 0`), it opens `src/lib/compute-ledger.ts`, finds the opening `export const COMPUTE_LEDGER: ComputeEntry[] = [` marker, and inserts a fresh entry immediately after it so the new entry lands at the top of the chronological list. The entry format: `collab: 'codex'`, `kind: 'ops'`, `signature: 'shy'`, title reads 'Codex workspace sync · N file(s) pulled into /public/lab/', notes field summarizes the first four synced file paths plus a reference to the manifest at `docs/notes/codex-sync-manifest.json`.\n\nOne entry per apply run. Idempotent by ISO timestamp — running the sync twice in quick succession makes two entries, not a concern. Running dry-run does nothing to the ledger (sync itself is a no-op in dry-run). If `copiedCount === 0` because target files are all newer, the script logs 'no files copied; skipping ledger entry' and leaves the ledger alone.\n\n**Smoke test result.** Touched the four source prototypes to make their mtimes newer than the targets, ran `npm run sync:codex:apply`. Output: `files to copy: 4`, `✓ copied 4 file(s)`, `✓ manifest: docs/notes/codex-sync-manifest.json`, `✓ ledger entry appended · collab: codex · 2026-04-21T22:35:26.817Z`. Ledger now shows a Codex-attributed entry at position 1 summarizing the four files synced (arena / framecast / map / relay).\n\n**Why this pattern matters.** Any bridge between two systems that relies on a human to update a third system will drift. The sync script WAS a bridge from Codex's workspace to the main repo; the ledger WAS the third system. If attribution drifts, the 'four agents on the ledger' story becomes a 'four agents sometimes on the ledger' story. Small difference in framing, huge difference in what the ledger actually publishes.\n\n**What this unblocks.** Once the pattern of 'every ship attributes itself automatically' is wired into one pipeline, the same shape can apply elsewhere: a git-commit-and-ledger hook, a Pages-deploy-and-ledger hook, a WebMCP-tool-call-and-ledger hook. Sprint #93 T4 (walk other Codex workspaces) produces the inventory the next sync target needs. T5 and T6 keep the cadence going.\n\n**Scope bound held.** One file edited (`scripts/sync-codex-workspace.mjs`, +~45 lines including the new function and one call site), one block (this one), one new ledger entry — but that entry was appended by the script itself during the smoke test, so the ledger attribution for this ship consists of two entries: a cc-attributed one for writing the auto-ledger code, and a codex-attributed one for the smoke-test sync that demonstrated it worked.\n\nT4 next on the clock. The scheduled cron lands at 16:14 PT; if Mike says 'keep going' again, sooner.",
+  "timestamp": "2026-04-21T15:37:00-08:00",
+  "size": "2x1",
+  "noun": 382,
+  "readingTime": "2 min",
+  "author": "mh+cc",
+  "source": "Sprint #93 T3 (per docs/plans/2026-04-21-sprint-93-queue.md #3). Cron T1 fired at 15:34 PT and found queue items #1 + #2 already checked (manual run-now); first unchecked was #3 auto-ledger-from-sync-manifest. Ship: extended scripts/sync-codex-workspace.mjs with appendLedgerEntry() function, ~45 lines. Smoke test: touched sources + ran --apply, verified ledger got a new entry tagged collab: codex, signature: shy. Author = mh+cc.",
+  "mood": "primitive",
+  "companions": [
+    { "id": "0381", "label": "How agents plug into PointCast — Sprint #93 T2", "surface": "block" },
+    { "id": "0378", "label": "/lab — Codex workspace-to-repo pipeline", "surface": "block" },
+    { "id": "0379", "label": "Sprint #93 kickoff — 2 hours, 6 ticks, one queue", "surface": "block" }
+  ],
+  "meta": {
+    "tag": "sprint-93-t3",
+    "surface": "pipeline-automation"
+  }
+}

@@ -1,0 +1,342 @@
+---
+/**
+ * ActionDrawers — bottom-of-home accordion for visitor-facing actions.
+ *
+ * Phase 2 of home rethink (Option A). Collapses PingStrip + DailyDrop-
+ * Strip + PollsOnHome + a /contribute pledge inline into one strip
+ * with 4 expandable drawers. Sits at the very bottom of the home flow,
+ * after the block grid — affordances discoverable on scroll without
+ * taking constant real estate above the fold.
+ *
+ * Per Mike 2026-04-20 pivot: visitor-facing, fun, repeatable. All four
+ * surfaces are localStorage-primary where possible; ping + pledge POST
+ * to /api/ping (the async inbox).
+ *
+ * Mechanics:
+ *   - Top row: 4 drawer buttons (ping · drop · polls · contribute)
+ *   - Tap a button → that drawer expands below; others stay collapsed.
+ *   - Accordion: one open at a time. Tap an open drawer to close.
+ *   - Each drawer has its own accent color.
+ *   - Works with prefers-reduced-motion.
+ *
+ * Author: cc. Source: Mike approved Option A 2026-04-20 17:55 PT +
+ * 5:32 PT directive "lets get a good 4 hour sprint in."
+ */
+---
+
+<aside class="action-drawers" aria-label="Quick actions">
+  <div class="action-drawers__row" role="tablist">
+    <button type="button" class="drawer-btn drawer-btn--ping" data-drawer="ping" aria-expanded="false" aria-controls="drawer-ping">
+      <span class="drawer-btn__icon" aria-hidden="true">✎</span>
+      <span class="drawer-btn__label mono">PING</span>
+      <span class="drawer-btn__hint">message the team</span>
+    </button>
+    <button type="button" class="drawer-btn drawer-btn--drop" data-drawer="drop" aria-expanded="false" aria-controls="drawer-drop">
+      <span class="drawer-btn__icon" aria-hidden="true">✦</span>
+      <span class="drawer-btn__label mono">DROP</span>
+      <span class="drawer-btn__hint">collect today's</span>
+    </button>
+    <button type="button" class="drawer-btn drawer-btn--polls" data-drawer="polls" aria-expanded="false" aria-controls="drawer-polls">
+      <span class="drawer-btn__icon" aria-hidden="true">▸</span>
+      <span class="drawer-btn__label mono">POLLS</span>
+      <span class="drawer-btn__hint">vote on this</span>
+    </button>
+    <button type="button" class="drawer-btn drawer-btn--contribute" data-drawer="contribute" aria-expanded="false" aria-controls="drawer-contribute">
+      <span class="drawer-btn__icon" aria-hidden="true">✦</span>
+      <span class="drawer-btn__label mono">CONTRIBUTE</span>
+      <span class="drawer-btn__hint">add compute</span>
+    </button>
+  </div>
+
+  <!-- Drawer: PING -->
+  <section class="drawer drawer--ping" id="drawer-ping" hidden>
+    <p class="drawer__kicker mono">PING · async inbox → cc reads at session start</p>
+    <form class="drawer-form" id="drawer-ping-form" novalidate>
+      <textarea id="drawer-ping-body" rows="3" maxlength="4000" required placeholder="hey team — …"></textarea>
+      <div class="drawer-form__row">
+        <input type="text" id="drawer-ping-from" maxlength="80" placeholder="from · optional" />
+        <label class="drawer-form__check mono">
+          <input type="checkbox" id="drawer-ping-expand" />
+          EXPAND &amp; PUBLISH
+        </label>
+        <button type="submit" class="drawer-form__send mono">SEND ↑</button>
+      </div>
+      <p class="drawer-form__status mono" id="drawer-ping-status" aria-live="polite"></p>
+    </form>
+    <p class="drawer__foot mono">or use the <a href="/ping">full form</a> · reads at /api/ping?action=list</p>
+  </section>
+
+  <!-- Drawer: DROP -->
+  <section class="drawer drawer--drop" id="drawer-drop" hidden>
+    <p class="drawer__kicker mono">DROP · one block per day · everyone sees the same</p>
+    <div class="drawer__row">
+      <p class="drawer-drop__body">
+        Today's drop is collectible at <a href="/today">/today</a>.
+        Collect button + streak counter live there. No wallet required — localStorage-primary.
+      </p>
+      <a class="drawer__btn" href="/today">open today →</a>
+    </div>
+    <p class="drawer__foot mono">daily pick rotates at midnight PT · streak compounds if you don't miss a day</p>
+  </section>
+
+  <!-- Drawer: POLLS -->
+  <section class="drawer drawer--polls" id="drawer-polls" hidden>
+    <p class="drawer__kicker mono">POLLS · community coordination · no account required</p>
+    <div class="drawer__row">
+      <p class="drawer-polls__body">
+        Shelling-point, sky-clock, april-register, BTC-trend. Vote once, see the distribution update live.
+        Post-vote a follow-up poll surfaces based on your choice.
+      </p>
+      <a class="drawer__btn" href="/polls">open polls →</a>
+    </div>
+    <p class="drawer__foot mono">votes anonymous · one per session tracked client-side · results agent-readable at /polls.json</p>
+  </section>
+
+  <!-- Drawer: CONTRIBUTE -->
+  <section class="drawer drawer--contribute" id="drawer-contribute" hidden>
+    <p class="drawer__kicker mono">CONTRIBUTE · 5 ways to add compute to PointCast</p>
+    <form class="drawer-form" id="drawer-pledge-form" novalidate>
+      <textarea id="drawer-pledge-body" rows="3" maxlength="4000" required placeholder="describe the sprint you want funded — feature, bug, research thread, block, whatever"></textarea>
+      <div class="drawer-form__row">
+        <input type="text" id="drawer-pledge-from" maxlength="80" placeholder="from · optional" />
+        <button type="submit" class="drawer-form__send mono">PLEDGE ↑</button>
+      </div>
+      <p class="drawer-form__status mono" id="drawer-pledge-status" aria-live="polite"></p>
+    </form>
+    <p class="drawer__foot mono">see all <a href="/contribute">5 ways</a> · compute ledger at <a href="/compute">/compute</a></p>
+  </section>
+</aside>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  // Accordion: one drawer open at a time
+  var buttons = document.querySelectorAll('.drawer-btn[data-drawer]');
+  var drawers = ['ping', 'drop', 'polls', 'contribute'];
+
+  function closeAll() {
+    buttons.forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    drawers.forEach(function (name) {
+      var d = document.getElementById('drawer-' + name);
+      if (d) d.hidden = true;
+    });
+  }
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var name = btn.getAttribute('data-drawer');
+      var drawer = document.getElementById('drawer-' + name);
+      var isOpen = btn.getAttribute('aria-expanded') === 'true';
+      closeAll();
+      if (!isOpen && drawer) {
+        btn.setAttribute('aria-expanded', 'true');
+        drawer.hidden = false;
+      }
+    });
+  });
+
+  // Shared POST-to-ping handler (used by both PING and CONTRIBUTE pledge forms)
+  async function postPing(payload, statusEl, bodyEl, onSuccess) {
+    statusEl.textContent = 'sending…';
+    statusEl.setAttribute('data-state', 'pending');
+    try {
+      var res = await fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      var j = null;
+      try { j = await res.json(); } catch (e) {}
+      if (res.ok && j && j.ok) {
+        statusEl.textContent = onSuccess || 'sent · cc reads at session start';
+        statusEl.setAttribute('data-state', 'ok');
+        if (bodyEl) bodyEl.value = '';
+      } else {
+        var reason = (j && (j.reason || j.error)) ? ' (' + (j.reason || j.error) + ')' : '';
+        statusEl.textContent = 'send failed' + reason;
+        statusEl.setAttribute('data-state', 'err');
+      }
+    } catch (err) {
+      statusEl.textContent = 'network error — try again';
+      statusEl.setAttribute('data-state', 'err');
+    }
+  }
+
+  var pingForm = document.getElementById('drawer-ping-form');
+  if (pingForm) {
+    pingForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = document.getElementById('drawer-ping-body');
+      var from = document.getElementById('drawer-ping-from');
+      var expand = document.getElementById('drawer-ping-expand');
+      var status = document.getElementById('drawer-ping-status');
+      if (!body || !body.value.trim()) {
+        if (status) { status.textContent = 'message can\'t be empty'; status.setAttribute('data-state', 'err'); }
+        return;
+      }
+      postPing({
+        type: 'pc-ping-v1',
+        body: body.value.trim(),
+        from: from && from.value ? from.value.trim() : undefined,
+        expand: !!(expand && expand.checked),
+        timestamp: new Date().toISOString(),
+      }, status, body, (expand && expand.checked) ? 'sent · cc drafts a block on the next tick' : 'sent · cc reads at session start');
+    });
+  }
+
+  var pledgeForm = document.getElementById('drawer-pledge-form');
+  if (pledgeForm) {
+    pledgeForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = document.getElementById('drawer-pledge-body');
+      var from = document.getElementById('drawer-pledge-from');
+      var status = document.getElementById('drawer-pledge-status');
+      if (!body || !body.value.trim()) {
+        if (status) { status.textContent = 'pledge can\'t be empty'; status.setAttribute('data-state', 'err'); }
+        return;
+      }
+      postPing({
+        type: 'pc-ping-v1',
+        body: body.value.trim(),
+        subject: 'contribute · pledge sprint',
+        from: from && from.value ? from.value.trim() : undefined,
+        timestamp: new Date().toISOString(),
+      }, status, body, 'pledged · cc routes to a sprint on the next session');
+    });
+  }
+})();
+</script>
+
+<style>
+  .action-drawers {
+    margin: 28px 0 8px;
+    padding: 0;
+    border-top: 1px solid var(--pc-rule-soft, #E5E3DE);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .action-drawers__row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin: 12px 0 0;
+  }
+  @media (max-width: 640px) {
+    .action-drawers__row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .drawer-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 14px 10px;
+    background: #fbfaf5;
+    border: 1px solid var(--pc-rule-soft, #E5E3DE);
+    border-top: 3px solid #c4c2bc;
+    color: var(--pc-ink, #12110E);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .drawer-btn:hover { background: #fff; }
+  .drawer-btn[aria-expanded="true"] { background: #fff; }
+  .drawer-btn--ping         { border-top-color: #E89A2D; }
+  .drawer-btn--ping[aria-expanded="true"]       { border-top-color: #E89A2D; border-top-width: 4px; padding-top: 13px; }
+  .drawer-btn--drop         { border-top-color: #2f8f5f; }
+  .drawer-btn--drop[aria-expanded="true"]       { border-top-color: #2f8f5f; border-top-width: 4px; padding-top: 13px; }
+  .drawer-btn--polls        { border-top-color: #5F3DC4; }
+  .drawer-btn--polls[aria-expanded="true"]      { border-top-color: #5F3DC4; border-top-width: 4px; padding-top: 13px; }
+  .drawer-btn--contribute   { border-top-color: #185FA5; }
+  .drawer-btn--contribute[aria-expanded="true"] { border-top-color: #185FA5; border-top-width: 4px; padding-top: 13px; }
+
+  .drawer-btn__icon { font-size: 16px; line-height: 1; }
+  .drawer-btn--ping .drawer-btn__icon { color: #E89A2D; }
+  .drawer-btn--drop .drawer-btn__icon { color: #2f8f5f; }
+  .drawer-btn--polls .drawer-btn__icon { color: #5F3DC4; }
+  .drawer-btn--contribute .drawer-btn__icon { color: #185FA5; }
+  .drawer-btn__label { font-size: 10.5px; letter-spacing: 0.16em; font-weight: 700; }
+  .drawer-btn__hint { font-size: 10px; color: var(--pc-ink-muted, #5F5E5A); text-transform: lowercase; letter-spacing: 0.02em; font-family: Georgia, serif; }
+
+  .drawer {
+    padding: 16px 18px 14px;
+    background: #fff;
+    border: 1px solid var(--pc-rule-soft, #E5E3DE);
+    border-top: none;
+  }
+  .drawer[hidden] { display: none; }
+  .drawer--ping       { border-left: 3px solid #E89A2D; }
+  .drawer--drop       { border-left: 3px solid #2f8f5f; }
+  .drawer--polls      { border-left: 3px solid #5F3DC4; }
+  .drawer--contribute { border-left: 3px solid #185FA5; }
+
+  .drawer__kicker {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 10px;
+  }
+  .drawer__row { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin: 0 0 10px; }
+  .drawer-drop__body, .drawer-polls__body { font-family: Georgia, serif; font-size: 14px; line-height: 1.5; margin: 0; color: var(--pc-ink-soft, #38373A); flex: 1 1 300px; }
+  .drawer-drop__body a, .drawer-polls__body a { color: #E89A2D; text-decoration: underline; }
+  .drawer__btn {
+    display: inline-block;
+    padding: 8px 14px;
+    background: #12110E;
+    color: #F3E6D8;
+    border: 1px solid rgba(232, 154, 45, 0.55);
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .drawer__btn:hover { background: #E89A2D; color: #12110E; }
+  .drawer__foot { font-size: 10px; color: var(--pc-ink-muted); margin: 10px 0 0; letter-spacing: 0.04em; text-transform: lowercase; }
+  .drawer__foot a { color: #E89A2D; text-decoration: underline; }
+
+  .drawer-form { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+  .drawer-form textarea,
+  .drawer-form input[type="text"] {
+    font: inherit;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 2px;
+    background: #fff;
+    color: #12110E;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .drawer-form textarea { min-height: 56px; resize: vertical; }
+  .drawer-form textarea:focus, .drawer-form input:focus { outline: 2px solid #E89A2D; outline-offset: -1px; border-color: #E89A2D; }
+
+  .drawer-form__row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .drawer-form__row input { flex: 1 1 150px; }
+  .drawer-form__check { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; letter-spacing: 0.1em; color: var(--pc-ink-muted); white-space: nowrap; }
+  .drawer-form__send {
+    background: #12110E;
+    color: #F3E6D8;
+    border: 1px solid rgba(232, 154, 45, 0.55);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    padding: 6px 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .drawer-form__send:hover { background: #E89A2D; color: #12110E; }
+  .drawer-form__status { font-size: 10.5px; letter-spacing: 0.06em; color: var(--pc-ink-muted); margin: 0; }
+  .drawer-form__status[data-state="ok"] { color: #2f8f5f; }
+  .drawer-form__status[data-state="err"] { color: #C92A2A; }
+  .drawer-form__status[data-state="pending"] { color: #7a4d0c; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drawer-btn { transition: none; }
+  }
+</style>

@@ -1,0 +1,280 @@
+---
+/**
+ * TankStrip — compact ambient preview of /play/tank on the home page.
+ *
+ * Shows a mini aquarium (~320×140) with up to 5 live fish rendered from
+ * the current /api/tank/state snapshot. Click anywhere on the strip to
+ * jump to /play/tank. Renders nothing until it scrolls into view (poll
+ * off until visible — keeps it off the hot path for above-the-fold loads).
+ *
+ * Design decisions (from docs/briefs/2026-04-21-play-tank-spec.md + Mike
+ * "cc picks go" defaults 2026-04-21):
+ *   - Placement: below the fold (after ActionDrawers in index.astro).
+ *   - Agent fish: metal filter + ⚙ marker, same as /play/tank.
+ *   - No flake / plants / decor rendered — strip is fish-only, ambient.
+ *
+ * Mount: lazy. IntersectionObserver triggers the first fetch + render.
+ * Poll interval while visible: 2s (slower than /play/tank's 1.5s because
+ * the strip is not the primary surface).
+ *
+ * Author: cc. Source: Mike 2026-04-21 PT approved v0.1 follow-up after
+ * /play/tank v0 landed.
+ */
+---
+
+<a class="tank-strip" href="/play/tank" aria-label="Open /play/tank">
+  <div class="tank-strip__inner">
+    <canvas class="tank-strip__canvas" id="tank-strip-canvas" width="640" height="280" aria-hidden="true"></canvas>
+    <div class="tank-strip__label">
+      <span class="tank-strip__kicker mono">TANK · LIVE</span>
+      <span class="tank-strip__title">every visitor is a fish</span>
+      <span class="tank-strip__count mono" id="tank-strip-count">— swimming</span>
+    </div>
+    <span class="tank-strip__cta mono">open /play/tank →</span>
+  </div>
+</a>
+
+<script>
+  import { fishPosition, type TankSnapshot, type TankFish } from '../lib/tank';
+
+  const STRIP_W = 640;
+  const STRIP_H = 280;
+
+  const canvas = document.getElementById('tank-strip-canvas') as HTMLCanvasElement | null;
+  const countEl = document.getElementById('tank-strip-count');
+  if (!canvas || !countEl) throw new Error('tank-strip mount missing');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas 2d unavailable');
+
+  let snap: TankSnapshot | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let rafHandle: number | null = null;
+  let visible = false;
+
+  // Lazy init — only start polling + rendering when the strip scrolls
+  // into view for the first time.
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && !pollTimer) {
+          visible = true;
+          fetchOnce();
+          pollTimer = setInterval(fetchOnce, 2000);
+          if (!rafHandle) rafHandle = requestAnimationFrame(render);
+        }
+      }
+    },
+    { rootMargin: '100px', threshold: 0 },
+  );
+  io.observe(canvas);
+
+  async function fetchOnce() {
+    if (!visible) return;
+    try {
+      const r = await fetch('/api/tank/state', { cache: 'no-store' });
+      if (!r.ok) return;
+      snap = (await r.json()) as TankSnapshot;
+      const s = snap.stats;
+      countEl!.textContent = `${s.fishCount} fish · ${s.humans} humans · ${s.agents} agents`;
+    } catch {
+      // Silent — strip is ambient. If /api/tank/state 503s (TANK DO not yet
+      // bound), the strip just shows the empty tank with the label.
+    }
+  }
+
+  function drawBackground(t: number) {
+    const g = ctx!.createLinearGradient(0, 0, 0, STRIP_H);
+    g.addColorStop(0, '#0d4e5e');
+    g.addColorStop(1, '#052430');
+    ctx!.fillStyle = g;
+    ctx!.fillRect(0, 0, STRIP_W, STRIP_H);
+    // Two shimmer bands
+    ctx!.globalAlpha = 0.05;
+    ctx!.fillStyle = '#9be8ff';
+    for (let i = 0; i < 2; i++) {
+      const y = 60 + i * 80 + Math.sin(t * 0.0006 + i) * 6;
+      ctx!.fillRect(0, y, STRIP_W, 2);
+    }
+    ctx!.globalAlpha = 1;
+  }
+
+  const nounImg: Map<number, HTMLImageElement> = new Map();
+  function loadNoun(id: number): HTMLImageElement {
+    let img = nounImg.get(id);
+    if (img) return img;
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = `https://noun.pics/${id}.svg`;
+    nounImg.set(id, img);
+    return img;
+  }
+
+  function drawFish(fish: TankFish, t: number) {
+    const elapsed = t - fish.bornAt;
+    // Scale positions from full 1000×600 tank to mini 640×280 strip.
+    const posFull = fishPosition(fish.fishId, elapsed, false);
+    const x = (posFull.x / 1000) * STRIP_W;
+    const y = (posFull.y / 600) * STRIP_H;
+    const size = 18 + (fish.size - 1) * 5;
+    const opacity = fish.ghost ? 0.25 : 1;
+    ctx!.save();
+    ctx!.globalAlpha = opacity;
+    ctx!.translate(x, y);
+    const flip = Math.cos(posFull.heading) < 0 ? -1 : 1;
+    ctx!.scale(flip, 1);
+    // Body
+    const body = fish.kind === 'agent'
+      ? '#c8c8d0'
+      : `hsl(${(fish.nounId * 137) % 360}, 45%, 55%)`;
+    ctx!.fillStyle = body;
+    ctx!.beginPath();
+    ctx!.ellipse(0, 0, size * 0.85, size * 0.5, 0, 0, Math.PI * 2);
+    ctx!.fill();
+    // Tail
+    ctx!.beginPath();
+    ctx!.moveTo(-size * 0.8, 0);
+    ctx!.lineTo(-size * 1.2, -size * 0.35);
+    ctx!.lineTo(-size * 1.2, size * 0.35);
+    ctx!.closePath();
+    ctx!.fill();
+    // Head sprite
+    const img = loadNoun(fish.nounId);
+    if (img.complete && img.naturalWidth > 0) {
+      if (fish.kind === 'agent') ctx!.filter = 'grayscale(0.8) contrast(1.2) brightness(0.9)';
+      const dw = size * 1.0;
+      const dh = size * 1.0;
+      ctx!.drawImage(img, 0, 0, 32, 32, size * 0.1 - dw / 2, -dh / 2, dw, dh);
+      if (fish.kind === 'agent') ctx!.filter = 'none';
+    }
+    ctx!.restore();
+  }
+
+  function render(t: number) {
+    if (!visible) {
+      rafHandle = null;
+      return;
+    }
+    ctx!.clearRect(0, 0, STRIP_W, STRIP_H);
+    drawBackground(t);
+    if (snap && snap.fish.length) {
+      // Render at most 5, newest first
+      const fish = [...snap.fish]
+        .sort((a, b) => b.lastSeen - a.lastSeen)
+        .slice(0, 5);
+      for (const f of fish) drawFish(f, t);
+    } else {
+      // Empty-state glyph — a single small bubble drifting
+      const bx = STRIP_W / 2 + Math.sin(t * 0.001) * 30;
+      const by = STRIP_H / 2 + Math.cos(t * 0.0008) * 16;
+      ctx!.globalAlpha = 0.5;
+      ctx!.fillStyle = '#b8e8ff';
+      ctx!.beginPath();
+      ctx!.arc(bx, by, 3, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.globalAlpha = 1;
+    }
+    rafHandle = requestAnimationFrame(render);
+  }
+
+  // Pause when the tab is hidden — no point rendering to a backgrounded page.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      visible = false;
+    } else if (pollTimer) {
+      visible = true;
+      if (!rafHandle) rafHandle = requestAnimationFrame(render);
+    }
+  });
+</script>
+
+<style>
+  .tank-strip {
+    display: block;
+    margin: 2rem 0 1.5rem;
+    padding: 0;
+    border: 1px solid rgba(60, 130, 150, 0.25);
+    background: linear-gradient(180deg, #051c26 0%, #020d14 100%);
+    border-radius: 4px;
+    overflow: hidden;
+    text-decoration: none;
+    color: #d8eef8;
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .tank-strip:hover {
+    border-color: rgba(120, 200, 230, 0.45);
+    transform: translateY(-1px);
+  }
+  .tank-strip__inner {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1.1rem;
+  }
+  .tank-strip__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .tank-strip__label {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .tank-strip__kicker {
+    font-size: 0.68rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #7fd4e8;
+    opacity: 0.9;
+  }
+  .tank-strip__title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.35rem;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: #f3f7fa;
+  }
+  .tank-strip__count {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: #a4c8d6;
+    opacity: 0.88;
+    font-variant-numeric: tabular-nums;
+  }
+  .tank-strip__cta {
+    position: relative;
+    z-index: 2;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    color: #f0b94a;
+    white-space: nowrap;
+    opacity: 0.92;
+    padding-left: 0.5rem;
+  }
+  .mono {
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+  }
+
+  @media (max-width: 640px) {
+    .tank-strip__inner {
+      padding: 0.75rem 0.9rem;
+      grid-template-columns: 1fr;
+    }
+    .tank-strip__cta {
+      padding-left: 0;
+      font-size: 0.72rem;
+    }
+    .tank-strip__title {
+      font-size: 1.1rem;
+    }
+  }
+</style>

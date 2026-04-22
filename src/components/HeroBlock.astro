@@ -1,0 +1,143 @@
+---
+const blockModules = import.meta.glob('../content/blocks/*.json', { eager: true });
+const blocks = Object.fromEntries(
+  Object.entries(blockModules).map(([_, mod]) => {
+    const m = mod?.default ?? mod;
+    return [String(m.id), m];
+  })
+);
+
+// POOL refresh 2026-04-21 Tuesday late afternoon (16:30 PT, Sprint #93 T5)
+// — rotated in fresher blocks from today's Sprint #92 + #93 work:
+// 0385 (late-afternoon pulse — BTC + NBA + MLB + weather), 0384 (walk
+// codex workspaces), 0383 (/play/tank live), 0382 (sync auto-ledger),
+// 0381 (/for-agents how-agents-plug-in), 0378 (/lab pipeline), 0376
+// (Sprint #92 activation), 0371 (Beacon inline). Kept 0366 (earlier
+// afternoon pulse) + 0363 (HUD v4) as strong same-day anchors.
+const POOL = ['0385', '0384', '0383', '0382', '0381', '0378', '0376', '0371', '0366', '0363'];
+
+function pickToday(pool, when = new Date()) {
+  const day = Math.floor(when.getTime() / (24 * 3600 * 1000));
+  let s = (day * 2654435761) >>> 0;
+  s = (s * 1664525 + 1013904223) >>> 0;
+  return pool[s % pool.length];
+}
+
+const pickedId = pickToday(POOL);
+const block = blocks[pickedId] || blocks[POOL[0]] || null;
+---
+
+{block && (
+  <section class="hero-block">
+    <div class="hero-block__noun">
+      <img src={`https://noun.pics/${block.noun || 0}.svg`} alt={`noun ${block.noun}`} loading="eager" />
+    </div>
+    <div class="hero-block__text">
+      <p class="hero-block__kicker mono">CH.{block.channel} · {block.type} · {block.id}</p>
+      <h2 class="hero-block__title">{block.title}</h2>
+      <p class="hero-block__dek">{block.dek}</p>
+      <p class="hero-block__meta mono">
+        <span>{block.readingTime}</span>
+        <span aria-hidden="true">·</span>
+        <span>{block.author}</span>
+        <span aria-hidden="true">·</span>
+        <a href={`/b/${block.id}`}>open →</a>
+      </p>
+    </div>
+  </section>
+)}
+
+<style>
+  .hero-block {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 20px;
+    align-items: start;
+    padding: 20px;
+    background: #fbfaf5;
+    border: 1px solid #e5e3de;
+    border-left: 3px solid #e89a2d;
+    border-radius: 3px;
+  }
+
+  .hero-block__noun {
+    display: flex;
+    justify-content: center;
+  }
+
+  .hero-block__noun img {
+    width: 100%;
+    max-width: 180px;
+    aspect-ratio: 1;
+    object-fit: contain;
+    image-rendering: pixelated;
+    background: #1a120a;
+    border-radius: 3px;
+  }
+
+  .hero-block__text {
+    min-width: 0;
+  }
+
+  .hero-block__kicker {
+    margin: 0 0 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #e89a2d;
+  }
+
+  .hero-block__title {
+    margin: 0 0 12px;
+    font-family: var(--pc-font-sans);
+    font-size: clamp(24px, 3.6vw, 36px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+
+  .hero-block__dek {
+    margin: 0 0 14px;
+    max-width: 64ch;
+    font-family: Georgia, serif;
+    font-size: 16px;
+    line-height: 1.55;
+    color: #38373a;
+  }
+
+  .hero-block__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .hero-block__meta span[aria-hidden='true'] {
+    opacity: 0.5;
+  }
+
+  .hero-block__meta a {
+    color: #e89a2d;
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+  }
+
+  @media (max-width: 640px) {
+    .hero-block {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .hero-block__noun img {
+      max-width: 140px;
+      margin: 0 auto;
+    }
+  }
+</style>
