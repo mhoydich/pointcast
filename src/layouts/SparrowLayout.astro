@@ -124,7 +124,7 @@ const paletteData = {
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.29</span>
+          <span class="sp-sub">pointcast reader · v0.30</span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -262,6 +262,20 @@ const paletteData = {
         animate in bottom-right, auto-dismiss after ~7s, capped at 3
         concurrent. Click a toast to open the block. */}
     <aside class="sp-motion-toasts" data-sp-motion-toasts aria-live="polite"></aside>
+
+    {/* v0.30: ambient friends strip. Shows avatars of friends who have
+        published a kind-20078 (ephemeral) presence event in the last
+        ~90 seconds. Empty when nobody you follow is active — no nag.
+        Position: fixed bottom-left, below motion toasts. */}
+    <aside
+      class="sp-ambient"
+      data-sp-ambient
+      hidden
+      aria-label="friends active right now"
+    >
+      <span class="sp-ambient-label" aria-hidden="true">✦ here now</span>
+      <ul class="sp-ambient-list" data-sp-ambient-list></ul>
+    </aside>
 
     <script
       is:inline
@@ -1996,6 +2010,164 @@ const paletteData = {
           });
         })();
 
+        // ─── v0.30 · AMBIENT FRIENDS (presence) ─────────────────────
+        // Two halves: a publisher (we emit a kind-20078 ephemeral
+        // "presence" event every ~60s while the tab is foregrounded
+        // and a signer is connected) and a subscriber (we REQ friends'
+        // presence events and paint a small avatar strip of who's
+        // online right now).
+        //
+        // Why kind-20078: the 20000-29999 range is ephemeral per
+        // NIP-16 — relays don't store these. Perfect for presence,
+        // which is moot the instant it's stale. The `t:sparrow-presence`
+        // tag scopes the filter so we don't cross-pollinate with
+        // other apps using the same kind.
+        //
+        // Why opt-in: we're announcing our liveness on public relays.
+        // Off by default. Flag: sparrow:ambient-enabled.
+        const KEY_AMBIENT_ENABLED = 'sparrow:ambient-enabled';
+        const AMBIENT_KIND        = 20078;
+        const AMBIENT_TAG         = 'sparrow-presence';
+        const AMBIENT_BROADCAST_MS = 60_000;   // re-emit every 60s
+        const AMBIENT_FRESH_MS     = 90_000;   // friend counts as "here" for 90s after last event
+        const AMBIENT_MAX_VISIBLE  = 8;
+        const ambientEnabled = () => {
+          try { return localStorage.getItem(KEY_AMBIENT_ENABLED) === '1'; }
+          catch { return false; }
+        };
+
+        const ambientEl = document.querySelector('[data-sp-ambient]');
+        const ambientListEl = document.querySelector('[data-sp-ambient-list]');
+
+        async function emitAmbientPresence() {
+          if (!ambientEnabled() || !hasNip07() || !cachedPubkey.value) return;
+          const relays = getRelays();
+          if (!relays.length) return;
+          if (document.hidden) return; // respect the tab state
+          const unsigned = {
+            kind: AMBIENT_KIND,
+            pubkey: cachedPubkey.value,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ['t', AMBIENT_TAG],
+              ['client', 'sparrow', 'https://pointcast.xyz/sparrow'],
+              // NIP-40 expiration hint — 2 minutes out.
+              ['expiration', String(Math.floor(Date.now() / 1000) + 120)],
+            ],
+            content: '',
+          };
+          let signed;
+          try { signed = await window.nostr.signEvent(unsigned); }
+          catch { return; }
+          if (!signed?.id || !signed?.sig) return;
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['EVENT', signed])); } catch {}
+              });
+              ws.addEventListener('message', () => { try { ws.close(); } catch {} });
+              setTimeout(() => { try { if (ws.readyState <= 1) ws.close(); } catch {} }, 3000);
+            } catch {}
+          }
+        }
+
+        (function startAmbientWatcher() {
+          const friendsInit = readFriendsForMotion().filter((f) => !f.muted);
+          if (!friendsInit.length) return;   // no one to watch
+          if (!ambientEl || !ambientListEl) return;
+
+          const lastSeen = new Map();   // pubkey -> epochMs
+          const relays = motionRelays();
+          const subId = `sp-amb-${Math.random().toString(36).slice(2, 10)}`;
+          const bootTime = Math.floor(Date.now() / 1000);
+          const filter = {
+            kinds: [AMBIENT_KIND],
+            authors: friendsInit.map((f) => f.pubkey),
+            '#t': [AMBIENT_TAG],
+            since: bootTime - 60, // catch presence just before load
+          };
+          const sockets = [];
+
+          function onEvent(ev) {
+            if (!ev || ev.kind !== AMBIENT_KIND) return;
+            if (typeof ev.pubkey !== 'string' || typeof ev.created_at !== 'number') return;
+            const tags = Array.isArray(ev.tags) ? ev.tags : [];
+            if (!tags.some((t) => Array.isArray(t) && t[0] === 't' && t[1] === AMBIENT_TAG)) return;
+            const live = readFriendsForMotion();
+            if (!live.some((f) => f.pubkey === ev.pubkey && !f.muted)) return;
+            lastSeen.set(ev.pubkey, Date.now());
+            paintAmbient();
+          }
+
+          function paintAmbient() {
+            const live = readFriendsForMotion().filter((f) => !f.muted);
+            const now = Date.now();
+            const here = [];
+            for (const friend of live) {
+              const seen = lastSeen.get(friend.pubkey);
+              if (seen && now - seen < AMBIENT_FRESH_MS) {
+                here.push({ friend, seen });
+              }
+            }
+            // Freshest first.
+            here.sort((a, b) => b.seen - a.seen);
+            ambientEl.hidden = here.length === 0;
+            ambientListEl.innerHTML = '';
+            for (const { friend } of here.slice(0, AMBIENT_MAX_VISIBLE)) {
+              const name = motionNameFor(friend.pubkey, friend);
+              const pic  = motionPictureFor(friend.pubkey);
+              const li = document.createElement('li');
+              li.className = 'sp-ambient-item';
+              li.innerHTML = pic
+                ? `<img src="${pic.replace(/[<>"']/g, '')}" alt="" title="${String(name).replace(/[<>"']/g, '')} · here now" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display='none'" />`
+                : `<span class="sp-ambient-placeholder" title="${String(name).replace(/[<>"']/g, '')} · here now" aria-hidden="true">✦</span>`;
+              ambientListEl.appendChild(li);
+            }
+            if (here.length > AMBIENT_MAX_VISIBLE) {
+              const more = document.createElement('li');
+              more.className = 'sp-ambient-more';
+              more.textContent = `+${here.length - AMBIENT_MAX_VISIBLE}`;
+              ambientListEl.appendChild(more);
+            }
+          }
+
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              sockets.push(ws);
+              ws.addEventListener('open', () => {
+                try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch {}
+              });
+              ws.addEventListener('message', (msg) => {
+                let frame;
+                try { frame = JSON.parse(msg.data); } catch { return; }
+                if (Array.isArray(frame) && frame[0] === 'EVENT' && frame[1] === subId && frame[2]) {
+                  onEvent(frame[2]);
+                }
+              });
+            } catch {}
+          }
+
+          // Decay stale entries periodically even without new events.
+          setInterval(paintAmbient, 15_000);
+
+          window.addEventListener('beforeunload', () => {
+            for (const ws of sockets) { try { ws.close(); } catch {} }
+          });
+        })();
+
+        // Presence publisher — independent of the watcher; either can
+        // run without the other (e.g. a signer-less reader still sees
+        // ambient friends but doesn't broadcast presence).
+        if (ambientEnabled()) {
+          emitAmbientPresence().catch(() => {});
+          setInterval(() => { emitAmbientPresence().catch(() => {}); }, AMBIENT_BROADCAST_MS);
+        }
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && ambientEnabled()) emitAmbientPresence().catch(() => {});
+        });
+
         // ─── SERVICE WORKER REGISTRATION ────────────────────────────
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
@@ -2744,6 +2916,59 @@ const paletteData = {
       @media (max-width: 520px) {
         .sp-motion-toasts { right: 12px; bottom: 12px; left: 12px; }
         .sp-motion-toast { min-width: 0; max-width: none; }
+      }
+
+      /* v0.30 ambient friends strip — fixed bottom-left, small. Shows
+         avatars of friends who've published a kind-20078 presence
+         event within AMBIENT_FRESH_MS. Empty state = section hidden. */
+      .sp-ambient {
+        position: fixed;
+        left: 20px; bottom: 20px;
+        display: inline-flex; align-items: center; gap: 10px;
+        padding: 6px 12px;
+        z-index: 68;
+        border-radius: 999px;
+        border: 1px solid color-mix(in oklch, var(--sp-moss) 40%, var(--sp-rule));
+        background: color-mix(in oklch, var(--sp-blue-hour) 92%, var(--sp-moss));
+        box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+      }
+      .sp-ambient[hidden] { display: none; }
+      .sp-ambient-label {
+        font-family: var(--sp-mono); font-size: 9px;
+        letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--sp-moss);
+      }
+      .sp-ambient-list {
+        display: inline-flex; gap: 4px; align-items: center;
+        list-style: none; padding: 0; margin: 0;
+      }
+      .sp-ambient-item {
+        width: 24px; height: 24px;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid color-mix(in oklch, var(--sp-moss) 30%, var(--sp-rule));
+        background: var(--sp-ink);
+        flex-shrink: 0;
+      }
+      .sp-ambient-item img {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .sp-ambient-placeholder {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 100%; height: 100%;
+        color: var(--sp-moss); font-size: 11px;
+      }
+      .sp-ambient-more {
+        font-family: var(--sp-mono); font-size: 10px;
+        letter-spacing: 0.08em;
+        color: var(--sp-mute);
+        padding: 0 4px;
+      }
+      @media (max-width: 520px) {
+        .sp-ambient { left: 12px; bottom: 12px; padding: 5px 10px; }
+        .sp-ambient-label { display: none; }
       }
 
       /* ─── v0.5 · READER TYPOGRAPHY POLISH ───────────────────────── */

@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.29',
-    protocol_version: '0.29',
+    version: '0.30',
+    protocol_version: '0.30',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -443,6 +443,56 @@ export const GET: APIRoute = async () => {
             privacy_posture: 'bundle contains pubkeys + aliases + profile metadata the user already has cached locally; no secret material. Entirely client-side Blob download.',
           },
           not_yet: 'opt-in email digest (still requires sidecar worker infra — now the ONLY remaining v0.28 bundle item)',
+        },
+
+        // v0.30: ambient presence — who's reading right now. Uses the
+        // ephemeral Nostr kind range (20000-29999 per NIP-16) so relays
+        // don't persist presence events. Every SparrowLayout tab with
+        // a signer + the opt-in flag re-broadcasts every 60s while
+        // foregrounded. Subscribers render avatars of friends seen in
+        // the last 90 seconds.
+        ambient_friends: {
+          since: 'v0.30',
+          opt_in_storage: 'localStorage["sparrow:ambient-enabled"] ("1" | "0")',
+          publisher: {
+            event_kind: 20078,
+            tags: '[["t","sparrow-presence"], ["client","sparrow",...], ["expiration", <now+120s>]]',
+            content: 'empty — presence is the fact of emission, not the payload',
+            cadence: 'broadcast every 60s (AMBIENT_BROADCAST_MS) while the tab is foregrounded; re-emits on visibilitychange → visible',
+            fan_out: 'short-lived WebSocket per relay, EVENT frame, 3s timeout',
+            why_ephemeral: 'kind 20078 is in the 20000-29999 NIP-16 ephemeral range — relays relay in real-time but don\'t persist. Presence is moot the instant it\'s stale.',
+          },
+          subscriber: {
+            filter: '{ kinds:[20078], authors:<non-muted friends>, "#t":["sparrow-presence"], since: <bootTime - 60s> }',
+            fresh_window_ms: 90000,
+            render: 'fixed bottom-left .sp-ambient strip · ✦ here now label + up to 8 avatars + "+N" overflow; hidden when nobody\'s fresh',
+            decay_tick: 'setInterval(15s) repaints so avatars drop off as they exceed AMBIENT_FRESH_MS',
+            mute_respected: 'friend.muted filtered at ingest + paint',
+          },
+          privacy_story: 'Publishing announces your liveness to the public relay pool; off by default. Not publishing still lets you see ambient friends (subscription is passive).',
+        },
+
+        // v0.30: digest sidecar scaffold. Worker not yet live — this
+        // documents the shape so a Cloudflare Worker can pick up the
+        // contract when ready.
+        digest_sidecar: {
+          since: 'v0.30',
+          status: 'scaffold · worker not live yet',
+          signup_ui: '/sparrow/signals weekly-digest panel',
+          storage_key: 'sparrow:digest-subscription',
+          subscription_shape: {
+            schema: 'sparrow-digest-subscription-v1',
+            email: 'string · user-supplied',
+            frequency: '"weekly" | "biweekly" | "monthly"',
+            npub: 'hex pubkey or null (from sparrow:nostr-pubkey)',
+            relays: 'string[] · copies getRelays() so the worker can re-aggregate from the same relay pool',
+            created_at: 'ISO 8601',
+          },
+          future_endpoint: 'POST /api/sparrow/digest-subscribe',
+          expected_response: '{ ok: true } when live; 501 ("worker not live") is the current placeholder',
+          unsubscribe_plan: 'DELETE /api/sparrow/digest-subscribe with a signed token from the email footer; local clear of sparrow:digest-subscription',
+          worker_security_posture: 'never holds secret material — stores email + npub + relay list + frequency only. Recomputes signals bundle at send time by subscribing to the same public kind-30078 d-tag the web client uses.',
+          why_client_first: 'We ship the intent capture + schema doc before the worker goes live so early users are queued, not blocked. When the worker is up, an on-load sync step will flush queued intents.',
         },
 
         // v0.29: per-channel friends top-N surface on /sparrow/ch/<slug>.
@@ -892,7 +942,8 @@ export const GET: APIRoute = async () => {
       'v0.26': 'Friends in motion. SparrowLayout gains a persistent streaming kind-30078 REQ with `since: bootTime` so only events published after the tab loaded fire a bottom-right "just saved" toast (avatar + name + № id · click opens). Max 3 visible, 7s TTL, fades on leave. Opt-in Web Audio chime (two-note fifth, ~450ms, no asset) via sparrow:friends-chime-enabled. Per-friend mute — sparrow:friends entries gain an optional `muted` field that drops the friend from every consumer path (subscribe, feed, lane, toasts) without unfollowing. New 🔈/🔇 mute button in /sparrow/friends. Global motion opt-out via sparrow:friends-motion-disabled.',
       'v0.27': 'Friends activity timeline at /sparrow/friends/activity. Dual subscription — bounded initial pull (limit 50) for history + `since: bootTime` live pull kept open until beforeunload. Events render newest-first as per-event cards (avatar + name + "saved N blocks" + relative timestamp + first 3 saved-block receipts with title/channel chips + "+N more"). New events splice at the top with a moss pulse animation + "new" pill that fades after 12 seconds. Respects mute — muted friends filtered from the authors list and re-checked on ingest. CTA added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated.',
       'v0.28': 'Signals recap at /sparrow/signals. Three-panel aggregation over the same kind-30078 corpus the rest of the federation surface reads. Panel 1 — most co-saved (blocks hit by 2+ signers, count-sorted, top 12, inline saver chips). Panel 2 — recent adds (friends who published a fresh saved list in the last 7 days, newest first, with avatar + freshest receipt). Panel 3 — channel distribution (proportional bars across all 9 channels derived from saved-block channel codes, each linking to its /sparrow/ch/<slug>). Client-side aggregation only; reuses sparrow:profiles cache + server-shipped block lookup. Signals nav links added from /sparrow/friends feed head; palette + SW + routes + kicker + feature card updated. Stats bumped to 10 routes.',
-      'v0.29': 'Signals, extended. Three of the four v0.29-bundled items land today; opt-in email digest deferred to v0.30 (needs sidecar worker infra). (1) First-picker attribution — in /sparrow/signals Panel 1, each co-saved block now surfaces ⭐ <name> — the friend with the earliest created_at among current savers. (2) Export JSON — new ⤓ button in signals nav dumps the current recap as sparrow-signals-<date>.json with schema sparrow-signals-v1 (friends, relays, newest_events, top_co_saved with saver lists + first_picker_at, notes documenting caveats). (3) Channel friends panel — new client-side strip on every /sparrow/ch/<slug> above the main reel showing which blocks in this channel your followed friends have co-saved, count-sorted, top 6, with first-picker chip. Hides when irrelevant; opt-out via localStorage["sparrow:ch-friends-hidden"]. (current)',
+      'v0.29': 'Signals, extended. Three of the four v0.29-bundled items land today; opt-in email digest deferred to v0.30 (needs sidecar worker infra). (1) First-picker attribution — in /sparrow/signals Panel 1, each co-saved block now surfaces ⭐ <name> — the friend with the earliest created_at among current savers. (2) Export JSON — new ⤓ button in signals nav dumps the current recap as sparrow-signals-<date>.json with schema sparrow-signals-v1 (friends, relays, newest_events, top_co_saved with saver lists + first_picker_at, notes documenting caveats). (3) Channel friends panel — new client-side strip on every /sparrow/ch/<slug> above the main reel showing which blocks in this channel your followed friends have co-saved, count-sorted, top 6, with first-picker chip. Hides when irrelevant; opt-out via localStorage["sparrow:ch-friends-hidden"].',
+      'v0.30': 'Ambient friends + digest sidecar scaffold. (1) Ambient presence — SparrowLayout now publishes an ephemeral kind-20078 event tagged t:sparrow-presence every 60s while the tab is foregrounded (opt-in via sparrow:ambient-enabled). A streaming subscriber tracks friends\' presence via kinds:[20078] #t:sparrow-presence and paints a fixed bottom-left "✦ here now" avatar strip of friends seen in the last 90s. Uses NIP-16 ephemeral-kind range so relays never persist presence. (2) Digest sidecar scaffold — new panel in /sparrow/signals for email-digest subscription (schema sparrow-digest-subscription-v1). Worker isn\'t live yet; intents stored locally in sparrow:digest-subscription and POSTed to /api/sparrow/digest-subscribe with 501 handled as "queued, worker pending." Contract fully documented in /sparrow.json.nostr.federated_lists.digest_sidecar so the worker can pick up the shape when infra is ready. Toggle for ambient added to /sparrow/friends publisher panel. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

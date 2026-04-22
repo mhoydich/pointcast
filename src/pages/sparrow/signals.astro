@@ -119,6 +119,48 @@ const channelList = CHANNEL_LIST.map((c) => ({
         No saves tallied yet.
       </p>
     </section>
+
+    <section class="sp-sig-panel sp-sig-digest" aria-label="weekly digest">
+      <header class="sp-sig-panel-head">
+        <span class="sp-friends-kicker">✦ weekly digest · experimental</span>
+        <span class="sp-sig-panel-meta">v0.30 · worker pending</span>
+      </header>
+      <p class="sp-sig-dek">
+        Opt in to a weekly HTML email of this recap. The sidecar
+        worker isn't live yet — your subscription intent is stored
+        locally in <code>sparrow:digest-subscription</code> and sent
+        when <code>/api/sparrow/digest-subscribe</code> comes up. Worker
+        will never hold secret material: only signed-payload pointers
+        (relays + npub + preferences).
+      </p>
+      <form class="sp-sig-digest-form" data-sp-digest-form>
+        <label>
+          <span>email</span>
+          <input
+            type="email"
+            name="email"
+            autocomplete="email"
+            placeholder="you@example.com"
+            required
+          />
+        </label>
+        <label>
+          <span>frequency</span>
+          <select name="frequency">
+            <option value="weekly">weekly (Mondays)</option>
+            <option value="biweekly">biweekly</option>
+            <option value="monthly">monthly (1st)</option>
+          </select>
+        </label>
+        <button type="submit">note my intent →</button>
+      </form>
+      <p class="sp-sig-digest-status" data-sp-digest-status></p>
+      <p class="sp-sig-dek sp-sig-dek-small">
+        Schema documented at <a class="sp-link" href="/sparrow.json">/sparrow.json</a> under
+        <code>nostr.federated_lists.digest_sidecar</code>. Unsubscribe is a
+        local clear + future worker DELETE.
+      </p>
+    </section>
   </section>
 
   <script
@@ -531,6 +573,61 @@ const channelList = CHANNEL_LIST.map((c) => ({
         setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 2000);
       });
 
+      // v0.30: digest subscription intent. No worker yet — we store
+      // the shape locally and attempt the POST, accepting 404 / 501
+      // as "worker not live, intent recorded." When the sidecar ships,
+      // a Service Worker or on-load sync pass will push queued
+      // subscriptions to /api/sparrow/digest-subscribe.
+      const digestForm = document.querySelector('[data-sp-digest-form]');
+      const digestStatus = document.querySelector('[data-sp-digest-status]');
+      const KEY_DIGEST = 'sparrow:digest-subscription';
+      // Hydrate the form from stored intent.
+      try {
+        const stored = JSON.parse(localStorage.getItem(KEY_DIGEST) || 'null');
+        if (stored && typeof stored === 'object' && digestForm) {
+          const emailInput = digestForm.querySelector('input[name="email"]');
+          const freqInput  = digestForm.querySelector('select[name="frequency"]');
+          if (emailInput && typeof stored.email === 'string') emailInput.value = stored.email;
+          if (freqInput && typeof stored.frequency === 'string') freqInput.value = stored.frequency;
+          if (digestStatus) digestStatus.textContent = `intent stored locally · ${stored.email} · ${stored.frequency}`;
+        }
+      } catch {}
+
+      digestForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(digestForm);
+        const email = String(fd.get('email') || '').trim().toLowerCase();
+        const frequency = String(fd.get('frequency') || 'weekly');
+        const selfPk = (localStorage.getItem('sparrow:nostr-pubkey') || '').toLowerCase();
+        if (!/^\S+@\S+\.\S+$/.test(email)) return;
+        const intent = {
+          schema: 'sparrow-digest-subscription-v1',
+          email,
+          frequency,
+          npub: selfPk || null,
+          relays: getRelays(),
+          created_at: new Date().toISOString(),
+        };
+        try { localStorage.setItem(KEY_DIGEST, JSON.stringify(intent)); } catch {}
+        if (digestStatus) digestStatus.textContent = 'saved locally · attempting /api/sparrow/digest-subscribe…';
+        try {
+          const r = await fetch('/api/sparrow/digest-subscribe', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(intent),
+          });
+          if (r.ok) {
+            if (digestStatus) digestStatus.textContent = 'subscribed — check your inbox for a confirmation.';
+          } else if (r.status === 501 || r.status === 404) {
+            if (digestStatus) digestStatus.textContent = 'worker not live yet · intent saved locally · will retry on future visits.';
+          } else {
+            if (digestStatus) digestStatus.textContent = `intent saved · endpoint returned ${r.status}.`;
+          }
+        } catch {
+          if (digestStatus) digestStatus.textContent = 'intent saved · offline — will retry on future visits.';
+        }
+      });
+
       window.addEventListener('beforeunload', () => {
         for (const ws of openSockets) { try { ws.close(); } catch {} }
       });
@@ -745,6 +842,63 @@ const channelList = CHANNEL_LIST.map((c) => ({
       .sp-sig-recent-action { display: none; }
       .sp-sig-dist-link { grid-template-columns: 36px 1fr 40px; }
       .sp-sig-dist-name { display: none; }
+    }
+    /* v0.30 digest subscription form */
+    .sp-sig-digest { border-color: color-mix(in oklch, var(--sp-moss) 30%, var(--sp-rule)); }
+    .sp-sig-dek {
+      font-size: 13px;
+      color: color-mix(in oklch, var(--sp-bone) 80%, var(--sp-mute));
+      line-height: 1.55;
+      margin: 0 0 12px;
+    }
+    .sp-sig-dek-small { font-size: 12px; color: var(--sp-mute); margin: 8px 0 0; }
+    .sp-sig-dek code { font-family: var(--sp-mono); font-size: 0.92em; color: var(--sp-ember); }
+    .sp-sig-digest-form {
+      display: grid;
+      grid-template-columns: 2fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .sp-sig-digest-form label { display: grid; gap: 4px; }
+    .sp-sig-digest-form span {
+      font-family: var(--sp-mono); font-size: 10px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sp-mute);
+    }
+    .sp-sig-digest-form input,
+    .sp-sig-digest-form select {
+      font-family: var(--sp-mono); font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-rule);
+      background: var(--sp-ink);
+      color: var(--sp-bone);
+    }
+    .sp-sig-digest-form input:focus,
+    .sp-sig-digest-form select:focus {
+      outline: none; border-color: var(--sp-moss);
+    }
+    .sp-sig-digest-form button {
+      padding: 8px 14px;
+      border-radius: 3px;
+      border: 1px solid var(--sp-moss);
+      color: var(--sp-moss);
+      background: color-mix(in oklch, var(--sp-moss) 10%, transparent);
+      font-family: var(--sp-mono); font-size: 11px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      cursor: pointer;
+    }
+    .sp-sig-digest-form button:hover {
+      background: color-mix(in oklch, var(--sp-moss) 22%, transparent);
+    }
+    .sp-sig-digest-status {
+      margin: 10px 0 0;
+      font-family: var(--sp-mono); font-size: 11px;
+      color: var(--sp-moss);
+      min-height: 14px;
+    }
+    @media (max-width: 640px) {
+      .sp-sig-digest-form { grid-template-columns: 1fr; }
     }
   </style>
 </SparrowLayout>
