@@ -209,6 +209,12 @@ const features = [
     body: 'Destination chips are checkboxes; PointCast is locked on. Tick extras (Mastodon, Farcaster, bitchat, etc.) and submit POSTs to Magpie /compose with the full destinations[] list. Any /compose failure falls back gracefully to direct /api/ping so the reply always lands in PointCast. Magpie native endpoint is spec\'d in the manifest.',
     kbd: 'compose',
   },
+  {
+    kicker: 'native',
+    title: 'Magpie /compose shipped',
+    body: 'The Swift counterpart to v0.13 landed in Magpie v0.14 — AppState.handleComposeRequest builds an ephemeral ClipItem (not persisted) + PublishDraft and fans out via PublisherRegistry, returning the same result envelope as /broadcast so Sparrow\'s parser is unchanged. Upgrade Magpie; next time you tick extras, the first hop succeeds.',
+    kbd: 'swift',
+  },
 ];
 
 const roadmap = [
@@ -396,17 +402,32 @@ const roadmap = [
   },
   {
     v: 'v0.14',
-    status: 'next',
-    when: 'planned',
-    title: 'Native /compose + list mirror',
+    status: 'shipped',
+    when: '2026-04-21',
+    title: 'Native /compose handler (Magpie side)',
     items: [
-      'Magpie Swift /compose handler — creates an ephemeral ClipItem, builds a PublishDraft, delegates to PublisherRegistry.publish',
-      'Returns the same result envelope as /broadcast so clients can share parsers',
-      'Sparrow.app ↔ web reader reading-list mirror via the same localhost HTTP bridge',
+      'Magpie/Services/MagpieServer.swift: ComposeRequest struct + /compose route + handleCompose',
+      'Magpie/App/AppState.swift: composeHandler wired + handleComposeRequest — ephemeral ClipItem (id:nil, no DB write) + PublishDraft + PublisherRegistry.publish',
+      'Returns the same BroadcastResult envelope shape as /broadcast — Sparrow\'s v0.13 parser works unchanged',
+      'Preserves input destination order so clients can correlate results 1:1',
+      'Unknown / typo\'d publisher ids surface as explicit "unknown publisher id" errors instead of silent drops',
+      'No changes required to the Sparrow web client — it just starts hitting the real endpoint once Magpie is upgraded',
     ],
   },
   {
     v: 'v0.15',
+    status: 'next',
+    when: 'planned',
+    title: 'Reading-list mirror',
+    items: [
+      'Sparrow.app exposes GET/POST /saved on its native HTTP server',
+      'SparrowLayout polls + pushes sparrow:saved changes when the bridge pill is connected',
+      'Newest-wins conflict resolution',
+      'Same pattern extends to sparrow:visited and sparrow:reactions once it\'s proven out',
+    ],
+  },
+  {
+    v: 'v0.16',
     status: 'planned',
     title: 'Sync + end-to-end',
     items: [
@@ -494,7 +515,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.13 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.14 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
