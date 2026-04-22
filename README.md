@@ -81,7 +81,9 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 | [/glossary](https://pointcast.xyz/glossary)       | Dictionary of PointCast-specific terms with stable anchors    |
 | [/local](https://pointcast.xyz/local)             | 100-mile El Segundo lens: institutions, stations, local blocks |
 | [/nature](https://pointcast.xyz/nature)           | El Segundo flora, dune habitat, field guide                   |
+| [/garden-yield](https://pointcast.xyz/garden-yield) | Native planting value-yield planner                         |
 | [/houseplants](https://pointcast.xyz/houseplants) | Indoor plant learning lab: light, water, roots, diagnosis     |
+| [/meditate](https://pointcast.xyz/meditate)       | Ocean breathing room: timer, focus mode, local tide log       |
 | [/nouns-cola](https://pointcast.xyz/nouns-cola)   | Nouns Cola pilot operating board + live planning model        |
 | [/collabs/relay](https://pointcast.xyz/collabs/relay) | Playable collaborator-routing room                         |
 | [/archive](https://pointcast.xyz/archive)         | Chronological index with channel + type + search filters      |

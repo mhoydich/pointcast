@@ -1,0 +1,1186 @@
+---
+const programs = [
+  {
+    id: 'calm',
+    name: 'Calm Bay',
+    label: 'Calm Bay',
+    pattern: [4, 2, 6, 2],
+    tone: 'soft shoreline',
+    note: 'A gentle shoreline rhythm for a quick nervous-system reset.',
+    prompts: [
+      'Let the inhale rise like a small wave.',
+      'Rest at the crest without gripping.',
+      'Exhale as the tide rolls back out.',
+    ],
+  },
+  {
+    id: 'current',
+    name: 'Deep Current',
+    label: 'Deep Current',
+    pattern: [5, 2, 7, 2],
+    tone: 'long exhale',
+    note: 'A slower current for clearing mental noise before focused work.',
+    prompts: [
+      'Breathe below the surface of the feed.',
+      'Let each thought pass like sea glass in the current.',
+      'Lengthen the exhale until the water goes still.',
+    ],
+  },
+  {
+    id: 'moon',
+    name: 'Moon Tide',
+    label: 'Moon Tide',
+    pattern: [4, 4, 4, 4],
+    tone: 'box breath',
+    note: 'A square breath under moonlight for evening decompression.',
+    prompts: [
+      'Inhale to the horizon.',
+      'Pause in the silver quiet.',
+      'Exhale into the dark water.',
+    ],
+  },
+] as const;
+
+const durations = [
+  { seconds: 120, label: '2 min', name: 'Morning tide' },
+  { seconds: 300, label: '5 min', name: 'Deep reset' },
+  { seconds: 600, label: '10 min', name: 'Full drift' },
+] as const;
+---
+
+<section class="ocean-meditation" data-ocean-meditation data-program="calm" data-cue="inhale" aria-label="Ocean meditation timer">
+  <div class="session-shell">
+    <div class="ocean-stage" aria-hidden="true">
+      <div class="stage-skyline"></div>
+      <div class="stage-sun"></div>
+      <div class="stage-cloud stage-cloud--one"></div>
+      <div class="stage-cloud stage-cloud--two"></div>
+      <div class="breath-orb">
+        <span id="oceanCue">Inhale</span>
+      </div>
+      <div class="stage-wave stage-wave--back"></div>
+      <div class="stage-wave stage-wave--mid"></div>
+      <div class="stage-wave stage-wave--front"></div>
+    </div>
+
+    <div class="session-panel">
+      <div class="panel-strip">
+        <span class="mono">OCEAN RESET</span>
+        <span class="mono" id="oceanState">READY</span>
+      </div>
+
+      <div class="programs" aria-label="Meditation programs">
+        {programs.map((program) => (
+          <button
+            class:list={['program-btn', program.id === 'calm' && 'is-active']}
+            type="button"
+            data-program={program.id}
+          >
+            <span>{program.label}</span>
+            <small>{program.pattern.join('-')}</small>
+          </button>
+        ))}
+      </div>
+
+      <div class="duration-row" aria-label="Session duration">
+        {durations.map((duration, index) => (
+          <button
+            class:list={['duration-btn', index === 0 && 'is-active']}
+            type="button"
+            data-duration={duration.seconds}
+            data-session-name={duration.name}
+          >
+            {duration.label}
+          </button>
+        ))}
+      </div>
+
+      <div class="readout-grid">
+        <div>
+          <span class="readout-label mono">Session</span>
+          <strong id="oceanSessionName">Morning tide</strong>
+        </div>
+        <div>
+          <span class="readout-label mono">Remaining</span>
+          <strong id="oceanTime">02:00</strong>
+        </div>
+        <div>
+          <span class="readout-label mono">Completed</span>
+          <strong id="oceanSessions">0</strong>
+        </div>
+        <div>
+          <span class="readout-label mono">Minutes</span>
+          <strong id="oceanMinutes">0</strong>
+        </div>
+      </div>
+
+      <div class="tide-meter" aria-hidden="true">
+        <span id="oceanProgress"></span>
+      </div>
+
+      <div class="action-row">
+        <button class="action-btn action-btn--primary" type="button" id="oceanStart" aria-pressed="false">Start</button>
+        <button class="action-btn" type="button" id="oceanReset">Reset</button>
+        <button class="action-btn" type="button" id="oceanFocus">Focus</button>
+        <label class="tone-toggle">
+          <input type="checkbox" id="oceanTone" />
+          <span>Ocean tone</span>
+        </label>
+      </div>
+
+      <p class="program-note" id="oceanNote">{programs[0].note}</p>
+
+      <ul class="prompt-list" id="oceanPrompts">
+        {programs[0].prompts.map((prompt) => <li>{prompt}</li>)}
+      </ul>
+
+      <div class="tide-log">
+        <div class="tide-log__head">
+          <span class="mono">Tide Log</span>
+          <button type="button" id="oceanClearLog">Clear</button>
+        </div>
+        <ul id="oceanLog">
+          <li>No sessions completed yet.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="asset-card" aria-label="Breathe El Segundo token artwork">
+    <img src="/images/tokens/breathe-el-segundo.webp" alt="Breathe El Segundo token artwork" loading="lazy" decoding="async" />
+    <div>
+      <p class="mono">TOKEN ARTIFACT</p>
+      <h2>Breathe El Segundo</h2>
+      <p>Ocean-based attention training, folded back into the PointCast broadcast instead of another app to maintain.</p>
+    </div>
+  </div>
+
+  <div class="focus-overlay" id="oceanFocusOverlay" aria-hidden="true">
+    <div class="focus-window" role="dialog" aria-modal="true" aria-labelledby="oceanFocusTitle">
+      <button class="focus-close" type="button" id="oceanFocusClose" title="Close focus mode">×</button>
+      <div class="focus-scene" aria-hidden="true">
+        <div class="focus-sun"></div>
+        <div class="focus-orb">
+          <span id="oceanFocusCue">Inhale</span>
+        </div>
+        <div class="focus-wave focus-wave--back"></div>
+        <div class="focus-wave focus-wave--front"></div>
+      </div>
+      <div class="focus-copy">
+        <span class="mono" id="oceanFocusTitle">Ocean Focus</span>
+        <strong id="oceanFocusTime">02:00</strong>
+        <em id="oceanFocusProgram">Calm Bay</em>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script define:vars={{ programs, durations }}>
+  (function () {
+    const root = document.querySelector('[data-ocean-meditation]');
+    if (!root) return;
+
+    const STORAGE_KEY = 'pc:ocean-meditation';
+    const programMap = Object.fromEntries(programs.map((program) => [program.id, program]));
+    const programBtns = root.querySelectorAll('.program-btn');
+    const durationBtns = root.querySelectorAll('.duration-btn');
+    const startBtn = document.getElementById('oceanStart');
+    const resetBtn = document.getElementById('oceanReset');
+    const focusBtn = document.getElementById('oceanFocus');
+    const toneToggle = document.getElementById('oceanTone');
+    const clearLogBtn = document.getElementById('oceanClearLog');
+    const cueEl = document.getElementById('oceanCue');
+    const timeEl = document.getElementById('oceanTime');
+    const sessionNameEl = document.getElementById('oceanSessionName');
+    const stateEl = document.getElementById('oceanState');
+    const sessionsEl = document.getElementById('oceanSessions');
+    const minutesEl = document.getElementById('oceanMinutes');
+    const progressEl = document.getElementById('oceanProgress');
+    const noteEl = document.getElementById('oceanNote');
+    const promptsEl = document.getElementById('oceanPrompts');
+    const logEl = document.getElementById('oceanLog');
+    const focusOverlay = document.getElementById('oceanFocusOverlay');
+    const focusClose = document.getElementById('oceanFocusClose');
+    const focusCueEl = document.getElementById('oceanFocusCue');
+    const focusTimeEl = document.getElementById('oceanFocusTime');
+    const focusProgramEl = document.getElementById('oceanFocusProgram');
+
+    let currentProgram = 'calm';
+    let duration = Number(durations[0]?.seconds || 120);
+    let sessionName = durations[0]?.name || 'Morning tide';
+    let elapsed = 0;
+    let timer = null;
+    let audioCtx = null;
+    let toneNodes = null;
+    let tonePulse = null;
+    let stats = loadStats();
+
+    function loadStats() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (parsed && typeof parsed === 'object') {
+          return {
+            sessions: Number(parsed.sessions) || 0,
+            minutes: Number(parsed.minutes) || 0,
+            log: Array.isArray(parsed.log) ? parsed.log.slice(0, 5) : [],
+          };
+        }
+      } catch {}
+      return { sessions: 0, minutes: 0, log: [] };
+    }
+
+    function saveStats() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); } catch {}
+    }
+
+    function formatTime(totalSeconds) {
+      const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+      const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+      return minutes + ':' + seconds;
+    }
+
+    function getCue(seconds) {
+      const program = programMap[currentProgram] || programMap.calm;
+      const pattern = program.pattern;
+      const cycle = pattern.reduce((sum, value) => sum + Number(value), 0);
+      const phase = seconds % cycle;
+      if (phase < pattern[0]) return { key: 'inhale', text: 'Inhale' };
+      if (phase < pattern[0] + pattern[1]) return { key: 'hold', text: 'Hold' };
+      if (phase < pattern[0] + pattern[1] + pattern[2]) return { key: 'exhale', text: 'Exhale' };
+      return { key: 'soften', text: 'Soften' };
+    }
+
+    function renderStats() {
+      if (sessionsEl) sessionsEl.textContent = String(stats.sessions);
+      if (minutesEl) minutesEl.textContent = String(stats.minutes);
+      if (!logEl) return;
+      logEl.textContent = '';
+      if (!stats.log.length) {
+        const item = document.createElement('li');
+        item.textContent = 'No sessions completed yet.';
+        logEl.appendChild(item);
+        return;
+      }
+      stats.log.forEach((entry) => {
+        const item = document.createElement('li');
+        const name = document.createElement('span');
+        const meta = document.createElement('span');
+        name.textContent = entry.name || 'Ocean session';
+        meta.textContent = (entry.length || '0m') + ' ' + (entry.time || '');
+        item.append(name, meta);
+        logEl.appendChild(item);
+      });
+    }
+
+    function renderProgram() {
+      const program = programMap[currentProgram] || programMap.calm;
+      root.setAttribute('data-program', currentProgram);
+      if (focusOverlay) focusOverlay.setAttribute('data-program', currentProgram);
+      if (noteEl) noteEl.textContent = program.note;
+      if (focusProgramEl) focusProgramEl.textContent = program.name;
+      if (promptsEl) {
+        promptsEl.textContent = '';
+        program.prompts.forEach((prompt) => {
+          const item = document.createElement('li');
+          item.textContent = prompt;
+          promptsEl.appendChild(item);
+        });
+      }
+    }
+
+    function render() {
+      const remaining = Math.max(duration - elapsed, 0);
+      const progress = duration > 0 ? Math.min((elapsed / duration) * 100, 100) : 0;
+      const cue = getCue(elapsed);
+      const timeText = formatTime(remaining);
+      root.setAttribute('data-cue', cue.key);
+      if (focusOverlay) focusOverlay.setAttribute('data-cue', cue.key);
+      if (cueEl) cueEl.textContent = cue.text;
+      if (focusCueEl) focusCueEl.textContent = cue.text;
+      if (timeEl) timeEl.textContent = timeText;
+      if (focusTimeEl) focusTimeEl.textContent = timeText;
+      if (sessionNameEl) sessionNameEl.textContent = sessionName;
+      if (progressEl) progressEl.style.width = progress + '%';
+    }
+
+    function stopTone() {
+      if (tonePulse) {
+        clearInterval(tonePulse);
+        tonePulse = null;
+      }
+      if (toneNodes) {
+        toneNodes.forEach((node) => {
+          try {
+            if (typeof node.stop === 'function') node.stop();
+          } catch {}
+          try { node.disconnect(); } catch {}
+        });
+        toneNodes = null;
+      }
+    }
+
+    function startTone() {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) {
+        if (toneToggle) toneToggle.checked = false;
+        return;
+      }
+      if (toneNodes) return;
+      try {
+        audioCtx = audioCtx || new Ctor();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+        const low = audioCtx.createOscillator();
+        const shimmer = audioCtx.createOscillator();
+        const lowGain = audioCtx.createGain();
+        const shimmerGain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        const master = audioCtx.createGain();
+        const isMoon = currentProgram === 'moon';
+        const isCurrent = currentProgram === 'current';
+
+        low.type = 'sine';
+        shimmer.type = isMoon ? 'sine' : 'triangle';
+        low.frequency.value = isMoon ? 72 : 92;
+        shimmer.frequency.value = isCurrent ? 212 : 184;
+        lowGain.gain.value = isCurrent ? 0.05 : 0.035;
+        shimmerGain.gain.value = isMoon ? 0.005 : 0.009;
+        filter.type = 'lowpass';
+        filter.frequency.value = isMoon ? 380 : 540;
+        master.gain.value = 0.42;
+
+        low.connect(lowGain);
+        shimmer.connect(shimmerGain);
+        lowGain.connect(filter);
+        shimmerGain.connect(filter);
+        filter.connect(master);
+        master.connect(audioCtx.destination);
+        low.start(now);
+        shimmer.start(now);
+
+        tonePulse = setInterval(() => {
+          const t = audioCtx.currentTime;
+          master.gain.cancelScheduledValues(t);
+          master.gain.setValueAtTime(master.gain.value, t);
+          master.gain.linearRampToValueAtTime(isCurrent ? 0.72 : 0.64, t + 1.4);
+          master.gain.linearRampToValueAtTime(0.36, t + 3);
+        }, 3000);
+
+        toneNodes = [low, shimmer, lowGain, shimmerGain, filter, master];
+      } catch {
+        if (toneToggle) toneToggle.checked = false;
+      }
+    }
+
+    function pause(stopAudio) {
+      clearInterval(timer);
+      timer = null;
+      root.removeAttribute('data-running');
+      if (stateEl) stateEl.textContent = elapsed >= duration ? 'COMPLETE' : 'READY';
+      if (startBtn) {
+        startBtn.textContent = elapsed >= duration ? 'Done' : 'Start';
+        startBtn.setAttribute('aria-pressed', 'false');
+      }
+      if (stopAudio) {
+        if (toneToggle) toneToggle.checked = false;
+        stopTone();
+      }
+    }
+
+    function recordCompletion() {
+      const minutes = Math.round(duration / 60);
+      const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const program = programMap[currentProgram] || programMap.calm;
+      stats.sessions += 1;
+      stats.minutes += minutes;
+      stats.log.unshift({ name: program.name, length: minutes + 'm', time });
+      stats.log = stats.log.slice(0, 5);
+      saveStats();
+      renderStats();
+    }
+
+    function complete() {
+      pause(false);
+      recordCompletion();
+      root.setAttribute('data-cue', 'soften');
+      if (focusOverlay) focusOverlay.setAttribute('data-cue', 'soften');
+      if (cueEl) cueEl.textContent = 'Complete';
+      if (focusCueEl) focusCueEl.textContent = 'Complete';
+      if (toneToggle) toneToggle.checked = false;
+      stopTone();
+    }
+
+    function start() {
+      if (timer) {
+        pause(true);
+        return;
+      }
+      if (elapsed >= duration) elapsed = 0;
+      root.setAttribute('data-running', 'true');
+      if (stateEl) stateEl.textContent = 'BREATHING';
+      if (startBtn) {
+        startBtn.textContent = 'Pause';
+        startBtn.setAttribute('aria-pressed', 'true');
+      }
+      if (toneToggle && toneToggle.checked) startTone();
+      render();
+      timer = setInterval(() => {
+        elapsed += 1;
+        if (elapsed >= duration) {
+          elapsed = duration;
+          render();
+          complete();
+          return;
+        }
+        render();
+      }, 1000);
+    }
+
+    function reset() {
+      pause(true);
+      elapsed = 0;
+      if (stateEl) stateEl.textContent = 'READY';
+      if (startBtn) startBtn.textContent = 'Start';
+      render();
+    }
+
+    function openFocus() {
+      if (!focusOverlay) return;
+      if (!timer) start();
+      focusOverlay.classList.add('is-active');
+      focusOverlay.setAttribute('aria-hidden', 'false');
+      if (focusClose) focusClose.focus();
+    }
+
+    function closeFocus() {
+      if (!focusOverlay) return;
+      focusOverlay.classList.remove('is-active');
+      focusOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    programBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = btn.getAttribute('data-program') || 'calm';
+        if (!programMap[next]) return;
+        currentProgram = next;
+        programBtns.forEach((item) => item.classList.toggle('is-active', item === btn));
+        reset();
+        renderProgram();
+        render();
+      });
+    });
+
+    durationBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        durationBtns.forEach((item) => item.classList.toggle('is-active', item === btn));
+        duration = Number(btn.getAttribute('data-duration') || 120);
+        sessionName = btn.getAttribute('data-session-name') || 'Ocean reset';
+        reset();
+      });
+    });
+
+    if (startBtn) startBtn.addEventListener('click', start);
+    if (resetBtn) resetBtn.addEventListener('click', reset);
+    if (focusBtn) focusBtn.addEventListener('click', openFocus);
+    if (focusClose) focusClose.addEventListener('click', closeFocus);
+    if (focusOverlay) {
+      focusOverlay.addEventListener('click', (event) => {
+        if (event.target === focusOverlay) closeFocus();
+      });
+    }
+    if (toneToggle) {
+      toneToggle.addEventListener('change', () => {
+        if (toneToggle.checked) startTone();
+        else stopTone();
+      });
+    }
+    if (clearLogBtn) {
+      clearLogBtn.addEventListener('click', () => {
+        stats = { sessions: 0, minutes: 0, log: [] };
+        saveStats();
+        renderStats();
+      });
+    }
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeFocus();
+    });
+
+    renderProgram();
+    renderStats();
+    render();
+  })();
+</script>
+
+<style>
+  .ocean-meditation {
+    display: grid;
+    gap: 14px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .session-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .ocean-stage,
+  .session-panel,
+  .asset-card,
+  .focus-window {
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .ocean-stage {
+    min-height: 520px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0) 22%),
+      linear-gradient(180deg, #cbeef4 0%, #85cfcd 45%, #197b8b 46%, #0c5363 100%);
+  }
+
+  .ocean-stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(255,255,255,0.14) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 10px 10px;
+    opacity: 0.28;
+    pointer-events: none;
+  }
+
+  .stage-skyline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 45%;
+    height: 2px;
+    background: rgba(255,255,255,0.72);
+    box-shadow: 0 2px 0 rgba(18,17,14,0.1);
+  }
+
+  .stage-sun {
+    position: absolute;
+    right: 36px;
+    top: 36px;
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: #f7c325;
+    box-shadow: 0 0 0 8px rgba(247,195,37,0.14), 0 0 44px rgba(247,195,37,0.72);
+    animation: pc-ocean-sun 7s ease-in-out infinite;
+  }
+
+  .stage-cloud {
+    position: absolute;
+    height: 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.78);
+    box-shadow: 14px -6px 0 3px rgba(255,255,255,0.7), 32px 0 0 rgba(255,255,255,0.66);
+  }
+
+  .stage-cloud--one {
+    left: 42px;
+    top: 72px;
+    width: 58px;
+  }
+
+  .stage-cloud--two {
+    right: 164px;
+    top: 118px;
+    width: 44px;
+    opacity: 0.68;
+  }
+
+  .breath-orb {
+    position: absolute;
+    left: 50%;
+    top: 48%;
+    z-index: 3;
+    width: 168px;
+    height: 168px;
+    margin: -84px 0 0 -84px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.78);
+    background:
+      radial-gradient(circle at 38% 30%, rgba(255,255,255,0.96), rgba(130,228,218,0.84) 34%, rgba(15,110,86,0.82) 70%),
+      linear-gradient(135deg, #84e6da, #185fa5);
+    box-shadow: 0 0 44px rgba(52,197,179,0.54), inset -14px -18px 0 rgba(18,17,14,0.12);
+    transition: transform 1.1s ease, box-shadow 1.1s ease, background 1.1s ease;
+  }
+
+  .breath-orb span,
+  .focus-orb span {
+    font-family: var(--pc-font-mono);
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #092d31;
+  }
+
+  [data-cue="inhale"] .breath-orb,
+  .focus-overlay[data-cue="inhale"] .focus-orb {
+    transform: scale(1.16);
+    box-shadow: 0 0 58px rgba(52,197,179,0.72), inset -14px -18px 0 rgba(18,17,14,0.1);
+  }
+
+  [data-cue="hold"] .breath-orb,
+  .focus-overlay[data-cue="hold"] .focus-orb {
+    transform: scale(1.1);
+  }
+
+  [data-cue="exhale"] .breath-orb,
+  .focus-overlay[data-cue="exhale"] .focus-orb {
+    transform: scale(0.88);
+    box-shadow: 0 0 28px rgba(52,197,179,0.46), inset -14px -18px 0 rgba(18,17,14,0.15);
+  }
+
+  .stage-wave,
+  .focus-wave {
+    position: absolute;
+    left: -12%;
+    right: -12%;
+    bottom: 0;
+    z-index: 2;
+    background-repeat: repeat-x;
+  }
+
+  .stage-wave--back {
+    height: 170px;
+    bottom: 72px;
+    opacity: 0.6;
+    background:
+      radial-gradient(58px 28px at 58px 0, transparent 46%, rgba(255,255,255,0.68) 48%, transparent 56%) 0 0 / 116px 38px,
+      linear-gradient(180deg, rgba(74,158,255,0.46), rgba(24,95,165,0.9));
+    animation: pc-ocean-tide 8s linear infinite;
+  }
+
+  .stage-wave--mid {
+    height: 142px;
+    bottom: 28px;
+    background:
+      radial-gradient(48px 24px at 48px 0, transparent 46%, rgba(255,255,255,0.82) 48%, transparent 56%) 0 0 / 96px 34px,
+      linear-gradient(180deg, #2cc5a0, #185fa5);
+    animation: pc-ocean-tide 6s linear infinite reverse;
+  }
+
+  .stage-wave--front {
+    height: 98px;
+    background:
+      radial-gradient(38px 18px at 38px 0, transparent 46%, rgba(255,255,255,0.9) 48%, transparent 57%) 0 0 / 76px 28px,
+      linear-gradient(180deg, #197b8b, #0b3e73);
+    animation: pc-ocean-tide 4.8s linear infinite;
+  }
+
+  [data-program="current"] .ocean-stage {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0) 20%),
+      linear-gradient(180deg, #b6e4e9 0%, #58c2bd 45%, #126e83 46%, #0b3e73 100%);
+  }
+
+  [data-program="current"] .stage-wave {
+    animation-duration: 3.8s;
+  }
+
+  [data-program="moon"] .ocean-stage {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 24%),
+      linear-gradient(180deg, #332c7c 0%, #534ab7 44%, #185fa5 45%, #12110e 100%);
+  }
+
+  [data-program="moon"] .stage-sun {
+    background: #eef4fa;
+    box-shadow: 0 0 0 8px rgba(238,244,250,0.12), 0 0 46px rgba(238,244,250,0.68);
+  }
+
+  [data-program="moon"] .stage-cloud {
+    opacity: 0.28;
+  }
+
+  [data-program="moon"] .breath-orb {
+    background:
+      radial-gradient(circle at 38% 30%, rgba(255,255,255,0.94), rgba(208,218,255,0.82) 34%, rgba(83,74,183,0.82) 70%),
+      linear-gradient(135deg, #cfd8ff, #534ab7);
+  }
+
+  .session-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    background: #fbf7ee;
+  }
+
+  .panel-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--pc-rule);
+    color: var(--pc-ink-muted);
+  }
+
+  .programs,
+  .duration-row,
+  .readout-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .programs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .duration-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .program-btn,
+  .duration-btn,
+  .action-btn,
+  .tone-toggle,
+  .tide-log,
+  .prompt-list li,
+  .program-note,
+  .readout-grid > div {
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .program-btn,
+  .duration-btn,
+  .action-btn {
+    color: var(--pc-ink);
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .program-btn {
+    display: grid;
+    gap: 3px;
+    min-height: 70px;
+    padding: 10px 8px;
+    text-align: left;
+  }
+
+  .program-btn span {
+    font-size: 12px;
+  }
+
+  .program-btn small {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+  }
+
+  .duration-btn,
+  .action-btn {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .program-btn:hover,
+  .duration-btn:hover,
+  .action-btn:hover {
+    background: #eef4fa;
+  }
+
+  .program-btn.is-active,
+  .duration-btn.is-active,
+  .action-btn--primary {
+    border-color: #0f6e56;
+    background: #e7f4ef;
+    color: #074638;
+  }
+
+  .readout-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .readout-grid > div {
+    min-height: 64px;
+    padding: 10px;
+  }
+
+  .readout-label {
+    display: block;
+    color: var(--pc-ink-muted);
+    margin-bottom: 4px;
+  }
+
+  .readout-grid strong {
+    display: block;
+    font-family: var(--pc-font-mono);
+    font-size: 18px;
+    line-height: 1.2;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tide-meter {
+    height: 18px;
+    padding: 3px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .tide-meter span {
+    display: block;
+    width: 0%;
+    height: 100%;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.42) 0 8px, transparent 8px 16px),
+      linear-gradient(90deg, #185fa5, #2cc5a0, #f7c325);
+    transition: width 0.4s ease;
+  }
+
+  .action-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tone-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 8px 10px;
+    color: var(--pc-ink-soft);
+    cursor: pointer;
+  }
+
+  .program-note {
+    margin: 0;
+    padding: 10px;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .prompt-list {
+    display: grid;
+    gap: 6px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .prompt-list li {
+    position: relative;
+    padding: 8px 10px 8px 28px;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .prompt-list li::before {
+    content: '~';
+    position: absolute;
+    left: 11px;
+    top: 6px;
+    color: #0f6e56;
+    font-family: var(--pc-font-mono);
+  }
+
+  .tide-log__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--pc-rule);
+    color: var(--pc-ink-muted);
+  }
+
+  .tide-log__head button {
+    border: 0;
+    background: transparent;
+    color: var(--pc-accent);
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .tide-log ul {
+    display: grid;
+    gap: 1px;
+    list-style: none;
+    margin: 0;
+    padding: 5px;
+  }
+
+  .tide-log li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+  }
+
+  .tide-log li span:last-child {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    white-space: nowrap;
+  }
+
+  .asset-card {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 14px;
+    padding: 12px;
+    align-items: center;
+    background: #fbeeea;
+    border-color: #993c1d;
+  }
+
+  .asset-card img {
+    width: 160px;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    object-position: center 38%;
+    border: 1px solid #993c1d;
+  }
+
+  .asset-card p {
+    margin: 0;
+    color: #6a2810;
+  }
+
+  .asset-card h2 {
+    margin: 3px 0 5px;
+    font-family: var(--pc-font-mono);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .focus-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    place-items: center;
+    padding: 24px;
+    background: rgba(18, 17, 14, 0.82);
+  }
+
+  .focus-overlay.is-active {
+    display: grid;
+  }
+
+  .focus-window {
+    width: min(820px, 100%);
+    min-height: 540px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.28);
+  }
+
+  .focus-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 4;
+    width: 30px;
+    height: 28px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    cursor: pointer;
+  }
+
+  .focus-scene {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0) 22%),
+      linear-gradient(180deg, #cbeef4 0%, #85cfcd 45%, #197b8b 46%, #0c5363 100%);
+  }
+
+  .focus-sun {
+    position: absolute;
+    top: 58px;
+    right: 92px;
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    background: #f7c325;
+    box-shadow: 0 0 48px rgba(247,195,37,0.72);
+  }
+
+  .focus-orb {
+    position: absolute;
+    left: 50%;
+    top: 48%;
+    z-index: 3;
+    width: 190px;
+    height: 190px;
+    margin: -95px 0 0 -95px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.78);
+    background:
+      radial-gradient(circle at 38% 30%, rgba(255,255,255,0.96), rgba(130,228,218,0.84) 34%, rgba(15,110,86,0.82) 70%),
+      linear-gradient(135deg, #84e6da, #185fa5);
+    box-shadow: 0 0 58px rgba(52,197,179,0.62);
+    transition: transform 1.1s ease, background 1.1s ease;
+  }
+
+  .focus-orb span {
+    font-size: 24px;
+  }
+
+  .focus-wave--back {
+    height: 190px;
+    bottom: 64px;
+    opacity: 0.6;
+    background:
+      radial-gradient(70px 34px at 70px 0, transparent 46%, rgba(255,255,255,0.68) 48%, transparent 56%) 0 0 / 140px 44px,
+      linear-gradient(180deg, rgba(74,158,255,0.46), rgba(24,95,165,0.9));
+    animation: pc-ocean-tide 8s linear infinite;
+  }
+
+  .focus-wave--front {
+    height: 118px;
+    background:
+      radial-gradient(48px 24px at 48px 0, transparent 46%, rgba(255,255,255,0.9) 48%, transparent 57%) 0 0 / 96px 34px,
+      linear-gradient(180deg, #197b8b, #0b3e73);
+    animation: pc-ocean-tide 4.8s linear infinite;
+  }
+
+  .focus-copy {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 34px;
+    z-index: 4;
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    color: #fff;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.35);
+  }
+
+  .focus-copy strong {
+    font-family: var(--pc-font-mono);
+    font-size: 56px;
+    line-height: 1;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .focus-copy em {
+    font-style: normal;
+    font-size: 18px;
+  }
+
+  .focus-overlay[data-program="current"] .focus-scene {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0) 20%),
+      linear-gradient(180deg, #b6e4e9 0%, #58c2bd 45%, #126e83 46%, #0b3e73 100%);
+  }
+
+  .focus-overlay[data-program="moon"] .focus-scene {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 24%),
+      linear-gradient(180deg, #332c7c 0%, #534ab7 44%, #185fa5 45%, #12110e 100%);
+  }
+
+  .focus-overlay[data-program="moon"] .focus-sun {
+    background: #eef4fa;
+    box-shadow: 0 0 46px rgba(238,244,250,0.68);
+  }
+
+  @keyframes pc-ocean-tide {
+    from { transform: translateX(0); }
+    to { transform: translateX(-96px); }
+  }
+
+  @keyframes pc-ocean-sun {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(4px); }
+  }
+
+  @media (max-width: 960px) {
+    .session-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .ocean-stage {
+      min-height: 420px;
+    }
+
+    .readout-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .programs,
+    .duration-row,
+    .readout-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .ocean-stage {
+      min-height: 360px;
+    }
+
+    .breath-orb {
+      width: 130px;
+      height: 130px;
+      margin: -65px 0 0 -65px;
+    }
+
+    .asset-card {
+      grid-template-columns: 1fr;
+    }
+
+    .asset-card img {
+      width: 100%;
+      max-height: 260px;
+    }
+
+    .focus-overlay {
+      padding: 12px;
+    }
+
+    .focus-window {
+      min-height: calc(100vh - 24px);
+    }
+
+    .focus-orb {
+      width: 150px;
+      height: 150px;
+      margin: -75px 0 0 -75px;
+    }
+
+    .focus-copy strong {
+      font-size: 42px;
+    }
+  }
+</style>

@@ -5,6 +5,12 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import {
+  GARDEN_YIELD_CONTEXT,
+  GARDEN_YIELD_METRICS,
+  GARDEN_YIELD_SITES,
+  GARDEN_YIELD_SOURCE_BLOCK,
+} from '../lib/garden-yield';
+import {
   ANCHOR,
   NATURE_NOTES,
   NATIVE_PLANTING_PALETTE,
@@ -40,6 +46,15 @@ export const GET: APIRoute = async () => {
       id: '0331',
       url: 'https://pointcast.xyz/b/0331',
       jsonUrl: 'https://pointcast.xyz/b/0331.json',
+    },
+    valueYieldSystem: {
+      name: GARDEN_YIELD_CONTEXT.name,
+      description: GARDEN_YIELD_CONTEXT.purpose,
+      url: GARDEN_YIELD_CONTEXT.url,
+      jsonUrl: GARDEN_YIELD_CONTEXT.jsonUrl,
+      sourceBlock: GARDEN_YIELD_SOURCE_BLOCK,
+      metrics: GARDEN_YIELD_METRICS.map((metric) => metric.id),
+      sitePresets: GARDEN_YIELD_SITES.map((site) => site.id),
     },
     notes: NATURE_NOTES,
     plantingPalette: NATIVE_PLANTING_PALETTE,
@@ -78,6 +93,8 @@ export const GET: APIRoute = async () => {
       houseplants: 'https://pointcast.xyz/houseplants',
       houseplantsJson: 'https://pointcast.xyz/houseplants.json',
       houseplantBlock: 'https://pointcast.xyz/b/0333',
+      gardenYield: GARDEN_YIELD_CONTEXT.url,
+      gardenYieldJson: GARDEN_YIELD_CONTEXT.jsonUrl,
     },
   };
 

@@ -1,0 +1,925 @@
+---
+/**
+ * /garden-yield - value-yield system for Block 0331.
+ *
+ * This is the operating layer for the El Segundo native planting palette:
+ * choose a site, tune the conditions, get a ranked kit plus value scores.
+ * The machine mirror lives at /garden-yield.json.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { NATIVE_PLANTING_PALETTE } from '../lib/local';
+import {
+  GARDEN_YIELD_CONTEXT,
+  GARDEN_YIELD_LOOP,
+  GARDEN_YIELD_METRICS,
+  GARDEN_YIELD_PLANTS,
+  GARDEN_YIELD_SITES,
+  GARDEN_YIELD_SOURCE_BLOCK,
+} from '../lib/garden-yield';
+
+const paletteBySlug = new Map(NATIVE_PLANTING_PALETTE.map((plant) => [plant.slug, plant]));
+const clientPlants = GARDEN_YIELD_PLANTS.map((plant) => {
+  const palette = paletteBySlug.get(plant.slug);
+  return {
+    ...plant,
+    name: palette?.name ?? plant.slug,
+    scientific: palette?.scientific ?? '',
+    form: palette?.form ?? '',
+    sourceLabel: palette?.sourceLabel ?? '',
+    sourceUrl: palette?.sourceUrl ?? '',
+  };
+});
+
+const defaultSite = GARDEN_YIELD_SITES[0];
+const starterPlants = clientPlants.filter((plant) => plant.bestFor.includes(defaultSite.id)).slice(0, 3);
+
+const title = 'Garden Yield · Native value system';
+const description =
+  'An interactive value-yield planner for the El Segundo native planting palette from PointCast Block 0331.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/garden-yield',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/garden-yield',
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+  about: {
+    '@type': 'CreativeWork',
+    name: GARDEN_YIELD_SOURCE_BLOCK.title,
+    url: GARDEN_YIELD_SOURCE_BLOCK.url,
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og/garden-yield.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/garden-yield.json', title: 'Garden yield system (JSON)' },
+    { type: 'application/json', href: '/nature.json', title: 'El Segundo nature field guide (JSON)' },
+  ]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nature">nature</a>
+      <span aria-hidden="true">/</span>
+      <span>garden-yield</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker">GARDEN YIELD · BLOCK 0331 SYSTEM</p>
+        <h1>Make the palette pay back.</h1>
+        <p class="dek">
+          Not financial yield. Living value: pollinator traffic, water fit,
+          shelter, seasonal signal, and care ease from a small native planting.
+        </p>
+      </div>
+      <aside class="scorebox" aria-label="System output">
+        <p class="scorebox__label mono">SYSTEM OUTPUT</p>
+        <strong data-total-score>--</strong>
+        <span data-total-read>Choose a site to start.</span>
+        <dl>
+          <div><dt class="mono">SOURCE</dt><dd><a href="/b/0331">0331</a></dd></div>
+          <div><dt class="mono">PLANTS</dt><dd>{clientPlants.length}</dd></div>
+          <div><dt class="mono">MODE</dt><dd>ecology</dd></div>
+        </dl>
+      </aside>
+    </header>
+
+    <section class="system" aria-label="Garden value planner">
+      <form class="controls" data-controls>
+        <fieldset class="preset-set">
+          <legend class="kicker">SITE PRESET</legend>
+          <div class="preset-grid">
+            {GARDEN_YIELD_SITES.map((site) => (
+              <button
+                type="button"
+                class="preset"
+                data-preset={site.id}
+                aria-pressed={site.id === defaultSite.id ? 'true' : 'false'}
+              >
+                <span class="preset__label">{site.label}</span>
+                <span class="preset__read">{site.read}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <div class="control-grid">
+          <label class="range-control">
+            <span class="control-label mono">PATCH SIZE</span>
+            <input
+              type="range"
+              min="4"
+              max="96"
+              step="2"
+              value={defaultSite.areaSqFt}
+              data-field="areaSqFt"
+            />
+            <output data-value="areaSqFt">{defaultSite.areaSqFt} sq ft</output>
+          </label>
+
+          <label class="range-control">
+            <span class="control-label mono">WILDNESS TOLERANCE</span>
+            <input
+              type="range"
+              min="20"
+              max="95"
+              step="1"
+              value={defaultSite.wildness}
+              data-field="wildness"
+            />
+            <output data-value="wildness">{defaultSite.wildness}%</output>
+          </label>
+
+          <fieldset class="choice-set">
+            <legend class="control-label mono">SUN</legend>
+            <div class="choice-row">
+              <button type="button" data-choice="sun" data-choice-value="full">Full</button>
+              <button type="button" data-choice="sun" data-choice-value="part">Part</button>
+              <button type="button" data-choice="sun" data-choice-value="soft">Soft</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="choice-set">
+            <legend class="control-label mono">DRAINAGE</legend>
+            <div class="choice-row">
+              <button type="button" data-choice="drainage" data-choice-value="fast">Fast</button>
+              <button type="button" data-choice="drainage" data-choice-value="mixed">Mixed</button>
+              <button type="button" data-choice="drainage" data-choice-value="heavy">Heavy</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="choice-set">
+            <legend class="control-label mono">WATER AFTER YEAR 1</legend>
+            <div class="choice-row">
+              <button type="button" data-choice="water" data-choice-value="low">Low</button>
+              <button type="button" data-choice="water" data-choice-value="medium">Medium</button>
+            </div>
+          </fieldset>
+        </div>
+      </form>
+
+      <section class="ledger" aria-label="Value ledger" aria-live="polite">
+        <div class="section-head">
+          <p class="kicker">VALUE LEDGER</p>
+          <span class="section-head__note mono" data-system-mode>{defaultSite.label}</span>
+        </div>
+        <div class="metric-grid">
+          {GARDEN_YIELD_METRICS.map((metric) => (
+            <article class="metric" data-metric={metric.id}>
+              <div class="metric__top">
+                <span class="mono">{metric.short}</span>
+                <strong data-metric-value>--</strong>
+              </div>
+              <div class="metric__bar" aria-hidden="true">
+                <span data-metric-bar></span>
+              </div>
+              <p>{metric.read}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
+
+    <section class="section kit" aria-label="Recommended planting kit">
+      <div class="section-head">
+        <p class="kicker">RECOMMENDED KIT</p>
+        <span class="section-head__note mono" data-kit-count>{starterPlants.length} PLANTS</span>
+      </div>
+      <div class="kit-grid" data-kit-grid>
+        {starterPlants.map((plant) => (
+          <article class="plant-card">
+            <div class="plant-card__top">
+              <span class="mono">{plant.role}</span>
+              <strong>{plant.name}</strong>
+            </div>
+            <p class="plant-card__latin">{plant.scientific}</p>
+            <p>{plant.placement}</p>
+            <small>{plant.value.join(' / ')}</small>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section loop" aria-label="Establishment loop">
+      <div class="section-head">
+        <p class="kicker">ESTABLISHMENT LOOP</p>
+        <a href="/b/0331" class="section-head__note mono">SOURCE BLOCK</a>
+      </div>
+      <ol class="loop-grid">
+        {GARDEN_YIELD_LOOP.map((step, index) => (
+          <li>
+            <span class="loop-grid__num mono">{String(index + 1).padStart(2, '0')}</span>
+            <h2>{step.phase}</h2>
+            <p class="loop-grid__timing mono">{step.timing}</p>
+            <p>{step.action}</p>
+            <small>{step.check}</small>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <aside class="source-strip">
+      <div>
+        <p class="kicker">MACHINE-READABLE</p>
+        <p>{GARDEN_YIELD_CONTEXT.purpose}</p>
+      </div>
+      <ul>
+        <li><a href="/garden-yield.json">/garden-yield.json</a></li>
+        <li><a href="/nature.json">/nature.json</a></li>
+        <li><a href="/b/0331.json">/b/0331.json</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <script
+    is:inline
+    define:vars={{
+      PLANTS: clientPlants,
+      SITES: GARDEN_YIELD_SITES,
+      METRICS: GARDEN_YIELD_METRICS,
+      DEFAULT_SITE: defaultSite,
+    }}
+  >
+    (function () {
+      const state = {
+        site: DEFAULT_SITE.id,
+        areaSqFt: DEFAULT_SITE.areaSqFt,
+        sun: DEFAULT_SITE.sun,
+        drainage: DEFAULT_SITE.drainage,
+        water: DEFAULT_SITE.water,
+        wildness: DEFAULT_SITE.wildness,
+      };
+
+      const rank = { low: 1, medium: 2 };
+      const controls = document.querySelector('[data-controls]');
+      const kitGrid = document.querySelector('[data-kit-grid]');
+      const totalScore = document.querySelector('[data-total-score]');
+      const totalRead = document.querySelector('[data-total-read]');
+      const systemMode = document.querySelector('[data-system-mode]');
+      const kitCount = document.querySelector('[data-kit-count]');
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function currentSiteLabel() {
+        const site = SITES.find((item) => item.id === state.site);
+        return site ? site.label : 'Custom site';
+      }
+
+      function plantFit(plant) {
+        let score = 0;
+        score += plant.sun.includes(state.sun) ? 24 : state.sun === 'soft' && plant.sun.includes('part') ? 10 : 0;
+        score += plant.drainage.includes(state.drainage) ? 22 : state.drainage === 'heavy' && plant.drainage.includes('mixed') ? 9 : 0;
+        score += plant.water.includes(state.water) ? 16 : rank[state.water] > rank[plant.water[0]] ? 7 : 0;
+        score += state.areaSqFt >= plant.minSqFt ? 16 : -18;
+        score += plant.bestFor.includes(state.site) ? 14 : 0;
+        score += state.site === 'balcony' ? (plant.containerFit ? 12 : -22) : 0;
+        score += clamp(12 - Math.abs(state.wildness - plant.wildness) * 0.18, -8, 12);
+        return clamp(Math.round(score), 0, 100);
+      }
+
+      function recommendedPlants() {
+        const ranked = PLANTS
+          .map((plant) => ({ ...plant, fit: plantFit(plant) }))
+          .sort((a, b) => b.fit - a.fit);
+        const limit = state.areaSqFt < 14 ? 3 : state.areaSqFt < 44 ? 4 : 5;
+        const chosen = ranked.filter((plant) => plant.fit >= 38).slice(0, limit);
+        return chosen.length >= 3 ? chosen : ranked.slice(0, 3);
+      }
+
+      function quantityFor(plant) {
+        let raw = (state.areaSqFt / 12) * plant.quantityPer12SqFt;
+        if (state.site === 'balcony') raw *= plant.containerFit ? 1 : 0.2;
+        if (state.areaSqFt < plant.minSqFt) raw *= 0.45;
+        return clamp(Math.max(1, Math.round(raw)), 1, 12);
+      }
+
+      function metricScore(metricId, plants) {
+        const fitTotal = plants.reduce((sum, plant) => sum + plant.fit, 0) || 1;
+        const weighted = plants.reduce((sum, plant) => sum + plant.scores[metricId] * plant.fit, 0) / fitTotal;
+        const fitAverage = fitTotal / plants.length;
+        let adjusted = weighted * 0.72 + fitAverage * 0.28;
+        if (metricId === 'habitat') adjusted += (state.wildness - 55) * 0.12;
+        if (metricId === 'careEase' && state.wildness < 40) adjusted -= 4;
+        if (metricId === 'waterFit' && state.water === 'low') adjusted += 3;
+        if (metricId === 'seasonal' && state.areaSqFt > 36) adjusted += 3;
+        return clamp(Math.round(adjusted), 0, 100);
+      }
+
+      function totalLabel(score) {
+        if (score >= 82) return 'High native value from this kit.';
+        if (score >= 68) return 'Strong small-patch return.';
+        if (score >= 54) return 'Useful starter value.';
+        return 'Stretch fit; tune the conditions.';
+      }
+
+      function setActiveControls() {
+        document.querySelectorAll('[data-preset]').forEach((button) => {
+          button.setAttribute('aria-pressed', button.getAttribute('data-preset') === state.site ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-choice]').forEach((button) => {
+          const field = button.getAttribute('data-choice');
+          const value = button.getAttribute('data-choice-value');
+          button.setAttribute('aria-pressed', state[field] === value ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-field]').forEach((input) => {
+          const field = input.getAttribute('data-field');
+          input.value = String(state[field]);
+          const value = document.querySelector(`[data-value="${field}"]`);
+          if (value) value.textContent = field === 'areaSqFt' ? `${state[field]} sq ft` : `${state[field]}%`;
+        });
+        if (systemMode) systemMode.textContent = currentSiteLabel();
+      }
+
+      function renderKit(plants) {
+        if (!kitGrid) return;
+        kitGrid.textContent = '';
+        plants.forEach((plant) => {
+          const card = document.createElement('article');
+          card.className = 'plant-card';
+
+          const top = document.createElement('div');
+          top.className = 'plant-card__top';
+          const role = document.createElement('span');
+          role.className = 'mono';
+          role.textContent = `${quantityFor(plant)}x ${plant.role}`;
+          const name = document.createElement('strong');
+          name.textContent = plant.name;
+          top.append(role, name);
+
+          const latin = document.createElement('p');
+          latin.className = 'plant-card__latin';
+          latin.textContent = plant.scientific;
+
+          const fit = document.createElement('p');
+          fit.className = 'plant-card__fit mono';
+          fit.textContent = `FIT ${plant.fit}/100`;
+
+          const placement = document.createElement('p');
+          placement.textContent = plant.placement;
+
+          const value = document.createElement('small');
+          value.textContent = plant.value.join(' / ');
+
+          const care = document.createElement('p');
+          care.className = 'plant-card__care';
+          care.textContent = plant.maintenance;
+
+          card.append(top, latin, fit, placement, value, care);
+          kitGrid.append(card);
+        });
+        if (kitCount) kitCount.textContent = `${plants.length} PLANTS`;
+      }
+
+      function render() {
+        const plants = recommendedPlants();
+        const metricValues = METRICS.map((metric) => ({
+          id: metric.id,
+          value: metricScore(metric.id, plants),
+        }));
+        const total = Math.round(metricValues.reduce((sum, metric) => sum + metric.value, 0) / metricValues.length);
+
+        metricValues.forEach((metric) => {
+          const root = document.querySelector(`[data-metric="${metric.id}"]`);
+          if (!root) return;
+          const value = root.querySelector('[data-metric-value]');
+          const bar = root.querySelector('[data-metric-bar]');
+          if (value) value.textContent = String(metric.value);
+          if (bar) bar.style.width = `${metric.value}%`;
+        });
+
+        if (totalScore) totalScore.textContent = String(total);
+        if (totalRead) totalRead.textContent = totalLabel(total);
+        setActiveControls();
+        renderKit(plants);
+      }
+
+      if (controls) {
+        controls.addEventListener('submit', (event) => event.preventDefault());
+      }
+
+      document.querySelectorAll('[data-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const site = SITES.find((item) => item.id === button.getAttribute('data-preset'));
+          if (!site) return;
+          state.site = site.id;
+          state.areaSqFt = site.areaSqFt;
+          state.sun = site.sun;
+          state.drainage = site.drainage;
+          state.water = site.water;
+          state.wildness = site.wildness;
+          render();
+        });
+      });
+
+      document.querySelectorAll('[data-field]').forEach((input) => {
+        input.addEventListener('input', () => {
+          const field = input.getAttribute('data-field');
+          state[field] = Number(input.value);
+          state.site = 'custom';
+          render();
+        });
+      });
+
+      document.querySelectorAll('[data-choice]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const field = button.getAttribute('data-choice');
+          state[field] = button.getAttribute('data-choice-value');
+          state.site = 'custom';
+          render();
+        });
+      });
+
+      render();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 18px 18px 84px;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 310px);
+    gap: 22px;
+    align-items: stretch;
+    padding-bottom: 20px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero h1 {
+    max-width: 10ch;
+    margin: 0 0 14px;
+    font-size: clamp(3rem, 9vw, 5.8rem);
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .dek {
+    max-width: 60ch;
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.52;
+    color: var(--pc-ink-soft);
+  }
+
+  .scorebox {
+    display: grid;
+    align-content: space-between;
+    gap: 14px;
+    min-height: 240px;
+    padding: 16px;
+    border: 1.5px solid #0F6E56;
+    border-radius: 2px;
+    background: #f6faf7;
+  }
+
+  .scorebox__label {
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .scorebox strong {
+    display: block;
+    font-size: clamp(52px, 10vw, 86px);
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #12110E;
+  }
+
+  .scorebox span:not(.scorebox__label) {
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .scorebox dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .scorebox div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #cddbd0;
+  }
+
+  .scorebox dt,
+  .scorebox dd {
+    margin: 0;
+  }
+
+  .scorebox dd {
+    font-weight: 500;
+  }
+
+  .system {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
+    gap: 16px;
+    margin: 24px 0;
+    align-items: start;
+  }
+
+  .controls,
+  .ledger,
+  .source-strip {
+    border: 1px solid #ccd7cf;
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .controls {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .preset-set,
+  .choice-set {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .preset,
+  .choice-row button {
+    border: 1px solid #cddbd0;
+    border-radius: 2px;
+    background: #f9fbf8;
+    color: #12110E;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .preset {
+    display: grid;
+    gap: 5px;
+    min-height: 104px;
+    padding: 11px;
+  }
+
+  .preset[aria-pressed='true'],
+  .choice-row button[aria-pressed='true'] {
+    border-color: #0F6E56;
+    background: #e7f4ef;
+    box-shadow: inset 0 0 0 1px #0F6E56;
+  }
+
+  .preset__label {
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  .preset__read {
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--pc-ink-soft);
+  }
+
+  .control-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .control-label {
+    display: block;
+    margin-bottom: 6px;
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .range-control {
+    display: grid;
+    gap: 7px;
+  }
+
+  .range-control input {
+    width: 100%;
+    accent-color: #0F6E56;
+  }
+
+  .range-control output {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-soft);
+  }
+
+  .choice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .choice-row button {
+    min-height: 36px;
+    padding: 0 11px;
+    text-align: center;
+  }
+
+  .ledger {
+    padding: 16px;
+  }
+
+  .section,
+  .source-strip {
+    margin: 26px 0;
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .section-head__note {
+    color: var(--pc-ink-muted);
+    font-weight: 500;
+  }
+
+  .metric-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .metric {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid #d5ddd4;
+    border-radius: 2px;
+    background: #fdfefc;
+  }
+
+  .metric__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .metric__top span {
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .metric__top strong {
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .metric__bar {
+    height: 8px;
+    overflow: hidden;
+    border: 1px solid #cddbd0;
+    border-radius: 999px;
+    background: #eef4ea;
+  }
+
+  .metric__bar span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: #0F6E56;
+    transition: width 160ms ease-out;
+  }
+
+  .metric p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.42;
+    color: var(--pc-ink-soft);
+  }
+
+  .kit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+  }
+
+  .plant-card {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    min-height: 230px;
+    padding: 14px;
+    border: 1px solid #d5ddd4;
+    border-left: 4px solid #0F6E56;
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .plant-card__top {
+    display: grid;
+    gap: 6px;
+  }
+
+  .plant-card__top .mono,
+  .plant-card__fit {
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .plant-card strong {
+    font-size: 20px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .plant-card p,
+  .plant-card small {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--pc-ink-soft);
+  }
+
+  .plant-card__latin {
+    margin-top: -2px;
+    font-family: Georgia, 'Iowan Old Style', serif;
+    font-size: 13px;
+    font-style: italic;
+    color: #45413b;
+  }
+
+  .plant-card__care {
+    color: #12110E;
+  }
+
+  .loop-grid {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .loop-grid li {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    min-height: 250px;
+    padding: 14px;
+    border: 1px solid #d6d4cd;
+    border-top: 4px solid #BA7517;
+    border-radius: 2px;
+    background: #fffaf2;
+  }
+
+  .loop-grid__num,
+  .loop-grid__timing {
+    color: #834F0A;
+    font-weight: 500;
+  }
+
+  .loop-grid h2 {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .loop-grid p,
+  .loop-grid small {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--pc-ink-soft);
+  }
+
+  .source-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    padding: 16px;
+    background: #f6faf7;
+  }
+
+  .source-strip p:not(.kicker) {
+    margin: 0;
+    max-width: 64ch;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+
+  .source-strip ul {
+    list-style: none;
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 880px) {
+    .hero,
+    .system,
+    .source-strip,
+    .loop-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .page {
+      padding-inline: 14px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.35rem, 12vw, 3rem);
+    }
+
+    .dek {
+      font-size: 15px;
+    }
+
+    .scorebox strong {
+      font-size: 56px;
+    }
+
+    .preset-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .scorebox {
+      min-height: 0;
+    }
+
+    .choice-row button {
+      flex: 1 1 84px;
+    }
+  }
+</style>
