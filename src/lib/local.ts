@@ -192,6 +192,150 @@ export const NATIVE_PLANTING_PALETTE: NativePlantPick[] = [
   },
 ];
 
+export type PlantingYieldMetric = {
+  label: string;
+  signal: string;
+  measure: string;
+};
+
+export type PlantingYieldSite = {
+  slug: 'balcony' | 'parkway' | 'yard' | 'wild-edge';
+  name: string;
+  scale: string;
+  siteRead: string;
+  value: string;
+  water: string;
+  mix: Array<{
+    slug: NativePlantPick['slug'];
+    units: string;
+    role: string;
+  }>;
+  nextMoves: string[];
+};
+
+export const PLANTING_VALUE_SYSTEM = {
+  sourceBlock: '0331',
+  title: 'Block 0331 native planting value system',
+  yieldDefinition:
+    'Value yield means local habitat signal, water fit, repeatable action, and legible public learning. It is not an investment or financial return.',
+  operatingPrinciple:
+    'Turn one short block into an installable palette, a 90-day care loop, and a machine-readable plan that another human or agent can reuse.',
+  metrics: [
+    {
+      label: 'Habitat lift',
+      signal: 'native flowers, shelter, seedheads, and insect traffic',
+      measure: 'Count how many palette species survive to second bloom.',
+    },
+    {
+      label: 'Water fit',
+      signal: 'rain-season establishment with lower dry-season demand',
+      measure: 'Track weeks watered after establishment, then reduce when roots hold.',
+    },
+    {
+      label: 'Local literacy',
+      signal: 'neighbors can name buckwheat, suncups, deerweed, and scrub',
+      measure: 'A plant label, a block link, or one shared cutting/seed note.',
+    },
+    {
+      label: 'Repeatability',
+      signal: 'balcony, parkway, and yard versions all use the same grammar',
+      measure: 'Document the site type, plant mix, and what changed after 90 days.',
+    },
+  ] satisfies PlantingYieldMetric[],
+  operatingRules: [
+    'Match plants to sun, drainage, mature size, and foot traffic before buying anything.',
+    'Plant during the cool rainy season when possible; use the first dry season as establishment, not performance.',
+    'Leave some seedheads and imperfect structure so the garden can work as habitat.',
+    'Avoid invasive groundcovers, especially iceplant near dune-adjacent places.',
+  ],
+  phases: [
+    { label: 'Read', action: 'Map sun, drainage, wind, container depth, and where people walk.' },
+    { label: 'Plant', action: 'Install the smallest useful mix and water deeply through establishment.' },
+    { label: 'Watch', action: 'Log bloom, insect traffic, leaf stress, and irrigation changes for 90 days.' },
+    { label: 'Share', action: 'Publish the mix, misses, and one photo back to the block or local channel.' },
+  ],
+} as const;
+
+export const PLANTING_YIELD_SITES: PlantingYieldSite[] = [
+  {
+    slug: 'balcony',
+    name: 'Balcony tray',
+    scale: '3-5 containers',
+    siteRead: 'Windy, bright, shallow, and fully visible. Keep the mix low and tough.',
+    value: 'A tiny public-facing native signal that teaches the palette without pretending to be dune restoration.',
+    water: 'Hand-water through the first dry season; use fast drainage and do not let pots sit in runoff.',
+    mix: [
+      { slug: 'beach-suncups', units: '2 low pots', role: 'ground-level dune note' },
+      { slug: 'coast-sunflower', units: '1 medium pot', role: 'bright bloom and pollinator draw' },
+      { slug: 'seacliff-buckwheat', units: '1 deep pot', role: 'anchor plant and block reference' },
+    ],
+    nextMoves: [
+      'Choose containers with drainage holes and enough weight for coastal wind.',
+      'Top-dress with mineral mulch; skip rich, wet potting mixes.',
+      'Photo-log bloom and leaf stress once a week for 90 days.',
+    ],
+  },
+  {
+    slug: 'parkway',
+    name: 'Parkway strip',
+    scale: '20-80 square feet',
+    siteRead: 'Hot, walked-by, compacted at the edges, and easy to over-tidy.',
+    value: 'Turns a dead strip into a low-water learning strip with flowers, structure, and visible seasonal change.',
+    water: 'Deep establishment water beats frequent sprinkles; keep water off sidewalks.',
+    mix: [
+      { slug: 'seacliff-buckwheat', units: '3 plants', role: 'pollinator anchor' },
+      { slug: 'beach-suncups', units: '6 starts', role: 'low sandy edge' },
+      { slug: 'deerweed', units: '3 plants', role: 'repair texture and nitrogen-fixing rhythm' },
+      { slug: 'coast-sunflower', units: '2 plants', role: 'yellow bloom marker' },
+    ],
+    nextMoves: [
+      'Check city parkway rules and keep sightlines clear.',
+      'Break compaction gently and avoid imported high-fertility soil.',
+      'Mulch around starts, not over crowns, and leave a walking edge.',
+    ],
+  },
+  {
+    slug: 'yard',
+    name: 'Front yard patch',
+    scale: '100-400 square feet',
+    siteRead: 'Enough room for layers: low flowers, loose repair plants, and evergreen coastal scrub.',
+    value: 'Creates a durable local habitat patch that can replace thirsty ornamental area over time.',
+    water: 'Rain-season planting plus monthly deep checks during the first dry season.',
+    mix: [
+      { slug: 'coyote-brush', units: '2 shrubs', role: 'evergreen structure and shelter' },
+      { slug: 'seacliff-buckwheat', units: '5 plants', role: 'pollinator and El Segundo signal' },
+      { slug: 'deerweed', units: '5 plants', role: 'loose restoration fill' },
+      { slug: 'coast-sunflower', units: '4 plants', role: 'visual bloom field' },
+      { slug: 'beach-suncups', units: '10 starts', role: 'low edge and seasonal groundcover' },
+    ],
+    nextMoves: [
+      'Place shrubs first by mature size, then fill between them with lower plants.',
+      'Group plants by water need so establishment does not punish the dry-adapted ones.',
+      'Remove invasive groundcover in phases so bare soil is not left open too long.',
+    ],
+  },
+  {
+    slug: 'wild-edge',
+    name: 'Wild edge',
+    scale: '400+ square feet',
+    siteRead: 'A larger slope, fence line, or back edge that can look wilder and carry real structure.',
+    value: 'Builds a recognizable coastal scrub edge: shelter, flowers, berries, and seasonal roughness.',
+    water: 'Establish with deep infrequent water, then let dry-season structure be part of the look.',
+    mix: [
+      { slug: 'lemonade-berry', units: '2 shrubs', role: 'large coastal mass and bird value' },
+      { slug: 'coyote-brush', units: '4 shrubs', role: 'wind-proof structure' },
+      { slug: 'seacliff-buckwheat', units: '8 plants', role: 'pollinator field' },
+      { slug: 'deerweed', units: '8 plants', role: 'fast repair and seasonal looseness' },
+      { slug: 'coast-sunflower', units: '6 plants', role: 'bright scrub note' },
+    ],
+    nextMoves: [
+      'Mark paths before planting so habitat does not get stepped through.',
+      'Plant larger shrubs with their mature width in mind, not nursery size.',
+      'Keep a simple quarterly log: bloom, seed, bird/insect activity, water used.',
+    ],
+  },
+];
+
 export type SeasonalSignal = {
   season: string;
   months: string;

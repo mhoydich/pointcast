@@ -122,6 +122,7 @@ export const GET: APIRoute = async () => {
         gardenYield: 'https://pointcast.xyz/garden-yield.json',
         houseplants: 'https://pointcast.xyz/houseplants.json',
         meditate: 'https://pointcast.xyz/meditate.json',
+        natureYield: 'https://pointcast.xyz/nature-yield.json',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',

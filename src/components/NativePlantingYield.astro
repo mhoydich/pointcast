@@ -1,0 +1,508 @@
+---
+import {
+  NATIVE_PLANTING_PALETTE,
+  PLANTING_VALUE_SYSTEM,
+  PLANTING_YIELD_SITES,
+} from '../lib/local';
+
+interface Props {
+  context?: 'block' | 'nature';
+}
+
+const { context = 'nature' } = Astro.props;
+const paletteBySlug = new Map(NATIVE_PLANTING_PALETTE.map((plant) => [plant.slug, plant]));
+const sites = PLANTING_YIELD_SITES.map((site) => ({
+  ...site,
+  mix: site.mix.map((item) => {
+    const plant = paletteBySlug.get(item.slug);
+    return {
+      ...item,
+      name: plant?.name ?? item.slug,
+      scientific: plant?.scientific ?? '',
+      form: plant?.form ?? 'plant',
+    };
+  }),
+}));
+const defaultSite = sites[0];
+---
+
+<section class={`planting-yield planting-yield--${context}`} id="planting-yield" data-planting-yield>
+  <div class="planting-yield__copy">
+    <p class="planting-yield__kicker">BLOCK {PLANTING_VALUE_SYSTEM.sourceBlock} · VALUE YIELD SYSTEM</p>
+    <h2>Turn the palette into a small local asset.</h2>
+    <p class="planting-yield__dek">{PLANTING_VALUE_SYSTEM.yieldDefinition}</p>
+    <dl class="planting-yield__metrics">
+      {PLANTING_VALUE_SYSTEM.metrics.map((metric) => (
+        <div>
+          <dt>{metric.label}</dt>
+          <dd>{metric.signal}</dd>
+        </div>
+      ))}
+    </dl>
+  </div>
+
+  <div class="planting-yield__system">
+    <div class="planting-yield__controls" aria-label="Native planting yield controls">
+      <div>
+        <span class="planting-yield__label">Site type</span>
+        <div class="planting-yield__tabs" role="group" aria-label="Site type">
+          {sites.map((site, index) => (
+            <button
+              type="button"
+              class:list={['planting-yield__tab', { 'is-active': index === 0 }]}
+              data-yield-site={site.slug}
+            >
+              {site.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <label class="planting-yield__select">
+        <span class="planting-yield__label">Sun read</span>
+        <select data-yield-sun>
+          <option value="full">Full coastal sun</option>
+          <option value="part">Morning sun / part day</option>
+          <option value="shade">Bright shade edge</option>
+        </select>
+      </label>
+
+      <label class="planting-yield__select">
+        <span class="planting-yield__label">Care mode</span>
+        <select data-yield-care>
+          <option value="rain">Rain-season start</option>
+          <option value="hand">Hand-water establishment</option>
+          <option value="container">Container watch</option>
+        </select>
+      </label>
+    </div>
+
+    <article class="planting-yield__output" aria-live="polite">
+      <div class="planting-yield__output-head">
+        <div>
+          <span class="planting-yield__label">Plan</span>
+          <h3 data-yield-name>{defaultSite.name}</h3>
+        </div>
+        <span class="planting-yield__scale" data-yield-scale>{defaultSite.scale}</span>
+      </div>
+
+      <p class="planting-yield__read" data-yield-read>{defaultSite.siteRead}</p>
+      <p class="planting-yield__value" data-yield-value>{defaultSite.value}</p>
+
+      <div class="planting-yield__columns">
+        <div>
+          <span class="planting-yield__label">Plant mix</span>
+          <ul class="planting-yield__mix" data-yield-mix>
+            {defaultSite.mix.map((item) => (
+              <li>
+                <strong>{item.name}</strong>
+                <span>{item.units} · {item.role}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <span class="planting-yield__label">Next 90 days</span>
+          <ol class="planting-yield__moves" data-yield-moves>
+            {defaultSite.nextMoves.map((move) => <li>{move}</li>)}
+          </ol>
+        </div>
+      </div>
+
+      <div class="planting-yield__fit">
+        <span class="planting-yield__label">Fit check</span>
+        <p data-yield-fit>{defaultSite.water}</p>
+      </div>
+    </article>
+  </div>
+
+  <div class="planting-yield__footer">
+    <span>{PLANTING_VALUE_SYSTEM.operatingPrinciple}</span>
+    <a href="/nature-yield.json">/nature-yield.json</a>
+  </div>
+</section>
+
+<script is:inline define:vars={{ sites }}>
+  (function () {
+    const root = document.currentScript?.closest('[data-planting-yield]') ||
+      document.querySelector('[data-planting-yield]');
+    if (!root) return;
+
+    const siteMap = new Map(sites.map(function (site) { return [site.slug, site]; }));
+    const buttons = Array.from(root.querySelectorAll('[data-yield-site]'));
+    const sun = root.querySelector('[data-yield-sun]');
+    const care = root.querySelector('[data-yield-care]');
+    const name = root.querySelector('[data-yield-name]');
+    const scale = root.querySelector('[data-yield-scale]');
+    const read = root.querySelector('[data-yield-read]');
+    const value = root.querySelector('[data-yield-value]');
+    const mix = root.querySelector('[data-yield-mix]');
+    const moves = root.querySelector('[data-yield-moves]');
+    const fit = root.querySelector('[data-yield-fit]');
+
+    function escapeHtml(input) {
+      return String(input).replace(/[&<>"']/g, function (char) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;',
+        }[char];
+      });
+    }
+
+    function fitNote(site) {
+      const sunValue = sun ? sun.value : 'full';
+      const careValue = care ? care.value : 'rain';
+      const notes = [site.water];
+
+      if (sunValue === 'part') {
+        notes.push('Part-day sun favors buckwheat, coyote brush, and lemonade berry; expect fewer sunflower blooms.');
+      } else if (sunValue === 'shade') {
+        notes.push('Bright shade is a constraint: use the plan as a grammar, then reduce the hottest bloom plants.');
+      } else {
+        notes.push('Full sun supports the complete dune-to-scrub palette when drainage is fast.');
+      }
+
+      if (careValue === 'hand') {
+        notes.push('Water deeply and infrequently so roots chase depth instead of surface sprinklers.');
+      } else if (careValue === 'container') {
+        notes.push('Containers need sharper drainage, mineral top-dress, and closer dry-down checks.');
+      } else {
+        notes.push('Rain-season starts create the best low-effort establishment window.');
+      }
+
+      return notes.join(' ');
+    }
+
+    function render(slug) {
+      const site = siteMap.get(slug) || sites[0];
+      if (!site) return;
+
+      buttons.forEach(function (button) {
+        button.classList.toggle('is-active', button.getAttribute('data-yield-site') === site.slug);
+      });
+
+      if (name) name.textContent = site.name;
+      if (scale) scale.textContent = site.scale;
+      if (read) read.textContent = site.siteRead;
+      if (value) value.textContent = site.value;
+      if (mix) {
+        mix.innerHTML = site.mix.map(function (item) {
+          return '<li><strong>' + escapeHtml(item.name) + '</strong><span>' +
+            escapeHtml(item.units) + ' · ' + escapeHtml(item.role) + '</span></li>';
+        }).join('');
+      }
+      if (moves) {
+        moves.innerHTML = site.nextMoves.map(function (move) {
+          return '<li>' + escapeHtml(move) + '</li>';
+        }).join('');
+      }
+      if (fit) fit.textContent = fitNote(site);
+      root.setAttribute('data-active-site', site.slug);
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        render(button.getAttribute('data-yield-site'));
+      });
+    });
+
+    [sun, care].forEach(function (control) {
+      if (!control) return;
+      control.addEventListener('change', function () {
+        render(root.getAttribute('data-active-site') || sites[0].slug);
+      });
+    });
+
+    render(sites[0]?.slug);
+  })();
+</script>
+
+<style>
+  .planting-yield {
+    margin: 28px 0;
+    padding: 18px;
+    border: 1.5px solid #0F6E56;
+    border-radius: 2px;
+    background: #f7fbf5;
+  }
+
+  .planting-yield--block {
+    margin-top: 16px;
+  }
+
+  .planting-yield__kicker,
+  .planting-yield__label,
+  .planting-yield__footer a {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .planting-yield__kicker {
+    margin: 0 0 8px;
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .planting-yield h2 {
+    margin: 0 0 10px;
+    max-width: 14ch;
+    font-size: clamp(2rem, 8vw, 4.5rem);
+    line-height: 0.92;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #12110E;
+  }
+
+  .planting-yield__dek {
+    max-width: 64ch;
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+
+  .planting-yield__metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 16px 0 18px;
+  }
+
+  .planting-yield__metrics div {
+    min-height: 112px;
+    padding: 12px;
+    border: 1px solid #cbd8cd;
+    border-top: 4px solid #0F6E56;
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .planting-yield__metrics dt {
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #12110E;
+  }
+
+  .planting-yield__metrics dd {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--pc-ink-soft);
+  }
+
+  .planting-yield__system {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.36fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+
+  .planting-yield__controls,
+  .planting-yield__output {
+    border: 1px solid #cbd8cd;
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .planting-yield__controls {
+    display: grid;
+    gap: 14px;
+    padding: 12px;
+    position: sticky;
+    top: 12px;
+  }
+
+  .planting-yield__label {
+    display: block;
+    margin-bottom: 6px;
+    color: #526257;
+  }
+
+  .planting-yield__tabs {
+    display: grid;
+    gap: 6px;
+  }
+
+  .planting-yield__tab {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #aebdaf;
+    border-radius: 2px;
+    background: #f7f8f4;
+    color: #12110E;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .planting-yield__tab.is-active {
+    border-color: #0F6E56;
+    background: #0F6E56;
+    color: #fff;
+  }
+
+  .planting-yield__select select {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid #aebdaf;
+    border-radius: 2px;
+    background: #fff;
+    color: #12110E;
+    font: inherit;
+  }
+
+  .planting-yield__output {
+    padding: 14px;
+  }
+
+  .planting-yield__output-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px dashed #cbd8cd;
+    padding-bottom: 12px;
+  }
+
+  .planting-yield h3 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.05;
+    font-weight: 500;
+    color: #12110E;
+  }
+
+  .planting-yield__scale {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border: 1px solid #0F6E56;
+    border-radius: 2px;
+    color: #074638;
+    background: #eaf5ed;
+    font-size: 13px;
+  }
+
+  .planting-yield__read,
+  .planting-yield__value,
+  .planting-yield__fit p {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+  }
+
+  .planting-yield__value {
+    color: #12110E;
+  }
+
+  .planting-yield__columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .planting-yield__mix,
+  .planting-yield__moves {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .planting-yield__mix {
+    list-style: none;
+  }
+
+  .planting-yield__mix li,
+  .planting-yield__moves li {
+    padding: 10px;
+    border: 1px solid #d8dfd5;
+    border-radius: 2px;
+    background: #fbfcf9;
+  }
+
+  .planting-yield__mix strong,
+  .planting-yield__mix span {
+    display: block;
+  }
+
+  .planting-yield__mix strong {
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+
+  .planting-yield__mix span,
+  .planting-yield__moves li {
+    font-size: 13px;
+    line-height: 1.42;
+    color: var(--pc-ink-soft);
+  }
+
+  .planting-yield__moves {
+    padding-left: 20px;
+  }
+
+  .planting-yield__fit {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed #cbd8cd;
+  }
+
+  .planting-yield__footer {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #cbd8cd;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--pc-ink-soft);
+  }
+
+  .planting-yield__footer a {
+    flex: 0 0 auto;
+    color: var(--pc-accent);
+    font-weight: 500;
+  }
+
+  @media (max-width: 820px) {
+    .planting-yield__metrics,
+    .planting-yield__system,
+    .planting-yield__columns {
+      grid-template-columns: 1fr;
+    }
+
+    .planting-yield__controls {
+      position: static;
+    }
+
+    .planting-yield__metrics div {
+      min-height: auto;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .planting-yield {
+      padding: 14px;
+    }
+
+    .planting-yield__output-head,
+    .planting-yield__footer {
+      display: grid;
+    }
+
+    .planting-yield__scale {
+      width: fit-content;
+    }
+  }
+</style>

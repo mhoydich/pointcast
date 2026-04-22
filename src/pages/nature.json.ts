@@ -14,6 +14,8 @@ import {
   ANCHOR,
   NATURE_NOTES,
   NATIVE_PLANTING_PALETTE,
+  PLANTING_VALUE_SYSTEM,
+  PLANTING_YIELD_SITES,
   SEASONAL_SIGNALS,
   filterInRangeBlocks,
 } from '../lib/local';
@@ -58,6 +60,11 @@ export const GET: APIRoute = async () => {
     },
     notes: NATURE_NOTES,
     plantingPalette: NATIVE_PLANTING_PALETTE,
+    nativePlantingYield: {
+      ...PLANTING_VALUE_SYSTEM,
+      jsonUrl: 'https://pointcast.xyz/nature-yield.json',
+      sitePlans: PLANTING_YIELD_SITES,
+    },
     seasonalSignals: SEASONAL_SIGNALS,
     sources: [...new Map([...NATURE_NOTES, ...NATIVE_PLANTING_PALETTE].map((item) => [
       item.sourceUrl,
