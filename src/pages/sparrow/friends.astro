@@ -340,15 +340,40 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
           const displayName = f.alias || profName || '';
           const aliasSource = f.alias ? 'local' : (profName ? 'nostr' : 'none');
           const npubShort = (hexToNpub(f.pubkey) || f.pubkey).slice(0, 14) + '…';
+          // v0.24: NIP-05 verified checkmark. `verifiedStateFor` returns
+          // "ok" (verified, pubkey matched), "mismatch" (resolved but
+          // different pubkey — suspicious), "pending" (in-flight),
+          // "unchecked" (no nip05 / never fetched).
+          const v = verifiedStateFor(f.pubkey);
+          const verifyGlyph =
+            v === 'ok'       ? '<span class="sp-friends-verify is-ok" title="NIP-05 resolves to this pubkey">✓</span>'
+          : v === 'mismatch' ? '<span class="sp-friends-verify is-bad" title="NIP-05 points to a different pubkey">!</span>'
+          : v === 'pending'  ? '<span class="sp-friends-verify is-pending" title="verifying NIP-05…">…</span>'
+          :                    '';
+          // v0.24: picture thumbnail. Lazy-loaded, CSP-safe (https-only
+          // allowed via profile storage filter), onerror-hidden so a
+          // 404 thumbnail doesn't leave a broken-image glyph.
+          const pictureHTML = prof?.picture
+            ? `<img
+                class="sp-friends-pic"
+                src="${escapeHTML(prof.picture)}"
+                alt=""
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                decoding="async"
+                onerror="this.style.display='none'"
+              />`
+            : `<span class="sp-friends-pic sp-friends-pic-placeholder" aria-hidden="true">✦</span>`;
           const li = document.createElement('li');
           li.className = 'sp-friends-row';
           li.innerHTML = `
+            ${pictureHTML}
             <span class="sp-friends-pk">
               ${displayName ? `<strong>${escapeHTML(displayName)}</strong>` : ''}
               ${displayName && aliasSource === 'nostr' ? '<span class="sp-friends-src" title="name pulled from NIP-01 kind-0 profile">🛰</span>' : ''}
               ${displayName ? ' · ' : ''}
               <code title="${f.pubkey}">${escapeHTML(npubShort)}</code>
-              ${prof?.nip05 ? `<span class="sp-friends-nip05">${escapeHTML(prof.nip05)}</span>` : ''}
+              ${prof?.nip05 ? `<span class="sp-friends-nip05">${escapeHTML(prof.nip05)}${verifyGlyph}</span>` : ''}
             </span>
             <button type="button" class="sp-friends-unfollow" data-pubkey="${f.pubkey}">unfollow</button>
           `;
@@ -492,13 +517,23 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
           const updatedAt = entry.body?.saved?.updated_at || '';
           const profName  = profileName(friend.pubkey);
           const displayName = friend.alias || profName || '';
+          const prof = profileFor(friend.pubkey);
+          const v = verifiedStateFor(friend.pubkey);
+          const verifyGlyph =
+            v === 'ok'       ? ' <span class="sp-friends-verify is-ok" title="NIP-05 verified">✓</span>'
+          : v === 'mismatch' ? ' <span class="sp-friends-verify is-bad" title="NIP-05 mismatch">!</span>'
+          :                    '';
+          const pictureHTML = prof?.picture
+            ? `<img class="sp-friends-pic sp-friends-pic-sm" src="${escapeHTML(prof.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display='none'" />`
+            : '';
           const card = document.createElement('article');
           card.className = 'sp-friends-card';
           const header = document.createElement('header');
           header.className = 'sp-friends-card-head';
           header.innerHTML = `
             <span class="sp-friends-card-name">
-              ${displayName ? `<strong>${escapeHTML(displayName)}</strong> · ` : ''}
+              ${pictureHTML}
+              ${displayName ? `<strong>${escapeHTML(displayName)}</strong>${verifyGlyph} · ` : ''}
               <code title="${friend.pubkey}">${shortPk(friend.pubkey)}</code>
             </span>
             <span class="sp-friends-card-meta">
@@ -632,19 +667,30 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         if (!newestByAuthor || !newestByAuthor.size) return;
         const map = readProfiles();
         let changed = false;
+        const needVerify = [];
         for (const [pubkey, ev] of newestByAuthor) {
           let content;
           try { content = JSON.parse(ev.content); } catch { continue; }
           if (!content || typeof content !== 'object') continue;
+          // Preserve existing nip05_verified state when the nip05
+          // string hasn't changed — no reason to re-check twice.
+          const prior = map[pubkey] || {};
+          const nextNip05 = typeof content.nip05 === 'string' ? content.nip05.slice(0, 120) : undefined;
+          const nip05Changed = (prior.nip05 || '') !== (nextNip05 || '');
           const next = {
             name:         typeof content.name === 'string' ? content.name.slice(0, 80) : undefined,
             display_name: typeof content.display_name === 'string' ? content.display_name.slice(0, 80) : undefined,
             picture:      typeof content.picture === 'string' && /^https?:\/\//i.test(content.picture) ? content.picture.slice(0, 400) : undefined,
-            nip05:        typeof content.nip05 === 'string' ? content.nip05.slice(0, 120) : undefined,
+            nip05:        nextNip05,
+            nip05_verified:  nip05Changed ? undefined : prior.nip05_verified,
+            nip05_verified_at: nip05Changed ? undefined : prior.nip05_verified_at,
             fetched_at:   Date.now(),
           };
           map[pubkey] = next;
           changed = true;
+          if (next.nip05 && (nip05Changed || !verifiedStateFreshByProfile(next))) {
+            needVerify.push({ pubkey, nip05: next.nip05 });
+          }
         }
         if (changed) {
           writeProfiles(map);
@@ -652,6 +698,85 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
           repaintFeed();
           paintState();
         }
+        // Kick off NIP-05 verifications for anyone with a nip05 that's
+        // new or stale. Runs parallel, each independent.
+        for (const { pubkey, nip05 } of needVerify) {
+          verifyNip05(pubkey, nip05).catch(() => {});
+        }
+      }
+
+      // ─── v0.24 · NIP-05 verification ──────────────────────────────
+      // Resolve `<user>@<domain>` via `https://<domain>/.well-known/nostr.json?name=<user>`
+      // and confirm that the claimed nip05 points back at this pubkey.
+      // Result ("ok" | "mismatch" | "pending" | "unchecked") is cached
+      // on the profile record with a 7-day TTL. `fetch` is same-origin
+      // cache-friendly (GET, no credentials); non-2xx / parse errors /
+      // CORS failures all land as "mismatch" so an unreachable verifier
+      // doesn't masquerade as verified.
+      const NIP05_VERIFY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+      function verifiedStateFreshByProfile(prof) {
+        return !!(prof && prof.nip05_verified_at && Date.now() - prof.nip05_verified_at < NIP05_VERIFY_TTL_MS);
+      }
+
+      function verifiedStateFor(pubkey) {
+        const prof = profileFor(pubkey);
+        if (!prof || !prof.nip05) return 'unchecked';
+        if (typeof prof.nip05_verified === 'boolean' && verifiedStateFreshByProfile(prof)) {
+          return prof.nip05_verified ? 'ok' : 'mismatch';
+        }
+        if (prof.nip05_verify_in_flight) return 'pending';
+        return 'unchecked';
+      }
+
+      async function verifyNip05(pubkey, nip05) {
+        // nip05 shape: "<localpart>@<domain>" (or bare "domain" → "_@domain")
+        const m = /^([^@]+)@([^@]+)$/.exec(nip05)
+          || (/^[^@]+$/.test(nip05) ? [null, '_', nip05] : null);
+        if (!m) {
+          markVerify(pubkey, false);
+          return;
+        }
+        const [, user, domain] = m;
+        if (!/^[a-z0-9._-]+$/i.test(user) || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+          markVerify(pubkey, false);
+          return;
+        }
+        markVerifyPending(pubkey);
+        const url = `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(user)}`;
+        try {
+          const r = await fetch(url, { method: 'GET', cache: 'force-cache' });
+          if (!r.ok) { markVerify(pubkey, false); return; }
+          const body = await r.json();
+          const names = body && typeof body === 'object' ? body.names : null;
+          const reported = names && typeof names === 'object' ? names[user] : null;
+          const ok = typeof reported === 'string' && reported.toLowerCase() === pubkey.toLowerCase();
+          markVerify(pubkey, ok);
+        } catch {
+          markVerify(pubkey, false);
+        }
+      }
+
+      function markVerifyPending(pubkey) {
+        const map = readProfiles();
+        const prof = map[pubkey] || {};
+        prof.nip05_verify_in_flight = true;
+        map[pubkey] = prof;
+        writeProfiles(map);
+        paintFriendsList();
+        repaintFeed();
+      }
+
+      function markVerify(pubkey, ok) {
+        const map = readProfiles();
+        const prof = map[pubkey] || {};
+        prof.nip05_verified = !!ok;
+        prof.nip05_verified_at = Date.now();
+        delete prof.nip05_verify_in_flight;
+        map[pubkey] = prof;
+        writeProfiles(map);
+        paintFriendsList();
+        repaintFeed();
       }
 
       // ─── Boot ─────────────────────────────────────────────────────
@@ -659,6 +784,17 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       paintFriendsList();
       subscribeToFriends();
       refreshProfiles();
+
+      // v0.24: kick NIP-05 verification for any cached friend whose
+      // nip05 hasn't been verified yet (or whose verify cache is
+      // stale). New profiles arriving via refreshProfiles() have their
+      // own verification hook in commitProfiles().
+      for (const f of readFriends()) {
+        const prof = profileFor(f.pubkey);
+        if (prof?.nip05 && !verifiedStateFreshByProfile(prof)) {
+          verifyNip05(f.pubkey, prof.nip05).catch(() => {});
+        }
+      }
 
       // Re-paint if the signer injects late (NIP-07 extensions often do).
       setTimeout(paintState, 800);
@@ -754,11 +890,59 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
       display: flex; flex-direction: column; gap: 4px;
     }
     .sp-friends-row {
-      display: flex; align-items: center; justify-content: space-between;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center; gap: 10px;
       padding: 8px 10px;
       border: 1px solid var(--sp-rule);
       border-radius: 3px;
       background: color-mix(in oklch, var(--sp-bone) 3%, transparent);
+    }
+    /* v0.24: picture thumbnail. 28x28 with soft ring; placeholder ✦
+       for people without a kind-0 picture. Small-size variant lives
+       in the card header. */
+    .sp-friends-pic {
+      width: 28px; height: 28px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 1px solid var(--sp-rule);
+      background: var(--sp-ink);
+      flex-shrink: 0;
+    }
+    .sp-friends-pic-placeholder {
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--sp-mute); font-size: 14px;
+    }
+    .sp-friends-pic-sm {
+      width: 18px; height: 18px;
+      margin-right: 6px;
+      vertical-align: -4px;
+    }
+    /* v0.24: NIP-05 verification glyph. `ok` is moss, `mismatch` is
+       oxblood so a malicious nip05 doesn't sneak past as "verified". */
+    .sp-friends-verify {
+      display: inline-block;
+      margin-left: 4px;
+      width: 14px; height: 14px; line-height: 14px;
+      text-align: center;
+      font-size: 10px; font-weight: 700;
+      border-radius: 999px;
+      vertical-align: middle;
+      cursor: help;
+    }
+    .sp-friends-verify.is-ok {
+      color: var(--sp-moss);
+      border: 1px solid color-mix(in oklch, var(--sp-moss) 60%, transparent);
+      background: color-mix(in oklch, var(--sp-moss) 12%, transparent);
+    }
+    .sp-friends-verify.is-bad {
+      color: var(--sp-oxblood);
+      border: 1px solid color-mix(in oklch, var(--sp-oxblood) 60%, transparent);
+      background: color-mix(in oklch, var(--sp-oxblood) 14%, transparent);
+    }
+    .sp-friends-verify.is-pending {
+      color: var(--sp-mute);
+      border: 1px solid var(--sp-rule);
     }
     .sp-friends-pk code {
       font-family: var(--sp-mono); font-size: 12px;

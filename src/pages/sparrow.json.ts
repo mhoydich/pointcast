@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.23',
-    protocol_version: '0.23',
+    version: '0.24',
+    protocol_version: '0.24',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -306,12 +306,49 @@ export const GET: APIRoute = async () => {
           since: 'v0.23',
           event_kind: 0,
           subscribe_filter: '{ kinds: [0], authors: <friends>, limit: friends.length }',
-          cache_storage: 'localStorage["sparrow:profiles"] — { [hex]: { name?, display_name?, picture?, nip05?, fetched_at } }',
+          cache_storage: 'localStorage["sparrow:profiles"] — { [hex]: { name?, display_name?, picture?, nip05?, nip05_verified?, nip05_verified_at?, fetched_at } }',
           ttl_ms: 86400000,
           fields_read: ['name', 'display_name', 'picture', 'nip05'],
           alias_priority: 'local alias (sparrow:friends[].alias) > kind-0 display_name > kind-0 name > nothing',
           render: 'friends list + feed card header both show the resolved display name; a 🛰 glyph appears next to names sourced from the relay so users can tell what\'s local vs federated',
-          not_yet: 'picture rendering (v0.24) and NIP-05 verification round-trip',
+        },
+
+        // v0.24: lazy-loaded, CSP-friendly profile thumbnails on the
+        // friends list + feed cards. Images go through a strict
+        // https-only filter before they ever land in sparrow:profiles,
+        // and render with referrerpolicy=no-referrer + onerror=hide so
+        // a broken URL disappears quietly rather than leaving a torn-
+        // page glyph behind.
+        picture_rendering: {
+          since: 'v0.24',
+          storage_gate: 'kind-0 `picture` accepted only when /^https?:\\/\\//i.test(value), capped at 400 chars',
+          render_element: '<img class="sp-friends-pic" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display=\'none\'">',
+          placeholder: 'sp-friends-pic-placeholder span with a ✦ glyph when no picture is known',
+          sizes: { list: '28px circle', feed_card: '18px inline' },
+          why_no_proxy: 'Loading via Cloudflare/image proxy would add a TTL layer but also cost bandwidth + privacy. Lazy + no-referrer gets 90% of the benefit.',
+        },
+
+        // v0.24: NIP-05 verification. Resolves `<user>@<domain>` via
+        // /.well-known/nostr.json?name=<user> on the claimed domain
+        // and confirms names[user] equals the author pubkey. Results
+        // cache on the profile with a 7-day TTL. Any non-2xx, parse
+        // error, CORS failure, or mismatch lands as "mismatch" so a
+        // silent failure doesn't masquerade as verified.
+        nip05_verification: {
+          since: 'v0.24',
+          protocol: 'NIP-05',
+          endpoint_template: 'https://<domain>/.well-known/nostr.json?name=<user>',
+          request: 'GET · no credentials · cache: force-cache',
+          cache_fields: ['nip05_verified (bool)', 'nip05_verified_at (epoch ms)', 'nip05_verify_in_flight (optional bool)'],
+          cache_ttl_ms: 604800000,
+          outcomes: {
+            ok: 'pubkey matches names[user] (case-insensitive)',
+            mismatch: 'resolved to a different pubkey, non-2xx, parse error, CORS failure, or malformed nip05',
+            pending: 'verify in-flight',
+            unchecked: 'no nip05 in profile, or pending verification not yet started',
+          },
+          render: '✓ (moss pill) beside the nip05 string + name when verified; ! (oxblood pill) when mismatch; … (mute) while pending',
+          trigger_points: ['commitProfiles() when nip05 changed or stale', 'boot scan of cached friends whose nip05_verified_at is >7d'],
         },
       },
 
@@ -609,6 +646,7 @@ export const GET: APIRoute = async () => {
       focus_search: '/',
       theme_toggle: 'T',
       save_toggle: 'S',
+      friends_open: 'F',
       scroll_top: '0',
       scroll_bottom: '$',
       cheatsheet: '?',
@@ -690,7 +728,8 @@ export const GET: APIRoute = async () => {
       'v0.20': 'Sparrow.app peer-node shipped. Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on port 38474 exposing GET /health + GET /reader-state.json + POST /reader-state with byte-identical sparrow-reader-state-v1 merge logic to Magpie\'s. NWListener.service advertises _sparrow._tcp "Sparrow" with a TXT record (version/path/schema/mirror/peer). Web resolver ladder extended to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474. window.__sparrow.magpiePeerKind records which peer answered so the bridge pill can label it accurately. Composer stays Magpie-only and falls back to direct /api/ping when Sparrow.app is the resolved peer.',
       'v0.21': 'Cross-device sync of saved + visited + reactions via NIP-44-encrypted kind-30078 addressable events. Opt-in HUD pill (sync · on/off/n/a); self-encryption via window.nostr.nip44 means only the same npub can decrypt. Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, both use the same newest-wins-per-key merge policy so state stays coherent across device + peer. 4s throttle between relay pushes; on page load subscribes with limit:1 against each relay to pull latest.',
       'v0.22': 'Federated reading lists. New /sparrow/friends route. Opt-in "publish my saved list publicly" flag emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted, narrow scope — just the saved ids + a client-id profile; no visited/reaction data). Friends management UI stores {pubkey,alias?}[] in sparrow:friends; on load, REQs the relay pool for each friend\'s latest public saved event and renders their list with server-shipped block lookups so titles and channels resolve. Hex-only for now; npub1… bech32 decode lands in a polish pass.',
-      'v0.23': 'Federation polish. Self-contained NIP-19 bech32 codec in /sparrow/friends — npubToHex/hexToNpub/parsePubkey — so the add-form accepts npub1… alongside hex and the HUD self-pubkey display renders as a short npub. NIP-01 kind-0 profile lookup REQs {kinds:[0], authors:<friends>} on load, caches {name, display_name, picture, nip05, fetched_at} in sparrow:profiles (24h TTL), and uses display_name/name as auto-alias when the local alias is empty. Friends list + feed cards show a 🛰 glyph on names pulled from the relay so federated vs local is legible. Picture rendering + NIP-05 verification round-trip are explicitly v0.24. (current)',
+      'v0.23': 'Federation polish. Self-contained NIP-19 bech32 codec in /sparrow/friends — npubToHex/hexToNpub/parsePubkey — so the add-form accepts npub1… alongside hex and the HUD self-pubkey display renders as a short npub. NIP-01 kind-0 profile lookup REQs {kinds:[0], authors:<friends>} on load, caches {name, display_name, picture, nip05, fetched_at} in sparrow:profiles (24h TTL), and uses display_name/name as auto-alias when the local alias is empty. Friends list + feed cards show a 🛰 glyph on names pulled from the relay so federated vs local is legible. Picture rendering + NIP-05 verification round-trip are explicitly v0.24.',
+      'v0.24': 'Federation finish. Profile pictures render as 28px circles on /sparrow/friends list (18px inline on feed cards) with lazy loading + referrerpolicy=no-referrer + onerror hide. NIP-05 verification hits https://<domain>/.well-known/nostr.json?name=<user> and checks names[user] equals the pubkey; results cached on the profile with a 7-day TTL. Moss-pill ✓ when verified, oxblood-pill ! on mismatch, dot while pending. Keyboard shortcut F jumps to /sparrow/friends from any page; palette + cheatsheet entries added. Friends reel-lane on /sparrow dashboard is explicitly deferred to v0.25 to keep this sprint coherent. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
