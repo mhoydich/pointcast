@@ -32,12 +32,16 @@ import { CHANNEL_LIST } from '../lib/channels';
 import { getCollection } from 'astro:content';
 
 const HELLO_MIKE_BLOCK_ID = '0334';
+const HOUSEPLANTS_FIRST_BLOCK_ID = '0333';
 
 const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-const helloMikeBlock = allBlocks.find((block) => block.data.id === HELLO_MIKE_BLOCK_ID);
-const blocks = allBlocks.filter((block) => block.data.id !== HELLO_MIKE_BLOCK_ID);
+const firstBlock = allBlocks.find((block) => block.data.id === HOUSEPLANTS_FIRST_BLOCK_ID) ?? allBlocks[0] ?? null;
+const helloMikeCandidate = allBlocks.find((block) => block.data.id === HELLO_MIKE_BLOCK_ID) ?? null;
+const helloMikeBlock = helloMikeCandidate?.data.id !== firstBlock?.data.id ? helloMikeCandidate : null;
+const pinnedBlockIds = new Set([firstBlock?.data.id, helloMikeBlock?.data.id].filter(Boolean));
+const blocks = allBlocks.filter((block) => !pinnedBlockIds.has(block.data.id));
 const blockCount = allBlocks.length;
 
 // JSON-LD — make the home a CollectionPage so agents can parse the list.
@@ -100,6 +104,12 @@ const alternates = [
       <WalletChip />
       <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
+
+    {firstBlock && (
+      <section class="first-block" aria-label="First block on PointCast">
+        <BlockCard block={firstBlock} />
+      </section>
+    )}
 
     {helloMikeBlock && (
       <section class="hello-module" aria-label="Hello Mike module">
@@ -410,6 +420,33 @@ const alternates = [
   }
   .chip__code { font-weight: 500; }
   .chip__name { font-weight: 400; color: var(--pc-ink-soft); }
+
+  .first-block {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 14px;
+  }
+
+  .first-block :global(.block-card) {
+    min-height: 210px;
+  }
+
+  .first-block :global(.block-card.span-2x1),
+  .first-block :global(.block-card.span-2x2),
+  .first-block :global(.block-card.span-3x2) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  @media (max-width: 639px) {
+    .first-block {
+      margin-top: 12px;
+    }
+
+    .first-block :global(.block-card) {
+      min-height: 180px;
+    }
+  }
 
   /* Self-healing grid per BLOCKS.md: auto-fit + minmax(220px, 1fr) */
   .grid {
