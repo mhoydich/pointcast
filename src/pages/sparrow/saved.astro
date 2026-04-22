@@ -30,6 +30,12 @@ const lookup = Object.fromEntries(
 );
 
 const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.name]));
+const channelList = CHANNEL_LIST.map((c) => ({
+  code: c.code,
+  slug: c.slug,
+  name: c.name,
+  purpose: c.purpose,
+}));
 ---
 
 <SparrowLayout
@@ -45,6 +51,20 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
         <span data-sp-saved-total>0</span> saved · press <kbd>S</kbd> on any block to toggle
       </span>
     </header>
+
+    <div class="sp-opml" data-sp-opml aria-label="OPML import and export">
+      <span class="sp-opml-kicker">✦ opml</span>
+      <button
+        type="button"
+        class="sp-opml-btn"
+        data-sp-opml-export
+      >export saved ↓</button>
+      <label class="sp-opml-btn sp-opml-btn--import">
+        import ↑
+        <input type="file" accept=".opml,.xml,application/xml,text/xml" data-sp-opml-import hidden />
+      </label>
+      <span class="sp-opml-result" data-sp-opml-result aria-live="polite"></span>
+    </div>
 
     <ol class="sp-receipts" data-sp-receipts data-sp-saved-list></ol>
 
@@ -66,7 +86,7 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
     is:inline
     type="application/json"
     id="sp-saved-lookup"
-    set:html={JSON.stringify({ lookup, channels: channelNameByCode })}
+    set:html={JSON.stringify({ lookup, channels: channelNameByCode, channelList })}
   />
 
   <script is:inline>
@@ -163,6 +183,163 @@ const channelNameByCode = Object.fromEntries(CHANNEL_LIST.map((c) => [c.code, c.
             window.location.reload();
           }
         });
+      });
+    })();
+
+    // ─── v0.17 · OPML IMPORT / EXPORT ───────────────────────────────
+    (() => {
+      const DATA = JSON.parse(document.getElementById('sp-saved-lookup')?.textContent || '{}');
+      const lookup = DATA.lookup || {};
+      const channelList = Array.isArray(DATA.channelList) ? DATA.channelList : [];
+      const channelNames = DATA.channels || {};
+      const resultEl = document.querySelector('[data-sp-opml-result]');
+      const flash = (text, state) => {
+        if (!resultEl) return;
+        resultEl.textContent = text;
+        resultEl.setAttribute('data-state', state || '');
+        if (state === 'ok' || state === 'error') {
+          setTimeout(() => {
+            resultEl.textContent = '';
+            resultEl.removeAttribute('data-state');
+          }, 2800);
+        }
+      };
+
+      const readSaved = () => {
+        try { return JSON.parse(localStorage.getItem('sparrow:saved') || '[]'); }
+        catch { return []; }
+      };
+      const xmlEscape = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;',
+      }[c]));
+
+      function buildOPML() {
+        const saved = readSaved();
+        const now = new Date().toISOString();
+        const lines = [];
+        lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+        lines.push('<opml version="2.0">');
+        lines.push('  <head>');
+        lines.push('    <title>Sparrow — saved blocks + channels</title>');
+        lines.push(`    <dateCreated>${now}</dateCreated>`);
+        lines.push('    <ownerName>Sparrow · https://pointcast.xyz/sparrow</ownerName>');
+        lines.push('  </head>');
+        lines.push('  <body>');
+
+        // Reader root: the Sparrow feed itself + the generic PointCast feed.
+        lines.push('    <outline title="Sparrow" text="Sparrow">');
+        lines.push('      <outline type="rss" version="atom" title="Sparrow · PointCast reader" text="Sparrow · PointCast reader"' +
+                   ' xmlUrl="https://pointcast.xyz/sparrow/feed.xml"' +
+                   ' htmlUrl="https://pointcast.xyz/sparrow" />');
+        lines.push('      <outline type="rss" title="PointCast · all blocks" text="PointCast · all blocks"' +
+                   ' xmlUrl="https://pointcast.xyz/feed.xml"' +
+                   ' htmlUrl="https://pointcast.xyz/" />');
+        lines.push('    </outline>');
+
+        // Saved block list.
+        lines.push('    <outline title="Saved blocks" text="Saved blocks">');
+        for (const id of saved) {
+          const b = lookup[id];
+          const title = b?.title ? `№ ${b.id} — ${b.title}` : `№ ${id}`;
+          const ch = b?.channel ? ` · ${channelNames[b.channel] || b.channel}` : '';
+          lines.push(`      <outline type="link" title="${xmlEscape(title + ch)}" text="${xmlEscape(title + ch)}"` +
+                     ` htmlUrl="https://pointcast.xyz/b/${xmlEscape(id)}" />`);
+        }
+        lines.push('    </outline>');
+
+        // Channel RSS bucket so a feed reader subscribing to this OPML
+        // gets all nine channels' RSS in addition to the saved links.
+        if (channelList.length) {
+          lines.push('    <outline title="Channels" text="Channels">');
+          for (const c of channelList) {
+            lines.push(`      <outline type="rss" title="${xmlEscape(c.name)}" text="${xmlEscape(c.name)}"` +
+                       ` description="${xmlEscape(c.purpose || '')}"` +
+                       ` xmlUrl="https://pointcast.xyz/c/${c.slug}.rss"` +
+                       ` htmlUrl="https://pointcast.xyz/sparrow/ch/${c.slug}" />`);
+          }
+          lines.push('    </outline>');
+        }
+
+        lines.push('  </body>');
+        lines.push('</opml>');
+        return lines.join('\n');
+      }
+
+      function downloadBlob(text, filename) {
+        const blob = new Blob([text], { type: 'text/xml;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        }, 100);
+      }
+
+      document.querySelector('[data-sp-opml-export]')?.addEventListener('click', () => {
+        try {
+          const xml = buildOPML();
+          const d = new Date().toISOString().slice(0, 10);
+          downloadBlob(xml, `sparrow-saved-${d}.opml`);
+          flash(`exported · ${readSaved().length} saved + ${channelList.length} channels`, 'ok');
+        } catch (err) {
+          flash(`× ${err?.message || 'export failed'}`, 'error');
+        }
+      });
+
+      /**
+       * OPML → { blockIds: string[] } by scraping htmlUrl + xmlUrl
+       * attributes that match /b/<id>. Supports both block links and
+       * accidentally-subscribed channel feeds (which just get ignored
+       * — they already live under "Channels" in our export so fine).
+       */
+      function parseOPML(xmlText) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, 'application/xml');
+        const err = doc.querySelector('parsererror');
+        if (err) throw new Error('malformed XML');
+        const ids = new Set();
+        doc.querySelectorAll('outline').forEach((el) => {
+          const url = el.getAttribute('htmlUrl') || el.getAttribute('xmlUrl') || '';
+          const m = /\/b\/(\d{3,})/.exec(url);
+          if (m) ids.add(m[1]);
+        });
+        return Array.from(ids);
+      }
+
+      const fileInput = document.querySelector('[data-sp-opml-import]');
+      fileInput?.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        flash('parsing…', 'pending');
+        try {
+          const text = await file.text();
+          const incoming = parseOPML(text);
+          if (!incoming.length) {
+            flash('× no /b/<id> entries found', 'error');
+            fileInput.value = '';
+            return;
+          }
+          const existing = new Set(readSaved());
+          const before = existing.size;
+          let added = 0;
+          for (const id of incoming) {
+            if (!existing.has(id)) { existing.add(id); added++; }
+          }
+          const merged = Array.from(existing);
+          // Newest-added first to match the save-toggle convention.
+          localStorage.setItem('sparrow:saved', JSON.stringify(merged));
+          localStorage.setItem('sparrow:saved:updated_at', new Date().toISOString());
+          flash(`merged · +${added} new · ${before + added} total`, 'ok');
+          fileInput.value = '';
+          // Re-render the list from the updated localStorage.
+          setTimeout(() => window.location.reload(), 900);
+        } catch (err) {
+          flash(`× ${err?.message || 'import failed'}`, 'error');
+          fileInput.value = '';
+        }
       });
     })();
   </script>
