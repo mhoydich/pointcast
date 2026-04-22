@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.17',
-    protocol_version: '0.17',
+    version: '0.18',
+    protocol_version: '0.18',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -120,7 +120,7 @@ export const GET: APIRoute = async () => {
       service_worker: {
         url: '/sparrow/sw.js',
         scope: '/sparrow/',
-        version: 'sparrow-v0.17.0',
+        version: 'sparrow-v0.18.0',
       },
       cache_policy: {
         shell: 'stale-while-revalidate (home, about, saved, 9 channel pages, manifest, atom feed)',
@@ -277,6 +277,25 @@ export const GET: APIRoute = async () => {
       result_states: ['pending', 'ok', 'error'],
       collapses_on: 'successful post (2.2s after ok state shows)',
       future: 'v0.13 routes multi-destination replies through Magpie /compose when any non-PointCast destination is selected (this sprint); when Magpie is unreachable or /compose 4xx/5xx, Sparrow automatically falls back to direct /api/ping so the reply always lands in PointCast.',
+    },
+
+    // v0.18: Magpie bridge discovery via a ranked origin ladder.
+    // Shared resolver used by every Magpie-bound fetch (reader-state
+    // mirror, bridge awareness pill, composer /compose). First 200 on
+    // /health wins and caches on window.__sparrow.magpieOrigin for
+    // the life of the page.
+    bridge_discovery: {
+      probe_order: [
+        { rank: 1, source: 'localStorage["sparrow:magpie-origin"]', why: 'user override — LAN, VM, reverse proxy, non-default port' },
+        { rank: 2, source: 'http://magpie.local:38473', why: 'mDNS-published .local name once Magpie advertises via Bonjour (v0.19)' },
+        { rank: 3, source: 'http://127.0.0.1:38473', why: 'hardcoded loopback default — always present when Magpie is running locally' },
+      ],
+      health_endpoint: '/health',
+      probe_timeout_ms: 1200,
+      resolved_cache: 'window.__sparrow.magpieOrigin (plus magpieOriginResolved flag so we don\'t re-probe mid-session)',
+      override_setter: 'set localStorage["sparrow:magpie-origin"] to e.g. "http://magpie.box.lan:38473" and reload',
+      why_not_direct_mdns: 'Browsers do not expose Bonjour / mDNS-SD APIs; .local name resolution is handled by the OS stack and works transparently once the service advertises. v0.19 adds the Swift-side NWListener advertisement.',
+      shared_by: ['reader_state_mirror (GET/POST)', 'magpie_bridge (GET /health + /config.json)', 'compose (POST /compose)'],
     },
 
     // v0.17: OPML import/export on /sparrow/saved. Round-trips the
@@ -551,9 +570,10 @@ export const GET: APIRoute = async () => {
       'v0.14': 'Magpie native /compose endpoint shipped. Swift-side handler in Magpie/Services/MagpieServer.swift decodes ComposeRequest { body, title?, dek?, destinations[], channel?, blockType?, sourceUrl?, sourceApp?, subject?, timestamp?, overrides? }; AppState.handleComposeRequest builds an ephemeral ClipItem (id: nil, not persisted) + PublishDraft and fans out via PublisherRegistry. Results envelope mirrors /broadcast so existing parsers work unchanged. Sparrow\'s v0.13 /compose attempts now succeed on the first hop when Magpie is ≥v0.14; older versions still graceful-fallback.',
       'v0.15': 'Reading-list mirror via the Magpie peer-node. MagpieServer adds GET /reader-state.json + POST /reader-state (UserDefaults-backed blob store). SparrowLayout debounces POSTs on saved-list writes + pulls on load. Newest-wins per top-level key via updated_at timestamps. Single-machine today; Sparrow.app HTTP server for true native ↔ web mirror lands later alongside the v0.6 app reshape.',
       'v0.16': 'Visited + reactions extend the sparrow-reader-state-v1 schema. writeVisited + writeReactions both debounce into the same 600ms scheduleReaderMirror(); on pull, Sparrow repaints .is-visited and rehydrates reaction chips from remote state. Magpie-side merge logic unchanged — its per-key newest-wins already handled any shape.',
-      'v0.17': 'OPML import/export on /sparrow/saved. Export bundles Sparrow\'s Atom feed + the nine channel RSS feeds + one <outline> per saved block (/b/<id>) into an OPML 2.0 file any feed reader can swallow. Import DOMParses the uploaded text and unions /b/<id> matches with sparrow:saved (additive, never destructive; unknown outlines ignored). Entirely client-side. (current)',
-      'v0.18': 'Bonjour (mDNS) advertisement from Magpie so dev setups auto-discover the peer-node instead of hardcoding 127.0.0.1:38473. Sparrow probes mDNS before falling back to the port default.',
-      'v0.19': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44). Closes the multi-machine loop that localhost mirror can\'t reach.',
+      'v0.17': 'OPML import/export on /sparrow/saved. Export bundles Sparrow\'s Atom feed + the nine channel RSS feeds + one <outline> per saved block (/b/<id>) into an OPML 2.0 file any feed reader can swallow. Import DOMParses the uploaded text and unions /b/<id> matches with sparrow:saved (additive, never destructive; unknown outlines ignored). Entirely client-side.',
+      'v0.18': 'Bridge discovery (web side). Shared resolveMagpieOrigin() probes a ranked ladder — localStorage["sparrow:magpie-origin"] override → http://magpie.local:38473 → http://127.0.0.1:38473 — and caches the first /health responder on window.__sparrow. Used by every Magpie-bound fetch (mirror, bridge awareness, composer). Sets the stage for Magpie v0.19\'s Bonjour advertisement: the `.local` host just starts resolving once Magpie advertises via NWListener. (current)',
+      'v0.19': 'Magpie Swift-side Bonjour advertisement. NWListener publishes the peer-node as _magpie._tcp with port in the TXT record; macOS mDNS responder makes magpie.local resolve to the host running it. Pairs with Sparrow v0.18\'s already-shipped discovery ladder. Sparrow.app gets the same advertisement on its own service type for the native ↔ web reading-list mirror.',
+      'v0.20': 'Cross-device sync of saved + visited + reactions via Nostr relay pool; end-to-end encrypted (NIP-44). Closes the multi-machine loop that localhost mirror can\'t reach.',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
