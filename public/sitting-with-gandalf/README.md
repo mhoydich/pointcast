@@ -1,8 +1,18 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking companion for a quiet pipe pause: timer, smoke rings, ambient fire crackle, original wizardly prompts, and a small local session log.
+A self-contained fantasy smoking companion for a quiet pipe pause: timer, smoke rings, ambient fire/rain/road/starlight audio, original wizardly prompts, lantern view, phase guidance, and a small local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
+
+## V2
+
+- Four scene presets: Fire, Rain, Road, and Stars.
+- Web Audio ambience with procedural crackle, rain patter, road wind/steps, and soft bell tones.
+- Canvas atmosphere with smoke rings, embers, rain streaks, road dust, and starlight motes.
+- Warmth and Smoke sliders stored locally.
+- Lantern view for a quieter timer-only room.
+- Session phases that shift from Settle to Drift to Return.
+- Simplified control hierarchy: choose a room, set ambience, then use pipe ritual extras only when wanted.
 
 ## Asset
 
