@@ -14,6 +14,7 @@ Operating rules:
 - Use small, reviewable pull requests. Do not push directly to `main`.
 - Preserve other agents' work. If the checkout is dirty, identify the dirty files before editing.
 - Run `npm run build:bare` for code or content changes that affect routes, feeds, layouts, or JSON surfaces.
+- Run `npm run audit:agents` for changes that touch `/agents.json`, `/for-agents`, `/llms*`, RSS/JSON feeds, or agent-readable indexes.
 - Use `npm run audit:publishing` before recommending any publish path when that script exists.
 - Treat Manus as the browser, ops, and real-user QA partner. Do not fake browser/login steps. Hand them to Manus with a crisp brief and acceptance criteria.
 - Put Manus handoffs in either a GitHub issue comment or `docs/briefs/YYYY-MM-DD-manus-*.md`.
