@@ -74,6 +74,8 @@ All state lives in files. No external database, no shared Slack channel, no ephe
 - `BLOCKS.md` — design directive (v2 spec)
 - `AGENTS.md` — this doc, workflow directive
 - `TASKS.md` — live task queue, checked on every session start
+- `CLAUDE.md` — Claude Code's GitHub Action instructions
+- `docs/setup/agent-bridge.md` — Claude, Manus, and Codex connection guide
 - `docs/claude-code-logs/`, `docs/manus-logs/`, `docs/codex-logs/` — per-agent session logs
 
 ### TASKS.md format
@@ -104,7 +106,14 @@ If a dispatcher (Cowork, custom orchestration) is wired in, it can:
 - Trigger Manus on specific commit prefixes (`deploy:` → Manus deploys; `publish:` → Manus cross-posts)
 - Route Mike's chat commands to the appropriate agent
 
-Start simple — the repo is enough. Add automation once the workflow is stable and handoff friction is visible.
+Current bridge:
+
+- GitHub issue/PR comments containing `@claude` trigger `.github/workflows/claude.yml`.
+- The Claude workflow runs `anthropics/claude-code-action@v1` with `claude-opus-4-7`.
+- Manus is dispatched locally through `node scripts/manus.mjs create --file docs/briefs/<brief>.md`.
+- Use `.github/ISSUE_TEMPLATE/agent-handoff.yml` for structured work requests.
+
+Start simple — the repo is enough. Add deeper MCP automation once the workflow is stable and handoff friction is visible.
 
 ---
 

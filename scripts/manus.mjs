@@ -10,6 +10,7 @@
  *   node scripts/manus.mjs list            List your tasks (latest first)
  *   node scripts/manus.mjs get <task_id>   Fetch a task's detail + output
  *   node scripts/manus.mjs create "..."    Kick off a new task with a prompt
+ *   node scripts/manus.mjs create --title "QA pass" --file docs/briefs/foo.md
  *   node scripts/manus.mjs watch <id>      Poll a task until done
  *
  * Exit codes: 0 success, 1 API error, 2 missing key, 3 bad args.
@@ -29,14 +30,15 @@ const ENV_FILE = path.join(REPO_ROOT, '.env.local');
 const BASE_URL = 'https://api.manus.ai';
 
 function loadEnv() {
-  if (!fs.existsSync(ENV_FILE)) {
+  if (fs.existsSync(ENV_FILE)) {
+    const raw = fs.readFileSync(ENV_FILE, 'utf8');
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+    }
+  } else if (!process.env.MANUS_API_KEY) {
     console.error(`[manus] missing ${ENV_FILE} — put MANUS_API_KEY=... there`);
     process.exit(2);
-  }
-  const raw = fs.readFileSync(ENV_FILE, 'utf8');
-  for (const line of raw.split('\n')) {
-    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
   }
   if (!process.env.MANUS_API_KEY) {
     console.error('[manus] MANUS_API_KEY not set in .env.local');
@@ -91,12 +93,50 @@ async function cmdGet(id) {
   console.log(JSON.stringify(data, null, 2));
 }
 
-async function cmdCreate(prompt) {
-  if (!prompt) { console.error('usage: manus.mjs create "prompt..."'); process.exit(3); }
-  // API expects { task_type, message: { content } } — NOT `input`.
+function parseCreateArgs(args) {
+  const opts = {
+    title: null,
+    file: null,
+    profile: 'manus-1.6-max',
+    visibility: 'private',
+    interactive: false,
+    promptParts: [],
+  };
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--title') opts.title = args[++i];
+    else if (arg === '--file') opts.file = args[++i];
+    else if (arg === '--profile') opts.profile = args[++i];
+    else if (arg === '--public') opts.visibility = 'public';
+    else if (arg === '--team') opts.visibility = 'team';
+    else if (arg === '--interactive') opts.interactive = true;
+    else opts.promptParts.push(arg);
+  }
+  return opts;
+}
+
+async function cmdCreate(args) {
+  const opts = parseCreateArgs(args);
+  let prompt = opts.promptParts.join(' ').trim();
+  if (opts.file) {
+    const filePath = path.resolve(REPO_ROOT, opts.file);
+    prompt = fs.readFileSync(filePath, 'utf8') + (prompt ? `\n\n${prompt}` : '');
+  }
+  if (!prompt) {
+    console.error('usage: manus.mjs create "prompt..." [--title "..."] [--file docs/briefs/foo.md] [--profile manus-1.6-max]');
+    process.exit(3);
+  }
   const data = await api('/v2/task.create', {
     method: 'POST',
-    body: JSON.stringify({ task_type: 'standard', message: { content: prompt } }),
+    body: JSON.stringify({
+      title: opts.title || undefined,
+      agent_profile: opts.profile,
+      interactive_mode: opts.interactive,
+      share_visibility: opts.visibility,
+      message: {
+        content: prompt,
+      },
+    }),
   });
   console.log(JSON.stringify(data, null, 2));
 }
@@ -123,7 +163,7 @@ loadEnv();
 switch (cmd) {
   case 'list':   await cmdList(); break;
   case 'get':    await cmdGet(rest[0]); break;
-  case 'create': await cmdCreate(rest.join(' ')); break;
+  case 'create': await cmdCreate(rest); break;
   case 'watch':  await cmdWatch(rest[0]); break;
   default:
     console.error('usage: manus.mjs <list|get|create|watch> [args]');
