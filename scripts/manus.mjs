@@ -3,12 +3,12 @@
  * manus.mjs — thin wrapper around the Manus REST API.
  *
  * Reads MANUS_API_KEY from .env.local (gitignored). Endpoints use the
- * `{resource}.{verb}` convention (e.g. task.list, task.create, task.get).
+ * `{resource}.{verb}` convention (e.g. task.list, task.create, task.detail).
  * Auth is a single header: x-manus-api-key.
  *
  * Commands:
  *   node scripts/manus.mjs list            List your tasks (latest first)
- *   node scripts/manus.mjs get <task_id>   Fetch a task's detail + output
+ *   node scripts/manus.mjs get <task_id>   Fetch task status + messages
  *   node scripts/manus.mjs create "..."    Kick off a new task with a prompt
  *   node scripts/manus.mjs create --title "QA pass" --file docs/briefs/foo.md
  *   node scripts/manus.mjs watch <id>      Poll a task until done
@@ -89,8 +89,16 @@ async function cmdList() {
 
 async function cmdGet(id) {
   if (!id) { console.error('usage: manus.mjs get <task_id>'); process.exit(3); }
-  const data = await api(`/v2/task.get?task_id=${encodeURIComponent(id)}`);
-  console.log(JSON.stringify(data, null, 2));
+  const [detail, messages] = await Promise.all([
+    api(`/v2/task.detail?task_id=${encodeURIComponent(id)}`),
+    api(`/v2/task.listMessages?task_id=${encodeURIComponent(id)}&order=desc&limit=50`),
+  ]);
+  console.log(JSON.stringify({
+    ok: detail.ok && messages.ok,
+    request_id: detail.request_id,
+    task: detail.task,
+    messages: messages.messages ?? [],
+  }, null, 2));
 }
 
 function parseCreateArgs(args) {
@@ -145,13 +153,19 @@ async function cmdWatch(id) {
   if (!id) { console.error('usage: manus.mjs watch <task_id>'); process.exit(3); }
   const start = Date.now();
   while (true) {
-    const data = await api(`/v2/task.get?task_id=${encodeURIComponent(id)}`);
-    const task = data.data ?? data;
+    const data = await api(`/v2/task.detail?task_id=${encodeURIComponent(id)}`);
+    const task = data.task ?? data;
     const elapsed = Math.floor((Date.now() - start) / 1000);
     process.stderr.write(`\r[${elapsed}s] status=${task.status} credits=${task.credit_usage}        `);
-    if (task.status !== 'running' && task.status !== 'pending') {
+    if (task.status !== 'running') {
+      const messages = await api(`/v2/task.listMessages?task_id=${encodeURIComponent(id)}&order=desc&limit=50`);
       process.stderr.write('\n');
-      console.log(JSON.stringify(task, null, 2));
+      console.log(JSON.stringify({
+        ok: data.ok && messages.ok,
+        request_id: data.request_id,
+        task,
+        messages: messages.messages ?? [],
+      }, null, 2));
       return;
     }
     await new Promise((r) => setTimeout(r, 10_000));
