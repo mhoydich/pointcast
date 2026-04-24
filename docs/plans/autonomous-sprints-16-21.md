@@ -115,10 +115,22 @@ once PR #18 is on main — becomes a ~50-line PostJSON wire.
 
 ---
 
-## Sprint 20 — /wire evolution + editorial block
+## Sprint 20 — /wire evolution + editorial block ✅ SHIPPED
 
-Catch-up + write block 0344/0345 editorial. Topic pick based on
-what the feed needs.
+**Shipped:** 2026-04-24 ~03:20 PT · PR #48 squashed to main · deploy `a17cbf95`
+
+- **Block 0344** — `FD READ`, 2x1, "Four sprints after midnight." Capstone
+  covering Sprints 16–19. Matches 0339's RC0 recap cadence. Ends with
+  a six-item "what Mike provisions in the morning" checklist so the
+  follow-up list is visible on the home feed tomorrow.
+- **`/wire` refresh button** — sidebar button, fetches `/wire.json` with
+  `cache: no-store` and rebuilds both marquee rows from live data.
+  Disabled 1.5s after click. Build-time render stays source of truth on
+  first paint; button just hydrates on demand.
+
+**Front Door client instrumentation** deliberately skipped — PR #18
+is still OPEN (Mike hasn't blessed the Phase 1 RFC yet). Will pick up
+whenever #18 lands; tiny PostJSON wire, separate PR.
 
 ---
 
