@@ -1,0 +1,708 @@
+---
+/**
+ * /drum/click — the super neat drum cookie clicker.
+ *
+ * Mike 2026-04-20 16:15 PT: "have chatgpt, upgrade drum, a super neat
+ * drum cookie clicker."
+ * Mike 2026-04-20 18:50 PT: "hooray drum!"
+ *
+ * Ship path: ChatGPT brief was written (docs/briefs/2026-04-20-chatgpt-
+ * drum-cookie-clicker.md) but not handed off yet. Per the 48h burn
+ * plan, cc ships directly so we don't wait. The ChatGPT brief stays
+ * on disk as reference for future refinements; this file is v0.
+ *
+ * Design:
+ *   - Giant circular drum head, 240px+ tap target
+ *   - Web Audio synth (kick + optional snare + hi-hat as upgrades unlock)
+ *   - Beats counter; unlocks new samples + auto-drummer + prestige
+ *   - Prestige at 25k = "cast a rhythm" — local receipt in
+ *     pc:drum:rhythms, +10% tap multiplier forever
+ *   - Respects prefers-reduced-motion
+ *   - Keyboard: Space = tap
+ *
+ * State (localStorage):
+ *   pc:drum:state = {
+ *     schemaVersion: 1, beats, lifetime, tapMultiplier,
+ *     unlocks: string[], lastTick, lastActiveAt
+ *   }
+ *   pc:drum:rhythms = Array<{ n, beats, upgrades, prestigedAt }>
+ *
+ * Author: cc. Source: Mike 2026-04-20 16:15 + 18:50 PT chat;
+ * brief at docs/briefs/2026-04-20-chatgpt-drum-cookie-clicker.md.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const title = 'Drum — a cookie clicker, but drums';
+const description =
+  "Tap the drum. Accumulate beats. Unlock snare, hi-hat, auto-drummer, polyrhythm. At 25,000 beats you can cast a rhythm and start over with a multiplier. Browser audio, no server, mobile-first, keyboard-friendly.";
+
+const alternates = [
+  { type: 'text/html', href: '/drum', title: 'Drum — the original' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  name: 'PointCast Drum',
+  description,
+  url: 'https://pointcast.xyz/drum/click',
+  genre: 'Incremental',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd} alternates={alternates}>
+  <main class="drum-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/drum">drum</a>
+      <span aria-hidden="true">›</span>
+      <span>click</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">DRUM · COOKIE CLICKER EDITION</p>
+      <h1 class="title">Tap the drum.</h1>
+      <p class="dek">
+        Click unlocks beats. Beats unlock upgrades. Hit 25,000 and you can cast a
+        rhythm — a local receipt + a permanent multiplier. Respects reduced
+        motion. Space = tap. Long press for velocity. Mobile-first.
+      </p>
+    </header>
+
+    <section class="hud">
+      <p class="hud__stat">
+        <span class="hud__num mono" id="drum-beats">0</span>
+        <span class="hud__lbl mono">BEATS</span>
+      </p>
+      <p class="hud__stat">
+        <span class="hud__num mono" id="drum-bpb">0.0</span>
+        <span class="hud__lbl mono">BPS (PASSIVE)</span>
+      </p>
+      <p class="hud__stat">
+        <span class="hud__num mono" id="drum-mult">×1.0</span>
+        <span class="hud__lbl mono">TAP MULT</span>
+      </p>
+      <p class="hud__stat">
+        <span class="hud__num mono" id="drum-lifetime">0</span>
+        <span class="hud__lbl mono">LIFETIME</span>
+      </p>
+    </section>
+
+    <section class="stage">
+      <button type="button" class="drum-head" id="drum-head" aria-label="Tap the drum">
+        <svg class="drum-head__svg" viewBox="0 0 240 240" aria-hidden="true">
+          <defs>
+            <radialGradient id="drum-grad" cx="50%" cy="45%" r="50%">
+              <stop offset="0%" stop-color="#f7e4b6" />
+              <stop offset="60%" stop-color="#d8b26c" />
+              <stop offset="100%" stop-color="#8c5d1f" />
+            </radialGradient>
+            <radialGradient id="drum-rim" cx="50%" cy="50%" r="52%">
+              <stop offset="80%" stop-color="transparent" />
+              <stop offset="94%" stop-color="rgba(232, 154, 45, 0.6)" />
+              <stop offset="100%" stop-color="#5a3b10" />
+            </radialGradient>
+          </defs>
+          <circle cx="120" cy="120" r="108" fill="url(#drum-grad)" />
+          <circle cx="120" cy="120" r="108" fill="url(#drum-rim)" />
+          <circle cx="120" cy="120" r="72" fill="rgba(90, 59, 16, 0.15)" />
+          <circle cx="120" cy="120" r="32" fill="rgba(255, 255, 255, 0.1)" />
+        </svg>
+        <span class="drum-head__hint mono" id="drum-hint">tap or space</span>
+      </button>
+
+      <!-- Ring-pulse overlay container — each tap spawns a ring. -->
+      <div class="ring-stage" id="ring-stage" aria-hidden="true"></div>
+    </section>
+
+    <section class="shop" aria-label="Upgrade shop">
+      <p class="section__kicker mono">UPGRADES · EARN &amp; UNLOCK</p>
+      <div class="shop__grid" id="shop-grid">
+        <!-- Populated by script from DRUM_UPGRADES. -->
+      </div>
+    </section>
+
+    <section class="prestige" id="prestige-section" hidden>
+      <p class="section__kicker mono">PRESTIGE · CAST A RHYTHM</p>
+      <p class="prestige__dek">
+        At 25,000 beats you can cast a rhythm. All current beats burn in exchange
+        for a permanent <b>+10%</b> tap multiplier and a local <em>rhythm receipt</em>
+        you can show off. Receipts pile up in <code>pc:drum:rhythms</code>.
+      </p>
+      <button type="button" class="prestige__btn mono" id="prestige-btn">CAST A RHYTHM →</button>
+    </section>
+
+    <section class="receipts" aria-label="Rhythm receipts">
+      <p class="section__kicker mono">RHYTHMS CAST</p>
+      <ol class="receipts__list" id="receipts-list">
+        <li class="receipts__empty">No rhythms yet. Get to 25,000.</li>
+      </ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  // ---- Upgrade catalog -----------------------------------------------------
+  var DRUM_UPGRADES = [
+    { id: 'snare',    label: 'SNARE',              cost: 10,    effect: '+snare tone on every tap',      bpbDelta: 0,   kind: 'sample' },
+    { id: 'hihat',    label: 'HI-HAT PATTERN',     cost: 50,    effect: 'every 4th tap auto-plays hat',  bpbDelta: 0,   kind: 'pattern' },
+    { id: 'auto-mk1', label: 'AUTO-DRUMMER MK.1',  cost: 200,   effect: '+0.5 BPS passive (tab focus)',  bpbDelta: 0.5, kind: 'passive' },
+    { id: 'poly-3v4', label: 'POLYRHYTHM 3v4',     cost: 1000,  effect: 'every 3rd tap counts 4×',        bpbDelta: 0,   kind: 'multiplier' },
+    { id: 'auto-mk2', label: 'AUTO-DRUMMER MK.2',  cost: 5000,  effect: '+5 BPS passive',                 bpbDelta: 5,   kind: 'passive' },
+    { id: 'prestige', label: 'CAST A RHYTHM',      cost: 25000, effect: 'reset with +10% tap mult forever', bpbDelta: 0, kind: 'prestige' },
+    // Patient-path: skip prestige at 25k, accumulate to 50k, unlock rim-shot
+    // for permanent +5% on every tap (no reset). Per overnight ship-queue
+    // entry ship-overnight-01 (Mike super-sprint directive 2026-04-21 00:35 PT).
+    { id: 'rim-shot', label: 'RIM-SHOT',           cost: 50000, effect: 'permanent +5% on every tap (no reset)', bpbDelta: 0, kind: 'multiplier' },
+  ];
+
+  // ---- State ----------------------------------------------------------------
+  var SCHEMA = 1;
+  var LS_STATE = 'pc:drum:state';
+  var LS_RHYTHMS = 'pc:drum:rhythms';
+  var DEFAULT_STATE = {
+    schemaVersion: SCHEMA,
+    beats: 0,
+    lifetime: 0,
+    tapMultiplier: 1.0,
+    unlocks: [],
+    lastTick: Date.now(),
+    lastActiveAt: Date.now(),
+  };
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(LS_STATE);
+      if (!raw) return Object.assign({}, DEFAULT_STATE);
+      var s = JSON.parse(raw);
+      if (!s || s.schemaVersion !== SCHEMA) return Object.assign({}, DEFAULT_STATE);
+      return Object.assign({}, DEFAULT_STATE, s);
+    } catch (e) { return Object.assign({}, DEFAULT_STATE); }
+  }
+  function saveState(s) {
+    try { localStorage.setItem(LS_STATE, JSON.stringify(s)); } catch (e) {}
+  }
+  function loadRhythms() {
+    try { var r = JSON.parse(localStorage.getItem(LS_RHYTHMS) || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; }
+  }
+  function saveRhythms(arr) {
+    try { localStorage.setItem(LS_RHYTHMS, JSON.stringify(arr.slice(-50))); } catch (e) {}
+  }
+
+  var state = loadState();
+
+  // ---- Audio — Web Audio synth, singleton AudioContext ---------------------
+  var ctx = null;
+  function audio() {
+    if (ctx) return ctx;
+    try {
+      var A = (window.AudioContext || window.webkitAudioContext);
+      if (!A) return null;
+      ctx = new A();
+      return ctx;
+    } catch (e) { return null; }
+  }
+  function playKick(vel) {
+    var a = audio(); if (!a) return;
+    if (a.state === 'suspended') a.resume();
+    var o = a.createOscillator();
+    var g = a.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(140, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(42, a.currentTime + 0.18);
+    g.gain.setValueAtTime(0.001, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(Math.min(0.9, 0.5 + vel * 0.4), a.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.3);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + 0.35);
+  }
+  function playSnare(vel) {
+    var a = audio(); if (!a) return;
+    var buf = a.createBuffer(1, a.sampleRate * 0.18, a.sampleRate);
+    var ch = buf.getChannelData(0);
+    for (var i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / ch.length, 2);
+    var src = a.createBufferSource(); src.buffer = buf;
+    var hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200;
+    var g = a.createGain();
+    g.gain.setValueAtTime(Math.min(0.6, 0.35 + vel * 0.25), a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.16);
+    src.connect(hp); hp.connect(g); g.connect(a.destination);
+    src.start(); src.stop(a.currentTime + 0.2);
+  }
+  function playHat() {
+    var a = audio(); if (!a) return;
+    var buf = a.createBuffer(1, a.sampleRate * 0.06, a.sampleRate);
+    var ch = buf.getChannelData(0);
+    for (var i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1);
+    var src = a.createBufferSource(); src.buffer = buf;
+    var hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
+    var g = a.createGain();
+    g.gain.setValueAtTime(0.25, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.05);
+    src.connect(hp); hp.connect(g); g.connect(a.destination);
+    src.start(); src.stop(a.currentTime + 0.07);
+  }
+
+  // ---- Derived helpers -----------------------------------------------------
+  function bps() {
+    var v = 0;
+    DRUM_UPGRADES.forEach(function (u) {
+      if (state.unlocks.indexOf(u.id) >= 0) v += u.bpbDelta || 0;
+    });
+    return v;
+  }
+  var tapCount = 0;
+  function computeTapGain() {
+    tapCount++;
+    var base = 1;
+    if (state.unlocks.indexOf('poly-3v4') >= 0 && tapCount % 3 === 0) base = 4;
+    var rimBonus = state.unlocks.indexOf('rim-shot') >= 0 ? 1.05 : 1.0;
+    return Math.round(base * state.tapMultiplier * rimBonus);
+  }
+
+  // ---- Passive tick --------------------------------------------------------
+  var PASSIVE_CAP_H = 2;
+  function applyPassive() {
+    var now = Date.now();
+    var last = state.lastTick || now;
+    var elapsedSec = Math.min(PASSIVE_CAP_H * 3600, (now - last) / 1000);
+    if (elapsedSec < 0.25) return 0;
+    var bps_ = bps();
+    if (bps_ <= 0) { state.lastTick = now; return 0; }
+    // Only pay out passive when the tab is focused or within the cap.
+    var gained = Math.floor(bps_ * elapsedSec);
+    if (gained > 0) {
+      state.beats += gained;
+      state.lifetime += gained;
+    }
+    state.lastTick = now;
+    return gained;
+  }
+  function tickLoop() {
+    if (document.visibilityState !== 'visible') return;
+    var g = applyPassive();
+    if (g > 0) { saveState(state); render(); }
+  }
+  setInterval(tickLoop, 1000);
+
+  // ---- Render --------------------------------------------------------------
+  var $beats = document.getElementById('drum-beats');
+  var $bpb = document.getElementById('drum-bpb');
+  var $mult = document.getElementById('drum-mult');
+  var $lifetime = document.getElementById('drum-lifetime');
+  var $shop = document.getElementById('shop-grid');
+  var $receipts = document.getElementById('receipts-list');
+  var $prestige = document.getElementById('prestige-section');
+  var animNumber = { beats: 0 };
+  function animateNumber(to) {
+    var from = animNumber.beats;
+    var start = performance.now();
+    var dur = Math.min(400, 200 + Math.abs(to - from) * 0.02);
+    function frame(t) {
+      var p = Math.min(1, (t - start) / dur);
+      var eased = 1 - Math.pow(1 - p, 3);
+      var cur = Math.round(from + (to - from) * eased);
+      $beats.textContent = cur.toLocaleString();
+      if (p < 1) requestAnimationFrame(frame);
+      else animNumber.beats = to;
+    }
+    requestAnimationFrame(frame);
+  }
+  function render() {
+    animateNumber(state.beats);
+    $bpb.textContent = bps().toFixed(1);
+    $mult.textContent = '×' + state.tapMultiplier.toFixed(2);
+    $lifetime.textContent = state.lifetime.toLocaleString();
+
+    // Shop
+    $shop.innerHTML = '';
+    DRUM_UPGRADES.forEach(function (u) {
+      if (u.id === 'prestige') return; // prestige has its own section
+      var owned = state.unlocks.indexOf(u.id) >= 0;
+      var canBuy = !owned && state.beats >= u.cost;
+      var card = document.createElement('div');
+      card.className = 'upgrade' + (owned ? ' upgrade--owned' : canBuy ? ' upgrade--can-buy' : ' upgrade--locked');
+      card.innerHTML =
+        '<p class="upgrade__label mono">' + u.label + '</p>' +
+        '<p class="upgrade__effect">' + u.effect + '</p>' +
+        '<p class="upgrade__cost mono">' + (owned ? 'OWNED' : u.cost.toLocaleString() + ' BEATS') + '</p>';
+      if (canBuy) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'upgrade__buy mono';
+        btn.textContent = 'BUY';
+        btn.addEventListener('click', function () { buy(u.id); });
+        card.appendChild(btn);
+      }
+      $shop.appendChild(card);
+    });
+
+    // Prestige section
+    var prestigeReady = state.beats >= 25000;
+    if ($prestige) $prestige.hidden = !(prestigeReady || state.tapMultiplier > 1);
+
+    // Receipts
+    var r = loadRhythms();
+    $receipts.innerHTML = '';
+    if (r.length === 0) {
+      var li = document.createElement('li');
+      li.className = 'receipts__empty';
+      li.textContent = 'No rhythms yet. Get to 25,000.';
+      $receipts.appendChild(li);
+    } else {
+      r.slice().reverse().forEach(function (rh) {
+        var li = document.createElement('li');
+        li.className = 'receipt';
+        li.innerHTML =
+          '<span class="receipt__n mono">#' + rh.n + '</span>' +
+          '<span class="receipt__beats mono">' + rh.beats.toLocaleString() + ' beats</span>' +
+          '<span class="receipt__when mono">' + new Date(rh.prestigedAt).toLocaleDateString() + '</span>';
+        $receipts.appendChild(li);
+      });
+    }
+  }
+
+  // ---- Ring pulse ----------------------------------------------------------
+  var $ringStage = document.getElementById('ring-stage');
+  function pulseRing() {
+    if (!$ringStage) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var ring = document.createElement('div');
+    ring.className = 'ring';
+    $ringStage.appendChild(ring);
+    setTimeout(function () { ring.remove(); }, 650);
+  }
+
+  // ---- Tap handler ---------------------------------------------------------
+  var $head = document.getElementById('drum-head');
+  var $hint = document.getElementById('drum-hint');
+  var hintFaded = false;
+  function doTap(velocity) {
+    velocity = velocity || 0.7;
+    var gain = computeTapGain();
+    state.beats += gain;
+    state.lifetime += gain;
+    state.lastActiveAt = Date.now();
+    // Audio
+    playKick(velocity);
+    if (state.unlocks.indexOf('snare') >= 0) playSnare(velocity * 0.8);
+    if (state.unlocks.indexOf('hihat') >= 0 && tapCount % 4 === 0) playHat();
+    // Visual
+    pulseRing();
+    if ($head) {
+      $head.classList.remove('drum-head--hit');
+      void $head.offsetWidth;
+      $head.classList.add('drum-head--hit');
+    }
+    // Haptic (mobile)
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+    // Fade hint after first tap
+    if (!hintFaded && $hint) { $hint.style.opacity = '0'; hintFaded = true; }
+    saveState(state);
+    render();
+  }
+  if ($head) {
+    $head.addEventListener('pointerdown', function (e) {
+      // Resume AudioContext on first user gesture
+      var a = audio();
+      if (a && a.state === 'suspended') a.resume();
+      doTap(0.7);
+    });
+  }
+  // Keyboard: Space = tap. Prevent default to stop page scroll.
+  window.addEventListener('keydown', function (e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.code === 'Space' || e.key === ' ') {
+      e.preventDefault();
+      doTap(0.6);
+    }
+  });
+
+  // ---- Buy upgrade ---------------------------------------------------------
+  function buy(id) {
+    var u = DRUM_UPGRADES.find(function (x) { return x.id === id; });
+    if (!u) return;
+    if (state.unlocks.indexOf(id) >= 0) return;
+    if (state.beats < u.cost) return;
+    state.beats -= u.cost;
+    state.unlocks.push(id);
+    saveState(state);
+    render();
+  }
+
+  // ---- Prestige ------------------------------------------------------------
+  var $prestigeBtn = document.getElementById('prestige-btn');
+  if ($prestigeBtn) {
+    $prestigeBtn.addEventListener('click', function () {
+      if (state.beats < 25000) return;
+      var r = loadRhythms();
+      var n = r.length + 1;
+      r.push({
+        n: n,
+        beats: state.beats,
+        upgrades: state.unlocks.slice(),
+        prestigedAt: new Date().toISOString(),
+      });
+      saveRhythms(r);
+      // Reset beats + unlocks (lifetime + multiplier keep).
+      state.beats = 0;
+      state.unlocks = [];
+      state.tapMultiplier = Math.round((state.tapMultiplier + 0.1) * 100) / 100;
+      state.lastTick = Date.now();
+      saveState(state);
+      render();
+      // Celebration pulse
+      if ($ringStage && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        var big = document.createElement('div');
+        big.className = 'ring ring--big';
+        $ringStage.appendChild(big);
+        setTimeout(function () { big.remove(); }, 1400);
+      }
+    });
+  }
+
+  // ---- Bootstrap -----------------------------------------------------------
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      applyPassive();
+      saveState(state);
+      render();
+    }
+  });
+  // Initial passive catch-up
+  applyPassive();
+  saveState(state);
+  render();
+})();
+</script>
+
+<style>
+  .drum-page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #e89a2d; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 22px; padding-bottom: 18px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #E89A2D; margin: 0 0 10px; font-weight: 600; }
+  .title {
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui);
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 500;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .dek { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0; max-width: 62ch; }
+
+  /* ─── HUD ─── */
+  .hud {
+    display: flex;
+    gap: 18px 28px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0 0 18px;
+    padding: 12px 16px;
+    background: rgba(232, 154, 45, 0.05);
+    border: 1px solid rgba(232, 154, 45, 0.2);
+    border-radius: 3px;
+  }
+  .hud__stat { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0; }
+  .hud__num {
+    font-size: 26px;
+    font-weight: 600;
+    color: #12110E;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  #drum-beats { font-size: clamp(32px, 6vw, 56px); color: #E89A2D; }
+  .hud__lbl { font-size: 9px; letter-spacing: 0.16em; color: #5F5E5A; text-transform: uppercase; }
+
+  /* ─── Drum stage ─── */
+  .stage {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 16px 0 30px;
+    min-height: 300px;
+  }
+  .drum-head {
+    position: relative;
+    width: clamp(240px, 50vw, 360px);
+    height: clamp(240px, 50vw, 360px);
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: transform 0.08s ease-out;
+    filter: drop-shadow(0 10px 24px rgba(90, 59, 16, 0.25));
+  }
+  .drum-head:hover { transform: scale(1.02); }
+  .drum-head:active, .drum-head--hit { transform: scale(0.96); }
+  .drum-head__svg { width: 100%; height: 100%; display: block; }
+  .drum-head__hint {
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #5F5E5A;
+    text-transform: uppercase;
+    transition: opacity 0.6s;
+  }
+
+  .ring-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+  }
+  .ring {
+    position: absolute;
+    width: clamp(240px, 50vw, 360px);
+    height: clamp(240px, 50vw, 360px);
+    border: 2px solid rgba(232, 154, 45, 0.55);
+    border-radius: 50%;
+    animation: ring-pulse 0.65s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    pointer-events: none;
+  }
+  .ring--big {
+    border-color: rgba(201, 42, 42, 0.7);
+    animation: ring-pulse-big 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  @keyframes ring-pulse {
+    0%   { opacity: 0.85; transform: scale(0.92); border-width: 3px; }
+    100% { opacity: 0;    transform: scale(1.18); border-width: 1px; }
+  }
+  @keyframes ring-pulse-big {
+    0%   { opacity: 1;    transform: scale(0.85); border-width: 5px; }
+    100% { opacity: 0;    transform: scale(1.6);  border-width: 1px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .drum-head { transition: none; }
+    .ring, .ring--big { display: none; }
+  }
+
+  /* ─── Upgrade shop ─── */
+  .section__kicker {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 26px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dotted var(--pc-rule-soft, #E5E3DE);
+  }
+  .shop__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .upgrade {
+    padding: 12px 14px;
+    background: #fbfaf5;
+    border: 1px solid var(--pc-rule-soft, #E5E3DE);
+    border-left: 3px solid #ccc4b0;
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .upgrade--can-buy { border-left-color: #E89A2D; background: rgba(232, 154, 45, 0.06); }
+  .upgrade--owned {
+    border-left-color: #2f8f5f;
+    background: rgba(47, 143, 95, 0.06);
+    opacity: 0.85;
+  }
+  .upgrade--locked { opacity: 0.65; }
+  .upgrade__label { font-size: 11px; letter-spacing: 0.12em; font-weight: 600; color: #12110E; }
+  .upgrade__effect { font-size: 13px; line-height: 1.4; color: var(--pc-ink-soft, #38373A); margin: 0; font-family: var(--pc-font-sans, system-ui); }
+  .upgrade__cost { font-size: 10px; letter-spacing: 0.12em; color: #7a4d0c; text-transform: uppercase; }
+  .upgrade__buy {
+    margin-top: 4px;
+    background: #12110E;
+    color: #F3E6D8;
+    border: 1px solid #E89A2D;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    padding: 6px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .upgrade__buy:hover { background: #E89A2D; color: #12110E; }
+
+  /* ─── Prestige ─── */
+  .prestige {
+    margin: 22px 0;
+    padding: 16px 18px;
+    border: 1px solid rgba(201, 42, 42, 0.3);
+    border-left: 3px solid #C92A2A;
+    background: rgba(201, 42, 42, 0.05);
+    border-radius: 3px;
+  }
+  .prestige__dek { font-size: 14px; line-height: 1.5; color: var(--pc-ink-soft); margin: 0 0 12px; }
+  .prestige__dek code { font-family: var(--pc-font-mono); font-size: 12px; background: rgba(0, 0, 0, 0.05); padding: 1px 5px; border-radius: 2px; }
+  .prestige__btn {
+    background: #C92A2A;
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    border-radius: 2px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .prestige__btn:hover { background: #a81f1f; }
+
+  /* ─── Receipts ─── */
+  .receipts__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .receipt {
+    display: grid;
+    grid-template-columns: 60px 1fr 120px;
+    gap: 10px;
+    font-size: 12px;
+    padding: 6px 0;
+    border-bottom: 1px dotted var(--pc-rule-soft, #E5E3DE);
+    color: var(--pc-ink-soft);
+  }
+  .receipt__n { color: #E89A2D; font-weight: 600; }
+  .receipt__beats { font-variant-numeric: tabular-nums; }
+  .receipt__when { text-align: right; color: var(--pc-ink-muted); font-size: 10.5px; letter-spacing: 0.08em; }
+  .receipts__empty {
+    font-style: italic;
+    color: var(--pc-ink-muted);
+    padding: 8px 0;
+    font-size: 13px;
+  }
+</style>

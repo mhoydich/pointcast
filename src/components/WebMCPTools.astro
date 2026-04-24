@@ -1,0 +1,293 @@
+---
+/**
+ * WebMCPTools — registers PointCast's agent-legible actions with
+ * navigator.modelContext.provideContext(), per the WebMCP draft spec.
+ *
+ * Spec: https://webmachinelearning.github.io/webmcp/
+ * Chrome blog: https://developer.chrome.com/blog/webmcp-epp
+ *
+ * Mike 2026-04-21 10:15 PT agent-ready audit: "No WebMCP tools detected on
+ * page load. Implement navigator.modelContext.provideContext() with tool
+ * definitions exposing your site's key actions to AI agents."
+ *
+ * Strategy: register a small set of READ + WRITE tools that mirror the
+ * public HTTP APIs. Execute callbacks hit the same /api/* endpoints an
+ * external agent would hit — so the in-page MCP surface and the out-of-
+ * process MCP surface stay symmetric. No secrets embedded.
+ *
+ * Tools exposed:
+ *   1. pointcast_latest_blocks   — fetch recent blocks (reads /blocks.json)
+ *   2. pointcast_get_block       — fetch a specific block by id
+ *   3. pointcast_send_ping       — post a ping to /api/ping
+ *   4. pointcast_push_drop       — push a URL as a drop via /api/drop
+ *   5. pointcast_drum_beat       — register a drum beat via /api/drum
+ *   6. pointcast_federation      — list federated peer nodes
+ *   7. pointcast_compute_ledger  — fetch /compute.json for recent ships
+ *   8. pointcast_tank_observe    — read /play/tank shared aquarium state
+ *   9. pointcast_tank_feed       — drop a flake in the tank
+ *  10. pointcast_tank_place      — place a plant or decor item
+ *  11. pointcast_tank_dart       — make your fish dart
+ *  12. pointcast_tank_describe_fish — write CC0 lore about a specific fish
+ *
+ * Graceful degradation: if navigator.modelContext is not available (older
+ * browsers, non-Chrome canary), the script no-ops. Nothing else on the page
+ * depends on it.
+ */
+---
+
+<script is:inline>
+  (function () {
+    'use strict';
+    if (typeof navigator === 'undefined' || !navigator.modelContext || typeof navigator.modelContext.provideContext !== 'function') {
+      return; // WebMCP not supported — silent skip
+    }
+
+    var ORIGIN = 'https://pointcast.xyz';
+
+    async function fetchJson(path) {
+      var res = await fetch(ORIGIN + path, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+    async function postJson(path, body) {
+      var res = await fetch(ORIGIN + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+        credentials: 'same-origin'
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    var tools = [
+      {
+        name: 'pointcast_latest_blocks',
+        description: 'Fetch the N most recent PointCast blocks (editorial posts, notes, dispatches from the network). Each block has an id, title, channel, type, dek, timestamp, and canonical URL.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 40, default: 10, description: 'How many recent blocks to return (1-40).' }
+          }
+        },
+        execute: async function (input) {
+          var all = await fetchJson('/blocks.json');
+          var limit = (input && typeof input.limit === 'number') ? Math.max(1, Math.min(40, input.limit)) : 10;
+          var items = Array.isArray(all) ? all : (all.items || all.blocks || []);
+          return items.slice(0, limit).map(function (b) {
+            return {
+              id: b.id,
+              title: b.title,
+              channel: b.channel,
+              type: b.type,
+              dek: b.dek,
+              timestamp: b.timestamp,
+              url: ORIGIN + '/b/' + b.id + '/'
+            };
+          });
+        }
+      },
+      {
+        name: 'pointcast_get_block',
+        description: 'Fetch a single PointCast block by its 4-digit id (e.g. "0358"). Returns full block metadata + body text.',
+        inputSchema: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', pattern: '^\\d{4}$', description: 'Four-digit block id, zero-padded (e.g. "0358").' }
+          }
+        },
+        execute: async function (input) {
+          if (!input || !input.id) throw new Error('id is required');
+          return fetchJson('/b/' + input.id + '.json');
+        }
+      },
+      {
+        name: 'pointcast_send_ping',
+        description: 'Send a ping (message / observation / clip) to the PointCast team inbox. Appears in the /api/ping feed. Optional fields: caption, url, channel.',
+        inputSchema: {
+          type: 'object',
+          required: ['caption'],
+          properties: {
+            caption: { type: 'string', minLength: 1, maxLength: 500, description: 'Short human-readable message or observation.' },
+            url: { type: 'string', format: 'uri', description: 'Optional URL the ping is about.' },
+            channel: { type: 'string', description: 'Optional channel/tag (e.g. "FD", "GDN", "CX", "NE").' }
+          }
+        },
+        execute: async function (input) {
+          return postJson('/api/ping?action=post', {
+            caption: input.caption,
+            url: input.url || null,
+            channel: input.channel || 'AGENT',
+            from: 'webmcp-agent'
+          });
+        }
+      },
+      {
+        name: 'pointcast_push_drop',
+        description: 'Push a URL as a drop on the PointCast feed. Agents use this to share a link or article into the editorial stream. Kind = "link" for URLs, "note" for text-only.',
+        inputSchema: {
+          type: 'object',
+          required: ['kind'],
+          properties: {
+            kind: { type: 'string', enum: ['link', 'note'], description: 'Drop type.' },
+            url: { type: 'string', format: 'uri', description: 'Required when kind is "link".' },
+            title: { type: 'string', description: 'Short title for the drop.' },
+            caption: { type: 'string', description: 'Optional prose explaining the drop.' }
+          }
+        },
+        execute: async function (input) {
+          return postJson('/api/drop', {
+            type: input.kind,
+            url: input.url || null,
+            title: input.title || null,
+            caption: input.caption || null,
+            from: 'webmcp-agent'
+          });
+        }
+      },
+      {
+        name: 'pointcast_drum_beat',
+        description: 'Register a drum beat on the PointCast collaborative drum. Agents can participate in the cookie-clicker rhythm game. Returns the updated lifetime beat count.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tier: { type: 'string', enum: ['kick', 'snare', 'hat', 'rim'], default: 'kick', description: 'Which drum tier to hit.' }
+          }
+        },
+        execute: async function (input) {
+          return postJson('/api/drum', { tier: (input && input.tier) || 'kick', from: 'webmcp-agent' });
+        }
+      },
+      {
+        name: 'pointcast_presence_snapshot',
+        description: 'Fetch a live snapshot of who is currently connected to pointcast.xyz — counts of humans + agents + recent sessions with joinedAt + anonymized nounId. Backed by a Cloudflare Durable Object. No auth required.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async function () {
+          return fetchJson('/api/presence/snapshot');
+        }
+      },
+      {
+        name: 'pointcast_federation',
+        description: 'List PointCast federated peer nodes (sister sites running compatible bars). Each peer has host, label, status (live/placeholder), and description.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async function () {
+          // Mirrors src/components/CoNavHUD.astro PEERS array. Static for v0;
+          // a future version reads /.well-known/for-nodes or /for-nodes.json.
+          return [
+            { host: 'pointcast.xyz',   label: 'POINTCAST', status: 'live',        desc: 'El Segundo broadcast' },
+            { host: 'garden.kfn',      label: 'GARDEN',    status: 'placeholder', desc: 'slow-tempo garden feed' },
+            { host: 'wharf.live',      label: 'WHARF',     status: 'placeholder', desc: 'dockside operations log' },
+            { host: 'bench.network',   label: 'BENCH',     status: 'placeholder', desc: 'who is building what' },
+            { host: 'riverside.fm',    label: 'RIVERSIDE', status: 'placeholder', desc: 'riverside editorial' }
+          ];
+        }
+      },
+      {
+        name: 'pointcast_compute_ledger',
+        description: 'Fetch the recent compute ledger — a chronological log of every ship (sprint / block / brief / ops / editorial) by cc + collaborators. Returns the 20 most recent entries with collab, kind, title, artifact, timestamp.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }
+          }
+        },
+        execute: async function (input) {
+          var data = await fetchJson('/compute.json');
+          var limit = (input && typeof input.limit === 'number') ? Math.max(1, Math.min(50, input.limit)) : 20;
+          var items = Array.isArray(data) ? data : (data.entries || data.ledger || []);
+          return items.slice(0, limit);
+        }
+      },
+      {
+        name: 'pointcast_tank_observe',
+        description: 'Observe the /play/tank shared aquarium. Returns the current fish roster (humans + agents + ghosts), flake particles, plants, decor, waste level, recent events, and lore. Read-only. No auth.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async function () {
+          return await fetchJson('/api/tank/state');
+        }
+      },
+      {
+        name: 'pointcast_tank_feed',
+        description: 'Drop a flake in the /play/tank aquarium. Rate-limited to 1 per 5s per session. Returns the dropped flake (id, x, y).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            x: { type: 'number', description: 'Optional x coordinate in tank (0-1000). Defaults to random mid-upper.' },
+            y: { type: 'number', description: 'Optional y coordinate in tank (0-600). Defaults to upper third.' }
+          }
+        },
+        execute: async function (input) {
+          var r = await fetch('/api/tank/feed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input || {})
+          });
+          return await r.json();
+        }
+      },
+      {
+        name: 'pointcast_tank_place',
+        description: 'Place a plant or decor item in /play/tank. Item types: plant, rock, castle, bubbler, sunken_ship. Rate-limited to 1 per minute per session. Plants cap at 12, decor caps at 6.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            item_type: { type: 'string', enum: ['plant', 'rock', 'castle', 'bubbler', 'sunken_ship'] },
+            x: { type: 'number' },
+            y: { type: 'number' }
+          },
+          required: ['item_type']
+        },
+        execute: async function (input) {
+          var r = await fetch('/api/tank/place', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input || {})
+          });
+          return await r.json();
+        }
+      },
+      {
+        name: 'pointcast_tank_dart',
+        description: 'Make your fish dart in /play/tank. Rate-limited to 1 per 10s per session. Returns ok + tank event id.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async function () {
+          var r = await fetch('/api/tank/dart', { method: 'POST' });
+          return await r.json();
+        }
+      },
+      {
+        name: 'pointcast_tank_describe_fish',
+        description: 'Write a short piece of CC0 lore (<=300 chars) about a specific fish in /play/tank. Appears in the tank lore feed + optionally federated to /compute.json. Rate-limited to 6 per hour per session.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fish_id: { type: 'string', description: 'Fish id from pointcast_tank_observe().fish[].fishId' },
+            lore: { type: 'string', maxLength: 300 },
+            author: { type: 'string', description: 'Agent slug to attribute the lore to (e.g. "claude-code", "codex"). Defaults to session.' }
+          },
+          required: ['fish_id', 'lore']
+        },
+        execute: async function (input) {
+          var r = await fetch('/api/tank/describe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input || {})
+          });
+          return await r.json();
+        }
+      }
+    ];
+
+    try {
+      navigator.modelContext.provideContext({
+        tools: tools
+      });
+      // Publish a small debug hook so devtools users can see the tools registered.
+      try { window.__pointcast_webmcp_tools = tools.map(function (t) { return t.name; }); } catch (e) {}
+    } catch (e) {
+      // Swallow — graceful degrade. Logging would pollute the console.
+      try { window.__pointcast_webmcp_error = String(e && e.message || e); } catch (err) {}
+    }
+  })();
+</script>

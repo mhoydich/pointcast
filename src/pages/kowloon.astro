@@ -1,0 +1,1039 @@
+---
+/**
+ * /kowloon — the Kowloon universe arcade hub.
+ *
+ * Dedicated landing page for the two browser games that live under this
+ * universe: Kowloon Kitchen (back-alley bakery arcade, Season 1 live)
+ * and Kowloon Dim Sum (match-3 companion, v0.1 beta).
+ *
+ * Both games are mounted as static sites under /public/kowloon/*:
+ *   - /kowloon/baker     → Kowloon Kitchen (v11, Ch 6 "Typhoon Night")
+ *   - /kowloon/dim-sum   → Kowloon Dim Sum (v0.1, match-3 beta)
+ *
+ * Visual language: neo-noir HK 1988, neon pink/cyan/amber/jade, CRT
+ * scanlines, rain, bilingual Cantonese + English. Distinct from Magpie's
+ * field-guide palette — this is a sibling universe, not a subordinate.
+ *
+ * Art pipeline: image placeholders use prompts written for the ChatGPT
+ * Images 2.0 model (strong text rendering + multi-element composition).
+ * Mike drops renders into /public/kowloon/art/* and they light up here.
+ *
+ * Author: cc. Built alongside the game sprints, same hour.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Kowloon — the arcade';
+const description =
+  "Two browser games set in 1988 Kowloon. Kowloon Kitchen: a 2-minute neo-noir baking arcade where you smuggle contraband pineapple buns past the 食環署. Kowloon Dim Sum: a match-3 companion set the morning after, in auntie's upstairs teahouse. Free, no install, CC0, bilingual Cantonese + English.";
+
+const games = [
+  {
+    id: 'baker',
+    href: '/kowloon/baker/',
+    titleZh: '九龍廚房',
+    titleEn: 'KOWLOON KITCHEN',
+    version: 'v11 · CH 6 · TYPHOON NIGHT',
+    pitch: 'A 2-minute arcade bake-em-up set in the back-alley of a Kowloon teahouse. Pick an order, knead the dough, pull from the oven at the jade sweet-spot, dodge the 食環署 and Inspector Chan, pay the triad. 8 recurring neighbors. 33 achievements. Daily Shift seeded run. In-game $BUN token. Tezos-ready.',
+    cta: '開波 · PLAY',
+    accent: '#ff2d95',
+    accentSoft: 'rgba(255,45,149,0.2)',
+    emoji: '🍞',
+    ambientSigns: ['麵包', '茶餐廳', '九龍夜', '走鬼'],
+    stats: [
+      { label: 'achievements', value: '33' },
+      { label: 'chapters', value: 'S1 · 6/8' },
+      { label: 'session', value: '~2 min' },
+    ],
+  },
+  {
+    id: 'dim-sum',
+    href: '/kowloon/dim-sum/',
+    titleZh: '九龍點心',
+    titleEn: 'KOWLOON DIM SUM',
+    version: 'v0.1 · LEVEL 1 BETA',
+    pitch: 'The companion to Kowloon Kitchen, set one year later in auntie\'s upstairs teahouse. A match-3 with 6 dim-sum pieces — 菠蘿包, 蛋撻, 叉燒包, 馬拉糕, 老婆餅, 月餅. No lives, no paywalls. Clear auntie\'s egg tart order in 25 moves. Tutorial on the title screen. Shared $BUN balance with Kowloon Kitchen.',
+    cta: '開波 · PLAY',
+    accent: '#ffd54a',
+    accentSoft: 'rgba(255,213,74,0.22)',
+    emoji: '🥮',
+    ambientSigns: ['點心', '茶餐廳', '九龍', '早茶'],
+    stats: [
+      { label: 'session', value: '~3 min' },
+      { label: 'levels', value: '1 · more soon' },
+      { label: 'specials', value: '4 planned' },
+    ],
+  },
+];
+
+const chapters = [
+  { n: 1, zh: '新嚟嘅細佬', en: 'The New Kid',              hook: 'Knead phase.',                       live: true },
+  { n: 2, zh: '旺角個老鬼', en: 'Old Man of Mong Kok',       hook: 'Named NPC reputation.',              live: true },
+  { n: 3, zh: '食環署陳阿Sir', en: 'Inspector Chan',         hook: 'Named antagonist + alley chase.',    live: true },
+  { n: 4, zh: '阿爺嘅信',   en: "The Triad's Letter",        hook: 'Triad rep + side jobs.',             live: true },
+  { n: 5, zh: '街坊',      en: 'The Neighborhood',          hook: 'District specialty bonuses.',        live: true },
+  { n: 6, zh: '颱風夜',     en: 'Typhoon Night',             hook: 'Full weather layer + storm drop.',   live: true },
+  { n: 7, zh: '阿姐嘅秘密', en: "Auntie's Secret",           hook: 'Branching dialogue + sepia POV.',    live: false },
+  { n: 8, zh: '最後一爐',   en: 'Last Batch',                hook: 'Season 1 Finale · 3 endings.',       live: false },
+];
+
+const cast = [
+  { face: '👵🏻', name: '阿姐',    en: 'Auntie' },
+  { face: '👦🏻', name: '細佬',    en: 'The Kid' },
+  { face: '👴🏻', name: '老鬼',    en: 'Old Man Lo' },
+  { face: '👩🏻', name: '小蘭',    en: 'Siu-Lan' },
+  { face: '🧑🏻', name: '阿德',    en: 'Ah-Tak' },
+  { face: '🧓🏻', name: '芬姐',    en: 'Fen-Jie' },
+  { face: '🧑🏻‍🎓', name: '學生仔', en: 'The Student' },
+  { face: '👨🏻', name: '阿伯',    en: 'Mr. Bak' },
+  { face: '👩🏻‍🍳', name: '小英',   en: 'Siu-Ying' },
+  { face: '🧓🏼', name: '波叔',    en: 'Uncle Bo' },
+  { face: '🕵🏻‍♂️', name: '陳阿Sir', en: 'Inspector Chan' },
+  { face: '🥷🏻', name: '阿爺',    en: 'The Triad' },
+];
+
+const artPrompts = [
+  {
+    id: 'hero',
+    label: 'Universe hero · 2560×1440',
+    ar: '16:9',
+    prompt:
+`Cinematic ultra-wide 2560×1440 oil-and-neon poster, 1988 Kowloon at 3am after heavy rain. Composition is split vertical: LEFT half is a narrow rainy back-alley with a lit bakery window showing a silhouetted auntie pulling pineapple buns from a red-hot oven, steam curling into pink neon; RIGHT half is an upstairs teahouse window in morning blue-hour, backlit golden, showing the same auntie now serving dim sum to three customers in suits. A vertical neon sign between them reads "九龍" in pink, "KOWLOON" in cyan. Thin bilingual subtitle tag across the bottom in amber: "TWO GAMES · ONE UNIVERSE · 1988 / 1989 · 焗製 → 拼盤". CRT scanlines subtle, film grain, Kodak 500T color science, magenta-orange midtones, teal shadows. No people on the camera side of either window. No modern tech, no logos other than the neon sign. Legible text rendering, no glitches.`,
+  },
+  {
+    id: 'kk-key',
+    label: 'Kowloon Kitchen · key art · 1200×1600 portrait',
+    ar: '3:4',
+    prompt:
+`A 1988 Hong Kong movie poster for the browser game "九龍廚房 KOWLOON KITCHEN". Vertical 1200×1600. Hero figure: a weathered Cantonese kid in flour-dusted apron, holding a tray of 6 perfect golden pineapple buns, shot from below, hot pink neon rim-light on his face from behind, steam rising past him, rain on his shoulders. Behind him: narrow Kowloon alley at night, wet brick, a distant figure in a 食環署 health-inspector uniform approaching silhouetted. Bilingual title burned into the top in glowing pink neon Chinese handwriting "九龍廚房" and beneath in small cyan pixel font "KOWLOON KITCHEN · SEASON 1 · DAILY SHIFT". Small amber tagline near bottom: "BAKE · RUN · DON'T GET CAUGHT · 焗製 · 走鬼 · 唔好畀人捉". CRT scanline overlay subtle, Wong Kar-wai cinematography, film grain, crushed blacks. Legible text, Chinese glyphs rendered correctly.`,
+  },
+  {
+    id: 'kds-key',
+    label: 'Kowloon Dim Sum · key art · 1200×1600 portrait',
+    ar: '3:4',
+    prompt:
+`Blue-hour companion poster to Kowloon Kitchen. Vertical 1200×1600. Morning scene: a Cantonese auntie in a green apron serves a bamboo steamer of 6 specific dim sum pieces (菠蘿包 pineapple bun, 蛋撻 egg tart, 叉燒包 char siu bao, 馬拉糕 malai gao, 老婆餅 wife cake, 月餅 mooncake) on a round marble teahouse table, sunlight cutting through horizontal bamboo-blind slats behind her, warm amber mid-tones over a teal dawn outside the window, specific dim sum pieces rendered at premium food-photography level — visible crust flake on egg tart, cross on top of char siu bao. Title burned across the top in gold neon handwriting "九龍點心" and beneath in small cyan pixel font "KOWLOON DIM SUM · MATCH 3 · MORNING TEA". Amber tagline bottom: "早茶嘅節奏 · THE TEMPO OF MORNING TEA". CRT scanline overlay very subtle. Legible bilingual text, Chinese glyphs rendered correctly.`,
+  },
+  {
+    id: 'pastry-set',
+    label: 'CC0 pastry set · 2048×1365',
+    ar: '3:2',
+    prompt:
+`A 2×3 grid of isolated studio-quality food photographs on pure matte black: top row — 菠蘿包 (pineapple bun, golden crackled top), 蛋撻 (egg tart, flaky crust, glossy custard), 叉燒包 (char siu bao, steamed white with cross opening); bottom row — 馬拉糕 (brown malai gao, honeycomb texture), 老婆餅 (wife cake, round with translucent pastry), 月餅 (mooncake, stamped decorative top). Shot at 3/4 high angle, 50mm macro, single warm amber top-left key light, magenta rim, 2px transparent margin per piece, steam faintly visible on top row, slight film grain, no shadows on floor, no text, no logos. Each pastry is a separate hero-shot, composition grid-aligned. Art-direction: premium food magazine crossed with CC0 NFT collectible, saturated but restrained.`,
+  },
+  {
+    id: 'cast',
+    label: 'Character roster sheet · 2048×1024',
+    ar: '2:1',
+    prompt:
+`Character roster sheet for the Kowloon universe. Horizontal 2048×1024 strip, 6 portraits side-by-side in equal cells with thin cyan dividers. Each portrait is a low-angle bust shot, shot on 35mm Kodak 500T with anamorphic bokeh, moody teal shadows + magenta midtones, slight CRT scanline overlay. Each has a small name plate at the bottom of the cell in a mix of Chinese hand-painted + cyan Press Start 2P pixel font.
+L to R: (1) AUNTIE 阿姐 — elderly Cantonese woman, green apron over floral blouse, silver hair in bun, flour on cheek, red oven glow behind. (2) THE KID 細佬 — teen boy, flour on hands, rain-damp hair, nervous sharp eyes, pink neon reflected on cheek. (3) OLD MAN LO 老鬼 — 60s ex-cinema projectionist in Mong Kok, old brown jacket, thin black frames, cigarette smoke curling. (4) INSPECTOR CHAN 陳阿Sir — 食環署 health inspector, beige government uniform, black square-frame glasses, clipboard, cold look under flickering cyan neon. (5) THE TRIAD 阿爺 — mid-40s black silk shirt with gold buttons, thin gold chain, half-smile, gold reflections. (6) FEN-JIE 芬姐 — elderly street fortune-teller in Yau Ma Tei, shawl over shoulders, worn I-Ching hexagram fan. Ensemble should feel like stills from a lost 1988 crime film. Legible bilingual name plates, Chinese glyphs rendered correctly.`,
+  },
+];
+---
+<BlockLayout title={title} description={description}>
+  <main class="kowloon-page">
+    <div class="rain"></div>
+    <div class="crt"></div>
+
+    <section class="hero">
+      <div class="neon-sign s1">九</div>
+      <div class="neon-sign s2">龍</div>
+      <div class="hero-inner">
+        <div class="kicker">TWO GAMES · ONE UNIVERSE · 1988 KOWLOON</div>
+        <h1>
+          <span class="h-zh">九龍</span>
+          <span class="h-en">KOWLOON</span>
+        </h1>
+        <p class="tagline">
+          焗製。走鬼。揉麵。配對。
+          <span class="tagline-en">BAKE · RUN · KNEAD · MATCH</span>
+        </p>
+        <p class="lede">
+          Two browser games, same universe. A neo-noir arcade where you smuggle
+          contraband pineapple buns past the 食環署 at night — and, the morning
+          after, a match-3 where you and auntie run the upstairs teahouse.
+          Free, no install, CC0, bilingual.
+        </p>
+        <div class="hero-ctas">
+          <a class="cta cta-pink" href="/kowloon/baker/">▶ 開波 · PLAY KOWLOON KITCHEN</a>
+          <a class="cta cta-gold" href="/kowloon/dim-sum/">▶ 開波 · PLAY KOWLOON DIM SUM</a>
+          <a class="cta cta-cyan" href="/kowloon/tezos">💎 連錢包 · CLAIM $BUN</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="games">
+      <div class="section-tag">THE TWO GAMES · 兩隻遊戲</div>
+      <div class="games-grid">
+        {games.map((g) => (
+          <a class={`game-card game-${g.id}`} href={g.href} style={`--accent:${g.accent};--accent-soft:${g.accentSoft}`}>
+            <div class="game-signs">
+              {g.ambientSigns.map((sign) => <span class="gs">{sign}</span>)}
+            </div>
+            <div class="game-emoji">{g.emoji}</div>
+            <div class="game-title">
+              <span class="gt-zh">{g.titleZh}</span>
+              <span class="gt-en">{g.titleEn}</span>
+            </div>
+            <div class="game-version">{g.version}</div>
+            <p class="game-pitch">{g.pitch}</p>
+            <div class="game-stats">
+              {g.stats.map((s) => (
+                <div class="gs-cell">
+                  <div class="gs-val">{s.value}</div>
+                  <div class="gs-lbl">{s.label}</div>
+                </div>
+              ))}
+            </div>
+            <div class="game-cta">{g.cta}<span class="cta-arrow">→</span></div>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="season">
+      <div class="section-tag">SEASON 1 · 半夜三更 · THE WITCHING HOUR · 8 CHAPTERS</div>
+      <div class="season-strip">
+        {chapters.map((c) => (
+          <div class={`chap ${c.live ? 'live' : 'pending'}`}>
+            <div class="chap-n">CH {c.n}</div>
+            <div class="chap-zh">{c.zh}</div>
+            <div class="chap-en">{c.en}</div>
+            <div class="chap-hook">{c.hook}</div>
+            <div class="chap-status">{c.live ? '● LIVE' : '○ COMING'}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="cast">
+      <div class="section-tag">THE CAST · 角色 · 12 NAMED</div>
+      <div class="cast-grid">
+        {cast.map((c) => (
+          <div class="cast-cell">
+            <div class="cast-face">{c.face}</div>
+            <div class="cast-zh">{c.name}</div>
+            <div class="cast-en">{c.en}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="art">
+      <div class="section-tag">ART PIPELINE · CHATGPT IMAGES 2.0 PROMPTS · CC0</div>
+      <p class="art-lede">
+        Every image below has a prompt ready for <a href="https://openai.com/index/introducing-chatgpt-images-2-0/" target="_blank" rel="noopener">ChatGPT Images 2.0</a>
+        — drop it in, get the asset, drop the file into <code>/public/kowloon/art/&lt;id&gt;.png</code>,
+        and it lights up here. All art CC0. Clean text rendering and legible Chinese glyphs are the reason we're using 2.0.
+      </p>
+      <div class="art-grid">
+        {artPrompts.map((a) => (
+          <div class={`art-card art-${a.ar.replace(':','x')}`}>
+            <div class="art-frame" data-art-id={a.id}>
+              <img src={`/kowloon/art/${a.id}.png`} alt={a.label} loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('missing')" />
+              <div class="art-missing">
+                <div class="am-label">no render yet</div>
+                <div class="am-sub">drop <code>/kowloon/art/{a.id}.png</code></div>
+              </div>
+            </div>
+            <div class="art-meta">
+              <div class="art-label">{a.label}</div>
+              <details class="art-prompt">
+                <summary>show prompt ↓</summary>
+                <pre>{a.prompt}</pre>
+                <button class="copy-btn" data-clip={a.id}>copy prompt</button>
+              </details>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="chain">
+      <div class="section-tag">ON-CHAIN · TEZOS · 上鏈</div>
+      <div class="chain-inner">
+        <div class="chain-copy">
+          <h2>Real Tezos. Real mint. Real CC0.</h2>
+          <p>
+            Both games feed one unified <strong>$BUN</strong> balance — an
+            <strong>FA1.2 fungible token</strong> on Tezos mainnet, voucher-signed mint
+            (same security pattern as PointCast's <code>$DRUM</code>), daily-capped server-side
+            at <strong>2.00 $BUN/wallet/day</strong> to prevent grinding. Connect Kukai, Temple,
+            or Umami; sign the claim; mint hits your wallet in ~30 seconds.
+          </p>
+          <p>
+            The <strong>6 CC0 Pastry genesis NFTs</strong> are an <strong>FA2 multi-asset</strong>
+            contract — airdropped to the Season 1 Finale Daily Shift top-50 on
+            <strong>Apr 28, 2026 · 20:00 PT</strong>. Claim-based, with an admin batch
+            mint for the launch. 10% royalty funds the art pipeline. Remix the art
+            freely — the royalty's on the NFT receipt, not the underlying CC0.
+          </p>
+          <div class="chain-links">
+            <a class="chain-btn" href="/kowloon/tezos">💎 Connect &amp; Claim →</a>
+            <a class="chain-btn ghost" href="https://github.com/pointcast/kowloon#contracts" target="_blank" rel="noopener">Contract source ↗</a>
+          </div>
+        </div>
+        <div class="chain-specs">
+          <div class="spec">
+            <div class="spec-label">$BUN · FA1.2</div>
+            <div class="spec-val"><code>contracts/bun_token.py</code></div>
+            <div class="spec-meta">voucher-signed mint · 2dp · daily cap 2.00</div>
+          </div>
+          <div class="spec">
+            <div class="spec-label">PASTRY · FA2</div>
+            <div class="spec-val"><code>contracts/kowloon_pastry_fa2.py</code></div>
+            <div class="spec-meta">6 token IDs · IPFS metadata · 10% royalty</div>
+          </div>
+          <div class="spec">
+            <div class="spec-label">VOUCHER WORKER</div>
+            <div class="spec-val"><code>functions/api/kowloon-voucher.ts</code></div>
+            <div class="spec-meta">ed25519 · 5-min expiry · KV-backed daily cap</div>
+          </div>
+          <div class="spec">
+            <div class="spec-label">CLIENT LIB</div>
+            <div class="spec-val"><code>src/lib/kowloon-mint.ts</code></div>
+            <div class="spec-meta">Taquito 24.2 · Beacon popup bridge</div>
+          </div>
+          <div class="spec">
+            <div class="spec-label">ACHIEVEMENTS · FA2</div>
+            <div class="spec-val"><code>contracts/kowloon_achievements_fa2.py</code></div>
+            <div class="spec-meta">36 slugs · 0% royalty · one receipt per wallet-slug</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stack">
+      <div class="section-tag">THE STACK · 技術</div>
+      <div class="stack-grid">
+        <div class="stack-cell">
+          <div class="sc-head">SINGLE FILE</div>
+          <p>Each game is one <code>index.html</code> — vanilla JS + canvas, no build. Loads in &lt;1s on a subway.</p>
+        </div>
+        <div class="stack-cell">
+          <div class="sc-head">CC0 ART</div>
+          <p>Pastry sprites, character portraits, key art — all public domain, free to remix, print a t-shirt, make a filter.</p>
+        </div>
+        <div class="stack-cell">
+          <div class="sc-head">TEZOS READY</div>
+          <p>$BUN is an off-chain cosmetic token now, FA2 migration wired for Season 2. CC0 pastry NFTs drop at S1 finale.</p>
+        </div>
+        <div class="stack-cell">
+          <div class="sc-head">SHARED WALLET</div>
+          <p>One $BUN balance across both games. NPC reputation in Kitchen can be raised by named-buyer orders in Dim Sum.</p>
+        </div>
+        <div class="stack-cell">
+          <div class="sc-head">BILINGUAL</div>
+          <p>Every subtitle, every achievement, every menu — Traditional Chinese + English. Cantonese-first dialog.</p>
+        </div>
+        <div class="stack-cell">
+          <div class="sc-head">DAILY SHIFT</div>
+          <p>Seeded daily run, same for every player worldwide. Share the poster at the end. Wordle for buns.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="footer-note">
+      <p>
+        Made by <a href="https://pointcast.xyz/">Mike Hoydich</a> + Claude Code, shipping every hour in public.
+        Season 1 Finale + CC0 pastry NFT drop: <strong>Apr 28, 2026 · 8am PT</strong>.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  // Copy-to-clipboard for art prompts
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-clip]');
+    if (!btn) return;
+    const id = btn.getAttribute('data-clip');
+    const pre = btn.parentElement.querySelector('pre');
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = '✓ copied';
+      setTimeout(() => (btn.textContent = orig), 1400);
+    });
+  });
+</script>
+
+<style>
+  :root {
+    --kw-bg: #0a0314;
+    --kw-ink: #e8e3ff;
+    --kw-pink: #ff2d95;
+    --kw-cyan: #00e0ff;
+    --kw-amber: #ffb800;
+    --kw-blood: #c8102e;
+    --kw-jade: #aaffd0;
+    --kw-gold: #ffd54a;
+  }
+
+  .kowloon-page {
+    position: relative;
+    background:
+      radial-gradient(ellipse at 22% 12%, rgba(255,45,149,0.18) 0%, transparent 45%),
+      radial-gradient(ellipse at 78% 88%, rgba(0,224,255,0.15) 0%, transparent 45%),
+      radial-gradient(ellipse at 50% 55%, rgba(255,213,74,0.08) 0%, transparent 60%),
+      var(--kw-bg);
+    color: var(--kw-ink);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    min-height: 100vh;
+    padding: 0 0 3rem;
+    overflow: hidden;
+  }
+  .kowloon-page .rain {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      110deg,
+      transparent 0 8px,
+      rgba(255,255,255,0.03) 8px,
+      rgba(255,255,255,0.07) 9px,
+      transparent 10px);
+    animation: kw-rain 0.55s linear infinite;
+    z-index: 1;
+  }
+  @keyframes kw-rain { from { background-position: 0 0 } to { background-position: -40px 80px } }
+  .kowloon-page .crt {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(to bottom,
+        rgba(0,0,0,0) 0 2px,
+        rgba(0,0,0,0.35) 3px,
+        rgba(0,0,0,0) 4px),
+      radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.85) 100%);
+    z-index: 2;
+    mix-blend-mode: multiply;
+  }
+  .kowloon-page section { position: relative; z-index: 3; }
+
+  .section-tag {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.3em;
+    color: var(--kw-cyan);
+    text-shadow: 0 0 6px var(--kw-cyan);
+    text-transform: uppercase;
+    padding: 0.5rem 1rem;
+    border-top: 1px dashed rgba(0,224,255,0.35);
+    border-bottom: 1px dashed rgba(0,224,255,0.35);
+    margin: 0 0 1.5rem;
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    min-height: 78vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 1.5rem;
+    overflow: hidden;
+  }
+  .neon-sign {
+    position: absolute;
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 900;
+    font-size: 24rem;
+    color: var(--kw-pink);
+    opacity: 0.11;
+    text-shadow: 0 0 40px var(--kw-pink);
+    pointer-events: none;
+    animation: kw-flicker 3s infinite;
+    line-height: 0.85;
+  }
+  .neon-sign.s1 { top: 10%; left: 4%; color: var(--kw-pink); }
+  .neon-sign.s2 { bottom: 5%; right: 3%; color: var(--kw-cyan); opacity: 0.09; font-size: 22rem; }
+  @keyframes kw-flicker {
+    0%, 100% { opacity: 0.13; }
+    50% { opacity: 0.05; }
+    55% { opacity: 0.18; }
+    57% { opacity: 0.02; }
+    60% { opacity: 0.13; }
+  }
+  .hero-inner {
+    position: relative;
+    text-align: center;
+    max-width: 860px;
+    padding: 2rem;
+    z-index: 2;
+  }
+  .kicker {
+    font-size: 0.85rem;
+    letter-spacing: 0.35em;
+    color: var(--kw-gold);
+    text-shadow: 0 0 6px var(--kw-gold);
+    text-transform: uppercase;
+    margin-bottom: 1.4rem;
+  }
+  .hero h1 {
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 900;
+    font-size: clamp(5rem, 16vw, 12rem);
+    line-height: 0.9;
+    margin: 0 0 0.5rem;
+  }
+  .hero h1 .h-zh {
+    color: var(--kw-pink);
+    text-shadow:
+      0 0 20px var(--kw-pink),
+      0 0 60px rgba(255,45,149,0.55);
+    display: block;
+  }
+  .hero h1 .h-en {
+    display: block;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(1.2rem, 2.5vw, 2rem);
+    color: var(--kw-cyan);
+    text-shadow: 0 0 10px var(--kw-cyan);
+    letter-spacing: 0.35em;
+    margin-top: 0.5rem;
+  }
+  .tagline {
+    font-family: 'Noto Serif HK', serif;
+    font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+    color: var(--kw-amber);
+    text-shadow: 0 0 10px var(--kw-amber);
+    margin: 1.2rem 0 0.4rem;
+  }
+  .tagline-en {
+    display: block;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.35em;
+    color: var(--kw-jade);
+    text-shadow: 0 0 6px var(--kw-jade);
+    margin-top: 0.3rem;
+  }
+  .lede {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: rgba(232,227,255,0.8);
+    max-width: 620px;
+    margin: 1.3rem auto 1.8rem;
+  }
+  .hero-ctas {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .cta {
+    display: inline-block;
+    padding: 1rem 1.7rem;
+    border: 2px solid currentColor;
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    box-shadow: 0 0 15px rgba(255,255,255,0.12);
+    transition: all 0.15s ease-out;
+    background: rgba(10,3,20,0.55);
+  }
+  .cta-pink { color: var(--kw-pink); text-shadow: 0 0 8px var(--kw-pink); box-shadow: 0 0 20px rgba(255,45,149,0.35); }
+  .cta-pink:hover { background: var(--kw-pink); color: #fff; text-shadow: none; transform: translateY(-2px); box-shadow: 0 0 30px var(--kw-pink); }
+  .cta-gold { color: var(--kw-gold); text-shadow: 0 0 8px var(--kw-gold); box-shadow: 0 0 20px rgba(255,213,74,0.35); }
+  .cta-gold:hover { background: var(--kw-gold); color: #0a0314; text-shadow: none; transform: translateY(-2px); box-shadow: 0 0 30px var(--kw-gold); }
+  .cta-cyan { color: var(--kw-cyan); text-shadow: 0 0 8px var(--kw-cyan); box-shadow: 0 0 20px rgba(0,224,255,0.35); }
+  .cta-cyan:hover { background: var(--kw-cyan); color: #0a0314; text-shadow: none; transform: translateY(-2px); box-shadow: 0 0 30px var(--kw-cyan); }
+
+  /* Games grid */
+  .games { padding: 2rem 1.5rem; }
+  .games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 1.5rem;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .game-card {
+    position: relative;
+    display: block;
+    padding: 2rem 1.6rem 1.8rem;
+    border: 2px solid var(--accent);
+    background: linear-gradient(135deg, var(--accent-soft), rgba(10,3,20,0.88));
+    color: var(--kw-ink);
+    text-decoration: none;
+    box-shadow: 0 0 25px var(--accent-soft);
+    transition: all 0.18s;
+    overflow: hidden;
+  }
+  .game-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 45px var(--accent), 0 0 90px var(--accent-soft);
+  }
+  .game-signs {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-around;
+    pointer-events: none;
+    opacity: 0.06;
+    font-family: 'Noto Serif HK', serif;
+    font-size: 8rem;
+    font-weight: 900;
+    color: var(--accent);
+    writing-mode: vertical-rl;
+    animation: kw-flicker 3s infinite;
+  }
+  .game-emoji {
+    font-size: 4rem;
+    filter: drop-shadow(0 0 15px var(--accent));
+    text-align: center;
+    margin-bottom: 0.4rem;
+    position: relative;
+    z-index: 2;
+  }
+  .game-title { text-align: center; position: relative; z-index: 2; }
+  .gt-zh {
+    display: block;
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 900;
+    font-size: 2.6rem;
+    color: var(--accent);
+    text-shadow: 0 0 12px var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .gt-en {
+    display: block;
+    font-size: 0.78rem;
+    letter-spacing: 0.28em;
+    color: var(--kw-cyan);
+    text-shadow: 0 0 5px var(--kw-cyan);
+    margin-top: 0.25rem;
+  }
+  .game-version {
+    text-align: center;
+    font-size: 0.62rem;
+    letter-spacing: 0.24em;
+    color: var(--kw-amber);
+    text-shadow: 0 0 5px var(--kw-amber);
+    border: 1px solid rgba(255,184,0,0.4);
+    padding: 0.2rem 0.5rem;
+    display: inline-block;
+    position: relative;
+    z-index: 2;
+    margin: 0.8rem auto 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .game-pitch {
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: rgba(232,227,255,0.82);
+    margin: 0 0 1.2rem;
+    position: relative;
+    z-index: 2;
+  }
+  .game-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+    border-top: 1px dashed rgba(232,227,255,0.22);
+    padding-top: 0.8rem;
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 2;
+  }
+  .gs-cell { text-align: center; }
+  .gs-val {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--kw-jade);
+    text-shadow: 0 0 5px var(--kw-jade);
+  }
+  .gs-lbl {
+    font-size: 0.58rem;
+    letter-spacing: 0.22em;
+    color: rgba(232,227,255,0.45);
+    text-transform: uppercase;
+    margin-top: 0.15rem;
+  }
+  .game-cta {
+    text-align: center;
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--accent);
+    text-shadow: 0 0 10px var(--accent);
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 0.8rem;
+    letter-spacing: 0.08em;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+  .cta-arrow { transition: transform 0.15s; }
+  .game-card:hover .cta-arrow { transform: translateX(6px); }
+
+  /* Season strip */
+  .season { padding: 2rem 1.5rem; }
+  .season-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.7rem;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .chap {
+    padding: 0.85rem 0.95rem;
+    border: 1px solid rgba(232,227,255,0.18);
+    background: rgba(10,3,20,0.72);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    transition: all 0.15s;
+  }
+  .chap.live { border-color: rgba(170,255,208,0.55); background: rgba(10,40,25,0.4); }
+  .chap.pending { opacity: 0.52; }
+  .chap-n {
+    font-size: 0.55rem;
+    letter-spacing: 0.22em;
+    color: var(--kw-gold);
+    text-shadow: 0 0 4px var(--kw-gold);
+  }
+  .chap-zh {
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--kw-ink);
+  }
+  .chap.live .chap-zh { color: var(--kw-jade); text-shadow: 0 0 5px var(--kw-jade); }
+  .chap-en {
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    color: rgba(232,227,255,0.62);
+  }
+  .chap-hook {
+    font-size: 0.72rem;
+    color: rgba(232,227,255,0.55);
+    margin-top: 0.25rem;
+    font-style: italic;
+  }
+  .chap-status {
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    margin-top: 0.25rem;
+    color: var(--kw-cyan);
+  }
+  .chap.pending .chap-status { color: rgba(232,227,255,0.35); }
+
+  /* Cast */
+  .cast { padding: 2rem 1.5rem; }
+  .cast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.55rem;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .cast-cell {
+    padding: 0.7rem 0.4rem;
+    border: 1px solid rgba(255,213,74,0.3);
+    background: rgba(10,3,20,0.72);
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .cast-cell:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 15px rgba(255,213,74,0.35);
+  }
+  .cast-face {
+    font-size: 2.3rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 8px var(--kw-gold));
+    margin-bottom: 0.3rem;
+  }
+  .cast-zh {
+    font-family: 'Noto Serif HK', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--kw-gold);
+    text-shadow: 0 0 4px var(--kw-gold);
+  }
+  .cast-en {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: rgba(232,227,255,0.55);
+    text-transform: uppercase;
+    margin-top: 0.15rem;
+  }
+
+  /* Art gallery */
+  .art { padding: 2rem 1.5rem; max-width: 1280px; margin: 0 auto; }
+  .art-lede {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: rgba(232,227,255,0.78);
+    margin: 0 0 1.5rem;
+  }
+  .art-lede a { color: var(--kw-pink); text-decoration: underline; text-decoration-style: dashed; }
+  .art-lede code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85em;
+    padding: 0.1em 0.3em;
+    background: rgba(0,224,255,0.12);
+    color: var(--kw-cyan);
+    border-radius: 2px;
+  }
+  .art-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 1.2rem;
+  }
+  .art-card {
+    background: rgba(10,3,20,0.75);
+    border: 1px solid rgba(255,213,74,0.3);
+    padding: 0.8rem;
+  }
+  .art-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background:
+      repeating-linear-gradient(45deg, rgba(255,213,74,0.04) 0 6px, transparent 6px 12px),
+      rgba(0,0,0,0.5);
+    border: 1px dashed rgba(255,213,74,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+  }
+  .art-frame.art-16x9 { aspect-ratio: 16 / 9; }
+  .art-frame.art-3x4 { aspect-ratio: 3 / 4; }
+  .art-frame.art-3x2 { aspect-ratio: 3 / 2; }
+  .art-frame.art-2x1 { aspect-ratio: 2 / 1; }
+  .art-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .art-missing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    color: rgba(232,227,255,0.5);
+  }
+  .art-frame:not(.missing) .art-missing { display: none; }
+  .am-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+  }
+  .am-sub {
+    font-size: 0.72rem;
+    color: rgba(232,227,255,0.35);
+  }
+  .am-sub code { font-size: 0.82em; color: var(--kw-cyan); background: rgba(0,224,255,0.1); padding: 0.1em 0.3em; }
+  .art-label {
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: var(--kw-gold);
+    text-shadow: 0 0 5px var(--kw-gold);
+    margin-bottom: 0.3rem;
+  }
+  .art-prompt summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--kw-cyan);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .art-prompt pre {
+    margin: 0.6rem 0;
+    padding: 0.7rem 0.9rem;
+    background: rgba(0,0,0,0.5);
+    border-left: 2px solid var(--kw-gold);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: rgba(232,227,255,0.82);
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .copy-btn {
+    padding: 0.3rem 0.7rem;
+    font-family: inherit;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    background: transparent;
+    border: 1px solid var(--kw-gold);
+    color: var(--kw-gold);
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .copy-btn:hover { background: var(--kw-gold); color: #0a0314; }
+
+  /* Chain section */
+  .chain { padding: 2.5rem 1.5rem; max-width: 1280px; margin: 0 auto; }
+  .chain-inner {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .chain-inner { grid-template-columns: 1fr; } }
+  .chain-copy h2 {
+    font-family: 'Noto Serif HK', serif;
+    font-size: 2.2rem;
+    color: var(--kw-cyan);
+    text-shadow: 0 0 15px var(--kw-cyan), 0 0 40px rgba(0,224,255,0.45);
+    margin: 0 0 1rem;
+    line-height: 1.1;
+  }
+  .chain-copy p {
+    font-size: 1rem;
+    line-height: 1.65;
+    color: rgba(232,227,255,0.82);
+    margin-bottom: 1rem;
+  }
+  .chain-copy strong {
+    color: var(--kw-gold);
+    text-shadow: 0 0 4px var(--kw-gold);
+  }
+  .chain-copy code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.92em;
+    color: var(--kw-amber);
+    background: rgba(255,184,0,0.1);
+    padding: 0.1em 0.3em;
+  }
+  .chain-links {
+    display: flex;
+    gap: 0.7rem;
+    margin-top: 1.2rem;
+    flex-wrap: wrap;
+  }
+  .chain-btn {
+    display: inline-block;
+    padding: 0.85rem 1.3rem;
+    border: 2px solid var(--kw-cyan);
+    color: var(--kw-cyan);
+    text-decoration: none;
+    font-family: 'Noto Serif HK', serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 6px var(--kw-cyan);
+    box-shadow: 0 0 18px rgba(0,224,255,0.3);
+    transition: all 0.15s;
+    background: rgba(10,3,20,0.5);
+  }
+  .chain-btn:hover { background: var(--kw-cyan); color: #0a0314; text-shadow: none; transform: translateY(-2px); }
+  .chain-btn.ghost {
+    border-color: rgba(232,227,255,0.4);
+    color: rgba(232,227,255,0.7);
+    box-shadow: none;
+    text-shadow: none;
+    font-size: 0.92rem;
+    padding: 0.85rem 1.1rem;
+  }
+  .chain-btn.ghost:hover {
+    border-color: var(--kw-gold);
+    color: var(--kw-gold);
+    background: rgba(255,213,74,0.1);
+    text-shadow: 0 0 5px var(--kw-gold);
+  }
+  .chain-specs {
+    display: grid;
+    gap: 0.6rem;
+    grid-template-columns: 1fr 1fr;
+  }
+  .spec {
+    padding: 0.8rem 0.95rem;
+    border: 1px solid rgba(0,224,255,0.25);
+    background: rgba(10,3,20,0.72);
+  }
+  .spec-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.24em;
+    color: var(--kw-cyan);
+    text-shadow: 0 0 4px var(--kw-cyan);
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+  }
+  .spec-val {
+    font-size: 0.85rem;
+    color: var(--kw-gold);
+    text-shadow: 0 0 4px var(--kw-gold);
+    word-break: break-all;
+    margin-bottom: 0.3rem;
+  }
+  .spec-val code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.95em;
+  }
+  .spec-meta {
+    font-size: 0.72rem;
+    color: rgba(232,227,255,0.55);
+    line-height: 1.4;
+  }
+
+  /* Stack */
+  .stack { padding: 2rem 1.5rem; max-width: 1280px; margin: 0 auto; }
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.8rem;
+  }
+  .stack-cell {
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(0,224,255,0.25);
+    background: rgba(10,3,20,0.7);
+  }
+  .sc-head {
+    font-size: 0.62rem;
+    letter-spacing: 0.28em;
+    color: var(--kw-cyan);
+    text-shadow: 0 0 5px var(--kw-cyan);
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+  }
+  .stack-cell p {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: rgba(232,227,255,0.75);
+  }
+  .stack-cell code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85em;
+    color: var(--kw-amber);
+  }
+
+  .footer-note {
+    padding: 2rem 1.5rem;
+    text-align: center;
+    font-size: 0.88rem;
+    color: rgba(232,227,255,0.55);
+    border-top: 1px dashed rgba(232,227,255,0.18);
+    max-width: 1280px;
+    margin: 2rem auto 0;
+  }
+  .footer-note a {
+    color: var(--kw-pink);
+    text-decoration: underline;
+    text-decoration-style: dashed;
+  }
+  .footer-note strong {
+    color: var(--kw-gold);
+    text-shadow: 0 0 5px var(--kw-gold);
+  }
+
+  @media (max-width: 640px) {
+    .hero { min-height: 60vh; padding: 3rem 1rem; }
+    .game-card { padding: 1.4rem 1.1rem; }
+    .gt-zh { font-size: 2.1rem; }
+    .neon-sign { font-size: 14rem; }
+  }
+</style>
+</BlockLayout>

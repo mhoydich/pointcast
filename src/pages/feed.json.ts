@@ -1,12 +1,9 @@
 /**
- * /feed.json — unified JSON Feed v1.1 covering the latest 50 Blocks.
+ * /feed.json — JSON Feed 1.1 (https://www.jsonfeed.org/version/1.1/)
  *
- * Sibling of /feed.xml in the jsonfeed.org v1.1 format. Most modern RSS
- * clients and agents speak this natively.
- *
- * Differs from /blocks.json: this is the canonical "feed" shape
- * (standards-compliant, items[], authors[], tags[]), whereas /blocks.json
- * is PointCast's native shape (blocks[], richer metadata).
+ * Latest 50 non-draft blocks, newest first. Primary consumers: readers
+ * that support JSON Feed (NetNewsWire, Reeder, Feedbin) and LLM pipelines
+ * that prefer JSON over XML.
  */
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
@@ -16,7 +13,8 @@ function htmlEscape(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export const GET: APIRoute = async () => {
@@ -29,11 +27,10 @@ export const GET: APIRoute = async () => {
     const body = b.data.body ?? b.data.dek ?? b.data.title;
     const tags = [ch.code];
     if (b.data.mood) tags.push(b.data.mood);
-    const prefixedTitle = `${ch.name} \u00b7 ${b.data.title}`;
     return {
       id: `https://pointcast.xyz/b/${b.data.id}`,
       url: `https://pointcast.xyz/b/${b.data.id}`,
-      title: prefixedTitle,
+      title: `${ch.name} · ${b.data.title}`,
       content_html: `<p>${htmlEscape(body)}</p>`,
       content_text: body,
       summary: b.data.dek ?? undefined,
@@ -43,17 +40,17 @@ export const GET: APIRoute = async () => {
     };
   });
 
-  const payload = {
+  const feed = {
     version: 'https://jsonfeed.org/version/1.1',
     title: 'PointCast',
-    home_page_url: 'https://pointcast.xyz/',
+    description: 'Living broadcast from El Segundo. Blocks over channels, edition one.',
+    home_page_url: 'https://pointcast.xyz',
     feed_url: 'https://pointcast.xyz/feed.json',
-    description: 'A living broadcast from El Segundo. Every piece of content is a Block.',
-    language: 'en-US',
+    language: 'en',
     items,
   };
 
-  return new Response(JSON.stringify(payload, null, 2), {
+  return new Response(JSON.stringify(feed, null, 2), {
     status: 200,
     headers: {
       'Content-Type': 'application/feed+json; charset=utf-8',

@@ -1,0 +1,502 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import WalletChip from '../../components/WalletChip.astro';
+import {
+  PASSPORT_IMAGE_GENERATOR,
+  PASSPORT_STAMPS,
+  PASSPORT_STORAGE_KEY,
+  passportDateKey,
+} from '../../lib/passport';
+import {
+  PASSPORT_COMPANION_COLLECTION,
+  PASSPORT_STAMP_COLLECTION,
+  PASSPORT_STAMP_PRD_PATH,
+  passportStampMintPlan,
+} from '../../lib/passport-mint';
+
+const today = passportDateKey();
+const receiptRows = PASSPORT_STAMPS.map((stamp) => ({
+  stamp,
+  mint: passportStampMintPlan(stamp),
+}));
+
+const title = 'Passport Receipts';
+const description =
+  'Client-side receipt drawer for PointCast Station Passport Tezos companion proof mints.';
+
+const clientPayload = {
+  storageKey: PASSPORT_STORAGE_KEY,
+  today,
+  total: PASSPORT_STAMPS.length,
+  stamps: PASSPORT_STAMPS.map((stamp) => ({
+    slug: stamp.slug,
+    code: stamp.code,
+    name: stamp.name,
+  })),
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/passport/receipts',
+  name: 'PointCast Passport Mint Receipts',
+  description,
+  url: 'https://pointcast.xyz/passport/receipts',
+  isPartOf: {
+    '@type': 'WebApplication',
+    name: 'PointCast Station Passport',
+    url: 'https://pointcast.xyz/passport',
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/posters/passport/ridge-port-mesh.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/passport/receipts.json', title: 'Passport Receipts JSON' }]}
+  frame={{
+    image: 'https://pointcast.xyz/posters/passport/ridge-port-mesh.png',
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Receipts', action: 'link', target: 'https://pointcast.xyz/passport/receipts' },
+      { label: 'Passport', action: 'link', target: 'https://pointcast.xyz/passport' },
+      { label: 'Routes', action: 'link', target: 'https://pointcast.xyz/passport/routes' },
+    ],
+  }}
+>
+  <div class="page">
+    <script type="application/json" id="passport-receipts-data" set:html={JSON.stringify(clientPayload)} />
+
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/passport">passport</a>
+      <span aria-hidden="true">/</span>
+      <span>receipts</span>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <div class="hero__top">
+          <p class="kicker">MINT RECEIPTS · TEZOS · {today}</p>
+          <WalletChip />
+        </div>
+        <h1>A receipt drawer for every proof.</h1>
+        <p class="dek">
+          After a wallet-approved mint, the passport records the operation hash
+          in browser storage. This drawer turns those saved broadcasts into
+          readable proof cards with TzKT links and metadata.
+        </p>
+      </div>
+      <section class="receipt-score" aria-label="Receipt count">
+        <p class="receipt-score__label">receipts</p>
+        <strong><span data-receipt-count>0</span>/{PASSPORT_STAMPS.length}</strong>
+        <div class="receipt-score__meter"><span data-receipt-meter></span></div>
+        <p>Current live path: {PASSPORT_COMPANION_COLLECTION.entrypoint} on Visit Nouns. Native {PASSPORT_STAMP_COLLECTION.entrypoint} waits for KT1 origination.</p>
+      </section>
+    </header>
+
+    <section class="truth-box" aria-labelledby="truth-title">
+      <div>
+        <p class="kicker">TRUTH LABEL</p>
+        <h2 id="truth-title">No wallet signature, no confirmed receipt.</h2>
+      </div>
+      <p>
+        These cards only become confirmed after the main passport page broadcasts
+        a transaction and stores its operation hash. Until then, they are receipt
+        templates. The generated stamp-art FA2 remains {PASSPORT_STAMP_COLLECTION.status};
+        see the <a href={PASSPORT_STAMP_PRD_PATH}>PRD</a>.
+      </p>
+    </section>
+
+    <section class="receipt-grid" aria-label="Passport mint receipts">
+      {receiptRows.map(({ stamp, mint }) => (
+        <article
+          class="receipt-card"
+          id={stamp.slug}
+          data-receipt-card={stamp.slug}
+          style={`--stamp-color:${stamp.color};`}
+        >
+          <a class="receipt-card__art" href={`/passport/art/${stamp.slug}.svg`}>
+            <img src={`/passport/art/${stamp.slug}.svg`} alt={`${stamp.name} passport stamp`} loading="lazy" />
+          </a>
+          <div class="receipt-card__copy">
+            <p class="receipt-card__meta">{stamp.code} · {mint.current.mode === 'passport-stamp-native' ? 'native stamp' : 'companion proof'}</p>
+            <h2>{stamp.name}</h2>
+            <dl>
+              <div>
+                <dt>token</dt>
+                <dd>#{mint.current.tokenId}</dd>
+              </div>
+              <div>
+                <dt>contract</dt>
+                <dd><code>{mint.current.contract ?? 'pending'}</code></dd>
+              </div>
+              <div>
+                <dt>status</dt>
+                <dd data-receipt-status={stamp.slug}>No receipt yet.</dd>
+              </div>
+            </dl>
+            <div class="receipt-card__links">
+              <a href={`/passport#${stamp.slug}`}>Mint</a>
+              <a href={`/passport/stamps/${stamp.slug}.json`}>Metadata</a>
+              <a data-receipt-tzkt={stamp.slug} href={mint.current.tzkt ?? '#'} target="_blank" rel="noopener">TzKT</a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/passport/receipts.json">/passport/receipts.json</a></li>
+        <li><a href="/passport/routes.json">/passport/routes.json</a></li>
+        <li><a href="/passport.json">/passport.json</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script>
+  (function () {
+    var dataEl = document.getElementById('passport-receipts-data');
+    if (!dataEl) return;
+
+    var data = {};
+    try { data = JSON.parse(dataEl.textContent || '{}'); } catch (e) { return; }
+
+    var storageKey = data.storageKey || 'pc:station-passport:v1';
+    var total = Number(data.total || 0);
+    var countEl = document.querySelector('[data-receipt-count]');
+    var meterEl = document.querySelector('[data-receipt-meter]');
+
+    function emptyState() {
+      return { version: 1, updatedAt: null, stamps: {}, mints: {} };
+    }
+
+    function readState() {
+      try {
+        var raw = localStorage.getItem(storageKey);
+        if (!raw) return emptyState();
+        var parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return emptyState();
+        if (!parsed.stamps || typeof parsed.stamps !== 'object') parsed.stamps = {};
+        if (!parsed.mints || typeof parsed.mints !== 'object') parsed.mints = {};
+        return parsed;
+      } catch (e) {
+        return emptyState();
+      }
+    }
+
+    function stampName(slug) {
+      var stamp = (data.stamps || []).find(function (item) { return item.slug === slug; });
+      return stamp ? stamp.name : slug;
+    }
+
+    function paint() {
+      var state = readState();
+      var n = Object.keys(state.mints || {}).length;
+      if (countEl) countEl.textContent = String(n);
+      if (meterEl) meterEl.style.width = total ? Math.round((n / total) * 100) + '%' : '0%';
+
+      document.querySelectorAll('[data-receipt-card]').forEach(function (card) {
+        var slug = card.getAttribute('data-receipt-card') || '';
+        var mint = state.mints && state.mints[slug];
+        card.classList.toggle('is-confirmed', Boolean(mint));
+        var status = card.querySelector('[data-receipt-status]');
+        var tzkt = card.querySelector('[data-receipt-tzkt]');
+
+        if (!mint) {
+          if (status) status.textContent = 'No receipt yet.';
+          return;
+        }
+
+        if (status) {
+          var hash = mint.opHash ? String(mint.opHash).slice(0, 10) + '...' : 'broadcast recorded';
+          status.textContent = 'Confirmed ' + (mint.mode === 'passport-stamp-native' ? 'stamp' : 'proof') + ' for ' + stampName(slug) + ' · ' + hash;
+        }
+        if (tzkt && mint.tzktUrl) {
+          tzkt.setAttribute('href', mint.tzktUrl);
+        }
+      });
+    }
+
+    paint();
+  })();
+</script>
+
+<style>
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 20px 0 88px;
+  }
+
+  .crumb,
+  .kicker,
+  .receipt-score__label,
+  .receipt-card__meta,
+  .receipt-card dt,
+  .receipt-card__links,
+  .agent-strip__label {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 28px;
+    align-items: stretch;
+    padding-bottom: 24px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .kicker {
+    margin: 0 0 10px;
+    color: #8a2432;
+  }
+
+  .hero h1 {
+    margin: 0;
+    max-width: 760px;
+    font-size: 62px;
+    line-height: 0.96;
+    font-weight: 500;
+  }
+
+  .dek {
+    margin: 16px 0 0;
+    max-width: 72ch;
+    color: var(--pc-ink-soft);
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .receipt-score {
+    display: grid;
+    align-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    box-shadow: 8px 8px 0 #e9e5dd;
+  }
+
+  .receipt-score p {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .receipt-score strong {
+    font-size: 42px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .receipt-score__meter {
+    height: 12px;
+    border: 1px solid var(--pc-ink);
+    background: repeating-linear-gradient(90deg, #f7f5f0 0 8px, #ece8de 8px 16px);
+    overflow: hidden;
+  }
+
+  .receipt-score__meter span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: #185fa5;
+    transition: width 160ms ease;
+  }
+
+  .truth-box {
+    display: grid;
+    grid-template-columns: 0.82fr 1.18fr;
+    gap: 24px;
+    margin: 26px 0;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .truth-box h2 {
+    margin: 0;
+    max-width: 16ch;
+    font-size: 28px;
+    line-height: 1.05;
+    font-weight: 500;
+  }
+
+  .truth-box p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .receipt-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .receipt-card {
+    display: grid;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .receipt-card.is-confirmed {
+    border-color: var(--stamp-color);
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--stamp-color) 16%, transparent);
+  }
+
+  .receipt-card__art {
+    display: block;
+    aspect-ratio: 1;
+    margin: 12px;
+    border: 2px solid var(--stamp-color);
+    background: #fffdf7;
+    overflow: hidden;
+  }
+
+  .receipt-card__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .receipt-card__copy {
+    display: grid;
+    gap: 9px;
+    padding: 0 14px 14px;
+  }
+
+  .receipt-card__meta {
+    margin: 0;
+    color: var(--stamp-color);
+  }
+
+  .receipt-card h2 {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.04;
+    font-weight: 500;
+  }
+
+  .receipt-card dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .receipt-card dl div {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .receipt-card dt {
+    color: var(--stamp-color);
+  }
+
+  .receipt-card dd {
+    margin: 0;
+    min-width: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .receipt-card code {
+    word-break: break-word;
+  }
+
+  .receipt-card__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .agent-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-top: 30px;
+    padding: 14px 0;
+    border-top: 1px solid var(--pc-rule-soft);
+  }
+
+  .agent-strip__label {
+    margin: 0;
+    color: var(--pc-ink-muted);
+  }
+
+  .agent-strip ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  @media (max-width: 980px) {
+    .hero,
+    .truth-box {
+      grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+      font-size: 46px;
+    }
+
+    .receipt-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .page {
+      width: min(100% - 24px, 1180px);
+      padding-top: 14px;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+    }
+
+    .hero__top {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .receipt-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

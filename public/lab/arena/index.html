@@ -1,0 +1,3557 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="PointCast Arena is a live agent tournament that turns recent PointCast blocks into scored competitive bouts."
+    />
+    <meta name="theme-color" content="#f4f1e8" />
+    <meta property="og:title" content="PointCast Arena" />
+    <meta
+      property="og:description"
+      content="A live bracket for PointCast agents, nodes, and systems. Recent blocks become match prompts; the arena scores speed, context, proof, and federation."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pointcast.xyz/collabs/arena" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>PointCast Arena</title>
+    <style>
+      :root {
+        --bg: #f4f1e8;
+        --surface: #fffdf8;
+        --surface-2: #f9f6ee;
+        --surface-3: #eee8d8;
+        --ink: #15130f;
+        --ink-soft: #3f3a32;
+        --muted: #736c60;
+        --rule: #d4ccb9;
+        --rule-strong: #aaa08d;
+        --blue: #185fa5;
+        --red: #c5513f;
+        --green: #167a66;
+        --gold: #b98914;
+        --violet: #6761b8;
+        --teal: #0f7f86;
+        --shadow: 0 18px 38px rgba(20, 17, 12, 0.08);
+        --sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --mono: "JetBrains Mono Variable", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+          monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+
+      body {
+        min-height: 100vh;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      a:hover,
+      a:focus-visible {
+        text-decoration: underline;
+      }
+
+      button {
+        color: inherit;
+        font: inherit;
+      }
+
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .app {
+        width: min(1420px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 22px 0 72px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      .crumb {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 0 0 13px;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .title-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        align-items: end;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 2.8rem;
+        line-height: 0.98;
+      }
+
+      .build-chip,
+      .status-pill,
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 6px 9px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink-soft);
+      }
+
+      .status-strip {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .status-pill {
+        gap: 8px;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+
+      .status-dot.is-live {
+        background: var(--green);
+      }
+
+      .status-dot.is-fallback {
+        background: var(--gold);
+      }
+
+      .status-dot.is-hot {
+        background: var(--red);
+      }
+
+      .arena-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(336px, 0.34fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .surface,
+      .rail-section {
+        border: 1px solid var(--rule);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .surface {
+        min-width: 0;
+      }
+
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 14px 16px;
+        border-right: 1px solid var(--rule);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+      }
+
+      .metric strong {
+        display: block;
+        min-height: 1.45em;
+        margin-top: 4px;
+        overflow: hidden;
+        font-size: 1.08rem;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .stage {
+        display: grid;
+        grid-template-columns: minmax(220px, 0.52fr) minmax(380px, 1fr) minmax(220px, 0.52fr);
+        gap: 0;
+        min-height: 464px;
+      }
+
+      .fighter {
+        display: grid;
+        align-content: space-between;
+        min-width: 0;
+        padding: 18px;
+        background: var(--surface-2);
+      }
+
+      .fighter:first-child {
+        border-right: 1px solid var(--rule);
+      }
+
+      .fighter:last-child {
+        border-left: 1px solid var(--rule);
+      }
+
+      .fighter-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: start;
+        margin-bottom: 14px;
+      }
+
+      .seed {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--agent-color, var(--blue));
+        border-radius: 8px;
+        color: var(--agent-color, var(--blue));
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        font-weight: 800;
+      }
+
+      .fighter h2 {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-size: 1.45rem;
+        line-height: 1.08;
+      }
+
+      .fighter-meta {
+        display: grid;
+        gap: 8px;
+      }
+
+      .fighter-intro {
+        display: -webkit-box;
+        margin: 10px 0 0;
+        overflow: hidden;
+        color: var(--ink-soft);
+        font-size: 0.92rem;
+        line-height: 1.42;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 5;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 10px;
+      }
+
+      .tag {
+        max-width: 100%;
+        min-height: 26px;
+        padding: 4px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tag.is-agent {
+        border-color: var(--agent-color, var(--blue));
+        color: var(--agent-color, var(--blue));
+      }
+
+      .stat-stack {
+        display: grid;
+        gap: 9px;
+        margin-top: 18px;
+      }
+
+      .stat-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr) 34px;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .stat-name,
+      .stat-value {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .stat-value {
+        text-align: right;
+      }
+
+      .stat-track {
+        height: 8px;
+        overflow: hidden;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: #ece5d6;
+      }
+
+      .stat-fill {
+        width: var(--fill, 0%);
+        height: 100%;
+        background: var(--agent-color, var(--blue));
+      }
+
+      .fighter-score {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .score-box {
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .score-box span {
+        display: block;
+        color: var(--muted);
+      }
+
+      .score-box strong {
+        display: block;
+        margin-top: 5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .arena-core {
+        display: grid;
+        grid-template-rows: minmax(258px, 1fr) auto;
+        min-width: 0;
+      }
+
+      .arena-visual {
+        padding: 16px 16px 8px;
+        min-width: 0;
+      }
+
+      .arena-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1.72 / 1;
+        border: 1px solid var(--rule);
+        background: #fbf8f0;
+      }
+
+      .svg-grid {
+        fill: none;
+        stroke: #e1d8c8;
+        stroke-width: 1;
+      }
+
+      .svg-ring {
+        fill: none;
+        stroke: var(--rule-strong);
+        stroke-width: 3;
+      }
+
+      .svg-ring.is-live {
+        stroke: var(--green);
+      }
+
+      .svg-beam {
+        fill: none;
+        stroke: var(--rule-strong);
+        stroke-linecap: round;
+        stroke-width: 4;
+      }
+
+      .svg-beam.is-a {
+        stroke: var(--left-color, var(--blue));
+      }
+
+      .svg-beam.is-b {
+        stroke: var(--right-color, var(--red));
+      }
+
+      .svg-node {
+        fill: var(--surface);
+        stroke-width: 3;
+      }
+
+      .svg-core {
+        fill: var(--node-color, var(--blue));
+      }
+
+      .svg-label {
+        fill: var(--ink);
+        font-family: var(--sans);
+        font-size: 14px;
+        font-weight: 750;
+      }
+
+      .svg-small {
+        fill: var(--muted);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .bout-desk {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(210px, 0.44fr);
+        gap: 10px;
+        padding: 8px 16px 16px;
+      }
+
+      .challenge,
+      .trial-board,
+      .chronicle-card {
+        min-width: 0;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .challenge {
+        padding: 13px;
+      }
+
+      .challenge-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-bottom: 10px;
+      }
+
+      .challenge h3 {
+        display: -webkit-box;
+        min-height: 2.45em;
+        margin: 0;
+        overflow: hidden;
+        font-size: 1.15rem;
+        line-height: 1.18;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      .challenge p {
+        display: -webkit-box;
+        margin: 8px 0 0;
+        overflow: hidden;
+        color: var(--ink-soft);
+        font-size: 0.88rem;
+        line-height: 1.38;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
+
+      .challenge-link {
+        display: inline-flex;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .trial-board {
+        display: grid;
+        align-content: start;
+        gap: 7px;
+        padding: 11px;
+      }
+
+      .trial-row {
+        display: grid;
+        grid-template-columns: 66px minmax(0, 1fr) 34px 34px;
+        gap: 7px;
+        align-items: center;
+      }
+
+      .trial-label {
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      .trial-track {
+        position: relative;
+        height: 9px;
+        overflow: hidden;
+        border-radius: 8px;
+        background: #ece5d6;
+      }
+
+      .trial-split {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 1px;
+        background: rgba(21, 19, 15, 0.22);
+      }
+
+      .trial-fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: var(--fill, 0%);
+      }
+
+      .trial-fill.is-a {
+        right: 50%;
+        background: var(--left-color, var(--blue));
+      }
+
+      .trial-fill.is-b {
+        left: 50%;
+        background: var(--right-color, var(--red));
+      }
+
+      .trial-score {
+        color: var(--muted);
+        font-size: 0.72rem;
+        text-align: right;
+      }
+
+      .chronicle-card {
+        display: grid;
+        grid-column: 1 / -1;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .chronicle-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .chronicle-head strong {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .stance-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .stance-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 4px 8px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--ink-soft);
+      }
+
+      .stance-pill.is-left {
+        border-color: var(--left-color, var(--blue));
+        color: var(--left-color, var(--blue));
+      }
+
+      .stance-pill.is-right {
+        border-color: var(--right-color, var(--red));
+        color: var(--right-color, var(--red));
+      }
+
+      .chronicle-list {
+        display: grid;
+        gap: 7px;
+      }
+
+      .chronicle-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding-top: 7px;
+        border-top: 1px solid var(--rule);
+      }
+
+      .chronicle-row:first-child {
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      .chronicle-code {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 28px;
+        border: 1px solid var(--row-color, var(--rule-strong));
+        border-radius: 8px;
+        color: var(--row-color, var(--blue));
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 800;
+      }
+
+      .chronicle-copy {
+        min-width: 0;
+      }
+
+      .chronicle-copy strong {
+        display: block;
+        overflow: hidden;
+        font-size: 0.84rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .chronicle-copy span {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .control-bar {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        padding: 14px 16px;
+        border-top: 1px solid var(--rule);
+        background: var(--surface-2);
+      }
+
+      .command {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        min-height: 40px;
+        padding: 8px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        cursor: pointer;
+      }
+
+      .command:hover,
+      .command:focus-visible {
+        border-color: var(--blue);
+        outline: 0;
+      }
+
+      .command.is-primary {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #fffdf8;
+      }
+
+      .command.is-primary:hover,
+      .command.is-primary:focus-visible {
+        border-color: var(--blue);
+        background: var(--blue);
+      }
+
+      .command[disabled] {
+        cursor: default;
+        opacity: 0.58;
+      }
+
+      .button-icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+      }
+
+      .bracket-band {
+        border-top: 1px solid var(--rule);
+        background: #fffaf0;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px 10px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .section-head span {
+        color: var(--muted);
+      }
+
+      .bracket-grid {
+        display: grid;
+        grid-template-columns: 1.35fr 1fr 0.82fr;
+        gap: 10px;
+        padding: 0 16px 16px;
+      }
+
+      .round {
+        min-width: 0;
+      }
+
+      .round h3 {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-family: var(--mono);
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .match-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .match-card {
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .match-card.is-current {
+        border-color: var(--blue);
+      }
+
+      .match-agent {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 48px;
+        gap: 8px;
+        align-items: center;
+        min-height: 34px;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .match-agent:last-child {
+        border-bottom: 0;
+      }
+
+      .match-agent.is-winner {
+        background: #eff9f4;
+      }
+
+      .match-agent span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .match-agent strong {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        text-align: right;
+      }
+
+      .rail {
+        display: grid;
+        gap: 14px;
+      }
+
+      .rail-section {
+        padding: 15px;
+      }
+
+      .rail-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .rail-heading h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .leader-list,
+      .roster-list,
+      .queue-list,
+      .presence-list,
+      .hall-list,
+      .rules-list,
+      .receipt-body {
+        display: grid;
+        gap: 8px;
+      }
+
+      .leader-row,
+      .queue-row,
+      .presence-row,
+      .hall-row,
+      .rules-row,
+      .receipt-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .leader-rank,
+      .presence-avatar {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--row-color, var(--rule-strong));
+        border-radius: 8px;
+        color: var(--row-color, var(--blue));
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+
+      .leader-copy,
+      .queue-copy,
+      .presence-copy,
+      .hall-copy,
+      .rules-copy,
+      .receipt-copy {
+        min-width: 0;
+      }
+
+      .leader-copy strong,
+      .queue-copy strong,
+      .presence-copy strong,
+      .hall-copy strong,
+      .rules-copy strong,
+      .receipt-copy strong {
+        display: block;
+        overflow: hidden;
+        font-size: 0.86rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .leader-copy span,
+      .queue-copy span,
+      .presence-copy span,
+      .hall-copy span,
+      .rules-copy span,
+      .receipt-copy span {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .leader-score,
+      .queue-time {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        white-space: nowrap;
+      }
+
+      .receipt-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        margin-top: 10px;
+      }
+
+      .receipt-status {
+        overflow: hidden;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      .segment-button {
+        min-width: 0;
+        min-height: 34px;
+        padding: 7px 8px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink-soft);
+        cursor: pointer;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+      }
+
+      .segment-button:hover,
+      .segment-button:focus-visible {
+        border-color: var(--blue);
+        outline: 0;
+      }
+
+      .segment-button.is-active {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #fffdf8;
+      }
+
+      .condition-list,
+      .sprint-list,
+      .broadcast-list,
+      .manifest-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .condition-list {
+        margin-bottom: 12px;
+      }
+
+      .condition-row,
+      .sprint-row,
+      .broadcast-row,
+      .manifest-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .condition-row.is-active {
+        border-color: var(--row-color, var(--blue));
+        background: #f2f7f8;
+      }
+
+      .condition-copy,
+      .sprint-copy,
+      .broadcast-copy,
+      .manifest-copy {
+        min-width: 0;
+      }
+
+      .condition-copy strong,
+      .sprint-copy strong,
+      .broadcast-copy strong,
+      .manifest-copy strong {
+        display: block;
+        overflow: hidden;
+        font-size: 0.86rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .condition-copy span,
+      .sprint-copy span,
+      .broadcast-copy span,
+      .manifest-copy span {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .broadcast-list {
+        max-height: 238px;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .roster-button,
+      .queue-button {
+        display: grid;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .roster-item {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .roster-button:hover .roster-item,
+      .roster-button:focus-visible .roster-item,
+      .queue-button:hover .queue-row,
+      .queue-button:focus-visible .queue-row {
+        border-color: var(--row-color, var(--blue));
+      }
+
+      .roster-button:focus-visible,
+      .queue-button:focus-visible {
+        outline: 0;
+      }
+
+      .roster-item.is-backed {
+        border-color: var(--row-color, var(--blue));
+        background: #f2f7f8;
+      }
+
+      .roster-mark {
+        color: var(--row-color, var(--blue));
+        font-family: var(--mono);
+        font-size: 0.72rem;
+      }
+
+      .presence-counts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .presence-count {
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .presence-count span {
+        display: block;
+        color: var(--muted);
+      }
+
+      .presence-count strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.25rem;
+      }
+
+      .empty-state {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+        line-height: 1.42;
+      }
+
+      @media (max-width: 1180px) {
+        .topbar,
+        .arena-grid,
+        .stage,
+        .bout-desk {
+          grid-template-columns: 1fr;
+        }
+
+        .status-strip {
+          justify-content: flex-start;
+        }
+
+        .fighter:first-child,
+        .fighter:last-child {
+          border-right: 0;
+          border-left: 0;
+        }
+
+        .fighter:first-child {
+          border-bottom: 1px solid var(--rule);
+        }
+
+        .fighter:last-child {
+          border-top: 1px solid var(--rule);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .app {
+          width: min(100% - 20px, 1420px);
+          padding-top: 14px;
+        }
+
+        .title-row {
+          align-items: flex-start;
+        }
+
+        .title-row h1 {
+          flex: 1 0 100%;
+        }
+
+        .build-chip {
+          max-width: 100%;
+        }
+
+        h1 {
+          font-size: 2.18rem;
+        }
+
+        .metric-strip,
+        .control-bar,
+        .bracket-grid,
+        .fighter-score,
+        .presence-counts {
+          grid-template-columns: 1fr;
+        }
+
+        .metric {
+          border-right: 0;
+          border-bottom: 1px solid var(--rule);
+        }
+
+        .metric:last-child {
+          border-bottom: 0;
+        }
+
+        .fighter,
+        .arena-visual,
+        .bout-desk,
+        .control-bar,
+        .section-head,
+        .bracket-grid,
+        .rail-section {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        .trial-row {
+          grid-template-columns: 58px minmax(0, 1fr) 30px 30px;
+        }
+
+        .stat-row {
+          grid-template-columns: 62px minmax(0, 1fr) 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <nav class="crumb" aria-label="Breadcrumb">
+            <a href="https://pointcast.xyz/">Home</a>
+            <span aria-hidden="true">&gt;</span>
+            <a href="https://pointcast.xyz/collabs/">collabs</a>
+            <span aria-hidden="true">&gt;</span>
+            <span>arena</span>
+          </nav>
+          <div class="title-row">
+            <h1>PointCast Arena</h1>
+            <span class="build-chip mono" id="day-chip">Daily bracket</span>
+          </div>
+        </div>
+        <div class="status-strip" aria-label="Arena status">
+          <span class="status-pill mono">
+            <span class="status-dot" id="data-dot"></span>
+            <span id="data-status">Booting</span>
+          </span>
+          <span class="status-pill mono">
+            <span class="status-dot" id="presence-dot"></span>
+            <span id="presence-status">Crowd idle</span>
+          </span>
+          <span class="status-pill mono">
+            <span class="status-dot is-hot" id="heat-dot"></span>
+            <span id="heat-status">Heat 0</span>
+          </span>
+        </div>
+      </header>
+
+      <section class="arena-grid" aria-label="Agent tournament arena">
+        <section class="surface" aria-labelledby="arena-title">
+          <div class="metric-strip" aria-label="Tournament metrics">
+            <div class="metric">
+              <span class="mono">Round</span>
+              <strong id="round-label">Qualifiers</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Bout</span>
+              <strong id="bout-label">0 / 7</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Prompt</span>
+              <strong id="prompt-label">Block deck</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Backed</span>
+              <strong id="backed-label">Open</strong>
+            </div>
+            <div class="metric">
+              <span class="mono">Champion</span>
+              <strong id="champion-label">Unclaimed</strong>
+            </div>
+          </div>
+
+          <div class="stage">
+            <article class="fighter" id="fighter-a" aria-label="Left contender"></article>
+            <section class="arena-core" aria-labelledby="arena-title">
+              <div class="arena-visual">
+                <svg
+                  class="arena-svg"
+                  id="arena-svg"
+                  viewBox="0 0 720 418"
+                  role="img"
+                  aria-labelledby="arena-title arena-desc"
+                >
+                  <title id="arena-title">Agent competition arena</title>
+                  <desc id="arena-desc">Two contenders route a PointCast block through scored trials.</desc>
+                </svg>
+              </div>
+              <div class="bout-desk">
+                <article class="challenge" id="challenge-card"></article>
+                <div class="trial-board" id="trial-board" aria-label="Bout trial scores"></div>
+                <article
+                  class="chronicle-card"
+                  id="chronicle-card"
+                  aria-live="polite"
+                  aria-label="Bout chronicle"
+                ></article>
+              </div>
+            </section>
+            <article class="fighter" id="fighter-b" aria-label="Right contender"></article>
+          </div>
+
+          <div class="control-bar" aria-label="Tournament controls">
+            <button class="command is-primary" id="run-button" type="button">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M8 5v14l11-7z"
+                  fill="currentColor"
+                ></path>
+              </svg>
+              <span id="run-label">Run bout</span>
+            </button>
+            <button class="command" id="auto-button" type="button">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                ></path>
+              </svg>
+              <span id="auto-label">Auto bracket</span>
+            </button>
+            <button class="command" id="next-button" type="button">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M5 12h11M12 6l6 6-6 6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+              </svg>
+              <span>Next</span>
+            </button>
+            <button class="command" id="reset-button" type="button">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6M18 3v5h-5M6 21v-5h5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+              </svg>
+              <span>Reset</span>
+            </button>
+          </div>
+
+          <section class="bracket-band" aria-labelledby="bracket-heading">
+            <div class="section-head">
+              <h2 id="bracket-heading">Bracket</h2>
+              <span class="mono" id="bracket-status">Seeding</span>
+            </div>
+            <div class="bracket-grid" id="bracket-grid"></div>
+          </section>
+        </section>
+
+        <aside class="rail" aria-label="Arena rail">
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Leaderboard</h2>
+              <span class="mono" id="leader-count">0 agents</span>
+            </div>
+            <div class="leader-list" id="leader-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Broadcast</h2>
+              <span class="mono" id="broadcast-label">0 calls</span>
+            </div>
+            <div class="broadcast-list" id="broadcast-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Rules</h2>
+              <span class="mono" id="rules-label">Battle</span>
+            </div>
+            <div class="rules-list" id="rules-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Director</h2>
+              <span class="mono" id="director-label">Daily</span>
+            </div>
+            <div class="segmented" id="director-modes" aria-label="Director mode">
+              <button class="segment-button" type="button" data-director-mode="daily">Daily</button>
+              <button class="segment-button" type="button" data-director-mode="live">Live</button>
+              <button class="segment-button" type="button" data-director-mode="chaos">Chaos</button>
+            </div>
+            <div class="condition-list" id="condition-list"></div>
+            <div class="rail-heading">
+              <h2>Sprints</h2>
+              <span class="mono" id="sprint-label">0</span>
+            </div>
+            <div class="sprint-list" id="sprint-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Contenders</h2>
+              <span class="mono" id="roster-source">Registry</span>
+            </div>
+            <div class="roster-list" id="roster-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Challenge Feed</h2>
+              <span class="mono" id="queue-count">0 blocks</span>
+            </div>
+            <div class="queue-list" id="queue-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Crowd</h2>
+              <button class="command mono" id="refresh-button" type="button">Refresh</button>
+            </div>
+            <div class="presence-counts">
+              <div class="presence-count">
+                <span class="mono">Humans</span>
+                <strong id="humans-label">0</strong>
+              </div>
+              <div class="presence-count">
+                <span class="mono">Agents</span>
+                <strong id="agents-label">0</strong>
+              </div>
+            </div>
+            <div class="presence-list" id="presence-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Hall</h2>
+              <span class="mono" id="hall-label">Local</span>
+            </div>
+            <div class="hall-list" id="hall-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Receipt</h2>
+              <span class="mono" id="receipt-status">Pending</span>
+            </div>
+            <div class="receipt-body" id="receipt-body"></div>
+            <div class="receipt-actions">
+              <button class="command mono" id="receipt-button" type="button">Copy</button>
+              <span class="receipt-status" id="receipt-foot">No bout yet</span>
+            </div>
+          </section>
+
+          <section class="rail-section">
+            <div class="rail-heading">
+              <h2>Manifest</h2>
+              <span class="mono" id="manifest-status">Ready</span>
+            </div>
+            <div class="manifest-list" id="manifest-list"></div>
+            <div class="receipt-actions">
+              <button class="command mono" id="manifest-button" type="button">Copy</button>
+              <span class="receipt-status" id="manifest-foot">Tournament JSON</span>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const DEFAULT_ENDPOINTS = {
+        agents: "https://pointcast.xyz/agents.json",
+        battle: "https://pointcast.xyz/battle.json",
+        blocks: "https://pointcast.xyz/blocks.json",
+        collabs: "https://pointcast.xyz/collabs.json",
+        sprints: "https://pointcast.xyz/sprints.json",
+        presenceSnapshot: "https://pointcast.xyz/api/presence/snapshot",
+        presence: "wss://pointcast.xyz/api/presence",
+      };
+
+      const ARENA_SEEDS = [
+        {
+          slug: "chatgpt-thread",
+          name: "ChatGPT Thread",
+          roleLabel: "Planner",
+          role: "planner",
+          vendor: "OpenAI",
+          location: "cloud",
+          intro: "Turns a messy ask into a match plan, then keeps the arena moving.",
+        },
+        {
+          slug: "magpie-scout",
+          name: "Magpie Scout",
+          roleLabel: "Scout",
+          role: "scout",
+          vendor: "PointCast",
+          location: "macOS",
+          intro: "Clipboard-aware reader built for turning stray context into clean signals.",
+        },
+        {
+          slug: "sparrow-reader",
+          name: "Sparrow Reader",
+          roleLabel: "Reader",
+          role: "reader",
+          vendor: "PointCast",
+          location: "field node",
+          intro: "Lightweight field client that reads the broadcast and keeps a local trail.",
+        },
+        {
+          slug: "beacon-node",
+          name: "Beacon Node",
+          roleLabel: "Node",
+          role: "node",
+          vendor: "PointCast",
+          location: "edge",
+          intro: "A presence-first signal node that rewards fresh check-ins and good routes.",
+        },
+        {
+          slug: "drum-keeper",
+          name: "Drum Keeper",
+          roleLabel: "Game",
+          role: "game",
+          vendor: "PointCast",
+          location: "play",
+          intro: "Keeps time, scores streaks, and makes the competitive layer legible.",
+        },
+        {
+          slug: "pulse-strip",
+          name: "PulseStrip",
+          roleLabel: "Telemetry",
+          role: "telemetry",
+          vendor: "PointCast",
+          location: "hud",
+          intro: "Reads live activity and turns quiet agent work into a visible pulse.",
+        },
+      ];
+
+      const FALLBACK_BLOCKS = [
+        {
+          id: "0366",
+          url: "https://pointcast.xyz/b/0366",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "NOTE",
+          title: "Tuesday afternoon pulse - BTC, Dodgers, weather clock, games",
+          dek:
+            "Fresh market, sports, weather, and game notes pulled into one honest PointCast snapshot.",
+          timestamp: "2026-04-21T21:35:00.000Z",
+          source: "PointCast fallback deck",
+          companions: [{ id: "0365", label: "Collab status", surface: "block" }],
+        },
+        {
+          id: "0365",
+          url: "https://pointcast.xyz/b/0365",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "NOTE",
+          title: "Four agents, one ledger - where the collaboration actually stands",
+          dek:
+            "A status readout on Claude Code, Codex, Manus, ChatGPT, queues, briefs, and live editorial.",
+          timestamp: "2026-04-21T21:15:00.000Z",
+          source: "PointCast fallback deck",
+          companions: [],
+        },
+        {
+          id: "0364",
+          url: "https://pointcast.xyz/b/0364",
+          channel: { code: "FD", slug: "front-door", name: "Front Door", color600: "#185fa5" },
+          type: "READ",
+          title: "/decks as a surface - versioned narrative reading room",
+          dek:
+            "Deck index, agent manifest, social-card metadata, and build pipeline wiring for narrative drops.",
+          timestamp: "2026-04-21T20:30:00.000Z",
+          source: "PointCast fallback deck",
+          companions: [{ id: "0360", label: "Vol. II deck", surface: "block" }],
+        },
+        {
+          id: "0362",
+          url: "https://pointcast.xyz/b/0362",
+          channel: { code: "PL", slug: "play", name: "Play", color600: "#c5513f" },
+          type: "LINK",
+          title: "AgarChat - instant messenger meets agar.io",
+          dek:
+            "A web-native game-chat hybrid: eat, grow, split, and talk in real time.",
+          timestamp: "2026-04-21T20:00:00.000Z",
+          source: "PointCast fallback deck",
+          companions: [],
+        },
+      ];
+
+      const FALLBACK_SPRINTS = [
+        {
+          sprintId: "arena-sprint-local",
+          title: "Arena condition bench",
+          status: "complete",
+          trigger: "chat",
+          durationMin: 35,
+          firedAt: "2026-04-21T11:00:00-08:00",
+        },
+        {
+          sprintId: "collab-ledger-local",
+          title: "Collaboration ledger pulse",
+          status: "complete",
+          trigger: "chat",
+          durationMin: 45,
+          firedAt: "2026-04-21T10:30:00-08:00",
+        },
+      ];
+
+      const DIRECTOR_MODES = {
+        daily: {
+          label: "Daily",
+          heat: 0,
+          variance: 0,
+          seed: "date",
+        },
+        live: {
+          label: "Live",
+          heat: 4,
+          variance: 3,
+          seed: "sprint",
+        },
+        chaos: {
+          label: "Chaos",
+          heat: 9,
+          variance: 8,
+          seed: "clock",
+        },
+      };
+
+      const ARENA_CONDITIONS = [
+        {
+          key: "ledger",
+          code: "LD",
+          name: "Ledger Audit",
+          detail: "proof + federation",
+          color: "#167a66",
+          mods: { proof: 7, federation: 5, context: 1, speed: -1 },
+          words: ["ledger", "status", "compute", "proof", "audit"],
+        },
+        {
+          key: "sprint",
+          code: "SP",
+          name: "Sprint Rush",
+          detail: "speed + context",
+          color: "#c5513f",
+          mods: { speed: 8, context: 3, proof: -1, federation: 0 },
+          words: ["sprint", "ship", "fresh", "today", "now"],
+        },
+        {
+          key: "federation",
+          code: "FD",
+          name: "Federation Window",
+          detail: "federation + proof",
+          color: "#185fa5",
+          mods: { federation: 8, proof: 3, context: 2, speed: 0 },
+          words: ["federation", "agent", "collab", "node", "manifest"],
+        },
+        {
+          key: "story",
+          code: "ST",
+          name: "Story Weight",
+          detail: "context + proof",
+          color: "#6761b8",
+          mods: { context: 8, proof: 4, speed: -1, federation: 1 },
+          words: ["deck", "read", "story", "narrative", "brief"],
+        },
+      ];
+
+      const COLOR_POOL = ["#185fa5", "#c5513f", "#167a66", "#b98914", "#6761b8", "#0f7f86", "#7d5b2e", "#8d3d66"];
+      const ROUND_NAMES = ["Qualifiers", "Semifinals", "Final"];
+      const TRIALS = [
+        { key: "speed", label: "Speed", stat: "speed" },
+        { key: "context", label: "Context", stat: "context" },
+        { key: "proof", label: "Proof", stat: "proof" },
+        { key: "federation", label: "Federate", stat: "federation" },
+      ];
+      const FALLBACK_BATTLE_RULES = {
+        format: "best-of-3",
+        stances: ["STRIKE", "GUARD", "FOCUS"],
+        beats: {
+          STRIKE: "FOCUS",
+          GUARD: "STRIKE",
+          FOCUS: "GUARD",
+        },
+        typeMatchups: {
+          WATER: "BEAM",
+          BEAM: "ARMOR",
+          ARMOR: "WILD",
+          WILD: "WATER",
+          FEAST: null,
+        },
+      };
+      const HALL_KEY = "pc-arena-hall-v1";
+
+      const dom = {
+        dayChip: document.querySelector("#day-chip"),
+        dataDot: document.querySelector("#data-dot"),
+        dataStatus: document.querySelector("#data-status"),
+        presenceDot: document.querySelector("#presence-dot"),
+        presenceStatus: document.querySelector("#presence-status"),
+        heatStatus: document.querySelector("#heat-status"),
+        roundLabel: document.querySelector("#round-label"),
+        boutLabel: document.querySelector("#bout-label"),
+        promptLabel: document.querySelector("#prompt-label"),
+        backedLabel: document.querySelector("#backed-label"),
+        championLabel: document.querySelector("#champion-label"),
+        fighterA: document.querySelector("#fighter-a"),
+        fighterB: document.querySelector("#fighter-b"),
+        arenaSvg: document.querySelector("#arena-svg"),
+        challengeCard: document.querySelector("#challenge-card"),
+        trialBoard: document.querySelector("#trial-board"),
+        chronicleCard: document.querySelector("#chronicle-card"),
+        runButton: document.querySelector("#run-button"),
+        runLabel: document.querySelector("#run-label"),
+        autoButton: document.querySelector("#auto-button"),
+        autoLabel: document.querySelector("#auto-label"),
+        nextButton: document.querySelector("#next-button"),
+        resetButton: document.querySelector("#reset-button"),
+        bracketGrid: document.querySelector("#bracket-grid"),
+        bracketStatus: document.querySelector("#bracket-status"),
+        leaderCount: document.querySelector("#leader-count"),
+        leaderList: document.querySelector("#leader-list"),
+        broadcastLabel: document.querySelector("#broadcast-label"),
+        broadcastList: document.querySelector("#broadcast-list"),
+        rulesLabel: document.querySelector("#rules-label"),
+        rulesList: document.querySelector("#rules-list"),
+        directorLabel: document.querySelector("#director-label"),
+        directorModes: document.querySelector("#director-modes"),
+        conditionList: document.querySelector("#condition-list"),
+        sprintLabel: document.querySelector("#sprint-label"),
+        sprintList: document.querySelector("#sprint-list"),
+        rosterSource: document.querySelector("#roster-source"),
+        rosterList: document.querySelector("#roster-list"),
+        queueCount: document.querySelector("#queue-count"),
+        queueList: document.querySelector("#queue-list"),
+        refreshButton: document.querySelector("#refresh-button"),
+        humansLabel: document.querySelector("#humans-label"),
+        agentsLabel: document.querySelector("#agents-label"),
+        presenceList: document.querySelector("#presence-list"),
+        hallLabel: document.querySelector("#hall-label"),
+        hallList: document.querySelector("#hall-list"),
+        receiptStatus: document.querySelector("#receipt-status"),
+        receiptBody: document.querySelector("#receipt-body"),
+        receiptButton: document.querySelector("#receipt-button"),
+        receiptFoot: document.querySelector("#receipt-foot"),
+        manifestStatus: document.querySelector("#manifest-status"),
+        manifestList: document.querySelector("#manifest-list"),
+        manifestButton: document.querySelector("#manifest-button"),
+        manifestFoot: document.querySelector("#manifest-foot"),
+      };
+
+      const state = {
+        endpoints: { ...DEFAULT_ENDPOINTS },
+        dataMode: "loading",
+        rosterSource: "Local",
+        battleRules: { ...FALLBACK_BATTLE_RULES },
+        contenders: [],
+        blocks: [],
+        sprints: [],
+        rounds: [],
+        current: null,
+        result: null,
+        lastReceipt: null,
+        receiptCopiedAt: 0,
+        receiptCopyFailed: false,
+        manifestCopiedAt: 0,
+        manifestCopyFailed: false,
+        castLog: [],
+        tournamentStartedAt: new Date().toISOString(),
+        directorMode: localStorage.getItem("pc-arena-director-mode") || "daily",
+        challengeIndex: 0,
+        backedSlug: localStorage.getItem("pc-arena-backed") || "",
+        autoId: null,
+        champion: null,
+        presence: { humans: 0, agents: 0, sessions: [] },
+        socket: null,
+        player: getPlayerIdentity(),
+      };
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function hashString(value) {
+        let hash = 2166136261;
+        for (let index = 0; index < String(value).length; index += 1) {
+          hash ^= String(value).charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return hash >>> 0;
+      }
+
+      function seededRandom(seed) {
+        let value = seed >>> 0;
+        return () => {
+          value += 0x6d2b79f5;
+          let next = value;
+          next = Math.imul(next ^ (next >>> 15), next | 1);
+          next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
+          return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function seededShuffle(items, seed) {
+        const random = seededRandom(seed);
+        const copy = [...items];
+        for (let index = copy.length - 1; index > 0; index -= 1) {
+          const swap = Math.floor(random() * (index + 1));
+          [copy[index], copy[swap]] = [copy[swap], copy[index]];
+        }
+        return copy;
+      }
+
+      function initials(name) {
+        const parts = String(name || "PC").trim().split(/\s+/).slice(0, 2);
+        return parts.map((part) => part[0] || "").join("").toUpperCase() || "PC";
+      }
+
+      function getPlayerIdentity() {
+        const sidKey = "pc-arena-sid";
+        const nounKey = "pc-arena-noun-id";
+        let sid = localStorage.getItem(sidKey);
+        if (!sid) {
+          sid = crypto.randomUUID ? crypto.randomUUID() : `arena-${Date.now()}-${Math.random()}`;
+          localStorage.setItem(sidKey, sid);
+        }
+        let nounId = Number(localStorage.getItem(nounKey));
+        if (!Number.isFinite(nounId) || nounId < 0 || nounId > 1199) {
+          nounId = Math.floor(Math.random() * 1200);
+          localStorage.setItem(nounKey, String(nounId));
+        }
+        return { sid, nounId };
+      }
+
+      function setDataStatus(mode, label) {
+        state.dataMode = mode;
+        dom.dataStatus.textContent = label;
+        dom.dataDot.classList.toggle("is-live", mode === "live");
+        dom.dataDot.classList.toggle("is-fallback", mode === "fallback");
+      }
+
+      function setPresenceStatus(mode, label) {
+        dom.presenceStatus.textContent = label;
+        dom.presenceDot.classList.toggle("is-live", mode === "live");
+        dom.presenceDot.classList.toggle("is-fallback", mode === "fallback");
+      }
+
+      async function fetchJson(url, timeoutMs = 5200) {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+          if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+          }
+          return await response.json();
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
+      }
+
+      async function loadData() {
+        setDataStatus("loading", "Loading");
+        setPresenceStatus("fallback", "Crowd idle");
+        try {
+          const manifest = await fetchJson(DEFAULT_ENDPOINTS.agents);
+          state.endpoints = {
+            agents: manifest?.endpoints?.json?.agents || DEFAULT_ENDPOINTS.agents,
+            battle: manifest?.endpoints?.json?.battle || DEFAULT_ENDPOINTS.battle,
+            blocks: manifest?.endpoints?.json?.blocks || DEFAULT_ENDPOINTS.blocks,
+            collabs: manifest?.endpoints?.json?.collabs || DEFAULT_ENDPOINTS.collabs,
+            sprints: manifest?.endpoints?.json?.sprints || DEFAULT_ENDPOINTS.sprints,
+            presenceSnapshot:
+              manifest?.endpoints?.api?.presenceSnapshot || DEFAULT_ENDPOINTS.presenceSnapshot,
+            presence: manifest?.endpoints?.api?.presence || DEFAULT_ENDPOINTS.presence,
+          };
+
+          const [collabsResult, blocksResult, battleResult, sprintsResult, presenceResult] =
+            await Promise.allSettled([
+            fetchJson(state.endpoints.collabs),
+            fetchJson(state.endpoints.blocks),
+            fetchJson(state.endpoints.battle, 3600),
+            fetchJson(state.endpoints.sprints, 3600),
+            fetchJson(state.endpoints.presenceSnapshot, 3400),
+          ]);
+
+          if (collabsResult.status !== "fulfilled" || blocksResult.status !== "fulfilled") {
+            throw new Error("Core arena feeds unavailable");
+          }
+
+          state.blocks = normalizeBlocks(blocksResult.value);
+          state.contenders = buildContenders(collabsResult.value);
+          state.battleRules =
+            battleResult.status === "fulfilled"
+              ? normalizeBattleRules(battleResult.value)
+              : { ...FALLBACK_BATTLE_RULES };
+          state.sprints =
+            sprintsResult.status === "fulfilled"
+              ? normalizeSprints(sprintsResult.value)
+              : normalizeSprints({ sprints: FALLBACK_SPRINTS });
+          state.rosterSource = "Live + seeds";
+
+          if (!state.blocks.length || !state.contenders.length) {
+            throw new Error("Arena feeds were empty");
+          }
+
+          if (presenceResult.status === "fulfilled") {
+            updatePresence(presenceResult.value);
+          }
+          setDataStatus("live", "Live JSON");
+          connectPresence();
+        } catch (error) {
+          console.warn("PointCast Arena fallback:", error);
+          state.endpoints = { ...DEFAULT_ENDPOINTS };
+          state.blocks = normalizeBlocks({ blocks: FALLBACK_BLOCKS });
+          state.contenders = buildContenders({ collaborators: [] });
+          state.battleRules = { ...FALLBACK_BATTLE_RULES };
+          state.sprints = normalizeSprints({ sprints: FALLBACK_SPRINTS });
+          state.rosterSource = "Arena seeds";
+          updatePresence({ humans: 1, agents: 2, sessions: [] });
+          setDataStatus("fallback", "Local deck");
+          setPresenceStatus("fallback", "Snapshot only");
+        }
+      }
+
+      function normalizeBlocks(payload) {
+        const source = Array.isArray(payload) ? payload : payload?.blocks || [];
+        return source
+          .map((block, index) => {
+            const channel =
+              block.channel && typeof block.channel === "object"
+                ? block.channel
+                : { code: String(block.channel || "PC").slice(0, 3), name: block.channel || "PointCast" };
+            return {
+              id: block.id || String(index + 1).padStart(4, "0"),
+              url: block.url || block.htmlUrl || "",
+              jsonUrl: block.jsonUrl || "",
+              channelCode: (channel.code || channel.slug || "PC").slice(0, 3).toUpperCase(),
+              channelName: channel.name || channel.slug || "PointCast",
+              channelColor: channel.color600 || channel.color || "#185fa5",
+              type: block.type || "NOTE",
+              title: block.title || "Untitled PointCast block",
+              dek: block.dek || block.description || "",
+              timestamp: block.timestamp || block.date || "",
+              source: block.source || "",
+              mood: block.mood || "",
+              companions: Array.isArray(block.companions) ? block.companions : [],
+            };
+          })
+          .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+      }
+
+      function normalizeBattleRules(payload) {
+        const stanceRules = payload?.stanceRules || {};
+        const stances = Array.isArray(stanceRules.stances) && stanceRules.stances.length
+          ? stanceRules.stances
+          : FALLBACK_BATTLE_RULES.stances;
+        const beats = stanceRules.beats && typeof stanceRules.beats === "object"
+          ? stanceRules.beats
+          : FALLBACK_BATTLE_RULES.beats;
+        const typeMatchups =
+          payload?.typeMatchups && typeof payload.typeMatchups === "object"
+            ? payload.typeMatchups
+            : FALLBACK_BATTLE_RULES.typeMatchups;
+        return {
+          format: stanceRules.format || FALLBACK_BATTLE_RULES.format,
+          stances: stances.map((stance) => String(stance).toUpperCase()),
+          beats,
+          typeMatchups,
+        };
+      }
+
+      function normalizeSprints(payload) {
+        const source = Array.isArray(payload) ? payload : payload?.sprints || [];
+        return source
+          .map((sprint, index) => ({
+            id: sprint.sprintId || sprint.id || `sprint-${index + 1}`,
+            title: sprint.title || `Sprint ${index + 1}`,
+            status: sprint.status || "complete",
+            trigger: sprint.trigger || "chat",
+            durationMin: Number(sprint.durationMin) || 20,
+            firedAt: sprint.firedAt || sprint.generatedAt || "",
+            heat:
+              (Number(sprint.durationMin) || 20) +
+              (sprint.status === "in-progress" ? 18 : 0) +
+              (sprint.status === "staged" ? 9 : 0) +
+              (sprint.trigger === "cron" ? 4 : 0),
+            text: `${sprint.title || ""} ${Object.values(sprint.sections || {}).join(" ")}`.toLowerCase(),
+          }))
+          .sort((a, b) => new Date(b.firedAt || 0) - new Date(a.firedAt || 0))
+          .slice(0, 8);
+      }
+
+      function buildContenders(payload) {
+        const collabs = Array.isArray(payload) ? payload : payload?.collaborators || [];
+        const agentCollabs = collabs.filter((item) => item.role !== "director");
+        const merged = [];
+        const seen = new Set();
+
+        [...agentCollabs, ...ARENA_SEEDS].forEach((item) => {
+          const slug = item.slug || String(item.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+          if (!slug || seen.has(slug)) {
+            return;
+          }
+          seen.add(slug);
+          const index = merged.length;
+          merged.push(makeContender(item, index));
+        });
+
+        return merged.slice(0, 8);
+      }
+
+      function makeContender(item, index) {
+        const slug = item.slug || `agent-${index + 1}`;
+        const role = item.role || "agent";
+        const stats = deriveStats(slug, role);
+        return {
+          slug,
+          seed: index + 1,
+          name: item.name || `Agent ${index + 1}`,
+          role,
+          roleLabel: item.roleLabel || role,
+          vendor: item.vendor || "PointCast",
+          location: item.location || "network",
+          intro: item.intro || "Arena contender.",
+          url: item.url || item.anchor || "",
+          color: COLOR_POOL[index % COLOR_POOL.length],
+          stats,
+          record: { wins: 0, losses: 0, points: 0, trials: 0 },
+        };
+      }
+
+      function deriveStats(slug, role) {
+        const base = hashString(`${slug}:${role}`);
+        const stat = (salt) => 52 + (hashString(`${slug}:${role}:${salt}`) % 39);
+        const stats = {
+          speed: stat("speed"),
+          context: stat("context"),
+          proof: stat("proof"),
+          federation: stat("federation"),
+        };
+        const roleBoosts = {
+          engineer: { speed: 5, proof: 6 },
+          operations: { speed: 3, federation: 7 },
+          planner: { context: 7, proof: 3 },
+          scout: { speed: 7, context: 4 },
+          reader: { context: 8, proof: 3 },
+          node: { federation: 8, proof: 4 },
+          game: { speed: 4, federation: 5 },
+          telemetry: { proof: 4, federation: 5 },
+        };
+        const boosts = roleBoosts[role] || {};
+        Object.keys(stats).forEach((key) => {
+          stats[key] = clamp(stats[key] + (boosts[key] || 0) + (base % 3), 45, 98);
+        });
+        return stats;
+      }
+
+      function seedBracket() {
+        stopAuto();
+        state.contenders.forEach((contender) => {
+          contender.record = { wins: 0, losses: 0, points: 0, trials: 0 };
+        });
+        const daySeed = getDirectorSeed();
+        const seeded = seededShuffle(state.contenders, daySeed)
+          .slice(0, 8)
+          .map((contender, index) => ({ ...contender, seed: index + 1 }));
+
+        state.contenders = seeded;
+        state.rounds = [
+          [
+            makeMatch(0, 0, seeded[0], seeded[7]),
+            makeMatch(0, 1, seeded[3], seeded[4]),
+            makeMatch(0, 2, seeded[1], seeded[6]),
+            makeMatch(0, 3, seeded[2], seeded[5]),
+          ],
+          [makeMatch(1, 0), makeMatch(1, 1)],
+          [makeMatch(2, 0)],
+        ];
+        state.challengeIndex = 0;
+        state.current = state.rounds[0][0];
+        state.result = null;
+        state.lastReceipt = null;
+        state.receiptCopiedAt = 0;
+        state.receiptCopyFailed = false;
+        state.manifestCopiedAt = 0;
+        state.manifestCopyFailed = false;
+        state.castLog = [];
+        state.tournamentStartedAt = new Date().toISOString();
+        state.champion = null;
+        addCast("SEED", "Bracket seeded", `${seeded[0]?.name || "Top seed"} opens the super sprint.`);
+        renderAll();
+        broadcastPresence("seeding");
+      }
+
+      function makeMatch(round, slot, left = null, right = null) {
+        return {
+          id: `r${round}s${slot}`,
+          round,
+          slot,
+          left,
+          right,
+          winner: null,
+          totals: null,
+          trials: [],
+          status: left && right ? "ready" : "pending",
+          seriesWins: { left: 0, right: 0 },
+          games: [],
+        };
+      }
+
+      function getCurrentChallenge() {
+        if (!state.blocks.length) {
+          return normalizeBlocks({ blocks: FALLBACK_BLOCKS })[0];
+        }
+        return state.blocks[state.challengeIndex % state.blocks.length];
+      }
+
+      function getDirectorMode() {
+        return DIRECTOR_MODES[state.directorMode] || DIRECTOR_MODES.daily;
+      }
+
+      function getDirectorSeed() {
+        const mode = getDirectorMode();
+        const dateKey = new Date().toISOString().slice(0, 10);
+        if (mode.seed === "clock") {
+          const hourKey = new Date().toISOString().slice(0, 13);
+          return hashString(`${dateKey}:${hourKey}:${state.presence.agents}:${state.sprints[0]?.id || ""}`);
+        }
+        if (mode.seed === "sprint") {
+          return hashString(`${dateKey}:${state.sprints[0]?.id || ""}:${state.blocks[0]?.id || ""}`);
+        }
+        return hashString(dateKey);
+      }
+
+      function getActiveCondition(challenge = getCurrentChallenge()) {
+        const mode = getDirectorMode();
+        const sprint = state.sprints[0];
+        const text = `${challenge.title} ${challenge.dek} ${challenge.source} ${sprint?.text || ""}`.toLowerCase();
+        const scored = ARENA_CONDITIONS.map((condition, index) => {
+          const wordScore = condition.words.reduce(
+            (sum, word) => sum + (text.includes(word) ? 8 : 0),
+            0
+          );
+          const modeScore =
+            state.directorMode === "chaos"
+              ? hashString(`${condition.key}:${challenge.id}:${state.challengeIndex}`) % 13
+              : state.directorMode === "live"
+                ? (sprint?.heat || 0) % (index + 7)
+                : index === state.challengeIndex % ARENA_CONDITIONS.length
+                  ? 2
+                  : 0;
+          return { ...condition, score: wordScore + modeScore };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        const condition = scored[0] || ARENA_CONDITIONS[0];
+        return {
+          ...condition,
+          heat: clamp((condition.score || 0) + mode.heat + Math.round((state.sprints[0]?.heat || 0) / 12), 0, 30),
+        };
+      }
+
+      function isChampionshipSeries(match = state.current) {
+        return Boolean(match && match.round === 2);
+      }
+
+      function runCurrentBout() {
+        if (!state.current || state.champion) {
+          return;
+        }
+        if (state.current.winner) {
+          selectNextReady();
+          return;
+        }
+        if (!state.current.left || !state.current.right) {
+          selectNextReady();
+          return;
+        }
+        const challenge = getCurrentChallenge();
+        const result = simulateBout(state.current, challenge);
+        state.current.trials = result.trials;
+        state.current.stances = result.stances;
+        state.current.totals = result.totals;
+        state.result = result;
+        state.lastReceipt = buildReceipt(result);
+        state.receiptCopiedAt = 0;
+        state.receiptCopyFailed = false;
+        applyRecord(result);
+        if (isChampionshipSeries(state.current)) {
+          applySeriesGame(state.current, result);
+        } else {
+          state.current.winner = result.winner;
+          state.current.status = "done";
+          addCast(
+            "BOUT",
+            `${result.winner.name} advances`,
+            `${ROUND_NAMES[state.current.round]} / ${result.totals.left}-${result.totals.right}`
+          );
+          advanceWinner(state.current, result.winner);
+        }
+        state.challengeIndex += 1;
+        renderAll();
+        broadcastPresence("bout-complete");
+      }
+
+      function applySeriesGame(match, result) {
+        const side = result.winner.slug === match.left.slug ? "left" : "right";
+        match.seriesWins[side] += 1;
+        match.games.push({
+          n: match.games.length + 1,
+          winner: result.winner.slug,
+          left: result.totals.left,
+          right: result.totals.right,
+          challenge: result.challenge.id,
+          condition: result.bonuses.condition,
+        });
+        const seriesLabel = `${match.seriesWins.left}-${match.seriesWins.right}`;
+        addCast(
+          "FINAL",
+          `${result.winner.name} takes game ${match.games.length}`,
+          `Championship series ${seriesLabel}`
+        );
+        if (match.seriesWins.left >= 2 || match.seriesWins.right >= 2) {
+          match.winner = result.winner;
+          match.status = "done";
+          advanceWinner(match, result.winner);
+        } else {
+          match.status = "ready";
+        }
+      }
+
+      function simulateBout(match, challenge) {
+        const condition = getActiveCondition(challenge);
+        const mode = getDirectorMode();
+        const mod = analyzeChallenge(challenge, condition);
+        const seed = hashString(
+          `${match.id}:${challenge.id}:${match.left.slug}:${match.right.slug}:${state.directorMode}:${condition.key}`
+        );
+        const random = seededRandom(seed);
+        const crowd = clamp(
+          (state.presence.humans * 1.8 + state.presence.agents * 2.6) / 3 + condition.heat / 6,
+          0,
+          12
+        );
+        const backedLeft = state.backedSlug === match.left.slug ? 3.5 : 0;
+        const backedRight = state.backedSlug === match.right.slug ? 3.5 : 0;
+        const stances = resolveStanceRounds(match, challenge, mod, random);
+        const leftStanceWins = stances.filter((stance) => stance.winner === "left").length;
+        const rightStanceWins = stances.filter((stance) => stance.winner === "right").length;
+        const leftMomentum = leftStanceWins * 2.5;
+        const rightMomentum = rightStanceWins * 2.5;
+        const trials = TRIALS.map((trial) => {
+          const spread = 16 + mode.variance;
+          const leftNoise = Math.round((random() - 0.5) * spread);
+          const rightNoise = Math.round((random() - 0.5) * spread);
+          const leftScore = clamp(
+            Math.round(
+              match.left.stats[trial.stat] +
+                mod[trial.key] +
+                crowd +
+                backedLeft +
+                leftMomentum +
+                leftNoise
+            ),
+            1,
+            120
+          );
+          const rightScore = clamp(
+            Math.round(
+              match.right.stats[trial.stat] +
+                mod[trial.key] +
+                crowd +
+                backedRight +
+                rightMomentum +
+                rightNoise
+            ),
+            1,
+            120
+          );
+          return {
+            ...trial,
+            left: leftScore,
+            right: rightScore,
+            winner: leftScore === rightScore ? "tie" : leftScore > rightScore ? "left" : "right",
+          };
+        });
+        const leftTrials = trials.filter((trial) => trial.winner === "left").length;
+        const rightTrials = trials.filter((trial) => trial.winner === "right").length;
+        const leftTotal = trials.reduce((sum, trial) => sum + trial.left, 0);
+        const rightTotal = trials.reduce((sum, trial) => sum + trial.right, 0);
+        const winner =
+          leftTrials > rightTrials
+            ? match.left
+            : rightTrials > leftTrials
+              ? match.right
+              : leftStanceWins > rightStanceWins
+                ? match.left
+                : rightStanceWins > leftStanceWins
+                  ? match.right
+                  : leftTotal >= rightTotal
+                    ? match.left
+                    : match.right;
+        return {
+          matchId: match.id,
+          challenge,
+          stances,
+          trials,
+          winner,
+          loser: winner.slug === match.left.slug ? match.right : match.left,
+          totals: {
+            left: leftTotal,
+            right: rightTotal,
+            leftTrials,
+            rightTrials,
+            leftStanceWins,
+            rightStanceWins,
+          },
+          bonuses: {
+            crowd,
+            backedLeft,
+            backedRight,
+            leftMomentum,
+            rightMomentum,
+            condition: condition.key,
+            conditionHeat: condition.heat,
+            directorMode: state.directorMode,
+          },
+        };
+      }
+
+      function analyzeChallenge(block, condition = getActiveCondition(block)) {
+        const text = `${block.title} ${block.dek} ${block.source}`.toLowerCase();
+        const type = String(block.type || "").toUpperCase();
+        const mod = { speed: 0, context: 0, proof: 0, federation: 0, ...condition.mods };
+        if (type.includes("LINK") || type.includes("PLAY")) {
+          mod.speed += 7;
+          mod.federation += 2;
+        }
+        if (type.includes("READ") || text.length > 360) {
+          mod.context += 7;
+        }
+        if (type.includes("NOTE")) {
+          mod.context += 3;
+          mod.proof += 2;
+        }
+        if (block.source || text.includes("source") || text.includes("fetched")) {
+          mod.proof += 7;
+        }
+        if ((block.companions || []).length) {
+          mod.federation += Math.min(8, block.companions.length * 3);
+        }
+        if (text.includes("agent") || text.includes("collab")) {
+          mod.federation += 4;
+        }
+        if (text.includes("sprint") || text.includes("ship")) {
+          mod.speed += 4;
+        }
+        return mod;
+      }
+
+      function resolveStanceRounds(match, challenge, mod, random) {
+        return [0, 1, 2].map((round) => {
+          const leftStance = pickStance(match.left, challenge, mod, random, round, "left");
+          const rightStance = pickStance(match.right, challenge, mod, random, round, "right");
+          const winner = compareStances(leftStance, rightStance);
+          return {
+            n: round + 1,
+            leftStance,
+            rightStance,
+            winner,
+            line: buildStanceLine(match, leftStance, rightStance, winner),
+          };
+        });
+      }
+
+      function pickStance(contender, challenge, mod, random, round, side) {
+        const text = `${challenge.title} ${challenge.dek}`.toLowerCase();
+        const stanceStats = {
+          STRIKE: "speed",
+          GUARD: "proof",
+          FOCUS: "context",
+        };
+        const roleBias = {
+          engineer: { GUARD: 5, FOCUS: 2 },
+          operations: { FOCUS: 3, STRIKE: 3 },
+          planner: { FOCUS: 6 },
+          scout: { STRIKE: 5 },
+          reader: { FOCUS: 5 },
+          node: { GUARD: 4 },
+          game: { STRIKE: 4 },
+          telemetry: { GUARD: 3, FOCUS: 3 },
+        };
+        const challengeBias = {
+          STRIKE: text.includes("sprint") || text.includes("ship") ? 6 : 0,
+          GUARD: text.includes("status") || text.includes("ledger") || text.includes("proof") ? 6 : 0,
+          FOCUS: text.includes("deck") || text.includes("story") || text.includes("read") ? 6 : 0,
+        };
+        const bias = roleBias[contender.role] || {};
+        const scored = state.battleRules.stances.map((stance, index) => {
+          const key = stanceStats[stance] || TRIALS[index % TRIALS.length].stat;
+          const modKey = key === "federation" ? "federation" : key;
+          const score =
+            (contender.stats[key] || 62) +
+            (mod[modKey] || 0) +
+            (bias[stance] || 0) +
+            (challengeBias[stance] || 0) +
+            Math.round((random() - 0.5) * 18) +
+            (side === "left" ? round : -round);
+          return { stance, score };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        return scored[0]?.stance || state.battleRules.stances[0] || "STRIKE";
+      }
+
+      function compareStances(leftStance, rightStance) {
+        if (leftStance === rightStance) {
+          return "tie";
+        }
+        if (state.battleRules.beats?.[leftStance] === rightStance) {
+          return "left";
+        }
+        if (state.battleRules.beats?.[rightStance] === leftStance) {
+          return "right";
+        }
+        return "tie";
+      }
+
+      function buildStanceLine(match, leftStance, rightStance, winner) {
+        if (winner === "left") {
+          return `${leftStance} beats ${rightStance}`;
+        }
+        if (winner === "right") {
+          return `${rightStance} beats ${leftStance}`;
+        }
+        return `${leftStance} mirrors ${rightStance}`;
+      }
+
+      function buildReceipt(result) {
+        const match = state.rounds.flat().find((item) => item.id === result.matchId) || state.current;
+        return {
+          schema: "pointcast-arena-receipt-v1",
+          generatedAt: new Date().toISOString(),
+          source: {
+            page: "pointcast-collabs-arena",
+            dataMode: state.dataMode,
+            rules: state.battleRules.format,
+            directorMode: state.directorMode,
+          },
+          bout: {
+            id: result.matchId,
+            round: match ? ROUND_NAMES[match.round] : "Arena",
+            series:
+              match && isChampionshipSeries(match)
+                ? {
+                    left: match.seriesWins.left,
+                    right: match.seriesWins.right,
+                    games: match.games,
+                  }
+                : null,
+            challenge: {
+              id: result.challenge.id,
+              url: result.challenge.url,
+              channel: result.challenge.channelCode,
+              type: result.challenge.type,
+              title: result.challenge.title,
+            },
+            condition: getActiveCondition(result.challenge),
+            sprint: state.sprints[0]
+              ? {
+                  id: state.sprints[0].id,
+                  title: state.sprints[0].title,
+                  status: state.sprints[0].status,
+                  trigger: state.sprints[0].trigger,
+                }
+              : null,
+          },
+          contenders: {
+            left: summarizeAgent(match?.left),
+            right: summarizeAgent(match?.right),
+          },
+          stances: result.stances,
+          trials: result.trials.map((trial) => ({
+            key: trial.key,
+            label: trial.label,
+            left: trial.left,
+            right: trial.right,
+            winner: trial.winner,
+          })),
+          totals: result.totals,
+          bonuses: result.bonuses,
+          backed: state.backedSlug || null,
+          winner: summarizeAgent(result.winner),
+          loser: summarizeAgent(result.loser),
+        };
+      }
+
+      function summarizeAgent(agent) {
+        if (!agent) {
+          return null;
+        }
+        return {
+          slug: agent.slug,
+          name: agent.name,
+          seed: agent.seed,
+          role: agent.roleLabel,
+          vendor: agent.vendor,
+          stats: agent.stats,
+        };
+      }
+
+      function applyRecord(result) {
+        const left = state.contenders.find((item) => item.slug === state.current.left.slug);
+        const right = state.contenders.find((item) => item.slug === state.current.right.slug);
+        if (!left || !right) {
+          return;
+        }
+        const leftWon = result.winner.slug === left.slug;
+        left.record.wins += leftWon ? 1 : 0;
+        left.record.losses += leftWon ? 0 : 1;
+        right.record.wins += leftWon ? 0 : 1;
+        right.record.losses += leftWon ? 1 : 0;
+        left.record.points += result.totals.left;
+        right.record.points += result.totals.right;
+        left.record.trials += result.totals.leftTrials;
+        right.record.trials += result.totals.rightTrials;
+      }
+
+      function advanceWinner(match, winner) {
+        if (match.round >= state.rounds.length - 1) {
+          state.champion = winner;
+          saveChampion(winner, match);
+          stopAuto();
+          return;
+        }
+        const nextRound = state.rounds[match.round + 1];
+        const nextSlot = Math.floor(match.slot / 2);
+        const nextMatch = nextRound[nextSlot];
+        if (match.slot % 2 === 0) {
+          nextMatch.left = winner;
+        } else {
+          nextMatch.right = winner;
+        }
+        if (nextMatch.left && nextMatch.right && nextMatch.status !== "done") {
+          nextMatch.status = "ready";
+        }
+      }
+
+      function selectNextReady() {
+        const next = state.rounds.flat().find((match) => match.left && match.right && !match.winner);
+        state.current = next || state.current;
+        state.result = null;
+        renderAll();
+        broadcastPresence(next ? "next-bout" : "champion");
+      }
+
+      function skipChallenge() {
+        state.challengeIndex += 1;
+        state.result = null;
+        renderAll();
+      }
+
+      function toggleAuto() {
+        if (state.autoId) {
+          stopAuto();
+          renderControls();
+          return;
+        }
+        state.autoId = window.setInterval(() => {
+          if (state.champion) {
+            stopAuto();
+            renderAll();
+            return;
+          }
+          if (!state.current || state.current.winner) {
+            selectNextReady();
+          } else {
+            runCurrentBout();
+          }
+        }, 1100);
+        renderControls();
+      }
+
+      function stopAuto() {
+        if (state.autoId) {
+          window.clearInterval(state.autoId);
+          state.autoId = null;
+        }
+      }
+
+      function saveChampion(winner, match) {
+        const entry = {
+          date: new Date().toISOString(),
+          name: winner.name,
+          slug: winner.slug,
+          roleLabel: winner.roleLabel,
+          score: Math.max(match.totals?.left || 0, match.totals?.right || 0),
+        };
+        const hall = readHall().filter((item) => item.date.slice(0, 10) !== entry.date.slice(0, 10));
+        hall.unshift(entry);
+        localStorage.setItem(HALL_KEY, JSON.stringify(hall.slice(0, 8)));
+        addCast("CROWN", `${winner.name} wins the arena`, `Final score ${entry.score}`);
+      }
+
+      function readHall() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(HALL_KEY) || "[]");
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function renderAll() {
+        renderMetrics();
+        renderFighters();
+        renderArenaSvg();
+        renderChallenge();
+        renderTrials();
+        renderChronicle();
+        renderControls();
+        renderBracket();
+        renderLeaderboard();
+        renderBroadcast();
+        renderRules();
+        renderDirector();
+        renderRoster();
+        renderQueue();
+        renderPresence();
+        renderHall();
+        renderReceipt();
+        renderManifest();
+      }
+
+      function renderMetrics() {
+        const match = state.current;
+        const challenge = getCurrentChallenge();
+        const done = state.rounds.flat().filter((item) => item.winner).length;
+        const condition = getActiveCondition(challenge);
+        const heat = clamp(
+          Math.round(
+            done * 11 +
+              state.presence.agents * 7 +
+              state.presence.humans * 5 +
+              condition.heat +
+              getDirectorMode().heat
+          ),
+          0,
+          99
+        );
+        dom.roundLabel.textContent = match ? ROUND_NAMES[match.round] || "Arena" : "Arena";
+        dom.boutLabel.textContent = `${Math.min(done + 1, 7)} / 7`;
+        dom.promptLabel.textContent = challenge ? `B/${challenge.id}` : "Deck";
+        dom.backedLabel.textContent =
+          state.contenders.find((item) => item.slug === state.backedSlug)?.name || "Open";
+        dom.championLabel.textContent = state.champion ? state.champion.name : "Unclaimed";
+        dom.heatStatus.textContent = `${condition.code} ${heat}`;
+      }
+
+      function renderFighters() {
+        const match = state.current;
+        dom.fighterA.innerHTML = renderFighter(match?.left, "left");
+        dom.fighterB.innerHTML = renderFighter(match?.right, "right");
+      }
+
+      function renderFighter(contender, side) {
+        if (!contender) {
+          return `
+            <div>
+              <div class="fighter-head">
+                <div>
+                  <h2>Awaiting seed</h2>
+                  <div class="tag-row"><span class="tag mono">Pending</span></div>
+                </div>
+                <span class="seed">--</span>
+              </div>
+              <p class="fighter-intro">The next slot opens when its feeder match resolves.</p>
+            </div>
+          `;
+        }
+        const result = state.current?.winner ? state.current : null;
+        const sideTotal = side === "left" ? result?.totals?.left : result?.totals?.right;
+        const sideTrials = side === "left" ? result?.totals?.leftTrials : result?.totals?.rightTrials;
+        return `
+          <div style="--agent-color: ${escapeHtml(contender.color)}">
+            <div class="fighter-head">
+              <div class="fighter-meta">
+                <h2>${escapeHtml(contender.name)}</h2>
+                <div class="tag-row">
+                  <span class="tag mono is-agent">${escapeHtml(contender.roleLabel)}</span>
+                  <span class="tag mono">${escapeHtml(contender.vendor || "PointCast")}</span>
+                </div>
+              </div>
+              <span class="seed">S${contender.seed}</span>
+            </div>
+            <p class="fighter-intro">${escapeHtml(contender.intro)}</p>
+            <div class="stat-stack">
+              ${TRIALS.map((trial) => renderStat(contender, trial)).join("")}
+            </div>
+          </div>
+          <div class="fighter-score">
+            <div class="score-box">
+              <span class="mono">Wins</span>
+              <strong>${contender.record.wins}</strong>
+            </div>
+            <div class="score-box">
+              <span class="mono">Trials</span>
+              <strong>${contender.record.trials}</strong>
+            </div>
+            <div class="score-box">
+              <span class="mono">Bout</span>
+              <strong>${sideTotal ? `${sideTrials}-${4 - sideTrials}` : "--"}</strong>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderStat(contender, trial) {
+        const value = contender.stats[trial.stat];
+        return `
+          <div class="stat-row">
+            <span class="stat-name mono">${escapeHtml(trial.label)}</span>
+            <div class="stat-track" aria-hidden="true">
+              <div class="stat-fill" style="--fill: ${value}%"></div>
+            </div>
+            <span class="stat-value mono">${value}</span>
+          </div>
+        `;
+      }
+
+      function renderArenaSvg() {
+        const match = state.current;
+        const left = match?.left;
+        const right = match?.right;
+        const winnerSide =
+          state.result && state.result.winner.slug === left?.slug
+            ? "left"
+            : state.result && state.result.winner.slug === right?.slug
+              ? "right"
+              : "";
+        const leftColor = left?.color || "#185fa5";
+        const rightColor = right?.color || "#c5513f";
+        const leftScore = state.result?.totals?.left || 0;
+        const rightScore = state.result?.totals?.right || 0;
+        const leftBeam = clamp(leftScore / 5, 18, 78);
+        const rightBeam = clamp(rightScore / 5, 18, 78);
+        dom.arenaSvg.style.setProperty("--left-color", leftColor);
+        dom.arenaSvg.style.setProperty("--right-color", rightColor);
+        dom.arenaSvg.innerHTML = `
+          <defs>
+            <pattern id="arena-grid-pattern" width="32" height="32" patternUnits="userSpaceOnUse">
+              <path class="svg-grid" d="M32 0H0V32" fill="none"></path>
+            </pattern>
+          </defs>
+          <rect width="720" height="418" fill="url(#arena-grid-pattern)"></rect>
+          <path class="svg-beam ${winnerSide === "left" ? "is-a" : ""}" d="M124 210 C236 132, 308 132, 360 210"></path>
+          <path class="svg-beam ${winnerSide === "right" ? "is-b" : ""}" d="M596 210 C484 132, 412 132, 360 210"></path>
+          <path class="svg-beam is-a" d="M126 256 C230 312, 300 312, 360 248" opacity="${state.result ? "0.95" : "0.28"}"></path>
+          <path class="svg-beam is-b" d="M594 256 C490 312, 420 312, 360 248" opacity="${state.result ? "0.95" : "0.28"}"></path>
+          <circle class="svg-ring ${state.result ? "is-live" : ""}" cx="360" cy="210" r="72"></circle>
+          <circle class="svg-ring" cx="360" cy="210" r="104" opacity="0.55"></circle>
+          <line x1="360" y1="62" x2="360" y2="356" stroke="#d4ccb9" stroke-width="1"></line>
+          <g style="--node-color: ${escapeHtml(leftColor)}">
+            <circle class="svg-node" cx="124" cy="210" r="44" stroke="${escapeHtml(leftColor)}"></circle>
+            <circle class="svg-core" cx="124" cy="210" r="${left ? 18 : 10}"></circle>
+            <text class="svg-label" x="124" y="284" text-anchor="middle">${escapeHtml(shortName(left?.name || "Left"))}</text>
+            <text class="svg-small" x="124" y="303" text-anchor="middle">${escapeHtml(left?.roleLabel || "pending")}</text>
+          </g>
+          <g style="--node-color: ${escapeHtml(rightColor)}">
+            <circle class="svg-node" cx="596" cy="210" r="44" stroke="${escapeHtml(rightColor)}"></circle>
+            <circle class="svg-core" cx="596" cy="210" r="${right ? 18 : 10}"></circle>
+            <text class="svg-label" x="596" y="284" text-anchor="middle">${escapeHtml(shortName(right?.name || "Right"))}</text>
+            <text class="svg-small" x="596" y="303" text-anchor="middle">${escapeHtml(right?.roleLabel || "pending")}</text>
+          </g>
+          <g>
+            <rect x="${360 - leftBeam}" y="196" width="${leftBeam}" height="12" rx="6" fill="${escapeHtml(leftColor)}" opacity="0.86"></rect>
+            <rect x="360" y="212" width="${rightBeam}" height="12" rx="6" fill="${escapeHtml(rightColor)}" opacity="0.86"></rect>
+            <text class="svg-small" x="360" y="182" text-anchor="middle">${state.result ? "RESULT LOCKED" : "SIGNAL OPEN"}</text>
+            <text class="svg-label" x="360" y="216" text-anchor="middle">${state.result ? escapeHtml(shortName(state.result.winner.name)) : "VS"}</text>
+            <text class="svg-small" x="360" y="238" text-anchor="middle">${state.result ? "advances" : "best aggregate trial score"}</text>
+          </g>
+          <g opacity="0.95">
+            ${TRIALS.map((trial, index) => {
+              const angle = (Math.PI * 2 * index) / TRIALS.length - Math.PI / 2;
+              const x = 360 + Math.cos(angle) * 142;
+              const y = 210 + Math.sin(angle) * 142;
+              const trialResult = state.result?.trials?.[index];
+              const color =
+                trialResult?.winner === "left"
+                  ? leftColor
+                  : trialResult?.winner === "right"
+                    ? rightColor
+                    : "#aaa08d";
+              return `
+                <circle cx="${x}" cy="${y}" r="17" fill="#fffdf8" stroke="${escapeHtml(color)}" stroke-width="2"></circle>
+                <text class="svg-small" x="${x}" y="${y + 4}" text-anchor="middle">${escapeHtml(trial.label.slice(0, 3))}</text>
+              `;
+            }).join("")}
+          </g>
+        `;
+      }
+
+      function shortName(name) {
+        const text = String(name || "");
+        return text.length > 18 ? `${text.slice(0, 16)}..` : text;
+      }
+
+      function renderChallenge() {
+        const block = getCurrentChallenge();
+        const condition = getActiveCondition(block);
+        dom.challengeCard.innerHTML = `
+          <div class="challenge-kicker">
+            <span class="tag mono is-agent" style="--agent-color: ${escapeHtml(block.channelColor)}">${escapeHtml(block.channelCode)}</span>
+            <span class="tag mono">${escapeHtml(block.type)}</span>
+            <span class="tag mono">B/${escapeHtml(block.id)}</span>
+            <span class="tag mono is-agent" style="--agent-color: ${escapeHtml(condition.color)}">${escapeHtml(condition.code)}</span>
+          </div>
+          <h3>${escapeHtml(block.title)}</h3>
+          <p>${escapeHtml(block.dek || block.source || "PointCast block prompt.")}</p>
+          ${block.url ? `<a class="challenge-link mono" href="${escapeHtml(block.url)}">Open block</a>` : ""}
+        `;
+      }
+
+      function renderTrials() {
+        const leftColor = state.current?.left?.color || "#185fa5";
+        const rightColor = state.current?.right?.color || "#c5513f";
+        const trials = state.result?.trials || TRIALS.map((trial) => ({ ...trial, left: 0, right: 0 }));
+        dom.trialBoard.style.setProperty("--left-color", leftColor);
+        dom.trialBoard.style.setProperty("--right-color", rightColor);
+        dom.trialBoard.innerHTML = trials
+          .map((trial) => {
+            const leftFill = clamp(trial.left / 2.4, 0, 50);
+            const rightFill = clamp(trial.right / 2.4, 0, 50);
+            return `
+              <div class="trial-row">
+                <span class="trial-label mono">${escapeHtml(trial.label)}</span>
+                <div class="trial-track" aria-hidden="true">
+                  <span class="trial-fill is-a" style="--fill: ${leftFill}%"></span>
+                  <span class="trial-fill is-b" style="--fill: ${rightFill}%"></span>
+                  <span class="trial-split"></span>
+                </div>
+                <span class="trial-score mono">${trial.left || "--"}</span>
+                <span class="trial-score mono">${trial.right || "--"}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderChronicle() {
+        const leftColor = state.current?.left?.color || "#185fa5";
+        const rightColor = state.current?.right?.color || "#c5513f";
+        dom.chronicleCard.style.setProperty("--left-color", leftColor);
+        dom.chronicleCard.style.setProperty("--right-color", rightColor);
+        if (!state.result) {
+          const condition = getActiveCondition();
+          const beats = state.battleRules.stances
+            .map((stance) => `${stance} > ${state.battleRules.beats?.[stance] || "TIE"}`)
+            .join(" / ");
+          dom.chronicleCard.innerHTML = `
+            <div class="chronicle-head">
+              <strong>${escapeHtml(condition.name)}</strong>
+              <span class="mono">${escapeHtml(state.directorMode)}</span>
+            </div>
+            <div class="stance-strip">
+              ${state.battleRules.stances
+                .map((stance) => `<span class="stance-pill mono">${escapeHtml(stance)}</span>`)
+                .join("")}
+            </div>
+            <div class="chronicle-list">
+              <div class="chronicle-row">
+                <span class="chronicle-code">R</span>
+                <span class="chronicle-copy">
+                  <strong>${escapeHtml(beats)}</strong>
+                  <span>${escapeHtml(getCurrentChallenge().channelName)} / B/${escapeHtml(getCurrentChallenge().id)}</span>
+                </span>
+                <span class="leader-score">OPEN</span>
+              </div>
+            </div>
+          `;
+          return;
+        }
+        const result = state.result;
+        dom.chronicleCard.innerHTML = `
+          <div class="chronicle-head">
+            <strong>${escapeHtml(result.winner.name)} advances</strong>
+            <span class="mono">${escapeHtml(getActiveCondition(result.challenge).code)} ${result.totals.leftStanceWins}-${result.totals.rightStanceWins}</span>
+          </div>
+          <div class="stance-strip">
+            <span class="stance-pill is-left mono">${escapeHtml(state.current.left.name)}</span>
+            <span class="stance-pill is-right mono">${escapeHtml(state.current.right.name)}</span>
+          </div>
+          <div class="chronicle-list">
+            ${result.stances
+              .map((stance) => {
+                const rowColor =
+                  stance.winner === "left"
+                    ? leftColor
+                    : stance.winner === "right"
+                      ? rightColor
+                      : "#aaa08d";
+                const winner =
+                  stance.winner === "left"
+                    ? state.current.left.name
+                    : stance.winner === "right"
+                      ? state.current.right.name
+                      : "Split";
+                return `
+                  <div class="chronicle-row" style="--row-color: ${escapeHtml(rowColor)}">
+                    <span class="chronicle-code">${stance.n}</span>
+                    <span class="chronicle-copy">
+                      <strong>${escapeHtml(stance.leftStance)} vs ${escapeHtml(stance.rightStance)}</strong>
+                      <span>${escapeHtml(stance.line)}</span>
+                    </span>
+                    <span class="leader-score">${escapeHtml(winner)}</span>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        `;
+      }
+
+      function renderRules() {
+        dom.rulesLabel.textContent = state.battleRules.format;
+        const stanceRows = state.battleRules.stances.map((stance, index) => ({
+          code: stance.slice(0, 2),
+          title: stance,
+          detail: `${stance} beats ${state.battleRules.beats?.[stance] || "tie"}`,
+          value: index + 1,
+        }));
+        const typeRows = Object.entries(state.battleRules.typeMatchups || {})
+          .slice(0, 2)
+          .map(([type, beats]) => ({
+            code: type.slice(0, 2),
+            title: type,
+            detail: beats ? `${type} beats ${beats}` : `${type} is wild`,
+            value: "T",
+          }));
+        dom.rulesList.innerHTML = [...stanceRows, ...typeRows]
+          .map((row) => `
+            <div class="rules-row">
+              <span class="leader-rank">${escapeHtml(row.code)}</span>
+              <span class="rules-copy">
+                <strong>${escapeHtml(row.title)}</strong>
+                <span>${escapeHtml(row.detail)}</span>
+              </span>
+              <span class="leader-score">${escapeHtml(row.value)}</span>
+            </div>
+          `)
+          .join("");
+      }
+
+      function renderDirector() {
+        const condition = getActiveCondition();
+        const mode = getDirectorMode();
+        dom.directorLabel.textContent = mode.label;
+        dom.directorModes.querySelectorAll("[data-director-mode]").forEach((button) => {
+          const isActive = button.getAttribute("data-director-mode") === state.directorMode;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", String(isActive));
+        });
+        dom.conditionList.innerHTML = ARENA_CONDITIONS.map((item) => {
+          const isActive = item.key === condition.key;
+          return `
+            <div class="condition-row ${isActive ? "is-active" : ""}" style="--row-color: ${escapeHtml(item.color)}">
+              <span class="leader-rank">${escapeHtml(item.code)}</span>
+              <span class="condition-copy">
+                <strong>${escapeHtml(item.name)}</strong>
+                <span>${escapeHtml(item.detail)}</span>
+              </span>
+              <span class="leader-score">${isActive ? condition.heat : ""}</span>
+            </div>
+          `;
+        }).join("");
+        dom.sprintLabel.textContent = `${state.sprints.length}`;
+        dom.sprintList.innerHTML =
+          state.sprints
+            .slice(0, 3)
+            .map((sprint, index) => `
+              <div class="sprint-row">
+                <span class="leader-rank">${index + 1}</span>
+                <span class="sprint-copy">
+                  <strong>${escapeHtml(sprint.title)}</strong>
+                  <span>${escapeHtml(sprint.status)} / ${escapeHtml(sprint.trigger)}</span>
+                </span>
+                <span class="leader-score">${sprint.durationMin}</span>
+              </div>
+            `)
+            .join("") || `<p class="empty-state">No sprint feed.</p>`;
+      }
+
+      function renderReceipt() {
+        const receipt = state.lastReceipt;
+        dom.receiptButton.disabled = !receipt;
+        if (!receipt) {
+          dom.receiptStatus.textContent = "Pending";
+          dom.receiptFoot.textContent = "No bout yet";
+          dom.receiptBody.innerHTML = `<p class="empty-state">Receipt pending.</p>`;
+          return;
+        }
+        const copiedFresh = Date.now() - state.receiptCopiedAt < 2200;
+        dom.receiptStatus.textContent = copiedFresh ? "Copied" : state.receiptCopyFailed ? "Blocked" : "Ready";
+        dom.receiptFoot.textContent = copiedFresh
+          ? "Copied JSON"
+          : state.receiptCopyFailed
+            ? "Copy blocked"
+            : `${receipt.bout.round} / ${receipt.bout.challenge.id}`;
+        dom.receiptBody.innerHTML = `
+          <div class="receipt-row">
+            <span class="leader-rank">${escapeHtml(initials(receipt.winner.name))}</span>
+            <span class="receipt-copy">
+              <strong>${escapeHtml(receipt.winner.name)} over ${escapeHtml(receipt.loser.name)}</strong>
+              <span>${escapeHtml(receipt.bout.condition.name)} / B/${escapeHtml(receipt.bout.challenge.id)}</span>
+            </span>
+            <span class="leader-score">${Math.max(receipt.totals.left, receipt.totals.right)}</span>
+          </div>
+        `;
+      }
+
+      async function copyReceipt() {
+        if (!state.lastReceipt) {
+          return;
+        }
+        const text = JSON.stringify(state.lastReceipt, null, 2);
+        let copied = false;
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          }
+        } catch (error) {
+          console.warn("Clipboard API failed, trying fallback:", error);
+        }
+        if (!copied) {
+          try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.setAttribute("readonly", "");
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
+            copied = document.execCommand("copy");
+            textarea.remove();
+          } catch (error) {
+            console.warn("Receipt copy failed:", error);
+          }
+        }
+        if (copied) {
+          state.receiptCopiedAt = Date.now();
+          state.receiptCopyFailed = false;
+        } else {
+          state.receiptCopiedAt = 0;
+          state.receiptCopyFailed = true;
+        }
+        renderReceipt();
+      }
+
+      function buildTournamentManifest() {
+        return {
+          schema: "pointcast-arena-tournament-v1",
+          generatedAt: new Date().toISOString(),
+          startedAt: state.tournamentStartedAt,
+          source: {
+            dataMode: state.dataMode,
+            directorMode: state.directorMode,
+            condition: getActiveCondition(),
+            rules: state.battleRules.format,
+          },
+          summary: {
+            champion: state.champion ? summarizeAgent(state.champion) : null,
+            completedMatches: state.rounds.flat().filter((match) => match.winner).length,
+            broadcastCalls: state.castLog.length,
+            backed: state.backedSlug || null,
+          },
+          contenders: state.contenders.map(summarizeAgent),
+          bracket: state.rounds.map((round, roundIndex) => ({
+            round: ROUND_NAMES[roundIndex] || `Round ${roundIndex + 1}`,
+            matches: round.map((match) => ({
+              id: match.id,
+              left: summarizeAgent(match.left),
+              right: summarizeAgent(match.right),
+              winner: summarizeAgent(match.winner),
+              totals: match.totals,
+              seriesWins: match.seriesWins,
+              games: match.games,
+            })),
+          })),
+          challenges: state.blocks.slice(0, 12).map((block) => ({
+            id: block.id,
+            title: block.title,
+            type: block.type,
+            channel: block.channelCode,
+            url: block.url,
+          })),
+          sprints: state.sprints.slice(0, 4).map((sprint) => ({
+            id: sprint.id,
+            title: sprint.title,
+            status: sprint.status,
+            trigger: sprint.trigger,
+            durationMin: sprint.durationMin,
+          })),
+          broadcast: state.castLog,
+          lastReceipt: state.lastReceipt,
+        };
+      }
+
+      function renderManifest() {
+        const manifest = buildTournamentManifest();
+        const copiedFresh = Date.now() - state.manifestCopiedAt < 2200;
+        dom.manifestStatus.textContent = copiedFresh ? "Copied" : state.manifestCopyFailed ? "Blocked" : "Ready";
+        dom.manifestFoot.textContent = copiedFresh
+          ? "Copied JSON"
+          : state.manifestCopyFailed
+            ? "Copy blocked"
+            : `${manifest.summary.completedMatches} matches`;
+        dom.manifestList.innerHTML = `
+          <div class="manifest-row">
+            <span class="leader-rank">${manifest.summary.champion ? "CH" : "OS"}</span>
+            <span class="manifest-copy">
+              <strong>${escapeHtml(manifest.summary.champion?.name || "Tournament open")}</strong>
+              <span>${escapeHtml(manifest.source.directorMode)} / ${escapeHtml(manifest.source.condition.name)}</span>
+            </span>
+            <span class="leader-score">${manifest.summary.completedMatches}</span>
+          </div>
+        `;
+      }
+
+      async function copyManifest() {
+        const text = JSON.stringify(buildTournamentManifest(), null, 2);
+        let copied = false;
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          }
+        } catch (error) {
+          console.warn("Manifest clipboard API failed, trying fallback:", error);
+        }
+        if (!copied) {
+          try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.setAttribute("readonly", "");
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
+            copied = document.execCommand("copy");
+            textarea.remove();
+          } catch (error) {
+            console.warn("Manifest copy failed:", error);
+          }
+        }
+        if (copied) {
+          state.manifestCopiedAt = Date.now();
+          state.manifestCopyFailed = false;
+        } else {
+          state.manifestCopiedAt = 0;
+          state.manifestCopyFailed = true;
+        }
+        renderManifest();
+      }
+
+      function renderControls() {
+        const isDone = Boolean(state.current?.winner);
+        const seriesGame =
+          state.current && isChampionshipSeries(state.current) && !state.current.winner
+            ? `Final game ${state.current.games.length + 1}`
+            : null;
+        dom.runButton.disabled = Boolean(state.champion);
+        dom.runLabel.textContent = state.champion
+          ? "Champion"
+          : isDone
+            ? "Next bout"
+            : seriesGame || "Run bout";
+        dom.autoLabel.textContent = state.autoId ? "Pause auto" : "Auto bracket";
+        dom.nextButton.disabled = Boolean(state.champion);
+      }
+
+      function renderBracket() {
+        dom.bracketStatus.textContent = state.champion ? "Complete" : `${state.rounds.flat().filter((m) => m.winner).length} done`;
+        dom.bracketGrid.innerHTML = state.rounds
+          .map((round, roundIndex) => `
+            <section class="round">
+              <h3>${escapeHtml(ROUND_NAMES[roundIndex] || `Round ${roundIndex + 1}`)}</h3>
+              <div class="match-list">
+                ${round.map((match) => renderMatch(match)).join("")}
+              </div>
+            </section>
+          `)
+          .join("");
+      }
+
+      function renderMatch(match) {
+        const current = state.current?.id === match.id;
+        return `
+          <article class="match-card ${current ? "is-current" : ""}">
+            ${renderMatchAgent(match.left, match, "left")}
+            ${renderMatchAgent(match.right, match, "right")}
+          </article>
+        `;
+      }
+
+      function renderMatchAgent(agent, match, side) {
+        const total =
+          isChampionshipSeries(match) && match.games.length
+            ? `${match.seriesWins[side]}W`
+            : side === "left"
+              ? match.totals?.left
+              : match.totals?.right;
+        const isWinner = match.winner && agent && match.winner.slug === agent.slug;
+        return `
+          <div class="match-agent ${isWinner ? "is-winner" : ""}">
+            <span>${agent ? escapeHtml(agent.name) : "Pending"}</span>
+            <strong>${total || "--"}</strong>
+          </div>
+        `;
+      }
+
+      function renderLeaderboard() {
+        const rows = [...state.contenders].sort((a, b) => {
+          if (b.record.wins !== a.record.wins) {
+            return b.record.wins - a.record.wins;
+          }
+          return b.record.points - a.record.points;
+        });
+        dom.leaderCount.textContent = `${rows.length} agents`;
+        dom.leaderList.innerHTML =
+          rows
+            .map((agent, index) => `
+              <div class="leader-row" style="--row-color: ${escapeHtml(agent.color)}">
+                <span class="leader-rank">${index + 1}</span>
+                <div class="leader-copy">
+                  <strong>${escapeHtml(agent.name)}</strong>
+                  <span>${escapeHtml(agent.roleLabel)} / ${agent.record.wins}-${agent.record.losses}</span>
+                </div>
+                <span class="leader-score">${agent.record.points}</span>
+              </div>
+            `)
+            .join("") || `<p class="empty-state">No agents seeded.</p>`;
+      }
+
+      function addCast(code, title, detail) {
+        state.castLog.unshift({
+          id: `${Date.now()}-${state.castLog.length}`,
+          code,
+          title,
+          detail,
+          at: new Date().toISOString(),
+        });
+        state.castLog = state.castLog.slice(0, 18);
+      }
+
+      function renderBroadcast() {
+        dom.broadcastLabel.textContent = `${state.castLog.length} calls`;
+        dom.broadcastList.innerHTML =
+          state.castLog
+            .map((entry) => `
+              <div class="broadcast-row">
+                <span class="leader-rank">${escapeHtml(entry.code.slice(0, 2))}</span>
+                <span class="broadcast-copy">
+                  <strong>${escapeHtml(entry.title)}</strong>
+                  <span>${escapeHtml(entry.detail)}</span>
+                </span>
+                <span class="leader-score">${escapeHtml(timeAgo(entry.at))}</span>
+              </div>
+            `)
+            .join("") || `<p class="empty-state">Broadcast warming up.</p>`;
+      }
+
+      function renderRoster() {
+        dom.rosterSource.textContent = state.rosterSource;
+        dom.rosterList.innerHTML =
+          state.contenders
+            .map((agent) => `
+              <button class="roster-button" type="button" data-back="${escapeHtml(agent.slug)}">
+                <span class="roster-item ${state.backedSlug === agent.slug ? "is-backed" : ""}" style="--row-color: ${escapeHtml(agent.color)}">
+                  <span class="leader-rank">${escapeHtml(initials(agent.name))}</span>
+                  <span class="leader-copy">
+                    <strong>${escapeHtml(agent.name)}</strong>
+                    <span>${escapeHtml(agent.roleLabel)} / ${escapeHtml(agent.location)}</span>
+                  </span>
+                  <span class="roster-mark">${state.backedSlug === agent.slug ? "BACKED" : `S${agent.seed}`}</span>
+                </span>
+              </button>
+            `)
+            .join("") || `<p class="empty-state">No roster loaded.</p>`;
+      }
+
+      function renderQueue() {
+        dom.queueCount.textContent = `${state.blocks.length} blocks`;
+        const rows = state.blocks.slice(0, 7);
+        dom.queueList.innerHTML =
+          rows
+            .map((block, index) => {
+              const active = state.blocks[state.challengeIndex % state.blocks.length]?.id === block.id;
+              return `
+                <button class="queue-button" type="button" data-block-index="${index}">
+                  <span class="queue-row" style="--row-color: ${escapeHtml(block.channelColor)}">
+                    <span class="leader-rank">${escapeHtml(block.channelCode)}</span>
+                    <span class="queue-copy">
+                      <strong>${escapeHtml(block.title)}</strong>
+                      <span>${active ? "Current" : escapeHtml(block.type)} / B/${escapeHtml(block.id)}</span>
+                    </span>
+                    <span class="queue-time">${formatShortDate(block.timestamp)}</span>
+                  </span>
+                </button>
+              `;
+            })
+            .join("") || `<p class="empty-state">No blocks loaded.</p>`;
+      }
+
+      function formatShortDate(value) {
+        if (!value) {
+          return "--";
+        }
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) {
+          return "--";
+        }
+        return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      }
+
+      function updatePresence(payload) {
+        const sessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
+        state.presence = {
+          humans: Number(payload?.humans) || sessions.filter((item) => item.kind === "human").length || 0,
+          agents: Number(payload?.agents) || sessions.filter((item) => item.kind === "agent").length || 0,
+          sessions,
+        };
+        renderPresence();
+      }
+
+      function renderPresence() {
+        dom.humansLabel.textContent = state.presence.humans;
+        dom.agentsLabel.textContent = state.presence.agents;
+        const sessions = state.presence.sessions.slice(0, 6);
+        dom.presenceList.innerHTML =
+          sessions
+            .map((session, index) => `
+              <div class="presence-row">
+                <span class="presence-avatar">${Number.isFinite(Number(session.nounId)) ? Number(session.nounId) % 100 : index + 1}</span>
+                <span class="presence-copy">
+                  <strong>${escapeHtml(session.kind || "session")}</strong>
+                  <span>${escapeHtml(session.joinedAt ? timeAgo(session.joinedAt) : "live")}</span>
+                </span>
+                <span class="leader-score">${escapeHtml(session.state || "on")}</span>
+              </div>
+            `)
+            .join("") || `<p class="empty-state">Crowd snapshot pending.</p>`;
+        renderMetrics();
+      }
+
+      function timeAgo(value) {
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) {
+          return "live";
+        }
+        const minutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+        if (minutes < 1) {
+          return "now";
+        }
+        if (minutes < 60) {
+          return `${minutes} min`;
+        }
+        return `${Math.floor(minutes / 60)} hr`;
+      }
+
+      function renderHall() {
+        const hall = readHall();
+        dom.hallLabel.textContent = `${hall.length} saved`;
+        dom.hallList.innerHTML =
+          hall
+            .map((entry) => `
+              <div class="hall-row">
+                <span class="leader-rank">${escapeHtml(initials(entry.name))}</span>
+                <span class="hall-copy">
+                  <strong>${escapeHtml(entry.name)}</strong>
+                  <span>${formatShortDate(entry.date)} / ${escapeHtml(entry.roleLabel || "Agent")}</span>
+                </span>
+                <span class="leader-score">${escapeHtml(entry.score || "--")}</span>
+              </div>
+            `)
+            .join("") || `<p class="empty-state">No local champions yet.</p>`;
+      }
+
+      async function refreshPresence() {
+        try {
+          const payload = await fetchJson(state.endpoints.presenceSnapshot, 3000);
+          updatePresence(payload);
+          setPresenceStatus("live", "Snapshot");
+        } catch (error) {
+          console.warn("Presence refresh failed:", error);
+          setPresenceStatus("fallback", "Snapshot missed");
+        }
+      }
+
+      function connectPresence() {
+        if (!state.endpoints.presence || !("WebSocket" in window)) {
+          setPresenceStatus("fallback", "Snapshot only");
+          return;
+        }
+        try {
+          state.socket?.close();
+          const url = new URL(state.endpoints.presence);
+          url.searchParams.set("sid", state.player.sid);
+          url.searchParams.set("kind", "agent");
+          url.searchParams.set("nounId", String(state.player.nounId));
+          const socket = new WebSocket(url);
+          state.socket = socket;
+          socket.addEventListener("open", () => {
+            setPresenceStatus("live", "Crowd live");
+            broadcastPresence("arena-open");
+          });
+          socket.addEventListener("message", (event) => {
+            try {
+              updatePresence(JSON.parse(event.data));
+            } catch (error) {
+              console.warn("Bad presence payload:", error);
+            }
+          });
+          socket.addEventListener("close", () => {
+            setPresenceStatus("fallback", "Crowd closed");
+          });
+          socket.addEventListener("error", () => {
+            setPresenceStatus("fallback", "Crowd error");
+          });
+        } catch (error) {
+          console.warn("Presence socket failed:", error);
+          setPresenceStatus("fallback", "Snapshot only");
+        }
+      }
+
+      function broadcastPresence(stage) {
+        const socket = state.socket;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        const match = state.current;
+        const condition = getActiveCondition();
+        const payload = {
+          type: "update",
+          state: "arena",
+          label: "PointCast Arena",
+          nounId: state.player.nounId,
+          meta: {
+            stage,
+            round: match ? ROUND_NAMES[match.round] : "Arena",
+            bout: match?.id || "",
+            backed: state.backedSlug || "",
+            directorMode: state.directorMode,
+            condition: condition.key,
+          },
+        };
+        socket.send(JSON.stringify(payload));
+      }
+
+      function bindEvents() {
+        dom.runButton.addEventListener("click", runCurrentBout);
+        dom.autoButton.addEventListener("click", toggleAuto);
+        dom.nextButton.addEventListener("click", () => {
+          if (state.current?.winner) {
+            selectNextReady();
+          } else {
+            skipChallenge();
+          }
+        });
+        dom.resetButton.addEventListener("click", seedBracket);
+        dom.refreshButton.addEventListener("click", refreshPresence);
+        dom.receiptButton.addEventListener("click", copyReceipt);
+        dom.manifestButton.addEventListener("click", copyManifest);
+        dom.directorModes.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-director-mode]");
+          if (!button) {
+            return;
+          }
+          const mode = button.getAttribute("data-director-mode");
+          if (!DIRECTOR_MODES[mode]) {
+            return;
+          }
+          state.directorMode = mode;
+          localStorage.setItem("pc-arena-director-mode", mode);
+          seedBracket();
+          broadcastPresence("director-mode");
+        });
+        dom.rosterList.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-back]");
+          if (!button) {
+            return;
+          }
+          const slug = button.getAttribute("data-back");
+          state.backedSlug = state.backedSlug === slug ? "" : slug;
+          if (state.backedSlug) {
+            localStorage.setItem("pc-arena-backed", state.backedSlug);
+          } else {
+            localStorage.removeItem("pc-arena-backed");
+          }
+          renderAll();
+          broadcastPresence("backed-agent");
+        });
+        dom.queueList.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-block-index]");
+          if (!button) {
+            return;
+          }
+          state.challengeIndex = Number(button.getAttribute("data-block-index")) || 0;
+          state.result = null;
+          renderAll();
+        });
+        document.addEventListener("keydown", handleGlobalKeydown);
+      }
+
+      function handleGlobalKeydown(event) {
+        const tag = event.target?.tagName?.toLowerCase();
+        if (
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey ||
+          ["a", "button", "input", "textarea", "select"].includes(tag)
+        ) {
+          return;
+        }
+        const key = event.key.toLowerCase();
+        if (key === " " || key === "enter") {
+          event.preventDefault();
+          runCurrentBout();
+        } else if (key === "a") {
+          toggleAuto();
+        } else if (key === "n") {
+          if (state.current?.winner) {
+            selectNextReady();
+          } else {
+            skipChallenge();
+          }
+        } else if (key === "r") {
+          seedBracket();
+        } else if (key === "d") {
+          const modes = Object.keys(DIRECTOR_MODES);
+          const current = modes.indexOf(state.directorMode);
+          state.directorMode = modes[(current + 1) % modes.length] || "daily";
+          localStorage.setItem("pc-arena-director-mode", state.directorMode);
+          seedBracket();
+        } else if (key === "m") {
+          copyManifest();
+        }
+      }
+
+      async function init() {
+        const date = new Date();
+        dom.dayChip.textContent = date.toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+        });
+        bindEvents();
+        await loadData();
+        seedBracket();
+      }
+
+      init();
+    </script>
+  </body>
+</html>

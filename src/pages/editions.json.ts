@@ -7,6 +7,11 @@
  */
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
+import {
+  PASSPORT_COMPANION_COLLECTION,
+  PASSPORT_STAMP_COLLECTION,
+  PASSPORT_STAMP_PRD_PATH,
+} from '../lib/passport-mint';
 import contracts from '../data/contracts.json';
 import market from '../data/market.json';
 
@@ -55,7 +60,7 @@ export const GET: APIRoute = async () => {
       liveMinted: visitNounsSupply?.totalMinted ?? 0,
       marketListed: listedTokens.length,
       faucetChannels: faucetBlocks.length,
-      plannedIncoming: 2,
+      plannedIncoming: 3,
     },
     lanes: {
       onChainLive: {
@@ -121,6 +126,14 @@ export const GET: APIRoute = async () => {
           source: 'contracts/v2/prize_cast.py',
           type: 'No-loss prize-linked savings (PoolTogether-flavored)',
           drawDay: 'Sunday 18:00 UTC',
+        },
+        PassportStamps: {
+          ...PASSPORT_STAMP_COLLECTION,
+          currentCompanion: PASSPORT_COMPANION_COLLECTION,
+          spec: `https://pointcast.xyz${PASSPORT_STAMP_PRD_PATH}`,
+          metadataPattern: 'https://pointcast.xyz/passport/stamps/{slug}.json',
+          artPattern: 'https://pointcast.xyz/passport/art/{slug}.svg',
+          type: 'FA2 · Station passport stamps',
         },
       },
       mintBlocks: mintBlocks.map((b) => ({

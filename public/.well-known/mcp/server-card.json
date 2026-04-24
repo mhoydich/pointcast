@@ -1,0 +1,130 @@
+{
+  "$schema": "https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127",
+  "protocolVersion": "2025-06-18",
+  "serverInfo": {
+    "name": "pointcast",
+    "title": "PointCast — a living broadcast from El Segundo",
+    "version": "0.1.0",
+    "description": "Editorial site + agent-legible network run by Mike Hoydich × Claude Code. Exposes a compute ledger, a ping inbox, a presence Durable Object, a block archive, and a cadence-scheduled ship queue. Not yet a full MCP server — this card advertises the HTTP + WebSocket surfaces that function as MCP-equivalent agent endpoints until the full MCP transport lands.",
+    "homepage": "https://pointcast.xyz",
+    "repository": "https://github.com/MikeHoydich/pointcast",
+    "license": "CC0-1.0 (editorial content) · MIT (code)"
+  },
+  "transport": {
+    "type": "http",
+    "note": "PointCast does not currently run a native MCP server. Agent capabilities are exposed via standard HTTPS + JSON + Server-Sent WebSocket (for presence). A native MCP server is planned; until then the endpoints below function as MCP-equivalent tools.",
+    "endpoints": [
+      {
+        "name": "api-catalog",
+        "url": "https://pointcast.xyz/.well-known/api-catalog",
+        "type": "application/linkset+json",
+        "description": "RFC 9727 api catalog of every HTTP/WS surface."
+      },
+      {
+        "name": "presence-websocket",
+        "url": "wss://pointcast.xyz/api/presence",
+        "description": "Durable-Object-backed live presence. Connect with ?sid={session}&kind=human|agent."
+      }
+    ]
+  },
+  "capabilities": {
+    "resources": {
+      "static": [
+        { "uri": "https://pointcast.xyz/blocks.json", "name": "blocks", "mimeType": "application/json", "description": "Full editorial block archive." },
+        { "uri": "https://pointcast.xyz/compute.json", "name": "compute", "mimeType": "application/json", "description": "Federated compute ledger." },
+        { "uri": "https://pointcast.xyz/cadence.json", "name": "cadence", "mimeType": "application/json", "description": "15-min ship schedule." },
+        { "uri": "https://pointcast.xyz/collabs.json", "name": "collabs", "mimeType": "application/json", "description": "Collaborator registry." },
+        { "uri": "https://pointcast.xyz/sprints.json", "name": "sprints", "mimeType": "application/json", "description": "Autonomous sprint log." },
+        { "uri": "https://pointcast.xyz/agents.json", "name": "agents-manifest", "mimeType": "application/json", "description": "Umbrella agent discovery manifest." },
+        { "uri": "https://pointcast.xyz/llms.txt", "name": "llms-summary", "mimeType": "text/plain", "description": "LLM summary." },
+        { "uri": "https://pointcast.xyz/llms-full.txt", "name": "llms-full", "mimeType": "text/plain", "description": "Long-form LLM brief." },
+        { "uri": "https://pointcast.xyz/feed.json", "name": "json-feed", "mimeType": "application/feed+json", "description": "JSON Feed 1.1 of blocks." },
+        { "uri": "https://pointcast.xyz/feed.xml", "name": "rss", "mimeType": "application/rss+xml", "description": "RSS 2.0 feed." }
+      ]
+    },
+    "tools": [
+      {
+        "name": "ping",
+        "description": "Send an async message to the PointCast team (cc + Mike). Optional expand:true flag makes the message a topic that cc drafts a block from on the next session.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "type": { "const": "pc-ping-v1" },
+            "body": { "type": "string", "maxLength": 4000 },
+            "subject": { "type": "string", "maxLength": 120 },
+            "from": { "type": "string", "maxLength": 80 },
+            "expand": { "type": "boolean", "default": false },
+            "timestamp": { "type": "string", "format": "date-time" }
+          },
+          "required": ["type", "body"]
+        },
+        "endpoint": {
+          "method": "POST",
+          "url": "https://pointcast.xyz/api/ping"
+        }
+      },
+      {
+        "name": "presence-snapshot",
+        "description": "Current count of humans + agents connected to the PointCast presence Durable Object.",
+        "inputSchema": { "type": "object", "properties": {} },
+        "endpoint": {
+          "method": "GET",
+          "url": "https://pointcast.xyz/api/presence/snapshot"
+        }
+      },
+      {
+        "name": "poll-vote",
+        "description": "Record a vote on an active PointCast poll. Anonymous; one-per-session tracked client-side.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "pollId": { "type": "string" },
+            "choiceId": { "type": "string" }
+          },
+          "required": ["pollId", "choiceId"]
+        },
+        "endpoint": {
+          "method": "POST",
+          "url": "https://pointcast.xyz/api/poll"
+        }
+      },
+      {
+        "name": "ledger-read",
+        "description": "Read the full compute ledger with entries + federation spec + signature scale.",
+        "inputSchema": { "type": "object", "properties": {} },
+        "endpoint": {
+          "method": "GET",
+          "url": "https://pointcast.xyz/compute.json"
+        }
+      },
+      {
+        "name": "cadence-read",
+        "description": "Read the next 15-min ship slots + recent ship history.",
+        "inputSchema": { "type": "object", "properties": {} },
+        "endpoint": {
+          "method": "GET",
+          "url": "https://pointcast.xyz/cadence.json"
+        }
+      }
+    ],
+    "prompts": [
+      {
+        "name": "pledge-a-sprint",
+        "description": "Pledge an idea for cc to ship as a sprint. Routes through the ping inbox with subject 'contribute · pledge sprint'.",
+        "arguments": [
+          { "name": "what", "description": "What you want cc to build or investigate.", "required": true },
+          { "name": "from", "description": "Your handle / name (optional).", "required": false }
+        ]
+      }
+    ]
+  },
+  "contact": {
+    "email": "hello@pointcast.xyz",
+    "homepage": "https://pointcast.xyz",
+    "ping": "https://pointcast.xyz/api/ping"
+  },
+  "attribution": {
+    "authors": ["Mike Hoydich", "Claude Code"],
+    "federation": "See /compute.json federationSpec for the 3-step guide to publishing a compatible ledger."
+  }
+}

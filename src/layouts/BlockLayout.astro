@@ -12,7 +12,8 @@
  */
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
-import CoNavigator from '../components/CoNavigator.astro';
+import CoNavHUD from '../components/CoNavHUD.astro';
+import WebMCPTools from '../components/WebMCPTools.astro';
 import { ClientRouter } from 'astro:transitions';
 
 interface FrameButton {
@@ -65,7 +66,16 @@ const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} —
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Mobile viewport — `viewport-fit=cover` honors iOS notch/safe-areas;
+         `interactive-widget=resizes-content` so the keyboard doesn't punt
+         the layout off-screen when a visitor focuses an input. Per Mike
+         pings 2026-04-20T21:32:45 + 2026-04-21T01:18 (paraphrased): "mobile
+         often lite zooms or to far zoom out." Removing the maximum-scale
+         lock so visitors can pinch-zoom freely if they want, while keeping
+         initial-scale=1 so first paint isn't either too zoomed-in or too
+         small. Bumping minimum-scale prevents iOS Safari's auto-shrink
+         when a child element overflows. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
     <meta name="robots" content="index,follow,max-image-preview:large" />
@@ -121,7 +131,16 @@ const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} —
 
     <title>{siteTitle}</title>
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Favicon — SVG broadcast dish; sizes="any" beats cached .ico
+         in browsers that still have the old Anthropic A icon in their
+         per-origin cache. Per Mike 2026-04-20 ping: "the favicon still
+         some other image, should be broadcast dish". -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#e89a2d" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Mood persistence — read pc:mood before paint so the page
          renders tinted from the first frame. Per Mike 2026-04-20 13:55
@@ -151,7 +170,21 @@ const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} —
     <main id="main-content" role="main">
       <slot />
     </main>
-    <CoNavigator />
+    <CoNavHUD />
+    <WebMCPTools />
+    {/* PointCast service worker — offline cache for READ blocks + nav
+        spine. Only registered on https + non-Sparrow origin (Sparrow
+        has its own scoped SW under /sparrow/). Skipped in dev so the
+        dev reload loop stays clean. */}
+    <script is:inline>
+      if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.pathname.startsWith('/sparrow/')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
+            console.warn('[pc-sw] register failed', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>
 

@@ -1,0 +1,562 @@
+---
+/**
+ * /magpie/tour — interactive, keyboard-driven tour.
+ *
+ * A 12-slide walkthrough — arrow keys, space, or click to advance.
+ * Each slide is self-contained: a big idea, a visual, a caption.
+ * Meant to be viewed once at install time (or embedded in-app).
+ *
+ * Sibling /magpie/guide is the scrollable long-form version.
+ */
+
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const slides = [
+  {
+    kicker: '01 · The big idea',
+    title: 'Capture once, broadcast everywhere.',
+    visual: 'idea',
+    body: "You're already in Safari, Spotify, Warpcast, Zora. Copy what you want. Magpie holds it. Then it travels to every home you connected.",
+  },
+  {
+    kicker: '02 · Install',
+    title: 'One .dmg, one drag.',
+    visual: 'install',
+    body: 'Download from github.com/Good-Feels/magpie/releases. Drag Magpie.app to /Applications. First launch asks for clipboard access — grant it.',
+  },
+  {
+    kicker: '03 · Menu bar',
+    title: 'Lives up there. Always listening.',
+    visual: 'menubar',
+    body: 'Click the magpie icon. You see your clipboard history — newest first, pinned items on top. URLs auto-unfurl: title, description, OG image.',
+  },
+  {
+    kicker: '04 · First push',
+    title: 'Right-click → Push to PointCast.',
+    visual: 'push',
+    body: "It lands in your PointCast inbox. If the clip had a title, Claude Code will expand it into a full block on the next tick.",
+  },
+  {
+    kicker: '05 · Presets',
+    title: 'Six one-click bundles.',
+    visual: 'presets',
+    body: 'Social, Web3, Long-form, Mesh, Visual, All ready. Press ⌘1–⌘6 in the composer. Chips dim for presets that don\'t apply to this clip.',
+  },
+  {
+    kicker: '06 · Composer',
+    title: 'Eleven destinations. One draft.',
+    visual: 'composer',
+    body: 'Each destination shows a live preview — char count, thread warnings, "+ URL embed", "visibility: public". Per-destination overrides tweak copy per platform.',
+  },
+  {
+    kicker: '07 · Attach images',
+    title: 'Up to 4 per broadcast.',
+    visual: 'attach',
+    body: 'Mastodon multipart. Bluesky blob. Farcaster IPFS-staged via Pinata. ⌘⇧A to attach. Image clips get seeded automatically.',
+  },
+  {
+    kicker: '08 · Schedule',
+    title: "'TOMORROW 9A' is one click.",
+    visual: 'schedule',
+    body: 'The clock button opens presets + a date picker. PointCast entries fire cloud-side even while your laptop sleeps.',
+  },
+  {
+    kicker: '09 · Retry queue',
+    title: 'Failures stick around.',
+    visual: 'queue',
+    body: "Transient errors auto-queue. Preferences → Queue shows pending. Retry one, retry all, or discard. Drafts survive restarts.",
+  },
+  {
+    kicker: '10 · Reach',
+    title: 'See what traveled.',
+    visual: 'reach',
+    body: '30-day totals. 14-day histogram. Per-destination success-rate lanes. Block-type split. Preferences → Reach. Also at pointcast.xyz/magpie/activity.',
+  },
+  {
+    kicker: '11 · CLI',
+    title: 'magpie list, broadcast, schedule…',
+    visual: 'cli',
+    body: "Your peer node has a read API the CLI talks to. Scriptable. Works with cron, shortcuts, anywhere you'd rather type than click.",
+  },
+  {
+    kicker: '12 · Mint (optional)',
+    title: 'Zora + Objkt for MINT blocks.',
+    visual: 'mint',
+    body: 'Preferences → Wallets generates Tezos keys natively. EVM + on-chain minting land in v1.0. Your work, on-chain, when you want it.',
+  },
+  {
+    kicker: 'End',
+    title: 'Ship something.',
+    visual: 'end',
+    body: "That's the tour. Right-click any clip. Hit Broadcast. Watch it travel.",
+  },
+];
+---
+
+<BlockLayout
+  channelCode="FD"
+  blockType="NOTE"
+  title="Magpie · Tour"
+  description="A 12-slide interactive walkthrough of Magpie."
+  pageTitle="Magpie Tour"
+>
+  <div class="mgt-stage" tabindex="-1">
+    <div class="mgt-progress" aria-hidden="true">
+      <div class="mgt-progress-fill" id="mgt-progress-fill"></div>
+    </div>
+
+    <main id="mgt-deck" class="mgt-deck">
+      {slides.map((s, i) => (
+        <section class="mgt-slide" data-idx={i} data-visual={s.visual}>
+          <div class="mgt-inner">
+            <p class="mgt-kicker">{s.kicker}</p>
+            <h1 class="mgt-title">{s.title}</h1>
+            <div class={`mgt-visual mgt-v-${s.visual}`} aria-hidden="true">
+              <div class="mgt-visual-inner" data-visual={s.visual}></div>
+            </div>
+            <p class="mgt-body">{s.body}</p>
+          </div>
+        </section>
+      ))}
+    </main>
+
+    <nav class="mgt-controls" aria-label="Tour navigation">
+      <button id="mgt-prev" type="button" aria-label="Previous">◀︎</button>
+      <span id="mgt-counter" class="mgt-counter">1 / {slides.length}</span>
+      <button id="mgt-next" type="button" aria-label="Next">▶︎</button>
+      <span class="mgt-hint"><kbd>→</kbd> or <kbd>space</kbd></span>
+      <a class="mgt-escape" href="/magpie">exit to app</a>
+    </nav>
+  </div>
+</BlockLayout>
+
+<style>
+  :root {
+    --mg-paper: #EFE8D2;
+    --mg-paper-tint: #E7DFC4;
+    --mg-card: #FAF5E0;
+    --mg-rule: #C8B98E;
+    --mg-ink: #1E1C14;
+    --mg-ink-soft: #5A544A;
+    --mg-ink-mute: #8A8273;
+    --mg-moss: #3E5940;
+    --mg-clay: #AE6A38;
+    --mg-bronze: #7E5A2A;
+    --mg-leaf-red: #C14E3A;
+    --mg-display: Georgia, 'Iowan Old Style', serif;
+    --mg-mono: ui-monospace, 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  }
+
+  .mgt-stage {
+    background: var(--mg-paper);
+    color: var(--mg-ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    outline: none;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+
+  .mgt-progress {
+    height: 3px;
+    background: var(--mg-paper-tint);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .mgt-progress-fill {
+    height: 100%;
+    background: var(--mg-moss);
+    width: 0%;
+    transition: width 260ms ease-out;
+  }
+
+  .mgt-deck {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+  .mgt-slide {
+    flex: 0 0 100%;
+    display: grid;
+    place-items: center;
+    padding: 32px 24px;
+    opacity: 0;
+    transform: translateX(24px);
+    transition: opacity 320ms ease-out, transform 320ms ease-out;
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+  }
+  .mgt-slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+    position: relative;
+  }
+
+  .mgt-inner {
+    max-width: 640px;
+    text-align: center;
+  }
+  .mgt-kicker {
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--mg-clay);
+    margin: 0 0 10px;
+  }
+  .mgt-title {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 44px;
+    line-height: 1.15;
+    margin: 0 0 28px;
+    color: var(--mg-ink);
+  }
+  .mgt-body {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-size: 19px;
+    color: var(--mg-ink-soft);
+    line-height: 1.5;
+    margin: 24px 0 0;
+  }
+
+  /* Visuals — pure-CSS scene for each slide. */
+  .mgt-visual {
+    width: 100%;
+    max-width: 520px;
+    aspect-ratio: 16 / 9;
+    margin: 0 auto;
+    border-radius: 6px;
+    background: var(--mg-card);
+    border: 1px solid var(--mg-rule);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(30, 28, 20, 0.08);
+  }
+  .mgt-visual-inner { position: absolute; inset: 0; }
+
+  /* 01 idea — magpie glyph radiating lines */
+  .mgt-v-idea .mgt-visual-inner::before {
+    content: '🐦‍⬛';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 92px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+  }
+  .mgt-v-idea .mgt-visual-inner::after {
+    content: '';
+    position: absolute;
+    inset: 12%;
+    border: 1px dashed var(--mg-clay);
+    border-radius: 50%;
+    opacity: 0.5;
+    animation: spin 20s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 02 install — ribbon + arrow */
+  .mgt-v-install .mgt-visual-inner {
+    background: linear-gradient(135deg, var(--mg-card) 0%, var(--mg-paper-tint) 100%);
+    display: grid;
+    place-items: center;
+    font-family: var(--mg-mono);
+    font-size: 18px;
+    color: var(--mg-clay);
+    letter-spacing: 0.2em;
+  }
+  .mgt-v-install .mgt-visual-inner::before {
+    content: '.dmg ↓';
+  }
+
+  /* 03 menubar — narrow top strip with icon */
+  .mgt-v-menubar .mgt-visual-inner {
+    background:
+      linear-gradient(to bottom, #D8D2C0 0%, #D8D2C0 8%, transparent 8%),
+      var(--mg-paper);
+  }
+  .mgt-v-menubar .mgt-visual-inner::after {
+    content: '🐦‍⬛';
+    position: absolute;
+    top: 5px; right: 20px;
+    font-size: 18px;
+  }
+
+  /* 04 push — stylized clip card with → arrow */
+  .mgt-v-push .mgt-visual-inner {
+    display: grid;
+    place-items: center;
+    background: var(--mg-paper);
+  }
+  .mgt-v-push .mgt-visual-inner::before {
+    content: '◈ READ · pointcast.xyz';
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--mg-clay);
+    padding: 20px 32px;
+    border: 1px solid var(--mg-rule);
+    background: var(--mg-card);
+  }
+  .mgt-v-push .mgt-visual-inner::after {
+    content: '→  PUSH';
+    position: absolute;
+    top: 50%; right: 30px;
+    transform: translateY(-50%);
+    font-family: var(--mg-mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--mg-moss);
+  }
+
+  /* 05 presets — row of chips */
+  .mgt-v-presets .mgt-visual-inner {
+    display: flex; flex-wrap: wrap; gap: 8px; align-content: center; justify-content: center;
+    padding: 30px;
+  }
+  .mgt-v-presets .mgt-visual-inner::before {
+    content: 'ALL · SOC · W3 · LONG · MESH · VIS';
+    font-family: var(--mg-mono);
+    font-size: 13px;
+    letter-spacing: 0.26em;
+    color: var(--mg-moss);
+    text-align: center;
+    line-height: 2.4;
+  }
+
+  /* 06 composer — split card */
+  .mgt-v-composer .mgt-visual-inner {
+    background:
+      linear-gradient(90deg, var(--mg-card) 0 55%, var(--mg-paper-tint) 55% 100%);
+    display: grid;
+    grid-template-columns: 55% 45%;
+  }
+  .mgt-v-composer .mgt-visual-inner::before {
+    content: 'title\a dek\a body';
+    white-space: pre;
+    padding: 24px;
+    font-family: var(--mg-mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: var(--mg-ink-soft);
+    align-self: center;
+  }
+  .mgt-v-composer .mgt-visual-inner::after {
+    content: '☑ PC\a ☑ MA\a ☑ FC\a ☑ BS\a ☐ TW';
+    white-space: pre;
+    padding: 24px;
+    font-family: var(--mg-mono);
+    font-size: 13px;
+    color: var(--mg-moss);
+    line-height: 1.6;
+  }
+
+  /* 07 attach — image grid */
+  .mgt-v-attach .mgt-visual-inner {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 30px;
+  }
+  .mgt-v-attach .mgt-visual-inner::before,
+  .mgt-v-attach .mgt-visual-inner::after {
+    content: '🖼';
+    aspect-ratio: 1;
+    background: var(--mg-paper-tint);
+    border: 1px solid var(--mg-rule);
+    display: grid; place-items: center;
+    font-size: 32px;
+  }
+
+  /* 08 schedule — clock face */
+  .mgt-v-schedule .mgt-visual-inner {
+    display: grid; place-items: center;
+    background: var(--mg-paper);
+  }
+  .mgt-v-schedule .mgt-visual-inner::before {
+    content: '⏰  TOMORROW 9:00';
+    font-family: var(--mg-mono);
+    font-size: 22px;
+    letter-spacing: 0.2em;
+    color: var(--mg-clay);
+  }
+
+  /* 09 queue — stacked drafts */
+  .mgt-v-queue .mgt-visual-inner {
+    background: var(--mg-paper);
+    padding: 18px 30px;
+    display: flex; flex-direction: column; gap: 8px; justify-content: center;
+  }
+  .mgt-v-queue .mgt-visual-inner::before {
+    content: '↻ RETRY ALL\a  ⏸ pending · attempt 2\a  ⏸ pending · attempt 1';
+    white-space: pre;
+    font-family: var(--mg-mono);
+    font-size: 13px;
+    color: var(--mg-ink-soft);
+    line-height: 2;
+  }
+
+  /* 10 reach — tiny bars */
+  .mgt-v-reach .mgt-visual-inner {
+    display: grid;
+    grid-template-columns: repeat(14, 1fr);
+    gap: 4px;
+    align-items: end;
+    padding: 40px 30px 30px;
+  }
+  .mgt-v-reach .mgt-visual-inner::before,
+  .mgt-v-reach .mgt-visual-inner::after {
+    content: '';
+    background: var(--mg-moss);
+    grid-column: span 1;
+  }
+
+  /* 11 cli — terminal prompt */
+  .mgt-v-cli .mgt-visual-inner {
+    background: var(--mg-ink);
+    color: var(--mg-paper-tint);
+    font-family: var(--mg-mono);
+    font-size: 13px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    line-height: 1.8;
+  }
+  .mgt-v-cli .mgt-visual-inner::before {
+    content: '$ magpie broadcast 42 --to pointcast,mastodon\a ✓ broadcast #42 · 2/2 destinations';
+    white-space: pre;
+    color: #c1d1b8;
+  }
+
+  /* 12 mint — hex crystal glyph */
+  .mgt-v-mint .mgt-visual-inner {
+    display: grid; place-items: center;
+    background: var(--mg-paper);
+  }
+  .mgt-v-mint .mgt-visual-inner::before {
+    content: '◈';
+    font-size: 120px;
+    color: var(--mg-clay);
+    opacity: 0.7;
+  }
+
+  /* end */
+  .mgt-v-end .mgt-visual-inner {
+    display: grid; place-items: center;
+    background: var(--mg-moss);
+    color: var(--mg-paper);
+  }
+  .mgt-v-end .mgt-visual-inner::before {
+    content: '⇝';
+    font-size: 120px;
+  }
+
+  /* Controls */
+  .mgt-controls {
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--mg-card);
+    border-top: 1px solid var(--mg-rule);
+  }
+  .mgt-controls button {
+    font-family: var(--mg-mono);
+    font-size: 16px;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid var(--mg-rule);
+    border-radius: 2px;
+    cursor: pointer;
+    color: var(--mg-ink);
+  }
+  .mgt-controls button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .mgt-counter {
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--mg-ink-soft);
+  }
+  .mgt-hint {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--mg-ink-mute);
+    margin-left: auto;
+  }
+  .mgt-hint kbd {
+    font-family: var(--mg-mono);
+    font-size: 10px;
+    padding: 1px 5px;
+    background: var(--mg-paper-tint);
+    border: 1px solid var(--mg-rule);
+    border-radius: 2px;
+  }
+  .mgt-escape {
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--mg-bronze);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .mgt-title { font-size: 30px; }
+    .mgt-body { font-size: 16px; }
+    .mgt-visual { max-width: 100%; }
+  }
+</style>
+
+<script>
+  const deck = document.getElementById('mgt-deck') as HTMLElement;
+  const slides = Array.from(deck.querySelectorAll<HTMLElement>('.mgt-slide'));
+  const progress = document.getElementById('mgt-progress-fill') as HTMLElement;
+  const counter = document.getElementById('mgt-counter') as HTMLElement;
+  const prev = document.getElementById('mgt-prev') as HTMLButtonElement;
+  const next = document.getElementById('mgt-next') as HTMLButtonElement;
+  const stage = document.querySelector('.mgt-stage') as HTMLElement;
+
+  let idx = 0;
+  const total = slides.length;
+
+  function render() {
+    slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+    counter.textContent = `${idx + 1} / ${total}`;
+    progress.style.width = `${((idx + 1) / total) * 100}%`;
+    prev.disabled = idx === 0;
+    next.disabled = idx === total - 1;
+    try { history.replaceState(null, '', `#${idx + 1}`); } catch {}
+  }
+
+  function go(delta: number) {
+    const target = Math.max(0, Math.min(total - 1, idx + delta));
+    if (target !== idx) { idx = target; render(); }
+  }
+
+  prev.addEventListener('click', () => go(-1));
+  next.addEventListener('click', () => go(1));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); go(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); idx = 0; render(); }
+    else if (e.key === 'End') { e.preventDefault(); idx = total - 1; render(); }
+  });
+
+  // Support deep-linking via #N.
+  const hash = window.location.hash.replace('#', '');
+  const parsed = Number(hash);
+  if (Number.isFinite(parsed) && parsed >= 1 && parsed <= total) {
+    idx = parsed - 1;
+  }
+  render();
+  stage.focus();
+</script>

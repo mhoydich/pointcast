@@ -3,10 +3,10 @@
 > A living broadcast from El Segundo, California. Dispatches, faucets,
 > visits, and mints on Tezos. Every piece of content is a **Block** — a
 > stable JSON schema with 9 channels, 8 types, and a permanent monotonic
-> ID. Built by Mike Hoydich with Claude (Anthropic) and Codex (OpenAI).
-> Agent-native by design. CC0-flavored.
+> ID. Built by Mike Hoydich with Claude (Anthropic), Codex (OpenAI), and
+> Manus. Agent-native by design. CC0-flavored.
 
-**Live:** [pointcast.xyz](https://pointcast.xyz) · **Canonical:** [/manifesto](https://pointcast.xyz/manifesto) · **Agents:** [/agents.json](https://pointcast.xyz/agents.json) · **LLMs:** [/llms.txt](https://pointcast.xyz/llms.txt)
+**Live:** [pointcast.xyz](https://pointcast.xyz) · **Canonical:** [/manifesto](https://pointcast.xyz/manifesto) · **Agents:** [/agents.json](https://pointcast.xyz/agents.json) · **LLMs:** [/llms.txt](https://pointcast.xyz/llms.txt) · **Share:** [/share](https://pointcast.xyz/share) · **Resources:** [/resources](https://pointcast.xyz/resources)
 
 ---
 
@@ -25,16 +25,34 @@ Jump to the explainer: **[/manifesto](https://pointcast.xyz/manifesto)**.
 
 ---
 
+## The three pillars
+
+PointCast has grown from a single site into a small ecosystem. Same
+primitive (the Block), three surfaces tuned to different readers:
+
+| Pillar        | Surface                                              | Role                                    |
+|---------------|------------------------------------------------------|-----------------------------------------|
+| **PointCast** | [pointcast.xyz](https://pointcast.xyz)               | Canonical broadcast — 164 Blocks, 9 channels, mood-aware home grid |
+| **Magpie**    | [pointcast.xyz/magpie](https://pointcast.xyz/magpie) | Publisher — hosted UI + macOS companion, pc-ping-v1 schema |
+| **Sparrow**   | [pointcast.xyz/sparrow](https://pointcast.xyz/sparrow) | Reader — keyboard-first PWA, works offline, blue-hour chrome |
+
+Sparrow is installable as an app (scoped service worker at
+`/sparrow/sw.js`), keyboard-driven (J/K glide, 1–9 channel jump, ⌘K
+palette), and themed deliberately apart from PointCast to feel like a
+reader, not a republisher. See `/sparrow/about` and `/sparrow/deck` for
+the v0.4 memo.
+
+---
+
 ## Stack
 
 - **Framework:** [Astro 6.1](https://astro.build) (static site + islands)
-- **Hosting:** [Cloudflare Pages](https://pages.cloudflare.com) + Pages Functions
+- **Hosting:** [Cloudflare Pages](https://pages.cloudflare.com) + Pages Functions + Durable Objects (presence)
 - **Chain:** [Tezos](https://tezos.com) mainnet, integrated via
   [Taquito 24.2](https://tezostaquito.io) + [Beacon SDK 24.2](https://walletbeacon.io)
-- **Contracts:** [SmartPy](https://smartpy.io) 0.24 (FA2 for Visit Nouns,
-  FA1.2 for DRUM, custom for Prize Cast)
+- **Contracts:** [SmartPy](https://smartpy.io) (FA2 for Visit Nouns + Passport Stamps, FA1.2 for DRUM, custom for Prize Cast + Marketplace)
 - **Indexing:** [TzKT](https://tzkt.io) for on-chain reads
-- **Typography:** Self-hosted Inter + JetBrains Mono (no Google Fonts)
+- **Typography:** Self-hosted Inter + JetBrains Mono on PointCast; Gloock + Inter Tight + Departure Mono on Sparrow
 - **Analytics:** none
 
 See [/stack](https://pointcast.xyz/stack) for the full technical
@@ -76,31 +94,44 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 
 | Route                  | Purpose                                                                   |
 |------------------------|---------------------------------------------------------------------------|
-| [/](https://pointcast.xyz/)                       | Home feed — dense auto-fit grid of every Block                |
+| [/](https://pointcast.xyz/)                       | Home feed — drag-to-arrange, mood-persistent, daily-drop strip |
 | [/manifesto](https://pointcast.xyz/manifesto)     | Canonical Q&A, FAQPage + DefinedTerm JSON-LD                  |
 | [/glossary](https://pointcast.xyz/glossary)       | Dictionary of PointCast-specific terms with stable anchors    |
 | [/archive](https://pointcast.xyz/archive)         | Chronological index with channel + type + search filters      |
 | [/editions](https://pointcast.xyz/editions)       | Mintable dashboard: live supply + listed market + planned     |
-| [/timeline](https://pointcast.xyz/timeline)       | Publication cadence viz (SVG, sparklines + heatmap)           |
+| [/clock](https://pointcast.xyz/clock)             | Sky clock — per-zone facts, rituals, sun position, landmarks  |
+| [/moods](https://pointcast.xyz/moods)             | Mood system + soundtracks powering the persistent conavigator |
+| [/here](https://pointcast.xyz/here)               | Live presence — beat pad, polls, meditative pulse             |
 | [/now](https://pointcast.xyz/now)                 | Live system snapshot: CotD + next draw + latest 4 blocks      |
+| [/mesh](https://pointcast.xyz/mesh)               | LOCAL / ONLINE / AGENT mesh view                              |
+| [/beacon](https://pointcast.xyz/beacon)           | 25-mile El Segundo beacon                                     |
 | [/battle](https://pointcast.xyz/battle)           | Nouns Battler — deterministic duels, Card of the Day rotates  |
 | [/cast](https://pointcast.xyz/cast)               | Prize Cast — no-loss prize savings on Tezos (pending compile) |
 | [/drum](https://pointcast.xyz/drum)               | Multiplayer drum room, DRUM token claim (pending compile)     |
+| [/magpie](https://pointcast.xyz/magpie)           | Magpie publisher — hosted UI, pc-ping-v1 schema               |
+| [/sparrow](https://pointcast.xyz/sparrow)         | Sparrow reader — keyboard-first PWA (v0.4)                    |
+| [/workbench](https://pointcast.xyz/workbench)     | Network workbench for node operators                          |
 | [/for-agents](https://pointcast.xyz/for-agents)   | Human-readable manifest                                       |
 | [/agents.json](https://pointcast.xyz/agents.json) | Machine-readable discovery manifest                           |
 | [/llms.txt](https://pointcast.xyz/llms.txt)       | LLM summary (llmstxt.org convention)                          |
 | [/feed.xml](https://pointcast.xyz/feed.xml)       | Unified RSS 2.0 (every block)                                 |
 | [/feed.json](https://pointcast.xyz/feed.json)     | JSON Feed v1.1                                                |
+| [/api/mesh.jsonl](https://pointcast.xyz/api/mesh.jsonl) | Mesh presence stream (JSONL)                            |
+| [/api/soundtracks.jsonl](https://pointcast.xyz/api/soundtracks.jsonl) | Soundtrack catalog (JSONL)                |
 
 ---
 
 ## On-chain
 
-| Contract           | Address                                      | Status                     |
-|--------------------|----------------------------------------------|----------------------------|
-| Visit Nouns FA2    | `KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh`       | **LIVE mainnet**           |
-| DRUM Token (FA1.2) | `contracts/v2/drum_token.py`                 | Written; pending ghostnet  |
-| Prize Cast         | `contracts/v2/prize_cast.py`                 | Written; pending mainnet   |
+| Contract            | Address / path                                | Status                     |
+|---------------------|-----------------------------------------------|----------------------------|
+| Visit Nouns (FA2)   | `KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh`        | **LIVE mainnet**           |
+| Passport Stamps (FA2) | `contracts/v2/passport_stamps_fa2.py`       | Written; pending ghostnet  |
+| Marketplace         | `contracts/v2/marketplace.py`                 | Written; pending ghostnet  |
+| DRUM Token (FA1.2)  | `contracts/v2/drum_token.py`                  | Written; pending ghostnet  |
+| Prize Cast          | `contracts/v2/prize_cast.py`                  | Written; pending mainnet   |
+
+Deploy notes per contract live in `contracts/v2/DEPLOY_NOTES*.md`.
 
 ---
 
@@ -117,13 +148,32 @@ Source: [`functions/_middleware.ts`](./functions/_middleware.ts)
 
 ---
 
+## Currently shipping
+
+Recent sprints, newest first. Full commit log in `git log`, narrative
+changelog at [/changelog](https://pointcast.xyz/changelog).
+
+- **Sparrow v0.1 → v0.4** — hosted reader client, then PWA + offline, then v0.4 technical memorandum deck (`/sparrow/deck`). Keyboard-first, installable, scoped service worker.
+- **Magpie hosted UI** — publisher surface at `/magpie` with tour, pitch, press, launch, FAQ. Ships `pc-ping-v1` v0.5 schema.
+- **Conavigator** — persistent footer bar: mood + soundtrack survive navigation across the entire site.
+- **Drag-to-arrange home** — reorder Blocks on the grid; mood persists site-wide; sports redesign; broadcast favicon.
+- **Sky clock** — per-zone facts, rituals, seasonal notes, 12/24h, sun plotted where it actually is, landmarks strip, 14+ rituals.
+- **Home strips** — daily-drop, sports, BTC trend poll, mood soundtracks, post-vote followup.
+- **Network presence** — Durable Object for online presence, `/here`, `/for-nodes`, `/workbench`, `/start`, MCP-driven Codex libs.
+
+---
+
 ## Local development
 
 ```sh
 npm install
+npm run audit:publishing
 npm run dev    # Astro dev server at http://localhost:4321
 npm run build  # Static build + OG card generation
 ```
+
+Codex/GitHub/publishing rules live at
+[`docs/setup/codex-github-publishing.md`](./docs/setup/codex-github-publishing.md).
 
 The build script runs `scripts/generate-og-images.mjs` first (sharp
 rasterizes SVG → PNG per Block and per first-class page) then
@@ -139,13 +189,16 @@ automatically.
 ## Contributing
 
 This is Mike Hoydich's site, not a general-purpose template — but the
-Block primitive, BLOCKS.md spec, and agent-layer patterns are
-CC0-flavored. Fork and reuse freely. Cite `/manifesto` if you want
-credit traced back.
+Block primitive, BLOCKS.md spec, pc-ping-v1 schema, and agent-layer
+patterns are CC0-flavored. Fork and reuse freely. Cite `/manifesto` if
+you want credit traced back.
 
 If you've found a bug in an agent surface (`/*.json`, `/for-agents`,
 stripped HTML mode), file an issue with the request URL and observed
 response.
+
+Multi-agent workflow (Claude Code, Codex, Manus, Mike) is documented in
+[`AGENTS.md`](./AGENTS.md).
 
 ---
 

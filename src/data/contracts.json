@@ -21,6 +21,19 @@
       "note": "Originated via scripts/deploy-visit-nouns-mainnet.mjs. Admin is the throwaway signer — transfer to Mike's mainnet wallet via set_administrator as a second step."
     }
   },
+  "passport_stamps": {
+    "mainnet": "",
+    "shadownet": "",
+    "symbol": "PCPASS",
+    "mintPriceMutez": 0,
+    "metadataBaseUrl": "https://pointcast.xyz/passport/stamps",
+    "_notes": {
+      "source": "contracts/v2/passport_stamps_fa2.py",
+      "entrypoint": "mint_stamp(stamp_id)",
+      "tokenIds": "0-15 map to passport stamp codes P00-P15",
+      "status": "source-written-awaiting-compile-and-origination"
+    }
+  },
   "drum_token": {
     "mainnet": "",
     "shadownet": "",
@@ -53,6 +66,32 @@
   },
   "prize_cast": {
     "mainnet": ""
+  },
+  "compute_lotto": {
+    "base": "",
+    "base_sepolia": "",
+    "_notes": {
+      "source": "contracts/v2/compute_lotto.sol",
+      "chain": "base",
+      "pattern": "Weekly lottery with dual prize rails: humans pay USDC (1 USDC/ticket) via wagmi; agents pay via x402 through the facilitator endpoint. Each 7-day epoch draws two independent winners via Chainlink VRF — human-class winner receives USDC, agent-class winner receives compute credits accumulated on-contract.",
+      "constructor_args": {
+        "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "vrfCoordinator": "(Base VRF v2.5 coordinator — see docs.chain.link/vrf)",
+        "subscriptionId": "(created + funded pre-deploy)",
+        "keyHash": "(Base gas-lane keyHash)",
+        "admin": "(mike's wallet)",
+        "treasury": "(mike's wallet or multisig)",
+        "facilitator": "(fresh relayer key, rotated post-deploy)"
+      },
+      "x402_manifest": "/.well-known/x402/compute-lotto.json",
+      "x402_endpoint": "/api/x402/compute-lotto",
+      "status": "source-written-awaiting-compile-and-deploy",
+      "docs": {
+        "block": "/b/0400",
+        "research": "docs/research/2026-04-21-ethereum-lottery.md",
+        "brief": "docs/briefs/2026-04-21-compute-lotto-spec.md"
+      }
+    }
   },
   "daily_auction": {
     "mainnet": "",
@@ -92,10 +131,10 @@
     "decimals": 2,
     "_notes": {
       "source": "contracts/bun_token.py",
-      "pattern": "FA1.2 voucher-signed mint (mirrors $DRUM).",
+      "pattern": "FA1.2 voucher-signed mint (same as DRUM)",
       "entrypoint": "claim(recipient, amount, nonce, expiry, signature)",
       "signer_key_env": "BUN_SIGNER_KEY",
-      "daily_cap": "2.00 $BUN per wallet/day, enforced in /api/kowloon-voucher",
+      "daily_cap": "2.00 $BUN per wallet per day, enforced server-side in /api/kowloon-voucher",
       "status": "source-written-awaiting-compile-and-origination"
     }
   },
@@ -105,15 +144,18 @@
     "symbol": "KPASTRY",
     "_notes": {
       "source": "contracts/kowloon_pastry_fa2.py",
-      "pattern": "FA2 multi-asset, claim_pastry via signed voucher + admin_mint.",
+      "pattern": "FA2 multi-asset NFT, claim_pastry via signed voucher + admin_mint",
       "tokenIds": {
-        "0": "菠蘿包 Pineapple Bun", "1": "蛋撻 Egg Tart",
-        "2": "叉燒包 Char Siu Bao", "3": "馬拉糕 Malai Gao",
-        "4": "老婆餅 Wife Cake",    "5": "月餅 Mooncake"
+        "0": "菠蘿包 Pineapple Bun",
+        "1": "蛋撻 Egg Tart",
+        "2": "叉燒包 Char Siu Bao",
+        "3": "馬拉糕 Malai Gao",
+        "4": "老婆餅 Wife Cake",
+        "5": "月餅 Mooncake"
       },
       "signer_key_env": "BUN_SIGNER_KEY",
       "royalty_bps": 1000,
-      "airdrop_event": "S1 Finale Daily Shift top-50, Apr 28 2026 20:00 PT",
+      "airdrop_event": "Kowloon Kitchen S1 Finale top-50 Daily Shift, Apr 28 2026 20:00 PT",
       "status": "source-written-awaiting-compile-and-origination"
     }
   },
@@ -123,20 +165,24 @@
     "symbol": "KACHV",
     "_notes": {
       "source": "contracts/kowloon_achievements_fa2.py",
-      "pattern": "FA2 multi-asset receipt. claim_achievement via signed voucher, dedup'd per (wallet,token_id).",
+      "pattern": "FA2 multi-asset, claim_achievement via signed voucher. Dedup via claimed_by(tz, token_id). 0% royalty — receipts.",
+      "entrypoint": "claim_achievement(recipient, token_id, nonce, expiry, signature)",
       "signer_key_env": "BUN_SIGNER_KEY",
       "royalty_bps": 0,
+      "note": "Voucher worker checks the player has the achievement unlocked client-side before signing. Slug ↔ token_id mapping is set post-deploy via set_achievement_slug.",
       "slug_map": {
-        "0": "first_bake", "1": "first_bullseye", "2": "vip_done", "3": "boss_done",
-        "4": "combo_10", "5": "combo_20", "6": "cash_stash", "7": "bribe_lord",
-        "8": "shop_goer", "9": "four_ovens", "10": "daily_shifter", "11": "wallet_connect",
-        "12": "bun_collector", "13": "theme_chameleon", "14": "developed_gluten",
-        "15": "auntie_hands", "16": "regular", "17": "five_stars", "18": "all_hands",
-        "19": "outran_chan", "20": "vendetta_done", "21": "right_hand", "22": "no_mans_land",
-        "23": "sidejob_done", "24": "everyone_knows", "25": "local_hero",
-        "26": "typhoon_hero", "27": "storm_drop", "28": "ch7_started", "29": "truth_kept",
-        "30": "truth_uncovered", "31": "sepia_runner", "32": "typhoon_survivor",
-        "33": "triad_paid", "34": "night_5", "35": "night_10"
+        "0": "first_bake",        "1": "first_bullseye",  "2": "vip_done",
+        "3": "boss_done",         "4": "combo_10",        "5": "combo_20",
+        "6": "cash_stash",        "7": "bribe_lord",      "8": "shop_goer",
+        "9": "four_ovens",        "10": "daily_shifter",  "11": "wallet_connect",
+        "12": "bun_collector",    "13": "theme_chameleon","14": "developed_gluten",
+        "15": "auntie_hands",     "16": "regular",        "17": "five_stars",
+        "18": "all_hands",        "19": "outran_chan",    "20": "vendetta_done",
+        "21": "right_hand",       "22": "no_mans_land",   "23": "sidejob_done",
+        "24": "everyone_knows",   "25": "local_hero",     "26": "typhoon_hero",
+        "27": "storm_drop",       "28": "ch7_started",    "29": "truth_kept",
+        "30": "truth_uncovered",  "31": "sepia_runner",   "32": "typhoon_survivor",
+        "33": "triad_paid",       "34": "night_5",        "35": "night_10"
       },
       "status": "source-written-awaiting-compile-and-origination"
     }

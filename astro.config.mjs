@@ -5,10 +5,25 @@ import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
+const SITEMAP_EXCLUDE = [
+  /^\/admin\//,
+  /^\/auth\/?$/,
+  /^\/battle-log\/?$/,
+  /^\/drum\/click\/?$/,
+  /^\/sparrow\//,
+];
+
 // https://astro.build/config
 export default defineConfig({
   site: 'https://pointcast.xyz',
-  integrations: [sitemap()],
+  integrations: [
+    sitemap({
+      filter: (page) => {
+        const pathname = new URL(page).pathname;
+        return !SITEMAP_EXCLUDE.some((pattern) => pattern.test(pathname));
+      },
+    }),
+  ],
   vite: {
     plugins: [
       // Taquito + @airgap/beacon-sdk reference Node globals (process, Buffer,

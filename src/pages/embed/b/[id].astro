@@ -1,0 +1,188 @@
+---
+/**
+ * /embed/b/[id] — iframe-safe block embed.
+ *
+ * Rendered inside partner sites when someone pastes a
+ * https://pointcast.xyz/b/{id} URL into an oEmbed-speaking editor
+ * (WordPress, Ghost, Discourse, etc). The oEmbed endpoint at
+ * /oembed.json returns an iframe pointing here.
+ *
+ * This is a deliberately minimal render — no BlockLayout, no CoNavHUD,
+ * no global nav — so the embed reads clean at any size. Channel-tinted
+ * border, title, dek, one-line meta, 220-char body preview, attribution
+ * + "Read on PointCast ↗" link with target="_blank".
+ *
+ * Frame-ancestor policy is open (no X-Frame-Options / CSP frame-ancestors)
+ * so partner sites can embed freely. We set <meta name="robots"
+ * content="noindex"> so the embed URL itself doesn't compete with the
+ * canonical /b/{id} in SERPs — the canonical is declared in <link rel=
+ * "canonical">.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { CHANNELS } from '../../../lib/channels';
+
+export async function getStaticPaths() {
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  return blocks.map((block) => ({
+    params: { id: block.data.id },
+    props: { block },
+  }));
+}
+
+interface Props { block: CollectionEntry<'blocks'> }
+const { block } = Astro.props;
+const ch = CHANNELS[block.data.channel];
+
+const permalink = `https://pointcast.xyz/b/${block.data.id}`;
+const thumbnail = `/images/og/b/${block.data.id}.png`;
+const dek = block.data.dek ?? block.data.body?.slice(0, 200) ?? block.data.title;
+const date = block.data.timestamp.toISOString().slice(0, 10);
+const readingTime = (block.data as any).readingTime;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {/* Embed URL is noindex — the canonical /b/{id} should rank, not this. */}
+    <meta name="robots" content="noindex, follow" />
+    <link rel="canonical" href={permalink} />
+    <title>{block.data.title} — PointCast (embed)</title>
+
+    <style>
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #12110E;
+        background: #ffffff;
+      }
+      a { color: #185FA5; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      .embed {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100vh;
+        padding: 14px 16px;
+        border-left: 3px solid var(--ch, #185FA5);
+      }
+
+      .embed__head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #5F5E5A;
+      }
+      .embed__code { color: var(--ch-dark, #0B3E73); font-weight: 500; }
+      .embed__type {
+        padding: 2px 6px;
+        border: 1px solid #C4C2BC;
+        background: #fafaf8;
+        border-radius: 2px;
+      }
+      .embed__date { font-variant-numeric: tabular-nums; }
+
+      .embed__body {
+        overflow: hidden;
+        padding: 8px 0;
+      }
+      .embed__title {
+        font-size: 20px;
+        font-weight: 500;
+        line-height: 1.25;
+        margin: 0 0 6px;
+      }
+      .embed__dek {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: #38373A;
+        margin: 0 0 6px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .embed__footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 8px;
+        border-top: 1px solid #E5E3DE;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #5F5E5A;
+      }
+      .embed__brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #12110E;
+        font-weight: 500;
+      }
+      .embed__brand-dot {
+        width: 7px; height: 7px;
+        background: var(--ch, #185FA5);
+        border-radius: 50%;
+      }
+      .embed__cta {
+        padding: 6px 10px;
+        border: 1px solid #12110E;
+        border-radius: 2px;
+        color: #12110E;
+        font-weight: 500;
+        background: #fff;
+        transition: background-color 120ms, color 120ms;
+      }
+      .embed__cta:hover {
+        background: #12110E;
+        color: #fff;
+        text-decoration: none;
+      }
+
+      @media (max-width: 500px) {
+        .embed__title { font-size: 17px; }
+        .embed__dek { font-size: 13px; -webkit-line-clamp: 2; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <article class="embed" style={`--ch: ${ch.color600}; --ch-dark: ${ch.color800};`}>
+      <header class="embed__head">
+        <span class="embed__code">CH.{ch.code} · {ch.name}</span>
+        <span class="embed__type">{block.data.type}</span>
+        <time class="embed__date" datetime={block.data.timestamp.toISOString()}>{date}</time>
+      </header>
+
+      <div class="embed__body">
+        <h1 class="embed__title"><a href={permalink} target="_blank" rel="noopener">{block.data.title}</a></h1>
+        <p class="embed__dek">{dek}</p>
+      </div>
+
+      <footer class="embed__footer">
+        <span class="embed__brand">
+          <span class="embed__brand-dot" aria-hidden="true"></span>
+          <a href="https://pointcast.xyz" target="_blank" rel="noopener" style="color:inherit;">pointcast.xyz</a>
+          {readingTime && <span>· {readingTime}</span>}
+        </span>
+        <a class="embed__cta" href={permalink} target="_blank" rel="noopener">
+          Read on PointCast ↗
+        </a>
+      </footer>
+    </article>
+  </body>
+</html>

@@ -7,7 +7,7 @@
  * directive — see /b/0282 for the arc framing.
  *
  * STATIONS mode (2026-04-19) adds two additive layers:
- *   - STATIONS INDEX: 15 nearby channels, keyed like TV presets
+ *   - STATIONS INDEX: nearby channels, keyed like TV presets
  *   - STATION FEED: same /tv chrome, but filtered to one place
  *
  * Global mode remains the default and preserves the original /tv
@@ -224,6 +224,30 @@ const stationPayload = stationEntries.map(({ station, keyHint, blockCount, block
       color: var(--tv-ink);
       outline: none;
     }
+    .top__fs-btn { text-decoration: none; }
+    .top__fs-btn[data-active="true"] { background: rgba(245, 159, 0, 0.28); border-color: var(--tv-accent); color: var(--tv-ink); }
+    .top__shows-btn { text-decoration: none; border-color: rgba(245, 159, 0, 0.55); color: var(--tv-ink); }
+    .top__shows-btn:hover { background: rgba(245, 159, 0, 0.22); }
+    .tv-fs-hint {
+      position: fixed;
+      left: 50%;
+      bottom: 110px;
+      transform: translateX(-50%);
+      z-index: 30;
+      padding: 10px 18px;
+      background: rgba(12, 11, 8, 0.78);
+      border: 1px solid rgba(245, 159, 0, 0.45);
+      border-radius: 2px;
+      color: var(--tv-ink);
+      font-family: var(--tv-font-mono);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    .tv-fs-hint[data-visible="true"] { opacity: 1; }
     @keyframes tv-blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
@@ -964,6 +988,15 @@ const stationPayload = stationEntries.map(({ station, keyHint, blockCount, block
   </style>
 </head>
 <body>
+  <!-- Fullscreen-on-first-tap: browsers gate fullscreen behind a user
+       gesture, so we arm a one-shot click/tap listener that fires the
+       fullscreen request on the first interaction anywhere. The button
+       in the top bar is a manual toggle for anyone who dismisses the
+       hint below. Per Mike 2026-04-20 23:30ish PT ping: "tv is so cool,
+       when go to url can we auto full screen." -->
+  <div class="tv-fs-hint" id="tv-fs-hint" data-visible="false" aria-hidden="true">
+    Tap anywhere for fullscreen · press <kbd>F</kbd>
+  </div>
   <header class="top">
     <div class="top__brand">POINT<em>CAST</em></div>
     <div class="top__live">
@@ -973,6 +1006,12 @@ const stationPayload = stationEntries.map(({ station, keyHint, blockCount, block
     <button class="top__stations-btn" id="tv-stations-toggle" type="button" aria-controls="tv-stations-index">
       STATIONS
     </button>
+    <button class="top__stations-btn top__fs-btn" id="tv-fullscreen-toggle" type="button" aria-label="Enter fullscreen">
+      <span aria-hidden="true">⛶</span> FULLSCREEN
+    </button>
+    <a class="top__stations-btn top__shows-btn" href="/tv/shows/">
+      SHOWS →
+    </a>
     <div class="top__presence" id="tv-presence" aria-live="polite">
       <span class="top__presence-label">WATCHING</span>
       <span class="top__presence-constellation" id="tv-presence-constellation" aria-label="Watcher noun constellation">
@@ -1112,7 +1151,7 @@ const stationPayload = stationEntries.map(({ station, keyHint, blockCount, block
     <section class="stations-index" id="tv-stations-index" hidden aria-label="Stations index">
       <div class="stations-index__head">
         <div>
-          <p class="stations-index__lede">15 nearby channels · keyed like presets</p>
+          <p class="stations-index__lede">{STATIONS.length} nearby channels · keyed like presets</p>
           <h2 class="stations-index__title">Stations <em>in range</em></h2>
         </div>
         <p class="stations-index__legend">S or swipe up · 1-9 then QWERTY · Esc to back out</p>
@@ -2027,6 +2066,82 @@ const stationPayload = stationEntries.map(({ station, keyHint, blockCount, block
           schedulePresenceReconnect(selfSessionId, selfNounId);
         });
       }
+
+      // ---- Fullscreen wiring (autofs on first tap + manual button + F key)
+      (function wireFullscreen() {
+        var fsBtn = document.getElementById('tv-fullscreen-toggle');
+        var hint = document.getElementById('tv-fs-hint');
+        var armed = true;
+        var hintTimer = null;
+
+        function inFullscreen() {
+          return !!(document.fullscreenElement || document.webkitFullscreenElement);
+        }
+        function enterFullscreen() {
+          var el = document.documentElement;
+          var req = el.requestFullscreen || el.webkitRequestFullscreen;
+          if (req) {
+            try {
+              var p = req.call(el);
+              if (p && p.then) p.catch(function () {});
+            } catch (e) {}
+          }
+        }
+        function exitFullscreen() {
+          var ex = document.exitFullscreen || document.webkitExitFullscreen;
+          if (ex) {
+            try {
+              var p = ex.call(document);
+              if (p && p.then) p.catch(function () {});
+            } catch (e) {}
+          }
+        }
+        function toggle() { inFullscreen() ? exitFullscreen() : enterFullscreen(); }
+
+        function paint() {
+          if (fsBtn) fsBtn.setAttribute('data-active', inFullscreen() ? 'true' : 'false');
+        }
+
+        if (fsBtn) {
+          fsBtn.addEventListener('click', function (e) { e.stopPropagation(); toggle(); });
+        }
+
+        // Arm one-shot auto-enter on first interaction anywhere.
+        function autoEnterOnce(ev) {
+          // Don't auto-enter if clicking the fullscreen button (it handles itself)
+          if (ev && ev.target && fsBtn && (ev.target === fsBtn || fsBtn.contains(ev.target))) return;
+          // Don't auto-enter if clicking the stations button or any explicit link
+          if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.closest && ev.target.closest('a,button'))) return;
+          if (!armed) return;
+          armed = false;
+          window.removeEventListener('click', autoEnterOnce);
+          window.removeEventListener('touchend', autoEnterOnce);
+          enterFullscreen();
+        }
+        window.addEventListener('click', autoEnterOnce);
+        window.addEventListener('touchend', autoEnterOnce);
+
+        // Also bind F / F11 / Escape
+        window.addEventListener('keydown', function (ev) {
+          if (ev.key === 'f' || ev.key === 'F') { toggle(); }
+        });
+
+        document.addEventListener('fullscreenchange', paint);
+        document.addEventListener('webkitfullscreenchange', paint);
+        paint();
+
+        // Show hint briefly so visitor knows they can tap for FS. Fade after 6s.
+        if (hint) {
+          setTimeout(function () {
+            hint.setAttribute('data-visible', 'true');
+            hintTimer = setTimeout(function () { hint.setAttribute('data-visible', 'false'); }, 6000);
+          }, 700);
+          // Hide immediately once FS engaged
+          document.addEventListener('fullscreenchange', function () {
+            if (inFullscreen()) hint.setAttribute('data-visible', 'false');
+          });
+        }
+      })();
 
       const selfSessionId = viewerSessionId();
       const selfNounId = viewerNounId(selfSessionId);

@@ -1,0 +1,359 @@
+---
+/**
+ * /tv/shows/drum-vis — generative drum visualizer TV show.
+ *
+ * Self-playing rhythm machine: kick on the beat, snare on backbeat, hat
+ * subdividing. Tempo cycles through 5 modes (heartbeat → walk → train →
+ * run → sprint) over a 90-second loop. Each beat fires a colored ring
+ * emanating from the center; the rings stack and create interference
+ * patterns at higher tempos. Tap anywhere to add your own beat into the
+ * mix — it joins the loop.
+ *
+ * Auto-fullscreen on first tap (which also seeds your first beat).
+ * Same skeleton as the other TV shows.
+ */
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#060504" />
+  <meta name="description" content="Generative drum visualizer — self-playing rhythm with ring pulses radiating from the center, tempo cycling through 5 modes. Tap to add a beat. Full viewport, ambient." />
+  <title>PointCast TV · Drum visualizer</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #060504;
+      --bg-2: #1a0d1a;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --accent: #F59F00;
+      --warm: #8a2432;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, var(--bg-2) 0%, var(--bg) 80%); color: var(--ink); font-family: var(--serif); transition: background 4s ease; }
+    body[data-mode="heartbeat"] { background: radial-gradient(ellipse at 50% 50%, #2a0d2a 0%, var(--bg) 80%); }
+    body[data-mode="walk"]      { background: radial-gradient(ellipse at 50% 50%, #1a1a2a 0%, var(--bg) 80%); }
+    body[data-mode="train"]     { background: radial-gradient(ellipse at 50% 50%, #2a1a0d 0%, var(--bg) 80%); }
+    body[data-mode="run"]       { background: radial-gradient(ellipse at 50% 50%, #1a2a1a 0%, var(--bg) 80%); }
+    body[data-mode="sprint"]    { background: radial-gradient(ellipse at 50% 50%, #2a1a2a 0%, var(--bg) 80%); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; gap: 16px; padding: 16px 30px; z-index: 30;
+      font-family: var(--mono);
+      background: linear-gradient(180deg, rgba(6, 5, 4, 0.85) 0%, transparent 100%);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__bpm { font-size: 11px; letter-spacing: 0.16em; color: var(--accent); margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .top__bpm small { color: var(--ink-dim); margin-left: 4px; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .stage {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+
+    /* Center drum head */
+    .drum {
+      position: relative;
+      width: clamp(180px, 28vmin, 380px);
+      height: clamp(180px, 28vmin, 380px);
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #f3e6d8 0%, #c4a77d 65%, #5a3b10 100%);
+      box-shadow: 0 8px 60px rgba(0, 0, 0, 0.5), inset 0 -8px 16px rgba(0, 0, 0, 0.3), inset 0 8px 16px rgba(255, 255, 255, 0.15);
+      transition: transform 0.06s ease;
+      z-index: 5;
+    }
+    .drum[data-pulse="kick"]  { transform: scale(0.95); }
+    .drum[data-pulse="snare"] { transform: scale(1.04); }
+
+    /* Ripples */
+    .ripple {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      border: 2px solid var(--ring, var(--accent));
+      border-radius: 50%;
+      width: 0; height: 0;
+      pointer-events: none;
+      animation: ripple-out var(--dur, 1.6s) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+      opacity: 0.7;
+    }
+    @keyframes ripple-out {
+      0%   { width: 30vmin; height: 30vmin; opacity: 0.7; border-width: 2.5px; }
+      100% { width: 200vmin; height: 200vmin; opacity: 0; border-width: 0.5px; }
+    }
+    .ripple--kick  { --ring: #F59F00; --dur: 1.8s; }
+    .ripple--snare { --ring: #E5603C; --dur: 1.4s; border-style: dashed; }
+    .ripple--hat   { --ring: #6b7cff; --dur: 0.9s; opacity: 0.45; }
+    .ripple--user  { --ring: #4cd39b; --dur: 2.0s; border-width: 3.5px; opacity: 0.85; }
+
+    /* Mode label */
+    .mode-label {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: clamp(11px, 1.4vw, 14px);
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      transition: opacity 1s ease;
+      z-index: 10;
+    }
+    .mode-label small {
+      display: block;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: var(--ink-soft);
+      margin-top: 6px;
+      text-transform: none;
+      font-weight: 400;
+    }
+
+    .bot {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 44px;
+      display: flex; align-items: center; gap: 16px; padding: 12px 30px; z-index: 30;
+      background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
+      font-family: var(--mono); color: var(--ink-dim);
+      font-size: 10px; letter-spacing: 0.14em;
+    }
+    .bot__kicker { color: var(--accent); font-weight: 700; }
+    .bot__hint { color: var(--ink-soft); }
+    .bot__hint kbd { font-family: var(--mono); padding: 1px 5px; border: 1px solid var(--ink-dim); border-radius: 2px; color: var(--ink); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ripple { animation: none !important; opacity: 0; }
+    }
+  </style>
+</head>
+<body data-mode="walk">
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / DRUM VISUALIZER</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+    <div class="top__bpm"><span id="bpm-val">—</span><small>BPM</small></div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="drum" id="drum"></div>
+  </main>
+
+  <p class="mode-label" id="mode-label">walk<small>—</small></p>
+
+  <footer class="bot">
+    <span class="bot__kicker">SELF-PLAYING</span>
+    <span class="bot__hint">5 modes cycling on a 90s loop · tap anywhere or press <kbd>SPACE</kbd> to add a green ring · <kbd>F</kbd> for fullscreen</span>
+  </footer>
+
+  <script is:inline>
+    (function () {
+      var stage = document.getElementById('stage');
+      var drum = document.getElementById('drum');
+      var bpmEl = document.getElementById('bpm-val');
+      var modeLabelEl = document.getElementById('mode-label');
+
+      // ---- Modes (bpm + label + body data attribute) ---------------------
+      var MODES = [
+        { slug: 'heartbeat', bpm: 60,  label: 'HEARTBEAT', sub: 'one sixty per minute, steady' },
+        { slug: 'walk',      bpm: 88,  label: 'WALK',      sub: 'an unrushed pace down a long hall' },
+        { slug: 'train',     bpm: 120, label: 'TRAIN',     sub: 'a freight rolling through the night' },
+        { slug: 'run',       bpm: 144, label: 'RUN',       sub: 'a runner on the second mile' },
+        { slug: 'sprint',    bpm: 168, label: 'SPRINT',    sub: 'the last hundred meters' },
+      ];
+      var currentMode = 1;  // start on walk
+      var modeStartedAt = Date.now();
+      var MODE_DURATION_MS = 18_000;
+
+      function applyMode() {
+        var m = MODES[currentMode];
+        document.body.setAttribute('data-mode', m.slug);
+        bpmEl.textContent = m.bpm;
+        modeLabelEl.innerHTML = m.label + '<small>' + m.sub + '</small>';
+        modeStartedAt = Date.now();
+      }
+      applyMode();
+
+      // ---- Audio ---------------------------------------------------------
+      var audioCtx = null;
+      var muted = false;
+      function ensureCtx() {
+        if (!audioCtx) {
+          try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          try { audioCtx.resume(); } catch (e) {}
+        }
+      }
+      function playKick() {
+        if (muted || !audioCtx) return;
+        var t = audioCtx.currentTime;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(140, t);
+        osc.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+        gain.gain.setValueAtTime(0.42, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(t); osc.stop(t + 0.25);
+      }
+      function playSnare() {
+        if (muted || !audioCtx) return;
+        var t = audioCtx.currentTime;
+        var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.16, audioCtx.sampleRate);
+        var data = buf.getChannelData(0);
+        for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        var src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        var hi = audioCtx.createBiquadFilter();
+        hi.type = 'highpass'; hi.frequency.value = 1200;
+        var gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.28, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+        src.connect(hi).connect(gain).connect(audioCtx.destination);
+        src.start(t);
+      }
+      function playHat() {
+        if (muted || !audioCtx) return;
+        var t = audioCtx.currentTime;
+        var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+        var data = buf.getChannelData(0);
+        for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        var src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        var hi = audioCtx.createBiquadFilter();
+        hi.type = 'highpass'; hi.frequency.value = 6500;
+        var gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.14, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        src.connect(hi).connect(gain).connect(audioCtx.destination);
+        src.start(t);
+      }
+      function playChime() {
+        if (muted || !audioCtx) return;
+        var t = audioCtx.currentTime;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, t);
+        gain.gain.setValueAtTime(0.16, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(t); osc.stop(t + 0.42);
+      }
+
+      // ---- Visuals -------------------------------------------------------
+      function pulse(kind) {
+        drum.setAttribute('data-pulse', kind);
+        clearTimeout(pulse._t);
+        pulse._t = setTimeout(function () { drum.removeAttribute('data-pulse'); }, 90);
+      }
+      function ripple(kind) {
+        var r = document.createElement('div');
+        r.className = 'ripple ripple--' + kind;
+        stage.appendChild(r);
+        setTimeout(function () { r.remove(); }, 2200);
+      }
+
+      // ---- Generative drum loop -----------------------------------------
+      var beatNum = 0;
+      function step() {
+        var m = MODES[currentMode];
+        var beatMs = (60 / m.bpm) * 1000;
+        // Beat structure: 4/4 time
+        // beat 0: kick + ripple
+        // beat 1: hat
+        // beat 2: snare + ripple
+        // beat 3: hat
+        var phase = beatNum % 4;
+        if (phase === 0) { playKick(); pulse('kick'); ripple('kick'); }
+        else if (phase === 1) { playHat(); ripple('hat'); }
+        else if (phase === 2) { playSnare(); pulse('snare'); ripple('snare'); }
+        else { playHat(); ripple('hat'); }
+        beatNum++;
+
+        // Cycle through modes every MODE_DURATION_MS
+        if (Date.now() - modeStartedAt > MODE_DURATION_MS) {
+          currentMode = (currentMode + 1) % MODES.length;
+          applyMode();
+          beatNum = 0;
+        }
+
+        setTimeout(step, beatMs);
+      }
+      // Start once the user interacts (audio gesture requirement)
+      function startLoop() {
+        ensureCtx();
+        if (!startLoop._started) {
+          startLoop._started = true;
+          step();
+        }
+      }
+
+      // ---- User interaction: tap adds a green ring + chime --------------
+      function userBeat() {
+        ensureCtx();
+        playChime();
+        ripple('user');
+        // Pulse the drum slightly differently
+        drum.setAttribute('data-pulse', 'snare');
+        clearTimeout(userBeat._t);
+        userBeat._t = setTimeout(function () { drum.removeAttribute('data-pulse'); }, 120);
+      }
+
+      stage.addEventListener('click', function (e) {
+        // Don't capture clicks on top bar buttons / links
+        if (e.target.closest('.top, .top__back, .top__fs, .bot')) return;
+        startLoop();
+        userBeat();
+      });
+      stage.addEventListener('touchstart', function (e) {
+        if (e.target.closest('.top, .top__back, .top__fs, .bot')) return;
+        startLoop();
+        userBeat();
+      }, { passive: true });
+
+      // Auto-kick the loop after 1.5s if no interaction (browsers may allow muted)
+      setTimeout(startLoop, 1500);
+
+      // ---- Fullscreen wiring (same pattern as other shows) --------------
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) {
+        if (ev.key === 'f' || ev.key === 'F') { inFs() ? exit() : enter(); }
+        if (ev.key === ' ' || ev.code === 'Space') { ev.preventDefault(); startLoop(); userBeat(); }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -13,8 +13,11 @@
  */
 
 import contracts from '../data/contracts.json';
+import { connectKukai, tezosClient } from './tezos';
 
-export type Network = 'mainnet' | 'ghostnet';
+export type Network = 'mainnet' | 'ghostnet' | 'shadownet';
+
+const PASSPORT_STAMP_MAX_ID = 23;
 
 export function visitNounsAddress(network: Network): string {
   return (contracts as any)?.visit_nouns?.[network] ?? '';
@@ -24,8 +27,20 @@ export function hasVisitNounsContract(network: Network = 'mainnet'): boolean {
   return visitNounsAddress(network).startsWith('KT1');
 }
 
+export function passportStampsAddress(network: Network): string {
+  return (contracts as any)?.passport_stamps?.[network] ?? '';
+}
+
+export function hasPassportStampsContract(network: Network = 'mainnet'): boolean {
+  return passportStampsAddress(network).startsWith('KT1');
+}
+
 export function visitNounsMintPriceMutez(): number {
   return Number((contracts as any)?.visit_nouns?.mintPriceMutez ?? 0);
+}
+
+export function passportStampsMintPriceMutez(): number {
+  return Number((contracts as any)?.passport_stamps?.mintPriceMutez ?? 0);
 }
 
 /**
@@ -69,33 +84,16 @@ export async function mintVisitNoun(
   if (!Number.isFinite(nounId) || nounId < 0 || nounId > 1199) {
     return { ok: false, reason: 'invalid-noun-id' };
   }
-
-  // Lazy-load Taquito + BeaconWallet — same split-bundle pattern as /collect.
-  const { TezosToolkit } = await import('@taquito/taquito');
-  const { BeaconWallet } = await import('@taquito/beacon-wallet');
-
-  const rpcUrl = network === 'mainnet'
-    ? 'https://mainnet.api.tez.ie'
-    : 'https://ghostnet.tezos.ecadinfra.com';
-
-  const tezos = new TezosToolkit(rpcUrl);
-  const wallet = new BeaconWallet({
-    name: 'PointCast',
-    preferredNetwork: network as any,
-  });
-  tezos.setWalletProvider(wallet);
-
-  // Ensure a session on the right network.
-  const existing = await wallet.client.getActiveAccount();
-  if (!existing || (existing as any).network?.type !== network) {
-    try { await wallet.clearActiveAccount(); } catch {}
-    await wallet.client.requestPermissions({ network: { type: network as any } });
+  if (network !== 'mainnet') {
+    return { ok: false, reason: 'unsupported-network' };
   }
 
   const priceMutez = visitNounsMintPriceMutez();
-  const contract = await tezos.wallet.at(address);
 
   try {
+    const tezos = await tezosClient();
+    await connectKukai();
+    const contract = await tezos.wallet.at(address);
     const op = await contract.methodsObject
       .mint_noun(nounId)
       .send({
@@ -109,6 +107,60 @@ export async function mintVisitNoun(
       opHash: (op as any).opHash,
       confirmation: op.confirmation(1),
       tzktUrl: `${tzktBase}/${(op as any).opHash}`,
+    };
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (/ABORTED|reject|cancel/i.test(msg)) {
+      return { ok: false, reason: 'user-cancelled' };
+    }
+    if (/NotEnoughBalance|balance/i.test(msg)) {
+      return { ok: false, reason: 'insufficient-balance' };
+    }
+    return { ok: false, reason: msg.slice(0, 200) };
+  }
+}
+
+/**
+ * Call mint_stamp(stampId) on the native Passport Stamps FA2 contract.
+ *
+ * @param stampId  0-23 (P00-P23)
+ * @param network  'mainnet' only for browser Beacon flow
+ * @param context  Optional — stashed client-side only for now
+ */
+export async function mintPassportStamp(
+  stampId: number,
+  network: Network = 'mainnet',
+  _context: MintContext = {},
+): Promise<MintResult> {
+  const address = passportStampsAddress(network);
+  if (!address.startsWith('KT1')) {
+    return { ok: false, reason: 'not-deployed' };
+  }
+  if (!Number.isFinite(stampId) || stampId < 0 || stampId > PASSPORT_STAMP_MAX_ID) {
+    return { ok: false, reason: 'invalid-stamp-id' };
+  }
+  if (network !== 'mainnet') {
+    return { ok: false, reason: 'unsupported-network' };
+  }
+
+  const priceMutez = passportStampsMintPriceMutez();
+
+  try {
+    const tezos = await tezosClient();
+    await connectKukai();
+    const contract = await tezos.wallet.at(address);
+    const op = await contract.methodsObject
+      .mint_stamp(stampId)
+      .send({
+        amount: priceMutez,
+        mutez: true,
+      });
+
+    return {
+      ok: true,
+      opHash: (op as any).opHash,
+      confirmation: op.confirmation(1),
+      tzktUrl: `https://tzkt.io/${(op as any).opHash}`,
     };
   } catch (err: any) {
     const msg = err?.message || String(err);

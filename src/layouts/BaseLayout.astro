@@ -1,6 +1,7 @@
 ---
 import Footer from '../components/Footer.astro';
-import CoNavigator from '../components/CoNavigator.astro';
+import CoNavHUD from '../components/CoNavHUD.astro';
+import WebMCPTools from '../components/WebMCPTools.astro';
 import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
 
@@ -8,6 +9,13 @@ interface Props {
   title: string;
   description?: string;
   image?: string;
+  /**
+   * SEO: override the computed canonical URL. Use when a page is a legacy
+   * or alternate rendering of content whose permanent home is elsewhere
+   * (e.g. /posts/seeing-the-future-0205 → /b/0205). Must be an absolute
+   * URL. If omitted, the current request URL is used.
+   */
+  canonical?: string;
   hideNav?: boolean;
   /**
    * Opt-in Farcaster Frame metadata. When provided, extra <meta> tags
@@ -26,18 +34,27 @@ interface Props {
 
 const {
   title,
-  description = 'Mike Hoydich & Claude Cowork Publishings — articles, projects, art, and essays born from human-AI collaboration.',
+  // SEO: keep parity with BlockLayout's default so legacy pages don't
+  // ship a stale / off-topic description in SERPs. Page-specific
+  // descriptions passed as prop always take precedence.
+  description = 'A living broadcast from El Segundo — dispatches, faucets, visits, and mints on Tezos. Every piece of content is a Block.',
   // Versioned filename busts iMessage's aggressive LinkPresentation cache —
   // any client that previously cached the old og-default.png treats this as
   // a different URL and refetches. Bump the suffix when we change the art.
   image = '/images/og-home-v3.png',
+  canonical,
   hideNav = false,
   frame = undefined,
 } = Astro.props;
 
-const siteTitle = title === 'Home' ? 'PointCast' : `${title} | PointCast`;
+// SEO: em-dash separator matches BlockLayout so SERP titles read
+// consistently across v1 + v2 pages. Was " | PointCast" on legacy pages.
+const siteTitle = title === 'Home' ? 'PointCast' : `${title} — PointCast`;
 const siteBase = Astro.site || 'https://pointcast.xyz';
-const canonicalURL = new URL(Astro.url.pathname, siteBase);
+// SEO: when `canonical` is passed, use it verbatim so legacy content
+// (/posts/*) can defer to its permanent block URL. Falls back to the
+// current request URL otherwise.
+const canonicalURL = canonical ?? new URL(Astro.url.pathname, siteBase).href;
 const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
 ---
 
@@ -45,9 +62,12 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Mobile viewport — see BlockLayout for full rationale. Prevents
+         iOS auto-shrink when a child overflows + honors the notch. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
     <!-- Mood persistence — read pc:mood from localStorage BEFORE paint
          so the page renders in the visitor's chosen mood from the first
          frame, no flicker. Per Mike 2026-04-20 13:55 PT: "rolling thru
@@ -63,6 +83,11 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
     <meta name="theme-color" content="#f5efe4" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#12110e" media="(prefers-color-scheme: dark)" />
     <link rel="canonical" href={canonicalURL} />
+    {/* SEO: parity with BlockLayout — declare en-US as the primary
+        language and x-default for crawlers that expect a hreflang hint.
+        All v1/legacy pages wrapping BaseLayout now carry these. */}
+    <link rel="alternate" hreflang="en-US" href={canonicalURL} />
+    <link rel="alternate" hreflang="x-default" href={canonicalURL} />
 
     <!-- Open Graph — explicit dimensions + type + secure_url dramatically
          improve unfurl reliability in iMessage (Apple's LinkPresentation
@@ -117,7 +142,17 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
 
     <title>{siteTitle}</title>
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Favicon — SVG broadcast dish (vector, modern browsers) + raster
+         ICO/PNG fallbacks for Safari, iOS home-screen, and older Chrome.
+         All rasterized from public/favicon.svg via scripts/rasterize-
+         favicon.mjs (v2 2026-04-20 redesign — pure vector dish, no
+         emoji, no red tones). -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#e89a2d" />
     <link rel="alternate" type="application/rss+xml" title="PointCast" href="/rss.xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
@@ -207,6 +242,19 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
     </main>
 
     <Footer />
-    <CoNavigator />
+    <CoNavHUD />
+    <WebMCPTools />
+    {/* Service worker — shared code path with BlockLayout. Offline
+        fallback, pre-cache for the nav spine, stale-while-revalidate
+        on /b/* and /c/*. See public/sw.js. */}
+    <script is:inline>
+      if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.pathname.startsWith('/sparrow/')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
+            console.warn('[pc-sw] register failed', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

@@ -1,0 +1,446 @@
+---
+/**
+ * /blocks — canonical "what is a Block" reference page.
+ *
+ * This is referenced from /manifesto, /glossary, README.md, BLOCKS.md,
+ * llms.txt, and every agent surface. The concept is the primitive of
+ * the entire site; putting it on one clean /blocks URL (vs buried in
+ * BLOCKS.md on GitHub) gives Google + LLMs a canonical anchor.
+ *
+ * Target keywords: "what is a block pointcast", "block schema", "pointcast
+ * architecture", "agent-native content primitive".
+ *
+ * Schema: TechArticle + DefinedTerm + BreadcrumbList + a live ItemList
+ * showing a sampling of real blocks.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS, CHANNEL_LIST } from '../lib/channels';
+import { getCollection } from 'astro:content';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+const blockCount = blocks.length;
+
+// Sample: one recent block per type so visitors can see the shape variety.
+const TYPES = ['READ', 'NOTE', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'VISIT', 'LINK'] as const;
+const samples = TYPES.map((t) => blocks.find((b) => b.data.type === t)).filter(Boolean).slice(0, 8) as typeof blocks;
+
+// Pretty-printed canonical JSON shape for the page body.
+const exampleJson = `{
+  "id": "0205",              // monotonic, 4-digit, immutable
+  "channel": "FD",           // one of 9 channel codes
+  "type": "READ",            // one of 8 type codes
+  "title": "The front door is agentic",
+  "dek": "Atlas, Comet, Dia, Claude-in-Chrome...",
+  "body": "Six months ago the browser was a neutral window...",
+  "timestamp": "2026-04-14T09:00:00-08:00",
+  "size": "3x2",             // grid span on home
+  "external": { "url": "..." },  // optional
+  "edition": { ... },        // only on MINT / FAUCET
+  "media": { "beats": [...] },   // only on LISTEN / WATCH
+  "meta": {
+    "format": "howto",       // optional — drives HowTo schema
+    "legacyPath": "...",
+    "series": "seeing-the-future"
+  }
+}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': 'https://pointcast.xyz/blocks',
+      headline: 'Blocks — the PointCast content primitive',
+      name: 'Blocks — the PointCast content primitive',
+      description: 'Every piece of content on PointCast is a Block — a stable JSON schema with an immutable monotonic ID, one of 9 channels, and one of 8 types. This page is the canonical reference.',
+      url: 'https://pointcast.xyz/blocks',
+      image: 'https://pointcast.xyz/images/og-home-v3.png',
+      author: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person', name: 'Mike Hoydich' },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      datePublished: '2026-04-21',
+      dateModified: '2026-04-21',
+      inLanguage: 'en-US',
+      mainEntityOfPage: 'https://pointcast.xyz/blocks',
+      keywords: 'Block, PointCast, content primitive, agent-native schema, permalink, CC0',
+      articleSection: 'Architecture',
+    },
+    {
+      '@type': 'DefinedTerm',
+      '@id': 'https://pointcast.xyz/blocks#block',
+      name: 'Block',
+      description: 'A Block is the atomic content primitive on PointCast — a stable JSON schema with a monotonic zero-padded ID, one of 9 channel values, and one of 8 type values. Blocks live at immutable permalinks /b/{id} and are dual-published as both HTML and JSON.',
+      inDefinedTermSet: 'https://pointcast.xyz/glossary#terms',
+    },
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/blocks#examples',
+      numberOfItems: samples.length,
+      itemListElement: samples.map((b, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        url: `https://pointcast.xyz/b/${b.data.id}`,
+        name: `${b.data.type} · ${b.data.title}`,
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/blocks#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Blocks', item: 'https://pointcast.xyz/blocks' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Blocks — the content primitive"
+  description="Every piece of content on PointCast is a Block — a stable JSON schema with an immutable monotonic ID, one of 9 channels, and one of 8 types. Canonical reference page."
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Blocks</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">ARCHITECTURE · THE PRIMITIVE · {blockCount} SHIPPED</p>
+      <h1 class="display">Blocks.</h1>
+      <p class="dek">
+        Every piece of content on PointCast is a <strong>Block</strong> —
+        a stable JSON schema with an immutable monotonic ID, one of 9
+        channels, and one of 8 types. Blocks live at permanent /b/{'{id}'}
+        URLs and are dual-published as both human HTML and machine-readable
+        JSON. This page is the canonical reference.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="shape">The JSON shape</h2>
+      <pre class="code"><code>{exampleJson}</code></pre>
+      <p>
+        Canonical schema lives in <code>src/content.config.ts</code> (Zod)
+        with full documentation at
+        <a href="https://github.com/MikeHoydich/pointcast/blob/main/BLOCKS.md" target="_blank" rel="noopener">BLOCKS.md</a>
+        in the repo. Every Block stored on disk at
+        <code>src/content/blocks/{'{id}'}.json</code>.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="channels">The 9 channels</h2>
+      <p>A Block belongs to exactly one channel. Channels answer "what is this about?"</p>
+      <ul class="channels">
+        {CHANNEL_LIST.map((c) => (
+          <li class="channel" style={`--ch-600: ${c.color600}; --ch-800: ${c.color800}; --ch-50: ${c.color50};`}>
+            <a href={`/c/${c.slug}`}>
+              <span class="channel__code mono">CH.{c.code}</span>
+              <span class="channel__name">{c.name}</span>
+              <span class="channel__purpose">{c.purpose}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="types">The 8 types</h2>
+      <p>A Block has exactly one type. Types answer "what shape is this?"</p>
+      <dl class="types">
+        <dt>READ</dt>      <dd>Long-form text (dispatch, essay). Fires BlogPosting schema with articleBody + wordCount + timeRequired.</dd>
+        <dt>LISTEN</dt>    <dd>Audio embed (Spotify, SoundCloud). Fires MusicRecording schema.</dd>
+        <dt>WATCH</dt>     <dd>Video embed with runtime. Fires VideoObject schema. Optional <code>media.beats</code> array enables /yee rhythm-game overlay.</dd>
+        <dt>MINT</dt>      <dd>Paid edition on Tezos FA2. Fires Product + Offer schema.</dd>
+        <dt>FAUCET</dt>    <dd>Free daily claim on Tezos. Fires Product + Offer (price: 0).</dd>
+        <dt>NOTE</dt>      <dd>Short observation, tweet-sized. Fires SocialMediaPosting schema.</dd>
+        <dt>VISIT</dt>     <dd>Visit-log entry (human or AI agent). Fires BlogPosting with articleSection: "Visit log".</dd>
+        <dt>LINK</dt>      <dd>External link with context. Fires CreativeWork schema.</dd>
+      </dl>
+    </section>
+
+    <section class="section">
+      <h2 id="examples">One block per type</h2>
+      <p>Live samples from the archive — click through to see each type rendered with its per-type schema.</p>
+      <ul class="samples">
+        {samples.map((b) => {
+          const ch = CHANNELS[b.data.channel];
+          return (
+            <li class="sample" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800};`}>
+              <a href={`/b/${b.data.id}`}>
+                <span class="sample__type mono">{b.data.type}</span>
+                <span class="sample__id mono">№ {b.data.id}</span>
+                <span class="sample__ch mono">CH.{b.data.channel}</span>
+                <span class="sample__title">{b.data.title}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="permalinks">Permalinks are permanent</h2>
+      <p>
+        Block IDs are monotonic (always increasing), 4-digit zero-padded,
+        and <em>never</em> reused. A retired block 404s rather than being
+        renumbered — which means every <code>/b/{'{id}'}</code> URL is
+        safe to bookmark, cite, or link from anywhere, forever.
+      </p>
+      <p>
+        This is a design choice in favor of backlink durability. Most
+        content systems break permalinks when slugs change or posts move;
+        PointCast's permalink shape is divorced from the title, so the URL
+        survives editorial renames and re-slugs. Cite <code>/b/{'{id}'}</code>,
+        always.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="dual">Every Block has a JSON twin</h2>
+      <p>Pattern: if a human surface renders it, a machine surface can fetch it.</p>
+      <ul class="dual">
+        <li><code>/b/{'{id}'}</code> → <code>/b/{'{id}'}.json</code></li>
+        <li><code>/c/{'{slug}'}</code> → <code>/c/{'{slug}'}.json</code> + <code>/c/{'{slug}'}.rss</code></li>
+        <li><code>/archive</code> → <code>/archive.json</code></li>
+        <li><a href="/blocks.json"><code>/blocks.json</code></a> — full archive in one response</li>
+        <li><a href="/feed.json"><code>/feed.json</code></a> — JSON Feed 1.1</li>
+        <li><a href="/feed.xml"><code>/feed.xml</code></a> — RSS 2.0</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="agents">For agents</h2>
+      <p>
+        Blocks are designed to be read by LLMs as often as by humans.
+        Every Block carries per-type JSON-LD schema; the full discovery
+        manifest lives at <a href="/agents.json"><code>/agents.json</code></a>.
+        For the rest of the agent-native surface set — llms.txt, stripped
+        HTML middleware, Content-Signals, .well-known endpoints, and
+        Farcaster Frames — see <a href="/agent-native">/agent-native</a>.
+      </p>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">RELATED</p>
+      <ul>
+        <li><a href="/archive">/archive — every block, filterable</a></li>
+        <li><a href="/manifesto">/manifesto — the 14-question canonical</a></li>
+        <li><a href="/glossary">/glossary — 24 stable-anchor terms</a></li>
+        <li><a href="/agent-native">/agent-native — the agent-native surface set</a></li>
+        <li><a href="/for-agents">/for-agents — machine discovery manifest walkthrough</a></li>
+        <li><a href="https://github.com/MikeHoydich/pointcast/blob/main/BLOCKS.md" target="_blank" rel="noopener">BLOCKS.md (full spec) ↗</a></li>
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 820px; margin: 0 auto; padding: 18px 18px 80px; }
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: 40px;
+    font-weight: 500;
+    line-height: 1.05;
+    margin: 0 0 12px;
+  }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 17px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 64ch; }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0 0 10px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--pc-ink);
+    max-width: 64ch;
+    margin: 0 0 12px;
+  }
+  .section a { color: var(--pc-accent); text-decoration: underline; }
+  .section strong { font-weight: 500; }
+  .section em { font-style: italic; }
+  .section code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #f4f2ed;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .code {
+    margin: 0 0 12px;
+    padding: 14px 16px;
+    background: #12110E;
+    color: #eef4fa;
+    font-family: var(--pc-font-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    overflow-x: auto;
+    border-radius: 2px;
+    white-space: pre;
+  }
+  .code code { background: transparent; padding: 0; color: inherit; }
+
+  .channels {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 8px;
+  }
+  .channel { border: 1px solid var(--ch-600); border-radius: 2px; background: var(--ch-50); }
+  .channel a {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    grid-template-rows: auto auto;
+    gap: 4px 10px;
+    padding: 10px 12px;
+    text-decoration: none;
+  }
+  .channel:hover { background: color-mix(in oklab, var(--ch-600) 15%, #fff); }
+  .channel__code { grid-row: 1 / span 2; align-self: center; color: var(--ch-800); font-weight: 500; }
+  .channel__name {
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+  .channel__purpose {
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+    line-height: 1.4;
+  }
+
+  .types {
+    margin: 0 0 12px;
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 4px 14px;
+    padding: 14px;
+    background: #fafaf8;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+  }
+  .types dt {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: var(--pc-ink);
+    padding: 4px 0;
+  }
+  .types dd {
+    margin: 0;
+    padding: 4px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    border-bottom: 1px dashed var(--pc-rule-soft);
+  }
+  .types dt:last-of-type + dd,
+  .types dd:last-child { border-bottom: 0; }
+  @media (max-width: 600px) {
+    .types { grid-template-columns: 1fr; gap: 0; }
+    .types dt { padding-top: 8px; }
+    .types dd { padding-bottom: 8px; margin-bottom: 4px; }
+  }
+
+  .samples {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .sample { border: 1px solid var(--pc-rule); border-radius: 2px; background: #fff; }
+  .sample a {
+    display: grid;
+    grid-template-columns: 60px 60px 60px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    text-decoration: none;
+  }
+  .sample:hover { border-color: var(--ch-600); background: #fafaf8; }
+  .sample__type { color: var(--pc-ink-muted); }
+  .sample__id { color: var(--pc-ink-muted); }
+  .sample__ch { color: var(--ch-800); font-weight: 500; }
+  .sample__title {
+    font-family: var(--pc-font-sans);
+    font-size: 14px;
+    color: var(--pc-ink);
+    line-height: 1.4;
+  }
+  @media (max-width: 600px) {
+    .sample a { grid-template-columns: 50px 50px 50px 1fr; gap: 6px; font-size: 12px; padding: 8px; }
+    .sample__title { font-size: 13px; grid-column: 1 / -1; padding-top: 4px; }
+  }
+
+  .dual {
+    list-style: none;
+    padding: 12px 14px;
+    margin: 0 0 12px;
+    background: #fafaf8;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    display: grid;
+    gap: 4px;
+  }
+  .dual li {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    color: var(--pc-ink);
+  }
+  .dual a { color: var(--pc-accent); }
+
+  .related {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

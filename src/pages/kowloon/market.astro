@@ -1,0 +1,491 @@
+---
+/**
+ * /kowloon/market — FA2 ask board for Kowloon + Visit Nouns.
+ *
+ * Reads live asks from tzkt, filters to Kowloon + allowlisted
+ * collections, renders a grid. Sellers connect + list + cancel;
+ * buyers connect + fulfill.
+ *
+ * Marketplace contract: contracts/marketplace.py
+ * Client helpers:       src/lib/kowloon-market.ts
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import contracts from '../../data/contracts.json';
+
+const marketKt1 = (contracts as any)?.marketplace?.mainnet ?? '';
+const pastryKt1 = (contracts as any)?.kowloon_pastry?.mainnet ?? '';
+const achvKt1 = (contracts as any)?.kowloon_achievements?.mainnet ?? '';
+const nounsKt1 = (contracts as any)?.visit_nouns?.mainnet ?? '';
+
+const PASTRY_NAMES: Record<number, string> = {
+  0: '菠蘿包 Pineapple Bun', 1: '蛋撻 Egg Tart',
+  2: '叉燒包 Char Siu Bao', 3: '馬拉糕 Malai Gao',
+  4: '老婆餅 Wife Cake',     5: '月餅 Mooncake',
+};
+---
+<BaseLayout
+  title="Kowloon Market — FA2 asks"
+  description="Buy, sell, and browse Kowloon Pastry NFTs, Achievement receipts, and Visit Nouns on the PointCast marketplace. Generic FA2 ask board, one Tezos contract, CC0 art."
+>
+  <main class="kmkt">
+    <div class="rain"></div><div class="crt"></div>
+
+    <section class="hero">
+      <div class="kicker">KOWLOON · MARKETPLACE · FA2 ASK BOARD</div>
+      <h1>市場</h1>
+      <p class="tagline">
+        一個合約,三個收藏系列。
+        <span class="en">One contract. Three collections. Zero intermediaries.</span>
+      </p>
+      <p class="lede">
+        Every Kowloon NFT — Pastry (1000 bps / 10% royalty), Achievement
+        Receipts (0%), Visit Nouns (20%) — trades through
+        <a href="https://github.com/pointcast/pointcast/blob/main/contracts/marketplace.py" target="_blank">one Tezos marketplace contract</a>.
+        Platform fee 2.5%, everything else to creator + seller. No off-chain
+        orderbook. All asks read live from tzkt.
+      </p>
+    </section>
+
+    <section class="status">
+      <div class="status-row">
+        <div class="status-cell">
+          <div class="sc-label">MARKETPLACE</div>
+          <div class="sc-value"><code id="market-kt">{marketKt1 || '— not deployed —'}</code></div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">WALLET</div>
+          <div class="sc-value" id="wallet-state">— not connected —</div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">PLATFORM FEE</div>
+          <div class="sc-value"><span style="color:var(--kmkt-gold);text-shadow:0 0 5px var(--kmkt-gold)">2.5%</span> · royalty variable per collection</div>
+        </div>
+      </div>
+      <div class="cta-row">
+        <button class="cta cta-cyan" id="connect-btn">▶ 連 Kukai · CONNECT WALLET</button>
+        <button class="cta cta-muted" id="signout-btn" style="display:none">✕ Disconnect</button>
+      </div>
+      <div class="toast" id="toast"></div>
+    </section>
+
+    <section class="filters">
+      <div class="section-tag">LIVE ASKS · 上架中</div>
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter={pastryKt1}>🥮 Kowloon Pastry</button>
+        <button class="filter-btn" data-filter={achvKt1}>🏆 Achievements</button>
+        <button class="filter-btn" data-filter={nounsKt1}>👁️ Visit Nouns</button>
+      </div>
+      <div id="listings" class="listings">
+        <div class="empty-state">
+          Loading asks from tzkt…
+        </div>
+      </div>
+    </section>
+
+    <section class="list-panel">
+      <div class="section-tag">LIST AN ITEM · 上架</div>
+      <p class="list-lede">
+        Sellers: pick a collection, pick a token ID you own, set a price in tez. The marketplace becomes an FA2 operator on your wallet (one-time per token), then the ask is open to anyone. You can cancel or update anytime.
+      </p>
+      <div class="list-form">
+        <div class="list-field">
+          <label>Collection</label>
+          <select id="list-collection">
+            <option value={pastryKt1}>🥮 Kowloon Pastry · 10% royalty</option>
+            <option value={achvKt1}>🏆 Achievement Receipts · 0% royalty</option>
+            <option value={nounsKt1}>👁️ Visit Nouns · 20% royalty</option>
+          </select>
+        </div>
+        <div class="list-field">
+          <label>Token ID</label>
+          <input type="number" id="list-tokenid" min="0" max="9999" value="0" />
+        </div>
+        <div class="list-field">
+          <label>Amount</label>
+          <input type="number" id="list-amount" min="1" max="999" value="1" />
+        </div>
+        <div class="list-field">
+          <label>Price (tez)</label>
+          <input type="number" id="list-price" min="0" max="9999" step="0.1" value="1" />
+        </div>
+        <div class="list-actions">
+          <button class="cta cta-gold" id="approve-btn">1 · Approve operator</button>
+          <button class="cta cta-gold" id="list-btn" disabled>2 · List ask</button>
+        </div>
+      </div>
+    </section>
+
+    <p class="back-link"><a href="/kowloon">← 返回 KOWLOON HUB</a> · <a href="/kowloon/tezos">連錢包 · CLAIM →</a></p>
+  </main>
+
+<script type="module">
+  const USER_KEY = 'kowloon-user-v5';
+  const COLLECTIONS = {};   // populated at boot
+  const PASTRY_NAMES = {
+    0: '菠蘿包', 1: '蛋撻', 2: '叉燒包',
+    3: '馬拉糕', 4: '老婆餅', 5: '月餅',
+  };
+  const PASTRY_EMOJI = ['🍞','🥧','🥟','🧁','🍪','🥮'];
+  const ACHV_LABELS = {
+    0:'First Bake',1:'Bullseye',2:'VIP Done',3:'Boss Done',4:'Combo 10',
+    5:'Combo 20',6:'Cash Stash',7:'Bribe Lord',8:'Shop Goer',9:'Four Ovens',
+    10:'Daily Shifter',11:'Wallet Connect',12:'Bun Collector',13:'Theme Chameleon',
+    14:'Developed Gluten',15:"Auntie's Hands",16:'Regular',17:'Five Stars',
+    18:'All Hands',19:'Outran Chan',20:'Vendetta Done',21:'Right Hand',
+    22:"No Man's Land",23:'Sidejob Done',24:'Everyone Knows',25:'Local Hero',
+    26:'Typhoon Hero',27:'Storm Drop',28:'Ch7 Started',29:'Truth Kept',
+    30:'Truth Uncovered',31:'Sepia Runner',32:'Typhoon Survivor',33:'Triad Paid',
+    34:'Night 5',35:'Night 10',
+  };
+
+  const $ = (s) => document.querySelector(s);
+  const walletStateEl = $('#wallet-state');
+  const connectBtn = $('#connect-btn');
+  const signoutBtn = $('#signout-btn');
+  const listEl = $('#listings');
+  const toastEl = $('#toast');
+  const approveBtn = $('#approve-btn');
+  const listBtn = $('#list-btn');
+  const marketKt = () => document.getElementById('market-kt').textContent.trim();
+
+  let activeAddress = null;
+  let clients = null;
+  let currentFilter = 'all';
+
+  const toast = (msg, kind='info') => {
+    toastEl.className = 'toast show ' + kind;
+    toastEl.textContent = msg;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toastEl.classList.remove('show'), 4500);
+  };
+  const shortAddr = (a) => a ? a.slice(0,5)+'…'+a.slice(-4) : '';
+
+  async function getClients() {
+    if (clients) return clients;
+    const [taquito, beacon] = await Promise.all([
+      import('@taquito/taquito'), import('@taquito/beacon-wallet')
+    ]);
+    const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+    const wallet = new beacon.BeaconWallet({
+      name: 'Kowloon Market', network: { type: 'mainnet' }, preferredNetwork: 'mainnet'
+    });
+    tezos.setWalletProvider(wallet);
+    clients = { tezos, wallet };
+    return clients;
+  }
+
+  async function connect() {
+    try {
+      const { wallet } = await getClients();
+      const existing = await wallet.client.getActiveAccount();
+      if (existing) { onConnected(existing.address); return; }
+      await wallet.requestPermissions();
+      const acct = await wallet.client.getActiveAccount();
+      if (acct?.address) onConnected(acct.address);
+    } catch (e) { toast('Connect failed: is Kukai unlocked?', 'err'); }
+  }
+
+  function onConnected(addr) {
+    activeAddress = addr;
+    walletStateEl.textContent = shortAddr(addr);
+    walletStateEl.classList.add('connected');
+    connectBtn.style.display = 'none';
+    signoutBtn.style.display = 'inline-block';
+    try { localStorage.setItem(USER_KEY, JSON.stringify({ type: 'tezos', name: addr })); } catch {}
+    renderListings();   // re-render so "cancel" buttons show on my own asks
+  }
+
+  async function disconnect() {
+    try { const { wallet } = await getClients(); await wallet.clearActiveAccount(); } catch {}
+    activeAddress = null;
+    walletStateEl.textContent = '— not connected —';
+    walletStateEl.classList.remove('connected');
+    connectBtn.style.display = 'inline-block';
+    signoutBtn.style.display = 'none';
+    try { localStorage.removeItem(USER_KEY); } catch {}
+    renderListings();
+  }
+
+  function formatTokenDescription(fa2, tokenId) {
+    // Collection-aware labels for the 3 Kowloon contracts.
+    const pastry = document.querySelector('[data-filter]').parentElement?.querySelectorAll('[data-filter]')[1]?.dataset?.filter;
+    const achv = document.querySelector('[data-filter]').parentElement?.querySelectorAll('[data-filter]')[2]?.dataset?.filter;
+    const nouns = document.querySelector('[data-filter]').parentElement?.querySelectorAll('[data-filter]')[3]?.dataset?.filter;
+    if (fa2 === pastry) return { face: PASTRY_EMOJI[tokenId] || '🥮', name: PASTRY_NAMES[tokenId] || `#${tokenId}`, collection: 'Pastry' };
+    if (fa2 === achv)   return { face: '🏆', name: ACHV_LABELS[tokenId] || `Achievement #${tokenId}`, collection: 'Achievement' };
+    if (fa2 === nouns)  return { face: '👁️', name: `Visit Noun #${tokenId}`, collection: 'Nouns' };
+    return { face: '🎴', name: `#${tokenId}`, collection: 'External' };
+  }
+
+  async function fetchListings() {
+    const kt = marketKt();
+    if (!kt.startsWith('KT1')) {
+      listEl.innerHTML = `<div class="empty-state">
+        Marketplace contract not deployed yet. The ask board will be live the moment <code>${kt}</code> gets replaced with a KT1 in <code>contracts.json</code>.
+      </div>`;
+      return [];
+    }
+    const url = `https://api.tzkt.io/v1/contracts/${kt}/bigmaps/asks/keys?active=true&limit=200`;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return [];
+      const keys = await resp.json();
+      return keys.map((k) => ({
+        askId: Number(k.key),
+        seller: k.value.seller,
+        tokenContract: k.value.token_contract,
+        tokenId: Number(k.value.token_id),
+        amount: Number(k.value.amount),
+        priceMutez: Number(k.value.price_mutez),
+        royaltyBps: Number(k.value.royalty_bps),
+        royaltyReceiver: k.value.royalty_receiver,
+      }));
+    } catch { return []; }
+  }
+
+  async function renderListings() {
+    const all = await fetchListings();
+    const filtered = currentFilter === 'all'
+      ? all
+      : all.filter(a => a.tokenContract === currentFilter);
+    if (filtered.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No open asks${currentFilter === 'all' ? '' : ' in this collection'}. Be the first — list below.</div>`;
+      return;
+    }
+    listEl.innerHTML = filtered.map(a => {
+      const info = formatTokenDescription(a.tokenContract, a.tokenId);
+      const priceTez = (a.priceMutez / 1_000_000).toFixed(2);
+      const isMine = activeAddress === a.seller;
+      const royaltyPct = (a.royaltyBps / 100).toFixed(1);
+      return `
+        <div class="listing">
+          <div class="l-face">${info.face}</div>
+          <div class="l-title">
+            <div class="l-name">${info.name}</div>
+            <div class="l-collection">${info.collection} · #${a.tokenId}</div>
+          </div>
+          <div class="l-meta">
+            <div class="l-seller">${shortAddr(a.seller)}${isMine ? ' <span class="mine">· YOU</span>' : ''}</div>
+            <div class="l-royalty">royalty ${royaltyPct}% · fee 2.5%</div>
+          </div>
+          <div class="l-price">
+            <div class="l-amount">${priceTez} <span>ꜩ</span></div>
+            <div class="l-units">${a.amount > 1 ? `${a.amount}× avail` : 'single'}</div>
+          </div>
+          <div class="l-actions">
+            ${isMine
+              ? `<button class="action-btn cancel" data-ask="${a.askId}">Cancel</button>`
+              : `<button class="action-btn buy" data-ask="${a.askId}" data-price="${a.priceMutez}">Buy</button>`}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderListings();
+    });
+  });
+
+  // Action delegation on the list
+  listEl.addEventListener('click', async (e) => {
+    const buyBtn = e.target.closest('.action-btn.buy');
+    const cancelBtn = e.target.closest('.action-btn.cancel');
+    if (buyBtn) {
+      if (!activeAddress) { toast('Connect wallet first.', 'warn'); return; }
+      const askId = Number(buyBtn.dataset.ask);
+      const priceMutez = Number(buyBtn.dataset.price);
+      toast(`Buying ask #${askId} for ${(priceMutez/1_000_000).toFixed(2)} ꜩ…`, 'info');
+      try {
+        const { tezos } = await getClients();
+        const contract = await tezos.wallet.at(marketKt());
+        const op = await contract.methodsObject
+          .fulfill_ask({ ask_id: askId, amount: 1 })
+          .send({ amount: priceMutez, mutez: true });
+        toast(`Sent ${op.opHash.slice(0,10)}… confirming…`, 'info');
+        await op.confirmation();
+        toast('✓ Purchased. Check your wallet.', 'ok');
+        renderListings();
+      } catch (e) {
+        toast('Buy failed: ' + ((e && e.message) || 'unknown'), 'err');
+      }
+    }
+    if (cancelBtn) {
+      if (!activeAddress) { toast('Connect wallet first.', 'warn'); return; }
+      const askId = Number(cancelBtn.dataset.ask);
+      toast(`Cancelling ask #${askId}…`, 'info');
+      try {
+        const { tezos } = await getClients();
+        const contract = await tezos.wallet.at(marketKt());
+        const op = await contract.methodsObject.cancel_ask(askId).send();
+        toast(`Sent ${op.opHash.slice(0,10)}… confirming…`, 'info');
+        await op.confirmation();
+        toast('✓ Cancelled.', 'ok');
+        renderListings();
+      } catch (e) {
+        toast('Cancel failed: ' + ((e && e.message) || 'unknown'), 'err');
+      }
+    }
+  });
+
+  // Listing flow
+  approveBtn.addEventListener('click', async () => {
+    if (!activeAddress) { toast('Connect wallet first.', 'warn'); return; }
+    const fa2 = document.getElementById('list-collection').value;
+    const tokenId = Number(document.getElementById('list-tokenid').value);
+    if (!fa2.startsWith('KT1')) { toast('Collection contract not deployed.', 'warn'); return; }
+    toast('Approving marketplace as operator…', 'info');
+    try {
+      const { tezos } = await getClients();
+      const fa2c = await tezos.wallet.at(fa2);
+      const op = await fa2c.methodsObject.update_operators([
+        { add_operator: { owner: activeAddress, operator: marketKt(), token_id: tokenId } },
+      ]).send();
+      toast(`Approval sent ${op.opHash.slice(0,10)}… confirming…`, 'info');
+      await op.confirmation();
+      toast('✓ Approved. Now list the ask.', 'ok');
+      listBtn.disabled = false;
+    } catch (e) { toast('Approve failed: ' + ((e && e.message) || 'unknown'), 'err'); }
+  });
+
+  listBtn.addEventListener('click', async () => {
+    if (!activeAddress) { toast('Connect wallet first.', 'warn'); return; }
+    const fa2 = document.getElementById('list-collection').value;
+    const tokenId = Number(document.getElementById('list-tokenid').value);
+    const amount = Number(document.getElementById('list-amount').value);
+    const priceTez = Number(document.getElementById('list-price').value);
+    const priceMutez = Math.round(priceTez * 1_000_000);
+    const royaltyMap = {
+      [document.querySelectorAll('.filter-btn')[1].dataset.filter]: { bps: 1000, recv: 'tz1PS4WgbYCKcKnfbfMNSH44JfrnFVhkcKp1' },
+      [document.querySelectorAll('.filter-btn')[2].dataset.filter]: { bps: 0,    recv: 'tz1PS4WgbYCKcKnfbfMNSH44JfrnFVhkcKp1' },
+      [document.querySelectorAll('.filter-btn')[3].dataset.filter]: { bps: 2000, recv: 'tz1PS4WgbYCKcKnfbfMNSH44JfrnFVhkcKp1' },
+    };
+    const royalty = royaltyMap[fa2] || { bps: 0, recv: activeAddress };
+    toast(`Listing ${amount}× #${tokenId} @ ${priceTez} ꜩ…`, 'info');
+    try {
+      const { tezos } = await getClients();
+      const contract = await tezos.wallet.at(marketKt());
+      const op = await contract.methodsObject.list_ask({
+        token_contract: fa2, token_id: tokenId, amount,
+        price_mutez: priceMutez,
+        royalty_bps: royalty.bps,
+        royalty_receiver: royalty.recv,
+      }).send();
+      toast(`Listing sent ${op.opHash.slice(0,10)}… confirming…`, 'info');
+      await op.confirmation();
+      toast('✓ Listed. Refreshing board…', 'ok');
+      listBtn.disabled = true;
+      renderListings();
+    } catch (e) { toast('List failed: ' + ((e && e.message) || 'unknown'), 'err'); }
+  });
+
+  // Wire
+  connectBtn.addEventListener('click', connect);
+  signoutBtn.addEventListener('click', disconnect);
+
+  // Boot
+  (async () => {
+    await renderListings();
+    try {
+      const { wallet } = await getClients();
+      const acct = await wallet.client.getActiveAccount();
+      if (acct?.address) onConnected(acct.address);
+    } catch {}
+  })();
+  setInterval(renderListings, 30000);
+</script>
+
+<style>
+  :root {
+    --kmkt-bg:#0a0314;--kmkt-ink:#e8e3ff;--kmkt-pink:#ff2d95;--kmkt-cyan:#00e0ff;
+    --kmkt-amber:#ffb800;--kmkt-jade:#aaffd0;--kmkt-gold:#ffd54a;--kmkt-blood:#c8102e;
+  }
+  .kmkt { min-height:100vh; background: radial-gradient(ellipse at 20% 10%, rgba(255,45,149,0.16) 0%, transparent 45%), radial-gradient(ellipse at 80% 90%, rgba(255,213,74,0.18) 0%, transparent 45%), var(--kmkt-bg); color:var(--kmkt-ink); font-family:'JetBrains Mono Variable',ui-monospace,monospace; padding:2.5rem 1.4rem 3rem; position:relative; overflow-x:hidden; }
+  .rain, .crt { position:fixed; inset:0; pointer-events:none; }
+  .rain { background-image: repeating-linear-gradient(110deg, transparent 0 8px, rgba(255,255,255,0.03) 8px, rgba(255,255,255,0.07) 9px, transparent 10px); animation:kmkt-rain 0.6s linear infinite; z-index:1; }
+  @keyframes kmkt-rain { from { background-position:0 0 } to { background-position:-40px 80px } }
+  .crt { background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.32) 3px, rgba(0,0,0,0) 4px), radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.8) 100%); z-index:2; mix-blend-mode:multiply; }
+  section, .hero { position:relative; z-index:3; max-width:1080px; margin:0 auto; }
+  .hero { text-align:center; padding:1.5rem 0 2rem; }
+  .kicker { font-size:0.72rem; letter-spacing:0.35em; color:var(--kmkt-gold); text-shadow:0 0 6px var(--kmkt-gold); text-transform:uppercase; margin-bottom:1rem; }
+  .hero h1 { font-family:'Noto Serif HK',serif; font-weight:900; font-size:clamp(4rem, 10vw, 8rem); color:var(--kmkt-gold); text-shadow:0 0 20px var(--kmkt-gold), 0 0 50px rgba(255,213,74,0.4); line-height:0.9; margin:0; }
+  .tagline { font-family:'Noto Serif HK',serif; font-size:1.2rem; color:var(--kmkt-jade); margin:1rem 0 0.5rem; }
+  .tagline .en { display:block; font-size:0.78rem; letter-spacing:0.3em; color:rgba(232,227,255,0.6); margin-top:0.35rem; }
+  .lede { max-width:720px; margin:1rem auto; font-size:0.95rem; line-height:1.6; color:rgba(232,227,255,0.78); }
+  .lede a { color:var(--kmkt-cyan); text-decoration:underline; text-decoration-style:dashed; }
+  .section-tag { font-size:0.72rem; letter-spacing:0.3em; color:var(--kmkt-cyan); text-shadow:0 0 5px var(--kmkt-cyan); text-transform:uppercase; padding:0.5rem 0; border-top:1px dashed rgba(0,224,255,0.3); border-bottom:1px dashed rgba(0,224,255,0.3); margin:1.8rem 0 1rem; }
+
+  /* Status panel (shared with tezos.astro) */
+  .status { padding:1.2rem 1.4rem; border:1px solid rgba(255,213,74,0.4); background:rgba(10,3,20,0.82); box-shadow:0 0 20px rgba(255,213,74,0.15); }
+  .status-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; padding-bottom:0.8rem; border-bottom:1px dashed rgba(232,227,255,0.15); margin-bottom:0.8rem; }
+  .sc-label { font-size:0.6rem; letter-spacing:0.28em; color:var(--kmkt-cyan); text-shadow:0 0 4px var(--kmkt-cyan); margin-bottom:0.3rem; text-transform:uppercase; }
+  .sc-value { font-size:0.9rem; color:var(--kmkt-ink); }
+  .sc-value code { font-size:0.76rem; color:var(--kmkt-gold); text-shadow:0 0 4px var(--kmkt-gold); word-break:break-all; }
+  #wallet-state.connected { color:var(--kmkt-jade); text-shadow:0 0 5px var(--kmkt-jade); font-weight:700; }
+  .cta-row { display:flex; gap:0.7rem; flex-wrap:wrap; justify-content:center; }
+  .cta { padding:0.85rem 1.3rem; font-family:'Noto Serif HK',serif; font-size:1rem; font-weight:700; letter-spacing:0.1em; background:transparent; border:2px solid currentColor; cursor:pointer; transition:all 0.15s; }
+  .cta:disabled { opacity:0.3; cursor:not-allowed; }
+  .cta-cyan { color:var(--kmkt-cyan); text-shadow:0 0 6px var(--kmkt-cyan); box-shadow:0 0 15px rgba(0,224,255,0.3); }
+  .cta-cyan:hover:not(:disabled) { background:var(--kmkt-cyan); color:#0a0314; text-shadow:none; transform:translateY(-2px); }
+  .cta-gold { color:var(--kmkt-gold); text-shadow:0 0 6px var(--kmkt-gold); box-shadow:0 0 15px rgba(255,213,74,0.3); }
+  .cta-gold:hover:not(:disabled) { background:var(--kmkt-gold); color:#0a0314; text-shadow:none; transform:translateY(-2px); }
+  .cta-muted { color:rgba(232,227,255,0.55); border-color:rgba(232,227,255,0.4); box-shadow:none; font-size:0.85rem; }
+  .cta-muted:hover { color:var(--kmkt-pink); border-color:var(--kmkt-pink); }
+  .toast { margin-top:0.8rem; padding:0.5rem 0.9rem; font-size:0.88rem; min-height:1.6rem; opacity:0; transition:opacity 0.2s; border-left:2px solid var(--kmkt-cyan); background:rgba(0,224,255,0.06); }
+  .toast.show { opacity:1; }
+  .toast.ok { border-color:var(--kmkt-jade); color:var(--kmkt-jade); background:rgba(170,255,208,0.06); }
+  .toast.warn { border-color:var(--kmkt-amber); color:var(--kmkt-amber); background:rgba(255,184,0,0.06); }
+  .toast.err { border-color:var(--kmkt-blood); color:var(--kmkt-blood); background:rgba(200,16,46,0.06); }
+
+  /* Filter row */
+  .filter-row { display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .filter-btn { padding:0.4rem 0.85rem; font-family:'Press Start 2P',monospace; font-size:0.58rem; letter-spacing:0.2em; background:transparent; border:1px solid rgba(232,227,255,0.3); color:rgba(232,227,255,0.7); cursor:pointer; transition:all 0.1s; }
+  .filter-btn:hover { border-color:var(--kmkt-gold); color:var(--kmkt-gold); }
+  .filter-btn.active { background:var(--kmkt-gold); color:#0a0314; border-color:var(--kmkt-gold); }
+
+  /* Listings grid */
+  .listings { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:0.8rem; }
+  .empty-state { padding:2rem; text-align:center; color:rgba(232,227,255,0.55); font-size:0.95rem; line-height:1.6; border:1px dashed rgba(232,227,255,0.2); grid-column:1/-1; }
+  .empty-state code { color:var(--kmkt-amber); background:rgba(255,184,0,0.1); padding:0.1em 0.3em; font-size:0.9em; }
+  .listing { display:grid; grid-template-columns:auto 1fr auto; grid-template-rows:auto auto auto; grid-template-areas: "face title price" "face meta price" "face actions actions"; gap:0.4rem 0.8rem; padding:0.9rem 1rem; border:1px solid rgba(255,213,74,0.28); background:rgba(10,3,20,0.75); transition:all 0.15s; }
+  .listing:hover { border-color:var(--kmkt-gold); box-shadow:0 0 18px rgba(255,213,74,0.3); transform:translateY(-2px); }
+  .l-face { grid-area:face; font-size:2.6rem; filter:drop-shadow(0 0 8px var(--kmkt-gold)); align-self:center; }
+  .l-title { grid-area:title; }
+  .l-name { font-family:'Noto Serif HK',serif; font-size:1.1rem; font-weight:700; color:var(--kmkt-gold); text-shadow:0 0 4px var(--kmkt-gold); }
+  .l-collection { font-size:0.65rem; letter-spacing:0.2em; color:var(--kmkt-cyan); text-shadow:0 0 3px var(--kmkt-cyan); text-transform:uppercase; margin-top:0.2rem; }
+  .l-meta { grid-area:meta; font-size:0.72rem; color:rgba(232,227,255,0.55); line-height:1.4; }
+  .l-seller { font-family:'JetBrains Mono Variable',ui-monospace,monospace; }
+  .mine { color:var(--kmkt-jade); text-shadow:0 0 4px var(--kmkt-jade); font-weight:700; }
+  .l-royalty { font-size:0.64rem; color:rgba(232,227,255,0.4); margin-top:0.15rem; }
+  .l-price { grid-area:price; text-align:right; align-self:start; }
+  .l-amount { font-family:'Press Start 2P',monospace; font-size:1rem; color:var(--kmkt-gold); text-shadow:0 0 5px var(--kmkt-gold); }
+  .l-amount span { font-size:0.8em; }
+  .l-units { font-size:0.6rem; letter-spacing:0.2em; color:rgba(232,227,255,0.4); margin-top:0.3rem; text-transform:uppercase; }
+  .l-actions { grid-area:actions; display:flex; gap:0.4rem; margin-top:0.3rem; border-top:1px dashed rgba(232,227,255,0.15); padding-top:0.5rem; }
+  .action-btn { padding:0.35rem 0.9rem; font-family:'JetBrains Mono Variable',ui-monospace,monospace; font-size:0.72rem; letter-spacing:0.15em; background:transparent; border:1px solid currentColor; cursor:pointer; text-transform:uppercase; transition:all 0.1s; }
+  .action-btn.buy { color:var(--kmkt-jade); }
+  .action-btn.buy:hover { background:var(--kmkt-jade); color:#0a0314; }
+  .action-btn.cancel { color:var(--kmkt-blood); }
+  .action-btn.cancel:hover { background:var(--kmkt-blood); color:#fff; }
+
+  /* List form */
+  .list-panel { border:1px solid rgba(0,224,255,0.25); background:rgba(10,3,20,0.75); padding:1.1rem 1.2rem; margin-top:1.5rem; }
+  .list-lede { font-size:0.88rem; color:rgba(232,227,255,0.7); line-height:1.55; margin-bottom:0.9rem; }
+  .list-form { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.7rem; }
+  .list-field { display:flex; flex-direction:column; gap:0.3rem; }
+  .list-field label { font-size:0.6rem; letter-spacing:0.22em; color:var(--kmkt-cyan); text-shadow:0 0 3px var(--kmkt-cyan); text-transform:uppercase; }
+  .list-field input, .list-field select { padding:0.55rem 0.7rem; font-family:inherit; font-size:0.92rem; background:rgba(0,0,0,0.5); border:1px solid rgba(255,213,74,0.3); color:var(--kmkt-ink); }
+  .list-field input:focus, .list-field select:focus { outline:none; border-color:var(--kmkt-gold); box-shadow:0 0 10px rgba(255,213,74,0.35); }
+  .list-actions { grid-column:1/-1; display:flex; gap:0.6rem; margin-top:0.5rem; }
+
+  .back-link { text-align:center; margin-top:2rem; font-size:0.92rem; }
+  .back-link a { color:var(--kmkt-pink); text-shadow:0 0 5px var(--kmkt-pink); text-decoration:none; letter-spacing:0.1em; margin:0 0.4rem; }
+  .back-link a:hover { color:var(--kmkt-gold); text-shadow:0 0 5px var(--kmkt-gold); }
+</style>
+</BaseLayout>

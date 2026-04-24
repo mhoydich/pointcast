@@ -38,6 +38,15 @@ import {
   renderChannelDistText,
   type BlockLookup,
 } from './aggregate';
+import {
+  isDeadLettered,
+  recordFailure,
+  clearFailure,
+  deadLetter,
+  listDeadLetter,
+  releaseDeadLetter,
+  type DeadLetterRecord,
+} from './deadletter';
 
 export interface Env {
   SPARROW_DIGEST_KV: KVNamespace;
@@ -48,6 +57,10 @@ export interface Env {
    *  value on the Pages Function (`functions/api/sparrow/digest-subscribe.ts`)
    *  so the unsubscribe link in the email footer verifies on click. */
   SPARROW_DIGEST_SIGNING_KEY: string;
+  /** v0.37: bearer token for the /ops/dead-letter + /ops/release
+   *  endpoints. Set via `wrangler secret put SPARROW_OPS_TOKEN`. Leave
+   *  unset and those routes return 503 "ops-not-configured". */
+  SPARROW_OPS_TOKEN?: string;
 }
 
 interface Subscription {
@@ -312,7 +325,17 @@ export default {
     let sent = 0;
     let failed = 0;
     let retriableFailed = 0;
+    let deadLettered = 0;
+    let skippedDead = 0;
     for (const sub of due) {
+      // v0.37: skip subs that hit the dead-letter threshold on a prior
+      // tick. They stay in the `sub:` store but receive nothing until
+      // an operator releases them via /ops/dead-letter?action=release.
+      if (await isDeadLettered(env.SPARROW_DIGEST_KV, sub.email)) {
+        skippedDead += 1;
+        continue;
+      }
+
       const email = await renderDigestEmail(sub, env, lookup);
       const result = await sendViaMailChannels(sub, env, email);
       if (result.ok) {
@@ -321,26 +344,45 @@ export default {
           expirationTtl: 60 * 60 * 24 * 400,
           metadata: { frequency: sub.frequency, last_sent_at: sub.last_sent_at },
         });
+        // v0.37: a successful send clears the failure counter.
+        await clearFailure(env.SPARROW_DIGEST_KV, sub.email);
         sent += 1;
       } else {
         failed += 1;
         if (result.retriable) retriableFailed += 1;
-        // v0.35: retriable failures do NOT update last_sent_at, so the
-        // next cron tick tries again. Permanent failures (401/403/422)
-        // also don't update last_sent_at here — ops needs to see them;
-        // a future sprint may add a dead-letter KV bucket and
-        // exponential-backoff across cron ticks.
-        console.warn(
-          `[sparrow-digest] send failed for ${sub.email} · status=${result.status} · ` +
-          `attempts=${result.attempts} · retriable=${result.retriable} · ${result.finalError ?? ''}`,
+        // v0.37: track + maybe dead-letter. Retriable failures count
+        // up; at threshold (3 consecutive) the sub gets dead-lettered.
+        // Non-retriable (auth/validation) dead-letters on first hit.
+        const { record, shouldDeadLetter, reason } = await recordFailure(
+          env.SPARROW_DIGEST_KV,
+          sub.email,
+          result.status,
+          result.attempts,
+          result.retriable,
+          result.finalError,
         );
+        if (shouldDeadLetter && reason) {
+          await deadLetter(env.SPARROW_DIGEST_KV, sub.email, reason, record);
+          deadLettered += 1;
+          console.warn(
+            `[sparrow-digest] DEAD-LETTERED ${sub.email} · reason=${reason} · ` +
+            `status=${result.status} · consecutive=${record.consecutive}`,
+          );
+        } else {
+          console.warn(
+            `[sparrow-digest] send failed for ${sub.email} · status=${result.status} · ` +
+            `attempts=${result.attempts} · retriable=${result.retriable} · ` +
+            `consecutive=${record.consecutive} · ${result.finalError ?? ''}`,
+          );
+        }
       }
     }
 
     ctx.waitUntil(Promise.resolve());
     console.log(
       `[sparrow-digest] done · sent ${sent} · failed ${failed} ` +
-      `(${retriableFailed} retriable) · elapsed ${Date.now() - started}ms`,
+      `(${retriableFailed} retriable · ${deadLettered} dead-lettered · ${skippedDead} already-dead skipped) ` +
+      `· elapsed ${Date.now() - started}ms`,
     );
   },
 

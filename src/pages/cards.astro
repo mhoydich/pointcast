@@ -1,0 +1,349 @@
+---
+/**
+ * /cards — one collectible card per visit (mood + noun + date + rarity).
+ *
+ * Mike 2026-04-20 23:39 UTC ping (expand: true): "like /compute, great
+ * tho we have no visitors thus things like drum, collecting, fun,
+ * information, learning are to be important if we want people to
+ * participate in programs."
+ *
+ * Response: this is the second visitor-facing primitive shipped in the
+ * pivot (after /drum/click). Simple + fun + repeatable:
+ *   - Each day you visit, one "daily card" is generated for you.
+ *   - The card captures: your mood, your noun, today's date, a rarity
+ *     tier (common / uncommon / rare / legendary), and an edge quality
+ *     (first-of-week, palindrome-noun, mood-match-day-of-week, etc.).
+ *   - Cards persist in pc:cards localStorage; a collection grid shows
+ *     your shelf newest-first.
+ *   - No server. No wallet. Just localStorage + joy.
+ *
+ * Follow-up queued: share link per card, rare-card reveal animation,
+ * card trading (later, requires presence DO + protocol).
+ *
+ * Author: cc. Source: Mike 2026-04-20 23:39 UTC ping.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Cards — one a day, yours to keep';
+const description =
+  "Each visit to PointCast generates a collectible card — mood + noun + date + rarity. Your shelf lives in your browser; your deck grows with you. No wallet, no signup, just the quiet accumulation of tiny artifacts.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Cards',
+  description,
+  url: 'https://pointcast.xyz/cards',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="cards-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>cards</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">CARDS · ONE A DAY · YOURS TO KEEP</p>
+      <h1 class="title">Your PointCast deck.</h1>
+      <p class="dek">
+        Each visit generates one card — mood + noun + date + rarity. The deck
+        lives in this browser; it grows quietly as you come back. No wallet
+        required. No signup. Just the accumulation of tiny artifacts.
+      </p>
+    </header>
+
+    <section class="today">
+      <p class="section__kicker mono">TODAY</p>
+      <div class="today__slot" id="today-slot">
+        <p class="today__empty mono">loading your card…</p>
+      </div>
+    </section>
+
+    <section class="deck">
+      <p class="section__kicker mono">DECK · <span id="deck-count">0</span> CARDS</p>
+      <div class="deck__grid" id="deck-grid">
+        <p class="deck__empty mono">your deck is empty — today's card will show up above.</p>
+      </div>
+    </section>
+
+    <p class="foot mono">
+      cards live in <code>pc:cards</code> in your browser's localStorage ·
+      <a href="/ping">drop a ping</a> to request new edge qualities ·
+      <a href="/contribute">contribute</a> if you want to run your own /cards
+    </p>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  var LS_CARDS = 'pc:cards';
+  var LS_MOOD = 'pc:mood';
+  var LS_NOUN = 'pc:visitor:noun';
+  var LS_NOUN_OVERRIDE = 'pc:visitor:noun:override';
+  var LS_SESSION = 'pc:session';
+
+  var MOODS = {
+    chill:   { color: '#2B8A3E', label: 'CHILL',   bg: '#f2f8f4' },
+    hype:    { color: '#C92A2A', label: 'HYPE',    bg: '#fff1f1' },
+    focus:   { color: '#1864AB', label: 'FOCUS',   bg: '#eef4fa' },
+    flow:    { color: '#5F3DC4', label: 'FLOW',    bg: '#f5f0ff' },
+    curious: { color: '#E8590C', label: 'CURIOUS', bg: '#fff4ed' },
+    quiet:   { color: '#5F5E5A', label: 'QUIET',   bg: '#f5f5f2' },
+  };
+
+  function today() { return new Date().toISOString().slice(0, 10); }
+  function cheapHash(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = (((h << 5) + h) + s.charCodeAt(i)) | 0;
+    return h >>> 0;
+  }
+  function getMood() {
+    try { return localStorage.getItem(LS_MOOD) || 'quiet'; } catch (e) { return 'quiet'; }
+  }
+  function getNoun() {
+    try {
+      var o = localStorage.getItem(LS_NOUN_OVERRIDE);
+      if (o) { var n = parseInt(o, 10); if (n >= 0 && n < 1200) return n; }
+      var s = localStorage.getItem(LS_NOUN);
+      if (s) { var m = parseInt(s, 10); if (m >= 0 && m < 1200) return m; }
+      var sid = localStorage.getItem(LS_SESSION) || '';
+      return sid ? cheapHash(sid) % 1200 : Math.floor(Math.random() * 1200);
+    } catch (e) { return Math.floor(Math.random() * 1200); }
+  }
+
+  function rarityTier(card) {
+    // Seeded random from {date + noun + mood} gives a stable rarity per card.
+    var seed = cheapHash(card.date + ':' + card.nounId + ':' + card.mood);
+    var r = (seed % 1000) / 1000;
+    if (r < 0.03) return 'legendary';
+    if (r < 0.13) return 'rare';
+    if (r < 0.40) return 'uncommon';
+    return 'common';
+  }
+
+  function edgeQualities(card) {
+    var q = [];
+    // Palindrome noun ID
+    var s = String(card.nounId);
+    if (s === s.split('').reverse().join('')) q.push('palindrome-noun');
+    // Round noun (multiple of 100)
+    if (card.nounId > 0 && card.nounId % 100 === 0) q.push('round-noun');
+    // Mood matches day-of-week (silly but fun)
+    var dow = new Date(card.date + 'T12:00:00').getDay();
+    var dowMoods = ['quiet', 'hype', 'focus', 'flow', 'curious', 'chill', 'chill'];
+    if (dowMoods[dow] === card.mood) q.push('mood-of-the-day');
+    // First of month
+    if (card.date.slice(-2) === '01') q.push('first-of-month');
+    // 4/20 special
+    if (card.date.slice(5) === '04-20') q.push('four-twenty');
+    return q;
+  }
+
+  function loadDeck() {
+    try {
+      var raw = localStorage.getItem(LS_CARDS);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveDeck(arr) {
+    try { localStorage.setItem(LS_CARDS, JSON.stringify(arr.slice(-365))); } catch (e) {}
+  }
+
+  function ensureTodayCard() {
+    var deck = loadDeck();
+    var t = today();
+    var existing = deck.find(function (c) { return c.date === t; });
+    if (existing) return { card: existing, newlyCreated: false, deck: deck };
+
+    var card = {
+      date: t,
+      nounId: getNoun(),
+      mood: getMood(),
+      at: new Date().toISOString(),
+    };
+    card.rarity = rarityTier(card);
+    card.edges = edgeQualities(card);
+    deck.push(card);
+    saveDeck(deck);
+    return { card: card, newlyCreated: true, deck: deck };
+  }
+
+  function renderCard(card, isToday) {
+    var m = MOODS[card.mood] || MOODS.quiet;
+    var rarityColors = {
+      legendary: { border: '#E89A2D', shadow: 'rgba(232, 154, 45, 0.45)' },
+      rare:      { border: '#5F3DC4', shadow: 'rgba(95, 61, 196, 0.35)' },
+      uncommon:  { border: '#1864AB', shadow: 'rgba(24, 100, 171, 0.25)' },
+      common:    { border: '#c4c2bc', shadow: 'rgba(0, 0, 0, 0.08)' },
+    };
+    var rc = rarityColors[card.rarity] || rarityColors.common;
+    var d = new Date(card.date + 'T12:00:00');
+    var dateStr = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+
+    var el = document.createElement('article');
+    el.className = 'card card--' + card.rarity + (isToday ? ' card--today' : '');
+    el.style.background = m.bg;
+    el.style.borderColor = rc.border;
+    el.style.boxShadow = '0 6px 16px -6px ' + rc.shadow;
+
+    el.innerHTML =
+      '<div class="card__head">' +
+        '<span class="card__mood-dot" style="background: ' + m.color + '" aria-hidden="true"></span>' +
+        '<span class="card__mood mono">' + m.label + '</span>' +
+        '<span class="card__rarity mono" style="color: ' + rc.border + '">' + card.rarity.toUpperCase() + '</span>' +
+      '</div>' +
+      '<img class="card__noun" src="https://noun.pics/' + card.nounId + '.svg" alt="noun ' + card.nounId + '" loading="lazy" />' +
+      '<div class="card__foot">' +
+        '<span class="card__date mono">' + dateStr + '</span>' +
+        '<span class="card__n mono">#' + card.nounId + '</span>' +
+      '</div>' +
+      (card.edges && card.edges.length
+        ? '<div class="card__edges mono">' + card.edges.map(function (e) { return '✦ ' + e; }).join(' · ') + '</div>'
+        : '');
+    return el;
+  }
+
+  // ---- Render --------------------------------------------------------------
+  var $today = document.getElementById('today-slot');
+  var $grid = document.getElementById('deck-grid');
+  var $count = document.getElementById('deck-count');
+
+  var result = ensureTodayCard();
+  $today.innerHTML = '';
+  var todayEl = renderCard(result.card, true);
+  $today.appendChild(todayEl);
+
+  var all = result.deck.slice().reverse();
+  $count.textContent = String(all.length);
+  $grid.innerHTML = '';
+  if (all.length === 0) {
+    $grid.innerHTML = '<p class="deck__empty mono">your deck is empty — today\'s card shows up above.</p>';
+  } else {
+    all.forEach(function (c) {
+      // Skip today in the grid since it's already above.
+      if (c.date === result.card.date) return;
+      $grid.appendChild(renderCard(c, false));
+    });
+    if ($grid.children.length === 0) {
+      $grid.innerHTML = '<p class="deck__empty mono">first visit — today\'s card is all you\'ve got. come back tomorrow.</p>';
+    }
+  }
+
+  // New-card celebration
+  if (result.newlyCreated && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    setTimeout(function () {
+      todayEl.classList.add('card--flash');
+      setTimeout(function () { todayEl.classList.remove('card--flash'); }, 900);
+    }, 200);
+  }
+})();
+</script>
+
+<style>
+  .cards-page { max-width: 980px; margin: 0 auto; padding: 24px 20px 80px; color: var(--pc-ink, #12110E); }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .crumb { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px; color: var(--pc-ink-muted, #5F5E5A); }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #e89a2d; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 22px; padding-bottom: 18px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #E89A2D; margin: 0 0 10px; font-weight: 600; }
+  .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui); font-size: clamp(28px, 4vw, 40px); font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em; line-height: 1.14; }
+  .dek { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0; max-width: 62ch; }
+
+  .section__kicker { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px dotted var(--pc-rule-soft, #E5E3DE); }
+
+  /* Today card — oversized, centered */
+  .today__slot { display: flex; justify-content: center; align-items: center; padding: 16px 0; }
+  .today__empty { color: var(--pc-ink-muted); font-style: italic; }
+
+  /* Card component */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    border: 2px solid #c4c2bc;
+    border-radius: 8px;
+    background: #fff;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card--today {
+    width: min(300px, 90vw);
+    padding: 18px;
+    border-width: 3px;
+  }
+  .card--legendary { animation: card-shimmer 3s ease-in-out infinite; }
+  @keyframes card-shimmer {
+    0%, 100% { box-shadow: 0 6px 16px -6px rgba(232, 154, 45, 0.45); }
+    50%      { box-shadow: 0 6px 20px -4px rgba(232, 154, 45, 0.7); }
+  }
+  .card--flash {
+    animation: card-flash 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  @keyframes card-flash {
+    0%   { transform: scale(0.85) rotate(-3deg); opacity: 0; }
+    50%  { transform: scale(1.08) rotate(1deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .card__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .card__mood-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .card__mood { font-weight: 600; color: var(--pc-ink); }
+  .card__rarity { margin-left: auto; font-weight: 600; font-size: 9px; letter-spacing: 0.14em; }
+  .card__noun {
+    width: 100%;
+    max-width: 240px;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 3px;
+  }
+  .card__foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--pc-ink-muted);
+    margin-top: auto;
+  }
+  .card__n { color: #E89A2D; font-weight: 600; }
+  .card__edges {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: #5F3DC4;
+    padding-top: 6px;
+    border-top: 1px dotted rgba(0, 0, 0, 0.1);
+    text-transform: lowercase;
+  }
+
+  /* Deck grid */
+  .deck__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .deck__empty { color: var(--pc-ink-muted); font-style: italic; grid-column: 1 / -1; padding: 14px 0; }
+
+  .foot { margin: 30px 0 0; font-size: 11px; color: var(--pc-ink-muted); line-height: 1.5; }
+  .foot code { font-family: var(--pc-font-mono); background: rgba(0, 0, 0, 0.05); padding: 1px 5px; border-radius: 2px; }
+  .foot a { color: #E89A2D; text-decoration: underline; }
+</style>

@@ -1,0 +1,554 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import WalletChip from '../../components/WalletChip.astro';
+import {
+  PASSPORT_IMAGE_GENERATOR,
+  PASSPORT_STORAGE_KEY,
+  passportDateKey,
+} from '../../lib/passport';
+import {
+  PASSPORT_ACHIEVEMENTS,
+  passportAchievementStamps,
+} from '../../lib/passport-achievements';
+import posterSet from '../../data/passport-posters.json';
+
+const today = passportDateKey();
+const postersBySlug = new Map(posterSet.posters.map((poster) => [poster.slug, poster]));
+const routes = PASSPORT_ACHIEVEMENTS.map((achievement) => ({
+  achievement,
+  stamps: passportAchievementStamps(achievement),
+  poster: achievement.posterSlug ? postersBySlug.get(achievement.posterSlug) : null,
+}));
+
+const title = 'Passport Routes';
+const description =
+  'Route achievements for the PointCast Station Passport: collect stamp groups, complete visas, and finish the 100-mile lens.';
+
+const clientPayload = {
+  storageKey: PASSPORT_STORAGE_KEY,
+  today,
+  routes: routes.map(({ achievement, stamps }) => ({
+    slug: achievement.slug,
+    title: achievement.title,
+    stampSlugs: stamps.map((stamp) => stamp.slug),
+    stamps: stamps.map((stamp) => ({
+      slug: stamp.slug,
+      code: stamp.code,
+      name: stamp.name,
+    })),
+  })),
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/passport/routes',
+  name: 'PointCast Passport Route Achievements',
+  description,
+  url: 'https://pointcast.xyz/passport/routes',
+  isPartOf: {
+    '@type': 'WebApplication',
+    name: 'PointCast Station Passport',
+    url: 'https://pointcast.xyz/passport',
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/posters/passport/south-bay-run.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/passport/routes.json', title: 'Passport Routes JSON' }]}
+  frame={{
+    image: 'https://pointcast.xyz/posters/passport/south-bay-run.png',
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Routes', action: 'link', target: 'https://pointcast.xyz/passport/routes' },
+      { label: 'Book', action: 'link', target: 'https://pointcast.xyz/passport/book' },
+      { label: 'Receipts', action: 'link', target: 'https://pointcast.xyz/passport/receipts' },
+    ],
+  }}
+>
+  <div class="page">
+    <script type="application/json" id="passport-routes-data" set:html={JSON.stringify(clientPayload)} />
+
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/passport">passport</a>
+      <span aria-hidden="true">/</span>
+      <span>routes</span>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <div class="hero__top">
+          <p class="kicker">ROUTE VISAS · {PASSPORT_IMAGE_GENERATOR.model} · {today}</p>
+          <WalletChip />
+        </div>
+        <h1>Turn stamps into route visas.</h1>
+        <p class="dek">
+          Achievements are inferred from the same browser passport used by the
+          book, cabinet, and stamp board. Finish a route, and it becomes a little
+          visa page inside the collection story.
+        </p>
+      </div>
+      <section class="route-score" aria-label="Route progress">
+        <p class="route-score__label">routes complete</p>
+        <strong><span data-routes-count>0</span>/{routes.length}</strong>
+        <div class="route-score__meter"><span data-routes-meter></span></div>
+        <p>Completion rule: every stamp in a route must exist in <code>{PASSPORT_STORAGE_KEY}</code>.</p>
+      </section>
+    </header>
+
+    <section class="visa-grid" aria-label="Passport route achievements">
+      {routes.map(({ achievement, stamps, poster }) => (
+        <article
+          class="visa-card"
+          id={achievement.slug}
+          data-route-card={achievement.slug}
+          data-route-slugs={stamps.map((stamp) => stamp.slug).join(',')}
+          style={`--route-color:${achievement.color};`}
+        >
+          <div class="visa-card__media">
+            {poster ? (
+              <img src={poster.image} alt={`${achievement.title} passport route poster`} width="1200" height="1800" loading="lazy" />
+            ) : (
+              <div class="visa-card__stamp-wall" aria-hidden="true">
+                {stamps.slice(0, 24).map((stamp) => (
+                  <span style={`--stamp-color:${stamp.color};`}>{stamp.code}</span>
+                ))}
+              </div>
+            )}
+            <span class="visa-card__badge">{achievement.badge}</span>
+          </div>
+          <div class="visa-card__copy">
+            <p class="visa-card__meta">{stamps.length} stamp{stamps.length === 1 ? '' : 's'} · {achievement.shortTitle}</p>
+            <h2>{achievement.title}</h2>
+            <p>{achievement.description}</p>
+            <ul class="visa-card__stamps">
+              {stamps.map((stamp) => (
+                <li data-route-stamp={stamp.slug} style={`--stamp-color:${stamp.color};`}>
+                  <span>{stamp.code}</span>
+                  {stamp.shortName}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <footer class="visa-card__foot">
+            <button type="button" data-route-claim={achievement.slug}>Collect route</button>
+            <a href={`/passport/book#${stamps[0]?.slug ?? achievement.slug}`}>Book</a>
+            <a href={`/passport/collection#${stamps[0]?.slug ?? achievement.slug}`}>Cabinet</a>
+          </footer>
+        </article>
+      ))}
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/passport/routes.json">/passport/routes.json</a></li>
+        <li><a href="/passport/receipts.json">/passport/receipts.json</a></li>
+        <li><a href="/passport.json">/passport.json</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script>
+  (function () {
+    var dataEl = document.getElementById('passport-routes-data');
+    if (!dataEl) return;
+
+    var data = {};
+    try { data = JSON.parse(dataEl.textContent || '{}'); } catch (e) { return; }
+
+    var storageKey = data.storageKey || 'pc:station-passport:v1';
+    var countEl = document.querySelector('[data-routes-count]');
+    var meterEl = document.querySelector('[data-routes-meter]');
+
+    function emptyState() {
+      return { version: 1, updatedAt: null, stamps: {}, mints: {} };
+    }
+
+    function readState() {
+      try {
+        var raw = localStorage.getItem(storageKey);
+        if (!raw) return emptyState();
+        var parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || !parsed.stamps) return emptyState();
+        if (!parsed.mints || typeof parsed.mints !== 'object') parsed.mints = {};
+        return parsed;
+      } catch (e) {
+        return emptyState();
+      }
+    }
+
+    function writeState(state) {
+      state.updatedAt = new Date().toISOString();
+      try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (e) {}
+    }
+
+    function routeBySlug(slug) {
+      return (data.routes || []).find(function (route) { return route.slug === slug; }) || null;
+    }
+
+    function isComplete(route, state) {
+      return Boolean(route && route.stampSlugs.every(function (slug) {
+        return Boolean(state.stamps && state.stamps[slug]);
+      }));
+    }
+
+    function paint() {
+      var state = readState();
+      var completeCount = 0;
+
+      document.querySelectorAll('[data-route-card]').forEach(function (card) {
+        var slug = card.getAttribute('data-route-card') || '';
+        var route = routeBySlug(slug);
+        var complete = isComplete(route, state);
+        if (complete) completeCount += 1;
+        card.classList.toggle('is-complete', complete);
+        var btn = card.querySelector('[data-route-claim]');
+        if (btn) btn.textContent = complete ? 'Route complete' : 'Collect route';
+
+        card.querySelectorAll('[data-route-stamp]').forEach(function (item) {
+          var stampSlug = item.getAttribute('data-route-stamp') || '';
+          item.classList.toggle('is-stamped', Boolean(state.stamps && state.stamps[stampSlug]));
+        });
+      });
+
+      if (countEl) countEl.textContent = String(completeCount);
+      if (meterEl) meterEl.style.width = data.routes?.length
+        ? Math.round((completeCount / data.routes.length) * 100) + '%'
+        : '0%';
+    }
+
+    document.querySelectorAll('[data-route-claim]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var route = routeBySlug(btn.getAttribute('data-route-claim') || '');
+        if (!route) return;
+
+        var state = readState();
+        route.stamps.forEach(function (stamp) {
+          state.stamps[stamp.slug] = {
+            slug: stamp.slug,
+            station: stamp.name,
+            code: stamp.code,
+            date: data.today,
+            at: new Date().toISOString(),
+          };
+        });
+        writeState(state);
+        paint();
+      });
+    });
+
+    paint();
+  })();
+</script>
+
+<style>
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 20px 0 88px;
+  }
+
+  .crumb,
+  .kicker,
+  .route-score__label,
+  .visa-card__badge,
+  .visa-card__meta,
+  .visa-card__stamps,
+  .visa-card__foot,
+  .agent-strip__label {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 28px;
+    align-items: stretch;
+    padding-bottom: 24px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .kicker {
+    margin: 0 0 10px;
+    color: #8a2432;
+  }
+
+  .hero h1 {
+    margin: 0;
+    max-width: 760px;
+    font-size: 62px;
+    line-height: 0.96;
+    font-weight: 500;
+  }
+
+  .dek {
+    margin: 16px 0 0;
+    max-width: 72ch;
+    color: var(--pc-ink-soft);
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .route-score {
+    display: grid;
+    align-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    box-shadow: 8px 8px 0 #e9e5dd;
+  }
+
+  .route-score p {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .route-score strong {
+    font-size: 42px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .route-score code {
+    word-break: break-word;
+  }
+
+  .route-score__meter {
+    height: 12px;
+    border: 1px solid var(--pc-ink);
+    background: repeating-linear-gradient(90deg, #f7f5f0 0 8px, #ece8de 8px 16px);
+    overflow: hidden;
+  }
+
+  .route-score__meter span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: #8a2432;
+    transition: width 160ms ease;
+  }
+
+  .visa-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 26px;
+  }
+
+  .visa-card {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .visa-card.is-complete {
+    border-color: var(--route-color);
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--route-color) 16%, transparent);
+  }
+
+  .visa-card__media {
+    position: relative;
+    aspect-ratio: 5 / 3;
+    background: #111;
+    overflow: hidden;
+  }
+
+  .visa-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .visa-card__stamp-wall {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    height: 100%;
+    padding: 16px;
+    background:
+      radial-gradient(circle at 70% 20%, rgba(240, 185, 74, 0.18), transparent 32%),
+      #fffaf0;
+  }
+
+  .visa-card__stamp-wall span {
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--stamp-color);
+    color: var(--stamp-color);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+  }
+
+  .visa-card__badge {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    padding: 5px 8px;
+    border: 1px solid #fffaf0;
+    background: rgba(18, 17, 14, 0.76);
+    color: #fffaf0;
+  }
+
+  .visa-card__copy {
+    display: grid;
+    gap: 9px;
+    padding: 14px;
+  }
+
+  .visa-card__meta {
+    margin: 0;
+    color: var(--route-color);
+  }
+
+  .visa-card h2 {
+    margin: 0;
+    font-size: 26px;
+    line-height: 1.02;
+    font-weight: 500;
+  }
+
+  .visa-card p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .visa-card__stamps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0;
+  }
+
+  .visa-card__stamps li {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    padding: 5px 7px;
+    border: 1px dashed color-mix(in srgb, var(--stamp-color) 58%, #aaa);
+    color: var(--pc-ink-muted);
+  }
+
+  .visa-card__stamps li.is-stamped {
+    border-style: solid;
+    background: var(--stamp-color);
+    color: #fff;
+  }
+
+  .visa-card__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 12px 14px;
+    border-top: 1px solid var(--pc-rule-soft);
+  }
+
+  .visa-card__foot button {
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--route-color);
+    background: var(--route-color);
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .visa-card.is-complete .visa-card__foot button {
+    background: #fff;
+    color: var(--route-color);
+  }
+
+  .agent-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-top: 30px;
+    padding: 14px 0;
+    border-top: 1px solid var(--pc-rule-soft);
+  }
+
+  .agent-strip__label {
+    margin: 0;
+    color: var(--pc-ink-muted);
+  }
+
+  .agent-strip ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  @media (max-width: 980px) {
+    .hero {
+      grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+      font-size: 46px;
+    }
+
+    .visa-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .page {
+      width: min(100% - 24px, 1180px);
+      padding-top: 14px;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+    }
+
+    .hero__top {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .visa-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

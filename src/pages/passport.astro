@@ -1,0 +1,1390 @@
+---
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import WalletChip from '../components/WalletChip.astro';
+import {
+  PASSPORT_IMAGE_GENERATOR,
+  PASSPORT_STAMPS,
+  PASSPORT_STORAGE_KEY,
+  filterBlocksForPassportStamp,
+  getDailyPassportRoute,
+  passportDateKey,
+  passportDaySeed,
+} from '../lib/passport';
+import {
+  PASSPORT_COMPANION_COLLECTION,
+  PASSPORT_STAMP_COLLECTION,
+  PASSPORT_STAMP_PRD_PATH,
+  passportCompanionNounId,
+  passportStampMintPlan,
+} from '../lib/passport-mint';
+import posterSet from '../data/passport-posters.json';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const today = passportDateKey();
+const daySeed = passportDaySeed();
+const dailyRoute = getDailyPassportRoute(new Date(), 4);
+const firstCompanionId = passportCompanionNounId(PASSPORT_STAMPS[0]);
+const lastCompanionId = passportCompanionNounId(PASSPORT_STAMPS[PASSPORT_STAMPS.length - 1]);
+const companionRange = `#${firstCompanionId}-#${lastCompanionId}`;
+const stampRows = PASSPORT_STAMPS.map((stamp) => ({
+  stamp,
+  mint: passportStampMintPlan(stamp),
+  blocks: filterBlocksForPassportStamp(blocks, stamp).slice(0, 3),
+}));
+
+const prettyDate = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date());
+
+const title = 'Station Passport';
+const description =
+  `Collect ${PASSPORT_STAMPS.length} local stamps across the PointCast 100-mile lens: El Segundo origin, /tv stations, and field-expansion stamps. Browser-local stamps, Tezos companion proofs, dedicated stamp FA2 next.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/passport',
+  name: 'PointCast Station Passport',
+  description,
+  url: 'https://pointcast.xyz/passport',
+  applicationCategory: 'LifestyleApplication',
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+};
+
+const clientPayload = {
+  storageKey: PASSPORT_STORAGE_KEY,
+  today,
+  total: PASSPORT_STAMPS.length,
+  route: dailyRoute.map((stamp) => stamp.slug),
+  stamps: PASSPORT_STAMPS.map((stamp) => ({
+    slug: stamp.slug,
+    code: stamp.code,
+    name: stamp.name,
+    mint: passportStampMintPlan(stamp).current,
+  })),
+};
+
+const posterHighlights = posterSet.posters.slice(0, 4);
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og/local.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/passport.json', title: 'Station Passport (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/local.png',
+    buttons: [
+      { label: 'Open Passport', action: 'link', target: 'https://pointcast.xyz/passport' },
+      { label: 'Local', action: 'link', target: 'https://pointcast.xyz/local' },
+      { label: 'TV Stations', action: 'link', target: 'https://pointcast.xyz/tv' },
+      { label: 'Coffee Map', action: 'link', target: 'https://pointcast.xyz/collabs/map' },
+    ],
+  }}
+>
+  <div class="page">
+    <script type="application/json" id="passport-data" set:html={JSON.stringify(clientPayload)} />
+
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/local">local</a>
+      <span aria-hidden="true">/</span>
+      <span>passport</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <div class="hero__top">
+          <p class="kicker">STATION PASSPORT · {PASSPORT_IMAGE_GENERATOR.model} ART · {prettyDate}</p>
+          <WalletChip />
+        </div>
+        <h1>Collect the 100-mile lens.</h1>
+        <p class="dek">
+          Start at El Segundo, then stamp the stations that make the PointCast map feel
+          alive: beach towns, ports, foothills, desert exceptions, and the county-wide
+          signal. Collect in-browser, then mint a Tezos companion proof through the live
+          Visit Nouns contract while the dedicated Passport Stamps FA2 moves from PRD to
+          mainnet.
+        </p>
+      </div>
+
+      <section class="scoreboard" aria-label="Passport progress">
+        <div class="scoreboard__row">
+          <span class="scoreboard__label">stamps</span>
+          <strong><span id="passport-count">0</span>/{PASSPORT_STAMPS.length}</strong>
+        </div>
+        <div class="scoreboard__meter" aria-hidden="true">
+          <span id="passport-meter"></span>
+        </div>
+        <div class="scoreboard__row scoreboard__row--sub">
+          <span>{PASSPORT_IMAGE_GENERATOR.provider}</span>
+          <span>{today}</span>
+        </div>
+        <div class="scoreboard__actions">
+          <button type="button" class="tool-btn" id="passport-export">Export JSON</button>
+          <button type="button" class="tool-btn tool-btn--quiet" id="passport-reset">Reset</button>
+        </div>
+      </section>
+    </header>
+
+    <section class="mint-brief" aria-labelledby="mint-brief-title">
+      <div>
+        <p class="kicker">TEZOS MINTING · MAINNET</p>
+        <h2 id="mint-brief-title">Stamp art is metadata-ready. Companion proofs are live.</h2>
+      </div>
+      <div class="mint-brief__grid">
+        <article>
+          <p class="mini-label">live now</p>
+          <p>
+            <strong>{PASSPORT_COMPANION_COLLECTION.name}</strong> ·
+            <code>{PASSPORT_COMPANION_COLLECTION.contract || 'pending'}</code> ·
+            entrypoint <code>{PASSPORT_COMPANION_COLLECTION.entrypoint}</code>.
+            Passport buttons map {PASSPORT_STAMPS[0].code}-{PASSPORT_STAMPS[PASSPORT_STAMPS.length - 1].code} to Visit Nouns {companionRange}.
+          </p>
+        </article>
+        <article>
+          <p class="mini-label">next contract</p>
+          <p>
+            <strong>{PASSPORT_STAMP_COLLECTION.name}</strong> ·
+            {PASSPORT_STAMP_COLLECTION.standard} ·
+            <a href={PASSPORT_STAMP_PRD_PATH}>PRD</a>. This is the contract that should
+            mint the generated stamp art itself.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="poster-strip" aria-labelledby="poster-strip-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">POSTER SET · {posterSet.generator.model}</p>
+          <h2 id="poster-strip-title">Ten launch posters for the mint path</h2>
+        </div>
+        <a class="poster-strip__all" href="/passport/posters">View all 10</a>
+      </div>
+      <div class="poster-strip__grid">
+        {posterHighlights.map((poster) => (
+          <a class="poster-strip__item" href={poster.image}>
+            <img src={poster.image} alt={`${poster.title} PointCast Passport Stamps poster`} width="1200" height="1800" loading="lazy" />
+            <span>{poster.number} · {poster.title}</span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="visual-tools" aria-labelledby="visual-tools-title">
+      <div>
+        <p class="kicker">VISUAL COLLECTION</p>
+        <h2 id="visual-tools-title">The passport has rooms now.</h2>
+        <p>
+          Use the stamp board for minting, the book for a tactile field-pass feel,
+          and the cabinet when you want to see every collection object in one place.
+        </p>
+      </div>
+      <div class="visual-tools__grid">
+        <a class="visual-tool" href="/passport/book">
+          <span>Book</span>
+          <strong>Flip the bound passport</strong>
+          <small>/passport/book</small>
+        </a>
+        <a class="visual-tool" href="/passport/collection">
+          <span>Cabinet</span>
+          <strong>See stamps, posters, proofs</strong>
+          <small>/passport/collection</small>
+        </a>
+        <a class="visual-tool" href="/passport/routes">
+          <span>Routes</span>
+          <strong>Complete route visas</strong>
+          <small>/passport/routes</small>
+        </a>
+        <a class="visual-tool" href="/passport/receipts">
+          <span>Receipts</span>
+          <strong>Open mint proof cards</strong>
+          <small>/passport/receipts</small>
+        </a>
+        <a class="visual-tool" href="/passport/posters">
+          <span>Posters</span>
+          <strong>Open the campaign wall</strong>
+          <small>{posterSet.posters.length} prints</small>
+        </a>
+      </div>
+    </section>
+
+    <section class="route" aria-labelledby="route-title">
+      <div class="section-head">
+        <p class="kicker">TODAY'S ROUTE · SEED {daySeed}</p>
+        <h2 id="route-title">Four stamps for the day</h2>
+      </div>
+      <ol class="route__list">
+        {dailyRoute.map((stamp, index) => (
+          <li
+            class="route__item"
+            data-route-stamp={stamp.slug}
+            style={`--stamp-color: ${stamp.color};`}
+          >
+            <span class="route__order">{index + 1}</span>
+            <div>
+              <p class="route__name">{stamp.name}</p>
+              <p class="route__note">{stamp.routeNote}</p>
+            </div>
+            <a class="route__link" href={`#${stamp.slug}`}>stamp</a>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="rail" aria-label="Passport stamp rail">
+      {PASSPORT_STAMPS.map((stamp) => (
+        <a
+          class="rail__stamp"
+          href={`#${stamp.slug}`}
+          data-stamp-pill={stamp.slug}
+          style={`--stamp-color: ${stamp.color};`}
+          aria-label={`${stamp.name} stamp`}
+        >
+          <span>{stamp.code}</span>
+        </a>
+      ))}
+    </section>
+
+    <section class="board" aria-label="All passport stamps">
+      {stampRows.map(({ stamp, mint, blocks }) => (
+        <article
+          class="stamp-card"
+          id={stamp.slug}
+          data-stamp-card={stamp.slug}
+          style={`--stamp-color: ${stamp.color};`}
+        >
+          <header class="stamp-card__head">
+            <span class="stamp-card__code">{stamp.code}</span>
+            <span class="stamp-card__band">{stamp.band}</span>
+          </header>
+
+          <a
+            class="stamp-card__stamp"
+            href={`/passport/art/${stamp.slug}.svg`}
+            aria-label={`${stamp.name} stamp art`}
+          >
+            <img
+              src={`/passport/art/${stamp.slug}.svg`}
+              alt={`${stamp.name} PointCast passport stamp`}
+              loading="lazy"
+            />
+          </a>
+
+          <div class="stamp-card__body">
+            <p class="stamp-card__meta">
+              {stamp.direction} · {stamp.miles} mi · {stamp.coords.lat.toFixed(2)}, {stamp.coords.lng.toFixed(2)}
+            </p>
+            <h2>{stamp.name}</h2>
+            <p class="stamp-card__prompt">{stamp.prompt}</p>
+            <dl class="stamp-card__facts">
+              <div>
+                <dt>proof</dt>
+                <dd>{stamp.proof}</dd>
+              </div>
+              <div>
+                <dt>reward</dt>
+                <dd>{stamp.reward}</dd>
+              </div>
+              <div>
+                <dt>art</dt>
+                <dd>{PASSPORT_IMAGE_GENERATOR.model} · prompt in /passport.json</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="stamp-card__blocks">
+            <p class="mini-label">nearby blocks</p>
+            {blocks.length > 0 ? (
+              <ul>
+                {blocks.map((block) => (
+                  <li>
+                    <a href={`/b/${block.data.id}`}>
+                      <span>#{block.data.id}</span>
+                      {block.data.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="stamp-card__empty">No station-specific blocks yet. The stamp can lead the block.</p>
+            )}
+          </div>
+
+          <footer class="stamp-card__foot">
+            <div class="stamp-card__local-actions">
+              <button
+                type="button"
+                class="claim-btn"
+                data-claim-stamp={stamp.slug}
+                data-stamp-name={stamp.name}
+                data-stamp-code={stamp.code}
+              >
+                Collect stamp
+              </button>
+              <a href={stamp.links.tv}>TV</a>
+              <a href={stamp.links.search}>Search</a>
+              {stamp.links.map && <a href={stamp.links.map}>Map</a>}
+            </div>
+            <div class="mint-lane">
+              <button
+                type="button"
+                class="mint-btn"
+                data-mint-stamp={stamp.slug}
+                data-mint-token={mint.current.tokenId}
+                data-mint-contract={mint.current.contract ?? ''}
+                data-mint-mode={mint.current.mode}
+                data-stamp-name={stamp.name}
+                data-stamp-code={stamp.code}
+              >
+                {mint.current.label}
+              </button>
+              <a href={`/passport/stamps/${stamp.slug}.json`}>Metadata</a>
+              <a href={`/passport/receipts#${stamp.slug}`}>Receipt</a>
+              <a href={mint.current.tzkt ?? '#'} target="_blank" rel="noopener">TzKT</a>
+              <p class="mint-status" data-mint-status={stamp.slug}>
+                {mint.current.mode === 'passport-stamp-native' ? 'Stamp token' : 'Proof noun'} #{mint.current.tokenId} · {mint.current.priceLabel}
+              </p>
+            </div>
+          </footer>
+        </article>
+      ))}
+    </section>
+
+    <section class="bridge" aria-label="What the passport unlocks">
+      <div>
+        <p class="kicker">NEXT UNLOCKS</p>
+        <h2>Stamps become a route, then a wallet object.</h2>
+      </div>
+      <p>
+        This sprint keeps the mechanic cheap and playful: localStorage first,
+        no moderation surface, no backend dependency. The same stamp shape now
+        has generated art endpoints, TZIP-style metadata, a live Tezos companion
+        mint, and a dedicated FA2 product plan.
+      </p>
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/passport.json">/passport.json</a></li>
+        <li><a href="/passport/book">/passport/book</a></li>
+        <li><a href="/passport/book.json">/passport/book.json</a></li>
+        <li><a href="/passport/collection">/passport/collection</a></li>
+        <li><a href="/passport/collection.json">/passport/collection.json</a></li>
+        <li><a href="/passport/routes">/passport/routes</a></li>
+        <li><a href="/passport/routes.json">/passport/routes.json</a></li>
+        <li><a href="/passport/receipts">/passport/receipts</a></li>
+        <li><a href="/passport/receipts.json">/passport/receipts.json</a></li>
+        <li><a href="/passport/posters">/passport/posters</a></li>
+        <li><a href="/passport/posters.json">/passport/posters.json</a></li>
+        <li><a href="/passport/stamps/el-segundo.json">/passport/stamps/{'{slug}'}.json</a></li>
+        <li><a href="/passport/art/el-segundo.svg">/passport/art/{'{slug}'}.svg</a></li>
+        <li><a href="/local.json">/local.json</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+      <p class="agent-strip__note">{PASSPORT_IMAGE_GENERATOR.model} stamp-art and launch-poster prompts are published in JSON.</p>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script>
+  (function () {
+    var dataEl = document.getElementById('passport-data');
+    if (!dataEl) return;
+
+    var data = {};
+    try { data = JSON.parse(dataEl.textContent || '{}'); }
+    catch (e) { return; }
+
+    var storageKey = data.storageKey || 'pc:station-passport:v1';
+    var total = Number(data.total || 0);
+    var countEl = document.getElementById('passport-count');
+    var meterEl = document.getElementById('passport-meter');
+    var exportBtn = document.getElementById('passport-export');
+    var resetBtn = document.getElementById('passport-reset');
+
+    function emptyState() {
+      return { version: 1, updatedAt: null, stamps: {}, mints: {} };
+    }
+
+    function readState() {
+      try {
+        var raw = localStorage.getItem(storageKey);
+        if (!raw) return emptyState();
+        var parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || !parsed.stamps) return emptyState();
+        if (!parsed.mints || typeof parsed.mints !== 'object') parsed.mints = {};
+        return parsed;
+      } catch (e) {
+        return emptyState();
+      }
+    }
+
+    function writeState(state) {
+      state.updatedAt = new Date().toISOString();
+      try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (e) {}
+    }
+
+    function stampCount(state) {
+      return Object.keys(state.stamps || {}).length;
+    }
+
+    function paint() {
+      var state = readState();
+      var n = stampCount(state);
+      if (countEl) countEl.textContent = String(n);
+      if (meterEl) meterEl.style.width = total ? Math.round((n / total) * 100) + '%' : '0%';
+
+      document.querySelectorAll('[data-stamp-card]').forEach(function (card) {
+        var slug = card.getAttribute('data-stamp-card') || '';
+        var stamped = Boolean(state.stamps && state.stamps[slug]);
+        var minted = Boolean(state.mints && state.mints[slug]);
+        card.classList.toggle('is-stamped', stamped);
+        card.classList.toggle('is-minted', minted);
+        var btn = card.querySelector('[data-claim-stamp]');
+        if (btn) btn.textContent = stamped ? 'Stamped' : 'Collect stamp';
+        var mintBtn = card.querySelector('[data-mint-stamp]');
+        if (mintBtn) {
+          var mode = mintBtn.getAttribute('data-mint-mode') || 'visit-noun-companion';
+          mintBtn.textContent = minted
+            ? (mode === 'passport-stamp-native' ? 'Minted stamp' : 'Minted proof')
+            : (mode === 'passport-stamp-native' ? 'Mint station stamp' : 'Mint Tezos proof');
+        }
+        var status = card.querySelector('[data-mint-status]');
+        if (status && minted) {
+          var entry = state.mints[slug];
+          status.textContent = 'Confirmed ' + (entry.mode === 'passport-stamp-native' ? 'stamp' : 'proof') + ' ' + (entry.opHash ? entry.opHash.slice(0, 10) + '...' : '') + ' · token #' + entry.tokenId;
+        }
+      });
+
+      document.querySelectorAll('[data-stamp-pill]').forEach(function (pill) {
+        var slug = pill.getAttribute('data-stamp-pill') || '';
+        pill.classList.toggle('is-stamped', Boolean(state.stamps && state.stamps[slug]));
+      });
+
+      document.querySelectorAll('[data-route-stamp]').forEach(function (item) {
+        var slug = item.getAttribute('data-route-stamp') || '';
+        item.classList.toggle('is-stamped', Boolean(state.stamps && state.stamps[slug]));
+      });
+    }
+
+    document.querySelectorAll('[data-claim-stamp]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var slug = btn.getAttribute('data-claim-stamp') || '';
+        var name = btn.getAttribute('data-stamp-name') || slug;
+        var code = btn.getAttribute('data-stamp-code') || '';
+        if (!slug) return;
+
+        var state = readState();
+        state.stamps[slug] = {
+          slug: slug,
+          station: name,
+          code: code,
+          date: data.today,
+          at: new Date().toISOString(),
+        };
+        writeState(state);
+        paint();
+
+        window.dispatchEvent(new CustomEvent('pc:passport-updated', {
+          detail: { slug: slug, count: stampCount(state), total: total },
+        }));
+      });
+    });
+
+    function setMintStatus(slug, text) {
+      var el = document.querySelector('[data-mint-status="' + slug + '"]');
+      if (el) el.textContent = text;
+    }
+
+    function stampBySlug(slug) {
+      return (data.stamps || []).find(function (stamp) { return stamp.slug === slug; }) || null;
+    }
+
+    document.querySelectorAll('[data-mint-stamp]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var slug = btn.getAttribute('data-mint-stamp') || '';
+        var tokenId = Number(btn.getAttribute('data-mint-token') || NaN);
+        var mode = btn.getAttribute('data-mint-mode') || 'visit-noun-companion';
+        var contract = btn.getAttribute('data-mint-contract') || '';
+        var stamp = stampBySlug(slug);
+        if (!slug || !Number.isFinite(tokenId)) return;
+
+        if (!contract) {
+          setMintStatus(slug, 'Passport Stamps FA2 pending; metadata is ready.');
+          return;
+        }
+
+        var original = btn.textContent || (mode === 'passport-stamp-native' ? 'Mint station stamp' : 'Mint Tezos proof');
+        btn.disabled = true;
+        btn.textContent = 'Opening wallet...';
+        setMintStatus(slug, 'Opening Kukai / Beacon for Tezos mainnet...');
+
+        try {
+          var mod = await import('../lib/mint');
+          var context = {
+            source: 'station-passport',
+            stamp: slug,
+            code: stamp ? stamp.code : undefined,
+            capturedAt: new Date().toISOString(),
+          };
+          var result = mode === 'passport-stamp-native'
+            ? await mod.mintPassportStamp(tokenId, 'mainnet', context)
+            : await mod.mintVisitNoun(tokenId, 'mainnet', context);
+
+          if (!result.ok) {
+            if (result.reason === 'user-cancelled') {
+              setMintStatus(slug, 'Mint cancelled.');
+            } else if (result.reason === 'insufficient-balance') {
+              setMintStatus(slug, 'Need more tez for gas.');
+            } else {
+              setMintStatus(slug, 'Mint failed: ' + (result.reason || 'unknown error'));
+            }
+            btn.textContent = original;
+            btn.disabled = false;
+            return;
+          }
+
+          var state = readState();
+          state.stamps[slug] = {
+            slug: slug,
+            station: stamp ? stamp.name : slug,
+            code: stamp ? stamp.code : '',
+            date: data.today,
+            at: new Date().toISOString(),
+          };
+          state.mints[slug] = {
+            slug: slug,
+            code: stamp ? stamp.code : '',
+            station: stamp ? stamp.name : slug,
+            mode: mode,
+            contract: contract,
+            tokenId: tokenId,
+            nounId: mode === 'visit-noun-companion' ? tokenId : null,
+            opHash: result.opHash || null,
+            tzktUrl: result.tzktUrl || null,
+            at: new Date().toISOString(),
+          };
+          writeState(state);
+          paint();
+
+          if (result.tzktUrl && result.opHash) {
+            setMintStatus(slug, 'Broadcast ' + result.opHash.slice(0, 10) + '... confirming on Tezos...');
+          } else {
+            setMintStatus(slug, 'Broadcast. Confirming on Tezos...');
+          }
+
+          try {
+            if (result.confirmation) await result.confirmation;
+            setMintStatus(slug, 'Confirmed on Tezos · token #' + tokenId);
+          } catch (e) {
+            setMintStatus(slug, 'Broadcast recorded; check TzKT for final confirmation.');
+          }
+        } catch (e) {
+          console.error('Passport mint failed:', e);
+          setMintStatus(slug, 'Mint failed before signing.');
+          btn.textContent = original;
+          btn.disabled = false;
+        }
+      });
+    });
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        if (!window.confirm('Reset this browser passport?')) return;
+        writeState(emptyState());
+        paint();
+      });
+    }
+
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function () {
+        var state = readState();
+        var payload = {
+          exportedAt: new Date().toISOString(),
+          source: 'https://pointcast.xyz/passport',
+          storageKey: storageKey,
+          passport: state,
+        };
+        var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'pointcast-station-passport.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      });
+    }
+
+    paint();
+  })();
+</script>
+
+<style>
+  .page {
+    width: min(1120px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 20px 0 88px;
+  }
+
+  .crumb,
+  .kicker,
+  .mini-label,
+  .scoreboard__label,
+  .scoreboard__row,
+  .stamp-card__code,
+  .stamp-card__band,
+  .stamp-card__meta,
+  .stamp-card__facts dt,
+  .poster-strip__all,
+  .poster-strip__item span,
+  .visual-tool span,
+  .visual-tool small,
+  .agent-strip__label {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 28px;
+    align-items: stretch;
+    padding-bottom: 24px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero h1 {
+    margin: 0;
+    max-width: 760px;
+    font-size: 62px;
+    line-height: 0.96;
+    font-weight: 500;
+  }
+
+  .kicker {
+    margin: 0 0 10px;
+    color: #8a2432;
+  }
+
+  .dek {
+    margin: 16px 0 0;
+    max-width: 70ch;
+    color: var(--pc-ink-soft);
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .hero__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .hero__top .kicker {
+    margin-bottom: 0;
+  }
+
+  .scoreboard {
+    display: grid;
+    align-content: space-between;
+    gap: 14px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    padding: 16px;
+    box-shadow: 8px 8px 0 #e9e5dd;
+  }
+
+  .scoreboard__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--pc-ink-muted);
+  }
+
+  .scoreboard__row strong {
+    color: var(--pc-ink);
+    font-size: 32px;
+    line-height: 1;
+  }
+
+  .scoreboard__row--sub {
+    font-size: 10px;
+  }
+
+  .scoreboard__meter {
+    height: 12px;
+    border: 1px solid var(--pc-ink);
+    background:
+      repeating-linear-gradient(90deg, #f7f5f0 0 8px, #ece8de 8px 16px);
+    overflow: hidden;
+  }
+
+  .scoreboard__meter span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: #185fa5;
+    transition: width 160ms ease;
+  }
+
+  .scoreboard__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .tool-btn,
+  .claim-btn,
+  .mint-btn {
+    appearance: none;
+    border: 1px solid var(--pc-ink);
+    background: var(--pc-ink);
+    color: #fff;
+    min-height: 40px;
+    padding: 8px 10px;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+
+  .tool-btn--quiet {
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .mint-brief {
+    display: grid;
+    grid-template-columns: 0.82fr 1.18fr;
+    gap: 24px;
+    margin: 24px 0 28px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .mint-brief h2 {
+    margin: 0;
+    max-width: 15ch;
+    font-size: 28px;
+    line-height: 1.05;
+    font-weight: 500;
+  }
+
+  .mint-brief__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .mint-brief article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .mint-brief p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .mint-brief strong,
+  .mint-brief code {
+    color: var(--pc-ink);
+  }
+
+  .mint-brief code {
+    word-break: break-word;
+  }
+
+  .poster-strip {
+    margin: 26px 0 30px;
+    padding: 18px 0 22px;
+    border-top: 1px solid var(--pc-rule-soft);
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .poster-strip__all {
+    color: #8a2432;
+  }
+
+  .poster-strip__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .poster-strip__item {
+    display: grid;
+    gap: 8px;
+    color: var(--pc-ink);
+    text-decoration: none;
+  }
+
+  .poster-strip__item img {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border: 1px solid var(--pc-rule);
+    background: #111;
+  }
+
+  .poster-strip__item:hover img {
+    border-color: var(--pc-ink);
+  }
+
+  .poster-strip__item span {
+    color: var(--pc-ink-muted);
+  }
+
+  .visual-tools {
+    display: grid;
+    grid-template-columns: 0.82fr 1.18fr;
+    gap: 24px;
+    margin: 26px 0 30px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .visual-tools h2 {
+    margin: 0;
+    max-width: 14ch;
+    font-size: 30px;
+    line-height: 1.02;
+    font-weight: 500;
+  }
+
+  .visual-tools p {
+    margin: 12px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .visual-tools__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .visual-tool {
+    display: grid;
+    align-content: space-between;
+    min-height: 150px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    background:
+      linear-gradient(135deg, rgba(240, 185, 74, 0.16), transparent 42%),
+      #fff;
+    color: var(--pc-ink);
+    text-decoration: none;
+  }
+
+  .visual-tool:nth-child(2) {
+    background:
+      linear-gradient(135deg, rgba(15, 110, 86, 0.13), transparent 42%),
+      #fff;
+  }
+
+  .visual-tool:nth-child(3) {
+    background:
+      linear-gradient(135deg, rgba(24, 95, 165, 0.13), transparent 42%),
+      #fff;
+  }
+
+  .visual-tool:hover {
+    border-color: var(--pc-ink);
+  }
+
+  .visual-tool span,
+  .visual-tool small {
+    color: #8a2432;
+  }
+
+  .visual-tool strong {
+    display: block;
+    max-width: 13ch;
+    margin: 20px 0;
+    font-size: 24px;
+    line-height: 1.04;
+    font-weight: 500;
+  }
+
+  .route {
+    margin: 28px 0;
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+
+  .section-head h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 500;
+  }
+
+  .route__list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .route__item {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 12px;
+    min-height: 142px;
+    align-content: start;
+    border: 1px solid var(--pc-rule);
+    border-top: 5px solid var(--stamp-color);
+    padding: 14px;
+    background: #fff;
+  }
+
+  .route__item.is-stamped {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--stamp-color) 12%, #fff), #fff 45%);
+    border-color: var(--pc-ink);
+  }
+
+  .route__order {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--pc-ink);
+    color: var(--stamp-color);
+    font-family: var(--pc-font-mono);
+  }
+
+  .route__name {
+    margin: 0 0 6px;
+    font-weight: 500;
+  }
+
+  .route__note {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .route__link {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .rail {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: repeat(16, minmax(0, 1fr));
+    gap: 4px;
+    margin: 26px 0;
+    padding: 8px;
+    border: 1px solid var(--pc-rule-soft);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+  }
+
+  .rail__stamp {
+    display: grid;
+    place-items: center;
+    min-height: 36px;
+    border: 1px dashed color-mix(in srgb, var(--stamp-color) 58%, #aaa);
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+  }
+
+  .rail__stamp.is-stamped {
+    border-style: solid;
+    background: var(--stamp-color);
+    color: #fff;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .stamp-card {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    min-height: 510px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .stamp-card.is-stamped {
+    border-color: var(--pc-ink);
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--stamp-color) 18%, transparent);
+  }
+
+  .stamp-card__head,
+  .stamp-card__foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+
+  .stamp-card__code {
+    color: var(--stamp-color);
+  }
+
+  .stamp-card__band {
+    color: var(--pc-ink-muted);
+  }
+
+  .stamp-card__stamp {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    margin: 12px;
+    border: 2px solid var(--stamp-color);
+    background: #fffdf7;
+    color: var(--stamp-color);
+    text-align: center;
+    font-family: var(--pc-font-mono);
+    font-size: 20px;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-decoration: none;
+  }
+
+  .stamp-card__stamp img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .stamp-card.is-stamped .stamp-card__stamp::after {
+    content: 'STAMPED';
+    position: absolute;
+    transform: rotate(-9deg);
+    padding: 5px 8px;
+    border: 2px solid var(--stamp-color);
+    background: #fff;
+    color: var(--stamp-color);
+    font-size: 12px;
+  }
+
+  .stamp-card__stamp {
+    position: relative;
+  }
+
+  .stamp-card__body,
+  .stamp-card__blocks {
+    padding: 0 14px 14px;
+  }
+
+  .stamp-card__meta {
+    margin: 0 0 8px;
+    color: var(--pc-ink-muted);
+  }
+
+  .stamp-card h2 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    line-height: 1.05;
+    font-weight: 500;
+  }
+
+  .stamp-card__prompt {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .stamp-card__facts {
+    display: grid;
+    gap: 8px;
+    margin: 14px 0 0;
+  }
+
+  .stamp-card__facts div {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 10px;
+  }
+
+  .stamp-card__facts dt {
+    color: var(--stamp-color);
+  }
+
+  .stamp-card__facts dd {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .mini-label {
+    margin: 0 0 8px;
+    color: var(--pc-ink-muted);
+  }
+
+  .stamp-card__blocks ul {
+    display: grid;
+    gap: 6px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .stamp-card__blocks a {
+    display: grid;
+    gap: 2px;
+    color: var(--pc-ink);
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .stamp-card__blocks span {
+    color: var(--stamp-color);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+  }
+
+  .stamp-card__empty {
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .stamp-card__foot {
+    border-top: 1px solid var(--pc-rule-soft);
+    border-bottom: 0;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .stamp-card__foot a {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .stamp-card__local-actions,
+  .mint-lane {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .mint-lane {
+    padding-top: 8px;
+    border-top: 1px dashed var(--pc-rule-soft);
+  }
+
+  .claim-btn {
+    min-height: 34px;
+    background: var(--stamp-color);
+    border-color: var(--stamp-color);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .stamp-card.is-stamped .claim-btn {
+    background: #fff;
+    color: var(--stamp-color);
+  }
+
+  .mint-btn {
+    min-height: 34px;
+    background: var(--pc-ink);
+    border-color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .mint-btn:disabled {
+    cursor: wait;
+    opacity: 0.72;
+  }
+
+  .stamp-card.is-minted .mint-btn {
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .mint-status {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.35;
+    text-transform: uppercase;
+  }
+
+  .bridge {
+    display: grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: 24px;
+    margin: 34px 0;
+    padding: 18px 0;
+    border-top: 1.5px solid var(--pc-ink);
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .bridge h2 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 500;
+  }
+
+  .bridge p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    line-height: 1.55;
+  }
+
+  .agent-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-top: 28px;
+    padding: 14px 0;
+    border-top: 1px solid var(--pc-rule-soft);
+  }
+
+  .agent-strip__label {
+    margin: 0;
+    color: var(--pc-ink-muted);
+  }
+
+  .agent-strip ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .agent-strip__note {
+    width: 100%;
+    margin: 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 960px) {
+    .hero,
+    .mint-brief,
+    .visual-tools,
+    .bridge {
+      grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+      font-size: 46px;
+    }
+
+    .route__list,
+    .board,
+    .visual-tools__grid,
+    .poster-strip__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .rail {
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
+
+    .mint-brief h2 {
+      max-width: 24ch;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .page {
+      width: min(100% - 24px, 1120px);
+      padding-top: 14px;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+    }
+
+    .hero__top,
+    .section-head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .route__list,
+    .board,
+    .visual-tools__grid,
+    .mint-brief__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .rail {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      position: static;
+    }
+
+    .stamp-card {
+      min-height: auto;
+    }
+  }
+</style>

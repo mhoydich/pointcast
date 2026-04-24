@@ -1,0 +1,261 @@
+---
+/**
+ * StateStrip — "who's working / who's idle" on PointCast, right now.
+ *
+ * Mike 2026-04-20 17:30 PT: *"and have on homepage, a state, working
+ * or idle"* — visible state machine for the collaborators.
+ *
+ * Derives state from the compute ledger at build time + a client-side
+ * relative-time updater. Each collaborator row shows:
+ *   - name
+ *   - live/idle chip ("working" if last ledger entry < 20 min ago,
+ *     else "idle · 3h ago")
+ *   - most-recent artifact + title if idle
+ *
+ * Four rows for the four current builders: Claude Code, Codex, ChatGPT,
+ * Manus. Mike gets a separate row above because his "work" cadence is
+ * directive, not ship — shown as "directing" when the last editorial
+ * entry is recent.
+ *
+ * Author: cc. Source: Mike 2026-04-20 17:30 PT chat.
+ */
+import { COMPUTE_LEDGER, type ComputeEntry } from '../lib/compute-ledger';
+import { COLLABORATORS } from '../lib/collaborators';
+
+interface LatestByCollab {
+  slug: string;
+  name: string;
+  role: string;
+  entry: ComputeEntry | null;
+}
+
+// Roster to display — order matters, left is headline (cc does the most
+// code, mh directs, codex atomic, chatgpt client, manus ops).
+const ROSTER_ORDER = ['claude-code', 'mike-hoydich', 'codex', 'chatgpt', 'manus'];
+
+function latestForSlug(slug: string): ComputeEntry | null {
+  // `mh+cc` collab in ledger counts for both mike-hoydich and claude-code.
+  let best: ComputeEntry | null = null;
+  for (const e of COMPUTE_LEDGER) {
+    const matches = e.collab === slug || (slug === 'mike-hoydich' && e.collab === 'mh+cc')
+      || (slug === 'claude-code' && e.collab === 'mh+cc');
+    if (!matches) continue;
+    if (!best || new Date(e.at).getTime() > new Date(best.at).getTime()) best = e;
+  }
+  return best;
+}
+
+function displayName(slug: string): string {
+  const c = COLLABORATORS.find((x) => x.slug === slug);
+  if (c) {
+    if (slug === 'claude-code') return 'cc';
+    if (slug === 'mike-hoydich') return 'mike';
+    return c.name;
+  }
+  if (slug === 'chatgpt') return 'chatgpt';
+  return slug;
+}
+
+function displayRole(slug: string): string {
+  switch (slug) {
+    case 'claude-code': return 'engineer';
+    case 'mike-hoydich': return 'director';
+    case 'codex': return 'specialist';
+    case 'chatgpt': return 'client';
+    case 'manus': return 'ops';
+    default: return '';
+  }
+}
+
+const rows: LatestByCollab[] = ROSTER_ORDER.map((slug) => {
+  const e = latestForSlug(slug);
+  const c = COLLABORATORS.find((x) => x.slug === slug);
+  return {
+    slug,
+    name: displayName(slug),
+    role: displayRole(slug) || (c?.role ?? ''),
+    entry: e,
+  };
+});
+
+// Latest overall (for the "last ship" line in the header).
+const latestOverall = [...COMPUTE_LEDGER].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0] || null;
+---
+
+<aside class="state-strip" aria-label="Collaborator state — working or idle">
+  <p class="state-strip__kicker mono">
+    <span class="state-strip__label">STATE</span>
+    <span class="state-strip__sep" aria-hidden="true">·</span>
+    <span class="state-strip__lede">
+      working or idle · derived from <a href="/compute">/compute</a>
+      {latestOverall && (
+        <>
+          · last ship <time data-iso={latestOverall.at} class="state-strip__last">{latestOverall.at.slice(0, 16).replace('T', ' ')}Z</time>
+        </>
+      )}
+    </span>
+  </p>
+  <ul class="state-strip__rows mono">
+    {rows.map((r) => (
+      <li class="state-strip__row" data-last-at={r.entry?.at ?? ''}>
+        <span class="state-strip__name">{r.name}</span>
+        <span class="state-strip__role">{r.role}</span>
+        <span class="state-strip__dot" data-state="unknown" aria-hidden="true"></span>
+        <span class="state-strip__status" data-status>— loading…</span>
+        {r.entry && (
+          <a class="state-strip__last-link" href={(r.entry.artifact && r.entry.artifact.startsWith('/')) ? r.entry.artifact : '/compute'}>
+            {r.entry.title.length > 60 ? r.entry.title.slice(0, 58) + '…' : r.entry.title}
+          </a>
+        )}
+      </li>
+    ))}
+  </ul>
+</aside>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var rows = document.querySelectorAll('.state-strip__row');
+    if (!rows.length) return;
+
+    var WORKING_MS = 20 * 60 * 1000;        // < 20 min = working
+    var RECENT_MS  = 24 * 60 * 60 * 1000;   // < 24h = show hours
+    function fmtAgo(deltaMs) {
+      if (deltaMs < 60 * 1000) return 'just now';
+      if (deltaMs < 60 * 60 * 1000) return Math.round(deltaMs / 60000) + 'm ago';
+      if (deltaMs < 24 * 60 * 60 * 1000) return Math.round(deltaMs / 3600000) + 'h ago';
+      if (deltaMs < 7 * 24 * 60 * 60 * 1000) return Math.round(deltaMs / (24*3600000)) + 'd ago';
+      return Math.round(deltaMs / (7*24*3600000)) + 'w ago';
+    }
+
+    function paint() {
+      var now = Date.now();
+      rows.forEach(function (row) {
+        var lastAt = row.getAttribute('data-last-at');
+        var dot = row.querySelector('.state-strip__dot');
+        var status = row.querySelector('[data-status]');
+        if (!lastAt) {
+          if (dot) dot.setAttribute('data-state', 'unknown');
+          if (status) status.textContent = 'no entries yet';
+          return;
+        }
+        var delta = now - new Date(lastAt).getTime();
+        if (isNaN(delta) || delta < 0) return;
+        var state = delta < WORKING_MS ? 'working' : 'idle';
+        if (dot) dot.setAttribute('data-state', state);
+        if (status) {
+          status.textContent = state === 'working'
+            ? 'working · ' + fmtAgo(delta)
+            : 'idle · ' + fmtAgo(delta);
+        }
+      });
+    }
+
+    paint();
+    // Re-paint every 60s so the relative times stay fresh without any
+    // network call. Ledger itself is static per page load; that's the
+    // correct granularity — a page reload picks up newer ships.
+    setInterval(paint, 60 * 1000);
+  })();
+</script>
+
+<style>
+  .state-strip {
+    margin: 12px 0 10px;
+    padding: 10px 14px 12px;
+    background: rgba(24, 95, 165, 0.03);
+    border: 1px solid rgba(24, 95, 165, 0.18);
+    border-left: 3px solid #185FA5;
+    border-radius: 2px;
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+  }
+
+  .state-strip__kicker {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+    color: #0B3E73;
+  }
+  .state-strip__label { font-weight: 600; }
+  .state-strip__sep { margin: 0 6px; opacity: 0.5; }
+  .state-strip__lede { color: var(--pc-ink-soft, #38373A); text-transform: none; letter-spacing: 0; }
+  .state-strip__lede a { color: #185FA5; text-decoration: underline; }
+  .state-strip__last { font-family: var(--pc-font-mono); font-size: 9.5px; }
+
+  .state-strip__rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 3px; }
+  .state-strip__row {
+    display: grid;
+    grid-template-columns: 80px 70px 12px 130px 1fr;
+    gap: 10px;
+    align-items: baseline;
+    padding: 3px 0;
+    font-size: 11px;
+    border-bottom: 1px dotted rgba(24, 95, 165, 0.14);
+  }
+  .state-strip__row:last-child { border-bottom: none; }
+
+  .state-strip__name {
+    font-family: var(--pc-font-sans, system-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pc-ink, #12110E);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .state-strip__role {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .state-strip__dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #c4c2bc;
+    display: inline-block;
+    align-self: center;
+  }
+  .state-strip__dot[data-state="working"] {
+    background: #2f8f5f;
+    box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55);
+    animation: state-pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .state-strip__dot[data-state="idle"] { background: #8a7e6c; }
+  @keyframes state-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55); }
+    70%  { box-shadow: 0 0 0 8px rgba(47, 143, 95, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+
+  .state-strip__status {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink-muted);
+  }
+  .state-strip__last-link {
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    color: var(--pc-ink-soft);
+    text-decoration: underline;
+    text-decoration-color: rgba(24, 95, 165, 0.25);
+    text-underline-offset: 2px;
+    text-transform: none;
+    letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .state-strip__last-link:hover { color: #185FA5; text-decoration-color: currentColor; }
+
+  @media (max-width: 700px) {
+    .state-strip__row {
+      grid-template-columns: 70px 10px 1fr;
+      gap: 8px;
+    }
+    .state-strip__row .state-strip__role { display: none; }
+    .state-strip__last-link { display: none; }
+  }
+</style>

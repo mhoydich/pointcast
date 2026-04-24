@@ -17,6 +17,11 @@
  *   node scripts/indexnow-submit.mjs https://pointcast.xyz/manifesto \
  *                                    https://pointcast.xyz/glossary
  *
+ *   # Submit only the SEO-priority URLs (home + pillars + all 9 channels
+ *   # + meta surfaces). Use this right after a deploy that touched any of
+ *   # those pages — much faster than sending the whole archive.
+ *   node scripts/indexnow-submit.mjs --priority
+ *
  * Until INDEXNOW_KEY is bound, the endpoint returns 503 with
  * { reason: 'key-not-bound' } — this script logs the condition and
  * exits 0 (not a failure) so it can be wired into post-deploy CI today
@@ -37,6 +42,46 @@ const PRIORITY_URLS = [
   'https://pointcast.xyz/local',
   'https://pointcast.xyz/battle',
   'https://pointcast.xyz/ai-stack',
+];
+
+/**
+ * SEO-priority URLs: the pages where a faster index-refresh compounds
+ * the most (home + keyword-targeted pillars + channel landings + meta
+ * surfaces). Kept in sync with the footer endpoint list in
+ * src/pages/index.astro and the llms.txt pillar section.
+ */
+const PRIORITY_URLS = [
+  'https://pointcast.xyz/',
+  'https://pointcast.xyz/start',
+  'https://pointcast.xyz/share',
+  'https://pointcast.xyz/el-segundo',
+  'https://pointcast.xyz/agent-native',
+  'https://pointcast.xyz/nouns',
+  'https://pointcast.xyz/federated',
+  'https://pointcast.xyz/federate',
+  'https://pointcast.xyz/manifesto',
+  'https://pointcast.xyz/glossary',
+  'https://pointcast.xyz/for-agents',
+  'https://pointcast.xyz/resources',
+  'https://pointcast.xyz/ai-stack',
+  'https://pointcast.xyz/beacon',
+  'https://pointcast.xyz/local',
+  'https://pointcast.xyz/mesh',
+  'https://pointcast.xyz/archive',
+  'https://pointcast.xyz/collection',
+  'https://pointcast.xyz/collection/visit-nouns',
+  'https://pointcast.xyz/battle',
+  'https://pointcast.xyz/cast',
+  'https://pointcast.xyz/drum',
+  'https://pointcast.xyz/c/front-door',
+  'https://pointcast.xyz/c/court',
+  'https://pointcast.xyz/c/spinning',
+  'https://pointcast.xyz/c/good-feels',
+  'https://pointcast.xyz/c/garden',
+  'https://pointcast.xyz/c/el-segundo',
+  'https://pointcast.xyz/c/faucet',
+  'https://pointcast.xyz/c/visit',
+  'https://pointcast.xyz/c/battler',
 ];
 
 async function fetchSitemapUrls() {
@@ -65,8 +110,13 @@ async function main() {
   const argv = process.argv.slice(2);
   let urls;
 
-  if (argv.length > 0) {
-    urls = argv;
+  const isPriority = argv.includes('--priority');
+
+  if (isPriority) {
+    urls = PRIORITY_URLS;
+    console.log(`[indexnow] --priority · ${urls.length} SEO-priority URLs`);
+  } else if (argv.length > 0) {
+    urls = argv.filter((a) => !a.startsWith('--'));
   } else {
     console.log('[indexnow] no URLs specified — pulling priority URLs + all /b/* from sitemap');
     const all = await fetchSitemapUrls();

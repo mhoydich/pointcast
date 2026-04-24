@@ -1,0 +1,211 @@
+---
+/**
+ * /tv/shows/clock — world-clock ticker. El Segundo center, with a
+ * broadcast-relevant ring around it (cloud/UTC, major broadcast time
+ * zones, poetic bonuses). Live-ticking big digits, subtle rotation.
+ *
+ * Auto-fullscreen on first tap.
+ */
+
+interface Zone {
+  tz: string;
+  label: string;
+  sublabel?: string;
+  accent?: string;
+  emphasis?: boolean;
+}
+
+const ZONES: Zone[] = [
+  { tz: 'America/Los_Angeles',    label: 'El Segundo',   sublabel: 'Broadcast origin · 33.92°N 118.39°W',  accent: '#F59F00', emphasis: true },
+  { tz: 'UTC',                    label: 'Cloud',        sublabel: 'Where the agents live · UTC',           accent: '#6b7cff' },
+  { tz: 'America/New_York',       label: 'New York',     sublabel: 'Markets open · ET',                      accent: '#E5603C' },
+  { tz: 'Europe/London',          label: 'London',       sublabel: 'BBC · GMT/BST',                           accent: '#4cd39b' },
+  { tz: 'Europe/Berlin',          label: 'Berlin',       sublabel: 'CET · old radio',                         accent: '#c4a77d' },
+  { tz: 'Asia/Tokyo',             label: 'Tokyo',        sublabel: 'JST · 9 ahead of UTC',                    accent: '#ff8da8' },
+  { tz: 'Asia/Hong_Kong',         label: 'Hong Kong',    sublabel: 'HKT · financial hub',                     accent: '#c67cff' },
+  { tz: 'Australia/Sydney',       label: 'Sydney',       sublabel: 'AEDT · tomorrow already',                 accent: '#5ad4ff' },
+  { tz: 'Atlantic/Reykjavik',     label: 'Reykjavík',    sublabel: 'GMT · northern broadcast',                accent: '#7ad6ff' },
+  { tz: 'Africa/Casablanca',      label: 'Casablanca',   sublabel: 'WEST · the song is not here',             accent: '#f2a365' },
+];
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#060504" />
+  <meta name="description" content="World clock broadcast — El Segundo center, ten broadcast-relevant zones ticking live. Full viewport, subtle motion, big digits." />
+  <title>PointCast TV · World clock</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lora:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #060504;
+      --bg-2: #14100a;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --accent: #F59F00;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, var(--bg-2) 0%, var(--bg) 80%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; gap: 16px; padding: 16px 30px; z-index: 10;
+      font-family: var(--mono);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; margin-left: auto; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .stage {
+      position: relative;
+      min-height: 100vh;
+      padding: 80px 30px 70px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+    }
+
+    .primary {
+      text-align: center;
+      width: 100%;
+      max-width: 1100px;
+      padding: 20px 0 10px;
+      border-bottom: 1px solid rgba(254, 245, 231, 0.12);
+    }
+    .primary__label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; font-weight: 700; }
+    .primary__clock { font-family: var(--mono); font-weight: 500; font-size: clamp(64px, 13vw, 180px); line-height: 1; color: var(--ink); margin: 0; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .primary__date { font-family: var(--serif); font-size: clamp(16px, 2vw, 22px); color: var(--ink-soft); margin: 8px 0 0; font-style: italic; }
+    .primary__sub { font-family: var(--mono); font-size: 10px; letter-spacing: 0.24em; color: var(--ink-dim); margin: 6px 0 0; text-transform: uppercase; }
+
+    .ring {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      width: 100%;
+      max-width: 1400px;
+    }
+    .zone {
+      padding: 18px 20px;
+      background: rgba(254, 245, 231, 0.03);
+      border-left: 3px solid var(--zone-accent, var(--ink-dim));
+      border-radius: 2px;
+    }
+    .zone__label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--zone-accent, var(--ink-soft)); margin: 0 0 4px; font-weight: 700; }
+    .zone__clock { font-family: var(--mono); font-weight: 500; font-size: clamp(22px, 3.2vw, 36px); line-height: 1; color: var(--ink); margin: 4px 0; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+    .zone__sub { font-family: var(--serif); font-size: 12px; color: var(--ink-dim); margin: 4px 0 0; font-style: italic; }
+
+    .bot {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 44px;
+      display: flex; align-items: center; gap: 16px; padding: 12px 30px; z-index: 10;
+      background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
+      font-family: var(--mono); color: var(--ink-dim);
+      font-size: 10px; letter-spacing: 0.14em;
+    }
+    .bot__kicker { color: var(--accent); font-weight: 700; }
+
+    @media (max-width: 720px) {
+      .ring { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+      .stage { gap: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / WORLD CLOCK</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+  </header>
+
+  <main class="stage">
+    <section class="primary">
+      <p class="primary__label" id="primary-label">El Segundo · broadcast origin</p>
+      <p class="primary__clock" id="primary-clock">—:—:—</p>
+      <p class="primary__date" id="primary-date">—</p>
+      <p class="primary__sub">33.92°N 118.39°W · a living broadcast</p>
+    </section>
+
+    <section class="ring">
+      {ZONES.filter((z) => !z.emphasis).map((z) => (
+        <div class="zone" data-tz={z.tz} style={`--zone-accent: ${z.accent ?? '#c4c2bc'}`}>
+          <p class="zone__label">{z.label}</p>
+          <p class="zone__clock js-zone-clock">—:—</p>
+          <p class="zone__sub">{z.sublabel ?? ''}</p>
+        </div>
+      ))}
+    </section>
+  </main>
+
+  <footer class="bot">
+    <span class="bot__kicker">LIVE</span>
+    <span>broadcast origin + {ZONES.length - 1} broadcast-relevant zones · ticks every second · El Segundo time is source</span>
+  </footer>
+
+  <script is:inline>
+    (function () {
+      var primaryTz = 'America/Los_Angeles';
+      var primaryClock = document.getElementById('primary-clock');
+      var primaryDate = document.getElementById('primary-date');
+      var primaryLabel = document.getElementById('primary-label');
+
+      function fmt(date, tz, withSeconds) {
+        return new Intl.DateTimeFormat('en-US', {
+          hour: '2-digit', minute: '2-digit',
+          second: withSeconds ? '2-digit' : undefined,
+          hour12: false, timeZone: tz,
+        }).format(date);
+      }
+      function fmtDate(date, tz) {
+        return new Intl.DateTimeFormat('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+          timeZone: tz,
+        }).format(date);
+      }
+
+      function tick() {
+        var now = new Date();
+        if (primaryClock) primaryClock.textContent = fmt(now, primaryTz, true);
+        if (primaryDate) primaryDate.textContent = fmtDate(now, primaryTz);
+        document.querySelectorAll('.zone').forEach(function (el) {
+          var tz = el.getAttribute('data-tz');
+          var clock = el.querySelector('.js-zone-clock');
+          if (tz && clock) clock.textContent = fmt(now, tz, false);
+        });
+      }
+      tick();
+      setInterval(tick, 1000);
+
+      // Fullscreen
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

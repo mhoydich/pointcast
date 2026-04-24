@@ -1,0 +1,1076 @@
+---
+/**
+ * CoNavHUD — v2 of the persistent bottom navigation bar.
+ *
+ * Mike 2026-04-21 09:00 PT directive:
+ *   "lets take a big pass at the bar, v2, thinking about in future a
+ *    federated bar across all our sites, and maybe we browse with it,
+ *    and have style, start to go into personal hud, login, assistive,
+ *    should be a neat assignment, be creative, like an early mac
+ *    developer making ui breakthroughs"
+ *
+ * Five directions, all pointed at in this v2:
+ *
+ *   1. FEDERATED — A ⚡ network dropdown showing PointCast plus peer
+ *      nodes. v0 hardcodes placeholders; v1 reads /for-nodes registry.
+ *      The component is designed to drop into any peer's layout: it
+ *      reads its own origin, marks the current node as "you are here",
+ *      lists peers, and links out. Same component, different hosts.
+ *
+ *   2. BROWSE — A center command palette (⌘K / Ctrl+K) that:
+ *      - types `/foo` → filters local routes + navigates on enter
+ *      - types `@peer` → jumps to a federated peer's `/` or surface
+ *      - types `?` → shows help / shortcuts
+ *      - anything else → ask-style placeholder (v0 links to /cos)
+ *
+ *   3. STYLE — Early-Mac-developer aesthetic breakthroughs:
+ *      - 1px crisp borders, no unnecessary rounding beyond 2px
+ *      - Monospace-heavy typography for the functional bits
+ *      - Micro-animations kept subtle
+ *      - Dotted-row textures inside the expanded HUD like QuickDraw patterns
+ *      - Status panel that "tears off" to the top-right when expanded
+ *
+ *   4. PERSONAL HUD — A ≡ expand toggle reveals a second-row drawer
+ *      with three panels: YOU (noun + mood + local stats from
+ *      localStorage), NETWORK (federation list + peer links), HELP
+ *      (keyboard shortcuts + ask input). Drawer persists across
+ *      navigation via localStorage.
+ *
+ *   5. LOGIN + ASSISTIVE — Google sign-in chip in YOU panel (hidden
+ *      when pc_session cookie present). Beacon wallet chip stays in
+ *      place. Keyboard shortcuts: ⌘K palette, ⌘. HUD toggle, ⌘/ nav
+ *      menu, ⌘? help. Skip-to-content link at top of DOM for
+ *      screen readers.
+ *
+ * Backwards compatibility — The old CoNavigator.astro stays on disk.
+ * This component replaces it in BaseLayout + BlockLayout. If something
+ * breaks, swap the imports back.
+ */
+import { COMPUTE_LEDGER } from '../lib/compute-ledger';
+import WalletChip from './WalletChip.astro';
+
+// Federation peers — v0 placeholder list. v1 reads /for-nodes registry.
+interface Peer {
+  host: string;
+  label: string;
+  status: 'live' | 'placeholder' | 'coming';
+  desc: string;
+}
+const PEERS: Peer[] = [
+  { host: 'pointcast.xyz',   label: 'POINTCAST',  status: 'live',        desc: 'El Segundo broadcast · you are here' },
+  { host: 'garden.kfn',      label: 'GARDEN',     status: 'placeholder', desc: 'slow-tempo garden feed (imagined peer)' },
+  { host: 'wharf.live',      label: 'WHARF',      status: 'placeholder', desc: 'dockside operations log (imagined peer)' },
+  { host: 'bench.network',   label: 'BENCH',      status: 'placeholder', desc: 'who\'s building what (imagined peer)' },
+  { host: 'riverside.fm',    label: 'RIVERSIDE',  status: 'placeholder', desc: 'riverside editorial (imagined peer)' },
+];
+
+// Compact chip set — what always shows on the main row.
+// Second-row HUD "DO" panel can list more.
+interface Chip {
+  href: string;
+  label: string;
+  icon?: string;
+  title?: string;
+  variant?: string;
+}
+const CHIPS: Chip[] = [
+  { href: '/here',        label: 'here',  title: 'who\'s connected right now' },
+  { href: '/drum/click',  label: 'drum',  title: 'drum cookie clicker' },
+  { href: '/noundrum',    label: 'nd',    title: 'drum to claim land, make art', icon: '🥁', variant: 'noundrum' },
+  { href: '/ping',        label: 'ping',  title: 'message the team', icon: '✎', variant: 'ping' },
+  { href: '/cos',         label: 'cos',   title: 'chief of staff — chat the team', variant: 'cos' },
+  { href: '/tv',          label: 'tv',    title: '12 TV shows' },
+];
+
+// HUD "DO" panel — fuller list of surfaces, shown in the expanded drawer.
+const HUD_DO: Chip[] = [
+  ...CHIPS,
+  { href: '/commercials',  label: 'commercials' },
+  { href: '/passport',     label: 'passport' },
+  { href: '/leaderboards', label: 'leaderboards' },
+  { href: '/tezos',        label: 'tezos' },
+  { href: '/bath',         label: 'bath' },
+  { href: '/now',          label: 'now' },
+  { href: '/cadence',      label: 'cadence' },
+  { href: '/compute',      label: 'compute' },
+  { href: '/play',         label: 'play' },
+];
+
+// Recent ledger count for the status badge.
+const shipCount = COMPUTE_LEDGER.length;
+const lastShipAt = [...COMPUTE_LEDGER].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0]?.at ?? null;
+
+// Keyboard shortcuts shown in the HELP panel.
+const SHORTCUTS = [
+  { keys: '⌘K',  label: 'focus command palette' },
+  { keys: '⌘.',  label: 'toggle HUD drawer' },
+  { keys: '⌘/',  label: 'open network menu' },
+  { keys: '⌘?',  label: 'show this help' },
+  { keys: 'Esc', label: 'close any popover' },
+  { keys: '/',   label: 'prefix for route navigation' },
+  { keys: '@',   label: 'prefix for peer-network jump' },
+  { keys: '?',   label: 'prefix for help query' },
+];
+---
+
+<!-- Skip-to-content link for keyboard / screen reader users -->
+<a class="hud-skip" href="#main-content">Skip to main content</a>
+
+<aside class="hud" id="hud" data-expanded="false" data-height="compact" aria-label="PointCast navigator + HUD" data-skipto="main">
+  <!-- Grab-strip: a clearly-visible click-to-toggle control that opens /
+       closes the drawer below. Labeled so the affordance is unmistakable.
+       Keyboard: Enter/Space activates. -->
+  <button type="button" class="hud__grab" id="hud-grab" aria-label="Open drawer (click to toggle)" aria-controls="hud-drawer">
+    <span class="hud__grab-arrow" id="hud-grab-arrow" aria-hidden="true">▲</span>
+    <span class="hud__grab-label mono" id="hud-grab-label">OPEN DRAWER</span>
+    <span class="hud__grab-arrow" aria-hidden="true">▲</span>
+  </button>
+  <!-- Compact row (always visible) -->
+  <div class="hud__bar" role="toolbar">
+    <!-- LEFT: identity chip (noun avatar + mood) -->
+    <div class="hud__left">
+      <button type="button" class="hud__me" id="hud-me" aria-label="Your identity + mood" title="Your identity">
+        <span class="hud__me-noun">
+          <img id="hud-noun-img" alt="your noun" src="https://noun.pics/0.svg" />
+        </span>
+        <span class="hud__me-text">
+          <span class="hud__me-label mono" id="hud-me-label">anon</span>
+          <span class="hud__me-mood mono" id="hud-me-mood">—</span>
+        </span>
+      </button>
+      <button type="button" class="hud__chip hud__chip--net" id="hud-net-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="hud-net-menu" title="Network (⌘/)">
+        <span class="hud__chip-icon" aria-hidden="true">⚡</span>
+        <span class="hud__chip-text mono">net</span>
+      </button>
+    </div>
+
+    <!-- CENTER: command palette -->
+    <form class="hud__palette" id="hud-palette" role="search" autocomplete="off">
+      <span class="hud__palette-prompt mono" aria-hidden="true">&gt;_</span>
+      <input
+        type="text"
+        class="hud__palette-input"
+        id="hud-palette-input"
+        placeholder="ask or go… (⌘K)"
+        aria-label="Ask or go to a surface"
+        spellcheck="false"
+      />
+      <kbd class="hud__palette-kbd mono" aria-hidden="true">⌘K</kbd>
+      <div class="hud__palette-results" id="hud-palette-results" role="listbox" hidden></div>
+    </form>
+
+    <!-- RIGHT: quick chips (compact) + HUD expand + help -->
+    <nav class="hud__chips" aria-label="Quick nav">
+      {CHIPS.map((c) => (
+        <a
+          class={`hud__chip hud__chip--link${c.variant ? ' hud__chip--' + c.variant : ''}`}
+          href={c.href}
+          title={c.title ?? c.label}
+        >
+          {c.icon && <span class="hud__chip-icon" aria-hidden="true">{c.icon}</span>}
+          <span class="hud__chip-text mono">{c.label}</span>
+        </a>
+      ))}
+    </nav>
+
+    <div class="hud__right">
+      <button type="button" class="hud__chip hud__chip--help" id="hud-help-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="hud-help-panel" title="Shortcuts (⌘?)">
+        <span class="hud__chip-icon" aria-hidden="true">?</span>
+      </button>
+      <!-- ≡ expand/collapse drawer. ⌘. hotkey. -->
+      <button type="button" class="hud__chip hud__chip--expand" id="hud-expand" aria-expanded="false" aria-controls="hud-drawer" title="Open drawer (⌘.)">
+        <span class="hud__chip-icon" aria-hidden="true">≡</span>
+      </button>
+      <!-- × minimize to corner chip. ⌘M hotkey. -->
+      <button type="button" class="hud__chip hud__chip--minimize" id="hud-minimize" title="Minimize to corner chip (⌘M)" aria-label="Minimize HUD">
+        <span class="hud__chip-icon" aria-hidden="true">×</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Minimized floating chip — shown only when HUD is minimized. Tap reopens. -->
+  <button type="button" class="hud__reopen" id="hud-reopen" hidden aria-label="Reopen PointCast HUD" title="Reopen HUD (⌘M)">
+    <span class="hud__reopen-icon" aria-hidden="true">◉</span>
+    <span class="hud__reopen-label mono">OPEN HUD</span>
+  </button>
+
+  <!-- Expanded drawer (three panels) -->
+  <div class="hud__drawer" id="hud-drawer" hidden>
+    <!-- Panel: YOU -->
+    <section class="hud__panel hud__panel--you">
+      <header class="hud__panel-head">
+        <p class="hud__panel-kicker mono">YOU</p>
+        <p class="hud__panel-sub mono" id="hud-you-sub">anon · local-first</p>
+      </header>
+      <dl class="hud__stats mono">
+        <div class="hud__stat"><dt>noun</dt>      <dd id="hud-stat-noun">#—</dd></div>
+        <div class="hud__stat"><dt>mood</dt>      <dd id="hud-stat-mood">—</dd></div>
+        <div class="hud__stat"><dt>nd tiles</dt>  <dd id="hud-stat-nd">0</dd></div>
+        <div class="hud__stat"><dt>drum beats</dt><dd id="hud-stat-drum">0</dd></div>
+        <div class="hud__stat"><dt>cards</dt>     <dd id="hud-stat-cards">0</dd></div>
+        <div class="hud__stat"><dt>session</dt>   <dd id="hud-stat-session">—</dd></div>
+      </dl>
+      <div class="hud__auth">
+        <a class="hud__auth-chip mono" id="hud-google" href="/api/auth/google/start?next=/" hidden>↪ sign in with google</a>
+        <a class="hud__auth-chip mono hud__auth-chip--logout" id="hud-logout" href="/api/auth/logout?next=/" hidden>⏻ sign out</a>
+        <a class="hud__auth-chip mono" href="/auth">→ /auth (status + setup)</a>
+        <a class="hud__auth-chip mono" href="/profile">→ /profile (wallets)</a>
+      </div>
+      <!-- Inline Beacon wallet — click opens Kukai/Temple/Umami/Airgap picker,
+           stores address in localStorage['pc:wallets'], emits pc:wallet-change.
+           Mike 2026-04-21 13:55 PT: "yah, get beacon working". -->
+      <div class="hud__wallet">
+        <WalletChip />
+      </div>
+    </section>
+
+    <!-- Panel: NETWORK (federation) -->
+    <section class="hud__panel hud__panel--net">
+      <header class="hud__panel-head">
+        <p class="hud__panel-kicker mono">NETWORK · FEDERATED BAR</p>
+        <p class="hud__panel-sub mono">same bar, different host · v0 placeholders</p>
+      </header>
+      <ul class="hud__peers" id="hud-peers">
+        {PEERS.map((p) => (
+          <li class={`hud__peer hud__peer--${p.status}`} data-host={p.host}>
+            <span class="hud__peer-dot" aria-hidden="true"></span>
+            <span class="hud__peer-body">
+              <span class="hud__peer-name mono">{p.label}</span>
+              <span class="hud__peer-host mono">{p.host}</span>
+              <span class="hud__peer-desc">{p.desc}</span>
+            </span>
+            {p.status === 'live' ? (
+              <span class="hud__peer-here mono">◉ HERE</span>
+            ) : (
+              <a class="hud__peer-jump mono" href={`https://${p.host}/`} rel="noopener" target="_blank">↗</a>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p class="hud__panel-foot mono">
+        <a href="/for-nodes">/for-nodes</a> · <a href="/decks">/decks</a> · <a href="/rfc">/rfc</a> · <a href="/research">/research</a>
+      </p>
+    </section>
+
+    <!-- Panel: HELP -->
+    <section class="hud__panel hud__panel--help" id="hud-help-panel">
+      <header class="hud__panel-head">
+        <p class="hud__panel-kicker mono">HELP · SHORTCUTS + ASK</p>
+        <p class="hud__panel-sub mono">press any key · ESC closes popovers</p>
+      </header>
+      <ul class="hud__shortcuts">
+        {SHORTCUTS.map((s) => (
+          <li class="hud__shortcut">
+            <kbd class="mono">{s.keys}</kbd>
+            <span>{s.label}</span>
+          </li>
+        ))}
+      </ul>
+      <p class="hud__panel-foot mono">
+        ask a bigger question → <a href="/cos">send via /cos</a> · {shipCount} ships in the ledger
+      </p>
+    </section>
+  </div>
+
+  <!-- Network popover (overlay, NOT part of drawer — triggered from compact row) -->
+  <div class="hud__popover hud__popover--net" id="hud-net-menu" role="menu" hidden>
+    <ul class="hud__peers hud__peers--compact">
+      {PEERS.map((p) => (
+        <li class={`hud__peer hud__peer--${p.status}`}>
+          <span class="hud__peer-dot" aria-hidden="true"></span>
+          <span class="hud__peer-name mono">{p.label}</span>
+          {p.status === 'live' ? (
+            <span class="hud__peer-here mono">HERE</span>
+          ) : (
+            <a class="hud__peer-jump mono" href={`https://${p.host}/`} rel="noopener" target="_blank">↗</a>
+          )}
+        </li>
+      ))}
+    </ul>
+    <p class="hud__popover-foot mono">same bar on every peer · <a href="/for-nodes">register</a></p>
+  </div>
+</aside>
+
+<script is:inline define:vars={{ HUD_DO, lastShipAt }}>
+(function () {
+  'use strict';
+
+  // ---- Refs ----
+  var hud = document.getElementById('hud');
+  var expandBtn = document.getElementById('hud-expand');
+  var drawer = document.getElementById('hud-drawer');
+  var paletteInput = document.getElementById('hud-palette-input');
+  var paletteResults = document.getElementById('hud-palette-results');
+  var netToggle = document.getElementById('hud-net-toggle');
+  var netMenu = document.getElementById('hud-net-menu');
+  var helpToggle = document.getElementById('hud-help-toggle');
+  var meBtn = document.getElementById('hud-me');
+
+  var nounImg = document.getElementById('hud-noun-img');
+  var meLabel = document.getElementById('hud-me-label');
+  var meMood = document.getElementById('hud-me-mood');
+
+  var youSub = document.getElementById('hud-you-sub');
+  var statNoun = document.getElementById('hud-stat-noun');
+  var statMood = document.getElementById('hud-stat-mood');
+  var statNd = document.getElementById('hud-stat-nd');
+  var statDrum = document.getElementById('hud-stat-drum');
+  var statCards = document.getElementById('hud-stat-cards');
+  var statSession = document.getElementById('hud-stat-session');
+  var googleChip = document.getElementById('hud-google');
+  var logoutChip = document.getElementById('hud-logout');
+
+  // ---- Identity + mood from localStorage ----
+  function getSession() {
+    var k = 'pc:session-id';
+    var v = '';
+    try { v = localStorage.getItem(k) || ''; } catch (e) {}
+    if (!v) {
+      v = 'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      try { localStorage.setItem(k, v); } catch (e) {}
+    }
+    return v;
+  }
+  function nounFromSession(sid) {
+    var h = 0;
+    for (var i = 0; i < sid.length; i++) h = (h * 31 + sid.charCodeAt(i)) >>> 0;
+    return h % 1340;
+  }
+  function getMood() {
+    try { return localStorage.getItem('pc:mood') || ''; } catch (e) { return ''; }
+  }
+  function cookieHas(name) {
+    var raw = document.cookie || '';
+    var parts = raw.split(';').map(function (s) { return s.trim(); });
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].indexOf(name + '=') === 0) return true;
+    }
+    return false;
+  }
+  function readJson(key, path) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!path) return p;
+      var parts = path.split('.');
+      var v = p;
+      for (var i = 0; i < parts.length; i++) {
+        if (v == null) return null;
+        if (parts[i] === 'length' && Array.isArray(v)) return v.length;
+        v = v[parts[i]];
+      }
+      return v;
+    } catch (e) { return null; }
+  }
+
+  function paintIdentity() {
+    var sid = getSession();
+    var nid = nounFromSession(sid);
+    var mood = getMood();
+    var isMike = false;
+    // If pc_session cookie present + profile says mike, override.
+    try {
+      var w = localStorage.getItem('pc:wallet');
+      if (w) { var o = JSON.parse(w); if (o && o.address === 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw') isMike = true; }
+    } catch (e) {}
+
+    if (nounImg) nounImg.src = 'https://noun.pics/' + nid + '.svg';
+    if (meLabel) meLabel.textContent = isMike ? 'mike' : 'noun #' + nid;
+    if (meMood) meMood.textContent = mood || '—';
+
+    if (youSub) youSub.textContent = (isMike ? 'mike' : 'anon') + ' · local-first';
+    if (statNoun) statNoun.textContent = '#' + nid;
+    if (statMood) statMood.textContent = mood || '—';
+    if (statSession) statSession.textContent = sid.slice(0, 14) + '…';
+
+    var ndTiles = readJson('pc:noundrum:state', 'ownedTiles.length') || 0;
+    var drumBeats = readJson('pc:drum:state', 'lifetime') || 0;
+    var cardsCount = readJson('pc:cards:deck', 'length') || 0;
+    if (statNd) statNd.textContent = ndTiles;
+    if (statDrum) statDrum.textContent = drumBeats;
+    if (statCards) statCards.textContent = cardsCount;
+
+    if (googleChip) {
+      if (cookieHas('pc_session')) googleChip.setAttribute('hidden', '');
+      else googleChip.removeAttribute('hidden');
+    }
+    if (logoutChip) {
+      if (cookieHas('pc_session')) logoutChip.removeAttribute('hidden');
+      else logoutChip.setAttribute('hidden', '');
+    }
+  }
+  paintIdentity();
+
+  // ---- Expand / collapse drawer (delegates to unified height state) ----
+  function setExpanded(on) {
+    setHeight(on ? 'tall' : 'compact');
+  }
+  expandBtn.addEventListener('click', function () {
+    setExpanded(hud.getAttribute('data-height') !== 'tall');
+  });
+
+  // ---- Height states (v4.0 — simplified) ----
+  // v3.x had four states including 'tiny' (icon-only strip) which ended up
+  // looking broken. v4 collapses to three clear states:
+  //   min     — HUD hidden, floating reopen chip in bottom-right
+  //   compact — default full bar (chips + palette)
+  //   tall    — bar + drawer open below
+  //
+  // Shade keys (⌘↑/⌘↓) + grab click now ONLY cycle between compact↔tall.
+  // Minimizing is explicit (× button / ⌘M) so a stray keystroke can't hide
+  // the bar by accident.
+  var HEIGHTS = ['min', 'compact', 'tall'];
+  var SHADE   = ['compact', 'tall'];
+  var minimizeBtn = document.getElementById('hud-minimize');
+  var reopenBtn = document.getElementById('hud-reopen');
+  var grabEl = document.getElementById('hud-grab');
+
+  function setHeight(h) {
+    if (HEIGHTS.indexOf(h) < 0) h = 'compact';
+    hud.setAttribute('data-height', h);
+    hud.setAttribute('data-expanded', h === 'tall' ? 'true' : 'false');
+    hud.setAttribute('data-minimized', h === 'min' ? 'true' : 'false');
+    expandBtn.setAttribute('aria-expanded', h === 'tall' ? 'true' : 'false');
+    if (h === 'tall') drawer.removeAttribute('hidden'); else drawer.setAttribute('hidden', '');
+    if (h === 'min') {
+      hud.setAttribute('hidden', '');
+      if (reopenBtn) reopenBtn.removeAttribute('hidden');
+    } else {
+      hud.removeAttribute('hidden');
+      if (reopenBtn) reopenBtn.setAttribute('hidden', '');
+    }
+    try { localStorage.setItem('pc:hud:height', h); } catch (e) {}
+    document.body.setAttribute('data-hud-height', h);
+  }
+  // Hydrate from localStorage.
+  // v4 migration: any prior version is reset to 'compact' on next load. This
+  // clears the accumulated v3.x state confusion (min/tiny/persisted) for every
+  // returning user, one time. Subsequent interactions save normally.
+  var HUD_VERSION = 'v4.0';
+  try {
+    var savedVersion = localStorage.getItem('pc:hud:version');
+    if (savedVersion !== HUD_VERSION) {
+      // One-time reset for anyone on a pre-v4 state.
+      setHeight('compact');
+      localStorage.removeItem('pc:hud:minimized');
+      localStorage.removeItem('pc:hud:expanded');
+    } else {
+      var savedH = localStorage.getItem('pc:hud:height');
+      if (savedH && HEIGHTS.indexOf(savedH) >= 0) setHeight(savedH);
+      else setHeight('compact');
+    }
+    localStorage.setItem('pc:hud:version', HUD_VERSION);
+  } catch (e) {}
+
+  if (minimizeBtn) minimizeBtn.addEventListener('click', function () { setHeight('min'); });
+  if (reopenBtn) reopenBtn.addEventListener('click', function () { setHeight('compact'); });
+
+  // Grab-strip: click toggles compact↔tall. Now a real <button> with a
+  // high-contrast label so the affordance is unmistakable.
+  var grabLabel = document.getElementById('hud-grab-label');
+  function syncGrabLabel() {
+    if (!grabLabel) return;
+    var isTall = hud.getAttribute('data-height') === 'tall';
+    grabLabel.textContent = isTall ? 'CLOSE DRAWER' : 'OPEN DRAWER';
+    if (grabEl) grabEl.setAttribute('aria-label', isTall ? 'Close drawer' : 'Open drawer');
+  }
+  if (grabEl) {
+    grabEl.addEventListener('click', function () {
+      var cur = hud.getAttribute('data-height') || 'compact';
+      setHeight(cur === 'tall' ? 'compact' : 'tall');
+      syncGrabLabel();
+    });
+  }
+  syncGrabLabel();
+
+  // ---- Network popover ----
+  function toggleNet(force) {
+    var open = force != null ? force : (netMenu.hasAttribute('hidden'));
+    if (open) {
+      netMenu.removeAttribute('hidden');
+      netToggle.setAttribute('aria-expanded', 'true');
+    } else {
+      netMenu.setAttribute('hidden', '');
+      netToggle.setAttribute('aria-expanded', 'false');
+    }
+  }
+  netToggle.addEventListener('click', function (e) { e.stopPropagation(); toggleNet(); });
+  document.addEventListener('click', function (e) {
+    if (!netMenu.hasAttribute('hidden') && !netMenu.contains(e.target) && e.target !== netToggle) toggleNet(false);
+  });
+
+  // ---- Help toggle → expands drawer + scrolls help panel into view ----
+  helpToggle.addEventListener('click', function () {
+    setExpanded(true);
+    var el = document.getElementById('hud-help-panel');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  // ---- Me button → expand drawer, scroll to YOU ----
+  meBtn.addEventListener('click', function () {
+    setExpanded(true);
+  });
+
+  // ---- Command palette ----
+  // Routes from HUD_DO + a handful of additional known surfaces for autocomplete.
+  var ROUTES = (HUD_DO || []).map(function (c) { return c.href; })
+    .concat(['/', '/about', '/collabs', '/for-agents', '/for-nodes', '/manifesto', '/collection', '/quiz', '/cards', '/today', '/here', '/sports', '/compute.json']);
+  ROUTES = Array.from(new Set(ROUTES));
+
+  var PEER_HOSTS = Array.from(document.querySelectorAll('.hud__peer[data-host]')).map(function (el) { return el.getAttribute('data-host'); });
+
+  function closeResults() {
+    paletteResults.setAttribute('hidden', '');
+    paletteResults.innerHTML = '';
+  }
+  function showResults(items) {
+    if (!items.length) { closeResults(); return; }
+    paletteResults.innerHTML = items.map(function (it, i) {
+      return '<a class="hud__palette-result" href="' + it.href + '"' + (it.external ? ' target="_blank" rel="noopener"' : '') + (i === 0 ? ' data-active="true"' : '') + '><span class="hud__palette-kind mono">' + it.kind + '</span><span class="hud__palette-label">' + it.label + '</span>' + (it.desc ? '<span class="hud__palette-desc mono">' + it.desc + '</span>' : '') + '</a>';
+    }).join('');
+    paletteResults.removeAttribute('hidden');
+  }
+
+  function renderResults(q) {
+    q = (q || '').trim();
+    if (!q) { closeResults(); return; }
+    var items = [];
+    if (q.charAt(0) === '/') {
+      var pattern = q.toLowerCase();
+      ROUTES.filter(function (r) { return r.toLowerCase().indexOf(pattern) === 0; })
+            .slice(0, 6)
+            .forEach(function (r) { items.push({ kind: 'ROUTE', label: r, href: r }); });
+    } else if (q.charAt(0) === '@') {
+      var n = q.slice(1).toLowerCase();
+      PEER_HOSTS.filter(function (h) { return h.toLowerCase().indexOf(n) >= 0; })
+                .slice(0, 6)
+                .forEach(function (h) { items.push({ kind: 'PEER', label: h, href: 'https://' + h + '/', external: true }); });
+    } else if (q.charAt(0) === '?') {
+      items.push({ kind: 'HELP', label: 'Keyboard shortcuts', href: '#', desc: '⌘. toggles this drawer' });
+      items.push({ kind: 'HELP', label: 'Ask via /cos', href: '/cos', desc: 'send a message to the team' });
+    } else {
+      // Free-form query — offer to ask via /cos
+      items.push({ kind: 'ASK',   label: 'Send "' + q.slice(0, 40) + '" to /cos', href: '/cos?q=' + encodeURIComponent(q), desc: 'routes to the chief-of-staff inbox' });
+      // Also try matching against ROUTES without the slash
+      ROUTES.filter(function (r) { return r.toLowerCase().indexOf(q.toLowerCase()) >= 0; })
+            .slice(0, 4)
+            .forEach(function (r) { items.push({ kind: 'ROUTE', label: r, href: r }); });
+    }
+    showResults(items);
+  }
+
+  paletteInput.addEventListener('input', function () { renderResults(paletteInput.value); });
+  paletteInput.addEventListener('focus', function () { renderResults(paletteInput.value); });
+  paletteInput.addEventListener('blur', function () { setTimeout(closeResults, 200); });
+  document.getElementById('hud-palette').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var active = paletteResults.querySelector('[data-active="true"]') || paletteResults.querySelector('.hud__palette-result');
+    if (active) { window.location.href = active.getAttribute('href'); return; }
+    var v = (paletteInput.value || '').trim();
+    if (v.charAt(0) === '/') window.location.href = v;
+    else if (v) window.location.href = '/cos?q=' + encodeURIComponent(v);
+  });
+
+  // ---- Keyboard shortcuts ----
+  window.addEventListener('keydown', function (ev) {
+    var cmd = ev.metaKey || ev.ctrlKey;
+    if (cmd && ev.key.toLowerCase() === 'k') { ev.preventDefault(); paletteInput.focus(); paletteInput.select(); return; }
+    if (cmd && ev.key === '.') { ev.preventDefault(); setExpanded(hud.getAttribute('data-expanded') !== 'true'); return; }
+    if (cmd && ev.key === '/') { ev.preventDefault(); toggleNet(); return; }
+    if (cmd && (ev.key === '?' || (ev.shiftKey && ev.key === '/'))) { ev.preventDefault(); helpToggle.click(); return; }
+    if (cmd && ev.key.toLowerCase() === 'm') {
+      ev.preventDefault();
+      setHeight(hud.getAttribute('data-height') === 'min' ? 'compact' : 'min');
+      return;
+    }
+    // v3.x had ⌘↑/⌘↓ shade keys; removed in v4 because ⌘↑ conflicts with
+    // macOS scroll-to-top and the two-state model doesn't need them.
+    if (ev.key === 'Escape') {
+      if (!netMenu.hasAttribute('hidden')) toggleNet(false);
+      if (paletteResults && !paletteResults.hasAttribute('hidden')) closeResults();
+    }
+  });
+
+  // ---- Beacon wallet: WalletChip component embedded in the drawer handles
+  // the real connect flow (Kukai / Temple / Umami / Airgap picker). Nothing
+  // to wire here — the component manages its own state via pc:wallet-change
+  // window events. Previous version linked out to /profile#wallet; v4 is inline.
+
+  // ---- Repaint on storage changes (other tabs) + every 60s ----
+  window.addEventListener('storage', paintIdentity);
+  setInterval(paintIdentity, 60 * 1000);
+
+  // ---- Mark top-of-page skip-target ----
+  var main = document.querySelector('main, [role="main"], article');
+  if (main && !main.id) main.id = 'main-content';
+})();
+</script>
+
+<style>
+  /* ====================================================================
+     CoNavHUD — early-Mac-inspired persistent HUD bar
+     Color palette: warm cream paper, ink black, maroon accents, amber
+     glints. Pixel-grid crisp borders. Monospace-heavy for the function
+     bits. Tiny. Considered.
+     ==================================================================== */
+  .hud-skip {
+    position: fixed;
+    top: -40px; left: 12px;
+    background: #12110e; color: #fef5e7;
+    padding: 8px 14px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace);
+    font-size: 11px; letter-spacing: 0.12em;
+    border-radius: 2px;
+    z-index: 9999;
+    transition: top 0.2s ease;
+  }
+  .hud-skip:focus { top: 12px; }
+
+  /* v3.2 smoothness pass — single timing function for the whole bar so
+     state changes feel coordinated, not ragged. Slight spring. */
+  .hud, .hud * {
+    --hud-ease: cubic-bezier(0.2, 0.7, 0.25, 1);
+    --hud-dur-fast: 140ms;
+    --hud-dur-med:  220ms;
+    --hud-dur-slow: 320ms;
+  }
+
+  .hud {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 800;
+    background: rgba(252, 246, 232, 0.96);
+    border-top: 1.5px solid #12110e;
+    color: #12110e;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui);
+    backdrop-filter: saturate(1.12) blur(12px);
+    -webkit-backdrop-filter: saturate(1.12) blur(12px);
+    box-shadow: 0 -4px 30px rgba(138, 36, 50, 0.06);
+    transition: transform var(--hud-dur-med) var(--hud-ease);
+  }
+
+  /* Hidden attr safety — without this, Astro scoped CSS outspecifies
+     the UA [hidden] rule on the drawer + popovers, leaving them visible. */
+  .hud__drawer[hidden],
+  .hud__popover[hidden],
+  .hud__palette-results[hidden] { display: none !important; }
+  .hud .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  /* Grab-strip at the top edge — click cycles through 4 heights,
+     drag up/down resizes with snap-to-state on release.
+     Early-Mac window-shade / NeXT-drag-strip visual vocabulary. */
+  .hud__grab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: 22px;
+    padding: 0 14px;
+    cursor: pointer;
+    background: #12110e;
+    color: #fef5e7;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    user-select: none;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    transition: background var(--hud-dur-fast) var(--hud-ease),
+                color var(--hud-dur-fast) var(--hud-ease);
+  }
+  .hud__grab:hover, .hud__grab:focus-visible {
+    background: #8a2432;
+    color: #fef5e7;
+    outline: none;
+  }
+  .hud__grab:active { background: #6a1d28; }
+  .hud__grab-arrow {
+    color: #F59F00;
+    font-size: 9px;
+    transition: transform var(--hud-dur-med) var(--hud-ease);
+  }
+  /* When tall (drawer open), arrows flip to ▼ */
+  .hud[data-height="tall"] .hud__grab-arrow { transform: rotate(180deg); }
+  .hud[data-height="tall"] .hud__grab {
+    background: #8a2432;
+    color: #fef5e7;
+  }
+
+  .hud__bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 14px;
+    min-height: 56px;
+    transition: min-height var(--hud-dur-med) var(--hud-ease),
+                padding var(--hud-dur-med) var(--hud-ease),
+                gap var(--hud-dur-med) var(--hud-ease);
+  }
+
+  /* ============ HEIGHT STATES (v4 — three clear states) ============
+     min:     HUD hidden entirely (hidden attr set by JS)
+     compact: default 56px bar with palette + chips + drawer toggle
+     tall:    same bar + drawer open below
+     ================================================================ */
+
+  .hud[data-height="tall"] .hud__drawer { display: grid; }
+
+  /* LEFT zone */
+  .hud__left { display: flex; align-items: center; gap: 8px; }
+  .hud__me {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px 3px 3px;
+    background: transparent;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    cursor: pointer;
+    color: inherit;
+    transition: border-color var(--hud-dur-fast) var(--hud-ease),
+                background var(--hud-dur-fast) var(--hud-ease),
+                transform var(--hud-dur-fast) var(--hud-ease);
+  }
+  .hud__me:hover { border-color: #8a2432; background: rgba(138, 36, 50, 0.04); transform: translateY(-0.5px); }
+  .hud__me:active { transform: translateY(0.5px); transition-duration: 60ms; }
+  .hud__me-noun {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #fffaf1;
+    border: 1px solid #e6d8be;
+    display: block;
+    flex-shrink: 0;
+  }
+  .hud__me-noun img { width: 100%; height: 100%; display: block; }
+  .hud__me-text { display: flex; flex-direction: column; gap: 0; line-height: 1.1; text-align: left; }
+  .hud__me-label { font-size: 10.5px; letter-spacing: 0.14em; font-weight: 700; color: #12110e; text-transform: uppercase; }
+  .hud__me-mood { font-size: 9px; letter-spacing: 0.1em; color: #5F5E5A; text-transform: uppercase; }
+
+  /* Chips — shared */
+  .hud__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 9px;
+    background: transparent;
+    color: #12110e;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background var(--hud-dur-fast) var(--hud-ease),
+                border-color var(--hud-dur-fast) var(--hud-ease),
+                color var(--hud-dur-fast) var(--hud-ease);
+    line-height: 1;
+  }
+  .hud__chip:hover {
+    background: rgba(18, 17, 14, 0.06);
+    border-color: rgba(18, 17, 14, 0.2);
+  }
+  .hud__chip--link { border-color: #e6d8be; background: #fffaf1; }
+  .hud__chip--link:hover { background: #12110e; color: #fef5e7; border-color: #12110e; }
+  .hud__chip--noundrum { border-color: rgba(245, 159, 0, 0.6); background: rgba(245, 159, 0, 0.08); }
+  .hud__chip--noundrum:hover { background: #F59F00; color: #12110e; border-color: #F59F00; }
+  .hud__chip--ping { border-color: rgba(138, 36, 50, 0.6); background: rgba(138, 36, 50, 0.05); }
+  .hud__chip--ping:hover { background: #8a2432; color: #fef5e7; border-color: #8a2432; }
+  .hud__chip--cos { border-color: rgba(24, 95, 165, 0.55); background: rgba(24, 95, 165, 0.04); }
+  .hud__chip--cos:hover { background: #185FA5; color: #fef5e7; border-color: #185FA5; }
+  .hud__chip--net {
+    border: 1px solid #12110e;
+    font-weight: 700;
+  }
+  .hud__chip--net:hover { background: #12110e; color: #fef5e7; }
+  .hud__chip--expand, .hud__chip--help, .hud__chip--minimize {
+    border: 1px solid #d6d4cd;
+    background: #fffaf1;
+    font-weight: 700;
+    padding: 5px 9px;
+    min-width: 32px;
+    justify-content: center;
+  }
+  .hud__chip--expand:hover, .hud__chip--help:hover { background: #12110e; color: #fef5e7; border-color: #12110e; }
+  .hud[data-expanded="true"] .hud__chip--expand { background: #12110e; color: #fef5e7; border-color: #12110e; }
+  .hud__chip--minimize {
+    border-color: rgba(201, 42, 42, 0.4);
+    color: #8a2432;
+    font-size: 14px;
+  }
+  .hud__chip--minimize:hover { background: #8a2432; color: #fef5e7; border-color: #8a2432; }
+
+  /* Minimized floating reopen chip — shown in bottom-right corner when the
+     HUD is hidden. Bigger + pulsing so a minimized state is never a silent
+     disappearance. Tap or ⌘M reopens. */
+  .hud__reopen {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 900;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 10px 12px;
+    background: #12110e;
+    color: #fef5e7;
+    border: 2px solid #F59F00;
+    border-radius: 26px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    box-shadow: 0 6px 26px rgba(18, 17, 14, 0.36), 0 0 0 4px rgba(245, 159, 0, 0.14);
+    transition: transform var(--hud-dur-fast) var(--hud-ease),
+                box-shadow var(--hud-dur-fast) var(--hud-ease);
+  }
+  .hud__reopen:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(18, 17, 14, 0.42), 0 0 0 6px rgba(245, 159, 0, 0.2); animation: none; }
+  .hud__reopen-icon { color: #F59F00; font-size: 13px; }
+  .hud__reopen[hidden] { display: none !important; }
+  .hud__chip-icon { font-size: 12px; line-height: 1; }
+
+  /* CENTER: command palette */
+  .hud__palette {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px 5px 8px;
+    background: #fffaf1;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    max-width: 420px;
+    margin: 0 auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .hud__palette {
+    transition: border-color var(--hud-dur-fast) var(--hud-ease),
+                background var(--hud-dur-fast) var(--hud-ease),
+                box-shadow var(--hud-dur-med) var(--hud-ease);
+  }
+  .hud__palette:focus-within { border-color: #12110e; background: #fff; box-shadow: 0 0 0 3px rgba(18, 17, 14, 0.1), 0 0 0 1px #12110e; }
+  .hud__palette-prompt { color: #8a2432; font-weight: 700; font-size: 12px; }
+  .hud__palette-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--pc-font-mono);
+    font-size: 12.5px;
+    color: #12110e;
+    letter-spacing: 0.02em;
+  }
+  .hud__palette-input::placeholder { color: #8a7e6c; }
+  .hud__palette-kbd {
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    padding: 1px 5px;
+    background: rgba(18, 17, 14, 0.08);
+    border: 1px solid rgba(18, 17, 14, 0.18);
+    border-radius: 2px;
+    color: #5F5E5A;
+  }
+  .hud__palette-results {
+    position: absolute;
+    left: 0; right: 0; bottom: calc(100% + 6px);
+    background: #fffaf1;
+    border: 1.5px solid #12110e;
+    border-radius: 2px;
+    box-shadow: 0 4px 24px rgba(18, 17, 14, 0.25);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+  .hud__palette-result {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 8px 12px;
+    text-decoration: none;
+    color: #12110e;
+    font-size: 13px;
+    border-bottom: 1px solid #e6d8be;
+    transition: background var(--hud-dur-fast) var(--hud-ease),
+                color var(--hud-dur-fast) var(--hud-ease),
+                padding-left var(--hud-dur-fast) var(--hud-ease);
+  }
+  .hud__palette-result:hover, .hud__palette-result[data-active="true"] { padding-left: 16px; }
+  .hud__palette-result:last-child { border-bottom: none; }
+  .hud__palette-result:hover, .hud__palette-result[data-active="true"] { background: #12110e; color: #fef5e7; }
+  .hud__palette-result:hover .hud__palette-kind, .hud__palette-result[data-active="true"] .hud__palette-kind { color: #F59F00; }
+  .hud__palette-kind { font-family: var(--pc-font-mono); font-size: 9px; letter-spacing: 0.16em; font-weight: 700; color: #8a2432; text-transform: uppercase; }
+  .hud__palette-label { font-family: var(--pc-font-mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hud__palette-desc { font-size: 10px; letter-spacing: 0.04em; color: #8a7e6c; }
+  .hud__palette-result:hover .hud__palette-desc, .hud__palette-result[data-active="true"] .hud__palette-desc { color: #c4c2bc; }
+
+  /* RIGHT: chips nav */
+  .hud__chips {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .hud__right { display: flex; align-items: center; gap: 4px; }
+
+  /* Network popover (compact) */
+  .hud__popover {
+    position: absolute;
+    background: #fffaf1;
+    border: 1.5px solid #12110e;
+    border-radius: 2px;
+    box-shadow: 0 6px 28px rgba(18, 17, 14, 0.3);
+    padding: 10px 12px;
+    z-index: 15;
+    min-width: 280px;
+  }
+  .hud__popover--net { left: 14px; bottom: calc(100% + 8px); }
+  .hud__peers { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .hud__peers--compact .hud__peer { grid-template-columns: 10px 1fr auto; gap: 8px; padding: 4px 0; }
+  .hud__peer {
+    display: grid;
+    grid-template-columns: 10px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dotted #e6d8be;
+  }
+  .hud__peer:last-child { border-bottom: none; }
+  .hud__peer-dot { width: 8px; height: 8px; border-radius: 50%; background: #d6d4cd; }
+  .hud__peer--live .hud__peer-dot { background: #2f8f5f; box-shadow: 0 0 6px rgba(47, 143, 95, 0.6); }
+  .hud__peer--placeholder .hud__peer-dot { background: #d6d4cd; border: 1px dashed #8a7e6c; }
+  .hud__peer-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .hud__peer-name { font-size: 10.5px; letter-spacing: 0.14em; font-weight: 700; color: #12110e; text-transform: uppercase; }
+  .hud__peer-host { font-size: 10px; letter-spacing: 0.04em; color: #5F5E5A; }
+  .hud__peer-desc { font-size: 11px; color: #5F5E5A; font-family: Georgia, serif; font-style: italic; }
+  .hud__peers--compact .hud__peer-desc, .hud__peers--compact .hud__peer-host { display: none; }
+  .hud__peer-here { font-size: 9px; letter-spacing: 0.14em; color: #2f8f5f; font-weight: 700; padding: 2px 6px; border: 1px solid #2f8f5f; border-radius: 2px; }
+  .hud__peer-jump {
+    font-size: 14px;
+    color: #8a2432;
+    text-decoration: none;
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    transition: border-color var(--hud-dur-fast) var(--hud-ease),
+                background var(--hud-dur-fast) var(--hud-ease),
+                transform var(--hud-dur-fast) var(--hud-ease);
+  }
+  .hud__peer-jump:hover { border-color: #8a2432; background: rgba(138, 36, 50, 0.06); transform: translateX(1px); }
+  .hud__popover-foot { font-size: 10px; letter-spacing: 0.06em; color: #5F5E5A; margin: 8px 0 0; padding-top: 6px; border-top: 1px dotted #e6d8be; }
+  .hud__popover-foot a { color: #8a2432; text-decoration: underline; }
+
+  /* Drawer (expanded HUD) */
+  .hud__drawer {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    border-top: 1px dashed #d6d4cd;
+    background:
+      linear-gradient(rgba(252, 246, 232, 0.4), rgba(252, 246, 232, 0.4)),
+      repeating-linear-gradient(0deg, transparent 0 3px, rgba(18, 17, 14, 0.02) 3px 4px);
+  }
+  .hud__panel {
+    padding: 12px 16px;
+    border-right: 1px dashed #d6d4cd;
+  }
+  .hud__panel:last-child { border-right: none; }
+  .hud__panel-head { margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #e6d8be; }
+  .hud__panel-kicker { font-size: 9.5px; letter-spacing: 0.22em; font-weight: 700; color: #8a2432; text-transform: uppercase; margin: 0 0 3px; }
+  .hud__panel-sub { font-size: 10px; letter-spacing: 0.06em; color: #5F5E5A; margin: 0; }
+  .hud__panel-foot { font-size: 10px; letter-spacing: 0.04em; color: #5F5E5A; margin: 10px 0 0; padding-top: 8px; border-top: 1px dotted #e6d8be; }
+  .hud__panel-foot a { color: #8a2432; text-decoration: underline; }
+
+  .hud__stats { margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+  .hud__stat { display: contents; }
+  .hud__stat dt { font-size: 9px; letter-spacing: 0.14em; color: #8a7e6c; text-transform: uppercase; grid-column: 1; }
+  .hud__stat dd { font-size: 11px; letter-spacing: 0.04em; color: #12110e; font-weight: 700; margin: 0; grid-column: 2; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .hud__auth { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+  .hud__auth-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: #12110e;
+    background: #fffaf1;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+  }
+  .hud__auth-chip {
+    transition: background var(--hud-dur-fast) var(--hud-ease),
+                color var(--hud-dur-fast) var(--hud-ease),
+                border-color var(--hud-dur-fast) var(--hud-ease),
+                transform var(--hud-dur-fast) var(--hud-ease);
+  }
+  .hud__auth-chip:hover { background: #12110e; color: #fef5e7; border-color: #12110e; transform: translateY(-0.5px); }
+  .hud__auth-chip:active { transform: translateY(0.5px); transition-duration: 60ms; }
+  .hud__auth-chip--beacon { border-color: rgba(24, 95, 165, 0.45); }
+  .hud__auth-chip--beacon:hover { background: #185FA5; border-color: #185FA5; }
+  .hud__auth-chip--logout { border-color: rgba(138, 36, 50, 0.5); color: #8a2432; }
+  .hud__auth-chip--logout:hover { background: #8a2432; color: #fef5e7; border-color: #8a2432; }
+
+  .hud__shortcuts { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .hud__shortcut { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: baseline; font-size: 11px; color: #12110e; font-family: Georgia, serif; }
+  .hud__shortcut kbd {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    background: rgba(18, 17, 14, 0.08);
+    border: 1px solid rgba(18, 17, 14, 0.18);
+    border-radius: 2px;
+    text-align: center;
+  }
+
+  /* Mobile — stack + simplify */
+  @media (max-width: 720px) {
+    .hud__bar {
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      padding: 6px 10px;
+      min-height: 48px;
+    }
+    .hud__chips { display: none; }
+    .hud__me-text { display: none; }
+    .hud__palette { max-width: none; }
+    .hud__palette-kbd { display: none; }
+    .hud__popover { left: 10px; right: 10px; min-width: 0; }
+    .hud__drawer { grid-template-columns: 1fr; }
+    .hud__panel { border-right: none; border-bottom: 1px dashed #d6d4cd; }
+    .hud__panel:last-child { border-bottom: none; }
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .hud-skip, .hud__chip, .hud__me, .hud__palette { transition: none !important; }
+  }
+
+  /* Hide the old CoNav if both somehow coexist */
+  :global(.conav) { display: none !important; }
+
+  /* Page padding for content below the HUD.
+     v4: three states. min = no bar so no padding. compact/tall = bar visible,
+     reserve ~64px (bar itself is 56px min-height + 10px grab strip). */
+  :global(body) { padding-bottom: 66px; transition: padding-bottom 0.14s ease; }
+  :global(body[data-hud-height="min"]) { padding-bottom: 0; }
+  :global(body[data-hud-height="tall"]) { padding-bottom: 66px; }
+  :global(body.bath-mode) { padding-bottom: 0 !important; }
+</style>

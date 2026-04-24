@@ -1,0 +1,226 @@
+---
+/**
+ * /tv/shows/quotes — Mike's directives as fullscreen serif.
+ *
+ * Pulls verbatim quotes Mike has pinged over the last few days (captured
+ * in block.source fields as the editorial record of what-directed-what).
+ * Each quote displays full-viewport in huge serif, attribution below in
+ * mono, then crossfades to the next. Palette subtly shifts per quote.
+ *
+ * Auto-fullscreen on first tap.
+ */
+
+// Hand-curated from recent block source records. The attribution is the
+// block that was topic-expanded from this quote (or the feature it drove).
+const QUOTES = [
+  { text: "the home page, lets keep trying to improve there, as next, make plan, and then i'll compact and then we'll begin, add thoughts on rest of sprint and getting chatgpt to go, we still have so much compute to use in next two days.", attrib: "Mike, 2026-04-20 20:34 PT → docs/plans/home-phase3-plus-sprint-plan.md" },
+  { text: "that /bath try more immersive color waves, and other songs, research find others that'd be neat for various moods and then a block for it", attrib: "Mike, 2026-04-20 23:58 PT → Block 0339 + bath v2" },
+  { text: "i'd like to query and talk with claude code right from the website independent of the current tasks, the project, product manager", attrib: "Mike, ping 303c9f3a → Block 0338 + /cos" },
+  { text: "so yah, when humans land things like collect, drum, interacting with exisiting peoples at the time, learnings, information updates", attrib: "Mike, 2026-04-20 17:32 PT → Block 0336 + visitors-first pivot" },
+  { text: "like /compute, great tho we have no visitors thus things like drum, collecting, fun, information, learning are to be important if we want people to participate in programs", attrib: "Mike, ping b4ca5b5e → Block 0336" },
+  { text: "this, lets federate compute", attrib: "Mike, 2026-04-20 15:05 PT after Elad Gil → Block 0330 + /compute" },
+  { text: "do you know it's me, is the tezos wallet working and yes let's get google auth working", attrib: "Mike, ping e46e2d24 → /api/wallet/me + Google auth stub queued" },
+  { text: "have codex visit and leave a message, you visit, leave a message, have manus create a pointcast poster and post", attrib: "Mike, ping 114b4636 → cc + codex visits + Bell Labs × Rothko brief" },
+  { text: "yah let's make the bar down the bottom bigger for more control over interaction", attrib: "Mike, ping 48103aa0 → CoNavigator bar 64/56" },
+  { text: "on homepage, it should likely be all the interesting things we were talking about today from clock to bitcoin, to 420, to feature updates", attrib: "Mike, 2026-04-20 12:20 PT → TodayOnPointCast" },
+  { text: "tv is so cool, when go to url can we auto full screen, start to create some content from our history that'd be interesting in that format, try some viewables", attrib: "Mike, 2026-04-20 ~23:30 PT → /tv/shows/* + Block 0344" },
+  { text: "still 4/20", attrib: "Mike, 2026-04-20 ~23:00 PT → Sprint 2 Night 2 continuation" },
+  { text: "we have two days to use this 50% compute, make a plan", attrib: "Mike, 2026-04-20 16:00 PT → 48h compute burn" },
+  { text: "yah, lets go option a · and build the system so we are active on the 15 min mark, always shipping, small, medium, large", attrib: "Mike, 2026-04-20 16:05 PT → /cadence + ship-queue.ts" },
+  { text: "work on the bar further plus look at the ability on mobile to swipe across", attrib: "Mike, ping 82ed3deb → CoNavigator mobile swipe refinement" },
+];
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f3e6d8" />
+  <meta name="description" content="Mike's directives as fullscreen serif — every ping that shaped a PointCast block or feature, displayed one at a time in big type. Attribution shows the ship it drove." />
+  <title>PointCast TV · Mike's directives</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f3e6d8;
+      --bg-2: #e8d4b8;
+      --ink: #12110e;
+      --ink-soft: #5f2a1e;
+      --accent: #8A2432;
+      --warm: #E89A2D;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--serif); transition: background 3s ease; }
+    body[data-palette="warm"] { background: radial-gradient(ellipse at 40% 30%, #fff0cf 0%, var(--bg) 55%, var(--bg-2) 100%); }
+    body[data-palette="rose"] { background: radial-gradient(ellipse at 50% 60%, #fbd6c5 0%, var(--bg) 60%, var(--bg-2) 100%); }
+    body[data-palette="paper"] { background: radial-gradient(ellipse at 60% 40%, #fffaf1 0%, var(--bg) 60%, var(--bg-2) 100%); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 30px;
+      z-index: 10;
+      font-family: var(--mono);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; color: var(--ink); }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(138, 36, 50, 0.08); border: 1px solid rgba(138, 36, 50, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; margin-left: auto; }
+    .top__fs:hover { background: rgba(138, 36, 50, 0.2); color: #fff; }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .stage {
+      position: relative;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 8vw 80px;
+    }
+
+    .quote-wrap { max-width: 1280px; width: 100%; }
+    .quote {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-style: italic;
+      font-size: clamp(24px, 4.2vw, 58px);
+      line-height: 1.3;
+      color: var(--ink);
+      margin: 0 0 28px;
+      letter-spacing: -0.005em;
+      transition: opacity 1.2s ease, transform 1.2s cubic-bezier(0.4, 0, 0.6, 1);
+      quotes: "\201C" "\201D";
+    }
+    .quote::before { content: open-quote; color: var(--accent); margin-right: 4px; }
+    .quote::after { content: close-quote; color: var(--accent); margin-left: 4px; }
+    .quote[data-state="out"] { opacity: 0; transform: translateY(10px); }
+
+    .attrib {
+      font-family: var(--mono);
+      font-size: clamp(11px, 1.1vw, 14px);
+      letter-spacing: 0.12em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      font-weight: 600;
+      transition: opacity 1.2s ease;
+    }
+    .attrib[data-state="out"] { opacity: 0; }
+
+    .progress {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      height: 2px;
+      background: rgba(138, 36, 50, 0.1);
+      z-index: 5;
+    }
+    .progress__bar {
+      height: 100%;
+      background: var(--accent);
+      transform-origin: left center;
+      transform: scaleX(0);
+      transition: transform 10s linear;
+    }
+
+    .counter {
+      position: fixed; left: 30px; bottom: 20px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      font-weight: 600;
+      z-index: 5;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .quote, .attrib { transition: none !important; }
+      .progress__bar { transition: none !important; }
+    }
+  </style>
+</head>
+<body data-palette="paper">
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / MIKE'S DIRECTIVES</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+  </header>
+
+  <section class="stage">
+    <div class="quote-wrap">
+      <p class="quote" id="quote" data-state="in">—</p>
+      <p class="attrib" id="attrib" data-state="in">—</p>
+    </div>
+  </section>
+
+  <div class="counter" id="counter">01 / 15</div>
+  <div class="progress"><div class="progress__bar" id="progress"></div></div>
+
+  <script is:inline define:vars={{ QUOTES }}>
+    (function () {
+      var quoteEl = document.getElementById('quote');
+      var attribEl = document.getElementById('attrib');
+      var counterEl = document.getElementById('counter');
+      var progEl = document.getElementById('progress');
+      var body = document.body;
+      var i = 0;
+      var PALETTES = ['paper', 'warm', 'rose'];
+
+      function total() { return QUOTES.length; }
+      function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+      function paint() {
+        var q = QUOTES[i];
+        if (!q) return;
+        quoteEl.setAttribute('data-state', 'out');
+        attribEl.setAttribute('data-state', 'out');
+        progEl.style.transition = 'none';
+        progEl.style.transform = 'scaleX(0)';
+        setTimeout(function () {
+          quoteEl.textContent = q.text;
+          attribEl.textContent = q.attrib;
+          counterEl.textContent = pad(i + 1) + ' / ' + pad(total());
+          body.setAttribute('data-palette', PALETTES[i % PALETTES.length]);
+          quoteEl.setAttribute('data-state', 'in');
+          attribEl.setAttribute('data-state', 'in');
+          // kick the progress bar
+          setTimeout(function () {
+            progEl.style.transition = 'transform 10s linear';
+            progEl.style.transform = 'scaleX(1)';
+          }, 40);
+        }, 1200);
+      }
+
+      paint();
+      setInterval(function () {
+        i = (i + 1) % total();
+        paint();
+      }, 11000);
+
+      // Fullscreen
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

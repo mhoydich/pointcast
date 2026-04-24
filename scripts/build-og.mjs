@@ -29,6 +29,16 @@ const CARDS = [
   { svg: 'og-drum.svg',    png: 'og-drum.png'    }, // /drum
   { svg: 'og-collect.svg', png: 'og-collect.png' }, // /collect
   { svg: 'og-about.svg',   png: 'og-about.png'   }, // /about
+  // SEO pillar cards — dedicated unfurls so shares of these pages don't
+  // fall back to the home OG. Added 2026-04-21 alongside the pillars.
+  { svg: 'og-el-segundo.svg',   png: 'og-el-segundo.png'   }, // /el-segundo · 1200×630
+  { svg: 'og-agent-native.svg', png: 'og-agent-native.png' }, // /agent-native · 1200×630
+  { svg: 'og-nouns.svg',        png: 'og-nouns.png'        }, // /nouns · 1200×630
+  // Square 1080×1080 pillar cards for Instagram + Threads + Farcaster
+  // grid previews. Paired alt to the 1200×630 versions above.
+  { svg: 'og-el-segundo-square.svg',   png: 'og-el-segundo-square.png'   },
+  { svg: 'og-agent-native-square.svg', png: 'og-agent-native-square.png' },
+  { svg: 'og-nouns-square.svg',        png: 'og-nouns-square.png'        },
 ];
 
 /**

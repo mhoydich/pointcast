@@ -1,0 +1,454 @@
+---
+/**
+ * /cos — Chief of Staff. Talk to the PointCast team from your phone.
+ *
+ * Mike pinged twice in 15 minutes for the same surface:
+ *   ping:2026-04-21T01:11:24.584Z:303c9f3a (expand:true) "i'd like to
+ *     query and talk with claude code right from the website
+ *     independent of the current tasks, the project, product manager"
+ *   chat 2026-04-20 17:32 PT "would be neat to talk to someone like we
+ *     talk here on pointcast site, from my mobile, that's likely more
+ *     product, project manager, chief of staff, yah chief of staff that
+ *     processes, build a block."
+ *
+ * Block 0338 captures the design rationale. This is the v0 surface.
+ *
+ * Shape:
+ *   - Mobile-first vertical layout
+ *   - Top: agent dots (cc · codex · manus · chatgpt) inheriting from
+ *     compute-ledger; greenish-pulse if working, idle otherwise
+ *   - Middle: bigger composer (textarea + from + subject + expand)
+ *   - Below: timeline of recent pings woven with recent ledger entries
+ *   - Below: queue view of next 3 cadence ships
+ *
+ * Backend: every send POSTs to /api/ping (the existing async inbox).
+ * No new server state. Loop unchanged: ping → cc reads at session start
+ * → ship → ledger entry → visible here.
+ *
+ * Author: cc. Source: Mike 2026-04-21T01:11 ping + 2026-04-20 17:32 PT
+ * chat. Block 0338 (companion).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { COMPUTE_LEDGER } from '../lib/compute-ledger';
+import { upcomingShips, COLLAB_LABEL, SIZE_LABEL } from '../lib/ship-queue';
+
+// Latest entries per agent for the dot-row.
+function latestForCollab(slug: string) {
+  const matches = COMPUTE_LEDGER.filter((e) => {
+    if (slug === 'claude-code') return e.collab === 'claude-code' || e.collab === 'mh+cc';
+    return e.collab === slug;
+  });
+  matches.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return matches[0] ?? null;
+}
+
+const agents = [
+  { slug: 'claude-code', label: 'cc', latest: latestForCollab('claude-code') },
+  { slug: 'codex',       label: 'codex', latest: latestForCollab('codex') },
+  { slug: 'manus',       label: 'manus', latest: latestForCollab('manus') },
+  { slug: 'chatgpt',     label: 'chatgpt', latest: latestForCollab('chatgpt') },
+];
+
+// Timeline: last 12 ledger entries, formatted.
+const recentLedger = [...COMPUTE_LEDGER]
+  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+  .slice(0, 12)
+  .map((e) => ({
+    at: e.at,
+    kind: 'ship',
+    collab: e.collab,
+    title: e.title,
+    artifact: e.artifact ?? null,
+    signature: e.signature,
+  }));
+
+const queue = upcomingShips(3);
+
+const title = 'Chief of staff — talk to PointCast from your phone';
+const description = "A chat-style front door to the team. Drop a message, cc reads at session start, the ledger answers as ships land. Optional expand-and-publish flag turns your message into a block topic. Built so Mike can delegate from a subway platform.";
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="cos-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>cos</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">CHIEF OF STAFF · TALK TO THE TEAM FROM ANYWHERE</p>
+      <h1 class="title">Drop a thought.</h1>
+      <p class="dek">
+        Mobile-friendly front door to the PointCast team. Send a message — cc reads
+        at session start and the ledger answers as ships land. Toggle <em>expand &amp;
+        publish</em> if your message is a topic that should become a block.
+        See block <a href="/b/0338">0338</a> for the design rationale.
+      </p>
+    </header>
+
+    <!-- Agent status row -->
+    <section class="agents" aria-label="Who's working right now">
+      {agents.map((a) => (
+        <div class="agent" data-agent={a.slug}>
+          <span class="agent__dot" data-state="unknown" data-last-at={a.latest?.at ?? ''} aria-hidden="true"></span>
+          <div class="agent__meta">
+            <p class="agent__name mono">{a.label}</p>
+            {a.latest && (
+              <p class="agent__last">
+                <time data-iso={a.latest.at} class="agent__rel">—</time>
+                <span class="agent__sep" aria-hidden="true">·</span>
+                <span class="agent__title">{a.latest.title.slice(0, 60)}{a.latest.title.length > 60 ? '…' : ''}</span>
+              </p>
+            )}
+            {!a.latest && <p class="agent__last agent__last--empty">no entries yet</p>}
+          </div>
+        </div>
+      ))}
+    </section>
+
+    <!-- Composer -->
+    <section class="composer">
+      <p class="section__kicker mono">DROP A MESSAGE</p>
+      <form id="cos-form" novalidate>
+        <textarea
+          id="cos-body"
+          name="body"
+          rows="5"
+          required
+          maxlength="4000"
+          placeholder="hey team — …"
+        ></textarea>
+        <div class="composer__row">
+          <input type="text" id="cos-from" name="from" placeholder="from · optional" maxlength="80" />
+          <input type="text" id="cos-subject" name="subject" placeholder="subject · optional" maxlength="120" />
+        </div>
+        <label class="composer__expand">
+          <input type="checkbox" id="cos-expand" />
+          <span class="mono">EXPAND &amp; PUBLISH</span>
+          <span class="composer__expand-hint">cc drafts a block from this seed on the next tick</span>
+        </label>
+        <div class="composer__actions">
+          <button type="submit" class="composer__send mono" id="cos-send">SEND ↑</button>
+          <span class="composer__status mono" id="cos-status" role="status" aria-live="polite"></span>
+        </div>
+      </form>
+      <p class="composer__foot mono">
+        all messages land at <a href="/api/ping?action=list">/api/ping?action=list</a>
+        · agent surface card at <a href="/.well-known/mcp/server-card.json">/.well-known/mcp/server-card.json</a>
+        · <a href="/tezos">◆ tip mike in tez</a>
+        · <a class="signin-chip" id="signin-chip" href="/api/auth/google/start?next=/cos" hidden>↪ sign in with google</a>
+      </p>
+    </section>
+
+    <!-- Cadence — next 3 ships -->
+    <section class="cadence">
+      <p class="section__kicker mono">NEXT SHIPS</p>
+      {queue.length === 0 ? (
+        <p class="empty">queue is empty — drop a pledge above to fill it</p>
+      ) : (
+        <ol class="cadence__list">
+          {queue.map((s) => (
+            <li class={`cadence__row cadence__row--${s.size}`}>
+              <span class="cadence__when mono">{new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Los_Angeles' }).format(new Date(s.dueAt))} PT</span>
+              <span class={`chip chip--${s.size}`}>{SIZE_LABEL[s.size]}</span>
+              <span class="chip chip--collab">{COLLAB_LABEL[s.collab]}</span>
+              <span class="cadence__title">{s.title}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p class="cadence__foot mono">
+        full schedule at <a href="/cadence">/cadence</a> · plan at
+        <a href="https://github.com/MikeHoydich/pointcast/blob/main/docs/plans/2026-04-20-cadence-system.md" rel="noopener">docs/plans/cadence-system.md</a>
+      </p>
+    </section>
+
+    <!-- Timeline — recent ledger -->
+    <section class="timeline">
+      <p class="section__kicker mono">RECENT SHIPS</p>
+      <ol class="timeline__list">
+        {recentLedger.map((e) => (
+          <li class={`timeline__row timeline__row--${e.signature}`}>
+            <span class="timeline__when mono">
+              <time data-iso={e.at} class="timeline__rel">—</time>
+            </span>
+            <span class={`chip chip--collab`}>{e.collab.replace('claude-code', 'cc')}</span>
+            <span class="timeline__title">
+              {e.artifact ? (
+                <a href={e.artifact.startsWith('http') ? e.artifact : e.artifact}>{e.title}</a>
+              ) : (
+                e.title
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p class="timeline__foot mono">
+        full ledger at <a href="/compute">/compute</a> · sprint log at <a href="/sprints">/sprints</a>
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  var WORKING_MS = 20 * 60 * 1000;
+
+  function fmtAgo(ms) {
+    if (ms < 60 * 1000) return 'just now';
+    if (ms < 60 * 60 * 1000) return Math.round(ms / 60000) + 'm ago';
+    if (ms < 24 * 60 * 60 * 1000) return Math.round(ms / 3600000) + 'h ago';
+    if (ms < 7 * 24 * 60 * 60 * 1000) return Math.round(ms / (24 * 3600000)) + 'd ago';
+    return Math.round(ms / (7 * 24 * 3600000)) + 'w ago';
+  }
+
+  function paint() {
+    var now = Date.now();
+    document.querySelectorAll('time[data-iso]').forEach(function (el) {
+      var iso = el.getAttribute('data-iso');
+      if (!iso) return;
+      var d = now - new Date(iso).getTime();
+      if (!isNaN(d) && d >= 0) el.textContent = fmtAgo(d);
+    });
+    document.querySelectorAll('.agent__dot[data-last-at]').forEach(function (el) {
+      var iso = el.getAttribute('data-last-at');
+      if (!iso) { el.setAttribute('data-state', 'idle'); return; }
+      var d = now - new Date(iso).getTime();
+      if (isNaN(d)) { el.setAttribute('data-state', 'unknown'); return; }
+      el.setAttribute('data-state', d < WORKING_MS ? 'working' : 'idle');
+    });
+  }
+
+  paint();
+  setInterval(paint, 60 * 1000);
+
+  // Composer
+  var form = document.getElementById('cos-form');
+  if (!form) return;
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var body = document.getElementById('cos-body');
+    var from = document.getElementById('cos-from');
+    var subject = document.getElementById('cos-subject');
+    var expand = document.getElementById('cos-expand');
+    var status = document.getElementById('cos-status');
+    var send = document.getElementById('cos-send');
+
+    if (!body || !body.value.trim()) {
+      status.textContent = 'message can\'t be empty';
+      status.setAttribute('data-state', 'err');
+      return;
+    }
+    var payload = {
+      type: 'pc-ping-v1',
+      body: body.value.trim(),
+      from: (from && from.value) ? from.value.trim() : undefined,
+      subject: subject && subject.value
+        ? 'cos · ' + subject.value.trim()
+        : 'cos · message',
+      expand: !!(expand && expand.checked),
+      timestamp: new Date().toISOString(),
+    };
+
+    send.disabled = true;
+    status.textContent = 'sending…';
+    status.setAttribute('data-state', 'pending');
+    try {
+      var res = await fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      var j = null;
+      try { j = await res.json(); } catch (e) {}
+      if (res.ok && j && j.ok) {
+        status.textContent = payload.expand
+          ? 'sent · cc drafts a block on the next tick'
+          : 'sent · cc reads at session start';
+        status.setAttribute('data-state', 'ok');
+        body.value = '';
+        if (subject) subject.value = '';
+        if (expand) expand.checked = false;
+      } else {
+        var reason = (j && (j.reason || j.error)) ? ' (' + (j.reason || j.error) + ')' : '';
+        status.textContent = 'send failed' + reason;
+        status.setAttribute('data-state', 'err');
+      }
+    } catch (err) {
+      status.textContent = 'network error — try again';
+      status.setAttribute('data-state', 'err');
+    } finally {
+      send.disabled = false;
+    }
+  });
+
+  // Show "sign in with google" chip if pc_session cookie is absent.
+  // pc_session is the auth cookie issued by /api/auth/google/callback.
+  // Per ship-overnight-08 (Mike super-sprint Google auth directive 00:35 PT).
+  (function () {
+    var cookieHas = function (name) {
+      var raw = document.cookie || '';
+      var parts = raw.split(';').map(function (s) { return s.trim(); });
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].indexOf(name + '=') === 0) return true;
+      }
+      return false;
+    };
+    var chip = document.getElementById('signin-chip');
+    if (chip && !cookieHas('pc_session')) chip.removeAttribute('hidden');
+  })();
+
+  // Wallet recognition — if /api/wallet/me confirms Mike's address, swap title
+  try {
+    var wraw = localStorage.getItem('pc:wallet');
+    if (wraw) {
+      var w = JSON.parse(wraw);
+      if (w && w.address) {
+        fetch('/api/wallet/me?addr=' + encodeURIComponent(w.address))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (j && j.recognized) {
+              var t = document.querySelector('.title');
+              if (t) t.textContent = 'Hi mike — drop a thought.';
+              var fromInput = document.getElementById('cos-from');
+              if (fromInput && !fromInput.value) fromInput.value = 'mike';
+            }
+          })
+          .catch(function () {});
+      }
+    }
+  } catch (e) {}
+})();
+</script>
+
+<style>
+  .cos-page { max-width: 760px; margin: 0 auto; padding: 24px 18px 80px; color: var(--pc-ink, #12110E); }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .crumb { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px; color: var(--pc-ink-muted, #5F5E5A); }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #E89A2D; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 22px; padding-bottom: 18px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #E89A2D; margin: 0 0 10px; font-weight: 600; }
+  .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui); font-size: clamp(28px, 4.5vw, 44px); font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em; line-height: 1.1; }
+  .dek { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0; max-width: 60ch; }
+  .dek a { color: #E89A2D; text-decoration: underline; }
+  .dek em { font-style: italic; color: var(--pc-ink); }
+
+  .section__kicker { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px dotted var(--pc-rule-soft, #E5E3DE); }
+
+  /* Agents row */
+  .agents { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: rgba(232, 154, 45, 0.04); border: 1px solid rgba(232, 154, 45, 0.22); border-left: 3px solid #E89A2D; border-radius: 2px; }
+  .agent { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: center; padding: 4px 0; }
+  .agent__dot { width: 10px; height: 10px; border-radius: 50%; background: #c4c2bc; }
+  .agent__dot[data-state="working"] { background: #2f8f5f; box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55); animation: agent-pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  .agent__dot[data-state="idle"] { background: #8a7e6c; }
+  @keyframes agent-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55); }
+    70%  { box-shadow: 0 0 0 8px rgba(47, 143, 95, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+  .agent__meta { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: baseline; }
+  .agent__name { font-size: 12px; letter-spacing: 0.08em; font-weight: 600; color: var(--pc-ink); margin: 0; text-transform: uppercase; }
+  .agent__last { font-size: 11.5px; color: var(--pc-ink-soft); margin: 0; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--pc-font-sans, system-ui); }
+  .agent__last--empty { color: var(--pc-ink-muted); font-style: italic; }
+  .agent__rel { font-family: var(--pc-font-mono); font-size: 10px; color: var(--pc-ink-muted); }
+  .agent__sep { margin: 0 4px; opacity: 0.5; }
+
+  /* Composer */
+  .composer textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    font: inherit;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 16px;
+    line-height: 1.5;
+    background: #fff;
+    color: var(--pc-ink);
+    resize: vertical;
+    min-height: 100px;
+  }
+  .composer textarea:focus { outline: 2px solid #E89A2D; outline-offset: -1px; border-color: #E89A2D; }
+  .composer__row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; }
+  .composer__row input {
+    flex: 1 1 200px;
+    padding: 10px 12px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    font: inherit;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14.5px;
+    background: #fff;
+    color: var(--pc-ink);
+  }
+  .composer__row input:focus { outline: 2px solid #E89A2D; outline-offset: -1px; border-color: #E89A2D; }
+
+  .composer__expand { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; cursor: pointer; }
+  .composer__expand input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+  .composer__expand .mono { font-size: 10.5px; letter-spacing: 0.12em; color: var(--pc-ink); font-weight: 600; }
+  .composer__expand-hint { font-size: 12px; color: var(--pc-ink-muted); font-family: Georgia, serif; }
+
+  .composer__actions { display: flex; align-items: center; gap: 14px; margin: 14px 0 0; flex-wrap: wrap; }
+  .composer__send {
+    background: #12110E;
+    color: #F3E6D8;
+    border: 1px solid rgba(232, 154, 45, 0.55);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    padding: 10px 22px;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .composer__send:hover:not(:disabled) { background: #E89A2D; color: #12110E; }
+  .composer__send:disabled { opacity: 0.6; cursor: wait; }
+  .composer__status { font-size: 11px; letter-spacing: 0.06em; color: var(--pc-ink-muted); }
+  .composer__status[data-state="ok"] { color: #2f8f5f; }
+  .composer__status[data-state="err"] { color: #C92A2A; }
+  .composer__status[data-state="pending"] { color: #7a4d0c; }
+
+  .composer__foot, .cadence__foot, .timeline__foot { font-size: 11px; color: var(--pc-ink-muted); margin: 14px 0 0; line-height: 1.55; letter-spacing: 0.02em; }
+  .composer__foot a, .cadence__foot a, .timeline__foot a { color: #E89A2D; text-decoration: underline; }
+
+  /* Cadence + timeline shared row styles */
+  .chip { display: inline-block; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; font-family: var(--pc-font-mono); font-weight: 600; }
+  .chip--shy { background: rgba(138, 126, 108, 0.2); color: #5a4e38; }
+  .chip--modest { background: rgba(24, 95, 165, 0.15); color: #0b3e73; }
+  .chip--healthy { background: rgba(232, 89, 12, 0.15); color: #8f370f; }
+  .chip--heavy { background: rgba(201, 42, 42, 0.15); color: #7a1414; }
+  .chip--collab { background: rgba(95, 61, 196, 0.14); color: #3a1d8a; }
+
+  .cadence__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .cadence__row { display: grid; grid-template-columns: 110px 60px 70px 1fr; gap: 8px; align-items: baseline; padding: 6px 8px; background: #fbfaf5; border-left: 3px solid #c4c2bc; border-radius: 2px; font-size: 12.5px; }
+  .cadence__row--heavy { border-left-color: #C92A2A; }
+  .cadence__row--healthy { border-left-color: #E8590C; }
+  .cadence__row--modest { border-left-color: #185FA5; }
+  .cadence__row--shy { border-left-color: #8a7e6c; }
+  .cadence__when { font-size: 10.5px; letter-spacing: 0.04em; color: var(--pc-ink-muted); }
+  .cadence__title { font-family: var(--pc-font-sans, system-ui); }
+
+  .timeline__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .timeline__row { display: grid; grid-template-columns: 90px 60px 1fr; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px dotted var(--pc-rule-soft, #E5E3DE); font-size: 12.5px; }
+  .timeline__when { font-size: 10.5px; letter-spacing: 0.04em; color: var(--pc-ink-muted); }
+  .timeline__title { font-family: var(--pc-font-sans, system-ui); overflow: hidden; text-overflow: ellipsis; }
+  .timeline__title a { color: var(--pc-ink); text-decoration: underline; text-decoration-color: rgba(0,0,0,0.18); }
+  .timeline__title a:hover { color: #E89A2D; text-decoration-color: currentColor; }
+
+  .empty { font-style: italic; color: var(--pc-ink-muted); margin: 8px 0; font-size: 13px; }
+
+  @media (max-width: 600px) {
+    .agent__meta { grid-template-columns: 60px 1fr; gap: 6px; }
+    .agent__last { font-size: 11px; }
+    .cadence__row { grid-template-columns: 1fr; gap: 4px; padding: 8px 8px; }
+    .timeline__row { grid-template-columns: 80px 1fr; gap: 6px; padding: 8px 0; }
+    .timeline__row .chip--collab { display: none; }
+  }
+</style>

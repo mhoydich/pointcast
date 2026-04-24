@@ -1,0 +1,264 @@
+---
+/**
+ * /tv/shows/here — fullscreen presence-bubble TV show.
+ *
+ * Visualizes /api/presence/snapshot as floating Noun bubbles drifting on
+ * a dark canvas. Refreshes every 3 seconds. Each bubble shows mood +
+ * listening string if present.
+ *
+ * Auto-fullscreen on first tap. Same skeleton as the other TV shows.
+ */
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#060504" />
+  <meta name="description" content="Here bubbles — every visitor connected to PointCast right now, rendered as a floating Noun. Live snapshot from the presence Durable Object, refreshed every 3 seconds." />
+  <title>PointCast TV · Here bubbles</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://noun.pics" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #060504;
+      --bg-2: #1a0d1a;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --accent: #F59F00;
+      --human: #F59F00;
+      --agent: #6b7cff;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, var(--bg-2) 0%, var(--bg) 80%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; gap: 16px; padding: 16px 30px; z-index: 30;
+      font-family: var(--mono);
+      background: linear-gradient(180deg, rgba(6, 5, 4, 0.85) 0%, transparent 100%);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__count { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-dim); margin-left: auto; font-weight: 600; }
+    .top__count b { color: var(--accent); font-weight: 700; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .stage {
+      position: fixed; inset: 0;
+      overflow: hidden;
+    }
+    .bubble {
+      position: absolute;
+      width: 110px;
+      transform: translate(-50%, -50%);
+      will-change: transform;
+      animation: float-drift var(--dur, 26s) ease-in-out infinite alternate;
+      animation-delay: var(--delay, 0s);
+    }
+    .bubble__circle {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2.5px solid var(--ring, var(--human));
+      box-shadow: 0 0 30px var(--glow, rgba(245, 159, 0, 0.4));
+      background: rgba(0, 0, 0, 0.45);
+      margin: 0 auto;
+    }
+    .bubble__img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .bubble__meta {
+      margin-top: 6px;
+      text-align: center;
+      max-width: 140px;
+      transform: translateX(-15px);
+    }
+    .bubble__noun { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--ring, var(--human)); font-weight: 700; margin: 0; text-transform: uppercase; }
+    .bubble__mood { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--ink-soft); margin: 2px 0 0; text-transform: uppercase; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bubble__listening { font-family: var(--serif); font-style: italic; font-size: 11.5px; color: var(--ink-dim); margin: 2px 0 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    @keyframes float-drift {
+      0%   { transform: translate(calc(-50% + var(--x-start, 0px)), calc(-50% + var(--y-start, 0px))); }
+      100% { transform: translate(calc(-50% + var(--x-end,   0px)), calc(-50% + var(--y-end,   0px))); }
+    }
+
+    .empty {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; padding: 0 40px;
+      text-align: center;
+    }
+    .empty__line {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: clamp(28px, 4.5vw, 50px);
+      color: var(--ink);
+      margin: 0;
+      letter-spacing: -0.005em;
+    }
+    .empty__cta {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      color: var(--accent);
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 8px 14px;
+      border: 1px solid var(--accent);
+      border-radius: 2px;
+    }
+    .empty__cta:hover { background: var(--accent); color: var(--bg); }
+
+    .bot {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 44px;
+      display: flex; align-items: center; gap: 16px; padding: 12px 30px; z-index: 30;
+      background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
+      font-family: var(--mono); color: var(--ink-dim);
+      font-size: 10px; letter-spacing: 0.14em;
+    }
+    .bot__kicker { color: var(--accent); font-weight: 700; }
+    .bot__pulse-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4cd39b; box-shadow: 0 0 6px rgba(76, 211, 155, 0.7); margin-right: 6px; animation: pdot 2s ease-in-out infinite; }
+    @keyframes pdot { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .bubble { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / HERE BUBBLES</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+    <div class="top__count">WATCHING — <b id="count-humans">—</b> humans · <b id="count-agents">—</b> agents</div>
+  </header>
+
+  <main class="stage" id="stage" aria-label="Live presence visualization">
+    <div class="empty" id="empty" hidden>
+      <p class="empty__line">no one here yet — be the first</p>
+      <a class="empty__cta" href="/here">→ /here</a>
+    </div>
+  </main>
+
+  <footer class="bot">
+    <span class="bot__pulse-dot" aria-hidden="true"></span>
+    <span class="bot__kicker">LIVE</span>
+    <span>fullscreen view of /api/presence/snapshot · refreshes every 3 seconds · drifting CSS animation</span>
+  </footer>
+
+  <script is:inline>
+    (function () {
+      var stage = document.getElementById('stage');
+      var emptyEl = document.getElementById('empty');
+      var countH = document.getElementById('count-humans');
+      var countA = document.getElementById('count-agents');
+      var ctrl = null;
+
+      function makeBubble(s, idx, total) {
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        // Initial position: stagger across viewport
+        var col = idx % 5;
+        var row = Math.floor(idx / 5);
+        var startLeft = 12 + col * 18 + (Math.random() * 6 - 3);  // % of vw
+        var startTop  = 22 + row * 22 + (Math.random() * 6 - 3);
+        bubble.style.left = startLeft + 'vw';
+        bubble.style.top  = startTop  + 'vh';
+        // Drift parameters
+        var xs = (Math.random() * 80) - 40;
+        var ys = (Math.random() * 80) - 40;
+        var xe = (Math.random() * 80) - 40;
+        var ye = (Math.random() * 80) - 40;
+        var dur = 18 + Math.random() * 22;
+        var delay = -(Math.random() * 20);
+        bubble.style.setProperty('--x-start', xs + 'px');
+        bubble.style.setProperty('--y-start', ys + 'px');
+        bubble.style.setProperty('--x-end',   xe + 'px');
+        bubble.style.setProperty('--y-end',   ye + 'px');
+        bubble.style.setProperty('--dur',     dur + 's');
+        bubble.style.setProperty('--delay',   delay + 's');
+        // Kind tint
+        var isAgent = s.kind === 'agent';
+        bubble.style.setProperty('--ring', isAgent ? '#6b7cff' : '#F59F00');
+        bubble.style.setProperty('--glow', isAgent ? 'rgba(107, 124, 255, 0.4)' : 'rgba(245, 159, 0, 0.4)');
+        // Inner content
+        var nounId = (typeof s.nounId === 'number') ? s.nounId : 0;
+        var mood = (s.mood || '').toString().slice(0, 28);
+        var listening = (s.listening || '').toString().slice(0, 32);
+        bubble.innerHTML =
+          '<div class="bubble__circle"><img class="bubble__img" src="https://noun.pics/' + nounId + '.svg" alt="" loading="lazy" /></div>' +
+          '<div class="bubble__meta">' +
+            '<p class="bubble__noun">noun #' + nounId + '</p>' +
+            (mood ? '<p class="bubble__mood">' + mood + '</p>' : '') +
+            (listening ? '<p class="bubble__listening">♪ ' + listening + '</p>' : '') +
+          '</div>';
+        return bubble;
+      }
+
+      function paint(snapshot) {
+        var sessions = (snapshot && Array.isArray(snapshot.sessions)) ? snapshot.sessions : [];
+        var humans = (snapshot && typeof snapshot.humans === 'number') ? snapshot.humans : sessions.filter(function (s) { return s.kind !== 'agent'; }).length;
+        var agents = (snapshot && typeof snapshot.agents === 'number') ? snapshot.agents : sessions.filter(function (s) { return s.kind === 'agent'; }).length;
+        countH.textContent = humans;
+        countA.textContent = agents;
+        // Clear stage children except .empty
+        var oldBubbles = stage.querySelectorAll('.bubble');
+        oldBubbles.forEach(function (b) { b.remove(); });
+        if (sessions.length === 0) {
+          emptyEl.hidden = false;
+          return;
+        }
+        emptyEl.hidden = true;
+        sessions.slice(0, 30).forEach(function (s, i) {
+          stage.appendChild(makeBubble(s, i, sessions.length));
+        });
+      }
+
+      async function fetchSnapshot() {
+        if (ctrl) ctrl.abort();
+        ctrl = new AbortController();
+        try {
+          var res = await fetch('/api/presence/snapshot', { signal: ctrl.signal });
+          if (!res.ok) { paint(null); return; }
+          var j = await res.json();
+          paint(j);
+        } catch (e) { /* aborted or network */ }
+      }
+
+      fetchSnapshot();
+      setInterval(fetchSnapshot, 3000);
+
+      // Fullscreen wiring (same as other shows)
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

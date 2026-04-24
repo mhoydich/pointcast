@@ -1,0 +1,436 @@
+---
+/**
+ * /contributor/[slug] — one page per collaborator with rich Person schema.
+ *
+ * SEO / GEO rationale: /collabs is the index; /contributor/{slug} is the
+ * atomic page Google's Knowledge Graph + LLM entity extractors can key on
+ * per-person. Each page declares a full Person with jobTitle, worksFor,
+ * sameAs, homeLocation, memberOf. That's the entity signal that lets
+ * pointcast.xyz get attributed as the source when someone asks "who is
+ * Mike Hoydich" / "what does Claude Code do at PointCast".
+ *
+ * Static-generated from src/lib/collaborators.ts.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { COLLABORATORS, ROLE_LABEL, type Collaborator } from '../../lib/collaborators';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  return COLLABORATORS.map((c) => ({
+    params: { slug: c.slug },
+    props: { collab: c },
+  }));
+}
+
+interface Props { collab: Collaborator }
+const { collab } = Astro.props;
+
+// Blocks authored by this contributor. Most blocks use short author codes:
+// 'cc' (Claude Code), 'codex', 'mh' (Mike Hoydich). Map slugs → codes so
+// the "blocks by X" list actually filters correctly.
+const SLUG_TO_AUTHOR_CODES: Record<string, string[]> = {
+  'mike-hoydich': ['mh', 'mike-hoydich', 'mike'],
+  'claude-code': ['cc', 'claude-code', 'claude'],
+  'codex': ['codex'],
+  'manus': ['manus'],
+};
+const codes = SLUG_TO_AUTHOR_CODES[collab.slug] ?? [collab.slug];
+
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft));
+const authored = allBlocks
+  .filter((b) => {
+    const author = (b.data as any)?.author;
+    const byline = (b.data as any)?.meta?.byline ?? '';
+    if (typeof author === 'string' && codes.includes(author.toLowerCase())) return true;
+    if (typeof byline === 'string' && codes.some((c) => byline.toLowerCase().includes(c))) return true;
+    return false;
+  })
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const roleLabel = ROLE_LABEL[collab.role];
+const personId = collab.slug === 'mike-hoydich'
+  ? 'https://pointcast.xyz/#person'
+  : `https://pointcast.xyz/contributor/${collab.slug}#person`;
+
+// sameAs — social profile URLs. Rich for Knowledge Graph.
+const sameAs = [
+  collab.twitter ? `https://x.com/${collab.twitter.replace(/^@/, '')}` : null,
+  collab.farcaster ? `https://warpcast.com/${collab.farcaster.replace(/^@/, '')}` : null,
+  collab.github ? `https://github.com/${collab.github.replace(/^@/, '')}` : null,
+  collab.url && !collab.url.startsWith('https://pointcast.xyz') ? collab.url : null,
+].filter(Boolean);
+
+// Vendor-backed collaborators (Claude Code, Codex, Manus) are Software-
+// Application entities in addition to Person, so LLMs see them correctly.
+const isModel = Boolean(collab.vendor);
+const softwareAppSchema = isModel
+  ? {
+      '@type': 'SoftwareApplication',
+      '@id': `https://pointcast.xyz/contributor/${collab.slug}#app`,
+      name: collab.name,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Cloud',
+      provider: { '@type': 'Organization', name: collab.vendor },
+      url: collab.url,
+      description: collab.intro,
+    }
+  : null;
+
+const personSchema: Record<string, unknown> = {
+  '@type': 'Person',
+  '@id': personId,
+  name: collab.name,
+  description: collab.intro,
+  url: `https://pointcast.xyz/contributor/${collab.slug}`,
+  jobTitle: roleLabel + ' · PointCast',
+  memberOf: {
+    '@type': 'Organization',
+    '@id': 'https://pointcast.xyz/#org',
+    name: 'PointCast',
+  },
+  ...(collab.vendor ? { worksFor: { '@type': 'Organization', name: collab.vendor } } : {}),
+  ...(collab.location && collab.location !== 'cloud'
+    ? { homeLocation: { '@type': 'Place', name: collab.location } }
+    : {}),
+  ...(sameAs.length > 0 ? { sameAs } : {}),
+};
+
+// For Mike, include the full home-address structure (matches BaseLayout #person).
+if (collab.slug === 'mike-hoydich') {
+  (personSchema as any).jobTitle = ['Founder, PointCast', 'COO, Good Feels'];
+  (personSchema as any).homeLocation = {
+    '@type': 'Place',
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: 'El Segundo',
+      addressRegion: 'CA',
+      postalCode: '90245',
+      addressCountry: 'US',
+    },
+  };
+  (personSchema as any).worksFor = [
+    { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+    { '@type': 'Organization', name: 'Good Feels', url: 'https://shop.getgoodfeels.com' },
+  ];
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    personSchema,
+    ...(softwareAppSchema ? [softwareAppSchema] : []),
+    {
+      '@type': 'ProfilePage',
+      '@id': `https://pointcast.xyz/contributor/${collab.slug}`,
+      name: `${collab.name} — contributor profile`,
+      mainEntity: { '@id': personId },
+      url: `https://pointcast.xyz/contributor/${collab.slug}`,
+      inLanguage: 'en-US',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `https://pointcast.xyz/contributor/${collab.slug}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Collaborators', item: 'https://pointcast.xyz/collabs' },
+        { '@type': 'ListItem', position: 3, name: collab.name, item: `https://pointcast.xyz/contributor/${collab.slug}` },
+      ],
+    },
+  ],
+};
+
+const metaDescription = `${collab.name} — ${roleLabel} at PointCast. ${collab.intro}${authored.length > 0 ? ` ${authored.length} blocks authored.` : ''}`.slice(0, 180);
+---
+
+<BlockLayout
+  title={`${collab.name} — ${roleLabel}`}
+  description={metaDescription}
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/collabs">Collaborators</a>
+      <span aria-hidden="true">›</span>
+      <span>{collab.name}</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">{roleLabel.toUpperCase()}{collab.vendor ? ` · ${collab.vendor.toUpperCase()}` : ''}{collab.location ? ` · ${collab.location.toUpperCase()}` : ''}</p>
+      <h1 class="display">{collab.name}</h1>
+      <p class="dek">{collab.intro}</p>
+    </header>
+
+    <section class="section">
+      <h2 id="overview">Role</h2>
+      <dl class="overview">
+        <dt>Role</dt>
+        <dd>{roleLabel}{collab.slug === 'mike-hoydich' ? ' · also COO, Good Feels' : ''}</dd>
+
+        {collab.vendor && (
+          <>
+            <dt>Operated by</dt>
+            <dd>{collab.vendor}</dd>
+          </>
+        )}
+
+        {collab.location && (
+          <>
+            <dt>Based</dt>
+            <dd>{collab.location}</dd>
+          </>
+        )}
+
+        {collab.since && (
+          <>
+            <dt>Joined</dt>
+            <dd>{new Date(collab.since).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</dd>
+          </>
+        )}
+
+        {collab.url && (
+          <>
+            <dt>Primary link</dt>
+            <dd><a href={collab.url} target={collab.url.startsWith('https://pointcast.xyz') ? '_self' : '_blank'} rel={collab.url.startsWith('https://pointcast.xyz') ? undefined : 'noopener'}>{collab.url}</a></dd>
+          </>
+        )}
+
+        {collab.twitter && (
+          <>
+            <dt>X / Twitter</dt>
+            <dd><a href={`https://x.com/${collab.twitter.replace(/^@/, '')}`} target="_blank" rel="noopener">{collab.twitter}</a></dd>
+          </>
+        )}
+
+        {collab.farcaster && (
+          <>
+            <dt>Farcaster</dt>
+            <dd><a href={`https://warpcast.com/${collab.farcaster.replace(/^@/, '')}`} target="_blank" rel="noopener">{collab.farcaster}</a></dd>
+          </>
+        )}
+
+        {collab.github && (
+          <>
+            <dt>GitHub</dt>
+            <dd><a href={`https://github.com/${collab.github.replace(/^@/, '')}`} target="_blank" rel="noopener">{collab.github}</a></dd>
+          </>
+        )}
+      </dl>
+    </section>
+
+    {authored.length > 0 && (
+      <section class="section">
+        <h2 id="authored">{authored.length} block{authored.length === 1 ? '' : 's'} authored</h2>
+        <p class="note">Most recent first. All blocks are permanent links at /b/{'{id}'} — safe to cite.</p>
+        <ul class="authored">
+          {authored.slice(0, 30).map((b) => (
+            <li class="authored-item">
+              <a href={`/b/${b.data.id}`}>
+                <span class="authored-id mono">№ {b.data.id}</span>
+                <span class="authored-ch mono">CH.{b.data.channel}</span>
+                <span class="authored-type mono">{b.data.type}</span>
+                <span class="authored-title">{b.data.title}</span>
+                <span class="authored-date mono">{b.data.timestamp.toISOString().slice(0, 10)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        {authored.length > 30 && (
+          <p class="note">… and {authored.length - 30} more. Full archive: <a href="/archive">/archive</a>.</p>
+        )}
+      </section>
+    )}
+
+    {collab.slug === 'mike-hoydich' && (
+      <section class="section">
+        <h2 id="biography">Biography</h2>
+        <p>
+          Mike Hoydich is a creative technologist, founder, and operator
+          based in El Segundo, California. He runs PointCast (this site),
+          an agent-native broadcast built in explicit collaboration with
+          Claude Code (Anthropic) and Codex (OpenAI), publishing daily
+          across nine editorial channels and on Tezos mainnet. He is also
+          COO at <a href="https://shop.getgoodfeels.com" target="_blank" rel="noopener">Good Feels</a>,
+          a hemp-derived THC beverage company, also based in El Segundo.
+        </p>
+        <p>
+          Mike's work sits at the intersection of publishing, software, and
+          on-chain primitives. Long-running obsessions: pickleball
+          (he plays on The Squeeze at El Segundo Recreation Park), music
+          curation, mid-century modern design, and what happens to the
+          web when agents become first-class readers.
+        </p>
+        <p>
+          More: <a href="/about">/about</a> ·
+          <a href="/press">/press</a> (media kit) ·
+          <a href="/el-segundo">/el-segundo</a> (local pillar) ·
+          <a href="/agent-native">/agent-native</a> (technical pillar).
+        </p>
+      </section>
+    )}
+
+    {collab.slug === 'claude-code' && (
+      <section class="section">
+        <h2 id="how-it-works">How Claude Code works on PointCast</h2>
+        <p>
+          Claude Code runs on an hourly cron, reads <code>docs/inbox/</code>
+          and <code>docs/queue/</code> for fresh work, picks a sprint,
+          ships the code, and commits. A typical day ships 2-10 Blocks
+          + the supporting engineering (schema migrations, new routes,
+          scripts, UI). Sessions are logged at <a href="/sprints">/sprints</a>;
+          the inbox flow is exposed at <a href="/ping">/ping</a>.
+        </p>
+        <p>
+          The architecture is explicit: Claude Code is not autonomous in
+          an open-ended sense. It operates within a queue Mike maintains.
+          New capabilities get proposed, reviewed, ratified, and only
+          then wired in.
+        </p>
+      </section>
+    )}
+
+    {collab.slug === 'codex' && (
+      <section class="section">
+        <h2 id="what-codex-ships">What Codex ships</h2>
+        <p>
+          Codex is OpenAI's repo-scoped engineering specialist, wired into
+          PointCast as an MCP server Claude Code drives programmatically.
+          Codex shipped the STATIONS layer (<a href="/tv">/tv</a> geo-channels),
+          the presence Durable Objects upgrade, the <a href="/here">/here</a>
+          backend, and several single-file wins flagged in the session log.
+        </p>
+      </section>
+    )}
+
+    {collab.slug === 'manus' && (
+      <section class="section">
+        <h2 id="manus-ops">Manus operations</h2>
+        <p>
+          Manus runs launch-week operations: platform matrix, Cloudflare
+          Email Routing setup, Resend DNS verification, Google Search
+          Console registration, IndexNow key binding, objkt collection
+          curation, and the ongoing checklist for submissions to
+          aggregators (see <code>docs/outreach/submission-checklist.md</code>).
+          Works from Mike-drafted ops briefs in <code>docs/briefs/</code>.
+        </p>
+      </section>
+    )}
+
+    <footer class="related">
+      <p class="related__label">RELATED</p>
+      <ul>
+        <li><a href="/collabs">/collabs — full registry + federation spec</a></li>
+        <li><a href="/collabs.json">/collabs.json — machine-readable</a></li>
+        {COLLABORATORS.filter((c) => c.slug !== collab.slug).slice(0, 3).map((c) => (
+          <li><a href={`/contributor/${c.slug}`}>{c.name}</a> · {ROLE_LABEL[c.role]}</li>
+        ))}
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 820px; margin: 0 auto; padding: 18px 18px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .display { font-family: var(--pc-font-sans); font-size: 40px; font-weight: 500; line-height: 1.05; margin: 0 0 12px; }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 17px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 64ch; }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 10px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--pc-ink);
+    max-width: 64ch;
+    margin: 0 0 12px;
+  }
+  .section a { color: var(--pc-accent); text-decoration: underline; }
+  .section code { font-family: var(--pc-font-mono); font-size: 13px; background: #f4f2ed; padding: 1px 5px; border-radius: 2px; }
+  .note { font-size: 13px; color: var(--pc-ink-muted); }
+
+  .overview {
+    display: grid;
+    grid-template-columns: minmax(140px, auto) 1fr;
+    gap: 8px 16px;
+    margin: 0;
+    padding: 14px;
+    background: #fafaf8;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+  }
+  .overview dt {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .overview dd { margin: 0; font-size: 14px; color: var(--pc-ink); line-height: 1.4; word-break: break-word; }
+  .overview a { color: var(--pc-accent); }
+  @media (max-width: 600px) {
+    .overview { grid-template-columns: 1fr; gap: 2px; }
+    .overview dd { padding-bottom: 8px; border-bottom: 1px dashed var(--pc-rule-soft); }
+    .overview dd:last-child { border-bottom: 0; }
+  }
+
+  .authored { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+  .authored-item { border: 1px solid var(--pc-rule); border-radius: 2px; background: #fff; }
+  .authored-item a {
+    display: grid;
+    grid-template-columns: 64px 54px 54px 1fr 78px;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    text-decoration: none;
+  }
+  .authored-item:hover { background: #fafaf8; border-color: var(--pc-ink-muted); }
+  .authored-id, .authored-ch, .authored-type, .authored-date { color: var(--pc-ink-muted); font-size: 9.5px; }
+  .authored-title { font-family: var(--pc-font-sans); font-size: 14px; color: var(--pc-ink); line-height: 1.4; }
+  @media (max-width: 640px) {
+    .authored-item a { grid-template-columns: 54px 54px 1fr; gap: 6px; }
+    .authored-type, .authored-date { display: none; }
+    .authored-title { grid-column: 1 / -1; font-size: 13.5px; padding-top: 4px; }
+  }
+
+  .related {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

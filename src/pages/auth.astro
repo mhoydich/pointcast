@@ -1,0 +1,317 @@
+---
+/**
+ * /auth — authentication status page.
+ *
+ * Mike 2026-04-21 09:20 PT: "keep working on and confirming logins, its a
+ * top priority on the go forward."
+ *
+ * Three sections on this page:
+ *   1. YOUR STATE — live-reads the pc_session cookie + pc:wallets local-
+ *      storage + pc:session-id and renders what PointCast knows about
+ *      you right now: Google-signed-in, Tezos-wallet-connected, both,
+ *      or neither (anonymous visitor).
+ *   2. SIGN IN — buttons for Google OAuth (via /api/auth/google/start)
+ *      and Tezos Beacon (via /profile#wallet where the real Beacon flow
+ *      lives). Shows setup-required warnings if env vars are missing.
+ *   3. SETUP NOTES — for Mike: the Cloudflare Pages env-var checklist
+ *      needed to make Google OAuth actually resolve, plus the Tezos
+ *      wallet-connect context.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Auth — who are you on PointCast';
+const description = 'Live view of your authentication state on PointCast (Google session cookie + Tezos Beacon wallet + anonymous session ID). Setup notes for activating Google OAuth and Beacon wallet connect.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="auth-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Auth</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">AUTH · WHO POINTCAST KNOWS YOU AS</p>
+      <h1 class="title">Your state, right now.</h1>
+      <p class="dek">
+        PointCast supports three kinds of identity: an anonymous session (auto-generated, every visitor
+        gets one in <code>localStorage['pc:session-id']</code>), a Google-OAuth session (cookie
+        <code>pc_session</code>, 30-day, 30-day, issued by <code>/api/auth/google/callback</code>), and
+        one or more connected Tezos wallets (via Beacon, stored in <code>pc:wallets</code>). This page
+        shows what you are right now + the setup steps needed for the server-side flows to actually
+        resolve.
+      </p>
+    </header>
+
+    <!-- STATE -->
+    <section class="block">
+      <h2 class="block__title mono">YOUR STATE</h2>
+      <ul class="state" id="auth-state">
+        <li class="state__row state__row--session">
+          <span class="state__dot" data-state="unknown" aria-hidden="true"></span>
+          <div class="state__body">
+            <p class="state__label mono">SESSION (ANONYMOUS)</p>
+            <p class="state__value mono" id="auth-session">—</p>
+            <p class="state__note">Every visitor gets one. Anchors your noun and your local game state.</p>
+          </div>
+        </li>
+        <li class="state__row state__row--google">
+          <span class="state__dot" data-state="unknown" id="auth-google-dot" aria-hidden="true"></span>
+          <div class="state__body">
+            <p class="state__label mono">GOOGLE (OPTIONAL)</p>
+            <p class="state__value mono" id="auth-google">—</p>
+            <p class="state__note">Set once, lasts 30 days. Needed for cross-device identity. Route returns 404 until env vars set.</p>
+          </div>
+        </li>
+        <li class="state__row state__row--tezos">
+          <span class="state__dot" data-state="unknown" id="auth-tezos-dot" aria-hidden="true"></span>
+          <div class="state__body">
+            <p class="state__label mono">TEZOS WALLET (OPTIONAL)</p>
+            <p class="state__value mono" id="auth-tezos">—</p>
+            <p class="state__note">Beacon wallet pairing for collecting, tipping, and federation-identity.</p>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- SIGN IN -->
+    <section class="block">
+      <h2 class="block__title mono">SIGN IN</h2>
+      <div class="signin">
+        <a class="signin__btn signin__btn--google" id="signin-google" href="/api/auth/google/start?next=/auth">
+          <span class="signin__icon" aria-hidden="true">G</span>
+          <span class="signin__label">Sign in with Google</span>
+          <span class="signin__sub mono" id="signin-google-sub">start OAuth flow</span>
+        </a>
+        <a class="signin__btn signin__btn--tezos" id="signin-tezos" href="/profile#wallet">
+          <span class="signin__icon" aria-hidden="true">◆</span>
+          <span class="signin__label">Connect Tezos wallet</span>
+          <span class="signin__sub mono">Beacon flow lives at /profile#wallet</span>
+        </a>
+        <button type="button" class="signin__btn signin__btn--signout" id="signin-out" hidden>
+          <span class="signin__icon" aria-hidden="true">↩</span>
+          <span class="signin__label">Sign out of Google</span>
+          <span class="signin__sub mono">clears pc_session cookie</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SETUP NOTES (for Mike) -->
+    <section class="block">
+      <h2 class="block__title mono">SETUP NOTES · FOR MIKE</h2>
+      <article class="notes">
+        <h3 class="notes__sub">1. Google OAuth env vars</h3>
+        <p>
+          The <code>/api/auth/google/start</code> + <code>/callback</code> endpoints are written
+          (see <code>functions/api/auth/google/start.ts</code> + <code>callback.ts</code>) but
+          return a 503 config-error until the Cloudflare Pages dashboard has three env vars set
+          for the <strong>Production</strong> environment:
+        </p>
+        <ul>
+          <li><code>GOOGLE_CLIENT_ID</code> — from Google Cloud Console, OAuth 2.0 Client IDs</li>
+          <li><code>GOOGLE_CLIENT_SECRET</code> — the matching secret</li>
+          <li><code>GOOGLE_REDIRECT_URI</code> — must exactly match an authorized redirect URI registered in Google Cloud Console. Recommended: <code>https://pointcast.xyz/api/auth/google/callback</code></li>
+        </ul>
+        <p>
+          <strong>Dashboard path:</strong> Cloudflare Pages → pointcast project → Settings → Environment variables → Production → Add variable. Add all three, save, trigger a re-deploy (pushing any commit works, or run <code>npx wrangler pages deploy dist --branch main</code> again). After that, <code>/api/auth/google/start</code> returns a 302 to Google's OAuth dialog.
+        </p>
+        <p class="notes__fyi mono">
+          Google Cloud Console steps (in case you need a refresher): APIs &amp; Services → Credentials → + Create credentials → OAuth 2.0 Client ID → Application type: Web application → Authorized redirect URIs: the one above. Copy client ID + client secret into Cloudflare.
+        </p>
+
+        <h3 class="notes__sub">2. Tezos Beacon wallet</h3>
+        <p>
+          The <code>/profile</code> page has the Beacon wallet pairing flow already wired via the
+          <code>WalletChip</code> component. Visitors click, Beacon opens, they approve, the address
+          lands in <code>pc:wallets</code>. Cross-session identity confirmation runs via
+          <code>/api/wallet/me</code> which returns <code>{'{ recognized: true, identity: "mike" }'}</code>
+          when the connected address matches Mike's tz2 seller address. No additional setup needed;
+          this works today.
+        </p>
+
+        <h3 class="notes__sub">3. Session cookie caveat (v0)</h3>
+        <p>
+          The <code>pc_session</code> cookie issued by the callback is a base64-encoded JSON blob, NOT a
+          JWT. It's <em>unsigned</em> — anyone with browser access could mint one. Treat as an identity
+          <em>hint</em>, never as an auth credential gating anything valuable. v1 ships JWT signing once
+          a <code>GOOGLE_SESSION_SECRET</code> env var is wired + a small signing helper in
+          <code>functions/api/auth/session.ts</code>.
+        </p>
+
+        <h3 class="notes__sub">4. Where auth state is visible in the UI</h3>
+        <ul>
+          <li>The HUD bar (bottom of every page): YOU panel shows noun + mood + stats; sign-in chip reveals only when <code>pc_session</code> cookie is absent.</li>
+          <li>The <code>/cos</code> page: composer foot has a "sign in with Google" chip when logged out.</li>
+          <li><code>/noundrum</code> header: tiny <em>↪ G</em> chip in upper right when logged out.</li>
+          <li>This page (<code>/auth</code>): the definitive status + setup reference.</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer class="foot">
+      <p class="mono foot__kicker">ALSO</p>
+      <ul class="foot__list">
+        <li><a href="/profile">/profile — connected Tezos wallets with live TzKT balance</a></li>
+        <li><a href="/api/wallet/me">/api/wallet/me — wallet recognition endpoint</a></li>
+        <li><a href="/b/0338">/b/0338 — chief of staff block (identity layer context)</a></li>
+        <li><a href="/cos">/cos — send a message to the team</a></li>
+      </ul>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  function cookieGet(name) {
+    var raw = document.cookie || '';
+    var parts = raw.split(';').map(function (s) { return s.trim(); });
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].indexOf(name + '=') === 0) return decodeURIComponent(parts[i].slice(name.length + 1));
+    }
+    return null;
+  }
+  function readStorage(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  // Session (anonymous)
+  var sid = readStorage('pc:session-id');
+  var sidEl = document.getElementById('auth-session');
+  var sidDot = document.querySelector('.state__row--session .state__dot');
+  if (sid) {
+    sidEl.textContent = 'Active · ' + sid.slice(0, 18) + '…';
+    sidDot.setAttribute('data-state', 'on');
+  } else {
+    sidEl.textContent = 'Not yet initialized (will be on next page load)';
+    sidDot.setAttribute('data-state', 'off');
+  }
+
+  // Google
+  var gCookie = cookieGet('pc_session');
+  var gEl = document.getElementById('auth-google');
+  var gDot = document.getElementById('auth-google-dot');
+  var gSub = document.getElementById('signin-google-sub');
+  var outBtn = document.getElementById('signin-out');
+  if (gCookie) {
+    try {
+      var padded = gCookie.replace(/-/g, '+').replace(/_/g, '/');
+      while (padded.length % 4) padded += '=';
+      var decoded = JSON.parse(atob(padded));
+      gEl.textContent = 'Signed in' + (decoded.email ? ' · ' + decoded.email : '') + (decoded.name ? ' (' + decoded.name + ')' : '');
+      gDot.setAttribute('data-state', 'on');
+      if (gSub) gSub.textContent = 'already signed in — click to re-auth';
+      if (outBtn) outBtn.removeAttribute('hidden');
+    } catch (e) {
+      gEl.textContent = 'Session cookie present but could not decode';
+      gDot.setAttribute('data-state', 'warn');
+    }
+  } else {
+    gEl.textContent = 'Not signed in';
+    gDot.setAttribute('data-state', 'off');
+  }
+
+  // Tezos
+  var wRaw = readStorage('pc:wallets') || readStorage('pc:wallet');
+  var tEl = document.getElementById('auth-tezos');
+  var tDot = document.getElementById('auth-tezos-dot');
+  if (wRaw) {
+    try {
+      var parsed = JSON.parse(wRaw);
+      var addr = Array.isArray(parsed) ? (parsed[0] && parsed[0].address) : (parsed.address);
+      if (addr) {
+        tEl.textContent = 'Connected · ' + addr.slice(0, 10) + '…' + addr.slice(-6);
+        tDot.setAttribute('data-state', 'on');
+      } else {
+        tEl.textContent = 'Storage present but no address field';
+        tDot.setAttribute('data-state', 'warn');
+      }
+    } catch (e) {
+      tEl.textContent = 'Storage malformed';
+      tDot.setAttribute('data-state', 'warn');
+    }
+  } else {
+    tEl.textContent = 'No wallet connected';
+    tDot.setAttribute('data-state', 'off');
+  }
+
+  // Sign out button — clears pc_session cookie
+  if (outBtn) outBtn.addEventListener('click', function () {
+    document.cookie = 'pc_session=; Path=/; Max-Age=0; SameSite=Lax';
+    location.reload();
+  });
+})();
+</script>
+
+<style>
+  .auth-page { max-width: 880px; margin: 0 auto; padding: 24px 18px 80px; color: var(--pc-ink, #12110E); }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .crumb { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px; color: var(--pc-ink-muted, #5F5E5A); }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #185FA5; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 26px; padding-bottom: 18px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #185FA5; margin: 0 0 10px; font-weight: 700; }
+  .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui); font-size: clamp(28px, 4vw, 40px); font-weight: 500; margin: 0 0 12px; line-height: 1.15; letter-spacing: -0.01em; }
+  .dek { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0; max-width: 75ch; font-family: Georgia, serif; }
+  .dek code { font-family: var(--pc-font-mono); font-size: 11.5px; background: rgba(0,0,0,0.05); padding: 1px 5px; border-radius: 2px; }
+
+  .block { margin-bottom: 36px; }
+  .block__title { font-size: 11px; letter-spacing: 0.22em; color: #185FA5; margin: 0 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--pc-rule-soft); font-weight: 700; }
+
+  .state { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .state__row { display: grid; grid-template-columns: 14px 1fr; gap: 14px; align-items: start; padding: 14px 16px; background: #fffaf1; border: 1px solid #e6d8be; border-radius: 3px; }
+  .state__dot { width: 10px; height: 10px; border-radius: 50%; background: #d6d4cd; margin-top: 6px; }
+  .state__dot[data-state="on"] { background: #2f8f5f; box-shadow: 0 0 8px rgba(47, 143, 95, 0.45); }
+  .state__dot[data-state="off"] { background: #d6d4cd; border: 1px solid #8a7e6c; box-sizing: border-box; }
+  .state__dot[data-state="warn"] { background: #E8590C; box-shadow: 0 0 8px rgba(232, 89, 12, 0.45); }
+  .state__label { font-size: 10px; letter-spacing: 0.22em; color: #5F2A1E; margin: 0 0 4px; font-weight: 700; text-transform: uppercase; }
+  .state__value { font-size: 13px; letter-spacing: 0.04em; color: var(--pc-ink); margin: 0 0 4px; font-weight: 700; font-family: var(--pc-font-mono); }
+  .state__note { font-size: 12px; line-height: 1.45; color: var(--pc-ink-soft); margin: 0; font-family: Georgia, serif; }
+
+  .signin { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .signin__btn {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    padding: 12px 16px;
+    background: #12110e;
+    color: #f3e6d8;
+    border: 1px solid #12110e;
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.12s ease, transform 0.12s ease;
+  }
+  .signin__btn:hover { transform: translateY(-1px); }
+  .signin__btn--google { background: #fff; color: #12110e; border-color: #4285F4; }
+  .signin__btn--google:hover { background: #4285F4; color: #fff; border-color: #4285F4; }
+  .signin__btn--tezos { background: #12110e; color: #f3e6d8; border-color: #185FA5; }
+  .signin__btn--tezos:hover { background: #185FA5; color: #fff; border-color: #185FA5; }
+  .signin__btn--signout { background: transparent; color: #8A2432; border-color: #8A2432; }
+  .signin__btn--signout:hover { background: #8A2432; color: #fff; }
+  .signin__icon { grid-column: 1; grid-row: 1 / 3; font-size: 22px; font-weight: 700; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid currentColor; border-radius: 50%; }
+  .signin__label { grid-column: 2; grid-row: 1; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+  .signin__sub { grid-column: 2; grid-row: 2; font-size: 10px; letter-spacing: 0.08em; opacity: 0.75; text-transform: uppercase; }
+
+  .notes { font-family: Georgia, serif; line-height: 1.6; color: var(--pc-ink); max-width: 70ch; }
+  .notes__sub { font-family: var(--pc-font-sans, 'Inter Variable', system-ui); font-size: 16px; color: var(--pc-ink); margin: 20px 0 8px; font-weight: 600; }
+  .notes__sub:first-of-type { margin-top: 0; }
+  .notes p { margin: 0 0 12px; font-size: 14.5px; }
+  .notes code { font-family: var(--pc-font-mono); font-size: 11.5px; background: rgba(0,0,0,0.05); padding: 1px 5px; border-radius: 2px; }
+  .notes ul { margin: 0 0 12px; padding-left: 22px; font-size: 14px; line-height: 1.7; }
+  .notes__fyi { font-size: 12px; color: var(--pc-ink-muted); letter-spacing: 0.02em; background: rgba(24, 95, 165, 0.05); border-left: 3px solid #185FA5; padding: 8px 12px; border-radius: 2px; font-family: var(--pc-font-mono); }
+  .notes strong { color: #8A2432; font-weight: 700; }
+  .notes em { color: var(--pc-ink-soft); }
+
+  .foot { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--pc-rule-soft); }
+  .foot__kicker { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 8px; font-weight: 700; }
+  .foot__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .foot__list a { color: var(--pc-ink); text-decoration: underline; text-decoration-color: rgba(0,0,0,0.18); font-size: 14px; }
+  .foot__list a:hover { color: #185FA5; text-decoration-color: currentColor; }
+</style>

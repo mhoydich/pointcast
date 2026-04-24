@@ -1,0 +1,268 @@
+---
+/**
+ * /tv/shows/polls — cycling poll results. Full-viewport rendering of
+ * each poll in the collection: question + option list with vote-share
+ * bars, purpose chip, age. Client-side fetches latest tallies from
+ * /api/poll/{slug}. Crossfades every 9 seconds.
+ *
+ * Auto-fullscreen on first tap.
+ */
+import { getCollection } from 'astro:content';
+
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime())
+  .map((p) => ({
+    slug: p.data.slug,
+    question: p.data.question,
+    dek: p.data.dek ?? '',
+    options: p.data.options,
+    purpose: p.data.purpose,
+    openedAt: p.data.openedAt.toISOString(),
+    outcomeAction: p.data.outcomeAction ?? '',
+  }))
+  .slice(0, 12);
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#060504" />
+  <meta name="description" content="Polls show — every active PointCast poll with its current vote distribution, cycling one at a time. Full viewport, live-fetched tallies." />
+  <title>PointCast TV · Polls cycle</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #060504;
+      --bg-2: #14100a;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --accent: #F59F00;
+      --warm: #E5603C;
+      --cool: #6b7cff;
+      --green: #4cd39b;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: radial-gradient(ellipse at 40% 40%, var(--bg-2) 0%, var(--bg) 80%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; gap: 16px; padding: 16px 30px; z-index: 10;
+      font-family: var(--mono);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; margin-left: auto; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .stage {
+      position: relative;
+      height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 80px 40px 70px;
+    }
+
+    .poll-wrap { max-width: 1200px; width: 100%; }
+
+    .poll__meta { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .poll__purpose { font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; padding: 3px 10px; border: 1px solid rgba(245, 159, 0, 0.5); color: var(--accent); border-radius: 2px; font-weight: 700; }
+    .poll__age { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-dim); text-transform: uppercase; font-weight: 600; }
+    .poll__slug { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-dim); font-weight: 600; }
+
+    .poll__question { font-family: var(--serif); font-weight: 500; font-size: clamp(22px, 3.8vw, 44px); line-height: 1.2; color: var(--ink); margin: 0 0 10px; letter-spacing: -0.005em; transition: opacity 1s ease; }
+    .poll__dek { font-family: var(--serif); font-size: clamp(14px, 1.6vw, 18px); color: var(--ink-soft); margin: 0 0 22px; font-style: italic; transition: opacity 1s ease; max-width: 70ch; }
+
+    .poll__options { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; transition: opacity 1s ease; }
+    .poll__opt { display: grid; grid-template-columns: 1fr 80px; align-items: center; gap: 12px; padding: 6px 0; }
+    .poll__opt-label { font-family: var(--serif); font-size: clamp(14px, 1.6vw, 20px); color: var(--ink); }
+    .poll__opt-pct { font-family: var(--mono); font-size: clamp(13px, 1.4vw, 16px); font-weight: 700; color: var(--accent); text-align: right; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+    .poll__opt-bar { grid-column: 1 / -1; height: 4px; background: rgba(254, 245, 231, 0.08); border-radius: 2px; overflow: hidden; }
+    .poll__opt-fill { height: 100%; background: var(--opt-color, var(--accent)); transform-origin: left center; transform: scaleX(0); transition: transform 1.2s cubic-bezier(0.4, 0, 0.6, 1); }
+
+    .poll__outcome { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--ink-soft); margin: 20px 0 0; text-transform: uppercase; font-weight: 600; transition: opacity 1s ease; }
+    .poll__outcome strong { color: var(--accent); }
+
+    [data-state="out"] { opacity: 0; }
+    [data-state="in"] { opacity: 1; }
+
+    .counter {
+      position: fixed; left: 30px; bottom: 18px;
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 0.2em;
+      color: var(--ink-dim); text-transform: uppercase; font-weight: 600;
+      z-index: 5;
+    }
+
+    .progress {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 2px; z-index: 5;
+      background: rgba(245, 159, 0, 0.1);
+    }
+    .progress__bar { height: 100%; background: var(--accent); transform-origin: left center; transform: scaleX(0); transition: transform 9s linear; }
+
+    .empty {
+      font-family: var(--serif);
+      font-size: 22px;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / POLLS CYCLE</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+  </header>
+
+  <main class="stage">
+    <div class="poll-wrap" id="poll-wrap">
+      {polls.length === 0 ? (
+        <p class="empty">no polls yet — ship one at /polls</p>
+      ) : (
+        <>
+          <div class="poll__meta">
+            <span class="poll__purpose" id="poll-purpose">—</span>
+            <span class="poll__slug" id="poll-slug">—</span>
+            <span class="poll__age" id="poll-age">—</span>
+          </div>
+          <h1 class="poll__question" id="poll-question" data-state="in">—</h1>
+          <p class="poll__dek" id="poll-dek" data-state="in">—</p>
+          <ul class="poll__options" id="poll-options" data-state="in"></ul>
+          <p class="poll__outcome" id="poll-outcome" data-state="in"></p>
+        </>
+      )}
+    </div>
+  </main>
+
+  <div class="counter" id="counter">01 / {polls.length}</div>
+  <div class="progress"><div class="progress__bar" id="progress"></div></div>
+
+  <script is:inline define:vars={{ polls }}>
+    (function () {
+      if (!polls || polls.length === 0) return;
+      var idx = 0;
+      var COLORS = ['#F59F00', '#E5603C', '#4cd39b', '#6b7cff', '#c67cff', '#ff8da8', '#5ad4ff'];
+      var questionEl = document.getElementById('poll-question');
+      var dekEl = document.getElementById('poll-dek');
+      var optionsEl = document.getElementById('poll-options');
+      var outcomeEl = document.getElementById('poll-outcome');
+      var purposeEl = document.getElementById('poll-purpose');
+      var slugEl = document.getElementById('poll-slug');
+      var ageEl = document.getElementById('poll-age');
+      var counterEl = document.getElementById('counter');
+      var progEl = document.getElementById('progress');
+
+      function fadeOut() {
+        [questionEl, dekEl, optionsEl, outcomeEl].forEach(function (el) {
+          if (el) el.setAttribute('data-state', 'out');
+        });
+      }
+      function fadeIn() {
+        [questionEl, dekEl, optionsEl, outcomeEl].forEach(function (el) {
+          if (el) el.setAttribute('data-state', 'in');
+        });
+      }
+      function fmtAge(iso) {
+        var d = Date.now() - new Date(iso).getTime();
+        if (d < 24*3600*1000) return Math.round(d / 3600000) + 'H OLD';
+        var days = Math.round(d / (24*3600000));
+        if (days < 7) return days + 'D OLD';
+        return Math.round(days / 7) + 'W OLD';
+      }
+      function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+      async function fetchTally(slug) {
+        try {
+          var r = await fetch('/api/poll?slug=' + encodeURIComponent(slug));
+          if (!r.ok) return null;
+          var j = await r.json();
+          return j && j.counts ? j.counts : null;
+        } catch (e) { return null; }
+      }
+
+      async function paint() {
+        var p = polls[idx];
+        progEl.style.transition = 'none';
+        progEl.style.transform = 'scaleX(0)';
+        fadeOut();
+
+        await new Promise(function (r) { setTimeout(r, 900); });
+
+        questionEl.textContent = p.question;
+        dekEl.textContent = p.dek || '';
+        if (!p.dek) dekEl.style.display = 'none'; else dekEl.style.display = 'block';
+        purposeEl.textContent = p.purpose;
+        slugEl.textContent = '/' + p.slug;
+        ageEl.textContent = fmtAge(p.openedAt);
+        counterEl.textContent = pad(idx + 1) + ' / ' + pad(polls.length);
+
+        // Tally
+        var counts = await fetchTally(p.slug);
+        var total = 0;
+        if (counts) { for (var k in counts) total += counts[k] || 0; }
+
+        optionsEl.innerHTML = '';
+        p.options.forEach(function (opt, i) {
+          var n = (counts && counts[opt.id]) || 0;
+          var pct = total > 0 ? Math.round((n / total) * 100) : 0;
+          var li = document.createElement('li');
+          li.className = 'poll__opt';
+          li.style.setProperty('--opt-color', COLORS[i % COLORS.length]);
+          li.innerHTML =
+            '<span class="poll__opt-label">' + opt.label + '</span>' +
+            '<span class="poll__opt-pct">' + pct + '%</span>' +
+            '<div class="poll__opt-bar"><div class="poll__opt-fill" style="background:' + COLORS[i % COLORS.length] + '"></div></div>';
+          optionsEl.appendChild(li);
+          var fill = li.querySelector('.poll__opt-fill');
+          setTimeout(function () { if (fill) fill.style.transform = 'scaleX(' + (pct / 100) + ')'; }, 120);
+        });
+
+        if (p.outcomeAction) {
+          outcomeEl.innerHTML = '<strong>Outcome →</strong> ' + p.outcomeAction;
+        } else {
+          outcomeEl.innerHTML = total > 0 ? (total + ' votes · ' + p.purpose) : 'awaiting first vote';
+        }
+
+        fadeIn();
+        setTimeout(function () {
+          progEl.style.transition = 'transform 9s linear';
+          progEl.style.transform = 'scaleX(1)';
+        }, 40);
+      }
+
+      paint();
+      setInterval(function () { idx = (idx + 1) % polls.length; paint(); }, 10000);
+
+      // Fullscreen
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

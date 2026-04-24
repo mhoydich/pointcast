@@ -1,0 +1,346 @@
+---
+/**
+ * /tv/shows/federation — animated network graph of PointCast plus
+ * imagined federated peer nodes. Sketch view of what the federation
+ * primitive (block 0330) becomes once other small networks publish
+ * compatible /compute.json feeds and register through the for-nodes
+ * spec at /for-nodes.
+ *
+ * v0 ships placeholder peer nodes. The shape + the protocol is real
+ * (any node can drop in by serving /compute.json + /agents.json); the
+ * peers shown here are sketches, not active federated networks. When
+ * real peers join, they replace the placeholders.
+ *
+ * Auto-fullscreen on first tap. Same skeleton as the other TV shows.
+ */
+
+interface Node {
+  slug: string;
+  label: string;
+  loc: string;
+  x: number;       // 0..1 normalized canvas coords
+  y: number;
+  isMe: boolean;
+}
+
+// Hand-curated placeholder federation. PointCast at center; imagined
+// peers around it. When real peers register through /for-nodes, this
+// list gets edited or migrated to a JSON config + render hook.
+const NODES: Node[] = [
+  { slug: 'pointcast.xyz',   label: 'POINTCAST',   loc: 'El Segundo, CA',   x: 0.50, y: 0.50, isMe: true },
+  { slug: 'garden.kfn',      label: 'GARDEN.KFN',  loc: '(placeholder)',    x: 0.18, y: 0.30, isMe: false },
+  { slug: 'wharf.live',      label: 'WHARF',       loc: '(placeholder)',    x: 0.22, y: 0.72, isMe: false },
+  { slug: 'bench.network',   label: 'BENCH',       loc: '(placeholder)',    x: 0.78, y: 0.28, isMe: false },
+  { slug: 'riverside.fm',    label: 'RIVERSIDE',   loc: '(placeholder)',    x: 0.84, y: 0.66, isMe: false },
+  { slug: 'dawn.collab',     label: 'DAWN',        loc: '(placeholder)',    x: 0.50, y: 0.14, isMe: false },
+  { slug: 'estuary.cast',    label: 'ESTUARY',     loc: '(placeholder)',    x: 0.50, y: 0.86, isMe: false },
+  { slug: 'bells.echo',      label: 'BELLS',       loc: '(placeholder)',    x: 0.10, y: 0.52, isMe: false },
+];
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#060504" />
+  <meta name="description" content="Federation map — animated network graph of PointCast plus imagined federated peer nodes, with pulsing connection lines and traveling ping events. Sketch view of the federation primitive." />
+  <title>PointCast TV · Federation map</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #060504;
+      --bg-2: #0a0d1a;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --me: #F59F00;
+      --peer: #6b7cff;
+      --line: rgba(254, 245, 231, 0.18);
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, var(--bg-2) 0%, var(--bg) 80%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; gap: 16px; padding: 16px 30px; z-index: 30;
+      font-family: var(--mono);
+      background: linear-gradient(180deg, rgba(6,5,4,0.85) 0%, transparent 100%);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--me); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__count { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-dim); margin-left: auto; font-weight: 600; }
+    .top__count b { color: var(--me); }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--me); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--me); }
+
+    .stage {
+      position: fixed; inset: 0;
+    }
+    .map {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+    }
+
+    .ping-dot {
+      position: absolute;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--ping-color, var(--me));
+      box-shadow: 0 0 12px 2px var(--ping-color, var(--me));
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      animation: ping-travel var(--dur, 3s) cubic-bezier(0.5, 0, 0.5, 1) forwards;
+    }
+    @keyframes ping-travel {
+      0%   { left: var(--from-x); top: var(--from-y); opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+      15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      85%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { left: var(--to-x); top: var(--to-y); opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    }
+
+    .node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .node__circle {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      border: 2px solid var(--peer);
+      background: rgba(107, 124, 255, 0.16);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 20px rgba(107, 124, 255, 0.25);
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    .node__circle::after {
+      content: '';
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--peer);
+      box-shadow: 0 0 10px 1px var(--peer);
+    }
+    .node--me .node__circle {
+      width: 100px; height: 100px;
+      border-color: var(--me);
+      background: rgba(245, 159, 0, 0.14);
+      box-shadow: 0 0 50px rgba(245, 159, 0, 0.45);
+    }
+    .node--me .node__circle::after {
+      width: 36px; height: 36px;
+      background: var(--me);
+      box-shadow: 0 0 18px 3px var(--me);
+    }
+    .node--pulse .node__circle { transform: scale(1.18); }
+
+    .node__meta {
+      text-align: center;
+      font-family: var(--mono);
+    }
+    .node__label {
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 0;
+    }
+    .node--me .node__label {
+      font-size: 13px;
+      color: var(--me);
+    }
+    .node__loc {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: var(--ink-dim);
+      margin: 2px 0 0;
+      text-transform: uppercase;
+    }
+    .node__slug {
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      color: var(--ink-soft);
+      margin: 2px 0 0;
+    }
+    .node--me .node__slug { color: var(--ink); }
+
+    .bot {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 44px;
+      display: flex; align-items: center; gap: 16px; padding: 12px 30px; z-index: 30;
+      background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
+      font-family: var(--mono); color: var(--ink-dim);
+      font-size: 10px; letter-spacing: 0.14em;
+    }
+    .bot__kicker { color: var(--me); font-weight: 700; }
+    .bot__rate { margin-left: auto; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .bot__rate b { color: var(--me); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ping-dot { animation: none !important; opacity: 0; }
+      .node--pulse .node__circle { transform: scale(1) !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / FEDERATION MAP</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+    <div class="top__count">FEDERATION — <b id="node-count">{NODES.length}</b> NODES (<b id="real-count">1</b> live · <b id="placeholder-count">{NODES.length - 1}</b> placeholder)</div>
+  </header>
+
+  <main class="stage">
+    <!-- Connection lines (drawn as SVG so they don't break against transform) -->
+    <svg class="map" id="lines-layer" preserveAspectRatio="none" viewBox="0 0 1000 1000">
+      {NODES.filter((n) => !n.isMe).map((n) => {
+        const me = NODES.find((m) => m.isMe)!;
+        return (
+          <line
+            x1={me.x * 1000} y1={me.y * 1000}
+            x2={n.x * 1000} y2={n.y * 1000}
+            stroke="rgba(254, 245, 231, 0.18)"
+            stroke-width="1"
+            stroke-dasharray="4 6"
+            data-peer={n.slug}
+          />
+        );
+      })}
+    </svg>
+
+    <!-- Nodes -->
+    {NODES.map((n) => (
+      <div
+        class={`node ${n.isMe ? 'node--me' : ''}`}
+        data-slug={n.slug}
+        style={`left: ${n.x * 100}%; top: ${n.y * 100}%`}
+      >
+        <div class="node__circle"></div>
+        <div class="node__meta">
+          <p class="node__label">{n.label}</p>
+          <p class="node__loc">{n.loc}</p>
+          <p class="node__slug">{n.slug}</p>
+        </div>
+      </div>
+    ))}
+
+    <!-- Ping dots layer -->
+    <div id="ping-layer" style="position: absolute; inset: 0; pointer-events: none;"></div>
+  </main>
+
+  <footer class="bot">
+    <span class="bot__kicker">FEDERATION</span>
+    <span>placeholder peer nodes · real peers register at /for-nodes by serving /compute.json + /agents.json</span>
+    <span class="bot__rate">PINGS · <b id="ping-rate">—</b> /min</span>
+  </footer>
+
+  <script is:inline define:vars={{ NODES }}>
+    (function () {
+      var pingLayer = document.getElementById('ping-layer');
+      var pingRateEl = document.getElementById('ping-rate');
+      var nodeEls = {};
+      document.querySelectorAll('.node[data-slug]').forEach(function (el) {
+        nodeEls[el.getAttribute('data-slug')] = el;
+      });
+      var me = NODES.find(function (n) { return n.isMe; });
+      var peers = NODES.filter(function (n) { return !n.isMe; });
+
+      var pingsPerMinWindow = [];
+
+      function nodePos(node) {
+        return { x: node.x * window.innerWidth, y: node.y * window.innerHeight };
+      }
+
+      function emitPing(from, to) {
+        var f = nodePos(from);
+        var t = nodePos(to);
+        var dot = document.createElement('div');
+        dot.className = 'ping-dot';
+        var fromMe = from.isMe;
+        var color = fromMe ? '#F59F00' : '#6b7cff';
+        dot.style.setProperty('--ping-color', color);
+        dot.style.setProperty('--from-x', f.x + 'px');
+        dot.style.setProperty('--from-y', f.y + 'px');
+        dot.style.setProperty('--to-x', t.x + 'px');
+        dot.style.setProperty('--to-y', t.y + 'px');
+        dot.style.setProperty('--dur', (1.8 + Math.random() * 1.6) + 's');
+        // Set initial position (animation overrides)
+        dot.style.left = f.x + 'px';
+        dot.style.top = f.y + 'px';
+        pingLayer.appendChild(dot);
+        setTimeout(function () { dot.remove(); }, 4000);
+
+        // Pulse target node briefly when ping arrives
+        var targetEl = nodeEls[to.slug];
+        if (targetEl) {
+          setTimeout(function () {
+            targetEl.classList.add('node--pulse');
+            setTimeout(function () { targetEl.classList.remove('node--pulse'); }, 600);
+          }, 1700);
+        }
+
+        // Track for rate
+        pingsPerMinWindow.push(Date.now());
+      }
+
+      function pickPair() {
+        var fromMe = Math.random() < 0.55;  // bias toward outgoing pings from me
+        if (fromMe) {
+          var to = peers[Math.floor(Math.random() * peers.length)];
+          return [me, to];
+        } else {
+          var from = peers[Math.floor(Math.random() * peers.length)];
+          return [from, me];
+        }
+      }
+
+      function tick() {
+        var pair = pickPair();
+        emitPing(pair[0], pair[1]);
+        var nextDelay = 800 + Math.random() * 1800;
+        setTimeout(tick, nextDelay);
+      }
+
+      function paintRate() {
+        var now = Date.now();
+        pingsPerMinWindow = pingsPerMinWindow.filter(function (t) { return now - t < 60_000; });
+        if (pingRateEl) pingRateEl.textContent = pingsPerMinWindow.length;
+      }
+
+      // Kick off after slight delay so layout settles
+      setTimeout(tick, 800);
+      setInterval(paintRate, 1000);
+
+      // Resize handler — pings already in flight stay valid, new pings use updated positions
+      window.addEventListener('resize', function () {});
+
+      // ---- Fullscreen wiring (same pattern as other shows) --------------
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+---
+/**
+ * /nouns — Nouns-on-Tezos hub page.
+ *
+ * Target keywords: "nouns on tezos", "tezos nouns nft", "cc0 nft tezos",
+ * "visit nouns", "nouns battler", "nouns proliferation", "noun.pics".
+ *
+ * Strategy: become the canonical writeup for "Nouns, implemented on
+ * Tezos" — a category with precedent (Teznouns, 2023) but no active
+ * hub. Ties Visit Nouns FA2 + Nouns Battler + Card of the Day + CC0
+ * reuse culture into one page.
+ *
+ * Schema: CollectionPage + FAQPage + BreadcrumbList + Product schema
+ * for the Visit Nouns FA2 contract (with Offer). Links to Ethereum
+ * Nouns for context but positions Tezos as the execution layer.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import BlockCard from '../components/BlockCard.astro';
+import { getCollection } from 'astro:content';
+
+const btlBlocks = (await getCollection('blocks', ({ data }) => !data.draft && data.channel === 'BTL'))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
+  .slice(0, 8);
+
+const faqs = [
+  {
+    q: 'What is Nouns DAO?',
+    a: 'Nouns DAO is a decentralized autonomous organization on Ethereum, launched August 2021, that mints one on-chain generative pixel-art Noun NFT every day via an open English auction. All proceeds go to a community treasury governed by Noun-holders. Nouns are released under CC0 (public domain), meaning anyone can use the Nouns name, characters, and imagery for anything. The treasury has historically held tens of millions of ETH-denominated assets and funds proliferation proposals — the umbrella term for CC0 derivative projects.',
+  },
+  {
+    q: 'What is Nouns on Tezos?',
+    a: 'Nouns on Tezos refers to CC0 derivative projects that port Nouns characters, rendering pipelines, and cultural memes onto the Tezos blockchain. PointCast operates two such surfaces: Visit Nouns FA2 (a mintable NFT contract where each tokenId is a Nouns seed 0-1199) and Nouns Battler (a deterministic turn-based fighter where Noun seeds are combatants). The earliest precedent was Teznouns in March 2023, a proof-of-concept bridging Ethereum Nouns culture to Tezos\'s art-centric community.',
+  },
+  {
+    q: 'What is Visit Nouns?',
+    a: 'Visit Nouns is a Tezos FA2 NFT contract deployed by PointCast to KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh on 2026-04-17. It is open-supply: there are 1,200 possible tokenIds (one per Nouns seed 0-1199), each mintable independently on-demand. Mint price is fractions of a tez (~0.003 ꜩ in network fees). The artwork for each token is the canonical Nouns seed rendering from noun.pics (also CC0). Visit Nouns are collected as proof-of-attendance keepsakes for PointCast visitors and by the broader Nouns proliferation community.',
+  },
+  {
+    q: 'Why Tezos instead of Ethereum for Nouns derivatives?',
+    a: 'Three reasons. Gas — a Tezos mint costs fractions of a tez (milli-cent equivalents) versus multi-dollar Ethereum gas, which makes open-supply low-friction mints economically viable. Standards — FA2 and FA1.2 are simpler, better-documented standards than ERC-721 + ERC-20 combinations, with less ambient bug surface. Yield — Tezos baking yield funds downstream mechanics (like the planned Prize Cast no-loss savings pool) without bridging off-chain. No L2 complexity, native Beacon wallet standard (one protocol covers Kukai, Temple, Umami, Altme), and a vibrant CC0 art community already live on Tezos via fxhash and objkt.',
+  },
+  {
+    q: 'What is Nouns Battler?',
+    a: 'Nouns Battler is a deterministic turn-based fighter built on top of the Nouns CC0 collection. Every Nouns seed (0-1199) is a playable character whose stats (HP, ATK, DEF, SPD, plus four skill values) derive from the seed\'s trait bytes via a pure cryptographic hash. Same seed → same stats, forever. Same match inputs → same outcome, forever. A "Card of the Day" rotates deterministically through a 21-Noun curated roster keyed by UTC date (floor(epoch_ms / 86,400,000) modulo 21). No RNG, no accounts, no server state. Play lives at /battle.',
+  },
+  {
+    q: 'Are these officially affiliated with Nouns DAO?',
+    a: 'No, and they don\'t need to be. Nouns is CC0 — the Creative Commons Zero license means anyone can build on the IP without permission, attribution, or licensing. PointCast\'s Tezos projects are proliferation: CC0-native derivative works that extend Nouns culture to a new blockchain. Nouns DAO has historically celebrated proliferation via both cultural norms and direct treasury grants ("noundry" proposals). Visit Nouns and Nouns Battler are independent projects that cite Nouns as their root IP but have no formal tie.',
+  },
+  {
+    q: 'How do I collect a Visit Noun?',
+    a: 'Connect a Tezos wallet (Kukai, Temple, Umami, or Altme — all speak the Beacon protocol) to pointcast.xyz/collection/visit-nouns, pick a Nouns seed number (0-1199), and mint. Cost is ~0.003 ꜩ in network fees. The contract is open-supply, so any unclaimed seed is available. Already-minted tokens can be re-minted by additional wallets (each mint produces a unique FA2 token instance referencing the same seed artwork). Secondary market on objkt at objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh.',
+  },
+  {
+    q: 'What is CC0 and why does it matter for Nouns?',
+    a: 'CC0 ("Creative Commons Zero") is a license that places a work in the global public domain. No copyright, no licensing fee, no attribution required — anyone can use the work for anything. Nouns was one of the earliest major NFT projects to adopt CC0 (August 2021), and the decision structurally defines what Nouns became. Because the IP is free for everyone, derivative projects ("proliferation") multiply faster than in any attribution-required project. PointCast\'s Visit Nouns + Nouns Battler + Card of the Day are all downstream of that decision.',
+  },
+  {
+    q: 'What\'s a Nouns seed?',
+    a: 'A Nouns seed is an integer (0 through ~1,200 at launch, more added via proposals since) that deterministically generates one pixel-art Noun. The seed encodes five trait bytes — background, body, accessory, head, glasses — each of which maps to a specific visual part. Same seed in, same Noun out. Renderers like noun.pics and the canonical Nouns contract on Ethereum produce identical pixel art from the same seed. PointCast uses seeds 0-1199 for Visit Nouns minting and the full roster for Nouns Battler fighter stats.',
+  },
+  {
+    q: 'Can I build my own Nouns derivative?',
+    a: 'Yes — that\'s the whole point. Nouns IP is CC0, which means you can ship a Nouns-branded project without permission, licensing, or attribution (though attribution is culturally appreciated). Common patterns: a new collection on a new chain (like PointCast\'s Tezos FA2), a game that uses Nouns as characters, editorial/merch using Nouns imagery, or a derivative DAO (Lil Nouns, Biz Nouns, etc). The Nouns treasury historically funds proliferation proposals under the "noundry" umbrella — apply if your project adds ecosystem value.',
+  },
+  {
+    q: 'How does Card of the Day work exactly?',
+    a: 'Card of the Day is deterministic on UTC date. The rule is floor(epoch_ms ÷ 86,400,000) mod 21, applied to a 21-Noun curated roster. Everyone visiting pointcast.xyz/battle on a given UTC date sees the same Card. The rotation has no randomness, no server state, no coordination layer — just a pure function of the date. Rosters can be extended by changing the array (governed by DAO proposal); the modulo stays 21 until the array length does. Source: /battle.json.',
+  },
+  {
+    q: 'Why should a Nouns holder care about what happens on Tezos?',
+    a: 'Three reasons. First, proliferation compounds — every active chain where Nouns IP lives extends the brand. Second, fees — Tezos mint costs are milli-cents; Ethereum\'s aren\'t. That unlocks use cases (open-supply free mints, attention-token payouts) that are economically blocked on L1. Third, Tezos already has a CC0-friendly art culture (fxhash, objkt); Nouns slots in naturally. None of this threatens Nouns-on-Ethereum — they\'re complements, not substitutes.',
+  },
+  {
+    q: 'What about trademarks or the Nouns Foundation?',
+    a: 'Nouns IP is CC0 — there\'s no trademark to respect (and nothing stopping you from using the name "Nouns" in your project name). The Nouns Foundation (the DAO-adjacent legal entity that holds the Ethereum contracts and treasury) is structured around governance, not licensing; they don\'t police derivatives. Community etiquette: do add "on Tezos" / "for pickleball" / "for reading" so your project is clearly a distinct downstream thing, not claiming to be the canonical Nouns DAO. PointCast calls its collection Visit Nouns for exactly that reason.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': 'https://pointcast.xyz/nouns',
+      name: 'Nouns on Tezos — PointCast',
+      description: 'PointCast\'s Nouns-on-Tezos hub — Visit Nouns FA2 open-supply NFT contract, Nouns Battler deterministic fighter, Card of the Day, and CC0 proliferation culture.',
+      url: 'https://pointcast.xyz/nouns',
+      isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website' },
+      keywords: 'Nouns DAO, Nouns on Tezos, Visit Nouns, Nouns Battler, CC0 NFT, Tezos FA2, proliferation, noun.pics',
+    },
+    {
+      '@type': 'Product',
+      '@id': 'https://pointcast.xyz/nouns#visit-nouns',
+      name: 'Visit Nouns (FA2)',
+      description: 'Open-supply Tezos FA2 NFT contract where each tokenId 0-1199 corresponds to a Nouns seed. Artwork sourced from noun.pics (CC0).',
+      brand: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      category: 'NFT / CC0 Collection',
+      image: 'https://pointcast.xyz/images/og-nouns.png',
+      url: 'https://pointcast.xyz/collection/visit-nouns',
+      sameAs: [
+        'https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh',
+        'https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh',
+      ],
+      offers: {
+        '@type': 'Offer',
+        url: 'https://pointcast.xyz/collection/visit-nouns',
+        price: 0.003,
+        priceCurrency: 'XTZ',
+        availability: 'https://schema.org/InStock',
+        seller: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org' },
+      },
+    },
+    {
+      '@type': 'Game',
+      '@id': 'https://pointcast.xyz/nouns#battler',
+      name: 'Nouns Battler',
+      description: 'Deterministic turn-based fighter on the Nouns CC0 collection. Every Nouns seed (0-1199) is a playable fighter whose stats derive from seed trait bytes via a pure hash.',
+      url: 'https://pointcast.xyz/battle',
+      genre: 'Turn-based fighter',
+      gamePlatform: 'Web browser',
+      playMode: 'SinglePlayer',
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/nouns#faq',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/nouns#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Nouns', item: 'https://pointcast.xyz/nouns' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Nouns on Tezos"
+  description="PointCast's Nouns-on-Tezos hub — Visit Nouns FA2 open-supply NFT contract, Nouns Battler deterministic fighter, Card of the Day, and CC0 proliferation culture."
+  image="/images/og-nouns.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Nouns</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CC0 · TEZOS · PROLIFERATION</p>
+      <h1 class="display">Nouns on Tezos.</h1>
+      <p class="dek">
+        PointCast operates two Nouns-native surfaces on Tezos — Visit
+        Nouns FA2 (an open-supply NFT contract where every Nouns seed
+        0–1199 is mintable) and Nouns Battler (a deterministic fighter
+        where each seed is a fighter). Both are CC0 derivatives of
+        <a href="https://nouns.wtf" target="_blank" rel="noopener">Nouns DAO</a>,
+        positioned inside Tezos\'s fee-friendly FA2 standard and the
+        broader proliferation culture that treats Nouns IP as a shared
+        substrate.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="what-are-nouns">What are Nouns?</h2>
+      <p>
+        Nouns is an Ethereum NFT DAO launched in August 2021. One Noun is
+        auctioned every day, on-chain, in perpetuity. Each Noun is a
+        generative pixel-art NFT derived from a deterministic seed (one of
+        ~1,200 possible seed combinations at launch, more added later).
+        Auction proceeds go to a community treasury governed by Noun-holders
+        through proposals. Nouns are released under <strong>CC0</strong> —
+        the Creative Commons Zero "No Rights Reserved" license — meaning
+        the Nouns name, characters, and imagery are public domain.
+      </p>
+      <p>
+        The CC0 posture is the interesting part. It means anyone can build
+        on Nouns IP without permission, licensing, or attribution. Derivative
+        projects ("proliferation") are the norm, not the exception —
+        <a href="https://lilnouns.wtf" target="_blank" rel="noopener">Lil Nouns</a>,
+        <a href="https://nouns.build" target="_blank" rel="noopener">Nouns Builder</a>,
+        and dozens of sub-DAOs and sibling projects ride the same IP.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="visit-nouns">Visit Nouns — FA2 on Tezos mainnet</h2>
+      <p>
+        <a href="/collection/visit-nouns">Visit Nouns</a> is a Tezos FA2 NFT
+        contract deployed by PointCast at <code>KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh</code>
+        on 2026-04-17. The contract is open-supply: there are 1,200 possible
+        tokenIds (one per Nouns seed 0–1199), each mintable independently
+        on-demand. Mint cost is network-level (~0.003 ꜩ). Artwork is sourced
+        from <a href="https://noun.pics" target="_blank" rel="noopener">noun.pics</a>,
+        the canonical CC0 seed renderer. Already-minted tokens can be
+        re-minted by additional wallets (each mint produces a unique FA2
+        token instance referencing the same seed artwork).
+      </p>
+      <ul>
+        <li><a href="/collection/visit-nouns">/collection/visit-nouns</a> — on-site gallery + mint UI</li>
+        <li><a href="https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">TzKT explorer</a></li>
+        <li><a href="https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">objkt marketplace</a></li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="battler">Nouns Battler — deterministic duels</h2>
+      <p>
+        <a href="/battle">Nouns Battler</a> is a turn-based fighter where
+        every Nouns seed (0–1199) is a playable character. Stats — HP,
+        ATK, DEF, SPD, plus four skill values — derive from the seed\'s
+        trait bytes via a pure cryptographic hash. <strong>No RNG, no
+        server state, no accounts.</strong> Same seed → same stats,
+        forever. Same match inputs → same outcome, forever. You can
+        verify any match by re-running the inputs.
+      </p>
+      <p>
+        A <em>Card of the Day</em> rotates deterministically through a
+        21-Noun curated roster keyed by UTC date: floor(epoch_ms /
+        86,400,000) modulo 21. Same rotation regardless of visitor, time
+        zone, or browser. It\'s the simplest possible shared daily ritual:
+        everyone on the site sees the same featured fighter, every day,
+        without any coordination layer.
+      </p>
+      <p>
+        Rules and schema live at <a href="/battle.json">/battle.json</a>;
+        the local match archive is at <a href="/battle-log">/battle-log</a>
+        (browser storage, no server).
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="why-tezos">Why Tezos</h2>
+      <ul>
+        <li>
+          <strong>Gas.</strong> Tezos mints cost fractions of a tez — roughly
+          0.003 ꜩ (milli-cent equivalents at typical XTZ prices). Ethereum
+          gas historically runs $5-$50+ for a mint. Open-supply "mint a
+          Nouns seed for the price of a network fee" is economically
+          viable only on a chain with sub-cent transaction cost.
+        </li>
+        <li>
+          <strong>Standards.</strong> FA2 (multi-asset, used for NFTs) and
+          FA1.2 (fungible token) are simpler, better-documented standards
+          than the ERC-721 + ERC-20 + ERC-1155 matrix on Ethereum. Less
+          ambient bug surface, fewer standards wars.
+        </li>
+        <li>
+          <strong>Beacon wallet standard.</strong> One protocol — Beacon —
+          covers Kukai, Temple, Umami, and Altme. Users don\'t pick a
+          wallet per-app; apps speak Beacon and the user\'s wallet of
+          choice responds.
+        </li>
+        <li>
+          <strong>Baking yield.</strong> Tezos validators ("bakers") pay
+          ~5% annualized yield on staked XTZ. This funds downstream
+          mechanics like the planned <a href="/cast">Prize Cast</a>
+          no-loss savings pool without bridging.
+        </li>
+        <li>
+          <strong>CC0 art community.</strong> Tezos already has a deep
+          CC0-friendly art culture via <a href="https://fxhash.xyz" target="_blank" rel="noopener">fxhash</a>
+          and <a href="https://objkt.com" target="_blank" rel="noopener">objkt</a>.
+          Nouns culture slots in naturally.
+        </li>
+        <li>
+          <strong>No L2 complexity.</strong> Tezos L1 handles the load.
+          No bridges, no chain-switching, no "which version of USDC is
+          this". One chain, one wallet, one confirmation.
+        </li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="proliferation">Proliferation culture</h2>
+      <p>
+        Proliferation is the Nouns community term for CC0 derivative work.
+        Unlike most NFT collections where derivative = infringement,
+        Nouns treats derivative work as the intended growth mechanism.
+        Sub-DAOs, sibling projects, chain-forks, and standalone apps all
+        count. There\'s even a treasury-funded grant category ("noundry")
+        for proliferation proposals.
+      </p>
+      <p>
+        Earlier Tezos-side proliferation precedent:
+        <a href="https://medium.com/@Vendingnfts/teznouns-was-a-project-that-started-out-as-a-proof-of-concept-for-a-dao-proposition-to-the-eth-baff6461e890" target="_blank" rel="noopener">Teznouns</a>
+        (March 2023) — the proof-of-concept that tested whether Nouns
+        culture could bridge from Ethereum PFP communities to Tezos\'s
+        art community. Visit Nouns and Nouns Battler pick up from that
+        lineage three years later, with a different execution surface
+        (PointCast as the front end) and different primitives (FA2 mint,
+        deterministic game).
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="faq">FAQ</h2>
+      <dl class="faq">
+        {faqs.map((f) => (
+          <>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    {btlBlocks.length > 0 && (
+      <section class="section" aria-label="Latest Battler blocks">
+        <div class="latest-head">
+          <h2 id="latest">Latest from Battler</h2>
+          <a class="latest-all" href="/c/battler">See all →</a>
+        </div>
+        <section class="grid">
+          {btlBlocks.map((b) => <BlockCard block={b} />)}
+        </section>
+      </section>
+    )}
+
+    <footer class="related">
+      <p class="related__label">RELATED SURFACES</p>
+      <ul>
+        <li><a href="/collection/visit-nouns">/collection/visit-nouns</a> — on-site gallery + mint UI</li>
+        <li><a href="/battle">/battle</a> — Nouns Battler arena</li>
+        <li><a href="/battle-log">/battle-log</a> — local match archive</li>
+        <li><a href="/c/battler">/c/battler</a> — channel feed</li>
+        <li><a href="/collection">/collection</a> — Mike\'s full Tezos NFT gallery</li>
+        <li><a href="https://nouns.wtf" target="_blank" rel="noopener">nouns.wtf ↗</a></li>
+        <li><a href="https://noun.pics" target="_blank" rel="noopener">noun.pics ↗</a></li>
+        <li><a href="https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">Visit Nouns on TzKT ↗</a></li>
+        <li><a href="https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">Visit Nouns on objkt ↗</a></li>
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 780px; margin: 0 auto; padding: 16px 20px 80px; }
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #551620; /* BTL channel 800 */
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: 40px;
+    font-weight: 500;
+    line-height: 1.05;
+    margin: 0 0 12px;
+  }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 17px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 64ch; }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0 0 10px;
+  }
+  .section p, .section li {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--pc-ink);
+    max-width: 64ch;
+  }
+  .section p { margin: 0 0 12px; }
+  .section ul { padding-left: 18px; margin: 0 0 12px; }
+  .section li { margin-bottom: 8px; }
+  .section a { color: var(--pc-accent); text-decoration: underline; }
+  .section strong { font-weight: 500; }
+  .section em { font-style: italic; }
+  .section code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #f4f2ed;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .faq { margin: 0; display: grid; gap: 14px; }
+  .faq dt { font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+  .faq dd { margin: 0; font-size: 15px; line-height: 1.55; color: var(--pc-ink-soft); max-width: 64ch; }
+
+  .latest-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 10px;
+    flex-wrap: wrap;
+  }
+  .latest-head h2 { margin: 0; }
+  .latest-all {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-auto-rows: minmax(170px, auto);
+    grid-auto-flow: dense;
+    gap: 8px;
+  }
+  @media (max-width: 639px) {
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+  }
+
+  .related {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

@@ -1,0 +1,248 @@
+---
+/**
+ * /tv/shows/sprint-retro — slow vertical crawl through every sprint
+ * markdown file in /docs/sprints/. Mirrors the archive crawl format
+ * but with sprints instead of blocks.
+ *
+ * Auto-fullscreen on first tap. Same skeleton as other TV shows.
+ */
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+const SPRINTS_DIR = join(process.cwd(), 'docs', 'sprints');
+
+interface SprintEntry {
+  slug: string;
+  date: string;     // YYYY-MM-DD
+  title: string;    // first H1 in the file
+  summary: string;  // first non-heading paragraph (max ~220 chars)
+}
+
+async function loadSprints(): Promise<SprintEntry[]> {
+  let files: string[] = [];
+  try { files = await readdir(SPRINTS_DIR); } catch { return []; }
+  const out: SprintEntry[] = [];
+  for (const f of files) {
+    if (!f.endsWith('.md')) continue;
+    if (f.startsWith('.')) continue;
+    let raw = '';
+    try { raw = await readFile(join(SPRINTS_DIR, f), 'utf8'); } catch { continue; }
+    const slug = f.replace(/\.md$/, '');
+    const dateMatch = slug.match(/^(\d{4}-\d{2}-\d{2})/);
+    const date = dateMatch ? dateMatch[1] : '';
+    const lines = raw.split('\n');
+    let title = slug.replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/-/g, ' ');
+    for (const line of lines) {
+      const m = line.match(/^#\s+(.+)/);
+      if (m) { title = m[1].trim(); break; }
+    }
+    let summary = '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      if (t.startsWith('#')) continue;
+      if (t.startsWith('---')) continue;
+      if (t.startsWith('**') && t.endsWith('**')) continue;
+      summary = t.length > 220 ? t.slice(0, 217) + '…' : t;
+      break;
+    }
+    out.push({ slug: slug.replace(/^\d{4}-\d{2}-\d{2}-/, ''), date, title, summary });
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+const items = await loadSprints();
+
+function fmtDate(s: string) {
+  if (!s) return '—';
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric', month: 'short', day: '2-digit',
+    timeZone: 'America/Los_Angeles',
+  }).format(new Date(s + 'T12:00:00Z'));
+}
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0c0a06" />
+  <meta name="description" content="Sprint retro crawl — every retro markdown in /docs/sprints/, oldest to newest, scrolling slowly. The shipping discipline made readable." />
+  <title>PointCast TV · Sprint retro crawl</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0a06;
+      --bg-2: #1a1208;
+      --ink: #f3e6d8;
+      --ink-soft: #c4a77d;
+      --ink-dim: #8a7e6c;
+      --accent: #F59F00;
+      --warm: #8a2432;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; gap: 16px; padding: 16px 30px;
+      background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+      z-index: 10; font-family: var(--mono);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__counter { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-dim); margin-left: auto; font-weight: 600; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .bot {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 44px;
+      display: flex; align-items: center; gap: 16px; padding: 12px 30px;
+      background: linear-gradient(0deg, var(--bg-2) 0%, transparent 100%);
+      z-index: 10; font-family: var(--mono); color: var(--ink-dim);
+      font-size: 10px; letter-spacing: 0.14em;
+    }
+    .bot__kicker { color: var(--accent); font-weight: 700; }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      height: 100vh;
+      padding: 80px 0 60px;
+    }
+    .crawl {
+      display: flex;
+      flex-direction: column;
+      gap: 50px;
+      padding: 40vh 0 40vh;
+      animation: crawl-scroll calc(var(--seconds, 240) * 1s) linear infinite;
+    }
+    @keyframes crawl-scroll {
+      0%   { transform: translateY(40vh); }
+      100% { transform: translateY(calc(-100% + 40vh)); }
+    }
+
+    .entry {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 32px;
+      padding: 0 56px;
+      align-items: baseline;
+      max-width: 1500px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .entry__num {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink-dim);
+      letter-spacing: 0.06em;
+      text-align: right;
+      padding-top: 14px;
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .entry__body { display: flex; flex-direction: column; gap: 8px; }
+    .entry__meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+    .entry__meta--date { color: var(--ink-soft); }
+    .entry__meta--sprint { color: var(--accent); }
+    .entry__meta--author { color: var(--ink-dim); }
+    .entry__title {
+      font-family: var(--serif);
+      font-size: clamp(26px, 3vw, 40px);
+      font-weight: 500;
+      line-height: 1.2;
+      color: var(--ink);
+      margin: 0;
+      letter-spacing: -0.005em;
+    }
+    .entry__summary {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: clamp(14px, 1.4vw, 18px);
+      line-height: 1.45;
+      color: var(--ink-soft);
+      margin: 0;
+      max-width: 70ch;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .crawl { animation: none !important; transform: none !important; padding: 40px; gap: 32px; overflow-y: auto; }
+      .stage { overflow-y: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / SPRINT RETRO</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+    <div class="top__counter">{items.length} SPRINTS</div>
+  </header>
+
+  <section class="stage">
+    <div class="crawl" style={`--seconds: ${Math.max(150, items.length * 8)}`}>
+      {items.map((s) => (
+        <article class="entry">
+          <span class="entry__num">{s.slug}</span>
+          <div class="entry__body">
+            <div class="entry__meta">
+              <span class="entry__meta--date">{fmtDate(s.date)}</span>
+              <span class="entry__meta--sprint">SPRINT</span>
+              <span class="entry__meta--author">cc</span>
+            </div>
+            <h2 class="entry__title">{s.title}</h2>
+            {s.summary && <p class="entry__summary">{s.summary}</p>}
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <footer class="bot">
+    <span class="bot__kicker">SPRINTS</span>
+    <span>every sprint retro in /docs/sprints/, oldest to newest · the shipping record made readable</span>
+  </footer>
+
+  <script is:inline>
+    (function () {
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

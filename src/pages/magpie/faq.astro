@@ -1,0 +1,314 @@
+---
+/**
+ * /magpie/faq — common questions.
+ *
+ * Grouped into: privacy, pricing, what-it-isn't, setup, destinations,
+ * agents, roadmap. Each question is a plain <details> so it's
+ * print-friendly + scriptable.
+ */
+
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const faqs = [
+  {
+    section: 'Privacy & data',
+    items: [
+      {
+        q: 'Does Magpie send my clipboard anywhere?',
+        a: "No. Your clipboard lives in a local SQLite database in ~/Library/Application Support/Magpie/clipboard.sqlite. Nothing is sent to any server unless you explicitly push or broadcast a clip. We built Magpie because we wanted that to be true for ourselves."
+      },
+      {
+        q: 'Where are my tokens stored?',
+        a: "In your macOS Keychain, scoped per publisher (e.g. com.good-feels.magpie.publisher/mastodon/access_token). Same security as Safari passwords. Access requires your login — if someone can read that Keychain, they already have root on your Mac."
+      },
+      {
+        q: 'What about analytics?',
+        a: "Magpie sends non-content telemetry to Mixpanel: publish_attempted, publish_outcome, composer_opened, with bucketed values (text-length bucket, duration-ms bucket, error category). No clip contents. No titles. No user identifiers beyond an install-level anonymous ID. Toggle off in Preferences → General → Analytics."
+      },
+      {
+        q: 'What does the cloud scheduler send?',
+        a: "Only what you schedule to broadcast at a future time, and only when you opt into cloud scheduling. Credentials for non-pointcast destinations travel in an AES-GCM-256 envelope that the worker CAN'T decrypt — only your local Magpie can open them. The worker stores + forwards; the client fans out."
+      },
+    ]
+  },
+  {
+    section: 'Pricing & license',
+    items: [
+      {
+        q: 'How much does Magpie cost?',
+        a: "Free. MIT licensed. No accounts, no subscriptions, no upsells."
+      },
+      {
+        q: 'Will there be a paid tier?',
+        a: "Maybe a hosted-scheduler tier someday that handles server-side credential forwarding for heavy schedulers. The core clipboard + broadcast will always be free."
+      },
+      {
+        q: 'Can I use Magpie commercially?',
+        a: "Yes. MIT is MIT."
+      },
+    ]
+  },
+  {
+    section: 'What it is / isn\'t',
+    items: [
+      {
+        q: "Is Magpie a Hootsuite competitor?",
+        a: "Not really. Hootsuite assumes you sit in their composer. Magpie inverts that — you capture where you already are, then broadcast. Also Hootsuite is Web2-only; Magpie is Web2 + Web3 (Farcaster, bitchat, Zora, Objkt) + PointCast."
+      },
+      {
+        q: 'Why macOS only?',
+        a: "Native menu-bar integration is the whole UX premise. Once that's solid, iOS + Windows become possible — iOS especially, since the Mac version's HTTP peer-node already means phones can reach it on LAN."
+      },
+      {
+        q: 'Is this open source?',
+        a: "Yes — github.com/Good-Feels/magpie. All eleven adapters, the composer, the scheduler, the cloud worker, the tutorial pages, the CLI, everything."
+      },
+    ]
+  },
+  {
+    section: 'Setup',
+    items: [
+      {
+        q: 'What do I need to install?',
+        a: "A .dmg from github.com/Good-Feels/magpie/releases. Drag to /Applications. First launch asks for clipboard access."
+      },
+      {
+        q: 'Do I need a PointCast account?',
+        a: "No. Magpie works standalone as a clipboard manager. PointCast is the default destination because it's unauthed and the canonical home for the block-type taxonomy, but you can use Magpie without ever posting there."
+      },
+      {
+        q: 'Which destinations need what?',
+        a: "PointCast: nothing. Mastodon: instance + access token. Farcaster: Neynar API key + approved signer. Bluesky: handle + app password. Twitter/LinkedIn: OAuth 2.0 via browser. bitchat: Nostr nsec + relay list. Zora/Objkt: wallet (Tezos key native; EVM needs secp256k1 — see v1.0 notes). Instagram: Meta Business OAuth. OpenSea: EVM wallet + API key."
+      },
+      {
+        q: 'Where do I get a Pinata JWT?',
+        a: "app.pinata.cloud — free tier covers casual use. Paste the JWT in Preferences → IPFS. Magpie uses it to auto-stage local images for Farcaster embeds and (v1.1) Zora/Objkt mint metadata."
+      },
+    ]
+  },
+  {
+    section: 'Destinations',
+    items: [
+      {
+        q: "Why include bitchat?",
+        a: "bitchat's internet transport is Nostr. Magpie broadcasts a NIP-01 kind-1 event to a configurable relay pool; any bitchat client subscribed to those relays picks it up. Once on the mesh, delivery propagates BLE when peers bridge. It's the most local-first destination in the list."
+      },
+      {
+        q: 'How does threading work?',
+        a: "Mastodon, Twitter, Bluesky, Farcaster, bitchat all support reply-chains. Drafts longer than the destination's char limit auto-split with (n/m) tags, linked via the platform's native reply mechanism."
+      },
+      {
+        q: 'Can I tweak copy per platform?',
+        a: "Yes. In the composer, click the chevron on any selected destination to open an override editor — populated with what the adapter would send by default. Your platform-specific variant replaces it."
+      },
+      {
+        q: 'What about video / audio?',
+        a: "v1.0 is image-only. Video + audio attachments land in v1.1. The MediaAttachment type already reserves .video and .audio cases."
+      },
+    ]
+  },
+  {
+    section: 'Agents',
+    items: [
+      {
+        q: 'How does the peer-node API work?',
+        a: "When you turn on 'Serve local web UI' in Preferences → PointCast, Magpie runs an HTTP server on 127.0.0.1:38473. GET /clips.json lists clips. POST /broadcast fans out. GET /summary returns a 30-day recap. Full API at /magpie.json — it's the agent-discovery manifest."
+      },
+      {
+        q: 'Can Claude/ChatGPT publish through Magpie?',
+        a: "Yes. Any agent that can make HTTP requests to localhost can read clips + trigger broadcasts. The hosted /magpie/activity page does exactly that — it's client-side JS fetching your peer node."
+      },
+      {
+        q: "Do you have an MCP server?",
+        a: "Not yet — the peer-node HTTP API is the de facto equivalent. An MCP wrapper is a reasonable v1.1 ship if the request comes up."
+      },
+    ]
+  },
+  {
+    section: 'Roadmap',
+    items: [
+      {
+        q: 'What shipped in v1.0?',
+        a: "Everything in /magpie/changelog. Highlights: 11 destinations, 3 native wallet signers, 6 composer presets, reach dashboard, cloud scheduler with encrypted credential forwarding, interactive tour + long-form guide."
+      },
+      {
+        q: "What's in v1.1?",
+        a: "Real mint submission paths (Zora Base RPC, Tezos RPC + Michelson for Objkt), Instagram Graph API, OpenSea Seaport, video attachments, hardware wallet bridges (Beacon + WalletConnect)."
+      },
+      {
+        q: 'Feature request?',
+        a: "File an issue at github.com/Good-Feels/magpie/issues. Or post to PointCast with #magpie — the sprint-pick queue reads public asks."
+      },
+    ]
+  },
+];
+---
+
+<BlockLayout
+  channelCode="FD"
+  blockType="READ"
+  title="Magpie · FAQ"
+  description="Common questions about Magpie — privacy, pricing, setup, agents."
+  pageTitle="Magpie FAQ"
+>
+  <article class="mgq-root">
+    <header class="mgq-head">
+      <p class="mgq-kicker">frequently asked</p>
+      <h1 class="mgq-title">Questions we've heard.</h1>
+      <p class="mgq-dek">
+        If something isn't covered, ping
+        <a href="https://github.com/Good-Feels/magpie/issues">GitHub issues</a>
+        or <a href="https://pointcast.xyz">pointcast.xyz</a>.
+      </p>
+    </header>
+
+    {faqs.map((group) => (
+      <section class="mgq-group">
+        <h2>{group.section}</h2>
+        <div class="mgq-items">
+          {group.items.map((item) => (
+            <details class="mgq-item">
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    <footer class="mgq-foot">
+      <a href="/magpie/launch">← back to launch</a>
+      <a href="/magpie/guide">full guide →</a>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  :root {
+    --mg-paper: #EFE8D2;
+    --mg-paper-tint: #E7DFC4;
+    --mg-card: #FAF5E0;
+    --mg-rule: #C8B98E;
+    --mg-rule-soft: #E0D6B6;
+    --mg-ink: #1E1C14;
+    --mg-ink-soft: #5A544A;
+    --mg-ink-mute: #8A8273;
+    --mg-moss: #3E5940;
+    --mg-clay: #AE6A38;
+    --mg-bronze: #7E5A2A;
+    --mg-display: Georgia, 'Iowan Old Style', serif;
+    --mg-mono: ui-monospace, 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  }
+
+  .mgq-root {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 60px;
+    background: var(--mg-paper);
+    color: var(--mg-ink);
+    font-family: -apple-system, system-ui, sans-serif;
+    line-height: 1.6;
+  }
+
+  .mgq-head { margin-bottom: 40px; }
+  .mgq-kicker {
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mg-clay);
+    margin: 0 0 8px;
+  }
+  .mgq-title {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 40px;
+    margin: 0 0 12px;
+    color: var(--mg-ink);
+  }
+  .mgq-dek {
+    font-size: 15px;
+    color: var(--mg-ink-soft);
+    margin: 0;
+  }
+  .mgq-dek a { color: var(--mg-bronze); }
+
+  .mgq-group { margin-bottom: 36px; }
+  .mgq-group h2 {
+    font-family: var(--mg-display);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 22px;
+    margin: 0 0 12px;
+    color: var(--mg-moss);
+    border-bottom: 1px dotted var(--mg-rule);
+    padding-bottom: 6px;
+  }
+
+  .mgq-items { display: flex; flex-direction: column; gap: 4px; }
+  .mgq-item {
+    background: var(--mg-card);
+    border: 1px solid var(--mg-rule-soft);
+    border-radius: 3px;
+    padding: 10px 14px;
+    transition: border-color 180ms;
+  }
+  .mgq-item[open] {
+    border-color: var(--mg-rule);
+  }
+  .mgq-item summary {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--mg-ink);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .mgq-item summary::-webkit-details-marker { display: none; }
+  .mgq-item summary::after {
+    content: '+';
+    font-family: var(--mg-mono);
+    font-size: 16px;
+    color: var(--mg-clay);
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .mgq-item[open] summary::after { content: '−'; }
+  .mgq-item p {
+    margin: 10px 0 2px;
+    font-size: 14px;
+    color: var(--mg-ink-soft);
+    line-height: 1.6;
+  }
+
+  .mgq-foot {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 24px;
+    border-top: 1px dotted var(--mg-rule);
+    margin-top: 20px;
+    font-family: var(--mg-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  .mgq-foot a {
+    color: var(--mg-bronze);
+    text-decoration: none;
+  }
+  .mgq-foot a:hover { color: var(--mg-clay); }
+
+  @media print {
+    .mgq-item { break-inside: avoid; }
+    .mgq-item[open] summary::after { content: ''; }
+    .mgq-item p { display: block !important; }
+    details > summary { list-style: none; }
+  }
+
+  @media (max-width: 640px) {
+    .mgq-title { font-size: 28px; }
+  }
+</style>

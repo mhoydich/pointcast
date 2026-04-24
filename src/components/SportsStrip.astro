@@ -77,6 +77,20 @@
       </div>
       <a class="sports-tile__link" href="https://www.espn.com/soccer/scoreboard/_/league/eng.1" target="_blank" rel="noopener">full board →</a>
     </article>
+
+    <!-- MLS added 2026-04-21 03:36 PT (overnight tick 10) — spring schedule
+         is in full swing; West vs East separation gives a useful US-football
+         tile alongside the European leagues. -->
+    <article class="sports-tile" data-league="mls" data-path="soccer/usa.1">
+      <header class="sports-tile__head">
+        <h3 class="sports-tile__league">MLS</h3>
+        <span class="sports-tile__sub">spring</span>
+      </header>
+      <div class="sports-tile__body" data-state="loading">
+        <p class="sports-tile__loading">loading…</p>
+      </div>
+      <a class="sports-tile__link" href="https://www.espn.com/soccer/scoreboard/_/league/usa.1" target="_blank" rel="noopener">full board →</a>
+    </article>
   </div>
 </aside>
 
@@ -86,7 +100,7 @@
   var grid = document.getElementById('sports-strip-grid');
   if (!grid) return;
 
-  var CACHE_PREFIX = 'pc:sports:v2:';
+  var CACHE_PREFIX = 'pc:sports:v3:';
   var TTL_MS = 10 * 60 * 1000;
 
   function readCache(key) {
@@ -118,6 +132,50 @@
     return false;
   }
 
+  // v3: parse "45-23" or "45-23-3" records to a winning-percentage number.
+  // Used for upset detection. Returns null if we can't parse.
+  function recordToPct(summary) {
+    if (!summary || typeof summary !== 'string') return null;
+    var parts = summary.split('-').map(function (x) { return parseInt(x, 10); });
+    if (!parts.every(function (n) { return isFinite(n); })) return null;
+    var wins = parts[0], losses = parts[1], otl = parts[2] || 0;
+    var total = wins + losses + otl;
+    if (total === 0) return null;
+    return wins / total;
+  }
+
+  function getTeamRecord(competitor) {
+    var recs = competitor && competitor.records;
+    if (!Array.isArray(recs) || !recs.length) return '';
+    // Prefer 'overall' / 'total' record if present; fall back to first.
+    var r = recs.find(function (x) { return x.type === 'total' || x.name === 'overall'; }) || recs[0];
+    return (r && r.summary) || '';
+  }
+
+  // v3: upset detection — a FINAL game where the winner had a worse record
+  // coming into the game than the loser.
+  function isUpset(status, home, away) {
+    if (status !== 'post') return false;
+    var hPct = recordToPct(getTeamRecord(home));
+    var aPct = recordToPct(getTeamRecord(away));
+    if (hPct == null || aPct == null) return false;
+    if (home.winner === true && hPct < aPct - 0.08) return true;
+    if (away.winner === true && aPct < hPct - 0.08) return true;
+    return false;
+  }
+
+  function fmtTipoff(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return new Intl.DateTimeFormat('en-US', {
+        weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+        timeZone: 'America/Los_Angeles',
+      }).format(d) + ' PT';
+    } catch (e) { return ''; }
+  }
+
   function fmtGame(event) {
     try {
       var comp = event.competitions && event.competitions[0];
@@ -134,14 +192,21 @@
       var aScore = safe(away.score, '');
       var hWinner = home.winner === true;
       var aWinner = away.winner === true;
+      var hRec = getTeamRecord(home);
+      var aRec = getTeamRecord(away);
       var hot = isCloseGame(hScore, aScore, status, shortDetail);
+      var upset = isUpset(status, home, away);
+      var tipoff = status === 'pre' ? fmtTipoff(comp.date || event.date) : '';
       return {
         status: status,
         shortDetail: shortDetail,
         hAbbr: hAbbr, aAbbr: aAbbr,
         hScore: hScore, aScore: aScore,
         hWinner: hWinner, aWinner: aWinner,
+        hRec: hRec, aRec: aRec,
         hot: hot,
+        upset: upset,
+        tipoff: tipoff,
       };
     } catch (e) { return null; }
   }
@@ -160,7 +225,9 @@
       return;
     }
     body.dataset.state = 'loaded';
-    var sorted = games.slice().sort(rank).slice(0, 3);
+    // Per Mike 2026-04-20 ~19:42 PT: "sports update, 1-5". Bumped to 5 games
+    // per league so the strip carries actual context (was 3). Sort: live > final > pre.
+    var sorted = games.slice().sort(rank).slice(0, 5);
     body.innerHTML = sorted.map(function (g) {
       var statusLabel = '';
       var statusClass = '';
@@ -168,20 +235,32 @@
       else if (g.status === 'in') { statusLabel = g.shortDetail || 'LIVE'; statusClass = 'live'; }
       else { statusLabel = g.shortDetail || 'UPCOMING'; statusClass = 'pre'; }
 
-      var hotBadge = g.hot ? '<span class="sports-game__hot" aria-label="close game">⚡</span>' : '';
+      var badges = '';
+      if (g.upset) badges += '<span class="sports-game__upset" aria-label="upset">⭐ UPSET</span>';
+      else if (g.hot) badges += '<span class="sports-game__hot" aria-label="close game">⚡</span>';
+
+      var aRecStr = g.aRec ? '<span class="sports-game__rec">' + escapeHtml(g.aRec) + '</span>' : '';
+      var hRecStr = g.hRec ? '<span class="sports-game__rec">' + escapeHtml(g.hRec) + '</span>' : '';
 
       var awayRow = '<div class="sports-game__row' + (g.aWinner ? ' sports-game__row--winner' : '') + '">' +
         '<span class="sports-game__team">' + escapeHtml(g.aAbbr) + '</span>' +
+        aRecStr +
         '<span class="sports-game__score">' + escapeHtml(g.aScore) + '</span>' +
       '</div>';
       var homeRow = '<div class="sports-game__row' + (g.hWinner ? ' sports-game__row--winner' : '') + '">' +
         '<span class="sports-game__team">' + escapeHtml(g.hAbbr) + '</span>' +
+        hRecStr +
         '<span class="sports-game__score">' + escapeHtml(g.hScore) + '</span>' +
       '</div>';
 
-      return '<article class="sports-game sports-game--' + statusClass + (g.hot ? ' sports-game--hot' : '') + '">' +
-        '<div class="sports-game__meta"><span class="sports-game__status">' + escapeHtml(statusLabel) + '</span>' + hotBadge + '</div>' +
+      var tipoffLine = (g.status === 'pre' && g.tipoff)
+        ? '<div class="sports-game__tipoff mono">' + escapeHtml(g.tipoff) + '</div>'
+        : '';
+
+      return '<article class="sports-game sports-game--' + statusClass + (g.hot ? ' sports-game--hot' : '') + (g.upset ? ' sports-game--upset' : '') + '">' +
+        '<div class="sports-game__meta"><span class="sports-game__status">' + escapeHtml(statusLabel) + '</span>' + badges + '</div>' +
         awayRow + homeRow +
+        tipoffLine +
       '</article>';
     }).join('');
   }
@@ -360,9 +439,9 @@
 
   .sports-game__row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     align-items: baseline;
-    gap: 10px;
+    gap: 8px;
     padding: 1px 2px;
   }
   .sports-game__team {
@@ -372,15 +451,57 @@
     color: #38373a;
     letter-spacing: 0.01em;
   }
+  .sports-game__rec {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    color: #8a8878;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
   .sports-game__score {
     font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
     font-variant-numeric: tabular-nums;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
     color: #38373a;
     letter-spacing: -0.01em;
   }
   .sports-game__row--winner .sports-game__team { color: #0B3E73; font-weight: 700; }
   .sports-game__row--winner .sports-game__score { color: #0B3E73; }
+  .sports-game__row--winner .sports-game__rec { color: #0B3E73; }
   .sports-game--pre .sports-game__score { color: #aaa9a4; }
+
+  /* v3: UPSET badge + tipoff preview */
+  .sports-game__upset {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, #5F3DC4 0%, #E8590C 100%);
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  .sports-game--upset {
+    background: linear-gradient(180deg, #f5f0ff 0%, #fafaf6 100%);
+    border-color: rgba(95, 61, 196, 0.4);
+  }
+  .sports-game__tipoff {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: #0B3E73;
+    margin-top: 3px;
+    padding-top: 4px;
+    border-top: 1px dotted rgba(11, 62, 115, 0.18);
+    text-transform: uppercase;
+  }
+
+  /* Tighter layout on narrow screens */
+  @media (max-width: 520px) {
+    .sports-game__row { grid-template-columns: auto 1fr auto; gap: 6px; }
+    .sports-game__team { font-size: 12.5px; }
+    .sports-game__score { font-size: 15px; }
+    .sports-game__rec { font-size: 9px; }
+  }
 </style>

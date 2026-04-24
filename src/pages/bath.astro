@@ -1,0 +1,748 @@
+---
+/**
+ * /bath — a digital bath. v2 — deeper immersion.
+ *
+ * v1 (ship 2026-04-20 20:10 PT): 4 color field layers, 4 modes, single
+ * track (Mike's Circle of Life — 5qdmxwRkULsZY1BxNvSGx4). Mike's note
+ * 4/20 23:58 PT: *"that /bath try more immersive color waves, and other
+ * songs, research find others that'd be neat for various moods and then
+ * a block for it."*
+ *
+ * v2 changes:
+ *   - 7 color field layers instead of 4, with distinct drift speeds and
+ *     scales so layered depth actually reads.
+ *   - Parallax: pointermove (desktop) and deviceorientation (mobile) nudge
+ *     the field transforms. Shallow layers tilt further than deep ones.
+ *   - SVG noise grain overlay at low opacity for film-like texture.
+ *   - Two slow-drifting "orbs" inside each field — small radial gradients
+ *     that cross-fade on a longer loop (90s+), independent of the field
+ *     drift. Creates motion at multiple timescales.
+ *   - Smoother easing (cubic-bezier(0.45, 0, 0.55, 1) for drifts).
+ *   - Song catalog — 11 curated tracks across the 4 moods, with a prev/
+ *     next cycler in the audio tray. Mike's original track lives on as
+ *     BATHE's default. Catalog rationale and rotation live in block 0339.
+ *   - Audio tray upgraded: title + artist + track counter display when
+ *     open; swap tracks without leaving the bath.
+ *   - Mode buttons retain their size + feel so the physical UI doesn't
+ *     shift underneath the user.
+ *
+ * The bath still works silent. Audio is invitation, not required.
+ *
+ * Respects prefers-reduced-motion: kills parallax, shortens drifts.
+ *
+ * Author: cc. Source: Mike 2026-04-20 23:58 PT ("more immersive color
+ * waves, other songs, research find others"). Block 0339 (companion).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Bath — a digital bath';
+const description = 'A meditative full-viewport bath of color, motion, and audio. Four modes: bathe, breathe, drift, release. Eleven curated tracks across moods. Works in silence; audio is invitation, not required.';
+
+// Curated song catalog. Each track is a verified Spotify ID + human label.
+// Structure mirrors the 4 bath modes so the audio tray always shows mood-
+// appropriate tracks first, but any track can play under any mode.
+// Full rationale in block 0339.
+const SONGS = {
+  bathe: [
+    { id: '5qdmxwRkULsZY1BxNvSGx4', title: 'Circle of Life', artist: 'Tsidii Le Loka · The Lion King' },
+    { id: '17oLsEzzlGFlrBKViCzmGc', title: 'Merry Christmas Mr. Lawrence', artist: 'Ryuichi Sakamoto' },
+    { id: '2MZSXhq4XDJWu6coGoXX1V', title: 'Avril 14th', artist: 'Aphex Twin' },
+  ],
+  breathe: [
+    { id: '6kkwzB6hXLIONkEk9JciA6', title: 'Weightless', artist: 'Marconi Union' },
+    { id: '5626KdflSKfeDK7RJQfSrE', title: 'Says', artist: 'Nils Frahm' },
+    { id: '7zHd9LxIZB8WKosSWN9Umj', title: 'Spiegel im Spiegel', artist: 'Arvo Pärt · Angèle Dubeau' },
+  ],
+  drift: [
+    { id: '67Hna13dNDkZvBpTXRIaOJ', title: 'Teardrop', artist: 'Massive Attack · Elizabeth Fraser' },
+    { id: '5x85MJqDpH6MLWYoKg8EhO', title: 'On the Nature of Daylight', artist: 'Max Richter' },
+    { id: '20HCH8XT2EK1QYe1loAJ8E', title: 'Moon (And It Went Like)', artist: 'Kid Francescoli · Julia Minkin' },
+  ],
+  release: [
+    { id: '35KiiILklye1JRRctaLUb4', title: 'Holocene', artist: 'Bon Iver' },
+    { id: '0yQPpUq5BJyqah5m2Q5Stt', title: 'Hoppípolla', artist: 'Sigur Rós' },
+    { id: '35YyxFpE0ZTOoqFx5bADW8', title: 'Nude', artist: 'Radiohead' },
+  ],
+};
+
+// Flatten for script consumption. Order: bathe, breathe, drift, release.
+const FLAT_SONGS = [
+  ...SONGS.bathe.map((s) => ({ ...s, mood: 'bathe' })),
+  ...SONGS.breathe.map((s) => ({ ...s, mood: 'breathe' })),
+  ...SONGS.drift.map((s) => ({ ...s, mood: 'drift' })),
+  ...SONGS.release.map((s) => ({ ...s, mood: 'release' })),
+];
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="bath" id="bath-root" data-mode="bathe">
+    <!-- 7 stacked color fields — each a translucent radial gradient
+         drifting at its own slow speed. Deeper numbers = deeper in the stack. -->
+    <div class="field field--1" aria-hidden="true"></div>
+    <div class="field field--2" aria-hidden="true"></div>
+    <div class="field field--3" aria-hidden="true"></div>
+    <div class="field field--4" aria-hidden="true"></div>
+    <div class="field field--5" aria-hidden="true"></div>
+    <div class="field field--6" aria-hidden="true"></div>
+    <div class="field field--7" aria-hidden="true"></div>
+
+    <!-- Orb layer — two small drifting gradients per mood. Independent motion. -->
+    <div class="orb orb--a" aria-hidden="true"></div>
+    <div class="orb orb--b" aria-hidden="true"></div>
+
+    <!-- SVG noise grain overlay — film-like texture, fixed. -->
+    <svg class="grain" width="100%" height="100%" aria-hidden="true">
+      <filter id="grain-noise">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+        <feColorMatrix values="0 0 0 0 0.95
+                               0 0 0 0 0.9
+                               0 0 0 0 0.85
+                               0 0 0 0.35 0"/>
+      </filter>
+      <rect width="100%" height="100%" filter="url(#grain-noise)" opacity="0.6"/>
+    </svg>
+
+    <!-- Center content — kept minimal so the field reads. -->
+    <div class="stage">
+      <div class="breath-ring" id="breath-ring" aria-hidden="true">
+        <div class="breath-ring__glow" aria-hidden="true"></div>
+        <div class="breath-ring__inner"></div>
+      </div>
+      <p class="stage__cue mono" id="stage-cue">breathe in</p>
+      <p class="stage__mode mono" id="stage-mode">BATHE</p>
+    </div>
+
+    <!-- Exit / crumb -->
+    <a class="bath__home mono" href="/" aria-label="Leave the bath">← leave</a>
+
+    <!-- Mode bar (bottom) -->
+    <nav class="modes mono" aria-label="Bath modes">
+      <button type="button" class="mode-btn" data-mode="bathe" aria-pressed="true">
+        <span class="mode-btn__icon" aria-hidden="true">◉</span>
+        <span class="mode-btn__label">BATHE</span>
+      </button>
+      <button type="button" class="mode-btn" data-mode="breathe" aria-pressed="false">
+        <span class="mode-btn__icon" aria-hidden="true">◎</span>
+        <span class="mode-btn__label">BREATHE</span>
+      </button>
+      <button type="button" class="mode-btn" data-mode="drift" aria-pressed="false">
+        <span class="mode-btn__icon" aria-hidden="true">◌</span>
+        <span class="mode-btn__label">DRIFT</span>
+      </button>
+      <button type="button" class="mode-btn" data-mode="release" aria-pressed="false">
+        <span class="mode-btn__icon" aria-hidden="true">○</span>
+        <span class="mode-btn__label">RELEASE</span>
+      </button>
+    </nav>
+
+    <!-- Audio tray — v2 upgrades: track cycler, title, mood-aware default -->
+    <aside class="audio" id="audio-tray" data-open="false">
+      <button type="button" class="audio__toggle mono" id="audio-toggle" aria-expanded="false" aria-controls="audio-frame-wrap">
+        <span class="audio__toggle-icon" aria-hidden="true">♪</span>
+        <span class="audio__toggle-text">PLAY THE BATH</span>
+      </button>
+      <div class="audio__panel" id="audio-frame-wrap" hidden>
+        <div class="audio__meta">
+          <p class="audio__title" id="audio-title">—</p>
+          <p class="audio__artist mono" id="audio-artist">—</p>
+          <p class="audio__counter mono" id="audio-counter">1 / 11</p>
+        </div>
+        <div class="audio__controls mono">
+          <button type="button" class="audio__nav" id="audio-prev" aria-label="Previous track">← prev</button>
+          <button type="button" class="audio__nav" id="audio-next" aria-label="Next track">next →</button>
+        </div>
+        <iframe
+          id="audio-frame"
+          src="about:blank"
+          title="Bath soundtrack"
+          width="300"
+          height="80"
+          frameborder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </aside>
+
+    <!-- Invisible JSON for the client script -->
+    <script type="application/json" id="bath-songs-data" set:html={JSON.stringify(FLAT_SONGS)}></script>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  var root = document.getElementById('bath-root');
+  var cue = document.getElementById('stage-cue');
+  var modeLabel = document.getElementById('stage-mode');
+  var buttons = document.querySelectorAll('.mode-btn[data-mode]');
+  var audioToggle = document.getElementById('audio-toggle');
+  var audioFrameWrap = document.getElementById('audio-frame-wrap');
+  var audioFrame = document.getElementById('audio-frame');
+  var audioTray = document.getElementById('audio-tray');
+  var audioTitle = document.getElementById('audio-title');
+  var audioArtist = document.getElementById('audio-artist');
+  var audioCounter = document.getElementById('audio-counter');
+  var audioPrev = document.getElementById('audio-prev');
+  var audioNext = document.getElementById('audio-next');
+  var audioToggleText = document.querySelector('.audio__toggle-text');
+  var songsData = document.getElementById('bath-songs-data');
+
+  if (!root) return;
+
+  // Parse the song catalog.
+  var SONGS = [];
+  try { SONGS = JSON.parse(songsData.textContent || '[]'); } catch (e) { SONGS = []; }
+
+  // Mode configs — breath timings in seconds + palette tag
+  var MODES = {
+    bathe:   { cue: 'bathe',          in: 4,  hold: 2, out: 6, pal: 'warm' },
+    breathe: { cue: 'breathe in',     in: 4,  hold: 7, out: 8, pal: 'warm' },
+    drift:   { cue: 'drift',          in: 6,  hold: 0, out: 6, pal: 'cool' },
+    release: { cue: 'release',        in: 3,  hold: 0, out: 9, pal: 'indigo' },
+  };
+
+  var phase = 'in';
+  var phaseUntil = 0;
+  var currentMode = 'bathe';
+  // Find index of first track in current mood for mood-aware defaults.
+  var trackIndex = 0;
+
+  function cueText(mode, phase) {
+    if (mode === 'bathe') return 'bathe';
+    if (mode === 'drift') return 'drift';
+    if (mode === 'release') return 'release';
+    if (phase === 'in') return 'breathe in';
+    if (phase === 'hold') return 'hold';
+    if (phase === 'out') return 'breathe out';
+    return 'breathe';
+  }
+
+  function setMode(m) {
+    if (!MODES[m]) return;
+    currentMode = m;
+    root.setAttribute('data-mode', m);
+    if (modeLabel) modeLabel.textContent = m.toUpperCase();
+    buttons.forEach(function (b) {
+      var on = b.getAttribute('data-mode') === m;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    phase = 'in';
+    phaseUntil = Date.now() + MODES[m].in * 1000;
+    if (cue) cue.textContent = cueText(m, phase);
+    // If the audio panel is not open yet, pre-seed trackIndex to the first
+    // track matching the new mode so "play the bath" opens with the right
+    // mood. If it IS open (user is actively listening), don't interrupt.
+    if (audioTray.getAttribute('data-open') !== 'true') {
+      for (var i = 0; i < SONGS.length; i++) {
+        if (SONGS[i].mood === m) { trackIndex = i; break; }
+      }
+      paintTrack();
+    }
+  }
+
+  function tick() {
+    var now = Date.now();
+    if (now < phaseUntil) return;
+    var cfg = MODES[currentMode];
+    if (phase === 'in') {
+      if (cfg.hold > 0) { phase = 'hold'; phaseUntil = now + cfg.hold * 1000; }
+      else              { phase = 'out';  phaseUntil = now + cfg.out * 1000; }
+    } else if (phase === 'hold') {
+      phase = 'out';
+      phaseUntil = now + cfg.out * 1000;
+    } else {
+      phase = 'in';
+      phaseUntil = now + cfg.in * 1000;
+    }
+    root.setAttribute('data-phase', phase);
+    if (cue) cue.textContent = cueText(currentMode, phase);
+  }
+
+  // ---- Parallax: pointer (desktop) + deviceorientation (mobile) ----
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var tiltX = 0;
+  var tiltY = 0;
+
+  function applyTilt() {
+    // Depth increases with field number. 1 is closest to viewer.
+    // Apply to fields 1..7 via CSS variable.
+    if (reduceMotion) return;
+    root.style.setProperty('--tilt-x', tiltX.toFixed(3));
+    root.style.setProperty('--tilt-y', tiltY.toFixed(3));
+  }
+
+  if (!reduceMotion) {
+    window.addEventListener('pointermove', function (e) {
+      var w = window.innerWidth || 1;
+      var h = window.innerHeight || 1;
+      tiltX = (e.clientX / w) - 0.5;   // -0.5..0.5
+      tiltY = (e.clientY / h) - 0.5;
+      applyTilt();
+    }, { passive: true });
+
+    // Mobile: deviceorientation — gamma is left/right tilt, beta is front/back.
+    // Clamp to reasonable range and map to -0.5..0.5.
+    window.addEventListener('deviceorientation', function (e) {
+      if (e.gamma === null || e.beta === null) return;
+      var g = Math.max(-30, Math.min(30, e.gamma)) / 30 * 0.5;
+      var b = Math.max(-30, Math.min(30, e.beta - 35)) / 30 * 0.5;
+      tiltX = g;
+      tiltY = b;
+      applyTilt();
+    }, { passive: true });
+  }
+
+  // ---- Audio catalog ----
+  function currentSong() {
+    if (!SONGS.length) return null;
+    var i = ((trackIndex % SONGS.length) + SONGS.length) % SONGS.length;
+    return SONGS[i];
+  }
+
+  function paintTrack() {
+    var s = currentSong();
+    if (!s) return;
+    if (audioTitle) audioTitle.textContent = s.title;
+    if (audioArtist) audioArtist.textContent = s.artist + ' · ' + s.mood;
+    if (audioCounter) audioCounter.textContent = ((trackIndex % SONGS.length) + 1) + ' / ' + SONGS.length;
+    if (audioToggleText) {
+      var open = audioTray.getAttribute('data-open') === 'true';
+      audioToggleText.textContent = open ? s.title.toUpperCase() : 'PLAY THE BATH';
+    }
+  }
+
+  function playCurrent() {
+    var s = currentSong();
+    if (!s || !audioFrame) return;
+    var url = 'https://open.spotify.com/embed/track/' + s.id + '?utm_source=generator&theme=0&autoplay=1';
+    audioFrame.src = url;
+  }
+
+  function stopPlayback() {
+    if (audioFrame) audioFrame.src = 'about:blank';
+  }
+
+  function nextTrack() {
+    trackIndex = (trackIndex + 1) % SONGS.length;
+    paintTrack();
+    if (audioTray.getAttribute('data-open') === 'true') playCurrent();
+  }
+
+  function prevTrack() {
+    trackIndex = (trackIndex - 1 + SONGS.length) % SONGS.length;
+    paintTrack();
+    if (audioTray.getAttribute('data-open') === 'true') playCurrent();
+  }
+
+  // ---- Kick off ----
+  setMode('bathe');
+  root.setAttribute('data-phase', 'in');
+  setInterval(tick, 250);
+  paintTrack();
+
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      setMode(b.getAttribute('data-mode') || 'bathe');
+    });
+  });
+
+  // Audio toggle (open/close panel)
+  if (audioToggle) {
+    audioToggle.addEventListener('click', function () {
+      var open = audioTray.getAttribute('data-open') === 'true';
+      if (open) {
+        audioTray.setAttribute('data-open', 'false');
+        audioToggle.setAttribute('aria-expanded', 'false');
+        audioFrameWrap.hidden = true;
+        stopPlayback();
+        paintTrack();
+      } else {
+        audioTray.setAttribute('data-open', 'true');
+        audioToggle.setAttribute('aria-expanded', 'true');
+        audioFrameWrap.hidden = false;
+        playCurrent();
+        paintTrack();
+      }
+    });
+  }
+
+  if (audioPrev) audioPrev.addEventListener('click', prevTrack);
+  if (audioNext) audioNext.addEventListener('click', nextTrack);
+
+  // Hide CoNav bar while in the bath
+  document.body.classList.add('bath-mode');
+})();
+</script>
+
+<style>
+  :global(body.bath-mode .conav) { display: none !important; }
+  :global(body.bath-mode) { overflow: hidden; }
+  :global(body.bath-mode footer) { display: none !important; }
+
+  .bath {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: #130a04;
+    color: #f3e6d8;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui);
+    --tilt-x: 0;
+    --tilt-y: 0;
+    --ease: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  /* 7 color fields — each a translucent radial gradient drifting on its own schedule. */
+  .field {
+    position: absolute;
+    inset: -25%;
+    pointer-events: none;
+    will-change: transform, opacity;
+    mix-blend-mode: screen;
+    transition: opacity 4s ease, background 4s ease;
+  }
+
+  /* Depth parallax — shallow fields tilt more than deep ones.
+     Field 1 is closest; field 7 is farthest. */
+  .field--1 { transform: translate3d(calc(var(--tilt-x) * -28px), calc(var(--tilt-y) * -28px), 0); }
+  .field--2 { transform: translate3d(calc(var(--tilt-x) * -22px), calc(var(--tilt-y) * -22px), 0); }
+  .field--3 { transform: translate3d(calc(var(--tilt-x) * -16px), calc(var(--tilt-y) * -16px), 0); }
+  .field--4 { transform: translate3d(calc(var(--tilt-x) * -10px), calc(var(--tilt-y) * -10px), 0); }
+  .field--5 { transform: translate3d(calc(var(--tilt-x) * -6px),  calc(var(--tilt-y) * -6px),  0); }
+  .field--6 { transform: translate3d(calc(var(--tilt-x) * -3px),  calc(var(--tilt-y) * -3px),  0); }
+  .field--7 { transform: translate3d(calc(var(--tilt-x) * -1px),  calc(var(--tilt-y) * -1px),  0); }
+
+  /* --- BATHE palette: warm amber × rose × cream, ember core --- */
+  .bath[data-mode="bathe"] .field--1 { background: radial-gradient(60% 55% at 28% 38%, rgba(255, 169, 58, 0.55), transparent 62%); animation: drift-a 38s var(--ease) infinite alternate; }
+  .bath[data-mode="bathe"] .field--2 { background: radial-gradient(55% 50% at 72% 62%, rgba(230, 76, 60, 0.38), transparent 65%); animation: drift-b 52s var(--ease) infinite alternate; }
+  .bath[data-mode="bathe"] .field--3 { background: radial-gradient(50% 45% at 50% 22%, rgba(246, 222, 178, 0.28), transparent 68%); animation: drift-c 68s var(--ease) infinite alternate; }
+  .bath[data-mode="bathe"] .field--4 { background: radial-gradient(70% 60% at 18% 78%, rgba(184, 55, 27, 0.25), transparent 70%); animation: drift-d 46s var(--ease) infinite alternate; }
+  .bath[data-mode="bathe"] .field--5 { background: radial-gradient(40% 35% at 85% 25%, rgba(255, 207, 130, 0.2), transparent 72%); animation: drift-e 84s var(--ease) infinite alternate; }
+  .bath[data-mode="bathe"] .field--6 { background: radial-gradient(90% 75% at 50% 100%, rgba(90, 40, 10, 0.45), transparent 60%); }
+  .bath[data-mode="bathe"] .field--7 { background: linear-gradient(180deg, rgba(60, 30, 10, 0.1) 0%, rgba(16, 10, 4, 0.75) 100%); }
+
+  /* --- BREATHE palette: sunrise gold, breath-synced center --- */
+  .bath[data-mode="breathe"] .field--1 { background: radial-gradient(55% 50% at 50% 50%, rgba(255, 176, 66, 0.45), transparent 60%); animation: drift-breathe-in 19s var(--ease) infinite alternate; }
+  .bath[data-mode="breathe"] .field--2 { background: radial-gradient(70% 65% at 50% 50%, rgba(235, 96, 48, 0.28), transparent 68%); animation: drift-a 74s linear infinite alternate; }
+  .bath[data-mode="breathe"] .field--3 { background: radial-gradient(80% 70% at 50% 50%, rgba(246, 222, 178, 0.18), transparent 70%); animation: drift-b 94s linear infinite alternate; }
+  .bath[data-mode="breathe"] .field--4 { background: radial-gradient(40% 38% at 30% 70%, rgba(255, 200, 100, 0.2), transparent 68%); animation: drift-c 62s var(--ease) infinite alternate; }
+  .bath[data-mode="breathe"] .field--5 { background: radial-gradient(45% 40% at 72% 28%, rgba(255, 150, 80, 0.18), transparent 70%); animation: drift-d 56s var(--ease) infinite alternate; }
+  .bath[data-mode="breathe"] .field--6 { background: radial-gradient(100% 90% at 50% 100%, rgba(70, 35, 10, 0.35), transparent 62%); }
+  .bath[data-mode="breathe"] .field--7 { background: linear-gradient(180deg, rgba(50, 25, 10, 0.08) 0%, rgba(12, 8, 3, 0.65) 100%); }
+
+  /* --- DRIFT palette: cool violet × deep blue × teal, wider motion --- */
+  .bath[data-mode="drift"] .field--1 { background: radial-gradient(58% 52% at 22% 32%, rgba(130, 84, 232, 0.52), transparent 58%); animation: drift-wide-a 46s var(--ease) infinite alternate; }
+  .bath[data-mode="drift"] .field--2 { background: radial-gradient(60% 55% at 78% 68%, rgba(34, 118, 196, 0.42), transparent 62%); animation: drift-wide-b 62s var(--ease) infinite alternate; }
+  .bath[data-mode="drift"] .field--3 { background: radial-gradient(50% 48% at 50% 50%, rgba(60, 168, 130, 0.22), transparent 70%); animation: drift-wide-c 76s var(--ease) infinite alternate; }
+  .bath[data-mode="drift"] .field--4 { background: radial-gradient(44% 40% at 12% 82%, rgba(85, 50, 180, 0.3), transparent 65%); animation: drift-wide-d 54s var(--ease) infinite alternate; }
+  .bath[data-mode="drift"] .field--5 { background: radial-gradient(38% 36% at 86% 18%, rgba(100, 180, 220, 0.22), transparent 72%); animation: drift-wide-e 90s var(--ease) infinite alternate; }
+  .bath[data-mode="drift"] .field--6 { background: radial-gradient(100% 80% at 50% 0%, rgba(40, 30, 90, 0.3), transparent 62%); }
+  .bath[data-mode="drift"] .field--7 { background: linear-gradient(180deg, rgba(20, 15, 60, 0.18) 0%, rgba(6, 6, 22, 0.78) 100%); }
+
+  /* --- RELEASE palette: indigo → cream, pulse-driven --- */
+  .bath[data-mode="release"] .field--1 { background: radial-gradient(55% 50% at 50% 42%, rgba(110, 72, 218, 0.62), transparent 56%); animation: release-pulse-a 9s ease-out infinite; }
+  .bath[data-mode="release"] .field--2 { background: radial-gradient(60% 55% at 50% 58%, rgba(255, 170, 80, 0.26), transparent 62%); animation: drift-b 86s linear infinite alternate; }
+  .bath[data-mode="release"] .field--3 { background: radial-gradient(70% 65% at 50% 50%, rgba(246, 222, 178, 0.14), transparent 70%); }
+  .bath[data-mode="release"] .field--4 { background: radial-gradient(40% 38% at 18% 24%, rgba(180, 90, 255, 0.3), transparent 65%); animation: release-pulse-b 12s ease-out infinite; }
+  .bath[data-mode="release"] .field--5 { background: radial-gradient(38% 35% at 82% 76%, rgba(200, 110, 220, 0.24), transparent 70%); animation: release-pulse-c 14s ease-out infinite; }
+  .bath[data-mode="release"] .field--6 { background: radial-gradient(100% 95% at 50% 100%, rgba(40, 20, 100, 0.38), transparent 62%); }
+  .bath[data-mode="release"] .field--7 { background: linear-gradient(180deg, rgba(50, 25, 120, 0.14) 0%, rgba(8, 6, 20, 0.7) 100%); }
+
+  /* Drift keyframes — generic, reused across modes. Vary scale + translate. */
+  @keyframes drift-a { 0% { transform: translate3d(-5%, -3%, 0) scale(1.02); } 100% { transform: translate3d(5%, 3%, 0) scale(1.16); } }
+  @keyframes drift-b { 0% { transform: translate3d(4%, 5%, 0) scale(1.1); }    100% { transform: translate3d(-4%, -5%, 0) scale(0.94); } }
+  @keyframes drift-c { 0% { transform: translate3d(-3%, 4%, 0) scale(1); }     100% { transform: translate3d(3%, -4%, 0) scale(1.14); } }
+  @keyframes drift-d { 0% { transform: translate3d(6%, -2%, 0) scale(0.98); }  100% { transform: translate3d(-6%, 2%, 0) scale(1.1); } }
+  @keyframes drift-e { 0% { transform: translate3d(-2%, -5%, 0) scale(1.05); } 100% { transform: translate3d(2%, 5%, 0) scale(1.18); } }
+
+  @keyframes drift-wide-a { 0% { transform: translate3d(-10%, -6%, 0) scale(0.92); } 100% { transform: translate3d(10%, 6%, 0) scale(1.2); } }
+  @keyframes drift-wide-b { 0% { transform: translate3d(8%, 10%, 0) scale(1.14); }   100% { transform: translate3d(-8%, -10%, 0) scale(0.88); } }
+  @keyframes drift-wide-c { 0% { transform: translate3d(-5%, 8%, 0) scale(1); }      100% { transform: translate3d(5%, -8%, 0) scale(1.2); } }
+  @keyframes drift-wide-d { 0% { transform: translate3d(12%, -4%, 0) scale(0.94); }  100% { transform: translate3d(-12%, 4%, 0) scale(1.16); } }
+  @keyframes drift-wide-e { 0% { transform: translate3d(-4%, -10%, 0) scale(1.08); } 100% { transform: translate3d(4%, 10%, 0) scale(1.22); } }
+
+  @keyframes drift-breathe-in { 0% { transform: scale(0.85); opacity: 0.5; } 100% { transform: scale(1.12); opacity: 0.9; } }
+
+  @keyframes release-pulse-a { 0% { opacity: 0.4; transform: scale(0.92); } 50% { opacity: 0.9; transform: scale(1.1); } 100% { opacity: 0.2; transform: scale(1.18); } }
+  @keyframes release-pulse-b { 0% { opacity: 0.3; transform: scale(0.9); }  50% { opacity: 0.75; transform: scale(1.14); } 100% { opacity: 0.18; transform: scale(1.22); } }
+  @keyframes release-pulse-c { 0% { opacity: 0.25; transform: scale(1); }   50% { opacity: 0.6; transform: scale(1.16); }  100% { opacity: 0.15; transform: scale(1.24); } }
+
+  /* Orbs — small drifting radials, cross-fading on longer loops */
+  .orb {
+    position: absolute;
+    width: 40vmax;
+    height: 40vmax;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    filter: blur(24px);
+    will-change: transform, opacity;
+    opacity: 0.6;
+  }
+  .orb--a { top: -8%; left: -10%; animation: orb-a 92s linear infinite; }
+  .orb--b { bottom: -10%; right: -12%; animation: orb-b 118s linear infinite; }
+  .bath[data-mode="bathe"] .orb--a { background: radial-gradient(circle, rgba(255, 175, 80, 0.55), transparent 60%); }
+  .bath[data-mode="bathe"] .orb--b { background: radial-gradient(circle, rgba(230, 80, 50, 0.42), transparent 65%); }
+  .bath[data-mode="breathe"] .orb--a { background: radial-gradient(circle, rgba(255, 180, 80, 0.45), transparent 62%); }
+  .bath[data-mode="breathe"] .orb--b { background: radial-gradient(circle, rgba(255, 145, 85, 0.4), transparent 65%); }
+  .bath[data-mode="drift"] .orb--a { background: radial-gradient(circle, rgba(140, 90, 240, 0.5), transparent 60%); }
+  .bath[data-mode="drift"] .orb--b { background: radial-gradient(circle, rgba(50, 130, 220, 0.48), transparent 62%); }
+  .bath[data-mode="release"] .orb--a { background: radial-gradient(circle, rgba(160, 90, 255, 0.55), transparent 60%); }
+  .bath[data-mode="release"] .orb--b { background: radial-gradient(circle, rgba(255, 170, 80, 0.35), transparent 62%); }
+
+  @keyframes orb-a {
+    0%   { transform: translate3d(0, 0, 0) scale(1); opacity: 0.5; }
+    25%  { transform: translate3d(35vw, 10vh, 0) scale(1.05); opacity: 0.75; }
+    50%  { transform: translate3d(60vw, 50vh, 0) scale(1.15); opacity: 0.6; }
+    75%  { transform: translate3d(20vw, 35vh, 0) scale(1.05); opacity: 0.8; }
+    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.5; }
+  }
+  @keyframes orb-b {
+    0%   { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+    25%  { transform: translate3d(-30vw, -15vh, 0) scale(1.12); opacity: 0.7; }
+    50%  { transform: translate3d(-10vw, -45vh, 0) scale(1); opacity: 0.55; }
+    75%  { transform: translate3d(-25vw, -30vh, 0) scale(1.08); opacity: 0.8; }
+    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+  }
+
+  /* Noise grain */
+  .grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    opacity: 0.18;
+  }
+
+  /* Stage */
+  .stage {
+    position: relative;
+    z-index: 3;
+    width: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    padding: 40px 20px 120px;
+    box-sizing: border-box;
+  }
+
+  /* Breath ring — v2 adds a soft glow halo */
+  .breath-ring {
+    position: relative;
+    width: clamp(200px, 44vmin, 360px);
+    height: clamp(200px, 44vmin, 360px);
+    border: 1.5px solid rgba(243, 230, 216, 0.35);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(6px);
+    transition: transform 3s var(--ease), border-color 2s ease, opacity 2s ease;
+  }
+  .breath-ring__glow {
+    position: absolute;
+    inset: -22%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 200, 130, 0.24), transparent 62%);
+    filter: blur(28px);
+    opacity: 0.85;
+    transition: opacity 2s ease, transform 3s var(--ease);
+    pointer-events: none;
+    z-index: -1;
+  }
+  .breath-ring__inner {
+    width: 62%;
+    height: 62%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, rgba(243, 230, 216, 0.16), rgba(243, 230, 216, 0.02) 70%);
+    transition: transform 3s var(--ease), background 3s ease;
+  }
+  .bath[data-phase="in"]   .breath-ring  { transform: scale(1.1); border-color: rgba(243, 230, 216, 0.6); }
+  .bath[data-phase="in"]   .breath-ring__glow { opacity: 1; transform: scale(1.12); }
+  .bath[data-phase="hold"] .breath-ring  { transform: scale(1.1); }
+  .bath[data-phase="out"]  .breath-ring  { transform: scale(0.9); border-color: rgba(243, 230, 216, 0.22); }
+  .bath[data-phase="out"]  .breath-ring__glow { opacity: 0.5; transform: scale(0.92); }
+
+  /* breathe mode matches 4-7-8 tempo */
+  .bath[data-mode="breathe"][data-phase="in"]   .breath-ring        { transition-duration: 4s; }
+  .bath[data-mode="breathe"][data-phase="in"]   .breath-ring__glow  { transition-duration: 4s; }
+  .bath[data-mode="breathe"][data-phase="hold"] .breath-ring        { transition-duration: 7s; }
+  .bath[data-mode="breathe"][data-phase="out"]  .breath-ring        { transition-duration: 8s; }
+  .bath[data-mode="breathe"][data-phase="out"]  .breath-ring__glow  { transition-duration: 8s; }
+
+  .stage__cue {
+    font-size: clamp(16px, 2.8vw, 22px);
+    letter-spacing: 0.28em;
+    text-transform: lowercase;
+    color: rgba(243, 230, 216, 0.78);
+    margin: 0;
+    transition: opacity 0.6s ease;
+    text-shadow: 0 0 30px rgba(0,0,0,0.4);
+  }
+  .stage__mode {
+    font-size: 10px;
+    letter-spacing: 0.4em;
+    color: rgba(243, 230, 216, 0.42);
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  /* Leave */
+  .bath__home {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 5;
+    color: rgba(243, 230, 216, 0.55);
+    text-decoration: none;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    padding: 6px 10px;
+    border: 1px solid rgba(243, 230, 216, 0.22);
+    border-radius: 2px;
+    backdrop-filter: blur(4px);
+    text-transform: uppercase;
+    background: rgba(12, 11, 8, 0.35);
+  }
+  .bath__home:hover { color: #fff; border-color: rgba(243, 230, 216, 0.55); }
+
+  /* Mode bar */
+  .modes {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    background: rgba(12, 11, 8, 0.45);
+    border: 1px solid rgba(243, 230, 216, 0.2);
+    border-radius: 40px;
+    backdrop-filter: blur(10px);
+  }
+  .mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: transparent;
+    color: rgba(243, 230, 216, 0.55);
+    border: none;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+  .mode-btn:hover { color: #fff; background: rgba(243, 230, 216, 0.08); }
+  .mode-btn[aria-pressed="true"] {
+    background: rgba(232, 154, 45, 0.22);
+    color: #fff;
+    border: 1px solid rgba(232, 154, 45, 0.5);
+    padding: 5px 11px;
+  }
+  .mode-btn__icon { font-size: 11px; }
+
+  @media (max-width: 520px) {
+    .modes { bottom: 12px; gap: 2px; padding: 4px; }
+    .mode-btn { padding: 6px 8px; font-size: 9px; letter-spacing: 0.12em; }
+    .mode-btn__label { display: none; }
+    .mode-btn__icon { font-size: 14px; }
+  }
+
+  /* Audio tray — v2 with track cycler + meta display */
+  .audio {
+    position: fixed;
+    right: 16px;
+    bottom: 72px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: calc(100vw - 32px);
+  }
+  .audio__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(12, 11, 8, 0.5);
+    color: rgba(243, 230, 216, 0.78);
+    border: 1px solid rgba(243, 230, 216, 0.28);
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    backdrop-filter: blur(12px);
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .audio__toggle:hover { color: #fff; border-color: rgba(243, 230, 216, 0.55); }
+  .audio[data-open="true"] .audio__toggle { background: rgba(232, 154, 45, 0.26); border-color: rgba(232, 154, 45, 0.6); color: #fff; }
+  .audio__toggle-icon { font-size: 12px; flex-shrink: 0; }
+  .audio__toggle-text { overflow: hidden; text-overflow: ellipsis; }
+
+  .audio__panel {
+    background: rgba(12, 11, 8, 0.88);
+    border: 1px solid rgba(243, 230, 216, 0.22);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(14px);
+    padding: 12px 14px 8px;
+    min-width: 260px;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .audio__panel[hidden] { display: none; }
+  .audio__meta { display: flex; flex-direction: column; gap: 1px; }
+  .audio__title { font-size: 13.5px; color: #fff; margin: 0; font-weight: 500; line-height: 1.2; }
+  .audio__artist { font-size: 9.5px; letter-spacing: 0.08em; color: rgba(243, 230, 216, 0.6); margin: 0; text-transform: uppercase; }
+  .audio__counter { font-size: 9px; letter-spacing: 0.12em; color: rgba(243, 230, 216, 0.4); margin: 2px 0 0; text-transform: uppercase; }
+  .audio__controls { display: flex; justify-content: space-between; gap: 8px; }
+  .audio__nav {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(243, 230, 216, 0.22);
+    color: rgba(243, 230, 216, 0.75);
+    padding: 5px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font: inherit;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .audio__nav:hover { color: #fff; border-color: rgba(232, 154, 45, 0.6); background: rgba(232, 154, 45, 0.1); }
+  .audio__panel iframe {
+    display: block;
+    border: none;
+    width: 100%;
+    height: 80px;
+    border-radius: 8px;
+    margin-top: 2px;
+  }
+  @media (max-width: 520px) {
+    .audio { right: 12px; bottom: 62px; left: 12px; align-items: stretch; }
+    .audio__toggle { max-width: unset; }
+    .audio__toggle-icon { font-size: 14px; }
+  }
+
+  /* Reduced motion — kill drifts + parallax, soften breath */
+  @media (prefers-reduced-motion: reduce) {
+    .field, .orb { animation: none !important; transform: none !important; }
+    .breath-ring { transition-duration: 0s !important; transform: scale(1) !important; }
+    .breath-ring__glow { transition-duration: 0s !important; transform: scale(1) !important; }
+  }
+</style>
+

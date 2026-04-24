@@ -135,6 +135,13 @@ const alternates = [
             <span class="mono hud-label">BEST</span>
             <span class="mono hud-value" id="hud-best">—</span>
           </div>
+          <!-- Difficulty selector — auto-shows when beats[].note prefixes
+               include 2+ of "easy"/"medium"/"hard". Filters beats by prefix.
+               Per overnight-19 (yeeplayer Bell Tolls difficulty consolidation). -->
+          <div class="hud-row hud-row--wide hud-row--diff" id="hud-diff" hidden>
+            <span class="mono hud-label">DIFF</span>
+            <span class="mono diff-btns" id="diff-btns"></span>
+          </div>
         </div>
       </div>
 
@@ -227,7 +234,51 @@ const alternates = [
      */
     (function () {
       const beatsEl = document.getElementById('yee-beats');
-      const beats = JSON.parse(beatsEl ? beatsEl.textContent : '[]');
+      const allBeats = JSON.parse(beatsEl ? beatsEl.textContent : '[]');
+
+      // Difficulty filter — scan note prefixes for "easy"/"medium"/"hard"
+      // and offer a selector when 2+ are present. Filtered set replaces
+      // `beats` for state.list. Selector defaults to easy if available.
+      const DIFFICULTIES = ['easy', 'medium', 'hard'];
+      const presentDiffs = DIFFICULTIES.filter(function (d) {
+        return allBeats.some(function (b) { return (b.note || '').toLowerCase().indexOf(d) === 0; });
+      });
+      let activeDiff = presentDiffs[0] || null;
+      function applyDiff(diff) {
+        activeDiff = diff;
+        return diff
+          ? allBeats.filter(function (b) { return (b.note || '').toLowerCase().indexOf(diff) === 0; })
+          : allBeats;
+      }
+      let beats = activeDiff ? applyDiff(activeDiff) : allBeats;
+      // Render selector only when 2+ difficulties present
+      const diffRow = document.getElementById('hud-diff');
+      const diffBtnsEl = document.getElementById('diff-btns');
+      if (diffRow && diffBtnsEl && presentDiffs.length >= 2) {
+        diffRow.removeAttribute('hidden');
+        diffBtnsEl.innerHTML = presentDiffs.map(function (d) {
+          var on = d === activeDiff;
+          return '<button type="button" class="diff-btn' + (on ? ' diff-btn--on' : '') + '" data-diff="' + d + '" style="background:' + (on ? '#F59F00' : 'transparent') + ';color:' + (on ? '#12110E' : '#c4c2bc') + ';border:1px solid ' + (on ? '#F59F00' : '#5F5E5A') + ';padding:2px 8px;margin-right:4px;font-family:inherit;font-size:11px;letter-spacing:0.12em;border-radius:2px;cursor:pointer;text-transform:uppercase;font-weight:600">' + d + '</button>';
+        }).join('');
+        diffBtnsEl.addEventListener('click', function (e) {
+          var b = e.target.closest('button[data-diff]');
+          if (!b) return;
+          var d = b.getAttribute('data-diff');
+          if (d === activeDiff) return;
+          beats = applyDiff(d);
+          // Re-init state.list with new beats; reset score/combo/hits.
+          state.list.forEach(function (it) { if (it.el && it.el.parentNode) it.el.parentNode.removeChild(it.el); });
+          state.list = beats.map(function (b) { return Object.assign({}, b, { status: 'pending', el: null, lastY: -9999 }); });
+          state.score = 0; state.hits = 0; state.combo = 0; state.maxCombo = 0;
+          if (typeof renderHud === 'function') renderHud();
+          // Rebuild buttons to reflect active state
+          diffBtnsEl.innerHTML = presentDiffs.map(function (dd) {
+            var on = dd === activeDiff;
+            return '<button type="button" class="diff-btn' + (on ? ' diff-btn--on' : '') + '" data-diff="' + dd + '" style="background:' + (on ? '#F59F00' : 'transparent') + ';color:' + (on ? '#12110E' : '#c4c2bc') + ';border:1px solid ' + (on ? '#F59F00' : '#5F5E5A') + ';padding:2px 8px;margin-right:4px;font-family:inherit;font-size:11px;letter-spacing:0.12em;border-radius:2px;cursor:pointer;text-transform:uppercase;font-weight:600">' + dd + '</button>';
+          }).join('');
+        });
+      }
+
       const total = beats.length;
       const mount = document.getElementById('yee-player');
       const ytId = mount ? mount.dataset.yt : null;

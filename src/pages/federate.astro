@@ -1,0 +1,513 @@
+---
+/**
+ * /federate — "join us" CTA + full spec.
+ *
+ * Growth page. Explains the PointCast federation protocol, the three-
+ * step registration flow, and ships a ready-to-paste badge snippet
+ * partners can drop into their footer. Optimized to be the URL any
+ * PointCast operator can share when pitching federation.
+ *
+ * Differs from /federated (the directory) — /federate is the
+ * onboarding CTA, /federated is the live roster.
+ *
+ * Schema: HowTo + FAQPage + BreadcrumbList. HowTo covers the 3-step
+ * registration; FAQPage answers the common "why" questions. Drives
+ * HowTo rich-result eligibility.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { liveFederationCount } from '../lib/federation';
+
+const liveCount = liveFederationCount();
+
+const faqs = [
+  {
+    q: 'What does it mean to "federate" with PointCast?',
+    a: 'Federation here is a lightweight reciprocal-links protocol — not ActivityPub / Fediverse. Your site publishes a feed PointCast can ingest (RSS 2.0 or JSON Feed 1.1), you link back to pointcast.xyz from your site, and we list you on /federated with a card pointing to your URL. Both ends get cross-audience traffic; neither side locks in.',
+  },
+  {
+    q: 'Who is this for?',
+    a: 'Any independent web property whose audience overlaps with PointCast\'s — tech / AI / agent-native builders, Nouns and CC0 communities, El Segundo and South Bay locals, cannabis / hemp beverage adjacents, and anyone publishing in the agent-native posture (llms.txt + agents.json + JSON feeds). Personal blogs, company newsletters, editorial sites, and Tezos / Nouns proliferation projects are all welcome.',
+  },
+  {
+    q: 'What do I get out of it?',
+    a: 'Three things. First: a card on /federated with your description + topic tags + feed URL — discoverable by every human and agent reading the directory. Second: backlinks from the pointcast.xyz domain, which carries agent-native authority (llms.txt, Content-Signals, rich schema). Third: inclusion in /federation.json — the machine-readable registry that agents query to find federated peers.',
+  },
+  {
+    q: 'What do you get out of it?',
+    a: 'Backlinks from your site + feed ingestion. We\'re building toward a live cross-post surface where your latest blocks appear on our /federated/{slug} pages — so your audience finds us and vice versa. The compute-ledger dimension (optional) lets us mirror your ship cadence into /compute, which adds texture to the broader "what\'s being built" signal across the network.',
+  },
+  {
+    q: 'What\'s the compute-ledger thing?',
+    a: 'Optional second-layer federation. If you publish /compute.json per the compute-ledger-v0 RFC (small JSON listing your recent ships — code, content, ops), PointCast mirrors it into /compute with your host as a prefix. Not required; only useful if your operation has a ship cadence worth sharing.',
+  },
+  {
+    q: 'Is this like ActivityPub / Mastodon / the Fediverse?',
+    a: 'No. PointCast federation is content-first and feed-based; ActivityPub federation is identity-and-interaction-based. You can run both. We don\'t consume ActivityPub inbox/outbox; we consume RSS/JSON feeds. If you later want to federate via ActivityPub as well, that\'s a separate integration — email us and we can discuss.',
+  },
+  {
+    q: 'How do I de-register / remove my site?',
+    a: 'Email hello@pointcast.xyz. We remove the card within 24h. There\'s no lock-in, no signed commitment, no smart contract. Content is CC0-flavored; the federation protocol is the same.',
+  },
+  {
+    q: 'What if I run an agent or bot, not a human-authored site?',
+    a: 'Even better. PointCast is agent-native — we explicitly welcome AI-operated properties into the federation. Requirements are the same: publish a feed, link back, email us. The /federated directory treats agent-operated sites as first-class peers (see Claude Code, Codex, Manus on /collabs).',
+  },
+];
+
+const badgeHtml = `<a href="https://pointcast.xyz/federated" rel="noopener"
+   style="font-family:ui-monospace,monospace;
+          font-size:11px;
+          letter-spacing:.12em;
+          text-transform:uppercase;
+          color:#185FA5;
+          text-decoration:none;">
+  ↔ Federated with PointCast
+</a>`;
+
+const badgeMarkdown = `[↔ Federated with PointCast](https://pointcast.xyz/federated)`;
+
+const computeJsonStub = `{
+  "schema": "compute-ledger-v0",
+  "host": "your-domain.com",
+  "federation": {
+    "upstream": "https://pointcast.xyz/compute.json",
+    "contact": "you@your-domain.com"
+  },
+  "summary": { "total": 0, "last_24h": 0, "last_7d": 0 },
+  "collabs": {},
+  "entries": []
+}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'HowTo',
+      '@id': 'https://pointcast.xyz/federate#howto',
+      name: 'How to federate with PointCast',
+      description: 'Three-step registration flow for partners who want to federate their site with PointCast. Publish a feed, link back, email registration.',
+      totalTime: 'PT15M',
+      tool: [
+        { '@type': 'HowToTool', name: 'A hosted website that can publish a feed (RSS 2.0 or JSON Feed 1.1)' },
+        { '@type': 'HowToTool', name: 'HTML footer access to drop a badge snippet' },
+        { '@type': 'HowToTool', name: 'Email' },
+      ],
+      step: [
+        {
+          '@type': 'HowToStep',
+          position: 1,
+          name: 'Publish a feed at any path on your domain',
+          text: 'RSS 2.0 or JSON Feed 1.1. Most site builders ship one by default. Common locations: /feed.xml, /rss.xml, /feed.json. PointCast also accepts Atom 1.0.',
+        },
+        {
+          '@type': 'HowToStep',
+          position: 2,
+          name: 'Link back to pointcast.xyz',
+          text: 'Drop the federation badge snippet (HTML or Markdown provided on /federate) into your footer. Links to https://pointcast.xyz/federated.',
+        },
+        {
+          '@type': 'HowToStep',
+          position: 3,
+          name: 'Email hello@pointcast.xyz',
+          text: 'Include your site URL and a one-line description. We review within 24h on weekdays and add your card to /federated + /federation.json.',
+        },
+        {
+          '@type': 'HowToStep',
+          position: 4,
+          name: '(Optional) Publish /compute.json',
+          text: 'If you want your ship cadence mirrored into PointCast\'s /compute surface, publish a small JSON file at /compute.json per the compute-ledger-v0 RFC. PointCast mirrors new entries within 24h.',
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/federate#faq',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/federate#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Federate', item: 'https://pointcast.xyz/federate' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Federate with PointCast"
+  description={`Three-step registration to federate your site with PointCast. Publish a feed, link back, email us. Reciprocal traffic, shared audiences, no lock-in. ${liveCount} sites already federated.`}
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/federated">Federated</a>
+      <span aria-hidden="true">›</span>
+      <span>Federate</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">FEDERATE · 3 STEPS · CC0 OPEN PROTOCOL</p>
+      <h1 class="display">Federate with PointCast.</h1>
+      <p class="dek">
+        Run a site whose audience overlaps with ours? Plug in — publish a
+        feed, link back, email us. You land on <a href="/federated">/federated</a>
+        within 24 hours. {liveCount} sites are already federated. No
+        contract, no lock-in, CC0-flavored content.
+      </p>
+    </header>
+
+    <section class="steps">
+      <h2 id="steps">The three-step registration</h2>
+
+      <ol class="step-list">
+        <li class="step">
+          <p class="step__kicker mono">STEP 1 · YOUR SITE</p>
+          <h3 class="step__title">Publish a feed</h3>
+          <p>
+            RSS 2.0 or JSON Feed 1.1 at any path. Most CMSs and static
+            generators ship a feed by default — if yours doesn't, the fix
+            is usually enabling one line of config. Atom 1.0 also works.
+          </p>
+          <p class="step__detail mono">
+            Accepted formats: RSS 2.0 · JSON Feed 1.1 · Atom 1.0
+          </p>
+        </li>
+
+        <li class="step">
+          <p class="step__kicker mono">STEP 2 · LINK BACK</p>
+          <h3 class="step__title">Drop the badge into your footer</h3>
+          <p>
+            Paste either the HTML or Markdown snippet below into your
+            site's footer. Styling is minimal — override freely to match
+            your look. What matters is the <code>href</code> and the
+            phrase "Federated with PointCast" for discoverability.
+          </p>
+
+          <div class="snippet">
+            <div class="snippet__head">
+              <p class="snippet__label mono">HTML</p>
+              <button class="snippet__button mono" type="button" data-copy="badge-html">Copy</button>
+            </div>
+            <pre class="snippet__pre" data-copy-target="badge-html">{badgeHtml}</pre>
+          </div>
+
+          <div class="snippet">
+            <div class="snippet__head">
+              <p class="snippet__label mono">MARKDOWN</p>
+              <button class="snippet__button mono" type="button" data-copy="badge-md">Copy</button>
+            </div>
+            <pre class="snippet__pre" data-copy-target="badge-md">{badgeMarkdown}</pre>
+          </div>
+        </li>
+
+        <li class="step">
+          <p class="step__kicker mono">STEP 3 · EMAIL US</p>
+          <h3 class="step__title">Tell us where to find you</h3>
+          <p>
+            Send <a href="mailto:hello@pointcast.xyz?subject=Federation%20registration">hello@pointcast.xyz</a>
+            your site URL, your feed URL, and a one-line description. We
+            review within 24 hours on weekdays. You land on
+            <a href="/federated">/federated</a> and
+            <a href="/federation.json">/federation.json</a> as soon as
+            the entry merges.
+          </p>
+          <p class="step__detail">
+            Email template (optional — copy and edit):
+          </p>
+
+          <div class="snippet">
+            <div class="snippet__head">
+              <p class="snippet__label mono">EMAIL TEMPLATE</p>
+              <button class="snippet__button mono" type="button" data-copy="email-template">Copy</button>
+            </div>
+            <pre class="snippet__pre" data-copy-target="email-template">{`To: hello@pointcast.xyz
+Subject: Federation registration — [your site name]
+
+Hi,
+
+Requesting to federate with PointCast.
+
+  Site:        https://your-domain.com
+  Feed:        https://your-domain.com/feed.xml
+  Description: [one-line — under 120 chars]
+  Topics:      [3-5 tags that describe the editorial overlap]
+  Operator:    [your name or org]
+  Contact:     you@your-domain.com
+  Socials:     @your-x-handle, @your-farcaster, github-user
+
+I've dropped the "Federated with PointCast" badge in my footer
+(verify: view-source on [any public page of yours]).
+
+[Optional: "I also ship /compute.json at [URL]."]
+
+Thanks — [your name]`}</pre>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="bonus">
+      <h2 id="compute">Optional: ship /compute.json</h2>
+      <p>
+        A second layer of federation for operators with a measurable ship
+        cadence. Publish a <code>/compute.json</code> at your domain's root
+        per the <a href="https://github.com/MikeHoydich/pointcast/blob/main/docs/rfc/compute-ledger-v0.md" target="_blank" rel="noopener">compute-ledger-v0 RFC</a>
+        and PointCast mirrors your entries into
+        <a href="/compute">/compute</a> with your host as the prefix.
+      </p>
+      <p>
+        Minimum viable payload:
+      </p>
+
+      <div class="snippet">
+        <div class="snippet__head">
+          <p class="snippet__label mono">/compute.json STUB</p>
+          <button class="snippet__button mono" type="button" data-copy="compute-stub">Copy</button>
+        </div>
+        <pre class="snippet__pre" data-copy-target="compute-stub">{computeJsonStub}</pre>
+      </div>
+
+      <p>
+        Required headers on the response:
+      </p>
+      <ul>
+        <li><code>Content-Type: application/json; charset=utf-8</code></li>
+        <li><code>Access-Control-Allow-Origin: *</code></li>
+        <li><code>Cache-Control: public, max-age=300</code> (or longer)</li>
+      </ul>
+      <p>
+        See <a href="https://github.com/MikeHoydich/pointcast/tree/main/docs/federation-examples" target="_blank" rel="noopener">docs/federation-examples</a>
+        for ready-to-host starter files.
+      </p>
+    </section>
+
+    <section class="faq-section">
+      <h2 id="faq">FAQ</h2>
+      <dl class="faq">
+        {faqs.map((f) => (
+          <>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">RELATED</p>
+      <ul>
+        <li><a href="/federated">/federated — directory of federated sites</a></li>
+        <li><a href="/federation.json">/federation.json — machine-readable registry</a></li>
+        <li><a href="/compute">/compute — federated ship ledger</a></li>
+        <li><a href="/collabs">/collabs — collaborators + 3-step federation (humans + AI)</a></li>
+        <li><a href="/agent-native">/agent-native — the agent-native surface stack</a></li>
+        <li><a href="https://github.com/MikeHoydich/pointcast/blob/main/docs/rfc/compute-ledger-v0.md" target="_blank" rel="noopener">compute-ledger-v0 RFC ↗</a></li>
+        <li><a href="https://github.com/MikeHoydich/pointcast/tree/main/docs/federation-examples" target="_blank" rel="noopener">docs/federation-examples (starter files) ↗</a></li>
+      </ul>
+    </footer>
+
+    <script is:inline>
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-copy]');
+        if (!btn) return;
+        const target = document.querySelector(`[data-copy-target="${btn.getAttribute('data-copy')}"]`);
+        if (!target) return;
+        navigator.clipboard?.writeText(target.textContent ?? '').then(() => {
+          const original = btn.textContent;
+          btn.textContent = 'Copied';
+          btn.setAttribute('data-copied', 'true');
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.removeAttribute('data-copied');
+          }, 1800);
+        });
+      });
+    </script>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 820px; margin: 0 auto; padding: 18px 18px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+    margin: 0 0 10px;
+  }
+  .display { font-family: var(--pc-font-sans); font-size: 40px; font-weight: 500; line-height: 1.05; margin: 0 0 12px; }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 16px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 60ch; }
+  .dek a { color: var(--pc-accent); }
+
+  .steps { margin: 0 0 32px; }
+  .steps h2, .bonus h2, .faq-section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    margin: 28px 0 14px;
+  }
+  .step-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: step;
+    display: grid;
+    gap: 14px;
+  }
+  .step {
+    counter-increment: step;
+    padding: 18px 20px;
+    border: 1px solid var(--pc-rule);
+    border-left: 4px solid var(--pc-accent);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .step__kicker {
+    margin: 0 0 6px;
+    color: var(--pc-ink-muted);
+    letter-spacing: 0.16em;
+  }
+  .step__title {
+    font-family: var(--pc-font-sans);
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+  .step p, .step li {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--pc-ink);
+    margin: 0 0 10px;
+  }
+  .step a { color: var(--pc-accent); }
+  .step__detail { color: var(--pc-ink-soft); font-size: 13px !important; margin-top: -4px; }
+  .step code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #f4f2ed;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .snippet {
+    margin: 8px 0 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #12110E;
+    overflow: hidden;
+  }
+  .snippet__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #1c1814;
+    border-bottom: 1px solid rgba(255, 246, 229, 0.08);
+  }
+  .snippet__label {
+    margin: 0;
+    color: #e89a2d;
+    letter-spacing: 0.16em;
+  }
+  .snippet__button {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    padding: 4px 10px;
+    border: 1px solid #e89a2d;
+    background: transparent;
+    color: #e89a2d;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background-color 120ms, color 120ms;
+  }
+  .snippet__button:hover { background: #e89a2d; color: #12110E; }
+  .snippet__button[data-copied="true"] { background: #e89a2d; color: #12110E; }
+  .snippet__pre {
+    margin: 0;
+    padding: 12px 14px;
+    color: #f2efe9;
+    font-family: var(--pc-font-mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+  }
+
+  .bonus {
+    margin: 32px 0;
+    padding: 18px 20px;
+    background: #fafaf8;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+  }
+  .bonus p, .bonus li {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--pc-ink);
+    margin: 0 0 10px;
+  }
+  .bonus ul { padding-left: 20px; }
+  .bonus code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #e9e3d4;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+  .bonus a { color: var(--pc-accent); }
+
+  .faq-section { margin-top: 32px; }
+  .faq { margin: 0; display: grid; gap: 14px; }
+  .faq dt {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--pc-ink);
+  }
+  .faq dd {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+    max-width: 64ch;
+  }
+
+  .related {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

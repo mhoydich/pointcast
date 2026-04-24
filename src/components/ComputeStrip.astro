@@ -1,0 +1,169 @@
+---
+/**
+ * ComputeStrip — compact home-page readout of the compute ledger.
+ *
+ * Mike 2026-04-20 15:10 PT: *"this, lets federate compute."*
+ * (after Elad Gil's "compute is the new currency")
+ *
+ * One row on the home page. Shows: top-line total + last-24h + 3 newest
+ * ledger entries + a link to /compute for the full record. Stays quiet
+ * on mobile (condensed to the totals and one newest entry).
+ *
+ * Data flows from src/lib/compute-ledger.ts at build time — no client
+ * fetch, no hydration cost.
+ *
+ * Author: cc. Source: Mike 2026-04-20 15:10 PT chat.
+ */
+import {
+  COMPUTE_LEDGER,
+  recentEntries,
+  SIGNATURE_LABEL,
+  KIND_LABEL,
+} from '../lib/compute-ledger';
+import { findCollaborator } from '../lib/collaborators';
+
+const sorted = [...COMPUTE_LEDGER].sort(
+  (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+);
+const top3 = sorted.slice(0, 3);
+const last24h = recentEntries(24);
+
+function who(slug: string): string {
+  const c = findCollaborator(slug);
+  if (c) return c.name.replace('Claude Code', 'cc');
+  if (slug.includes(':')) return slug.split(':')[1];
+  return slug;
+}
+
+function fmtTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Los_Angeles',
+    }).format(d) + ' PT';
+  } catch {
+    return iso;
+  }
+}
+---
+
+<aside class="compute-strip" aria-label="Compute ledger · recent">
+  <p class="compute-strip__kicker mono">
+    <span class="compute-strip__label">COMPUTE</span>
+    <span class="compute-strip__sep" aria-hidden="true">·</span>
+    <span class="compute-strip__lede">
+      {COMPUTE_LEDGER.length} ships logged ·
+      {last24h.length} in the last 24h ·
+      federated ledger at <a href="/compute">/compute</a>
+    </span>
+  </p>
+  <ul class="compute-strip__rows mono">
+    {top3.map((e) => (
+      <li class={`compute-strip__row compute-strip__row--${e.signature}`}>
+        <span class="compute-strip__when">{fmtTime(e.at)}</span>
+        <span class="compute-strip__who">{who(e.collab)}</span>
+        <span class="compute-strip__kind">{KIND_LABEL[e.kind]}</span>
+        <span class="compute-strip__title">
+          {e.artifact ? (
+            <a href={e.artifact.startsWith('http') ? e.artifact : e.artifact}>{e.title}</a>
+          ) : (
+            e.title
+          )}
+        </span>
+        <span class="compute-strip__sig" title={`compute signature · ${SIGNATURE_LABEL[e.signature]}`}>{SIGNATURE_LABEL[e.signature]}</span>
+      </li>
+    ))}
+  </ul>
+  <p class="compute-strip__foot mono">
+    After Elad Gil 4/12: <em>compute is the new currency.</em>
+    PointCast publishes its own ledger openly + invites other nodes to
+    publish a compatible <a href="/compute.json"><code>/compute.json</code></a>.
+    <a href="/compute">Read the full spec →</a>
+  </p>
+</aside>
+
+<style>
+  .compute-strip {
+    margin: 14px 0 8px;
+    padding: 10px 14px 12px;
+    background: rgba(95, 61, 196, 0.04);
+    border: 1px solid rgba(95, 61, 196, 0.18);
+    border-left: 3px solid #5F3DC4;
+    border-radius: 2px;
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+  }
+  .compute-strip__kicker {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+    color: #3A1D8A;
+  }
+  .compute-strip__label { font-weight: 600; }
+  .compute-strip__sep { margin: 0 6px; opacity: 0.5; }
+  .compute-strip__lede { color: var(--pc-ink-soft, #38373A); text-transform: none; letter-spacing: 0; }
+  .compute-strip__lede a { color: #5F3DC4; text-decoration: underline; }
+
+  .compute-strip__rows { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 3px; }
+  .compute-strip__row {
+    display: grid;
+    grid-template-columns: 96px 120px 60px 1fr 66px;
+    gap: 10px;
+    font-size: 11px;
+    line-height: 1.45;
+    align-items: baseline;
+    color: var(--pc-ink-soft);
+    padding: 3px 0;
+    border-bottom: 1px dotted rgba(95, 61, 196, 0.16);
+  }
+  .compute-strip__row:last-child { border-bottom: none; }
+  .compute-strip__when { color: var(--pc-ink-muted, #5F5E5A); font-size: 10px; letter-spacing: 0.04em; }
+  .compute-strip__who { font-weight: 500; color: var(--pc-ink, #12110E); text-transform: none; letter-spacing: 0; font-family: var(--pc-font-sans, system-ui); font-size: 12px; }
+  .compute-strip__kind { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #5F3DC4; }
+  .compute-strip__title { font-family: var(--pc-font-sans, system-ui); font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--pc-ink-soft); }
+  .compute-strip__title a { color: inherit; text-decoration: underline; text-decoration-color: rgba(0,0,0,0.18); }
+  .compute-strip__title a:hover { color: #5F3DC4; text-decoration-color: currentColor; }
+  .compute-strip__sig { font-size: 10px; letter-spacing: 0.08em; text-align: right; color: var(--pc-ink-muted); }
+  .compute-strip__row--heavy .compute-strip__sig { color: #C92A2A; font-weight: 600; }
+  .compute-strip__row--healthy .compute-strip__sig { color: #E8590C; font-weight: 500; }
+
+  .compute-strip__foot {
+    margin: 6px 0 0;
+    font-size: 10.5px;
+    color: var(--pc-ink-muted);
+    line-height: 1.5;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .compute-strip__foot em { color: var(--pc-ink-soft); font-style: italic; }
+  .compute-strip__foot a { color: #5F3DC4; text-decoration: underline; }
+  .compute-strip__foot code {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    padding: 1px 4px;
+    background: rgba(95, 61, 196, 0.08);
+    border-radius: 2px;
+  }
+
+  @media (max-width: 680px) {
+    .compute-strip { padding: 10px 12px; }
+    .compute-strip__rows { gap: 6px; }
+    .compute-strip__row {
+      grid-template-columns: 1fr;
+      gap: 1px;
+      padding: 6px 0;
+    }
+    .compute-strip__when, .compute-strip__kind, .compute-strip__sig { font-size: 9.5px; }
+    .compute-strip__row { font-size: 12px; }
+    .compute-strip__row .compute-strip__title { font-size: 12.5px; }
+    /* Hide all but the first row on very small screens. */
+    .compute-strip__row:nth-child(n+2) { display: none; }
+  }
+</style>

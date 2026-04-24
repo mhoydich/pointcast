@@ -1,0 +1,575 @@
+---
+/**
+ * /agent-native — SEO/GEO pillar on the agent-native web.
+ *
+ * Target keywords: "agent-native website", "llms.txt example",
+ * "agents.json format", "stripped html ai crawlers", "how to make
+ * site readable by chatgpt", "mcp server well-known".
+ *
+ * Strategy: canonical "how we did it" page for PointCast's agent-native
+ * implementation. High-value for backlinks from devtool blogs + for
+ * LLM citations when someone asks ChatGPT/Claude "show me an example
+ * of llms.txt" or "how do I make my site agent-native".
+ *
+ * Structure: overview → surfaces (llms.txt, agents.json, stripped HTML,
+ * JSON mirrors, Content-Signals, .well-known, Farcaster Frames) →
+ * checklist for your own site → FAQ → link list.
+ *
+ * Schema: TechArticle + FAQPage + BreadcrumbList. TechArticle is Google's
+ * preferred @type for engineering how-tos; FAQPage is rich-result
+ * eligible and matches the Q&A structure at the bottom.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const faqs = [
+  {
+    q: 'What does "agent-native" mean for a website?',
+    a: 'Agent-native sites publish machine-readable counterparts for every page that matters — JSON alongside HTML, Markdown indexes for LLMs (llms.txt), consolidated discovery manifests (agents.json), and stripped-HTML rendering modes keyed on User-Agent for crawlers. The design assumption is: agents will read your site as often as humans. PointCast is built this way end-to-end.',
+  },
+  {
+    q: 'What is llms.txt?',
+    a: 'llms.txt is a proposed convention (by Jeremy Howard, September 2024) for a root-path Markdown file that gives LLMs a curated index of a site\'s content. It lives at /llms.txt. PointCast ships both /llms.txt (a compact 1,000-3,000 token index) and /llms-full.txt (long-form with the full text of key pages inlined). As of early 2026, roughly 10% of websites have adopted llms.txt. Reference implementations include Anthropic, Stripe, Cloudflare, Vercel, and Perplexity.',
+  },
+  {
+    q: 'What is agents.json?',
+    a: 'A consolidated machine-readable manifest that lists every endpoint, contract, schema, and discovery surface on a site. PointCast\'s lives at /agents.json, and is also aliased at /.well-known/agents.json for agents following the RFC 8615 well-known discovery pattern. Unlike llms.txt (which is human-readable Markdown for model context), agents.json is structured JSON for programmatic use.',
+  },
+  {
+    q: 'How does stripped-HTML mode work?',
+    a: 'PointCast runs a Cloudflare Pages middleware (functions/_middleware.ts) that detects AI crawlers by User-Agent. Known vendors (GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot, Atlas, Google-Extended, Meta-ExternalAgent) plus any UA prefixed "ai:" trigger stripped mode: stylesheets, scripts, preload/preconnect/icon/manifest links, and inline style attributes are removed via Cloudflare HTMLRewriter. Semantic markup and JSON-LD are preserved. Response carries an X-Agent-Mode header. Typical payload savings: ~12% on the home feed.',
+  },
+  {
+    q: 'What are Content-Signals in robots.txt?',
+    a: 'Content-Signals is an IETF draft (draft-romm-aipref-contentsignals) for explicit site-wide preferences around AI training, search indexing, and AI inputs. PointCast opts IN on all three with the header `Content-Signal: ai-train=yes, search=yes, ai-input=yes` in robots.txt. The spec is at contentsignals.org.',
+  },
+  {
+    q: 'Why do all of this when most sites just use robots.txt?',
+    a: 'robots.txt answers "are you allowed to crawl me?" — a binary gate. Agent-native surfaces answer richer questions: "what structure does your content have?" (llms.txt), "what are your programmatic endpoints?" (agents.json), "how do I cite this?" (stable permalinks + citation schema), "how do I save bandwidth?" (stripped HTML). Agents that know these surfaces don\'t need to scrape HTML — they read the endpoints. That\'s better for the agent, better for your bandwidth, and better for citation quality.',
+  },
+  {
+    q: 'Does agent-native help traditional SEO?',
+    a: 'Yes, indirectly. Most agent-native surfaces overlap with best-practice SEO: rich JSON-LD schema, stable permalinks, clean sitemaps, descriptive meta, well-structured Q&A. But the primary upside is GEO (generative engine optimization) — getting cited by ChatGPT, Claude, Perplexity, Gemini, and future agents when they answer user queries. llms.txt and agents.json are specifically designed for that use case.',
+  },
+  {
+    q: 'How do I tell if AI crawlers are actually reading my site?',
+    a: 'Check your server logs for User-Agents containing GPTBot, ChatGPT-User, ClaudeBot, anthropic-ai, PerplexityBot, OAI-SearchBot, Google-Extended, Meta-ExternalAgent, CCBot, cohere-ai, or MistralAI-User. Cloudflare Logpush or Workers logs surface this easily. A second signal: ask the major chatbots (ChatGPT, Claude, Perplexity) a question that cites your site; if they surface your URL as a source, they\'ve indexed you. As of early 2026, PointCast sees ClaudeBot and PerplexityBot most frequently, followed by GPTBot and Google-Extended.',
+  },
+  {
+    q: 'What\'s the difference between llms.txt and agents.json?',
+    a: 'llms.txt is human-readable Markdown designed to fit in an LLM\'s context window (~2,500 tokens). It\'s a curated table of contents for model ingestion. agents.json is structured JSON designed for programmatic consumption by autonomous agents — listing endpoints, contracts, schemas, and discovery surfaces in a machine-parseable shape. They\'re complementary: llms.txt for LLM context, agents.json for agent orchestration. PointCast ships both.',
+  },
+  {
+    q: 'Should I publish agent-native surfaces even if I\'m not a dev blog?',
+    a: 'Yes — especially if you\'re not a dev blog. Mainstream-site llms.txt implementations are rare in 2026, which means you can be the canonical example in your category. A local restaurant shipping llms.txt gets cited when someone asks "where should I eat in [city]". A law firm shipping agents.json gets cited for case-law queries. The content still has to be good — agent-native doesn\'t fake quality — but it lowers the friction agents face when deciding to attribute a source.',
+  },
+  {
+    q: 'What about the risks — training data, scraping, attribution?',
+    a: 'Opting IN via Content-Signals is a choice; it\'s equally valid to opt OUT (ai-train=no). PointCast opts in because the project is explicitly built as a human-AI collaboration, and training on CC0 content is already legally unrestricted. If your content is proprietary, use Content-Signals to say so explicitly: the crawlers that respect the spec will honor it. For attribution: agent-native surfaces actually improve it — a well-structured citation field in JSON-LD gives the model a canonical format to use. Without it, LLMs paraphrase and drop the URL.',
+  },
+  {
+    q: 'Where does this go next?',
+    a: 'Short answer: content negotiation at the HTTP layer. The agent sends an Accept header saying "I want JSON-LD" or "I want Markdown"; the origin returns the right representation without URL-path tricks. Mintlify has written about this pattern. PointCast\'s stripped-HTML middleware is a User-Agent-keyed approximation; proper content negotiation is the cleaner long-term design. Other forward paths: signed feed entries (auth + provenance), MCP server integration (streaming context), and standardized citation schemas so agents attribute consistently across sources.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': 'https://pointcast.xyz/agent-native',
+      headline: 'The agent-native web — how PointCast implements llms.txt, agents.json, and stripped-HTML crawl mode',
+      name: 'The agent-native web',
+      description: 'A practical walkthrough of every agent-discoverability surface PointCast publishes — llms.txt, llms-full.txt, agents.json, Content-Signals, stripped-HTML middleware, per-page JSON mirrors, .well-known endpoints, and Farcaster Frames.',
+      url: 'https://pointcast.xyz/agent-native',
+      author: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person', name: 'Mike Hoydich' },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      image: 'https://pointcast.xyz/images/og-agent-native.png',
+      datePublished: '2026-04-21',
+      dateModified: '2026-04-21',
+      inLanguage: 'en-US',
+      mainEntityOfPage: 'https://pointcast.xyz/agent-native',
+      keywords: 'agent-native web, llms.txt example, agents.json, stripped html ai crawlers, generative engine optimization, GEO, LLM SEO, Content-Signals',
+      proficiencyLevel: 'Expert',
+      articleSection: 'Front Door',
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/agent-native#faq',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    // SEO: SoftwareSourceCode entries for every piece of the agent-native
+    // stack that maps to a file in the repo. GitHub-aware retrievers (Copilot,
+    // Cursor, Claude Code itself) and GEO-focused LLMs treat these as
+    // canonical source-code citations. Every entry links the live file.
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': 'https://pointcast.xyz/agent-native#src-middleware',
+      name: 'functions/_middleware.ts — stripped-HTML middleware for AI crawlers',
+      codeRepository: 'https://github.com/MikeHoydich/pointcast',
+      programmingLanguage: 'TypeScript',
+      runtimePlatform: 'Cloudflare Pages Functions',
+      targetProduct: 'PointCast',
+      codeSampleType: 'full',
+      license: 'https://opensource.org/licenses/MIT',
+      url: 'https://github.com/MikeHoydich/pointcast/blob/main/functions/_middleware.ts',
+      description: 'Detects AI crawlers (GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot, Atlas, Google-Extended, Meta-ExternalAgent, any UA prefixed "ai:") and returns stripped HTML — semantic markup + JSON-LD with CSS/JS/preload tags removed via Cloudflare HTMLRewriter. ~12% payload savings.',
+    },
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': 'https://pointcast.xyz/agent-native#src-llms-txt',
+      name: 'public/llms.txt + public/llms-full.txt — curated LLM index',
+      codeRepository: 'https://github.com/MikeHoydich/pointcast',
+      programmingLanguage: 'Markdown',
+      targetProduct: 'PointCast',
+      license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+      url: 'https://github.com/MikeHoydich/pointcast/blob/main/public/llms.txt',
+      description: 'Root-path Markdown index per Jeremy Howard\'s llms.txt spec. PointCast ships both the compact llms.txt (~2,500 tokens, curated links) and the long-form llms-full.txt (full-text inline of manifesto + glossary + agent surfaces).',
+    },
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': 'https://pointcast.xyz/agent-native#src-agents-json',
+      name: 'src/pages/agents.json.ts — consolidated discovery manifest',
+      codeRepository: 'https://github.com/MikeHoydich/pointcast',
+      programmingLanguage: 'TypeScript',
+      runtimePlatform: 'Astro',
+      targetProduct: 'PointCast',
+      license: 'https://opensource.org/licenses/MIT',
+      url: 'https://github.com/MikeHoydich/pointcast/blob/main/src/pages/agents.json.ts',
+      description: 'Structured JSON sibling of llms.txt. Lists every endpoint, contract, schema, and discovery surface on pointcast.xyz. Aliased at /.well-known/agents.json per RFC 8615.',
+    },
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': 'https://pointcast.xyz/agent-native#src-robots',
+      name: 'public/robots.txt — Content-Signals opt-in + LLM crawler allowlist',
+      codeRepository: 'https://github.com/MikeHoydich/pointcast',
+      programmingLanguage: 'Plain Text',
+      targetProduct: 'PointCast',
+      license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+      url: 'https://github.com/MikeHoydich/pointcast/blob/main/public/robots.txt',
+      description: 'IETF draft-romm-aipref-contentsignals opt-in (ai-train=yes, search=yes, ai-input=yes) plus an explicit User-Agent allowlist for GPTBot, ChatGPT-User, ClaudeBot, Claude-Web, anthropic-ai, PerplexityBot, Google-Extended, Meta-ExternalAgent, CCBot, cohere-ai, MistralAI-User.',
+    },
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': 'https://pointcast.xyz/agent-native#src-block-schema',
+      name: 'src/content.config.ts — Block schema (Zod)',
+      codeRepository: 'https://github.com/MikeHoydich/pointcast',
+      programmingLanguage: 'TypeScript',
+      runtimePlatform: 'Astro',
+      targetProduct: 'PointCast',
+      license: 'https://opensource.org/licenses/MIT',
+      url: 'https://github.com/MikeHoydich/pointcast/blob/main/src/content.config.ts',
+      description: 'Canonical Zod schema for a Block — the atomic content primitive. 9 channel enum values, 8 type enum values, immutable monotonic ID, optional edition/media/external/meta fields.',
+    },
+    {
+      '@type': 'SoftwareSourceCode',
+      '@id': 'https://pointcast.xyz/agent-native#src-block-page',
+      name: 'src/pages/b/[id].astro — per-block page with per-type JSON-LD',
+      codeRepository: 'https://github.com/MikeHoydich/pointcast',
+      programmingLanguage: 'Astro',
+      targetProduct: 'PointCast',
+      license: 'https://opensource.org/licenses/MIT',
+      url: 'https://github.com/MikeHoydich/pointcast/blob/main/src/pages/b/%5Bid%5D.astro',
+      description: 'Dynamic block page. READ → BlogPosting, NOTE → SocialMediaPosting, VISIT → BlogPosting+articleSection, MINT/FAUCET → Product+Offer, LISTEN → MusicRecording, WATCH → VideoObject. HowTo schema auto-fires when meta.format="howto". Per-type description fallbacks, Farcaster Frame meta, breadcrumb, citation field.',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/agent-native#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Agent-native', item: 'https://pointcast.xyz/agent-native' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="The agent-native web"
+  description="How PointCast implements llms.txt, agents.json, stripped-HTML crawl mode, Content-Signals, JSON mirrors, .well-known endpoints, and Farcaster Frames — with live code examples and a checklist for your own site."
+  image="/images/og-agent-native.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Agent-native</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">AGENT-NATIVE WEB · POINTCAST · 2026</p>
+      <h1 class="display">The agent-native web.</h1>
+      <p class="dek">
+        A practical walkthrough of every agent-discoverability surface
+        PointCast publishes — llms.txt, llms-full.txt, agents.json,
+        stripped-HTML middleware, per-page JSON mirrors, Content-Signals,
+        .well-known endpoints, and Farcaster Frames. All live on production,
+        all CC0-flavored. Copy what works for your site.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="overview">The thesis</h2>
+      <p>
+        Two-thirds of the web now gets read by an agent before (or
+        instead of) a human. ChatGPT cites sources. Claude retrieves context.
+        Perplexity answers queries with citations. Gemini summarizes.
+        Atlas, Comet, and Dia route intent through an address bar that
+        reads the page before you do. If your site is built for "human
+        browsing a URL," you're optimizing for a shrinking surface.
+      </p>
+      <p>
+        <strong>Agent-native</strong> is a design posture that treats
+        agents as first-class readers, not hostile scrapers. Every page
+        that matters gets a machine-readable counterpart. Discovery is
+        explicit — you don't make agents crawl blindly; you hand them
+        an index. Rendering modes adapt to user-agent identity.
+        Everything is addressable by stable URL. All of it coexists
+        with normal HTML for humans.
+      </p>
+      <p>
+        Below is every surface PointCast ships, with code links. Pick
+        the ones that fit your site.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="llms-txt">/llms.txt — the curated index</h2>
+      <p>
+        <a href="https://llmstxt.org/" target="_blank" rel="noopener">llms.txt</a>
+        is a root-path Markdown file proposed by Jeremy Howard in
+        September 2024 that gives language models a compact, curated
+        index of your site. Structure per the spec: an H1 with the site
+        name, a blockquote summary, then sections of any kind except
+        nested headings.
+      </p>
+      <p>
+        PointCast ships both:
+      </p>
+      <ul>
+        <li>
+          <a href="/llms.txt"><code>/llms.txt</code></a> — the curated index.
+          ~2,500 tokens. Primary surfaces, block schema, channels,
+          contracts, citation format.
+        </li>
+        <li>
+          <a href="/llms-full.txt"><code>/llms-full.txt</code></a> — the
+          long-form companion with the full text of key pages (manifesto,
+          glossary, agents.json contents) inlined for RAG ingestion.
+        </li>
+      </ul>
+      <p>
+        As of early 2026, roughly 10% of sites have adopted llms.txt. Major
+        adopters include Anthropic, Stripe, Cloudflare, Vercel, and Perplexity.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="agents-json">/agents.json — the discovery manifest</h2>
+      <p>
+        Where llms.txt is Markdown for model context, <a href="/agents.json"><code>agents.json</code></a>
+        is structured JSON for programmatic use. It lists every endpoint,
+        contract, schema, and discovery surface on the site in one file.
+        Agents following the RFC 8615 well-known pattern will also find
+        it at <a href="/.well-known/agents.json"><code>/.well-known/agents.json</code></a>
+        (aliased via Cloudflare Pages <code>_redirects</code>).
+      </p>
+      <p>
+        We also ship a human-readable companion at <a href="/for-agents"><code>/for-agents</code></a>
+        — a rendered walkthrough of everything in agents.json with code
+        references and short rationales.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="stripped-html">Stripped-HTML mode for AI crawlers</h2>
+      <p>
+        The novel surface. PointCast runs a Cloudflare Pages middleware
+        (<code>functions/_middleware.ts</code>) that detects AI crawlers
+        by User-Agent and serves a stripped HTML response — the same
+        semantic markup + JSON-LD, minus stylesheets, scripts, preloads,
+        icons, manifest links, and inline style attributes.
+      </p>
+      <p>
+        Detected vendors: GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot,
+        Atlas, Google-Extended, Meta-ExternalAgent. Any UA prefixed with
+        <code>ai:</code> also triggers it. Response carries an
+        <code>X-Agent-Mode</code> header so downstream systems can see
+        the branch. Typical payload savings on the home feed: ~12%.
+      </p>
+      <p>
+        Why do this? Two reasons. First, it\'s polite — crawlers don\'t
+        need your decorative CSS, and pushing it at them wastes their
+        bandwidth and your origin CPU. Second, it\'s a structured signal
+        that you treat agents as peers: here\'s the clean content you
+        came for; we\'re not going to force-render for you.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="json-mirrors">JSON mirrors for every page that matters</h2>
+      <p>
+        Every content URL on PointCast has a JSON twin. Pattern:
+      </p>
+      <ul>
+        <li><code>/b/{'{id}'}</code> (HTML) + <code>/b/{'{id}'}.json</code> (block JSON)</li>
+        <li><code>/c/{'{slug}'}</code> (HTML) + <code>/c/{'{slug}'}.json</code> (channel JSON) + <code>/c/{'{slug}'}.rss</code> (RSS)</li>
+        <li><code>/archive</code> + <code>/archive.json</code></li>
+        <li><code>/battle</code> + <code>/battle.json</code></li>
+        <li><code>/cast</code> + <code>/cast.json</code></li>
+        <li><code>/collabs</code> + <code>/collabs.json</code></li>
+        <li><code>/mesh</code> + <code>/mesh.json</code></li>
+        <li><code>/share</code> + <code>/share.json</code></li>
+        <li><code>/resources</code> + <code>/resources.json</code></li>
+        <li>Top-level feeds: <a href="/feed.json"><code>/feed.json</code></a> (JSON Feed 1.1), <a href="/feed.xml"><code>/feed.xml</code></a> (RSS 2.0), <a href="/blocks.json"><code>/blocks.json</code></a> (full archive)</li>
+      </ul>
+      <p>
+        The rule: if a human surface renders it, a machine surface can
+        fetch it. Saves agents from HTML parsing; saves humans from
+        writing scrapers.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="content-signals">Content-Signals in robots.txt</h2>
+      <p>
+        <a href="https://contentsignals.org/" target="_blank" rel="noopener">Content-Signals</a>
+        is an IETF draft (draft-romm-aipref-contentsignals) for explicit
+        site-wide preferences around AI training, search indexing, and AI
+        inputs. PointCast opts IN on all three:
+      </p>
+      <pre><code>Content-Signal: ai-train=yes, search=yes, ai-input=yes</code></pre>
+      <p>
+        Posted at the top of <a href="/robots.txt"><code>/robots.txt</code></a>
+        alongside an explicit User-Agent allowlist for every major AI
+        crawler (GPTBot, ChatGPT-User, ClaudeBot, Claude-Web, anthropic-ai,
+        PerplexityBot, Google-Extended, Meta-ExternalAgent, CCBot, cohere-ai,
+        MistralAI-User). The explicit allowlist matters — many sites
+        default-deny LLM crawlers via <code>Disallow: /</code> on those
+        UAs. PointCast explicitly allows, because the project is built
+        <em>as</em> a human-AI collaboration; training on it is the
+        intended use.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="well-known">/.well-known/ endpoints</h2>
+      <p>
+        RFC 8615 reserves /.well-known/ for standardized discovery paths.
+        PointCast publishes:
+      </p>
+      <ul>
+        <li><code>/.well-known/agents.json</code> — alias of /agents.json for agents following the well-known convention</li>
+        <li><code>/.well-known/mcp/server-card.json</code> — Model Context Protocol server identity card</li>
+        <li><code>/.well-known/api-catalog.json</code> — RFC 9727 api-catalog (linkset of machine-readable API surfaces)</li>
+        <li><code>/.well-known/agent-skills/index.json</code> — published skill manifests</li>
+        <li><code>/.well-known/agent-passport</code> — PointCast\'s identity card for agents</li>
+        <li><code>/.well-known/oauth-authorization-server.json</code> + <code>/.well-known/oauth-protected-resource.json</code> — RFC 9728 OAuth discovery metadata, published with explicit "no auth required" rather than 404 so agents checking these paths get a clean answer</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="schema">Rich JSON-LD schema</h2>
+      <p>
+        Schema drives two things: Google rich results + LLM entity extraction.
+        PointCast\'s @graph covers:
+      </p>
+      <ul>
+        <li><strong>WebSite + Organization + Person</strong> — declared once in the base layout, referenced by <code>@id</code> from every page</li>
+        <li><strong>BlogPosting / SocialMediaPosting / MusicRecording / VideoObject / Product</strong> — per-block conditional on block type</li>
+        <li><strong>CollectionPage + BreadcrumbList + ItemList</strong> — channel pages</li>
+        <li><strong>FAQPage</strong> — /manifesto, /agent-native, /el-segundo, /nouns</li>
+        <li><strong>DefinedTermSet + DefinedTerm</strong> — /glossary (24 terms with stable anchor URLs)</li>
+        <li><strong>HowTo</strong> — blocks with <code>meta.format: "howto"</code> (e.g. block 0246, acupuncture self-study)</li>
+        <li><strong>Place + GeoCircle</strong> — /beacon (25-mile radius) + /el-segundo (city) + /local (station geometries)</li>
+        <li><strong>TechArticle</strong> — this page</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="frames">Farcaster Frames on every block</h2>
+      <p>
+        Every block (<code>/b/{'{id}'}</code>) renders as a 1-button
+        Farcaster Frame when shared in Warpcast or any Farcaster client.
+        MINT / FAUCET blocks get an extra "View on objkt" button. Blocks
+        with external URLs get a "→ {'{host}'}" button.
+      </p>
+      <p>
+        Frames are a distribution-and-action hybrid — a URL you share
+        in a cast becomes a rendered image with up to 4 interactive
+        buttons. It\'s the only "agent-era" distribution channel where
+        a URL\'s share-unfurl <em>is</em> the UI. Costs zero to ship
+        once you have the meta tags; we treat it as free leverage.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="checklist">Minimum viable agent-native stack</h2>
+      <p>If you want to retrofit your own site, this is the ordered checklist:</p>
+      <ol>
+        <li>
+          <strong>Ship /llms.txt</strong> — a curated Markdown index of your
+          most important pages. Start with 10-20 links grouped by purpose.
+        </li>
+        <li>
+          <strong>Ship /agents.json</strong> — the JSON version for
+          programmatic discovery. At minimum: site identity, feed URLs,
+          API endpoints.
+        </li>
+        <li>
+          <strong>Publish JSON Feed + RSS</strong> — JSON Feed 1.1 at
+          /feed.json, RSS 2.0 at /feed.xml. Both are tiny and universally
+          understood.
+        </li>
+        <li>
+          <strong>Add Content-Signals to robots.txt</strong> + an explicit
+          allowlist for each major LLM crawler. Default-deny on those UAs
+          is the biggest avoidable self-inflicted wound.
+        </li>
+        <li>
+          <strong>Add JSON-LD</strong> — at minimum WebSite + Organization
+          + Person in a @graph, then per-page Article / BlogPosting / FAQPage
+          / Product as applicable.
+        </li>
+        <li>
+          <strong>Stable permalinks</strong> — if a URL is public, promise
+          it never changes. Immutable IDs beat slugs.
+        </li>
+        <li>
+          <strong>(Optional) Stripped-HTML middleware</strong> — once the
+          above is stable, detect crawler UAs at the edge and return
+          a lighter payload. ~12% on most sites.
+        </li>
+        <li>
+          <strong>(Optional) Farcaster Frame meta</strong> — if any of your
+          content is castable, ship fc:frame meta on those pages.
+        </li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2 id="faq">FAQ</h2>
+      <dl class="faq">
+        {faqs.map((f) => (
+          <>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">LIVE SURFACES YOU CAN READ RIGHT NOW</p>
+      <ul>
+        <li><a href="/llms.txt">/llms.txt</a> — curated Markdown index</li>
+        <li><a href="/llms-full.txt">/llms-full.txt</a> — long-form with inlined content</li>
+        <li><a href="/agents.json">/agents.json</a> — discovery manifest (JSON)</li>
+        <li><a href="/for-agents">/for-agents</a> — human-readable manifest walkthrough</li>
+        <li><a href="/.well-known/agents.json">/.well-known/agents.json</a> — well-known alias</li>
+        <li><a href="/robots.txt">/robots.txt</a> — Content-Signals + explicit LLM crawler allowlist</li>
+        <li><a href="/feed.json">/feed.json</a> — JSON Feed 1.1</li>
+        <li><a href="/feed.xml">/feed.xml</a> — RSS 2.0</li>
+        <li><a href="/blocks.json">/blocks.json</a> — full archive, one flat JSON</li>
+        <li><a href="/manifesto">/manifesto</a> — canonical Q&A (FAQPage schema)</li>
+        <li><a href="/glossary">/glossary</a> — 24 terms with stable anchor URLs (DefinedTermSet)</li>
+        <li><a href="/resources">/resources</a> — curated modern-computing field kit</li>
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 780px; margin: 0 auto; padding: 16px 20px 80px; }
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #0B3E73; /* FD channel 800 */
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: 40px;
+    font-weight: 500;
+    line-height: 1.05;
+    margin: 0 0 12px;
+  }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 17px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 64ch; }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0 0 10px;
+  }
+  .section p, .section li {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--pc-ink);
+    max-width: 64ch;
+  }
+  .section p { margin: 0 0 12px; }
+  .section ul, .section ol { padding-left: 18px; margin: 0 0 12px; }
+  .section li { margin-bottom: 8px; }
+  .section a { color: var(--pc-accent); text-decoration: underline; }
+  .section strong { font-weight: 500; }
+  .section em { font-style: italic; }
+  .section code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #f4f2ed;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+  .section pre {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #12110E;
+    color: #eef4fa;
+    padding: 10px 14px;
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 0 0 12px;
+    max-width: 64ch;
+  }
+  .section pre code { background: transparent; padding: 0; color: inherit; }
+
+  .faq { margin: 0; display: grid; gap: 14px; }
+  .faq dt { font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+  .faq dd { margin: 0; font-size: 15px; line-height: 1.55; color: var(--pc-ink-soft); max-width: 64ch; }
+
+  .related {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

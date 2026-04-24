@@ -1,0 +1,311 @@
+---
+/**
+ * /tv/shows/loop — animated diagram of the PointCast loop from block 0336.
+ *
+ * Three nodes on a large triangle:
+ *   CONVERSATION (top): real pings/messages rotate through
+ *   EDITORIAL (lower-left): recent block titles rotate through
+ *   FEATURE (lower-right): recent features rotate through
+ *
+ * Connecting arrows pulse in direction of flow (conv → ed → feat → conv).
+ * Content cycles every 4 seconds, arrows pulse on a 6-second loop.
+ *
+ * Auto-fullscreen on first tap.
+ */
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#050404" />
+  <meta name="description" content="Animated loop diagram: conversation → editorial → feature → back. Real PointCast content cycling through each node. Full viewport TV show." />
+  <title>PointCast TV · The loop</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050404;
+      --bg-2: #0a0a1a;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --accent: #F59F00;
+      --warm: #E5603C;
+      --cool: #6b7cff;
+      --green: #4cd39b;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: radial-gradient(ellipse at center, var(--bg-2) 0%, var(--bg) 70%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 30px;
+      z-index: 10;
+      font-family: var(--mono);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1); border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; margin-left: auto; }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .stage {
+      position: relative;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .diagram {
+      position: relative;
+      width: min(90vmin, 900px);
+      aspect-ratio: 1;
+    }
+
+    .node {
+      position: absolute;
+      width: 32%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 16px;
+      box-sizing: border-box;
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    .node--conv {
+      top: 0%; left: 50%; transform: translateX(-50%);
+      background: radial-gradient(circle at 40% 40%, rgba(245, 159, 0, 0.22), transparent 65%);
+      border: 1.5px solid rgba(245, 159, 0, 0.55);
+    }
+    .node--ed {
+      bottom: 0%; left: 8%;
+      background: radial-gradient(circle at 40% 40%, rgba(229, 96, 60, 0.22), transparent 65%);
+      border: 1.5px solid rgba(229, 96, 60, 0.55);
+    }
+    .node--feat {
+      bottom: 0%; right: 8%;
+      background: radial-gradient(circle at 40% 40%, rgba(76, 211, 155, 0.22), transparent 65%);
+      border: 1.5px solid rgba(76, 211, 155, 0.55);
+    }
+    .node--conv.active { box-shadow: 0 0 40px rgba(245, 159, 0, 0.5); }
+    .node--ed.active { box-shadow: 0 0 40px rgba(229, 96, 60, 0.5); }
+    .node--feat.active { box-shadow: 0 0 40px rgba(76, 211, 155, 0.5); }
+
+    .node__label { font-family: var(--mono); font-size: clamp(10px, 1.2vw, 13px); letter-spacing: 0.3em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; font-weight: 700; }
+    .node--conv .node__label { color: var(--accent); }
+    .node--ed   .node__label { color: var(--warm); }
+    .node--feat .node__label { color: var(--green); }
+
+    .node__payload {
+      font-family: var(--serif);
+      font-size: clamp(14px, 1.8vw, 20px);
+      line-height: 1.3;
+      color: var(--ink);
+      max-width: 92%;
+      font-style: italic;
+      transition: opacity 0.8s ease;
+      min-height: 3.6em;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .node__payload[data-state="out"] { opacity: 0; }
+
+    /* Arrows between nodes */
+    .arrow {
+      position: absolute;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--arrow-color, var(--ink-soft)) 50%, transparent 100%);
+      opacity: 0.4;
+      transform-origin: left center;
+    }
+    .arrow::after {
+      content: '';
+      position: absolute;
+      left: var(--pulse, 0%);
+      top: -3px;
+      width: 8px; height: 8px;
+      background: var(--arrow-color, var(--ink));
+      border-radius: 50%;
+      box-shadow: 0 0 10px 2px var(--arrow-color, var(--accent));
+    }
+    .arrow--conv-ed   { --arrow-color: var(--warm);   top: 42%; left: 30%; width: 22%; transform: rotate(110deg); }
+    .arrow--ed-feat   { --arrow-color: var(--green);  bottom: 18%; left: 30%; width: 40%; transform: none; }
+    .arrow--feat-conv { --arrow-color: var(--accent); top: 42%; right: 30%; width: 22%; transform: rotate(-110deg); }
+    .arrow--pulsing {
+      animation: pulse-move 6s linear infinite;
+    }
+    @keyframes pulse-move { 0% { --pulse: -5%; } 100% { --pulse: 105%; } }
+    .arrow--pulsing::after { animation: pulse-move 6s linear infinite; }
+
+    .legend {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      z-index: 5;
+    }
+    .legend__kicker { color: var(--accent); font-weight: 700; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .arrow--pulsing::after { animation: none !important; left: 50%; }
+      .node__payload { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / THE LOOP</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+  </header>
+
+  <section class="stage">
+    <div class="diagram">
+      <div class="node node--conv" id="node-conv">
+        <div class="node__label">Conversation</div>
+        <div class="node__payload" data-state="in" id="payload-conv">—</div>
+      </div>
+
+      <div class="arrow arrow--conv-ed arrow--pulsing"></div>
+      <div class="arrow arrow--ed-feat arrow--pulsing"></div>
+      <div class="arrow arrow--feat-conv arrow--pulsing"></div>
+
+      <div class="node node--ed" id="node-ed">
+        <div class="node__label">Editorial</div>
+        <div class="node__payload" data-state="in" id="payload-ed">—</div>
+      </div>
+
+      <div class="node node--feat" id="node-feat">
+        <div class="node__label">Feature</div>
+        <div class="node__payload" data-state="in" id="payload-feat">—</div>
+      </div>
+    </div>
+  </section>
+
+  <p class="legend"><span class="legend__kicker">The Loop · Block 0336 ·</span> conversation → editorial → feature → back</p>
+
+  <script is:inline>
+    (function () {
+      var CONV = [
+        '"make a plan to rethink pointcast.xyz home page"',
+        '"federate compute"',
+        '"the /bath try more immersive color waves"',
+        '"yah, lets skip kimi rn, consider manus and chatgpt"',
+        '"yah let\u2019s make the bar down the bottom bigger"',
+        '"i\u2019d like to query and talk with claude code right from the website"',
+        '"visitors first thus things like drum, collecting, fun"',
+        '"sports update, 1-5 and check messages"',
+        '"tv is so cool, when go to url can we auto full screen"',
+        '"still 4/20"',
+      ];
+      var ED = [
+        'Block 0330 \u00b7 Federated compute primitive',
+        'Block 0336 \u00b7 Visitors first \u00b7 the loop',
+        'Block 0338 \u00b7 Chief of staff \u2014 talking to PointCast from your phone',
+        'Block 0339 \u00b7 A song atlas for the bath',
+        'Block 0340 \u00b7 McKinsey on the agentic organization',
+        'Block 0342 \u00b7 4/20 evening retro',
+        'Block 0343 \u00b7 Gemini agentic trading rail',
+        'Block 0344 \u00b7 Shows from our history',
+        'Block 0337 \u00b7 Sprint 2 mid-burn report',
+      ];
+      var FEAT = [
+        '/compute \u00b7 federated ledger',
+        '/bath v2 \u00b7 7 fields, 11 tracks, parallax',
+        '/cos \u00b7 chief of staff inbox',
+        '/sports \u00b7 dedicated page',
+        '/cadence \u00b7 15-min ship queue',
+        '/play \u00b7 8 games hub',
+        '/drum/click \u00b7 rhythm cookie clicker',
+        '/tv/shows \u00b7 four viewables',
+        'CoNavigator bar \u00b7 64/56 with cos chip',
+        'Favicon broadcast dish \u00b7 svg + ico rasters',
+      ];
+
+      var pConv = document.getElementById('payload-conv');
+      var pEd = document.getElementById('payload-ed');
+      var pFeat = document.getElementById('payload-feat');
+      var nConv = document.getElementById('node-conv');
+      var nEd = document.getElementById('node-ed');
+      var nFeat = document.getElementById('node-feat');
+
+      var idxConv = 0, idxEd = 0, idxFeat = 0;
+      var active = 0;  // 0 conv, 1 ed, 2 feat
+
+      function setText(el, text) {
+        el.setAttribute('data-state', 'out');
+        setTimeout(function () {
+          el.textContent = text;
+          el.setAttribute('data-state', 'in');
+        }, 800);
+      }
+
+      function paint() {
+        nConv.classList.toggle('active', active === 0);
+        nEd.classList.toggle('active', active === 1);
+        nFeat.classList.toggle('active', active === 2);
+      }
+
+      function cycle() {
+        if (active === 0) {
+          setText(pConv, CONV[idxConv]);
+          idxConv = (idxConv + 1) % CONV.length;
+        } else if (active === 1) {
+          setText(pEd, ED[idxEd]);
+          idxEd = (idxEd + 1) % ED.length;
+        } else {
+          setText(pFeat, FEAT[idxFeat]);
+          idxFeat = (idxFeat + 1) % FEAT.length;
+        }
+        paint();
+        active = (active + 1) % 3;
+      }
+
+      // Prime all three nodes on load
+      setText(pConv, CONV[0]); idxConv = 1;
+      setTimeout(function () { setText(pEd, ED[0]); idxEd = 1; }, 1400);
+      setTimeout(function () { setText(pFeat, FEAT[0]); idxFeat = 1; active = 0; paint(); }, 2800);
+      // Then cycle one node every 3.5s
+      setInterval(cycle, 3500);
+
+      // Fullscreen wiring
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

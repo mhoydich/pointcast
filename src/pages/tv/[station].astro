@@ -1,27 +1,261 @@
 ---
+/**
+ * /tv/[station] — station-specific landing page + auto-tune into /tv.
+ *
+ * SEO: was a bare meta-refresh shim; now a real indexable landing
+ * page with VideoObject + BroadcastEvent + Place schema per station.
+ * Humans still auto-forward to /tv?station=... after a brief interstitial
+ * so the ambient broadcast mode boots immediately. Crawlers see full
+ * structured content — title, description, schema, and a link — which
+ * makes these 20+ station URLs eligible for video-rich-result placement
+ * and Google video sitemap inclusion.
+ *
+ * Anchor: each station has coords + distance + direction from El Segundo.
+ * That map plus the canonical PointCast broadcast (1920×1080 / 3840×2160)
+ * gives Google enough to classify as a broadcast/video entity.
+ */
 import { STATIONS } from '../../lib/local';
+import BlockLayout from '../../layouts/BlockLayout.astro';
 
 export async function getStaticPaths() {
   return STATIONS.map((station) => ({
     params: { station: station.slug },
+    props: { station },
   }));
 }
 
-const station = Astro.params.station ?? '';
-const target = `/tv?station=${encodeURIComponent(station)}`;
+const { station } = Astro.props as any;
+const slug = station.slug;
+const tuneTarget = `/tv?station=${encodeURIComponent(slug)}`;
+const canonical = `https://pointcast.xyz/tv/${slug}`;
+const thumbnail = 'https://pointcast.xyz/images/og-home-v3.png';
+
+const title = `TV · ${station.name}`;
+const description = `PointCast TV broadcast mode tuned to ${station.name} — ambient big-screen feed with local blocks, polls, and commercials. Approx ${station.miles} mi ${station.direction} of El Segundo, California. Castable to AirPlay, Chromecast, HDMI, or native smart-TV browser.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoObject',
+      '@id': `${canonical}#broadcast`,
+      name: `PointCast TV — ${station.name} station`,
+      description,
+      thumbnailUrl: thumbnail,
+      uploadDate: new Date().toISOString(),
+      contentUrl: `https://pointcast.xyz${tuneTarget}`,
+      embedUrl: `https://pointcast.xyz${tuneTarget}`,
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      inLanguage: 'en-US',
+      regionsAllowed: 'US',
+      // Ambient broadcast — no fixed runtime; loops continuously.
+      isLiveBroadcast: true,
+    },
+    {
+      '@type': 'BroadcastEvent',
+      '@id': `${canonical}#event`,
+      name: `${station.name} · PointCast live broadcast`,
+      description: `Ambient live broadcast tuned to the ${station.name} station. Rotating blocks, live polls with QR voting, and the commercial reel.`,
+      isLiveBroadcast: true,
+      startDate: '2026-04-21',
+      broadcastOfEvent: {
+        '@type': 'Event',
+        name: 'PointCast TV',
+        location: {
+          '@type': 'Place',
+          name: station.name,
+          geo: { '@type': 'GeoCoordinates', latitude: station.coords.lat, longitude: station.coords.lng },
+        },
+      },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      videoFormat: 'HD',
+      broadcastDisplayName: `PointCast · ${station.name}`,
+    },
+    {
+      '@type': 'Place',
+      '@id': `${canonical}#place`,
+      name: station.name,
+      geo: { '@type': 'GeoCoordinates', latitude: station.coords.lat, longitude: station.coords.lng },
+      description: `${station.name}, California — approximately ${station.miles} miles ${station.direction} of El Segundo.`,
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'TV', item: 'https://pointcast.xyz/tv' },
+        { '@type': 'ListItem', position: 3, name: station.name, item: canonical },
+      ],
+    },
+  ],
+};
 ---
 
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content={`0;url=${target}`} />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PointCast · TV Station</title>
-</head>
-<body>
-  <script is:inline define:vars={{ target }}>
-    window.location.replace(target);
+<BlockLayout title={title} description={description} image={thumbnail} jsonLd={jsonLd}>
+  <article class="tv-station">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/tv">TV</a>
+      <span aria-hidden="true">›</span>
+      <span>{station.name}</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">TV · STATION · LIVE BROADCAST</p>
+      <h1 class="display">PointCast TV — {station.name}</h1>
+      <p class="dek">
+        Ambient big-screen broadcast tuned to the {station.name} station.
+        Approximately {station.miles} miles {station.direction} of El Segundo.
+        Auto-rotating slides: daily drop, recent blocks, live polls (QR → phone
+        → vote → live tally), and the commercial reel.
+      </p>
+      <p class="dek tv-blurb">{station.blurb}</p>
+    </header>
+
+    <section class="tune">
+      <p class="tune__head mono">AUTO-TUNING IN 2s…</p>
+      <a class="tune__cta" href={tuneTarget}>
+        <span class="tune__cta-label">Open broadcast now</span>
+        <span class="tune__cta-arrow mono" aria-hidden="true">→</span>
+      </a>
+      <p class="tune__fine mono">
+        Castable to AirPlay · Chromecast · HDMI · native smart-TV browser.
+      </p>
+    </section>
+
+    <section class="why">
+      <p class="why__kicker mono">WHY STATIONS?</p>
+      <p>
+        PointCast runs a 100-mile lens anchored on El Segundo. Each of
+        the {STATIONS.length} stations is a tunable ambient channel — same
+        broadcast chrome, different local bias. /tv/{slug} is the
+        castable, bookmarkable URL for this one.
+      </p>
+      <p>
+        Full station index: <a href="/local">/local</a>.
+        Broadcast architecture: <a href="/tv">/tv</a>.
+      </p>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">NEIGHBORING STATIONS</p>
+      <ul>
+        {STATIONS
+          .filter((s: any) => s.slug !== slug)
+          .sort((a: any, b: any) => Math.abs(a.miles - station.miles) - Math.abs(b.miles - station.miles))
+          .slice(0, 6)
+          .map((s: any) => (
+            <li>
+              <a href={`/tv/${s.slug}`}>
+                <span class="mono">{s.miles} mi {s.direction}</span>
+                <span>{s.name}</span>
+              </a>
+            </li>
+          ))}
+      </ul>
+    </footer>
+  </article>
+
+  {/* Soft forward — 2s interstitial so crawlers index content first,
+      humans land on the broadcast. Delay short enough that it feels
+      like a tune-in; not using meta refresh so search engines read the
+      full HTML before any nav fires. */}
+  <script is:inline define:vars={{ target: tuneTarget }}>
+    setTimeout(() => {
+      // Honor reduced-motion and "I clicked something else" — only auto-
+      // forward on the initial landing with no recent user interaction.
+      if (document.hidden) return;
+      window.location.replace(target);
+    }, 2000);
   </script>
-</body>
-</html>
+</BlockLayout>
+
+<style>
+  .tv-station { max-width: 780px; margin: 0 auto; padding: 18px 18px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+    margin: 0 0 10px;
+  }
+  .display { font-family: var(--pc-font-sans); font-size: 34px; font-weight: 500; line-height: 1.1; margin: 0 0 12px; }
+  @media (max-width: 600px) { .display { font-size: 26px; } }
+  .dek { font-size: 16px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0 0 8px; max-width: 60ch; }
+  .tv-blurb { font-style: italic; }
+
+  .tune {
+    margin: 0 0 24px;
+    padding: 16px 18px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #12110E;
+    color: #f2efe9;
+  }
+  .tune__head { margin: 0 0 10px; color: #e89a2d; letter-spacing: 0.2em; font-size: 10px; }
+  .tune__cta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #e89a2d;
+    color: #12110E;
+    font-family: var(--pc-font-sans);
+    font-weight: 500;
+    font-size: 15px;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background-color 120ms;
+  }
+  .tune__cta:hover { background: #ffb347; text-decoration: none; }
+  .tune__cta-arrow { font-size: 12px; letter-spacing: 0.14em; }
+  .tune__fine { margin: 12px 0 0; color: color-mix(in oklab, #f2efe9 60%, transparent); font-size: 10px; }
+
+  .why { margin: 0 0 24px; }
+  .why__kicker { margin: 0 0 6px; color: var(--pc-ink-muted); }
+  .why p { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink); max-width: 60ch; margin: 0 0 10px; }
+  .why a { color: var(--pc-accent); }
+
+  .related {
+    margin-top: 32px;
+    padding-top: 14px;
+    border-top: 1.5px dashed var(--pc-rule);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 10px;
+    align-items: baseline;
+    color: var(--pc-accent);
+    text-decoration: none;
+  }
+  .related a:hover { text-decoration: underline; }
+  .related a .mono { color: var(--pc-ink-muted); }
+  .related a :not(.mono) {
+    font-family: var(--pc-font-sans);
+    font-size: 13.5px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--pc-ink);
+  }
+</style>

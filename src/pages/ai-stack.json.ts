@@ -3,6 +3,7 @@
  * Same data as /ai-stack, structured for programmatic consumption.
  */
 import type { APIRoute } from 'astro';
+import { POINTCAST_IMAGE_GENERATOR } from '../lib/image-generation';
 
 const TOOLS = [
   { name: 'Claude',                  maker: 'Anthropic',      category: 'language-chat', tier: 'daily',      url: 'https://claude.ai' },
@@ -16,7 +17,7 @@ const TOOLS = [
   { name: 'Midjourney',              maker: 'Midjourney',     category: 'image',         tier: 'weekly',     url: 'https://midjourney.com' },
   { name: 'Ideogram',                maker: 'Ideogram AI',    category: 'image',         tier: 'weekly',     url: 'https://ideogram.ai' },
   { name: 'Flux',                    maker: 'Black Forest Labs', category: 'image',      tier: 'occasional', url: 'https://blackforestlabs.ai' },
-  { name: 'DALL-E / gpt-image',      maker: 'OpenAI',         category: 'image',         tier: 'occasional', url: 'https://chatgpt.com' },
+  { name: 'GPT Image 2',             maker: 'OpenAI',         category: 'image',         tier: 'occasional', url: 'https://chatgpt.com', model: POINTCAST_IMAGE_GENERATOR.model },
   { name: 'Runway',                  maker: 'Runway',         category: 'video',         tier: 'occasional', url: 'https://runwayml.com' },
   { name: 'Sora',                    maker: 'OpenAI',         category: 'video',         tier: 'watching',   url: 'https://sora.com' },
   { name: 'Kling',                   maker: 'Kuaishou',       category: 'video',         tier: 'occasional', url: 'https://klingai.com' },
@@ -44,11 +45,12 @@ export const GET: APIRoute = async () => {
     dailyCount: dailyTools.length,
     categoryCounts,
     tools: TOOLS,
+    imageGeneration: POINTCAST_IMAGE_GENERATOR,
     principles: [
       'Voice fit first — Claude reads like a colleague, ChatGPT reads like a product.',
       'Use the best model for the job, not the one in the subscription.',
       'Code needs tool-use, not just completion.',
-      'Image aesthetics ≠ image function — Midjourney for feel, Ideogram for text, Flux for photo.',
+      'Image aesthetics ≠ image function — Midjourney for feel, Ideogram for text, GPT Image 2 for precise PointCast prompts.',
       'Video is in its Sora-moment — experiment quarterly.',
       'Agents are a layer, not a product.',
     ],

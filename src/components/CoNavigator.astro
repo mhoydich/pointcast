@@ -31,9 +31,22 @@ import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 ---
 
-<aside class="conav" id="pc-conav" aria-label="PointCast co-navigator">
+<aside class="conav" id="pc-conav" aria-label="PointCast co-navigator" data-open="true">
+  <!-- When closed, only this tiny reopen chip shows. -->
+  <button type="button" class="conav__reopen mono" id="pc-conav-reopen" aria-label="Open co-navigator bar">
+    <span aria-hidden="true">📡</span>
+  </button>
+
   <div class="conav__bar">
     <div class="conav__left">
+      <button
+        type="button"
+        class="conav__noun"
+        id="pc-conav-noun-btn"
+        aria-label="Your noun — tap to shuffle or pick a new one"
+      >
+        <img class="conav__noun-img" id="pc-conav-noun-img" alt="" src="" loading="eager" />
+      </button>
       <button
         type="button"
         class="conav__mood"
@@ -42,9 +55,7 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
       >
         <span class="conav__mood-dot" id="pc-conav-mood-dot" aria-hidden="true"></span>
         <span class="conav__mood-label mono" id="pc-conav-mood-label">SET MOOD</span>
-        <span class="conav__mood-arrow mono" id="pc-conav-mood-arrow" aria-hidden="true">▸</span>
       </button>
-      <span class="conav__sep" aria-hidden="true"></span>
       <button
         type="button"
         class="conav__play"
@@ -53,7 +64,16 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
         hidden
       >
         <span class="conav__play-icon" aria-hidden="true">▶</span>
-        <span class="conav__play-label mono" id="pc-conav-play-label">SOUNDTRACK</span>
+      </button>
+      <button
+        type="button"
+        class="conav__collect"
+        id="pc-conav-collect"
+        aria-label="Collect this moment — noun + mood + listening + where"
+        title="Collect this moment (noun + mood + listening + where)"
+      >
+        <span class="conav__collect-icon" aria-hidden="true">✦</span>
+        <span class="conav__collect-label mono">COLLECT</span>
       </button>
     </div>
 
@@ -70,13 +90,93 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
         <span class="conav__stat-n mono" id="pc-conav-streak">·</span>
         <span class="conav__stat-l mono">streak</span>
       </span>
+      <span class="conav__stat" id="pc-conav-moments-wrap" hidden>
+        <span class="conav__stat-n mono" id="pc-conav-moments">·</span>
+        <span class="conav__stat-l mono">moments</span>
+      </span>
     </div>
 
     <nav class="conav__right" aria-label="Quick nav">
       <a class="conav__link mono" href="/here">here</a>
-      <a class="conav__link mono" href="/workbench">workbench</a>
-      <a class="conav__link mono" href="/drop">drop</a>
+      <a class="conav__link mono" href="/drum/click" title="Drum — cookie clicker">drum</a>
+      <a class="conav__link conav__link--noundrum mono" href="/noundrum" title="Noundrum — drum to claim land, make art">
+        <span class="conav__link-icon" aria-hidden="true">🥁</span><span class="conav__link-text">nd</span>
+      </a>
+      <a class="conav__link conav__link--ping mono" href="/ping" title="Ping — message the team">
+        <span class="conav__link-icon" aria-hidden="true">✎</span><span class="conav__link-text">ping</span>
+      </a>
+      <a class="conav__link conav__link--contribute mono" href="/contribute" title="Contribute compute">
+        <span class="conav__link-icon" aria-hidden="true">✦</span><span class="conav__link-text">+compute</span>
+      </a>
+      <button type="button" class="conav__link conav__link--cast mono" id="pc-conav-cast" title="Cast this page to Farcaster / share">
+        <span class="conav__link-icon" aria-hidden="true">↗</span><span class="conav__link-text">cast</span>
+      </button>
+      <a class="conav__link conav__link--cos mono" href="/cos" title="Chief of Staff — chat the team">cos</a>
+      <a class="conav__link mono" href="/tv" title="TV — ambient broadcast + 12 shows">tv</a>
+      <a class="conav__link mono" href="/profile">me</a>
     </nav>
+
+    <button type="button" class="conav__close" id="pc-conav-close-bar" aria-label="Close co-navigator bar (can reopen)" title="Close bar">×</button>
+  </div>
+
+  <!-- Mood picker popover, opens above the bar when the mood chip is tapped
+       and no mood is set yet. Per Mike 2026-04-20 ~15:00 PT: "have this
+       [mood] in the bar, and then once you select it goes away". Selection
+       closes the popover + drops the mood chip into its "chosen" state. -->
+  <div class="conav__mood-picker" id="pc-conav-mood-picker" hidden>
+    <p class="conav__mood-picker-title mono">
+      <span>pick a mood · page + music follow</span>
+      <button type="button" class="conav__mood-picker-close mono" id="pc-conav-mood-picker-close" aria-label="Close picker">×</button>
+    </p>
+    <div class="conav__mood-picker-row" id="pc-conav-mood-picker-row">
+      <button type="button" class="conav__mood-opt" data-mood-id="chill"   style="--m: #2B8A3E">
+        <span class="conav__mood-opt-dot" aria-hidden="true"></span>
+        <span class="conav__mood-opt-l mono">CHILL</span>
+        <span class="conav__mood-opt-h">slow + calm</span>
+      </button>
+      <button type="button" class="conav__mood-opt" data-mood-id="hype"    style="--m: #C92A2A">
+        <span class="conav__mood-opt-dot" aria-hidden="true"></span>
+        <span class="conav__mood-opt-l mono">HYPE</span>
+        <span class="conav__mood-opt-h">on the rise</span>
+      </button>
+      <button type="button" class="conav__mood-opt" data-mood-id="focus"   style="--m: #1864AB">
+        <span class="conav__mood-opt-dot" aria-hidden="true"></span>
+        <span class="conav__mood-opt-l mono">FOCUS</span>
+        <span class="conav__mood-opt-h">in the work</span>
+      </button>
+      <button type="button" class="conav__mood-opt" data-mood-id="flow"    style="--m: #5F3DC4">
+        <span class="conav__mood-opt-dot" aria-hidden="true"></span>
+        <span class="conav__mood-opt-l mono">FLOW</span>
+        <span class="conav__mood-opt-h">on tempo</span>
+      </button>
+      <button type="button" class="conav__mood-opt" data-mood-id="curious" style="--m: #E8590C">
+        <span class="conav__mood-opt-dot" aria-hidden="true"></span>
+        <span class="conav__mood-opt-l mono">CURIOUS</span>
+        <span class="conav__mood-opt-h">following a thread</span>
+      </button>
+      <button type="button" class="conav__mood-opt" data-mood-id="quiet"   style="--m: #5F5E5A">
+        <span class="conav__mood-opt-dot" aria-hidden="true"></span>
+        <span class="conav__mood-opt-l mono">QUIET</span>
+        <span class="conav__mood-opt-h">under the noise</span>
+      </button>
+    </div>
+    <p class="conav__mood-picker-foot mono">
+      once picked, the page tints + the soundtrack follows you.
+      change anytime via this chip.
+    </p>
+  </div>
+
+  <!-- Noun picker popover, opens above the bar when the noun chip is tapped. -->
+  <div class="conav__noun-picker" id="pc-conav-noun-picker" hidden>
+    <p class="conav__noun-picker-title mono">
+      <span id="pc-conav-noun-picker-current">noun —</span>
+      <button type="button" class="conav__noun-picker-close mono" id="pc-conav-noun-picker-close" aria-label="Close picker">×</button>
+    </p>
+    <div class="conav__noun-picker-row" id="pc-conav-noun-picker-row"></div>
+    <div class="conav__noun-picker-actions">
+      <button type="button" class="conav__noun-picker-btn mono" id="pc-conav-noun-shuffle">↺ SHUFFLE</button>
+      <button type="button" class="conav__noun-picker-btn mono" id="pc-conav-noun-reset">DEFAULT</button>
+    </div>
   </div>
 
   <div class="conav__drawer" id="pc-conav-drawer" hidden data-soundtracks={SOUNDTRACKS_JSON}>
@@ -218,10 +318,67 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
         .catch(() => {});
     }
 
+    // ---------- mood picker popover (inline mood selection) --------------
+    const moodPicker = qid<HTMLElement>('pc-conav-mood-picker');
+    const moodPickerClose = qid<HTMLButtonElement>('pc-conav-mood-picker-close');
+    const moodPickerRow = qid<HTMLElement>('pc-conav-mood-picker-row');
+
+    const MOOD_HUES: Record<string, number> = {
+      chill: 155, hype: 8, focus: 215, flow: 275, curious: 28, quiet: 220,
+    };
+
+    function openMoodPicker() {
+      if (moodPicker) moodPicker.hidden = false;
+      // Close the other popover if open.
+      if (picker && !picker.hidden) picker.hidden = true;
+    }
+    function closeMoodPicker() {
+      if (moodPicker) moodPicker.hidden = true;
+    }
+
+    function meditativePulse(id: string) {
+      try {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      } catch {}
+      const hue = MOOD_HUES[id] ?? 28;
+      const overlay = document.createElement('div');
+      overlay.className = 'mood-pulse';
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.setProperty('--mood-hue', String(hue));
+      document.body.appendChild(overlay);
+      setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 1800);
+    }
+
+    function selectMood(id: string) {
+      try { localStorage.setItem(LS_MOOD, id); } catch {}
+      document.documentElement.setAttribute('data-pc-mood', id);
+      paintMood(id);
+      meditativePulse(id);
+      try { window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: id } })); } catch {}
+      closeMoodPicker();
+    }
+
+    if (moodPickerRow) {
+      Array.prototype.forEach.call(moodPickerRow.querySelectorAll('.conav__mood-opt'), (el: Element) => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-mood-id');
+          if (id) selectMood(id);
+        });
+      });
+    }
+    if (moodPickerClose) moodPickerClose.addEventListener('click', closeMoodPicker);
+
     // ---------- wiring --------------------------------------------------
     if (moodBtn) moodBtn.addEventListener('click', () => {
       const id = getMood();
-      if (!id) { window.location.href = '/#mood'; return; }
+      if (!id) {
+        // No mood yet — open the picker inline. Per Mike 2026-04-20 15:00 PT:
+        // "have this in the bar, and then once you select it goes away."
+        if (moodPicker && moodPicker.hidden) openMoodPicker();
+        else closeMoodPicker();
+        return;
+      }
+      // Mood set: tap toggles the soundtrack drawer.
       if (drawer && drawer.hidden) openDrawer(id);
       else closeDrawer();
     });
@@ -256,8 +413,200 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
       } catch {}
     }
 
+    // ---------- noun chip + picker --------------------------------------
+    const nounBtn = qid<HTMLButtonElement>('pc-conav-noun-btn');
+    const nounImg = qid<HTMLImageElement>('pc-conav-noun-img');
+    const picker = qid<HTMLElement>('pc-conav-noun-picker');
+    const pickerClose = qid<HTMLButtonElement>('pc-conav-noun-picker-close');
+    const pickerCurrent = qid<HTMLElement>('pc-conav-noun-picker-current');
+    const pickerRow = qid<HTMLElement>('pc-conav-noun-picker-row');
+    const shuffleBtn = qid<HTMLButtonElement>('pc-conav-noun-shuffle');
+    const resetBtn = qid<HTMLButtonElement>('pc-conav-noun-reset');
+
+    const LS_NOUN_OVERRIDE = 'pc:visitor:noun:override';
+    const LS_NOUN = 'pc:visitor:noun';
+    const LS_SESSION = 'pc:session';
+
+    function cheapHash(s: string): number {
+      let h = 5381;
+      for (let i = 0; i < s.length; i++) h = (((h << 5) + h) + s.charCodeAt(i)) | 0;
+      return h >>> 0;
+    }
+    function deriveNounId(): number {
+      try {
+        const sid = localStorage.getItem(LS_SESSION) || '';
+        if (!sid) return 0;
+        return cheapHash(sid) % 1200;
+      } catch { return 0; }
+    }
+    function currentNounId(): number {
+      try {
+        const override = localStorage.getItem(LS_NOUN_OVERRIDE);
+        if (override) {
+          const n = parseInt(override, 10);
+          if (n >= 0 && n < 1200) return n;
+        }
+        const stored = localStorage.getItem(LS_NOUN);
+        if (stored) {
+          const n = parseInt(stored, 10);
+          if (n >= 0 && n < 1200) return n;
+        }
+      } catch {}
+      return deriveNounId();
+    }
+    function paintNoun() {
+      const id = currentNounId();
+      if (nounImg) {
+        nounImg.src = 'https://noun.pics/' + id + '.svg';
+        nounImg.alt = 'your noun · ' + id;
+      }
+      if (pickerCurrent) pickerCurrent.textContent = 'YOUR NOUN · ' + id;
+    }
+    function paintPickerRow() {
+      if (!pickerRow) return;
+      const current = currentNounId();
+      const pool = [];
+      // 6 random options + current.
+      const seen: Record<number, boolean> = { [current]: true };
+      pool.push(current);
+      while (pool.length < 7) {
+        const n = Math.floor(Math.random() * 1200);
+        if (!seen[n]) { seen[n] = true; pool.push(n); }
+      }
+      pickerRow.innerHTML = pool.map((n) => {
+        const activeCls = (n === current) ? ' conav__noun-opt--current' : '';
+        return '<button type="button" class="conav__noun-opt' + activeCls + '" data-noun-id="' + n + '" aria-label="Use noun ' + n + '"><img src="https://noun.pics/' + n + '.svg" alt="" loading="lazy" width="36" height="36" style="image-rendering: pixelated;"/></button>';
+      }).join('');
+      Array.prototype.forEach.call(pickerRow.querySelectorAll('.conav__noun-opt'), function (el: Element) {
+        el.addEventListener('click', function () {
+          const id = parseInt(el.getAttribute('data-noun-id') || '0', 10);
+          if (id >= 0 && id < 1200) {
+            try { localStorage.setItem(LS_NOUN_OVERRIDE, String(id)); } catch {}
+            try { localStorage.setItem(LS_NOUN, String(id)); } catch {}
+            paintNoun();
+            paintPickerRow();
+          }
+        });
+      });
+    }
+    function openPicker() {
+      if (picker) picker.hidden = false;
+      paintPickerRow();
+    }
+    function closePicker() { if (picker) picker.hidden = true; }
+    if (nounBtn) nounBtn.addEventListener('click', () => {
+      if (picker && picker.hidden) openPicker();
+      else closePicker();
+    });
+    if (pickerClose) pickerClose.addEventListener('click', closePicker);
+    if (shuffleBtn) shuffleBtn.addEventListener('click', () => {
+      const n = Math.floor(Math.random() * 1200);
+      try { localStorage.setItem(LS_NOUN_OVERRIDE, String(n)); } catch {}
+      try { localStorage.setItem(LS_NOUN, String(n)); } catch {}
+      paintNoun();
+      paintPickerRow();
+    });
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+      try { localStorage.removeItem(LS_NOUN_OVERRIDE); } catch {}
+      // Keep pc:visitor:noun as derived.
+      try { localStorage.setItem(LS_NOUN, String(deriveNounId())); } catch {}
+      paintNoun();
+      paintPickerRow();
+    });
+
+    // ---------- collect moment ------------------------------------------
+    const collectBtn = qid<HTMLButtonElement>('pc-conav-collect');
+    const momentsWrap = qid<HTMLElement>('pc-conav-moments-wrap');
+    const momentsEl = qid<HTMLElement>('pc-conav-moments');
+    const LS_MOMENTS = 'pc:moments';
+
+    function readMoments(): Array<Record<string, unknown>> {
+      try {
+        const raw = localStorage.getItem(LS_MOMENTS);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch { return []; }
+    }
+    function writeMoments(arr: Array<Record<string, unknown>>): void {
+      try { localStorage.setItem(LS_MOMENTS, JSON.stringify(arr.slice(-200))); } catch {}
+    }
+    function paintMoments() {
+      const arr = readMoments();
+      if (momentsWrap) momentsWrap.hidden = arr.length === 0;
+      if (momentsEl) momentsEl.textContent = String(arr.length);
+    }
+    if (collectBtn) collectBtn.addEventListener('click', () => {
+      let mood = null, listening = null, where = null;
+      try { mood = localStorage.getItem('pc:mood') || localStorage.getItem('pc:visitor:mood'); } catch {}
+      try { listening = localStorage.getItem('pc:visitor:listening'); } catch {}
+      try { where = localStorage.getItem('pc:visitor:where'); } catch {}
+      const moment = {
+        at: new Date().toISOString(),
+        path: window.location.pathname,
+        nounId: currentNounId(),
+        mood: mood,
+        listening: listening,
+        where: where,
+      };
+      const next = readMoments();
+      next.push(moment);
+      writeMoments(next);
+      paintMoments();
+      // Flash the collect button so the user sees the save.
+      collectBtn.classList.add('conav__collect--saved');
+      setTimeout(() => collectBtn.classList.remove('conav__collect--saved'), 1200);
+    });
+
+    // ---------- close / reopen bar --------------------------------------
+    const conav = qid<HTMLElement>('pc-conav');
+    const closeBarBtn = qid<HTMLButtonElement>('pc-conav-close-bar');
+    const reopenBtn = qid<HTMLButtonElement>('pc-conav-reopen');
+    const LS_CLOSED = 'pc:conav:closed';
+    function paintOpenState() {
+      if (!conav) return;
+      let closed = false;
+      try { closed = localStorage.getItem(LS_CLOSED) === '1'; } catch {}
+      conav.setAttribute('data-open', closed ? 'false' : 'true');
+    }
+    if (closeBarBtn) closeBarBtn.addEventListener('click', () => {
+      try { localStorage.setItem(LS_CLOSED, '1'); } catch {}
+      // Close any open drawer / picker first.
+      closeDrawer(); closePicker(); closeMoodPicker();
+      paintOpenState();
+    });
+    if (reopenBtn) reopenBtn.addEventListener('click', () => {
+      try { localStorage.setItem(LS_CLOSED, '0'); } catch {}
+      paintOpenState();
+    });
+
+    // ---------- cast (share to Farcaster / copy-link fallback) ----------
+    // Opens warpcast.com/~/compose with the current page URL + a short
+    // lead so any Farcaster user can cast the page in one tap. Falls back
+    // to clipboard copy on non-mobile when Warpcast isn't installed.
+    const castBtn = qid<HTMLButtonElement>('pc-conav-cast');
+    if (castBtn) castBtn.addEventListener('click', async () => {
+      const url = window.location.href;
+      const titleEl = document.querySelector('meta[property="og:title"]') as HTMLMetaElement | null;
+      const pageTitle = (titleEl && titleEl.content) || document.title || 'PointCast';
+      const text = `${pageTitle} — ${url}`;
+      // Prefer native share (mobile + recent desktop Safari/Chrome).
+      const nav = navigator as Navigator & { share?: (data: { title?: string; text?: string; url?: string }) => Promise<void> };
+      if (nav.share) {
+        try { await nav.share({ title: pageTitle, text: pageTitle, url }); return; } catch {}
+      }
+      // Fallback: open warpcast compose.
+      const castUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}&embeds[]=${encodeURIComponent(url)}`;
+      window.open(castUrl, '_blank', 'noopener');
+    });
+
+    // ---------- full hydrate ----------
+    paintNoun();
+    paintMoments();
+    paintOpenState();
+
     hydrate();
-    document.addEventListener('astro:page-load', hydrate);
+    document.addEventListener('astro:page-load', () => { hydrate(); paintNoun(); paintMoments(); paintOpenState(); });
   }
 
   if (document.readyState === 'loading') {
@@ -265,6 +614,114 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
   } else {
     init();
   }
+
+  // ---- WebMCP — expose PointCast tools to browser AI agents ----------
+  // Per isitagentready.com 2026-04-20 audit: implement
+  // navigator.modelContext.provideContext() so in-browser agents
+  // (Chrome with the Gemini/Claude extension, etc.) can discover +
+  // invoke PointCast's key actions without scraping the DOM.
+  // Docs: webmachinelearning.github.io/webmcp + developer.chrome.com/blog/webmcp-epp
+  function registerWebMCP() {
+    const nav = navigator as Navigator & {
+      modelContext?: {
+        provideContext?: (ctx: { tools?: Array<Record<string, unknown>> }) => void;
+      };
+    };
+    if (!nav.modelContext || typeof nav.modelContext.provideContext !== 'function') return;
+    try {
+      nav.modelContext.provideContext({
+        tools: [
+          {
+            name: 'pointcast.ping',
+            description: 'Send an async message to the PointCast team (Mike + Claude Code). Optional expand:true turns the message into a topic cc drafts a block from on the next session.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                body: { type: 'string', description: 'The message body, up to 4000 chars.', maxLength: 4000 },
+                subject: { type: 'string', description: 'Optional one-line subject.', maxLength: 120 },
+                from: { type: 'string', description: 'Optional sender name / handle.', maxLength: 80 },
+                expand: { type: 'boolean', description: 'If true, cc drafts a block from this seed.', default: false },
+              },
+              required: ['body'],
+            },
+            execute: async (input: Record<string, unknown>) => {
+              const res = await fetch('/api/ping', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'pc-ping-v1',
+                  body: String(input.body || ''),
+                  subject: input.subject ? String(input.subject) : undefined,
+                  from: input.from ? String(input.from) : undefined,
+                  expand: Boolean(input.expand),
+                  timestamp: new Date().toISOString(),
+                }),
+              });
+              return res.json();
+            },
+          },
+          {
+            name: 'pointcast.setMood',
+            description: 'Set the visitor\'s current mood (tints the page + plays a soundtrack via the persistent CoNavigator bar). One of: chill, hype, focus, flow, curious, quiet.',
+            inputSchema: {
+              type: 'object',
+              properties: { mood: { type: 'string', enum: ['chill', 'hype', 'focus', 'flow', 'curious', 'quiet'] } },
+              required: ['mood'],
+            },
+            execute: async (input: Record<string, unknown>) => {
+              const m = String(input.mood || '');
+              const valid = ['chill', 'hype', 'focus', 'flow', 'curious', 'quiet'];
+              if (!valid.includes(m)) return { ok: false, error: 'unknown mood' };
+              try { localStorage.setItem('pc:mood', m); } catch {}
+              document.documentElement.setAttribute('data-pc-mood', m);
+              window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: m } }));
+              return { ok: true, mood: m };
+            },
+          },
+          {
+            name: 'pointcast.collectMoment',
+            description: 'Collect the current moment — saves {nounId, mood, listening, where, path, at} to local moments list.',
+            inputSchema: { type: 'object', properties: {} },
+            execute: async () => {
+              const btn = document.getElementById('pc-conav-collect') as HTMLButtonElement | null;
+              if (btn) btn.click();
+              return { ok: true, note: 'Moment collected to pc:moments localStorage.' };
+            },
+          },
+          {
+            name: 'pointcast.presenceSnapshot',
+            description: 'Get live count of humans + agents connected to the PointCast presence Durable Object.',
+            inputSchema: { type: 'object', properties: {} },
+            execute: async () => {
+              const res = await fetch('/api/presence/snapshot', { cache: 'no-store' });
+              return res.ok ? res.json() : { ok: false };
+            },
+          },
+          {
+            name: 'pointcast.readLedger',
+            description: 'Read the compute ledger — who did what, how heavy, optionally paid via what rail.',
+            inputSchema: { type: 'object', properties: {} },
+            execute: async () => {
+              const res = await fetch('/compute.json');
+              return res.ok ? res.json() : { ok: false };
+            },
+          },
+          {
+            name: 'pointcast.readCadence',
+            description: 'Read the 15-minute ship cadence schedule (upcoming + recent).',
+            inputSchema: { type: 'object', properties: {} },
+            execute: async () => {
+              const res = await fetch('/cadence.json');
+              return res.ok ? res.json() : { ok: false };
+            },
+          },
+        ],
+      });
+    } catch {}
+  }
+  registerWebMCP();
+  // Re-register on Astro soft-nav so ClientRouter transitions don't drop context.
+  document.addEventListener('astro:page-load', registerWebMCP);
 })();
 </script>
 
@@ -284,14 +741,14 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 8px 14px;
+    gap: 12px;
+    padding: 12px 18px;
     background: #12110e;
     color: #f3e6d8;
-    border-top: 1px solid rgba(232, 154, 45, 0.24);
-    box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, 0.3);
-    min-height: 48px;
-    font-size: 12px;
+    border-top: 1px solid rgba(232, 154, 45, 0.32);
+    box-shadow: 0 -10px 24px -10px rgba(0, 0, 0, 0.4);
+    min-height: 64px;
+    font-size: 13px;
   }
   .conav__left, .conav__mid, .conav__right {
     display: flex;
@@ -353,6 +810,9 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
     text-transform: lowercase;
   }
   .conav__link:hover { color: #e89a2d; background: rgba(232, 154, 45, 0.08); }
+  .conav__link--ping { color: #e89a2d; }
+  .conav__link--ping .conav__link-icon { margin-right: 3px; font-size: 10px; }
+  .conav__link--ping:hover { color: #fff; background: rgba(232, 154, 45, 0.2); }
 
   .conav__drawer {
     background: #0b0b0b;
@@ -396,11 +856,286 @@ const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
     display: block;
   }
 
+  /* Noun chip in the left zone. */
+  .conav__noun {
+    background: transparent;
+    border: 2px solid rgba(232, 154, 45, 0.55);
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .conav__noun:hover { border-color: #e89a2d; transform: scale(1.05); }
+  .conav__noun-img {
+    width: 30px;
+    height: 30px;
+    image-rendering: pixelated;
+    background: #1a120a;
+    display: block;
+  }
+
+  /* Collect / save-moment button */
+  .conav__collect {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 1px solid rgba(232, 154, 45, 0.35);
+    color: #e89a2d;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: 'Monaco', 'Menlo', monospace;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .conav__collect:hover { background: rgba(232, 154, 45, 0.12); border-color: #e89a2d; }
+  .conav__collect--saved { background: #2f8f5f; border-color: #2f8f5f; color: #fff; }
+  .conav__collect-icon { font-size: 12px; }
+
+  /* Close + reopen. */
+  .conav__close {
+    background: transparent;
+    border: 1px solid rgba(243, 230, 216, 0.2);
+    color: #d4c2ad;
+    cursor: pointer;
+    width: 26px; height: 26px;
+    border-radius: 2px;
+    font-size: 16px;
+    line-height: 1;
+    margin-left: 4px;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .conav__close:hover { background: rgba(243, 230, 216, 0.08); color: #e89a2d; }
+
+  .conav__reopen {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #12110e;
+    color: #f3e6d8;
+    border: 1px solid rgba(232, 154, 45, 0.4);
+    font-size: 18px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+    z-index: 41;
+    padding: 0;
+  }
+  .conav__reopen:hover { border-color: #e89a2d; }
+  .conav[data-open="false"] .conav__bar,
+  .conav[data-open="false"] .conav__drawer,
+  .conav[data-open="false"] .conav__noun-picker,
+  .conav[data-open="false"] .conav__mood-picker { display: none !important; }
+  .conav[data-open="false"] .conav__reopen { display: inline-flex; }
+
+  /* Mood picker popover — same structural shape as noun picker but with
+     color-swatch + label + hint per mood. 6 options in a responsive grid. */
+  .conav__mood-picker {
+    background: #0b0b0b;
+    border-top: 1px solid rgba(232, 154, 45, 0.24);
+    padding: 10px 14px 12px;
+  }
+  .conav__mood-picker[hidden] { display: none; }
+  .conav__mood-picker-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #e89a2d;
+    margin: 0 0 10px;
+    text-transform: uppercase;
+  }
+  .conav__mood-picker-close {
+    background: transparent;
+    border: 1px solid rgba(243, 230, 216, 0.2);
+    color: #d4c2ad;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .conav__mood-picker-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin: 0 0 8px;
+  }
+  @media (max-width: 520px) {
+    .conav__mood-picker-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .conav__mood-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #1a120a;
+    border: 1px solid rgba(243, 230, 216, 0.12);
+    border-left: 3px solid var(--m, #e89a2d);
+    border-radius: 2px;
+    cursor: pointer;
+    color: #f3e6d8;
+    text-align: left;
+    transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  }
+  .conav__mood-opt:hover {
+    background: #231808;
+    border-color: rgba(232, 154, 45, 0.4);
+    transform: translateY(-1px);
+  }
+  .conav__mood-opt-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--m, #e89a2d);
+    flex-shrink: 0;
+  }
+  .conav__mood-opt-l {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: #f3e6d8;
+  }
+  .conav__mood-opt-h {
+    font-size: 10px;
+    color: #8a7e6c;
+    margin-left: auto;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  @media (max-width: 520px) { .conav__mood-opt-h { display: none; } }
+  .conav__mood-picker-foot {
+    margin: 0;
+    font-size: 10px;
+    color: #8a7e6c;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  /* Meditative mood-pulse overlay — same behavior MoodChip used to
+     provide at the top of the page. Ported here so removing MoodChip
+     from the home doesn't lose the feedback loop. */
+  :global(.mood-pulse) {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background:
+      radial-gradient(circle at 50% 50%,
+        hsla(var(--mood-hue, 28), 70%, 60%, 0.35) 0%,
+        hsla(var(--mood-hue, 28), 70%, 60%, 0.12) 32%,
+        hsla(var(--mood-hue, 28), 70%, 60%, 0.00) 62%);
+    opacity: 0;
+    animation: moodPulse 1.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    will-change: opacity, transform;
+    mix-blend-mode: multiply;
+  }
+  @keyframes moodPulse {
+    0%   { opacity: 0;   transform: scale(0.85); }
+    20%  { opacity: 0.9; transform: scale(1.00); }
+    55%  { opacity: 0.5; transform: scale(1.10); }
+    100% { opacity: 0;   transform: scale(1.25); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.mood-pulse) { display: none; }
+  }
+
+  /* Noun picker popover */
+  .conav__noun-picker {
+    background: #0b0b0b;
+    border-top: 1px solid rgba(232, 154, 45, 0.24);
+    padding: 10px 14px;
+  }
+  .conav__noun-picker[hidden] { display: none; }
+  .conav__noun-picker-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #e89a2d;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+  }
+  .conav__noun-picker-close {
+    background: transparent;
+    border: 1px solid rgba(243, 230, 216, 0.2);
+    color: #d4c2ad;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .conav__noun-picker-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 0 4px;
+    margin: 0 0 8px;
+  }
+  .conav__noun-opt {
+    width: 40px; height: 40px;
+    padding: 2px;
+    background: #1a120a;
+    border: 1px solid rgba(243, 230, 216, 0.14);
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .conav__noun-opt:hover { border-color: rgba(232, 154, 45, 0.6); }
+  .conav__noun-opt--current { border-color: #e89a2d !important; box-shadow: 0 0 0 2px rgba(232, 154, 45, 0.3); }
+  .conav__noun-opt img { width: 100%; height: 100%; display: block; }
+  .conav__noun-picker-actions { display: flex; gap: 8px; }
+  .conav__noun-picker-btn {
+    background: transparent;
+    border: 1px solid rgba(232, 154, 45, 0.4);
+    color: #e89a2d;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 4px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: 'Monaco', 'Menlo', monospace;
+    text-transform: uppercase;
+  }
+  .conav__noun-picker-btn:hover { background: rgba(232, 154, 45, 0.1); }
+
   /* Don't let content hide under the fixed bar. Paired with a body bottom-padding rule. */
-  @media (max-width: 600px) {
-    .conav__bar { padding: 6px 10px; font-size: 11px; min-height: 44px; }
+  @media (max-width: 680px) {
+    .conav__bar { padding: 10px 12px; font-size: 10px; min-height: 56px; gap: 6px; }
+    .conav__left { gap: 6px; }
     .conav__mid { display: none; }
-    .conav__link { padding: 3px 6px; font-size: 10px; }
+    .conav__sep { display: none; }
+    .conav__play-label { display: none; }
+    .conav__play { padding: 4px 6px; }
+    .conav__right { gap: 2px; }
+    .conav__link { padding: 3px 5px; font-size: 10px; }
+    .conav__mood-label { font-size: 9.5px; letter-spacing: 0.08em; }
+    .conav__collect-label { display: none; }
+    .conav__collect { padding: 4px 6px; }
     .conav__drawer iframe { height: 120px; }
+    .conav__noun { width: 32px; height: 32px; }
+    .conav__noun-img { width: 28px; height: 28px; }
+    .conav__reopen { width: 44px; height: 44px; right: 10px; bottom: 10px; font-size: 20px; }
+  }
+  @media (max-width: 400px) {
+    .conav__right a:nth-child(n+4) { display: none; }
   }
 </style>

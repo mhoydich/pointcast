@@ -44,32 +44,229 @@ function shortTitle(t: string, max = 40) {
   return t.length > max ? t.slice(0, max - 1) + '…' : t;
 }
 
-const title = `CH.${ch.code} · ${block.data.id} — ${block.data.title}`;
-const description = block.data.dek ?? block.data.body?.slice(0, 180) ?? block.data.title;
+// SEO: title is the block title alone so the SERP snippet leads with
+// human-scanable content, not the CH.{code} · {id} prefix that used to
+// eat ~14 chars. BlockLayout appends " — PointCast" automatically. The
+// channel + id still appear in the description + breadcrumb + H1 below.
+const title = block.data.title;
+
+// SEO: per-type description fallback so NOTE / LINK / VISIT blocks —
+// whose body is often 1-3 sentences — don't end up with a meta that
+// duplicates the title. Pattern: dek first, then per-type hint + body
+// tail, then a safe channel-purpose fallback. Output always ≤ 180 chars.
+function buildDescription(): string {
+  const dek = block.data.dek?.trim();
+  if (dek) return dek.length > 180 ? dek.slice(0, 177) + '…' : dek;
+
+  const body = block.data.body?.trim() ?? '';
+  const bodyTail = body.length > 140 ? body.slice(0, 137) + '…' : body;
+  const dateStr = block.data.timestamp.toISOString().slice(0, 10);
+
+  switch (block.data.type) {
+    case 'READ':
+      return bodyTail || `${ch.name} dispatch · ${dateStr} · PointCast`;
+    case 'LISTEN': {
+      const host = (() => { try { return new URL(block.data.external?.url ?? '', 'https://pointcast.xyz').host.replace(/^www\./, ''); } catch { return ''; } })();
+      return `Listening note · ${host || ch.name} · ${dateStr}${bodyTail ? ' — ' + bodyTail : ''}`.slice(0, 180);
+    }
+    case 'WATCH': {
+      const host = (() => { try { return new URL(block.data.external?.url ?? '', 'https://pointcast.xyz').host.replace(/^www\./, ''); } catch { return ''; } })();
+      return `Watch · ${host || ch.name} · ${dateStr}${bodyTail ? ' — ' + bodyTail : ''}`.slice(0, 180);
+    }
+    case 'MINT': {
+      const price = block.data.edition?.price === 'free' ? 'free' : `${(block.data.edition?.price as any)?.tez ?? ''} ꜩ`;
+      return `Editionable on Tezos · ${price} · CH.${ch.code} ${ch.name} · PointCast`.slice(0, 180);
+    }
+    case 'FAUCET':
+      return `Free daily claim · CH.${ch.code} ${ch.name} · ${dateStr} · PointCast faucet`.slice(0, 180);
+    case 'NOTE':
+      return bodyTail ? `Note · ${bodyTail}` : `Short note · CH.${ch.code} ${ch.name} · ${dateStr}`;
+    case 'VISIT':
+      return bodyTail ? `Visit log · ${bodyTail}` : `Visit log entry · ${dateStr} · PointCast`;
+    case 'LINK': {
+      const host = (() => { try { return new URL(block.data.external?.url ?? '', 'https://pointcast.xyz').host.replace(/^www\./, ''); } catch { return ''; } })();
+      return `External link${host ? ' · ' + host : ''}${bodyTail ? ' — ' + bodyTail : ''}`.slice(0, 180);
+    }
+    default:
+      return bodyTail || `${ch.name} · PointCast · ${dateStr}`;
+  }
+}
+const description = buildDescription();
 const ogImage = `/images/og/b/${block.data.id}.png`;
+const ogImageAbs = `https://pointcast.xyz${ogImage}`;
+
+// SEO: per-channel pillar mapping — every Block surfaces a single
+// "Part of" link to the most-relevant SEO pillar. Drives internal-link
+// juice from the long tail (individual blocks) to the three
+// high-priority landing pages. Kept to 1 link to avoid clutter.
+const PILLAR_BY_CHANNEL: Record<string, { url: string; label: string; note: string }> = {
+  FD:  { url: '/agent-native', label: 'Agent-native web', note: 'How PointCast ships llms.txt, agents.json, stripped-HTML, and Frames.' },
+  ESC: { url: '/el-segundo',   label: 'El Segundo, California', note: 'The local pillar — things to do, tech scene, 25-mile beacon.' },
+  BTL: { url: '/nouns',        label: 'Nouns on Tezos', note: 'Visit Nouns FA2 + Nouns Battler + CC0 proliferation.' },
+  CRT: { url: '/el-segundo',   label: 'El Segundo, California', note: 'Pickleball at El Segundo Rec Park — part of the local pillar.' },
+  GF:  { url: '/el-segundo',   label: 'El Segundo, California', note: 'Good Feels is based in El Segundo — see the local pillar.' },
+  GDN: { url: '/el-segundo',   label: 'El Segundo, California', note: 'Coastal SoCal birds + weather — part of the local lens.' },
+  SPN: { url: '/blocks',       label: 'Blocks — the primitive', note: 'Every Block (including LISTEN blocks) follows the same schema.' },
+  FCT: { url: '/nouns',        label: 'Nouns on Tezos', note: 'Free faucet claims run on the same Tezos FA2 stack.' },
+  VST: { url: '/agent-native', label: 'Agent-native web', note: 'The visit log tracks both humans and AI agents — agent-native by design.' },
+};
+const pillar = PILLAR_BY_CHANNEL[block.data.channel];
+
+// SEO / GEO: citation-ready text. Used for both the JSON-LD `citation`
+// field and the visible "Cite this block" widget so agents and humans
+// see the same canonical format.
+const citationDate = block.data.timestamp.toISOString().slice(0, 10);
+const citationShort = `PointCast · CH.${ch.code} · № ${block.data.id} — "${block.data.title}" · ${citationDate}`;
+const citationFull = `${citationShort}\nhttps://pointcast.xyz/b/${block.data.id}`;
+
+// SEO: conditional schema.org @type per block type. Was a single generic
+// CreativeWork — too broad for rich results. Now READ blocks become
+// BlogPosting (Article rich-result eligible), NOTE → SocialMediaPosting,
+// VISIT → BlogPosting (articleSection: "Visit log"), MINT/FAUCET → Product
+// with Offer, LISTEN → MusicRecording, WATCH → VideoObject, LINK stays as
+// CreativeWork. Shared fields (author, publisher, breadcrumb, image,
+// mainEntityOfPage) stay consistent across all types.
+const sharedAuthor = {
+  '@type': 'Person',
+  '@id': 'https://pointcast.xyz/#person',
+  name: 'Mike Hoydich',
+};
+const sharedPublisher = {
+  '@type': 'Organization',
+  '@id': 'https://pointcast.xyz/#org',
+  name: 'PointCast',
+  logo: { '@type': 'ImageObject', url: 'https://pointcast.xyz/images/og-home-v3.png' },
+};
+const blockUrl = `https://pointcast.xyz/b/${block.data.id}`;
+
+function buildPrimarySchema(): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    '@id': blockUrl,
+    identifier: block.data.id,
+    name: block.data.title,
+    headline: block.data.title.length > 110 ? block.data.title.slice(0, 109) + '…' : block.data.title,
+    description,
+    datePublished: block.data.timestamp.toISOString(),
+    dateModified: block.data.timestamp.toISOString(),
+    inLanguage: 'en-US',
+    url: blockUrl,
+    mainEntityOfPage: blockUrl,
+    image: ogImageAbs,
+    author: sharedAuthor,
+    publisher: sharedPublisher,
+    isPartOf: { '@type': 'CollectionPage', name: ch.name, url: `https://pointcast.xyz/c/${ch.slug}` },
+    // SEO / GEO: canonical citation text for LLMs. Matches the visible
+    // "Cite this block" widget so humans and agents use the same shape.
+    citation: citationShort,
+  };
+
+  const body = block.data.body ?? '';
+  const wordCount = body ? body.trim().split(/\s+/).length : undefined;
+
+  switch (block.data.type) {
+    case 'READ': {
+      const readMin = (block.data as any).readingTime?.match(/\d+/)?.[0];
+      return {
+        '@type': 'BlogPosting',
+        ...base,
+        articleSection: ch.name,
+        articleBody: body,
+        ...(wordCount ? { wordCount } : {}),
+        ...(readMin ? { timeRequired: `PT${readMin}M` } : {}),
+      };
+    }
+    case 'NOTE':
+      return {
+        '@type': 'SocialMediaPosting',
+        ...base,
+        articleBody: body,
+        ...(wordCount ? { wordCount } : {}),
+      };
+    case 'VISIT':
+      return {
+        '@type': 'BlogPosting',
+        ...base,
+        articleSection: 'Visit log',
+        articleBody: body,
+        ...(wordCount ? { wordCount } : {}),
+      };
+    case 'LISTEN':
+      return {
+        '@type': 'MusicRecording',
+        ...base,
+        ...(block.data.external?.url ? { url: block.data.external.url, sameAs: block.data.external.url } : {}),
+      };
+    case 'WATCH':
+      return {
+        '@type': 'VideoObject',
+        ...base,
+        thumbnailUrl: ogImageAbs,
+        uploadDate: block.data.timestamp.toISOString(),
+        ...(block.data.external?.url ? { contentUrl: block.data.external.url, embedUrl: block.data.external.url } : {}),
+      };
+    case 'MINT':
+    case 'FAUCET': {
+      const isFree = block.data.edition?.price === 'free';
+      const tezPrice = isFree ? 0 : (block.data.edition?.price as any)?.tez ?? 0;
+      return {
+        '@type': 'Product',
+        ...base,
+        category: block.data.type === 'FAUCET' ? 'NFT / Faucet' : 'NFT / Edition',
+        brand: sharedPublisher,
+        offers: {
+          '@type': 'Offer',
+          url: blockUrl,
+          price: tezPrice,
+          priceCurrency: 'XTZ',
+          availability: 'https://schema.org/InStock',
+          seller: sharedPublisher,
+        },
+      };
+    }
+    case 'LINK':
+    default:
+      return {
+        '@type': 'CreativeWork',
+        ...base,
+        ...(block.data.external?.url ? { mainEntity: { '@type': 'URL', url: block.data.external.url } } : {}),
+      };
+  }
+}
+
+// SEO: HowTo schema overlay — when a block is flagged as a how-to
+// (via `meta.format: "howto"` + optional `meta.howto.steps[]`), we emit
+// an additional HowTo entity into the @graph. Google treats HowTo as
+// eligible for rich results (numbered step carousel in SERPs). The
+// detection is explicit — we don't try to infer how-to shape from the
+// body. Block 0246 (acupuncture self-study) is the seed example.
+const howtoMeta = (block.data as any)?.meta?.howto;
+const isHowTo = (block.data as any)?.meta?.format === 'howto' && howtoMeta?.steps?.length > 0;
+const howtoSchema = isHowTo
+  ? {
+      '@type': 'HowTo',
+      '@id': `https://pointcast.xyz/b/${block.data.id}#howto`,
+      name: howtoMeta.name ?? block.data.title,
+      description: howtoMeta.description ?? description,
+      totalTime: howtoMeta.totalTime, // ISO 8601 duration e.g. PT30M
+      estimatedCost: howtoMeta.cost,  // { '@type': 'MonetaryAmount', currency, value }
+      supply: howtoMeta.supplies,     // array of { '@type': 'HowToSupply', name }
+      tool: howtoMeta.tools,          // array of { '@type': 'HowToTool', name }
+      step: howtoMeta.steps.map((s: any, i: number) => ({
+        '@type': 'HowToStep',
+        position: i + 1,
+        name: s.name,
+        text: s.text,
+        ...(s.url ? { url: s.url } : {}),
+        ...(s.image ? { image: s.image } : {}),
+      })),
+    }
+  : null;
 
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
-    {
-      '@type': 'CreativeWork',
-      '@id': `https://pointcast.xyz/b/${block.data.id}`,
-      identifier: block.data.id,
-      name: block.data.title,
-      description,
-      datePublished: block.data.timestamp.toISOString(),
-      inLanguage: 'en-US',
-      isPartOf: {
-        '@type': 'Collection',
-        name: ch.name,
-        url: `https://pointcast.xyz/c/${ch.slug}`,
-      },
-      encodingFormat: 'application/json',
-      ...(block.data.external?.url ? { mainEntity: { '@type': 'URL', url: block.data.external.url } } : {}),
-      ...(block.data.edition
-        ? { offers: { '@type': 'Offer', price: block.data.edition.price === 'free' ? 0 : block.data.edition.price?.tez, priceCurrency: 'XTZ' } }
-        : {}),
-    },
+    buildPrimarySchema(),
+    ...(howtoSchema ? [howtoSchema] : []),
     {
       '@type': 'BreadcrumbList',
       '@id': `https://pointcast.xyz/b/${block.data.id}#breadcrumb`,
@@ -86,6 +283,10 @@ const alternates = [
   { type: 'application/json', href: `/b/${block.data.id}.json`, title: 'Machine-readable block' },
   { type: 'application/json', href: `/c/${ch.slug}.json`, title: `${ch.name} (JSON feed)` },
   { type: 'application/rss+xml', href: `/c/${ch.slug}.rss`, title: `${ch.name} (RSS)` },
+  // SEO / federation / growth: oEmbed discovery link — when someone
+  // pastes this URL into WordPress, Ghost, Discourse, etc., the editor
+  // reads this <link> and fetches /oembed.json for a rich preview.
+  { type: 'application/json+oembed', href: `/oembed.json?url=https%3A%2F%2Fpointcast.xyz%2Fb%2F${block.data.id}`, title: `${block.data.title} (oEmbed)` },
 ];
 
 /**
@@ -292,6 +493,37 @@ const frame = {
       </section>
     )}
 
+    {/* SEO: Cite this block — visible copy-to-clipboard widget + canonical
+        citation format. The same text ships as `citation` in the JSON-LD
+        so LLMs crawling the page see the preferred citation form. */}
+    <section class="cite" aria-labelledby="cite-heading">
+      <div class="cite__head">
+        <p class="cite__label mono" id="cite-heading">CITE THIS BLOCK</p>
+        <button class="cite__copy mono" type="button" data-cite-copy aria-label="Copy citation">Copy</button>
+      </div>
+      <pre class="cite__text" data-cite-text>{citationFull}</pre>
+      <p class="cite__note">
+        Permanent URL. Safe to cite forever — block IDs never re-use and
+        never redirect. Agents: see <a href="/manifesto">/manifesto</a> for
+        the full citation guide.
+      </p>
+    </section>
+
+    {/* SEO: single-pillar context link. Drives internal-link juice from
+        the long tail (~150+ blocks) to the three keyword-targeted SEO
+        pillars + /blocks reference. Channel → pillar mapping in the
+        frontmatter. */}
+    {pillar && (
+      <aside class="pillar-context" aria-label="Related pillar">
+        <p class="pillar-context__kicker mono">PART OF</p>
+        <a class="pillar-context__link" href={pillar.url}>
+          <span class="pillar-context__title">{pillar.label}</span>
+          <span class="pillar-context__note">{pillar.note}</span>
+          <span class="pillar-context__arrow" aria-hidden="true">→</span>
+        </a>
+      </aside>
+    )}
+
     <FeedbackStrip blockId={block.data.id} />
 
     <aside class="agent-strip">
@@ -304,6 +536,25 @@ const frame = {
         <li><a href="/for-agents">/for-agents</a></li>
       </ul>
     </aside>
+
+    {/* Clipboard handler for the Cite-this widget. Scoped to this page. */}
+    <script is:inline>
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-cite-copy]');
+        if (!btn) return;
+        const text = document.querySelector('[data-cite-text]')?.textContent ?? '';
+        if (!text) return;
+        navigator.clipboard?.writeText(text).then(() => {
+          const original = btn.textContent;
+          btn.textContent = 'Copied';
+          btn.setAttribute('data-copied', 'true');
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.removeAttribute('data-copied');
+          }, 1800);
+        });
+      });
+    </script>
   </div>
 </BlockLayout>
 
@@ -633,6 +884,108 @@ const frame = {
     .related__id { grid-area: id; }
     .related__type { grid-area: type; }
     .related__title { grid-area: title; font-size: 13.5px; }
+  }
+
+  /* ─ Cite this block — clipboard-ready citation widget (GEO lift) ─ */
+  .cite {
+    margin: 24px 0 0;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+  .cite__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .cite__label {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--pc-ink-muted);
+    font-weight: 500;
+  }
+  .cite__copy {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    padding: 4px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+  }
+  .cite__copy:hover { background: var(--pc-ink); color: #fff; }
+  .cite__copy[data-copied="true"] { background: var(--pc-accent); border-color: var(--pc-accent); color: #fff; }
+  .cite__text {
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    background: #12110E;
+    color: #eef4fa;
+    font-family: var(--pc-font-mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    border-radius: 2px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .cite__note {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--pc-ink-muted);
+  }
+  .cite__note a { color: var(--pc-accent); }
+
+  /* ─ Pillar context — drives internal-link juice to the 3 SEO pillars ─ */
+  .pillar-context {
+    margin: 14px 0 0;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-left: 3px solid var(--pc-accent);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .pillar-context__kicker {
+    margin: 0 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--pc-ink-muted);
+    font-weight: 500;
+  }
+  .pillar-context__link {
+    display: grid;
+    grid-template-columns: 1fr 20px;
+    gap: 8px 12px;
+    align-items: baseline;
+    color: var(--pc-ink);
+    text-decoration: none;
+  }
+  .pillar-context__link:hover { text-decoration: none; }
+  .pillar-context__link:hover .pillar-context__title { color: var(--pc-accent); }
+  .pillar-context__title {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    grid-column: 1 / 2;
+  }
+  .pillar-context__note {
+    grid-column: 1 / 3;
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+    line-height: 1.5;
+  }
+  .pillar-context__arrow {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-weight: 600;
+    text-align: right;
   }
 
   .agent-strip {

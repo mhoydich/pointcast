@@ -1,0 +1,293 @@
+---
+/**
+ * /lotto — Compute Lotto (Ethereum, Base) — PointCast's Ethereum-side lottery.
+ *
+ * Humans pay $1 USDC per ticket via wagmi/viem connect. Agents pay via
+ * x402 through the facilitator endpoint at
+ * /.well-known/x402/compute-lotto. Each 7-day epoch draws two winners
+ * independently via Chainlink VRF — one human (USDC prize), one agent
+ * (compute credits).
+ *
+ * Distinct from Prize Cast (Tezos, humans, no-loss savings). Published
+ * as the fifth research-to-ship cycle of the 2026-04-21 session.
+ *
+ * v0 scope — see docs/briefs/2026-04-21-compute-lotto-spec.md.
+ *
+ * Author: cc. Source: Mike chat 2026-04-21 PT
+ * "yah and then another lottery app, publish, tho this one connected to etherum".
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
+
+const lotto = (contracts as Record<string, unknown>).compute_lotto as
+  | { base?: string; base_sepolia?: string }
+  | undefined;
+const mainnetAddr = lotto?.base ?? '';
+const sepoliaAddr = lotto?.base_sepolia ?? '';
+const network = mainnetAddr ? 'mainnet' : 'sepolia';
+const contractAddr = mainnetAddr || sepoliaAddr;
+
+const title = 'Lotto — Ethereum lottery, humans + agents on Base';
+const description =
+  "A weekly lottery on Base where humans bet $1 USDC and AI agents bet via x402 through a facilitator endpoint. Each 7-day epoch draws two winners — one human (USDC), one agent (compute credits). The lottery only PointCast can ship.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'PointCast Compute Lotto',
+  description,
+  url: 'https://pointcast.xyz/lotto',
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="lotto">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>lotto</span>
+    </nav>
+
+    <header class="lotto__head">
+      <p class="kicker mono">COMPUTE LOTTO · V0 · BASE · HUMANS + AGENTS</p>
+      <h1 class="title">Two winners per epoch.<br/>Different prize rails.</h1>
+      <p class="dek">
+        The Ethereum-side companion to <a href="/cast">Prize Cast</a>. Humans bid
+        <b>$1 USDC</b> per ticket through their wallet. AI agents bid via
+        <b>x402</b> through our <a href="/.well-known/x402/compute-lotto.json">facilitator endpoint</a>.
+        Each 7-day epoch draws <b>two independent winners via Chainlink VRF</b> — one
+        human (cash prize), one agent (compute credits). Nouns-goggled tickets either way.
+      </p>
+    </header>
+
+    {contractAddr ? (
+      <section class="lotto__live" data-network={network} data-contract={contractAddr}>
+        <div class="hero">
+          <div class="hero__panel hero__panel--human">
+            <p class="hero__kicker mono">HUMAN POOL</p>
+            <p class="hero__pool" id="human-pool">— USDC</p>
+            <p class="hero__count mono"><span id="human-count">—</span> tickets</p>
+          </div>
+          <div class="hero__center">
+            <p class="hero__epoch mono">EPOCH <span id="current-epoch">—</span></p>
+            <p class="hero__countdown" id="countdown">—</p>
+            <p class="hero__phase mono" id="phase" data-phase="open">open</p>
+          </div>
+          <div class="hero__panel hero__panel--agent">
+            <p class="hero__kicker mono">AGENT POOL</p>
+            <p class="hero__pool" id="agent-pool">— USDC</p>
+            <p class="hero__count mono"><span id="agent-count">—</span> tickets</p>
+          </div>
+        </div>
+
+        <form class="bid-form" id="bid-form" autocomplete="off">
+          <label for="ticket-count" class="mono">YOUR TICKETS (1 USDC each)</label>
+          <div class="bid-form__row">
+            <input
+              type="number"
+              id="ticket-count"
+              name="ticket-count"
+              min="1"
+              step="1"
+              value="1"
+              aria-describedby="bid-hint"
+            />
+            <button type="submit" class="btn btn-bid" id="btn-bid" disabled>
+              <span id="bid-label">connect wallet to buy</span>
+            </button>
+          </div>
+          <p id="bid-hint" class="mono bid-hint">
+            wagmi connector ships in a follow-up sprint alongside USDC approve +
+            buyTicket flow. For v0 this page is a live-state viewer; agent entries
+            via x402 work end-to-end at
+            <a href="/.well-known/x402/compute-lotto.json"><code>/.well-known/x402/compute-lotto.json</code></a>.
+          </p>
+          <button type="button" class="btn btn-settle" id="btn-settle" hidden>
+            ⚙ settle epoch (earn keeper tip)
+          </button>
+        </form>
+
+        <aside class="history">
+          <h3 class="mono">RECENT EPOCHS</h3>
+          <ul id="history-list">
+            <li class="history__empty mono">— (loading…)</li>
+          </ul>
+        </aside>
+
+        <footer class="contract-info mono">
+          <p>
+            Contract: <a id="contract-link" href={`${network === 'mainnet' ? 'https://basescan.org/address/' : 'https://sepolia.basescan.org/address/'}${contractAddr}`} target="_blank" rel="noopener"><code>{contractAddr}</code></a> ·
+            Network: <code>{network === 'mainnet' ? 'Base' : 'Base Sepolia'}</code> ·
+            x402: <a href="/.well-known/x402/compute-lotto.json"><code>/.well-known/x402/compute-lotto.json</code></a> ·
+            Agent manifest: <a href="/lotto.json"><code>/lotto.json</code></a>
+          </p>
+        </footer>
+      </section>
+    ) : (
+      <section class="lotto__pending">
+        <h2 class="mono pending__kicker">NOT YET DEPLOYED</h2>
+        <p>
+          ComputeLotto.sol source lives at <code>contracts/v2/compute_lotto.sol</code>
+          and is ready for deployment to Base Sepolia. Until then, this page is a
+          placeholder — the research memo + build spec explain the shape.
+        </p>
+        <ul class="pending__links mono">
+          <li><a href="https://github.com/mhoydich/pointcast/blob/main/contracts/v2/compute_lotto.sol">contracts/v2/compute_lotto.sol</a></li>
+          <li><a href="https://github.com/mhoydich/pointcast/blob/main/docs/briefs/2026-04-21-compute-lotto-spec.md">docs/briefs/2026-04-21-compute-lotto-spec.md</a></li>
+          <li><a href="https://github.com/mhoydich/pointcast/blob/main/docs/research/2026-04-21-ethereum-lottery.md">docs/research/2026-04-21-ethereum-lottery.md</a></li>
+          <li><a href="/b/0400">block 0400 — the ship editorial</a></li>
+        </ul>
+        <p class="pending__next mono">
+          Deploy sequence: compile + test on Foundry → deploy to Base Sepolia →
+          register VRF subscription + add contract as consumer → fund with LINK →
+          populate <code>compute_lotto.base_sepolia</code> in <code>src/data/contracts.json</code>
+          → /lotto switches to live mode on next build.
+        </p>
+      </section>
+    )}
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  var root = document.querySelector('.lotto__live');
+  if (!root) {
+    console.info('[lotto] not deployed yet');
+    return;
+  }
+
+  var view = null;
+
+  function countdown(totalSec) {
+    if (totalSec <= 0) return 'epoch ended';
+    var d = Math.floor(totalSec / 86400);
+    var h = Math.floor((totalSec % 86400) / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    if (d > 0) return d + 'd ' + h + 'h ' + String(m).padStart(2, '0') + 'm';
+    if (h > 0) return h + 'h ' + String(m).padStart(2, '0') + 'm';
+    if (m > 0) return m + 'm ' + String(s).padStart(2, '0') + 's';
+    return s + 's';
+  }
+
+  function usdcToDollarDisplay(units) {
+    var n = BigInt(units || '0');
+    var whole = n / 1000000n;
+    var frac = Number(n % 1000000n) / 1000000;
+    return (Number(whole) + frac).toFixed(2);
+  }
+
+  function render(manifest) {
+    if (!manifest || !manifest.state) return;
+    view = manifest.state;
+    document.getElementById('current-epoch').textContent = String(view.epoch);
+    document.getElementById('countdown').textContent = countdown(view.time_left_sec);
+    var phase = document.getElementById('phase');
+    phase.textContent = view.phase;
+    phase.dataset.phase = view.phase;
+    document.getElementById('human-pool').textContent = '$' + (view.human_pool_usd || usdcToDollarDisplay(view.humanPool));
+    document.getElementById('agent-pool').textContent = '$' + (view.agent_pool_usd || usdcToDollarDisplay(view.agentPool));
+    document.getElementById('human-count').textContent = String(view.humanCount);
+    document.getElementById('agent-count').textContent = String(view.agentCount);
+    var settleBtn = document.getElementById('btn-settle');
+    settleBtn.hidden = view.phase !== 'awaiting-settle';
+  }
+
+  async function tick() {
+    try {
+      var res = await fetch('/lotto.json', { cache: 'no-store' });
+      if (!res.ok) return;
+      render(await res.json());
+    } catch (err) {
+      console.warn('[lotto] manifest unavailable', err);
+    }
+  }
+
+  setInterval(function () {
+    if (!view) return;
+    var now = Math.floor(Date.now() / 1000);
+    var left = Math.max(0, view.endsAt - now);
+    document.getElementById('countdown').textContent = countdown(left);
+  }, 1000);
+
+  tick();
+  setInterval(tick, 15000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) tick();
+  });
+
+  var btn = document.getElementById('btn-bid');
+  btn.title = 'wagmi + USDC approve + buyTicket flow ships in a follow-up sprint';
+  btn.disabled = true;
+
+  var settleBtn = document.getElementById('btn-settle');
+  settleBtn.addEventListener('click', function () {
+    alert('Settle button wires in a follow-up sprint. For v0, any address can call settleEpoch() directly via basescan.org write-contract.');
+  });
+})();
+</script>
+
+<style>
+  .lotto { max-width: 960px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  .crumb { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.82rem; opacity: 0.6; margin-bottom: 1.5rem; }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { text-decoration: underline; }
+
+  .lotto__head { border-bottom: 2px solid currentColor; padding-bottom: 2rem; margin-bottom: 2.5rem; }
+  .kicker { font-size: 0.78rem; letter-spacing: 0.26em; text-transform: uppercase; opacity: 0.68; margin-bottom: 0.8rem; }
+  .mono { font-family: ui-monospace, 'JetBrains Mono', monospace; }
+  .title { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(2.2rem, 4.8vw, 3.4rem); line-height: 1.02; letter-spacing: -0.02em; margin-bottom: 1rem; }
+  .dek { font-size: 1.02rem; line-height: 1.55; max-width: 66ch; opacity: 0.88; }
+  .dek a, .dek b, .dek code { color: inherit; }
+  .dek code { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.92em; padding: 0 0.3em; }
+
+  .hero { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5rem; margin-bottom: 2rem; padding: 1.5rem; border: 1px solid currentColor; border-radius: 4px; }
+  @media (max-width: 700px) { .hero { grid-template-columns: 1fr; gap: 1rem; } }
+  .hero__panel { padding: 1rem; border-radius: 3px; background: rgba(0, 0, 0, 0.03); display: flex; flex-direction: column; gap: 0.3rem; }
+  .hero__panel--human { border-left: 3px solid #3a8fbf; }
+  .hero__panel--agent { border-left: 3px solid #9a6abf; }
+  .hero__kicker { font-size: 0.72rem; letter-spacing: 0.22em; opacity: 0.6; }
+  .hero__pool { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(1.8rem, 3.5vw, 2.6rem); line-height: 1; }
+  .hero__count { font-size: 0.8rem; opacity: 0.7; }
+  .hero__center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem; padding: 0.5rem; }
+  .hero__epoch { font-size: 0.72rem; letter-spacing: 0.22em; opacity: 0.6; }
+  .hero__countdown { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(1.8rem, 3.8vw, 2.6rem); line-height: 1; letter-spacing: -0.02em; }
+  .hero__phase { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 999px; border: 1px solid currentColor; opacity: 0.85; }
+  .hero__phase[data-phase="open"] { color: #3a9a4a; }
+  .hero__phase[data-phase="ending-soon"] { color: #c88040; }
+  .hero__phase[data-phase="awaiting-settle"] { color: #b85050; }
+  .hero__phase[data-phase="settled"] { color: #888; }
+
+  .bid-form { border: 1px solid currentColor; border-radius: 4px; padding: 1.2rem; margin-bottom: 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+  .bid-form label { font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.65; }
+  .bid-form__row { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; }
+  .bid-form input { padding: 0.7rem 0.9rem; border: 1px solid currentColor; border-radius: 2px; background: transparent; color: inherit; font: inherit; font-size: 1.1rem; }
+  .btn { border: 1px solid currentColor; background: rgba(0, 0, 0, 0.04); padding: 0.7rem 1rem; border-radius: 2px; font: inherit; cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; color: inherit; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); background: rgba(0, 0, 0, 0.08); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-bid { font-weight: 600; letter-spacing: 0.04em; }
+  .btn-settle { margin-top: 0.4rem; background: rgba(240, 185, 74, 0.15); border-color: #b88020; color: #b88020; font-weight: 600; }
+  .bid-hint { opacity: 0.65; font-size: 0.78rem; }
+  .bid-hint a, .bid-hint code { color: inherit; }
+
+  .history { margin-bottom: 2rem; }
+  .history h3 { font-size: 0.76rem; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.62; margin-bottom: 0.7rem; font-weight: 600; }
+  .history ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+  .history li { font-size: 0.86rem; line-height: 1.4; padding: 0.35rem 0; border-bottom: 1px dashed currentColor; opacity: 0.88; }
+  .history__empty { opacity: 0.4; font-style: italic; border: none; }
+
+  .contract-info { font-size: 0.76rem; opacity: 0.58; padding-top: 1rem; border-top: 1px dashed currentColor; }
+  .contract-info a, .contract-info code { color: inherit; }
+
+  .lotto__pending { padding: 2rem; border: 1px dashed currentColor; border-radius: 4px; opacity: 0.92; }
+  .pending__kicker { font-size: 0.78rem; letter-spacing: 0.22em; color: #c88040; margin-bottom: 1rem; }
+  .lotto__pending p { font-size: 1rem; line-height: 1.55; margin-bottom: 0.9rem; max-width: 64ch; }
+  .lotto__pending code { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.92em; padding: 0 0.3em; }
+  .pending__links { list-style: disc inside; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.86rem; margin: 1rem 0; }
+  .pending__links a { color: inherit; }
+  .pending__next { font-size: 0.82rem; opacity: 0.82; padding-top: 1rem; border-top: 1px dashed currentColor; }
+</style>

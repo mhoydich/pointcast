@@ -21,6 +21,15 @@ Three builders: Claude Code, Manus, Codex. One director: Mike. This doc defines 
 
 **Reads on every session:** `BLOCKS.md`, `AGENTS.md`, `TASKS.md`, **`docs/inbox/`** + **`/api/ping?action=list`** (Mike's async messages — see `src/pages/ping.astro` + `functions/api/ping.ts`), recent commits
 
+**SESSION-START INBOX CHECKLIST — do this FIRST, before any other work** (per Mike 2026-04-20: "are you seeing messages via /ping" — historically cc was missing the KV-backed pings because this wasn't reflexive):
+
+```
+curl -s 'https://pointcast.xyz/api/ping?action=list' | jq '.entries[-5:]'
+ls docs/inbox/ 2>&1
+```
+
+If either surface has new content since the last session: read every unprocessed ping + inbox file, acknowledge each in the first response to Mike, and thread each into the working plan (or explicitly defer with a reason). Never start implementation work before this read; the ping inbox is the highest-priority channel Mike has for async direction.
+
 **Topic-expand processing rule** (per Mike 2026-04-18): when an `/api/ping` entry has `expand: true` (visible in the KV metadata or in the message body's `.expand` field), cc reads the topic, drafts a block in cc-voice editorial (NOT in Mike's voice — VOICE.md applies), picks the best channel + type for the topic, sets:
 - `author: 'mh+cc'` if the topic is genuinely Mike's thinking (he provided the substance, cc the prose)
 - `author: 'cc'` if the topic is a more general request that cc could write without Mike-specific knowledge
@@ -51,7 +60,9 @@ After drafting + publishing, cc deletes the processed ping from KV (or moves it 
 - Contract logic review — SmartPy / Michelson correctness spot-check
 - Second opinion on architectural decisions when flagged by Claude Code or Mike
 
-**Does not:** commit directly to the codebase. Writes to `/sketches/` for UI alternatives, or leaves PR comments. Called on-demand, not persistent.
+**When Mike explicitly asks Codex to implement:** Codex may edit `/Users/michaelhoydich/pointcast` or a dedicated worktree, but still treats GitHub `main` and live publishing as approval-gated. Codex should run `npm run audit:publishing`, preserve other agents' local changes, and prefer a branch/PR unless Mike explicitly asks for a live publish.
+
+**Does not:** push to GitHub `main`, run a production publish/push script, deploy Workers, or remove other agents' worktrees without explicit approval. Writes to `/sketches/` for UI alternatives, implementation branches for scoped changes, or PR comments. Called on-demand, not persistent.
 
 ### Mike — director
 **Owns:** strategy, content, approvals, open questions
@@ -74,6 +85,7 @@ All state lives in files. No external database, no shared Slack channel, no ephe
 - `BLOCKS.md` — design directive (v2 spec)
 - `AGENTS.md` — this doc, workflow directive
 - `TASKS.md` — live task queue, checked on every session start
+- `docs/setup/codex-github-publishing.md` — Codex/GitHub/worktree/publishing rules
 - `docs/claude-code-logs/`, `docs/manus-logs/`, `docs/codex-logs/` — per-agent session logs
 
 ### TASKS.md format
@@ -148,6 +160,7 @@ BLOCKS.md is the spec. Phases 1-4 from that doc:
 |-------------------------------------|--------------------------|
 | Merge to `blocks-rebuild` branch    | CC self-approves         |
 | Merge to `main`                     | X review + MH approval   |
+| Codex publish or push to GitHub      | MH explicit go + publishing audit passes |
 | Deploy contract to Tezos mainnet    | X review + MH approval   |
 | Production DNS cutover              | MH explicit go           |
 | Launch dispatch publication         | MH writes, MH publishes  |

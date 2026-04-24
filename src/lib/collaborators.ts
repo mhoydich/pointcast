@@ -76,16 +76,6 @@ export const COLLABORATORS: Collaborator[] = [
     intro: 'Launch-week operations, platform matrix, Cloudflare Email Routing, Resend setup, GSC / IndexNow, objkt curation. Works from Mike-drafted ops briefs.',
     since: '2025-03-10',
   },
-  {
-    slug: 'kenzo',
-    name: 'Kenzo',
-    role: 'collaborator',
-    location: 'Mallorca, Spain',
-    // Mike 2026-04-20: added during the collab-clock expansion.
-    // Intro is a placeholder — MH to supply the real one-line.
-    intro: 'Collaborator from Mallorca. Role + projects TBD — Mike filling in the real one-line soon.',
-    since: '2026-04-20',
-  },
 ];
 
 /** Lookup by slug. Returns null if not found. */

@@ -10,14 +10,43 @@
 /.well-known/agents.json  /agents.json  200
 /.well-known/ai.json      /agents.json  200
 
+# Federation registry — .well-known alias for the machine-readable
+# /federation.json registry. Partners' discovery tools can check the
+# well-known path first before falling back to the canonical URL.
+/.well-known/federation       /federation.json  200
+/.well-known/federation.json  /federation.json  200
+
+# Tezos manifest — .well-known alias. Tezos-ecosystem indexers
+# (TzKT, objkt curators, fxhash ecosystem tools) following the
+# well-known pattern find /tezos.json immediately.
+/.well-known/tezos            /tezos.json  200
+/.well-known/tezos.json       /tezos.json  200
+
+# RFC 9727 api-catalog: spec says path is exactly /.well-known/api-catalog
+# (no extension). Cloudflare Pages 404s extension-less static files, so
+# keep the canonical bytes at api-catalog.json and 200-rewrite the spec
+# path to it. _headers overrides Content-Type to application/linkset+json.
+/.well-known/api-catalog  /.well-known/api-catalog.json  200
+
+# RFC 9728 OAuth Protected Resource Metadata. PointCast has NO protected
+# resources today; this metadata is published with empty authorization_servers
+# + scopes_supported + explanatory comment so agents checking the well-known
+# OAuth discovery paths get a clean "no auth required" answer instead of 404.
+# OIDC discovery (/.well-known/openid-configuration) is deliberately NOT
+# shipped — publishing fake issuer + endpoints would mislead agents; legitimate
+# answer is "no auth." Per Mike 2026-04-20 agent-readiness audit.
+
 # Canonical shorthand for the unified RSS feed — /rss redirects to
 # /feed.xml. The legacy /rss.xml still serves the posts-only archive
 # for back-compat with existing subscribers. Readers looking for "the
 # PointCast RSS feed" expect /rss; this gives them /feed.xml.
 /rss  /feed.xml  302
 
-# Tezos manifest — .well-known alias for the machine-readable
-# /tezos.json registry. Tezos indexers + ecosystem tooling (TzKT,
-# objkt curators) check the well-known path first.
-/.well-known/tezos       /tezos.json  200
-/.well-known/tezos.json  /tezos.json  200
+# Sprint #94 T1 (2026-04-21 22:07 PT, revised for splat syntax).
+# Cloudflare Pages otherwise 308-redirects /b/N → /b/N/. Using splat
+# (`*` + `:splat`) instead of named param for broadest compatibility —
+# the 200 rewrite catches the request before the built-in trailing-slash
+# handler kicks in, serving the directory's index.html directly.
+/b/*          /b/:splat/index.html          200
+/c/*          /c/:splat/index.html          200
+/research/*   /research/:splat/index.html   200

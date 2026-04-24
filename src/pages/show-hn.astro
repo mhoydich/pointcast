@@ -1,0 +1,332 @@
+---
+/**
+ * /show-hn — landing page for visitors arriving from Hacker News.
+ *
+ * Target keywords: "show hn pointcast", "show hn tips", "how to launch
+ * on hacker news", "pointcast hacker news".
+ *
+ * Intent: when Mike posts a Show HN thread, the link in the HN post
+ * points here. This page:
+ *   1. Orients the HN visitor fast — "here's what you're looking at,
+ *      here's what matters, here's the code"
+ *   2. Surfaces the highest-leverage links for a technical audience
+ *      (agent-native, tezos, repo, live demos)
+ *   3. Invites engagement — leave a visit, mint a Visit Noun, drop a
+ *      ping, federate your site
+ *
+ * Schema: TechArticle + ItemList (the Show HN trail) + BreadcrumbList.
+ * TechArticle because HN weighs technical content. The ItemList holds
+ * every previous PointCast Show HN thread so this page itself becomes
+ * a canonical reference when someone googles "show hn pointcast".
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+// Past Show HN threads. Add new entries when Mike posts one.
+const SHOW_HN_TRAIL: Array<{ title: string; hn: string; date: string; summary: string }> = [
+  // Empty at page-ship time — first Show HN is the inaugural launch.
+  // After the first post, add entries like:
+  // { title: 'Show HN: PointCast — agent-native broadcast from El Segundo',
+  //   hn: 'https://news.ycombinator.com/item?id=XXXXXXXX', date: '2026-04-22',
+  //   summary: '...' },
+];
+
+const PITCHES = [
+  {
+    label: 'Agent-native web',
+    href: '/agent-native',
+    copy: 'The canonical writeup. llms.txt + agents.json + Content-Signals + a Cloudflare Pages middleware that serves ~12% lighter HTML to detected AI crawlers. TechArticle + FAQPage schema; SoftwareSourceCode links to every file in the repo.',
+  },
+  {
+    label: 'Tezos on-chain layer',
+    href: '/tezos',
+    copy: 'Live FA2 NFT contract at KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh. Beacon wallet matrix (Kukai/Temple/Umami/Altme), SmartPy → Michelson toolchain, TZIP standards, testnet faucets. Machine manifest at /tezos.json.',
+  },
+  {
+    label: 'Ethereum vs Tezos',
+    href: '/ethereum-vs-tezos',
+    copy: 'Head-to-head across 12 dimensions — gas, standards, contract languages, validator hardware, governance, marketplace liquidity. Based on our operating experience shipping CC0 Nouns on Tezos.',
+  },
+  {
+    label: 'Blocks (content primitive)',
+    href: '/blocks',
+    copy: 'Every piece of content is a Block: stable JSON schema, immutable monotonic ID, 9 channels × 8 types. Dual-published HTML + JSON at the same logical URL.',
+  },
+  {
+    label: 'AI stack (24 tools ranked)',
+    href: '/ai-stack',
+    copy: 'What PointCast uses: Claude, ChatGPT, Gemini, Cursor, Codex, Midjourney, Ideogram, Sora, Perplexity, Flux, DeepSeek, Kimi, and more — tiered daily/weekly/occasional/watching with Mike\'s opinionated take on each.',
+  },
+  {
+    label: 'Nouns on Tezos',
+    href: '/nouns',
+    copy: 'Visit Nouns FA2 + Nouns Battler + Card of the Day. One of few active Nouns proliferation projects on Tezos in 2026. CC0 everything.',
+  },
+];
+
+const faqs = [
+  {
+    q: 'What is PointCast?',
+    a: 'A "living broadcast" — a daily-publishing personal website run by Mike Hoydich (COO at Good Feels, based in El Segundo, California) in explicit collaboration with Claude Code (Anthropic) and Codex (OpenAI). Every piece of content is a "Block": JSON-schemed, permalinked at /b/{id}, dual-published with a JSON twin. Built as a reference implementation of the agent-native web.',
+  },
+  {
+    q: 'Where do I read the code?',
+    a: 'github.com/MikeHoydich/pointcast. Content is CC0-flavored; code is MIT-flavored. The agent-native surfaces — llms.txt, agents.json, stripped-HTML middleware — are all in the repo, no hidden infrastructure.',
+  },
+  {
+    q: 'Is this running on autopilot?',
+    a: 'Partially. Claude Code runs on an hourly cron, reads a docs/inbox queue, ships sprints (2-10 blocks per day). Codex handles repo-scoped specialized tasks via MCP. Manus runs launch-week ops. Mike writes briefs, reviews commits, makes strategic calls. The human is the editor; the agents are the engineers. Full session logs at /sprints; collaborators at /collabs.',
+  },
+  {
+    q: 'What\'s the business model?',
+    a: 'PointCast isn\'t a business — it\'s a personal broadcast. Mike\'s day job is COO at Good Feels (hemp-THC beverage company). PointCast earns via on-chain mints (open-supply Visit Nouns FA2 at ~0.003 ꜩ — effectively free) and editorial FA2s at /collect. No ads, no paywall, no newsletter list. CC0 posture.',
+  },
+  {
+    q: 'How do I follow?',
+    a: 'Pick RSS or JSON Feed: /feed.xml (RSS 2.0), /feed.json (JSON Feed 1.1). Or socially: Farcaster + X both @mhoydich. No email list by design. See /subscribe for the full follow matrix.',
+  },
+  {
+    q: 'Can I run a similar setup?',
+    a: 'Yes. The stack is Astro + Cloudflare Pages + Workers + KV. Agent-native scaffolding (llms.txt, agents.json, stripped-HTML middleware, rich JSON-LD) is documented at /agent-native with live code links. The Tezos contracts are SmartPy → Michelson, Taquito + Beacon on the frontend — all at /tezos/how-to-mint. Fork the repo, delete our content, keep the patterns.',
+  },
+  {
+    q: 'What can I do here right now?',
+    a: 'If you\'ve got 60 seconds: drop a /visit so the guestbook records that you came. If you\'ve got 5 minutes: read /manifesto (the canonical 12 Q&A) or /agent-native (the technical writeup). If you\'ve got 10 minutes: /tezos/how-to-mint — walk through a free Visit Nouns mint and leave with a CC0 NFT on Tezos.',
+  },
+  {
+    q: 'What tech stack is this site on?',
+    a: 'Astro 6 + Cloudflare Pages + Cloudflare Workers + Cloudflare KV + Durable Objects. Content in .json files (Astro content collections). Contracts in SmartPy. Frontend Taquito + Beacon for Tezos interactions. No React, no Next.js, no Vercel, no CMS. Full stack at /stack.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': 'https://pointcast.xyz/show-hn',
+      headline: 'Show HN: PointCast — the 5-minute tour',
+      name: 'PointCast — arrived from Hacker News',
+      description: 'If you came from Hacker News: the fast orient. What PointCast is, what\'s interesting about it, where the code lives, and the seven pages worth your next five minutes. Built by Mike Hoydich × Claude Code in El Segundo, California.',
+      url: 'https://pointcast.xyz/show-hn',
+      author: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person', name: 'Mike Hoydich' },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      image: 'https://pointcast.xyz/images/og-home-v3.png',
+      datePublished: '2026-04-21',
+      dateModified: new Date().toISOString().slice(0, 10),
+      inLanguage: 'en-US',
+      mainEntityOfPage: 'https://pointcast.xyz/show-hn',
+      keywords: 'Show HN, Hacker News, PointCast, agent-native web, Tezos, Ethereum vs Tezos, AI stack, Claude Code, Codex, open source, CC0, El Segundo',
+      articleSection: 'Meta',
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/show-hn#faq',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    ...(SHOW_HN_TRAIL.length > 0
+      ? [{
+          '@type': 'ItemList',
+          '@id': 'https://pointcast.xyz/show-hn#trail',
+          numberOfItems: SHOW_HN_TRAIL.length,
+          itemListOrder: 'https://schema.org/ItemListOrderDescending',
+          itemListElement: SHOW_HN_TRAIL.map((t, i) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            url: t.hn,
+            name: t.title,
+          })),
+        }]
+      : []),
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/show-hn#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Show HN', item: 'https://pointcast.xyz/show-hn' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Show HN — PointCast"
+  description="Arrived from Hacker News? The 5-minute tour. What PointCast is, the 7 pages worth reading, how the agents + Tezos contracts + llms.txt stack fits together, and where the open-source repo lives."
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Show HN</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">SHOW HN · FIVE-MINUTE TOUR · WELCOME</p>
+      <h1 class="display">Hi HN. Welcome to PointCast.</h1>
+      <p class="dek">
+        If you clicked from a Hacker News thread, this page is the fast
+        orient. PointCast is a personal broadcast — Mike Hoydich × Claude
+        Code, shipping daily from El Segundo, California. The interesting
+        parts are the agent-native web scaffolding, the Tezos FA2 contract,
+        the three autonomous collaborators, and the CC0 posture across
+        content and code.
+      </p>
+      <p class="dek">
+        Code:
+        <a href="https://github.com/MikeHoydich/pointcast" target="_blank" rel="noopener">github.com/MikeHoydich/pointcast</a>.
+        Contact: <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a> /
+        <a href="https://x.com/mhoydich" target="_blank" rel="noopener">@mhoydich</a>.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="tour">The seven pages worth your next five minutes</h2>
+      <ol class="pitches">
+        {PITCHES.map((p, i) => (
+          <li class="pitch">
+            <span class="pitch__num mono">{String(i + 1).padStart(2, '0')}</span>
+            <div class="pitch__body">
+              <h3 class="pitch__title"><a href={p.href}>{p.label} ({p.href})</a></h3>
+              <p class="pitch__copy">{p.copy}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    {SHOW_HN_TRAIL.length > 0 && (
+      <section class="section">
+        <h2 id="trail">Show HN trail</h2>
+        <p>Every Show HN thread PointCast has posted, ordered newest first. Helpful if you want to see how the project has evolved.</p>
+        <ol class="trail">
+          {SHOW_HN_TRAIL.map((t) => (
+            <li class="trail__item">
+              <a href={t.hn} target="_blank" rel="noopener">{t.title}</a>
+              <span class="trail__date mono">{t.date}</span>
+              <p class="trail__summary">{t.summary}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+    )}
+
+    <section class="section">
+      <h2 id="faq">FAQ</h2>
+      <dl class="faq">
+        {faqs.map((f) => (
+          <>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <section class="section">
+      <h2 id="engage">Three things you can do right now</h2>
+      <ul class="actions">
+        <li>
+          <strong>Leave a visit</strong> — <a href="/visit">/visit</a> is
+          the guestbook. Humans and AI agents both sign. Takes 10 seconds.
+        </li>
+        <li>
+          <strong>Mint a free Visit Noun</strong> —
+          <a href="/collection/visit-nouns">/collection/visit-nouns</a>.
+          Pick any Nouns seed 0-1199, pay ~0.003 ꜩ (~$0.01) in network
+          fees, walk away with a Tezos FA2 NFT. Full walkthrough at
+          <a href="/tezos/how-to-mint">/tezos/how-to-mint</a>.
+        </li>
+        <li>
+          <strong>Drop a note</strong> — <a href="/ping">/ping</a> is an
+          async inbox that feeds into Mike + Claude Code's session
+          queue. Leave feedback, an idea, a question. It gets read.
+        </li>
+      </ul>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">RELATED</p>
+      <ul>
+        <li><a href="/manifesto">/manifesto — the canonical 12 Q&A</a></li>
+        <li><a href="/blocks">/blocks — the content primitive</a></li>
+        <li><a href="/for-agents">/for-agents — machine discovery manifest walkthrough</a></li>
+        <li><a href="/agents.json">/agents.json — JSON manifest</a></li>
+        <li><a href="/llms.txt">/llms.txt — LLM index</a></li>
+        <li><a href="/sprints">/sprints — every autonomous sprint shipped</a></li>
+        <li><a href="/collabs">/collabs — human + AI collaborator registry</a></li>
+        <li><a href="/press">/press — media kit (brand assets, bio, boilerplate)</a></li>
+        <li><a href="https://github.com/MikeHoydich/pointcast" target="_blank" rel="noopener">github.com/MikeHoydich/pointcast ↗</a></li>
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 780px; margin: 0 auto; padding: 18px 18px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: 18px; }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #ff6600; margin: 0 0 10px; font-weight: 500; }
+  .display { font-family: var(--pc-font-sans); font-size: 40px; font-weight: 500; line-height: 1.05; margin: 0 0 12px; }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 16px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0 0 10px; max-width: 64ch; }
+  .dek a { color: var(--pc-accent); }
+
+  .section { margin: 28px 0; }
+  .section h2 { font-family: var(--pc-font-sans); font-size: 22px; font-weight: 500; margin: 0 0 14px; }
+  .section p { font-size: 14.5px; line-height: 1.6; color: var(--pc-ink); margin: 0 0 12px; max-width: 64ch; }
+  .section a { color: var(--pc-accent); text-decoration: underline; }
+  .section strong { font-weight: 500; }
+
+  .pitches { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .pitch {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--pc-rule);
+    border-left: 3px solid #ff6600;
+    border-radius: 2px;
+    background: #fff;
+  }
+  .pitch__num { color: #ff6600; font-weight: 500; font-size: 12px; letter-spacing: 0.18em; padding-top: 3px; }
+  .pitch__title { margin: 0 0 6px; font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500; }
+  .pitch__title a { color: var(--pc-ink); text-decoration: none; }
+  .pitch__title a:hover { color: var(--pc-accent); }
+  .pitch__copy { margin: 0; font-size: 14px; line-height: 1.55; color: var(--pc-ink-soft); }
+
+  .trail { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .trail__item { padding: 10px 12px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  .trail__item a { font-family: var(--pc-font-sans); font-size: 15px; font-weight: 500; color: var(--pc-ink); }
+  .trail__date { display: block; color: var(--pc-ink-muted); font-size: 10px; margin: 2px 0 6px; }
+  .trail__summary { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--pc-ink-soft); }
+
+  .faq { margin: 0; display: grid; gap: 14px; }
+  .faq dt { font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500; }
+  .faq dd { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft); max-width: 64ch; }
+
+  .actions { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .actions li {
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-left: 3px solid var(--pc-accent);
+    border-radius: 2px;
+    background: #fff;
+    font-size: 14.5px;
+    line-height: 1.55;
+  }
+  .actions strong { color: var(--pc-ink); font-weight: 500; }
+
+  .related { margin-top: 40px; padding-top: 16px; border-top: 1.5px solid var(--pc-ink); font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

@@ -1,0 +1,207 @@
+---
+/**
+ * /tv/shows/archive — slow vertical crawl through every block title in
+ * PointCast's history, oldest to newest. The whole archive scrolls past
+ * in roughly 4 minutes at reading pace. Huge serif, subtle channel color.
+ *
+ * Auto-fullscreen on first tap.
+ */
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../../../lib/channels';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => a.data.timestamp.getTime() - b.data.timestamp.getTime());
+
+function fmtDate(iso: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric', month: 'short', day: '2-digit',
+    timeZone: 'America/Los_Angeles',
+  }).format(iso);
+}
+
+const items = blocks.map((b) => ({
+  id: b.data.id,
+  title: b.data.title,
+  channel: b.data.channel,
+  channelName: CHANNELS[b.data.channel]?.name ?? b.data.channel,
+  color: CHANNELS[b.data.channel]?.color600 ?? '#E89A2D',
+  date: fmtDate(b.data.timestamp),
+  author: b.data.author ?? 'cc',
+}));
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#1a1208" />
+  <meta name="description" content="Archive crawl — every block title in PointCast's history set in big serif, scrolling slowly top to bottom. A broadcast-mode reading of the archive. Full viewport." />
+  <title>PointCast TV · Archive crawl</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,500&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #1a1208;
+      --bg-2: #251810;
+      --ink: #f3e6d8;
+      --ink-soft: #c4a77d;
+      --ink-dim: #8a7e6c;
+      --accent: #E89A2D;
+      --serif: 'Lora', Georgia, serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%); color: var(--ink); font-family: var(--serif); }
+
+    .top {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 30px;
+      background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+      z-index: 10;
+      font-family: var(--mono);
+    }
+    .top__brand { font-size: 15px; letter-spacing: 0.28em; font-weight: 700; }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 10px; letter-spacing: 0.28em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__counter { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-dim); margin-left: auto; font-weight: 600; }
+    .top__fs { appearance: none; cursor: pointer; background: rgba(232, 154, 45, 0.1); border: 1px solid rgba(232, 154, 45, 0.4); color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; font-weight: 700; padding: 5px 10px; border-radius: 2px; }
+    .top__fs:hover { background: rgba(232, 154, 45, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    .bot {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 44px;
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px 30px;
+      background: linear-gradient(0deg, var(--bg-2) 0%, transparent 100%);
+      z-index: 10;
+      font-family: var(--mono);
+      color: var(--ink-dim);
+      font-size: 10px; letter-spacing: 0.14em;
+    }
+    .bot__kicker { color: var(--accent); font-weight: 700; }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      height: 100vh;
+      padding: 80px 0 60px;
+    }
+    .crawl {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      padding: 40vh 0 40vh;
+      animation: crawl-scroll calc(var(--seconds, 240) * 1s) linear infinite;
+    }
+    @keyframes crawl-scroll {
+      0%   { transform: translateY(40vh); }
+      100% { transform: translateY(calc(-100% + 40vh)); }
+    }
+
+    .entry {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 24px;
+      padding: 0 40px;
+      align-items: baseline;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .entry__num {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink-dim);
+      letter-spacing: 0.04em;
+      text-align: right;
+      padding-top: 12px;
+    }
+    .entry__body { display: flex; flex-direction: column; gap: 6px; }
+    .entry__meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+    .entry__meta--date { color: var(--ink-soft); }
+    .entry__meta--channel { color: var(--channel-color, var(--accent)); }
+    .entry__meta--author { color: var(--ink-dim); }
+    .entry__title {
+      font-family: var(--serif);
+      font-size: clamp(28px, 3.2vw, 44px);
+      font-weight: 500;
+      line-height: 1.2;
+      color: var(--ink);
+      margin: 0;
+      letter-spacing: -0.005em;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .crawl { animation: none !important; transform: none !important; padding: 40px; gap: 32px; overflow-y: auto; }
+      .stage { overflow-y: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / ARCHIVE CRAWL</div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FS</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+    <div class="top__counter">{items.length} BLOCKS</div>
+  </header>
+
+  <section class="stage">
+    <div class="crawl" style={`--seconds: ${Math.max(180, items.length * 0.8)}`}>
+      {items.map((b, i) => (
+        <article class="entry" style={`--channel-color: ${b.color}`}>
+          <span class="entry__num">{b.id}</span>
+          <div class="entry__body">
+            <div class="entry__meta">
+              <span class="entry__meta--date">{b.date}</span>
+              <span class="entry__meta--channel">{b.channelName.toUpperCase()}</span>
+              <span class="entry__meta--author">{b.author}</span>
+            </div>
+            <h2 class="entry__title">{b.title}</h2>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <footer class="bot">
+    <span class="bot__kicker">ARCHIVE</span>
+    <span>every block, oldest to newest, one after another · replays continuously</span>
+  </footer>
+
+  <script is:inline>
+    (function () {
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() { var el = document.documentElement; var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      function exit() { var e = document.exitFullscreen || document.webkitExitFullscreen; if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){} }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

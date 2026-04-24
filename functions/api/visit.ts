@@ -291,10 +291,21 @@ export async function recordVisit(opts: {
     { expirationTtl: PRESENCE_TTL_SECONDS },
   );
 
-  // No rate limit — every committed noun logs. The client widget's 10s
-  // countdown + manual regenerate naturally paces the cadence. KV-based
-  // rate limiting is unreliable due to eventual consistency anyway;
-  // log rotation (MAX_LOG_ENTRIES) bounds unbounded growth.
+  // Session-dedupe cooldown. Per Mike ping 2026-04-20 21:37 UTC:
+  // "been getting cloudflaire overuse notes in gmail for kv workers."
+  // Root cause: every page hit (+ every crawler hit via _middleware)
+  // wrote 2-3 KV entries (log, count, firsts). A single visitor scrolling
+  // 40 pages = 120 KV writes. Mitigation: skip log/count writes when the
+  // same IP hit within COOLDOWN_SECONDS. Presence still refreshes (above).
+  // Notes from the visitor (explicit user action) always log regardless.
+  const COOLDOWN_KEY_PREFIX = 'visit:cooldown:';
+  const COOLDOWN_SECONDS = 600;
+  const cooldownKey = `${COOLDOWN_KEY_PREFIX}${ipHash}`;
+  const cooldownActive = await env.VISITS.get(cooldownKey);
+  if (cooldownActive && !note) {
+    const present = await listPresent(env);
+    return { ok: true, count: await loadCount(env), present, throttled: true };
+  }
 
   // First-of-a-kind
   const firsts = await loadFirsts(env);
@@ -362,6 +373,9 @@ export async function recordVisit(opts: {
   const writes: Promise<void>[] = [
     env.VISITS.put(KEY_LOG, JSON.stringify(trimmed)),
     env.VISITS.put(KEY_COUNT, String(nextCount)),
+    // Set cooldown so the next hit from this IP within 10 min returns
+    // early above without re-writing log/count/firsts.
+    env.VISITS.put(cooldownKey, '1', { expirationTtl: COOLDOWN_SECONDS }),
   ];
   if (badges.length) {
     writes.push(env.VISITS.put(KEY_FIRSTS, JSON.stringify(firsts)));

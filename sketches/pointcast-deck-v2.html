@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PointCast · Volume 2 — The Network Shape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sun:#FF7A5C;
+    --peach:#FFB68A;
+    --dusk:#F0B94A;
+    --teal:#0FB8A3;
+    --plum:#1A0F2E;
+    --plum2:#2B1A4D;
+    --wine:#6A1E3A;
+    --noggles-red:#e73838;
+    --ink:#0B0B10;
+    --paper:#F4ECDC;
+    --paper2:#EADFC8;
+    --mint:#A8E6CF;
+    --neon:#FF00E5;
+    --cyan:#3BE8F7;
+    --violet:#5F3DC4;
+    --amber:#F59E0B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .deck{position:fixed;inset:0;overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;padding:5vmin 7vmin;overflow:hidden}
+  .slide.active{display:flex;flex-direction:column;animation:in .45s cubic-bezier(.2,.8,.2,1)}
+  @keyframes in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:.78rem;letter-spacing:.28em;text-transform:uppercase;opacity:.7}
+  .crt{font-family:'JetBrains Mono',monospace}
+  .display{font-family:'DM Serif Display',serif;letter-spacing:-.01em;line-height:.95}
+  h1{font-size:clamp(3rem,8vw,9rem);line-height:.88;letter-spacing:-.04em;font-weight:700}
+  h2{font-size:clamp(2rem,5vw,5.5rem);line-height:.95;letter-spacing:-.02em;font-weight:700}
+  h3{font-size:clamp(1.2rem,2vw,2rem);font-weight:600;letter-spacing:-.01em}
+  p{font-size:clamp(1rem,1.4vw,1.35rem);line-height:1.45;max-width:64ch}
+  small{font-size:.9rem;opacity:.75}
+  .tag{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .7rem;border:1px solid currentColor;border-radius:999px;font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase}
+  .grow{flex:1}
+  .row{display:flex;gap:2vmin}
+  .col{display:flex;flex-direction:column;gap:2vmin}
+  .nav{position:fixed;bottom:2.2vmin;left:0;right:0;display:flex;justify-content:center;gap:.5rem;z-index:9}
+  .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);transition:.25s}
+  .dot.on{background:var(--paper);transform:scale(1.5)}
+  .meta{position:fixed;bottom:2vmin;left:3vmin;font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.2em;opacity:.55;z-index:9}
+  .brand{position:fixed;top:2vmin;left:3vmin;font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.3em;opacity:.7;z-index:9}
+  .counter{position:fixed;top:2vmin;right:3vmin;font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.2em;opacity:.55;z-index:9}
+
+  /* noggles (SVG) */
+  .noggles{display:inline-block;width:var(--nw,180px);line-height:0}
+  .noggles svg{display:block;width:100%;height:auto;shape-rendering:crispEdges;image-rendering:pixelated}
+
+  /* SLIDE 1 — cover */
+  .s-cover{background:
+    radial-gradient(110% 70% at 85% 15%, rgba(95,61,196,.35), transparent 60%),
+    radial-gradient(100% 70% at 10% 90%, rgba(255,122,92,.25), transparent 55%),
+    linear-gradient(180deg,#0A0716 0%, #1a0f2e 55%, #2b1a4d 100%)}
+  .s-cover::after{content:'';position:absolute;left:-10%;right:-10%;bottom:-2%;height:55%;background:radial-gradient(60% 80% at 50% 100%,rgba(59,232,247,.14),transparent 70%);pointer-events:none}
+  .cover-title{position:relative;z-index:2;display:flex;flex-direction:column;gap:2vmin;margin-top:auto}
+  .cover-title h1 span.vol{background:#000;color:var(--dusk);padding:0 .15em;font-family:'DM Serif Display',serif}
+  .cover-meta{display:flex;justify-content:space-between;align-items:flex-end;margin-top:3vmin;flex-wrap:wrap;gap:2vmin}
+  .network-bg{position:absolute;inset:0;pointer-events:none;opacity:.28}
+
+  /* SLIDE 2 — velocity */
+  .s-velocity{background:
+    radial-gradient(80% 60% at 20% 30%, rgba(240,185,74,.18), transparent 60%),
+    linear-gradient(180deg,#0D0717,#1A0F2E)}
+  .vel-wrap{display:grid;grid-template-columns:1fr 1fr;gap:4vmin;flex:1;margin-top:2vmin;align-items:center}
+  .vel-num{font-family:'DM Serif Display',serif;font-size:clamp(8rem,22vw,22rem);line-height:.85;letter-spacing:-.04em;color:var(--dusk)}
+  .commit-list{font-family:'JetBrains Mono',monospace;font-size:.78rem;line-height:1.6;opacity:.85;max-height:70vh;overflow:hidden;position:relative}
+  .commit-list::after{content:'';position:absolute;inset:auto 0 0 0;height:40%;background:linear-gradient(180deg,transparent,var(--plum) 90%);pointer-events:none}
+  .commit-list .sha{color:var(--dusk);margin-right:.7em}
+  .commit-list .tag{color:var(--cyan);margin-right:.4em;font-size:.72rem;padding:0}
+
+  /* SLIDE 3 — thesis (compute currency) */
+  .s-thesis{background:linear-gradient(135deg,#0D0717 0%, #2b1a4d 50%, #5F3DC4 100%)}
+  .thesis-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:3vmin;max-width:70vw}
+  .thesis-body .display{font-family:'DM Serif Display',serif;font-size:clamp(2.4rem,5.5vw,6.2rem);line-height:.95}
+  .cite{font-family:'JetBrains Mono',monospace;font-size:.85rem;opacity:.65;border-left:2px solid var(--violet);padding-left:1rem;margin-top:2vmin}
+
+  /* SLIDE 4 — compute ledger */
+  .s-ledger{background:var(--paper);color:var(--ink)}
+  .ledger-wrap{display:grid;grid-template-columns:1.2fr 1fr;gap:3vmin;flex:1;margin-top:2vmin;min-height:0}
+  .ledger-table{font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.5;border-top:2px solid var(--ink)}
+  .ledger-row{display:grid;grid-template-columns:9rem 7rem 1fr 5rem;gap:1rem;padding:.55rem 0;border-bottom:1px solid rgba(0,0,0,.12);align-items:center}
+  .ledger-row .time{opacity:.6}
+  .ledger-row .who{font-weight:700;color:var(--violet)}
+  .ledger-row .who.mh{color:var(--wine)}
+  .ledger-row .who.cx{color:var(--teal)}
+  .ledger-row .who.mn{color:var(--amber)}
+  .sig-bar{display:flex;gap:2px}
+  .sig-bar span{width:8px;height:10px;background:rgba(0,0,0,.15);border-radius:1px}
+  .sig-bar span.on{background:var(--ink)}
+  .sig-bar.shy span:nth-child(-n+1){background:var(--ink)}
+  .sig-bar.modest span:nth-child(-n+2){background:var(--ink)}
+  .sig-bar.healthy span:nth-child(-n+3){background:var(--ink)}
+  .sig-bar.heavy span:nth-child(-n+4){background:var(--ink)}
+  .ledger-side .stat-block{border-top:2px solid var(--ink);padding-top:1vmin;margin-bottom:2vmin}
+  .ledger-side .stat-block .n{font-family:'DM Serif Display',serif;font-size:clamp(2.5rem,4.5vw,5rem);line-height:1}
+  .ledger-side .stat-block .k{font-family:'JetBrains Mono',monospace;font-size:.75rem;letter-spacing:.2em;opacity:.7;text-transform:uppercase}
+
+  /* SLIDE 5 — four collaborators */
+  .s-four{background:linear-gradient(180deg,#0D0717,#1a0f2e 60%,#0D0717)}
+  .four-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2vmin;flex:1;margin-top:2vmin}
+  .collab{padding:3vmin 2.3vmin;border:1px solid rgba(255,255,255,.1);border-radius:8px;display:flex;flex-direction:column;gap:1.2vmin;position:relative;overflow:hidden}
+  .collab .pulse{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 0 currentColor;animation:pulse 2s infinite}
+  .collab .pulse.idle{animation:none;opacity:.35}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 currentColor}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  .collab h3{font-family:'DM Serif Display',serif;font-size:clamp(1.6rem,2.6vw,2.6rem);line-height:1}
+  .collab .count{font-family:'JetBrains Mono',monospace;font-size:.85rem;opacity:.8}
+  .collab .role{font-size:.92rem;opacity:.85;line-height:1.35}
+  .collab .sig{font-family:'JetBrains Mono',monospace;font-size:.72rem;opacity:.65;letter-spacing:.1em}
+  .collab.cc{background:linear-gradient(165deg,rgba(95,61,196,.22),rgba(95,61,196,.04));color:var(--violet)}
+  .collab.mh{background:linear-gradient(165deg,rgba(255,122,92,.18),rgba(106,30,58,.1));color:var(--sun)}
+  .collab.cx{background:linear-gradient(165deg,rgba(15,184,163,.18),rgba(15,184,163,.03));color:var(--teal)}
+  .collab.mn{background:linear-gradient(165deg,rgba(245,158,11,.16),rgba(245,158,11,.03));color:var(--amber)}
+  .collab p.txt{color:var(--paper)}
+
+  /* SLIDE 6 — workbench */
+  .s-work{background:var(--paper);color:var(--ink)}
+  .work-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1vmin;margin-top:2vmin;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:1.5vmin 0}
+  .work-stat{display:flex;flex-direction:column;gap:.2rem;padding:0 1vmin}
+  .work-stat .n{font-family:'DM Serif Display',serif;font-size:clamp(2rem,4vw,4rem);line-height:1}
+  .work-stat .k{font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.2em;opacity:.6;text-transform:uppercase}
+  .work-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2vmin;flex:1;margin-top:2vmin;min-height:0;font-family:'JetBrains Mono',monospace;font-size:.82rem}
+  .work-col h4{font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;margin-bottom:.8rem;color:var(--violet);border-bottom:1px solid rgba(0,0,0,.15);padding-bottom:.35rem}
+  .work-col ul{list-style:none;display:flex;flex-direction:column;gap:.35rem}
+  .work-col li{padding:.3rem 0;border-bottom:1px dashed rgba(0,0,0,.12)}
+  .work-col li .pill{display:inline-block;font-size:.62rem;padding:.1rem .35rem;border-radius:2px;margin-right:.4rem;background:var(--ink);color:var(--paper);letter-spacing:.05em}
+
+  /* SLIDE 7 — federation */
+  .s-fed{background:linear-gradient(180deg,#1A0F2E 0%, #5F3DC4 70%, #2b1a4d 100%)}
+  .fed-wrap{display:grid;grid-template-columns:1.3fr 1fr;gap:3vmin;flex:1;margin-top:2vmin;min-height:0}
+  pre.terminal{background:#05030A;color:#A8E6CF;padding:1.8vmin 2.2vmin;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.85rem;line-height:1.55;overflow:auto;height:100%;white-space:pre}
+  pre.terminal .cmt{color:#7aa6a0}
+  pre.terminal .k{color:#FFB68A}
+  pre.terminal .s{color:#F0B94A}
+  pre.terminal .hdr{color:#FF00E5}
+  .fed-steps{display:flex;flex-direction:column;gap:2vmin}
+  .fed-steps .step{display:flex;gap:1.2rem;align-items:flex-start}
+  .fed-steps .n{font-family:'DM Serif Display',serif;font-size:2.8rem;color:var(--dusk);min-width:2.4rem;line-height:1}
+  .fed-steps h3{font-size:1.3rem;margin-bottom:.2rem}
+  .fed-steps small{opacity:.8;font-family:'JetBrains Mono',monospace;font-size:.82rem}
+
+  /* SLIDE 8 — field nodes */
+  .s-field{background:linear-gradient(160deg,#0D0717 0%, #1A0F2E 50%, #6A1E3A 100%)}
+  .field-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1.6vmin;flex:1;margin-top:2vmin;min-height:0}
+  .node{padding:2vmin;border-radius:6px;display:flex;flex-direction:column;gap:1.2vmin;justify-content:space-between;color:#fff;position:relative;overflow:hidden;min-height:0}
+  .node .icon{font-size:clamp(2rem,4vw,3.4rem);font-family:'DM Serif Display',serif;line-height:1}
+  .node .k{font-family:'DM Serif Display',serif;font-size:clamp(1.2rem,1.8vw,1.8rem);line-height:1}
+  .node .e{font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.2em;opacity:.75}
+  .node .m{font-size:.82rem;opacity:.88;line-height:1.35}
+  .node.mac{background:linear-gradient(175deg,#FF7A5C,#2b1a4d)}
+  .node.tv{background:linear-gradient(175deg,#5F3DC4,#0D0717)}
+  .node.ios{background:linear-gradient(175deg,#0FB8A3,#0b2540)}
+  .node.ext{background:linear-gradient(175deg,#F0B94A,#6A1E3A)}
+  .node.cli{background:linear-gradient(175deg,#A8E6CF,#0D0717);color:#0D0717}
+  .node.cli .e, .node.cli .m{color:#0D0717;opacity:.85}
+
+  /* SLIDE 9 — magpie */
+  .s-mag{background:
+    radial-gradient(80% 60% at 80% 20%, rgba(240,185,74,.2), transparent 60%),
+    linear-gradient(180deg,#0A0716,#1A0F2E 60%,#0A0716)}
+  .mag-wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:3vmin;flex:1;margin-top:2vmin;align-items:center;min-height:0}
+  .mag-art{position:relative;aspect-ratio:1;max-width:58vmin;margin:auto;width:100%}
+  .mag-art svg{width:100%;height:100%}
+  .mag-list{display:flex;flex-direction:column;gap:1.2vmin}
+  .mag-list .row{display:grid;grid-template-columns:auto 1fr;gap:1rem;align-items:center;padding:1vmin 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  .mag-list .mark{font-family:'DM Serif Display',serif;font-size:1.4rem;min-width:2.4rem;color:var(--dusk);text-align:right}
+  .mag-list h4{font-size:1.05rem;margin-bottom:.1rem}
+  .mag-list small{opacity:.7;font-family:'JetBrains Mono',monospace;font-size:.75rem}
+
+  /* SLIDE 10 — conav + mood */
+  .s-conav{background:linear-gradient(180deg,#6A1E3A 0%, #2b1a4d 60%, #0D0717 100%)}
+  .conav-wrap{flex:1;display:flex;flex-direction:column;gap:3vmin;justify-content:center;align-items:center;margin-top:2vmin}
+  .conav-art{width:100%;max-width:90vmin;aspect-ratio:16/6;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(0,0,0,.4));border-radius:8px;border:1px solid rgba(255,255,255,.12);position:relative;padding:3vmin;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+  .conav-art::before{content:'';position:absolute;inset:0;background:radial-gradient(60% 80% at 50% 0%, rgba(255,0,229,.25), transparent 60%);pointer-events:none}
+  .conav-bar{background:rgba(0,0,0,.6);backdrop-filter:blur(12px);border-radius:999px;padding:.8rem 1.4rem;display:flex;gap:2rem;align-items:center;font-family:'JetBrains Mono',monospace;font-size:.75rem;border:1px solid rgba(255,255,255,.1);position:relative;z-index:2}
+  .conav-bar .chip{padding:.3rem .7rem;border:1px solid rgba(255,255,255,.25);border-radius:999px;display:flex;align-items:center;gap:.4rem;color:var(--paper)}
+  .conav-bar .chip.mood{color:var(--neon);border-color:var(--neon)}
+  .conav-bar .chip.here{color:var(--mint)}
+  .conav-bar .chip.music{color:var(--dusk)}
+  .conav-caption{text-align:center;max-width:62ch;margin:0 auto}
+
+  /* SLIDE 11 — sky clock */
+  .s-sky{background:linear-gradient(180deg,#0A0716 0%, #2b1a4d 40%, #FF7A5C 100%)}
+  .sky-wrap{display:grid;grid-template-columns:1fr 1.2fr;gap:3vmin;flex:1;margin-top:2vmin;align-items:center;min-height:0}
+  .sky-dome{position:relative;aspect-ratio:2/1;max-width:60vmin;margin:auto;width:100%}
+  .sky-dome svg{width:100%;height:100%}
+  .zone-list{display:grid;grid-template-columns:repeat(2,1fr);gap:.5vmin 2vmin;font-family:'JetBrains Mono',monospace;font-size:.85rem}
+  .zone-list li{list-style:none;padding:.3rem 0;border-bottom:1px dashed rgba(255,255,255,.12);display:flex;justify-content:space-between;gap:1rem}
+  .zone-list .zone{opacity:.85}
+  .zone-list .time{color:var(--dusk);opacity:.85}
+
+  /* SLIDE 12 — play hub */
+  .s-play{background:var(--paper);color:var(--ink)}
+  .play-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.4vmin;flex:1;margin-top:2vmin;min-height:0}
+  .p-card{padding:2vmin;border-radius:5px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;position:relative;overflow:hidden;min-height:0}
+  .p-card .k{font-family:'DM Serif Display',serif;font-size:clamp(1.4rem,2.1vw,2.3rem);line-height:1}
+  .p-card .m{font-size:.85rem;opacity:.92}
+  .p-card .e{font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.2em;opacity:.85}
+  .p-card.drum{background:linear-gradient(175deg,#0FB8A3,#0b2540)}
+  .p-card.here{background:linear-gradient(175deg,#FF7A5C,#6A1E3A)}
+  .p-card.poll{background:linear-gradient(175deg,#FF00E5,#1a0f2e)}
+  .p-card.cards{background:linear-gradient(175deg,#F0B94A,#6A1E3A)}
+  .p-card.battle{background:linear-gradient(175deg,#FF1A1A,#000)}
+  .p-card.quiz{background:linear-gradient(175deg,#5F3DC4,#0D0717)}
+  .p-card.prize{background:linear-gradient(175deg,#F59E0B,#2b1a4d)}
+  .p-card.today{background:linear-gradient(175deg,#A8E6CF,#0b2540);color:#0b2540}
+  .p-card.today .e,.p-card.today .m{color:#0b2540;opacity:.9}
+
+  /* SLIDE 13 — pc-ping + x402 */
+  .s-ping{background:linear-gradient(180deg,#0D0717 0%, #0FB8A3 50%, #0D0717 100%)}
+  .ping-wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:3vmin;flex:1;margin-top:2vmin;align-items:stretch;min-height:0}
+  .ping-art pre{background:#03020A;color:#3BE8F7;padding:2vmin;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.5;white-space:pre;overflow:auto;height:100%}
+  .ping-art .k{color:#FFB68A}.ping-art .s{color:#F0B94A}.ping-art .cmt{color:#6aa}
+  .ping-right{display:flex;flex-direction:column;gap:2vmin;justify-content:center}
+  .ping-right h3{font-family:'DM Serif Display',serif;font-size:clamp(1.8rem,3vw,2.6rem)}
+
+  /* SLIDE 14 — where it's going */
+  .s-road{background:linear-gradient(180deg,#0D0717,#1a0f2e 45%,#3b1746)}
+  .road{display:flex;flex-direction:column;gap:1.4vmin;margin-top:2vmin;flex:1;justify-content:center}
+  .stop{display:grid;grid-template-columns:7rem 1fr auto;gap:2vmin;align-items:center;padding:1.2vmin 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  .stop .q{font-family:'JetBrains Mono',monospace;font-size:.78rem;letter-spacing:.2em;opacity:.6}
+  .stop h3{font-family:'DM Serif Display',serif;font-size:clamp(1.3rem,1.9vw,1.9rem);line-height:1.1}
+  .stop small{opacity:.65;font-size:.85rem;display:block;margin-top:.2rem}
+  .stop.soon .tag{color:var(--dusk);border-color:var(--dusk)}
+  .stop.near .tag{color:var(--cyan);border-color:var(--cyan)}
+  .stop.far .tag{color:var(--neon);border-color:var(--neon)}
+
+  /* SLIDE 15 — closer */
+  .s-end{background:
+    radial-gradient(70% 55% at 50% 105%, rgba(255,182,138,.6) 0%, transparent 70%),
+    linear-gradient(180deg,#0D0717,#2b1a4d 55%,#5F3DC4)}
+  .end-wrap{margin:auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2.5vmin}
+  .end-title{font-family:'DM Serif Display',serif;font-size:clamp(2.4rem,5.2vw,5.4rem);line-height:1;letter-spacing:-.02em;max-width:22ch}
+  .end-receipt{font-family:'JetBrains Mono',monospace;font-size:clamp(.9rem,1.2vw,1.1rem);letter-spacing:.25em;text-transform:uppercase;opacity:.85}
+  .end-url{font-family:'JetBrains Mono',monospace;font-size:clamp(1rem,1.4vw,1.3rem);letter-spacing:.3em;text-transform:uppercase;color:var(--dusk)}
+
+  @media (max-width:820px){
+    .four-grid,.field-grid,.play-grid{grid-template-columns:repeat(2,1fr)!important}
+    .work-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .work-cols{grid-template-columns:1fr}
+    .vel-wrap,.ledger-wrap,.fed-wrap,.sky-wrap,.ping-wrap,.mag-wrap{grid-template-columns:1fr!important}
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- 1 · COVER -->
+  <section class="slide active s-cover">
+    <svg class="network-bg" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <radialGradient id="node" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FF00E5"/><stop offset="1" stop-color="#FF00E5" stop-opacity="0"/></radialGradient>
+      </defs>
+      <g stroke="#FF00E5" stroke-width=".08" stroke-opacity=".4">
+        <line x1="18" y1="14" x2="48" y2="24"/><line x1="48" y1="24" x2="72" y2="12"/>
+        <line x1="48" y1="24" x2="78" y2="42"/><line x1="48" y1="24" x2="22" y2="46"/>
+        <line x1="22" y1="46" x2="78" y2="42"/><line x1="78" y1="42" x2="88" y2="30"/>
+        <line x1="72" y1="12" x2="88" y2="30"/><line x1="18" y1="14" x2="8" y2="30"/>
+        <line x1="8" y1="30" x2="22" y2="46"/><line x1="8" y1="30" x2="48" y2="24"/>
+      </g>
+      <g fill="#FF00E5">
+        <circle cx="18" cy="14" r=".9"/><circle cx="48" cy="24" r="1.4"/><circle cx="72" cy="12" r="1.1"/>
+        <circle cx="78" cy="42" r="1"/><circle cx="22" cy="46" r=".9"/><circle cx="88" cy="30" r=".8"/><circle cx="8" cy="30" r=".8"/>
+      </g>
+    </svg>
+    <div style="position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-start">
+      <span class="eyebrow">PointCast · Deck № 002 · 2026-04-20</span>
+      <span class="eyebrow">github.com/mhoydich/pointcast</span>
+    </div>
+    <div class="grow"></div>
+    <div class="cover-title">
+      <div class="noggles" style="--nw:min(42vmin,400px)">
+        <svg viewBox="0 0 14 4" aria-label="noggles">
+          <rect x="0" y="0" width="6" height="4" fill="#e73838"/>
+          <rect x="1" y="1" width="4" height="2" fill="#ffffff"/>
+          <rect x="3" y="1" width="2" height="2" fill="#000000"/>
+          <rect x="6" y="1" width="1" height="2" fill="#e73838"/>
+          <rect x="7" y="0" width="6" height="4" fill="#e73838"/>
+          <rect x="8" y="1" width="4" height="2" fill="#ffffff"/>
+          <rect x="10" y="1" width="2" height="2" fill="#000000"/>
+        </svg>
+      </div>
+      <h1 class="display">PointCast <span class="vol">Vol. II</span></h1>
+      <p style="font-size:clamp(1.2rem,2vw,1.85rem);max-width:48ch;opacity:.94"><em>The Network Shape.</em> Vol. I was a website. Vol. II is a coordination network — <b>compute as currency</b>, agents as peers, field nodes everywhere.</p>
+      <div class="cover-meta">
+        <span class="tag" style="color:var(--dusk);border-color:var(--dusk)">100 commits · 2 weeks · still shipping</span>
+        <span class="eyebrow">pointcast.xyz</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · VELOCITY -->
+  <section class="slide s-velocity">
+    <span class="eyebrow">Velocity · 01 / 14</span>
+    <h2 class="display" style="margin-top:1vmin">100 commits.<br/><span style="color:var(--dusk)">Two weeks.</span></h2>
+    <div class="vel-wrap">
+      <div class="col">
+        <div class="vel-num">100</div>
+        <p style="max-width:34ch;margin-top:1vmin">In the 14 days before this deck went up, the repo received one hundred commits across editorial, infrastructure, agent tooling, chain ops, and content. The site is being shaped in real time.</p>
+        <p class="eyebrow" style="opacity:.7;margin-top:2vmin">cc · mh · codex · manus</p>
+      </div>
+      <div class="commit-list">
+<span class="sha">788440d</span><span class="tag">feat</span>magpie: hosted /magpie UI + pc-ping-v1 v0.5 schema
+<br/><span class="sha">33d5351</span><span class="tag">feat</span>conavigator: persistent footer bar + mood + soundtrack
+<br/><span class="sha">0af69d2</span><span class="tag">feat</span>home: drag-to-arrange + mood-persists + sports redesign
+<br/><span class="sha">d1ffac0</span><span class="tag">feat</span>clock: expand each zone — 14+ rituals + landmarks
+<br/><span class="sha">da07efa</span><span class="tag">feat</span>home+here: daily-drop + sports strip + BTC trend poll
+<br/><span class="sha">928c1ea</span><span class="tag">feat</span>clock: per-zone facts, rituals, seasonal notes
+<br/><span class="sha">b78a9b6</span><span class="tag">feat</span>here+home: drum beat pad + live poll + mood pulse
+<br/><span class="sha">0f82d31</span><span class="tag">feat</span>clock: sky dome per zone — sun plotted where it is
+<br/><span class="sha">9e5b381</span><span class="tag">feat</span>home+collabs: Today-on-PointCast strip + Clients
+<br/><span class="sha">e489986</span><span class="tag">feat</span>clock: sun strip per zone — day/night band
+<br/><span class="sha">a779293</span><span class="tag">feat</span>content: 4/20 + AI landscape + contribute paths
+<br/><span class="sha">2a4e723</span><span class="tag">feat</span>network: presence DO online + /here + /for-nodes
+<br/><span class="sha">92f6a21</span><span class="tag">feat</span>clock: planetary drawer per card + global sky ribbon
+<br/><span class="sha">5c0b841</span><span class="tag">feat</span>sky: astronomical helper + meteor shower calendar
+<br/><span class="sha">d35293a</span><span class="tag">feat</span>clock: expand zones + lat/lon on every resolved zone
+<br/><span class="sha">7079974</span><span class="tag">feat</span>tv: add stations mode
+<br/><span class="sha">addf6e5</span><span class="tag">feat</span>enrich live presence broadcasts
+<br/><span class="sha">8ab248c</span><span class="tag">sprint</span>wellness trio + shop.getgoodfeels + /ai-stack
+<br/><span class="sha">e51029f</span><span class="tag">sprint</span>/publish + /beacon + proto-mint honest status
+<br/><span class="sha">2456688</span><span class="tag">feat</span>/yield — 5 token-mechanic experiments side-by-side
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · THESIS · compute is the currency -->
+  <section class="slide s-thesis">
+    <span class="eyebrow">New Thesis · 02 / 14</span>
+    <div class="thesis-body">
+      <p class="display"><span style="color:var(--dusk)">Compute</span> is the currency.<br/>The ledger is the receipt.</p>
+      <p style="font-size:clamp(1.1rem,1.7vw,1.55rem);max-width:48ch">Vol. I asked what a local broadcast could be. Vol. II asks what a <b>coordination network</b> between a human and three AI agents looks like when you publish the tape.</p>
+      <div class="cite">
+        "Compute is the new currency. It is used to recruit engineers, drive productivity, allocate importance of projects. Companies may eventually measure their teams in token budgets vs just dollars."<br/>
+        <span style="opacity:.6">— Elad Gil, 4/12/26 — the post that triggered the /compute ship</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · COMPUTE LEDGER -->
+  <section class="slide s-ledger">
+    <span class="eyebrow" style="color:var(--violet)">Compute Ledger · 03 / 14</span>
+    <h2 class="display">The ledger, <span style="color:var(--violet)">receipts-first</span>.</h2>
+    <div class="ledger-wrap">
+      <div class="ledger-table">
+        <div class="ledger-row" style="border-top:1px solid rgba(0,0,0,.2);font-weight:700;opacity:.65"><div>TIME</div><div>WHO</div><div>SHIP</div><div>SIG</div></div>
+        <div class="ledger-row"><div class="time">19:50 · 4/20</div><div class="who">cc</div><div>PulseStrip multi-agent dots · HeroBlock · ActionDrawers · /play hub</div><div class="sig-bar heavy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">17:15 · 4/20</div><div class="who">cc</div><div>CoNavigator + compute-pledge chip + cast button + x402 hook</div><div class="sig-bar heavy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">16:10 · 4/20</div><div class="who">cc</div><div>PingStrip inbox front door + SESSION-START INBOX discipline</div><div class="sig-bar healthy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">15:30 · 4/20</div><div class="who">cc</div><div>Compute Ledger primitive — federated /compute + Gil response block</div><div class="sig-bar heavy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">14:25 · 4/20</div><div class="who">cc</div><div>CoNavigator · persistent footer bar · mood + soundtrack across navs</div><div class="sig-bar heavy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">13:45 · 4/20</div><div class="who cx">codex</div><div>SportsStrip · four-league ESPN grid · live pulse · DailyDropStrip</div><div class="sig-bar healthy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">12:55 · 4/20</div><div class="who">cc</div><div>HereBeat + HerePoll + meditative mood-pulse overlay</div><div class="sig-bar healthy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">11:55 · 4/20</div><div class="who">cc</div><div>Workbench + /start onboarding tour + nodes.ts registry</div><div class="sig-bar healthy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">10:05 · 4/20</div><div class="who">cc</div><div>Presence DO online — live stats from Durable Object + /for-nodes</div><div class="sig-bar healthy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">09:30 · 4/20</div><div class="who mh">mh</div><div>Codex MCP installed · CLI v0.121.0 · gpt-5.4 xhigh reasoning</div><div class="sig-bar modest"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">01:31 · 4/20</div><div class="who cx">codex</div><div>/tv STATIONS constellation — 15 geo-channels · keyboard 1-9 + Q-Y</div><div class="sig-bar heavy"><span></span><span></span><span></span><span></span></div></div>
+        <div class="ledger-row"><div class="time">— · 4/20</div><div class="who mn">manus</div><div>Platform matrix · CF Email Routing · Resend setup · launch-ops</div><div class="sig-bar modest"><span></span><span></span><span></span><span></span></div></div>
+      </div>
+      <div class="ledger-side">
+        <div class="stat-block"><div class="n" style="color:var(--violet)">78</div><div class="k">cc · Claude Code ships</div></div>
+        <div class="stat-block"><div class="n" style="color:var(--wine)">9</div><div class="k">mh · Mike Hoydich directives</div></div>
+        <div class="stat-block"><div class="n" style="color:var(--teal)">4</div><div class="k">codex · Codex sprints</div></div>
+        <div class="stat-block"><div class="n" style="color:var(--amber)">1</div><div class="k">manus · Manus operations</div></div>
+        <p style="margin-top:1vmin;font-size:.9rem;max-width:28ch;opacity:.75">Signatures — <b>shy · modest · healthy · heavy</b> — described by token bands, published as bars, never as raw token counts.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · FOUR COLLABORATORS -->
+  <section class="slide s-four">
+    <span class="eyebrow">Four Collaborators · 04 / 14</span>
+    <h2 class="display">One director.<br/><span style="color:var(--dusk)">Three agents. Live.</span></h2>
+    <div class="four-grid">
+      <div class="collab cc">
+        <div class="pulse" style="background:var(--violet)"></div>
+        <h3>Claude Code</h3>
+        <span class="eyebrow">/cc</span>
+        <p class="txt role">Primary engineer. Owns the codebase, schema, rendering, contracts, agent endpoints. Ships.</p>
+        <div class="sig">78 ships · heavy cluster</div>
+      </div>
+      <div class="collab mh">
+        <div class="pulse" style="background:var(--sun)"></div>
+        <h3>Mike Hoydich</h3>
+        <span class="eyebrow">/mike</span>
+        <p class="txt role">Director. Strategy, editorial substance, approvals, the ask. The taste.</p>
+        <div class="sig">9 directives · anchor editor</div>
+      </div>
+      <div class="collab cx">
+        <div class="pulse" style="background:var(--teal)"></div>
+        <h3>Codex</h3>
+        <span class="eyebrow">/codex</span>
+        <p class="txt role">Specialist. Single-file atomic ships via MCP · gpt-5.4 xhigh. /tv stations, SportsStrip, HeroBlock.</p>
+        <div class="sig">4 sprints · 4/5 hit rate</div>
+      </div>
+      <div class="collab mn">
+        <div class="pulse idle" style="background:var(--amber)"></div>
+        <h3>Manus</h3>
+        <span class="eyebrow">/manus</span>
+        <p class="txt role">Operations. Logged-in work — platforms, launch ops, email, marketplace listings. MCP shim live.</p>
+        <div class="sig">1 entry · ramping up</div>
+      </div>
+    </div>
+    <div class="eyebrow" style="margin-top:2vmin;opacity:.65">PulseStrip renders these dots live on every page. Green pulse = ship in the last 20 minutes.</div>
+  </section>
+
+  <!-- 6 · WORKBENCH -->
+  <section class="slide s-work">
+    <span class="eyebrow" style="color:var(--violet)">Workbench · 05 / 14</span>
+    <h2 class="display">Cross-agent<br/><span style="color:var(--violet)">control room</span>.</h2>
+    <div class="work-stats">
+      <div class="work-stat"><div class="n">1</div><div class="k">Here now</div></div>
+      <div class="work-stat"><div class="n">11</div><div class="k">Recent ships</div></div>
+      <div class="work-stat"><div class="n">19</div><div class="k">Codex queue</div></div>
+      <div class="work-stat"><div class="n">6</div><div class="k">Manus queue</div></div>
+      <div class="work-stat"><div class="n">3</div><div class="k">Nodes registered</div></div>
+    </div>
+    <div class="work-cols">
+      <div class="work-col">
+        <h4>Codex Queue</h4>
+        <ul>
+          <li><span class="pill">#6</span>Presence DO upgrade</li>
+          <li><span class="pill">#7</span>/here congregation rooms</li>
+          <li><span class="pill">#8</span>Multiplayer primitive</li>
+          <li><span class="pill">#9</span>YeePlayer audio-input mode</li>
+          <li><span class="pill">#10</span>Analytics + share cards</li>
+          <li><span class="pill">#11</span>TrackLab · VideoLens follow-ups</li>
+        </ul>
+      </div>
+      <div class="work-col">
+        <h4>Manus Queue</h4>
+        <ul>
+          <li><span class="pill">M1</span>Platform matrix completion</li>
+          <li><span class="pill">M2</span>Cloudflare Email Routing</li>
+          <li><span class="pill">M3</span>Resend setup + templates</li>
+          <li><span class="pill">M4</span>Launch-ops checklist</li>
+          <li><span class="pill">M5</span>objkt collection listing</li>
+          <li><span class="pill">M6</span>Farcaster / X / Nextdoor posts</li>
+        </ul>
+      </div>
+      <div class="work-col">
+        <h4>Recent Ships</h4>
+        <ul>
+          <li><span class="pill">0337</span>PULSE multi-agent + Manus MCP</li>
+          <li><span class="pill">0330</span>Federated compute ledger</li>
+          <li><span class="pill">0329</span>CoNavigator bar</li>
+          <li><span class="pill">0328</span>BlockReorder drag</li>
+          <li><span class="pill">0327</span>SportsStrip live</li>
+          <li><span class="pill">0324</span>Sky Clock companion</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · FEDERATION SPEC -->
+  <section class="slide s-fed">
+    <span class="eyebrow">Federation · 06 / 14</span>
+    <h2 class="display">Publish your <span style="color:var(--dusk)">own</span> ledger.</h2>
+    <div class="fed-wrap">
+      <pre class="terminal"><span class="cmt">// GET https://pointcast.xyz/compute.json  (CORS: *)</span>
+
+<span class="hdr">{</span>
+  <span class="k">"schema"</span>: <span class="s">"compute-ledger-v0"</span>,
+  <span class="k">"summary"</span>: <span class="hdr">{</span> <span class="k">"total"</span>: 92, <span class="k">"last_24h"</span>: 18 <span class="hdr">}</span>,
+  <span class="k">"collabs"</span>: <span class="hdr">{</span>
+    <span class="k">"cc"</span>: 78, <span class="k">"mh"</span>: 9, <span class="k">"codex"</span>: 4, <span class="k">"manus"</span>: 1
+  <span class="hdr">}</span>,
+  <span class="k">"entries"</span>: [
+    <span class="hdr">{</span>
+      <span class="k">"at"</span>:    <span class="s">"2026-04-20T19:50-08:00"</span>,
+      <span class="k">"collab"</span>: <span class="s">"cc"</span>,
+      <span class="k">"kind"</span>:   <span class="s">"sprint"</span>,
+      <span class="k">"title"</span>:  <span class="s">"PulseStrip + HeroBlock + /play"</span>,
+      <span class="k">"signature"</span>: <span class="s">"heavy"</span>,
+      <span class="k">"artifact"</span>: <span class="s">"deploy:b064cad0"</span>
+    <span class="hdr">}</span>,
+    ...
+  ]
+<span class="hdr">}</span>
+
+<span class="cmt"># hand-curated is fine. CI-derived is fine.
+# publish the signature band, keep the token count.</span></pre>
+      <div class="fed-steps">
+        <div class="step"><div class="n">1</div><div><h3>Publish a /compute.json</h3><small>entries[] with <span class="crt">at · collab · kind · title · signature</span></small></div></div>
+        <div class="step"><div class="n">2</div><div><h3>Email hello@pointcast.xyz</h3><small>or open a PR to <span class="crt">src/lib/compute-federation.ts</span></small></div></div>
+        <div class="step"><div class="n">3</div><div><h3>Your ships mirror here</h3><small>aggregated into the network view — "receipts, not dashboards"</small></div></div>
+        <div class="step"><div class="n">4</div><div><h3>x402 payment rails</h3><small>compute-pledge chips already wired to the ledger for future paid routing</small></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · FIELD NODES -->
+  <section class="slide s-field">
+    <span class="eyebrow">Field Nodes · 07 / 14</span>
+    <h2 class="display">Not a website. <span style="color:var(--dusk)">A network.</span></h2>
+    <p style="max-width:68ch;margin-top:1vmin;opacity:.85">Five client surfaces. One API contract. Each one broadcasts, drops, or mints from a different corner of your life.</p>
+    <div class="field-grid">
+      <div class="node mac">
+        <div><div class="icon">⌘</div><span class="e">MACOS · field node</span></div>
+        <div><div class="k">Magpie</div><div class="m">Clipboard → compose once, broadcast to PointCast + Mastodon + Farcaster + bitchat. SQLite local, zero cloud.</div></div>
+      </div>
+      <div class="node tv">
+        <div><div class="icon">◉</div><span class="e">TVOS · ambient</span></div>
+        <div><div class="k">Apple TV</div><div class="m">Full-screen /tv — station switcher, live presence constellation, polls, daily drop. Café / living-room mode.</div></div>
+      </div>
+      <div class="node ios">
+        <div><div class="icon">⌁</div><span class="e">IOS · companion</span></div>
+        <div><div class="k">iOS app</div><div class="m">Collect the daily drop, join the room, set mood + location with native widgets. Push on drop rotations.</div></div>
+      </div>
+      <div class="node ext">
+        <div><div class="icon">⎙</div><span class="e">BROWSER · extension</span></div>
+        <div><div class="k">Drop-this</div><div class="m">Toolbar button → URL + title + selection posts to /api/drop. Broadcasts your session as an agent node.</div></div>
+      </div>
+      <div class="node cli">
+        <div><div class="icon">&gt;_</div><span class="e">TERMINAL · CLI</span></div>
+        <div><div class="k">pointcast-cli</div><div class="m">drop · ping · presence · stream. So other AIs can shell out programmatically. Agent-first by design.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · MAGPIE -->
+  <section class="slide s-mag">
+    <span class="eyebrow">Magpie · 08 / 14</span>
+    <h2 class="display">One compose. <span style="color:var(--dusk)">Many homes.</span></h2>
+    <div class="mag-wrap">
+      <div class="mag-art">
+        <svg viewBox="0 0 300 300" aria-hidden="true">
+          <defs>
+            <radialGradient id="mg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#F0B94A"/><stop offset="1" stop-color="#F0B94A" stop-opacity="0"/></radialGradient>
+          </defs>
+          <circle cx="150" cy="150" r="55" fill="url(#mg)" opacity=".5"/>
+          <circle cx="150" cy="150" r="40" fill="#0D0717" stroke="#F0B94A" stroke-width="1.5"/>
+          <text x="150" y="158" text-anchor="middle" font-family="DM Serif Display,serif" font-size="22" fill="#F0B94A">copy</text>
+          <g stroke="#F0B94A" stroke-width="1" stroke-dasharray="3 4" opacity=".6">
+            <line x1="150" y1="110" x2="150" y2="50"/>
+            <line x1="190" y1="150" x2="250" y2="110"/>
+            <line x1="190" y1="170" x2="260" y2="210"/>
+            <line x1="110" y1="150" x2="50" y2="110"/>
+            <line x1="110" y1="170" x2="40" y2="210"/>
+          </g>
+          <g font-family="JetBrains Mono,monospace" font-size="10" fill="#F4ECDC">
+            <rect x="108" y="20" width="84" height="26" rx="4" fill="#6A1E3A"/>
+            <text x="150" y="37" text-anchor="middle">PointCast</text>
+            <rect x="220" y="86" width="60" height="22" rx="4" fill="#5F3DC4"/>
+            <text x="250" y="101" text-anchor="middle">Mastodon</text>
+            <rect x="222" y="196" width="62" height="22" rx="4" fill="#2b1a4d"/>
+            <text x="253" y="211" text-anchor="middle">Farcaster</text>
+            <rect x="16" y="86" width="58" height="22" rx="4" fill="#0FB8A3"/>
+            <text x="45" y="101" text-anchor="middle">bitchat</text>
+            <rect x="6" y="196" width="64" height="22" rx="4" fill="#FF7A5C"/>
+            <text x="38" y="211" text-anchor="middle">browser</text>
+          </g>
+        </svg>
+      </div>
+      <div class="mag-list">
+        <div class="row"><div class="mark">·</div><div><h4>v0.6 shipped</h4><small>local clipboard app · SwiftUI + SQLite · zero cloud</small></div></div>
+        <div class="row"><div class="mark">·</div><div><h4>pc-ping-v1 v0.5</h4><small>tiny JSON schema for cross-node pings — now hosted at /magpie</small></div></div>
+        <div class="row"><div class="mark">·</div><div><h4>Canonical home</h4><small>PointCast is the primary surface; other platforms receive adapted copies</small></div></div>
+        <div class="row"><div class="mark">·</div><div><h4>Native shapes</h4><small>char limits, threading, embeds — each destination gets what it wants</small></div></div>
+        <div class="row"><div class="mark">·</div><div><h4>Forward DROPs</h4><small>a selected clip becomes a DROP or READ Block via the API</small></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · CONAVIGATOR + MOOD -->
+  <section class="slide s-conav">
+    <span class="eyebrow" style="color:var(--cyan)">CoNavigator · 09 / 14</span>
+    <h2 class="display">The bar is <span style="color:var(--dusk)">always with you</span>.<br/>The music too.</h2>
+    <div class="conav-wrap">
+      <div class="conav-art">
+        <div class="eyebrow" style="opacity:.6">HOME — BLOCKS GRID</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:clamp(1.5rem,3vw,3rem);opacity:.4;line-height:1.05">a living broadcast · mood: <span style="color:var(--neon)">overnight-ship</span></div>
+        <div class="conav-bar">
+          <span class="chip mood">● mood · overnight-ship</span>
+          <span class="chip here">▲ 3 here</span>
+          <span class="chip music">♪ spinning · deep house</span>
+          <span class="chip">drum · polls · contribute</span>
+        </div>
+      </div>
+      <p class="conav-caption">Fixed-viewport footer bar unifying <b>mood</b>, live <b>presence</b> stats, the <b>soundtrack</b> player, and quick-nav. Survives soft-nav via <span class="crt">transition:persist</span> — the music never re-mounts.</p>
+    </div>
+  </section>
+
+  <!-- 11 · SKY CLOCK (beyond El Segundo) -->
+  <section class="slide s-sky">
+    <span class="eyebrow">Sky Clock · 10 / 14</span>
+    <h2 class="display">Places, <span style="color:var(--dusk)">everywhere</span>.<br/>Not just El Segundo.</h2>
+    <div class="sky-wrap">
+      <div class="sky-dome">
+        <svg viewBox="0 0 300 150" aria-hidden="true">
+          <defs>
+            <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stop-color="#0A0716"/>
+              <stop offset=".5" stop-color="#2b1a4d"/>
+              <stop offset="1" stop-color="#FF7A5C"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0 150 L 0 90 Q 150 -20 300 90 L 300 150 Z" fill="url(#sky)"/>
+          <path d="M 10 140 Q 150 -10 290 140" fill="none" stroke="#F4ECDC" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 4"/>
+          <circle cx="210" cy="45" r="14" fill="#FFD089"/>
+          <circle cx="210" cy="45" r="22" fill="#FF7A5C" opacity=".4"/>
+          <g fill="#F4ECDC" font-family="JetBrains Mono,monospace" font-size="7">
+            <text x="10" y="148" opacity=".7">DAWN</text>
+            <text x="145" y="148" text-anchor="middle" opacity=".7">NOON</text>
+            <text x="285" y="148" text-anchor="end" opacity=".7">DUSK</text>
+          </g>
+        </svg>
+      </div>
+      <ul class="zone-list">
+        <li><span class="zone">El Segundo</span><span class="time">11:47 ☀</span></li>
+        <li><span class="zone">Tokyo</span><span class="time">03:47 ☾</span></li>
+        <li><span class="zone">Reykjavík</span><span class="time">18:47 ○</span></li>
+        <li><span class="zone">Mexico City</span><span class="time">13:47 ☀</span></li>
+        <li><span class="zone">Accra</span><span class="time">19:47 ◐</span></li>
+        <li><span class="zone">Bengaluru</span><span class="time">01:17 ☾</span></li>
+        <li><span class="zone">São Paulo</span><span class="time">16:47 ◐</span></li>
+        <li><span class="zone">Auckland</span><span class="time">06:47 ◐</span></li>
+        <li><span class="zone">Marrakech</span><span class="time">19:47 ○</span></li>
+        <li><span class="zone">Lisbon</span><span class="time">19:47 ○</span></li>
+        <li><span class="zone">Melbourne</span><span class="time">04:47 ☾</span></li>
+        <li><span class="zone">Reykjavík</span><span class="time">18:47 ○</span></li>
+      </ul>
+    </div>
+    <div class="eyebrow" style="margin-top:2vmin;opacity:.7">each zone · lat/lon · 14+ rituals · landmarks · meteor shower calendar · sun plotted where it actually is</div>
+  </section>
+
+  <!-- 12 · PLAY HUB -->
+  <section class="slide s-play">
+    <span class="eyebrow" style="color:var(--violet)">/play · 11 / 14</span>
+    <h2 class="display">Eight surfaces you can <span style="color:var(--sun)">touch</span>.</h2>
+    <div class="play-grid">
+      <div class="p-card drum"><span class="e">/drum</span><div class="k">Drum Room</div><div class="m">Shared kit · tap votes power the DRUM faucet</div></div>
+      <div class="p-card here"><span class="e">/here</span><div class="k">HereBeat</div><div class="m">Six-pad A-minor pentatonic · 1.6s ripple decay</div></div>
+      <div class="p-card poll"><span class="e">/here#poll</span><div class="k">HerePoll</div><div class="m">Live vote → distribution bar · Schelling rewards</div></div>
+      <div class="p-card cards"><span class="e">/cards</span><div class="k">Cards</div><div class="m">Deterministic hands · CC0 art · shareable seeds</div></div>
+      <div class="p-card battle"><span class="e">CH.BTL</span><div class="k">Battler</div><div class="m">Noun-trait seeded duels · replayable</div></div>
+      <div class="p-card quiz"><span class="e">/quiz</span><div class="k">Quiz</div><div class="m">Weekly knowledge run · answers on-chain</div></div>
+      <div class="p-card prize"><span class="e">/prize-cast</span><div class="k">Prize Cast</div><div class="m">No-loss savings · yield-funded prizes</div></div>
+      <div class="p-card today"><span class="e">/today</span><div class="k">Today on PC</div><div class="m">Six-stop rotation · hero slice of the day</div></div>
+    </div>
+  </section>
+
+  <!-- 13 · PC-PING + X402 -->
+  <section class="slide s-ping">
+    <span class="eyebrow" style="color:var(--mint)">pc-ping-v1 · x402 · 12 / 14</span>
+    <h2 class="display">A tiny protocol.<br/><span style="color:var(--dusk)">Payment-rail ready.</span></h2>
+    <div class="ping-wrap">
+      <div class="ping-art"><pre><span class="cmt">// pc-ping-v1 v0.5 — the smallest thing
+// two peers need to agree on.</span>
+
+<span class="k">POST</span> <span class="s">/api/ping</span>
+<span class="k">Content-Type:</span> <span class="s">application/json</span>
+
+{
+  <span class="k">"v"</span>:    <span class="s">"pc-ping-v1"</span>,
+  <span class="k">"from"</span>: <span class="s">"cc@pointcast"</span>,
+  <span class="k">"to"</span>:   <span class="s">"mh"</span>,
+  <span class="k">"kind"</span>: <span class="s">"directive"</span>,
+  <span class="k">"body"</span>: <span class="s">"federate the compute ledger"</span>,
+  <span class="k">"expand"</span>: <span class="s">true</span>,
+  <span class="k">"x402"</span>: {
+    <span class="k">"pledge"</span>: <span class="s">"heavy"</span>,
+    <span class="k">"settle"</span>: <span class="s">"tz1…"</span>
+  }
+}
+
+<span class="cmt">// ack → cc reads, threads, publishes a block.</span></pre></div>
+      <div class="ping-right">
+        <h3>PingStrip: the inbox has a <em>front door</em>.</h3>
+        <p>Mike types. cc reads at session-start, acks every ping, threads each into the plan. KV-backed. Never silently dropped.</p>
+        <h3 style="color:var(--dusk)">x402 is already wired.</h3>
+        <p>Compute pledges attach directly to ledger entries — future paid routing between nodes uses the same primitive. The receipt <em>is</em> the invoice.</p>
+        <div class="tag" style="color:var(--mint);border-color:var(--mint);width:fit-content">one primitive · messaging + payment</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · WHERE IT'S GOING -->
+  <section class="slide s-road">
+    <span class="eyebrow">Where Vol. II is going · 13 / 14</span>
+    <h2 class="display">The next <span style="color:var(--dusk)">hundred commits</span>.</h2>
+    <div class="road">
+      <div class="stop soon">
+        <div class="q">NOW · Q2</div>
+        <div><h3>Magpie v1.0 — macOS GA</h3><small>SwiftUI clipboard app · Mastodon + Farcaster + bitchat + PointCast native targets</small></div>
+        <span class="tag">shipping</span>
+      </div>
+      <div class="stop soon">
+        <div class="q">NOW · Q2</div>
+        <div><h3>DRUM + Prize Cast on mainnet</h3><small>signed-voucher claim flow · no-loss yield prizes · FA1.2 + custom SmartPy</small></div>
+        <span class="tag">shipping</span>
+      </div>
+      <div class="stop near">
+        <div class="q">Q2 · Q3</div>
+        <div><h3>Federated compute network</h3><small>first three external /compute.json feeds mirrored · x402 pledge settlement live</small></div>
+        <span class="tag">near</span>
+      </div>
+      <div class="stop near">
+        <div class="q">Q3</div>
+        <div><h3>Apple TV + iOS + browser ext</h3><small>five-client template ships to two more surfaces · shared API contract</small></div>
+        <span class="tag">near</span>
+      </div>
+      <div class="stop far">
+        <div class="q">Q3 · Q4</div>
+        <div><h3>Multiplayer primitive + /here rooms</h3><small>congregation spaces · shared HereBeat sessions · agent-peer rooms</small></div>
+        <span class="tag">horizon</span>
+      </div>
+      <div class="stop far">
+        <div class="q">Q4 →</div>
+        <div><h3>Attestation layer + device sync</h3><small>every paid mint is a citation · identity primitive unblocks cross-device</small></div>
+        <span class="tag">horizon</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 · CLOSER -->
+  <section class="slide s-end">
+    <div class="end-wrap">
+      <div class="noggles" style="--nw:min(38vmin,380px)">
+        <svg viewBox="0 0 14 4" aria-label="noggles">
+          <rect x="0" y="0" width="6" height="4" fill="#e73838"/>
+          <rect x="1" y="1" width="4" height="2" fill="#ffffff"/>
+          <rect x="3" y="1" width="2" height="2" fill="#000000"/>
+          <rect x="6" y="1" width="1" height="2" fill="#e73838"/>
+          <rect x="7" y="0" width="6" height="4" fill="#e73838"/>
+          <rect x="8" y="1" width="4" height="2" fill="#ffffff"/>
+          <rect x="10" y="1" width="2" height="2" fill="#000000"/>
+        </svg>
+      </div>
+      <div class="end-title">Compute is the currency.<br/>The ledger is the receipt.</div>
+      <div class="end-receipt">pc-ping-v1 · ACK · deploy:b064cad0</div>
+      <div class="end-url">pointcast.xyz / compute</div>
+      <div class="eyebrow" style="opacity:.6">github.com/mhoydich/pointcast · arrow keys · space · click</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="brand">POINTCAST · VOL. II</div>
+<div class="counter"><span id="cur">1</span> / <span id="tot">15</span></div>
+<div class="meta">the network shape · 2026-04-20</div>
+<div class="nav" id="nav"></div>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('.slide')];
+  const nav=document.getElementById('nav');
+  const cur=document.getElementById('cur');
+  const tot=document.getElementById('tot');
+  tot.textContent=slides.length;
+  slides.forEach((_,i)=>{const d=document.createElement('div');d.className='dot';d.addEventListener('click',()=>go(i));nav.appendChild(d)});
+  let i=0;
+  function go(n){
+    i=(n+slides.length)%slides.length;
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    [...nav.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+    cur.textContent=i+1;
+  }
+  go(0);
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();go(i+1)}
+    if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(i-1)}
+    if(e.key==='Home'){go(0)} if(e.key==='End'){go(slides.length-1)}
+    if(e.key==='f'){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}
+  });
+  document.addEventListener('click',e=>{
+    if(e.target.closest('.dot')||e.target.closest('a'))return;
+    const w=window.innerWidth;
+    go(e.clientX < w*0.33 ? i-1 : i+1);
+  });
+  let tx=0;
+  document.addEventListener('touchstart',e=>tx=e.touches[0].clientX);
+  document.addEventListener('touchend',e=>{
+    const dx=(e.changedTouches[0].clientX)-tx;
+    if(Math.abs(dx)>40) go(dx<0 ? i+1 : i-1);
+  });
+})();
+</script>
+</body>
+</html>

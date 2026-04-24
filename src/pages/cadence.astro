@@ -1,0 +1,327 @@
+---
+/**
+ * /cadence — public 15-min ship schedule page.
+ *
+ * Mike 2026-04-20 18:05 PT: *"build the system so we are active on the
+ * 15 min mark, always shipping, small, medium, large, etc."*
+ *
+ * Newspaper-style table of upcoming ships + recent history. Companion
+ * surface: /cadence.json.
+ *
+ * Author: cc. Source: Mike 2026-04-20 18:05 PT chat + docs/plans/2026-04-20-cadence-system.md.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  SHIP_QUEUE,
+  upcomingShips,
+  recentShips,
+  nextShip,
+  isActiveWindow,
+  nextSlot,
+  SIZE_LABEL,
+  COLLAB_LABEL,
+  STATE_LABEL,
+  type QueuedShip,
+} from '../lib/ship-queue';
+
+const now = new Date();
+const upcoming = upcomingShips(12);
+const recent = recentShips(24);
+const next = nextShip();
+const active = isActiveWindow(now);
+const nextSlotIso = nextSlot(now);
+
+function fmtTime(iso: string): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Los_Angeles',
+    }).format(d) + ' PT';
+  } catch {
+    return iso;
+  }
+}
+
+function sizeWeight(s: QueuedShip['size']): number {
+  return { shy: 1, modest: 2, healthy: 3, heavy: 4 }[s];
+}
+
+const title = 'Cadence — 15-minute ship schedule';
+const description =
+  'PointCast ships on the 15-minute mark during active hours (6am–2am PT). Every slot has a size (shy/modest/healthy/heavy) and a collaborator (cc/codex/chatgpt/manus/mike/kimi). Attribution flows into the compute ledger at /compute.';
+const alternates = [
+  { type: 'application/json', href: '/cadence.json', title: 'Cadence schedule (JSON)' },
+  { type: 'text/html', href: '/compute', title: 'Compute ledger' },
+  { type: 'text/html', href: '/sprints', title: 'Sprint log' },
+];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Schedule',
+  name: 'PointCast ship cadence',
+  description,
+  url: 'https://pointcast.xyz/cadence',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} alternates={alternates}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>cadence</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">CADENCE · 15-MINUTE SHIP SCHEDULE</p>
+      <h1 class="title">Always shipping, on the quarter hour.</h1>
+      <p class="dek">
+        Every 15 minutes during active hours (6am–2am PT), a ship is due. Sizes
+        rotate — shy / modest / healthy / heavy — matching the compute ledger's
+        signature bands. Collaborators rotate too — cc / codex / chatgpt /
+        manus / mike / (kimi, evaluating). The queue below is hand-curated per
+        session and auto-drained by the cadence tick once the cron binding
+        lands. Spec at
+        <a href="https://github.com/MikeHoydich/pointcast/blob/main/docs/plans/2026-04-20-cadence-system.md" rel="noopener">docs/plans/2026-04-20-cadence-system.md</a>;
+        agent-readable mirror at <a href="/cadence.json">/cadence.json</a>.
+      </p>
+
+      <ul class="stats">
+        <li><span class="stats__num">{SHIP_QUEUE.length}</span><span class="stats__lbl mono">TOTAL</span></li>
+        <li><span class="stats__num">{SHIP_QUEUE.filter((s) => s.state === 'queued').length}</span><span class="stats__lbl mono">QUEUED</span></li>
+        <li><span class="stats__num">{SHIP_QUEUE.filter((s) => s.state === 'in-flight').length}</span><span class="stats__lbl mono">IN FLIGHT</span></li>
+        <li><span class="stats__num">{SHIP_QUEUE.filter((s) => s.state === 'shipped').length}</span><span class="stats__lbl mono">SHIPPED</span></li>
+      </ul>
+
+      <p class={`window-chip mono window-chip--${active ? 'active' : 'muted'}`}>
+        <span class="window-chip__dot" aria-hidden="true"></span>
+        {active ? 'ACTIVE WINDOW' : 'MUTED (2–6am PT)'}
+        <span class="window-chip__sep" aria-hidden="true">·</span>
+        next slot {fmtTime(nextSlotIso)}
+      </p>
+    </header>
+
+    {next && (
+      <section class="next-ship" aria-label="Next ship">
+        <p class="section__kicker mono">NEXT SHIP</p>
+        <div class="next-ship__card">
+          <p class="next-ship__time mono">{fmtTime(next.dueAt)}</p>
+          <p class="next-ship__title">{next.title}</p>
+          <p class="next-ship__meta mono">
+            <span class={`chip chip--${next.size}`}>{SIZE_LABEL[next.size]}</span>
+            <span class="chip chip--collab">{COLLAB_LABEL[next.collab]}</span>
+            <span class={`chip chip--state chip--state-${next.state.replace(' ', '-')}`}>{STATE_LABEL[next.state]}</span>
+          </p>
+          {next.body && <p class="next-ship__body">{next.body}</p>}
+        </div>
+      </section>
+    )}
+
+    <section class="table" aria-label="Upcoming ships">
+      <p class="section__kicker mono">UPCOMING</p>
+      {upcoming.length === 0 ? (
+        <p class="empty">No ships queued. That's a planning failure, not a calm moment. Drop a pledge at <a href="/contribute">/contribute</a>.</p>
+      ) : (
+        <ol class="ship-list">
+          {upcoming.map((s) => (
+            <li class={`ship ship--${s.size}`}>
+              <span class="ship__time mono">{fmtTime(s.dueAt)}</span>
+              <span class={`chip chip--${s.size}`}>{SIZE_LABEL[s.size]}</span>
+              <span class="chip chip--collab">{COLLAB_LABEL[s.collab]}</span>
+              <span class="ship__title">{s.title}</span>
+              <span class={`chip chip--state chip--state-${s.state.replace(' ', '-')}`}>{STATE_LABEL[s.state]}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+
+    <section class="table" aria-label="Recent ships">
+      <p class="section__kicker mono">RECENT</p>
+      {recent.length === 0 ? (
+        <p class="empty">No ships landed yet. Cadence just started.</p>
+      ) : (
+        <ol class="ship-list">
+          {recent.map((s) => (
+            <li class={`ship ship--past ship--${s.size}`}>
+              <span class="ship__time mono">{fmtTime(s.landedAt ?? s.dueAt)}</span>
+              <span class={`chip chip--${s.size}`}>{SIZE_LABEL[s.size]}</span>
+              <span class="chip chip--collab">{COLLAB_LABEL[s.collab]}</span>
+              <span class="ship__title">
+                {s.artifact ? (
+                  <a href={s.artifact.startsWith('http') ? s.artifact : s.artifact}>{s.title}</a>
+                ) : (
+                  s.title
+                )}
+              </span>
+              <span class={`chip chip--state chip--state-${s.state.replace(' ', '-')}`}>{STATE_LABEL[s.state]}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+
+    <section class="scale" aria-label="Size scale">
+      <p class="section__kicker mono">SIZE SCALE</p>
+      <dl class="scale-list">
+        <div class="scale-row"><dt class="mono">shy</dt><dd>one-file edit, tiny fix · 1–5k tokens</dd></div>
+        <div class="scale-row"><dt class="mono">modest</dt><dd>a component or sprint retro · 5–20k tokens</dd></div>
+        <div class="scale-row"><dt class="mono">healthy</dt><dd>a feature across files · 20–60k tokens</dd></div>
+        <div class="scale-row"><dt class="mono">heavy</dt><dd>a primitive (new page + lib + component + retro) · 60k+ tokens</dd></div>
+      </dl>
+    </section>
+
+    <p class="foot mono">
+      every shipped entry writes a matching <a href="/compute">compute ledger</a> record.
+      federation spec at <a href="/compute.json">/compute.json</a>.
+      plan at <a href="https://github.com/MikeHoydich/pointcast/blob/main/docs/plans/2026-04-20-cadence-system.md" rel="noopener">docs/plans/…cadence-system.md</a>.
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'JetBrains Mono', monospace); }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #e89a2d; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 30px; padding-bottom: 20px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #e89a2d;
+    margin: 0 0 10px;
+  }
+  .title {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    line-height: 1.14;
+  }
+  .dek { font-size: 15px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0 0 14px; max-width: 68ch; }
+  .dek a { color: #e89a2d; text-decoration: underline; }
+
+  .stats { list-style: none; padding: 0; margin: 14px 0; display: flex; gap: 24px; flex-wrap: wrap; }
+  .stats__num { font-size: 22px; font-weight: 500; display: block; color: var(--pc-ink); line-height: 1; }
+  .stats__lbl { font-size: 9.5px; letter-spacing: 0.14em; color: var(--pc-ink-muted); display: block; margin-top: 4px; }
+
+  .window-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 2px;
+    margin: 8px 0 0;
+  }
+  .window-chip--active { background: rgba(47, 143, 95, 0.14); color: #1e5a3d; }
+  .window-chip--muted { background: rgba(138, 126, 108, 0.14); color: #5a4e38; }
+  .window-chip__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .window-chip__sep { margin: 0 4px; opacity: 0.6; }
+
+  .section__kicker {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 28px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dotted var(--pc-rule-soft);
+  }
+
+  .next-ship__card {
+    padding: 14px 16px;
+    background: rgba(232, 154, 45, 0.05);
+    border: 1px solid rgba(232, 154, 45, 0.28);
+    border-left: 3px solid #E89A2D;
+    border-radius: 2px;
+    margin: 0 0 10px;
+  }
+  .next-ship__time { font-size: 11px; letter-spacing: 0.08em; color: #7a4d0c; margin: 0 0 4px; }
+  .next-ship__title { font-family: var(--pc-font-sans); font-size: 18px; font-weight: 500; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.3; }
+  .next-ship__meta { margin: 0 0 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .next-ship__body { font-size: 12.5px; color: var(--pc-ink-soft); margin: 0; line-height: 1.5; }
+
+  .ship-list { list-style: none; padding: 0; margin: 0; counter-reset: ship; }
+  .ship {
+    display: grid;
+    grid-template-columns: 140px 60px 70px 1fr 80px;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dotted var(--pc-rule-soft);
+    align-items: baseline;
+    font-size: 13px;
+  }
+  .ship__time { font-size: 10.5px; letter-spacing: 0.04em; color: var(--pc-ink-muted); }
+  .ship__title { font-family: var(--pc-font-sans); }
+  .ship__title a { color: var(--pc-ink); text-decoration: underline; text-decoration-color: rgba(0,0,0,0.2); }
+  .ship__title a:hover { color: #e89a2d; text-decoration-color: currentColor; }
+  .ship--past { opacity: 0.75; }
+
+  .chip {
+    display: inline-block;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-weight: 600;
+  }
+  .chip--shy { background: rgba(138, 126, 108, 0.2); color: #5a4e38; }
+  .chip--modest { background: rgba(24, 95, 165, 0.15); color: #0b3e73; }
+  .chip--healthy { background: rgba(232, 89, 12, 0.15); color: #8f370f; }
+  .chip--heavy { background: rgba(201, 42, 42, 0.15); color: #7a1414; }
+  .chip--collab { background: rgba(95, 61, 196, 0.14); color: #3a1d8a; }
+  .chip--state-queued { background: rgba(196, 194, 188, 0.4); color: #5f5e5a; }
+  .chip--state-in-flight { background: rgba(47, 143, 95, 0.15); color: #1e5a3d; }
+  .chip--state-shipped { background: rgba(47, 143, 95, 0.2); color: #1e5a3d; }
+  .chip--state-deferred, .chip--state-skipped { background: rgba(201, 42, 42, 0.12); color: #7a1414; }
+
+  @media (max-width: 760px) {
+    .ship {
+      grid-template-columns: 1fr;
+      gap: 2px;
+      padding: 10px 0;
+    }
+    .ship__time { font-size: 10px; }
+  }
+
+  .empty { font-style: italic; color: var(--pc-ink-muted); margin: 10px 0; }
+  .empty a { color: #e89a2d; text-decoration: underline; }
+
+  .scale { margin: 28px 0; padding: 14px 16px; background: rgba(24, 95, 165, 0.04); border-left: 3px solid var(--pc-accent, #185FA5); border-radius: 2px; }
+  .scale-list { margin: 0; padding: 0; display: grid; gap: 6px; }
+  .scale-row { display: grid; grid-template-columns: 90px 1fr; gap: 10px; font-size: 13px; }
+  .scale-row dt { margin: 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pc-accent); }
+  .scale-row dd { margin: 0; color: var(--pc-ink-soft); }
+
+  .foot { margin: 30px 0 0; font-size: 11px; color: var(--pc-ink-muted); line-height: 1.55; letter-spacing: 0.02em; }
+  .foot a { color: #e89a2d; text-decoration: underline; }
+</style>

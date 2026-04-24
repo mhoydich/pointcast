@@ -18,6 +18,7 @@
  * 1.5px channel-colored border, optional 6px left accent bar on READ type.
  */
 import type { CollectionEntry } from 'astro:content';
+import { autoLinkBody } from '../lib/auto-link';
 import { CHANNELS } from '../lib/channels';
 import { BLOCK_TYPES } from '../lib/block-types';
 
@@ -320,8 +321,20 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
           mobile + desktop. Plain <p> for everything else. */}
     {data.body && (data.type === 'NOTE' || data.type === 'VISIT' || data.type === 'LINK' || (detail && data.type === 'READ')) && (
       detail && data.type === 'READ' ? (
+        /* SEO: auto-link the FIRST mention of each pillar concept per
+           paragraph. Drives internal-link juice from READ bodies into
+           /el-segundo, /agent-native, /nouns, /collection/visit-nouns,
+           /battle, /c/good-feels. Rule set in src/lib/auto-link.ts. */
         <div class="block-card__article">
-          {data.body.split(/\n\n+/).map((para) => <p class="block-card__article-p">{para}</p>)}
+          {autoLinkBody(data.body).map((chunks) => (
+            <p class="block-card__article-p">
+              {chunks.map((c) =>
+                typeof c === 'string' ? c : (
+                  <a class="block-card__auto-link" href={c.href} title={c.title}>{c.text}</a>
+                )
+              )}
+            </p>
+          ))}
         </div>
       ) : (
         <p class="block-card__body">{data.body}</p>
@@ -765,6 +778,21 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     background: #F2EFE9;
     padding: 1px 4px;
     border-radius: 2px;
+  }
+  /* SEO: auto-linked pillar mentions. Subtle underline, inherited color,
+     reveals a dotted accent on hover so visitors can tell it's a link
+     without the body reading like a link farm. */
+  .block-card__auto-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--pc-accent) 35%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 140ms, color 140ms;
+  }
+  .block-card__auto-link:hover {
+    color: var(--pc-accent);
+    text-decoration-color: var(--pc-accent);
   }
   @media (min-width: 640px) {
     .block-card__article-p { font-size: 17px; }

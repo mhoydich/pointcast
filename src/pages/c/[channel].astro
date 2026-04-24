@@ -26,16 +26,104 @@ const alternates = [
   { type: 'application/json', href: `/c/${ch.slug}.json`, title: `${ch.name} (JSON feed)` },
 ];
 
+// SEO: prefer the long intro (120-200 words) when set — it's the
+// keyword-targeted landing copy. Fall back to the one-line purpose for
+// channels that haven't been authored yet. Meta description truncates
+// to 180 chars to stay under Google's 160-char soft cap with a buffer.
+const channelIntro = ch.intro ?? ch.purpose;
+const channelMeta = channelIntro.length > 180 ? channelIntro.slice(0, 177) + '…' : channelIntro;
+
+// SEO: TopicalMap — a sub-graph of Thing entities per channel, each
+// with a `sameAs` Wikipedia link where one exists. This gives Google's
+// Knowledge Graph + LLM entity extractors explicit topical anchors
+// beyond the flat `keywords` string. One author-configured map per
+// channel; falls back to the topics[] array if unset.
+const CHANNEL_TOPIC_MAP: Record<string, Array<{ name: string; sameAs?: string; description?: string }>> = {
+  FD: [
+    { name: 'Agent-native web', sameAs: undefined, description: 'Websites that publish machine-readable counterparts for every page — llms.txt, agents.json, stripped HTML, JSON mirrors.' },
+    { name: 'Large language model', sameAs: 'https://en.wikipedia.org/wiki/Large_language_model' },
+    { name: 'Claude (LLM)', sameAs: 'https://en.wikipedia.org/wiki/Claude_(language_model)' },
+    { name: 'Web browser', sameAs: 'https://en.wikipedia.org/wiki/Web_browser' },
+    { name: 'Generative engine optimization' },
+    { name: 'llms.txt', sameAs: 'https://llmstxt.org/' },
+  ],
+  CRT: [
+    { name: 'Pickleball', sameAs: 'https://en.wikipedia.org/wiki/Pickleball' },
+    { name: 'Paddle (pickleball equipment)' },
+    { name: 'El Segundo Recreation Park' },
+    { name: 'The Squeeze (pickleball team)' },
+    { name: 'South Bay (Los Angeles)', sameAs: 'https://en.wikipedia.org/wiki/South_Bay,_Los_Angeles' },
+  ],
+  SPN: [
+    { name: 'Music curation' },
+    { name: 'Spotify', sameAs: 'https://en.wikipedia.org/wiki/Spotify' },
+    { name: 'SoundCloud', sameAs: 'https://en.wikipedia.org/wiki/SoundCloud' },
+    { name: 'Playlist' },
+    { name: 'Listening notes' },
+  ],
+  GF: [
+    { name: 'Cannabis beverage' },
+    { name: 'Hemp-derived THC' },
+    { name: 'Good Feels (company)' },
+    { name: 'Tetrahydrocannabinol', sameAs: 'https://en.wikipedia.org/wiki/Tetrahydrocannabinol' },
+    { name: 'Cannabidiol', sameAs: 'https://en.wikipedia.org/wiki/Cannabidiol' },
+    { name: 'Terpene', sameAs: 'https://en.wikipedia.org/wiki/Terpene' },
+  ],
+  GDN: [
+    { name: 'Birdwatching', sameAs: 'https://en.wikipedia.org/wiki/Birdwatching' },
+    { name: 'Marine layer', sameAs: 'https://en.wikipedia.org/wiki/Marine_layer' },
+    { name: 'Southern California coast' },
+    { name: "Allen's hummingbird", sameAs: 'https://en.wikipedia.org/wiki/Allen%27s_hummingbird' },
+    { name: 'Nature journaling' },
+  ],
+  ESC: [
+    { name: 'El Segundo, California', sameAs: 'https://en.wikipedia.org/wiki/El_Segundo,_California' },
+    { name: 'South Bay (Los Angeles)', sameAs: 'https://en.wikipedia.org/wiki/South_Bay,_Los_Angeles' },
+    { name: 'Silicon Beach', sameAs: 'https://en.wikipedia.org/wiki/Silicon_Beach' },
+    { name: 'ZIP Code 90245' },
+    { name: 'Los Angeles International Airport', sameAs: 'https://en.wikipedia.org/wiki/Los_Angeles_International_Airport' },
+    { name: 'Dockweiler State Beach', sameAs: 'https://en.wikipedia.org/wiki/Dockweiler_State_Beach' },
+  ],
+  FCT: [
+    { name: 'Tezos', sameAs: 'https://en.wikipedia.org/wiki/Tezos' },
+    { name: 'FA2 (Tezos NFT standard)' },
+    { name: 'Beacon wallet protocol' },
+    { name: 'Non-fungible token', sameAs: 'https://en.wikipedia.org/wiki/Non-fungible_token' },
+    { name: 'Airdrop (cryptocurrency)' },
+  ],
+  VST: [
+    { name: 'Web crawler', sameAs: 'https://en.wikipedia.org/wiki/Web_crawler' },
+    { name: 'Proof of attendance' },
+    { name: 'Visit Nouns (NFT)' },
+    { name: 'Guestbook' },
+    { name: 'Agent-native web' },
+  ],
+  BTL: [
+    { name: 'Nouns DAO', sameAs: 'https://en.wikipedia.org/wiki/Nouns_(NFT)' },
+    { name: 'Creative Commons CC0', sameAs: 'https://en.wikipedia.org/wiki/Creative_Commons_license#Zero_/_public_domain' },
+    { name: 'Tezos', sameAs: 'https://en.wikipedia.org/wiki/Tezos' },
+    { name: 'Deterministic algorithm', sameAs: 'https://en.wikipedia.org/wiki/Deterministic_algorithm' },
+    { name: 'Turn-based strategy' },
+    { name: 'FA2 (Tezos NFT standard)' },
+  ],
+};
+const channelTopics = CHANNEL_TOPIC_MAP[ch.code] ?? (ch.topics ?? []).map((name) => ({ name }));
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
     {
       '@type': 'CollectionPage',
       '@id': `https://pointcast.xyz/c/${ch.slug}`,
-      name: `CH.${ch.code} · ${ch.name}`,
-      description: ch.purpose,
+      name: `${ch.name} — PointCast`,
+      description: channelMeta,
       url: `https://pointcast.xyz/c/${ch.slug}`,
       isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website' },
+      ...(ch.topics ? { keywords: ch.topics.join(', ') } : {}),
+      // SEO: about[] references each topical Thing entity from the
+      // TopicalMap below. Google + LLM extractors treat `about` as
+      // stronger than `keywords` for entity attribution.
+      about: channelTopics.map((t, i) => ({ '@id': `https://pointcast.xyz/c/${ch.slug}#topic-${i}` })),
       hasPart: blocks.slice(0, 30).map((b) => ({
         '@type': 'CreativeWork',
         '@id': `https://pointcast.xyz/b/${b.data.id}`,
@@ -43,6 +131,16 @@ const jsonLd = {
         datePublished: b.data.timestamp.toISOString(),
       })),
     },
+    // TopicalMap sub-graph — one Thing entity per channel topic, with
+    // Wikipedia sameAs where a canonical entry exists. Ranks entity
+    // attribution without bloating the page HTML.
+    ...channelTopics.map((t, i) => ({
+      '@type': 'Thing',
+      '@id': `https://pointcast.xyz/c/${ch.slug}#topic-${i}`,
+      name: t.name,
+      ...(t.description ? { description: t.description } : {}),
+      ...(t.sameAs ? { sameAs: t.sameAs } : {}),
+    })),
     {
       '@type': 'BreadcrumbList',
       '@id': `https://pointcast.xyz/c/${ch.slug}#breadcrumb`,
@@ -66,15 +164,33 @@ const jsonLd = {
 };
 ---
 
-<BlockLayout title={`CH.${ch.code} · ${ch.name}`} description={ch.purpose} jsonLd={jsonLd} alternates={alternates}>
+<BlockLayout title={ch.name} description={channelMeta} jsonLd={jsonLd} alternates={alternates}>
   <div class="page">
     <header class="ch-header" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
       <a href="/" class="ch-header__back">← All channels</a>
       <div class="ch-header__title">
         <span class="ch-header__code" aria-hidden="true">CH.{ch.code}</span>
-        <h1 class="ch-header__name">CH.{ch.code} · {ch.name}</h1>
+        {/* SEO: H1 now leads with the channel name (not the CH.{code} prefix)
+            so it reads cleanly for both humans and crawlers. The code badge
+            stays as a visual element. */}
+        <h1 class="ch-header__name">{ch.name}</h1>
       </div>
-      <p class="ch-header__purpose">{ch.purpose}</p>
+      {ch.intro ? (
+        <p class="ch-header__intro">{ch.intro}</p>
+      ) : (
+        <p class="ch-header__purpose">{ch.purpose}</p>
+      )}
+      {ch.topics && ch.topics.length > 0 && (
+        <p class="ch-header__topics" aria-label="Topics covered in this channel">
+          <span class="ch-header__topics-label">Topics:</span>
+          {ch.topics.map((t, i) => (
+            <>
+              {i > 0 && <span aria-hidden="true"> · </span>}
+              <span class="ch-header__topic">{t}</span>
+            </>
+          ))}
+        </p>
+      )}
       <nav class="ch-header__feeds">
         <a href={`/c/${ch.slug}.rss`}>RSS</a>
         <span aria-hidden="true">·</span>
@@ -144,6 +260,38 @@ const jsonLd = {
     font-size: 13px;
     color: var(--pc-ink-soft);
     margin: 6px 0 10px;
+  }
+
+  /* SEO landing intro — 120-200 word paragraph, set a touch larger than
+     the legacy purpose blurb so it reads like body copy instead of a
+     sub-header. Max-width caps line length for comfortable reading. */
+  .ch-header__intro {
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+    margin: 8px 0 10px;
+    max-width: 64ch;
+  }
+
+  .ch-header__topics {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted);
+    margin: 0 0 10px;
+    max-width: 64ch;
+    line-height: 1.6;
+  }
+  .ch-header__topics-label {
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-right: 6px;
+    color: var(--ch-800);
+    font-weight: 500;
+  }
+  .ch-header__topic {
+    color: var(--pc-ink);
   }
 
   .ch-header__feeds {

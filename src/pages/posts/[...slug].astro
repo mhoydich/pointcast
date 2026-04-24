@@ -4,13 +4,31 @@ import { getCollection, render } from 'astro:content';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
-  return posts.map(post => ({
-    params: { slug: post.id },
-    props: { post },
-  }));
+  // SEO: build a legacyPath → block-id map so we can emit a canonical
+  // pointing at the permanent /b/{id} URL for any post that a block
+  // already references via meta.legacyPath. Converges duplicate-content
+  // signal onto the block URL without removing the rich post body from
+  // the site (visitors landing directly still see full content).
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  const legacyToBlockId = new Map<string, string>();
+  for (const b of blocks) {
+    const legacy = (b.data as any)?.meta?.legacyPath;
+    if (typeof legacy === 'string' && legacy.startsWith('/posts/')) {
+      legacyToBlockId.set(legacy.replace(/^\/posts\//, '').replace(/\/$/, ''), b.data.id);
+    }
+  }
+
+  return posts.map(post => {
+    const blockId = legacyToBlockId.get(post.id);
+    const canonical = blockId ? `https://pointcast.xyz/b/${blockId}` : undefined;
+    return {
+      params: { slug: post.id },
+      props: { post, canonical },
+    };
+  });
 }
 
-const { post } = Astro.props;
+const { post, canonical } = Astro.props as { post: any; canonical?: string };
 const { Content } = await render(post);
 ---
 
@@ -21,6 +39,30 @@ const { Content } = await render(post);
   type={post.data.type}
   image={post.data.image}
   tags={post.data.tags}
+  canonical={canonical}
 >
+  {canonical && (
+    <aside class="canonical-notice" role="note">
+      <p>
+        This article's permanent home is at <a href={canonical.replace('https://pointcast.xyz', '')}>{canonical.replace('https://pointcast.xyz', '')}</a>.
+        Bookmarks and citations should prefer that URL.
+      </p>
+    </aside>
+  )}
   <Content />
 </PostLayout>
+
+<style>
+  .canonical-notice {
+    max-width: 34rem;
+    margin: 0 auto 1.5rem;
+    padding: 10px 14px;
+    border-left: 3px solid #185FA5;
+    background: #eef4fa;
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #0B3E73;
+  }
+  .canonical-notice p { margin: 0; line-height: 1.5; }
+  .canonical-notice a { color: #185FA5; text-decoration: underline; }
+</style>

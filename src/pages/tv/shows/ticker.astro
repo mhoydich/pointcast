@@ -1,0 +1,229 @@
+---
+/**
+ * /tv/shows/ticker — compute-ledger scrolling ticker TV show.
+ *
+ * Three lanes of horizontal scroll at different speeds, each showing
+ * ledger entries as {title · collab · signature · artifact}. Colored
+ * by signature. Hypnotic at 4K, legible at 1080p, still fine on phone.
+ *
+ * Auto-fullscreen on first tap.
+ */
+import { COMPUTE_LEDGER } from '../../../lib/compute-ledger';
+
+// Sort newest first. Each lane gets a different slice+order for texture.
+const sorted = [...COMPUTE_LEDGER].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+const lane1 = sorted.slice(0, 60);
+const lane2 = sorted.slice(20, 70).reverse();
+const lane3 = sorted.slice(10, 50);
+
+function fmtWhen(iso: string) {
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'America/Los_Angeles',
+  }).format(d);
+}
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#090604" />
+  <meta name="description" content="Compute ticker — PointCast's federated ledger scrolling as a stock ticker. Three lanes, three speeds, signature-colored. Full viewport TV show." />
+  <title>PointCast TV · Compute ticker</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #090604;
+      --ink: #fef5e7;
+      --ink-soft: #c4c2bc;
+      --ink-dim: #5F5E5A;
+      --accent: #F59F00;
+      --warm: #8a2432;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+      --serif: 'Lora', Georgia, serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--serif); }
+    body { display: grid; grid-template-rows: 64px 1fr 52px; }
+
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 18px 36px;
+      border-bottom: 1px solid rgba(254, 245, 231, 0.1);
+      font-family: var(--mono);
+    }
+    .top__brand { font-size: 18px; letter-spacing: 0.28em; font-weight: 700; color: var(--ink); }
+    .top__brand em { font-style: normal; color: var(--accent); font-weight: 400; }
+    .top__show { font-size: 11px; letter-spacing: 0.3em; color: var(--ink-soft); text-transform: uppercase; font-weight: 600; }
+    .top__live {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 10px; border: 1px solid var(--warm); background: rgba(138, 36, 50, 0.18);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.22em; border-radius: 2px;
+    }
+    .top__live-dot { width: 7px; height: 7px; border-radius: 50%; background: #f66; box-shadow: 0 0 8px 1px rgba(255, 102, 102, 0.8); animation: blink 2s ease-in-out infinite; }
+    .top__spacer { flex: 1; }
+    .top__fs {
+      appearance: none; cursor: pointer; background: rgba(245, 159, 0, 0.1);
+      border: 1px solid rgba(245, 159, 0, 0.4); color: var(--accent);
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+      font-weight: 700; padding: 6px 12px; border-radius: 2px;
+    }
+    .top__fs:hover { background: rgba(245, 159, 0, 0.22); color: var(--ink); }
+    .top__back { color: var(--ink-soft); font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-decoration: none; }
+    .top__back:hover { color: var(--accent); }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 1fr 1fr 1fr;
+      gap: 8px;
+      padding: 32px 0;
+    }
+
+    .lane {
+      position: relative;
+      overflow: hidden;
+      height: 100%;
+      display: flex;
+      align-items: center;
+    }
+    .lane::before, .lane::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 120px;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .lane::before { left: 0; background: linear-gradient(90deg, var(--bg), transparent); }
+    .lane::after  { right: 0; background: linear-gradient(-90deg, var(--bg), transparent); }
+
+    .lane__track {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+      white-space: nowrap;
+      will-change: transform;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+    }
+    .lane--1 .lane__track { animation: scroll-left 280s linear infinite; }
+    .lane--2 .lane__track { animation: scroll-right 200s linear infinite; animation-direction: reverse; }
+    .lane--3 .lane__track { animation: scroll-left 160s linear infinite; }
+
+    @keyframes scroll-left  { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    @keyframes scroll-right { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+    .tick {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      border-left: 4px solid transparent;
+      border-radius: 2px;
+      background: rgba(254, 245, 231, 0.03);
+      flex-shrink: 0;
+    }
+    .tick--shy     { border-left-color: #8a7e6c; }
+    .tick--modest  { border-left-color: #185FA5; }
+    .tick--healthy { border-left-color: #E8590C; }
+    .tick--heavy   { border-left-color: #C92A2A; }
+
+    .tick__when    { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); letter-spacing: 0.04em; }
+    .tick__collab  { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; font-weight: 700; padding: 2px 7px; border: 1px solid rgba(245, 159, 0, 0.4); border-radius: 2px; }
+    .tick__title   { font-family: var(--serif); font-size: clamp(16px, 1.6vw, 22px); color: var(--ink); max-width: 52ch; overflow: hidden; text-overflow: ellipsis; }
+    .tick__sig     { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+
+    .lane--1 .tick { background: rgba(245, 159, 0, 0.05); }
+    .lane--2 .tick { background: rgba(138, 36, 50, 0.08); }
+    .lane--3 .tick { background: rgba(24, 95, 165, 0.05); }
+
+    .lane--2 .tick__title { font-size: clamp(15px, 1.5vw, 20px); color: var(--ink-soft); }
+    .lane--3 .tick__title { font-size: clamp(14px, 1.3vw, 18px); color: var(--ink-dim); }
+
+    .bot {
+      display: flex; align-items: center; padding: 14px 36px; gap: 20px;
+      border-top: 1px solid rgba(254, 245, 231, 0.1);
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+      color: var(--ink-soft);
+    }
+    .bot__kicker { color: var(--accent); font-weight: 700; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .lane__track { animation: none !important; transform: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top__brand">POINT<em>CAST</em></div>
+    <div class="top__show">SHOWS / COMPUTE TICKER</div>
+    <div class="top__live"><span class="top__live-dot" aria-hidden="true"></span>LIVE</div>
+    <div class="top__spacer"></div>
+    <button type="button" class="top__fs" id="fs-btn"><span aria-hidden="true">⛶</span> FULLSCREEN</button>
+    <a class="top__back" href="/tv/shows/">← SHOWS</a>
+  </header>
+
+  <section class="stage">
+    {[lane1, lane2, lane3].map((lane, i) => (
+      <div class={`lane lane--${i + 1}`}>
+        <div class="lane__track">
+          {/* Double the track for seamless loop */}
+          {[...lane, ...lane].map((e) => (
+            <div class={`tick tick--${e.signature}`}>
+              <span class="tick__when">{fmtWhen(e.at)}</span>
+              <span class="tick__collab">{e.collab.replace('claude-code', 'cc').replace('mike-hoydich', 'mh')}</span>
+              <span class="tick__title">{e.title}</span>
+              <span class="tick__sig">{e.signature}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </section>
+
+  <footer class="bot">
+    <span class="bot__kicker">/compute</span>
+    <span>{COMPUTE_LEDGER.length} ledger entries · three lanes · signature-colored · open record of what PointCast ships</span>
+  </footer>
+
+  <script is:inline>
+    (function () {
+      var fsBtn = document.getElementById('fs-btn');
+      var armed = true;
+      function inFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+      function enter() {
+        var el = document.documentElement;
+        var r = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (r) try { var p = r.call(el); if (p && p.then) p.catch(function(){}); } catch(e){}
+      }
+      function exit() {
+        var e = document.exitFullscreen || document.webkitExitFullscreen;
+        if (e) try { var p = e.call(document); if (p && p.then) p.catch(function(){}); } catch(e){}
+      }
+      if (fsBtn) fsBtn.addEventListener('click', function (ev) { ev.stopPropagation(); inFs() ? exit() : enter(); });
+      function autoOnce(ev) {
+        if (ev && ev.target && (ev.target.tagName === 'A' || ev.target.tagName === 'BUTTON' || (ev.target.closest && ev.target.closest('a,button')))) return;
+        if (!armed) return; armed = false;
+        window.removeEventListener('click', autoOnce);
+        window.removeEventListener('touchend', autoOnce);
+        enter();
+      }
+      window.addEventListener('click', autoOnce);
+      window.addEventListener('touchend', autoOnce);
+      window.addEventListener('keydown', function (ev) { if (ev.key === 'f' || ev.key === 'F') inFs() ? exit() : enter(); });
+    })();
+  </script>
+</body>
+</html>

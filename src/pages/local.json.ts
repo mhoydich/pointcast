@@ -83,6 +83,8 @@ export const GET: APIRoute = async () => {
       nameDropsEditorial: 'https://pointcast.xyz/b/0276',
       radiusEditorial: 'https://pointcast.xyz/b/0254',
       esNameDropsPoll: 'https://pointcast.xyz/poll/es-name-drops',
+      passport: 'https://pointcast.xyz/passport',
+      passportJson: 'https://pointcast.xyz/passport.json',
       broadcastTv: 'https://pointcast.xyz/tv',
       goodFeelsShop: 'https://shop.getgoodfeels.com',
     },

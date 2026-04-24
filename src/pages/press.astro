@@ -1,0 +1,628 @@
+---
+/**
+ * /press — journalist + media inbound magnet.
+ *
+ * Strategy: make it trivially easy for anyone writing about agent-native
+ * web, Nouns proliferation, El Segundo tech, CC0, Good Feels, or Mike
+ * Hoydich specifically to cite PointCast with the correct name, logo,
+ * bio, and facts. Press pages are backlink magnets — the link-with-value
+ * ratio is among the highest of any page type.
+ *
+ * Schema: WebPage + Organization + Person + AboutPage. The Organization
+ * + Person blocks reference the existing #org + #person @id graph in
+ * BaseLayout to avoid duplication.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNEL_LIST } from '../lib/channels';
+import { getCollection } from 'astro:content';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const blockCount = blocks.length;
+const earliest = blocks.reduce((min, b) => b.data.timestamp < min ? b.data.timestamp : min, blocks[0].data.timestamp);
+const sinceDate = earliest.toISOString().slice(0, 10);
+const sinceMonthYear = earliest.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+const factSheet = [
+  { label: 'Project name', value: 'PointCast' },
+  { label: 'URL', value: 'https://pointcast.xyz' },
+  { label: 'Repository', value: 'https://github.com/MikeHoydich/pointcast' },
+  { label: 'Founded', value: sinceMonthYear },
+  { label: 'Founder / operator', value: 'Mike Hoydich (El Segundo, California)' },
+  { label: 'AI collaborators', value: 'Claude Code (Anthropic) · Codex (OpenAI) · Manus (operations)' },
+  { label: 'Total blocks published', value: String(blockCount) },
+  { label: 'Channels', value: '9 (Front Door, Court, Spinning, Good Feels, Garden, El Segundo, Faucet, Visit, Battler)' },
+  { label: 'Content license', value: 'CC0-flavored (citation welcomed; please link to /b/{id})' },
+  { label: 'Code license', value: 'MIT-flavored' },
+  { label: 'Tech stack', value: 'Astro · Cloudflare Pages + Workers + KV + Durable Objects' },
+  { label: 'On-chain layer', value: 'Tezos mainnet (FA2 NFT contract live; FA1.2 + Prize Cast pending)' },
+  { label: 'Visit Nouns FA2 contract', value: 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh' },
+  { label: 'Farcaster', value: '@mhoydich (every block auto-renders as a Frame)' },
+  { label: 'Primary contact', value: 'hello@pointcast.xyz · @mhoydich on X' },
+];
+
+const brandAssets = [
+  {
+    label: 'Broadcast dish favicon (SVG)',
+    path: '/favicon.svg',
+    note: 'Primary mark. Vector. Use on white, cream, or deep ink backgrounds.',
+  },
+  {
+    label: 'Broadcast dish favicon (PNG, 512×512)',
+    path: '/icon-512.png',
+    note: 'Rasterized for platforms that reject SVG.',
+  },
+  {
+    label: 'Broadcast dish favicon (PNG, 192×192)',
+    path: '/icon-192.png',
+    note: 'App-tile size.',
+  },
+  {
+    label: 'OG card — home (1200×630 PNG)',
+    path: '/images/og-home-v3.png',
+    note: 'Default social unfurl. Deep-ink field with satellite dish + wordmark.',
+  },
+  {
+    label: 'OG card — /agent-native (1200×630 PNG)',
+    path: '/images/og-agent-native.png',
+    note: 'Terminal motif with agent-native surface list.',
+  },
+  {
+    label: 'OG card — /el-segundo (1200×630 PNG)',
+    path: '/images/og-el-segundo.png',
+    note: 'Purple beacon radius over El Segundo coordinates.',
+  },
+  {
+    label: 'OG card — /nouns (1200×630 PNG)',
+    path: '/images/og-nouns.png',
+    note: 'Oxblood pixel-grid glasses motif + Visit Nouns contract address.',
+  },
+];
+
+const boilerplate = {
+  short: 'PointCast is a living broadcast from El Segundo, California — dispatches, faucets, visits, and mints on Tezos. Every piece of content is a Block. Built by Mike Hoydich with Claude (Anthropic) and Codex (OpenAI).',
+  medium: `PointCast (pointcast.xyz) is an agent-native broadcast anchored in El Segundo, California. Launched ${sinceMonthYear}, the site publishes dispatches, listening notes, on-chain editions, and visit-log entries across nine themed channels. Every piece of content is a Block — a stable JSON schema with an immutable monotonic ID. PointCast is built as an explicit human-AI collaboration: Mike Hoydich directs, Claude Code (Anthropic) engineers, Codex (OpenAI) reviews, and Manus handles operations. Content is CC0-flavored; code is MIT-flavored. The site is deployed on Cloudflare Pages with Tezos mainnet contracts for the on-chain layer.`,
+  long: `PointCast (pointcast.xyz) is a personal broadcast and live experiment in agent-native web architecture, launched in ${sinceMonthYear} and anchored in El Segundo, California. The site publishes dispatches, listening notes, watch blocks, on-chain editions, and visit-log entries across nine themed channels — Front Door (AI and interfaces), Court (pickleball), Spinning (music), Good Feels (cannabis and hemp), Garden (balcony and wildlife), El Segundo (local fiction and community), Faucet (free daily claims), Visit (human and AI agent visit log), and Battler (Nouns-on-Tezos deterministic fighter). Every piece of content is a Block: a stable JSON schema with an immutable monotonic ID, dual-published as both human HTML and machine-readable JSON at the same logical URL. PointCast is built as an explicit human-AI collaboration between Mike Hoydich (director and operator), Claude Code (Anthropic, daily engineer), Codex (OpenAI, reviewer), and Manus (operations). The stack is Astro on Cloudflare Pages with Workers, KV, and Durable Objects; the on-chain layer runs on Tezos mainnet (Visit Nouns FA2 contract live at KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh, with a DRUM attention token and Prize Cast no-loss savings pool in development). The site ships an unusually complete set of agent-discoverability surfaces — /llms.txt, /llms-full.txt, /agents.json, Content-Signals opt-in, stripped-HTML middleware for detected AI crawlers, per-page JSON twins, RSS 2.0 + JSON Feed 1.1, rich JSON-LD schema, and Farcaster Frames on every content URL — documented at /agent-native. Content is CC0-flavored and may be cited freely; code is MIT-flavored and published at github.com/MikeHoydich/pointcast.`,
+};
+
+const bioShort = `Mike Hoydich is the founder and operator of PointCast, a living broadcast from El Segundo, California. He is also COO at Good Feels, a hemp-THC beverage company.`;
+
+const bioLong = `Mike Hoydich is a creative technologist, founder, and operator based in El Segundo, California. He runs PointCast (pointcast.xyz), an agent-native broadcast built in explicit collaboration with Claude Code (Anthropic) and Codex (OpenAI), publishing daily across nine editorial channels and on Tezos mainnet. He is also COO at Good Feels, a hemp-derived THC beverage company. Mike's work sits at the intersection of publishing, software, and on-chain primitives; his visual aesthetic pulls from mid-century modern, Southern California coastal design, and the Nouns DAO CC0 tradition. He holds long-running obsessions with pickleball (he plays on The Squeeze at El Segundo Recreation Park), music curation, and what happens to the web when agents become first-class readers.`;
+
+const storyAngles = [
+  {
+    title: 'The agent-native web',
+    hook: 'A case study in building a website for AI agents AND humans — llms.txt, agents.json, stripped-HTML middleware for crawlers, Content-Signals opt-in, JSON twins, Farcaster Frames. PointCast ships all of it.',
+    related: ['/agent-native', '/for-agents', '/manifesto'],
+  },
+  {
+    title: 'Nouns proliferation on Tezos',
+    hook: 'Visit Nouns FA2 is one of few active Nouns-derivative projects on Tezos in 2026. Open-supply, CC0, fractions-of-a-tez to mint. Tied to Nouns Battler, a fully deterministic fighter where stats derive from seed hashes.',
+    related: ['/nouns', '/collection/visit-nouns', '/battle'],
+  },
+  {
+    title: 'Human-AI collaboration as an operating model',
+    hook: 'Mike directs, Claude Code engineers on an hourly cron, Codex reviews, Manus runs ops. ~100 blocks per month shipped autonomously. Public GitHub repo, CC0 content, full session logs.',
+    related: ['/collabs', '/sprints', '/ai-stack'],
+  },
+  {
+    title: 'El Segundo as the next creative-tech hub',
+    hook: 'The aerospace-workshop side of Silicon Beach is quietly becoming the place where Web3 + CC0 + AI builders concentrate. PointCast anchors a 25-mile community beacon out of 90245.',
+    related: ['/el-segundo', '/beacon', '/local'],
+  },
+  {
+    title: 'Generative engine optimization (GEO) in practice',
+    hook: 'PointCast is optimized for citation by ChatGPT, Claude, Perplexity, Gemini as aggressively as for Google. Every design choice — permalink structure, llms.txt, schema, canonical citations — supports being a source the models name.',
+    related: ['/agent-native', '/manifesto', '/glossary'],
+  },
+];
+
+const citationFormat = `PointCast · CH.{CODE} · № {ID} — "{TITLE}" · {YYYY-MM-DD}
+https://pointcast.xyz/b/{ID}`;
+const citationExample = `PointCast · CH.FD · № 0205 — "The front door is agentic" · 2026-04-14
+https://pointcast.xyz/b/0205`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'AboutPage',
+      '@id': 'https://pointcast.xyz/press',
+      name: 'PointCast press kit',
+      description: 'Brand assets, bio, fact sheet, boilerplate, and story angles for journalists and writers covering PointCast, Mike Hoydich, agent-native web, Nouns on Tezos, or Good Feels.',
+      url: 'https://pointcast.xyz/press',
+      about: [
+        { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org' },
+        { '@type': 'Person', '@id': 'https://pointcast.xyz/#person' },
+      ],
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/press#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Press', item: 'https://pointcast.xyz/press' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Press kit"
+  description="PointCast press kit — brand assets, bio, fact sheet, boilerplate, and five story angles for journalists and writers. CC0-flavored content, citation welcomed."
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Press</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">PRESS · MEDIA · CITATIONS WELCOME</p>
+      <h1 class="display">Press kit.</h1>
+      <p class="dek">
+        Everything you need to write about PointCast, Mike Hoydich, or the
+        surrounding projects — bio, fact sheet, boilerplate, brand assets,
+        and five story angles. Content is CC0-flavored: citation is
+        encouraged. The preferred citation format is listed at the
+        bottom.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="fact-sheet">Fact sheet</h2>
+      <dl class="fact-sheet">
+        {factSheet.map((f) => (
+          <>
+            <dt>{f.label}</dt>
+            <dd>{f.value}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <section class="section">
+      <h2 id="boilerplate">Boilerplate (three lengths)</h2>
+      <p class="note">Use whichever length fits. Lightly editable; please keep URLs and collaborator names intact.</p>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Short · ~50 words</p>
+          <button class="copy-block__button" data-copy="boiler-short" type="button">Copy</button>
+        </div>
+        <p class="copy-block__text" data-copy-target="boiler-short">{boilerplate.short}</p>
+      </div>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Medium · ~110 words</p>
+          <button class="copy-block__button" data-copy="boiler-medium" type="button">Copy</button>
+        </div>
+        <p class="copy-block__text" data-copy-target="boiler-medium">{boilerplate.medium}</p>
+      </div>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Long · ~280 words</p>
+          <button class="copy-block__button" data-copy="boiler-long" type="button">Copy</button>
+        </div>
+        <p class="copy-block__text" data-copy-target="boiler-long">{boilerplate.long}</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 id="bio">Mike Hoydich — bio</h2>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Short · 2 sentences</p>
+          <button class="copy-block__button" data-copy="bio-short" type="button">Copy</button>
+        </div>
+        <p class="copy-block__text" data-copy-target="bio-short">{bioShort}</p>
+      </div>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Long · ~140 words</p>
+          <button class="copy-block__button" data-copy="bio-long" type="button">Copy</button>
+        </div>
+        <p class="copy-block__text" data-copy-target="bio-long">{bioLong}</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 id="assets">Brand assets</h2>
+      <p class="note">
+        Right-click any asset to save. All are CC0-flavored for journalistic
+        use and linked context. Please do not modify the wordmark shape or
+        swap the broadcast-dish mark with a different icon.
+      </p>
+      <ul class="assets">
+        {brandAssets.map((a) => (
+          <li class="asset">
+            <div class="asset__preview">
+              <img src={a.path} alt={a.label} loading="lazy" />
+            </div>
+            <div class="asset__meta">
+              <a class="asset__path mono" href={a.path}>{a.path}</a>
+              <p class="asset__label">{a.label}</p>
+              <p class="asset__note">{a.note}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="story-angles">Five story angles</h2>
+      <p class="note">
+        Pitches that fit different outlet types. Pick whichever aligns with
+        your publication; every angle has at least three canonical URLs to
+        cite.
+      </p>
+      <ol class="angles">
+        {storyAngles.map((a) => (
+          <li class="angle">
+            <h3 class="angle__title">{a.title}</h3>
+            <p class="angle__hook">{a.hook}</p>
+            <p class="angle__related mono">
+              Canonical URLs:
+              {a.related.map((r, i) => (
+                <>
+                  {i > 0 && <span aria-hidden="true"> · </span>}
+                  <a href={r}>{r}</a>
+                </>
+              ))}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2 id="citation">How to cite PointCast</h2>
+      <p>
+        Every Block has an immutable permanent URL at <code>/b/{'{id}'}</code>.
+        Use it for citations — the URL never changes, never redirects, and
+        is the canonical surface for both humans and agents.
+      </p>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Preferred citation format</p>
+          <button class="copy-block__button" data-copy="cite-format" type="button">Copy</button>
+        </div>
+        <pre class="copy-block__pre" data-copy-target="cite-format">{citationFormat}</pre>
+      </div>
+
+      <div class="copy-block">
+        <div class="copy-block__head">
+          <p class="copy-block__label">Example</p>
+          <button class="copy-block__button" data-copy="cite-example" type="button">Copy</button>
+        </div>
+        <pre class="copy-block__pre" data-copy-target="cite-example">{citationExample}</pre>
+      </div>
+
+      <p class="note">
+        For agents / LLMs: citation-ready content lives at
+        <a href="/manifesto">/manifesto</a> (FAQPage),
+        <a href="/glossary">/glossary</a> (DefinedTermSet), and the three
+        SEO pillars <a href="/el-segundo">/el-segundo</a>,
+        <a href="/agent-native">/agent-native</a>, and <a href="/nouns">/nouns</a>.
+        See also <a href="/llms.txt">/llms.txt</a>.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="contact">Contact</h2>
+      <ul class="contact">
+        <li><strong>Email:</strong> <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a></li>
+        <li><strong>X / Twitter:</strong> <a href="https://x.com/mhoydich" target="_blank" rel="noopener">@mhoydich</a></li>
+        <li><strong>Farcaster:</strong> <a href="https://warpcast.com/mhoydich" target="_blank" rel="noopener">@mhoydich on Warpcast</a></li>
+        <li><strong>LinkedIn:</strong> <a href="https://www.linkedin.com/in/mhoydich/" target="_blank" rel="noopener">linkedin.com/in/mhoydich</a></li>
+        <li><strong>GitHub:</strong> <a href="https://github.com/MikeHoydich/pointcast" target="_blank" rel="noopener">MikeHoydich/pointcast</a></li>
+      </ul>
+      <p class="note">
+        Response time is typically within 24 hours on weekdays. For urgent
+        press inquiries (story deadlines under 12 hours), please DM on X or
+        Farcaster for fastest response.
+      </p>
+    </section>
+  </article>
+</BlockLayout>
+
+<script is:inline>
+  // Clipboard copy — small, no dependencies. Each button pairs with a
+  // [data-copy-target="..."] element by data-copy key.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-copy]');
+    if (!btn) return;
+    const key = btn.getAttribute('data-copy');
+    const target = document.querySelector(`[data-copy-target="${key}"]`);
+    if (!target) return;
+    const text = target.textContent ?? '';
+    navigator.clipboard?.writeText(text).then(() => {
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('copy-block__button--copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copy-block__button--copied');
+      }, 1800);
+    });
+  });
+</script>
+
+<style>
+  .page { max-width: 820px; margin: 0 auto; padding: 18px 18px 80px; }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: 40px;
+    font-weight: 500;
+    line-height: 1.05;
+    margin: 0 0 12px;
+  }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 17px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 64ch; }
+
+  .section { margin: 28px 0; }
+  .section h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 14px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--pc-ink);
+    max-width: 64ch;
+    margin: 0 0 12px;
+  }
+  .section a { color: var(--pc-accent); text-decoration: underline; }
+  .section strong { font-weight: 500; }
+  .section code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #f4f2ed;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+  .note {
+    font-size: 14px;
+    color: var(--pc-ink-soft);
+  }
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+
+  /* Fact sheet — 2 column dl */
+  .fact-sheet {
+    display: grid;
+    grid-template-columns: minmax(160px, auto) 1fr;
+    gap: 8px 16px;
+    margin: 0;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    background: #fafaf8;
+    border-radius: 2px;
+  }
+  .fact-sheet dt {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    padding-top: 2px;
+  }
+  .fact-sheet dd {
+    margin: 0;
+    font-size: 14px;
+    color: var(--pc-ink);
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  @media (max-width: 600px) {
+    .fact-sheet { grid-template-columns: 1fr; gap: 2px; }
+    .fact-sheet dd { padding-bottom: 8px; border-bottom: 1px dashed var(--pc-rule-soft); }
+    .fact-sheet dd:last-child { border-bottom: 0; }
+  }
+
+  /* Copy blocks — boilerplate + bios + citation */
+  .copy-block {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .copy-block__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .copy-block__label {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .copy-block__button {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background-color 120ms, color 120ms;
+  }
+  .copy-block__button:hover { background: var(--pc-ink); color: #fff; }
+  .copy-block__button--copied { background: var(--pc-accent); border-color: var(--pc-accent); color: #fff; }
+  .copy-block__text {
+    margin: 0 !important;
+    font-size: 14.5px !important;
+    line-height: 1.55 !important;
+    color: var(--pc-ink) !important;
+    max-width: none !important;
+  }
+  .copy-block__pre {
+    margin: 0;
+    padding: 10px 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: #12110E;
+    color: #eef4fa;
+    border-radius: 2px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Assets grid */
+  .assets {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .asset {
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+    overflow: hidden;
+  }
+  .asset__preview {
+    aspect-ratio: 1.91 / 1;
+    background: #12110E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .asset__preview img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .asset__meta { padding: 10px 12px; }
+  .asset__path {
+    display: block;
+    color: var(--pc-accent);
+    font-size: 11px;
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+  .asset__label {
+    margin: 0 0 4px !important;
+    font-size: 13.5px !important;
+    font-weight: 500;
+    color: var(--pc-ink) !important;
+  }
+  .asset__note {
+    margin: 0 !important;
+    font-size: 12.5px !important;
+    color: var(--pc-ink-soft) !important;
+    line-height: 1.45 !important;
+  }
+
+  /* Story angles */
+  .angles {
+    list-style: none;
+    counter-reset: angle;
+    padding: 0;
+    margin: 0;
+  }
+  .angle {
+    counter-increment: angle;
+    padding: 14px 0;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+  }
+  .angle:last-child { border-bottom: 0; }
+  .angle__title {
+    margin: 0 0 6px;
+    font-family: var(--pc-font-sans);
+    font-size: 17px;
+    font-weight: 500;
+  }
+  .angle__title::before {
+    content: counter(angle, decimal-leading-zero) " · ";
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    color: var(--pc-ink-muted);
+    font-weight: 400;
+  }
+  .angle__hook {
+    margin: 0 0 8px !important;
+    font-size: 14.5px !important;
+    color: var(--pc-ink) !important;
+    line-height: 1.55 !important;
+  }
+  .angle__related {
+    margin: 0 !important;
+    font-size: 11px !important;
+    letter-spacing: 0.1em !important;
+    color: var(--pc-ink-muted) !important;
+    max-width: none !important;
+  }
+  .angle__related a { color: var(--pc-accent); margin-left: 4px; }
+
+  /* Contact */
+  .contact {
+    list-style: none;
+    padding: 12px 14px;
+    margin: 0 0 10px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    border-radius: 2px;
+  }
+  .contact li {
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 2px 0;
+  }
+  .contact li strong {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    display: inline-block;
+    min-width: 110px;
+  }
+</style>

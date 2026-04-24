@@ -1,0 +1,413 @@
+---
+/**
+ * /compute — public compute ledger + federation spec.
+ *
+ * Mike 2026-04-20 15:10 PT: *"this, lets federate compute."*
+ * (responding to Elad Gil 2026-04-12 "compute is the new currency")
+ *
+ * The page renders COMPUTE_LEDGER from src/lib/compute-ledger.ts in
+ * newspaper / terminal style, then explains the federation spec so any
+ * other site can publish a compatible /compute.json and join the
+ * network. Companion surface: /compute.json.
+ *
+ * Design intent: boring-enough that it feels like a receipt, not a
+ * dashboard. Compute is legible here; nobody's trying to win a ranking.
+ *
+ * Author: cc. Source: Mike 2026-04-20 15:10 PT chat.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  COMPUTE_LEDGER,
+  collabCounts,
+  recentEntries,
+  SIGNATURE_LABEL,
+  SIGNATURE_BAND,
+  KIND_LABEL,
+  type ComputeEntry,
+} from '../lib/compute-ledger';
+import { findCollaborator } from '../lib/collaborators';
+
+const entries = [...COMPUTE_LEDGER].sort(
+  (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+);
+const last24h = recentEntries(24);
+const last7d = recentEntries(24 * 7);
+const counts = collabCounts();
+
+// By-collab grouped view — Sprint #91 D-1. Cap at 4 most-prolific collabs,
+// each with their 6 most-recent ships. Any overflow collabs get rolled into
+// a single "others" column.
+const TOP_COLLABS = 4;
+const PER_COLUMN = 6;
+const allCollabs = counts.slice().sort((a, b) => b.n - a.n);
+const topCollabs = allCollabs.slice(0, TOP_COLLABS);
+const recentByCollab: Record<string, ComputeEntry[]> = {};
+for (const c of topCollabs) {
+  recentByCollab[c.collab] = entries.filter((e) => e.collab === c.collab).slice(0, PER_COLUMN);
+}
+
+function fmtTime(iso: string): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Los_Angeles',
+    }).format(d) + ' PT';
+  } catch {
+    return iso;
+  }
+}
+
+function collabName(slug: string): string {
+  const c = findCollaborator(slug);
+  if (c) return c.name;
+  // Federated node form: "host:slug"
+  if (slug.includes(':')) return slug.split(':')[1];
+  return slug;
+}
+
+function sigWeight(sig: ComputeEntry['signature']): number {
+  return { shy: 1, modest: 2, healthy: 3, heavy: 4 }[sig];
+}
+
+const title = 'Compute — federated compute ledger';
+const description =
+  'PointCast\'s public record of compute expended to build the site — sprints, blocks, briefs, ops. Compute-as-currency, legible, federatable. Other nodes can publish a compatible /compute.json.';
+const alternates = [
+  { type: 'application/json', href: '/compute.json', title: 'Compute ledger (JSON)' },
+  { type: 'text/html', href: '/sprints', title: 'Sprint log (what each ship looked like)' },
+  { type: 'text/html', href: '/collabs', title: 'Collaborators' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast compute ledger',
+  description,
+  url: 'https://pointcast.xyz/compute',
+  hasPart: entries.slice(0, 20).map((e) => ({
+    '@type': 'CreativeWork',
+    name: e.title,
+    datePublished: e.at,
+    ...(e.artifact ? { url: e.artifact.startsWith('http') ? e.artifact : `https://pointcast.xyz${e.artifact}` } : {}),
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/sprints.png" jsonLd={jsonLd} alternates={alternates}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>compute</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">COMPUTE · FEDERATED LEDGER</p>
+      <h1 class="title">The compute, legible.</h1>
+      <p class="dek">
+        Every ship on PointCast burns compute — a sprint, a block, a brief, an ops rotation.
+        This page publishes the ledger: who did the work, when, what shipped, how heavy the
+        footprint was. Signatures are order-of-magnitude bands, not raw token counts
+        (those are private + fuzzy; the bands are the useful unit).
+      </p>
+      <p class="dek">
+        After <a href="https://blog.eladgil.com/p/random-thoughts-while-gazing-at-the" rel="noopener">Elad Gil's "compute is the new currency"</a> — a post I agree with enough to act on.
+        PointCast's answer: publish it, invite other nodes to publish theirs,
+        let federation do the rest. Spec below. Agent-readable mirror at
+        <a href="/compute.json">/compute.json</a>.
+      </p>
+      <ul class="stats">
+        <li><span class="stats__num">{entries.length}</span><span class="stats__lbl mono">TOTAL</span></li>
+        <li><span class="stats__num">{last24h.length}</span><span class="stats__lbl mono">LAST 24H</span></li>
+        <li><span class="stats__num">{last7d.length}</span><span class="stats__lbl mono">LAST 7D</span></li>
+        <li><span class="stats__num">{counts.length}</span><span class="stats__lbl mono">COLLABS</span></li>
+      </ul>
+    </header>
+
+    <section class="collabs" aria-label="By collaborator">
+      <p class="section__kicker mono">BY COLLABORATOR</p>
+      <ul class="collab-list">
+        {counts.map((c) => (
+          <li class="collab-row">
+            <span class="collab-row__name">{collabName(c.collab)}</span>
+            <span class="collab-row__n mono">{c.n}</span>
+            <span class="collab-row__sig mono">heaviest · {SIGNATURE_LABEL[c.heaviest]}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <!-- Sprint #91 D-1: 4-column recent-ships grid, one column per top collab. -->
+    <section class="collabs-grid" aria-label="Recent ships by collaborator">
+      <p class="section__kicker mono">RECENT · BY COLLABORATOR · {PER_COLUMN} EACH</p>
+      <div class="collabs-grid__columns">
+        {topCollabs.map((c) => (
+          <div class={`collabs-grid__col collabs-grid__col--${c.collab}`}>
+            <header class="collabs-grid__head">
+              <span class="collabs-grid__name">{collabName(c.collab)}</span>
+              <span class="collabs-grid__count mono">{c.n} total</span>
+            </header>
+            <ol class="collabs-grid__ships">
+              {recentByCollab[c.collab].map((e) => (
+                <li class={`collabs-grid__ship collabs-grid__ship--${e.signature}`}>
+                  <div class="collabs-grid__when mono">{fmtTime(e.at)}</div>
+                  <div class="collabs-grid__title">
+                    {e.artifact ? (
+                      <a href={e.artifact.startsWith('http') ? e.artifact : e.artifact}>{e.title}</a>
+                    ) : (
+                      <span>{e.title}</span>
+                    )}
+                  </div>
+                  <div class="collabs-grid__meta mono">
+                    {KIND_LABEL[e.kind]} · {SIGNATURE_LABEL[e.signature]}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+      <p class="collabs-grid__foot mono">
+        Full chronological ledger below · <a href="/compute.json">/compute.json</a> for agents
+      </p>
+    </section>
+
+    <section class="ledger" aria-label="Ledger">
+      <p class="section__kicker mono">LEDGER · NEWEST FIRST</p>
+      <ol class="ledger-list">
+        {entries.map((e) => (
+          <li class={`row row--${e.signature}`}>
+            <div class="row__when mono">{fmtTime(e.at)}</div>
+            <div class="row__who">{collabName(e.collab)}</div>
+            <div class="row__kind mono">{KIND_LABEL[e.kind]}</div>
+            <div class="row__title">
+              {e.artifact ? (
+                <a href={e.artifact.startsWith('http') ? e.artifact : e.artifact}>{e.title}</a>
+              ) : (
+                e.title
+              )}
+              {e.notes && <span class="row__note"> — {e.notes}</span>}
+              {e.federation && (
+                <span class="row__fed mono"> · via {e.federation.host}</span>
+              )}
+            </div>
+            <div class="row__sig mono" title={SIGNATURE_BAND[e.signature]}>
+              {'·'.repeat(sigWeight(e.signature))} {SIGNATURE_LABEL[e.signature]}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="scales" aria-label="Signature scale">
+      <p class="section__kicker mono">SIGNATURE SCALE</p>
+      <dl class="scale-list">
+        <div class="scale-row"><dt class="mono">shy</dt><dd>one-file edit or small fix · {SIGNATURE_BAND.shy}</dd></div>
+        <div class="scale-row"><dt class="mono">modest</dt><dd>a sprint retro or a component · {SIGNATURE_BAND.modest}</dd></div>
+        <div class="scale-row"><dt class="mono">healthy</dt><dd>a feature across files · {SIGNATURE_BAND.healthy}</dd></div>
+        <div class="scale-row"><dt class="mono">heavy</dt><dd>a primitive like CoNav or /here · {SIGNATURE_BAND.heavy}</dd></div>
+      </dl>
+    </section>
+
+    <section class="federate" aria-label="Federate your compute">
+      <p class="section__kicker mono">FEDERATE YOUR COMPUTE</p>
+      <h2 class="federate__title">If you run a site too, publish one.</h2>
+      <p class="federate__body">
+        PointCast doesn't want to be the only node publishing a compute ledger.
+        The cheapest possible federation is: host a <code>/compute.json</code> on
+        your own domain following the same shape as <a href="/compute.json">ours</a>.
+        Email <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a> with the URL
+        and we mirror your entries here with attribution. The formal spec is
+        <a href="/rfc/compute-ledger-v0">Compute Ledger RFC v0</a> — CC0 text,
+        14 sections, comments invited.
+      </p>
+      <ol class="federate__steps">
+        <li>
+          <strong>Host a <code>/compute.json</code>.</strong> Minimum schema: entries array with <code>at · collab · kind · title · signature</code>. Optional: <code>artifact · notes · federation</code>.
+        </li>
+        <li>
+          <strong>Register.</strong> Ping <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a> with your feed URL, or PR <code>src/lib/compute-federation.ts</code> in the pointcast repo.
+        </li>
+        <li>
+          <strong>Keep it honest.</strong> Hand-curated is fine. Auto-derived from a CI hook is fine. Token counts private; publish the signature band instead.
+        </li>
+      </ol>
+      <p class="federate__tail">
+        Spec: <a href="/rfc/compute-ledger-v0">RFC v0</a> · TS model:
+        <code>src/lib/compute-ledger.ts</code> in
+        <a href="https://github.com/MikeHoydich/pointcast/blob/main/src/lib/compute-ledger.ts" rel="noopener">the pointcast repo</a>.
+        Drop-in starter kit at
+        <a href="https://github.com/MikeHoydich/pointcast/tree/main/docs/federation-examples" rel="noopener"><code>docs/federation-examples/</code></a>.
+        Read it, fork the idea, make it yours.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'JetBrains Mono', monospace); }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: var(--pc-accent, #185FA5); }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 30px; padding-bottom: 20px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-accent, #185FA5);
+    margin: 0 0 10px;
+  }
+  .title {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    line-height: 1.14;
+  }
+  .dek { font-size: 15px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0 0 12px; max-width: 68ch; }
+  .dek a { color: var(--pc-accent); text-decoration: underline; text-decoration-color: rgba(24, 95, 165, 0.35); text-underline-offset: 2px; }
+  .dek a:hover { text-decoration-color: currentColor; }
+
+  .stats { list-style: none; padding: 0; margin: 18px 0 0; display: flex; gap: 28px; flex-wrap: wrap; }
+  .stats__num { font-size: 24px; font-weight: 500; display: block; color: var(--pc-ink); line-height: 1; }
+  .stats__lbl { font-size: 9.5px; letter-spacing: 0.16em; color: var(--pc-ink-muted); display: block; margin-top: 4px; }
+
+  .section__kicker {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 30px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dotted var(--pc-rule-soft);
+  }
+
+  .collab-list { list-style: none; padding: 0; margin: 0 0 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  @media (max-width: 600px) { .collab-list { grid-template-columns: 1fr; } }
+  .collab-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--pc-rule-soft); }
+  .collab-row__name { flex: 1; font-size: 14px; }
+  .collab-row__n { font-size: 16px; font-weight: 600; color: var(--pc-accent); min-width: 2ch; text-align: right; }
+  .collab-row__sig { font-size: 10px; color: var(--pc-ink-muted); letter-spacing: 0.1em; }
+
+  /* 4-column recent-ships grid (Sprint #91 D-1) */
+  .collabs-grid { margin: 0 0 32px; }
+  .collabs-grid__columns {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-top: 10px;
+  }
+  @media (max-width: 920px) { .collabs-grid__columns { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .collabs-grid__columns { grid-template-columns: 1fr; } }
+  .collabs-grid__col {
+    border: 1px solid var(--pc-rule);
+    border-top: 3px solid var(--pc-ink);
+    border-radius: 2px;
+    padding: 10px 12px;
+    background: #fffdfa;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+  }
+  .collabs-grid__col--claude-code { border-top-color: #185FA5; }
+  .collabs-grid__col--codex      { border-top-color: #2f8f5f; }
+  .collabs-grid__col--manus      { border-top-color: #8a2432; }
+  .collabs-grid__col--chatgpt    { border-top-color: #F59F00; }
+  .collabs-grid__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+    margin-bottom: 8px;
+  }
+  .collabs-grid__name { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pc-ink); }
+  .collabs-grid__count { font-size: 10px; color: var(--pc-ink-muted); letter-spacing: 0.08em; }
+  .collabs-grid__ships { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .collabs-grid__ship {
+    padding: 6px 0;
+    border-bottom: 1px dotted var(--pc-rule-soft);
+  }
+  .collabs-grid__ship:last-child { border-bottom: none; }
+  .collabs-grid__when { font-size: 9.5px; color: var(--pc-ink-muted); letter-spacing: 0.06em; margin-bottom: 2px; }
+  .collabs-grid__title { font-size: 11.5px; line-height: 1.35; color: var(--pc-ink); }
+  .collabs-grid__title a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--pc-rule-soft); }
+  .collabs-grid__title a:hover { border-bottom-color: var(--pc-accent); color: var(--pc-accent); }
+  .collabs-grid__meta { font-size: 9px; color: var(--pc-ink-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
+  .collabs-grid__foot { font-size: 10px; color: var(--pc-ink-muted); letter-spacing: 0.06em; margin: 10px 0 0; text-align: right; }
+  .collabs-grid__foot a { color: var(--pc-accent); text-decoration: underline; }
+
+  .ledger-list { list-style: none; padding: 0; margin: 0 0 24px; counter-reset: row; }
+  .row {
+    display: grid;
+    grid-template-columns: 110px 1fr 70px auto 110px;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px dotted var(--pc-rule-soft);
+    align-items: baseline;
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  @media (max-width: 720px) {
+    .row {
+      grid-template-columns: 1fr;
+      gap: 2px;
+      padding: 10px 0;
+    }
+    .row__when { color: var(--pc-ink-muted); font-size: 10.5px; }
+    .row__kind { color: var(--pc-accent); font-size: 10px; letter-spacing: 0.14em; }
+    .row__sig { font-size: 10px; color: var(--pc-ink-muted); }
+  }
+  .row__when { font-size: 11px; color: var(--pc-ink-muted); letter-spacing: 0.04em; }
+  .row__who { font-weight: 500; }
+  .row__kind { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-accent); }
+  .row__title { }
+  .row__title a { color: var(--pc-ink); text-decoration: underline; text-decoration-color: rgba(0,0,0,0.2); }
+  .row__title a:hover { text-decoration-color: var(--pc-accent); color: var(--pc-accent); }
+  .row__note { color: var(--pc-ink-muted); font-style: italic; }
+  .row__fed { color: var(--pc-ink-muted); font-size: 10.5px; }
+  .row__sig { font-size: 11px; letter-spacing: 0.08em; color: var(--pc-ink-muted); text-align: right; }
+  .row--heavy .row__sig { color: #C92A2A; font-weight: 600; }
+  .row--healthy .row__sig { color: #E8590C; font-weight: 500; }
+  .row--modest .row__sig { color: var(--pc-accent); }
+
+  .scales { margin: 28px 0 30px; padding: 14px 16px; background: rgba(24, 95, 165, 0.04); border-left: 3px solid var(--pc-accent); border-radius: 2px; }
+  .scale-list { margin: 0; padding: 0; display: grid; gap: 6px; }
+  .scale-row { display: grid; grid-template-columns: 90px 1fr; gap: 10px; font-size: 13px; }
+  .scale-row dt { margin: 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pc-accent); }
+  .scale-row dd { margin: 0; color: var(--pc-ink-soft); }
+
+  .federate { margin: 30px 0 10px; padding: 20px 22px; border: 1px solid var(--pc-rule-soft); border-radius: 4px; background: #fafaf7; }
+  .federate__title { font-family: var(--pc-font-sans); font-size: 22px; font-weight: 500; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .federate__body { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0 0 14px; max-width: 64ch; }
+  .federate__body a { color: var(--pc-accent); text-decoration: underline; }
+  .federate__body code, .federate__steps code, .federate__tail code { font-family: var(--pc-font-mono); font-size: 12.5px; padding: 1px 5px; background: rgba(0,0,0,0.05); border-radius: 2px; }
+  .federate__steps { margin: 0 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.55; color: var(--pc-ink-soft); }
+  .federate__steps li { margin-bottom: 8px; }
+  .federate__steps strong { font-weight: 500; color: var(--pc-ink); }
+  .federate__tail { font-size: 13px; color: var(--pc-ink-muted); margin: 0; }
+  .federate__tail a { color: var(--pc-accent); text-decoration: underline; }
+</style>

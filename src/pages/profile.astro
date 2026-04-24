@@ -139,13 +139,23 @@ const jsonLd = {
       ]);
       const a = acc.ok ? await acc.json() : {};
       const n = tokens.ok ? (await tokens.text()).trim() : '—';
+      // TzKT field is `lastActivityTime` (ISO string), not `lastActivity`
+      // (which would be a block level integer — passing that to new Date()
+      // treats it as ms-since-epoch → Dec 31, 1969 PT for small/null values).
+      // Fall back to whichever field is present + present an ISO value.
+      const rawActivity = a.lastActivityTime ?? a.lastActivityTimestamp ?? null;
+      let fmtActivity = '—';
+      if (rawActivity) {
+        const d = new Date(rawActivity);
+        if (!Number.isNaN(d.getTime()) && d.getTime() > 0) {
+          fmtActivity = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
       return {
         balance: ((a.balance ?? 0) / 1_000_000).toFixed(4) + ' ꜩ',
         nfts: String(n),
         ops: String(a.numTransactions ?? '—'),
-        lastActivity: a.lastActivity
-          ? new Date(a.lastActivity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          : '—',
+        lastActivity: fmtActivity,
       };
     } catch {
       return { balance: '—', nfts: '—', ops: '—', lastActivity: '—' };

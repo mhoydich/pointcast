@@ -1,0 +1,258 @@
+---
+/**
+ * /leaderboards — local-first leaderboards across PointCast's games.
+ *
+ * Mike 2026-04-21 ~00:35 PT (super sprint directive):
+ *   "maybe think of some leaderboards"
+ *
+ * v0 reads from this visitor's localStorage and shows their personal
+ * stats next to a simulated population of "other players" (deterministic
+ * fictional rankings derived from the visitor's session ID so each
+ * visitor sees a consistent leaderboard story). Real federated
+ * leaderboards (KV-backed shared state) ship in v1 once the noundrum
+ * Durable Object lands.
+ *
+ * Boards covered:
+ *   - DRUM lifetime beats (pc:drum:state.lifetime)
+ *   - NOUNDRUM tiles owned (pc:noundrum:state.ownedTiles.length)
+ *   - NOUNDRUM lifetime beats (pc:noundrum:state.totalBeats)
+ *   - CARDS collected (pc:cards:deck length)
+ *   - QUIZ streak (pc:quiz:streak)
+ *   - COMMERCIALS guess-the-decade score (pc:commercials:score)
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Leaderboards — your local scores across PointCast games';
+const description = 'Your personal best scores across drum, noundrum, cards, quiz, and the commercials game, set against a simulated population of other players. v0 is local-only; v1 will federate via the noundrum Durable Object.';
+
+const BOARDS = [
+  { slug: 'drum-lifetime', label: 'Drum · lifetime beats', source: 'pc:drum:state', field: 'lifetime', href: '/drum/click', accent: '#8A2432' },
+  { slug: 'noundrum-tiles', label: 'Noundrum · tiles owned (now)', source: 'pc:noundrum:state', field: 'ownedTiles.length', href: '/noundrum', accent: '#F59F00' },
+  { slug: 'noundrum-best', label: 'Noundrum · best tile count', source: 'pc:noundrum:state', field: 'bestTiles', href: '/noundrum', accent: '#E8590C' },
+  { slug: 'noundrum-claims', label: 'Noundrum · lifetime claims', source: 'pc:noundrum:state', field: 'lifetimeClaims', href: '/noundrum', accent: '#E89A2D' },
+  { slug: 'noundrum-beats', label: 'Noundrum · lifetime beats', source: 'pc:noundrum:state', field: 'totalBeats', href: '/noundrum', accent: '#C4A77D' },
+  { slug: 'cards-deck', label: 'Cards · collected', source: 'pc:cards:deck', field: 'length', href: '/cards', accent: '#185FA5' },
+  { slug: 'quiz-streak', label: 'Quiz · streak', source: 'pc:quiz:streak', field: 'self', href: '/quiz', accent: '#2f8f5f' },
+  { slug: 'commercials-score', label: 'Commercials · decade score', source: 'pc:commercials:score', field: 'self', href: '/commercials', accent: '#5F2A1E' },
+];
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="lb-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Leaderboards</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">LEADERBOARDS · LOCAL SCORES + SIMULATED POPULATION</p>
+      <h1 class="title">Where you stand on the wall.</h1>
+      <p class="dek">
+        Your personal scores across PointCast's games, sat next to a simulated population of
+        ten other players whose names and rank distribution are derived from your session ID
+        (so the story is consistent visit to visit). v0 is local-only — every visitor sees
+        their own ranking. v1 federates via the noundrum Durable Object once it lands.
+      </p>
+      <div class="head__actions">
+        <a class="cta" href="/play">→ /play hub</a>
+        <a class="cta cta--alt" href="/noundrum">→ noundrum</a>
+        <a class="cta cta--alt" href="/drum/click">→ drum</a>
+      </div>
+    </header>
+
+    <section class="boards">
+      {BOARDS.map((b) => (
+        <article class="board" data-board={b.slug} data-source={b.source} data-field={b.field} style={`--accent: ${b.accent}`}>
+          <header class="board__head">
+            <p class="board__kicker mono">{b.label.toUpperCase()}</p>
+            <a class="board__cta mono" href={b.href}>play →</a>
+          </header>
+          <ol class="board__list" id={`board-${b.slug}`}></ol>
+        </article>
+      ))}
+    </section>
+
+    <footer class="foot">
+      <p class="mono foot__kicker">METHOD</p>
+      <p class="foot__note">
+        v0 reads each board's value from your <code>localStorage</code>. The ten "other players" are
+        generated deterministically from your session ID — same ID always produces the same names
+        and the same distribution, so the relative position story is stable. <em>If you've never
+        played a board, you'll be at zero with the population scattered above and below you.</em>
+        Real shared leaderboards ship with the noundrum Durable Object — that's v1.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  // ---- Session-derived "other players" --------------------------------
+  function sid() {
+    try { return localStorage.getItem('pc:session-id') || 'sess-anon'; } catch (e) { return 'sess-anon'; }
+  }
+  function hash(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  }
+  var SESSION = sid();
+  var SEED = hash(SESSION);
+  // Mulberry32 PRNG seeded by session
+  function rng() {
+    var s = SEED;
+    return function () {
+      s = (s + 0x6D2B79F5) >>> 0;
+      var t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var NAMES = [
+    'noun #', 'silent dj', 'el segundo', 'overnight cc', 'the bird',
+    'late shift', 'codex', 'manus', 'magpie', 'pointcast',
+    'bench', 'broadcast', 'agent', 'visitor', 'analog soul',
+    'after hours', 'cathode', 'cassette', 'drumroll', 'mike',
+  ];
+
+  function makePopulation(boardSlug, yourScore, scoreShape) {
+    var r = rng();
+    var pop = [];
+    for (var i = 0; i < 10; i++) {
+      var noun = Math.floor(r() * 1340);
+      var nameIdx = Math.floor(r() * NAMES.length);
+      var nm = NAMES[nameIdx];
+      if (nm === 'noun #') nm = 'noun #' + noun;
+      // Distribute scores around `yourScore` according to scoreShape
+      // (shape: 'spread' uses 0–3x, 'tight' uses 0.5–1.5x).
+      var mul;
+      if (scoreShape === 'tight') mul = 0.5 + r() * 1.0;
+      else mul = r() * 3.0;
+      var s = yourScore > 0 ? Math.round(yourScore * mul) : Math.round(r() * 200);
+      pop.push({ name: nm, noun: noun, score: s, isYou: false });
+    }
+    pop.push({ name: 'YOU', noun: -1, score: yourScore, isYou: true });
+    pop.sort(function (a, b) { return b.score - a.score; });
+    return pop;
+  }
+
+  // ---- Read board source from localStorage ----------------------------
+  function readSource(source, field) {
+    try {
+      var raw = localStorage.getItem(source);
+      if (!raw) return 0;
+      // For raw numeric stores (e.g. pc:quiz:streak might be just "5")
+      if (field === 'self') {
+        var n = Number(raw);
+        if (!isNaN(n)) return n;
+        // could also be JSON
+        try { var p = JSON.parse(raw); return Number(p) || 0; } catch (e) { return 0; }
+      }
+      var parsed;
+      try { parsed = JSON.parse(raw); } catch (e) { return 0; }
+      // field can be dotted path like 'ownedTiles.length'
+      var parts = field.split('.');
+      var v = parsed;
+      for (var i = 0; i < parts.length; i++) {
+        if (v == null) return 0;
+        if (parts[i] === 'length' && Array.isArray(v)) return v.length;
+        v = v[parts[i]];
+      }
+      var num = Number(v);
+      if (isNaN(num)) {
+        if (Array.isArray(v)) return v.length;
+        return 0;
+      }
+      return num;
+    } catch (e) { return 0; }
+  }
+
+  // ---- Render ---------------------------------------------------------
+  document.querySelectorAll('.board').forEach(function (board) {
+    var slug = board.getAttribute('data-board');
+    var src = board.getAttribute('data-source');
+    var field = board.getAttribute('data-field');
+    var your = readSource(src, field);
+    var pop = makePopulation(slug, your, 'spread');
+    var listEl = document.getElementById('board-' + slug);
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    pop.forEach(function (entry, rank) {
+      var li = document.createElement('li');
+      li.className = 'board__row' + (entry.isYou ? ' board__row--you' : '');
+      li.innerHTML =
+        '<span class="board__rank mono">' + (rank + 1) + '</span>' +
+        '<span class="board__name">' + entry.name + '</span>' +
+        '<span class="board__score mono">' + entry.score + '</span>';
+      listEl.appendChild(li);
+    });
+  });
+})();
+</script>
+
+<style>
+  .lb-page { max-width: 1100px; margin: 0 auto; padding: 24px 18px 80px; color: var(--pc-ink, #12110E); }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .crumb { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px; color: var(--pc-ink-muted, #5F5E5A); }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #E89A2D; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 26px; padding-bottom: 18px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #185FA5; margin: 0 0 10px; font-weight: 700; }
+  .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui); font-size: clamp(28px, 4vw, 40px); font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em; line-height: 1.15; }
+  .dek { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0 0 16px; max-width: 70ch; }
+  .head__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .cta { display: inline-flex; align-items: center; padding: 8px 14px; background: #12110E; color: #F3E6D8; font-size: 11px; letter-spacing: 0.16em; font-weight: 600; border-radius: 2px; text-decoration: none; font-family: var(--pc-font-mono); border: 1px solid #12110E; }
+  .cta:hover { background: #185FA5; border-color: #185FA5; }
+  .cta--alt { background: transparent; color: #12110E; }
+  .cta--alt:hover { background: #12110E; color: #F3E6D8; }
+
+  .boards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+  }
+
+  .board {
+    background: #fffaf1;
+    border: 1px solid #e6d8be;
+    border-top: 3px solid var(--accent, #8A2432);
+    border-radius: 3px;
+    padding: 14px 16px;
+  }
+  .board__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+  .board__kicker { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent, #8A2432); margin: 0; font-weight: 700; }
+  .board__cta { font-size: 10px; letter-spacing: 0.16em; color: var(--accent, #8A2432); text-decoration: none; font-weight: 700; text-transform: uppercase; }
+  .board__cta:hover { text-decoration: underline; }
+
+  .board__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; }
+  .board__row {
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    gap: 10px;
+    padding: 6px 8px;
+    align-items: baseline;
+    font-size: 13px;
+    border-radius: 2px;
+  }
+  .board__row--you {
+    background: var(--accent, #8A2432);
+    color: #fff;
+    font-weight: 700;
+  }
+  .board__rank { font-size: 11px; color: var(--pc-ink-muted); font-weight: 600; letter-spacing: 0.08em; }
+  .board__row--you .board__rank { color: #fff; opacity: 0.85; }
+  .board__name { font-family: Georgia, serif; }
+  .board__score { font-size: 12.5px; font-weight: 700; color: var(--accent, #8A2432); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+  .board__row--you .board__score { color: #fff; }
+
+  .foot { margin-top: 36px; padding: 18px 0 0; border-top: 1px solid var(--pc-rule-soft); }
+  .foot__kicker { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 6px; font-weight: 700; }
+  .foot__note { font-size: 13px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0; max-width: 75ch; font-family: Georgia, serif; }
+  .foot__note code { font-family: var(--pc-font-mono); font-size: 11.5px; background: rgba(0,0,0,0.05); padding: 1px 5px; border-radius: 2px; }
+  .foot__note em { color: #8A2432; }
+</style>

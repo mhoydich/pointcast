@@ -1,0 +1,408 @@
+---
+/**
+ * /social — social-distribution comparison hub.
+ *
+ * Target keywords: "farcaster vs twitter", "bluesky vs x", "farcaster vs
+ * bluesky vs x", "social media for builders 2026", "twitter card best
+ * practices", "open graph social cards".
+ *
+ * PointCast has perspective here: we ship Farcaster Frames on every
+ * block, Twitter/X cards, Bluesky-compatible OG tags, LinkedIn preview,
+ * and reader-friendly RSS/JSON feeds. This page is both (a) a social
+ * comparison for builders deciding where to post, and (b) a "where to
+ * follow us" routing page.
+ *
+ * Schema: TechArticle + ItemList (networks ranked) + FAQPage +
+ * BreadcrumbList.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Network {
+  slug: string;
+  name: string;
+  url: string;
+  handle: string;
+  kind: 'primary' | 'mirror' | 'directory' | 'pull-not-push';
+  pc_use: string;
+  what_works: string;
+  what_doesnt: string;
+  follow_url: string;
+  share_example?: string;
+}
+
+const NETWORKS: Network[] = [
+  {
+    slug: 'farcaster',
+    name: 'Farcaster',
+    url: 'https://farcaster.xyz',
+    handle: '@mhoydich',
+    kind: 'primary',
+    pc_use: 'Primary social. Every Block auto-renders as a Farcaster Frame with 1-4 interactive buttons when the /b/{id} URL is cast. Mints, games, and content surfaces become action-units instead of just links.',
+    what_works: 'Builder-dense audience. Frame protocol means shared URLs carry the interaction. Nouns DAO + Base communities overlap 100% with our Tezos + CC0 posture. Bot-like mentions tolerated; technical content rewarded.',
+    what_doesnt: 'Smaller reach than X. Algorithmic surfacing is shallow — if your first 10 engagers don\'t bite, the cast dies. Non-crypto audiences don\'t use it at all.',
+    follow_url: 'https://warpcast.com/mhoydich',
+    share_example: 'Cast https://pointcast.xyz/b/0205 directly — Warpcast renders the Frame with title, description, OG image, and an "Open on PointCast" action button, no extra effort from the sharer.',
+  },
+  {
+    slug: 'x',
+    name: 'X (Twitter)',
+    url: 'https://x.com',
+    handle: '@mhoydich',
+    kind: 'mirror',
+    pc_use: 'Mirror of Farcaster cadence, plus longer-form threads around pillar pages (/agent-native, /nouns, /tezos). Every PointCast URL ships full Twitter Card meta — summary_large_image, alt text, dimensions, secure_url — so unfurls render cleanly.',
+    what_works: 'Largest reach. AI + dev communities active. Threads still travel. Mike\'s existing network lives here.',
+    what_doesnt: 'Algorithmic hostility to outbound links. Reach has fallen across 2024-2026. AI-gen content throttled.',
+    follow_url: 'https://x.com/mhoydich',
+    share_example: 'Tweet the /b/{id} URL. X shows a summary_large_image card (1200×630 OG) with title + description. Link itself ranks lower in feed than native text/image posts — lead with the hook, drop the URL at the end.',
+  },
+  {
+    slug: 'bluesky',
+    name: 'Bluesky',
+    url: 'https://bsky.app',
+    handle: 'pending',
+    kind: 'mirror',
+    pc_use: 'Cross-posted threads. Bluesky reads OG tags the same way X does, so PointCast unfurls cleanly. The AT Protocol is interesting as potential federation partner (not yet wired).',
+    what_works: 'Design / CC0 / indie-tech audience over-indexes here. Algorithm rewards good writing over engagement-bait. Smaller than X but higher signal-to-noise for our topics.',
+    what_doesnt: 'Still small. Federation ("AT Proto") is complex to ship well. Some major X accounts aren\'t here yet.',
+    follow_url: 'https://bsky.app',
+  },
+  {
+    slug: 'threads',
+    name: 'Threads',
+    url: 'https://threads.net',
+    handle: 'pending',
+    kind: 'mirror',
+    pc_use: 'Mirror — X thread cross-posted verbatim. Threads\' integration with Instagram means our OG images carry through if visually strong.',
+    what_works: 'Algorithm still prioritizes new accounts. Attention-economy boost in 2026 vs older platforms.',
+    what_doesnt: 'Text-focused; link-click-through is poor. Dev / AI / Web3 audiences are thin here.',
+    follow_url: 'https://threads.net',
+  },
+  {
+    slug: 'mastodon',
+    name: 'Mastodon',
+    url: 'https://joinmastodon.org',
+    handle: 'pending',
+    kind: 'pull-not-push',
+    pc_use: 'PointCast publishes to any ActivityPub-compliant server via RSS→AP bridges (e.g. rss-parrot.net). We don\'t maintain a Mastodon account directly; federated followers can subscribe through RSS.',
+    what_works: 'Strong privacy-conscious / open-standards crowd. No algorithmic filter.',
+    what_doesnt: 'Audience is small + fragmented across instances. ActivityPub federation is complex if done natively.',
+    follow_url: 'https://mastodon.social (any instance)',
+  },
+  {
+    slug: 'linkedin',
+    name: 'LinkedIn',
+    url: 'https://linkedin.com',
+    handle: 'mhoydich',
+    kind: 'mirror',
+    pc_use: 'Long-form Articles for pillar pieces (/agent-native, /el-segundo, /ai-stack). Short posts for business-adjacent blocks (Good Feels, founder story). LinkedIn\'s OG rendering is solid; our 1200×630 cards work out of the box.',
+    what_works: 'B2B audience for /agent-native + enterprise SEO content. Mike\'s professional network. Articles stay discoverable via LinkedIn search.',
+    what_doesnt: 'Bad fit for Nouns / Tezos / CC0 culture content. Algorithm favors "business wisdom" posts; creative-tech content is niche.',
+    follow_url: 'https://linkedin.com/in/mhoydich',
+  },
+  {
+    slug: 'hn',
+    name: 'Hacker News',
+    url: 'https://news.ycombinator.com',
+    handle: 'mhoydich',
+    kind: 'primary',
+    pc_use: 'Show HN launches tied to major pillar ships. Landing page at /show-hn handles HN traffic. See docs/outreach/hackernews-show-hn.md for the template.',
+    what_works: 'Highest single-day traffic potential of any channel. Technical-depth audience. Front page = 1-20k sessions in 48h.',
+    what_doesnt: 'One-shot per topic — can\'t post the same pitch twice. Algorithmic. No ongoing feed; each post lives or dies on its own thread.',
+    follow_url: 'https://news.ycombinator.com/user?id=mhoydich',
+    share_example: 'Post at /show-hn — dedicated HN-audience landing page. Works as the URL for a "Show HN: PointCast — ..." submission.',
+  },
+  {
+    slug: 'rss',
+    name: 'RSS / JSON Feed',
+    url: '/feed.xml',
+    handle: '/feed.xml',
+    kind: 'pull-not-push',
+    pc_use: 'Canonical subscribe flow. Every Block is in /feed.xml (RSS 2.0), /feed.json (JSON Feed 1.1), and /blocks.json (native shape). Per-channel feeds at /c/{slug}.rss and /c/{slug}.json.',
+    what_works: 'Every serious follower gets content instantly, with zero platform dependency. Readers like NetNewsWire, Reeder, Feedbin, Inoreader render our PointCast-namespaced feed with channel color + type + edition data.',
+    what_doesnt: 'Smaller audience than any social. But the audience that does subscribe is the most engaged.',
+    follow_url: 'https://pointcast.xyz/feed.xml',
+  },
+];
+
+const faqs = [
+  {
+    q: 'Farcaster vs X vs Bluesky — which should a builder post on?',
+    a: 'All three if you\'re serious about distribution. Farcaster for crypto / Nouns / Web3 / CC0 content and for Frame-enabled interaction. X for reach; still the biggest single English-language feed for tech. Bluesky for design / indie-tech / open-standards audiences who over-index on signal-to-noise. Don\'t duplicate word-for-word — adapt the hook to each platform.',
+  },
+  {
+    q: 'How do I ship a Farcaster Frame on my site?',
+    a: 'Add four meta tags to any page: fc:frame (vNext), fc:frame:image (1200×630 absolute URL), fc:frame:image:aspect_ratio (1.91:1), and fc:frame:button:1 with label + action + target. Optionally up to 4 buttons. PointCast renders these on every /b/{id} — see src/layouts/BlockLayout.astro for the pattern. Full spec at docs.farcaster.xyz/developers/frames.',
+  },
+  {
+    q: 'What Open Graph tags does a social-ready page need in 2026?',
+    a: 'Minimum: og:title, og:description, og:image (1200×630 PNG), og:image:width, og:image:height, og:image:secure_url, og:type, og:site_name, og:url. Plus Twitter: twitter:card (summary_large_image), twitter:title, twitter:description, twitter:image, twitter:site. PointCast\'s base layout ships all of these by default; see src/layouts/BlockLayout.astro.',
+  },
+  {
+    q: 'Is RSS still worth publishing?',
+    a: 'Yes. 2026\'s RSS audience is small but high-fidelity — every subscriber reads every post. PointCast ships both RSS 2.0 (/feed.xml, universal reader support) and JSON Feed 1.1 (/feed.json, richer with image + namespace extensions). Per-channel feeds at /c/{slug}.rss make it easy for readers to subscribe to just one editorial track.',
+  },
+  {
+    q: 'What\'s Bluesky\'s AT Protocol and does it matter?',
+    a: 'AT Protocol is Bluesky\'s federation stack — different from ActivityPub (Mastodon). Key feature: "account portability" — you can move your handle + follower graph between servers. As of early 2026 it\'s promising but complex to integrate; PointCast doesn\'t run an AT Proto server natively, but our RSS feed works with any AT Proto RSS-ingestion bridge.',
+  },
+  {
+    q: 'What\'s the minimum cross-post workflow?',
+    a: 'Write once for Farcaster (primary, Frame-enabled), clone to X (add thread-first hook), mirror to Bluesky verbatim, long-form to LinkedIn if it\'s pillar content. Total: ~15 minutes per major post. Automate via the Buffer-like multi-platform tools if the cadence becomes daily; for weekly / per-pillar cadence, manual is fine and higher-fidelity.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TechArticle',
+      '@id': 'https://pointcast.xyz/social',
+      headline: 'PointCast on social — Farcaster, X, Bluesky, Threads, Mastodon, LinkedIn, HN, RSS',
+      name: 'PointCast social distribution',
+      description: 'Where PointCast publishes and why. Comparison of 8 social / distribution networks: Farcaster, X, Bluesky, Threads, Mastodon, LinkedIn, Hacker News, RSS / JSON Feed. With OG tag best practices, Frame wiring, and a minimum-viable cross-post workflow for builders.',
+      url: 'https://pointcast.xyz/social',
+      author: { '@type': 'Person', '@id': 'https://pointcast.xyz/#person', name: 'Mike Hoydich' },
+      publisher: { '@type': 'Organization', '@id': 'https://pointcast.xyz/#org', name: 'PointCast' },
+      image: 'https://pointcast.xyz/images/og-home-v3.png',
+      datePublished: '2026-04-21',
+      dateModified: new Date().toISOString().slice(0, 10),
+      inLanguage: 'en-US',
+      mainEntityOfPage: 'https://pointcast.xyz/social',
+      keywords: 'farcaster, x, twitter, bluesky, mastodon, threads, linkedin, hacker news, rss, json feed, farcaster frames, twitter cards, open graph, social distribution 2026, at protocol, activitypub',
+      articleSection: 'Social',
+      about: [
+        { '@type': 'Thing', name: 'Farcaster', sameAs: 'https://en.wikipedia.org/wiki/Farcaster' },
+        { '@type': 'Thing', name: 'X (social network)', sameAs: 'https://en.wikipedia.org/wiki/X_(social_network)' },
+        { '@type': 'Thing', name: 'Bluesky', sameAs: 'https://en.wikipedia.org/wiki/Bluesky_(social_network)' },
+        { '@type': 'Thing', name: 'Mastodon', sameAs: 'https://en.wikipedia.org/wiki/Mastodon_(social_network)' },
+        { '@type': 'Thing', name: 'Hacker News', sameAs: 'https://en.wikipedia.org/wiki/Hacker_News' },
+        { '@type': 'Thing', name: 'RSS', sameAs: 'https://en.wikipedia.org/wiki/RSS' },
+      ],
+    },
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/social#networks',
+      numberOfItems: NETWORKS.length,
+      itemListElement: NETWORKS.map((n, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        item: {
+          '@type': 'WebSite',
+          name: n.name,
+          url: n.url,
+          description: n.pc_use,
+        },
+      })),
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': 'https://pointcast.xyz/social#faq',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/social#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Social', item: 'https://pointcast.xyz/social' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Social distribution"
+  description="Where PointCast publishes and why. Farcaster, X, Bluesky, Threads, Mastodon, LinkedIn, Hacker News, RSS — 8 networks compared, with OG tag best practices, Frame wiring, and a minimum-viable cross-post workflow."
+  image="/images/og-home-v3.png"
+  jsonLd={jsonLd}
+>
+  <article class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Social</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">SOCIAL · 8 NETWORKS · 2026</p>
+      <h1 class="display">PointCast on social.</h1>
+      <p class="dek">
+        Where PointCast publishes, how each surface is wired, and what
+        builders should know about the 2026 social-distribution graph.
+        Opinion + operating experience: we ship Farcaster Frames on
+        every Block, full Twitter Cards + Open Graph meta, Bluesky-
+        compatible unfurls, LinkedIn Articles for pillar content, and
+        RSS / JSON Feed with a PointCast namespace extension. Here's
+        what works.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 id="networks">The 8 networks, compared</h2>
+      <ul class="networks">
+        {NETWORKS.map((n) => (
+          <li class={`network network--${n.kind}`}>
+            <header class="network__head">
+              <h3 class="network__name">
+                <a href={n.url} target="_blank" rel="noopener">{n.name} ↗</a>
+              </h3>
+              <span class="network__kind mono">{n.kind === 'primary' ? 'primary' : n.kind === 'mirror' ? 'mirror' : n.kind === 'pull-not-push' ? 'pull, not push' : 'directory'}</span>
+              <span class="network__handle mono">{n.handle}</span>
+            </header>
+            <dl class="network__body">
+              <dt>PointCast use</dt>
+              <dd>{n.pc_use}</dd>
+              <dt>What works</dt>
+              <dd>{n.what_works}</dd>
+              <dt>What doesn't</dt>
+              <dd>{n.what_doesnt}</dd>
+              {n.share_example && (
+                <>
+                  <dt>Share example</dt>
+                  <dd>{n.share_example}</dd>
+                </>
+              )}
+            </dl>
+            <footer class="network__foot">
+              <a class="network__follow mono" href={n.follow_url} target="_blank" rel="noopener">Follow / view →</a>
+            </footer>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 id="minimum-viable">Minimum-viable cross-post workflow</h2>
+      <ol class="workflow">
+        <li><strong>Write once for Farcaster.</strong> ~300-400 chars for the primary cast, plus 2-4 reply casts for the follow-up thread. Embed the URL so the Frame renders.</li>
+        <li><strong>Clone to X.</strong> Add a thread-first hook in tweet 1 — the hook has to carry the click because links rank lower. Tweets 2-N are the substance. Final tweet has the URL.</li>
+        <li><strong>Mirror verbatim to Bluesky.</strong> AT Proto doesn't penalize identical content and the audience is less overlap than you'd expect.</li>
+        <li><strong>LinkedIn Article for pillar content.</strong> If the post is /agent-native, /tezos, /ethereum-vs-tezos, /el-segundo — expand to 600-1200 words, add a header image, publish as Article (not a short post). LinkedIn Articles stay searchable forever.</li>
+        <li><strong>Cross-reference in RSS.</strong> The Block itself already ships in /feed.xml + /feed.json. No extra work; RSS readers pick it up within the hour.</li>
+        <li><strong>Every 3-5 pillar posts, Show HN.</strong> When a piece is substantive + technical, post at news.ycombinator.com with URL pointing to /show-hn. See docs/outreach/hackernews-show-hn.md for the template.</li>
+      </ol>
+      <p>
+        Total time per major post: ~15 minutes. For daily Blocks, skip
+        the thread + Article, post just to Farcaster + X with the
+        URL + a one-line hook. Let the RSS feed carry everything else.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 id="og-tags">Open Graph + Twitter Card best practices</h2>
+      <p>
+        PointCast's base layout ships all of the following by default on
+        every page. If you're retrofitting your own site:
+      </p>
+      <ul class="og-list">
+        <li><code>og:title</code>, <code>og:description</code>, <code>og:image</code> (1200×630 PNG), <code>og:image:secure_url</code>, <code>og:image:width</code>, <code>og:image:height</code>, <code>og:image:alt</code></li>
+        <li><code>og:type</code> (website or article), <code>og:site_name</code>, <code>og:url</code> (canonical), <code>og:locale</code></li>
+        <li><code>twitter:card</code> = summary_large_image, <code>twitter:title</code>, <code>twitter:description</code>, <code>twitter:image</code>, <code>twitter:image:alt</code>, <code>twitter:site</code></li>
+        <li><code>fc:frame</code> = vNext, <code>fc:frame:image</code>, <code>fc:frame:image:aspect_ratio</code>, <code>fc:frame:button:1</code> + action + target — all four make a cast an interactive Frame</li>
+      </ul>
+      <p>Missing any of these silently degrades the unfurl across Messages/Slack/Discord/X/Bluesky/Warpcast. The secure_url + explicit dimensions particularly — iMessage drops previews without them.</p>
+    </section>
+
+    <section class="section">
+      <h2 id="faq">FAQ</h2>
+      <dl class="faq">
+        {faqs.map((f) => (
+          <>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </>
+        ))}
+      </dl>
+    </section>
+
+    <footer class="related">
+      <p class="related__label">RELATED</p>
+      <ul>
+        <li><a href="/subscribe">/subscribe — the canonical follow matrix</a></li>
+        <li><a href="/agent-native">/agent-native — why we also publish for LLM crawlers</a></li>
+        <li><a href="/show-hn">/show-hn — Hacker News landing page</a></li>
+        <li><a href="/press">/press — media kit</a></li>
+        <li><a href="/feed.xml">/feed.xml — RSS 2.0</a></li>
+        <li><a href="/feed.json">/feed.json — JSON Feed 1.1</a></li>
+      </ul>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .page { max-width: 900px; margin: 0 auto; padding: 18px 18px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: 18px; }
+  .crumb a { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1.5px solid var(--pc-ink); }
+  .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pc-accent); margin: 0 0 10px; }
+  .display { font-family: var(--pc-font-sans); font-size: 40px; font-weight: 500; line-height: 1.05; margin: 0 0 12px; }
+  @media (max-width: 600px) { .display { font-size: 30px; } }
+  .dek { font-size: 16px; line-height: 1.55; color: var(--pc-ink-soft); margin: 0 0 10px; max-width: 64ch; }
+  .dek a { color: var(--pc-accent); }
+
+  .section { margin: 28px 0; }
+  .section h2 { font-family: var(--pc-font-sans); font-size: 22px; font-weight: 500; margin: 0 0 14px; }
+  .section p { font-size: 14.5px; line-height: 1.6; color: var(--pc-ink); margin: 0 0 12px; max-width: 72ch; }
+  .section a { color: var(--pc-accent); }
+  .section code { font-family: var(--pc-font-mono); font-size: 12.5px; background: #f4f2ed; padding: 1px 5px; border-radius: 2px; }
+
+  .networks { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .network {
+    padding: 14px 16px;
+    border: 1px solid var(--pc-rule);
+    border-left: 3px solid var(--pc-rule-soft);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .network--primary { border-left-color: var(--pc-accent); }
+  .network--mirror { border-left-color: #8A2432; }
+  .network--pull-not-push { border-left-color: #0F6E56; background: #fafaf8; }
+  .network--directory { border-left-color: #ff6600; }
+  .network__head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .network__name { margin: 0; font-family: var(--pc-font-sans); font-size: 18px; font-weight: 500; }
+  .network__name a { color: var(--pc-ink); text-decoration: none; }
+  .network__name a:hover { color: var(--pc-accent); }
+  .network__kind { padding: 2px 6px; background: #f4f2ed; border: 1px solid var(--pc-rule); color: var(--pc-ink-muted); border-radius: 2px; }
+  .network__handle { color: var(--pc-ink-muted); }
+
+  .network__body { margin: 0; display: grid; grid-template-columns: 140px 1fr; gap: 6px 14px; }
+  .network__body dt {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    padding-top: 3px;
+  }
+  .network__body dd { margin: 0; font-size: 14px; line-height: 1.55; color: var(--pc-ink-soft); }
+  @media (max-width: 640px) {
+    .network__body { grid-template-columns: 1fr; gap: 2px; }
+    .network__body dd { padding-bottom: 6px; border-bottom: 1px dashed var(--pc-rule-soft); }
+    .network__body dd:last-child { border-bottom: 0; }
+  }
+  .network__foot { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--pc-rule-soft); }
+  .network__follow { color: var(--pc-accent); }
+
+  .workflow { padding-left: 22px; margin: 0 0 12px; font-size: 14.5px; line-height: 1.6; }
+  .workflow li { margin-bottom: 8px; max-width: 72ch; color: var(--pc-ink); }
+  .workflow strong { color: var(--pc-ink); font-weight: 500; }
+
+  .og-list { padding-left: 22px; margin: 0 0 12px; font-size: 13.5px; line-height: 1.7; max-width: 72ch; }
+  .og-list li { margin-bottom: 4px; color: var(--pc-ink); }
+
+  .faq { margin: 0; display: grid; gap: 14px; }
+  .faq dt { font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500; }
+  .faq dd { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft); max-width: 72ch; }
+
+  .related { margin-top: 40px; padding-top: 16px; border-top: 1.5px solid var(--pc-ink); font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .related__label { margin: 0 0 8px; color: var(--pc-ink-soft); }
+  .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .related a { color: var(--pc-accent); }
+</style>

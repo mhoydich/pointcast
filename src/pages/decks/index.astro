@@ -1,0 +1,155 @@
+---
+/**
+ * /decks — versioned-narrative index.
+ *
+ * A browsable list of every PointCast deck, newest first. Each card renders
+ * the poster (public/posters/{slug}.png), the roman-numeral volume label,
+ * the title, dek, publish date, slide count, and a link to the deck + its
+ * cover-letter block.
+ *
+ * Companion JSON: /decks.json.
+ * Source of truth: src/lib/decks.ts.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { listDecks } from '../../lib/decks';
+
+const decks = listDecks();
+
+const title = 'Decks — PointCast versioned narrative';
+const description =
+  'Every PointCast deck. Single-file HTML presentations shipped when the network shape changes — DRUM goes mainnet, a federated /compute.json peer registers, a field-node client reaches distribution, or a guest human authors a block. Human index here; agent manifest at /decks.json.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Decks',
+  description,
+  url: 'https://pointcast.xyz/decks',
+  hasPart: decks.map((d) => ({
+    '@type': 'CreativeWork',
+    name: `PointCast ${d.roman} — ${d.title}`,
+    datePublished: d.publishedAt,
+    url: `https://pointcast.xyz/decks/${d.slug}.html`,
+    thumbnailUrl: `https://pointcast.xyz/posters/${d.slug}.png`,
+    about: d.dek,
+  })),
+};
+
+function fmtDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      timeZone: 'America/Los_Angeles',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+function fmtBytes(b: number): string {
+  return `${(b / 1024).toFixed(1)} kb`;
+}
+---
+
+<BlockLayout title={title} description={description} image="/posters/vol-2.png" jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>decks</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">DECKS · VERSIONED NARRATIVE</p>
+      <h1 class="title">The story, dated.</h1>
+      <p class="dek">
+        Each deck is a single-file HTML presentation shipped when the
+        network shape materially changes. The cadence is public — see
+        <a href="/b/0361">block 0361</a> for the four triggers that fire
+        the next volume. Agent manifest at <a href="/decks.json"><code>/decks.json</code></a>.
+      </p>
+      <ul class="stats">
+        <li><span class="stats__num">{decks.length}</span><span class="stats__lbl mono">VOLUMES</span></li>
+        <li><span class="stats__num">{decks.reduce((a, d) => a + d.slides, 0)}</span><span class="stats__lbl mono">SLIDES TOTAL</span></li>
+        <li><span class="stats__num">{(decks.reduce((a, d) => a + d.bytes, 0) / 1024).toFixed(0)}</span><span class="stats__lbl mono">KB ON DISK</span></li>
+      </ul>
+    </header>
+
+    <ol class="grid">
+      {decks.map((d) => (
+        <li class="card">
+          <a class="card__poster" href={`/decks/${d.slug}.html`}>
+            <img src={`/posters/${d.slug}.png`} alt={`PointCast ${d.roman} poster — ${d.title}`} width="1200" height="630" loading="lazy" />
+          </a>
+          <div class="card__body">
+            <div class="card__meta mono">
+              <span class="card__roman">{d.roman}</span>
+              <span class="card__date">{fmtDate(d.publishedAt)}</span>
+              <span class="card__size">{d.slides} slides · {fmtBytes(d.bytes)}</span>
+            </div>
+            <h2 class="card__title"><a href={`/decks/${d.slug}.html`}>{d.title}</a></h2>
+            <p class="card__dek">{d.dek}</p>
+            {d.note && <p class="card__note">{d.note}</p>}
+            <p class="card__links mono">
+              <a href={`/decks/${d.slug}.html`}>open deck →</a>
+              <span aria-hidden="true"> · </span>
+              <a href={`/b/${d.coverBlock}`}>cover block /b/{d.coverBlock}</a>
+            </p>
+          </div>
+        </li>
+      ))}
+    </ol>
+
+    <footer class="foot">
+      <p class="mono">
+        SCHEMA <code>src/lib/decks.ts</code> · POSTERS
+        <code>public/posters/{`{slug}.png`}</code> · DECKS
+        <code>public/decks/{`{slug}.html`}</code> · BUILD
+        <code>node scripts/build-deck-poster.mjs</code>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  .page { max-width: 1120px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  .crumb { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.82rem; opacity: 0.6; margin-bottom: 1.5rem; }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { text-decoration: underline; }
+
+  .head { border-bottom: 2px solid currentColor; padding-bottom: 2rem; margin-bottom: 3rem; }
+  .kicker { font-size: 0.8rem; letter-spacing: 0.28em; text-transform: uppercase; opacity: 0.7; margin-bottom: 1rem; }
+  .mono { font-family: ui-monospace, 'JetBrains Mono', monospace; }
+  .title { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(2.4rem, 5vw, 4.2rem); line-height: 0.95; letter-spacing: -0.02em; margin-bottom: 1.2rem; }
+  .dek { font-size: 1.1rem; line-height: 1.5; max-width: 68ch; opacity: 0.88; }
+  .dek a, .dek code { color: inherit; }
+  .dek code { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.92em; padding: 0 0.3em; }
+
+  .stats { list-style: none; display: flex; gap: 2rem; margin-top: 1.8rem; padding: 0; flex-wrap: wrap; }
+  .stats li { display: flex; flex-direction: column; gap: 0.2rem; }
+  .stats__num { font-family: 'DM Serif Display', Georgia, serif; font-size: 2.2rem; line-height: 1; }
+  .stats__lbl { font-size: 0.68rem; letter-spacing: 0.22em; opacity: 0.6; }
+
+  .grid { list-style: none; padding: 0; display: grid; grid-template-columns: 1fr; gap: 3rem; }
+  @media (min-width: 780px) { .grid { grid-template-columns: 1fr 1fr; gap: 3rem; } }
+
+  .card { display: flex; flex-direction: column; gap: 1.1rem; }
+  .card__poster { display: block; line-height: 0; border: 1px solid rgba(0,0,0,0.15); overflow: hidden; transition: transform 0.2s ease; }
+  .card__poster img { width: 100%; height: auto; display: block; }
+  .card__poster:hover { transform: translateY(-2px); }
+  .card__body { display: flex; flex-direction: column; gap: 0.6rem; }
+  .card__meta { display: flex; gap: 1rem; font-size: 0.78rem; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.7; flex-wrap: wrap; }
+  .card__roman { color: var(--dusk, #F0B94A); }
+  .card__title { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.9rem; line-height: 1.05; letter-spacing: -0.01em; }
+  .card__title a { color: inherit; text-decoration: none; background-image: linear-gradient(currentColor, currentColor); background-size: 0 1px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 0.25s ease; }
+  .card__title a:hover { background-size: 100% 1px; }
+  .card__dek { font-size: 1rem; line-height: 1.45; opacity: 0.9; }
+  .card__note { font-size: 0.92rem; line-height: 1.45; opacity: 0.75; font-style: italic; }
+  .card__links { font-size: 0.82rem; margin-top: 0.2rem; }
+  .card__links a { color: inherit; }
+
+  .foot { border-top: 1px dashed currentColor; margin-top: 4rem; padding-top: 1.5rem; opacity: 0.55; font-size: 0.78rem; letter-spacing: 0.1em; }
+  .foot code { font-family: ui-monospace, 'JetBrains Mono', monospace; padding: 0 0.3em; opacity: 0.85; }
+</style>

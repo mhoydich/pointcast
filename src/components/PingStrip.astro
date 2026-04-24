@@ -1,0 +1,315 @@
+---
+/**
+ * PingStrip — top-of-home composer for messages + feedback to the team.
+ *
+ * Mike 2026-04-20 19:52 UTC (ping): *"yah ping should be in the bar,
+ * bench is too dense, here and drum kinda same thing"* — the bar chip
+ * ships in CoNavigator; this strip is the Mike-follow-up 16:00 PT
+ * directive: *"and yah from the top, homepage, a /ping block to send
+ * information and feedback to."*
+ *
+ * Keeps it tiny by default — one line of text, a "say something" chip.
+ * Tap expands an inline composer with from/subject/body. POSTs to
+ * /api/ping (PC_PING_KV bound). Success collapses back to the chip +
+ * shows a tiny "sent" confirmation.
+ *
+ * Per the ping protocol in functions/api/ping.ts: body up to 4000 chars,
+ * subject up to 120, from up to 80. Optional `expand: true` flag asks cc
+ * to treat the ping as a topic and draft+publish a block from it.
+ *
+ * Author: cc. Source: Mike 2026-04-20 15:55 PT chat + Mike ping
+ * 2026-04-20T19:52:34.647Z.
+ */
+---
+
+<aside class="ping-strip" aria-label="Message the team">
+  <div class="ping-strip__row">
+    <p class="ping-strip__kicker mono">
+      <span class="ping-strip__label">PING</span>
+      <span class="ping-strip__sep" aria-hidden="true">·</span>
+      <span class="ping-strip__lede">feedback + ideas for the team — cc reads the inbox at session start</span>
+    </p>
+    <button type="button" class="ping-strip__toggle mono" id="pc-ping-toggle" aria-expanded="false" aria-controls="pc-ping-composer">
+      <span class="ping-strip__toggle-icon" aria-hidden="true">✎</span>
+      <span id="pc-ping-toggle-label">say something</span>
+    </button>
+  </div>
+
+  <form class="ping-strip__composer" id="pc-ping-composer" hidden novalidate>
+    <label class="ping-strip__field">
+      <span class="ping-strip__label-sm mono">MESSAGE</span>
+      <textarea
+        id="pc-ping-body"
+        name="body"
+        rows="3"
+        required
+        maxlength="4000"
+        placeholder="hey team — …"
+      ></textarea>
+    </label>
+    <div class="ping-strip__row2">
+      <label class="ping-strip__field ping-strip__field--sm">
+        <span class="ping-strip__label-sm mono">FROM · optional</span>
+        <input type="text" id="pc-ping-from" name="from" placeholder="mike · a visitor · @handle" maxlength="80" />
+      </label>
+      <label class="ping-strip__field ping-strip__field--sm">
+        <span class="ping-strip__label-sm mono">SUBJECT · optional</span>
+        <input type="text" id="pc-ping-subject" name="subject" placeholder="one line is plenty" maxlength="120" />
+      </label>
+    </div>
+    <label class="ping-strip__expand">
+      <input type="checkbox" id="pc-ping-expand" />
+      <span class="mono">EXPAND &amp; PUBLISH — </span>
+      <span>cc drafts a block from this seed on the next tick (default off = private note)</span>
+    </label>
+    <div class="ping-strip__actions">
+      <button type="submit" class="ping-strip__send mono" id="pc-ping-send">SEND ↑</button>
+      <span class="ping-strip__status mono" id="pc-ping-status" role="status" aria-live="polite"></span>
+      <a class="ping-strip__full mono" href="/ping">or use the full form →</a>
+    </div>
+  </form>
+</aside>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var toggle = document.getElementById('pc-ping-toggle');
+    var toggleLabel = document.getElementById('pc-ping-toggle-label');
+    var composer = document.getElementById('pc-ping-composer');
+    var form = composer;
+    var body = document.getElementById('pc-ping-body');
+    var from = document.getElementById('pc-ping-from');
+    var subject = document.getElementById('pc-ping-subject');
+    var expand = document.getElementById('pc-ping-expand');
+    var send = document.getElementById('pc-ping-send');
+    var status = document.getElementById('pc-ping-status');
+    if (!toggle || !composer || !form || !body || !send || !status) return;
+
+    function open() {
+      composer.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+      if (toggleLabel) toggleLabel.textContent = 'close';
+      setTimeout(function () { try { body.focus(); } catch (e) {} }, 60);
+    }
+    function close() {
+      composer.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      if (toggleLabel) toggleLabel.textContent = 'say something';
+    }
+    toggle.addEventListener('click', function () {
+      if (toggle.getAttribute('aria-expanded') === 'true') close();
+      else open();
+    });
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var payload = {
+        type: 'pc-ping-v1',
+        body: body.value.trim(),
+        from: (from && from.value ? from.value.trim() : undefined),
+        subject: (subject && subject.value ? subject.value.trim() : undefined),
+        expand: !!(expand && expand.checked),
+        timestamp: new Date().toISOString(),
+      };
+      if (!payload.body) {
+        status.textContent = 'message can\'t be empty';
+        status.setAttribute('data-state', 'err');
+        return;
+      }
+      send.disabled = true;
+      status.textContent = 'sending…';
+      status.setAttribute('data-state', 'pending');
+      try {
+        var res = await fetch('/api/ping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        var j = null;
+        try { j = await res.json(); } catch (e) {}
+        if (res.ok && j && j.ok) {
+          status.textContent = payload.expand
+            ? 'sent — cc drafts a block on the next tick'
+            : 'sent — cc reads at session start';
+          status.setAttribute('data-state', 'ok');
+          body.value = '';
+          if (subject) subject.value = '';
+          // Keep `from` set so a Mike follow-up doesn't retype identity.
+          if (expand) expand.checked = false;
+          // Collapse after a short beat.
+          setTimeout(close, 1800);
+        } else {
+          var reason = (j && (j.reason || j.error)) ? ' (' + (j.reason || j.error) + ')' : '';
+          status.textContent = 'send failed' + reason;
+          status.setAttribute('data-state', 'err');
+        }
+      } catch (err) {
+        status.textContent = 'network error — try again';
+        status.setAttribute('data-state', 'err');
+      } finally {
+        send.disabled = false;
+      }
+    });
+  })();
+</script>
+
+<style>
+  .ping-strip {
+    margin: 12px 0 10px;
+    padding: 10px 14px;
+    background: rgba(232, 154, 45, 0.06);
+    border: 1px solid rgba(232, 154, 45, 0.28);
+    border-left: 3px solid #E89A2D;
+    border-radius: 2px;
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+  }
+
+  .ping-strip__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ping-strip__kicker {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0;
+    color: #7a4d0c;
+    flex: 1 1 auto;
+  }
+  .ping-strip__label { font-weight: 600; }
+  .ping-strip__sep { margin: 0 6px; opacity: 0.5; }
+  .ping-strip__lede {
+    color: var(--pc-ink-soft, #38373A);
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+
+  .ping-strip__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #12110e;
+    color: #f3e6d8;
+    border: 1px solid rgba(232, 154, 45, 0.55);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    padding: 5px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .ping-strip__toggle:hover { background: #1f1808; border-color: #e89a2d; }
+  .ping-strip__toggle[aria-expanded="true"] { background: #e89a2d; color: #12110e; border-color: #e89a2d; }
+  .ping-strip__toggle-icon { font-size: 12px; }
+
+  .ping-strip__composer {
+    margin: 10px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px dotted rgba(232, 154, 45, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ping-strip__composer[hidden] { display: none; }
+
+  .ping-strip__field { display: flex; flex-direction: column; gap: 4px; }
+  .ping-strip__field--sm { flex: 1 1 auto; min-width: 0; }
+  .ping-strip__label-sm {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: #7a4d0c;
+  }
+  .ping-strip__field textarea,
+  .ping-strip__field input {
+    font: inherit;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 2px;
+    background: #fff;
+    color: #12110E;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+  }
+  .ping-strip__field textarea { min-height: 60px; }
+  .ping-strip__field textarea:focus,
+  .ping-strip__field input:focus {
+    outline: 2px solid #E89A2D;
+    outline-offset: -1px;
+    border-color: #E89A2D;
+  }
+
+  .ping-strip__row2 {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .ping-strip__row2 .ping-strip__field { flex: 1 1 200px; }
+
+  .ping-strip__expand {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    font-size: 11.5px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    line-height: 1.4;
+  }
+  .ping-strip__expand input[type="checkbox"] { margin-top: 2px; }
+  .ping-strip__expand .mono { font-weight: 600; color: #7a4d0c; letter-spacing: 0.08em; }
+
+  .ping-strip__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ping-strip__send {
+    background: #12110e;
+    color: #f3e6d8;
+    border: 1px solid rgba(232, 154, 45, 0.55);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    padding: 6px 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .ping-strip__send:hover:not(:disabled) { background: #e89a2d; color: #12110e; }
+  .ping-strip__send:disabled { opacity: 0.6; cursor: wait; }
+
+  .ping-strip__status {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted);
+  }
+  .ping-strip__status[data-state="ok"] { color: #2f8f5f; }
+  .ping-strip__status[data-state="err"] { color: #C92A2A; }
+  .ping-strip__status[data-state="pending"] { color: #7a4d0c; }
+
+  .ping-strip__full {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #7a4d0c;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .ping-strip__full:hover { color: #e89a2d; text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .ping-strip__kicker { font-size: 9.5px; }
+    .ping-strip__lede { font-size: 12px; }
+    .ping-strip__row2 { flex-direction: column; gap: 8px; }
+    .ping-strip__toggle { width: 100%; justify-content: center; }
+  }
+</style>

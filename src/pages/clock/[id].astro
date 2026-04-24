@@ -1299,6 +1299,187 @@ const jsonLd = {
         timers.push(setTimeout(chime, rand(8000, 20000)));
         return { oscs, nodes, timers };
       },
+
+      'reykjavik': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Wind over lava — cold, steady, banded
+        const wind = brownNoise(4);
+        const windBP = biquad('bandpass', 500, 0.35);
+        const windG = gain(0.3);
+        wind.connect(windBP).connect(windG).connect(out);
+        const windLFO = osc(0.05, 'sine'); const windLFOG = gain(180);
+        windLFO.connect(windLFOG).connect(windBP.frequency);
+        wind.start(); windLFO.start();
+        oscs.push(wind, windLFO); nodes.push(windBP, windG, windLFOG);
+        // Geothermal rumble — very low sine drone with slow amp LFO
+        const rumble = osc(32, 'sine');
+        const rumbleG = gain(0.12);
+        rumble.connect(rumbleG).connect(out);
+        const rumbleLFO = osc(0.08, 'sine');
+        const rumbleLFOG = gain(0.06);
+        rumbleLFO.connect(rumbleLFOG).connect(rumbleG.gain);
+        rumble.start(); rumbleLFO.start();
+        oscs.push(rumble, rumbleLFO); nodes.push(rumbleG, rumbleLFOG);
+        // High mineral shimmer — sparse high sine pings (ice crystal idea)
+        const shimmer = () => {
+          const t = ctx.currentTime;
+          const o = osc(4200 + Math.random() * 1800, 'sine');
+          const g = gain(0);
+          o.connect(g).connect(out);
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.025, t + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+          o.start(t); o.stop(t + 0.85);
+          setTimeout(() => { try { g.disconnect(); } catch(e) {} }, 1100);
+          timers.push(setTimeout(shimmer, rand(8000, 18000)));
+        };
+        timers.push(setTimeout(shimmer, rand(3000, 10000)));
+        // Distant Hallgrímskirkja bell — low F3 + 5th partial, slow
+        const bell = () => {
+          const t = ctx.currentTime;
+          const f = osc(87, 'sine');
+          const p = osc(261, 'sine');
+          const fg = gain(0), pg = gain(0);
+          f.connect(fg).connect(out); p.connect(pg).connect(out);
+          fg.gain.setValueAtTime(0, t);
+          fg.gain.linearRampToValueAtTime(0.1, t + 0.08);
+          fg.gain.exponentialRampToValueAtTime(0.001, t + 4);
+          pg.gain.setValueAtTime(0, t);
+          pg.gain.linearRampToValueAtTime(0.03, t + 0.1);
+          pg.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+          f.start(t); p.start(t);
+          f.stop(t + 4.1); p.stop(t + 2.6);
+          setTimeout(() => { try { fg.disconnect(); pg.disconnect(); } catch(e) {} }, 4500);
+          timers.push(setTimeout(bell, rand(60000, 120000)));
+        };
+        timers.push(setTimeout(bell, rand(20000, 50000)));
+        return { oscs, nodes, timers };
+      },
+
+      'lisbon': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Tram rattle — low brown noise + narrow bandpass on mid-range
+        const rattle = brownNoise(4);
+        const rattleBP = biquad('bandpass', 800, 1.2);
+        const rattleG = gain(0.08);
+        rattle.connect(rattleBP).connect(rattleG).connect(out);
+        rattle.start();
+        oscs.push(rattle); nodes.push(rattleBP, rattleG);
+        // Tagus water — slow wave-bed (similar to Mallorca but lower)
+        const water = brownNoise(4);
+        const waterLP = biquad('lowpass', 900, 0.4);
+        const waterG = gain(0.22);
+        water.connect(waterLP).connect(waterG).connect(out);
+        const waterLFO = osc(0.15, 'sine');
+        const waterLFOG = gain(0.12);
+        waterLFO.connect(waterLFOG).connect(waterG.gain);
+        water.start(); waterLFO.start();
+        oscs.push(water, waterLFO); nodes.push(waterLP, waterG, waterLFOG);
+        // Seagulls (Atlantic coast variant — lower + mellower than NYC)
+        const gull = () => {
+          const t = ctx.currentTime;
+          const n = whiteNoise(0.35);
+          const bp = biquad('bandpass', 1900, 9);
+          const gg = gain(0);
+          n.connect(bp).connect(gg).connect(out);
+          gg.gain.setValueAtTime(0, t);
+          gg.gain.linearRampToValueAtTime(0.14, t + 0.04);
+          gg.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+          n.start(t); n.stop(t + 0.42);
+          setTimeout(() => { try { bp.disconnect(); gg.disconnect(); } catch(e) {} }, 700);
+          timers.push(setTimeout(gull, rand(18000, 48000)));
+        };
+        timers.push(setTimeout(gull, rand(6000, 18000)));
+        // Tram bell — high ping (double-tap pattern)
+        const tramBell = () => {
+          const t = ctx.currentTime;
+          for (let i = 0; i < 2; i++) {
+            const tt = t + i * 0.18;
+            const o = osc(2400 + Math.random() * 300, 'sine');
+            const g = gain(0);
+            o.connect(g).connect(out);
+            g.gain.setValueAtTime(0, tt);
+            g.gain.linearRampToValueAtTime(0.08, tt + 0.005);
+            g.gain.exponentialRampToValueAtTime(0.0005, tt + 0.25);
+            o.start(tt); o.stop(tt + 0.28);
+            setTimeout(() => { try { g.disconnect(); } catch(e) {} }, 400);
+          }
+          timers.push(setTimeout(tramBell, rand(22000, 55000)));
+        };
+        timers.push(setTimeout(tramBell, rand(8000, 22000)));
+        // Fado hint — a single sustained minor 3rd every once in a while (guitar idea)
+        const fado = () => {
+          const t = ctx.currentTime;
+          const o1 = osc(220, 'triangle');
+          const o2 = osc(261.63, 'triangle'); // minor 3rd
+          const g = gain(0);
+          o1.connect(g); o2.connect(g); g.connect(out);
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.045, t + 0.3);
+          g.gain.linearRampToValueAtTime(0, t + 3);
+          o1.start(t); o2.start(t);
+          o1.stop(t + 3.2); o2.stop(t + 3.2);
+          setTimeout(() => { try { g.disconnect(); } catch(e) {} }, 3400);
+          timers.push(setTimeout(fado, rand(45000, 100000)));
+        };
+        timers.push(setTimeout(fado, rand(18000, 40000)));
+        return { oscs, nodes, timers };
+      },
+
+      'cape-town': (out) => {
+        const oscs = [], nodes = [], timers = [];
+        // Atlantic surf — brown noise with strong breathing LFO (bigger swell than Mallorca)
+        const surf = brownNoise(4);
+        const surfLP = biquad('lowpass', 1100, 0.4);
+        const surfG = gain(0.32);
+        surf.connect(surfLP).connect(surfG).connect(out);
+        const surfLFO = osc(0.1, 'sine'); const surfLFOG = gain(0.22);
+        surfLFO.connect(surfLFOG).connect(surfG.gain);
+        surf.start(); surfLFO.start();
+        oscs.push(surf, surfLFO); nodes.push(surfLP, surfG, surfLFOG);
+        // SE wind whistling around Table Mountain — bandpass + LFO on cutoff
+        const wind = whiteNoise(4);
+        const windBP = biquad('bandpass', 2200, 3);
+        const windG = gain(0.04);
+        wind.connect(windBP).connect(windG).connect(out);
+        const windLFO = osc(0.18, 'sine'); const windLFOG = gain(500);
+        windLFO.connect(windLFOG).connect(windBP.frequency);
+        wind.start(); windLFO.start();
+        oscs.push(wind, windLFO); nodes.push(windBP, windG, windLFOG);
+        // Seal bark — quick chesty noise burst through low bandpass
+        const seal = () => {
+          const t = ctx.currentTime;
+          const n = whiteNoise(0.22);
+          const bp = biquad('bandpass', 420, 4);
+          const g = gain(0);
+          n.connect(bp).connect(g).connect(out);
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.16, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+          n.start(t); n.stop(t + 0.25);
+          setTimeout(() => { try { bp.disconnect(); g.disconnect(); } catch(e) {} }, 400);
+          timers.push(setTimeout(seal, rand(10000, 30000)));
+        };
+        timers.push(setTimeout(seal, rand(4000, 14000)));
+        // Distant baboon woof — deep short tone with slight detune
+        const baboon = () => {
+          const t = ctx.currentTime;
+          const o1 = osc(180, 'sawtooth');
+          const o2 = osc(182, 'sawtooth');
+          const lp = biquad('lowpass', 600, 0.8);
+          const g = gain(0);
+          o1.connect(lp); o2.connect(lp); lp.connect(g).connect(out);
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.12, t + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+          o1.start(t); o2.start(t);
+          o1.stop(t + 0.45); o2.stop(t + 0.45);
+          setTimeout(() => { try { lp.disconnect(); g.disconnect(); } catch(e) {} }, 600);
+          timers.push(setTimeout(baboon, rand(35000, 90000)));
+        };
+        timers.push(setTimeout(baboon, rand(14000, 40000)));
+        return { oscs, nodes, timers };
+      },
     };
 
     // --- controller ---

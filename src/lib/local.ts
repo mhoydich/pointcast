@@ -29,7 +29,10 @@ export const NAME_DROPS: NameDrop[] = [
   { name: 'Pickleball League',   kind: 'community',     one: 'Courts at Rec Park, drills Thursday, tournaments Sundays.' },
 ];
 
-export const STATION_SHORTCUTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Q', 'W', 'E', 'R', 'T', 'Y'] as const;
+export const STATION_SHORTCUTS = [
+  '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'A', 'D', 'F', 'G',
+] as const;
 
 /** Cities within ~100 miles of El Segundo, cardinal-direction + approx mileage. */
 export type Station = {
@@ -162,6 +165,70 @@ export const STATIONS: Station[] = [
     blurb: 'just past the line; included because the desert earns it.',
     coords: { lat: 33.83, lng: -116.55 },
   },
+  {
+    name: 'LAX / Westchester',
+    slug: 'lax-westchester',
+    miles: 2,
+    direction: 'N',
+    blurb: 'runways, hotel rows, Sepulveda hum, the gate next door.',
+    coords: { lat: 33.94, lng: -118.40 },
+  },
+  {
+    name: 'Inglewood',
+    slug: 'inglewood',
+    miles: 7,
+    direction: 'NE',
+    blurb: 'arenas, flyover lights, forum echoes, game-day streets.',
+    coords: { lat: 33.96, lng: -118.35 },
+  },
+  {
+    name: 'Torrance',
+    slug: 'torrance',
+    miles: 9,
+    direction: 'S',
+    blurb: 'workshops, ramen plazas, refinery glow, practical South Bay.',
+    coords: { lat: 33.84, lng: -118.34 },
+  },
+  {
+    name: 'Culver City',
+    slug: 'culver-city',
+    miles: 10,
+    direction: 'NE',
+    blurb: 'studios, expo line, design offices, lunch-meeting energy.',
+    coords: { lat: 34.02, lng: -118.40 },
+  },
+  {
+    name: 'San Pedro',
+    slug: 'san-pedro',
+    miles: 17,
+    direction: 'SE',
+    blurb: 'breakwater, cranes, old port bars, cliff-side harbor views.',
+    coords: { lat: 33.74, lng: -118.29 },
+  },
+  {
+    name: 'Hollywood',
+    slug: 'hollywood',
+    miles: 18,
+    direction: 'NE',
+    blurb: 'sign, soundstages, boulevard glare, myth machine.',
+    coords: { lat: 34.10, lng: -118.33 },
+  },
+  {
+    name: 'Burbank / Glendale',
+    slug: 'burbank-glendale',
+    miles: 25,
+    direction: 'NE',
+    blurb: 'backlots, media offices, foothill streets, valley studio air.',
+    coords: { lat: 34.18, lng: -118.31 },
+  },
+  {
+    name: 'Ventura',
+    slug: 'ventura',
+    miles: 65,
+    direction: 'NW',
+    blurb: 'harbor, orchards, point breaks, north-coast breath before Santa Barbara.',
+    coords: { lat: 34.28, lng: -119.29 },
+  },
 ];
 
 /** Loose-match tokens for deciding whether a block's `meta.location` is in range.
@@ -170,7 +237,8 @@ export const SOCAL_TOKENS = [
   'el segundo', 'los angeles', 'manhattan beach', 'hermosa', 'redondo',
   'torrance', 'santa monica', 'venice', 'culver city', 'playa', 'inglewood',
   'long beach', 'palos verdes', 'malibu', 'pasadena', 'glendale', 'burbank',
-  'hollywood', 'downtown', 'orange county', 'anaheim', 'santa ana', 'irvine',
+  'hollywood', 'culver city', 'westchester', 'lax', 'inglewood', 'torrance',
+  'san pedro', 'downtown', 'orange county', 'anaheim', 'santa ana', 'irvine',
   'huntington', 'newport', 'laguna', 'san diego', 'oceanside', 'santa barbara',
   'ventura', 'palm springs', 'riverside', 'temecula', 'south bay', 'socal',
 ];
@@ -190,6 +258,14 @@ const STATION_MATCH_TERMS: Record<string, string[]> = {
   'santa-barbara': ['santa barbara'],
   'north-san-diego': ['north san diego', 'north county san diego', 'oceanside', 'carlsbad'],
   'palm-springs': ['palm springs'],
+  'lax-westchester': ['lax', 'los angeles international', 'westchester', 'playa del rey'],
+  'inglewood': ['inglewood', 'sofi', 'forum'],
+  'torrance': ['torrance', 'old torrance'],
+  'culver-city': ['culver city', 'helms', 'hayden tract'],
+  'san-pedro': ['san pedro', 'port of los angeles', 'point fermin', 'waterfront'],
+  'hollywood': ['hollywood', 'los feliz', 'silver lake'],
+  'burbank-glendale': ['burbank', 'glendale', 'studio city'],
+  'ventura': ['ventura', 'oxnard', 'ojai'],
 };
 
 /** Whether a given location string resolves inside the SoCal radius. */

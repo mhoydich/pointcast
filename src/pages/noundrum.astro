@@ -1,0 +1,1307 @@
+---
+/**
+ * /noundrum — multiplayer noun-cursor drum + land + decorate game.
+ *
+ * Mike 2026-04-21 ~00:00 PT (just after midnight, still-4/20 vibe holding):
+ *   "a new nouns cookie clicker drum where every visitor is a cursor
+ *    visualized as a noun to start, thru drumming acquire digital land,
+ *    build out the land, make art."
+ *
+ * v0 SCOPE (this session): solo experience that *feels* multiplayer via
+ * NPC nouns wandering the same canvas. Local-only state. Architectural
+ * sketch in this file's notes for v1 (real Cloudflare Durable Object
+ * sharing world state across visitors via WebSocket).
+ *
+ * MECHANICS:
+ *   1. Visitor identity = a deterministic Noun (from sessionId), shown
+ *      as a noun.pics SVG floating cursor that follows the mouse.
+ *   2. Drumming = currency. Click anywhere on the canvas, tap the drum
+ *      pad, or press SPACE → 1 beat sound + 1 rhythm point.
+ *   3. Land = persistent map. 24×16 tile grid (384 tiles). Click an
+ *      empty tile to claim for 50 rhythm (30 if adjacent to one you own).
+ *   4. Decorate = art. Click a tile you own → menu with tree/lamp/
+ *      fountain/star/tower at varied prices. Tile renders the decor.
+ *   5. Multiplayer (v0 simulated): 6 NPC nouns wander, auto-drum,
+ *      auto-claim, auto-decorate so the world breathes even with one
+ *      real visitor.
+ *
+ * SOUND: Web Audio synth, same pattern as /drum/click (kick/snare/hat
+ * rotated by combo position). Mute toggle in top bar.
+ *
+ * STATE: localStorage `pc:noundrum:state` holds your selfNounId + rhythm
+ * + ownedTiles + decorations + totalBeats. World state (other tiles +
+ * visitors) is per-page-load in v0. Real shared world ships v1 via DO.
+ *
+ * Author: cc. Source: Mike 2026-04-21 ~00:00 PT chat directive
+ * "yah keep going make it a double session, work on a couple of long
+ *  term projects, like a new nouns cookie clicker drum...".
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Noundrum — drum, claim land, make art';
+const description = 'A multiplayer cookie-clicker drum where every visitor is a cursor visualized as a Noun. Drum to earn rhythm; spend rhythm to claim tiles on a shared 24×16 grid; decorate your tiles with trees, lamps, fountains, stars, towers. v0 simulates other visitors via NPC Nouns. The art is the collective placement.';
+
+const COLS = 24;
+const ROWS = 16;
+const TOTAL_TILES = COLS * ROWS;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="nd" id="nd-root">
+    <!-- Header -->
+    <header class="nd-head">
+      <a href="/" class="nd-home" aria-label="Leave noundrum">←</a>
+      <h1 class="nd-brand mono">NOUNDRUM<span class="nd-brand-dim">·v0</span></h1>
+      <div class="nd-self">
+        <img class="nd-self__avatar" id="nd-self-avatar" src="https://noun.pics/0.svg" alt="Your Noun" />
+        <div class="nd-self__meta">
+          <p class="nd-self__noun mono" id="nd-self-noun">noun #—</p>
+          <p class="nd-self__stats mono">
+            <span id="nd-rhythm">0</span> rhythm · <span id="nd-tiles">0</span> tiles · <span id="nd-beats">0</span> beats
+          </p>
+        </div>
+      </div>
+      <div class="nd-spacer"></div>
+      <div class="nd-watching mono">
+        <span class="nd-watching-dot" aria-hidden="true"></span>
+        <span id="nd-watching-num">7</span> WATCHING
+      </div>
+      <button type="button" class="nd-mute mono" id="nd-mute" aria-pressed="false" aria-label="Mute sound">♪ ON</button>
+      <button type="button" class="nd-mute mono" id="nd-art-toggle" aria-pressed="false" aria-label="Toggle art mode (hide grid + chrome)">⊞ ART</button>
+      <a class="nd-help mono" href="/leaderboards" title="See where you stand">🏆</a>
+      <a class="nd-help mono nd-signin" id="nd-signin" href="/api/auth/google/start?next=/noundrum" title="Sign in with Google" hidden>↪ G</a>
+      <a class="nd-help mono" href="/b/0346" title="What is this?">?</a>
+    </header>
+
+    <!-- Canvas: tile grid + visitors layer + cursor -->
+    <section class="nd-canvas" id="nd-canvas" aria-label="Noundrum world">
+      <!-- 1/8-scale minimap of the full canvas, fixed top-right corner. Each
+           dot mirrors a tile; amber = mine, indigo = NPC owned, dim = empty.
+           Per overnight-11. Click toggles visibility. -->
+      <aside class="nd-minimap" id="nd-minimap" data-state="visible" aria-hidden="true" title="Minimap (click to hide)">
+        <div class="nd-minimap__grid" id="nd-minimap-grid"></div>
+        <p class="nd-minimap__label mono">MINIMAP · {COLS}×{ROWS}</p>
+      </aside>
+      <div class="nd-tiles" id="nd-tiles"></div>
+      <div class="nd-visitors" id="nd-visitors" aria-hidden="true"></div>
+      <div class="nd-cursor" id="nd-cursor" aria-hidden="true">
+        <img id="nd-cursor-img" alt="" src="https://noun.pics/0.svg" />
+        <span class="nd-cursor-label mono" id="nd-cursor-label">YOU</span>
+      </div>
+      <!-- Beat ripples appear here -->
+      <div class="nd-ripples" id="nd-ripples" aria-hidden="true"></div>
+      <!-- Combo display -->
+      <div class="nd-combo mono" id="nd-combo" data-state="hidden">×1</div>
+    </section>
+
+    <!-- Drum pad + shop -->
+    <section class="nd-bottom">
+      <button type="button" class="nd-drum" id="nd-drum" aria-label="Drum (or tap canvas, or press SPACE)">
+        <span class="nd-drum__rim"></span>
+        <span class="nd-drum__head"></span>
+        <span class="nd-drum__label mono">TAP / CLICK / SPACE</span>
+      </button>
+      <div class="nd-shop">
+        <p class="nd-shop__kicker mono">SPEND RHYTHM</p>
+        <div class="nd-shop__row">
+          <button type="button" class="nd-shop__btn" data-action="info-tile" disabled>
+            <span class="nd-shop__icon">⬜</span>
+            <span class="nd-shop__name">Tile</span>
+            <span class="nd-shop__price mono">50</span>
+            <span class="nd-shop__hint mono">click empty</span>
+          </button>
+          <button type="button" class="nd-shop__btn" data-action="info-decor" disabled>
+            <span class="nd-shop__icon">★</span>
+            <span class="nd-shop__name">Decorate</span>
+            <span class="nd-shop__price mono">20–200</span>
+            <span class="nd-shop__hint mono">click owned</span>
+          </button>
+          <button type="button" class="nd-shop__btn" id="nd-reset" data-action="reset">
+            <span class="nd-shop__icon">↻</span>
+            <span class="nd-shop__name">Reset me</span>
+            <span class="nd-shop__price mono">free</span>
+            <span class="nd-shop__hint mono">your tiles only</span>
+          </button>
+        </div>
+        <p class="nd-shop__foot mono">
+          adjacent tile = <strong>30</strong> · prices: tree 30 · lamp 20 · fountain 50 · star 100 · tower 200
+        </p>
+      </div>
+    </section>
+
+    <!-- Decoration menu (hidden by default) -->
+    <aside class="nd-decor-menu" id="nd-decor-menu" data-open="false" aria-hidden="true">
+      <header class="nd-decor-menu__head">
+        <p class="nd-decor-menu__kicker mono">DECORATE TILE <span id="nd-decor-tile">—</span></p>
+        <button type="button" class="nd-decor-menu__close" id="nd-decor-close" aria-label="Close">×</button>
+      </header>
+      <div class="nd-decor-menu__grid">
+        <button type="button" class="nd-decor-opt" data-decor="tree" data-price="30">
+          <svg viewBox="0 0 40 40" width="36" height="36"><polygon points="20,5 32,30 8,30" fill="#2f8f5f"/><rect x="17" y="28" width="6" height="8" fill="#5a3b10"/></svg>
+          <span class="mono">TREE · 30</span>
+        </button>
+        <button type="button" class="nd-decor-opt" data-decor="lamp" data-price="20">
+          <svg viewBox="0 0 40 40" width="36" height="36"><circle cx="20" cy="14" r="6" fill="#f5cf8d"/><rect x="18.5" y="18" width="3" height="18" fill="#5f2a1e"/><rect x="13" y="35" width="14" height="3" fill="#5f2a1e"/></svg>
+          <span class="mono">LAMP · 20</span>
+        </button>
+        <button type="button" class="nd-decor-opt" data-decor="fountain" data-price="50">
+          <svg viewBox="0 0 40 40" width="36" height="36"><ellipse cx="20" cy="32" rx="14" ry="4" fill="#185fa5"/><rect x="17" y="14" width="6" height="16" fill="#a3a3a8"/><circle cx="20" cy="12" r="4" fill="#5ad4ff"/></svg>
+          <span class="mono">FOUNTAIN · 50</span>
+        </button>
+        <button type="button" class="nd-decor-opt" data-decor="star" data-price="100">
+          <svg viewBox="0 0 40 40" width="36" height="36"><polygon points="20,4 24,16 36,16 26,24 30,36 20,28 10,36 14,24 4,16 16,16" fill="#F59F00"/></svg>
+          <span class="mono">STAR · 100</span>
+        </button>
+        <button type="button" class="nd-decor-opt" data-decor="tower" data-price="200">
+          <svg viewBox="0 0 40 40" width="36" height="36"><polygon points="14,8 26,8 24,36 16,36" fill="#8a2432"/><circle cx="20" cy="6" r="2" fill="#F59F00"/><rect x="18" y="20" width="4" height="6" fill="#F59F00"/></svg>
+          <span class="mono">TOWER · 200</span>
+        </button>
+        <button type="button" class="nd-decor-opt nd-decor-opt--clear" data-decor="" data-price="0">
+          <svg viewBox="0 0 40 40" width="36" height="36"><line x1="10" y1="10" x2="30" y2="30" stroke="#c92a2a" stroke-width="3"/><line x1="30" y1="10" x2="10" y2="30" stroke="#c92a2a" stroke-width="3"/></svg>
+          <span class="mono">CLEAR · 0</span>
+        </button>
+      </div>
+      <p class="nd-decor-menu__foot mono">your rhythm: <span id="nd-decor-rhythm">0</span></p>
+    </aside>
+
+    <!-- Toast for feedback -->
+    <div class="nd-toast mono" id="nd-toast" data-state="hidden">—</div>
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ COLS, ROWS, TOTAL_TILES }}>
+(function () {
+  'use strict';
+
+  // ============================================================
+  // CONSTANTS + UTILS
+  // ============================================================
+  var STORAGE_KEY = 'pc:noundrum:state';
+  var SCHEMA = 1;
+  var TILE_BASE_PRICE = 50;
+  var TILE_ADJ_PRICE = 30;
+  var DECOR_PRICES = { tree: 30, lamp: 20, fountain: 50, star: 100, tower: 200, '': 0 };
+  var COMBO_BONUS_AT = 4;  // every Nth beat in a combo gets a small bonus
+  var COMBO_RESET_MS = 1400;
+  var NPC_COUNT = 6;
+  var MAX_NOUN = 1340;     // safe upper bound for noun.pics
+
+  function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function tileIdx(c, r) { return r * COLS + c; }
+  function tileColRow(idx) { return [idx % COLS, Math.floor(idx / COLS)]; }
+  function adjacentIdxs(idx) {
+    var cr = tileColRow(idx);
+    var c = cr[0], r = cr[1];
+    var out = [];
+    if (c > 0) out.push(tileIdx(c - 1, r));
+    if (c < COLS - 1) out.push(tileIdx(c + 1, r));
+    if (r > 0) out.push(tileIdx(c, r - 1));
+    if (r < ROWS - 1) out.push(tileIdx(c, r + 1));
+    return out;
+  }
+
+  // ============================================================
+  // VISITOR IDENTITY (you = derived Noun from sessionId)
+  // ============================================================
+  function getOrSetSessionId() {
+    var k = 'pc:session-id';
+    var v = '';
+    try { v = localStorage.getItem(k) || ''; } catch (e) {}
+    if (!v) {
+      v = 'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      try { localStorage.setItem(k, v); } catch (e) {}
+    }
+    return v;
+  }
+  function nounFromSession(sid) {
+    var h = 0;
+    for (var i = 0; i < sid.length; i++) { h = (h * 31 + sid.charCodeAt(i)) >>> 0; }
+    return h % MAX_NOUN;
+  }
+
+  // ============================================================
+  // STATE (localStorage)
+  // ============================================================
+  function loadState() {
+    var raw = '';
+    try { raw = localStorage.getItem(STORAGE_KEY) || ''; } catch (e) {}
+    if (raw) {
+      try {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.schemaVersion === SCHEMA) return parsed;
+      } catch (e) {}
+    }
+    return null;
+  }
+  function saveState(s) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+
+  var sessionId = getOrSetSessionId();
+  var selfNounId = nounFromSession(sessionId);
+  var saved = loadState();
+  var state = saved || {
+    schemaVersion: SCHEMA,
+    selfNounId: selfNounId,
+    rhythm: 0,
+    ownedTiles: [],
+    decorations: {},
+    totalBeats: 0,
+    bestTiles: 0,        // lifetime best tile count, preserved across resets
+    lifetimeClaims: 0,   // total claims ever made, preserved across resets
+    lastSeen: Date.now(),
+  };
+  state.selfNounId = selfNounId;  // always sync to current session
+  // Backfill new fields on existing saved state from older schema
+  if (typeof state.bestTiles !== 'number') state.bestTiles = state.ownedTiles.length || 0;
+  if (typeof state.lifetimeClaims !== 'number') state.lifetimeClaims = state.ownedTiles.length || 0;
+
+  // ============================================================
+  // WORLD STATE (in-memory in v0; real DO in v1)
+  // ============================================================
+  // tile -> { ownerNounId, decor }
+  var world = {};
+  // Hydrate world from your owned tiles
+  state.ownedTiles.forEach(function (idx) {
+    world[idx] = { ownerNounId: selfNounId, decor: state.decorations[idx] || null };
+  });
+  // Generate NPCs
+  var NPCS = [];
+  for (var i = 0; i < NPC_COUNT; i++) {
+    var nid = rnd(0, MAX_NOUN - 1);
+    if (nid === selfNounId) nid = (nid + 17) % MAX_NOUN;
+    NPCS.push({
+      nounId: nid,
+      x: Math.random(),
+      y: Math.random(),
+      tx: Math.random(),
+      ty: Math.random(),
+      nextChange: Date.now() + rnd(4000, 10000),
+      lastDrum: Date.now() + rnd(0, 2000),
+      rhythm: rnd(20, 80),
+      ownedTiles: [],
+      el: null,
+    });
+  }
+  // NPCs each pre-claim 1-3 random tiles to seed the world with art
+  NPCS.forEach(function (npc) {
+    var n = rnd(1, 3);
+    for (var i = 0; i < n; i++) {
+      var idx = rnd(0, TOTAL_TILES - 1);
+      if (!world[idx] && !state.ownedTiles.includes(idx)) {
+        world[idx] = { ownerNounId: npc.nounId, decor: pickRandomDecorForNpc() };
+        npc.ownedTiles.push(idx);
+      }
+    }
+  });
+  function pickRandomDecorForNpc() {
+    var pool = ['tree', 'lamp', 'fountain', 'star', 'tower', null, null];
+    return pool[rnd(0, pool.length - 1)];
+  }
+
+  // ============================================================
+  // AUDIO (Web Audio synth)
+  // ============================================================
+  var audioCtx = null;
+  var muted = false;
+  function ensureCtx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      try { audioCtx.resume(); } catch (e) {}
+    }
+  }
+  function playKick() {
+    if (muted || !audioCtx) return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.25);
+  }
+  function playSnare() {
+    if (muted || !audioCtx) return;
+    var t = audioCtx.currentTime;
+    var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.18, audioCtx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    var src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    var hi = audioCtx.createBiquadFilter();
+    hi.type = 'highpass'; hi.frequency.value = 1200;
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.32, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    src.connect(hi).connect(gain).connect(audioCtx.destination);
+    src.start(t);
+  }
+  function playHat() {
+    if (muted || !audioCtx) return;
+    var t = audioCtx.currentTime;
+    var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.06, audioCtx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    var src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    var hi = audioCtx.createBiquadFilter();
+    hi.type = 'highpass'; hi.frequency.value = 6000;
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    src.connect(hi).connect(gain).connect(audioCtx.destination);
+    src.start(t);
+  }
+  function playChime() {
+    if (muted || !audioCtx) return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, t);
+    gain.gain.setValueAtTime(0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.42);
+  }
+
+  // ============================================================
+  // DOM REFS
+  // ============================================================
+  var root = document.getElementById('nd-root');
+  var canvas = document.getElementById('nd-canvas');
+  var tilesEl = document.getElementById('nd-tiles');
+  var visitorsEl = document.getElementById('nd-visitors');
+  var cursorEl = document.getElementById('nd-cursor');
+  var cursorImg = document.getElementById('nd-cursor-img');
+  var cursorLabel = document.getElementById('nd-cursor-label');
+  var ripplesEl = document.getElementById('nd-ripples');
+  var comboEl = document.getElementById('nd-combo');
+  var rhythmEl = document.getElementById('nd-rhythm');
+  var tilesCountEl = document.getElementById('nd-tiles');
+  var beatsEl = document.getElementById('nd-beats');
+  var watchingNumEl = document.getElementById('nd-watching-num');
+  var selfNounEl = document.getElementById('nd-self-noun');
+  var selfAvatarEl = document.getElementById('nd-self-avatar');
+  var drumBtn = document.getElementById('nd-drum');
+  var muteBtn = document.getElementById('nd-mute');
+  var artBtn = document.getElementById('nd-art-toggle');
+  var resetBtn = document.getElementById('nd-reset');
+  var decorMenu = document.getElementById('nd-decor-menu');
+  var decorTileEl = document.getElementById('nd-decor-tile');
+  var decorRhythmEl = document.getElementById('nd-decor-rhythm');
+  var decorCloseBtn = document.getElementById('nd-decor-close');
+  var toastEl = document.getElementById('nd-toast');
+
+  // ============================================================
+  // RENDER: tiles grid (once at start)
+  // ============================================================
+  function renderTiles() {
+    var html = '';
+    for (var i = 0; i < TOTAL_TILES; i++) {
+      html += '<div class="nd-tile" data-idx="' + i + '"></div>';
+    }
+    tilesEl.innerHTML = html;
+    // Set CSS grid columns based on COLS
+    tilesEl.style.gridTemplateColumns = 'repeat(' + COLS + ', 1fr)';
+  }
+
+  function paintTile(idx) {
+    var el = tilesEl.querySelector('[data-idx="' + idx + '"]');
+    if (!el) return;
+    var w = world[idx];
+    if (!w) {
+      el.className = 'nd-tile';
+      el.innerHTML = '';
+      return;
+    }
+    var mine = w.ownerNounId === selfNounId;
+    el.className = 'nd-tile ' + (mine ? 'nd-tile--mine' : 'nd-tile--owned');
+    el.style.setProperty('--owner', '#' + (w.ownerNounId * 0x9e3779 % 0xffffff).toString(16).padStart(6, '0'));
+    var inner = '';
+    if (w.decor) {
+      inner = decorSvg(w.decor);
+    }
+    el.innerHTML = inner;
+  }
+
+  function paintAllTiles() {
+    Object.keys(world).forEach(function (k) { paintTile(parseInt(k, 10)); });
+  }
+
+  // ============================================================
+  // MINIMAP — 1/8 scale overview of the full canvas (overnight-11)
+  // ============================================================
+  var minimapEl = document.getElementById('nd-minimap');
+  var minimapGridEl = document.getElementById('nd-minimap-grid');
+  function renderMinimap() {
+    if (!minimapGridEl) return;
+    minimapGridEl.style.gridTemplateColumns = 'repeat(' + COLS + ', 1fr)';
+    var html = '';
+    for (var i = 0; i < TOTAL_TILES; i++) {
+      html += '<span class="nd-minimap__cell" data-mi="' + i + '"></span>';
+    }
+    minimapGridEl.innerHTML = html;
+  }
+  function paintMinimapCell(idx) {
+    if (!minimapGridEl) return;
+    var el = minimapGridEl.querySelector('[data-mi="' + idx + '"]');
+    if (!el) return;
+    var w = world[idx];
+    if (!w) { el.removeAttribute('data-state'); return; }
+    el.setAttribute('data-state', w.ownerNounId === selfNounId ? 'mine' : 'owned');
+  }
+  function paintAllMinimap() {
+    if (!minimapGridEl) return;
+    for (var i = 0; i < TOTAL_TILES; i++) paintMinimapCell(i);
+  }
+  // Toggle visibility on click
+  if (minimapEl) {
+    minimapEl.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = minimapEl.getAttribute('data-state') === 'visible';
+      minimapEl.setAttribute('data-state', open ? 'hidden' : 'visible');
+    });
+  }
+  // Wrap paintTile to also paint minimap cell
+  var _origPaintTile = paintTile;
+  paintTile = function (idx) {
+    _origPaintTile(idx);
+    paintMinimapCell(idx);
+  };
+
+  function decorSvg(slug) {
+    if (slug === 'tree') return '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid meet"><polygon points="20,5 32,30 8,30" fill="#2f8f5f"/><rect x="17" y="28" width="6" height="8" fill="#5a3b10"/></svg>';
+    if (slug === 'lamp') return '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid meet"><circle cx="20" cy="14" r="6" fill="#f5cf8d"/><rect x="18.5" y="18" width="3" height="18" fill="#5f2a1e"/><rect x="13" y="35" width="14" height="3" fill="#5f2a1e"/></svg>';
+    if (slug === 'fountain') return '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid meet"><ellipse cx="20" cy="32" rx="14" ry="4" fill="#185fa5"/><rect x="17" y="14" width="6" height="16" fill="#a3a3a8"/><circle cx="20" cy="12" r="4" fill="#5ad4ff"/></svg>';
+    if (slug === 'star') return '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid meet"><polygon points="20,4 24,16 36,16 26,24 30,36 20,28 10,36 14,24 4,16 16,16" fill="#F59F00"/></svg>';
+    if (slug === 'tower') return '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid meet"><polygon points="14,8 26,8 24,36 16,36" fill="#8a2432"/><circle cx="20" cy="6" r="2" fill="#F59F00"/><rect x="18" y="20" width="4" height="6" fill="#F59F00"/></svg>';
+    return '';
+  }
+
+  // ============================================================
+  // RENDER: visitors layer (NPCs + you)
+  // ============================================================
+  function ensureVisitorEl(npc) {
+    if (npc.el) return npc.el;
+    var div = document.createElement('div');
+    div.className = 'nd-visitor';
+    div.innerHTML =
+      '<img class="nd-visitor__img" src="https://noun.pics/' + npc.nounId + '.svg" alt=""/>' +
+      '<span class="nd-visitor__label mono">noun #' + npc.nounId + '</span>';
+    visitorsEl.appendChild(div);
+    npc.el = div;
+    return div;
+  }
+  function paintVisitors() {
+    NPCS.forEach(function (npc) {
+      var el = ensureVisitorEl(npc);
+      el.style.left = (npc.x * 100) + '%';
+      el.style.top  = (npc.y * 100) + '%';
+    });
+  }
+
+  // ============================================================
+  // RENDER: cursor (you)
+  // ============================================================
+  cursorImg.src = 'https://noun.pics/' + selfNounId + '.svg';
+  cursorLabel.textContent = 'YOU · #' + selfNounId;
+
+  // ============================================================
+  // SHOP / STAT PAINT
+  // ============================================================
+  function paintStats() {
+    rhythmEl.textContent = state.rhythm;
+    tilesCountEl.textContent = state.ownedTiles.length;
+    beatsEl.textContent = state.totalBeats;
+    selfNounEl.textContent = 'noun #' + selfNounId;
+    selfAvatarEl.src = 'https://noun.pics/' + selfNounId + '.svg';
+    if (decorRhythmEl) decorRhythmEl.textContent = state.rhythm;
+  }
+
+  // ============================================================
+  // DRUM (your beat)
+  // ============================================================
+  var combo = 0;
+  var lastBeatAt = 0;
+  function drum() {
+    ensureCtx();
+    var now = Date.now();
+    if (now - lastBeatAt > COMBO_RESET_MS) combo = 0;
+    combo++;
+    lastBeatAt = now;
+    // pick sound based on combo phase
+    var phase = combo % 4;
+    if (phase === 1) playKick();
+    else if (phase === 2) playHat();
+    else if (phase === 3) playSnare();
+    else { playKick(); if (combo >= COMBO_BONUS_AT) playChime(); }
+    // gain
+    var gain = (combo >= COMBO_BONUS_AT && phase === 0) ? 2 : 1;
+    state.rhythm += gain;
+    state.totalBeats += 1;
+    paintStats();
+    showCombo();
+    // ripple at cursor position
+    var rect = canvas.getBoundingClientRect();
+    var cx = (lastMouseX - rect.left) / rect.width;
+    var cy = (lastMouseY - rect.top) / rect.height;
+    if (isFinite(cx) && cx > 0 && cx < 1) addRipple(cx, cy);
+    saveState(state);
+  }
+  function showCombo() {
+    if (combo < 2) { comboEl.setAttribute('data-state', 'hidden'); return; }
+    comboEl.textContent = '×' + combo;
+    comboEl.setAttribute('data-state', 'visible');
+    clearTimeout(showCombo._t);
+    showCombo._t = setTimeout(function () { comboEl.setAttribute('data-state', 'hidden'); }, COMBO_RESET_MS);
+  }
+  function addRipple(xFrac, yFrac) {
+    var div = document.createElement('div');
+    div.className = 'nd-ripple';
+    div.style.left = (xFrac * 100) + '%';
+    div.style.top  = (yFrac * 100) + '%';
+    ripplesEl.appendChild(div);
+    setTimeout(function () { div.remove(); }, 800);
+  }
+  function npcRipple(xFrac, yFrac, color) {
+    var div = document.createElement('div');
+    div.className = 'nd-ripple nd-ripple--npc';
+    div.style.left = (xFrac * 100) + '%';
+    div.style.top  = (yFrac * 100) + '%';
+    div.style.borderColor = color;
+    ripplesEl.appendChild(div);
+    setTimeout(function () { div.remove(); }, 800);
+  }
+
+  // ============================================================
+  // CLAIM TILE
+  // ============================================================
+  function tryClaimTile(idx) {
+    if (world[idx]) {
+      // Owned — if mine, open decor menu; if NPC's, show toast
+      if (world[idx].ownerNounId === selfNounId) {
+        openDecorMenu(idx);
+      } else {
+        toast('that tile belongs to noun #' + world[idx].ownerNounId);
+      }
+      return;
+    }
+    // Compute price: adjacent to one of mine = 30; else 50
+    var price = TILE_BASE_PRICE;
+    var adj = adjacentIdxs(idx);
+    for (var i = 0; i < adj.length; i++) {
+      if (world[adj[i]] && world[adj[i]].ownerNounId === selfNounId) { price = TILE_ADJ_PRICE; break; }
+    }
+    if (state.rhythm < price) {
+      toast('need ' + price + ' rhythm · you have ' + state.rhythm);
+      return;
+    }
+    state.rhythm -= price;
+    state.ownedTiles.push(idx);
+    state.lifetimeClaims = (state.lifetimeClaims || 0) + 1;
+    if (state.ownedTiles.length > (state.bestTiles || 0)) state.bestTiles = state.ownedTiles.length;
+    world[idx] = { ownerNounId: selfNounId, decor: null };
+    paintTile(idx);
+    paintStats();
+    saveState(state);
+    playChime();
+    toast('claimed tile #' + idx + ' · −' + price + ' rhythm');
+  }
+
+  // ============================================================
+  // DECORATION MENU
+  // ============================================================
+  var activeDecorTile = -1;
+  function openDecorMenu(idx) {
+    activeDecorTile = idx;
+    decorTileEl.textContent = '#' + idx;
+    decorRhythmEl.textContent = state.rhythm;
+    decorMenu.setAttribute('data-open', 'true');
+    decorMenu.setAttribute('aria-hidden', 'false');
+  }
+  function closeDecorMenu() {
+    activeDecorTile = -1;
+    decorMenu.setAttribute('data-open', 'false');
+    decorMenu.setAttribute('aria-hidden', 'true');
+  }
+  function applyDecor(decorSlug, price) {
+    if (activeDecorTile < 0) return;
+    if (state.rhythm < price) {
+      toast('need ' + price + ' rhythm · you have ' + state.rhythm);
+      return;
+    }
+    state.rhythm -= price;
+    if (decorSlug) state.decorations[activeDecorTile] = decorSlug;
+    else delete state.decorations[activeDecorTile];
+    if (world[activeDecorTile]) world[activeDecorTile].decor = decorSlug || null;
+    paintTile(activeDecorTile);
+    paintStats();
+    saveState(state);
+    playChime();
+    toast(decorSlug ? 'placed ' + decorSlug + ' · −' + price : 'cleared decoration');
+    closeDecorMenu();
+  }
+
+  // ============================================================
+  // RESET (your tiles only — NPCs untouched)
+  // ============================================================
+  function resetMe() {
+    if (!confirm('Reset your noundrum: refunds nothing, returns all your tiles to unowned, clears decorations. Best-tile count and lifetime-claims persist. Continue?')) return;
+    state.ownedTiles.forEach(function (idx) {
+      delete world[idx];
+      paintTile(idx);
+    });
+    state.ownedTiles = [];
+    state.decorations = {};
+    state.rhythm = 0;
+    state.totalBeats = 0;
+    // bestTiles + lifetimeClaims preserved across reset (per overnight-02)
+    saveState(state);
+    paintStats();
+    toast('reset · best ' + state.bestTiles + ' tiles · ' + state.lifetimeClaims + ' lifetime claims preserved');
+  }
+
+  // ============================================================
+  // TOAST
+  // ============================================================
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.setAttribute('data-state', 'visible');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { toastEl.setAttribute('data-state', 'hidden'); }, 2200);
+  }
+
+  // ============================================================
+  // CURSOR + INPUT
+  // ============================================================
+  var lastMouseX = window.innerWidth / 2;
+  var lastMouseY = window.innerHeight / 2;
+  function moveCursor(x, y) {
+    lastMouseX = x; lastMouseY = y;
+    cursorEl.style.left = x + 'px';
+    cursorEl.style.top  = y + 'px';
+  }
+  window.addEventListener('mousemove', function (e) { moveCursor(e.clientX, e.clientY); });
+  window.addEventListener('touchmove', function (e) {
+    if (e.touches && e.touches[0]) moveCursor(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+
+  // Tile click delegation
+  tilesEl.addEventListener('click', function (e) {
+    var t = e.target.closest('.nd-tile');
+    if (!t) return;
+    var idx = parseInt(t.getAttribute('data-idx'), 10);
+    if (isNaN(idx)) return;
+    e.stopPropagation();
+    tryClaimTile(idx);
+  });
+
+  // Drum: tap drum pad, tap empty canvas area, OR press space
+  drumBtn.addEventListener('click', function (e) { e.stopPropagation(); drum(); });
+  drumBtn.addEventListener('touchstart', function (e) { e.preventDefault(); drum(); }, { passive: false });
+  // Tapping the canvas (NOT a tile) also drums
+  canvas.addEventListener('click', function (e) {
+    if (e.target.closest('.nd-tile')) return;
+    if (e.target.closest('.nd-visitor, .nd-cursor, .nd-decor-menu')) return;
+    drum();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); drum(); }
+    if (e.key === 'Escape') { closeDecorMenu(); }
+  });
+
+  // Decor menu interactions
+  decorMenu.addEventListener('click', function (e) {
+    var btn = e.target.closest('.nd-decor-opt');
+    if (!btn) return;
+    var slug = btn.getAttribute('data-decor');
+    var price = parseInt(btn.getAttribute('data-price'), 10) || 0;
+    applyDecor(slug, price);
+  });
+  decorCloseBtn.addEventListener('click', closeDecorMenu);
+
+  // Reset
+  resetBtn.addEventListener('click', function (e) { e.stopPropagation(); resetMe(); });
+
+  // Mute toggle
+  muteBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    muted = !muted;
+    muteBtn.textContent = muted ? '♪ MUTE' : '♪ ON';
+    muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  });
+
+  // Art mode toggle — hides grid borders, NPC chrome, decoration menu;
+  // leaves the placed decorations visible so the canvas reads as art.
+  var artMode = false;
+  artBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    artMode = !artMode;
+    root.setAttribute('data-art', artMode ? 'true' : 'false');
+    artBtn.textContent = artMode ? '⊞ NORMAL' : '⊞ ART';
+    artBtn.setAttribute('aria-pressed', artMode ? 'true' : 'false');
+    if (artMode) toast('art mode · click ART again to return');
+  });
+  // Press A also toggles art mode
+  window.addEventListener('keydown', function (e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'a' || e.key === 'A') artBtn.click();
+  });
+
+  // ============================================================
+  // NPC TICK (the simulated multiplayer)
+  // ============================================================
+  function tickNpcs() {
+    var now = Date.now();
+    NPCS.forEach(function (npc) {
+      // Move toward target (lerp), then pick new target periodically
+      var dx = npc.tx - npc.x;
+      var dy = npc.ty - npc.y;
+      var step = 0.0035;
+      npc.x += dx * step;
+      npc.y += dy * step;
+      if (now > npc.nextChange || (Math.abs(dx) + Math.abs(dy)) < 0.005) {
+        npc.tx = clamp(Math.random(), 0.05, 0.95);
+        npc.ty = clamp(Math.random(), 0.1, 0.92);
+        npc.nextChange = now + rnd(5000, 11000);
+      }
+      // Drum periodically
+      if (now - npc.lastDrum > rnd(1100, 2400)) {
+        npc.lastDrum = now;
+        npc.rhythm += 1;
+        // Tiny visual ripple at NPC position
+        var color = '#' + (npc.nounId * 0x9e3779 % 0xffffff).toString(16).padStart(6, '0');
+        npcRipple(npc.x, npc.y, color);
+      }
+      // Auto-claim
+      if (npc.rhythm >= TILE_BASE_PRICE) {
+        // Try near npc position first, fallback random
+        var pickIdx = -1;
+        for (var attempt = 0; attempt < 10; attempt++) {
+          var c = clamp(Math.floor(npc.x * COLS) + rnd(-2, 2), 0, COLS - 1);
+          var r = clamp(Math.floor(npc.y * ROWS) + rnd(-2, 2), 0, ROWS - 1);
+          var i = tileIdx(c, r);
+          if (!world[i]) { pickIdx = i; break; }
+        }
+        if (pickIdx === -1) {
+          // global random fallback
+          for (var k = 0; k < 30; k++) {
+            var ridx = rnd(0, TOTAL_TILES - 1);
+            if (!world[ridx]) { pickIdx = ridx; break; }
+          }
+        }
+        if (pickIdx >= 0) {
+          npc.rhythm -= TILE_BASE_PRICE;
+          world[pickIdx] = { ownerNounId: npc.nounId, decor: pickRandomDecorForNpc() };
+          npc.ownedTiles.push(pickIdx);
+          paintTile(pickIdx);
+        }
+      }
+    });
+    paintVisitors();
+  }
+  setInterval(tickNpcs, 90);
+
+  // ============================================================
+  // INITIAL PAINT
+  // ============================================================
+  renderTiles();
+  renderMinimap();
+  paintAllTiles();
+  paintAllMinimap();
+  paintStats();
+  paintVisitors();
+  watchingNumEl.textContent = String(NPCS.length + 1);
+
+  // Welcome toast
+  setTimeout(function () { toast('drum to earn rhythm · click empty tiles to claim'); }, 600);
+
+  // Show "sign in with google" chip if pc_session cookie is absent.
+  // Per ship-overnight-08 (Mike super-sprint Google auth directive 00:35 PT).
+  (function () {
+    var cookieHas = function (name) {
+      var raw = document.cookie || '';
+      var parts = raw.split(';').map(function (s) { return s.trim(); });
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].indexOf(name + '=') === 0) return true;
+      }
+      return false;
+    };
+    var chip = document.getElementById('nd-signin');
+    if (chip && !cookieHas('pc_session')) chip.removeAttribute('hidden');
+  })();
+})();
+</script>
+
+<style>
+  /* ====================================================================
+     /noundrum — visual + interaction styles
+     ==================================================================== */
+  :global(body) { background: #0c0a06; }
+
+  .nd {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-rows: 64px 1fr 130px;
+    background: radial-gradient(ellipse at 50% 30%, #1a0f1a 0%, #0c0a06 75%);
+    color: #f3e6d8;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui);
+    overflow: hidden;
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  /* Header */
+  .nd-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    border-bottom: 1px solid rgba(243, 230, 216, 0.1);
+    background: rgba(8, 6, 4, 0.6);
+    backdrop-filter: blur(8px);
+    z-index: 20;
+  }
+  .nd-home {
+    color: rgba(243, 230, 216, 0.65);
+    text-decoration: none;
+    font-size: 18px;
+    padding: 4px 10px;
+    border: 1px solid rgba(243, 230, 216, 0.15);
+    border-radius: 2px;
+    line-height: 1;
+  }
+  .nd-home:hover { color: #fff; border-color: rgba(243, 230, 216, 0.45); }
+  .nd-brand {
+    font-size: 17px;
+    letter-spacing: 0.28em;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+  }
+  .nd-brand-dim { color: #F59F00; font-weight: 400; margin-left: 6px; opacity: 0.7; }
+  .nd-self {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 10px;
+    background: rgba(245, 159, 0, 0.06);
+    border: 1px solid rgba(245, 159, 0, 0.2);
+    border-radius: 24px;
+  }
+  .nd-self__avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: rgba(245, 159, 0, 0.12);
+    border: 1px solid rgba(245, 159, 0, 0.4);
+  }
+  .nd-self__meta { display: flex; flex-direction: column; gap: 1px; }
+  .nd-self__noun { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #F59F00; margin: 0; font-weight: 700; }
+  .nd-self__stats { font-size: 10px; letter-spacing: 0.06em; color: rgba(243, 230, 216, 0.75); margin: 0; font-variant-numeric: tabular-nums; }
+  .nd-spacer { flex: 1; }
+  .nd-watching {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    background: rgba(138, 36, 50, 0.18);
+    border: 1px solid rgba(138, 36, 50, 0.5);
+    border-radius: 2px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .nd-watching-dot { width: 7px; height: 7px; border-radius: 50%; background: #f66; box-shadow: 0 0 8px 1px rgba(255, 102, 102, 0.7); animation: ndblink 2s ease-in-out infinite; }
+  @keyframes ndblink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  .nd-mute, .nd-help {
+    appearance: none;
+    cursor: pointer;
+    background: rgba(243, 230, 216, 0.05);
+    border: 1px solid rgba(243, 230, 216, 0.18);
+    color: rgba(243, 230, 216, 0.8);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    padding: 6px 10px;
+    border-radius: 2px;
+    text-decoration: none;
+    line-height: 1;
+  }
+  .nd-mute:hover, .nd-help:hover { color: #fff; border-color: rgba(243, 230, 216, 0.45); }
+
+  /* Canvas */
+  .nd-canvas {
+    position: relative;
+    overflow: hidden;
+  }
+  .nd-tiles {
+    position: absolute;
+    inset: 16px;
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+  }
+  .nd-tile {
+    aspect-ratio: 1;
+    background: rgba(243, 230, 216, 0.025);
+    border: 1px solid rgba(243, 230, 216, 0.05);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nd-tile:hover { background: rgba(245, 159, 0, 0.1); border-color: rgba(245, 159, 0, 0.4); }
+  .nd-tile--owned {
+    background: rgba(243, 230, 216, 0.05);
+    border: 1px solid var(--owner, rgba(138, 36, 50, 0.5));
+  }
+  .nd-tile--mine {
+    background: rgba(245, 159, 0, 0.16);
+    border: 1.5px solid #F59F00;
+    box-shadow: inset 0 0 8px rgba(245, 159, 0, 0.25);
+  }
+  .nd-tile svg { width: 80%; height: 80%; display: block; }
+
+  /* Visitors layer (NPCs) */
+  .nd-visitors {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .nd-visitor {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    transform: translate(-50%, -50%);
+    transition: left 0.4s linear, top 0.4s linear;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .nd-visitor__img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(107, 124, 255, 0.6);
+    box-shadow: 0 0 18px rgba(107, 124, 255, 0.35);
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .nd-visitor__label {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 4px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: rgba(243, 230, 216, 0.6);
+    background: rgba(0, 0, 0, 0.45);
+    padding: 1px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  /* Your cursor (follows mouse) */
+  .nd-cursor {
+    position: fixed;
+    top: 50%; left: 50%;
+    width: 70px;
+    height: 70px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 30;
+    transition: transform 0.05s linear;
+  }
+  .nd-cursor img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2.5px solid #F59F00;
+    box-shadow: 0 0 26px rgba(245, 159, 0, 0.55);
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .nd-cursor-label {
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    color: #F59F00;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 2px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+
+  /* Beat ripples */
+  .nd-ripples { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+  .nd-ripple {
+    position: absolute;
+    width: 0px; height: 0px;
+    border: 2px solid #F59F00;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: nd-ripple 0.8s ease-out forwards;
+  }
+  .nd-ripple--npc { border-color: rgba(107, 124, 255, 0.7); }
+  @keyframes nd-ripple {
+    0%   { width: 10px; height: 10px; opacity: 0.85; }
+    100% { width: 110px; height: 110px; opacity: 0; }
+  }
+
+  /* Combo display */
+  .nd-combo {
+    position: absolute;
+    top: 24px; right: 24px;
+    z-index: 10;
+    font-size: clamp(28px, 5vw, 48px);
+    color: #F59F00;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 30px rgba(245, 159, 0, 0.55);
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .nd-combo[data-state="hidden"] { opacity: 0; transform: scale(0.85); }
+  .nd-combo[data-state="visible"] { opacity: 1; transform: scale(1); }
+
+  /* Bottom (drum + shop) */
+  .nd-bottom {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 12px;
+    padding: 14px 18px;
+    border-top: 1px solid rgba(243, 230, 216, 0.1);
+    background: rgba(8, 6, 4, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: 20;
+  }
+  .nd-drum {
+    appearance: none;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    position: relative;
+    width: 100%;
+    height: 100px;
+    color: #fff;
+    transition: transform 0.05s ease;
+  }
+  .nd-drum:active { transform: scale(0.97); }
+  .nd-drum__rim {
+    position: absolute;
+    inset: 0;
+    border-radius: 50% / 28%;
+    background: radial-gradient(ellipse at 50% 30%, #c4a77d, #5a3b10);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4), inset 0 -4px 12px rgba(0,0,0,0.5);
+  }
+  .nd-drum__head {
+    position: absolute;
+    inset: 8px 14px 16px;
+    border-radius: 50% / 36%;
+    background: radial-gradient(ellipse at 50% 30%, #f3e6d8, #c4a77d);
+    box-shadow: inset 0 -4px 8px rgba(138, 36, 50, 0.18), inset 0 4px 8px rgba(255, 255, 255, 0.3);
+  }
+  .nd-drum__label {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #5a3b10;
+    z-index: 2;
+    pointer-events: none;
+    font-weight: 700;
+  }
+
+  .nd-shop {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+  }
+  .nd-shop__kicker {
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    color: #F59F00;
+    margin: 0;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .nd-shop__row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .nd-shop__btn {
+    appearance: none;
+    cursor: pointer;
+    background: rgba(243, 230, 216, 0.04);
+    border: 1px solid rgba(243, 230, 216, 0.18);
+    color: rgba(243, 230, 216, 0.85);
+    border-radius: 3px;
+    padding: 6px 10px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    align-items: center;
+    text-align: left;
+    min-width: 140px;
+  }
+  .nd-shop__btn:disabled { cursor: default; opacity: 0.7; }
+  .nd-shop__btn:not(:disabled):hover { background: rgba(245, 159, 0, 0.08); border-color: rgba(245, 159, 0, 0.4); }
+  .nd-shop__icon { grid-row: 1 / 3; font-size: 18px; }
+  .nd-shop__name { grid-row: 1; font-size: 12px; font-weight: 600; }
+  .nd-shop__price { grid-row: 1; font-size: 12px; color: #F59F00; font-weight: 700; }
+  .nd-shop__hint { grid-row: 2; grid-column: 2 / 4; font-size: 9px; letter-spacing: 0.08em; color: rgba(243, 230, 216, 0.5); text-transform: uppercase; }
+  .nd-shop__foot { font-size: 10px; letter-spacing: 0.04em; color: rgba(243, 230, 216, 0.55); margin: 4px 0 0; font-family: var(--pc-font-mono); }
+  .nd-shop__foot strong { color: #F59F00; }
+
+  /* Decoration menu */
+  .nd-decor-menu {
+    position: fixed;
+    right: 18px;
+    bottom: 150px;
+    width: 300px;
+    z-index: 25;
+    background: rgba(12, 10, 6, 0.95);
+    border: 1px solid rgba(245, 159, 0, 0.45);
+    border-radius: 6px;
+    padding: 14px;
+    backdrop-filter: blur(10px);
+    transform: translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .nd-decor-menu[data-open="true"] { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  .nd-decor-menu__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .nd-decor-menu__kicker { font-size: 10px; letter-spacing: 0.18em; color: #F59F00; margin: 0; text-transform: uppercase; font-weight: 700; }
+  .nd-decor-menu__close {
+    appearance: none; cursor: pointer; background: transparent; border: 1px solid rgba(243, 230, 216, 0.25);
+    color: rgba(243, 230, 216, 0.7); width: 26px; height: 26px; border-radius: 2px; line-height: 1; font-size: 18px;
+  }
+  .nd-decor-menu__close:hover { color: #fff; border-color: #fff; }
+  .nd-decor-menu__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .nd-decor-opt {
+    appearance: none; cursor: pointer;
+    background: rgba(243, 230, 216, 0.04);
+    border: 1px solid rgba(243, 230, 216, 0.18);
+    color: rgba(243, 230, 216, 0.85);
+    border-radius: 3px; padding: 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .nd-decor-opt:hover { background: rgba(245, 159, 0, 0.1); border-color: rgba(245, 159, 0, 0.5); }
+  .nd-decor-opt span { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+  .nd-decor-opt--clear { border-color: rgba(201, 42, 42, 0.5); }
+  .nd-decor-opt--clear:hover { background: rgba(201, 42, 42, 0.1); }
+  .nd-decor-menu__foot { font-size: 10px; letter-spacing: 0.06em; color: rgba(243, 230, 216, 0.6); margin: 10px 0 0; font-family: var(--pc-font-mono); text-align: right; }
+
+  /* Toast */
+  .nd-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 150px;
+    transform: translateX(-50%);
+    z-index: 28;
+    padding: 10px 16px;
+    background: rgba(245, 159, 0, 0.9);
+    color: #1a0f0a;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    border-radius: 3px;
+    font-weight: 600;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .nd-toast[data-state="hidden"] { opacity: 0; transform: translate(-50%, 8px); pointer-events: none; }
+  .nd-toast[data-state="visible"] { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+
+  /* Minimap — 1/8 scale tile overview, top-right corner */
+  .nd-minimap {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 168px;
+    z-index: 6;
+    background: rgba(12, 11, 8, 0.78);
+    border: 1px solid rgba(243, 230, 216, 0.18);
+    border-radius: 3px;
+    padding: 6px 6px 4px;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    user-select: none;
+  }
+  .nd-minimap[data-state="hidden"] { opacity: 0.18; transform: translate(64px, -8px); }
+  .nd-minimap[data-state="hidden"]:hover { opacity: 0.7; transform: none; }
+  .nd-minimap__grid {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 1px;
+    aspect-ratio: 24 / 16;
+    background: rgba(243, 230, 216, 0.04);
+    border-radius: 2px;
+    padding: 1px;
+  }
+  .nd-minimap__cell {
+    background: transparent;
+    border-radius: 1px;
+    transition: background 0.18s ease;
+    aspect-ratio: 1;
+  }
+  .nd-minimap__cell[data-state="owned"] { background: rgba(107, 124, 255, 0.7); }
+  .nd-minimap__cell[data-state="mine"]  { background: #F59F00; box-shadow: 0 0 4px rgba(245, 159, 0, 0.6); }
+  .nd-minimap__label {
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    color: rgba(243, 230, 216, 0.55);
+    margin: 4px 0 0;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .nd[data-art="true"] .nd-minimap { display: none; }
+  @media (max-width: 720px) {
+    .nd-minimap { width: 112px; top: 8px; right: 8px; }
+  }
+
+  /* Art mode — hide grid borders + visitor labels + NPC bubbles + drum/shop;
+     leaves placed decorations + your cursor visible so the canvas reads as art. */
+  .nd[data-art="true"] .nd-tile { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+  .nd[data-art="true"] .nd-tile--mine { background: transparent !important; border-color: transparent !important; }
+  .nd[data-art="true"] .nd-visitor__label { display: none; }
+  .nd[data-art="true"] .nd-cursor-label { display: none; }
+  .nd[data-art="true"] .nd-cursor img { border-color: rgba(245, 159, 0, 0.3); box-shadow: none; }
+  .nd[data-art="true"] .nd-visitor__img { border-color: rgba(107, 124, 255, 0.25); box-shadow: none; }
+  .nd[data-art="true"] .nd-bottom { opacity: 0; pointer-events: none; }
+  .nd[data-art="true"] .nd-canvas { padding-bottom: 0; }
+  .nd[data-art="true"] { grid-template-rows: 64px 1fr 0px; }
+  .nd[data-art="true"] .nd-tiles { gap: 0; }
+
+  @media (max-width: 720px) {
+    .nd { grid-template-rows: 56px 1fr 110px; }
+    .nd-self__noun, .nd-watching { display: none; }
+    .nd-tiles { inset: 8px; }
+    .nd-bottom { grid-template-columns: 140px 1fr; gap: 8px; padding: 10px 12px; }
+    .nd-drum { height: 84px; }
+    .nd-cursor, .nd-visitor { width: 48px; height: 48px; }
+    .nd-decor-menu { right: 12px; left: 12px; width: auto; bottom: 130px; }
+    .nd-toast { bottom: 130px; }
+  }
+</style>

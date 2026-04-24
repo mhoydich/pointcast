@@ -1,0 +1,322 @@
+---
+/**
+ * /commercials — three commercial artifacts and a tiny guess-the-decade game.
+ *
+ * Mike 2026-04-21 ~00:35 PT (super-sprint directive):
+ *   "[3 videos attached] ok, lets try to post these and anything else fun,
+ *    be expansive with the assets, maybe game or something interesting
+ *    about the content."
+ *
+ * Three commercial videos to display:
+ *   1. magpie-commercial.mp4 — The Magpie commercial
+ *   2. pointcast-japanese-1967.mp4 — A "1967 Japanese PointCast" commercial
+ *      (creative anachronistic artifact — PointCast didn't exist in 1967;
+ *      this is a vintage-aesthetic rendering of what it might have been)
+ *   3. magpie-lego-commercial.mp4 — The Magpie × Lego commercial
+ *
+ * Page layout: editorial framing + each video in its own card with a
+ * caption + a tiny "Guess the decade" game per video where the visitor
+ * picks the decade and gets the artist's intended era back. Local-only
+ * scoring; persists in localStorage.
+ *
+ * Companion TV show at /tv/shows/commercials cycles all three on loop
+ * fullscreen (the auto-fullscreen pattern).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Commercial {
+  slug: string;
+  title: string;
+  brand: string;
+  era: string;          // displayed era / artist intent
+  decade: string;       // canonical decade for the game (e.g. '1960s')
+  source: string;
+  caption: string;
+  videoSrc: string;
+  poster?: string;
+}
+
+const COMMERCIALS: Commercial[] = [
+  {
+    slug: 'pointcast-1967',
+    title: 'PointCast — Tokyo broadcast',
+    brand: 'PointCast',
+    era: '1967 (anachronistic)',
+    decade: '1960s',
+    source: 'A retrocausal artifact — PointCast didn\'t exist in 1967. The piece imagines what a Showa-era Japanese TV spot for a living-broadcast network might have looked like. Bold serif type, color-graded cathode-ray glow, the syllable POINTCAST in katakana. The kind of thing that would have closed a late-night NHK block in Tokyo.',
+    caption: 'A 1967 Japanese PointCast commercial that never aired because the network didn\'t exist yet.',
+    videoSrc: '/videos/pointcast-japanese-1967.mp4',
+  },
+  {
+    slug: 'magpie',
+    title: 'Magpie — corner-store ad',
+    brand: 'Magpie',
+    era: '1970s–80s broadcast',
+    decade: '1970s',
+    source: 'Magpie is the British TV show; magpies are the bird; the brand-of-the-spot is intentionally ambiguous. The piece reads as a department-store or corner-store ad spliced for a Saturday-morning kids slot. Warm grain, hand-drawn lower thirds, the kind of music cue that cuts off because the TV in the background is changing channels.',
+    caption: 'A Magpie commercial — the era is on the screen; the brand is the bird.',
+    videoSrc: '/videos/magpie-commercial.mp4',
+  },
+  {
+    slug: 'magpie-lego',
+    title: 'Magpie × Lego — block by block',
+    brand: 'Magpie × Lego',
+    era: '1980s–90s crossover',
+    decade: '1980s',
+    source: 'A Magpie-meets-Lego cross-brand piece. Two visual languages stitched together — Lego\'s primary palette, Magpie\'s editorial pacing. The crossover commercial that never quite happened. Every visible block placement is a small act of design.',
+    caption: 'Magpie × Lego, an imagined crossover. The blocks build the spot.',
+    videoSrc: '/videos/magpie-lego-commercial.mp4',
+  },
+];
+
+const DECADES = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
+
+const title = 'Commercials — three artifacts and a tiny guess-the-decade game';
+const description = 'Three commercial videos posted as editorial artifacts: a 1967 anachronistic Japanese PointCast spot, a Magpie commercial, and a Magpie × Lego crossover. Each comes with a one-question game to guess the decade the artist intended. The fullscreen TV-show version auto-cycles all three.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="comm-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>Commercials</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">COMMERCIALS · ARTIFACTS · A TINY GAME</p>
+      <h1 class="title">Three commercials posted as editorial.</h1>
+      <p class="dek">
+        Three videos arrived as desktop drops at midnight Pacific. Each one is
+        a commercial — one anachronistic, one of-its-era, one a brand crossover
+        that never quite happened. Posted here with editorial framing, embedded
+        for direct play, plus a one-question per-video game where you pick the
+        decade and we tell you what the piece was reaching for. There's a
+        fullscreen TV-show version at <a href="/tv/shows/commercials">/tv/shows/commercials</a>
+        that loops all three end-to-end. The block at <a href="/b/0348">/b/0348</a>
+        carries the editorial.
+      </p>
+      <div class="head__actions">
+        <a class="cta" href="/tv/shows/commercials">Watch all → /tv/shows/commercials</a>
+        <button type="button" class="cta cta--alt" id="play-all">▶ Play all here</button>
+        <span class="cta cta--score mono">YOUR SCORE: <span id="score">0</span> / 3</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      {COMMERCIALS.map((c) => (
+        <article class="comm" data-slug={c.slug}>
+          <header class="comm__head">
+            <p class="comm__brand mono">{c.brand.toUpperCase()}</p>
+            <h2 class="comm__title">{c.title}</h2>
+            <p class="comm__caption">{c.caption}</p>
+          </header>
+
+          <div class="comm__player">
+            <video
+              class="comm__video"
+              src={c.videoSrc}
+              controls
+              playsinline
+              preload="metadata"
+              data-slug={c.slug}
+            ></video>
+          </div>
+
+          <div class="comm__game" data-slug={c.slug}>
+            <p class="comm__game-q mono">GUESS THE DECADE</p>
+            <div class="comm__game-options">
+              {DECADES.map((d) => (
+                <button type="button" class="opt mono" data-decade={d} data-correct={d === c.decade ? 'true' : 'false'}>{d}</button>
+              ))}
+            </div>
+            <p class="comm__game-feedback" data-slug={c.slug} data-state="hidden"></p>
+          </div>
+
+          <p class="comm__source">
+            <strong>Era reach:</strong> <em>{c.era}</em><br>
+            <strong>Source notes:</strong> {c.source}
+          </p>
+        </article>
+      ))}
+    </section>
+
+    <footer class="foot">
+      <p class="mono foot__kicker">ALSO</p>
+      <ul class="foot__list">
+        <li><a href="/tv/shows/commercials">/tv/shows/commercials — fullscreen carousel of all three</a></li>
+        <li><a href="/tv">/tv — the broadcast slideshow</a></li>
+        <li><a href="/play">/play — every game on PointCast</a></li>
+        <li><a href="/leaderboards">/leaderboards — top scores across games</a></li>
+        <li><a href="/tezos">/tezos — ◆ if a video made you smile, tip mike in tez</a></li>
+      </ul>
+      <p class="foot__credit mono">videos curated by <a href="/about">Mike Hoydich</a> · 2026-04-21 PT</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  var SCORE_KEY = 'pc:commercials:score';
+  var ANSWERS_KEY = 'pc:commercials:answers';
+  var scoreEl = document.getElementById('score');
+  var answers = {};
+  try { answers = JSON.parse(localStorage.getItem(ANSWERS_KEY) || '{}'); } catch (e) { answers = {}; }
+
+  function paintScore() {
+    var n = 0;
+    Object.keys(answers).forEach(function (k) { if (answers[k] === true) n++; });
+    if (scoreEl) scoreEl.textContent = n;
+    try { localStorage.setItem(SCORE_KEY, String(n)); } catch (e) {}
+  }
+  paintScore();
+
+  // Restore visual state for previously-answered games
+  Object.keys(answers).forEach(function (slug) {
+    var game = document.querySelector('.comm__game[data-slug="' + slug + '"]');
+    if (!game) return;
+    game.querySelectorAll('.opt').forEach(function (b) { b.disabled = true; });
+    var fb = game.querySelector('.comm__game-feedback');
+    if (fb) {
+      fb.textContent = answers[slug] === true ? '✓ correct' : '✗ noted — see era reach below';
+      fb.setAttribute('data-state', answers[slug] === true ? 'correct' : 'incorrect');
+    }
+  });
+
+  // Wire game options
+  document.querySelectorAll('.comm__game').forEach(function (game) {
+    var slug = game.getAttribute('data-slug');
+    game.querySelectorAll('.opt').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        var correct = btn.getAttribute('data-correct') === 'true';
+        game.querySelectorAll('.opt').forEach(function (b) { b.disabled = true; });
+        var fb = game.querySelector('.comm__game-feedback');
+        if (fb) {
+          fb.textContent = correct ? '✓ correct' : '✗ noted — see era reach below';
+          fb.setAttribute('data-state', correct ? 'correct' : 'incorrect');
+        }
+        if (correct) btn.classList.add('opt--correct');
+        else btn.classList.add('opt--wrong');
+        answers[slug] = correct;
+        try { localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers)); } catch (e) {}
+        paintScore();
+      });
+    });
+  });
+
+  // Play all — sequentially plays each video
+  var playAllBtn = document.getElementById('play-all');
+  if (playAllBtn) {
+    playAllBtn.addEventListener('click', function () {
+      var videos = Array.from(document.querySelectorAll('video.comm__video'));
+      if (!videos.length) return;
+      var i = 0;
+      function playNext() {
+        if (i >= videos.length) { playAllBtn.textContent = '▶ Play all here'; return; }
+        var v = videos[i++];
+        v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        v.currentTime = 0;
+        var p = v.play();
+        if (p && p.then) p.catch(function () {});
+        v.onended = playNext;
+      }
+      playAllBtn.textContent = 'Playing…';
+      playNext();
+    });
+  }
+})();
+</script>
+
+<style>
+  .comm-page { max-width: 1100px; margin: 0 auto; padding: 24px 18px 80px; color: var(--pc-ink, #12110E); }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+
+  .crumb { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px; color: var(--pc-ink-muted, #5F5E5A); }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .crumb a:hover { color: #E89A2D; }
+  .crumb span[aria-hidden] { margin: 0 6px; opacity: 0.5; }
+
+  .head { margin: 10px 0 26px; padding-bottom: 18px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .kicker { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #8A2432; margin: 0 0 10px; font-weight: 700; }
+  .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui); font-size: clamp(28px, 4.5vw, 44px); font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em; line-height: 1.12; }
+  .dek { font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0 0 16px; max-width: 70ch; }
+  .dek a { color: #8A2432; text-decoration: underline; }
+  .head__actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    background: #12110E; color: #F3E6D8;
+    font-size: 12px; letter-spacing: 0.16em; font-weight: 600;
+    border-radius: 2px; text-decoration: none;
+    border: 1px solid #12110E; cursor: pointer;
+    font-family: var(--pc-font-mono);
+  }
+  .cta:hover { background: #8A2432; border-color: #8A2432; }
+  .cta--alt { background: transparent; color: #12110E; }
+  .cta--alt:hover { background: #12110E; color: #F3E6D8; }
+  .cta--score { background: rgba(232, 154, 45, 0.18); border-color: rgba(232, 154, 45, 0.55); color: #5F2A1E; cursor: default; }
+  .cta--score:hover { background: rgba(232, 154, 45, 0.18); border-color: rgba(232, 154, 45, 0.55); color: #5F2A1E; }
+
+  .grid { display: flex; flex-direction: column; gap: 36px; }
+
+  .comm {
+    background: #fffaf1;
+    border: 1px solid #e6d8be;
+    border-top: 4px solid #8A2432;
+    border-radius: 3px;
+    padding: 18px 18px 16px;
+  }
+  .comm__head { margin-bottom: 14px; }
+  .comm__brand { font-size: 10px; letter-spacing: 0.22em; color: #8A2432; margin: 0 0 4px; font-weight: 700; }
+  .comm__title { font-family: var(--pc-font-sans, system-ui); font-size: clamp(20px, 2.6vw, 28px); font-weight: 500; margin: 0 0 4px; line-height: 1.2; }
+  .comm__caption { font-family: Georgia, serif; font-size: 14px; color: #5F5E5A; margin: 0; font-style: italic; }
+
+  .comm__player {
+    background: #000;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0 0 16px;
+    aspect-ratio: 16 / 9;
+  }
+  .comm__video { display: block; width: 100%; height: 100%; }
+
+  .comm__game {
+    padding: 12px 14px;
+    background: rgba(232, 154, 45, 0.06);
+    border: 1px solid rgba(232, 154, 45, 0.25);
+    border-radius: 3px;
+    margin: 0 0 14px;
+  }
+  .comm__game-q { font-size: 10px; letter-spacing: 0.2em; color: #5F2A1E; margin: 0 0 8px; font-weight: 700; text-transform: uppercase; }
+  .comm__game-options { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opt {
+    appearance: none; cursor: pointer;
+    background: #fff; color: #12110E;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    padding: 6px 10px;
+    font-size: 11.5px; letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .opt:hover:not(:disabled) { background: #12110E; color: #F3E6D8; border-color: #12110E; }
+  .opt:disabled { cursor: default; opacity: 0.5; }
+  .opt--correct { background: #2f8f5f !important; color: #fff !important; border-color: #2f8f5f !important; opacity: 1 !important; }
+  .opt--wrong   { background: #C92A2A !important; color: #fff !important; border-color: #C92A2A !important; opacity: 1 !important; }
+  .comm__game-feedback { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; margin: 8px 0 0; font-weight: 700; }
+  .comm__game-feedback[data-state="hidden"] { display: none; }
+  .comm__game-feedback[data-state="correct"] { color: #2f8f5f; }
+  .comm__game-feedback[data-state="incorrect"] { color: #C92A2A; }
+
+  .comm__source { font-size: 13px; line-height: 1.55; color: #5F5E5A; margin: 0; font-family: Georgia, serif; padding: 0 6px; }
+  .comm__source strong { color: #12110E; font-weight: 600; }
+  .comm__source em { color: #8A2432; font-style: italic; }
+
+  .foot { margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--pc-rule-soft); }
+  .foot__kicker { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 8px; }
+  .foot__list { margin: 0 0 12px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .foot__list a { color: var(--pc-ink); text-decoration: underline; text-decoration-color: rgba(0,0,0,0.18); font-size: 14.5px; }
+  .foot__list a:hover { color: #8A2432; text-decoration-color: currentColor; }
+  .foot__credit { font-size: 10.5px; color: var(--pc-ink-muted); margin: 8px 0 0; letter-spacing: 0.06em; }
+  .foot__credit a { color: #8A2432; text-decoration: underline; }
+</style>

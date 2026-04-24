@@ -3,14 +3,14 @@
 These are the generation parameters used to create the editorial-style images for the PointCast PaddleBlock. You can use these prompts to iterate or create consistent imagery for other paddles.
 
 ## Main Image (Clean Editorial)
-- **Model:** Default Image Generation Model (DALL-E 3 equivalent)
+- **Model:** OpenAI gpt-image-2
 - **Aspect Ratio:** 4:3 (Landscape)
 - **Resolution:** 1200x900 equivalent (Generated at 2400x1792)
 - **Prompt:** 
   > Editorial product photography meets mid-century modernist magazine illustration. A pickleball paddle centered-right in the frame, oriented diagonally from upper-left to lower-right, shown in a 3/4 perspective view. The paddle face displays a Gen 4 carbon-fiber surface with a subtle hexagonal HexGrit texture hatching pattern — fine, geometric, slightly embossed. The paddle is elongated with a 16mm thick polymer core edge visible on the side. The handle is wrapped in warm amber/honey-toned grip tape with a slight texture weave. Small mono uppercase letterforms on the paddle face read: 'VAPOR POWER 2'. Lighting: warm golden-hour light raking from the upper left, casting a soft elongated shadow to the lower right. The shadow is diffuse and elegant, not harsh. Background: cream paper texture, hex color #f6f2e8, with subtle paper grain and micro-fiber texture visible — like high-quality uncoated stock. Generous negative space on the left third of the image — clean, open, suitable for text overlay. The overall mood is editorial: a magazine feature spread, not a catalogue. Color palette: warm neutrals, muted graphite on the paddle face, amber grip, cream ground. No busy backgrounds. No props. No text except 'VAPOR POWER 2' on the paddle face in small sans-serif mono uppercase. Aspect ratio 4:3, landscape orientation, 1200x900 pixels equivalent composition.
 
 ## ALT Image (Staged with Props)
-- **Model:** Default Image Generation Model (DALL-E 3 equivalent)
+- **Model:** OpenAI gpt-image-2
 - **Aspect Ratio:** 4:3 (Landscape)
 - **Resolution:** 1200x900 equivalent (Generated at 2400x1792)
 - **Prompt:**

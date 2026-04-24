@@ -1,0 +1,645 @@
+---
+/**
+ * /play/tank — shared live aquarium.
+ *
+ * Every visitor to this page manifests as a Noun-head fish swimming in
+ * one shared tank. Agents (WebMCP) manifest as metallic fish. Feed
+ * flake, place plants + decor, vacuum gravel, watch the ecosystem.
+ *
+ * State: TankRoom DO (workers/tank/) holds canonical roster + flake +
+ * plants + decor + waste + events. This page polls /api/tank/state
+ * every 1.5s and computes fish positions deterministically client-side
+ * from fishId + elapsed time.
+ *
+ * v0 scope: no WebSocket (poll is good enough at this volume), no DRUM,
+ * no breeding, no permadeath. See docs/briefs/2026-04-21-play-tank-spec.md.
+ *
+ * Author: cc. Source: Mike 2026-04-21 PT chat "cc picks go" approving v0
+ * with defaults on the 4 open questions (drum cross-game yes, TankStrip
+ * below the fold, metal filter on agents, no gravestones).
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const title = 'Tank — PointCast shared live aquarium';
+const description =
+  "Every visitor becomes a Noun-head fish in one shared tank. Agents manifest as metallic fish. Feed flake, place plants, vacuum gravel, watch the ecosystem. v0 — no wallet, no crypto, no signup.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  name: 'PointCast Tank',
+  description,
+  url: 'https://pointcast.xyz/play/tank',
+  applicationCategory: 'GameApplication',
+  applicationSubCategory: 'ecosystem-simulator',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="tank-page" id="tank-root">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/play">play</a>
+      <span aria-hidden="true">›</span>
+      <span>tank</span>
+    </nav>
+
+    <header class="tank-head">
+      <div class="tank-head__left">
+        <p class="kicker mono">TANK · v0 · SHARED LIVE AQUARIUM</p>
+        <h1 class="title">Every visitor is a fish.</h1>
+      </div>
+      <div class="tank-head__stats mono" id="tank-stats">
+        <span class="stat"><span class="stat-n" id="stat-humans">—</span> humans</span>
+        <span class="stat"><span class="stat-n" id="stat-agents">—</span> agents</span>
+        <span class="stat"><span class="stat-n" id="stat-plants">—</span> plants</span>
+        <span class="stat"><span class="stat-n" id="stat-decor">—</span> decor</span>
+        <span class="stat stat-health" id="stat-health">—</span>
+      </div>
+    </header>
+
+    <section class="tank-canvas-wrap">
+      <canvas id="tank-canvas" width="1000" height="600" aria-label="Tank canvas"></canvas>
+      <div class="tank-overlay">
+        <div class="tank-mode-bar mono" id="tank-mode-bar" data-mode="idle">
+          <span class="mode-chip">mode: <b id="mode-label">idle</b></span>
+          <span class="mode-hint" id="mode-hint">click a button below to act</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="tank-controls">
+      <button type="button" class="ctrl" data-action="feed" id="btn-feed">
+        <span class="ctrl-icon">🟠</span>
+        <span class="ctrl-label">Drop flake</span>
+        <span class="ctrl-hint mono">1 / 5s</span>
+      </button>
+      <button type="button" class="ctrl" data-action="place-plant" id="btn-plant">
+        <span class="ctrl-icon">🌿</span>
+        <span class="ctrl-label">Place plant</span>
+        <span class="ctrl-hint mono">cap 12</span>
+      </button>
+      <button type="button" class="ctrl" data-action="place-rock" id="btn-rock">
+        <span class="ctrl-icon">🪨</span>
+        <span class="ctrl-label">Rock</span>
+        <span class="ctrl-hint mono">cap 6</span>
+      </button>
+      <button type="button" class="ctrl" data-action="place-castle" id="btn-castle">
+        <span class="ctrl-icon">🏰</span>
+        <span class="ctrl-label">Castle</span>
+        <span class="ctrl-hint mono">cap 6</span>
+      </button>
+      <button type="button" class="ctrl" data-action="place-bubbler" id="btn-bubbler">
+        <span class="ctrl-icon">💧</span>
+        <span class="ctrl-label">Bubbler</span>
+        <span class="ctrl-hint mono">cap 6</span>
+      </button>
+      <button type="button" class="ctrl" data-action="place-ship" id="btn-ship">
+        <span class="ctrl-icon">⛴</span>
+        <span class="ctrl-label">Sunken ship</span>
+        <span class="ctrl-hint mono">cap 6</span>
+      </button>
+      <button type="button" class="ctrl" data-action="dart" id="btn-dart">
+        <span class="ctrl-icon">⚡</span>
+        <span class="ctrl-label">Dart</span>
+        <span class="ctrl-hint mono">SPACE</span>
+      </button>
+      <button type="button" class="ctrl" data-action="vacuum" id="btn-vacuum">
+        <span class="ctrl-icon">🧹</span>
+        <span class="ctrl-label">Vacuum</span>
+        <span class="ctrl-hint mono">1 / hour</span>
+      </button>
+    </section>
+
+    <section class="tank-sidebar">
+      <aside class="events" id="tank-events">
+        <h3 class="mono">RECENT</h3>
+        <ul id="events-list"><li class="empty">— (no events yet)</li></ul>
+      </aside>
+      <aside class="lore" id="tank-lore">
+        <h3 class="mono">LORE</h3>
+        <ul id="lore-list"><li class="empty">— (no lore yet; agents write with <code>pointcast_tank_describe_fish</code>)</li></ul>
+      </aside>
+    </section>
+
+    <footer class="tank-foot mono">
+      <p>
+        Tank state: <code>/api/tank/state</code> · Agent tools:
+        <code>pointcast_tank_observe</code>, <code>pointcast_tank_feed</code>,
+        <code>pointcast_tank_place</code>, <code>pointcast_tank_dart</code>,
+        <code>pointcast_tank_describe_fish</code>.
+        Spec: <a href="/b/0380">block 0380</a> · brief:
+        <a href="https://github.com/mhoydich/pointcast/blob/main/docs/briefs/2026-04-21-play-tank-spec.md">docs/briefs/2026-04-21-play-tank-spec.md</a>.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script>
+  import { fishPosition, getClientSessionId, TANK_W, TANK_H, type TankSnapshot, type TankFish, type TankDecor } from '../../lib/tank';
+
+  const canvas = document.getElementById('tank-canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas 2d context unavailable');
+
+  const sessionId = getClientSessionId();
+  let snap: TankSnapshot | null = null;
+  let lastFetch = 0;
+  const fetchInterval = 1500;
+  let placeMode: null | 'plant' | 'rock' | 'castle' | 'bubbler' | 'sunken_ship' = null;
+  let feedMode = false;
+  const modeBar = document.getElementById('tank-mode-bar')!;
+  const modeLabel = document.getElementById('mode-label')!;
+  const modeHint = document.getElementById('mode-hint')!;
+  const dartingFish: Map<string, number> = new Map(); // fishId → until ms
+
+  // ---- Noun sprite cache (head-only, top-third crop) ---------------------
+  const nounImgCache: Map<number, HTMLImageElement> = new Map();
+  function loadNoun(nounId: number): HTMLImageElement {
+    let img = nounImgCache.get(nounId);
+    if (img) return img;
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = `https://noun.pics/${nounId}.svg`;
+    nounImgCache.set(nounId, img);
+    return img;
+  }
+
+  // ---- API ----------------------------------------------------------------
+  async function apiJoin() {
+    try {
+      await fetch('/api/tank/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-PC-Session': sessionId },
+        body: JSON.stringify({}),
+      });
+    } catch {}
+  }
+
+  async function apiState() {
+    try {
+      const r = await fetch('/api/tank/state', { headers: { 'X-PC-Session': sessionId } });
+      if (!r.ok) return;
+      snap = (await r.json()) as TankSnapshot;
+      renderStats();
+      renderEvents();
+      renderLore();
+    } catch {}
+  }
+
+  async function apiAction(path: string, body: Record<string, unknown> = {}): Promise<Response | null> {
+    try {
+      return await fetch(`/api/tank/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-PC-Session': sessionId },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // ---- Rendering ---------------------------------------------------------
+  function drawBackground(t: number) {
+    // Base gradient — deep teal top to dark bottom
+    const g = ctx!.createLinearGradient(0, 0, 0, TANK_H);
+    g.addColorStop(0, '#0d4e5e');
+    g.addColorStop(0.5, '#0a384b');
+    g.addColorStop(1, '#052430');
+    ctx!.fillStyle = g;
+    ctx!.fillRect(0, 0, TANK_W, TANK_H);
+
+    // Horizontal shimmer bands
+    for (let i = 0; i < 6; i++) {
+      const y = 40 + i * 90 + Math.sin(t * 0.0008 + i) * 10;
+      ctx!.globalAlpha = 0.04;
+      ctx!.fillStyle = '#9be8ff';
+      ctx!.fillRect(0, y, TANK_W, 2);
+      ctx!.globalAlpha = 1;
+    }
+
+    // Floor gravel gradient
+    const f = ctx!.createLinearGradient(0, TANK_H - 50, 0, TANK_H);
+    f.addColorStop(0, 'rgba(139, 120, 90, 0)');
+    f.addColorStop(1, 'rgba(139, 120, 90, 0.5)');
+    ctx!.fillStyle = f;
+    ctx!.fillRect(0, TANK_H - 50, TANK_W, 50);
+
+    // Waste tint overlay
+    const waste = snap?.waste ?? 0;
+    if (waste >= 100) {
+      const tint = Math.min(0.2, (waste - 100) / 200);
+      ctx!.fillStyle = `rgba(120, 90, 40, ${tint})`;
+      ctx!.fillRect(0, 0, TANK_W, TANK_H);
+    }
+  }
+
+  function drawBubbles(t: number) {
+    // Static 8 bubble streams rising, deterministic
+    for (let i = 0; i < 8; i++) {
+      const seed = i * 7919;
+      const x = (seed % TANK_W + TANK_W + 40) % TANK_W;
+      const duration = 6000 + (seed % 3000);
+      const phase = (t + i * 500) % duration;
+      const y = TANK_H - 10 - (phase / duration) * (TANK_H - 30);
+      const size = 2 + ((seed >> 3) % 3);
+      ctx!.globalAlpha = 0.4 - (phase / duration) * 0.3;
+      ctx!.fillStyle = '#b8e8ff';
+      ctx!.beginPath();
+      ctx!.arc(x, y, size, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.globalAlpha = 1;
+    }
+  }
+
+  function drawDecor() {
+    if (!snap) return;
+    for (const d of snap.decor) drawOneDecor(d);
+  }
+
+  function drawOneDecor(d: TankDecor) {
+    const x = d.x;
+    const y = d.y;
+    ctx!.save();
+    if (d.type === 'rock') {
+      ctx!.fillStyle = '#5a5249';
+      ctx!.beginPath();
+      ctx!.ellipse(x, y, 28, 16, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.fillStyle = '#403a33';
+      ctx!.beginPath();
+      ctx!.ellipse(x - 4, y - 4, 22, 10, 0, 0, Math.PI * 2);
+      ctx!.fill();
+    } else if (d.type === 'castle') {
+      ctx!.fillStyle = '#c88fa5';
+      ctx!.fillRect(x - 40, y - 60, 80, 60);
+      ctx!.fillStyle = '#9b6a80';
+      ctx!.fillRect(x - 45, y - 65, 12, 10);
+      ctx!.fillRect(x - 20, y - 75, 12, 12);
+      ctx!.fillRect(x + 8, y - 75, 12, 12);
+      ctx!.fillRect(x + 33, y - 65, 12, 10);
+      ctx!.fillStyle = '#2a1518';
+      ctx!.fillRect(x - 8, y - 30, 16, 30);
+    } else if (d.type === 'bubbler') {
+      ctx!.fillStyle = '#b8a148';
+      ctx!.fillRect(x - 5, y - 15, 10, 15);
+      ctx!.fillStyle = '#d6c25c';
+      ctx!.fillRect(x - 7, y - 17, 14, 4);
+    } else if (d.type === 'sunken_ship') {
+      ctx!.fillStyle = '#6e4a2a';
+      ctx!.beginPath();
+      ctx!.moveTo(x - 60, y);
+      ctx!.lineTo(x + 60, y);
+      ctx!.lineTo(x + 50, y + 30);
+      ctx!.lineTo(x - 50, y + 30);
+      ctx!.closePath();
+      ctx!.fill();
+      ctx!.fillStyle = '#4a3118';
+      ctx!.fillRect(x - 8, y - 50, 4, 50);
+      ctx!.fillStyle = '#7a5a3a';
+      ctx!.beginPath();
+      ctx!.moveTo(x - 8, y - 50);
+      ctx!.lineTo(x + 30, y - 30);
+      ctx!.lineTo(x - 8, y - 30);
+      ctx!.closePath();
+      ctx!.fill();
+    }
+    ctx!.restore();
+  }
+
+  function drawPlants(t: number) {
+    if (!snap) return;
+    for (const p of snap.plants) {
+      const sway = Math.sin(t * 0.001 + p.x * 0.01) * 6;
+      ctx!.save();
+      ctx!.translate(p.x, p.y);
+      ctx!.strokeStyle = '#2a7a3a';
+      ctx!.lineWidth = 4;
+      ctx!.beginPath();
+      ctx!.moveTo(0, 0);
+      ctx!.quadraticCurveTo(sway, -40, sway * 0.5, -80);
+      ctx!.stroke();
+      ctx!.fillStyle = '#3a9a4a';
+      for (let i = 0; i < 4; i++) {
+        const ly = -20 - i * 18;
+        const lx = sway * ((i + 1) / 4) + (i % 2 === 0 ? -10 : 10);
+        ctx!.beginPath();
+        ctx!.ellipse(lx, ly, 8, 12, (i % 2 === 0 ? -0.3 : 0.3), 0, Math.PI * 2);
+        ctx!.fill();
+      }
+      ctx!.restore();
+    }
+  }
+
+  function drawFlake(t: number) {
+    if (!snap) return;
+    for (const f of snap.flake) {
+      const age = f.age + (t - lastFetch);
+      const drift = Math.sin(age * 0.002 + f.x * 0.01) * 3;
+      const y = f.y + (age / 120_000) * (TANK_H - f.y - 50);
+      ctx!.fillStyle = '#ff9a4a';
+      ctx!.beginPath();
+      ctx!.arc(f.x + drift, y, 3, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.fillStyle = 'rgba(255, 200, 120, 0.5)';
+      ctx!.beginPath();
+      ctx!.arc(f.x + drift, y, 5, 0, Math.PI * 2);
+      ctx!.fill();
+    }
+  }
+
+  function drawFish(t: number) {
+    if (!snap) return;
+    for (const f of snap.fish) drawOneFish(f, t);
+  }
+
+  function drawOneFish(f: TankFish, t: number) {
+    const elapsed = t - f.bornAt;
+    const darting = (dartingFish.get(f.fishId) ?? 0) > t;
+    const pos = fishPosition(f.fishId, elapsed, darting);
+    const size = 28 + (f.size - 1) * 10;
+    const opacity = f.ghost ? Math.max(0.15, 1 - (t - f.lastSeen) / 60_000) : 1;
+    ctx!.save();
+    ctx!.globalAlpha = opacity;
+    ctx!.translate(pos.x, pos.y);
+    // Flip based on heading
+    const flip = Math.cos(pos.heading) < 0 ? -1 : 1;
+    ctx!.scale(flip, 1);
+
+    // Fish body (ellipse + tail)
+    const bodyColor = f.kind === 'agent' ? '#c8c8d0' : `hsl(${(f.nounId * 137) % 360}, 45%, 55%)`;
+    ctx!.fillStyle = bodyColor;
+    ctx!.beginPath();
+    ctx!.ellipse(0, 0, size * 0.9, size * 0.55, 0, 0, Math.PI * 2);
+    ctx!.fill();
+    // Tail
+    ctx!.beginPath();
+    ctx!.moveTo(-size * 0.8, 0);
+    ctx!.lineTo(-size * 1.3, -size * 0.4);
+    ctx!.lineTo(-size * 1.3, size * 0.4);
+    ctx!.closePath();
+    ctx!.fill();
+
+    // Noun head (sprite img, top-third crop centered on head)
+    const img = loadNoun(f.nounId);
+    if (img.complete && img.naturalWidth > 0) {
+      // Nouns SVG is 32×32 with head in roughly rows 8-20. Crop to head.
+      ctx!.save();
+      if (f.kind === 'agent') {
+        ctx!.filter = 'grayscale(0.8) contrast(1.2) brightness(0.9)';
+      }
+      const dw = size * 1.1;
+      const dh = size * 1.1;
+      ctx!.drawImage(
+        img,
+        0,
+        0,
+        32,
+        32,
+        size * 0.1 - dw / 2,
+        -dh / 2,
+        dw,
+        dh,
+      );
+      ctx!.restore();
+    }
+
+    // Agent marker — small gear in corner
+    if (f.kind === 'agent') {
+      ctx!.fillStyle = '#a0f5e0';
+      ctx!.font = `bold ${Math.floor(size * 0.35)}px ui-monospace, monospace`;
+      ctx!.scale(flip, 1); // flip back for text
+      ctx!.textAlign = 'center';
+      ctx!.fillText('⚙', -size * 0.4 * flip, -size * 0.55);
+    }
+
+    ctx!.restore();
+
+    // Clear darting flag when timer ends
+    if (!darting && dartingFish.has(f.fishId)) dartingFish.delete(f.fishId);
+  }
+
+  function render(t: number) {
+    ctx!.clearRect(0, 0, TANK_W, TANK_H);
+    drawBackground(t);
+    drawBubbles(t);
+    drawDecor();
+    drawPlants(t);
+    drawFlake(t);
+    drawFish(t);
+    requestAnimationFrame(render);
+  }
+
+  function renderStats() {
+    if (!snap) return;
+    const s = snap.stats;
+    (document.getElementById('stat-humans') as HTMLElement).textContent = String(s.humans);
+    (document.getElementById('stat-agents') as HTMLElement).textContent = String(s.agents);
+    (document.getElementById('stat-plants') as HTMLElement).textContent = `${s.plantCount}/${s.plantCap}`;
+    (document.getElementById('stat-decor') as HTMLElement).textContent = `${s.decorCount}/${s.decorCap}`;
+    const h = document.getElementById('stat-health') as HTMLElement;
+    h.textContent = `~ ${s.health} · waste ${snap.waste}`;
+    h.dataset.health = s.health;
+  }
+
+  function renderEvents() {
+    if (!snap) return;
+    const ul = document.getElementById('events-list')!;
+    if (snap.events.length === 0) {
+      ul.innerHTML = '<li class="empty">— (no events yet)</li>';
+      return;
+    }
+    ul.innerHTML = snap.events
+      .slice()
+      .reverse()
+      .slice(0, 8)
+      .map((e) => {
+        const dt = new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `<li><span class="mono t">${dt}</span> <span class="k k-${e.kind}">${e.kind}</span> ${e.by.slice(0, 10)}</li>`;
+      })
+      .join('');
+  }
+
+  function renderLore() {
+    if (!snap) return;
+    const ul = document.getElementById('lore-list')!;
+    if (snap.lore.length === 0) {
+      ul.innerHTML = '<li class="empty">— (no lore yet; agents write with <code>pointcast_tank_describe_fish</code>)</li>';
+      return;
+    }
+    ul.innerHTML = snap.lore
+      .slice()
+      .reverse()
+      .slice(0, 5)
+      .map((l) => `<li><span class="mono author">${l.author}</span>: ${escapeHtml(l.lore)}</li>`)
+      .join('');
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+  }
+
+  // ---- Mode helpers ------------------------------------------------------
+  function setMode(mode: typeof placeMode | 'feed' | null) {
+    placeMode = null;
+    feedMode = false;
+    if (mode === 'feed') {
+      feedMode = true;
+      modeBar.dataset.mode = 'feed';
+      modeLabel.textContent = 'feed';
+      modeHint.textContent = 'click anywhere in the tank to drop a flake';
+    } else if (mode) {
+      placeMode = mode;
+      modeBar.dataset.mode = 'place';
+      modeLabel.textContent = `place ${mode}`;
+      modeHint.textContent = `click ${mode === 'plant' ? 'the lower third' : 'anywhere'} to place`;
+    } else {
+      modeBar.dataset.mode = 'idle';
+      modeLabel.textContent = 'idle';
+      modeHint.textContent = 'click a button below to act';
+    }
+  }
+
+  // ---- Canvas events -----------------------------------------------------
+  function canvasCoords(ev: MouseEvent): { x: number; y: number } {
+    const r = canvas.getBoundingClientRect();
+    const x = ((ev.clientX - r.left) / r.width) * TANK_W;
+    const y = ((ev.clientY - r.top) / r.height) * TANK_H;
+    return { x, y };
+  }
+
+  canvas.addEventListener('click', async (ev) => {
+    const { x, y } = canvasCoords(ev);
+    if (feedMode) {
+      await apiAction('feed', { x, y });
+      setMode(null);
+      apiState();
+    } else if (placeMode) {
+      await apiAction('place', { item_type: placeMode, x, y });
+      setMode(null);
+      apiState();
+    }
+  });
+
+  // ---- Control buttons ---------------------------------------------------
+  document.querySelectorAll<HTMLButtonElement>('.ctrl').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action!;
+      if (action === 'feed') setMode('feed');
+      else if (action === 'place-plant') setMode('plant');
+      else if (action === 'place-rock') setMode('rock');
+      else if (action === 'place-castle') setMode('castle');
+      else if (action === 'place-bubbler') setMode('bubbler');
+      else if (action === 'place-ship') setMode('sunken_ship');
+      else if (action === 'dart') {
+        await apiAction('dart');
+        // Flag our fish as darting locally for snappy feedback
+        if (snap) {
+          const mine = snap.fish.filter((f) => !f.ghost)[0];
+          if (mine) dartingFish.set(mine.fishId, performance.now() + 2000);
+        }
+      } else if (action === 'vacuum') {
+        const r = await apiAction('vacuum');
+        if (r && !r.ok) {
+          const body = await r.json().catch(() => ({}));
+          if (body.error === 'cooldown') alert('Vacuum on cooldown — try again in up to 1h.');
+        }
+        apiState();
+      }
+    });
+  });
+
+  // Space → dart
+  document.addEventListener('keydown', async (ev) => {
+    if (ev.key === ' ' && !/input|textarea/i.test((ev.target as HTMLElement)?.tagName || '')) {
+      ev.preventDefault();
+      await apiAction('dart');
+      if (snap) {
+        const mine = snap.fish.filter((f) => !f.ghost)[0];
+        if (mine) dartingFish.set(mine.fishId, performance.now() + 2000);
+      }
+    }
+    if (ev.key === 'Escape') setMode(null);
+  });
+
+  // ---- Boot --------------------------------------------------------------
+  async function boot() {
+    await apiJoin();
+    await apiState();
+    setInterval(apiState, fetchInterval);
+    // Re-join every 30s to keep fish alive
+    setInterval(apiJoin, 30_000);
+    requestAnimationFrame(render);
+  }
+
+  // Leave hook
+  window.addEventListener('beforeunload', () => {
+    navigator.sendBeacon?.('/api/tank/leave', JSON.stringify({ sessionId }));
+  });
+
+  boot();
+</script>
+
+<style>
+  .tank-page { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  .crumb { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.82rem; opacity: 0.6; margin-bottom: 1rem; }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { text-decoration: underline; }
+
+  .tank-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.2rem; margin-bottom: 1rem; border-bottom: 1px solid currentColor; padding-bottom: 1rem; }
+  .tank-head__left .kicker { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.28em; text-transform: uppercase; opacity: 0.7; margin-bottom: 0.4rem; }
+  .tank-head__left .title { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(1.8rem, 3.5vw, 2.8rem); line-height: 1; letter-spacing: -0.02em; }
+  .tank-head__stats { display: flex; gap: 0.9rem; font-size: 0.82rem; flex-wrap: wrap; }
+  .stat { opacity: 0.82; }
+  .stat-n { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.2em; margin-right: 0.25rem; }
+  .stat-health { padding: 0.15rem 0.55rem; border-radius: 999px; border: 1px solid currentColor; }
+  .stat-health[data-health="healthy"] { color: #3a9a4a; }
+  .stat-health[data-health="warning"] { color: #c88040; }
+  .stat-health[data-health="polluted"] { color: #b85050; }
+  .stat-health[data-health="critical"] { color: #ff2020; }
+
+  .tank-canvas-wrap { position: relative; background: #031017; border: 1px solid rgba(60, 130, 150, 0.35); border-radius: 4px; overflow: hidden; aspect-ratio: 1000 / 600; }
+  #tank-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+  .tank-overlay { position: absolute; inset: 0; pointer-events: none; padding: 0.8rem; display: flex; flex-direction: column; justify-content: flex-start; }
+  .tank-mode-bar { pointer-events: auto; display: inline-flex; gap: 0.8rem; align-items: center; background: rgba(3, 16, 23, 0.75); border: 1px solid rgba(184, 232, 255, 0.25); padding: 0.35rem 0.7rem; border-radius: 2px; color: #b8e8ff; font-size: 0.78rem; width: fit-content; }
+  .tank-mode-bar[data-mode="feed"] { color: #ff9a4a; border-color: rgba(255, 154, 74, 0.5); }
+  .tank-mode-bar[data-mode="place"] { color: #a0e0a0; border-color: rgba(160, 224, 160, 0.5); }
+  .mode-chip b { text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .tank-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.6rem; margin-top: 1rem; }
+  .ctrl { background: rgba(0, 0, 0, 0.04); border: 1px solid currentColor; border-radius: 2px; padding: 0.7rem 0.5rem; display: flex; flex-direction: column; gap: 0.15rem; align-items: center; cursor: pointer; transition: transform 0.15s cubic-bezier(0.2, 0.7, 0.25, 1), background 0.2s ease; font-family: inherit; color: inherit; }
+  .ctrl:hover { background: rgba(0, 0, 0, 0.08); transform: translateY(-1px); }
+  .ctrl:active { transform: translateY(1px); }
+  .ctrl-icon { font-size: 1.4rem; line-height: 1; }
+  .ctrl-label { font-size: 0.86rem; font-weight: 600; }
+  .ctrl-hint { font-size: 0.66rem; opacity: 0.6; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .tank-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-top: 1.5rem; font-size: 0.86rem; }
+  .events, .lore { border: 1px dashed currentColor; padding: 0.8rem 1rem; border-radius: 2px; opacity: 0.92; }
+  .events h3, .lore h3 { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.62; margin-bottom: 0.5rem; font-weight: 600; }
+  .events ul, .lore ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.28rem; }
+  .events li, .lore li { font-size: 0.82rem; line-height: 1.4; }
+  .events li .t { opacity: 0.5; margin-right: 0.4rem; font-size: 0.72rem; }
+  .events li .k { display: inline-block; padding: 0 0.35rem; font-size: 0.7rem; border-radius: 2px; margin-right: 0.35rem; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; }
+  .k-feed { background: #c88040; }
+  .k-place { background: #3a9a4a; }
+  .k-dart { background: #4a60c8; }
+  .k-vacuum { background: #888; }
+  .k-join { background: #6a40c8; }
+  .k-leave { background: #888; opacity: 0.5; }
+  .k-describe { background: #b850a0; }
+  .lore .author { font-size: 0.7rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 0.35rem; }
+  .empty { opacity: 0.4; font-style: italic; }
+
+  .tank-foot { margin-top: 2rem; padding-top: 1rem; border-top: 1px dashed currentColor; opacity: 0.55; font-size: 0.78rem; letter-spacing: 0.02em; }
+  .tank-foot a, .tank-foot code { color: inherit; }
+  .tank-foot code { padding: 0 0.25em; font-size: 0.88em; }
+
+  @media (max-width: 700px) {
+    .tank-sidebar { grid-template-columns: 1fr; }
+    .tank-controls { grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); }
+    .ctrl-label { font-size: 0.78rem; }
+    .ctrl-icon { font-size: 1.2rem; }
+  }
+</style>

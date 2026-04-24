@@ -1,0 +1,694 @@
+---
+/**
+ * /analytics — the one page that measures every signal PointCast already
+ * has. Built 2026-04-21 after Mike: "lets start the analytics page where
+ * we are measuring interaction and feedback, be expansive."
+ *
+ * Sources (all build-time + a few live fetches):
+ *   - src/lib/compute-ledger.ts     → ships by collab / kind / day / signature
+ *   - src/lib/ship-queue.ts         → queued/shipped/deferred state
+ *   - src/lib/sprint-recap.ts       → sprint recap files under docs/sprints/
+ *   - src/content/blocks/*.json     → block count, channels, types, reading-time
+ *   - docs/notes/git-branch-attribution.json → per-collab branch commits
+ *   - public/.well-known/agent-skills/index.json → agent-ready tool count
+ *   - /api/presence/snapshot (live, client-side) → who's here
+ *   - /api/drum (live, client-side)              → lifetime beats
+ *
+ * Design intent: receipt-over-dashboard. Every section answers ONE question
+ * with a short headline number + a small supporting breakdown. No gauges,
+ * no charts-for-charts'-sake. The goal is legibility + federatability —
+ * another node running a similar stack can implement this page by reading
+ * the same signals.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  COMPUTE_LEDGER,
+  collabCounts,
+  recentEntries,
+  SIGNATURE_LABEL,
+  KIND_LABEL,
+  type ComputeEntry,
+} from '../lib/compute-ledger';
+import { SHIP_QUEUE } from '../lib/ship-queue';
+import { readAllRecaps, summary as recapSummary } from '../lib/sprint-recap';
+import { findCollaborator } from '../lib/collaborators';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+// --- Build-time data ---
+
+const entries = [...COMPUTE_LEDGER].sort(
+  (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+);
+const last24h = recentEntries(24);
+const last7d = recentEntries(24 * 7);
+const collabsByCount = collabCounts();
+
+// Group ship counts per day for the last 14 days.
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const now = new Date();
+const last14Keys: string[] = [];
+for (let i = 13; i >= 0; i--) {
+  const d = new Date(now);
+  d.setDate(now.getDate() - i);
+  last14Keys.push(dayKey(d.toISOString()));
+}
+const shipsPerDay: Record<string, number> = Object.fromEntries(last14Keys.map((k) => [k, 0]));
+for (const e of COMPUTE_LEDGER) {
+  const k = dayKey(e.at);
+  if (k in shipsPerDay) shipsPerDay[k] += 1;
+}
+const maxDaily = Math.max(1, ...Object.values(shipsPerDay));
+
+// Ships by kind + signature
+const byKind: Record<string, number> = {};
+const bySig: Record<string, number> = {};
+for (const e of COMPUTE_LEDGER) {
+  byKind[e.kind] = (byKind[e.kind] || 0) + 1;
+  bySig[e.signature] = (bySig[e.signature] || 0) + 1;
+}
+
+// Ship queue state
+const queueCounts: Record<string, number> = { queued: 0, shipped: 0, deferred: 0, 'in-flight': 0, skipped: 0 };
+for (const s of SHIP_QUEUE) {
+  queueCounts[s.state] = (queueCounts[s.state] || 0) + 1;
+}
+
+// Sprint recaps
+const recaps = readAllRecaps();
+const recapSum = recapSummary(recaps);
+
+// Blocks — read from content filesystem at build time
+const BLOCKS_DIR = join(process.cwd(), 'src', 'content', 'blocks');
+interface BlockMeta {
+  id: string;
+  channel?: string;
+  type?: string;
+  readingTime?: string;
+  timestamp?: string;
+}
+let blockFiles: string[] = [];
+try {
+  blockFiles = readdirSync(BLOCKS_DIR).filter((f) => f.endsWith('.json'));
+} catch {}
+const blockMetas: BlockMeta[] = [];
+for (const f of blockFiles) {
+  try {
+    const raw = JSON.parse(readFileSync(join(BLOCKS_DIR, f), 'utf8'));
+    blockMetas.push({
+      id: raw.id,
+      channel: raw.channel,
+      type: raw.type,
+      readingTime: raw.readingTime,
+      timestamp: raw.timestamp,
+    });
+  } catch {}
+}
+const blockCount = blockMetas.length;
+const channelMix: Record<string, number> = {};
+const typeMix: Record<string, number> = {};
+for (const b of blockMetas) {
+  if (b.channel) channelMix[b.channel] = (channelMix[b.channel] || 0) + 1;
+  if (b.type) typeMix[b.type] = (typeMix[b.type] || 0) + 1;
+}
+const readingMinutes = blockMetas.reduce((s, b) => {
+  const m = b.readingTime?.match(/(\d+)/);
+  return s + (m ? parseInt(m[1], 10) : 0);
+}, 0);
+
+// Git branch attribution — read if present, else empty
+interface AttrReport {
+  summary?: { totalBranches?: number; totalUniqueCommitsAheadOfBase?: number; byCollab?: Record<string, { branches: number; uniqueCommits: number }> };
+  generatedAt?: string;
+  baseRef?: string;
+}
+let attr: AttrReport = {};
+const ATTR_PATH = join(process.cwd(), 'docs', 'notes', 'git-branch-attribution.json');
+if (existsSync(ATTR_PATH)) {
+  try { attr = JSON.parse(readFileSync(ATTR_PATH, 'utf8')); } catch {}
+}
+
+// Agent-ready surface count — count well-known files
+const WK_DIR = join(process.cwd(), 'public', '.well-known');
+let wellKnownCount = 0;
+try {
+  const ls = readdirSync(WK_DIR, { withFileTypes: true });
+  wellKnownCount = ls.filter((e) => e.isFile() || e.isDirectory()).length;
+} catch {}
+// Pages Functions in functions/.well-known/
+let wkFunctionsCount = 0;
+try {
+  const fnLs = readdirSync(join(process.cwd(), 'functions', '.well-known'));
+  wkFunctionsCount = fnLs.filter((f) => f.endsWith('.ts')).length;
+} catch {}
+
+// Agent skills count
+let agentSkillsCount = 0;
+try {
+  const idx = JSON.parse(readFileSync(join(WK_DIR, 'agent-skills', 'index.json'), 'utf8'));
+  agentSkillsCount = (idx?.skills || []).length;
+} catch {}
+
+// WebMCP tool count — grep the file
+let webmcpToolCount = 0;
+try {
+  const src = readFileSync(join(process.cwd(), 'src', 'components', 'WebMCPTools.astro'), 'utf8');
+  webmcpToolCount = (src.match(/name: 'pointcast_/g) || []).length;
+} catch {}
+
+// Brief counts by collab
+const BRIEFS_DIR = join(process.cwd(), 'docs', 'briefs');
+let briefsByCollab: Record<string, number> = {};
+try {
+  const files = readdirSync(BRIEFS_DIR).filter((f) => f.endsWith('.md'));
+  for (const f of files) {
+    // Filename pattern: YYYY-MM-DD-{collab}-{slug}.md
+    const m = f.match(/^\d{4}-\d{2}-\d{2}-([a-z]+)-/);
+    if (m) {
+      briefsByCollab[m[1]] = (briefsByCollab[m[1]] || 0) + 1;
+    }
+  }
+} catch {}
+
+function collabLabel(slug: string): string {
+  const c = findCollaborator(slug);
+  return c?.name ?? slug;
+}
+
+function fmtN(n: number): string {
+  return new Intl.NumberFormat('en-US').format(n);
+}
+
+const title = '/analytics — every signal PointCast already has';
+const description = 'Dashboard for the multi-agent broadcast: ships per day, collaborators by branch + ledger, block count, interaction numbers, agent-ready surface, sprint cadence. All pulled from the repo and live endpoints, no third-party analytics.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>analytics</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">ANALYTICS · NOTHING PHONES HOME</p>
+      <h1 class="title">What the network actually knows about itself.</h1>
+      <p class="dek">
+        This page is the receipt for every signal PointCast already collects:
+        ships on the compute ledger, commits per branch, blocks by channel,
+        who's connected right now, how many drum beats have landed this week.
+        No third-party analytics, no pixels, no cookies. Every number below
+        comes from the repo or from an endpoint this site serves.
+      </p>
+      <p class="dek">
+        Regenerate the git-branch numbers with <code>npm run attribute:git</code>;
+        the rest updates on every deploy. The live counters (here-now, drum)
+        update client-side every 15–30 s.
+      </p>
+      <ul class="stats">
+        <li><span class="stats__num">{fmtN(COMPUTE_LEDGER.length)}</span><span class="stats__lbl mono">LEDGER ENTRIES</span></li>
+        <li><span class="stats__num">{fmtN(blockCount)}</span><span class="stats__lbl mono">BLOCKS</span></li>
+        <li><span class="stats__num">{fmtN(recapSum.count ?? recaps.length)}</span><span class="stats__lbl mono">SPRINTS</span></li>
+        <li><span class="stats__num">{fmtN(collabsByCount.length)}</span><span class="stats__lbl mono">COLLABS</span></li>
+        <li><span class="stats__num">{fmtN(attr?.summary?.totalUniqueCommitsAheadOfBase ?? 0)}</span><span class="stats__lbl mono">BRANCH COMMITS</span></li>
+        <li><span class="stats__num">{fmtN((webmcpToolCount || 0) + agentSkillsCount + wkFunctionsCount)}</span><span class="stats__lbl mono">AGENT SURFACES</span></li>
+      </ul>
+    </header>
+
+    <!-- ============ §1 SHIPS ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§1 · SHIPS</p>
+      <h2 class="section__head">Ships on the compute ledger.</h2>
+      <p class="section__lede">
+        Every ship — sprint, block, brief, ops rotation, editorial — is a
+        row. <b>{COMPUTE_LEDGER.length}</b> rows total. <b>{last24h.length}</b> in
+        the last 24 h, <b>{last7d.length}</b> in the last 7 d.
+      </p>
+
+      <h3 class="subhead mono">SHIPS PER DAY · LAST 14</h3>
+      <ol class="bar-row">
+        {last14Keys.map((k) => {
+          const n = shipsPerDay[k];
+          const pct = Math.max(2, Math.round((n / maxDaily) * 100));
+          const [, mo, da] = k.split('-');
+          return (
+            <li class="bar-row__cell">
+              <span class="bar-row__count mono">{n}</span>
+              <span class="bar-row__bar" style={`height:${pct}%`} title={`${k}: ${n} ships`} />
+              <span class="bar-row__label mono">{mo}/{da}</span>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div class="splits">
+        <div class="split">
+          <h3 class="subhead mono">BY KIND</h3>
+          <ul class="chiplist">
+            {Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
+              <li class="chip"><span class="chip__lbl mono">{KIND_LABEL[k as keyof typeof KIND_LABEL] ?? k}</span><b>{n}</b></li>
+            ))}
+          </ul>
+        </div>
+        <div class="split">
+          <h3 class="subhead mono">BY SIGNATURE</h3>
+          <ul class="chiplist">
+            {Object.entries(bySig).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
+              <li class="chip"><span class="chip__lbl mono">{SIGNATURE_LABEL[k as keyof typeof SIGNATURE_LABEL] ?? k}</span><b>{n}</b></li>
+            ))}
+          </ul>
+        </div>
+        <div class="split">
+          <h3 class="subhead mono">SHIP QUEUE</h3>
+          <ul class="chiplist">
+            {Object.entries(queueCounts).filter(([, n]) => n > 0).map(([k, n]) => (
+              <li class={`chip chip--q-${k}`}><span class="chip__lbl mono">{k}</span><b>{n}</b></li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ §2 COLLABS ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§2 · COLLABORATORS</p>
+      <h2 class="section__head">Ledger entries × branch commits × briefs queued.</h2>
+      <p class="section__lede">
+        Three independent signals per collab: ledger-attributed ships (hand
+        curated), git-branch commits (from <code>docs/notes/git-branch-attribution.json</code>),
+        briefs queued for them (from <code>docs/briefs/</code>).
+      </p>
+      <table class="collab-table">
+        <thead>
+          <tr>
+            <th>Collab</th>
+            <th>Ledger ships</th>
+            <th>Heaviest</th>
+            <th>Branch commits</th>
+            <th>Briefs queued</th>
+          </tr>
+        </thead>
+        <tbody>
+          {collabsByCount.map((c) => {
+            const branchEntry = attr?.summary?.byCollab?.[c.collab];
+            const briefKey = c.collab === 'claude-code' ? 'cc' : c.collab;
+            return (
+              <tr>
+                <td class="collab-name">{collabLabel(c.collab)}</td>
+                <td>{c.n}</td>
+                <td class="mono">{SIGNATURE_LABEL[c.heaviest]}</td>
+                <td>{branchEntry ? `${branchEntry.uniqueCommits} (${branchEntry.branches}b)` : '—'}</td>
+                <td>{briefsByCollab[briefKey] ?? briefsByCollab[c.collab] ?? '—'}</td>
+              </tr>
+            );
+          })}
+          <tr class="collab-row--total">
+            <td class="collab-name">total</td>
+            <td>{COMPUTE_LEDGER.length}</td>
+            <td class="mono">—</td>
+            <td>{attr?.summary?.totalUniqueCommitsAheadOfBase ?? '—'}</td>
+            <td>{Object.values(briefsByCollab).reduce((s, n) => s + n, 0)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="section__note">
+        Branch attribution convention: <code>codex/*</code> → Codex, <code>manus/*</code> → Manus,
+        <code>cc/*</code>/<code>feat/*</code>/<code>blocks-rebuild</code> → cc. Last generated
+        <span class="mono">{attr?.generatedAt ? attr.generatedAt.slice(0, 19) + 'Z' : '—'}</span>.
+      </p>
+    </section>
+
+    <!-- ============ §3 BLOCKS ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§3 · BLOCKS</p>
+      <h2 class="section__head">Editorial surface, by channel and type.</h2>
+      <p class="section__lede">
+        <b>{blockCount}</b> blocks currently on disk, <b>{readingMinutes}</b> minutes
+        of reading time total. Average <b>{blockCount ? (readingMinutes / blockCount).toFixed(1) : '0'}</b> minutes per block.
+      </p>
+      <div class="splits">
+        <div class="split">
+          <h3 class="subhead mono">CHANNELS</h3>
+          <ul class="chiplist">
+            {Object.entries(channelMix).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => (
+              <li class="chip"><span class="chip__lbl mono">CH.{k}</span><b>{n}</b></li>
+            ))}
+          </ul>
+        </div>
+        <div class="split">
+          <h3 class="subhead mono">TYPES</h3>
+          <ul class="chiplist">
+            {Object.entries(typeMix).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
+              <li class="chip"><span class="chip__lbl mono">{k}</span><b>{n}</b></li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ §4 PRESENCE (live) ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§4 · PRESENCE — LIVE</p>
+      <h2 class="section__head">Who is on the network right now.</h2>
+      <p class="section__lede">
+        Pulled from <code>/api/presence/snapshot</code>, the Cloudflare Durable
+        Object that holds the live session roster. Updates every 30 s.
+      </p>
+      <ul class="live-stats">
+        <li><span class="live-stats__num" id="live-humans">—</span><span class="live-stats__lbl mono">HUMANS</span></li>
+        <li><span class="live-stats__num" id="live-agents">—</span><span class="live-stats__lbl mono">AGENTS</span></li>
+        <li><span class="live-stats__num" id="live-sessions">—</span><span class="live-stats__lbl mono">SESSIONS</span></li>
+      </ul>
+      <p class="section__note" id="live-updated">Fetching…</p>
+    </section>
+
+    <!-- ============ §5 INTERACTION ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§5 · INTERACTION</p>
+      <h2 class="section__head">Drum beats, polls, land tiles, cards, tank state.</h2>
+      <p class="section__lede">
+        Every game surface that writes server-side is counted here. Local-only
+        state (card deck, quiz streak) stays in each visitor's browser by
+        design — included only as aggregate counts, never per-visitor.
+      </p>
+      <ul class="live-stats live-stats--grid">
+        <li><span class="live-stats__num" id="live-drum">—</span><span class="live-stats__lbl mono">LIFETIME DRUM BEATS</span></li>
+        <li><span class="live-stats__num" id="live-tank">—</span><span class="live-stats__lbl mono">FISH IN TANK</span></li>
+        <li><span class="live-stats__num" id="live-polls">—</span><span class="live-stats__lbl mono">POLLS ON HOME</span></li>
+        <li><span class="live-stats__num" id="live-shows">12</span><span class="live-stats__lbl mono">TV SHOWS</span></li>
+        <li><span class="live-stats__num" id="live-boards">8</span><span class="live-stats__lbl mono">LEADERBOARDS</span></li>
+        <li><span class="live-stats__num" id="live-lab">4</span><span class="live-stats__lbl mono">/LAB PROTOTYPES</span></li>
+      </ul>
+    </section>
+
+    <!-- ============ §6 FEEDBACK ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§6 · FEEDBACK</p>
+      <h2 class="section__head">The channels that invite a reply.</h2>
+      <p class="section__lede">
+        Three write endpoints + one editorial front door. All CORS-open. All
+        rate-limited per session. Anyone (human or agent) can ping.
+      </p>
+      <ul class="chiplist chiplist--wide">
+        <li class="chip chip--wide">
+          <span class="chip__lbl mono">/api/ping</span>
+          <span class="chip__desc">Short captions + URLs land in the inbox. WebMCP tool <code>pointcast_send_ping</code> posts here.</span>
+        </li>
+        <li class="chip chip--wide">
+          <span class="chip__lbl mono">/api/drop</span>
+          <span class="chip__desc">Link or note drop — WebMCP tool <code>pointcast_push_drop</code> posts here.</span>
+        </li>
+        <li class="chip chip--wide">
+          <span class="chip__lbl mono">/api/feedback</span>
+          <span class="chip__desc">Structured feedback POSTs. No captcha, light rate-limit.</span>
+        </li>
+        <li class="chip chip--wide">
+          <span class="chip__lbl mono">/cos</span>
+          <span class="chip__desc">Chief of staff — conversational feedback lane. Routes into the same inbox.</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ============ §7 NETWORK / AGENT-READY ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§7 · AGENT-READY</p>
+      <h2 class="section__head">What AI agents can discover + call.</h2>
+      <p class="section__lede">
+        <b>{wkFunctionsCount}</b> <code>/.well-known/*</code> endpoints served as Pages
+        Functions (OAuth, OIDC, protected-resource, agent-passport). <b>{agentSkillsCount}</b> declared
+        agent skills. <b>{webmcpToolCount}</b> WebMCP tools registered via
+        <code>navigator.modelContext.provideContext()</code> on every page.
+      </p>
+      <ul class="chiplist">
+        <li class="chip"><span class="chip__lbl mono">/.well-known/agent-passport</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/.well-known/oauth-authorization-server</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/.well-known/oauth-protected-resource</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/.well-known/openid-configuration</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/agents.json</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/compute.json</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/blocks.json</span><b>live</b></li>
+        <li class="chip"><span class="chip__lbl mono">/llms.txt</span><b>live</b></li>
+      </ul>
+      <p class="section__note">
+        Full agent-facing contract at <a href="/for-agents">/for-agents</a>. Federation onboarding at <a href="/for-nodes">/for-nodes</a>. Compute Ledger RFC v0 at <a href="/rfc/compute-ledger-v0">/rfc/compute-ledger-v0</a>.
+      </p>
+    </section>
+
+    <!-- ============ §8 CADENCE ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§8 · CADENCE</p>
+      <h2 class="section__head">Sprints + scheduled tasks + autonomous cadence.</h2>
+      <p class="section__lede">
+        <b>{recapSum.count ?? recaps.length}</b> sprint recaps on disk at
+        <code>docs/sprints/</code>. Sprint #93 (earlier today) was the first
+        scheduled-drop sprint — 6 one-shot cron ticks, all queue items shipped.
+      </p>
+      <ul class="live-stats live-stats--grid">
+        <li><span class="live-stats__num">{recaps.length}</span><span class="live-stats__lbl mono">SPRINT RECAPS</span></li>
+        <li><span class="live-stats__num">{Object.values(briefsByCollab).reduce((s, n) => s + n, 0)}</span><span class="live-stats__lbl mono">BRIEFS TOTAL</span></li>
+        <li><span class="live-stats__num">{queueCounts.queued}</span><span class="live-stats__lbl mono">QUEUED SHIPS</span></li>
+        <li><span class="live-stats__num">{queueCounts.shipped}</span><span class="live-stats__lbl mono">SHIPPED FROM QUEUE</span></li>
+      </ul>
+    </section>
+
+    <!-- ============ §9 MOST-RECENT STREAM ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§9 · LAST TEN SHIPS</p>
+      <h2 class="section__head">The freshest rows on the ledger.</h2>
+      <ol class="recent">
+        {entries.slice(0, 10).map((e) => (
+          <li class="recent__row">
+            <span class="recent__when mono">{new Date(e.at).toISOString().slice(0, 16).replace('T', ' ')}Z</span>
+            <span class="recent__who">{collabLabel(e.collab)}</span>
+            <span class="recent__kind mono">{KIND_LABEL[e.kind]}</span>
+            <span class="recent__title">{e.artifact ? (<a href={e.artifact}>{e.title}</a>) : (<span>{e.title}</span>)}</span>
+            <span class="recent__sig mono">{SIGNATURE_LABEL[e.signature]}</span>
+          </li>
+        ))}
+      </ol>
+      <p class="section__note">
+        Full chronological ledger at <a href="/compute">/compute</a>. Agent-readable at <a href="/compute.json">/compute.json</a>.
+      </p>
+    </section>
+
+    <!-- ============ §10 NOT MEASURED ============ -->
+    <section class="section">
+      <p class="section__kicker mono">§10 · NOT MEASURED (ON PURPOSE)</p>
+      <h2 class="section__head">What this page does not track.</h2>
+      <ul class="not-tracked">
+        <li>No page-view analytics. No pixels. No cookies for measurement.</li>
+        <li>No individual visitor fingerprinting. Presence is a count; sessions are a short nounId hash.</li>
+        <li>No referrer logging. No IP aggregation beyond what Cloudflare edges already do for request routing.</li>
+        <li>No A/B testing framework. Changes ship + the editorial cadence narrates what changed.</li>
+        <li>No engagement funnels. No "conversion events." The network is free and CC0; there's nothing to funnel toward.</li>
+        <li>No third-party SDKs. Every number above is from this repo or this site's own endpoints.</li>
+      </ul>
+      <p class="section__note">
+        What would change that. A peer that federates a <code>/compute.json</code> adds a signal to §2.
+        A new DO-backed surface (like <code>/play/tank</code>) adds a signal to §5. A WebMCP tool call
+        (today Chrome-Canary-only) would add a signal to §7 once browser support widens. The page
+        grows with the network; that's the design.
+      </p>
+    </section>
+
+    <footer class="page__foot">
+      <p class="foot__line mono">
+        Analytics page v0 · shipped 2026-04-21 Sprint #93 follow-up ·
+        regenerate anytime ·
+        <a href="/b/0390">block 0390</a> for framing · receipt-over-dashboard design.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    function setText(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = String(val);
+    }
+    function fmtAgo(iso) {
+      try {
+        var ms = Date.now() - new Date(iso).getTime();
+        var s = Math.floor(ms / 1000);
+        if (s < 60) return s + 's ago';
+        var m = Math.floor(s / 60);
+        if (m < 60) return m + 'm ago';
+        return Math.floor(m / 60) + 'h ago';
+      } catch (e) { return '—'; }
+    }
+    function pingPresence() {
+      fetch('/api/presence/snapshot').then(function (r) { return r.json(); }).then(function (j) {
+        setText('live-humans', j.humans || 0);
+        setText('live-agents', j.agents || 0);
+        setText('live-sessions', (j.sessions || []).length);
+        var up = document.getElementById('live-updated');
+        if (up) up.textContent = 'Updated just now · snapshot cached 5 s at the edge.';
+      }).catch(function () {
+        setText('live-updated', '(presence endpoint unavailable)');
+      });
+    }
+    function pingDrum() {
+      fetch('/api/drum').then(function (r) { return r.json(); }).then(function (j) {
+        var n = j.lifetime || j.total || j.count || 0;
+        setText('live-drum', n.toLocaleString());
+      }).catch(function () {});
+    }
+    function pingTank() {
+      fetch('/api/tank/state').then(function (r) { return r.json(); }).then(function (j) {
+        var fish = (j.fish && j.fish.length) || (j.roster && j.roster.length) || 0;
+        setText('live-tank', fish);
+      }).catch(function () {
+        setText('live-tank', '—');
+      });
+    }
+    function countPolls() {
+      fetch('/polls.json').then(function (r) { return r.json(); }).then(function (j) {
+        var n = (j && j.polls && j.polls.length) || (Array.isArray(j) ? j.length : 0);
+        setText('live-polls', n);
+      }).catch(function () { setText('live-polls', '—'); });
+    }
+    pingPresence();
+    pingDrum();
+    pingTank();
+    countPolls();
+    setInterval(pingPresence, 30 * 1000);
+    setInterval(pingDrum, 60 * 1000);
+    setInterval(pingTank, 60 * 1000);
+  })();
+</script>
+
+<style>
+  .page { max-width: 960px; margin: 0 auto; padding: 20px 20px 80px; font-family: var(--pc-font-sans, 'Inter Variable', system-ui); color: #12110e; }
+  .crumb { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #5F5E5A; margin-bottom: 16px; }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid #c4c2bc; }
+  .crumb a:hover { color: #185FA5; }
+
+  .head { margin-bottom: 32px; padding-bottom: 18px; border-bottom: 2px solid #12110e; }
+  .kicker { font-size: 10px; letter-spacing: 0.22em; color: #8a2432; margin: 0 0 4px; font-weight: 700; }
+  .title { font-family: 'DM Serif Display', 'Lora', Georgia, serif; font-size: 34px; line-height: 1.15; margin: 0 0 12px; }
+  .dek { font-family: Georgia, serif; font-size: 15px; line-height: 1.55; color: #38373A; margin: 0 0 10px; max-width: 760px; }
+  .dek code { background: rgba(18, 17, 14, 0.06); padding: 1px 5px; border-radius: 2px; font-size: 12.5px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+  .dek a { color: #8a2432; }
+
+  .stats { list-style: none; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+  .stats li { display: flex; flex-direction: column; padding: 8px 10px; background: #fffdfa; border: 1px solid #e6d8be; border-top: 3px solid #12110e; border-radius: 2px; }
+  .stats__num { font-family: var(--pc-font-mono); font-size: 22px; font-weight: 700; color: #185FA5; line-height: 1; }
+  .stats__lbl { font-size: 9px; letter-spacing: 0.14em; color: #5F5E5A; margin-top: 3px; }
+
+  .section { margin: 36px 0 0; padding-top: 24px; border-top: 1px dashed #c4c2bc; }
+  .section__kicker { font-size: 10px; letter-spacing: 0.22em; color: #8a2432; margin: 0 0 4px; font-weight: 700; }
+  .section__head { font-family: 'DM Serif Display', 'Lora', Georgia, serif; font-size: 22px; line-height: 1.2; margin: 0 0 8px; }
+  .section__lede { font-family: Georgia, serif; font-size: 14px; line-height: 1.55; color: #38373A; margin: 0 0 12px; max-width: 700px; }
+  .section__lede code { background: rgba(18, 17, 14, 0.06); padding: 1px 5px; border-radius: 2px; font-size: 12px; font-family: var(--pc-font-mono); }
+  .section__lede b { color: #185FA5; font-weight: 700; }
+  .section__note { font-size: 11.5px; color: #5F5E5A; font-style: italic; margin: 10px 0 0; }
+  .section__note code, .section__note .mono { font-family: var(--pc-font-mono); font-style: normal; }
+  .section__note a { color: #8a2432; }
+
+  .subhead { font-size: 10px; letter-spacing: 0.18em; color: #5F5E5A; margin: 14px 0 6px; font-weight: 700; }
+
+  /* 14-day bar row */
+  .bar-row { list-style: none; display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; padding: 0; margin: 0 0 14px; height: 120px; align-items: end; }
+  .bar-row__cell { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; height: 100%; }
+  .bar-row__count { font-size: 9px; color: #5F5E5A; }
+  .bar-row__bar { width: 100%; background: linear-gradient(180deg, #185FA5 0%, #12110e 100%); border-radius: 1px 1px 0 0; min-height: 2px; }
+  .bar-row__label { font-size: 8px; color: #8a7e6c; letter-spacing: 0.04em; margin-top: 2px; }
+
+  /* Splits (multi-column little summary boxes) */
+  .splits { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 10px 0 4px; }
+  .split { padding: 10px 12px; background: #fffdfa; border: 1px solid #e6d8be; border-radius: 2px; }
+  .chiplist { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chiplist--wide { flex-direction: column; gap: 8px; }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #fff;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    font-size: 12px;
+  }
+  .chip__lbl { font-size: 9.5px; color: #5F5E5A; letter-spacing: 0.1em; text-transform: uppercase; }
+  .chip b { color: #185FA5; font-family: var(--pc-font-mono); font-size: 12px; }
+  .chip--wide { width: 100%; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 10px; }
+  .chip__desc { font-size: 12.5px; color: #38373A; font-family: Georgia, serif; }
+  .chip__desc code { background: rgba(18, 17, 14, 0.06); padding: 0 4px; border-radius: 2px; font-family: var(--pc-font-mono); font-size: 11.5px; }
+  .chip--q-queued b   { color: #8a2432; }
+  .chip--q-shipped b  { color: #2f8f5f; }
+  .chip--q-deferred b { color: #8a7e6c; }
+
+  /* Collab table */
+  .collab-table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 13px; }
+  .collab-table th, .collab-table td { text-align: left; padding: 7px 8px; border-bottom: 1px dotted #e6d8be; }
+  .collab-table th { font-family: var(--pc-font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #5F5E5A; border-bottom: 1px solid #c4c2bc; }
+  .collab-table .collab-name { font-weight: 600; }
+  .collab-row--total { border-top: 2px solid #12110e; }
+  .collab-row--total td { font-weight: 700; color: #185FA5; }
+
+  /* Live stats */
+  .live-stats {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 6px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .live-stats--grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .live-stats li { padding: 10px 12px; background: #fffdfa; border: 1px solid #e6d8be; border-left: 3px solid #185FA5; border-radius: 2px; display: flex; flex-direction: column; }
+  .live-stats__num { font-family: var(--pc-font-mono); font-size: 22px; font-weight: 700; color: #185FA5; line-height: 1; }
+  .live-stats__lbl { font-size: 9px; letter-spacing: 0.14em; color: #5F5E5A; margin-top: 3px; }
+
+  /* Recent rows */
+  .recent { list-style: none; padding: 0; margin: 6px 0 0; }
+  .recent__row {
+    display: grid;
+    grid-template-columns: 150px 100px 80px 1fr 80px;
+    gap: 10px;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px dotted #e6d8be;
+    font-size: 12.5px;
+  }
+  .recent__row:last-child { border-bottom: none; }
+  .recent__when { font-size: 10.5px; color: #5F5E5A; }
+  .recent__who { font-weight: 600; }
+  .recent__kind { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #8a2432; }
+  .recent__title a { color: inherit; text-decoration: none; border-bottom: 1px solid #e6d8be; }
+  .recent__title a:hover { color: #185FA5; border-bottom-color: currentColor; }
+  .recent__sig { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #5F5E5A; text-align: right; }
+  @media (max-width: 720px) {
+    .recent__row { grid-template-columns: 1fr; gap: 2px; padding: 8px 0; }
+    .recent__sig { text-align: left; }
+  }
+
+  /* Not-measured list */
+  .not-tracked {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .not-tracked li {
+    padding: 8px 12px;
+    background: #fffdfa;
+    border-left: 3px solid #8a2432;
+    border-radius: 2px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #38373A;
+  }
+
+  .page__foot { margin-top: 32px; padding-top: 14px; border-top: 1px dotted #c4c2bc; }
+  .foot__line { font-size: 10px; letter-spacing: 0.08em; color: #5F5E5A; margin: 0; }
+  .foot__line a { color: #8a2432; text-decoration: underline; }
+</style>

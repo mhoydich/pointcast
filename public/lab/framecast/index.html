@@ -1,0 +1,1962 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Framecast Lab turns PointCast and GitHub signals into visual briefs, canvas cards, and publish-ready payloads."
+    />
+    <meta name="theme-color" content="#f7f7f2" />
+    <meta property="og:title" content="Framecast Lab" />
+    <meta
+      property="og:description"
+      content="A PointCast-style visual patchbay for live blocks, GitHub activity, and image-generation briefs."
+    />
+    <meta property="og:type" content="website" />
+    <title>Framecast Lab</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f2;
+        --surface: #ffffff;
+        --surface-2: #f0f3ed;
+        --surface-3: #e8edf3;
+        --ink: #11110f;
+        --ink-soft: #3f403c;
+        --muted: #6d6f68;
+        --rule: #cacfc3;
+        --rule-strong: #a6ad9e;
+        --blue: #1f64b5;
+        --red: #c34536;
+        --green: #167c65;
+        --gold: #b17b13;
+        --violet: #6157a8;
+        --teal: #0f7b8a;
+        --shadow: 0 18px 42px rgba(17, 17, 15, 0.08);
+        --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        --mono: "SFMono-Regular", Menlo, Consolas, ui-monospace, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          linear-gradient(90deg, rgba(31, 100, 181, 0.08), transparent 28%),
+          linear-gradient(180deg, var(--bg), #ffffff 68%);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      a:hover,
+      a:focus-visible {
+        text-decoration: underline;
+      }
+
+      .app {
+        width: min(1560px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 18px 0 64px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 14px;
+      }
+
+      .crumb {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.76rem;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 0;
+        font-size: 2.8rem;
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .status-strip {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .status-pill,
+      .tab-button,
+      .small-button,
+      .copy-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        background: var(--surface);
+      }
+
+      .status-pill {
+        gap: 8px;
+        padding: 7px 10px;
+        color: var(--ink-soft);
+        font-size: 0.86rem;
+        white-space: nowrap;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--gold);
+      }
+
+      .status-dot.is-live {
+        background: var(--green);
+      }
+
+      .status-dot.is-error {
+        background: var(--red);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(300px, 0.34fr) minmax(480px, 1fr) minmax(300px, 0.31fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .panel {
+        min-width: 0;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: start;
+        padding: 14px 14px 12px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .panel-head h2 {
+        margin: 0;
+        font-size: 1.02rem;
+      }
+
+      .panel-head span,
+      .mini-label,
+      .field-label,
+      .meta,
+      .tag,
+      .repo-meta,
+      .payload-note {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.75rem;
+      }
+
+      .source-controls,
+      .stage-controls,
+      .right-stack,
+      .output-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .source-controls {
+        padding: 12px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .tab-button {
+        padding: 7px 8px;
+        color: var(--ink-soft);
+        font-size: 0.85rem;
+      }
+
+      .tab-button.is-active {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #ffffff;
+      }
+
+      .repo-form,
+      .paste-form {
+        display: grid;
+        gap: 8px;
+      }
+
+      .repo-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        background: #fbfcf8;
+      }
+
+      input,
+      select {
+        min-height: 38px;
+        padding: 8px 10px;
+      }
+
+      textarea {
+        min-height: 74px;
+        padding: 9px 10px;
+        resize: vertical;
+      }
+
+      .small-button,
+      .copy-button {
+        padding: 7px 10px;
+        background: var(--ink);
+        color: #ffffff;
+        font-size: 0.86rem;
+      }
+
+      .small-button.is-quiet,
+      .copy-button.is-quiet {
+        background: var(--surface);
+        color: var(--ink);
+      }
+
+      .signal-list {
+        display: grid;
+        max-height: 656px;
+        overflow: auto;
+      }
+
+      .signal-row {
+        display: grid;
+        grid-template-columns: 4px minmax(0, 1fr);
+        gap: 0;
+        width: 100%;
+        border: 0;
+        border-bottom: 1px solid var(--rule);
+        background: transparent;
+        padding: 0;
+        text-align: left;
+      }
+
+      .signal-row:last-child {
+        border-bottom: 0;
+      }
+
+      .signal-row::before {
+        content: "";
+        display: block;
+        background: var(--accent, var(--blue));
+      }
+
+      .signal-row.is-active {
+        background: #eef3ea;
+      }
+
+      .signal-inner {
+        display: grid;
+        gap: 7px;
+        padding: 12px;
+      }
+
+      .signal-top,
+      .signal-meta,
+      .button-line,
+      .field-grid,
+      .metric-grid,
+      .avatar-line,
+      .token-row,
+      .prompt-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: center;
+      }
+
+      .signal-title {
+        overflow-wrap: anywhere;
+        font-weight: 720;
+        line-height: 1.24;
+      }
+
+      .signal-summary {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+        line-height: 1.42;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        min-height: 23px;
+        padding: 4px 7px;
+        border: 1px solid var(--rule);
+        border-radius: 5px;
+        background: #fbfcf8;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tag.is-blue {
+        border-color: rgba(31, 100, 181, 0.36);
+        color: var(--blue);
+      }
+
+      .tag.is-red {
+        border-color: rgba(195, 69, 54, 0.36);
+        color: var(--red);
+      }
+
+      .stage-panel {
+        overflow: hidden;
+      }
+
+      .stage-shell {
+        display: grid;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .stage-controls {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) auto auto;
+        align-items: end;
+      }
+
+      .stage-control {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .poster-frame {
+        display: grid;
+        place-items: center;
+        min-height: 520px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background:
+          linear-gradient(135deg, rgba(22, 124, 101, 0.12), transparent 34%),
+          linear-gradient(315deg, rgba(195, 69, 54, 0.1), transparent 36%),
+          #eef2ec;
+        padding: 14px;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        max-width: 920px;
+        height: auto;
+        border: 1px solid rgba(17, 17, 15, 0.25);
+        border-radius: 6px;
+        background: #ffffff;
+        box-shadow: 0 16px 36px rgba(17, 17, 15, 0.14);
+      }
+
+      .selected-strip {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: start;
+        padding: 12px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .selected-strip h2 {
+        margin: 0 0 6px;
+        font-size: 1.25rem;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+
+      .selected-strip p {
+        margin: 0;
+        color: var(--ink-soft);
+        line-height: 1.5;
+      }
+
+      .right-panel {
+        display: grid;
+        gap: 10px;
+        box-shadow: none;
+        background: transparent;
+        border: 0;
+      }
+
+      .rail-section {
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .rail-body {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        background: #fbfcf8;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 3px;
+        overflow: hidden;
+        font-size: 1.12rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .collab-row,
+      .endpoint-row,
+      .token-row {
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        background: #fbfcf8;
+      }
+
+      .collab-row strong,
+      .endpoint-row strong {
+        display: block;
+        overflow-wrap: anywhere;
+      }
+
+      .avatar {
+        width: 32px;
+        height: 32px;
+        flex: 0 0 auto;
+        border: 1px solid var(--rule-strong);
+        border-radius: 6px;
+        background: var(--surface-3);
+        object-fit: cover;
+      }
+
+      .output-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 14px;
+      }
+
+      .copy-panel {
+        min-width: 0;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .copy-panel.is-wide {
+        grid-column: span 2;
+      }
+
+      .copy-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        padding: 12px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .copy-head h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      pre {
+        margin: 0;
+        padding: 13px;
+        min-height: 220px;
+        max-height: 360px;
+        overflow: auto;
+        color: var(--ink-soft);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .empty {
+        padding: 22px 12px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 1240px) {
+        .workspace {
+          grid-template-columns: minmax(280px, 0.4fr) minmax(0, 1fr);
+        }
+
+        .right-panel {
+          grid-column: 1 / -1;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .stage-controls {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .output-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 860px) {
+        .app {
+          width: min(100% - 18px, 720px);
+          padding-top: 10px;
+        }
+
+        h1 {
+          font-size: 2rem;
+        }
+
+        .topbar,
+        .workspace,
+        .right-panel,
+        .output-grid,
+        .selected-strip {
+          grid-template-columns: 1fr;
+        }
+
+        .status-strip {
+          justify-content: flex-start;
+        }
+
+        .signal-list {
+          max-height: 420px;
+        }
+
+        .stage-controls {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .poster-frame {
+          min-height: 360px;
+          padding: 8px;
+        }
+
+        .copy-panel.is-wide {
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .tabs,
+        .repo-row,
+        .stage-controls,
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <nav class="crumb" aria-label="Breadcrumb">
+            <span>pointcast</span>
+            <span>/</span>
+            <span>collabs</span>
+            <span>/</span>
+            <span>framecast</span>
+          </nav>
+          <h1>Framecast Lab</h1>
+        </div>
+        <div class="status-strip" aria-live="polite">
+          <span class="status-pill"><span class="status-dot" id="pointcast-dot"></span><span id="pointcast-status">PointCast loading</span></span>
+          <span class="status-pill"><span class="status-dot" id="github-dot"></span><span id="github-status">GitHub loading</span></span>
+          <span class="status-pill"><span class="status-dot is-live"></span><span id="clock-status">local clock</span></span>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <section class="panel source-panel" aria-label="Source signals">
+          <div class="panel-head">
+            <div>
+              <h2>Signal Stack</h2>
+              <span id="signal-count">0 signals</span>
+            </div>
+            <span id="source-stamp">boot</span>
+          </div>
+
+          <div class="source-controls">
+            <div class="tabs" role="tablist" aria-label="Signal source filter">
+              <button class="tab-button is-active" type="button" data-filter="all">All</button>
+              <button class="tab-button" type="button" data-filter="PointCast">PointCast</button>
+              <button class="tab-button" type="button" data-filter="GitHub">GitHub</button>
+              <button class="tab-button" type="button" data-filter="Paste">Paste</button>
+            </div>
+
+            <form class="repo-form" id="repo-form">
+              <label class="field-label" for="repo-input">GitHub repo</label>
+              <div class="repo-row">
+                <input id="repo-input" name="repo" type="text" value="mhoydich/pointcast" autocomplete="off" />
+                <button class="small-button" type="submit">Load</button>
+              </div>
+              <div class="repo-meta" id="repo-meta">public API</div>
+            </form>
+
+            <form class="paste-form" id="paste-form">
+              <label class="field-label" for="paste-input">Paste signal</label>
+              <textarea id="paste-input" placeholder="Title, link, note, sprint fragment, rough prompt..."></textarea>
+              <button class="small-button is-quiet" type="submit">Add signal</button>
+            </form>
+          </div>
+
+          <div class="signal-list" id="signal-list"></div>
+        </section>
+
+        <section class="panel stage-panel" aria-label="Visual board">
+          <div class="panel-head">
+            <div>
+              <h2>Visual Board</h2>
+              <span id="poster-meta">editorial / wide</span>
+            </div>
+            <span id="seed-stamp">seed 21</span>
+          </div>
+
+          <div class="stage-shell">
+            <div class="stage-controls">
+              <label class="stage-control">
+                <span class="field-label">Mode</span>
+                <select id="style-select">
+                  <option value="editorial">Editorial brief</option>
+                  <option value="protocol">Protocol map</option>
+                  <option value="comic">Comic strip</option>
+                  <option value="infographic">Infographic</option>
+                  <option value="catalog">Asset catalog</option>
+                </select>
+              </label>
+              <label class="stage-control">
+                <span class="field-label">Aspect</span>
+                <select id="aspect-select">
+                  <option value="wide">Wide 16:9</option>
+                  <option value="square">Square 1:1</option>
+                  <option value="vertical">Vertical 4:5</option>
+                  <option value="banner">Banner 3:1</option>
+                </select>
+              </label>
+              <label class="stage-control">
+                <span class="field-label">Language</span>
+                <select id="language-select">
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="ja">Japanese</option>
+                  <option value="ko">Korean</option>
+                  <option value="ar">Arabic</option>
+                </select>
+              </label>
+              <label class="stage-control">
+                <span class="field-label">Density</span>
+                <select id="density-select">
+                  <option value="balanced">Balanced</option>
+                  <option value="dense">Dense</option>
+                  <option value="spare">Spare</option>
+                </select>
+              </label>
+              <button class="small-button is-quiet" type="button" id="reroll-button">Reroll</button>
+              <button class="small-button" type="button" id="export-button">Export PNG</button>
+            </div>
+
+            <div class="poster-frame">
+              <canvas id="poster-canvas" width="1600" height="900" aria-label="Generated visual card preview"></canvas>
+            </div>
+
+            <div class="selected-strip">
+              <div>
+                <div class="button-line" id="selected-tags"></div>
+                <h2 id="selected-title">Loading signals</h2>
+                <p id="selected-summary">Waiting for a source lane.</p>
+              </div>
+              <a class="small-button is-quiet" id="selected-link" href="#" target="_blank" rel="noreferrer">Open</a>
+            </div>
+          </div>
+        </section>
+
+        <aside class="right-panel" aria-label="Protocol rail">
+          <section class="rail-section">
+            <div class="panel-head">
+              <div>
+                <h2>Live Readout</h2>
+                <span id="readout-stamp">fallback</span>
+              </div>
+            </div>
+            <div class="rail-body">
+              <div class="metric-grid" id="metric-grid"></div>
+            </div>
+          </section>
+
+          <section class="rail-section">
+            <div class="panel-head">
+              <div>
+                <h2>Collaborators</h2>
+                <span id="collab-count">0 listed</span>
+              </div>
+            </div>
+            <div class="rail-body" id="collab-list"></div>
+          </section>
+
+          <section class="rail-section">
+            <div class="panel-head">
+              <div>
+                <h2>Prompt Tokens</h2>
+                <span id="token-count">0 tokens</span>
+              </div>
+            </div>
+            <div class="rail-body" id="token-list"></div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="output-grid" aria-label="Generated outputs">
+        <section class="copy-panel is-wide">
+          <div class="copy-head">
+            <div>
+              <h2>Image Prompt</h2>
+              <div class="payload-note">model-facing visual brief</div>
+            </div>
+            <button class="copy-button" type="button" data-copy="prompt">Copy</button>
+          </div>
+          <pre id="prompt-output"></pre>
+        </section>
+
+        <section class="copy-panel">
+          <div class="copy-head">
+            <div>
+              <h2>PointCast JSON</h2>
+              <div class="payload-note">draft block</div>
+            </div>
+            <button class="copy-button" type="button" data-copy="pointcast">Copy</button>
+          </div>
+          <pre id="pointcast-output"></pre>
+        </section>
+
+        <section class="copy-panel">
+          <div class="copy-head">
+            <div>
+              <h2>GitHub Note</h2>
+              <div class="payload-note">issue or PR comment</div>
+            </div>
+            <button class="copy-button" type="button" data-copy="github">Copy</button>
+          </div>
+          <pre id="github-output"></pre>
+        </section>
+
+        <section class="copy-panel is-wide">
+          <div class="copy-head">
+            <div>
+              <h2>Production Prompt</h2>
+              <div class="payload-note">asset set request</div>
+            </div>
+            <button class="copy-button" type="button" data-copy="production">Copy</button>
+          </div>
+          <pre id="production-output"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        const POINTCAST_MANIFEST_URL = "https://pointcast.xyz/agents.json";
+        const FALLBACKS = {
+          collabs: "https://pointcast.xyz/collabs.json",
+          blocks: "https://pointcast.xyz/blocks.json",
+          feed: "https://pointcast.xyz/feed.json",
+          presenceSnapshot: "https://pointcast.xyz/api/presence/snapshot",
+        };
+
+        const STYLE_MODES = {
+          editorial: {
+            label: "Editorial brief",
+            tokens: ["precise typography", "modular color blocks", "publication layout", "clear source marks"],
+            background: "#f7f7f2",
+          },
+          protocol: {
+            label: "Protocol map",
+            tokens: ["node graph", "manifest endpoints", "ledger trail", "proof annotations"],
+            background: "#f2f6f4",
+          },
+          comic: {
+            label: "Comic strip",
+            tokens: ["multi-panel continuity", "caption boxes", "consistent characters", "action beats"],
+            background: "#fffaf0",
+          },
+          infographic: {
+            label: "Infographic",
+            tokens: ["ranked callouts", "metrics", "diagram labels", "readable microcopy"],
+            background: "#f6f8fb",
+          },
+          catalog: {
+            label: "Asset catalog",
+            tokens: ["multi-format set", "brand swatches", "thumbnail variants", "production notes"],
+            background: "#fafaf7",
+          },
+        };
+
+        const ASPECTS = {
+          wide: { label: "Wide 16:9", width: 1600, height: 900 },
+          square: { label: "Square 1:1", width: 1200, height: 1200 },
+          vertical: { label: "Vertical 4:5", width: 1080, height: 1350 },
+          banner: { label: "Banner 3:1", width: 1800, height: 600 },
+        };
+
+        const LANGUAGE_LINES = {
+          en: ["Visual Dispatch", "Source to image", "Ready for review"],
+          es: ["Despacho visual", "Fuente a imagen", "Listo para revisar"],
+          ja: ["ビジュアル通信", "ソースから画像へ", "レビュー準備完了"],
+          ko: ["비주얼 디스패치", "소스에서 이미지로", "검토 준비 완료"],
+          ar: ["إرسال مرئي", "من المصدر إلى الصورة", "جاهز للمراجعة"],
+        };
+
+        const FALLBACK_BOOTSTRAP = {
+          manifest: {
+            generatedAt: "local fallback",
+            endpoints: {
+              json: {
+                collabs: FALLBACKS.collabs,
+                blocks: FALLBACKS.blocks,
+                feed: FALLBACKS.feed,
+              },
+              api: {
+                presenceSnapshot: FALLBACKS.presenceSnapshot,
+              },
+            },
+          },
+          collabs: {
+            collaborators: [
+              {
+                name: "Mike Hoydich",
+                roleLabel: "Director",
+                vendor: "",
+                intro: "Writes the blocks, picks the playlist, takes the photos, makes the calls.",
+              },
+              {
+                name: "Codex",
+                roleLabel: "Engineer",
+                vendor: "OpenAI",
+                intro: "Repo-scoped engineering specialist for PointCast surfaces.",
+              },
+              {
+                name: "Claude Code",
+                roleLabel: "Engineer",
+                vendor: "Anthropic",
+                intro: "Overnight sprint partner and implementation agent.",
+              },
+            ],
+          },
+          blocks: [
+            {
+              id: "0371",
+              url: "https://pointcast.xyz/b/0371",
+              channel: { code: "FD", name: "Front Door", color600: "#185FA5" },
+              type: "NOTE",
+              title: "Beacon wallet inline + what GitHub knows vs. what the ledger knows",
+              dek:
+                "A PointCast sprint note about wallet UI, GitHub attribution, and the ledger surface for human plus agent work.",
+              timestamp: "2026-04-21T22:25:00.000Z",
+              author: "mh+cc",
+            },
+            {
+              id: "0370",
+              url: "https://pointcast.xyz/b/0370",
+              channel: { code: "FD", name: "Front Door", color600: "#185FA5" },
+              type: "NOTE",
+              title: "Compute Ledger RFC v0",
+              dek:
+                "A protocol sketch for federated human and AI work attribution across sites, repos, and agents.",
+              timestamp: "2026-04-21T22:15:00.000Z",
+              author: "mh+cc",
+            },
+            {
+              id: "0368",
+              url: "https://pointcast.xyz/b/0368",
+              channel: { code: "FD", name: "Front Door", color600: "#185FA5" },
+              type: "READ",
+              title: "Where the 2026 frontier meets PointCast",
+              dek:
+                "A research pass on agents, websites, attribution, distribution, and the future shape of PointCast.",
+              timestamp: "2026-04-21T21:55:00.000Z",
+              author: "cc",
+            },
+          ],
+          github: {
+            repo: {
+              full_name: "mhoydich/pointcast",
+              html_url: "https://github.com/mhoydich/pointcast",
+              description: "Living broadcast from El Segundo.",
+              stargazers_count: 0,
+              forks_count: 0,
+              open_issues_count: 1,
+              language: "TypeScript",
+              owner: {
+                avatar_url: "https://avatars.githubusercontent.com/u/5737433?v=4",
+              },
+            },
+            issues: [
+              {
+                number: 1,
+                title: "feat(manus): all seven collab paths",
+                body: "Polls, federation entry, guest block, collab log.",
+                html_url: "https://github.com/mhoydich/pointcast/pull/1",
+                updated_at: "2026-04-21T18:21:21Z",
+                pull_request: {},
+                user: {
+                  login: "mhoydich",
+                  avatar_url: "https://avatars.githubusercontent.com/u/5737433?v=4",
+                },
+                labels: [],
+              },
+            ],
+            commits: [
+              {
+                sha: "framecast",
+                html_url: "https://github.com/mhoydich/pointcast",
+                commit: {
+                  message: "Prototype a visual dispatch surface",
+                  author: { name: "mhoydich", date: "2026-04-21T18:21:21Z" },
+                },
+                author: {
+                  login: "mhoydich",
+                  avatar_url: "https://avatars.githubusercontent.com/u/5737433?v=4",
+                },
+              },
+            ],
+          },
+          presence: { humans: 0, agents: 0, sessions: [] },
+        };
+
+        const state = {
+          sourceSets: {
+            pointcast: [],
+            github: [],
+            paste: [],
+          },
+          manifest: FALLBACK_BOOTSTRAP.manifest,
+          collabs: FALLBACK_BOOTSTRAP.collabs,
+          presence: FALLBACK_BOOTSTRAP.presence,
+          githubRepo: FALLBACK_BOOTSTRAP.github.repo,
+          filter: "all",
+          selectedId: "",
+          style: "editorial",
+          aspect: "wide",
+          language: "en",
+          density: "balanced",
+          seed: 21,
+          pointcastState: "loading",
+          githubState: "loading",
+          pointcastError: "",
+          githubError: "",
+        };
+
+        const elements = {
+          pointcastDot: document.querySelector("#pointcast-dot"),
+          githubDot: document.querySelector("#github-dot"),
+          pointcastStatus: document.querySelector("#pointcast-status"),
+          githubStatus: document.querySelector("#github-status"),
+          clockStatus: document.querySelector("#clock-status"),
+          signalCount: document.querySelector("#signal-count"),
+          sourceStamp: document.querySelector("#source-stamp"),
+          signalList: document.querySelector("#signal-list"),
+          repoForm: document.querySelector("#repo-form"),
+          repoInput: document.querySelector("#repo-input"),
+          repoMeta: document.querySelector("#repo-meta"),
+          pasteForm: document.querySelector("#paste-form"),
+          pasteInput: document.querySelector("#paste-input"),
+          styleSelect: document.querySelector("#style-select"),
+          aspectSelect: document.querySelector("#aspect-select"),
+          languageSelect: document.querySelector("#language-select"),
+          densitySelect: document.querySelector("#density-select"),
+          rerollButton: document.querySelector("#reroll-button"),
+          exportButton: document.querySelector("#export-button"),
+          posterCanvas: document.querySelector("#poster-canvas"),
+          posterMeta: document.querySelector("#poster-meta"),
+          seedStamp: document.querySelector("#seed-stamp"),
+          selectedTags: document.querySelector("#selected-tags"),
+          selectedTitle: document.querySelector("#selected-title"),
+          selectedSummary: document.querySelector("#selected-summary"),
+          selectedLink: document.querySelector("#selected-link"),
+          metricGrid: document.querySelector("#metric-grid"),
+          readoutStamp: document.querySelector("#readout-stamp"),
+          collabCount: document.querySelector("#collab-count"),
+          collabList: document.querySelector("#collab-list"),
+          tokenCount: document.querySelector("#token-count"),
+          tokenList: document.querySelector("#token-list"),
+          promptOutput: document.querySelector("#prompt-output"),
+          pointcastOutput: document.querySelector("#pointcast-output"),
+          githubOutput: document.querySelector("#github-output"),
+          productionOutput: document.querySelector("#production-output"),
+        };
+
+        function escapeHtml(value) {
+          return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+        }
+
+        function text(value, fallback = "") {
+          return String(value ?? fallback).trim();
+        }
+
+        function truncate(value, limit) {
+          const clean = text(value).replace(/\s+/g, " ");
+          return clean.length > limit ? `${clean.slice(0, limit - 1).trim()}...` : clean;
+        }
+
+        function clamp(value, min, max) {
+          return Math.min(max, Math.max(min, value));
+        }
+
+        function formatDate(value) {
+          if (!value) return "undated";
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) return "undated";
+          return date.toLocaleString("en-US", {
+            month: "short",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        }
+
+        function sourceColor(source, fallback) {
+          if (fallback) return fallback;
+          if (source === "GitHub") return "#11110f";
+          if (source === "Paste") return "#c34536";
+          return "#1f64b5";
+        }
+
+        function endpointMap() {
+          return {
+            collabs: state.manifest?.endpoints?.json?.collabs || FALLBACKS.collabs,
+            blocks: state.manifest?.endpoints?.json?.blocks || FALLBACKS.blocks,
+            feed: state.manifest?.endpoints?.json?.feed || FALLBACKS.feed,
+            presenceSnapshot: state.manifest?.endpoints?.api?.presenceSnapshot || FALLBACKS.presenceSnapshot,
+          };
+        }
+
+        function allSignals() {
+          return [
+            ...state.sourceSets.paste,
+            ...state.sourceSets.pointcast,
+            ...state.sourceSets.github,
+          ].sort((a, b) => new Date(b.when || 0) - new Date(a.when || 0));
+        }
+
+        function visibleSignals() {
+          const signals = allSignals();
+          if (state.filter === "all") return signals;
+          return signals.filter((signal) => signal.source === state.filter);
+        }
+
+        function selectedSignal() {
+          const signals = allSignals();
+          return signals.find((signal) => signal.id === state.selectedId) || signals[0] || null;
+        }
+
+        function ensureSelection() {
+          const signals = allSignals();
+          if (!signals.length) {
+            state.selectedId = "";
+            return;
+          }
+          if (!signals.some((signal) => signal.id === state.selectedId)) {
+            state.selectedId = signals[0].id;
+          }
+        }
+
+        function fetchJson(url, options = {}) {
+          const controller = new AbortController();
+          const timer = window.setTimeout(() => controller.abort(), options.timeout || 12000);
+          return fetch(url, {
+            headers: { Accept: "application/json" },
+            signal: controller.signal,
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`${response.status} ${response.statusText}`);
+              }
+              return response.json();
+            })
+            .finally(() => window.clearTimeout(timer));
+        }
+
+        function normalizePointCastBlock(block) {
+          const channel = block.channel || {};
+          return {
+            id: `pc-${block.id || block.url || Math.random()}`,
+            source: "PointCast",
+            kind: text(block.type, "BLOCK"),
+            title: text(block.title, "Untitled PointCast block"),
+            summary: text(block.dek || block.description || block.source, "PointCast dispatch"),
+            url: block.url || block.external?.url || "https://pointcast.xyz",
+            when: block.timestamp || block.updatedAt || block.date,
+            color: sourceColor("PointCast", channel.color600),
+            channel: channel.code || channel.name || "PC",
+            author: block.author || "pointcast",
+            avatar: "",
+            raw: block,
+          };
+        }
+
+        function normalizeGithubRepo(repo) {
+          return {
+            id: `gh-repo-${repo.full_name}`,
+            source: "GitHub",
+            kind: "REPO",
+            title: repo.full_name || "GitHub repository",
+            summary: repo.description || "Repository signal",
+            url: repo.html_url || `https://github.com/${repo.full_name || ""}`,
+            when: repo.pushed_at || repo.updated_at || repo.created_at,
+            color: sourceColor("GitHub"),
+            channel: repo.language || "repo",
+            author: repo.owner?.login || "github",
+            avatar: repo.owner?.avatar_url || "",
+            raw: repo,
+          };
+        }
+
+        function normalizeGithubIssue(issue, repoName) {
+          const isPull = Boolean(issue.pull_request);
+          const labels = Array.isArray(issue.labels) ? issue.labels.map((label) => label.name).join(", ") : "";
+          return {
+            id: `gh-${repoName}-${issue.number}`,
+            source: "GitHub",
+            kind: isPull ? "PR" : "ISSUE",
+            title: `#${issue.number} ${issue.title || "Untitled"}`,
+            summary: issue.body || labels || `${issue.comments || 0} comments`,
+            url: issue.html_url,
+            when: issue.updated_at || issue.created_at,
+            color: isPull ? "#6157a8" : sourceColor("GitHub"),
+            channel: isPull ? "pull request" : "issue",
+            author: issue.user?.login || "github",
+            avatar: issue.user?.avatar_url || "",
+            raw: issue,
+          };
+        }
+
+        function normalizeGithubCommit(commit, repoName) {
+          const message = commit.commit?.message || "Commit";
+          const firstLine = message.split("\n")[0];
+          return {
+            id: `gh-commit-${repoName}-${commit.sha}`,
+            source: "GitHub",
+            kind: "COMMIT",
+            title: firstLine,
+            summary: `${(commit.sha || "").slice(0, 7)} by ${
+              commit.commit?.author?.name || commit.author?.login || "unknown"
+            }`,
+            url: commit.html_url,
+            when: commit.commit?.author?.date,
+            color: "#167c65",
+            channel: "commit",
+            author: commit.author?.login || commit.commit?.author?.name || "github",
+            avatar: commit.author?.avatar_url || "",
+            raw: commit,
+          };
+        }
+
+        function buildPasteSignal(value) {
+          const clean = text(value);
+          const lines = clean.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+          const maybeUrl = clean.match(/https?:\/\/[^\s)]+/i)?.[0] || "";
+          return {
+            id: `paste-${Date.now()}`,
+            source: "Paste",
+            kind: maybeUrl ? "LINK" : "NOTE",
+            title: truncate(lines[0] || "Pasted signal", 96),
+            summary: truncate(lines.slice(1).join(" ") || clean, 220),
+            url: maybeUrl,
+            when: new Date().toISOString(),
+            color: sourceColor("Paste"),
+            channel: "manual",
+            author: "local",
+            avatar: "",
+            raw: { text: clean },
+          };
+        }
+
+        function setStatus(kind, status, message) {
+          const dot = kind === "pointcast" ? elements.pointcastDot : elements.githubDot;
+          const label = kind === "pointcast" ? elements.pointcastStatus : elements.githubStatus;
+          dot.classList.toggle("is-live", status === "live");
+          dot.classList.toggle("is-error", status === "error");
+          label.textContent = message;
+        }
+
+        async function loadPointCast() {
+          state.pointcastState = "loading";
+          setStatus("pointcast", "loading", "PointCast loading");
+          try {
+            const manifest = await fetchJson(POINTCAST_MANIFEST_URL);
+            state.manifest = manifest;
+            const endpoints = endpointMap();
+            const [collabs, blocks, presence] = await Promise.all([
+              fetchJson(endpoints.collabs).catch(() => FALLBACK_BOOTSTRAP.collabs),
+              fetchJson(endpoints.blocks).catch(() => ({ blocks: FALLBACK_BOOTSTRAP.blocks })),
+              fetchJson(endpoints.presenceSnapshot).catch(() => FALLBACK_BOOTSTRAP.presence),
+            ]);
+            state.collabs = collabs;
+            state.presence = presence;
+            const blockList = Array.isArray(blocks.blocks) ? blocks.blocks : Array.isArray(blocks) ? blocks : [];
+            state.sourceSets.pointcast = blockList.slice(0, 16).map(normalizePointCastBlock);
+            state.pointcastState = "live";
+            state.pointcastError = "";
+            setStatus("pointcast", "live", "PointCast live");
+          } catch (error) {
+            state.manifest = FALLBACK_BOOTSTRAP.manifest;
+            state.collabs = FALLBACK_BOOTSTRAP.collabs;
+            state.presence = FALLBACK_BOOTSTRAP.presence;
+            state.sourceSets.pointcast = FALLBACK_BOOTSTRAP.blocks.map(normalizePointCastBlock);
+            state.pointcastState = "error";
+            state.pointcastError = error.message || "fallback";
+            setStatus("pointcast", "error", "PointCast fallback");
+          }
+          ensureSelection();
+          render();
+        }
+
+        async function loadGithub(repoName) {
+          const cleanRepo = text(repoName, "mhoydich/pointcast").replace(/^https:\/\/github.com\//, "");
+          if (!/^[\w.-]+\/[\w.-]+$/.test(cleanRepo)) {
+            state.githubState = "error";
+            state.githubError = "Use owner/repo";
+            setStatus("github", "error", "GitHub repo format");
+            render();
+            return;
+          }
+
+          state.githubState = "loading";
+          setStatus("github", "loading", "GitHub loading");
+          elements.repoMeta.textContent = `loading ${cleanRepo}`;
+
+          try {
+            const base = `https://api.github.com/repos/${cleanRepo}`;
+            const [repo, issues, commits] = await Promise.all([
+              fetchJson(base),
+              fetchJson(`${base}/issues?state=all&sort=updated&per_page=8`),
+              fetchJson(`${base}/commits?per_page=6`),
+            ]);
+            state.githubRepo = repo;
+            state.sourceSets.github = [
+              normalizeGithubRepo(repo),
+              ...issues.map((issue) => normalizeGithubIssue(issue, cleanRepo)),
+              ...commits.map((commit) => normalizeGithubCommit(commit, cleanRepo)),
+            ];
+            state.githubState = "live";
+            state.githubError = "";
+            setStatus("github", "live", "GitHub live");
+            elements.repoMeta.textContent = `${repo.full_name} / ${repo.language || "mixed"} / ${
+              repo.open_issues_count || 0
+            } open`;
+          } catch (error) {
+            const fallback = FALLBACK_BOOTSTRAP.github;
+            state.githubRepo = fallback.repo;
+            state.sourceSets.github = [
+              normalizeGithubRepo(fallback.repo),
+              ...fallback.issues.map((issue) => normalizeGithubIssue(issue, fallback.repo.full_name)),
+              ...fallback.commits.map((commit) => normalizeGithubCommit(commit, fallback.repo.full_name)),
+            ];
+            state.githubState = "error";
+            state.githubError = error.message || "fallback";
+            setStatus("github", "error", "GitHub fallback");
+            elements.repoMeta.textContent = `fallback / ${state.githubError}`;
+          }
+
+          ensureSelection();
+          render();
+        }
+
+        function currentTokens(signal) {
+          const mode = STYLE_MODES[state.style] || STYLE_MODES.editorial;
+          const base = [
+            signal?.source || "source",
+            signal?.kind || "signal",
+            signal?.channel || "channel",
+            ASPECTS[state.aspect].label,
+          ];
+          return [...mode.tokens, ...base].filter(Boolean).slice(0, 10);
+        }
+
+        function buildPrompt(signal) {
+          if (!signal) return "";
+          const mode = STYLE_MODES[state.style] || STYLE_MODES.editorial;
+          const language = LANGUAGE_LINES[state.language]?.[0] || "Visual Dispatch";
+          const density =
+            state.density === "dense"
+              ? "dense but readable, with many labeled details"
+              : state.density === "spare"
+                ? "spare, confident, with generous whitespace"
+                : "balanced, editorial, and information-rich";
+
+          return [
+            `Create a ${ASPECTS[state.aspect].label.toLowerCase()} ${mode.label.toLowerCase()} image for a PointCast/GitHub visual dispatch.`,
+            "",
+            `Primary source: ${signal.source} / ${signal.kind} / ${signal.channel || "general"}.`,
+            `Title: ${signal.title}.`,
+            `Context: ${truncate(signal.summary, 520)}.`,
+            `Visual language: ${mode.tokens.join(", ")}.`,
+            `Typography: precise, readable, controlled hierarchy, publication-ready spacing.`,
+            `Density: ${density}.`,
+            `Language treatment: include a small multilingual marker reading "${language}" plus the English title.`,
+            `Palette: use ink black, source blue, signal red, ledger green, and one warm accent. Avoid a one-color look.`,
+            `Composition: make the source provenance obvious, include a small GitHub/PointCast routing motif, and leave room for a later caption or QR mark.`,
+            "",
+            `Output should feel like a polished artifact from a live agent-era editorial system, not a generic tech poster.`,
+          ].join("\n");
+        }
+
+        function buildProductionPrompt(signal) {
+          if (!signal) return "";
+          const prompt = buildPrompt(signal);
+          return [
+            "Generate a four-asset set from this source signal:",
+            "",
+            "1. Wide editorial card, 16:9.",
+            "2. Square social card, 1:1.",
+            "3. Vertical story card, 4:5.",
+            "4. Banner crop, 3:1.",
+            "",
+            "Maintain the same title, visual identity, and source provenance across all formats. Keep all text readable and avoid invented facts.",
+            "",
+            prompt,
+          ].join("\n");
+        }
+
+        function buildPointCastPayload(signal) {
+          if (!signal) return "";
+          return JSON.stringify(
+            {
+              type: "NOTE",
+              channel: "FD",
+              title: `Framecast: ${truncate(signal.title, 76)}`,
+              dek: `Visual brief from ${signal.source} ${signal.kind}: ${truncate(signal.summary, 220)}`,
+              external: signal.url
+                ? {
+                    label: `${signal.source} source`,
+                    url: signal.url,
+                  }
+                : null,
+              author: "framecast-lab",
+              tags: ["framecast", "visual-brief", signal.source.toLowerCase(), signal.kind.toLowerCase()],
+              generatedAt: new Date().toISOString(),
+              prompt: buildPrompt(signal),
+            },
+            null,
+            2,
+          );
+        }
+
+        function buildGithubNote(signal) {
+          if (!signal) return "";
+          return [
+            "## Framecast visual brief",
+            "",
+            `Source: ${signal.source} / ${signal.kind}`,
+            `Title: ${signal.title}`,
+            `Reference: ${signal.url || "local paste"}`,
+            "",
+            "Recommended asset:",
+            `- ${STYLE_MODES[state.style].label}, ${ASPECTS[state.aspect].label}`,
+            `- Density: ${state.density}`,
+            `- Multilingual marker: ${LANGUAGE_LINES[state.language]?.[0] || "Visual Dispatch"}`,
+            "",
+            "Prompt:",
+            "",
+            "```text",
+            buildPrompt(signal),
+            "```",
+          ].join("\n");
+        }
+
+        function renderStatuses() {
+          const now = new Date();
+          elements.clockStatus.textContent = now.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+          elements.sourceStamp.textContent = formatDate(now.toISOString());
+          elements.readoutStamp.textContent = state.pointcastState === "live" ? "network" : "local";
+        }
+
+        function renderSignals() {
+          const signals = visibleSignals();
+          const total = allSignals().length;
+          elements.signalCount.textContent = `${total} signals`;
+          if (!signals.length) {
+            elements.signalList.innerHTML = '<div class="empty">No signals in this lane.</div>';
+            return;
+          }
+          elements.signalList.innerHTML = signals
+            .map((signal) => {
+              const active = signal.id === state.selectedId ? " is-active" : "";
+              const avatar = signal.avatar
+                ? `<img class="avatar" src="${escapeHtml(signal.avatar)}" alt="" loading="lazy" />`
+                : "";
+              return `
+                <button class="signal-row${active}" type="button" data-signal-id="${escapeHtml(
+                  signal.id,
+                )}" style="--accent: ${escapeHtml(signal.color)}">
+                  <span class="signal-inner">
+                    <span class="signal-top">
+                      ${avatar}
+                      <span class="signal-title">${escapeHtml(signal.title)}</span>
+                    </span>
+                    <span class="signal-meta">
+                      <span class="tag is-blue">${escapeHtml(signal.source)}</span>
+                      <span class="tag">${escapeHtml(signal.kind)}</span>
+                      <span class="tag">${escapeHtml(formatDate(signal.when))}</span>
+                    </span>
+                    <span class="signal-summary">${escapeHtml(truncate(signal.summary, 150))}</span>
+                  </span>
+                </button>
+              `;
+            })
+            .join("");
+        }
+
+        function renderSelected(signal) {
+          if (!signal) {
+            elements.selectedTags.innerHTML = "";
+            elements.selectedTitle.textContent = "No signal";
+            elements.selectedSummary.textContent = "Add a paste or load a source lane.";
+            elements.selectedLink.hidden = true;
+            return;
+          }
+
+          elements.selectedTags.innerHTML = [
+            `<span class="tag is-blue">${escapeHtml(signal.source)}</span>`,
+            `<span class="tag">${escapeHtml(signal.kind)}</span>`,
+            `<span class="tag">${escapeHtml(signal.channel || "general")}</span>`,
+            `<span class="tag">${escapeHtml(formatDate(signal.when))}</span>`,
+          ].join("");
+          elements.selectedTitle.textContent = signal.title;
+          elements.selectedSummary.textContent = signal.summary;
+          elements.selectedLink.hidden = !signal.url;
+          elements.selectedLink.href = signal.url || "#";
+        }
+
+        function renderReadout(signal) {
+          const signals = allSignals();
+          const pcCount = state.sourceSets.pointcast.length;
+          const ghCount = state.sourceSets.github.length;
+          const pasteCount = state.sourceSets.paste.length;
+          const presenceHumans = state.presence?.humans ?? 0;
+          const presenceAgents = state.presence?.agents ?? 0;
+          const repo = state.githubRepo || {};
+          const metrics = [
+            ["Signals", signals.length],
+            ["PointCast", pcCount],
+            ["GitHub", ghCount],
+            ["Paste", pasteCount],
+            ["Presence", `${presenceHumans}h / ${presenceAgents}a`],
+            ["Repo stars", repo.stargazers_count ?? "n/a"],
+          ];
+
+          elements.metricGrid.innerHTML = metrics
+            .map(
+              ([label, value]) => `
+                <div class="metric">
+                  <span class="mini-label">${escapeHtml(label)}</span>
+                  <strong>${escapeHtml(value)}</strong>
+                </div>
+              `,
+            )
+            .join("");
+
+          const collaborators = Array.isArray(state.collabs?.collaborators)
+            ? state.collabs.collaborators.slice(0, 5)
+            : [];
+          elements.collabCount.textContent = `${collaborators.length} shown`;
+          elements.collabList.innerHTML = collaborators.length
+            ? collaborators
+                .map(
+                  (collab) => `
+                    <div class="collab-row">
+                      <strong>${escapeHtml(collab.name)}</strong>
+                      <span class="meta">${escapeHtml(
+                        [collab.roleLabel || collab.role, collab.vendor].filter(Boolean).join(" / "),
+                      )}</span>
+                    </div>
+                  `,
+                )
+                .join("")
+            : '<div class="empty">No collaborators loaded.</div>';
+
+          const tokens = currentTokens(signal);
+          elements.tokenCount.textContent = `${tokens.length} tokens`;
+          elements.tokenList.innerHTML = tokens
+            .map((token) => `<div class="token-row"><span class="tag">${escapeHtml(token)}</span></div>`)
+            .join("");
+        }
+
+        function renderOutputs(signal) {
+          const prompt = buildPrompt(signal);
+          elements.promptOutput.textContent = prompt;
+          elements.pointcastOutput.textContent = buildPointCastPayload(signal);
+          elements.githubOutput.textContent = buildGithubNote(signal);
+          elements.productionOutput.textContent = buildProductionPrompt(signal);
+          elements.posterMeta.textContent = `${STYLE_MODES[state.style].label} / ${ASPECTS[state.aspect].label}`;
+          elements.seedStamp.textContent = `seed ${state.seed}`;
+        }
+
+        function drawTextBlock(ctx, textValue, x, y, maxWidth, lineHeight, maxLines) {
+          const words = text(textValue).split(/\s+/).filter(Boolean);
+          const lines = [];
+          let line = "";
+          words.forEach((word) => {
+            const next = line ? `${line} ${word}` : word;
+            if (ctx.measureText(next).width > maxWidth && line) {
+              lines.push(line);
+              line = word;
+            } else {
+              line = next;
+            }
+          });
+          if (line) lines.push(line);
+          const visible = lines.slice(0, maxLines);
+          if (lines.length > maxLines && visible.length) {
+            visible[visible.length - 1] = `${visible[visible.length - 1].replace(/[.,;:]?$/, "")}...`;
+          }
+          visible.forEach((row, index) => {
+            ctx.fillText(row, x, y + index * lineHeight);
+          });
+          return visible.length * lineHeight;
+        }
+
+        function fitFont(ctx, textValue, maxWidth, start, min) {
+          let size = start;
+          while (size > min) {
+            ctx.font = `800 ${size}px Inter, Arial, sans-serif`;
+            if (ctx.measureText(text(textValue)).width <= maxWidth) return size;
+            size -= 2;
+          }
+          return min;
+        }
+
+        function seededUnit(offset) {
+          const value = Math.sin((state.seed + offset) * 12.9898) * 43758.5453;
+          return value - Math.floor(value);
+        }
+
+        function drawPoster(signal) {
+          const canvas = elements.posterCanvas;
+          const ctx = canvas.getContext("2d");
+          const aspect = ASPECTS[state.aspect] || ASPECTS.wide;
+          const mode = STYLE_MODES[state.style] || STYLE_MODES.editorial;
+          const accent = sourceColor(signal?.source, signal?.color);
+          const w = aspect.width;
+          const h = aspect.height;
+          canvas.width = w;
+          canvas.height = h;
+          canvas.style.aspectRatio = `${w} / ${h}`;
+
+          ctx.clearRect(0, 0, w, h);
+          ctx.fillStyle = mode.background;
+          ctx.fillRect(0, 0, w, h);
+
+          const margin = Math.max(44, Math.round(Math.min(w, h) * 0.06));
+          const red = "#c34536";
+          const green = "#167c65";
+          const gold = "#b17b13";
+          const ink = "#11110f";
+          const softInk = "#3f403c";
+
+          ctx.fillStyle = accent;
+          ctx.fillRect(0, 0, w, Math.max(18, Math.round(h * 0.026)));
+          ctx.fillStyle = red;
+          ctx.fillRect(w - margin * 2.2, 0, margin * 1.2, Math.max(18, Math.round(h * 0.026)));
+          ctx.fillStyle = green;
+          ctx.fillRect(w - margin, 0, margin, Math.max(18, Math.round(h * 0.026)));
+
+          if (state.style === "comic") {
+            const gutter = Math.max(14, Math.round(w * 0.012));
+            const panelY = margin * 1.15;
+            const panelH = h - margin * 2.2;
+            const panelW = (w - margin * 2 - gutter * 2) / 3;
+            [0, 1, 2].forEach((index) => {
+              const x = margin + index * (panelW + gutter);
+              ctx.fillStyle = index === 0 ? "#fffef9" : index === 1 ? "#eef4fb" : "#f8eee9";
+              ctx.fillRect(x, panelY, panelW, panelH);
+              ctx.strokeStyle = ink;
+              ctx.lineWidth = 6;
+              ctx.strokeRect(x, panelY, panelW, panelH);
+              ctx.fillStyle = [accent, red, green][index];
+              ctx.fillRect(x + 18, panelY + 18, panelW - 36, 54);
+              ctx.fillStyle = "#ffffff";
+              ctx.font = `800 ${Math.max(24, Math.round(w * 0.018))}px Inter, Arial, sans-serif`;
+              ctx.fillText(["SOURCE", "ROUTE", "FRAME"][index], x + 32, panelY + 54);
+            });
+          } else if (state.style === "protocol") {
+            ctx.strokeStyle = "rgba(17, 17, 15, 0.12)";
+            ctx.lineWidth = 2;
+            for (let x = margin; x < w - margin; x += Math.max(54, Math.round(w * 0.07))) {
+              ctx.beginPath();
+              ctx.moveTo(x, margin);
+              ctx.lineTo(x, h - margin);
+              ctx.stroke();
+            }
+            for (let y = margin; y < h - margin; y += Math.max(46, Math.round(h * 0.08))) {
+              ctx.beginPath();
+              ctx.moveTo(margin, y);
+              ctx.lineTo(w - margin);
+              ctx.stroke();
+            }
+            const nodes = [
+              [0.2, 0.28, accent],
+              [0.48, 0.5, red],
+              [0.72, 0.34, green],
+              [0.78, 0.72, gold],
+              [0.34, 0.76, "#6157a8"],
+            ];
+            ctx.strokeStyle = ink;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            nodes.forEach(([nx, ny], index) => {
+              const x = margin + nx * (w - margin * 2);
+              const y = margin + ny * (h - margin * 2);
+              if (index === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            nodes.forEach(([nx, ny, color], index) => {
+              const x = margin + nx * (w - margin * 2);
+              const y = margin + ny * (h - margin * 2);
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(x, y, Math.max(18, Math.round(Math.min(w, h) * 0.025)), 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = "#ffffff";
+              ctx.font = `800 ${Math.max(18, Math.round(Math.min(w, h) * 0.022))}px Inter, Arial, sans-serif`;
+              ctx.textAlign = "center";
+              ctx.fillText(String(index + 1), x, y + 7);
+              ctx.textAlign = "left";
+            });
+          } else if (state.style === "catalog") {
+            const columns = state.aspect === "banner" ? 6 : 4;
+            const tileGap = Math.max(12, Math.round(w * 0.012));
+            const tileW = (w - margin * 2 - tileGap * (columns - 1)) / columns;
+            const tileH = Math.max(110, Math.round(h * 0.24));
+            for (let index = 0; index < columns; index += 1) {
+              const x = margin + index * (tileW + tileGap);
+              const y = margin * 1.15;
+              ctx.fillStyle = ["#ffffff", "#f0f3ed", "#e8edf3", "#fff4e1", "#f7e8e4", "#e7f1ee"][
+                index % 6
+              ];
+              ctx.fillRect(x, y, tileW, tileH);
+              ctx.strokeStyle = "rgba(17, 17, 15, 0.24)";
+              ctx.strokeRect(x, y, tileW, tileH);
+              ctx.fillStyle = [accent, red, green, gold, "#6157a8", "#0f7b8a"][index % 6];
+              ctx.fillRect(x + 18, y + 18, tileW - 36, Math.max(16, tileH * 0.12));
+            }
+          } else {
+            const blockCount = state.style === "infographic" ? 9 : 6;
+            for (let index = 0; index < blockCount; index += 1) {
+              const bx = margin + seededUnit(index) * (w - margin * 2);
+              const by = margin + seededUnit(index + 20) * (h - margin * 2);
+              const bw = Math.max(90, w * (0.08 + seededUnit(index + 40) * 0.12));
+              const bh = Math.max(34, h * (0.04 + seededUnit(index + 60) * 0.09));
+              ctx.fillStyle = [accent, red, green, gold, "#11110f", "#ffffff"][index % 6];
+              ctx.globalAlpha = index % 5 === 4 ? 0.9 : 1;
+              ctx.fillRect(clamp(bx, margin, w - margin - bw), clamp(by, margin, h - margin - bh), bw, bh);
+              ctx.globalAlpha = 1;
+            }
+          }
+
+          const labelLines = LANGUAGE_LINES[state.language] || LANGUAGE_LINES.en;
+          ctx.fillStyle = ink;
+          ctx.font = `800 ${Math.max(18, Math.round(Math.min(w, h) * 0.022))}px Inter, Arial, sans-serif`;
+          ctx.fillText("FRAMECAST LAB", margin, margin * 0.72);
+          ctx.fillStyle = accent;
+          ctx.fillText(text(signal?.source || "SOURCE").toUpperCase(), w - margin * 4.2, margin * 0.72);
+
+          const titleMaxWidth = state.aspect === "banner" ? w * 0.48 : w - margin * 2.2;
+          const titleSize = fitFont(ctx, signal?.title || "Framecast signal", titleMaxWidth, Math.round(h * 0.12), 38);
+          ctx.font = `800 ${titleSize}px Inter, Arial, sans-serif`;
+          ctx.fillStyle = ink;
+          const titleY = state.aspect === "banner" ? margin * 1.75 : h * 0.35;
+          const titleHeight = drawTextBlock(
+            ctx,
+            signal?.title || "Framecast signal",
+            margin,
+            titleY,
+            titleMaxWidth,
+            titleSize * 1.02,
+            state.aspect === "banner" ? 2 : 4,
+          );
+
+          ctx.font = `500 ${Math.max(23, Math.round(Math.min(w, h) * 0.031))}px Inter, Arial, sans-serif`;
+          ctx.fillStyle = softInk;
+          drawTextBlock(
+            ctx,
+            signal?.summary || "Source signal ready for visual routing.",
+            margin,
+            titleY + titleHeight + Math.max(26, h * 0.035),
+            state.aspect === "banner" ? w * 0.44 : w - margin * 2.4,
+            Math.max(32, Math.round(Math.min(w, h) * 0.04)),
+            state.density === "spare" ? 2 : state.density === "dense" ? 5 : 3,
+          );
+
+          const footerY = h - margin * 1.2;
+          ctx.fillStyle = ink;
+          ctx.font = `700 ${Math.max(18, Math.round(Math.min(w, h) * 0.022))}px Inter, Arial, sans-serif`;
+          ctx.fillText(`${signal?.kind || "SIGNAL"} / ${signal?.channel || "GENERAL"}`, margin, footerY);
+
+          ctx.fillStyle = red;
+          ctx.fillText(labelLines[0], margin, footerY - Math.max(38, h * 0.055));
+          ctx.fillStyle = green;
+          ctx.fillText(labelLines[1], margin + Math.max(230, w * 0.2), footerY - Math.max(38, h * 0.055));
+          ctx.fillStyle = gold;
+          ctx.fillText(labelLines[2], margin + Math.max(460, w * 0.4), footerY - Math.max(38, h * 0.055));
+
+          const qrSize = Math.max(72, Math.round(Math.min(w, h) * 0.105));
+          const qrX = w - margin - qrSize;
+          const qrY = h - margin - qrSize;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(qrX, qrY, qrSize, qrSize);
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 4;
+          ctx.strokeRect(qrX, qrY, qrSize, qrSize);
+          for (let row = 0; row < 5; row += 1) {
+            for (let col = 0; col < 5; col += 1) {
+              if ((row + col + state.seed) % 2 === 0 || row === col) {
+                ctx.fillStyle = [ink, accent, red, green][(row + col) % 4];
+                ctx.fillRect(
+                  qrX + 10 + col * ((qrSize - 20) / 5),
+                  qrY + 10 + row * ((qrSize - 20) / 5),
+                  (qrSize - 20) / 5 - 4,
+                  (qrSize - 20) / 5 - 4,
+                );
+              }
+            }
+          }
+        }
+
+        function render() {
+          ensureSelection();
+          const signal = selectedSignal();
+          renderStatuses();
+          renderSignals();
+          renderSelected(signal);
+          renderReadout(signal);
+          renderOutputs(signal);
+          drawPoster(signal);
+        }
+
+        function copyToClipboard(value, button) {
+          const original = button.textContent;
+          const done = () => {
+            button.textContent = "Copied";
+            window.setTimeout(() => {
+              button.textContent = original;
+            }, 1100);
+          };
+
+          if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(value).then(done).catch(() => fallbackCopy(value, done));
+          } else {
+            fallbackCopy(value, done);
+          }
+        }
+
+        function fallbackCopy(value, done) {
+          const textarea = document.createElement("textarea");
+          textarea.value = value;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+          done();
+        }
+
+        function exportCanvas() {
+          const signal = selectedSignal();
+          const link = document.createElement("a");
+          const slug = text(signal?.title || "framecast")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 42);
+          link.href = elements.posterCanvas.toDataURL("image/png");
+          link.download = `${slug || "framecast"}-${state.aspect}.png`;
+          link.click();
+        }
+
+        function bindEvents() {
+          document.querySelectorAll(".tab-button").forEach((button) => {
+            button.addEventListener("click", () => {
+              state.filter = button.dataset.filter || "all";
+              document.querySelectorAll(".tab-button").forEach((node) => {
+                node.classList.toggle("is-active", node === button);
+              });
+              renderSignals();
+            });
+          });
+
+          elements.signalList.addEventListener("click", (event) => {
+            const row = event.target.closest("[data-signal-id]");
+            if (!row) return;
+            state.selectedId = row.dataset.signalId;
+            render();
+          });
+
+          elements.repoForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            loadGithub(elements.repoInput.value);
+          });
+
+          elements.pasteForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const signal = buildPasteSignal(elements.pasteInput.value);
+            if (!signal.summary && !signal.title) return;
+            state.sourceSets.paste.unshift(signal);
+            state.selectedId = signal.id;
+            state.filter = "all";
+            document.querySelectorAll(".tab-button").forEach((node) => {
+              node.classList.toggle("is-active", node.dataset.filter === "all");
+            });
+            elements.pasteInput.value = "";
+            render();
+          });
+
+          elements.styleSelect.addEventListener("change", () => {
+            state.style = elements.styleSelect.value;
+            render();
+          });
+          elements.aspectSelect.addEventListener("change", () => {
+            state.aspect = elements.aspectSelect.value;
+            render();
+          });
+          elements.languageSelect.addEventListener("change", () => {
+            state.language = elements.languageSelect.value;
+            render();
+          });
+          elements.densitySelect.addEventListener("change", () => {
+            state.density = elements.densitySelect.value;
+            render();
+          });
+          elements.rerollButton.addEventListener("click", () => {
+            state.seed += 17;
+            render();
+          });
+          elements.exportButton.addEventListener("click", exportCanvas);
+
+          document.querySelectorAll("[data-copy]").forEach((button) => {
+            button.addEventListener("click", () => {
+              const key = button.dataset.copy;
+              const values = {
+                prompt: elements.promptOutput.textContent,
+                pointcast: elements.pointcastOutput.textContent,
+                github: elements.githubOutput.textContent,
+                production: elements.productionOutput.textContent,
+              };
+              copyToClipboard(values[key] || "", button);
+            });
+          });
+        }
+
+        function bootFallbacks() {
+          state.sourceSets.pointcast = FALLBACK_BOOTSTRAP.blocks.map(normalizePointCastBlock);
+          state.sourceSets.github = [
+            normalizeGithubRepo(FALLBACK_BOOTSTRAP.github.repo),
+            ...FALLBACK_BOOTSTRAP.github.issues.map((issue) =>
+              normalizeGithubIssue(issue, FALLBACK_BOOTSTRAP.github.repo.full_name),
+            ),
+            ...FALLBACK_BOOTSTRAP.github.commits.map((commit) =>
+              normalizeGithubCommit(commit, FALLBACK_BOOTSTRAP.github.repo.full_name),
+            ),
+          ];
+          ensureSelection();
+          render();
+        }
+
+        bindEvents();
+        bootFallbacks();
+        loadPointCast();
+        loadGithub(elements.repoInput.value);
+        window.setInterval(renderStatuses, 1000);
+      })();
+    </script>
+  </body>
+</html>

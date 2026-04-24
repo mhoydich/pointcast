@@ -1,818 +1,652 @@
 ---
 /**
- * /now — the live "right now" page for PointCast.
+ * /now — refreshed lighter newspaper-feel surface (2026-04-21).
  *
- * Derek Sivers-style /now page but wired to live system state. Answers in
- * one viewport: what's happening this instant on PointCast? What's the
- * Card of the Day? When does the next Prize Cast draw settle? What's the
- * latest block? What's the agent surface count?
+ * Mike directive (in the rest-of-sprint roadmap, docs/plans/2026-04-20-
+ * home-phase3-plus-sprint-plan.md, Tier 2 item):
+ *   "/now refresh · 45min · cc. Lighter surface, less dashboard, more
+ *    newsroom. Reuses agent dots + recent ledger."
  *
- * Different from /status (which is task + agent activity focused) — /now
- * is the *user-facing* snapshot. A human or agent arrives here to get
- * oriented in 5 seconds.
+ * v1 was a Sivers-style /now meets system status dashboard — useful but
+ * dense. This refresh is a single-page newspaper-style snapshot:
+ *
+ *   - Masthead: PointCast · El Segundo · the date · pulsing live chip
+ *   - Headline: a one-line answer to "what's PointCast doing right now"
+ *   - Three columns:
+ *       1. RECENT SHIPS (last 5 ledger entries with collab + relative time)
+ *       2. INBOX (last 5 pings, fetched client-side from /api/ping)
+ *       3. WHERE TO 5-MIN (3 chips: a fresh block, a game, a show)
+ *   - Footer: links to /compute /cadence /cos /tv/shows /sprints
+ *
+ * On mobile the columns stack. The dashboard depth from v1 is in
+ * /status (system status surface) for anyone who wants it.
+ *
+ * Author: cc. Source: 2026-04-20 home phase 3 plan + 2026-04-21
+ * "lets keep going" double session continuation.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
-import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
-import { getPrizeCastSnapshot, getNextPrizeCastDrawAt } from '../lib/prize-cast';
-import contracts from '../data/contracts.json';
-import { execSync } from 'node:child_process';
+import { COMPUTE_LEDGER } from '../lib/compute-ledger';
 
 const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-const latestBlocks = blocks.slice(0, 4);
-const todaysCard = pickCardOfTheDay();
-const nextDraw = getNextPrizeCastDrawAt();
-const prizeCast = await getPrizeCastSnapshot();
-const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
-const prizeCastKt1 = ((contracts as any).prize_cast?.mainnet ?? '').trim();
-const drumKt1 = ((contracts as any).drum_token?.mainnet ?? '').trim();
+const latestBlock = blocks[0] ?? null;
+const latestThree = blocks.slice(0, 3);
 
-// Live TzKT mint count for Visit Nouns
-let mintCount: number | null = null;
-if (visitNounsKt1.startsWith('KT1')) {
-  try {
-    const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${visitNounsKt1}&limit=10000&select=totalSupply`);
-    if (r.ok) {
-      const list: Array<{ totalSupply: string }> = await r.json();
-      mintCount = list.reduce((sum, t) => sum + Number(t.totalSupply ?? 0), 0);
-    }
-  } catch {}
-}
+const ledger = [...COMPUTE_LEDGER]
+  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+  .slice(0, 5);
 
-// Most recent commit (for "last code change")
-let lastCommit: { hash: string; subject: string; date: string } | null = null;
-try {
-  const out = execSync('git log -1 --pretty=format:"%h|%s|%cI"', { encoding: 'utf-8' }).trim();
-  const [hash, subject, date] = out.split('|');
-  lastCommit = { hash, subject, date };
-} catch {}
+// SEO / GEO: agent-activity telemetry. Cheap to compute (derived from
+// the ledger + block authorship), high signal for LLM crawlers that
+// land on /now looking for "how active is this site". Counts are for
+// the 24h trailing window. Agent ships = blocks authored by Claude
+// Code (cc), Codex, or Manus. Human ships = MH-authored blocks.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const now = Date.now();
 
-// Count blocks by channel for the footprint strip
-const channelCounts: Record<string, number> = {};
-for (const b of blocks) channelCounts[b.data.channel] = (channelCounts[b.data.channel] ?? 0) + 1;
+const agentAuthors = new Set(['cc', 'claude-code', 'claude', 'codex', 'manus']);
+const humanAuthors = new Set(['mh', 'mike-hoydich', 'mike']);
 
-const buildTime = new Date().toISOString();
-const buildDateLabel = new Intl.DateTimeFormat('en-US', {
-  month: 'short', day: 'numeric', year: 'numeric',
-  hour: '2-digit', minute: '2-digit',
-  timeZone: 'America/Los_Angeles', hour12: false,
-}).format(new Date()).replace(',', '') + ' PT';
+const ships24h = blocks.filter((b) => now - b.data.timestamp.getTime() <= DAY_MS);
+const agentShips24h = ships24h.filter((b) => {
+  const a = (b.data as any).author?.toString().toLowerCase();
+  return a && agentAuthors.has(a);
+});
+const humanShips24h = ships24h.filter((b) => {
+  const a = (b.data as any).author?.toString().toLowerCase();
+  return a && humanAuthors.has(a);
+});
+const mixedShips24h = ships24h.length - agentShips24h.length - humanShips24h.length;
 
-function timeAgoRough(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso).getTime();
-  if (!d) return '—';
-  const diff = Date.now() - d;
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  return `${days}d ago`;
-}
+// Ledger-derived: how many compute entries in the last 24h, distinct
+// agent collaborators active today. Ledger has a richer signal than
+// block authorship because not every compute unit ships a block.
+const ledger24h = COMPUTE_LEDGER.filter((e) => now - new Date(e.at).getTime() <= DAY_MS);
+const activeAgents24h = Array.from(new Set(ledger24h.map((e) => e.collab))).filter((c) => c !== 'mike-hoydich' && c !== 'mh');
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebPage',
-  '@id': 'https://pointcast.xyz/now',
-  name: 'PointCast · Right now',
-  description: 'Live system snapshot of PointCast — Card of the Day, Prize Cast draw countdown, latest blocks, agent surfaces.',
-  url: 'https://pointcast.xyz/now',
-  dateModified: buildTime,
+// Three "5-minute" chips — a fresh block, a game, a show. Picks rotate
+// daily via the same date-seeded pattern HeroBlock uses elsewhere.
+const FIVE_MIN_CHIPS = [
+  { kicker: 'BLOCK', title: latestBlock ? latestBlock.data.title : '—', href: latestBlock ? `/b/${latestBlock.data.id}` : '/', accent: '#8A2432' },
+  { kicker: 'GAME',  title: 'Noundrum — drum to claim land',  href: '/noundrum', accent: '#F59F00' },
+  { kicker: 'WATCH', title: 'Three commercials + a tiny game', href: '/commercials', accent: '#5F2A1E' },
+  { kicker: 'SHOW',  title: 'TV / 11 viewables',               href: '/tv/shows/', accent: '#185FA5' },
+  { kicker: 'BOARD', title: 'Leaderboards across PointCast',   href: '/leaderboards', accent: '#0B3E73' },
+  { kicker: 'TEZOS', title: 'Contracts, tip mike, land sketch', href: '/tezos', accent: '#2f8f5f' },
+];
+
+const prettyToday = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long', month: 'long', day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date());
+
+const title = 'Now — what PointCast is doing this minute';
+const description = 'A newspaper-style live snapshot of PointCast right this second: the latest five ships from the federated compute ledger, the latest five pings from the inbox, three places to spend five minutes. Refreshed on every visit; minimal chrome.';
+
+const COLLAB_SHORT: Record<string, string> = {
+  'claude-code': 'cc',
+  'mh+cc': 'mh+cc',
+  'mike-hoydich': 'mh',
+  'codex': 'codex',
+  'manus': 'manus',
+  'chatgpt': 'chatgpt',
+};
+const SIG_COLOR: Record<string, string> = {
+  shy: '#8a7e6c',
+  modest: '#185FA5',
+  healthy: '#E8590C',
+  heavy: '#C92A2A',
 };
 ---
 
-<BlockLayout
-  title="Now"
-  description="Right now on PointCast — Card of the Day, Prize Cast countdown, latest blocks, agent surfaces. One screen, live snapshot."
-  image="/images/og/now.png"
-  jsonLd={jsonLd}
-  alternates={[{ type: 'application/json', href: '/now.json', title: 'Now snapshot (JSON)' }]}
->
-  <div class="page">
-    <nav class="crumb" aria-label="Breadcrumb">
-      <a href="/">Home</a>
-      <span aria-hidden="true">›</span>
-      <span>now</span>
-    </nav>
-
-    <header class="hero">
-      <div class="hero__kicker-row">
-        <p class="kicker">NOW · LIVE SYSTEM SNAPSHOT</p>
-        <span class="pulse">
-          <span class="pulse__dot" aria-hidden="true"></span>
-          <span class="mono" id="now-clock">{buildDateLabel}</span>
-        </span>
+<BlockLayout title={title} description={description}>
+  <main class="now-page">
+    <!-- Masthead -->
+    <header class="masthead">
+      <div class="masthead__left">
+        <a href="/" class="masthead__brand">PointCast</a>
+        <span class="masthead__sep" aria-hidden="true">·</span>
+        <span class="masthead__loc mono">El Segundo</span>
       </div>
-      <h1 class="display">Right now on PointCast.</h1>
-      <p class="dek">
-        One screen. One moment. What's broadcasting, what's settling, what the
-        machines just did. Updates with every page load; server state from
-        TzKT and the commit log; countdowns tick client-side.
-      </p>
+      <div class="masthead__right">
+        <span class="live mono"><span class="live__dot" aria-hidden="true"></span>LIVE</span>
+        <span class="masthead__date mono"><span id="now-date">{prettyToday}</span> · <time id="now-time">—:—</time> PT</span>
+      </div>
     </header>
 
-    {/* ══════ BROADCAST · CotD + Prize Cast ══════ */}
-    <section class="strip">
-      <div class="strip__head">
-        <p class="kicker strip__kicker">BROADCAST · TODAY</p>
-      </div>
-      <div class="strip__cards">
-        <article class="card card--cotd">
-          <a href="/battle" class="card__face">
-            <div class="card__art">
-              <img src={`https://noun.pics/${todaysCard.id}.svg`} alt={`Card of the Day — Noun ${todaysCard.id}`} loading="lazy" />
-            </div>
-            <div class="card__body">
-              <p class="card__kicker mono">CARD OF THE DAY · {todaysCard.dateLabel}</p>
-              <h2 class="card__title">Noun #{todaysCard.id}</h2>
-              <p class="card__note">{todaysCard.note}</p>
-              <p class="card__footer mono">DAY {todaysCard.rosterIndex + 1} / 21 · BATTLE →</p>
-            </div>
-          </a>
-        </article>
-
-        <article class="card card--cast">
-          <a href="/cast" class="card__face">
-            <div class="card__count">
-              <p class="card__kicker mono">NEXT PRIZE CAST DRAW</p>
-              <p class="card__big-number" data-role="draw-countdown">—</p>
-              <p class="card__footer mono">SUN 18:00 UTC · /CAST →</p>
-            </div>
-            <dl class="card__grid">
-              <div>
-                <dt>TVL</dt>
-                <dd>{prizeCast.tvlTez !== null ? `${prizeCast.tvlTez.toFixed(2)} ꜩ` : 'PENDING'}</dd>
-              </div>
-              <div>
-                <dt>PRIZE POOL</dt>
-                <dd>{prizeCast.prizePoolTez !== null ? `${prizeCast.prizePoolTez.toFixed(2)} ꜩ` : '—'}</dd>
-              </div>
-              <div>
-                <dt>STATUS</dt>
-                <dd>{prizeCastKt1.startsWith('KT1') ? 'LIVE' : 'PENDING'}</dd>
-              </div>
-            </dl>
-          </a>
-        </article>
-      </div>
-    </section>
-
-    {/* ══════ LATEST · 4 most recent blocks ══════ */}
-    <section class="latest">
-      <div class="latest__head">
-        <p class="kicker">LATEST · FROM THE FEED</p>
-        <a class="latest__more" href="/archive">See archive →</a>
-      </div>
-      <ol class="latest__list">
-        {latestBlocks.map((b) => {
-          const ch = CHANNELS[b.data.channel];
-          return (
-            <li class="latest__item">
-              <a href={`/b/${b.data.id}`} class="latest__link" style={`--row-c: ${ch.color600}; --row-c50: ${ch.color50}; --row-c8: ${ch.color800}`}>
-                <span class="latest__stamp">
-                  <span class="latest__ago mono" data-role="ago" data-ts={b.data.timestamp.toISOString()}>—</span>
-                  <span class="latest__ch" style={`border-color: ${ch.color600}; background: ${ch.color50}; color: ${ch.color800}`}>
-                    CH.{ch.code}
-                  </span>
-                </span>
-                <span class="latest__title">{b.data.title}</span>
-                <span class="latest__id mono">№{b.data.id}</span>
-              </a>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
-
-    {/* ══════ FOOTPRINT · what's in the system right now ══════ */}
-    <section class="footprint">
-      <div class="footprint__head">
-        <p class="kicker">FOOTPRINT · SYSTEM STATE</p>
-      </div>
-      <div class="footprint__grid">
-        <div class="fp">
-          <p class="fp__label mono">BLOCKS LIVE</p>
-          <p class="fp__value">{blocks.length}</p>
-          <p class="fp__note mono">ACROSS {Object.keys(channelCounts).length} CHANNELS</p>
-        </div>
-        <div class="fp">
-          <p class="fp__label mono">VISIT NOUNS MINTED</p>
-          <p class="fp__value">{mintCount ?? '—'}</p>
-          <p class="fp__note mono">{visitNounsKt1 ? 'LIVE · MAINNET' : 'PENDING'}</p>
-        </div>
-        <div class="fp">
-          <p class="fp__label mono">DRUM TOKEN</p>
-          <p class="fp__value">—</p>
-          <p class="fp__note mono">{drumKt1 ? 'LIVE' : 'CONTRACT · PENDING COMPILE'}</p>
-        </div>
-        <div class="fp">
-          <p class="fp__label mono">PRIZE CAST</p>
-          <p class="fp__value">{prizeCastKt1 ? 'LIVE' : 'PENDING'}</p>
-          <p class="fp__note mono">{prizeCastKt1 ? 'WEEKLY DRAWS' : 'CONTRACT · PENDING COMPILE'}</p>
-        </div>
-      </div>
-    </section>
-
-    {/* ══════ AGENT TRAIL · last commit + links to /status ══════ */}
-    <section class="trail">
-      <div class="trail__head">
-        <p class="kicker">AGENT TRAIL · LAST COMMIT</p>
-      </div>
-      {lastCommit ? (
-        <div class="trail__commit">
-          <p class="trail__hash mono">
-            <a href={`https://github.com/MikeHoydich/pointcast/commit/${lastCommit.hash}`} target="_blank" rel="noopener">{lastCommit.hash}</a>
-          </p>
-          <p class="trail__subject">{lastCommit.subject}</p>
-          <p class="trail__ago mono" data-role="ago" data-ts={lastCommit.date}>—</p>
-        </div>
-      ) : (
-        <p class="trail__empty">Commit log unavailable at build time.</p>
-      )}
-      <p class="trail__note">
-        See <a href="/status">/status</a> for agent owners, task queue, and the full commit history.
+    <!-- Headline -->
+    <section class="headline">
+      <p class="headline__kicker mono">RIGHT NOW · A NEWSPAPER OF ONE INSTANT</p>
+      <h1 class="headline__h1">
+        {ledger.length > 0 ? (
+          <>
+            Latest ship: <em>{ledger[0].title}</em>
+          </>
+        ) : (
+          <>What PointCast is doing this minute.</>
+        )}
+      </h1>
+      <p class="headline__dek">
+        A live snapshot. The five most recent ships, the five most recent pings landing in the inbox,
+        and three places to spend five minutes. Built so a visitor can know everything that matters
+        in eight seconds and pick their next move.
       </p>
     </section>
 
-    {/* ══════ SURFACES ══════ */}
-    <aside class="surfaces">
-      <p class="kicker">AGENT SURFACES</p>
-      <ul class="surfaces__list">
-        <li><a href="/now.json"><span class="mono">GET</span> /now.json</a></li>
-        <li><a href="/archive.json"><span class="mono">GET</span> /archive.json</a></li>
-        <li><a href="/editions.json"><span class="mono">GET</span> /editions.json</a></li>
-        <li><a href="/battle.json"><span class="mono">GET</span> /battle.json</a></li>
-        <li><a href="/cast.json"><span class="mono">GET</span> /cast.json</a></li>
-        <li><a href="/for-agents"><span class="mono">SEE</span> /for-agents</a></li>
-      </ul>
-    </aside>
-  </div>
+    <!-- Three columns -->
+    <section class="cols">
+      <!-- RECENT SHIPS -->
+      <article class="col">
+        <header class="col__head">
+          <p class="col__kicker mono">RECENT SHIPS · /COMPUTE</p>
+        </header>
+        <ol class="ships">
+          {ledger.map((e) => (
+            <li class="ship" style={`--sig: ${SIG_COLOR[e.signature] ?? '#8a7e6c'}`}>
+              <p class="ship__title">
+                {e.artifact ? (
+                  <a href={e.artifact.startsWith('http') ? e.artifact : e.artifact}>{e.title}</a>
+                ) : (
+                  e.title
+                )}
+              </p>
+              <p class="ship__meta mono">
+                <span class="ship__collab">{COLLAB_SHORT[e.collab] ?? e.collab}</span>
+                <span aria-hidden="true">·</span>
+                <span class="ship__sig">{e.signature}</span>
+                <span aria-hidden="true">·</span>
+                <time class="ship__when" data-iso={e.at}>—</time>
+              </p>
+            </li>
+          ))}
+        </ol>
+        <p class="col__foot mono"><a href="/compute">→ all ships at /compute</a></p>
+      </article>
 
-  <script is:inline>
-    // Live clock (PT), live Prize Cast draw countdown, relative-time on
-    // the latest blocks + last commit. All re-rendered on tick.
-    (function () {
-      const clock = document.getElementById('now-clock');
-      const drawEl = document.querySelector('[data-role="draw-countdown"]');
+      <!-- INBOX -->
+      <article class="col">
+        <header class="col__head">
+          <p class="col__kicker mono">INBOX · /API/PING</p>
+        </header>
+        <ol class="inbox" id="now-inbox">
+          <li class="inbox__loading mono">loading the inbox…</li>
+        </ol>
+        <p class="col__foot mono"><a href="/cos">→ /cos to send a message</a></p>
+      </article>
 
-      const clockFmt = new Intl.DateTimeFormat('en-US', {
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        timeZone: 'America/Los_Angeles', hour12: false,
-      });
+      <!-- WHERE TO 5 -->
+      <article class="col">
+        <header class="col__head">
+          <p class="col__kicker mono">WHERE TO 5 · GO HERE NEXT</p>
+        </header>
+        <ol class="chips">
+          {FIVE_MIN_CHIPS.map((c) => (
+            <li class="chip" style={`--accent: ${c.accent}`}>
+              <a href={c.href} class="chip__link">
+                <span class="chip__kicker mono">{c.kicker}</span>
+                <span class="chip__title">{c.title}</span>
+                <span class="chip__cta mono">→</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+        <p class="col__foot mono"><a href="/play">→ /play hub for everything</a></p>
+      </article>
+    </section>
 
-      function nextSunday18UTC(now) {
-        const next = new Date(Date.UTC(
-          now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
-          18, 0, 0, 0,
-        ));
-        const daysUntil = (7 - now.getUTCDay()) % 7;
-        next.setUTCDate(next.getUTCDate() + daysUntil);
-        if (daysUntil === 0 && now.getTime() >= next.getTime()) {
-          next.setUTCDate(next.getUTCDate() + 7);
-        }
-        return next;
-      }
+    {/* SEO / GEO: agent-activity pulse. Machine-readable-friendly
+        telemetry that answers "how active is this site right now".
+        Crawlers landing on /now see a fresh number every visit. The
+        linked surfaces (/agents.json, /llms.txt, /for-agents) take
+        curious agents directly to the structured entry points. */}
+    <section class="agent-pulse" aria-labelledby="ap-heading">
+      <div class="agent-pulse__head">
+        <p class="agent-pulse__kicker mono" id="ap-heading">AGENT PULSE · LAST 24H</p>
+        <p class="agent-pulse__meta mono">updated every build · window = 24h trailing</p>
+      </div>
+      <dl class="agent-pulse__stats">
+        <div class="agent-pulse__stat">
+          <dt class="mono">AGENT SHIPS</dt>
+          <dd class="agent-pulse__num">{agentShips24h.length}</dd>
+          <dd class="agent-pulse__label mono">blocks authored by Claude Code / Codex / Manus</dd>
+        </div>
+        <div class="agent-pulse__stat">
+          <dt class="mono">HUMAN SHIPS</dt>
+          <dd class="agent-pulse__num">{humanShips24h.length}</dd>
+          <dd class="agent-pulse__label mono">blocks authored by Mike Hoydich</dd>
+        </div>
+        <div class="agent-pulse__stat">
+          <dt class="mono">MIXED / OTHER</dt>
+          <dd class="agent-pulse__num">{mixedShips24h}</dd>
+          <dd class="agent-pulse__label mono">mh × cc pairs, unattributed, or federated contributors</dd>
+        </div>
+        <div class="agent-pulse__stat">
+          <dt class="mono">COMPUTE ENTRIES</dt>
+          <dd class="agent-pulse__num">{ledger24h.length}</dd>
+          <dd class="agent-pulse__label mono">federated ledger units (ships + in-flight)</dd>
+        </div>
+        <div class="agent-pulse__stat">
+          <dt class="mono">ACTIVE AGENTS</dt>
+          <dd class="agent-pulse__num">{activeAgents24h.length}</dd>
+          <dd class="agent-pulse__label mono">
+            {activeAgents24h.length > 0 ? activeAgents24h.map((a) => COLLAB_SHORT[a] ?? a).join(' · ') : '—'}
+          </dd>
+        </div>
+      </dl>
+      <nav class="agent-pulse__links">
+        <a href="/agents.json" class="mono">→ /agents.json</a>
+        <a href="/llms.txt" class="mono">→ /llms.txt</a>
+        <a href="/for-agents" class="mono">→ /for-agents</a>
+        <a href="/agent-native" class="mono">→ /agent-native</a>
+      </nav>
+    </section>
 
-      function agoLabel(iso) {
-        const d = new Date(iso).getTime();
-        if (!d) return '—';
-        const diff = Date.now() - d;
-        const m = Math.floor(diff / 60000);
-        if (m < 1) return 'just now';
-        if (m < 60) return m + 'm ago';
-        const h = Math.floor(m / 60);
-        if (h < 24) return h + 'h ago';
-        const days = Math.floor(h / 24);
-        return days + 'd ago';
-      }
+    <!-- Extra stripe — commercial-of-the-moment + leaderboard top-3 (overnight-12) -->
+    <section class="extra">
+      <article class="extra__cell extra__cell--watch">
+        <p class="extra__kicker mono">WATCH NOW · COMMERCIAL OF THE MOMENT</p>
+        <p class="extra__title" id="extra-com-title">—</p>
+        <p class="extra__sub mono" id="extra-com-sub">—</p>
+        <a class="extra__cta mono" href="/tv/shows/commercials">→ /tv/shows/commercials (fullscreen carousel)</a>
+      </article>
+      <article class="extra__cell extra__cell--board">
+        <p class="extra__kicker mono">WHO'S WINNING · YOUR LEADERBOARD POSITION</p>
+        <ul class="extra__board-list" id="extra-board-list">
+          <li class="extra__board-row mono">loading your scores…</li>
+        </ul>
+        <a class="extra__cta mono" href="/leaderboards">→ /leaderboards (8 boards)</a>
+      </article>
+    </section>
 
-      function tick() {
-        if (clock) {
-          clock.textContent = clockFmt.format(new Date()).replace(',', '') + ' PT';
-        }
-        if (drawEl) {
-          const target = nextSunday18UTC(new Date());
-          const diff = Math.max(0, target.getTime() - Date.now());
-          const totalMinutes = Math.floor(diff / 60000);
-          const d = Math.floor(totalMinutes / 1440);
-          const h = Math.floor((totalMinutes % 1440) / 60);
-          const mi = totalMinutes % 60;
-          const s = Math.floor((diff / 1000) % 60);
-          drawEl.textContent = d + 'd ' + String(h).padStart(2, '0') + 'h ' + String(mi).padStart(2, '0') + 'm ' + String(s).padStart(2, '0') + 's';
-        }
-        document.querySelectorAll('[data-role="ago"]').forEach(function (el) {
-          const ts = el.getAttribute('data-ts');
-          if (ts) el.textContent = agoLabel(ts);
-        });
-      }
-
-      tick();
-      setInterval(tick, 1000);
-    })();
-  </script>
+    <!-- Footer -->
+    <footer class="now-foot">
+      <p class="mono">
+        <a href="/compute">/compute</a>
+        <span aria-hidden="true">·</span>
+        <a href="/cadence">/cadence</a>
+        <span aria-hidden="true">·</span>
+        <a href="/cos">/cos</a>
+        <span aria-hidden="true">·</span>
+        <a href="/tv">/tv</a>
+        <span aria-hidden="true">·</span>
+        <a href="/tv/shows">/tv/shows</a>
+        <span aria-hidden="true">·</span>
+        <a href="/sprints">/sprints</a>
+        <span aria-hidden="true">·</span>
+        <a href="/status">→ system status dashboard</a>
+      </p>
+      <p class="now-foot__note mono">
+        page refreshed {new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour12: false })} PT · ledger has {COMPUTE_LEDGER.length} entries · {blocks.length} blocks live
+      </p>
+    </footer>
+  </main>
 </BlockLayout>
 
+<script is:inline>
+(function () {
+  // ---- Live clock --------------------------------------------------------
+  function tickClock() {
+    var t = document.getElementById('now-time');
+    if (!t) return;
+    var d = new Date();
+    var s = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Los_Angeles' });
+    t.textContent = s;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // ---- Relative-time labels ---------------------------------------------
+  function fmtAgo(ms) {
+    if (ms < 60_000) return 'just now';
+    if (ms < 3600_000) return Math.round(ms / 60_000) + 'm ago';
+    if (ms < 86400_000) return Math.round(ms / 3600_000) + 'h ago';
+    if (ms < 7 * 86400_000) return Math.round(ms / 86400_000) + 'd ago';
+    return Math.round(ms / (7 * 86400_000)) + 'w ago';
+  }
+  function paintRelativeTimes() {
+    var now = Date.now();
+    document.querySelectorAll('time[data-iso]').forEach(function (el) {
+      var iso = el.getAttribute('data-iso');
+      if (!iso) return;
+      var t = new Date(iso).getTime();
+      if (isNaN(t)) return;
+      el.textContent = fmtAgo(now - t);
+    });
+  }
+  paintRelativeTimes();
+  setInterval(paintRelativeTimes, 30_000);
+
+  // ---- Commercial of the moment (rotates by current minute %3) ----------
+  var COMMERCIALS = [
+    { title: 'PointCast — Tokyo broadcast', sub: '1967 · Showa-era anachronism' },
+    { title: 'Magpie — corner-store ad',     sub: '1970s–80s · the era is on the screen' },
+    { title: 'Magpie × Lego — block by block', sub: '1980s–90s · imagined crossover' },
+  ];
+  function paintCommercial() {
+    var m = new Date().getMinutes();
+    var c = COMMERCIALS[m % COMMERCIALS.length];
+    var t = document.getElementById('extra-com-title');
+    var s = document.getElementById('extra-com-sub');
+    if (t) t.textContent = c.title;
+    if (s) s.textContent = c.sub;
+  }
+  paintCommercial();
+  setInterval(paintCommercial, 60_000);
+
+  // ---- Leaderboard top-3 — show your scores across the 3 most-tracked boards
+  function readSource(source, field) {
+    try {
+      var raw = localStorage.getItem(source);
+      if (!raw) return 0;
+      if (field === 'self') {
+        var n = Number(raw);
+        if (!isNaN(n)) return n;
+        try { var p = JSON.parse(raw); return Number(p) || 0; } catch (e) { return 0; }
+      }
+      var parsed;
+      try { parsed = JSON.parse(raw); } catch (e) { return 0; }
+      var parts = field.split('.');
+      var v = parsed;
+      for (var i = 0; i < parts.length; i++) {
+        if (v == null) return 0;
+        if (parts[i] === 'length' && Array.isArray(v)) return v.length;
+        v = v[parts[i]];
+      }
+      var num = Number(v);
+      if (isNaN(num)) return Array.isArray(v) ? v.length : 0;
+      return num;
+    } catch (e) { return 0; }
+  }
+  function paintBoard() {
+    var BOARDS = [
+      { label: 'drum lifetime',     source: 'pc:drum:state',     field: 'lifetime' },
+      { label: 'noundrum tiles',    source: 'pc:noundrum:state', field: 'ownedTiles.length' },
+      { label: 'noundrum best',     source: 'pc:noundrum:state', field: 'bestTiles' },
+      { label: 'noundrum claims',   source: 'pc:noundrum:state', field: 'lifetimeClaims' },
+      { label: 'cards collected',   source: 'pc:cards:deck',     field: 'length' },
+      { label: 'commercials guess', source: 'pc:commercials:score', field: 'self' },
+    ];
+    var top = BOARDS.map(function (b) { return { label: b.label, score: readSource(b.source, b.field) }; })
+                   .sort(function (a, b) { return b.score - a.score; })
+                   .slice(0, 3);
+    var listEl = document.getElementById('extra-board-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    top.forEach(function (b, i) {
+      var li = document.createElement('li');
+      li.className = 'extra__board-row mono';
+      li.innerHTML = '<span class="extra__board-rank">' + (i + 1) + '</span><span class="extra__board-label">' + b.label + '</span><span class="extra__board-score">' + b.score + '</span>';
+      listEl.appendChild(li);
+    });
+  }
+  paintBoard();
+  setInterval(paintBoard, 30_000);
+
+  // ---- Inbox fetch (client-side, /api/ping?action=list) ------------------
+  async function loadInbox() {
+    var box = document.getElementById('now-inbox');
+    if (!box) return;
+    try {
+      var res = await fetch('/api/ping?action=list');
+      if (!res.ok) { box.innerHTML = '<li class="inbox__loading mono">inbox unreachable · try /cos</li>'; return; }
+      var j = await res.json();
+      var entries = (j && Array.isArray(j.entries)) ? j.entries.slice(-5).reverse() : [];
+      if (!entries.length) { box.innerHTML = '<li class="inbox__loading mono">no pings yet</li>'; return; }
+      box.innerHTML = '';
+      entries.forEach(function (e) {
+        var msg = e.message || {};
+        var li = document.createElement('li');
+        li.className = 'inbox__row';
+        var subj = msg.subject ? '<span class="inbox__subj">' + escapeHtml(msg.subject) + '</span>' : '';
+        var from = msg.from ? '<span class="inbox__from">' + escapeHtml(msg.from) + '</span>' : '<span class="inbox__from inbox__from--anon">anon</span>';
+        var body = (msg.body || '').toString().slice(0, 160);
+        var when = '<time class="inbox__when mono" data-iso="' + escapeAttr(msg.timestamp || '') + '">—</time>';
+        li.innerHTML =
+          '<p class="inbox__head mono">' + from + (msg.expand ? '<span class="inbox__expand">EXPAND</span>' : '') + ' · ' + when + '</p>' +
+          (subj ? '<p class="inbox__subjline">' + subj + '</p>' : '') +
+          '<p class="inbox__body">' + escapeHtml(body) + (body.length === 160 ? '…' : '') + '</p>';
+        box.appendChild(li);
+      });
+      paintRelativeTimes();
+    } catch (e) {
+      box.innerHTML = '<li class="inbox__loading mono">inbox unreachable · try /cos</li>';
+    }
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+  loadInbox();
+})();
+</script>
+
 <style>
-  .page {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 18px 16px 80px;
-  }
+  .now-page { max-width: 1200px; margin: 0 auto; padding: 22px 18px 60px; color: var(--pc-ink, #12110E); }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
 
-  .mono {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+  /* Masthead — single row, newspaper-style */
+  .masthead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 2px solid var(--pc-ink, #12110E);
+    padding-bottom: 10px; margin-bottom: 18px;
+    flex-wrap: wrap; gap: 8px;
   }
-
-  .kicker {
-    font-family: var(--pc-font-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--pc-ink-muted);
-    margin: 0 0 8px;
-  }
-
-  .crumb {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--pc-ink-muted);
-    margin-bottom: 18px;
-    display: flex;
-    gap: 8px;
-  }
-
-  /* ══════ HERO ══════ */
-  .hero {
-    margin-bottom: 24px;
-    padding-bottom: 18px;
-    border-bottom: 1.5px solid var(--pc-ink);
-  }
-
-  .hero__kicker-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-
-  .pulse {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 10px;
-    border: 1.5px solid var(--pc-accent);
-    background: #eef4fa;
-    color: var(--pc-accent);
-    border-radius: 2px;
-  }
-
-  .pulse__dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: currentColor;
-    animation: pulse 1.8s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.18); }
-  }
-
-  .display {
-    font-family: var(--pc-font-sans);
-    font-size: clamp(2.2rem, 10vw, 4.6rem);
-    font-weight: 500;
-    line-height: 0.94;
-    letter-spacing: -0.02em;
-    margin: 0 0 12px;
+  .masthead__left { display: flex; align-items: baseline; gap: 8px; }
+  .masthead__brand {
+    font-family: var(--pc-font-sans, 'Syne', system-ui);
+    font-weight: 700;
+    font-size: clamp(24px, 3vw, 32px);
+    letter-spacing: -0.01em;
     color: var(--pc-ink);
-  }
-
-  .dek {
-    margin: 0;
-    font-size: 15.5px;
-    line-height: 1.5;
-    color: var(--pc-ink-soft);
-    max-width: 60ch;
-  }
-
-  /* ══════ BROADCAST STRIP ══════ */
-  .strip {
-    margin-bottom: 24px;
-  }
-
-  .strip__head {
-    margin-bottom: 10px;
-  }
-
-  .strip__kicker {
-    color: var(--pc-accent);
-  }
-
-  .strip__cards {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .card {
-    border: 1.5px solid var(--pc-ink);
-    border-radius: 2px;
-    background: #fff;
-    overflow: hidden;
-  }
-
-  .card__face {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 14px;
-    padding: 14px;
-    color: var(--pc-ink);
-    transition: background-color 0.12s;
-  }
-
-  .card__face:hover {
-    background: #fafaf8;
     text-decoration: none;
   }
+  .masthead__brand:hover { color: #8A2432; }
+  .masthead__sep { color: var(--pc-ink-muted, #5F5E5A); font-size: 18px; }
+  .masthead__loc { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pc-ink-muted); font-weight: 600; }
+  .masthead__right { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; letter-spacing: 0.22em; font-weight: 700; padding: 3px 8px; border: 1px solid #C92A2A; background: rgba(201, 42, 42, 0.1); color: #8A2432; border-radius: 2px; }
+  .live__dot { width: 6px; height: 6px; border-radius: 50%; background: #C92A2A; box-shadow: 0 0 6px rgba(201, 42, 42, 0.6); animation: nw-blink 2s ease-in-out infinite; }
+  @keyframes nw-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .masthead__date { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-ink-muted); font-weight: 600; font-variant-numeric: tabular-nums; text-transform: uppercase; }
 
-  .card--cotd {
-    border-color: #8A2432;
-    background: #FBEAEE;
-  }
+  /* Headline */
+  .headline { margin: 0 0 22px; padding-bottom: 16px; border-bottom: 1px solid var(--pc-rule-soft, #E5E3DE); }
+  .headline__kicker { font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #8A2432; margin: 0 0 8px; font-weight: 700; }
+  .headline__h1 { font-family: var(--pc-font-sans, 'Syne', system-ui); font-size: clamp(22px, 3.4vw, 36px); font-weight: 500; margin: 0 0 10px; line-height: 1.18; letter-spacing: -0.01em; color: var(--pc-ink); }
+  .headline__h1 em { font-style: italic; color: #8A2432; }
+  .headline__dek { font-family: Georgia, 'Times New Roman', serif; font-size: 14.5px; line-height: 1.55; color: var(--pc-ink-soft, #38373A); margin: 0; max-width: 70ch; }
 
-  .card--cotd .card__face:hover {
-    background: color-mix(in oklab, #FBEAEE 75%, #fff);
-  }
-
-  .card--cast {
-    border-color: #0F6E56;
-    background: #E7F4EF;
-  }
-
-  .card--cast .card__face {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  .card--cast .card__face:hover {
-    background: color-mix(in oklab, #E7F4EF 75%, #fff);
-  }
-
-  .card__art {
-    aspect-ratio: 1 / 1;
-    border: 1.5px solid #8A2432;
-    border-radius: 2px;
-    background: #fff;
-    overflow: hidden;
-  }
-
-  .card__art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    image-rendering: pixelated;
-  }
-
-  .card__body, .card__count {
-    min-width: 0;
-  }
-
-  .card__kicker {
-    margin: 0 0 6px;
-    color: var(--pc-ink-muted);
-  }
-
-  .card--cotd .card__kicker { color: #551620; }
-  .card--cast .card__kicker { color: #074638; }
-
-  .card__title {
-    margin: 0 0 4px;
-    font-family: var(--pc-font-sans);
-    font-size: 24px;
-    font-weight: 500;
-    line-height: 1;
-    color: var(--pc-ink);
-  }
-
-  .card__note {
-    margin: 0 0 8px;
-    font-size: 14px;
-    color: var(--pc-ink-soft);
-    font-style: italic;
-    line-height: 1.4;
-  }
-
-  .card__footer {
-    margin: 0;
-    color: var(--pc-ink-muted);
-    font-size: 9.5px;
-  }
-
-  .card__big-number {
-    margin: 0 0 6px;
-    font-family: var(--pc-font-sans);
-    font-weight: 500;
-    font-size: clamp(1.8rem, 6vw, 2.6rem);
-    line-height: 1;
-    color: #074638;
-    letter-spacing: -0.01em;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .card__grid {
-    margin: 10px 0 0;
-    padding-top: 10px;
-    border-top: 1px dashed #0F6E56;
+  /* Three columns */
+  .cols {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px 10px;
+    gap: 30px;
+    margin-bottom: 30px;
   }
-
-  .card__grid div { min-width: 0; }
-
-  .card__grid dt {
-    margin: 0 0 2px;
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #074638;
-    opacity: 0.7;
+  .col {
+    background: transparent;
+    border-top: 3px solid var(--pc-ink);
+    padding-top: 12px;
   }
+  .col__head { margin-bottom: 12px; }
+  .col__kicker { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #5F2A1E; margin: 0; font-weight: 700; }
+  .col__foot { font-size: 11px; letter-spacing: 0.06em; color: var(--pc-ink-muted); margin: 14px 0 0; padding-top: 10px; border-top: 1px dotted var(--pc-rule-soft, #E5E3DE); }
+  .col__foot a { color: #8A2432; text-decoration: underline; text-decoration-color: rgba(138, 36, 50, 0.3); }
+  .col__foot a:hover { text-decoration-color: currentColor; }
 
-  .card__grid dd {
-    margin: 0;
-    font-size: 13px;
+  /* Ships column */
+  .ships { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .ship {
+    padding-left: 12px;
+    border-left: 3px solid var(--sig, #8a7e6c);
+  }
+  .ship__title { font-family: Georgia, serif; font-size: 14.5px; line-height: 1.35; margin: 0 0 4px; color: var(--pc-ink); font-weight: 500; }
+  .ship__title a { color: var(--pc-ink); text-decoration: underline; text-decoration-color: rgba(0,0,0,0.18); }
+  .ship__title a:hover { color: #8A2432; text-decoration-color: currentColor; }
+  .ship__meta { font-size: 10.5px; letter-spacing: 0.08em; color: var(--pc-ink-muted); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; text-transform: uppercase; font-weight: 600; }
+  .ship__collab { color: var(--sig, #8a7e6c); font-weight: 700; }
+  .ship__sig { color: var(--pc-ink-muted); }
+
+  /* Inbox column */
+  .inbox { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .inbox__loading { font-size: 12px; letter-spacing: 0.06em; color: var(--pc-ink-muted); font-style: italic; padding: 8px 0; }
+  .inbox__row { padding-bottom: 10px; border-bottom: 1px dotted var(--pc-rule-soft); }
+  .inbox__row:last-child { border-bottom: none; }
+  .inbox__head { font-size: 10px; letter-spacing: 0.12em; color: var(--pc-ink-muted); margin: 0 0 4px; text-transform: uppercase; font-weight: 600; }
+  .inbox__from { color: #8A2432; font-weight: 700; }
+  .inbox__from--anon { color: var(--pc-ink-muted); font-weight: 600; }
+  .inbox__expand { display: inline-block; margin: 0 6px; padding: 1px 5px; background: rgba(232, 154, 45, 0.18); color: #7a4d0c; font-weight: 700; border-radius: 2px; font-size: 8.5px; }
+  .inbox__when { color: var(--pc-ink-muted); font-weight: 600; }
+  .inbox__subjline { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--pc-ink); margin: 2px 0 4px; font-weight: 600; }
+  .inbox__subj { color: var(--pc-ink); }
+  .inbox__body { font-family: Georgia, serif; font-size: 13px; line-height: 1.45; color: var(--pc-ink-soft); margin: 0; }
+
+  /* Where-to-5 chips */
+  .chips { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .chip { background: transparent; }
+  .chip__link {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    padding: 12px 14px;
+    background: rgba(243, 230, 216, 0.5);
+    border: 1px solid var(--accent, #8A2432);
+    border-left: 4px solid var(--accent, #8A2432);
+    text-decoration: none;
     color: var(--pc-ink);
-    font-weight: 500;
-  }
-
-  /* ══════ LATEST ══════ */
-  .latest {
-    margin-bottom: 24px;
-    padding: 14px;
-    border: 1px solid var(--pc-rule);
     border-radius: 2px;
-    background: #fff;
+    transition: background 0.14s ease, transform 0.14s ease;
+  }
+  .chip__link:hover { background: rgba(243, 230, 216, 0.95); transform: translateX(2px); }
+  .chip__kicker { font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent, #8A2432); font-weight: 700; }
+  .chip__title { font-family: Georgia, serif; font-size: 14.5px; line-height: 1.3; color: var(--pc-ink); grid-column: 1 / 2; grid-row: 2; font-weight: 500; }
+  .chip__cta { font-size: 14px; color: var(--accent, #8A2432); grid-column: 2; grid-row: 1 / 3; align-self: center; font-weight: 700; }
+
+  /* Extra stripe (commercial-of-moment + leaderboard top-3) */
+  .extra {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 30px;
+    padding-top: 12px;
+  }
+  .extra__cell {
+    padding: 14px 16px;
+    background: rgba(243, 230, 216, 0.4);
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-top: 3px solid var(--accent, #8A2432);
+    border-radius: 2px;
+  }
+  .extra__cell--watch { --accent: #5F2A1E; }
+  .extra__cell--board { --accent: #0B3E73; }
+  .extra__kicker { font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; font-weight: 700; }
+  .extra__title { font-family: Georgia, serif; font-size: 17px; font-weight: 500; margin: 0 0 4px; line-height: 1.25; color: var(--pc-ink); }
+  .extra__sub { font-size: 11px; letter-spacing: 0.06em; color: var(--pc-ink-muted); margin: 0 0 12px; text-transform: uppercase; font-weight: 600; }
+  .extra__cta { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; color: var(--accent); text-decoration: underline; text-transform: uppercase; }
+  .extra__board-list { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 4px; }
+  .extra__board-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; padding: 4px 0; font-size: 12px; align-items: baseline; border-bottom: 1px dotted var(--pc-rule-soft, #E5E3DE); }
+  .extra__board-row:last-child { border-bottom: none; }
+  .extra__board-rank { color: var(--accent); font-weight: 700; }
+  .extra__board-label { color: var(--pc-ink); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .extra__board-score { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  @media (max-width: 720px) { .extra { grid-template-columns: 1fr; gap: 14px; } }
+
+  /* Footer */
+  .now-foot { padding-top: 18px; border-top: 1px solid var(--pc-rule-soft); }
+  .now-foot p { font-size: 12px; letter-spacing: 0.04em; color: var(--pc-ink-muted); margin: 0 0 6px; line-height: 1.6; }
+  .now-foot a { color: #8A2432; text-decoration: underline; text-decoration-color: rgba(138, 36, 50, 0.3); margin: 0 6px; }
+  .now-foot a:hover { text-decoration-color: currentColor; }
+  .now-foot__note { font-size: 11px; color: var(--pc-ink-muted); font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 860px) {
+    .cols { grid-template-columns: 1fr; gap: 22px; }
+    .masthead { flex-direction: column; align-items: flex-start; }
+    .masthead__right { gap: 8px; }
   }
 
-  .latest__head {
+  /* ─ Agent pulse — machine-readable-friendly live-activity telemetry ─ */
+  .agent-pulse {
+    margin: 32px 0 0;
+    padding: 18px 20px;
+    border: 1.5px solid #12110E;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #12110E 0%, #1c1814 100%);
+    color: #f2efe9;
+  }
+  .agent-pulse__head {
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 10px;
-    gap: 10px;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
     flex-wrap: wrap;
   }
-
-  .latest__more {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--pc-accent);
-  }
-
-  .latest__list {
-    list-style: none;
+  .agent-pulse__kicker {
     margin: 0;
-    padding: 0;
-  }
-
-  .latest__item + .latest__item {
-    border-top: 1px dashed var(--pc-rule-soft);
-  }
-
-  .latest__link {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 12px;
-    align-items: center;
-    padding: 10px 0;
-    color: var(--pc-ink);
-    text-decoration: none;
-    transition: padding-left 0.12s, background-color 0.12s;
-  }
-
-  .latest__link:hover {
-    padding-left: 8px;
-    background: var(--row-c50, #fafaf8);
-    text-decoration: none;
-  }
-
-  .latest__stamp {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .latest__ago {
-    color: var(--pc-ink-muted);
-    font-size: 10px;
-    min-width: 62px;
-  }
-
-  .latest__ch {
-    display: inline-flex;
-    padding: 2px 6px;
-    border: 1px solid;
-    border-radius: 2px;
-    font-family: var(--pc-font-mono);
-    font-size: 9.5px;
-    letter-spacing: 0.14em;
-    min-width: 52px;
-    justify-content: center;
-  }
-
-  .latest__title {
-    font-family: var(--pc-font-sans);
-    font-size: 15px;
+    font-size: 10.5px;
+    letter-spacing: 0.24em;
+    color: #e89a2d;
     font-weight: 500;
-    color: var(--pc-ink);
-    line-height: 1.3;
   }
-
-  .latest__link:hover .latest__title {
-    color: var(--row-c8, var(--pc-accent));
-  }
-
-  .latest__id {
-    color: var(--pc-ink-muted);
+  .agent-pulse__meta {
+    margin: 0;
     font-size: 10px;
+    letter-spacing: 0.1em;
+    color: color-mix(in oklab, #f2efe9 55%, transparent);
   }
-
-  /* ══════ FOOTPRINT ══════ */
-  .footprint {
-    margin-bottom: 24px;
-  }
-
-  .footprint__head {
-    margin-bottom: 10px;
-  }
-
-  .footprint__grid {
+  .agent-pulse__stats {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1px;
-    background: var(--pc-rule-soft);
-    border: 1px solid var(--pc-ink);
-    border-radius: 2px;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin: 0 0 14px;
   }
-
-  .fp {
-    padding: 14px 16px;
-    background: #fff;
+  .agent-pulse__stat {
+    padding: 8px 10px 10px;
+    border-left: 2px solid #e89a2d;
+    background: rgba(255, 246, 229, 0.04);
   }
-
-  .fp__label {
-    margin: 0 0 8px;
-    color: var(--pc-ink-muted);
-    font-size: 9.5px;
-  }
-
-  .fp__value {
+  .agent-pulse__stat dt {
     margin: 0 0 4px;
-    font-family: var(--pc-font-sans);
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    color: #e89a2d;
+  }
+  .agent-pulse__num {
+    margin: 0 0 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 32px;
     font-weight: 500;
-    font-size: clamp(1.4rem, 5vw, 2rem);
-    color: var(--pc-ink);
     line-height: 1;
+    color: #ffffff;
     font-variant-numeric: tabular-nums;
   }
-
-  .fp__note {
+  .agent-pulse__label {
     margin: 0;
-    color: var(--pc-ink-muted);
-    font-size: 9.5px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: color-mix(in oklab, #f2efe9 70%, transparent);
+    line-height: 1.4;
   }
-
-  /* ══════ TRAIL ══════ */
-  .trail {
-    margin-bottom: 24px;
-    padding: 14px;
-    border: 1px solid var(--pc-rule);
-    border-radius: 2px;
-    background: #fff;
-  }
-
-  .trail__head {
-    margin-bottom: 8px;
-  }
-
-  .trail__commit {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 12px;
-    align-items: baseline;
-    padding: 6px 0 10px;
-    border-bottom: 1px dashed var(--pc-rule-soft);
-  }
-
-  .trail__hash {
-    margin: 0;
-  }
-
-  .trail__hash a {
-    color: var(--pc-accent);
-  }
-
-  .trail__subject {
-    margin: 0;
-    font-size: 14px;
-    color: var(--pc-ink);
-    line-height: 1.3;
-  }
-
-  .trail__ago {
-    color: var(--pc-ink-muted);
-    font-size: 9.5px;
-    white-space: nowrap;
-  }
-
-  .trail__note,
-  .trail__empty {
-    margin: 10px 0 0;
-    font-size: 13px;
-    color: var(--pc-ink-soft);
-  }
-
-  .trail__note a {
-    color: var(--pc-accent);
-  }
-
-  /* ══════ SURFACES ══════ */
-  .surfaces {
-    margin-top: 32px;
-    padding: 14px;
-    border: 1px solid var(--pc-rule);
-    border-radius: 2px;
-    background: #fafaf8;
-  }
-
-  .surfaces__list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px 14px;
-  }
-
-  .surfaces__list a {
+  .agent-pulse__links {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    color: var(--pc-accent);
-    padding: 4px 0;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    padding-top: 12px;
+    border-top: 1px dashed color-mix(in oklab, #f2efe9 18%, transparent);
   }
-
-  .surfaces__list .mono {
-    color: var(--pc-ink-muted);
-    min-width: 38px;
+  .agent-pulse__links a {
+    color: #e89a2d;
+    font-size: 11px;
+    letter-spacing: 0.12em;
   }
-
-  /* ══════ RESPONSIVE ══════ */
-  @media (min-width: 720px) {
-    .strip__cards {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .footprint__grid {
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    .surfaces__list {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
-
-  @media (max-width: 560px) {
-    .latest__link {
-      grid-template-columns: 1fr auto;
-      grid-template-areas:
-        "stamp id"
-        "title title";
-      gap: 6px 8px;
-    }
-
-    .latest__stamp { grid-area: stamp; }
-    .latest__title { grid-area: title; font-size: 14px; }
-    .latest__id { grid-area: id; }
+  .agent-pulse__links a:hover { color: #fff6e5; }
+  @media (max-width: 600px) {
+    .agent-pulse__num { font-size: 26px; }
   }
 </style>

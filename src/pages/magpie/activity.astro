@@ -1,0 +1,341 @@
+---
+/**
+ * /magpie/activity — remote glance at broadcast history.
+ *
+ * Fully client-rendered to talk to the local peer-node at 127.0.0.1:38473.
+ * The hosted page can't fetch localhost itself (browsers block
+ * cross-origin), but the peer-node serves Access-Control-Allow-Origin: *
+ * so fetch() from this page works as long as the Magpie app is running
+ * with "Serve local web UI" enabled.
+ *
+ * What's here:
+ *   - Totals strip (last 30 days)
+ *   - Per-publisher success-rate bars
+ *   - Last-14-days histogram
+ *   - Scrollable outcome feed with permalinks
+ *
+ * Fetches: GET 127.0.0.1:38473/summary, /activity?limit=100
+ * Refreshes every 30s when the page is visible.
+ */
+
+import BlockLayout from '../../layouts/BlockLayout.astro';
+---
+
+<BlockLayout
+  channelCode="FD"
+  blockType="NOTE"
+  title="Magpie · Activity"
+  description="Cross-destination broadcast history from the local Magpie peer-node."
+  pageTitle="Magpie Activity"
+>
+  <div class="mg-activity-root">
+    <header class="mga-header">
+      <div>
+        <p class="mga-kicker">Magpie · remote read</p>
+        <h2 class="mga-title">Activity</h2>
+      </div>
+      <div class="mga-controls">
+        <span id="mga-status" class="mga-pill checking"><span class="mga-pill-dot"></span>checking</span>
+        <button id="mga-refresh" type="button" title="reload">↻</button>
+      </div>
+    </header>
+
+    <section id="mga-offline" class="mga-card mga-offline" hidden>
+      <h3>Peer node not reachable</h3>
+      <p>
+        Start Magpie.app on this machine and enable
+        <em>Preferences → PointCast → Serve local web UI</em>.
+        This page fetches <code id="mga-endpoint">http://127.0.0.1:38473/summary</code>.
+      </p>
+      <details>
+        <summary>Advanced · change endpoint</summary>
+        <input type="text" id="mga-endpoint-input" placeholder="http://127.0.0.1:38473" />
+        <button id="mga-endpoint-save" type="button">Save</button>
+      </details>
+    </section>
+
+    <section id="mga-totals" class="mga-card" hidden>
+      <h3 class="mga-section-title">Last 30 days</h3>
+      <div class="mga-totals-grid">
+        <div class="mga-tile"><span class="mga-tile-label">shipped</span><span class="mga-tile-value mga-t-moss" id="mga-t-success">—</span></div>
+        <div class="mga-tile"><span class="mga-tile-label">failed</span><span class="mga-tile-value mga-t-red" id="mga-t-fail">—</span></div>
+        <div class="mga-tile"><span class="mga-tile-label">destinations</span><span class="mga-tile-value mga-t-clay" id="mga-t-dests">—</span></div>
+        <div class="mga-tile"><span class="mga-tile-label">active days</span><span class="mga-tile-value mga-t-bronze" id="mga-t-days">—</span></div>
+        <div class="mga-tile"><span class="mga-tile-label">scheduled</span><span class="mga-tile-value" id="mga-t-scheduled">—</span></div>
+        <div class="mga-tile"><span class="mga-tile-label">drafts</span><span class="mga-tile-value" id="mga-t-drafts">—</span></div>
+      </div>
+    </section>
+
+    <section id="mga-publisher-lanes" class="mga-card" hidden>
+      <h3 class="mga-section-title">Per destination</h3>
+      <div class="mga-lanes" id="mga-lanes"></div>
+    </section>
+
+    <section id="mga-histogram" class="mga-card" hidden>
+      <h3 class="mga-section-title">Last 14 days</h3>
+      <div class="mga-histogram" id="mga-histogram-bars"></div>
+    </section>
+
+    <section id="mga-feed" class="mga-card" hidden>
+      <h3 class="mga-section-title">Recent outcomes</h3>
+      <ul class="mga-feed" id="mga-feed-list"></ul>
+    </section>
+  </div>
+</BlockLayout>
+
+<style>
+  :root {
+    --mg-paper: #EFE8D2;
+    --mg-paper-tint: #E7DFC4;
+    --mg-card: #FAF5E0;
+    --mg-rule: #C8B98E;
+    --mg-rule-soft: #E0D6B6;
+    --mg-ink: #1E1C14;
+    --mg-ink-soft: #5A544A;
+    --mg-ink-mute: #8A8273;
+    --mg-moss: #3E5940;
+    --mg-clay: #AE6A38;
+    --mg-bronze: #7E5A2A;
+    --mg-leaf-red: #C14E3A;
+    --mg-display: Georgia, 'Iowan Old Style', serif;
+    --mg-mono: ui-monospace, 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  }
+  .mg-activity-root { padding: 24px; max-width: 960px; margin: 0 auto; background: var(--mg-paper); color: var(--mg-ink); }
+  .mga-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; gap: 16px; }
+  .mga-kicker { font-family: var(--mg-mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--mg-clay); margin: 0 0 4px; }
+  .mga-title { font-family: var(--mg-display); font-style: italic; font-weight: 500; font-size: 28px; margin: 0; color: var(--mg-ink); }
+  .mga-controls { display: flex; align-items: center; gap: 10px; }
+  .mga-pill { font-family: var(--mg-mono); font-size: 10px; letter-spacing: 0.14em; padding: 4px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
+  .mga-pill.checking { background: rgba(174, 106, 56, 0.12); color: var(--mg-clay); }
+  .mga-pill.online { background: rgba(62, 89, 64, 0.14); color: var(--mg-moss); }
+  .mga-pill.offline { background: rgba(193, 78, 58, 0.12); color: var(--mg-leaf-red); }
+  .mga-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .mga-controls button { font-family: var(--mg-mono); padding: 4px 10px; background: transparent; border: 1px solid var(--mg-rule); border-radius: 2px; cursor: pointer; color: var(--mg-ink-soft); }
+
+  .mga-card { background: var(--mg-card); border: 1px solid var(--mg-rule); border-radius: 4px; padding: 18px; margin-bottom: 14px; }
+  .mga-section-title { font-family: var(--mg-mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--mg-moss); margin: 0 0 12px; }
+
+  .mga-offline h3 { font-family: var(--mg-display); font-style: italic; font-weight: 500; color: var(--mg-leaf-red); margin: 0 0 6px; }
+  .mga-offline p { font-size: 14px; color: var(--mg-ink-soft); margin: 0 0 10px; }
+  .mga-offline code { font-family: var(--mg-mono); font-size: 12px; padding: 1px 5px; background: var(--mg-paper-tint); border: 1px solid var(--mg-rule); border-radius: 2px; }
+  .mga-offline details { margin-top: 10px; font-size: 13px; }
+  .mga-offline input { font-family: var(--mg-mono); font-size: 12px; padding: 4px 8px; border: 1px solid var(--mg-rule); background: var(--mg-paper); width: 260px; margin-right: 6px; }
+
+  .mga-totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
+  .mga-tile { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--mg-paper-tint); border-radius: 3px; }
+  .mga-tile-label { font-family: var(--mg-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mg-ink-mute); }
+  .mga-tile-value { font-family: var(--mg-display); font-size: 24px; font-weight: 500; color: var(--mg-ink); }
+  .mga-t-moss { color: var(--mg-moss); }
+  .mga-t-red { color: var(--mg-leaf-red); }
+  .mga-t-clay { color: var(--mg-clay); }
+  .mga-t-bronze { color: var(--mg-bronze); }
+
+  .mga-lanes { display: grid; gap: 8px; }
+  .mga-lane { display: grid; grid-template-columns: 30px 120px 1fr 50px 50px; gap: 10px; align-items: center; }
+  .mga-lane-code { font-family: var(--mg-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--mg-clay); }
+  .mga-lane-name { font-size: 13px; color: var(--mg-ink); }
+  .mga-lane-bar { display: flex; height: 8px; border-radius: 2px; overflow: hidden; background: var(--mg-rule-soft); }
+  .mga-lane-bar-ok { background: var(--mg-moss); }
+  .mga-lane-bar-fail { background: rgba(193, 78, 58, 0.5); }
+  .mga-lane-count { font-family: var(--mg-mono); font-size: 10px; color: var(--mg-moss); text-align: right; }
+  .mga-lane-pct { font-family: var(--mg-mono); font-size: 10px; color: var(--mg-ink-soft); text-align: right; }
+
+  .mga-histogram { display: flex; align-items: flex-end; gap: 4px; height: 96px; }
+  .mga-histogram-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-width: 4px; }
+  .mga-histogram-bar-ok { background: var(--mg-moss); min-height: 1px; }
+  .mga-histogram-bar-fail { background: rgba(193, 78, 58, 0.5); min-height: 1px; }
+  .mga-histogram-bar-empty { background: var(--mg-rule-soft); height: 2px; }
+
+  .mga-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 400px; overflow-y: auto; }
+  .mga-feed-item { display: grid; grid-template-columns: 110px 30px 16px 1fr; gap: 8px; padding: 6px 8px; align-items: start; font-size: 12px; }
+  .mga-feed-item.ok { border-left: 2px solid var(--mg-moss); }
+  .mga-feed-item.fail { border-left: 2px solid var(--mg-leaf-red); background: rgba(193, 78, 58, 0.04); }
+  .mga-feed-when { font-family: var(--mg-mono); font-size: 10px; color: var(--mg-ink-mute); }
+  .mga-feed-code { font-family: var(--mg-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--mg-clay); }
+  .mga-feed-title { color: var(--mg-ink); }
+  .mga-feed-title a { color: var(--mg-bronze); text-decoration: underline; text-underline-offset: 2px; }
+  .mga-feed-error { font-family: var(--mg-mono); font-size: 10px; color: var(--mg-leaf-red); }
+
+  @media (max-width: 640px) {
+    .mga-lane { grid-template-columns: 28px 1fr 60px 50px; }
+    .mga-lane-name { display: none; }
+  }
+</style>
+
+<script>
+  const DEFAULT_ENDPOINT = 'http://127.0.0.1:38473';
+  const ENDPOINT_KEY = 'magpie-endpoint';
+
+  const PUBLISHER_CODES: Record<string, string> = {
+    pointcast: 'PC', mastodon: 'MA', farcaster: 'FC', bitchat: 'BC',
+    bluesky: 'BS', twitter: 'TW', linkedin: 'LI',
+    zora: 'ZO', objkt: 'OB', opensea: 'OS', instagram: 'IG',
+  };
+  const PUBLISHER_NAMES: Record<string, string> = {
+    pointcast: 'PointCast', mastodon: 'Mastodon', farcaster: 'Farcaster', bitchat: 'bitchat',
+    bluesky: 'Bluesky', twitter: 'Twitter / X', linkedin: 'LinkedIn',
+    zora: 'Zora', objkt: 'Objkt', opensea: 'OpenSea', instagram: 'Instagram',
+  };
+
+  function endpoint(): string {
+    return localStorage.getItem(ENDPOINT_KEY) || DEFAULT_ENDPOINT;
+  }
+  function $<T extends HTMLElement>(sel: string): T { return document.querySelector(sel) as T; }
+
+  async function loadAll() {
+    const base = endpoint();
+    ($('#mga-endpoint') as HTMLElement).textContent = base + '/summary';
+    try {
+      const [summaryRes, activityRes] = await Promise.all([
+        fetch(base + '/summary?days=30'),
+        fetch(base + '/activity?limit=100'),
+      ]);
+      if (!summaryRes.ok || !activityRes.ok) throw new Error('HTTP ' + summaryRes.status);
+      const summary = await summaryRes.json();
+      const activity = await activityRes.json();
+      showOnline();
+      renderSummary(summary);
+      renderActivity(activity);
+    } catch (err) {
+      showOffline();
+    }
+  }
+
+  function showOnline() {
+    const p = $('#mga-status');
+    p.className = 'mga-pill online';
+    p.innerHTML = '<span class="mga-pill-dot"></span>connected';
+    $('#mga-offline').hidden = true;
+    $('#mga-totals').hidden = false;
+    $('#mga-publisher-lanes').hidden = false;
+    $('#mga-histogram').hidden = false;
+    $('#mga-feed').hidden = false;
+  }
+  function showOffline() {
+    const p = $('#mga-status');
+    p.className = 'mga-pill offline';
+    p.innerHTML = '<span class="mga-pill-dot"></span>offline';
+    $('#mga-offline').hidden = false;
+    $('#mga-totals').hidden = true;
+    $('#mga-publisher-lanes').hidden = true;
+    $('#mga-histogram').hidden = true;
+    $('#mga-feed').hidden = true;
+  }
+
+  function renderSummary(summary: any) {
+    const t = summary.totals || {};
+    $('#mga-t-success').textContent = String(t.successes ?? 0);
+    $('#mga-t-fail').textContent = String(t.failures ?? 0);
+    $('#mga-t-dests').textContent = String(t.destinations ?? 0);
+    $('#mga-t-days').textContent = String(t.activeDays ?? 0);
+    $('#mga-t-scheduled').textContent = String(summary.scheduledCount ?? 0);
+    $('#mga-t-drafts').textContent = String(summary.pendingDraftsCount ?? 0);
+
+    const lanes = $('#mga-lanes');
+    lanes.innerHTML = '';
+    for (const p of (summary.perPublisher || [])) {
+      const row = document.createElement('div');
+      row.className = 'mga-lane';
+      const rate = p.attempts > 0 ? p.successes / p.attempts : 0;
+      const pct = Math.round(rate * 100);
+      row.innerHTML = `
+        <span class="mga-lane-code">${PUBLISHER_CODES[p.publisher] || p.publisher.slice(0,2).toUpperCase()}</span>
+        <span class="mga-lane-name">${PUBLISHER_NAMES[p.publisher] || p.publisher}</span>
+        <span class="mga-lane-bar">
+          <span class="mga-lane-bar-ok" style="width: ${(p.successes / Math.max(1, p.attempts)) * 100}%"></span>
+          <span class="mga-lane-bar-fail" style="width: ${((p.attempts - p.successes) / Math.max(1, p.attempts)) * 100}%"></span>
+        </span>
+        <span class="mga-lane-count">${p.successes}/${p.attempts}</span>
+        <span class="mga-lane-pct">${pct}%</span>
+      `;
+      lanes.appendChild(row);
+    }
+
+    const bars = $('#mga-histogram-bars');
+    bars.innerHTML = '';
+    const daily = (summary.daily || []) as Array<{ successes: number; failures: number }>;
+    const max = Math.max(1, ...daily.map((d) => d.successes + d.failures));
+    for (const d of daily) {
+      const col = document.createElement('div');
+      col.className = 'mga-histogram-col';
+      if (d.failures > 0) {
+        const fail = document.createElement('div');
+        fail.className = 'mga-histogram-bar-fail';
+        fail.style.height = `${(d.failures / max) * 96}px`;
+        col.appendChild(fail);
+      }
+      if (d.successes > 0) {
+        const ok = document.createElement('div');
+        ok.className = 'mga-histogram-bar-ok';
+        ok.style.height = `${(d.successes / max) * 96}px`;
+        col.appendChild(ok);
+      }
+      if (d.successes === 0 && d.failures === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'mga-histogram-bar-empty';
+        col.appendChild(empty);
+      }
+      bars.appendChild(col);
+    }
+  }
+
+  function renderActivity(activity: any) {
+    const feed = $('#mga-feed-list');
+    feed.innerHTML = '';
+    const entries = activity.entries || [];
+    for (const e of entries) {
+      const li = document.createElement('li');
+      li.className = 'mga-feed-item ' + (e.success ? 'ok' : 'fail');
+      const when = (e.at || '').slice(0, 16).replace('T', ' ');
+      const title = e.title || e.summary || e.error || '';
+      const code = PUBLISHER_CODES[e.publisher] || (e.publisher || '').slice(0, 2).toUpperCase();
+      const titleHTML = e.permalink
+        ? `<a href="${e.permalink}" target="_blank" rel="noopener">${escape(title)}</a>`
+        : escape(title);
+      const errHTML = !e.success && e.error ? `<div class="mga-feed-error">${escape(e.error)}</div>` : '';
+      li.innerHTML = `
+        <span class="mga-feed-when">${escape(when)}</span>
+        <span class="mga-feed-code">${escape(code)}</span>
+        <span>${e.success ? '✓' : '✗'}</span>
+        <span class="mga-feed-title">${titleHTML}${errHTML}</span>
+      `;
+      feed.appendChild(li);
+    }
+    if (entries.length === 0) {
+      feed.innerHTML = '<li style="padding:10px;color:var(--mg-ink-mute)">— no activity yet —</li>';
+    }
+  }
+
+  function escape(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  }
+
+  // Endpoint override controls.
+  const endpointSave = $('#mga-endpoint-save');
+  if (endpointSave) {
+    endpointSave.addEventListener('click', () => {
+      const v = ($('#mga-endpoint-input') as HTMLInputElement).value.trim();
+      if (v) localStorage.setItem(ENDPOINT_KEY, v);
+      loadAll();
+    });
+  }
+  const refresh = $('#mga-refresh');
+  if (refresh) refresh.addEventListener('click', loadAll);
+
+  // Auto-refresh when visible.
+  let refreshTimer: any;
+  function startRefresh() {
+    if (document.hidden) return;
+    if (refreshTimer) return;
+    refreshTimer = setInterval(loadAll, 30000);
+  }
+  function stopRefresh() {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopRefresh(); else { loadAll(); startRefresh(); }
+  });
+
+  loadAll();
+  startRefresh();
+</script>

@@ -1,16 +1,9 @@
 /**
- * /feed.xml — unified RSS 2.0 feed covering the latest 50 Blocks.
+ * /feed.xml — RSS 2.0 of the latest 50 non-draft blocks, newest first.
  *
- * The existing /rss.xml predates the Blocks architecture and only covers
- * long-form posts in src/content/posts/. /c/{slug}.rss covers single
- * channels. This feed is the "everything in reverse chronological order"
- * stream that most readers (RSS clients, agents consuming via Atom/RSS,
- * archival tools) will want.
- *
- * Sibling endpoints:
- *   - /feed.json   — JSON Feed v1.1 version of this same data
- *   - /rss.xml     — legacy posts-only RSS (preserved for existing subs)
- *   - /blocks.json — PointCast's native JSON shape
+ * Primary consumers: traditional RSS readers + search crawlers that
+ * still prefer the decade-plus-old format. PointCast also ships
+ * /feed.json for modern clients.
  */
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
@@ -25,47 +18,58 @@ function xmlEscape(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+function rfc822(d: Date): string {
+  return d.toUTCString();
+}
+
 export const GET: APIRoute = async () => {
   const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
     .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
     .slice(0, 50);
 
-  const channelsSeen = new Set<string>();
+  const channels = new Set<string>();
+  blocks.forEach((b) => {
+    const ch = CHANNELS[b.data.channel];
+    if (ch?.name) channels.add(ch.name);
+  });
 
   const items = blocks.map((b) => {
     const ch = CHANNELS[b.data.channel];
-    channelsSeen.add(ch.name);
-    const description = b.data.dek ?? b.data.body?.slice(0, 280) ?? b.data.title;
-    const prefixedTitle = `${ch.name} \u00b7 ${b.data.title}`;
-    return `
-    <item>
-      <title>${xmlEscape(prefixedTitle)}</title>
+    const title = `${ch.name} · ${b.data.title}`;
+    const body = b.data.dek ?? (b.data.body ? b.data.body.slice(0, 280) : b.data.title);
+    return `    <item>
+      <title>${xmlEscape(title)}</title>
       <link>https://pointcast.xyz/b/${b.data.id}</link>
       <guid isPermaLink="true">https://pointcast.xyz/b/${b.data.id}</guid>
-      <pubDate>${b.data.timestamp.toUTCString()}</pubDate>
-      <description>${xmlEscape(description)}</description>
+      <pubDate>${rfc822(b.data.timestamp)}</pubDate>
+      <description>${xmlEscape(body)}</description>
+      <category>${xmlEscape(ch.name)}</category>
+      <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">${xmlEscape(b.data.author)}</dc:creator>
     </item>`;
   }).join('\n');
 
-  const categories = Array.from(channelsSeen)
+  const categoryTags = Array.from(channels)
     .map((name) => `    <category>${xmlEscape(name)}</category>`)
     .join('\n');
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  const now = new Date();
+
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>PointCast</title>
-    <link>https://pointcast.xyz/</link>
-    <description>A living broadcast from El Segundo. Every piece of content is a Block.</description>
-    <language>en-US</language>
-    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <link>https://pointcast.xyz</link>
+    <description>Living broadcast from El Segundo. Blocks over channels, edition one.</description>
+    <language>en</language>
+    <lastBuildDate>${rfc822(now)}</lastBuildDate>
     <atom:link href="https://pointcast.xyz/feed.xml" rel="self" type="application/rss+xml" />
-${categories}
-    ${items}
+${categoryTags}
+${items}
   </channel>
-</rss>`;
+</rss>
+`;
 
-  return new Response(xml, {
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'application/rss+xml; charset=utf-8',

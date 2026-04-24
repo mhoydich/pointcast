@@ -121,6 +121,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // PerplexityBot, CCBot, Bytespider, Google-Extended, etc.). Humans,
   // unknown UAs, and non-AI bots (seo, social, search) get the full
   // experience unchanged.
+  // ── Markdown for Agents ──────────────────────────────────────────────────
+  //
+  // RFC / Cloudflare convention: if an agent sends Accept: text/markdown,
+  // we return a markdown version of the page. HTML remains the default for
+  // browsers. Per isitagentready.com 2026-04-20 audit goal: "Enable Markdown
+  // for Agents so requests with Accept: text/markdown return a markdown
+  // version of your HTML response while HTML stays the default."
+  //
+  // Implementation: cheap HTML → Markdown converter over the rendered body.
+  // Handles the common tag set (h1-h6, p, a, strong/em, ul/ol/li, code/pre).
+  // Good enough for blocks, about pages, /compute, /cadence, /contribute.
+  // Lossy — some structural HTML (flex layouts, custom components) doesn't
+  // roundtrip. We're optimizing for "agent gets the content" not "agent
+  // gets a pixel-perfect rerender."
+  if (wantsMarkdown(accept) && isGet && response.status === 200) {
+    const ct = response.headers.get('content-type') ?? '';
+    if (ct.startsWith('text/html')) {
+      const html = await response.text();
+      const md = htmlToMarkdown(html, url.pathname);
+      const headers = new Headers();
+      headers.set('Content-Type', 'text/markdown; charset=utf-8');
+      headers.set('Access-Control-Allow-Origin', '*');
+      headers.set('Cache-Control', 'public, max-age=300, s-maxage=3600');
+      headers.set('X-Markdown-For-Agents', '1');
+      headers.set('X-Markdown-Source', url.pathname);
+      // Rough token estimate (~4 chars/token); capped at a reasonable value.
+      headers.set('X-Markdown-Tokens', String(Math.min(Math.ceil(md.length / 4), 999999)));
+      headers.set('Vary', 'Accept');
+      return new Response(md, { status: 200, headers });
+    }
+  }
+
   if (type.startsWith('ai:') && response.status === 200) {
     const ct = response.headers.get('content-type') ?? '';
     if (ct.startsWith('text/html')) {
@@ -170,3 +202,105 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   return response;
 };
+
+/** Detect Accept: text/markdown preference. Accept header may carry
+ *  q-values; we do a loose contains check because the RFC and Cloudflare
+ *  docs both spell it "text/markdown" verbatim. */
+function wantsMarkdown(accept: string): boolean {
+  if (!accept) return false;
+  // Require text/markdown explicitly; don't transform for wildcard */*.
+  return /\btext\/markdown\b/i.test(accept);
+}
+
+/** Minimal HTML → Markdown converter. Optimized for PointCast pages:
+ *  block articles, about pages, /compute, /cadence, /contribute. Lossy
+ *  for complex layouts; good enough for agent consumption.
+ *
+ *  Key moves:
+ *   - Pull <title>, skip head/footer/nav/aside-that-isn't-main.
+ *   - Collapse <main> content (falling back to <body> if no main).
+ *   - Convert common block tags + inline tags to markdown.
+ *   - Collapse whitespace, unescape entities.
+ */
+function htmlToMarkdown(html: string, pathname: string): string {
+  // Extract title
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : '';
+
+  // Extract <main> content (fall back to body if no main).
+  const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  let body = mainMatch ? mainMatch[1] : (bodyMatch ? bodyMatch[1] : html);
+
+  // Drop script / style / head remnants.
+  body = body
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    // Drop site chrome tags that aren't editorial.
+    .replace(/<header[\s\S]*?<\/header>/gi, '')
+    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+    // Drop CoNavigator + strips (they're navigation aids, not content).
+    .replace(/<aside[\s\S]*?<\/aside>/gi, '');
+
+  // Block-level conversions.
+  body = body
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n# $1\n\n')
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n## $1\n\n')
+    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n### $1\n\n')
+    .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n#### $1\n\n')
+    .replace(/<h5[^>]*>([\s\S]*?)<\/h5>/gi, '\n\n##### $1\n\n')
+    .replace(/<h6[^>]*>([\s\S]*?)<\/h6>/gi, '\n\n###### $1\n\n')
+    .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_m, inner) => {
+      return '\n\n' + String(inner).trim().split('\n').map((l) => '> ' + l).join('\n') + '\n\n';
+    })
+    .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, '\n\n```\n$1\n```\n\n')
+    .replace(/<hr\s*\/?>/gi, '\n\n---\n\n')
+    .replace(/<br\s*\/?>/gi, '  \n')
+    // Lists: handle <li> first, then wrapping containers.
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n')
+    .replace(/<\/?(ul|ol)[^>]*>/gi, '\n')
+    .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n\n$1\n\n');
+
+  // Inline conversions. <a> first so href is captured before tag-strip.
+  body = body
+    .replace(/<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+    .replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**')
+    .replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*')
+    .replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
+    .replace(/<img\s+[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*\/?>/gi, '![$1]($2)')
+    .replace(/<img\s+[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, '![$2]($1)')
+    .replace(/<img\s+[^>]*src="([^"]*)"[^>]*\/?>/gi, '![]($1)');
+
+  // Strip remaining tags.
+  body = body.replace(/<[^>]+>/g, '');
+
+  // Unescape entities.
+  body = body
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&hellip;/g, '…');
+
+  // Collapse whitespace.
+  body = body
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const header = [
+    title ? `# ${title}` : '',
+    `<!-- source: https://pointcast.xyz${pathname} · rendered as markdown for Accept: text/markdown -->`,
+  ].filter(Boolean).join('\n') + '\n\n';
+  return header + body + '\n';
+}

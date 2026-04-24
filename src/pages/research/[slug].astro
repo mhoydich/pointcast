@@ -1,0 +1,134 @@
+---
+/**
+ * /research/[slug] — render a single research memo from docs/research/*.md.
+ *
+ * Mirrors the /rfc/[slug] pattern. Reuses src/lib/rfc-render.ts for the
+ * Markdown-to-HTML pass since the dialect is the same.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { listMemos, getMemo } from '../../lib/research';
+import { renderMarkdown } from '../../lib/rfc-render';
+
+export function getStaticPaths() {
+  return listMemos().map((m) => ({ params: { slug: m.slug } }));
+}
+
+const { slug } = Astro.params;
+const memo = getMemo(slug!);
+if (!memo) {
+  return Astro.redirect('/research');
+}
+
+const html = renderMarkdown(memo.body);
+
+const title = `${memo.title} — PointCast research`;
+const description = memo.summary.slice(0, 300);
+const canonicalUrl = `https://pointcast.xyz/research/${memo.slug}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ScholarlyArticle',
+  headline: memo.title,
+  datePublished: memo.filedDate,
+  author: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  inLanguage: 'en',
+  url: canonicalUrl,
+  description,
+};
+
+function fmtDate(raw: string): string {
+  if (!raw) return '';
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      timeZone: 'America/Los_Angeles',
+    }).format(new Date(raw));
+  } catch {
+    return raw;
+  }
+}
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="rfc">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/research">research</a>
+      <span aria-hidden="true">›</span>
+      <span>{memo.slug}</span>
+    </nav>
+
+    <header class="rfc__head">
+      <p class="kicker mono">RESEARCH MEMO · {fmtDate(memo.filedDate)}</p>
+      <h1 class="rfc__title">{memo.title}</h1>
+      <dl class="rfc__meta mono">
+        {memo.filedBy && (<><dt>Filed by</dt><dd>{memo.filedBy}</dd></>)}
+        {memo.trigger && (<><dt>Trigger</dt><dd>{memo.trigger}</dd></>)}
+        {memo.purpose && (<><dt>Purpose</dt><dd>{memo.purpose}</dd></>)}
+        <dt>Words</dt><dd>{memo.wordCount.toLocaleString()}</dd>
+        <dt>Canonical</dt><dd><a href={canonicalUrl}>{canonicalUrl.replace(/^https?:\/\//, '')}</a></dd>
+      </dl>
+    </header>
+
+    <article class="rfc__body" set:html={html}></article>
+
+    <footer class="rfc__foot mono">
+      <p>
+        Source: <a href={`https://github.com/mhoydich/pointcast/blob/main/docs/research/${memo.slug}.md`}>docs/research/{memo.slug}.md</a> ·
+        Index: <a href="/research">/research</a> ·
+        Agent: <a href="/research.json">/research.json</a> ·
+        Comments: <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  .rfc { max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  .crumb { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.82rem; opacity: 0.6; margin-bottom: 1.5rem; }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { text-decoration: underline; }
+
+  .rfc__head { border-bottom: 2px solid currentColor; padding-bottom: 2rem; margin-bottom: 3rem; }
+  .kicker { font-size: 0.8rem; letter-spacing: 0.28em; text-transform: uppercase; opacity: 0.7; margin-bottom: 1rem; }
+  .mono { font-family: ui-monospace, 'JetBrains Mono', monospace; }
+  .rfc__title { font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(2rem, 4.5vw, 3.6rem); line-height: 1; letter-spacing: -0.02em; margin-bottom: 1.6rem; }
+  .rfc__meta { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1.2rem; font-size: 0.82rem; }
+  .rfc__meta dt { opacity: 0.55; letter-spacing: 0.1em; text-transform: uppercase; }
+  .rfc__meta dd { margin: 0; opacity: 0.92; }
+  .rfc__meta dd a { color: inherit; }
+
+  .rfc__body { line-height: 1.65; font-size: 1.04rem; }
+  .rfc__body :global(h1) { display: none; }
+  .rfc__body :global(h2) { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.7rem; line-height: 1.1; letter-spacing: -0.01em; margin: 2.6rem 0 1rem; border-top: 1px solid currentColor; padding-top: 2rem; }
+  .rfc__body :global(h3) { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.25rem; line-height: 1.2; margin: 1.8rem 0 0.6rem; opacity: 0.92; }
+  .rfc__body :global(h4) { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.08rem; margin: 1.4rem 0 0.5rem; }
+  .rfc__body :global(p) { margin: 0 0 1.1rem; }
+  .rfc__body :global(ul),
+  .rfc__body :global(ol) { margin: 0 0 1.2rem 1.4rem; }
+  .rfc__body :global(li) { margin-bottom: 0.3rem; }
+  .rfc__body :global(strong) { font-weight: 600; }
+  .rfc__body :global(em) { font-style: italic; }
+  .rfc__body :global(a) { color: inherit; background-image: linear-gradient(currentColor, currentColor); background-size: 100% 1px; background-repeat: no-repeat; background-position: 0 100%; opacity: 0.9; word-break: break-word; }
+  .rfc__body :global(a:hover) { opacity: 1; }
+  .rfc__body :global(code) { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.9em; background: rgba(0,0,0,0.06); padding: 0.1em 0.35em; border-radius: 2px; }
+  .rfc__body :global(pre.rfc-code) { background: #0B0B10; color: #F4ECDC; padding: 1.1rem 1.3rem; border-radius: 4px; overflow-x: auto; font-size: 0.88rem; margin: 1.2rem 0; line-height: 1.55; }
+  .rfc__body :global(pre.rfc-code code) { background: transparent; padding: 0; color: inherit; }
+  .rfc__body :global(table.rfc-table) { border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 0.92rem; }
+  .rfc__body :global(table.rfc-table th),
+  .rfc__body :global(table.rfc-table td) { border-bottom: 1px solid currentColor; padding: 0.55rem 0.7rem; text-align: left; vertical-align: top; }
+  .rfc__body :global(table.rfc-table th) { opacity: 0.7; letter-spacing: 0.05em; font-weight: 600; }
+  .rfc__body :global(hr) { border: none; border-top: 1px dashed currentColor; opacity: 0.35; margin: 2rem 0; }
+  .rfc__body :global(blockquote) { border-left: 3px solid currentColor; padding-left: 1rem; margin: 1.2rem 0; opacity: 0.78; font-style: italic; }
+
+  .rfc__foot { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid currentColor; font-size: 0.78rem; opacity: 0.65; }
+  .rfc__foot a { color: inherit; }
+
+  @media (max-width: 640px) {
+    .rfc__meta { grid-template-columns: 1fr; gap: 0.1rem 0; }
+    .rfc__meta dt { margin-top: 0.6rem; }
+  }
+</style>
