@@ -51,6 +51,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     '/agent-derby',
     '/sitting-with-gandalf',
     '/talk',  // Voice Dispatch Phase 2 — merged via PR #30
+    '/room',  // Spotify playlist companion — merged via PR #32
+    '/profile',
     // /listen, /race still on PRs #17/#18 scaffold branches
   ]);
   if (isGet && wantsHtml && PRETTY_ROUTES.has(url.pathname)) {

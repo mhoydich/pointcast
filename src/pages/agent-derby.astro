@@ -54,7 +54,8 @@ const jsonLd = {
       <header class="mast">
         <div class="mast__copy">
           <p class="kicker">CH.BTL / AGENT DERBY / v{DERBY_VERSION}</p>
-          <h1 id="derby-title">PointCast Agent Derby</h1>
+          <h1 id="derby-title">PointCast Agent Derby v2</h1>
+          <p class="mast__dek">Pick a racer, run the field, anchor the receipt.</p>
         </div>
         <div class="mast__rail">
           <div class="race-key" aria-label="Race status">
@@ -67,6 +68,35 @@ const jsonLd = {
           </div>
         </div>
       </header>
+
+      <section class="play-deck" aria-label="Fast play">
+        <div class="play-step play-step--pick">
+          <span>1 / Pick</span>
+          <div class="quick-picks" data-quick-picks>
+            {DERBY_ROSTER.map((horse) => (
+              <button type="button" data-quick-agent={horse.slug} style={`--coat:${horse.coat};--accent:${horse.accent}`}>
+                <strong>{horse.name}</strong>
+                <small>{horse.agent}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div class="play-step play-step--run">
+          <span>2 / Race</span>
+          <div class="play-actions">
+            <button type="button" class="btn btn--primary btn--big" data-action="quick-run">Run v2 race</button>
+            <button type="button" class="btn" data-action="new-field">Shuffle field</button>
+          </div>
+        </div>
+        <div class="play-step play-step--chain">
+          <span>3 / Tezos</span>
+          <strong data-chain-status>Receipt pending</strong>
+          <div class="play-actions">
+            <button type="button" class="btn btn--chain" data-action="record-chain" data-chain-record disabled>Record on Tezos</button>
+            <button type="button" class="btn" data-action="copy-chain-packet" data-chain-copy disabled>Copy packet</button>
+          </div>
+        </div>
+      </section>
 
       <section class="control-deck" aria-label="Race controls">
         <label class="seed-box">
@@ -138,6 +168,31 @@ const jsonLd = {
           <pre class="receipt" data-receipt aria-label="Race receipt">{}</pre>
         </section>
 
+        <section class="chain-card" aria-label="Tezos receipt">
+          <div class="panel-head">
+            <span>Tezos receipt</span>
+            <a href="/agent-derby.json">manifest</a>
+          </div>
+          <dl class="chain-readout">
+            <div>
+              <dt>Network</dt>
+              <dd data-chain-network>mainnet</dd>
+            </div>
+            <div>
+              <dt>Contract</dt>
+              <dd data-chain-contract>pending KT1</dd>
+            </div>
+            <div>
+              <dt>Receipt hash</dt>
+              <dd data-chain-hash>run race first</dd>
+            </div>
+            <div>
+              <dt>Operation</dt>
+              <dd><a data-chain-op href="/agent-derby" aria-disabled="true">not recorded</a></dd>
+            </div>
+          </dl>
+        </section>
+
         <section class="log-card" aria-label="Race call">
           <div class="panel-head">
             <span>Call</span>
@@ -177,6 +232,7 @@ const jsonLd = {
 
       var params = new URLSearchParams(window.location.search);
       var seedInput = root.querySelector('[data-seed-input]');
+      var quickPicks = root.querySelector('[data-quick-picks]');
       var trackTabs = root.querySelector('[data-track-tabs]');
       var trackStage = root.querySelector('[data-track-stage]');
       var fieldList = root.querySelector('[data-field-list]');
@@ -193,6 +249,7 @@ const jsonLd = {
       var state = {
         seed: params.get('seed') || 'gamgee-rc0',
         trackId: params.get('track') || (TRACKS[0] && TRACKS[0].id),
+        focusAgent: (params.get('agents') || '').split(',')[0].trim().toLowerCase(),
         field: [],
         sim: null,
         timer: 0,
@@ -235,6 +292,7 @@ const jsonLd = {
       }
 
       function agentTokens() {
+        if (state.focusAgent) return [state.focusAgent];
         return (new URLSearchParams(window.location.search).get('agents') || '')
           .split(',')
           .map(function (token) { return token.trim().toLowerCase(); })
@@ -368,6 +426,14 @@ const jsonLd = {
         }).join('');
       }
 
+      function renderQuickPicks() {
+        if (!quickPicks) return;
+        quickPicks.querySelectorAll('[data-quick-agent]').forEach(function (button) {
+          var selected = button.getAttribute('data-quick-agent') === state.focusAgent;
+          button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+      }
+
       function renderTrack() {
         var sim = state.sim;
         var track = sim.track;
@@ -402,11 +468,20 @@ const jsonLd = {
 
       function receiptFor(sim) {
         return {
+          version: DATA.version,
           raceId: sim.raceId,
           seed: sim.seed,
           track: sim.track.id,
           generatedAt: new Date().toISOString(),
           winner: sim.winner.slug,
+          field: sim.runners.map(function (runner) {
+            return {
+              slug: runner.slug,
+              gate: runner.gate,
+              agent: runner.agent,
+              rating: Number(runner.rating.toFixed(2)),
+            };
+          }),
           order: sim.order.map(function (runner) { return runner.slug; }),
           margins: sim.order.map(function (runner) {
             return { slug: runner.slug, margin: runner.margin, time: runner.time };
@@ -472,10 +547,16 @@ const jsonLd = {
         root.dataset.racePhase = value.toLowerCase();
       }
 
+      function dispatchReceipt(receipt) {
+        window.dispatchEvent(new CustomEvent('pc:agent-derby-receipt', { detail: receipt }));
+      }
+
       function updateUrl() {
         var url = new URL(window.location.href);
         url.searchParams.set('seed', state.seed);
         url.searchParams.set('track', state.trackId);
+        if (state.focusAgent) url.searchParams.set('agents', state.focusAgent);
+        else url.searchParams.delete('agents');
         window.history.replaceState({}, '', url);
       }
 
@@ -501,11 +582,13 @@ const jsonLd = {
         setStateLabel('GATES');
         updateUrl();
         renderTrackTabs();
+        renderQuickPicks();
         renderTrack();
         renderField();
         renderReceipt(null);
         renderPodium();
         renderHistory();
+        dispatchReceipt(null);
         updatePositions(0);
       }
 
@@ -546,6 +629,7 @@ const jsonLd = {
             renderReceipt(state.receipt);
             renderPodium();
             renderHistory();
+            dispatchReceipt(state.receipt);
           }
         }, 38);
       }
@@ -558,13 +642,27 @@ const jsonLd = {
       });
 
       root.addEventListener('click', function (event) {
+        var pick = event.target.closest('[data-quick-agent]');
+        if (pick && !state.racing) {
+          state.focusAgent = pick.getAttribute('data-quick-agent') || '';
+          prepareRace();
+          return;
+        }
+
         var action = event.target.closest('[data-action]');
         if (!action) return;
         var name = action.getAttribute('data-action');
 
         if (name === 'run') playRace();
+        if (name === 'quick-run' && !state.racing) {
+          state.seed = 'race-' + Date.now().toString(36).slice(-7);
+          seedInput.value = state.seed;
+          prepareRace();
+          playRace();
+        }
         if (name === 'reset' && !state.racing) prepareRace({ keepField: true });
         if (name === 'new-field' && !state.racing) {
+          state.focusAgent = '';
           state.seed = 'race-' + Date.now().toString(36).slice(-7);
           seedInput.value = state.seed;
           prepareRace();
@@ -585,6 +683,126 @@ const jsonLd = {
 
       prepareRace();
     })();
+  </script>
+
+  <script>
+    import {
+      derbyChainConfig,
+      prepareDerbyChainPacket,
+      recordDerbyReceiptOnChain,
+    } from '../lib/agent-derby-chain';
+
+    const root = document.querySelector('[data-agent-derby]');
+    const statusEl = root?.querySelector('[data-chain-status]');
+    const networkEl = root?.querySelector('[data-chain-network]');
+    const contractEl = root?.querySelector('[data-chain-contract]');
+    const hashEl = root?.querySelector('[data-chain-hash]');
+    const opLink = root?.querySelector('[data-chain-op]') as HTMLAnchorElement | null;
+    const recordButton = root?.querySelector('[data-chain-record]') as HTMLButtonElement | null;
+    const copyButton = root?.querySelector('[data-chain-copy]') as HTMLButtonElement | null;
+
+    let currentReceipt: any = null;
+    let currentPacket: Awaited<ReturnType<typeof prepareDerbyChainPacket>> | null = null;
+
+    function short(value: string, head = 8, tail = 6) {
+      return value.length > head + tail + 1 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value;
+    }
+
+    function setText(el: Element | null | undefined, value: string) {
+      if (el) el.textContent = value;
+    }
+
+    function setOpLink(label: string, href?: string) {
+      if (!opLink) return;
+      opLink.textContent = label;
+      opLink.href = href || '/agent-derby';
+      opLink.setAttribute('aria-disabled', href ? 'false' : 'true');
+    }
+
+    function renderIdle() {
+      const config = derbyChainConfig();
+      setText(statusEl, 'Run a race to build a Tezos receipt');
+      setText(networkEl, config.network);
+      setText(contractEl, config.isLive ? short(config.address) : 'pending KT1');
+      setText(hashEl, 'run race first');
+      setOpLink('not recorded');
+      if (recordButton) {
+        recordButton.disabled = true;
+        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Deploy contract first';
+      }
+      if (copyButton) copyButton.disabled = true;
+    }
+
+    async function renderReceipt(receipt: any) {
+      currentReceipt = receipt;
+      currentPacket = null;
+      if (!receipt) {
+        renderIdle();
+        return;
+      }
+
+      currentPacket = await prepareDerbyChainPacket(receipt);
+      const { config, receiptHash } = currentPacket;
+      setText(statusEl, config.isLive ? 'Ready for Beacon signature' : 'Chain packet ready');
+      setText(networkEl, config.network);
+      setText(contractEl, config.isLive ? short(config.address) : 'pending KT1');
+      setText(hashEl, short(receiptHash, 10, 8));
+      setOpLink('not recorded');
+      if (recordButton) {
+        recordButton.disabled = !config.isLive;
+        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Deploy contract first';
+      }
+      if (copyButton) copyButton.disabled = false;
+    }
+
+    window.addEventListener('pc:agent-derby-receipt', (event) => {
+      void renderReceipt((event as CustomEvent).detail);
+    });
+
+    root?.addEventListener('click', async (event) => {
+      const action = (event.target as Element | null)?.closest?.('[data-action]');
+      if (!action) return;
+      const name = action.getAttribute('data-action');
+
+      if (name === 'copy-chain-packet') {
+        if (!currentReceipt || !currentPacket) return;
+        await navigator.clipboard?.writeText(JSON.stringify({
+          receipt: currentReceipt,
+          chain: {
+            network: currentPacket.config.network,
+            contract: currentPacket.config.address || null,
+            entrypoint: currentPacket.config.entrypoint,
+            receiptHash: currentPacket.receiptHash,
+            payload: currentPacket.payload,
+          },
+        }, null, 2));
+        setText(statusEl, 'Chain packet copied');
+      }
+
+      if (name === 'record-chain') {
+        if (!recordButton || !currentReceipt) return;
+        recordButton.disabled = true;
+        recordButton.textContent = 'Open wallet...';
+        setText(statusEl, 'Awaiting Beacon signature');
+        try {
+          const result = await recordDerbyReceiptOnChain(currentReceipt);
+          currentPacket = result;
+          setText(statusEl, 'Recorded on Tezos');
+          setText(hashEl, short(result.receiptHash, 10, 8));
+          setText(contractEl, short(result.config.address));
+          setOpLink(short(result.opHash, 10, 8), result.explorerUrl);
+          recordButton.textContent = 'Recorded';
+        } catch (error: any) {
+          const message = String(error?.message || error);
+          setText(statusEl, /reject|cancel|abort/i.test(message) ? 'Wallet cancelled' : 'Record failed');
+          recordButton.textContent = 'Record on Tezos';
+          recordButton.disabled = !derbyChainConfig().isLive;
+          console.warn('Agent Derby Tezos record failed:', error);
+        }
+      }
+    });
+
+    renderIdle();
   </script>
 </BlockLayout>
 
