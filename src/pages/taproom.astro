@@ -1,0 +1,338 @@
+---
+/**
+ * /taproom — PointCast's SoCal craft beer carry list.
+ *
+ * Mike 2026-04-24 ~11:30 PT: "see if we can start carrying beer menus
+ * from el segundo brewing, monkish, smog city, sugar monkey, paperback,
+ * almanac, absolution, three weavers, to start."
+ *
+ * Seeded at src/data/taproom.json. Eight breweries, 3-4 beers each,
+ * hand-curated. Each beer: style, abv, availability (on-tap / canned /
+ * limited / seasonal / archive), one-line note.
+ *
+ * Not scraping live menus (yet) — the breweries don't publish
+ * structured feeds, so this is a curated carry list that refreshes
+ * weekly-ish. Mike can edit the JSON directly; a Manus brief can be
+ * written for scheduled updates.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import taproomData from '../data/taproom.json';
+
+const { breweries, _lastReviewed } = taproomData as {
+  breweries: Array<{
+    id: string;
+    name: string;
+    location: string;
+    neighborhood: string;
+    founded: number;
+    vibe: string;
+    url: string;
+    untappd?: string;
+    featured?: boolean;
+    beers: Array<{
+      id: string;
+      name: string;
+      style: string;
+      abv: number;
+      availability: string;
+      note: string;
+    }>;
+  }>;
+  _lastReviewed: string;
+};
+
+const totalBeers = breweries.reduce((acc, b) => acc + b.beers.length, 0);
+const featuredCount = breweries.filter((b) => b.featured).length;
+
+const AVAILABILITY_ORDER: Record<string, number> = {
+  'on-tap': 0,
+  'canned': 1,
+  'limited': 2,
+  'seasonal': 3,
+  'archive': 4,
+};
+
+const title = 'Taproom · PointCast';
+const description = `Curated SoCal craft beer carry list — ${breweries.length} breweries, ${totalBeers} beers. El Segundo to Alameda. Updated ${_lastReviewed}.`;
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="tap">
+    <header class="tap-head">
+      <p class="tap-head__kicker mono">POINTCAST · TAPROOM · CURATED CARRY</p>
+      <h1 class="tap-head__title">What\u2019s pouring across SoCal.</h1>
+      <p class="tap-head__dek">
+        {breweries.length} breweries · {totalBeers} beers on the list · El Segundo, Torrance, Glendale, Inglewood, the Bay. Curated by hand. Availability is a snapshot — check the brewery for real stock.
+      </p>
+      <p class="tap-head__meta mono">
+        last reviewed · <time datetime={_lastReviewed}>{_lastReviewed}</time>
+        <span class="tap-head__sep"> · </span>
+        {featuredCount} featured
+        <span class="tap-head__sep"> · </span>
+        <a href="/taproom.json">taproom.json</a>
+      </p>
+    </header>
+
+    <ol class="tap-list">
+      {breweries.map((b) => (
+        <li class={`tap-card${b.featured ? ' tap-card--featured' : ''}`} id={b.id}>
+          <header class="tap-card__head">
+            <p class="tap-card__loc mono">{b.neighborhood.toUpperCase()} · EST. {b.founded}</p>
+            <h2 class="tap-card__name">
+              <a href={b.url} rel="noopener nofollow">{b.name}</a>
+              {b.featured && <span class="tap-card__star mono">FEATURED</span>}
+            </h2>
+            <p class="tap-card__vibe">{b.vibe}</p>
+            <p class="tap-card__links mono">
+              <a href={b.url} rel="noopener nofollow">{new URL(b.url).host}</a>
+              {b.untappd && (
+                <>
+                  <span class="tap-card__sep" aria-hidden="true"> · </span>
+                  <a href={b.untappd} rel="noopener nofollow">untappd</a>
+                </>
+              )}
+            </p>
+          </header>
+          <ol class="tap-card__beers">
+            {b.beers.slice().sort((a, c) => (AVAILABILITY_ORDER[a.availability] ?? 9) - (AVAILABILITY_ORDER[c.availability] ?? 9)).map((beer) => (
+              <li class={`tap-beer tap-beer--${beer.availability}`}>
+                <span class="tap-beer__avail mono">{beer.availability.toUpperCase()}</span>
+                <span class="tap-beer__name">{beer.name}</span>
+                <span class="tap-beer__style mono">{beer.style}</span>
+                <span class="tap-beer__abv mono">{beer.abv.toFixed(1)}%</span>
+                <span class="tap-beer__note">{beer.note}</span>
+              </li>
+            ))}
+          </ol>
+        </li>
+      ))}
+    </ol>
+
+    <footer class="tap-foot mono">
+      <span>taproom · curated by cc</span>
+      <span>·</span>
+      <a href="/taproom.json">taproom.json</a>
+      <span>·</span>
+      <a href="/">home</a>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style>
+  .tap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 36px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+  .tap-head__kicker {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    font-weight: 700;
+    color: #8a2432;
+  }
+  .tap-head__title {
+    margin: 0 0 10px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: clamp(34px, 5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .tap-head__dek {
+    margin: 0 0 12px;
+    font-family: Georgia, serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 640px;
+  }
+  .tap-head__meta {
+    margin: 0 0 20px;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    opacity: 0.75;
+  }
+  .tap-head__meta a { color: #8a2432; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .tap-head__sep { opacity: 0.5; }
+
+  .tap-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .tap-card {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
+    gap: 16px;
+    padding: 18px 20px;
+    background: #fafaf7;
+    border: 1px solid rgba(18,17,14,0.12);
+    border-radius: 3px;
+  }
+  .tap-card--featured {
+    border-left: 3px solid #d68a26;
+    background: linear-gradient(90deg, #fff8ec 0%, #fafaf7 40%);
+  }
+  @media (max-width: 700px) {
+    .tap-card { grid-template-columns: 1fr; gap: 10px; }
+  }
+
+  .tap-card__loc {
+    margin: 0 0 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .tap-card__name {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-weight: 400;
+    font-size: 24px;
+    line-height: 1.15;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .tap-card__name a {
+    color: var(--pc-ink, #12110E);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(18,17,14,0.2);
+  }
+  .tap-card__name a:hover { border-color: #8a2432; color: #8a2432; }
+  .tap-card__star {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    background: rgba(214, 138, 38, 0.2);
+    color: #8a5a00;
+    border-radius: 2px;
+  }
+  .tap-card__vibe {
+    margin: 0 0 8px;
+    font-family: Georgia, serif;
+    font-size: 13.5px;
+    line-height: 1.4;
+    color: var(--pc-ink-muted, #5F5E5A);
+    font-style: italic;
+  }
+  .tap-card__links {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+  .tap-card__links a { color: #8a2432; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .tap-card__sep { opacity: 0.5; }
+
+  .tap-card__beers {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tap-beer {
+    display: grid;
+    grid-template-columns: 60px 1fr auto auto;
+    gap: 8px 10px;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 2px;
+    align-items: baseline;
+    font-size: 12.5px;
+  }
+  .tap-beer__avail {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 2px;
+    background: rgba(18,17,14,0.08);
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .tap-beer--on-tap .tap-beer__avail {
+    background: rgba(47, 143, 95, 0.18);
+    color: #1b5033;
+  }
+  .tap-beer--canned .tap-beer__avail {
+    background: rgba(24, 100, 171, 0.15);
+    color: #0B3E73;
+  }
+  .tap-beer--limited .tap-beer__avail {
+    background: rgba(214, 138, 38, 0.2);
+    color: #8a5a00;
+  }
+  .tap-beer--seasonal .tap-beer__avail {
+    background: rgba(138, 36, 50, 0.15);
+    color: #6B2139;
+  }
+  .tap-beer--archive .tap-beer__avail {
+    background: rgba(95, 94, 90, 0.2);
+    color: #38373A;
+    opacity: 0.7;
+  }
+  .tap-beer__name {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 400;
+    color: var(--pc-ink, #12110E);
+  }
+  .tap-beer__style {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tap-beer__abv {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--pc-ink, #12110E);
+    min-width: 38px;
+    text-align: right;
+  }
+  .tap-beer__note {
+    grid-column: 2 / -1;
+    font-family: Georgia, serif;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin-top: -2px;
+  }
+  @media (max-width: 520px) {
+    .tap-beer { grid-template-columns: 60px 1fr auto; }
+    .tap-beer__style { grid-column: 2 / -1; }
+    .tap-beer__abv { grid-row: 1; grid-column: 3; }
+  }
+
+  .tap-foot {
+    margin-top: 28px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(18,17,14,0.12);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    opacity: 0.72;
+  }
+  .tap-foot a {
+    color: #8a2432;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+</style>

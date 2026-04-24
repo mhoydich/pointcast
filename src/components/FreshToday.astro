@@ -1,0 +1,290 @@
+---
+/**
+ * FreshToday — human-oriented live signal strip for the home page.
+ *
+ * Mike 2026-04-24 ~11:30 PT: "what can someone collect today, a sport
+ * score, shop.getgoodfeels.com link"
+ *
+ * Four live-signal tiles:
+ *   COLLECT — today's daily drop (from pickDailyBlock)
+ *   SCORE   — last finished NBA/MLB/NHL game (client-fetch ESPN)
+ *   SHOP    — featured Good Feels product (rotates daily by day-seed)
+ *   POUR    — featured beer from /taproom (day-seeded across breweries)
+ *
+ * Build-time renders a sensible default; client-side hydrates the
+ * SCORE tile with live ESPN data. If the fetch fails, the tile shows
+ * a stable label + link to /sports (or ESPN fallback).
+ *
+ * Stays small — dense 4-up row, grows to 2-col / 1-col on narrower
+ * viewports. Designed to sit alongside the existing Gamgee 4-card
+ * column (FOR THE RELEASE / HUMANS / AGENTS / TOOLS) without stealing
+ * its visual weight.
+ */
+import { getCollection } from 'astro:content';
+import { pickDailyBlock, todayPT } from '../lib/daily';
+import taproomData from '../data/taproom.json';
+
+// COLLECT — today's drop
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+const daily = pickDailyBlock(allBlocks);
+const dailyId = daily?.data.id ?? '';
+const dailyTitle = daily?.data.title ?? '';
+const dailyChannel = daily?.data.channel ?? '';
+
+// SHOP — rotate through a curated Good Feels link-of-the-day
+// Source of truth stays shop.getgoodfeels.com; we just pick which
+// landing each day. Day-seeded so everyone sees the same pick.
+const GOOD_FEELS_PICKS = [
+  { slug: '',                 title: 'Shop Good Feels',        kicker: 'THE ENTIRE SHOP',          note: 'Browse every drop.' },
+  { slug: '/collections/new', title: 'What\u2019s new',        kicker: 'NEW ARRIVALS',             note: 'Whatever just landed.' },
+  { slug: '/collections/bestsellers', title: 'Bestsellers',    kicker: 'THE STEADY ROTATION',      note: 'Everyone\u2019s top picks.' },
+  { slug: '/collections/gift-cards',  title: 'Gift cards',     kicker: 'SEND A VIBE',              note: 'Low effort, high yield.' },
+];
+function daySeedIndex(len: number, salt: number): number {
+  const day = Math.floor(Date.now() / (24 * 3600 * 1000));
+  return (((day * 131) ^ (salt * 17)) >>> 0) % Math.max(1, len);
+}
+const shopPick = GOOD_FEELS_PICKS[daySeedIndex(GOOD_FEELS_PICKS.length, 7)];
+const shopHref = `https://shop.getgoodfeels.com${shopPick.slug}`;
+
+// POUR — rotate through taproom breweries + their first beer
+const breweries = (taproomData as any).breweries as Array<{
+  id: string; name: string; neighborhood: string;
+  beers: Array<{ id: string; name: string; style: string; abv: number; availability: string }>;
+}>;
+const featuredBreweries = breweries.filter((b: any) => b.featured);
+const pourSet = featuredBreweries.length ? featuredBreweries : breweries;
+const pourBrewery = pourSet[daySeedIndex(pourSet.length, 11)];
+const pourBeer = pourBrewery?.beers?.[daySeedIndex(Math.max(1, pourBrewery.beers.length), 13)] ?? null;
+const pourHref = `/taproom#${pourBrewery?.id ?? ''}`;
+
+const today = todayPT();
+---
+
+<aside class="fresh-today" aria-label="Fresh today — collect / score / shop / pour">
+  <p class="fresh-today__kicker mono">
+    <span class="fresh-today__dot" aria-hidden="true"></span>
+    FRESH TODAY · <time datetime={today}>{today}</time>
+  </p>
+
+  <div class="fresh-today__grid">
+    <!-- COLLECT -->
+    <a class="ft-tile ft-tile--collect" href={dailyId ? `/b/${dailyId}` : '/today'}>
+      <span class="ft-tile__label mono">COLLECT</span>
+      {dailyId ? (
+        <>
+          <strong class="ft-tile__title">{dailyTitle}</strong>
+          <span class="ft-tile__meta mono">CH.{dailyChannel} · BLOCK {dailyId}</span>
+        </>
+      ) : (
+        <>
+          <strong class="ft-tile__title">Today\u2019s drop</strong>
+          <span class="ft-tile__meta mono">OPEN /today</span>
+        </>
+      )}
+    </a>
+
+    <!-- SCORE — hydrates client-side from ESPN -->
+    <a class="ft-tile ft-tile--score" href="/sports" id="ft-score-tile">
+      <span class="ft-tile__label mono">SCORE</span>
+      <strong class="ft-tile__title" id="ft-score-title">Latest major</strong>
+      <span class="ft-tile__meta mono" id="ft-score-meta">CHECK /SPORTS</span>
+    </a>
+
+    <!-- SHOP — day-rotated Good Feels pick -->
+    <a class="ft-tile ft-tile--shop" href={shopHref} rel="noopener">
+      <span class="ft-tile__label mono">SHOP</span>
+      <strong class="ft-tile__title">{shopPick.title}</strong>
+      <span class="ft-tile__meta mono">{shopPick.kicker} \u2192</span>
+    </a>
+
+    <!-- POUR — day-rotated taproom beer -->
+    <a class="ft-tile ft-tile--pour" href={pourHref}>
+      <span class="ft-tile__label mono">POUR</span>
+      {pourBeer ? (
+        <>
+          <strong class="ft-tile__title">{pourBeer.name}</strong>
+          <span class="ft-tile__meta mono">{pourBrewery.name.toUpperCase()} \u00B7 {pourBeer.abv.toFixed(1)}%</span>
+        </>
+      ) : (
+        <>
+          <strong class="ft-tile__title">The Taproom</strong>
+          <span class="ft-tile__meta mono">OPEN /TAPROOM</span>
+        </>
+      )}
+    </a>
+  </div>
+</aside>
+
+<script is:inline>
+  // SCORE tile hydrates from ESPN's public scoreboard — same pattern
+  // as SportsStrip. We just grab the most recent finished game from
+  // NBA, then MLB, then NHL, then Premier League, first match wins.
+  (function () {
+    'use strict';
+    var titleEl = document.getElementById('ft-score-title');
+    var metaEl  = document.getElementById('ft-score-meta');
+    if (!titleEl || !metaEl) return;
+
+    var LEAGUES = [
+      { key: 'nba', api: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard', label: 'NBA' },
+      { key: 'mlb', api: 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',   label: 'MLB' },
+      { key: 'nhl', api: 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard',     label: 'NHL' },
+    ];
+    var CACHE_KEY = 'pc:ft-score';
+    var CACHE_TTL = 10 * 60 * 1000;
+
+    function setScore(label, home, hs, away, as, status) {
+      titleEl.textContent = away.abbr + ' ' + as + '  \u2022  ' + home.abbr + ' ' + hs;
+      metaEl.textContent  = label + ' \u00B7 ' + status.toUpperCase();
+    }
+
+    function fromEvent(ev, label) {
+      if (!ev || !ev.competitions || !ev.competitions[0]) return null;
+      var comp = ev.competitions[0];
+      var competitors = comp.competitors || [];
+      if (competitors.length < 2) return null;
+      var home = competitors.find(function (c) { return c.homeAway === 'home'; }) || competitors[0];
+      var away = competitors.find(function (c) { return c.homeAway === 'away'; }) || competitors[1];
+      var status = (comp.status && comp.status.type && comp.status.type.shortDetail) || 'final';
+      return { label: label, home: { abbr: home.team.abbreviation }, hs: home.score, away: { abbr: away.team.abbreviation }, as: away.score, status: status };
+    }
+
+    try {
+      var cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) {
+        var c = JSON.parse(cached);
+        if (c && c.ts && Date.now() - c.ts < CACHE_TTL && c.score) {
+          setScore(c.score.label, c.score.home, c.score.hs, c.score.away, c.score.as, c.score.status);
+          return;
+        }
+      }
+    } catch (e) {}
+
+    function pickScore() {
+      return (async function () {
+        for (var i = 0; i < LEAGUES.length; i++) {
+          var L = LEAGUES[i];
+          try {
+            var res = await fetch(L.api);
+            if (!res.ok) continue;
+            var j = await res.json();
+            var events = (j && j.events) || [];
+            for (var e = 0; e < events.length; e++) {
+              var ev = events[e];
+              var s = (ev.status && ev.status.type && ev.status.type.state) || '';
+              if (s === 'post' || s === 'in') {
+                var parsed = fromEvent(ev, L.label);
+                if (parsed) return parsed;
+              }
+            }
+          } catch (err) { /* try next league */ }
+        }
+        return null;
+      })();
+    }
+
+    pickScore().then(function (s) {
+      if (!s) return;
+      setScore(s.label, s.home, s.hs, s.away, s.as, s.status);
+      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), score: s })); } catch (e) {}
+    });
+  })();
+</script>
+
+<style>
+  .fresh-today {
+    margin: 10px 0 14px;
+    padding: 12px 14px;
+    background: linear-gradient(90deg, #fffdf8 0%, #fef7e7 100%);
+    border: 1px solid rgba(18,17,14,0.12);
+    border-left: 3px solid #d68a26;
+    border-radius: 3px;
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+  .fresh-today__kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    font-weight: 700;
+    color: #8a5a00;
+  }
+  .fresh-today__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d68a26;
+    box-shadow: 0 0 6px rgba(214, 138, 38, 0.6);
+    animation: ft-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes ft-pulse {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.55;transform: scale(0.85); }
+  }
+
+  .fresh-today__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 820px) {
+    .fresh-today__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 460px) {
+    .fresh-today__grid { grid-template-columns: 1fr; }
+  }
+
+  .ft-tile {
+    display: grid;
+    gap: 3px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.82);
+    border: 1px solid rgba(18,17,14,0.1);
+    border-radius: 2px;
+    color: var(--pc-ink, #12110E);
+    text-decoration: none;
+    min-width: 0;
+    transition: border-color 0.12s, transform 0.12s, background 0.12s;
+  }
+  .ft-tile:hover {
+    border-color: #8a2432;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .ft-tile__label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    color: #8a5a00;
+  }
+  .ft-tile__title {
+    font-family: Georgia, serif;
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 1.2;
+    color: var(--pc-ink, #12110E);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ft-tile__meta {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+
+  .ft-tile--collect { border-left: 2px solid #2f8f5f; }
+  .ft-tile--collect .ft-tile__label { color: #1b5033; }
+  .ft-tile--score   { border-left: 2px solid #1864AB; }
+  .ft-tile--score   .ft-tile__label { color: #0B3E73; }
+  .ft-tile--shop    { border-left: 2px solid #8a2432; }
+  .ft-tile--shop    .ft-tile__label { color: #6B2139; }
+  .ft-tile--pour    { border-left: 2px solid #d68a26; }
+  .ft-tile--pour    .ft-tile__label { color: #8a5a00; }
+</style>
