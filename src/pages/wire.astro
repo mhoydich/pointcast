@@ -203,8 +203,14 @@ const description = 'Live news-ticker of the last 24 PointCast events — commit
         </ul>
         <p class="wire-side__foot mono">
           tint · {hour.toString().padStart(2,'0')}:00 sky<br/>
-          refresh · build
+          <span id="wire-refresh-status">refresh · build</span>
         </p>
+        <button
+          type="button"
+          class="wire-side__refresh mono"
+          id="wire-refresh-btn"
+          aria-label="Refresh wire events from /wire.json"
+        >↺ refresh</button>
       </aside>
 
       <!-- The marquee itself — content is duplicated so the scroll loop is
@@ -266,6 +272,90 @@ const description = 'Live news-ticker of the last 24 PointCast events — commit
   <!-- Scanline overlay — decorative, beneath interactive elements. -->
   <div class="wire-scan" aria-hidden="true"></div>
 </BaseLayout>
+
+<script is:inline>
+  // Sprint 20: client-side refresh. Rebuild both marquee rows from
+  // /wire.json on demand without a page reload. The build-time render
+  // is the source of truth on first paint; this hydrates it with live
+  // data if the user clicks refresh or leaves the tab open past build.
+  (function () {
+    'use strict';
+    var btn = document.getElementById('wire-refresh-btn');
+    var statusEl = document.getElementById('wire-refresh-status');
+    var track = document.querySelector('.wire-track');
+    if (!btn || !track) return;
+
+    var AGENT_LABEL = {
+      codex: 'Codex', manus: 'Manus', claude: 'Claude', mike: 'Mike', block: 'Block'
+    };
+
+    function relTime(iso) {
+      var now = Date.now();
+      var t = new Date(iso).getTime();
+      var d = Math.max(0, Math.floor((now - t) / 1000));
+      if (d < 60) return d + 's';
+      if (d < 3600) return Math.floor(d / 60) + 'm';
+      if (d < 86400) return Math.floor(d / 3600) + 'h';
+      if (d < 86400 * 7) return Math.floor(d / 86400) + 'd';
+      return new Date(iso).toISOString().slice(0, 10);
+    }
+
+    function chipMarkup(e) {
+      var agent = e.agent in AGENT_LABEL ? e.agent : 'block';
+      var label = AGENT_LABEL[agent];
+      var subject = String(e.subject || '').slice(0, 96);
+      var when = relTime(e.at || new Date().toISOString());
+      var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) {
+        return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+      }); };
+      var inner =
+        '<span class="wc__agent mono">' + esc(label) + '</span>' +
+        '<span class="wc__subject">' + esc(subject) + '</span>' +
+        '<span class="wc__when mono">' + esc(when) + '</span>';
+      var kindCls = e.kind === 'block' ? 'wc--block' : 'wc--commit';
+      if (e.href) {
+        return '<li class="wc wc--' + agent + ' ' + kindCls + '">' +
+          '<a href="' + esc(e.href) + '" class="wc__link">' + inner + '</a></li>';
+      }
+      return '<li class="wc wc--' + agent + ' ' + kindCls + '">' +
+        '<div class="wc__link wc__link--static">' + inner + '</div></li>';
+    }
+
+    function rebuild(events) {
+      // Replace both rows' HTML in one go. The CSS animation keyframes
+      // reference `50% - 7px` which depends on content width — updating
+      // both rows to the same list keeps the seamless loop intact.
+      var rows = track.querySelectorAll('.wire-row');
+      if (rows.length < 2) return;
+      var html = events.map(chipMarkup).join('');
+      rows[0].innerHTML = html;
+      rows[1].innerHTML = html;
+    }
+
+    function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
+
+    async function refresh() {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      setStatus('fetching…');
+      try {
+        var res = await fetch('/wire.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+        var events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) rebuild(events);
+        var gen = data.generatedAt ? new Date(data.generatedAt).toISOString().slice(11, 19) + ' UTC' : 'live';
+        setStatus('refresh · ' + gen);
+      } catch (e) {
+        setStatus('refresh failed · retry');
+      } finally {
+        setTimeout(function () { btn.disabled = false; }, 1500);
+      }
+    }
+
+    btn.addEventListener('click', refresh);
+  })();
+</script>
 
 <style>
   .wire {
@@ -381,6 +471,29 @@ const description = 'Live news-ticker of the last 24 PointCast events — commit
     text-transform: uppercase;
     opacity: 0.6;
     line-height: 1.6;
+  }
+  .wire-side__refresh {
+    margin-top: 10px;
+    padding: 6px 10px;
+    width: 100%;
+    background: rgba(0,0,0,0.32);
+    color: var(--wire-accent);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 3px;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .wire-side__refresh:hover:not(:disabled) {
+    background: rgba(0,0,0,0.55);
+    border-color: rgba(255,255,255,0.3);
+  }
+  .wire-side__refresh:disabled {
+    opacity: 0.5;
+    cursor: progress;
   }
 
   /* ─── marquee ───────────────────────────────────────── */
