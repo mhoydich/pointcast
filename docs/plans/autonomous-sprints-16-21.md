@@ -84,11 +84,34 @@ responses, all in degraded-no-kv mode (expected until Mike provisions).
 
 ---
 
-## Sprint 19 — Race System Phase 2 foundation
+## Sprint 19 — Race System Phase 2 foundation ✅ SHIPPED
 
-`PC_RACE_KV` binding + `/api/race/[slug]/submit` endpoint + Front
-Door client instrumentation. Race stays "scheduled" until Mike
-launches.
+**Shipped:** 2026-04-24 ~02:45 PT · PR #46 squashed to main · deploy `21d30181`
+
+- `src/lib/races.ts` — RaceSpec / RaceEntry / LeaderboardEntry types +
+  RACE_REGISTRY seeded with Front Door (status: scheduled, 2099
+  placeholder window) + helpers
+- `functions/api/race/[slug]/submit.ts` — POST, 10/hr/IP, upserts entrant
+  row + merges into sorted entries; graceful no-op when KV unbound
+- `functions/api/race/[slug]/leaderboard.ts` — GET, 60/min/IP, full race
+  meta + top-N entries + optional `you` via `?entrantId=`
+- `wrangler.toml` — PC_RACE_KV provision block
+- Manifests updated
+
+Verified: scheduled-race submit correctly returns 409; leaderboard
+returns race meta + empty entries with `reason: kv-unbound`; unknown
+slug → 404. All rate-limit headers attach in degraded-no-kv mode.
+
+**Deliberately not touched:** PR #18 (/race hub + /race/front-door
+page) — Mike's to bless. The two PRs meet up cleanly when both land.
+
+**Mike-blocked follow-ups:**
+- `npx wrangler kv namespace create "PC_RACE_KV"` + paste id
+- Flip Front Door's opensAt in `src/lib/races.ts` to launch the race
+- Merge PR #18 to get the hub + page scaffolds
+
+**Sprint 20 follow-up (auto):** Front Door client instrumentation
+once PR #18 is on main — becomes a ~50-line PostJSON wire.
 
 ---
 
