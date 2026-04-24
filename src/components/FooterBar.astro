@@ -86,6 +86,17 @@ const defaultNounId = dailyNounId();
 
     <!-- RIGHT — menu + on-air -->
     <div class="fb__right">
+      <button
+        type="button"
+        class="fb__room-btn"
+        id="fb-room-btn"
+        aria-pressed="false"
+        aria-label="Toggle room — see cursors + chat"
+        title="Toggle the room (see your noun cursor + chat)"
+      >
+        <span class="fb__room-glyph" aria-hidden="true">👥</span>
+        <span class="fb__room-label mono">ROOM</span>
+      </button>
       <span class="fb__on-air" aria-label="On air">
         <span class="fb__on-air-dot" aria-hidden="true"></span>
         <span class="fb__on-air-label mono">ON AIR</span>
@@ -301,13 +312,36 @@ const defaultNounId = dailyNounId();
       e.preventDefault();
       var q = String($omni.value || '').trim();
       if (!q) return;
+      // When ROOM is on, submit as chat instead of route/search.
+      if (roomOn && !q.startsWith('/') && !/^https?:\/\//.test(q)) {
+        window.dispatchEvent(new CustomEvent('pc:room:chat', { detail: { msg: q } }));
+        $omni.value = '';
+        $omni.placeholder = 'say something…';
+        return;
+      }
       if (q.startsWith('/') || /^https?:\/\//.test(q)) {
         window.location.href = q;
         return;
       }
-      // Path-like? Route there.
       var maybe = '/' + q.replace(/^\/+/, '').split(/\s+/)[0];
       window.location.href = '/search?q=' + encodeURIComponent(q) + '&from=' + encodeURIComponent(maybe);
+    });
+
+    // ─── ROOM toggle — emits pc:room:toggle, switches omnibox mode ─
+    var $roomBtn = document.getElementById('fb-room-btn');
+    var roomOn = false;
+    try { roomOn = localStorage.getItem('pc:room:on') === '1'; } catch (e) {}
+    function applyRoomUI() {
+      if (!$roomBtn) return;
+      $roomBtn.setAttribute('aria-pressed', roomOn ? 'true' : 'false');
+      $roomBtn.setAttribute('data-on', roomOn ? 'true' : 'false');
+      if ($omni) $omni.placeholder = roomOn ? 'say something…' : 'ask or go…';
+    }
+    applyRoomUI();
+    $roomBtn.addEventListener('click', function () {
+      roomOn = !roomOn;
+      applyRoomUI();
+      window.dispatchEvent(new CustomEvent('pc:room:toggle', { detail: { on: roomOn } }));
     });
 
     // ─── Wallet (Beacon) — reuses the WalletChip event surface ───
@@ -593,6 +627,39 @@ const defaultNounId = dailyNounId();
     font-weight: 700;
   }
   @media (max-width: 520px) { .fb__on-air-label { display: none; } }
+
+  .fb__room-btn {
+    appearance: none;
+    background: rgba(255, 200, 100, 0.08);
+    border: 1px solid rgba(255, 180, 80, 0.22);
+    color: #fdf2d6;
+    padding: 5px 9px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .fb__room-btn:hover {
+    background: rgba(255, 200, 100, 0.16);
+    border-color: rgba(255, 200, 100, 0.45);
+  }
+  .fb__room-btn[data-on='true'] {
+    background: rgba(255, 150, 60, 0.25);
+    border-color: rgba(255, 150, 60, 0.7);
+    color: #ffc878;
+  }
+  .fb__room-glyph { font-size: 13px; }
+  @media (max-width: 520px) {
+    .fb__room-label { display: none; }
+    .fb__room-btn { padding: 5px 7px; }
+  }
 
   .fb__menu-btn {
     appearance: none;
