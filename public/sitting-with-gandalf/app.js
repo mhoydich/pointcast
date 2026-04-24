@@ -4,7 +4,7 @@
   const STORAGE_KEY = "sitting-with-gandalf-log";
   const SETTINGS_KEY = "sitting-with-gandalf-settings";
   const DEFAULT_MINUTES = 15;
-  const versions = new Set(["v1", "v2"]);
+  const versions = new Set(["v1", "v2", "v3"]);
 
   const modeLines = {
     fire: [
@@ -42,6 +42,120 @@
     rain: { low: 73.42, high: 110.0, drone: 0.13 },
     road: { low: 65.41, high: 98.0, drone: 0.15 },
     stars: { low: 92.5, high: 138.59, drone: 0.1 }
+  };
+
+  const natureViews = {
+    glade: {
+      name: "Moss glade",
+      mode: "fire",
+      idle: "Rest your eyes in the green. Let the small lights do the wandering.",
+      phases: {
+        Settle: "Find one patch of moss and let your shoulders answer it.",
+        Drift: "Let the glade hold the edges of the day for you.",
+        Return: "Bring back one small, green permission to move slowly."
+      },
+      cues: {
+        look: "Notice the softest light in the trees. Stay with it for three breaths.",
+        listen: "Listen as if the room has leaves. Let the quiet have texture.",
+        breathe: "Breathe in like shade. Breathe out like a path becoming clear.",
+        release: "Let one tight thought step off the trail and disappear behind the ferns."
+      },
+      lines: [
+        "Green is a patient kind of advice.",
+        "You do not need to enter the forest loudly.",
+        "Let the moss keep what you no longer need to carry.",
+        "A small light is enough when the eyes soften."
+      ]
+    },
+    garden: {
+      name: "Rain garden",
+      mode: "rain",
+      idle: "Let the porch hold you. The rain can do the moving for now.",
+      phases: {
+        Settle: "Hear the nearest drops before you sort the far ones.",
+        Drift: "Let the garden drink what the day could not.",
+        Return: "Come back rinsed, not rushed."
+      },
+      cues: {
+        look: "Look where the path shines. Let the rain polish the moment.",
+        listen: "Count three soft sounds, then stop counting.",
+        breathe: "Breathe in cool. Breathe out the hurry you inherited.",
+        release: "Put one worry down on the wet stones and leave it there."
+      },
+      lines: [
+        "Rain makes a room out of anywhere with a roof.",
+        "Let the weather be busy on your behalf.",
+        "A garden in rain is not waiting. It is receiving.",
+        "You can be sheltered without being closed."
+      ]
+    },
+    meadow: {
+      name: "Meadow path",
+      mode: "road",
+      idle: "Choose the open air. Let the far hills make the next thing smaller.",
+      phases: {
+        Settle: "Feel the path without needing to follow it yet.",
+        Drift: "Let the meadow widen around the question.",
+        Return: "Take one honest step, not the whole horizon."
+      },
+      cues: {
+        look: "Look toward the bright distance without making a plan.",
+        listen: "Listen for the space between thoughts. It has room in it.",
+        breathe: "Breathe in the open field. Breathe out the clenched map.",
+        release: "Let the path go on without you for a few minutes."
+      },
+      lines: [
+        "A path can invite you without hurrying you.",
+        "The hill is far away, and that is part of its kindness.",
+        "Let the meadow be large enough for the feeling.",
+        "Open air has a way of making small troubles tell the truth."
+      ]
+    },
+    lake: {
+      name: "Moon lake",
+      mode: "stars",
+      idle: "Rest beside the reflected sky. Nothing bright needs to be chased.",
+      phases: {
+        Settle: "Let the water show you how stillness moves.",
+        Drift: "Borrow the lake's habit of holding light without grasping it.",
+        Return: "Bring back one quiet reflection and leave the rest shining."
+      },
+      cues: {
+        look: "Look at the reflected moon. Let attention settle on the waterline.",
+        listen: "Listen for the night behind the sound.",
+        breathe: "Breathe in like cool water. Breathe out like a ripple flattening.",
+        release: "Let one thought sink without needing to watch it land."
+      },
+      lines: [
+        "The lake keeps the moon without owning it.",
+        "Night can be gentle when you stop negotiating with it.",
+        "Reflection is not repetition. It is softening.",
+        "A quiet surface still has depth."
+      ]
+    }
+  };
+
+  const intentions = {
+    rest: {
+      title: "Rest",
+      text: "Let the picture be enough. Nothing needs improving for the next few minutes.",
+      lines: ["Rest is not a delay. It is repair.", "Let enough be enough for one small hour."]
+    },
+    ground: {
+      title: "Ground",
+      text: "Feel the chair, the floor, the weight of yourself allowed to arrive.",
+      lines: ["The body is a better anchor than an argument.", "Come back by inches. That is still coming back."]
+    },
+    wander: {
+      title: "Wander",
+      text: "Let attention walk gently through the scene without asking it to perform.",
+      lines: ["A wandering mind can still move softly.", "Let attention roam, then invite it home."]
+    },
+    sleep: {
+      title: "Sleep",
+      text: "Dim the effort. Let every breath make the room a little farther from the day.",
+      lines: ["The day may close without a speech.", "Let the last task be getting softer."]
+    }
   };
 
   const companions = {
@@ -137,8 +251,10 @@
     remaining: DEFAULT_MINUTES * 60,
     running: false,
     mode: savedSettings.mode || "fire",
-    version: versions.has(savedSettings.version) ? savedSettings.version : "v2",
+    version: versions.has(savedSettings.version) ? savedSettings.version : "v3",
     companion: companions[savedSettings.companion] ? savedSettings.companion : "hearth",
+    visual: natureViews[savedSettings.visual] ? savedSettings.visual : "glade",
+    intention: intentions[savedSettings.intention] ? savedSettings.intention : "rest",
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -162,6 +278,11 @@
     guideTitle: document.getElementById("guideTitle"),
     guideText: document.getElementById("guideText"),
     versionButtons: Array.from(document.querySelectorAll(".version-button")),
+    visualButtons: Array.from(document.querySelectorAll(".nature-button")),
+    intentionButtons: Array.from(document.querySelectorAll(".intention-button")),
+    cueButtons: Array.from(document.querySelectorAll(".cue-button")),
+    intentionTitle: document.getElementById("intentionTitle"),
+    intentionText: document.getElementById("intentionText"),
     roomStep: document.getElementById("roomStep"),
     ambienceStep: document.getElementById("ambienceStep"),
     durationButtons: Array.from(document.querySelectorAll(".duration-button")),
@@ -180,12 +301,16 @@
     hushButton: document.getElementById("hushButton"),
     warmthSlider: document.getElementById("warmthSlider"),
     smokeSlider: document.getElementById("smokeSlider"),
+    smokeLabel: document.getElementById("smokeLabel"),
     paceLabel: document.getElementById("paceLabel"),
     paceCount: document.getElementById("paceCount"),
     paceBar: document.getElementById("paceBar"),
     ringCount: document.getElementById("ringCount"),
+    ringLabel: document.getElementById("ringLabel"),
     sessionCount: document.getElementById("sessionCount"),
     totalMinutes: document.getElementById("totalMinutes"),
+    ritualSummary: document.getElementById("ritualSummary"),
+    blendLabel: document.getElementById("blendLabel"),
     noteInput: document.getElementById("noteInput"),
     sealEntryButton: document.getElementById("sealEntryButton"),
     clearLogButton: document.getElementById("clearLogButton"),
@@ -248,6 +373,8 @@
         version: state.version,
         mode: state.mode,
         companion: state.companion,
+        visual: state.visual,
+        intention: state.intention,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -256,6 +383,14 @@
 
   function activeCompanion() {
     return companions[state.companion] || companions.hearth;
+  }
+
+  function activeView() {
+    return natureViews[state.visual] || natureViews.glade;
+  }
+
+  function activeIntention() {
+    return intentions[state.intention] || intentions.rest;
   }
 
   function setGuide(step, title, text) {
@@ -269,12 +404,32 @@
       return;
     }
 
+    if (state.version === "v3") {
+      const view = activeView();
+      const intention = activeIntention();
+      setGuide(step || "Nature cue", view.name, `${view.idle} ${intention.text}`);
+      return;
+    }
+
     const companion = activeCompanion();
     setGuide(step || "Next", companion.name, companion.idle);
   }
 
   function updateGuideForPace(label, countdown) {
     if (state.version === "v1") {
+      return;
+    }
+
+    if (state.version === "v3") {
+      const view = activeView();
+      const lowerLabel = label.toLowerCase();
+      const copy = {
+        Inhale: `Breathe in for ${countdown}. Keep the ${view.name.toLowerCase()} soft in your eyes.`,
+        Hold: `Hold for ${countdown}. Let the view hold the edges of the room.`,
+        Exhale: `Breathe out for ${countdown}. Let one thing loosen without needing a story.`
+      };
+
+      setGuide(`Now: ${lowerLabel}`, view.name, copy[label] || view.idle);
       return;
     }
 
@@ -290,6 +445,15 @@
   }
 
   function chooseLine() {
+    if (state.version === "v3") {
+      const view = activeView();
+      const intention = activeIntention();
+      const pool = view.lines.concat(intention.lines);
+      const next = pool[Math.floor(Math.random() * pool.length)];
+      dom.wizardLine.textContent = next;
+      return;
+    }
+
     const companion = activeCompanion();
     const pool = state.version === "v1" || Math.random() <= 0.38 ? modeLines[state.mode] : companion.lines;
     const next = pool[Math.floor(Math.random() * pool.length)];
@@ -301,7 +465,13 @@
     const degrees = Math.max(0, Math.min(360, progress * 360));
     dom.timerFace.style.setProperty("--progress", `${degrees}deg`);
     dom.timerText.textContent = formatTime(state.remaining);
-    dom.timerCaption.textContent = state.running ? "keeping watch" : "pipe pause";
+    dom.timerCaption.textContent = state.running
+      ? state.version === "v3"
+        ? "breathing slowly"
+        : "keeping watch"
+      : state.version === "v3"
+        ? "nature sit"
+        : "pipe pause";
     updatePhase(progress);
   }
 
@@ -316,7 +486,11 @@
     }
 
     dom.phaseName.textContent = active.name;
-    dom.phaseHint.textContent = state.version === "v1" ? active.hint : activeCompanion().phases[active.name] || active.hint;
+    if (state.version === "v3") {
+      dom.phaseHint.textContent = activeView().phases[active.name] || active.hint;
+    } else {
+      dom.phaseHint.textContent = state.version === "v1" ? active.hint : activeCompanion().phases[active.name] || active.hint;
+    }
   }
 
   function updateStats() {
@@ -346,12 +520,14 @@
       const right = document.createElement("span");
       const mode = entry.mode ? ` / ${entry.mode}` : "";
       const companion = entry.companion ? ` / ${entry.companion.replace(" Gandalf", "")}` : "";
+      const visual = entry.visual ? ` / ${entry.visual}` : "";
+      const intention = entry.intention ? ` / ${entry.intention}` : "";
       const version = entry.version ? `${entry.version.toUpperCase()} / ` : "";
 
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${mode}${companion}`;
+      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${mode}${companion}${visual}${intention}`;
       right.textContent = entry.date;
       note.textContent = entry.note || "A quiet bowl, kept well.";
 
@@ -384,11 +560,13 @@
 
   function pauseSession() {
     state.running = false;
-    dom.startButton.textContent = "Resume quiet sit";
+    dom.startButton.textContent = state.version === "v3" ? "Resume nature sit" : "Resume quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
-    dom.timerCaption.textContent = "pipe pause";
-    if (state.version === "v2") {
+    dom.timerCaption.textContent = state.version === "v3" ? "nature sit" : "pipe pause";
+    if (state.version === "v3") {
+      setGuide("Paused", activeView().name, "The place will keep waiting. Come back without hurry.");
+    } else if (state.version === "v2") {
       setGuide("Paused", activeCompanion().name, activeCompanion().paused);
     }
   }
@@ -397,7 +575,7 @@
     state.running = false;
     state.remaining = state.duration;
     state.phaseName = "";
-    dom.startButton.textContent = "Start quiet sit";
+    dom.startButton.textContent = state.version === "v3" ? "Start nature sit" : "Start quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.paceLabel.textContent = "Settle";
@@ -410,11 +588,13 @@
 
   function completeSession() {
     pauseSession();
-    dom.startButton.textContent = "Start quiet sit";
+    dom.startButton.textContent = state.version === "v3" ? "Start nature sit" : "Start quiet sit";
     state.remaining = 0;
     updateTimer();
-    dom.wizardLine.textContent = "There. A little more room in the world.";
-    if (state.version === "v2") {
+    dom.wizardLine.textContent = state.version === "v3" ? "There. The room feels less crowded now." : "There. A little more room in the world.";
+    if (state.version === "v3") {
+      setGuide("Complete", activeView().name, "Carry one color, one sound, and one easier breath back with you.");
+    } else if (state.version === "v2") {
       setGuide("Complete", activeCompanion().name, activeCompanion().complete);
     }
     addSmoke({ count: 12, power: 1.2, spread: 100, countTowardSession: true });
@@ -431,7 +611,7 @@
   }
 
   function setVersion(version) {
-    const next = versions.has(version) ? version : "v2";
+    const next = versions.has(version) ? version : "v3";
     state.version = next;
     dom.body.dataset.version = next;
     dom.versionButtons.forEach((button) => {
@@ -440,6 +620,11 @@
 
     dom.roomStep.textContent = next === "v1" ? "1" : "2";
     dom.ambienceStep.textContent = next === "v1" ? "2" : "3";
+    dom.ritualSummary.textContent = next === "v3" ? "Session scent and tally" : "Pipe leaf and tally";
+    dom.blendLabel.textContent = next === "v3" ? "Session scent" : "Pipe leaf";
+    dom.smokeLabel.textContent = next === "v3" ? "Atmosphere" : "Smoke";
+    dom.ringLabel.textContent = next === "v3" ? "cues" : "rings";
+    dom.startButton.textContent = state.running ? "Running" : next === "v3" ? "Start nature sit" : "Start quiet sit";
 
     if (next === "v1" && state.mode === "stars") {
       setMode("fire");
@@ -449,6 +634,10 @@
     if (next === "v1") {
       dom.phaseHint.textContent = phases.find((phase) => phase.name === state.phaseName)?.hint || phases[0].hint;
       chooseLine();
+    } else if (next === "v3") {
+      setVisual(state.visual);
+      setIntention(state.intention);
+      updateGuideIdle("Nature ready");
     } else {
       updateGuideIdle("V2 ready");
     }
@@ -473,7 +662,7 @@
     }
 
     if (!state.running) {
-      updateGuideIdle("Next");
+      updateGuideIdle(state.version === "v3" ? "Sound set" : "Next");
     }
   }
 
@@ -494,7 +683,77 @@
     }
 
     chooseLine();
-    updateGuideIdle(settings.syncMode === false ? "Choose your Gandalf" : "Companion chosen");
+    updateGuideIdle(
+      state.version === "v3"
+        ? "Nature ready"
+        : settings.syncMode === false
+          ? "Choose your Gandalf"
+          : "Companion chosen"
+    );
+  }
+
+  function setVisual(visual, options) {
+    const next = natureViews[visual] ? visual : "glade";
+    const settings = options || {};
+
+    state.visual = next;
+    dom.body.dataset.visual = next;
+    dom.visualButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.visual === next);
+    });
+
+    if (settings.syncMode !== false) {
+      setMode(natureViews[next].mode);
+    } else {
+      saveSettings();
+    }
+
+    if (state.version === "v3") {
+      chooseLine();
+      updateGuideIdle("View chosen");
+    }
+  }
+
+  function setIntention(intention) {
+    const next = intentions[intention] ? intention : "rest";
+    const active = intentions[next];
+
+    state.intention = next;
+    dom.body.dataset.intention = next;
+    dom.intentionButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.intention === next);
+    });
+    dom.intentionTitle.textContent = active.title;
+    dom.intentionText.textContent = active.text;
+    saveSettings();
+
+    if (state.version === "v3") {
+      chooseLine();
+      updateGuideIdle("Intention set");
+    }
+  }
+
+  function playCue(cue) {
+    const view = activeView();
+    const text = view.cues[cue] || view.idle;
+    const labels = {
+      look: "Look",
+      listen: "Listen",
+      breathe: "Breathe",
+      release: "Release"
+    };
+
+    dom.wizardLine.textContent = text;
+    setGuide(labels[cue] || "Cue", view.name, text);
+
+    if (cue === "breathe") {
+      addSmoke({ count: 4, power: 0.55, spread: 70, countTowardSession: false });
+    } else {
+      spawnParticles(cue === "release" ? 12 : 6);
+    }
+
+    state.rings += 1;
+    updateStats();
   }
 
   function setWarmth(value) {
@@ -525,6 +784,8 @@
       mode: state.mode,
       version: state.version,
       companion: state.version === "v2" ? activeCompanion().name : "",
+      visual: state.version === "v3" ? activeView().name : "",
+      intention: state.version === "v3" ? activeIntention().title : "",
       note: dom.noteInput.value.trim()
     });
 
@@ -954,7 +1215,9 @@
     visuals.rings = [];
     visuals.particles = [];
     dom.wizardLine.textContent = "A good silence asks for nothing.";
-    if (state.version === "v2") {
+    if (state.version === "v3") {
+      setGuide("Quiet", activeView().name, "Ambience is off. Let the picture do the holding for a while.");
+    } else if (state.version === "v2") {
       setGuide("Quiet", activeCompanion().name, "Ambience is off. The room can stay still for a while.");
     }
   }
@@ -971,6 +1234,18 @@
 
   dom.versionButtons.forEach((button) => {
     button.addEventListener("click", () => setVersion(button.dataset.version));
+  });
+
+  dom.visualButtons.forEach((button) => {
+    button.addEventListener("click", () => setVisual(button.dataset.visual));
+  });
+
+  dom.intentionButtons.forEach((button) => {
+    button.addEventListener("click", () => setIntention(button.dataset.intention));
+  });
+
+  dom.cueButtons.forEach((button) => {
+    button.addEventListener("click", () => playCue(button.dataset.cue));
   });
 
   dom.companionButtons.forEach((button) => {
@@ -1011,6 +1286,7 @@
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
+  updateGuideIdle(state.version === "v3" ? "Nature ready" : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();

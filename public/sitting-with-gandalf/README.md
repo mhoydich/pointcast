@@ -1,12 +1,12 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking companion for a quiet pipe pause: timer, smoke rings, ambient fire/rain/road/starlight audio, original wizardly prompts, lantern view, phase guidance, and a small local session log.
+A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
 ## Versions
 
-The app defaults to V2, with a V1/V2 toggle in the masthead. The selected version is saved locally.
+The app defaults to V3, with a V1/V2/V3 toggle in the masthead. The selected version is saved locally.
 
 ### V1
 
@@ -27,12 +27,22 @@ The app defaults to V2, with a V1/V2 toggle in the masthead. The selected versio
 - Session phases that shift from Settle to Drift to Return.
 - Simplified control hierarchy: choose a Gandalf, choose a room, set ambience, then follow the smoke ritual.
 
-## V3 Plan
+### V3
 
-- Guided sits: 5, 15, and 25 minute smoke ceremonies with gentle phase-specific narration.
+- Defaults to a nature-first meditation room.
+- Adds a generated 2x2 nature visual sheet with no Gandalf, people, pipes, or smoking objects: Moss glade, Rain garden, Meadow path, and Moon lake.
+- Keeps V1 and V2 available from the version toggle.
+- Adds a nature visual selector that also syncs the best matching ambience sound.
+- Adds intention controls: Rest, Ground, Wander, and Sleep.
+- Adds sensory cue buttons: Look, Listen, Breathe, and Release.
+- Logs V3 notes with the selected nature view and intention.
+- Keeps the same timer, ambience, focus view, notes, and local storage behavior.
+
+## V4 Notes
+
 - Audio mixer: separate Fire, Weather, Road, Bells, and Drone levels instead of one master ambience slider.
-- Companion memory: remember preferred Gandalf, room, duration, and last note without making the UI busier.
-- Visual focus table: a closer pipe, ember, cup, and smoke view for focus mode.
+- Companion memory: remember preferred Gandalf, nature view, room, duration, and last note without making the UI busier.
+- Visual focus table: closer nature crops and a calmer timer-only view for longer sits.
 - Route polish: keep `/sitting-with-gandalf/` as the main room and consider a short `/gandalf/` alias after deploy behavior is confirmed.
 
 ## Assets
@@ -40,6 +50,8 @@ The app defaults to V2, with a V1/V2 toggle in the masthead. The selected versio
 The backdrop was generated with the built-in image generation tool and copied into `assets/wizard-study.png`.
 
 The companion portrait sheet was generated with the built-in image generation tool and copied into `assets/wizard-companions.jpg`.
+
+The V3 nature visual sheet was generated with the built-in image generation tool and copied into `assets/nature-visuals-v3.jpg`.
 
 Backdrop prompt:
 
@@ -70,4 +82,19 @@ Composition/framing: perfectly square image divided into four equal square portr
 Lighting/mood: meditative, slow, inviting, pipe smoke curls, gentle color differences per quadrant
 Color palette: amber hearth, rain blue-green, road brass/ochre, starlight indigo/silver, balanced with deep charcoal and muted parchment
 Constraints: no text, no logos, no watermark, no exact Gandalf/movie likeness, no recognizable actor, no copyrighted film still, no hard horror, no modern objects
+```
+
+V3 nature visual prompt:
+
+```text
+Use case: stylized-concept
+Asset type: web app ambient background illustration sprite sheet for a cozy meditation companion
+Primary request: create a 2x2 sheet of four super cozy, pleasing nature visuals with no person, no wizard, no characters, no pipe, and no smoking object visible
+Scene/backdrop: four distinct calm fantasy-adjacent nature rooms: top-left mossy forest glade with warm lantern-like fireflies, top-right rainy cottage garden seen from under a porch roof, bottom-left sunlit meadow path with distant soft hills, bottom-right moonlit lakeside with reeds and stars reflected in water
+Subject: nature itself as the companion; gentle places to rest attention, each quadrant readable as a separate scene
+Style/medium: painterly digital illustration, rich texture, calm premium app background, cozy but not dark, tactile natural detail
+Composition/framing: perfectly square 2x2 grid with clean gutters; each quadrant should work as a thumbnail and as a soft background crop; no text anywhere
+Lighting/mood: meditative, quiet, warm, restorative, slow breathing energy; balanced contrast with soft negative space
+Color palette: moss green, rain blue-green, meadow gold, moonlit indigo, natural amber highlights, muted cream, no harsh neon
+Constraints: no text, no logos, no watermark, no people, no wizard, no recognizable copyrighted locations, no film still, no smoking object, no pipe, no modern objects, no horror
 ```
