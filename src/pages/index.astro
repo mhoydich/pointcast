@@ -36,15 +36,48 @@ import AppLaunchStrip from '../components/AppLaunchStrip.astro';
 import { CHANNEL_LIST } from '../lib/channels';
 import { getCollection } from 'astro:content';
 
-const HELLO_MIKE_BLOCK_ID = '0334';
-const HOUSEPLANTS_FIRST_BLOCK_ID = '0333';
-
+// Sprint 23 (Mike 2026-04-24 Fri morning): "lets get the landing page
+// landing correct, need to keep the content fresh, this has been
+// around for days."
+//
+// Previous version pinned HELLO_MIKE_BLOCK_ID='0334' + HOUSEPLANTS_
+// FIRST_BLOCK_ID='0333' literally — blocks authored 2026-04-22 that
+// kept showing up as the two blocks above the fold. Replaced with a
+// dynamic picker that always surfaces the freshest editorial:
+//
+//   helloMikeBlock  — latest VISIT-type block (top-of-home greeting)
+//   firstBlock      — latest READ-type block (main editorial)
+//
+// Falls back cleanly when no block of a type exists. No hardcoded ids,
+// so new blocks (like 0344 this morning) bubble up without a code
+// change.
 const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-const firstBlock = allBlocks.find((block) => block.data.id === HOUSEPLANTS_FIRST_BLOCK_ID) ?? allBlocks[0] ?? null;
-const helloMikeCandidate = allBlocks.find((block) => block.data.id === HELLO_MIKE_BLOCK_ID) ?? null;
-const helloMikeBlock = helloMikeCandidate?.data.id !== firstBlock?.data.id ? helloMikeCandidate : null;
+// Freshness gates — prevent stale blocks from camping the top of the
+// home when no newer block of that type has landed. Different
+// thresholds per slot:
+//   · helloMikeBlock (VISIT, top-of-home greeting) — 24h. "Someone
+//     just visited" signal. Anything older reads as stale.
+//   · firstBlock (READ, main editorial pin) — 120h (5d). Editorial
+//     recaps have more shelf life; the Four-Sprints block is relevant
+//     all weekend.
+// When a slot's candidate is too old the slot goes empty and the grid
+// below takes over.
+const FRESH_VISIT_MS = 24 * 60 * 60 * 1000;
+const FRESH_READ_MS = 120 * 60 * 60 * 1000;
+const nowMs = Date.now();
+function ageMs(b: { data: { timestamp: Date } }): number {
+  return nowMs - b.data.timestamp.getTime();
+}
+
+const latestRead = allBlocks.find((b) => b.data.type === 'READ') ?? allBlocks[0] ?? null;
+const firstBlock = latestRead && ageMs(latestRead) < FRESH_READ_MS ? latestRead : null;
+
+const latestVisit = allBlocks.find(
+  (b) => b.data.type === 'VISIT' && b.data.id !== firstBlock?.data.id,
+);
+const helloMikeBlock = latestVisit && ageMs(latestVisit) < FRESH_VISIT_MS ? latestVisit : null;
 const pinnedBlockIds = new Set([firstBlock?.data.id, helloMikeBlock?.data.id].filter(Boolean));
 const blocks = allBlocks.filter((block) => !pinnedBlockIds.has(block.data.id));
 const blockCount = allBlocks.length;
@@ -99,18 +132,87 @@ const alternates = [
 
     <h1 class="sr-only">PointCast Gamgee - an agent-native broadcast from El Segundo with human and machine-readable paths.</h1>
 
-    <!-- Masthead — one line. Wordmark, block count, current time, agent link. -->
-    <header class="masthead">
+    <!-- Masthead — one line. Wordmark, block count, current time, agent
+         link. Sprint 23 adds:
+         · hour-tinted sky strip above the row (client-set data-bucket)
+         · Front Door race chip (scheduled until Mike flips opensAt in
+           src/lib/races.ts). Uses the same buckets as /wire. -->
+    <div class="masthead-sky" data-sky-bucket="midday" aria-hidden="true"></div>
+    <header class="masthead" id="pc-masthead" data-sky-bucket="midday">
       <a href="/" class="wordmark" aria-label="PointCast home">POINTCAST</a>
       <span class="sep" aria-hidden="true">·</span>
       <span class="meta">{blockCount} BLOCKS</span>
       <span class="sep" aria-hidden="true">·</span>
       <time class="meta time" id="pc-clock">— : —</time>
       <PresenceBar />
+      <a
+        href="/race/front-door"
+        class="race-chip mono"
+        id="pc-race-chip"
+        title="Front Door race — fastest page-load to first-click, daily."
+      >
+        <span class="race-chip__dot" aria-hidden="true"></span>
+        <span class="race-chip__label">RACE · FRONT DOOR</span>
+        <span class="race-chip__status" id="pc-race-status">SCHEDULED</span>
+      </a>
       <span class="spacer" aria-hidden="true"></span>
       <WalletChip />
       <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
+
+    <script is:inline>
+      // Sprint 23: tint the masthead sky strip by time-of-day and show
+      // a Front Door race chip. Buckets match /wire's sky pick so the
+      // whole site reads coherent as the day moves.
+      (function () {
+        'use strict';
+        var head = document.getElementById('pc-masthead');
+        var sky  = document.querySelector('.masthead-sky');
+        if (!head || !sky) return;
+        function bucket() {
+          var h = new Date().getHours() + new Date().getMinutes() / 60;
+          if (h < 6)       return 'smallhours';
+          if (h < 10)      return 'morning';
+          if (h < 15)      return 'midday';
+          if (h < 18)      return 'golden';
+          if (h < 21)      return 'blue';
+          return 'evening';
+        }
+        function apply() {
+          var b = bucket();
+          head.setAttribute('data-sky-bucket', b);
+          sky.setAttribute('data-sky-bucket', b);
+        }
+        apply();
+        setInterval(apply, 60_000);
+
+        // Front Door race chip live hydrate. /api/race/front-door/
+        // leaderboard returns race meta including derived status
+        // ('scheduled' | 'open' | 'closed' | 'resolved'). When the KV
+        // isn't bound, the endpoint still returns race meta with
+        // `reason: kv-unbound` so we can color + label correctly.
+        var chip   = document.getElementById('pc-race-chip');
+        var status = document.getElementById('pc-race-status');
+        if (chip && status) {
+          chip.setAttribute('data-status', 'scheduled');
+          fetch('/api/race/front-door/leaderboard', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              if (!d || !d.race) return;
+              var s = (d.race.status || 'scheduled').toLowerCase();
+              chip.setAttribute('data-status', s);
+              var label = s.toUpperCase();
+              if (s === 'open' && typeof d.count === 'number' && d.count > 0) {
+                label = 'OPEN · ' + d.count + ' IN';
+              } else if (s === 'resolved' && d.race.resolvesAt) {
+                label = 'RESOLVED';
+              }
+              status.textContent = label;
+            })
+            .catch(function () { /* keep default SCHEDULED */ });
+        }
+      })();
+    </script>
 
     <HomeFireplace />
 
@@ -386,6 +488,43 @@ const alternates = [
     border: 0;
   }
 
+  /* Sprint 23: hour-tinted sky band sits above the masthead and
+     breathes with the time of day. Subtle — doesn't dominate the
+     layout, just gives the page a diurnal pulse. Data attribute
+     driven so the inline script in the header block can swap it. */
+  .masthead-sky {
+    height: 6px;
+    margin: 0 0 10px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #bcd0e3 0%, #7e9ebf 50%, #2e5c8a 100%);
+    opacity: 0.7;
+    transition: background 400ms linear, opacity 400ms linear;
+  }
+  .masthead-sky[data-sky-bucket="smallhours"] {
+    background: linear-gradient(90deg, #08090f 0%, #121230 55%, #1a1830 100%);
+    opacity: 0.85;
+  }
+  .masthead-sky[data-sky-bucket="morning"] {
+    background: linear-gradient(90deg, #f2c8a0 0%, #f9a26c 50%, #e9c79a 100%);
+    opacity: 0.75;
+  }
+  .masthead-sky[data-sky-bucket="midday"] {
+    background: linear-gradient(90deg, #bcd0e3 0%, #7e9ebf 50%, #2e5c8a 100%);
+    opacity: 0.7;
+  }
+  .masthead-sky[data-sky-bucket="golden"] {
+    background: linear-gradient(90deg, #f2a35f 0%, #e97a42 50%, #8a2432 100%);
+    opacity: 0.78;
+  }
+  .masthead-sky[data-sky-bucket="blue"] {
+    background: linear-gradient(90deg, #4a2a5a 0%, #2b1d4a 50%, #121230 100%);
+    opacity: 0.82;
+  }
+  .masthead-sky[data-sky-bucket="evening"] {
+    background: linear-gradient(90deg, #1a1830 0%, #2a1e36 50%, #47345e 100%);
+    opacity: 0.85;
+  }
+
   .masthead {
     display: flex;
     align-items: baseline;
@@ -396,6 +535,71 @@ const alternates = [
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+
+  /* Sprint 23: Front Door daily race chip. Three states:
+     · SCHEDULED (default today, waiting for Mike to flip opensAt)
+     · OPEN (race accepting entries — pulse)
+     · CLOSED / RESOLVED (no pulse, muted)
+     Hydrated live by the inline script below from
+     /api/race/front-door/leaderboard. */
+  .race-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid rgba(138, 36, 50, 0.5);
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 999px;
+    color: #6B2139;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .race-chip:hover {
+    background: #8a2432;
+    color: #fef5e7;
+    border-color: #8a2432;
+    text-decoration: none;
+  }
+  .race-chip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #c4c2bc;
+    box-shadow: 0 0 0 0 rgba(196, 194, 188, 0.5);
+  }
+  .race-chip[data-status="open"] {
+    border-color: #2f8f5f;
+    color: #1b5033;
+    background: rgba(220, 255, 235, 0.6);
+  }
+  .race-chip[data-status="open"] .race-chip__dot {
+    background: #2f8f5f;
+    animation: race-pulse 2.4s ease-out infinite;
+  }
+  .race-chip[data-status="scheduled"] .race-chip__dot {
+    background: #F59F00;
+  }
+  .race-chip[data-status="closed"],
+  .race-chip[data-status="resolved"] {
+    opacity: 0.6;
+  }
+  @keyframes race-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.7); }
+    70%  { box-shadow: 0 0 0 8px rgba(47, 143, 95, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+  .race-chip__status {
+    font-size: 8.5px;
+    letter-spacing: 0.18em;
+    opacity: 0.85;
+  }
+  @media (max-width: 560px) {
+    .race-chip__label { display: none; }
   }
 
   .wordmark {
