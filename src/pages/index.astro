@@ -136,9 +136,14 @@ const alternates = [
          link. Sprint 23 adds:
          · hour-tinted sky strip above the row (client-set data-bucket)
          · Front Door race chip (scheduled until Mike flips opensAt in
-           src/lib/races.ts). Uses the same buckets as /wire. -->
-    <div class="masthead-sky" data-sky-bucket="midday" aria-hidden="true"></div>
-    <header class="masthead" id="pc-masthead" data-sky-bucket="midday">
+           src/lib/races.ts). Uses the same buckets as /wire.
+         Sprint 24 adds:
+         · mood-tinted accent (data-mood) responding to MoodChip's
+           `pc:mood-changed` event. Layers a colored glow on top of the
+           sky without overriding the time-of-day gradient — mood is an
+           accent, time-of-day is the base. -->
+    <div class="masthead-sky" data-sky-bucket="midday" data-mood="" aria-hidden="true"></div>
+    <header class="masthead" id="pc-masthead" data-sky-bucket="midday" data-mood="">
       <a href="/" class="wordmark" aria-label="PointCast home">POINTCAST</a>
       <span class="sep" aria-hidden="true">·</span>
       <span class="meta">{blockCount} BLOCKS</span>
@@ -185,6 +190,21 @@ const alternates = [
         }
         apply();
         setInterval(apply, 60_000);
+
+        // Sprint 24: mood → masthead accent. MoodChip writes the
+        // mood id to localStorage.pc:mood and dispatches
+        // pc:mood-changed{detail:{moodId}}. We apply both on load
+        // (so persisted mood tints on arrival) and on change.
+        function applyMood(id) {
+          var m = (id || '').toLowerCase();
+          head.setAttribute('data-mood', m);
+          sky.setAttribute('data-mood', m);
+        }
+        try { applyMood(localStorage.getItem('pc:mood') || ''); } catch (e) {}
+        window.addEventListener('pc:mood-changed', function (e) {
+          var id = e && e.detail && e.detail.moodId;
+          applyMood(id);
+        });
 
         // Front Door race chip live hydrate. /api/race/front-door/
         // leaderboard returns race meta including derived status
@@ -524,6 +544,34 @@ const alternates = [
     background: linear-gradient(90deg, #1a1830 0%, #2a1e36 50%, #47345e 100%);
     opacity: 0.85;
   }
+
+  /* Sprint 24 — mood accent layered on top of the sky.
+     Per mood palette from MoodChip:
+       chill #2B8A3E · hype #C92A2A · focus #1864AB · flow #5F3DC4
+       curious #E8590C · quiet #5F5E5A
+     Height grows slightly + a colored border-bottom paints the mood. */
+  .masthead-sky {
+    position: relative;
+    transition: height 300ms ease, background 400ms linear, opacity 400ms linear, box-shadow 300ms ease;
+  }
+  .masthead-sky[data-mood]:not([data-mood=""]) {
+    height: 8px;
+  }
+  .masthead-sky[data-mood="chill"]   { box-shadow: inset 0 -2px 0 0 #2B8A3E, 0 0 14px -2px rgba(43, 138, 62, 0.55); }
+  .masthead-sky[data-mood="hype"]    { box-shadow: inset 0 -2px 0 0 #C92A2A, 0 0 14px -2px rgba(201, 42, 42, 0.6); }
+  .masthead-sky[data-mood="focus"]   { box-shadow: inset 0 -2px 0 0 #1864AB, 0 0 14px -2px rgba(24, 100, 171, 0.6); }
+  .masthead-sky[data-mood="flow"]    { box-shadow: inset 0 -2px 0 0 #5F3DC4, 0 0 14px -2px rgba(95, 61, 196, 0.6); }
+  .masthead-sky[data-mood="curious"] { box-shadow: inset 0 -2px 0 0 #E8590C, 0 0 14px -2px rgba(232, 89, 12, 0.6); }
+  .masthead-sky[data-mood="quiet"]   { box-shadow: inset 0 -2px 0 0 #5F5E5A, 0 0 10px -3px rgba(95, 94, 90, 0.4); }
+
+  /* The wordmark also picks up a subtle mood cast — tiny accent so
+     the header feels connected to the selected mood, not just the sky. */
+  .masthead[data-mood="chill"]   .wordmark:hover { color: #2B8A3E; }
+  .masthead[data-mood="hype"]    .wordmark:hover { color: #C92A2A; }
+  .masthead[data-mood="focus"]   .wordmark:hover { color: #1864AB; }
+  .masthead[data-mood="flow"]    .wordmark:hover { color: #5F3DC4; }
+  .masthead[data-mood="curious"] .wordmark:hover { color: #E8590C; }
+  .masthead[data-mood="quiet"]   .wordmark:hover { color: #5F5E5A; }
 
   .masthead {
     display: flex;
