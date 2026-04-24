@@ -1,0 +1,1424 @@
+---
+/**
+ * /agent-derby - deterministic horse racing game for PointCast agents.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { DERBY_ROSTER, DERBY_RULEBOOK, DERBY_STATS, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
+
+const derbyData = {
+  version: DERBY_VERSION,
+  stats: DERBY_STATS,
+  tracks: DERBY_TRACKS,
+  roster: DERBY_ROSTER,
+  rulebook: DERBY_RULEBOOK,
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  '@id': 'https://pointcast.xyz/agent-derby#game',
+  name: 'PointCast Agent Derby',
+  description: 'A deterministic browser horse-racing game for PointCast agents and humans.',
+  url: 'https://pointcast.xyz/agent-derby',
+  gamePlatform: 'Web browser',
+  genre: 'Horse racing simulation',
+  inLanguage: 'en-US',
+};
+---
+
+<BlockLayout
+  title="Agent Derby"
+  description="A deterministic browser horse-racing game for PointCast agents and humans."
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/agent-derby.json', title: 'PointCast Agent Derby manifest' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/og-home-v2.png',
+    buttons: [
+      { label: 'Run race', action: 'link', target: 'https://pointcast.xyz/agent-derby' },
+      { label: 'Game JSON', action: 'link', target: 'https://pointcast.xyz/agent-derby.json' },
+      { label: '/for-agents', action: 'link', target: 'https://pointcast.xyz/for-agents' },
+      { label: 'Home', action: 'link', target: 'https://pointcast.xyz/' },
+    ],
+  }}
+>
+  <div class="derby-page" data-agent-derby>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>agent-derby</span>
+    </nav>
+
+    <section class="derby-shell" aria-labelledby="derby-title">
+      <header class="mast">
+        <div class="mast__copy">
+          <p class="kicker">CH.BTL / AGENT DERBY / v{DERBY_VERSION}</p>
+          <h1 id="derby-title">PointCast Agent Derby</h1>
+        </div>
+        <div class="race-key" aria-label="Race status">
+          <span data-race-id>AD-READY</span>
+          <strong data-race-state>GATES</strong>
+        </div>
+      </header>
+
+      <section class="control-deck" aria-label="Race controls">
+        <label class="seed-box">
+          <span>Seed</span>
+          <input type="text" value="gamgee-rc0" data-seed-input spellcheck="false" autocomplete="off" />
+        </label>
+        <div class="track-tabs" data-track-tabs role="tablist" aria-label="Track select"></div>
+        <div class="button-row">
+          <button type="button" class="btn btn--primary" data-action="run">Run race</button>
+          <button type="button" class="btn" data-action="new-field">New field</button>
+          <button type="button" class="btn" data-action="reset">Reset</button>
+        </div>
+      </section>
+
+      <div class="race-grid">
+        <main class="track-card" aria-label="Race track">
+          <div class="track-card__top">
+            <span data-track-label>El Segundo Sprint</span>
+            <strong data-track-meta>ES-1200 / 1200m / fast dirt</strong>
+          </div>
+          <div class="track-stage" data-track-stage></div>
+        </main>
+
+        <aside class="stable-card" aria-label="Field">
+          <div class="stable-card__head">
+            <span>Field</span>
+            <strong data-field-summary>6 gates loaded</strong>
+          </div>
+          <div class="field-list" data-field-list></div>
+        </aside>
+      </div>
+
+      <div class="race-bottom">
+        <section class="result-card" aria-label="Race result">
+          <div class="panel-head">
+            <span>Result</span>
+            <button type="button" class="mini-btn" data-action="copy">Copy receipt</button>
+          </div>
+          <div class="podium" data-podium>
+            <p>Gates are loaded.</p>
+          </div>
+          <pre class="receipt" data-receipt aria-label="Race receipt">{}</pre>
+        </section>
+
+        <section class="log-card" aria-label="Race call">
+          <div class="panel-head">
+            <span>Call</span>
+            <a href="/agent-derby.json">/agent-derby.json</a>
+          </div>
+          <div class="race-log" data-race-log>
+            <p>Race desk standing by.</p>
+          </div>
+        </section>
+
+        <section class="agent-card" aria-label="Agent protocol">
+          <div class="panel-head">
+            <span>Agent line</span>
+            <a href="/for-agents">/for-agents</a>
+          </div>
+          <code>/agent-derby?seed=gamgee-rc0&amp;track=wire-mile&amp;agents=claude,codex,manus</code>
+          <div class="history-list" data-history-list></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script type="application/json" id="derby-data" set:html={JSON.stringify(derbyData)}></script>
+
+  <script is:inline>
+    (function () {
+      var root = document.querySelector('[data-agent-derby]');
+      var dataEl = document.getElementById('derby-data');
+      if (!root || !dataEl) return;
+
+      var DATA = JSON.parse(dataEl.textContent || '{}');
+      var TRACKS = DATA.tracks || [];
+      var ROSTER = DATA.roster || [];
+      var STATS = DATA.stats || ['speed', 'stamina', 'burst', 'nerve', 'gate', 'grit'];
+      var STORAGE_KEY = 'pc:agent-derby:races';
+      var FRAME_COUNT = 120;
+
+      var params = new URLSearchParams(window.location.search);
+      var seedInput = root.querySelector('[data-seed-input]');
+      var trackTabs = root.querySelector('[data-track-tabs]');
+      var trackStage = root.querySelector('[data-track-stage]');
+      var fieldList = root.querySelector('[data-field-list]');
+      var historyList = root.querySelector('[data-history-list]');
+      var raceLog = root.querySelector('[data-race-log]');
+      var receiptEl = root.querySelector('[data-receipt]');
+      var podium = root.querySelector('[data-podium]');
+      var raceIdEl = root.querySelector('[data-race-id]');
+      var raceStateEl = root.querySelector('[data-race-state]');
+      var trackLabel = root.querySelector('[data-track-label]');
+      var trackMeta = root.querySelector('[data-track-meta]');
+      var fieldSummary = root.querySelector('[data-field-summary]');
+
+      var state = {
+        seed: params.get('seed') || 'gamgee-rc0',
+        trackId: params.get('track') || (TRACKS[0] && TRACKS[0].id),
+        field: [],
+        sim: null,
+        timer: 0,
+        frame: 0,
+        racing: false,
+        receipt: null,
+      };
+
+      seedInput.value = state.seed;
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, function (char) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+        });
+      }
+
+      function hashString(value) {
+        var hash = 2166136261;
+        var text = String(value);
+        for (var i = 0; i < text.length; i += 1) {
+          hash ^= text.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        return hash >>> 0;
+      }
+
+      function rngFrom(value) {
+        var a = hashString(value);
+        return function () {
+          a |= 0;
+          a = (a + 0x6D2B79F5) | 0;
+          var t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function activeTrack() {
+        return TRACKS.find(function (track) { return track.id === state.trackId; }) || TRACKS[0];
+      }
+
+      function agentTokens() {
+        return (new URLSearchParams(window.location.search).get('agents') || '')
+          .split(',')
+          .map(function (token) { return token.trim().toLowerCase(); })
+          .filter(Boolean);
+      }
+
+      function matchesToken(horse, token) {
+        return horse.slug.toLowerCase().indexOf(token) >= 0 ||
+          horse.agent.toLowerCase().indexOf(token) >= 0 ||
+          horse.name.toLowerCase().indexOf(token) >= 0;
+      }
+
+      function selectField(seed) {
+        var requested = [];
+        agentTokens().forEach(function (token) {
+          var match = ROSTER.find(function (horse) { return matchesToken(horse, token); });
+          if (match && requested.indexOf(match) === -1) requested.push(match);
+        });
+
+        var rng = rngFrom(seed + ':field');
+        var shuffled = ROSTER
+          .filter(function (horse) { return requested.indexOf(horse) === -1; })
+          .map(function (horse) { return { horse: horse, sort: rng() }; })
+          .sort(function (a, b) { return a.sort - b.sort; })
+          .map(function (item) { return item.horse; });
+
+        return requested.concat(shuffled).slice(0, 6).map(function (horse, index) {
+          return Object.assign({}, horse, { gate: index + 1 });
+        });
+      }
+
+      function ratingFor(horse, track) {
+        var total = 0;
+        STATS.forEach(function (stat) {
+          total += horse.stats[stat] * (track.bias[stat] || 1);
+        });
+        return total / STATS.length;
+      }
+
+      function raceId(seed, track, field) {
+        var base = seed + ':' + track.id + ':' + field.map(function (horse) { return horse.slug; }).join(',');
+        return 'AD-' + hashString(base).toString(36).toUpperCase().slice(0, 6).padStart(6, '0');
+      }
+
+      function simulateRace(seed, trackId, field) {
+        var track = TRACKS.find(function (item) { return item.id === trackId; }) || TRACKS[0];
+        var ratings = field.map(function (horse) { return ratingFor(horse, track); });
+        var totalRating = ratings.reduce(function (sum, rating) { return sum + rating; }, 0);
+
+        var runners = field.map(function (horse, runnerIndex) {
+          var rng = rngFrom(seed + ':' + track.id + ':' + horse.slug);
+          var rating = ratings[runnerIndex];
+          var distance = 0;
+          var raw = [0];
+          var trouble = null;
+
+          for (var tick = 1; tick <= FRAME_COUNT; tick += 1) {
+            var p = tick / FRAME_COUNT;
+            var gatePush = Math.max(0, 1 - p * 5) * (horse.stats.gate - 50) * 0.2;
+            var cruise = Math.sin(Math.PI * Math.min(1, p * 1.12)) * (horse.stats.speed - 50) * 0.045;
+            var stretch = Math.max(0, (p - 0.62) / 0.38) * (((horse.stats.stamina + horse.stats.burst) / 2) - 50) * 0.11;
+            var surface = 0;
+            if (track.id === 'dune-night') surface = (horse.stats.grit - 50) * 0.08;
+            if (track.id === 'fog-route') surface = (((horse.stats.nerve + horse.stats.grit) / 2) - 50) * 0.07;
+
+            var trafficWindow = p > 0.24 && p < 0.76;
+            if (!trouble && trafficWindow && rng() < (100 - horse.stats.nerve) / 18000) {
+              trouble = { tick: tick, note: horse.name + ' checked in traffic' };
+            }
+
+            var penalty = trouble && tick - trouble.tick < 11 ? 10.5 : 0;
+            var pace = 47 + rating / 3.35 + gatePush + cruise + stretch + surface + (rng() - 0.5) * 6 - penalty;
+            distance += Math.max(16, pace);
+            raw.push(distance);
+          }
+
+          var chance = Math.max(0.05, rating / totalRating);
+          return Object.assign({}, horse, {
+            rating: rating,
+            odds: (1 / chance).toFixed(1) + 'x',
+            raw: raw,
+            finish: raw[raw.length - 1],
+            trouble: trouble,
+          });
+        });
+
+        var maxDistance = runners.reduce(function (max, runner) { return Math.max(max, runner.finish); }, 0);
+        runners.forEach(function (runner) {
+          runner.positions = runner.raw.map(function (value) { return Math.min(100, (value / maxDistance) * 100); });
+          runner.margin = Number((((maxDistance - runner.finish) / maxDistance) * 12).toFixed(2));
+          runner.time = Number((track.par + runner.margin * 0.43).toFixed(2));
+        });
+
+        var order = runners.slice().sort(function (a, b) {
+          return b.finish - a.finish || a.gate - b.gate;
+        });
+
+        return {
+          raceId: raceId(seed, track, field),
+          seed: seed,
+          track: track,
+          runners: runners,
+          order: order,
+          winner: order[0],
+        };
+      }
+
+      function horseSvg() {
+        return '<svg viewBox="0 0 96 52" aria-hidden="true" focusable="false">' +
+          '<path fill="var(--coat)" d="M12 35h14l6-12h20l8 7 10-14 12 1 6 7-6 4 5 5-8 2-5-5-7 12H49l-5 9h-8l3-9H25l-7 9h-8l8-10-6-7Z"/>' +
+          '<path fill="var(--accent)" d="M54 22l7 5 5-8-7-3-5 6Zm-24 1h12l-3 6H27l3-6Z"/>' +
+          '<circle cx="80" cy="22" r="2" fill="#12110e"/>' +
+          '<path stroke="#12110e" stroke-width="3" stroke-linecap="round" d="M25 37l-7 10M46 37l-4 10M62 37l5 10"/>' +
+          '</svg>';
+      }
+
+      function statBars(horse) {
+        return STATS.map(function (stat) {
+          var value = horse.stats[stat];
+          return '<div class="stat-line"><span>' + stat.toUpperCase() + '</span><strong>' + value + '</strong><i style="--v:' + value + '%"></i></div>';
+        }).join('');
+      }
+
+      function renderTrackTabs() {
+        trackTabs.innerHTML = TRACKS.map(function (track) {
+          var selected = track.id === state.trackId ? ' aria-selected="true"' : ' aria-selected="false"';
+          return '<button type="button" role="tab" data-track="' + escapeHtml(track.id) + '"' + selected + '>' +
+            '<span>' + escapeHtml(track.code) + '</span>' +
+            '<strong>' + escapeHtml(track.label) + '</strong>' +
+            '</button>';
+        }).join('');
+      }
+
+      function renderTrack() {
+        var sim = state.sim;
+        var track = sim.track;
+        trackLabel.textContent = track.label;
+        trackMeta.textContent = track.code + ' / ' + track.distance + 'm / ' + track.going;
+        raceIdEl.textContent = sim.raceId;
+        fieldSummary.textContent = sim.runners.length + ' gates loaded';
+
+        trackStage.innerHTML =
+          '<div class="track-ruler"><span>GATE</span><span>BACKSTRETCH</span><span>TURN</span><span>WIRE</span></div>' +
+          sim.runners.map(function (runner) {
+            return '<div class="lane" data-lane="' + escapeHtml(runner.slug) + '">' +
+              '<div class="lane__meta"><span>G' + runner.gate + '</span><strong>' + escapeHtml(runner.name) + '</strong><small>' + escapeHtml(runner.agent) + ' / ' + runner.odds + '</small></div>' +
+              '<div class="lane__rail">' +
+                '<span class="lane__fill" data-fill="' + escapeHtml(runner.slug) + '"></span>' +
+                '<span class="runner" data-runner="' + escapeHtml(runner.slug) + '" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + ';left:3%;">' + horseSvg() + '</span>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+      }
+
+      function renderField() {
+        fieldList.innerHTML = state.sim.runners.map(function (runner) {
+          return '<article class="horse-card" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + '">' +
+            '<div class="horse-card__top"><span>G' + runner.gate + '</span><strong>' + escapeHtml(runner.name) + '</strong><small>' + escapeHtml(runner.odds) + '</small></div>' +
+            '<p>' + escapeHtml(runner.stable) + '</p>' +
+            '<em>' + escapeHtml(runner.bloodline) + '</em>' +
+            '<div class="stats">' + statBars(runner) + '</div>' +
+          '</article>';
+        }).join('');
+      }
+
+      function receiptFor(sim) {
+        return {
+          raceId: sim.raceId,
+          seed: sim.seed,
+          track: sim.track.id,
+          generatedAt: new Date().toISOString(),
+          winner: sim.winner.slug,
+          order: sim.order.map(function (runner) { return runner.slug; }),
+          margins: sim.order.map(function (runner) {
+            return { slug: runner.slug, margin: runner.margin, time: runner.time };
+          }),
+        };
+      }
+
+      function renderReceipt(receipt) {
+        receiptEl.textContent = JSON.stringify(receipt || {}, null, 2);
+      }
+
+      function renderPodium() {
+        if (!state.receipt) {
+          podium.innerHTML = '<p>Gates are loaded.</p>';
+          return;
+        }
+        var order = state.sim.order;
+        podium.innerHTML = order.slice(0, 3).map(function (runner, index) {
+          var place = index + 1;
+          return '<article class="podium-step podium-step--' + place + '" style="--coat:' + escapeHtml(runner.coat) + '">' +
+            '<span>' + place + '</span>' +
+            '<strong>' + escapeHtml(runner.name) + '</strong>' +
+            '<small>' + (runner.margin === 0 ? 'winner' : runner.margin + ' lengths') + '</small>' +
+          '</article>';
+        }).join('');
+      }
+
+      function readHistory() {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function writeHistory(receipt) {
+        var next = [receipt].concat(readHistory().filter(function (item) { return item.raceId !== receipt.raceId; })).slice(0, 12);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch (error) {}
+      }
+
+      function renderHistory() {
+        var items = readHistory().slice(0, 4);
+        historyList.innerHTML = items.length
+          ? items.map(function (item) {
+              return '<a href="/agent-derby?seed=' + encodeURIComponent(item.seed) + '&track=' + encodeURIComponent(item.track) + '">' +
+                '<span>' + escapeHtml(item.raceId) + '</span><strong>' + escapeHtml(item.winner) + '</strong>' +
+              '</a>';
+            }).join('')
+          : '<p>No race receipts yet.</p>';
+      }
+
+      function logLine(text) {
+        var p = document.createElement('p');
+        p.textContent = text;
+        raceLog.prepend(p);
+        while (raceLog.children.length > 8) raceLog.removeChild(raceLog.lastChild);
+      }
+
+      function setStateLabel(value) {
+        raceStateEl.textContent = value;
+        root.dataset.racePhase = value.toLowerCase();
+      }
+
+      function updateUrl() {
+        var url = new URL(window.location.href);
+        url.searchParams.set('seed', state.seed);
+        url.searchParams.set('track', state.trackId);
+        window.history.replaceState({}, '', url);
+      }
+
+      function updatePositions(frame) {
+        state.sim.runners.forEach(function (runner) {
+          var progress = runner.positions[Math.min(frame, runner.positions.length - 1)] || 0;
+          var x = 3 + progress * 0.935;
+          var marker = trackStage.querySelector('[data-runner="' + runner.slug + '"]');
+          var fill = trackStage.querySelector('[data-fill="' + runner.slug + '"]');
+          if (marker) marker.style.left = x + '%';
+          if (fill) fill.style.width = Math.max(0, x - 3) + '%';
+        });
+      }
+
+      function prepareRace(options) {
+        window.clearInterval(state.timer);
+        state.racing = false;
+        state.frame = 0;
+        state.receipt = null;
+        if (!options || !options.keepField) state.field = selectField(state.seed);
+        state.sim = simulateRace(state.seed, state.trackId, state.field);
+        raceLog.innerHTML = '<p>Race desk standing by.</p>';
+        setStateLabel('GATES');
+        updateUrl();
+        renderTrackTabs();
+        renderTrack();
+        renderField();
+        renderReceipt(null);
+        renderPodium();
+        renderHistory();
+        updatePositions(0);
+      }
+
+      function leaderAt(frame) {
+        return state.sim.runners
+          .slice()
+          .sort(function (a, b) {
+            return (b.positions[frame] || 0) - (a.positions[frame] || 0);
+          })[0];
+      }
+
+      function playRace() {
+        if (state.racing) return;
+        prepareRace({ keepField: true });
+        state.racing = true;
+        state.frame = 0;
+        setStateLabel('LIVE');
+        logLine('And they are off at ' + state.sim.track.label + '.');
+        state.timer = window.setInterval(function () {
+          state.frame += 1;
+          updatePositions(state.frame);
+
+          if (state.frame === 25 || state.frame === 58 || state.frame === 92) {
+            var leader = leaderAt(state.frame);
+            logLine(leader.name + ' leads through frame ' + state.frame + '.');
+          }
+
+          if (state.frame >= FRAME_COUNT) {
+            window.clearInterval(state.timer);
+            state.racing = false;
+            state.receipt = receiptFor(state.sim);
+            writeHistory(state.receipt);
+            setStateLabel('PHOTO');
+            logLine(state.sim.winner.name + ' hits the wire first.');
+            state.sim.order.forEach(function (runner) {
+              if (runner.trouble) logLine(runner.trouble.note + '.');
+            });
+            renderReceipt(state.receipt);
+            renderPodium();
+            renderHistory();
+          }
+        }, 38);
+      }
+
+      trackTabs.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-track]');
+        if (!button || state.racing) return;
+        state.trackId = button.getAttribute('data-track');
+        prepareRace({ keepField: true });
+      });
+
+      root.addEventListener('click', function (event) {
+        var action = event.target.closest('[data-action]');
+        if (!action) return;
+        var name = action.getAttribute('data-action');
+
+        if (name === 'run') playRace();
+        if (name === 'reset' && !state.racing) prepareRace({ keepField: true });
+        if (name === 'new-field' && !state.racing) {
+          state.seed = 'race-' + Date.now().toString(36).slice(-7);
+          seedInput.value = state.seed;
+          prepareRace();
+        }
+        if (name === 'copy') {
+          var receipt = state.receipt || receiptFor(state.sim);
+          navigator.clipboard?.writeText(JSON.stringify(receipt, null, 2));
+          logLine('Receipt copied for ' + receipt.raceId + '.');
+        }
+      });
+
+      seedInput.addEventListener('change', function () {
+        if (state.racing) return;
+        state.seed = seedInput.value.trim() || 'gamgee-rc0';
+        seedInput.value = state.seed;
+        prepareRace();
+      });
+
+      prepareRace();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .derby-page {
+    min-height: 100vh;
+    padding: 18px 20px 88px;
+    color: #12110e;
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.06) 1px, transparent 1px) 0 0 / 36px 36px,
+      linear-gradient(180deg, #fffdf4 0%, #eef6f0 48%, #f7f3e7 100%);
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    max-width: 1360px;
+    margin: 0 auto 14px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .derby-shell {
+    max-width: 1360px;
+    margin: 0 auto;
+    border-top: 1.5px solid #12110e;
+    border-bottom: 1.5px solid #12110e;
+  }
+
+  .mast {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+    padding: 24px 0 18px;
+    border-bottom: 1px solid #c7c0ad;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #9a5a18;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    max-width: 780px;
+    margin: 0;
+    font-size: 62px;
+    line-height: 0.95;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .race-key {
+    display: grid;
+    gap: 4px;
+    min-width: 178px;
+    padding: 10px 12px;
+    border: 1px solid #12110e;
+    background: #fffdf4;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .race-key strong {
+    color: #185fa5;
+    font-size: 18px;
+  }
+
+  .control-deck {
+    display: grid;
+    grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: stretch;
+    padding: 14px 0;
+    border-bottom: 1px solid #c7c0ad;
+  }
+
+  .seed-box {
+    display: grid;
+    gap: 6px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .seed-box input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid #12110e;
+    border-radius: 0;
+    padding: 8px 10px;
+    background: #fff;
+    color: #12110e;
+    font: 14px/1.2 var(--pc-font-mono);
+  }
+
+  .track-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid #12110e;
+    background: #fff;
+  }
+
+  .track-tabs button {
+    display: grid;
+    gap: 4px;
+    align-content: center;
+    min-height: 52px;
+    border: 0;
+    border-right: 1px solid #c7c0ad;
+    background: #fff;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .track-tabs button strong {
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.15;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .track-tabs button:last-child {
+    border-right: 0;
+  }
+
+  .track-tabs button span {
+    color: #9a5a18;
+  }
+
+  .track-tabs button[aria-selected="true"] {
+    background: #12110e;
+    color: #fff8df;
+  }
+
+  .track-tabs button[aria-selected="true"] span {
+    color: #f4b23f;
+  }
+
+  .button-row {
+    display: flex;
+    gap: 8px;
+    align-items: end;
+  }
+
+  .btn,
+  .mini-btn {
+    min-height: 42px;
+    border: 1px solid #12110e;
+    border-radius: 0;
+    padding: 8px 11px;
+    background: #fff;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .btn:hover,
+  .mini-btn:hover {
+    background: #eef6f0;
+  }
+
+  .btn--primary {
+    background: #f7d56b;
+  }
+
+  .race-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    min-width: 0;
+    border-bottom: 1px solid #c7c0ad;
+  }
+
+  .track-card {
+    min-width: 0;
+    padding: 16px 18px 18px 0;
+    border-right: 1px solid #c7c0ad;
+  }
+
+  .track-card__top,
+  .stable-card__head,
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .track-stage {
+    position: relative;
+    overflow: hidden;
+    border: 1.5px solid #12110e;
+    background:
+      linear-gradient(90deg, transparent 0 24%, rgba(24, 95, 165, 0.08) 24% 25%, transparent 25% 49%, rgba(32, 140, 75, 0.08) 49% 50%, transparent 50% 74%, rgba(154, 90, 24, 0.08) 74% 75%, transparent 75%),
+      #fffaf0;
+  }
+
+  .track-ruler {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-bottom: 1px solid #12110e;
+    background: #12110e;
+    color: #fff8df;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .track-ruler span {
+    padding: 7px 9px;
+    border-right: 1px solid rgba(255, 248, 223, 0.25);
+    overflow-wrap: anywhere;
+  }
+
+  .lane {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    min-height: 78px;
+    border-bottom: 1px solid #d9d1bd;
+  }
+
+  .lane:last-child {
+    border-bottom: 0;
+  }
+
+  .lane__meta {
+    display: grid;
+    align-content: center;
+    gap: 3px;
+    padding: 10px;
+    border-right: 1px solid #d9d1bd;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .lane__meta span,
+  .lane__meta small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .lane__meta strong {
+    font-size: 15px;
+    line-height: 1.1;
+  }
+
+  .lane__rail {
+    position: relative;
+    min-width: 0;
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.1) 1px, transparent 1px) 0 0 / 46px 100%,
+      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(240, 229, 203, 0.45));
+  }
+
+  .lane__rail::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 4.5%;
+    bottom: 0;
+    width: 4px;
+    background: repeating-linear-gradient(180deg, #12110e 0 8px, #fff8df 8px 16px);
+  }
+
+  .lane__fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    background: linear-gradient(90deg, rgba(244, 178, 63, 0.18), rgba(24, 95, 165, 0.08));
+  }
+
+  .runner {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: 72px;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08));
+    transition: left 80ms linear;
+  }
+
+  .runner svg {
+    width: 100%;
+    height: auto;
+  }
+
+  .stable-card {
+    min-width: 0;
+    padding: 16px 0 18px 18px;
+  }
+
+  .field-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .horse-card {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    box-shadow: inset 5px 0 0 var(--coat);
+  }
+
+  .horse-card__top {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .horse-card__top span,
+  .horse-card__top small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .horse-card__top strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .horse-card p,
+  .horse-card em {
+    margin: 0;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .horse-card em {
+    color: #5f5e5a;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 8px;
+  }
+
+  .stat-line {
+    display: grid;
+    grid-template-columns: 38px 24px;
+    gap: 4px;
+    align-items: center;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+  }
+
+  .stat-line i {
+    grid-column: 1 / -1;
+    height: 4px;
+    background: linear-gradient(90deg, var(--coat) var(--v), #ece7da var(--v));
+  }
+
+  .race-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+  }
+
+  .result-card,
+  .log-card,
+  .agent-card {
+    min-width: 0;
+    padding: 16px 16px 18px 0;
+    border-right: 1px solid #c7c0ad;
+  }
+
+  .log-card,
+  .agent-card {
+    padding-left: 16px;
+  }
+
+  .agent-card {
+    border-right: 0;
+  }
+
+  .panel-head a {
+    color: #185fa5;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .mini-btn {
+    min-height: 30px;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .podium {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-height: 90px;
+  }
+
+  .podium p {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 14px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+  }
+
+  .podium-step {
+    display: grid;
+    gap: 6px;
+    align-content: center;
+    min-width: 0;
+    min-height: 90px;
+    padding: 10px;
+    border: 1px solid #12110e;
+    background: #fffdf4;
+    box-shadow: inset 0 5px 0 var(--coat);
+  }
+
+  .podium-step span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+  }
+
+  .podium-step strong,
+  .podium-step small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .podium-step small {
+    color: #5f5e5a;
+  }
+
+  .receipt {
+    overflow: auto;
+    max-height: 210px;
+    margin: 10px 0 0;
+    padding: 10px;
+    border: 1px solid #c7c0ad;
+    background: #12110e;
+    color: #fff8df;
+    font: 11px/1.5 var(--pc-font-mono);
+  }
+
+  .race-log {
+    display: grid;
+    gap: 7px;
+  }
+
+  .race-log p {
+    margin: 0;
+    padding: 9px 10px;
+    border-left: 3px solid #185fa5;
+    background: #fff;
+    color: #38373a;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .agent-card code {
+    display: block;
+    overflow-wrap: anywhere;
+    padding: 10px;
+    border: 1px solid #12110e;
+    background: #fff;
+    color: #12110e;
+    font: 12px/1.45 var(--pc-font-mono);
+  }
+
+  .history-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .history-list a,
+  .history-list p {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0;
+    padding: 9px 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+  }
+
+  @media (max-width: 1120px) {
+    .control-deck,
+    .race-grid,
+    .race-bottom {
+      grid-template-columns: 1fr;
+    }
+
+    .track-card,
+    .stable-card,
+    .result-card,
+    .log-card,
+    .agent-card {
+      padding-right: 0;
+      padding-left: 0;
+      border-right: 0;
+      border-bottom: 1px solid #c7c0ad;
+    }
+
+    .agent-card {
+      border-bottom: 0;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .derby-page {
+      padding: 14px 14px 76px;
+    }
+
+    .mast {
+      grid-template-columns: 1fr;
+    }
+
+    h1 {
+      font-size: 43px;
+      line-height: 1;
+      overflow-wrap: anywhere;
+    }
+
+    .track-tabs,
+    .podium,
+    .stats {
+      grid-template-columns: 1fr;
+    }
+
+    .button-row {
+      flex-wrap: wrap;
+    }
+
+    .button-row .btn {
+      flex: 1 1 132px;
+    }
+
+    .lane {
+      grid-template-columns: 1fr;
+    }
+
+    .lane__meta {
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      gap: 5px 10px;
+      align-items: center;
+      border-right: 0;
+      border-bottom: 1px solid #d9d1bd;
+    }
+
+    .lane__meta small {
+      grid-column: 2 / -1;
+    }
+
+    .lane__rail {
+      min-height: 58px;
+    }
+
+    .runner {
+      width: 58px;
+    }
+  }
+</style>
+
+<style is:global>
+  .derby-page .track-tabs button {
+    display: flex;
+    min-width: 0;
+    min-height: 52px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    border-right: 1px solid #c7c0ad;
+    background: #fff;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    line-height: 1.15;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: normal;
+    appearance: none;
+  }
+
+  .derby-page .track-tabs button:last-child {
+    border-right: 0;
+  }
+
+  .derby-page .track-tabs button span {
+    display: block;
+    color: #9a5a18;
+  }
+
+  .derby-page .track-tabs button strong {
+    display: block;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.15;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .track-tabs button[aria-selected="true"] {
+    background: #12110e;
+    color: #fff8df;
+  }
+
+  .derby-page .track-tabs button[aria-selected="true"] span {
+    color: #f4b23f;
+  }
+
+  .derby-page .track-ruler {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-bottom: 1px solid #12110e;
+    background: #12110e;
+    color: #fff8df;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .derby-page .track-ruler span {
+    padding: 7px 9px;
+    border-right: 1px solid rgba(255, 248, 223, 0.25);
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .lane {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    min-height: 78px;
+    border-bottom: 1px solid #d9d1bd;
+  }
+
+  .derby-page .lane:last-child {
+    border-bottom: 0;
+  }
+
+  .derby-page .lane__meta {
+    display: grid;
+    align-content: center;
+    gap: 3px;
+    padding: 10px;
+    border-right: 1px solid #d9d1bd;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .derby-page .lane__meta span,
+  .derby-page .lane__meta small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .derby-page .lane__meta strong {
+    font-size: 15px;
+    line-height: 1.1;
+  }
+
+  .derby-page .lane__rail {
+    position: relative;
+    min-width: 0;
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.1) 1px, transparent 1px) 0 0 / 46px 100%,
+      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(240, 229, 203, 0.45));
+  }
+
+  .derby-page .lane__rail::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 4.5%;
+    bottom: 0;
+    width: 4px;
+    background: repeating-linear-gradient(180deg, #12110e 0 8px, #fff8df 8px 16px);
+  }
+
+  .derby-page .lane__fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    background: linear-gradient(90deg, rgba(244, 178, 63, 0.18), rgba(24, 95, 165, 0.08));
+  }
+
+  .derby-page .runner {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: 72px;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08));
+    transition: left 80ms linear;
+  }
+
+  .derby-page .runner svg {
+    width: 100%;
+    height: auto;
+  }
+
+  .derby-page .horse-card {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    box-shadow: inset 5px 0 0 var(--coat);
+  }
+
+  .derby-page .horse-card__top {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .derby-page .horse-card__top span,
+  .derby-page .horse-card__top small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .derby-page .horse-card__top strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .horse-card p,
+  .derby-page .horse-card em {
+    margin: 0;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .derby-page .horse-card em {
+    color: #5f5e5a;
+  }
+
+  .derby-page .stat-line {
+    display: grid;
+    grid-template-columns: 38px 24px;
+    gap: 4px;
+    align-items: center;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+  }
+
+  .derby-page .stat-line i {
+    grid-column: 1 / -1;
+    height: 4px;
+    background: linear-gradient(90deg, var(--coat) var(--v), #ece7da var(--v));
+  }
+
+  .derby-page .podium p {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 14px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+  }
+
+  .derby-page .podium-step {
+    display: grid;
+    gap: 6px;
+    align-content: center;
+    min-width: 0;
+    min-height: 90px;
+    padding: 10px;
+    border: 1px solid #12110e;
+    background: #fffdf4;
+    box-shadow: inset 0 5px 0 var(--coat);
+  }
+
+  .derby-page .podium-step span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+  }
+
+  .derby-page .podium-step strong,
+  .derby-page .podium-step small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .podium-step small {
+    color: #5f5e5a;
+  }
+
+  .derby-page .race-log p {
+    margin: 0;
+    padding: 9px 10px;
+    border-left: 3px solid #185fa5;
+    background: #fff;
+    color: #38373a;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .derby-page .history-list a,
+  .derby-page .history-list p {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0;
+    padding: 9px 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+  }
+
+  @media (max-width: 720px) {
+    .derby-page .lane {
+      grid-template-columns: 1fr;
+    }
+
+    .derby-page .lane__meta {
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      gap: 5px 10px;
+      align-items: center;
+      border-right: 0;
+      border-bottom: 1px solid #d9d1bd;
+    }
+
+    .derby-page .lane__meta small {
+      grid-column: 2 / -1;
+    }
+
+    .derby-page .lane__rail {
+      min-height: 58px;
+    }
+
+    .derby-page .runner {
+      width: 58px;
+    }
+  }
+</style>
