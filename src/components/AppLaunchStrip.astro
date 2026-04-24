@@ -1,24 +1,115 @@
 ---
+/**
+ * AppLaunchStrip — landing-page surface of "rooms you can step into now."
+ *
+ * Sprint 23 (Mike 2026-04-24 Fri morning): "the rooms highlighted here
+ * are not that strong." Prior version only listed the two external
+ * satellite pages.dev apps (MoodyGold, Offbalance) and titled itself
+ * "Two satellite rooms are live." That copy had been true for weeks and
+ * didn't reflect /farm, /wire, /talk, /room, /agent-derby etc. that
+ * shipped since.
+ *
+ * This version:
+ *   - keeps the satellite pages (MoodyGold, Offbalance)
+ *   - adds a rotating set of fresh internal rooms (5-a-day), chosen by
+ *     a day-seeded picker so everyone sees the same picks on the same
+ *     day but the selection rotates
+ *   - each card tagged [EXTERNAL] (satellite) or [INTERNAL] (PointCast
+ *     route)
+ *   - title flexes with the count ("N rooms are live" instead of
+ *     "Two satellite rooms are live")
+ */
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
+
+interface FreshRoom {
+  slug: string;
+  name: string;
+  kicker: string;
+  channel: string;
+  href: string;
+  kind: 'internal' | 'external';
+}
+
+// Curated set of internal rooms worth surfacing. Ordered roughly by
+// recency of ship / importance. Day-rotated picks keep it fresh.
+const INTERNAL_ROOMS: FreshRoom[] = [
+  { slug: 'wire',        name: 'PointCast Wire', kicker: 'LIVE TICKER · EVENTS',        channel: 'CH.FD',  href: '/wire',        kind: 'internal' },
+  { slug: 'farm',        name: 'Sam\u2019s Plot', kicker: 'FARMING GAME · 9 TILES',      channel: 'CH.GDN', href: '/farm',        kind: 'internal' },
+  { slug: 'agent-derby', name: 'Agent Derby',    kicker: 'DETERMINISTIC RACING · GAME',  channel: 'CH.BTL', href: '/agent-derby', kind: 'internal' },
+  { slug: 'room',        name: 'Listening Room', kicker: 'SPOTIFY COMPANION · CURSORS',  channel: 'CH.SPN', href: '/room',        kind: 'internal' },
+  { slug: 'talk',        name: 'Voice Dispatch', kicker: 'RECORD A TALK · 10\u201360s',  channel: 'CH.FD',  href: '/talk',        kind: 'internal' },
+  { slug: 'gandalf',     name: 'Sit With Gandalf', kicker: 'WARM COMPANION · KEEPSAKE',  channel: 'CH.GDN', href: '/gandalf',     kind: 'internal' },
+  { slug: 'cast',        name: 'Prize Cast',     kicker: 'NO-LOSS · PENDING MINT',        channel: 'CH.FCT', href: '/cast',        kind: 'internal' },
+  { slug: 'drum',        name: 'DRUM',           kicker: 'SHARED DRUM MODULE',            channel: 'CH.SPN', href: '/drum',        kind: 'internal' },
+  { slug: 'now',         name: 'What\u2019s Live', kicker: 'TODAY ON POINTCAST',          channel: 'CH.FD',  href: '/now',         kind: 'internal' },
+];
+
+// Day-seeded deterministic pick — same viewers on same day see same
+// lineup, but the selection rotates daily. Fisher-Yates-ish with a
+// seeded RNG so we just pick 3 internal rooms to surface alongside
+// the two satellites.
+function daySeed(): number {
+  const day = Math.floor(Date.now() / (24 * 3600 * 1000));
+  return ((day * 2654435761) >>> 0) || 1;
+}
+function pickN<T>(items: T[], n: number, seed: number): T[] {
+  const out = items.slice();
+  // Simple seeded LCG shuffle
+  let s = seed;
+  for (let i = out.length - 1; i > 0; i--) {
+    s = (s * 9301 + 49297) % 233280;
+    const j = Math.floor((s / 233280) * (i + 1));
+    const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+  }
+  return out.slice(0, n);
+}
+
+const seed = daySeed();
+const internalPicks = pickN(INTERNAL_ROOMS, 3, seed);
+const satellites: FreshRoom[] = POINTCAST_APPS.map((a) => ({
+  slug: a.slug,
+  name: a.name,
+  kicker: a.kicker,
+  channel: a.channel,
+  href: `/${a.slug}`,
+  kind: 'external',
+}));
+
+const rooms: FreshRoom[] = [...internalPicks, ...satellites];
+const liveCount = rooms.length;
+const numberWord = (n: number): string => {
+  if (n === 1) return 'One';
+  if (n === 2) return 'Two';
+  if (n === 3) return 'Three';
+  if (n === 4) return 'Four';
+  if (n === 5) return 'Five';
+  if (n === 6) return 'Six';
+  if (n === 7) return 'Seven';
+  return String(n);
+};
+const headline = `${numberWord(liveCount)} rooms are live right now.`;
 ---
 
 <section class="app-strip" aria-labelledby="app-strip-title">
   <div class="app-strip__head">
-    <p class="app-strip__kicker mono">APPS · NOW VIEWABLE ON POINTCAST</p>
-    <h2 id="app-strip-title">Two satellite rooms are live.</h2>
+    <p class="app-strip__kicker mono">ROOMS · OPEN NOW · PICKED FOR TODAY</p>
+    <h2 id="app-strip-title">{headline}</h2>
   </div>
-  <div class="app-strip__grid">
-    {POINTCAST_APPS.map((app) => (
-      <a class="app-strip__item" href={`/${app.slug}`}>
-        <span class="app-strip__channel mono">{app.channel}</span>
-        <strong>{app.name}</strong>
-        <span>{app.kicker}</span>
+  <div class="app-strip__grid" data-count={liveCount}>
+    {rooms.map((room) => (
+      <a class={`app-strip__item app-strip__item--${room.kind}`} href={room.href}>
+        <span class="app-strip__channel mono">
+          {room.channel}
+          <span class="app-strip__kindtag mono">{room.kind === 'external' ? 'SATELLITE' : 'POINTCAST'}</span>
+        </span>
+        <strong>{room.name}</strong>
+        <span class="app-strip__kickerline">{room.kicker}</span>
       </a>
     ))}
     <a class="app-strip__item app-strip__item--all" href="/apps">
       <span class="app-strip__channel mono">INDEX</span>
-      <strong>All apps</strong>
-      <span>MoodyGold + Offbalance</span>
+      <strong>All rooms</strong>
+      <span class="app-strip__kickerline">every PointCast surface, sorted</span>
     </a>
   </div>
 </section>
@@ -61,6 +152,10 @@ import { POINTCAST_APPS } from '../lib/pointcast-apps';
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
+  /* With 5 rooms + INDEX = 6 cards, use 3-up on wide screens, auto-fit on smaller. */
+  .app-strip__grid[data-count="5"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .app-strip__item {
     min-width: 0;
     padding: 10px;
@@ -70,20 +165,43 @@ import { POINTCAST_APPS } from '../lib/pointcast-apps';
     background: rgba(255, 255, 255, 0.68);
     color: var(--pc-ink);
     text-decoration: none;
+    transition: border-color 0.12s, transform 0.12s;
   }
   .app-strip__item:hover {
     border-color: #185FA5;
     text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .app-strip__item--internal {
+    border-left: 2px solid #2f8f5f;
+  }
+  .app-strip__item--external {
+    border-left: 2px solid #7a3b52;
   }
   .app-strip__channel {
     font-size: 9px;
     color: #8A2432;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .app-strip__kindtag {
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    padding: 1px 5px;
+    border-radius: 2px;
+    background: rgba(47, 143, 95, 0.12);
+    color: #2f8f5f;
+  }
+  .app-strip__item--external .app-strip__kindtag {
+    background: rgba(122, 59, 82, 0.12);
+    color: #7a3b52;
   }
   .app-strip__item strong {
     font-size: 14px;
     font-weight: 500;
   }
-  .app-strip__item span:last-child {
+  .app-strip__kickerline {
     min-width: 0;
     overflow-wrap: anywhere;
     font-size: 11px;
@@ -92,9 +210,11 @@ import { POINTCAST_APPS } from '../lib/pointcast-apps';
   }
   .app-strip__item--all {
     background: rgba(24, 95, 165, 0.06);
+    border-left: 2px solid #185FA5;
   }
   @media (max-width: 720px) {
-    .app-strip__grid {
+    .app-strip__grid,
+    .app-strip__grid[data-count="5"] {
       grid-template-columns: 1fr;
     }
     .app-strip h2 {
