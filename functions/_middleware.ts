@@ -55,7 +55,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     '/profile',
     '/wire',  // PointCast Wire ticker — Sprint 17 (closes #31)
     '/scoreboard',  // cross-agent competition reporting — Sprint 24
-    // /listen, /race still on PRs #17/#18 scaffold branches
+    '/race/front-door',  // today's Front Door race — Sprint 25 (PR #18 scaffolds the /race hub)
+    // /listen still on PR #17 scaffold branch
   ]);
   if (isGet && wantsHtml && PRETTY_ROUTES.has(url.pathname)) {
     const internalUrl = new URL(url);

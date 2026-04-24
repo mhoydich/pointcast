@@ -1,0 +1,165 @@
+---
+/**
+ * RaceInstrumentation — client-side race tap for the home page.
+ *
+ * Sprint 25 (Mike 2026-04-24 ~11:00 PT: "run today") wires the Front
+ * Door race end-to-end:
+ *   · arrive — stamped on first DOM ready for this session × race day
+ *   · engage — stamped on the first BlockCard click in the same
+ *     session × race day
+ *   · score = engage_ms - arrive_ms (lowest wins, 'fastest' mode)
+ *   · submit — POST to /api/race/front-door/submit once, per session
+ *
+ * entrantId uses the same opaque session id the Room uses
+ * (localStorage 'pc:room:sid'), so Mike's cursor-room session and his
+ * race entry are the same entity. kind: 'wallet' if pc:wallet-active
+ * is set; else 'anon'.
+ *
+ * Never retries. Never double-submits. Failures are silent (the endpoint
+ * is graceful-no-op when KV is unbound, so 'stored: false' is fine).
+ *
+ * Props:
+ *   slug — defaults to 'front-door'. Extend later for other daily races.
+ *
+ * This is an inline-script island; it reads data-slug off the mount
+ * element and doesn't need hydration.
+ */
+interface Props {
+  slug?: string;
+}
+const { slug = 'front-door' } = Astro.props as Props;
+---
+
+<span
+  class="race-instr"
+  id="race-instr"
+  data-slug={slug}
+  aria-hidden="true"
+></span>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var mount = document.getElementById('race-instr');
+    if (!mount) return;
+    var SLUG = mount.getAttribute('data-slug') || 'front-door';
+
+    // Namespace keys per slug so different daily races don't collide.
+    var KEY_ARRIVE   = 'pc:race:' + SLUG + ':arriveMs';
+    var KEY_ENGAGE   = 'pc:race:' + SLUG + ':engageMs';
+    var KEY_SUBMIT   = 'pc:race:' + SLUG + ':submitted';
+    var KEY_RANK     = 'pc:race:' + SLUG + ':rank';
+
+    function getSid() {
+      try {
+        var s = localStorage.getItem('pc:room:sid');
+        if (s) return s;
+        s = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        try { localStorage.setItem('pc:room:sid', s); } catch (e) {}
+        return s;
+      } catch (e) {
+        return 's-' + Date.now().toString(36);
+      }
+    }
+
+    function getKind() {
+      try {
+        return localStorage.getItem('pc:wallet-active') ? 'wallet' : 'anon';
+      } catch (e) { return 'anon'; }
+    }
+
+    function getEntrantId(kind) {
+      if (kind === 'wallet') {
+        try { return localStorage.getItem('pc:wallet-active') || getSid(); } catch (e) { return getSid(); }
+      }
+      return getSid();
+    }
+
+    // Arrive stamp — earliest-wins per session.
+    var arriveMs;
+    try {
+      var existing = sessionStorage.getItem(KEY_ARRIVE);
+      if (existing) {
+        arriveMs = parseInt(existing, 10);
+      } else {
+        arriveMs = Date.now();
+        sessionStorage.setItem(KEY_ARRIVE, String(arriveMs));
+      }
+    } catch (e) {
+      arriveMs = Date.now();
+    }
+
+    // Already submitted? Let the chip refresh from /api/race/.../
+    // leaderboard (handled in index.astro inline script); we only emit
+    // a pc:race:already-entered event so other UI can listen if it
+    // cares.
+    var submitted = false;
+    try { submitted = sessionStorage.getItem(KEY_SUBMIT) === '1'; } catch (e) {}
+    if (submitted) {
+      window.dispatchEvent(new CustomEvent('pc:race:already-entered', { detail: { slug: SLUG } }));
+      return;
+    }
+
+    // Engage handler — first click on a block-card link anywhere on
+    // the page. Fires once, then unhooks. Any block link counts;
+    // agent-curated "read this first" buttons count; navigation chips
+    // don't (they're not block links).
+    function onFirstBlockClick(e) {
+      var a = e.target && e.target.closest && e.target.closest('a');
+      if (!a) return;
+      var href = a.getAttribute('href') || '';
+      // Must be a block permalink: /b/0344 or /b/0344/
+      if (!/^\/b\/\d{4}\/?$/.test(href)) return;
+      var engageMs = Date.now();
+      try { sessionStorage.setItem(KEY_ENGAGE, String(engageMs)); } catch (e2) {}
+      var score = Math.max(0, engageMs - arriveMs);
+      submitScore(score, engageMs);
+      // Unhook after first valid click so we never double-submit.
+      document.removeEventListener('click', onFirstBlockClick, true);
+    }
+    document.addEventListener('click', onFirstBlockClick, true);
+
+    function submitScore(score, engageMs) {
+      var kind = getKind();
+      var entrantId = getEntrantId(kind);
+      var body = JSON.stringify({
+        entrantId: entrantId,
+        entrantKind: kind,
+        score: score,
+        clientTs: new Date().toISOString(),
+      });
+      try {
+        fetch('/api/race/' + SLUG + '/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: body,
+          keepalive: true,
+        }).then(function (r) { return r.ok ? r.json() : r.json().catch(function () { return null; }); })
+          .then(function (j) {
+            if (!j || j.ok !== true) {
+              window.dispatchEvent(new CustomEvent('pc:race:submit-failed', {
+                detail: { slug: SLUG, score: score, response: j }
+              }));
+              return;
+            }
+            try {
+              sessionStorage.setItem(KEY_SUBMIT, '1');
+              if (typeof j.rank === 'number') localStorage.setItem(KEY_RANK, String(j.rank));
+            } catch (e) {}
+            window.dispatchEvent(new CustomEvent('pc:race:submitted', {
+              detail: { slug: SLUG, score: score, rank: j.rank || null, stored: !!j.stored, reason: j.reason || null }
+            }));
+          })
+          .catch(function () {
+            window.dispatchEvent(new CustomEvent('pc:race:submit-failed', {
+              detail: { slug: SLUG, score: score, response: null }
+            }));
+          });
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  })();
+</script>
