@@ -1,0 +1,190 @@
+---
+/**
+ * CoffeePot — pixel art coffee pot (stovetop moka shape).
+ *
+ * Sprint 35 (Mike 2026-04-24 ~17:30 PT: "fun do some type of coffee pot
+ * block, module, likely something neat there, very pixel art"). Made
+ * the recurring "coffee pot, still on" motif literal — a 32×32 pixel
+ * art SVG moka pot rendered via per-pixel <rect>s so it scales crisp
+ * with image-rendering: pixelated. Steam wisps animate up + fade. Heat
+ * dots pulse below. Respects prefers-reduced-motion.
+ *
+ * Reusable. Sized via prop (default 256px). Drop into /coffee, /mythos,
+ * a footer, or anywhere a small cozy detail wants to land.
+ */
+interface Props {
+  size?: number;          // CSS pixels for display (default 256)
+  className?: string;
+  /** When true, the pot is "on" — heat pulses, steam rises. */
+  on?: boolean;
+}
+const { size = 256, className = '', on = true } = Astro.props;
+
+// Color palette pulled from the site's existing CSS vars where possible.
+const C = {
+  bg:     'transparent',
+  body:   '#3c2817',   // dark espresso
+  bodyHi: '#5a3b22',   // body highlight
+  bodyLo: '#241510',   // body shadow
+  lid:    '#1f1110',   // near-black lid
+  knob:   '#7a5230',   // wooden knob
+  joint:  '#5a3b22',   // metal collar
+  handle: '#1a1208',
+  steam:  '#fef5e7',
+  heat:   '#d4623a',   // ember red
+  amber:  '#c4952e',   // warm site gold (used for the "on" glow)
+};
+
+// Pixel rows for the pot body. Each entry: [x, y, w, h, color]
+// We compose the pot from rectangular regions rather than per-pixel
+// blocks — the result is still crisp pixel-art when scaled with
+// image-rendering: pixelated, and the markup stays small.
+const pixels: [number, number, number, number, string][] = [
+  // Lid knob (small block on top)
+  [14, 5, 4, 2, C.knob],
+  [15, 4, 2, 1, C.knob],
+  // Lid (rounded trapezoid suggested by stacked bands)
+  [11, 7,  10, 1, C.lid],
+  [10, 8,  12, 1, C.lid],
+  [ 9, 9,  14, 1, C.lid],
+  // Top body (collector) — wider than lid, narrows top
+  [ 8, 10, 16, 1, C.bodyLo],
+  [ 8, 11, 16, 4, C.body],
+  [ 8, 11,  1, 4, C.bodyHi],   // left highlight column
+  [ 9, 11,  1, 1, C.bodyHi],   // tiny corner highlight
+  // Joint (metal collar between top + bottom halves)
+  [ 8, 15, 16, 1, C.joint],
+  // Handle (right side) — sticks out as an open D shape
+  [24, 11,  1, 1, C.handle],
+  [25, 11,  1, 1, C.handle],
+  [26, 12,  2, 1, C.handle],
+  [27, 13,  1, 1, C.handle],
+  [27, 14,  1, 1, C.handle],
+  [26, 15,  2, 1, C.handle],
+  [25, 15,  1, 1, C.handle],
+  [24, 15,  1, 1, C.handle],
+  // Bottom body (boiler) — same width as top, slight curve at base
+  [ 8, 16, 16, 4, C.body],
+  [ 8, 16,  1, 4, C.bodyHi],   // left highlight
+  [23, 16,  1, 4, C.bodyLo],   // right shadow
+  [ 9, 20, 14, 1, C.body],
+  [10, 21, 12, 1, C.bodyLo],
+  // Heat plate / coaster
+  [ 9, 23, 14, 1, C.lid],
+  [10, 24, 12, 1, C.lid],
+];
+---
+
+<figure class={`coffee-pot ${on ? 'coffee-pot--on' : 'coffee-pot--off'} ${className}`} style={`--pot-size:${size}px`}>
+  <svg
+    viewBox="0 0 32 32"
+    width={size}
+    height={size}
+    aria-label="Pixel-art stovetop coffee pot, steaming"
+    role="img"
+    shape-rendering="crispEdges"
+  >
+    <!-- Background (transparent for re-use; subtle warm wash if needed) -->
+    <rect x="0" y="0" width="32" height="32" fill={C.bg} />
+
+    <!-- Steam wisps — three vertical "smoke trails" of small pixels.
+         Each wisp is its own group so they animate at different phases. -->
+    <g class="steam steam--1">
+      <rect x="13" y="3" width="1" height="1" fill={C.steam} opacity="0.85" />
+      <rect x="14" y="2" width="1" height="1" fill={C.steam} opacity="0.7" />
+      <rect x="13" y="1" width="1" height="1" fill={C.steam} opacity="0.5" />
+      <rect x="14" y="0" width="1" height="1" fill={C.steam} opacity="0.3" />
+    </g>
+    <g class="steam steam--2">
+      <rect x="16" y="4" width="1" height="1" fill={C.steam} opacity="0.85" />
+      <rect x="15" y="3" width="1" height="1" fill={C.steam} opacity="0.7" />
+      <rect x="16" y="2" width="1" height="1" fill={C.steam} opacity="0.5" />
+      <rect x="15" y="1" width="1" height="1" fill={C.steam} opacity="0.3" />
+    </g>
+    <g class="steam steam--3">
+      <rect x="18" y="3" width="1" height="1" fill={C.steam} opacity="0.85" />
+      <rect x="19" y="2" width="1" height="1" fill={C.steam} opacity="0.7" />
+      <rect x="18" y="1" width="1" height="1" fill={C.steam} opacity="0.5" />
+      <rect x="19" y="0" width="1" height="1" fill={C.steam} opacity="0.3" />
+    </g>
+
+    <!-- Pot body, lid, handle, coaster — composed from rectangular regions. -->
+    {pixels.map(([x, y, w, h, fill]) => (
+      <rect x={x} y={y} width={w} height={h} fill={fill} />
+    ))}
+
+    <!-- Heat dots beneath the coaster — three pulsing embers. -->
+    <g class="heat">
+      <rect class="heat__dot heat__dot--1" x="11" y="26" width="2" height="1" fill={C.heat} />
+      <rect class="heat__dot heat__dot--2" x="15" y="26" width="2" height="1" fill={C.heat} />
+      <rect class="heat__dot heat__dot--3" x="19" y="26" width="2" height="1" fill={C.heat} />
+    </g>
+  </svg>
+</figure>
+
+<style>
+  .coffee-pot {
+    margin: 0;
+    display: inline-block;
+    width: var(--pot-size, 256px);
+    height: var(--pot-size, 256px);
+    line-height: 0;
+  }
+  .coffee-pot svg {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* Steam — float up + fade. Three wisps offset for a gentle pulse. */
+  .steam {
+    transform-origin: center bottom;
+    animation: pot-steam 3.2s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+  .steam--1 { animation-delay: 0s;    animation-duration: 3.4s; }
+  .steam--2 { animation-delay: 1.0s;  animation-duration: 3.0s; }
+  .steam--3 { animation-delay: 2.1s;  animation-duration: 3.6s; }
+
+  @keyframes pot-steam {
+    0%   { opacity: 0;   transform: translateY(2px)  scaleY(0.8); }
+    20%  { opacity: 1;   transform: translateY(0)    scaleY(1); }
+    60%  { opacity: 0.7; transform: translateY(-1px) scaleY(1.05); }
+    100% { opacity: 0;   transform: translateY(-3px) scaleY(0.9); }
+  }
+
+  /* Heat embers — pulse warm. */
+  .heat__dot {
+    transform-origin: center;
+    animation: pot-heat 1.8s ease-in-out infinite;
+  }
+  .heat__dot--1 { animation-delay: 0s; }
+  .heat__dot--2 { animation-delay: 0.45s; }
+  .heat__dot--3 { animation-delay: 0.9s; }
+
+  @keyframes pot-heat {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1;    }
+  }
+
+  /* Off state — no steam, dim heat. */
+  .coffee-pot--off .steam,
+  .coffee-pot--off .heat {
+    animation: none;
+    opacity: 0.25;
+  }
+
+  /* Reduced motion — kill animations, keep visuals. */
+  @media (prefers-reduced-motion: reduce) {
+    .steam, .heat__dot {
+      animation: none;
+    }
+    .steam {
+      opacity: 0.7;
+    }
+    .heat__dot {
+      opacity: 0.85;
+    }
+  }
+</style>
