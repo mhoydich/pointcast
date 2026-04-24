@@ -49,8 +49,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     '/gandalf',
     '/farm',
     '/agent-derby',
-    '/typing',
     '/sitting-with-gandalf',
+    // /typing, /talk, /listen, /race live on PRs #17/#18 — add when merged
   ]);
   if (isGet && wantsHtml && PRETTY_ROUTES.has(url.pathname)) {
     const internalUrl = new URL(url);
