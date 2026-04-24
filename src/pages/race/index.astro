@@ -1,0 +1,412 @@
+---
+/**
+ * /race — race hub.
+ *
+ * Lists every race in RACE_REGISTRY grouped by derived status
+ * (open · scheduled · closed · resolved). Each card links to the
+ * per-slug page (/race/<slug>) which carries the live leaderboard.
+ *
+ * Matches the chrome + visual language of /race/front-door.astro so
+ * the two read as one system. When PR #18 (the larger race-system-rfc
+ * scaffold) merges, this file + /race/front-door.astro together
+ * already cover hub + detail — the merge strategy is to keep this
+ * pair and port any richer copy from #18 into them.
+ *
+ * Sprint 2026-04-24: Mike — "create an area for the racing game."
+ * Unblocks the hub-page gap the front-door.astro header flagged.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { RACE_REGISTRY, deriveStatus, type RaceSpec, type RaceStatus } from '../../lib/races';
+import { CHANNELS } from '../../lib/channels';
+
+const now = new Date();
+
+const WITH_STATUS = RACE_REGISTRY.map((race) => ({
+  race,
+  status: deriveStatus(race, now),
+}));
+
+// Stable ordering within each bucket:
+//   open:      closes soonest first (urgency)
+//   scheduled: opens soonest first
+//   closed:    most recently closed first
+//   resolved:  most recently resolved first
+function sortFor(status: RaceStatus) {
+  return (a: { race: RaceSpec }, b: { race: RaceSpec }) => {
+    const byField = status === 'open' ? 'closesAt'
+      : status === 'scheduled' ? 'opensAt'
+      : 'resolvesAt';
+    const av = Date.parse(a.race[byField]);
+    const bv = Date.parse(b.race[byField]);
+    const asc = status === 'open' || status === 'scheduled';
+    return asc ? av - bv : bv - av;
+  };
+}
+
+const OPEN = WITH_STATUS.filter((w) => w.status === 'open').sort(sortFor('open'));
+const SCHEDULED = WITH_STATUS.filter((w) => w.status === 'scheduled').sort(sortFor('scheduled'));
+const CLOSED = WITH_STATUS.filter((w) => w.status === 'closed').sort(sortFor('closed'));
+const RESOLVED = WITH_STATUS.filter((w) => w.status === 'resolved').sort(sortFor('resolved'));
+
+const GROUPS: Array<{ label: string; key: RaceStatus; rows: typeof WITH_STATUS }> = [
+  { label: 'Running now', key: 'open',      rows: OPEN      },
+  { label: 'Scheduled',   key: 'scheduled', rows: SCHEDULED },
+  { label: 'Closed',      key: 'closed',    rows: CLOSED    },
+  { label: 'Resolved',    key: 'resolved',  rows: RESOLVED  },
+];
+
+const fmtLA = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+
+const MODE_COPY: Record<RaceSpec['mode'], string> = {
+  fastest:    'lowest time wins',
+  most:       'highest count wins',
+  best:       'judged',
+  streak:     'longest streak wins',
+  prediction: 'closest guess wins',
+};
+
+const title = 'Race · PointCast';
+const description = 'Every race on PointCast — running, scheduled, and resolved. One competition per day, per channel.';
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="race-page race-hub" data-surface="hub">
+    <header class="race-head">
+      <p class="race-head__kicker mono">POINTCAST · RACE · HUB</p>
+      <h1 class="race-head__title">The race board.</h1>
+      <p class="race-head__dek">
+        One competition at a time, per channel, per day. Enter at the
+        page that carries the live leaderboard. Winners get
+        attribution — their noun takes the strip for the next day.
+      </p>
+      <dl class="race-head__meta">
+        <div class="race-head__meta-row">
+          <dt class="mono">OPEN NOW</dt>
+          <dd><strong>{OPEN.length}</strong></dd>
+        </div>
+        <div class="race-head__meta-row">
+          <dt class="mono">SCHEDULED</dt>
+          <dd><strong>{SCHEDULED.length}</strong></dd>
+        </div>
+        <div class="race-head__meta-row">
+          <dt class="mono">RESOLVED</dt>
+          <dd><strong>{RESOLVED.length}</strong></dd>
+        </div>
+        <div class="race-head__meta-row">
+          <dt class="mono">TOTAL</dt>
+          <dd><strong>{WITH_STATUS.length}</strong></dd>
+        </div>
+      </dl>
+    </header>
+
+    {WITH_STATUS.length === 0 && (
+      <section class="race-hub__empty">
+        <p class="mono">NO RACES REGISTERED YET.</p>
+        <p>
+          The registry lives at <code>src/lib/races.ts</code> — add a
+          <code>RaceSpec</code> to <code>RACE_REGISTRY</code> and this
+          page fills in.
+        </p>
+      </section>
+    )}
+
+    {GROUPS.map((group) => group.rows.length > 0 && (
+      <section class="race-hub__group" data-group={group.key}>
+        <header class="race-hub__group-head">
+          <h2 class="race-hub__group-title">{group.label}</h2>
+          <span class="race-hub__group-count mono">{group.rows.length} race{group.rows.length === 1 ? '' : 's'}</span>
+        </header>
+        <ul class="race-hub__grid">
+          {group.rows.map(({ race, status }) => {
+            const channel = CHANNELS[race.channel];
+            const chLower = race.channel.toLowerCase();
+            const when = status === 'open' ? `closes ${fmtLA(race.closesAt)}`
+              : status === 'scheduled' ? `opens ${fmtLA(race.opensAt)}`
+              : status === 'closed' ? `closed · resolves ${fmtLA(race.resolvesAt)}`
+              : `resolved ${fmtLA(race.resolvesAt)}`;
+            return (
+              <li class="race-card" data-status={status} data-channel={chLower}>
+                <a class="race-card__link" href={`/race/${race.slug}`}>
+                  <header class="race-card__head">
+                    <span class="race-card__status mono" data-status={status}>{status.toUpperCase()}</span>
+                    <span class="race-card__channel mono">CH · {race.channel}</span>
+                  </header>
+                  <h3 class="race-card__title">{race.title}</h3>
+                  {race.description && (
+                    <p class="race-card__dek">{race.description}</p>
+                  )}
+                  <footer class="race-card__foot mono">
+                    <span class="race-card__mode">{race.mode} · {MODE_COPY[race.mode]}</span>
+                    <span class="race-card__when">{when}</span>
+                    {race.prize && (
+                      <span class="race-card__prize">🏁 {race.prize}</span>
+                    )}
+                    <span class="race-card__channel-name">{channel?.name ?? race.channel}</span>
+                  </footer>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ))}
+
+    <footer class="race-foot mono">
+      <a href="/race/front-door">front door</a>
+      <span>·</span>
+      <a href="/scoreboard">scoreboard</a>
+      <span>·</span>
+      <a href="/wire">wire</a>
+      <span>·</span>
+      <a href="/">home</a>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style>
+  .race-page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 36px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+  .race-head__kicker {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    font-weight: 700;
+    color: #8a2432;
+  }
+  .race-head__title {
+    margin: 0 0 10px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: clamp(32px, 5vw, 54px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .race-head__dek {
+    margin: 0 0 14px;
+    font-family: Georgia, serif;
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 640px;
+  }
+  .race-head__meta {
+    margin: 14px 0 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px 18px;
+  }
+  .race-head__meta-row {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+  }
+  .race-head__meta-row dt {
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+  }
+  .race-head__meta-row dd {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--pc-ink, #12110E);
+  }
+
+  .race-hub__empty {
+    margin: 36px 0;
+    padding: 20px 22px;
+    border: 1px dashed rgba(95,94,90,0.35);
+    border-radius: 4px;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .race-hub__empty p { margin: 0 0 8px; font-family: Georgia, serif; }
+  .race-hub__empty code {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 12.5px;
+    color: #8a2432;
+  }
+
+  .race-hub__group {
+    margin: 36px 0 0;
+    padding-top: 20px;
+    border-top: 1px solid rgba(95,94,90,0.25);
+  }
+  .race-hub__group:first-of-type { border-top: 0; padding-top: 0; }
+  .race-hub__group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .race-hub__group-title {
+    margin: 0;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .race-hub__group-count {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+
+  .race-hub__grid {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .race-card {
+    list-style: none;
+    border: 1px solid rgba(95,94,90,0.25);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.55);
+    transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  }
+  .race-card:hover {
+    border-color: rgba(138,36,50,0.55);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -10px rgba(18,17,14,0.22);
+  }
+  .race-card[data-status="open"] {
+    border-color: rgba(47,143,95,0.40);
+    background: rgba(47,143,95,0.06);
+  }
+  .race-card[data-status="scheduled"] {
+    border-color: rgba(245,159,0,0.38);
+    background: rgba(245,159,0,0.06);
+  }
+  .race-card[data-status="resolved"] {
+    background: rgba(255,255,255,0.35);
+  }
+  .race-card__link {
+    display: block;
+    padding: 14px 16px;
+    color: inherit;
+    text-decoration: none;
+  }
+  .race-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+  .race-card__status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+  }
+  .race-card__status[data-status="open"] {
+    background: rgba(47,143,95,0.22);
+    color: #1b5033;
+  }
+  .race-card__status[data-status="scheduled"] {
+    background: rgba(245,159,0,0.24);
+    color: #8a5a00;
+  }
+  .race-card__status[data-status="closed"],
+  .race-card__status[data-status="resolved"] {
+    background: rgba(95,94,90,0.22);
+    color: #38373A;
+  }
+  .race-card__channel {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    font-weight: 700;
+  }
+  .race-card__title {
+    margin: 0 0 8px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.22;
+    letter-spacing: -0.01em;
+    color: var(--pc-ink, #12110E);
+  }
+  .race-card__dek {
+    margin: 0 0 10px;
+    font-family: Georgia, serif;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--pc-ink-muted, #5F5E5A);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .race-card__foot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(95,94,90,0.18);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .race-card__mode,
+  .race-card__when,
+  .race-card__prize,
+  .race-card__channel-name { display: block; }
+  .race-card__channel-name {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(95,94,90,0.75);
+  }
+
+  .race-foot {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(95,94,90,0.25);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .race-foot a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .race-foot a:hover { color: #8a2432; }
+  .race-foot span { margin: 0 6px; }
+
+  @media (prefers-color-scheme: dark) {
+    .race-card {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.12);
+    }
+    .race-card[data-status="open"] {
+      background: rgba(47,143,95,0.14);
+    }
+    .race-card[data-status="scheduled"] {
+      background: rgba(245,159,0,0.14);
+    }
+  }
+</style>
