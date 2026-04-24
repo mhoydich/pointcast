@@ -144,8 +144,8 @@ const alternates = [
            `pc:mood-changed` event. Layers a colored glow on top of the
            sky without overriding the time-of-day gradient — mood is an
            accent, time-of-day is the base. -->
-    <div class="masthead-sky" data-sky-bucket="midday" data-mood="" aria-hidden="true"></div>
-    <header class="masthead" id="pc-masthead" data-sky-bucket="midday" data-mood="">
+    <div class="masthead-sky" data-sky-bucket="midday" data-mood="" data-weather="" aria-hidden="true"></div>
+    <header class="masthead" id="pc-masthead" data-sky-bucket="midday" data-mood="" data-weather="">
       <a href="/" class="wordmark" aria-label="PointCast home">POINTCAST</a>
       <span class="sep" aria-hidden="true">·</span>
       <span class="meta">{blockCount} BLOCKS</span>
@@ -207,6 +207,64 @@ const alternates = [
           var id = e && e.detail && e.detail.moodId;
           applyMood(id);
         });
+
+        // Sprint 27: weather → masthead secondary tint. Hits the
+        // existing /api/weather ad-hoc endpoint for El Segundo
+        // (33.92, -118.42). Returns `{ condition, tempF, sunset }`
+        // with condition in: clear / mostly clear / partly cloudy /
+        // overcast / fog / drizzle / rain / showers / storm / snow /
+        // unknown. We map to a small set of tint tokens + cache the
+        // label in sessionStorage so subsequent tab-opens paint
+        // immediately without a round-trip.
+        function weatherTokenFromCondition(cond) {
+          var c = (cond || '').toLowerCase();
+          if (c === 'clear' || c === 'mostly clear') return 'clear';
+          if (c === 'partly cloudy')                 return 'partly';
+          if (c === 'overcast')                      return 'overcast';
+          if (c === 'fog')                           return 'marine';
+          if (c === 'drizzle' || c === 'rain' || c === 'showers') return 'rain';
+          if (c === 'storm')                         return 'storm';
+          if (c === 'snow')                          return 'cold';
+          return '';
+        }
+        function applyWeather(token, tempF) {
+          var t = token || '';
+          head.setAttribute('data-weather', t);
+          sky.setAttribute('data-weather', t);
+          if (typeof tempF === 'number' && !isNaN(tempF)) {
+            head.setAttribute('data-weather-temp', String(Math.round(tempF)));
+            sky.setAttribute('data-weather-temp', String(Math.round(tempF)));
+          }
+        }
+        // Paint from cache first so reloads feel instant.
+        try {
+          var cached = sessionStorage.getItem('pc:weather');
+          if (cached) {
+            var c = JSON.parse(cached);
+            if (c && c.ts && Date.now() - c.ts < 900_000) {
+              applyWeather(c.token, c.tempF);
+            }
+          }
+        } catch (e) {}
+        // Then refresh from the endpoint.
+        fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.ok) return;
+            var token = weatherTokenFromCondition(d.condition);
+            applyWeather(token, d.tempF);
+            try {
+              sessionStorage.setItem('pc:weather', JSON.stringify({
+                ts: Date.now(), token: token, tempF: d.tempF, condition: d.condition
+              }));
+            } catch (e) {}
+            // Broadcast for any other component that cares (e.g. the
+            // hearth could dial back the ember animation on rain).
+            window.dispatchEvent(new CustomEvent('pc:weather-changed', {
+              detail: { token: token, tempF: d.tempF, condition: d.condition }
+            }));
+          })
+          .catch(function () { /* keep whatever was cached */ });
 
         // Front Door race chip live hydrate. /api/race/front-door/
         // leaderboard returns race meta including derived status
@@ -573,6 +631,47 @@ const alternates = [
   .masthead-sky[data-sky-bucket="evening"] {
     background: linear-gradient(90deg, #1a1830 0%, #2a1e36 50%, #47345e 100%);
     opacity: 0.85;
+  }
+
+  /* Sprint 27 — weather accent. Sits below mood, above hour-bucket.
+     Each weather token overlays a thin horizontal gradient + a
+     distinctive box-shadow that reads as "conditions" without
+     fighting the hour-tinted base gradient.
+     Tokens: clear / partly / overcast / marine / rain / storm / cold */
+  .masthead-sky[data-weather="clear"] {
+    box-shadow: inset 0 0 0 1px rgba(255, 214, 120, 0.35);
+    filter: saturate(1.15) brightness(1.04);
+  }
+  .masthead-sky[data-weather="partly"] {
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.32);
+  }
+  .masthead-sky[data-weather="overcast"] {
+    background-image: linear-gradient(90deg, rgba(200, 205, 210, 0.55), rgba(180, 188, 198, 0.55));
+    background-blend-mode: screen;
+    filter: saturate(0.5) brightness(0.94);
+  }
+  /* Marine layer — the defining El Segundo morning pattern. Silver,
+     soft, slightly foggy. Gets its own visible tint even overriding
+     the hour gradient's chroma a bit. */
+  .masthead-sky[data-weather="marine"] {
+    background-image: linear-gradient(90deg, rgba(195, 200, 206, 0.7), rgba(168, 175, 185, 0.7));
+    background-blend-mode: screen;
+    filter: saturate(0.3) brightness(0.96);
+  }
+  .masthead-sky[data-weather="rain"] {
+    background-image: linear-gradient(90deg, rgba(71, 85, 112, 0.55), rgba(46, 55, 76, 0.55));
+    background-blend-mode: multiply;
+    filter: saturate(0.55) brightness(0.88);
+  }
+  .masthead-sky[data-weather="storm"] {
+    background-image: linear-gradient(90deg, rgba(28, 30, 48, 0.75), rgba(12, 14, 28, 0.75));
+    background-blend-mode: multiply;
+    filter: saturate(0.35) brightness(0.78);
+    box-shadow: inset 0 -2px 0 0 rgba(140, 160, 210, 0.4);
+  }
+  .masthead-sky[data-weather="cold"] {
+    filter: saturate(0.25) brightness(1.05);
+    background-blend-mode: lighten;
   }
 
   /* Sprint 24 — mood accent layered on top of the sky.
