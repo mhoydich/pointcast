@@ -1,0 +1,899 @@
+---
+/**
+ * /typing - PointCast typing tutor.
+ *
+ * Local-only practice surface. No account, no server writes; the browser keeps
+ * a small best-score ledger in localStorage.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const drills = [
+  {
+    id: 'dispatch',
+    label: 'Dispatch',
+    short: 'DSP',
+    lines: [
+      { label: 'Front door', text: 'PointCast is still the dispatch board.' },
+      { label: 'El Segundo', text: 'A living broadcast from El Segundo, one Block at a time.' },
+      { label: 'Wire note', text: 'The feed stays dense, local, slightly cryptic, and alive.' },
+      { label: 'Block law', text: 'Every dispatch is a Block before it is a page.' },
+    ],
+  },
+  {
+    id: 'routes',
+    label: 'Routes',
+    short: 'URL',
+    lines: [
+      { label: 'Agent spine', text: '/for-agents /agents.json /llms.txt /llms-full.txt' },
+      { label: 'Fresh path', text: '/now /today /feed.json /feed.xml /archive.json' },
+      { label: 'Gamgee path', text: '/gamgee /sprints /workbench /status /ping' },
+      { label: 'Play path', text: '/drum /battle /yee /polls /nouns-cola-crush' },
+    ],
+  },
+  {
+    id: 'agents',
+    label: 'Agents',
+    short: 'AGT',
+    lines: [
+      { label: 'Three lanes', text: 'Claude shapes the plan. Codex lands the patch. Manus runs the browser pass.' },
+      { label: 'House rule', text: 'Ship in small reviewable slices and leave the dirty train inventoried.' },
+      { label: 'Machine path', text: 'Agents get stable manifests, feeds, and a visible release ledger.' },
+      { label: 'Beacon line', text: 'Humans get the live home; machines get the canonical map.' },
+    ],
+  },
+  {
+    id: 'gamgee',
+    label: 'Gamgee',
+    short: 'RC0',
+    lines: [
+      { label: 'Release note', text: 'Gamgee explains the doorway without cleaning the fingerprints off the controls.' },
+      { label: 'Old soul', text: 'The release frame does not replace the old site. It protects it.' },
+      { label: 'Tape', text: 'YOU ALONE OPEN DRAWER BEACON AGENT MAP DIRTY TRAIN INVENTORY' },
+      { label: 'Gate', text: 'Small enough to ship. Weird enough to still be PointCast.' },
+    ],
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/typing#app',
+  name: 'PointCast Typing Tutor',
+  applicationCategory: 'EducationalApplication',
+  operatingSystem: 'Any browser',
+  url: 'https://pointcast.xyz/typing',
+  description: 'A local-only typing tutor for PointCast dispatches, routes, agent phrases, and Gamgee release copy.',
+  inLanguage: 'en-US',
+};
+---
+
+<BlockLayout
+  title="Typing Tutor"
+  description="A local-only typing tutor for PointCast dispatches, routes, agent phrases, and Gamgee release copy."
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/typing.json', title: 'PointCast typing tutor manifest' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/og-home-v2.png',
+    buttons: [
+      { label: 'Practice', action: 'link', target: 'https://pointcast.xyz/typing' },
+      { label: 'Typing JSON', action: 'link', target: 'https://pointcast.xyz/typing.json' },
+      { label: '/for-agents', action: 'link', target: 'https://pointcast.xyz/for-agents' },
+      { label: 'Home', action: 'link', target: 'https://pointcast.xyz/' },
+    ],
+  }}
+>
+  <div class="typing-page" data-typing-tutor>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>typing</span>
+    </nav>
+
+    <section class="tutor-shell" aria-labelledby="typing-title">
+      <header class="tutor-head">
+        <div>
+          <p class="kicker">CH.FD / TYPE TUTOR / LOCAL RUN</p>
+          <h1 id="typing-title">Type the PointCast wire.</h1>
+        </div>
+        <div class="run-light" aria-label="Run status">
+          <span data-run-light></span>
+          <strong data-run-state>READY</strong>
+        </div>
+      </header>
+
+      <div class="mode-row" role="tablist" aria-label="Typing modes">
+        {drills.map((drill, index) => (
+          <button
+            type="button"
+            class="mode-button"
+            role="tab"
+            aria-selected={index === 0 ? 'true' : 'false'}
+            data-mode={drill.id}
+          >
+            <span>{drill.short}</span>
+            {drill.label}
+          </button>
+        ))}
+      </div>
+
+      <div class="workbench">
+        <main class="trainer" aria-label="Typing practice">
+          <div class="target-card" data-focus-target>
+            <div class="target-card__meta">
+              <span data-drill-label>Dispatch / Front door</span>
+              <span data-drill-count>1 / 4</span>
+            </div>
+            <div class="copy-line" data-copy-line aria-live="polite"></div>
+          </div>
+
+          <label class="input-wrap">
+            <span>Input</span>
+            <textarea
+              data-typing-input
+              rows="4"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              placeholder="start typing..."
+            ></textarea>
+          </label>
+
+          <div class="control-row" aria-label="Typing controls">
+            <button type="button" class="control control--primary" data-action="restart">Restart</button>
+            <button type="button" class="control" data-action="next">Next line</button>
+            <button type="button" class="control" data-action="shuffle">Shuffle line</button>
+            <button type="button" class="control" data-action="clear-best">Clear best</button>
+          </div>
+        </main>
+
+        <aside class="meter-panel" aria-label="Typing metrics">
+          <div class="metric metric--big">
+            <span>WPM</span>
+            <strong data-wpm>0</strong>
+          </div>
+          <div class="metric">
+            <span>Accuracy</span>
+            <strong data-accuracy>100%</strong>
+          </div>
+          <div class="metric">
+            <span>Progress</span>
+            <strong data-progress>0%</strong>
+          </div>
+          <div class="metric">
+            <span>Errors</span>
+            <strong data-errors>0</strong>
+          </div>
+          <div class="metric">
+            <span>Streak</span>
+            <strong data-streak>0</strong>
+          </div>
+          <div class="metric">
+            <span>Best</span>
+            <strong data-best>--</strong>
+          </div>
+        </aside>
+      </div>
+
+      <section class="queue" aria-label="Current drill queue">
+        <div class="queue__head">
+          <span>Queue</span>
+          <span data-session-note>Dispatch bank loaded.</span>
+        </div>
+        <div class="queue__list" data-queue-list></div>
+      </section>
+    </section>
+  </div>
+
+  <script type="application/json" id="typing-drills" set:html={JSON.stringify(drills)}></script>
+
+  <script is:inline>
+    (function () {
+      var root = document.querySelector('[data-typing-tutor]');
+      var dataEl = document.getElementById('typing-drills');
+      if (!root || !dataEl) return;
+
+      var DRILLS = JSON.parse(dataEl.textContent || '[]');
+      var STORAGE_KEY = 'pc:typing-tutor:v1';
+      var modeButtons = Array.from(root.querySelectorAll('[data-mode]'));
+      var input = root.querySelector('[data-typing-input]');
+      var copyLine = root.querySelector('[data-copy-line]');
+      var drillLabel = root.querySelector('[data-drill-label]');
+      var drillCount = root.querySelector('[data-drill-count]');
+      var queueList = root.querySelector('[data-queue-list]');
+      var sessionNote = root.querySelector('[data-session-note]');
+      var runState = root.querySelector('[data-run-state]');
+      var runLight = root.querySelector('[data-run-light]');
+      var focusTarget = root.querySelector('[data-focus-target]');
+      var metric = {
+        wpm: root.querySelector('[data-wpm]'),
+        accuracy: root.querySelector('[data-accuracy]'),
+        progress: root.querySelector('[data-progress]'),
+        errors: root.querySelector('[data-errors]'),
+        streak: root.querySelector('[data-streak]'),
+        best: root.querySelector('[data-best]'),
+      };
+
+      var state = {
+        mode: DRILLS[0] ? DRILLS[0].id : '',
+        index: 0,
+        startedAt: 0,
+        finished: false,
+        streak: 0,
+        lastTick: 0,
+      };
+
+      var store = readStore();
+      var ticker = window.setInterval(renderStats, 500);
+
+      function readStore() {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"best":{},"runs":[]}');
+        } catch (error) {
+          return { best: {}, runs: [] };
+        }
+      }
+
+      function writeStore() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        } catch (error) {}
+      }
+
+      function drill() {
+        return DRILLS.find(function (item) { return item.id === state.mode; }) || DRILLS[0];
+      }
+
+      function target() {
+        var active = drill();
+        return active.lines[state.index] || active.lines[0];
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, function (char) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+        });
+      }
+
+      function elapsedSeconds() {
+        if (!state.startedAt) return 0;
+        var end = state.finished ? state.lastTick : Date.now();
+        return Math.max(0, (end - state.startedAt) / 1000);
+      }
+
+      function score() {
+        var phrase = target().text;
+        var typed = input.value || '';
+        var correct = 0;
+        var errors = 0;
+        for (var i = 0; i < typed.length; i += 1) {
+          if (typed[i] === phrase[i]) correct += 1;
+          else errors += 1;
+        }
+
+        var progress = phrase.length ? Math.min(100, Math.round((Math.min(typed.length, phrase.length) / phrase.length) * 100)) : 0;
+        var accuracy = typed.length ? Math.round((correct / typed.length) * 100) : 100;
+        var minutes = Math.max(elapsedSeconds() / 60, 1 / 60);
+        var wpm = state.startedAt ? Math.round((correct / 5) / minutes) : 0;
+
+        return {
+          typed: typed,
+          phrase: phrase,
+          correct: correct,
+          errors: errors,
+          progress: progress,
+          accuracy: Math.max(0, Math.min(100, accuracy)),
+          wpm: Math.max(0, wpm),
+          complete: typed === phrase,
+        };
+      }
+
+      function renderCopy() {
+        var s = score();
+        var html = '';
+        for (var i = 0; i < s.phrase.length; i += 1) {
+          var char = s.phrase[i];
+          var typed = s.typed[i];
+          var cls = 'char';
+          if (typed === undefined) cls += i === s.typed.length ? ' char--current' : ' char--pending';
+          else cls += typed === char ? ' char--correct' : ' char--wrong';
+          if (char === ' ') cls += ' char--space';
+          html += '<span class="' + cls + '">' + (char === ' ' ? '&nbsp;' : escapeHtml(char)) + '</span>';
+        }
+        if (s.typed.length > s.phrase.length) {
+          var extra = s.typed.slice(s.phrase.length);
+          for (var j = 0; j < extra.length; j += 1) {
+            html += '<span class="char char--wrong char--extra">' + escapeHtml(extra[j]) + '</span>';
+          }
+        }
+        copyLine.innerHTML = html;
+      }
+
+      function renderStats() {
+        var s = score();
+        metric.wpm.textContent = String(s.wpm);
+        metric.accuracy.textContent = s.accuracy + '%';
+        metric.progress.textContent = s.progress + '%';
+        metric.errors.textContent = String(s.errors);
+        metric.streak.textContent = String(state.streak);
+        var best = store.best[state.mode];
+        metric.best.textContent = best ? (best.wpm + ' / ' + best.accuracy + '%') : '--';
+
+        root.dataset.state = s.complete ? 'complete' : state.startedAt ? 'running' : 'ready';
+        runState.textContent = s.complete ? 'COMPLETE' : state.startedAt ? 'LIVE' : 'READY';
+        runLight.style.background = s.complete ? '#208c4b' : state.startedAt ? '#e89a2d' : '#185fa5';
+      }
+
+      function renderQueue() {
+        var active = drill();
+        queueList.innerHTML = active.lines.map(function (line, index) {
+          var selected = index === state.index ? ' aria-current="true"' : '';
+          return '<button type="button" data-line="' + index + '"' + selected + '>' +
+            '<span>' + String(index + 1).padStart(2, '0') + '</span>' +
+            '<strong>' + escapeHtml(line.label) + '</strong>' +
+            '<small>' + escapeHtml(line.text) + '</small>' +
+            '</button>';
+        }).join('');
+
+        Array.from(queueList.querySelectorAll('[data-line]')).forEach(function (button) {
+          button.addEventListener('click', function () {
+            state.index = Number(button.getAttribute('data-line') || 0);
+            resetRun();
+          });
+        });
+      }
+
+      function renderHeader() {
+        var active = drill();
+        var line = target();
+        drillLabel.textContent = active.label + ' / ' + line.label;
+        drillCount.textContent = (state.index + 1) + ' / ' + active.lines.length;
+        sessionNote.textContent = active.label + ' bank loaded.';
+      }
+
+      function resetRun() {
+        state.startedAt = 0;
+        state.finished = false;
+        state.lastTick = 0;
+        input.value = '';
+        renderHeader();
+        renderCopy();
+        renderQueue();
+        renderStats();
+        input.focus();
+      }
+
+      function finishRun(s) {
+        state.finished = true;
+        state.lastTick = Date.now();
+        state.streak += 1;
+        var run = {
+          mode: state.mode,
+          label: target().label,
+          wpm: s.wpm,
+          accuracy: s.accuracy,
+          seconds: Math.round(elapsedSeconds()),
+          at: new Date().toISOString(),
+        };
+        var best = store.best[state.mode];
+        if (!best || run.wpm > best.wpm || (run.wpm === best.wpm && run.accuracy > best.accuracy)) {
+          store.best[state.mode] = run;
+        }
+        store.runs = [run].concat(store.runs || []).slice(0, 20);
+        writeStore();
+        renderStats();
+      }
+
+      function setMode(mode) {
+        state.mode = mode;
+        state.index = 0;
+        modeButtons.forEach(function (button) {
+          var active = button.getAttribute('data-mode') === mode;
+          button.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        resetRun();
+      }
+
+      function nextLine(delta) {
+        var active = drill();
+        state.index = (state.index + delta + active.lines.length) % active.lines.length;
+        resetRun();
+      }
+
+      function shuffleLine() {
+        var active = drill();
+        var next = state.index;
+        if (active.lines.length > 1) {
+          while (next === state.index) next = Math.floor(Math.random() * active.lines.length);
+        }
+        state.index = next;
+        resetRun();
+      }
+
+      modeButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+          setMode(button.getAttribute('data-mode'));
+        });
+      });
+
+      root.addEventListener('click', function (event) {
+        var action = event.target && event.target.closest ? event.target.closest('[data-action]') : null;
+        if (!action) return;
+        var name = action.getAttribute('data-action');
+        if (name === 'restart') resetRun();
+        if (name === 'next') nextLine(1);
+        if (name === 'shuffle') shuffleLine();
+        if (name === 'clear-best') {
+          delete store.best[state.mode];
+          writeStore();
+          renderStats();
+          input.focus();
+        }
+      });
+
+      input.addEventListener('input', function () {
+        if (!state.startedAt && input.value.length > 0) {
+          state.startedAt = Date.now();
+          state.finished = false;
+        }
+        if (state.finished) {
+          renderCopy();
+          renderStats();
+          return;
+        }
+        renderCopy();
+        var s = score();
+        if (s.complete) finishRun(s);
+        else renderStats();
+      });
+
+      input.addEventListener('keydown', function (event) {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+          event.preventDefault();
+          nextLine(1);
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          resetRun();
+        }
+      });
+
+      focusTarget.addEventListener('click', function () {
+        input.focus();
+      });
+
+      resetRun();
+
+      window.addEventListener('beforeunload', function () {
+        window.clearInterval(ticker);
+      });
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .typing-page {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 20px 20px 88px;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 18px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .tutor-shell {
+    border-top: 1.5px solid var(--pc-ink);
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .tutor-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+    padding: 22px 0 18px;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+  }
+
+  h1 {
+    max-width: 760px;
+    margin: 0;
+    font-size: 56px;
+    line-height: 0.95;
+    letter-spacing: 0;
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+
+  .run-light {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff9e8;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .run-light span {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--pc-accent);
+  }
+
+  .mode-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .mode-button {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 0;
+    border-right: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .mode-button:last-child {
+    border-right: 0;
+  }
+
+  .mode-button span {
+    display: inline-flex;
+    min-width: 38px;
+    justify-content: center;
+    padding: 4px 6px;
+    border: 1px solid var(--pc-rule);
+    background: #fafaf7;
+  }
+
+  .mode-button[aria-selected="true"] {
+    background: #12110e;
+    color: #fff8df;
+  }
+
+  .mode-button[aria-selected="true"] span {
+    border-color: rgba(255, 248, 223, 0.35);
+    background: rgba(232, 154, 45, 0.18);
+  }
+
+  .workbench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    min-width: 0;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .trainer {
+    min-width: 0;
+    padding: 18px 20px 20px 0;
+    border-right: 1px solid var(--pc-rule);
+  }
+
+  .target-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1.5px solid var(--pc-ink);
+    background: #fafaf7;
+    cursor: text;
+  }
+
+  .target-card__meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .copy-line {
+    min-height: 138px;
+    color: var(--pc-ink);
+    font-size: 32px;
+    line-height: 1.35;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .char {
+    display: inline;
+    border-bottom: 2px solid transparent;
+  }
+
+  .char--correct {
+    color: #208c4b;
+  }
+
+  .char--wrong {
+    color: #b3261e;
+    background: #ffe4de;
+    border-bottom-color: #b3261e;
+  }
+
+  .char--current {
+    background: #fff2c2;
+    border-bottom-color: #e89a2d;
+  }
+
+  .char--pending {
+    color: var(--pc-ink-muted);
+  }
+
+  .char--space.char--wrong,
+  .char--space.char--current {
+    display: inline-block;
+    min-width: 0.42em;
+  }
+
+  .input-wrap {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .input-wrap textarea {
+    width: 100%;
+    min-height: 122px;
+    resize: vertical;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 0;
+    padding: 12px;
+    background: #fff;
+    color: var(--pc-ink);
+    font: 16px/1.5 var(--pc-font-mono);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .input-wrap textarea:focus {
+    outline: 2px solid #e89a2d;
+    outline-offset: 2px;
+  }
+
+  .control-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .control {
+    min-height: 38px;
+    border: 1px solid var(--pc-ink);
+    border-radius: 0;
+    padding: 8px 10px;
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .control:hover {
+    background: #f4f8fb;
+  }
+
+  .control--primary {
+    background: #fff7d6;
+  }
+
+  .meter-panel {
+    display: grid;
+    align-content: start;
+    min-width: 0;
+  }
+
+  .metric {
+    min-width: 0;
+    padding: 12px;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .metric span {
+    display: block;
+    margin-bottom: 5px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .metric strong {
+    display: block;
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 500;
+    color: var(--pc-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .metric--big {
+    background: #12110e;
+  }
+
+  .metric--big span,
+  .metric--big strong {
+    color: #fff8df;
+  }
+
+  .metric--big strong {
+    font-size: 62px;
+  }
+
+  .queue {
+    padding: 16px 0 18px;
+  }
+
+  .queue__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .queue__list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .queue__list button {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 4px 8px;
+    min-width: 0;
+    min-height: 86px;
+    padding: 9px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .queue__list button:hover,
+  .queue__list button[aria-current="true"] {
+    border-color: var(--pc-ink);
+    background: #fff9e8;
+  }
+
+  .queue__list span,
+  .queue__list strong,
+  .queue__list small {
+    min-width: 0;
+  }
+
+  .queue__list span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--pc-accent);
+  }
+
+  .queue__list strong {
+    font-size: 13px;
+    line-height: 1.15;
+    font-weight: 500;
+  }
+
+  .queue__list small {
+    grid-column: 1 / -1;
+    color: var(--pc-ink-soft);
+    font-size: 12px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 860px) {
+    .workbench,
+    .tutor-head {
+      grid-template-columns: 1fr;
+    }
+
+    .trainer {
+      padding-right: 0;
+      border-right: 0;
+      border-bottom: 1px solid var(--pc-rule);
+    }
+
+    .meter-panel {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .queue__list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 639px) {
+    .typing-page {
+      padding: 16px 16px 76px;
+    }
+
+    h1 {
+      font-size: 42px;
+      line-height: 1;
+      overflow-wrap: anywhere;
+    }
+
+    .mode-row,
+    .meter-panel,
+    .queue__list {
+      grid-template-columns: 1fr;
+    }
+
+    .mode-button {
+      border-right: 0;
+      border-bottom: 1px solid var(--pc-rule);
+    }
+
+    .copy-line {
+      min-height: 124px;
+      font-size: 24px;
+      line-height: 1.38;
+    }
+
+    .target-card__meta,
+    .queue__head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .control {
+      flex: 1 1 148px;
+    }
+
+    .metric--big strong {
+      font-size: 46px;
+    }
+  }
+</style>
