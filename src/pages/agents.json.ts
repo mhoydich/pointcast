@@ -96,6 +96,7 @@ export const GET: APIRoute = async () => {
         forAgents: 'https://pointcast.xyz/for-agents',
         forNodes: 'https://pointcast.xyz/for-nodes',
         farm: 'https://pointcast.xyz/farm',
+        wire: 'https://pointcast.xyz/wire',
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
@@ -129,6 +130,7 @@ export const GET: APIRoute = async () => {
         houseplants: 'https://pointcast.xyz/houseplants.json',
         meditate: 'https://pointcast.xyz/meditate.json',
         natureYield: 'https://pointcast.xyz/nature-yield.json',
+        wire: 'https://pointcast.xyz/wire.json',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',

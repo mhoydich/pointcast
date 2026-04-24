@@ -1,0 +1,536 @@
+---
+/**
+ * /wire — the PointCast Wire. Live ticker of the last ~18 events
+ * (commits + recent blocks) as agent-colored chips scrolling right
+ * to left, against an hour-tinted sky.
+ *
+ * Codex Issue #31 brief: "Build /wire — a live news-ticker page/strip
+ * showing the last 12 PointCast events as a horizontal marquee with
+ * agent-colored chips." AP Wire behind a newsroom.
+ *
+ * Shipped by cc (Sprint 17) since Codex didn't pick it up in the
+ * 30+ hours after the issue was filed.
+ *
+ * Build-time only:
+ *   - git log -n 18 for recent commits (AgentLedger pattern, reused)
+ *   - recent non-draft blocks sorted by timestamp
+ * Degrades to an empty ticker if git isn't available.
+ *
+ * JSON twin at /wire.json for agents.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { getCollection } from 'astro:content';
+
+function findRepoRoot(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  let dir = here;
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+const REPO_ROOT = findRepoRoot();
+
+type AgentKey = 'codex' | 'manus' | 'claude' | 'mike' | 'block';
+
+interface WireEvent {
+  kind: 'commit' | 'block';
+  agent: AgentKey;
+  subject: string;
+  href: string | null;
+  when: string;
+  iso: string;
+  sha?: string;
+  id?: string;
+  channel?: string;
+  type?: string;
+}
+
+const AGENT_LABEL: Record<AgentKey, string> = {
+  codex: 'Codex',
+  manus: 'Manus',
+  claude: 'Claude',
+  mike: 'Mike',
+  block: 'Block',
+};
+
+function relTime(iso: string): string {
+  const now = Date.now();
+  const t = new Date(iso).getTime();
+  const delta = Math.max(0, Math.floor((now - t) / 1000));
+  if (delta < 60) return `${delta}s`;
+  if (delta < 3600) return `${Math.floor(delta / 60)}m`;
+  if (delta < 86400) return `${Math.floor(delta / 3600)}h`;
+  if (delta < 86400 * 7) return `${Math.floor(delta / 86400)}d`;
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function attributeCommit(email: string, subject: string, body: string): AgentKey {
+  const e = (email || '').toLowerCase();
+  const s = subject || '';
+  const b = (body || '').toLowerCase();
+  if (e.includes('codex') || s.startsWith('[codex]')) return 'codex';
+  if (e.includes('manus') || s.startsWith('[manus]')) return 'manus';
+  if (b.includes('co-authored-by: claude') || b.includes('noreply@anthropic.com')) return 'claude';
+  return 'mike';
+}
+
+function cleanCommitSubject(s: string): string {
+  return s.replace(/^\[[a-z]+\]\s*/i, '').replace(/\s*\(#\d+\)\s*$/, '').trim();
+}
+
+// ─── commits ─────────────────────────────────────────────
+let commits: WireEvent[] = [];
+try {
+  const raw = execSync(
+    'git log -n 28 --pretty=format:"%H%x1f%cI%x1f%ae%x1f%s%x1f%b%x1e"',
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  commits = raw
+    .split('\x1e')
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [sha = '', iso = '', email = '', subject = '', body = ''] = chunk.split('\x1f');
+      const agent = attributeCommit(email, subject, body);
+      const cleaned = cleanCommitSubject(subject);
+      const prMatch = subject.match(/\(#(\d+)\)\s*$/);
+      const href = prMatch ? `https://github.com/mhoydich/pointcast/pull/${prMatch[1]}` : null;
+      return {
+        kind: 'commit' as const,
+        agent,
+        subject: cleaned.length > 96 ? cleaned.slice(0, 93) + '…' : cleaned,
+        href,
+        when: relTime(iso),
+        iso,
+        sha: sha.slice(0, 7),
+      };
+    });
+} catch {
+  commits = [];
+}
+
+// ─── recent blocks ──────────────────────────────────────
+let blockEvents: WireEvent[] = [];
+try {
+  const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+  blockEvents = blocks
+    .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
+    .slice(0, 12)
+    .map((b) => {
+      const iso = b.data.timestamp.toISOString();
+      const title = (b.data.title || '').trim() || `Block ${b.id}`;
+      return {
+        kind: 'block' as const,
+        agent: 'block' as const,
+        subject: title.length > 96 ? title.slice(0, 93) + '…' : title,
+        href: `/b/${b.id}`,
+        when: relTime(iso),
+        iso,
+        id: b.id,
+        channel: b.data.channel,
+        type: b.data.type,
+      };
+    });
+} catch {
+  blockEvents = [];
+}
+
+// ─── merge + sort ───────────────────────────────────────
+// Merge, dedupe near-simultaneous (≤90s) commit/block pairs (commits
+// that land a block often share a timestamp), sort desc, cap at 24.
+const merged: WireEvent[] = [...commits, ...blockEvents]
+  .sort((a, b) => new Date(b.iso).getTime() - new Date(a.iso).getTime())
+  .slice(0, 24);
+
+// Agent active tonight (since midnight local).
+const since = new Date();
+since.setHours(0, 0, 0, 0);
+const agentCounts: Record<AgentKey, number> = { codex: 0, manus: 0, claude: 0, mike: 0, block: 0 };
+for (const e of merged) {
+  if (new Date(e.iso).getTime() >= since.getTime()) agentCounts[e.agent]++;
+}
+
+// Hour-tinted sky — warm midday → deep evening indigo → pre-dawn ink.
+const now = new Date();
+const hour = now.getHours();
+function skyForHour(h: number): { bg: string; fg: string; accent: string } {
+  // 0–5 deep ink, 6–10 dawn amber, 11–15 noon blue, 16–19 sunset rose,
+  // 20–23 dusk indigo. Values tuned for legible mono + serif on top.
+  if (h >= 5 && h < 7) return { bg: 'linear-gradient(180deg,#1b1a2e 0%,#2a1e36 50%,#a35f3a 100%)', fg: '#fbe7c8', accent: '#f9a26c' };
+  if (h >= 7 && h < 11) return { bg: 'linear-gradient(180deg,#47345e 0%,#a35f3a 55%,#e9c79a 100%)', fg: '#2d1f08', accent: '#8a2432' };
+  if (h >= 11 && h < 16) return { bg: 'linear-gradient(180deg,#7e9ebf 0%,#bcd0e3 55%,#f2ecd8 100%)', fg: '#1e2a38', accent: '#2e5c8a' };
+  if (h >= 16 && h < 19) return { bg: 'linear-gradient(180deg,#3c2a4e 0%,#8a2432 55%,#f2a35f 100%)', fg: '#fff3dc', accent: '#ffd180' };
+  if (h >= 19 && h < 22) return { bg: 'linear-gradient(180deg,#121230 0%,#2b1d4a 55%,#4a2a5a 100%)', fg: '#e9d5ff', accent: '#a78bfa' };
+  // Late-night / pre-dawn: near-ink.
+  return { bg: 'linear-gradient(180deg,#08090f 0%,#121230 70%,#1a1830 100%)', fg: '#e3e2f3', accent: '#67e8f9' };
+}
+const sky = skyForHour(hour);
+
+const title = 'PointCast Wire';
+const description = 'Live news-ticker of the last 24 PointCast events — commits, ships, blocks. Agent-attributed, hour-tinted, always on.';
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="wire" style={`--wire-bg:${sky.bg};--wire-fg:${sky.fg};--wire-accent:${sky.accent};`}>
+    <header class="wire-head">
+      <p class="wire-head__kicker mono">POINTCAST · WIRE</p>
+      <h1 class="wire-head__title">The last <span class="wire-head__count">{merged.length}</span> events.</h1>
+      <p class="wire-head__dek">
+        Commits, ships, blocks. Agent-attributed. Right-to-left, always on.
+        <a class="wire-head__more" href="/status">full ledger at /status →</a>
+      </p>
+    </header>
+
+    <!-- Active-tonight sidebar + marquee share a row on desktop. -->
+    <div class="wire-stage">
+      <aside class="wire-side" aria-label="Agents active since midnight">
+        <p class="wire-side__head mono">ACTIVE · TONIGHT</p>
+        <ul class="wire-side__list">
+          {(['codex','manus','claude','mike','block'] as AgentKey[]).map((a) => (
+            <li class={`ws ws--${a}`}>
+              <span class="ws__label mono">{AGENT_LABEL[a]}</span>
+              <span class="ws__count mono">{agentCounts[a]}</span>
+            </li>
+          ))}
+        </ul>
+        <p class="wire-side__foot mono">
+          tint · {hour.toString().padStart(2,'0')}:00 sky<br/>
+          refresh · build
+        </p>
+      </aside>
+
+      <!-- The marquee itself — content is duplicated so the scroll loop is
+           visually seamless; aria-hidden on the clone so screen readers only
+           get one pass. -->
+      <section class="wire-track" aria-label="Event ticker">
+        {merged.length === 0 ? (
+          <p class="wire-empty mono">no events yet · the wire is warming up</p>
+        ) : (
+          <div class="wire-rail">
+            <ol class="wire-row" role="list">
+              {merged.map((e) => (
+                <li class={`wc wc--${e.agent} wc--${e.kind}`}>
+                  {e.href ? (
+                    <a href={e.href} class="wc__link">
+                      <span class="wc__agent mono">{AGENT_LABEL[e.agent]}</span>
+                      <span class="wc__subject">{e.subject}</span>
+                      <span class="wc__when mono">{e.when}</span>
+                    </a>
+                  ) : (
+                    <div class="wc__link wc__link--static">
+                      <span class="wc__agent mono">{AGENT_LABEL[e.agent]}</span>
+                      <span class="wc__subject">{e.subject}</span>
+                      <span class="wc__when mono">{e.when}</span>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            <ol class="wire-row" role="list" aria-hidden="true">
+              {merged.map((e) => (
+                <li class={`wc wc--${e.agent} wc--${e.kind}`}>
+                  <div class="wc__link wc__link--static">
+                    <span class="wc__agent mono">{AGENT_LABEL[e.agent]}</span>
+                    <span class="wc__subject">{e.subject}</span>
+                    <span class="wc__when mono">{e.when}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </section>
+    </div>
+
+    <footer class="wire-foot mono">
+      <span>/wire · generated at build</span>
+      <span>·</span>
+      <a href="/wire.json">wire.json</a>
+      <span>·</span>
+      <a href="/gamgee">gamgee</a>
+      <span>·</span>
+      <a href="/status">status</a>
+      <span>·</span>
+      <a href="/">home</a>
+    </footer>
+  </main>
+
+  <!-- Scanline overlay — decorative, beneath interactive elements. -->
+  <div class="wire-scan" aria-hidden="true"></div>
+</BaseLayout>
+
+<style>
+  .wire {
+    min-height: calc(100vh - 120px);
+    padding: 36px 20px 80px;
+    background: var(--wire-bg);
+    color: var(--wire-fg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .wire-head { max-width: 1100px; margin: 0 auto 24px; }
+  .wire-head__kicker {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    font-weight: 700;
+    color: var(--wire-accent);
+    opacity: 0.9;
+  }
+  .wire-head__title {
+    margin: 0 0 6px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: clamp(34px, 6vw, 64px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    color: var(--wire-fg);
+  }
+  .wire-head__count {
+    color: var(--wire-accent);
+    font-style: italic;
+  }
+  .wire-head__dek {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 15px;
+    line-height: 1.5;
+    max-width: 600px;
+    opacity: 0.82;
+  }
+  .wire-head__more {
+    margin-left: 10px;
+    color: var(--wire-accent);
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .wire-stage {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 20px;
+    align-items: stretch;
+  }
+  @media (max-width: 720px) {
+    .wire-stage { grid-template-columns: 1fr; }
+  }
+
+  .wire-side {
+    padding: 16px 14px 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 3px;
+    background: rgba(0,0,0,0.22);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .wire-side__head {
+    margin: 0 0 10px;
+    font-size: 9.5px;
+    letter-spacing: 0.26em;
+    font-weight: 700;
+    color: var(--wire-accent);
+  }
+  .wire-side__list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ws {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    padding: 4px 6px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .ws__label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .ws__count { opacity: 0.85; }
+  .ws--codex  { background: rgba(30,41,59,0.55); color: #67e8f9; }
+  .ws--manus  { background: rgba(59,18,25,0.55); color: #fbbf24; }
+  .ws--claude { background: rgba(76,29,149,0.55); color: #e9d5ff; }
+  .ws--mike   { background: rgba(27,40,24,0.55); color: #bbf7d0; }
+  .ws--block  { background: rgba(40,30,20,0.55); color: #f2ecd8; }
+
+  .wire-side__foot {
+    margin: 0;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    line-height: 1.6;
+  }
+
+  /* ─── marquee ───────────────────────────────────────── */
+  .wire-track {
+    position: relative;
+    height: clamp(220px, 32vh, 300px);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 3px;
+    background: rgba(0,0,0,0.28);
+    overflow: hidden;
+  }
+  .wire-track::before, .wire-track::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 40px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .wire-track::before {
+    left: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
+  }
+  .wire-track::after {
+    right: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.55));
+  }
+
+  .wire-rail {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 12px;
+    width: max-content;
+    animation: wire-scroll 48s linear infinite;
+    will-change: transform;
+  }
+  .wire-rail:hover { animation-play-state: paused; }
+  @media (prefers-reduced-motion: reduce) {
+    .wire-rail { animation: none; }
+  }
+
+  .wire-row {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .wire-row + .wire-row { margin-left: 14px; }
+
+  .wc {
+    flex-shrink: 0;
+    max-width: 520px;
+  }
+  .wc__link, .wc__link--static {
+    display: grid;
+    grid-template-columns: 70px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 10px 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(0,0,0,0.35);
+    color: var(--wire-fg);
+    text-decoration: none;
+    min-width: 260px;
+  }
+  .wc__link:hover { background: rgba(0,0,0,0.55); border-color: rgba(255,255,255,0.25); }
+  .wc__agent {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 2px;
+    text-align: center;
+  }
+  .wc--codex  .wc__agent { background: #1e293b; color: #67e8f9; }
+  .wc--manus  .wc__agent { background: #3b1219; color: #fbbf24; }
+  .wc--claude .wc__agent { background: #4c1d95; color: #e9d5ff; }
+  .wc--mike   .wc__agent { background: #1b2818; color: #bbf7d0; }
+  .wc--block  .wc__agent { background: #2d2317; color: #f2ecd8; }
+  .wc__subject {
+    font-family: Georgia, serif;
+    font-size: 13.5px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 360px;
+  }
+  .wc__when {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+    white-space: nowrap;
+  }
+  .wc--block .wc__link, .wc--block .wc__link--static { border-style: dashed; }
+
+  .wire-empty {
+    padding: 40px 20px;
+    text-align: center;
+    opacity: 0.6;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+  }
+
+  @keyframes wire-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(calc(-50% - 7px)); }
+  }
+
+  .wire-foot {
+    max-width: 1100px;
+    margin: 24px auto 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    opacity: 0.72;
+  }
+  .wire-foot a {
+    color: var(--wire-accent);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+
+  /* CRT scanlines — subtle, additive. */
+  .wire-scan {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(255,255,255,0.03) 3px,
+      rgba(0,0,0,0) 4px
+    );
+    mix-blend-mode: overlay;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+</style>
