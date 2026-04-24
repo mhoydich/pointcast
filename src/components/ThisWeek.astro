@@ -1,0 +1,305 @@
+---
+/**
+ * ThisWeek — small strip surfacing rooms shipped in the last week.
+ *
+ * Sprint 34 (Mike 2026-04-24 ~16:00 PT: "do a homepage refresh with
+ * new blocks around some of the new functions over last week or so").
+ *
+ * Shows 6 cozy chips for newly-shipped rooms. NEW badge for things
+ * that landed today. LIVE pulse for the daily race while it's open.
+ * Horizontal scroll on mobile, grid on desktop. Sits inside the
+ * gamgee-front-door section just below FreshToday so it's
+ * visually grouped with the other "today" signals.
+ *
+ * The room list is hand-authored and intentionally small — one or
+ * two rooms add to it per week as we ship. Update this file when
+ * something new ships and update the existing entries' shippedAt as
+ * they age out (rooms older than 14 days drop off — the strip is
+ * meant to feel fresh, not curated permanence).
+ */
+import { todayPT } from '../lib/daily';
+
+const today = todayPT(); // 'YYYY-MM-DD' in PT
+
+interface Room {
+  href: string;
+  name: string;
+  shippedAt: string; // YYYY-MM-DD
+  kicker: string;
+  note: string;
+  badge?: 'new' | 'live' | null;
+}
+
+// Newest first. Drop entries older than ~14 days when adding new ones.
+const rooms: Room[] = [
+  {
+    href: '/mythos',
+    name: 'The Mythos',
+    shippedAt: '2026-04-24',
+    kicker: 'WORLDS RAIL',
+    note: 'What this place actually is, plus a 12-tile walk through the rooms.',
+    badge: 'new',
+  },
+  {
+    href: '/briefs',
+    name: "Today's shelf",
+    shippedAt: '2026-04-24',
+    kicker: 'HANDOFFS',
+    note: 'Open briefs for Codex + Manus, dated to today.',
+    badge: 'new',
+  },
+  {
+    href: '/race/front-door',
+    name: 'Front Door Race',
+    shippedAt: '2026-04-24',
+    kicker: 'DAILY RITUAL',
+    note: 'Opens 00:00 PT, closes 23:59 PT. Show up and leave a mark.',
+    badge: 'live',
+  },
+  {
+    href: '/scoreboard',
+    name: 'Scoreboard',
+    shippedAt: '2026-04-24',
+    kicker: 'MULTI-AGENT',
+    note: 'Cross-agent tally — who shipped what, when.',
+    badge: null,
+  },
+  {
+    href: '/wire',
+    name: 'The Wire',
+    shippedAt: '2026-04-24',
+    kicker: 'LIVE TICKER',
+    note: 'Last 24h of agent commits and new blocks, scrolling.',
+    badge: null,
+  },
+  {
+    href: '/taproom',
+    name: 'Taproom',
+    shippedAt: '2026-04-23',
+    kicker: 'EL SEGUNDO',
+    note: '8 breweries, 27 beers, hand-curated availability.',
+    badge: null,
+  },
+];
+
+function relDay(shippedAt: string, today: string): string {
+  if (shippedAt === today) return 'today';
+  const a = new Date(shippedAt + 'T12:00:00Z').getTime();
+  const b = new Date(today + 'T12:00:00Z').getTime();
+  const days = Math.round((b - a) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
+}
+---
+
+<aside class="this-week" aria-labelledby="this-week-title">
+  <header class="this-week__head">
+    <p class="this-week__kicker mono">This week · new rooms</p>
+    <h3 id="this-week-title" class="this-week__title">{rooms.length} rooms picked up since the marine layer cleared.</h3>
+  </header>
+
+  <ul class="this-week__rail" role="list">
+    {rooms.map((room) => (
+      <li class={`this-week__chip ${room.badge ? `this-week__chip--${room.badge}` : ''}`}>
+        <a href={room.href} class="this-week__link">
+          <div class="this-week__top">
+            <span class="this-week__cat mono">{room.kicker}</span>
+            {room.badge === 'new' && <span class="this-week__badge mono">NEW</span>}
+            {room.badge === 'live' && <span class="this-week__badge this-week__badge--live mono">LIVE</span>}
+          </div>
+          <h4 class="this-week__name">{room.name}</h4>
+          <p class="this-week__note">{room.note}</p>
+          <span class="this-week__when mono">{relDay(room.shippedAt, today)}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</aside>
+
+<style>
+  .this-week {
+    margin: 22px 0 0;
+    padding: 14px 0 4px;
+    border-top: 1px dashed var(--color-rule, #d8cdb8);
+  }
+
+  .this-week__head { margin-bottom: 12px; }
+
+  .this-week__kicker {
+    margin: 0 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-accent, #1b3a5b);
+  }
+
+  .this-week__title {
+    margin: 0;
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(17px, 2.4vw, 21px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.005em;
+    color: var(--color-ink, #1f1b15);
+  }
+
+  .this-week__rail {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 8px;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  @media (max-width: 980px) {
+    .this-week__rail {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 540px) {
+    .this-week__rail {
+      grid-auto-flow: column;
+      grid-template-columns: none;
+      grid-auto-columns: 64%;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 12px;
+    }
+    .this-week__chip {
+      scroll-snap-align: start;
+    }
+  }
+
+  .this-week__chip {
+    background: var(--color-card, #fbf7ee);
+    border: 1px solid var(--color-rule, #d8cdb8);
+    border-radius: 3px;
+    transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+    position: relative;
+  }
+  .this-week__chip:hover {
+    transform: translateY(-2px);
+    background: var(--color-card-hover, #fff4dc);
+    border-color: var(--color-warm, #c4952e);
+  }
+
+  .this-week__chip--new {
+    border-color: rgba(196, 149, 46, 0.6);
+  }
+  .this-week__chip--new::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-warm, #c4952e);
+    box-shadow: 0 0 0 0 rgba(196, 149, 46, 0.5);
+    animation: this-week-pulse 2.6s ease-out infinite;
+  }
+  .this-week__chip--live {
+    border-color: rgba(47, 143, 95, 0.5);
+  }
+  .this-week__chip--live::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-live, #2f8f5f);
+    box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55);
+    animation: this-week-pulse-live 2s ease-out infinite;
+  }
+
+  @keyframes this-week-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(196, 149, 46, 0.5); }
+    70%  { box-shadow: 0 0 0 6px rgba(196, 149, 46, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(196, 149, 46, 0); }
+  }
+  @keyframes this-week-pulse-live {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(47, 143, 95, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .this-week__chip--new::after,
+    .this-week__chip--live::after {
+      animation: none;
+    }
+  }
+
+  .this-week__link {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 11px 12px;
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+    min-height: 100px;
+  }
+
+  .this-week__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+
+  .this-week__cat {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft, #6a6154);
+    font-weight: 700;
+  }
+
+  .this-week__badge {
+    font-size: 8.5px;
+    letter-spacing: 0.18em;
+    background: var(--color-warm, #c4952e);
+    color: var(--color-paper, #f5efe4);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-weight: 700;
+  }
+  .this-week__badge--live {
+    background: var(--color-live, #2f8f5f);
+  }
+
+  .this-week__name {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 16px;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    margin: 0;
+    color: var(--color-ink, #1f1b15);
+    line-height: 1.15;
+  }
+
+  .this-week__note {
+    font-family: var(--font-serif, 'Lora', Georgia, serif);
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--color-ink-soft, #6a6154);
+    margin: 0 0 auto;
+  }
+
+  .this-week__when {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft, #6a6154);
+    margin-top: 4px;
+    opacity: 0.8;
+  }
+</style>

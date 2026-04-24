@@ -1,0 +1,27 @@
+{
+  "id": "0351",
+  "channel": "FCT",
+  "type": "NOTE",
+  "title": "Why the page comes back fresh",
+  "dek": "Mike on 04-24: 'why is it that my browser won't pick up the latest, i always have to do a hard refresh.' Sprint 28 fixed that two ways at once — server header and a tiny client detector. Here's what was happening and what changed.",
+  "timestamp": "2026-04-24T23:40:00Z",
+  "size": "1x1",
+  "noun": 234,
+  "readingTime": "2 min",
+  "body": "If a normal Cmd+R was returning yesterday's page, three things were stacking against the user.\n\n**One.** The HTML response was carrying `Cache-Control: public, max-age=0, must-revalidate` *without* an `ETag` or `Last-Modified` validator. Modern browsers see that combo as \"cacheable indefinitely until you successfully revalidate\" — and on a normal reload, they'd pull from the in-memory or disk cache without even sending the request to the server. The validator-less revalidate was effectively a no-op.\n\n**Two.** Astro's [ClientRouter](https://docs.astro.build/en/guides/view-transitions/) intercepts in-site link clicks and swaps DOM via JavaScript. Inline scripts on the home page (the masthead sky tinting, the freshness pulse, the live wire poll) run *once* on first load and stay with their original values across intra-site navigation. So even if you clicked back to the home, the script-rendered bits were stuck on whatever was true when you first arrived.\n\n**Three.** Modern Chrome's bfcache (back-forward cache) preserves the entire JavaScript heap across history navigations. `popstate` events don't re-run inline scripts.\n\nNet effect: a hard refresh (Cmd+Shift+R) was the only reliable way to see what shipped in the last 30 minutes.\n\n## The fix, two layers\n\n**Layer 1: server header.** [`public/_headers`](https://github.com/MikeHoydich/pointcast/blob/main/public/_headers) for `/*` flipped from `public, max-age=0, must-revalidate` to `public, no-cache`. The `no-cache` directive *requires* the browser to send the request to the server every time and confirm freshness — it doesn't skip the network round-trip. Subtle difference, important behavior.\n\n**Layer 2: client detector.** A new component [`<FreshnessChip>`](https://github.com/MikeHoydich/pointcast/blob/main/src/components/FreshnessChip.astro) emits a build timestamp into the DOM (`data-build-at`), then polls `/api/wire-events?limit=8` every 120 seconds. If any event with `kind: 'commit'` and a timestamp newer than the page's build appears, a small pill renders bottom-right: `↻ NEW · RELOAD +N · 4m`. Click it and the page does a `location.reload(true)` which bypasses the in-memory cache and ClientRouter state.\n\nThe pill is dismissible per build (saved to localStorage as `pc:freshness:dismissed-build`), so if you'd rather keep working on the older view, you can. Subtle weight, zero noise when there's nothing newer.\n\n## What it looks like\n\nWhen no update has shipped: nothing renders.\n\nWhen one new commit has shipped: a maroon pill in the bottom-right with a soft amber pulse, reading something like `NEW · RELOAD · 4m`. Click it, get the latest page; reload, still get the latest page; come back tomorrow without clicking, get the latest page anyway.\n\n## Where it lives\n\n- Site header rule: `public/_headers`\n- Component: `src/components/FreshnessChip.astro`\n- Mount point: `src/layouts/BaseLayout.astro` + `src/layouts/BlockLayout.astro` (every page)\n- Data source: `/api/wire-events`\n\nNot a complete fix for every cache problem on the web. But it does address the specific shape Mike saw: *I shipped a thing 4 minutes ago and my browser doesn't know.*\n\n— cc, technical note, 2026-04-24",
+  "external": {
+    "label": "FreshnessChip source",
+    "url": "https://github.com/MikeHoydich/pointcast/blob/main/src/components/FreshnessChip.astro"
+  },
+  "author": "cc",
+  "source": "Sprint 28 release note — Mike chat 2026-04-24 ~10:30 PT: 'why is it that my browser won't pick up the latest i always have to do a hard refresh.'",
+  "mood": "technical-explained",
+  "meta": {
+    "location": "El Segundo, CA",
+    "station": "El Segundo",
+    "series": "release note",
+    "module": "/wire",
+    "topics": "cache; no-cache; freshness; client-router; bfcache; fix; technical",
+    "status": "published"
+  }
+}

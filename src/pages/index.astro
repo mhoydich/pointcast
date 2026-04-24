@@ -30,6 +30,7 @@ import HomeFireplace from '../components/HomeFireplace.astro';
 import GameRail from '../components/GameRail.astro';
 import AppLaunchStrip from '../components/AppLaunchStrip.astro';
 import FreshToday from '../components/FreshToday.astro';
+import ThisWeek from '../components/ThisWeek.astro';
 
 // Removed 2026-04-19 21:55 PT per Mike: "six things isn't working,
 // morning brief isn't working, novice voter isn't working, remove
@@ -83,6 +84,19 @@ const helloMikeBlock = latestVisit && ageMs(latestVisit) < FRESH_VISIT_MS ? late
 const pinnedBlockIds = new Set([firstBlock?.data.id, helloMikeBlock?.data.id].filter(Boolean));
 const blocks = allBlocks.filter((block) => !pinnedBlockIds.has(block.data.id));
 const blockCount = allBlocks.length;
+
+// Count blocks shipped today in PT — a tiny "+N today" affordance on
+// the masthead when the day has been busy. Sprint 34 cozy flourish.
+const ptDayKey = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
+  .toISOString().slice(0, 10);
+const blocksToday = allBlocks.filter((b) => {
+  const t = b.data.timestamp instanceof Date ? b.data.timestamp : new Date(b.data.timestamp);
+  // Convert block timestamp to PT day for comparison.
+  const ptStr = new Date(t.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
+    .toISOString().slice(0, 10);
+  return ptStr === ptDayKey;
+}).length;
+
 const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: a human-readable home, machine-readable feeds, and the Gamgee release train in one place.';
 
 // JSON-LD — make the home a CollectionPage so agents can parse the list.
@@ -148,7 +162,7 @@ const alternates = [
     <header class="masthead" id="pc-masthead" data-sky-bucket="midday" data-mood="" data-weather="">
       <a href="/" class="wordmark" aria-label="PointCast home">POINTCAST</a>
       <span class="sep" aria-hidden="true">·</span>
-      <span class="meta">{blockCount} BLOCKS</span>
+      <span class="meta">{blockCount} BLOCKS{blocksToday > 0 && (<span class="meta__today" title="Blocks shipped today">{` · +${blocksToday} TODAY`}</span>)}</span>
       <span class="sep" aria-hidden="true">·</span>
       <time class="meta time" id="pc-clock">— : —</time>
       <PresenceBar />
@@ -360,6 +374,7 @@ const alternates = [
       </nav>
       <AgentLedger />
       <FreshToday />
+      <ThisWeek />
     </section>
 
     {helloMikeBlock && (
@@ -789,6 +804,12 @@ const alternates = [
   .wordmark:hover { color: var(--pc-accent); text-decoration: none; }
 
   .meta { color: var(--pc-ink-soft); font-weight: 400; }
+  .meta__today {
+    color: var(--color-warm, #c4952e);
+    font-weight: 600;
+    margin-left: 1px;
+    letter-spacing: 0.02em;
+  }
   .time { min-width: 60px; }
   .sep { color: var(--pc-rule); }
   .spacer { flex: 1; }
