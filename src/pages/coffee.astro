@@ -1,0 +1,327 @@
+---
+/**
+ * /coffee — the coffee pot, on.
+ *
+ * Sprint 35 (Mike 2026-04-24 ~17:30 PT: "fun do some type of coffee
+ * pot block, module, likely something neat there, very pixel art").
+ * The "coffee pot, still on" line has closed three of cc's recent
+ * blocks (0347, 0348, the kimi/gemini READMEs) — this room makes the
+ * motif literal.
+ *
+ * Pixel-art moka pot, animated steam, a small "pour" interaction that
+ * adds to a localStorage cup-count, and a cozy time-of-day greeting.
+ * No login, no chain, no race — just a place to sit for a minute.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CoffeePot from '../components/CoffeePot.astro';
+---
+
+<BaseLayout
+  title="Coffee · PointCast"
+  description="The coffee pot, still on. A small cozy room with a pixel-art moka pot, a pour button, and a quiet count of cups poured today."
+>
+  <main class="coffee">
+    <article class="coffee__hero">
+      <p class="coffee__kicker mono">The pot · always on</p>
+      <h1 class="coffee__title">Coffee.</h1>
+      <p class="coffee__greeting" id="coffee-greeting">It's a fine time for a cup.</p>
+    </article>
+
+    <section class="coffee__stage" aria-label="Pixel-art coffee pot">
+      <CoffeePot size={320} />
+    </section>
+
+    <section class="coffee__interact" aria-label="Pour a cup">
+      <button
+        type="button"
+        id="coffee-pour"
+        class="coffee__pour mono"
+        aria-describedby="coffee-tally"
+      >
+        Pour a cup
+      </button>
+      <p class="coffee__tally mono" id="coffee-tally">
+        <span id="coffee-cups-num">0</span>
+        <span class="coffee__tally-lbl">cups poured here · today</span>
+      </p>
+      <p class="coffee__tally-note mono" id="coffee-tally-note" aria-live="polite"></p>
+    </section>
+
+    <section class="coffee__about" aria-label="About the pot">
+      <p>
+        This corner exists because the line "coffee pot, still on" has been closing cc's blocks for a few sprints now. Mike asked for the motif made literal. Here it is.
+      </p>
+      <p>
+        The pot is on. The steam is real (CSS keyframes). The heat dots pulse on a 1.8s loop. Reduced motion stops everything but keeps the silhouette. Pour a cup with the button — count is local to your browser, resets at midnight PT.
+      </p>
+      <p class="coffee__quiet">
+        A garden is slow on purpose. A broadcast is too. A good cup of coffee is in the same family.
+      </p>
+    </section>
+
+    <nav class="coffee__exits" aria-label="Coffee exits">
+      <a href="/" class="coffee__exit mono">← the front door</a>
+      <a href="/mythos" class="coffee__exit mono">the mythos</a>
+      <a href="/taproom" class="coffee__exit mono">the taproom</a>
+      <a href="/wire" class="coffee__exit mono">the wire</a>
+    </nav>
+  </main>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var STORAGE_KEY = 'pc:coffee:cups';
+    var DATE_KEY    = 'pc:coffee:date';
+
+    function ptToday() {
+      try {
+        // Local PT date string YYYY-MM-DD via Intl
+        var fmt = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Los_Angeles',
+          year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        return fmt.format(new Date());
+      } catch (e) {
+        // Fallback — use the browser's local date.
+        var d = new Date();
+        return d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0');
+      }
+    }
+
+    function readCups() {
+      try {
+        var savedDate = localStorage.getItem(DATE_KEY);
+        var today = ptToday();
+        if (savedDate !== today) {
+          // New PT day — reset.
+          localStorage.setItem(DATE_KEY, today);
+          localStorage.setItem(STORAGE_KEY, '0');
+          return 0;
+        }
+        return parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10) || 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    function writeCups(n) {
+      try {
+        localStorage.setItem(STORAGE_KEY, String(n));
+        localStorage.setItem(DATE_KEY, ptToday());
+      } catch (e) { /* private mode etc */ }
+    }
+
+    function greetingFor(hourPT) {
+      // 5–10  → first cup
+      // 10–13 → late morning
+      // 13–17 → afternoon
+      // 17–21 → evening (decaf?)
+      // 21–5  → late
+      if (hourPT >= 5  && hourPT < 10) return "First cup of the day.";
+      if (hourPT >= 10 && hourPT < 13) return "Late morning. The pot still has more.";
+      if (hourPT >= 13 && hourPT < 17) return "Afternoon refill. Pace yourself.";
+      if (hourPT >= 17 && hourPT < 21) return "Evening. Decaf, maybe.";
+      return "Late hour. Tea would be wiser, honestly.";
+    }
+
+    function noteFor(cups) {
+      if (cups === 0) return '';
+      if (cups === 1) return "One cup. A reasonable opening.";
+      if (cups === 2) return "Two. The morning has been productive.";
+      if (cups === 3) return "Three. Approaching the limit.";
+      if (cups === 4) return "Four cups. You\u2019re jittery.";
+      if (cups <  10) return cups + " cups. The pot may need a refill.";
+      return cups + " cups. Touch grass, friend.";
+    }
+
+    function ptHour() {
+      try {
+        var fmt = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Los_Angeles',
+          hour: 'numeric', hour12: false
+        });
+        return parseInt(fmt.format(new Date()), 10);
+      } catch (e) {
+        return new Date().getHours();
+      }
+    }
+
+    var btn        = document.getElementById('coffee-pour');
+    var numEl      = document.getElementById('coffee-cups-num');
+    var noteEl     = document.getElementById('coffee-tally-note');
+    var greetingEl = document.getElementById('coffee-greeting');
+
+    if (greetingEl) {
+      greetingEl.textContent = greetingFor(ptHour());
+    }
+
+    var cups = readCups();
+    if (numEl) numEl.textContent = String(cups);
+    if (noteEl) noteEl.textContent = noteFor(cups);
+
+    if (btn) {
+      btn.addEventListener('click', function () {
+        cups = readCups() + 1;
+        writeCups(cups);
+        if (numEl) numEl.textContent = String(cups);
+        if (noteEl) noteEl.textContent = noteFor(cups);
+
+        // Tiny visual nudge — the button briefly glows.
+        btn.classList.add('coffee__pour--poured');
+        setTimeout(function () { btn.classList.remove('coffee__pour--poured'); }, 600);
+      });
+    }
+  })();
+</script>
+
+<style>
+  .coffee {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 56px 20px 96px;
+    text-align: center;
+    color: var(--color-ink);
+  }
+
+  .coffee__hero { margin-bottom: 28px; }
+  .coffee__kicker {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .coffee__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(48px, 9vw, 84px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.012em;
+    margin: 0 0 12px;
+  }
+  .coffee__greeting {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: clamp(15px, 2vw, 18px);
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+
+  .coffee__stage {
+    margin: 24px auto 12px;
+    display: flex;
+    justify-content: center;
+    /* Gentle warm wash behind the pot to suggest a counter top. */
+    background: radial-gradient(ellipse at center bottom, rgba(196, 149, 46, 0.18) 0%, transparent 60%);
+    padding: 16px 0 8px;
+  }
+
+  .coffee__interact {
+    margin: 8px auto 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .coffee__pour {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    border-radius: 2px;
+    padding: 10px 22px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.14s, transform 0.1s, box-shadow 0.2s;
+  }
+  .coffee__pour:hover {
+    background: #6B2139;
+    border-color: #6B2139;
+  }
+  .coffee__pour:active {
+    transform: translateY(1px);
+  }
+  .coffee__pour--poured {
+    box-shadow: 0 0 0 3px rgba(196, 149, 46, 0.4);
+    background: var(--color-warm);
+    border-color: var(--color-warm);
+    color: var(--color-ink);
+  }
+
+  .coffee__tally {
+    margin: 0;
+    color: var(--color-ink-soft);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  #coffee-cups-num {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-ink);
+    letter-spacing: 0.04em;
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+  }
+  .coffee__tally-lbl {
+    color: var(--color-ink-soft);
+  }
+  .coffee__tally-note {
+    margin: 0;
+    color: var(--color-warm);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    min-height: 1em; /* prevent jump on first pour */
+  }
+
+  .coffee__about {
+    text-align: left;
+    max-width: 520px;
+    margin: 32px auto 28px;
+    padding: 20px 22px;
+    border: 1px solid var(--color-rule);
+    border-radius: 3px;
+    background: var(--color-card);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-ink);
+  }
+  .coffee__about p { margin: 0 0 12px; }
+  .coffee__about p:last-child { margin: 0; }
+  .coffee__quiet {
+    font-style: italic;
+    color: var(--color-ink-soft);
+  }
+
+  .coffee__exits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: center;
+    padding-top: 18px;
+    border-top: 1px dashed var(--color-rule);
+  }
+  .coffee__exit {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    border-bottom: 1px solid currentColor;
+  }
+  .coffee__exit:hover { color: var(--color-warm); }
+
+  .mono { font-family: var(--font-mono); }
+</style>
