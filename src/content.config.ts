@@ -17,7 +17,7 @@ const blocks = defineCollection({
   schema: z.object({
     id: z.string().regex(/^\d{4}$/, 'id must be 4-digit zero-padded string'),
     channel: z.enum(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST', 'BTL']),
-    type: z.enum(['READ', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'NOTE', 'VISIT', 'LINK']),
+    type: z.enum(['READ', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'NOTE', 'VISIT', 'LINK', 'TALK']),
     title: z.string(),
     body: z.string().optional(),
     timestamp: z.coerce.date(),
