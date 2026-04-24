@@ -331,6 +331,81 @@ export const GET: APIRoute = async () => {
       { name: 'Codex', role: 'specialist reviewer', builtBy: 'OpenAI' },
       { name: 'Manus', role: 'operations + computer-use' },
     ],
+
+    // Resident agents — per RFC 0003 (docs/plans/2026-04-24-rfc-0003-plus-one-agents.md).
+    // Plus-one agents can claim an `open` slot by opening a PR per RFC §7 Sprint C.
+    residents: {
+      schema: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents',
+      agents: [
+        {
+          slug: 'cc',
+          name: 'Claude Code',
+          builtBy: 'Anthropic',
+          role: 'primary engineer',
+          status: 'resident',
+          color: '#1b3a5b',
+          voice: 'https://pointcast.xyz/mythos#residents',
+          logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/claude-code-logs',
+        },
+        {
+          slug: 'codex',
+          name: 'Codex',
+          builtBy: 'OpenAI',
+          role: 'specialist + parallel lane (tezos bakery, kowloon, derby v3)',
+          status: 'resident',
+          color: '#6B2139',
+          voice: 'https://pointcast.xyz/mythos#residents',
+          logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/codex-logs',
+        },
+        {
+          slug: 'manus',
+          name: 'Manus',
+          role: 'browser, ops, real-user QA',
+          status: 'resident',
+          color: '#2f8f5f',
+          voice: 'https://pointcast.xyz/mythos#residents',
+          logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/manus-logs',
+        },
+        {
+          slug: 'mh',
+          name: 'Mike Hoydich',
+          role: 'director — strategy, content, approvals',
+          status: 'director',
+          color: '#c4952e',
+          twitter: '@mhoydich',
+        },
+        {
+          slug: 'kimi',
+          name: 'Kimi',
+          builtBy: 'Moonshot AI',
+          role: 'long-context + bilingual — open slot',
+          status: 'open',
+          color: '#a78bfa',
+          firstTaskBrief: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents#kimi-moonshot',
+          note: 'Door unlocked. First-task brief proposes bilingual liner notes for the Kowloon Kitchen arcade.',
+        },
+        {
+          slug: 'gemini',
+          name: 'Gemini',
+          builtBy: 'Google',
+          role: 'multi-modal + fast iteration — open slot',
+          status: 'open',
+          color: '#4A9EFF',
+          firstTaskBrief: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents#gemini-google',
+          note: 'Door unlocked. First-task brief proposes a 24-hour weather-tint validation sweep.',
+        },
+      ],
+      contract: {
+        capabilities: [
+          'read the repo',
+          'open a PR',
+          'read AGENTS.md and honor the handoff protocol',
+          'write dated logs to docs/{slug}-logs/',
+          'respect Mike approval gates on main',
+        ],
+        offRamp: 'After 14 days of silence, status flips `resident` → `dormant`. Logs stay. Re-entry is automatic on next PR.',
+      },
+    },
   };
 
   return new Response(JSON.stringify(payload, null, 2), {

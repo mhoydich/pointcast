@@ -7,9 +7,10 @@
  * and cozy"). A single-page declaration of the town, paired with a
  * Worlds Rail — small tiles representing each room of the place.
  *
- * Design-sketch for now: tiles are hand-authored. Codex brief at
- * docs/briefs/2026-04-24-codex-worlds-rail-data.md picks up the live
- * data wiring in Sprint 32+.
+ * Sprint 32 — seed the pattern: each channel-backed tile now reads its
+ * latest block at build time, so the rail is actually alive. Codex's
+ * brief at docs/briefs/2026-04-24-codex-worlds-rail-data.md picks up
+ * presence dots, freshness accents, and ordering from here.
  *
  * Room taxonomy mapped to channels (channel → room):
  *   FD   → Front Door
@@ -26,21 +27,51 @@
  *   /drum, /race/front-door, /yee, /nouns-cola-crush, /scoreboard
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
 
+// Build-time read: latest block per channel. Filter out drafts first,
+// then group by channel, sort desc by timestamp, take the head.
+const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
+const byChannel = new Map<string, { id: string; title: string; at: Date }>();
+for (const b of allBlocks) {
+  const ch = b.data.channel;
+  if (!ch) continue;
+  const at = b.data.timestamp instanceof Date ? b.data.timestamp : new Date(b.data.timestamp);
+  const existing = byChannel.get(ch);
+  if (!existing || at.getTime() > existing.at.getTime()) {
+    byChannel.set(ch, { id: b.data.id ?? b.id, title: b.data.title, at });
+  }
+}
+const totalBlockCount = allBlocks.length;
+
+// Static tile manifest. Each channel-backed tile will be enriched with
+// latest = byChannel.get(channel) downstream. Tiles without a channel
+// stay as pure utility surfaces.
 const rooms = [
-  { slug: 'fd',   name: 'Front Door',   href: '/',                 channel: 'FD',  kind: 'home',     mood: 'where the day starts',             note: 'tinted sky, live wire, hello module, race chip' },
-  { slug: 'race', name: 'Front Door Race', href: '/race/front-door', channel: null, kind: 'daily',    mood: 'the one ritual per day',           note: 'open 00:00 → 23:59 PT, leaderboard settles overnight' },
-  { slug: 'gdn',  name: 'Garden',       href: '/farm',             channel: 'GDN', kind: 'slow',     mood: 'a garden is slow on purpose',      note: 'plant, water, grow, harvest. Real wall-clock.' },
-  { slug: 'gf',   name: "Gandalf's",    href: '/gandalf',          channel: 'GF',  kind: 'quiet',    mood: 'a corner to sit with something',   note: "sam's sigil, breath, no scoreboard" },
-  { slug: 'btl',  name: 'Battle',       href: '/battle',           channel: 'BTL', kind: 'play',     mood: 'card of the day vs a challenger',  note: 'three rounds, stat-based, share the result' },
-  { slug: 'crt',  name: 'Agent Derby',  href: '/agent-derby',      channel: 'CRT', kind: 'play',     mood: 'deterministic horse racing',       note: 'seed, run, receipt. Daily card strip (v3).' },
-  { slug: 'vst',  name: 'Drops & Visit',href: '/drops',            channel: 'VST', kind: 'mint',     mood: 'limited, hand-staged',             note: 'drop 001 waiting, four blocks live' },
-  { slug: 'spn',  name: 'The Room',     href: '/room',             channel: 'SPN', kind: 'listen',   mood: 'spotify + clock-tinted wall',      note: 'play, sit, stay as long as you want' },
-  { slug: 'esc',  name: 'Taproom',      href: '/taproom',          channel: 'ESC', kind: 'local',    mood: 'el segundo + hand-curated',        note: '8 breweries, 27 beers, availability tags' },
-  { slug: 'fct',  name: 'The Wire',     href: '/wire',             channel: 'FCT', kind: 'signal',   mood: 'what just shipped',                note: 'right-to-left ticker of agent commits + blocks' },
-  { slug: 'dr',   name: 'Drum',         href: '/drum',             channel: null,  kind: 'make',     mood: 'tap a grid, save a loop',          note: 'farcaster frame-v1, ios audio unlock on tap' },
-  { slug: 'sb',   name: 'Scoreboard',   href: '/scoreboard',       channel: null,  kind: 'tally',    mood: 'who did what, when',               note: 'per-agent block + commit counts' },
+  { slug: 'fd',   name: 'Front Door',      href: '/',                 channel: 'FD',  kind: 'home',   mood: 'where the day starts',             note: 'tinted sky, live wire, hello module, race chip' },
+  { slug: 'race', name: 'Front Door Race', href: '/race/front-door',  channel: null,  kind: 'daily',  mood: 'the one ritual per day',           note: 'open 00:00 → 23:59 PT, leaderboard settles overnight' },
+  { slug: 'gdn',  name: 'Garden',          href: '/farm',             channel: 'GDN', kind: 'slow',   mood: 'a garden is slow on purpose',      note: 'plant, water, grow, harvest. real wall-clock.' },
+  { slug: 'gf',   name: "Gandalf's",       href: '/gandalf',          channel: 'GF',  kind: 'quiet',  mood: 'a corner to sit with something',   note: "sam's sigil, breath, no scoreboard" },
+  { slug: 'btl',  name: 'Battle',          href: '/battle',           channel: 'BTL', kind: 'play',   mood: 'card of the day vs a challenger',  note: 'three rounds, stat-based, share the result' },
+  { slug: 'crt',  name: 'Agent Derby',     href: '/agent-derby',      channel: 'CRT', kind: 'play',   mood: 'deterministic horse racing',       note: 'seed, run, receipt. daily card strip (v3).' },
+  { slug: 'vst',  name: 'Drops & Visit',   href: '/drops',            channel: 'VST', kind: 'mint',   mood: 'limited, hand-staged',             note: 'drop 001 waiting, four blocks live' },
+  { slug: 'spn',  name: 'The Room',        href: '/room',             channel: 'SPN', kind: 'listen', mood: 'spotify + clock-tinted wall',      note: 'play, sit, stay as long as you want' },
+  { slug: 'esc',  name: 'Taproom',         href: '/taproom',          channel: 'ESC', kind: 'local',  mood: 'el segundo + hand-curated',        note: '8 breweries, 27 beers, availability tags' },
+  { slug: 'fct',  name: 'The Wire',        href: '/wire',             channel: 'FCT', kind: 'signal', mood: 'what just shipped',                note: 'right-to-left ticker of agent commits + blocks' },
+  { slug: 'dr',   name: 'Drum',            href: '/drum',             channel: null,  kind: 'make',   mood: 'tap a grid, save a loop',          note: 'farcaster frame-v1, ios audio unlock on tap' },
+  { slug: 'sb',   name: 'Scoreboard',      href: '/scoreboard',       channel: null,  kind: 'tally',  mood: 'who did what, when',               note: 'per-agent block + commit counts' },
 ];
+
+// Compact relative-time formatter for build-time — the absolute ISO
+// goes on the element so client JS can refresh it if we want later.
+function relAt(at: Date): string {
+  const s = Math.max(0, Math.floor((Date.now() - at.getTime()) / 1000));
+  if (s < 60)      return `${s}s ago`;
+  if (s < 3600)    return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400)   return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800)  return `${Math.floor(s / 86400)}d ago`;
+  return `${Math.floor(s / 604800)}w ago`;
+}
 
 const residents = [
   { slug: 'cc',     name: 'Claude Code', status: 'resident', color: '#1b3a5b', role: 'primary engineer', lastBlock: '0346' },
@@ -82,25 +113,36 @@ const dayLoop = [
 
     <section class="mythos__rail" aria-labelledby="rail-title">
       <header class="mythos__rail-head">
-        <p class="mythos__rail-kicker mono">Worlds Rail · 12 rooms</p>
+        <p class="mythos__rail-kicker mono">Worlds Rail · 12 rooms · {totalBlockCount} blocks</p>
         <h2 id="rail-title" class="mythos__rail-title">Walk the town</h2>
         <p class="mythos__rail-dek">Each room has a door. Most have a scoreboard. None of them take more than a few minutes. Come back tomorrow.</p>
       </header>
       <ul class="rail" role="list">
-        {rooms.map((room) => (
-          <li class={`rail__tile rail__tile--${room.kind}`}>
-            <a href={room.href} class="rail__link">
-              <div class="rail__top">
-                <span class="rail__chip mono">{room.channel ?? room.kind.toUpperCase()}</span>
-                <span class="rail__kind mono">{room.kind}</span>
-              </div>
-              <h3 class="rail__name">{room.name}</h3>
-              <p class="rail__mood">{room.mood}</p>
-              <p class="rail__note mono">{room.note}</p>
-              <span class="rail__go mono">enter →</span>
-            </a>
-          </li>
-        ))}
+        {rooms.map((room) => {
+          const latest = room.channel ? byChannel.get(room.channel) : undefined;
+          const isFresh = latest && (Date.now() - latest.at.getTime()) < 24 * 3600 * 1000;
+          return (
+            <li class={`rail__tile rail__tile--${room.kind} ${isFresh ? 'rail__tile--fresh' : ''}`}>
+              <a href={room.href} class="rail__link">
+                <div class="rail__top">
+                  <span class="rail__chip mono">{room.channel ?? room.kind.toUpperCase()}</span>
+                  <span class="rail__kind mono">{room.kind}</span>
+                </div>
+                <h3 class="rail__name">{room.name}</h3>
+                <p class="rail__mood">{room.mood}</p>
+                <p class="rail__note mono">{room.note}</p>
+                {latest && (
+                  <p class="rail__latest mono" title={latest.title}>
+                    <span class="rail__latest-label">latest</span>
+                    <span class="rail__latest-id">№{latest.id}</span>
+                    <span class="rail__latest-at">{relAt(latest.at)}</span>
+                  </p>
+                )}
+                <span class="rail__go mono">enter →</span>
+              </a>
+            </li>
+          );
+        })}
       </ul>
     </section>
 
@@ -328,6 +370,87 @@ const dayLoop = [
     margin: 0 0 auto;
     text-transform: lowercase;
   }
+  .rail__latest {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px dashed var(--color-rule);
+    font-size: 9.5px;
+    letter-spacing: 0.09em;
+    color: var(--color-ink-soft);
+    line-height: 1.4;
+    text-transform: lowercase;
+  }
+  .rail__latest-label {
+    color: var(--color-ink-soft);
+    opacity: 0.65;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 8.5px;
+    font-weight: 700;
+  }
+  .rail__latest-id {
+    color: var(--color-ink);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .rail__latest-at {
+    color: var(--color-ink-soft);
+    margin-left: auto;
+  }
+
+  .rail__tile--fresh .rail__latest-id { color: var(--color-live); }
+  .rail__tile--fresh::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-live);
+    box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55);
+    animation: rail-fresh-pulse 2.6s ease-out infinite;
+  }
+  .rail__tile { position: relative; }
+
+  @keyframes rail-fresh-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(47, 143, 95, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+
+  /* The Race tile is never channel-backed, so it doesn't inherit the
+     fresh-dot treatment — but it's the one ritual per day, so give it
+     its own slow pulse while a race is reasonably-likely open (always
+     on in this sketch; Sprint 33+ can gate this on race-status). */
+  .rail__tile--daily .rail__chip {
+    position: relative;
+  }
+  .rail__tile--daily .rail__chip::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 4px;
+    border: 1px solid var(--color-live);
+    opacity: 0.55;
+    animation: rail-race-pulse 2.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes rail-race-pulse {
+    0%, 100% { transform: scale(1);    opacity: 0.55; }
+    50%      { transform: scale(1.18); opacity: 0;    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rail__tile--fresh::after,
+    .rail__tile--daily .rail__chip::after {
+      animation: none;
+    }
+  }
+
   .rail__go {
     align-self: flex-start;
     color: var(--color-accent);
