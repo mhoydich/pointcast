@@ -1,0 +1,222 @@
+---
+/**
+ * FreshnessChip — "new version available" toast / chip.
+ *
+ * Sprint 28 (Mike 2026-04-24: "why is it that my browser won't pick up
+ * the latest i always have to do a hard refresh"). Two things cause
+ * that behavior in practice:
+ *
+ *   1. Astro ClientRouter intercepts link clicks and swaps DOM via JS.
+ *      Inline scripts on the home page run once on first load and stay
+ *      with their original values through intra-site navigation.
+ *   2. Browser HTTP cache can serve in-memory HTML for reloads
+ *      (especially with ClientRouter + bfcache on modern Chrome).
+ *
+ * This component detects the condition directly: emit a build
+ * timestamp into the DOM, poll /api/wire-events for newer events,
+ * and show a subtle "↻ new version" pill in the bottom-right when the
+ * user's view is staler than the head of main. Clicking the pill
+ * forces a full reload (location.reload(true) — bypasses the memory
+ * cache and ClientRouter state).
+ *
+ * Zero-width when no update; minor visual weight when an update is
+ * available. Dismissible per-build so the user can keep working with
+ * the old view if they prefer.
+ */
+const BUILD_AT = new Date().toISOString();
+---
+
+<div
+  class="pc-freshness"
+  id="pc-freshness"
+  data-build-at={BUILD_AT}
+  aria-live="polite"
+  hidden
+>
+  <button
+    type="button"
+    class="pc-freshness__chip mono"
+    id="pc-freshness-chip"
+    title="Newer content shipped since this page loaded. Click to reload."
+  >
+    <span class="pc-freshness__dot" aria-hidden="true"></span>
+    <span class="pc-freshness__label">NEW · RELOAD</span>
+    <span class="pc-freshness__meta" id="pc-freshness-meta"></span>
+  </button>
+  <button
+    type="button"
+    class="pc-freshness__dismiss mono"
+    id="pc-freshness-dismiss"
+    aria-label="Dismiss new-version notice"
+  >\u00D7</button>
+</div>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var root = document.getElementById('pc-freshness');
+    var chip = document.getElementById('pc-freshness-chip');
+    var meta = document.getElementById('pc-freshness-meta');
+    var dismiss = document.getElementById('pc-freshness-dismiss');
+    if (!root || !chip) return;
+
+    var buildAt = root.getAttribute('data-build-at') || '';
+    var buildMs = Date.parse(buildAt);
+    if (!isFinite(buildMs)) return;
+
+    // Poll config — 120s is rare enough to not spam, frequent enough
+    // to catch ship-within-a-minute cases. First check fires 20s after
+    // mount so we don't burden the initial load.
+    var FIRST_CHECK_MS = 20_000;
+    var POLL_MS        = 120_000;
+    var DISMISS_KEY    = 'pc:freshness:dismissed-build';
+
+    function wasDismissed() {
+      try { return localStorage.getItem(DISMISS_KEY) === buildAt; }
+      catch (e) { return false; }
+    }
+    if (wasDismissed()) return; // stay silent if this specific build was dismissed
+
+    function show(newestIso, count) {
+      if (meta) {
+        var ago = relTime(newestIso);
+        meta.textContent = count > 1 ? ('+' + count + ' · ' + ago) : ago;
+      }
+      root.hidden = false;
+    }
+    function hide() { root.hidden = true; }
+
+    function relTime(iso) {
+      var t = new Date(iso).getTime();
+      if (!isFinite(t)) return '';
+      var d = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (d < 60)        return d + 's';
+      if (d < 3600)      return Math.floor(d / 60) + 'm';
+      if (d < 86400)     return Math.floor(d / 3600) + 'h';
+      return Math.floor(d / 86400) + 'd';
+    }
+
+    async function check() {
+      try {
+        var res = await fetch('/api/wire-events?limit=8', { cache: 'no-store' });
+        if (!res.ok) return;
+        var data = await res.json();
+        var events = (data && Array.isArray(data.events)) ? data.events : [];
+        // Count events strictly newer than this page's build. Only
+        // 'commit' kind — blocks don't warrant a reload on their own
+        // since getCollection output is already in the rendered HTML.
+        var newer = events.filter(function (e) {
+          if (!e || e.kind !== 'commit' || !e.at) return false;
+          var ts = Date.parse(e.at);
+          return isFinite(ts) && ts > buildMs;
+        });
+        if (newer.length === 0) { hide(); return; }
+        show(newer[0].at, newer.length);
+      } catch (e) { /* network blip; try again next poll */ }
+    }
+
+    chip.addEventListener('click', function () {
+      // Force a full reload — bypass memory cache + ClientRouter state.
+      // location.reload(true) is legacy but still works in Chromium /
+      // WebKit; pass an argument otherwise and rely on no-cache HTML.
+      try { window.location.reload(true); }
+      catch (e) { window.location.reload(); }
+    });
+    dismiss.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      try { localStorage.setItem(DISMISS_KEY, buildAt); } catch (e) {}
+      hide();
+    });
+
+    setTimeout(function () {
+      check();
+      setInterval(check, POLL_MS);
+    }, FIRST_CHECK_MS);
+  })();
+</script>
+
+<style>
+  .pc-freshness {
+    position: fixed;
+    bottom: 58px;        /* clear the FooterBar dock */
+    right: 14px;
+    z-index: 45;
+    display: flex;
+    align-items: stretch;
+    pointer-events: auto;
+    animation: pc-freshness-in 0.3s ease-out;
+  }
+  .pc-freshness[hidden] { display: none; }
+
+  .pc-freshness__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #8a2432;
+    color: #fef5e7;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-right: none;
+    border-radius: 2px 0 0 2px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.12s;
+    min-width: 0;
+  }
+  .pc-freshness__chip:hover { background: #6B2139; }
+  .pc-freshness__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #F59F00;
+    box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7);
+    animation: pc-freshness-pulse 2s ease-out infinite;
+  }
+  @keyframes pc-freshness-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7); }
+    70%  { box-shadow: 0 0 0 8px rgba(245, 159, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0); }
+  }
+  .pc-freshness__label { white-space: nowrap; }
+  .pc-freshness__meta {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    opacity: 0.8;
+    padding-left: 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .pc-freshness__dismiss {
+    padding: 4px 9px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fef5e7;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0 2px 2px 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .pc-freshness__dismiss:hover { background: rgba(255, 255, 255, 0.24); }
+
+  @keyframes pc-freshness-in {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 560px) {
+    .pc-freshness { bottom: 50px; right: 8px; }
+    .pc-freshness__chip { padding: 5px 8px; font-size: 9.5px; }
+    .pc-freshness__meta { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pc-freshness { animation: none; }
+    .pc-freshness__dot { animation: none; }
+  }
+</style>
