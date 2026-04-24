@@ -55,10 +55,32 @@ Cut and deferred:
 
 ---
 
-## Sprint 18 — Voice Dispatch Phase 3 foundation
+## Sprint 18 — Voice Dispatch Phase 3 foundation ✅ SHIPPED
 
-R2 bucket binding + rate-limit middleware + persistence approach
-doc. No live R2 until Mike provisions the bucket in CF dashboard.
+**Shipped:** 2026-04-24 ~02:10 PT · PR #44 squashed to main · deploy `0ca301f6`
+
+- `functions/_rate-limit.ts` — shared KV fixed-window limiter, graceful
+  no-op when PC_RATES_KV unbound (`X-RateLimit-Mode: degraded-no-kv`
+  header)
+- `/api/wire-events` — WebMCP tool shape backing `pointcast_wire_events`;
+  `?since` / `?limit` / `?agent` / `?kind` filters; 60/min/IP rate limit
+- `/api/talk` POST — 5 per 10 min per IP rate limited; Phase 3 R2 write
+  scaffold in place, gated behind `if (false)` flag until Mike
+  provisions the bucket + RFC 0001 Q7/Q8 resolve
+- `wrangler.toml` — comment blocks for Mike to provision
+  `PC_RATES_KV` (CLI) and `TALK_AUDIO` R2 bucket (dashboard)
+- `docs/plans/voice-dispatch-phase-3.md` — R2 key layout, draft→block
+  promotion flow, moderation model, quota envelope, readiness gates
+- Agent manifests register `/api/wire-events`, `/api/talk`, `/api/room`
+
+Verified live: wire-events returns 24 events, `?since=...&agent=claude`
+correctly filters, rate-limit headers attach to both success + error
+responses, all in degraded-no-kv mode (expected until Mike provisions).
+
+**Mike-blocked follow-ups** (queued for tomorrow):
+- `npx wrangler kv namespace create "PC_RATES_KV"` + paste id
+- CF R2 dashboard → bucket `pointcast-audio` → bind `TALK_AUDIO`
+- Answer RFC 0001 Q7 (TALK channel?) + Q8 (wallet-required submit?)
 
 ---
 
