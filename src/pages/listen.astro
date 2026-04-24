@@ -1,0 +1,264 @@
+---
+/**
+ * /listen — Voice Dispatch playback route.
+ *
+ * Scaffold per RFC 0001. Phase 1: route claimed, JSON-LD in place. The
+ * playback tuner UI (play/pause, skip, speed, continuous mode, channel
+ * filter, keyboard shortcuts) lands in Phase 3 once capture is live.
+ *
+ * Reads the current block collection for TALK-typed blocks and shows a
+ * queue count. When there are 0 TALK blocks (always, right now), the
+ * page explains why and links to the RFC.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+
+// Check current TALK block count — zero until Phase 2 lands
+const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
+const talkBlocks = allBlocks.filter((b) => (b.data.type as string) === 'TALK');
+const talkCount = talkBlocks.length;
+
+const title = 'Listen — Voice Dispatch tuner';
+const description = 'Tune in to PointCast voice dispatches. Continuous playback across channels, newest first. Landing Phase 3.';
+const canonical = 'https://pointcast.xyz/listen';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': canonical,
+  name: title,
+  description,
+  url: canonical,
+  inLanguage: 'en-US',
+  about: ['voice dispatch', 'audio', 'listening', 'broadcast', 'pointcast'],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="listen">
+    <nav class="listen__crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>listen</span>
+    </nav>
+
+    <header class="listen__hero">
+      <p class="listen__kicker mono">VOICE DISPATCH · PLAYBACK · PHASE 1 SCAFFOLD</p>
+      <h1 class="listen__title">Tune in.</h1>
+      <p class="listen__dek">
+        The playback side of Voice Dispatch. Newest-first tuner with
+        continuous mode, speed controls, and channel filters. Keyboard
+        shortcuts: <code class="mono">space</code> play/pause,
+        <code class="mono">j</code>/<code class="mono">k</code> prev/next,
+        <code class="mono">[</code>/<code class="mono">]</code> speed.
+      </p>
+    </header>
+
+    <section class="listen__queue" aria-label="Queue state">
+      <div class="listen__card">
+        <div class="listen__waveform" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <p class="listen__queue-label mono">QUEUE · {talkCount} VOICE DISPATCHES</p>
+        {talkCount === 0 && (
+          <p class="listen__empty">
+            Nothing on the air yet. Voice Dispatch capture lands in Phase 2
+            per <a href="https://github.com/mhoydich/pointcast/blob/main/docs/rfc/0001-voice-dispatch.md">RFC 0001</a>.
+            When Mike records the first one, it will play here.
+          </p>
+        )}
+        {talkCount > 0 && (
+          <p class="listen__ready">
+            Hit play. Queue advances automatically.
+          </p>
+        )}
+      </div>
+    </section>
+
+    <section class="listen__spec">
+      <h2 class="listen__h2">What plays here, once it's live</h2>
+      <ul class="listen__bullets">
+        <li>All <code class="mono">TALK</code> blocks, newest first</li>
+        <li>Channel filter: <code class="mono">FD</code> · <code class="mono">CRT</code> · <code class="mono">SPN</code> · <code class="mono">GF</code> · <code class="mono">GDN</code> · <code class="mono">ESC</code> · <code class="mono">FCT</code> · <code class="mono">VST</code> · <code class="mono">BTL</code></li>
+        <li>Continuous mode: auto-advance on end</li>
+        <li>Speed: 1× / 1.25× / 1.5×</li>
+        <li>Waveform visualization during playback</li>
+        <li>Transcript panel (collapsible) when present</li>
+        <li>Live presence dot — how many others are tuned in right now</li>
+      </ul>
+    </section>
+
+    <section class="listen__related">
+      <h2 class="listen__h2">Companion surfaces</h2>
+      <ul class="listen__links">
+        <li><a href="/talk"><code class="mono">/talk</code></a> — record a voice dispatch (capture side, also scaffold)</li>
+        <li><a href="/gamgee"><code class="mono">/gamgee</code></a> — the release this is part of</li>
+        <li><a href="/tonight"><code class="mono">/tonight</code></a> — el segundo, marine layer, a song on</li>
+        <li><a href="/tv"><code class="mono">/tv</code></a> — broadcast mode (video / ambient)</li>
+      </ul>
+    </section>
+
+    <footer class="listen__foot mono">
+      <span>PHASE 1 · SCAFFOLD · 2026-04-23 · EL SEGUNDO</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  .listen {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 20px 72px;
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+    color: #121116;
+  }
+  .mono { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+
+  .listen__crumb {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+    margin-bottom: 22px;
+  }
+  .listen__crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+  .listen__crumb span { margin: 0 6px; }
+
+  .listen__hero { padding-bottom: 24px; border-bottom: 2px solid #1a1a22; margin-bottom: 28px; }
+  .listen__kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #185fa5;
+    margin: 0 0 10px;
+  }
+  .listen__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(36px, 6vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    font-weight: 400;
+  }
+  .listen__dek {
+    font-family: Georgia, serif;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 60ch;
+    color: #38373a;
+  }
+  .listen__dek code { font-size: 12.5px; background: rgba(18,17,22,0.07); padding: 1px 5px; border-radius: 2px; }
+
+  .listen__queue { margin: 0 0 32px; }
+  .listen__card {
+    padding: 24px 20px 22px;
+    background: #0b1b2f;
+    color: #e9f1ff;
+    border-radius: 3px;
+    border: 1px solid #185fa5;
+    text-align: center;
+  }
+  .listen__waveform {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+    margin-bottom: 14px;
+  }
+  .listen__waveform span {
+    display: inline-block;
+    width: 3px;
+    background: #67e8f9;
+    border-radius: 2px;
+    opacity: 0.6;
+  }
+  .listen__waveform span:nth-child(1)  { height: 10px; }
+  .listen__waveform span:nth-child(2)  { height: 16px; }
+  .listen__waveform span:nth-child(3)  { height: 24px; }
+  .listen__waveform span:nth-child(4)  { height: 34px; }
+  .listen__waveform span:nth-child(5)  { height: 20px; }
+  .listen__waveform span:nth-child(6)  { height: 28px; }
+  .listen__waveform span:nth-child(7)  { height: 14px; }
+  .listen__waveform span:nth-child(8)  { height: 36px; }
+  .listen__waveform span:nth-child(9)  { height: 22px; }
+  .listen__waveform span:nth-child(10) { height: 12px; }
+  .listen__waveform span:nth-child(11) { height: 30px; }
+  .listen__waveform span:nth-child(12) { height: 18px; }
+  .listen__waveform span:nth-child(13) { height: 26px; }
+  .listen__waveform span:nth-child(14) { height: 10px; }
+  .listen__waveform span:nth-child(15) { height: 14px; }
+
+  .listen__queue-label {
+    font-size: 10.5px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #67e8f9;
+    margin: 0 0 10px;
+  }
+  .listen__empty, .listen__ready {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 48ch;
+    margin: 0 auto;
+    color: #c8d3e0;
+  }
+  .listen__empty a { color: #67e8f9; }
+
+  .listen__h2 {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    margin: 0 0 14px;
+  }
+  .listen__bullets {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .listen__bullets li {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 14px;
+    position: relative;
+    color: #1a1a22;
+  }
+  .listen__bullets li::before {
+    content: "·";
+    position: absolute;
+    left: 4px;
+    color: #185fa5;
+    font-weight: 700;
+  }
+  .listen__bullets code { font-size: 12.5px; background: rgba(18,17,22,0.07); padding: 1px 5px; border-radius: 2px; }
+
+  .listen__spec, .listen__related { margin: 0 0 32px; padding-bottom: 24px; border-bottom: 1px solid #e5e3de; }
+
+  .listen__links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-family: Georgia, serif;
+    font-size: 14px;
+  }
+  .listen__links a { color: #8a2432; text-decoration: none; border-bottom: 1px solid transparent; }
+  .listen__links a:hover { border-bottom-color: #8a2432; }
+  .listen__links code { font-size: 12.5px; background: rgba(18,17,22,0.06); padding: 1px 5px; border-radius: 2px; }
+
+  .listen__foot {
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
+    color: #5f5e5a;
+  }
+</style>
