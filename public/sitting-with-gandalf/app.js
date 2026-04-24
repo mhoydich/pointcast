@@ -4,6 +4,7 @@
   const STORAGE_KEY = "sitting-with-gandalf-log";
   const SETTINGS_KEY = "sitting-with-gandalf-settings";
   const DEFAULT_MINUTES = 15;
+  const versions = new Set(["v1", "v2"]);
 
   const modeLines = {
     fire: [
@@ -136,6 +137,7 @@
     remaining: DEFAULT_MINUTES * 60,
     running: false,
     mode: savedSettings.mode || "fire",
+    version: versions.has(savedSettings.version) ? savedSettings.version : "v2",
     companion: companions[savedSettings.companion] ? savedSettings.companion : "hearth",
     rings: 0,
     log: loadLog(),
@@ -159,6 +161,9 @@
     guideStep: document.getElementById("guideStep"),
     guideTitle: document.getElementById("guideTitle"),
     guideText: document.getElementById("guideText"),
+    versionButtons: Array.from(document.querySelectorAll(".version-button")),
+    roomStep: document.getElementById("roomStep"),
+    ambienceStep: document.getElementById("ambienceStep"),
     durationButtons: Array.from(document.querySelectorAll(".duration-button")),
     companionButtons: Array.from(document.querySelectorAll(".wizard-button")),
     modeButtons: Array.from(document.querySelectorAll(".mode-button")),
@@ -240,6 +245,7 @@
     localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
+        version: state.version,
         mode: state.mode,
         companion: state.companion,
         warmth: state.warmth,
@@ -259,11 +265,19 @@
   }
 
   function updateGuideIdle(step) {
+    if (state.version === "v1") {
+      return;
+    }
+
     const companion = activeCompanion();
     setGuide(step || "Next", companion.name, companion.idle);
   }
 
   function updateGuideForPace(label, countdown) {
+    if (state.version === "v1") {
+      return;
+    }
+
     const companion = activeCompanion();
     const lowerLabel = label.toLowerCase();
     const copy = {
@@ -277,7 +291,7 @@
 
   function chooseLine() {
     const companion = activeCompanion();
-    const pool = Math.random() > 0.38 ? companion.lines : modeLines[state.mode];
+    const pool = state.version === "v1" || Math.random() <= 0.38 ? modeLines[state.mode] : companion.lines;
     const next = pool[Math.floor(Math.random() * pool.length)];
     dom.wizardLine.textContent = next;
   }
@@ -302,7 +316,7 @@
     }
 
     dom.phaseName.textContent = active.name;
-    dom.phaseHint.textContent = activeCompanion().phases[active.name] || active.hint;
+    dom.phaseHint.textContent = state.version === "v1" ? active.hint : activeCompanion().phases[active.name] || active.hint;
   }
 
   function updateStats() {
@@ -332,11 +346,12 @@
       const right = document.createElement("span");
       const mode = entry.mode ? ` / ${entry.mode}` : "";
       const companion = entry.companion ? ` / ${entry.companion.replace(" Gandalf", "")}` : "";
+      const version = entry.version ? `${entry.version.toUpperCase()} / ` : "";
 
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${entry.minutes} min / ${entry.blend}${mode}${companion}`;
+      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${mode}${companion}`;
       right.textContent = entry.date;
       note.textContent = entry.note || "A quiet bowl, kept well.";
 
@@ -373,7 +388,9 @@
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.timerCaption.textContent = "pipe pause";
-    setGuide("Paused", activeCompanion().name, activeCompanion().paused);
+    if (state.version === "v2") {
+      setGuide("Paused", activeCompanion().name, activeCompanion().paused);
+    }
   }
 
   function resetSession() {
@@ -397,7 +414,9 @@
     state.remaining = 0;
     updateTimer();
     dom.wizardLine.textContent = "There. A little more room in the world.";
-    setGuide("Complete", activeCompanion().name, activeCompanion().complete);
+    if (state.version === "v2") {
+      setGuide("Complete", activeCompanion().name, activeCompanion().complete);
+    }
     addSmoke({ count: 12, power: 1.2, spread: 100, countTowardSession: true });
     spawnParticles(18);
   }
@@ -411,11 +430,38 @@
     resetSession();
   }
 
+  function setVersion(version) {
+    const next = versions.has(version) ? version : "v2";
+    state.version = next;
+    dom.body.dataset.version = next;
+    dom.versionButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.version === next);
+    });
+
+    dom.roomStep.textContent = next === "v1" ? "1" : "2";
+    dom.ambienceStep.textContent = next === "v1" ? "2" : "3";
+
+    if (next === "v1" && state.mode === "stars") {
+      setMode("fire");
+      return;
+    }
+
+    if (next === "v1") {
+      dom.phaseHint.textContent = phases.find((phase) => phase.name === state.phaseName)?.hint || phases[0].hint;
+      chooseLine();
+    } else {
+      updateGuideIdle("V2 ready");
+    }
+
+    saveSettings();
+  }
+
   function setMode(mode) {
-    state.mode = mode;
-    dom.body.dataset.mode = mode;
+    const nextMode = state.version === "v1" && mode === "stars" ? "fire" : mode;
+    state.mode = nextMode;
+    dom.body.dataset.mode = nextMode;
     dom.modeButtons.forEach((button) => {
-      button.classList.toggle("active", button.dataset.mode === mode);
+      button.classList.toggle("active", button.dataset.mode === nextMode);
     });
     saveSettings();
     chooseLine();
@@ -477,7 +523,8 @@
       blend: dom.blendSelect.value,
       rings: state.rings,
       mode: state.mode,
-      companion: activeCompanion().name,
+      version: state.version,
+      companion: state.version === "v2" ? activeCompanion().name : "",
       note: dom.noteInput.value.trim()
     });
 
@@ -907,7 +954,9 @@
     visuals.rings = [];
     visuals.particles = [];
     dom.wizardLine.textContent = "A good silence asks for nothing.";
-    setGuide("Quiet", activeCompanion().name, "Ambience is off. The room can stay still for a while.");
+    if (state.version === "v2") {
+      setGuide("Quiet", activeCompanion().name, "Ambience is off. The room can stay still for a while.");
+    }
   }
 
   function toggleLantern(force) {
@@ -918,6 +967,10 @@
 
   dom.durationButtons.forEach((button) => {
     button.addEventListener("click", () => setDuration(Number(button.dataset.minutes)));
+  });
+
+  dom.versionButtons.forEach((button) => {
+    button.addEventListener("click", () => setVersion(button.dataset.version));
   });
 
   dom.companionButtons.forEach((button) => {
@@ -954,6 +1007,7 @@
 
   resizeCanvas();
   renderLog();
+  setVersion(state.version);
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();

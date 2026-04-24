@@ -4,7 +4,17 @@ A self-contained fantasy smoking companion for a quiet pipe pause: timer, smoke 
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
-## V2
+## Versions
+
+The app defaults to V2, with a V1/V2 toggle in the masthead. The selected version is saved locally.
+
+### V1
+
+- Classic quiet-room mode.
+- Keeps the timer, Fire/Rain/Road rooms, ambience controls, focus view, notes, and local tally.
+- Hides companion portraits, V2 guide prompts, Stars mode, and the visible smoke ritual for a calmer first pass.
+
+### V2
 
 - Four selectable Gandalf companions: Hearth, Rain, Road, and Stars.
 - A live guide card that says what to do now: choose, start, inhale, hold, exhale, pause, or return.
@@ -16,6 +26,14 @@ Open `index.html` in a browser. The page has no build step and references only l
 - Lantern view for a quieter timer-only room.
 - Session phases that shift from Settle to Drift to Return.
 - Simplified control hierarchy: choose a Gandalf, choose a room, set ambience, then follow the smoke ritual.
+
+## V3 Plan
+
+- Guided sits: 5, 15, and 25 minute smoke ceremonies with gentle phase-specific narration.
+- Audio mixer: separate Fire, Weather, Road, Bells, and Drone levels instead of one master ambience slider.
+- Companion memory: remember preferred Gandalf, room, duration, and last note without making the UI busier.
+- Visual focus table: a closer pipe, ember, cup, and smoke view for focus mode.
+- Route polish: keep `/sitting-with-gandalf/` as the main room and consider a short `/gandalf/` alias after deploy behavior is confirmed.
 
 ## Assets
 
