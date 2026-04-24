@@ -4,7 +4,16 @@
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import WalletChip from '../components/WalletChip.astro';
+import contracts from '../data/contracts.json';
 import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_STATS, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
+
+const derbyReceiptContract = (contracts as any).agent_derby_receipts ?? {};
+const derbyChain = {
+  network: 'mainnet',
+  address: String(derbyReceiptContract.mainnet ?? ''),
+  entrypoint: String(derbyReceiptContract.entrypoint ?? 'record_race'),
+  explorerBase: 'https://tzkt.io',
+};
 
 const derbyData = {
   version: DERBY_VERSION,
@@ -13,6 +22,7 @@ const derbyData = {
   roster: DERBY_ROSTER,
   posters: DERBY_POSTERS,
   rulebook: DERBY_RULEBOOK,
+  chain: derbyChain,
 };
 
 const jsonLd = {
@@ -690,6 +700,7 @@ const jsonLd = {
       derbyChainConfig,
       prepareDerbyChainPacket,
       recordDerbyReceiptOnChain,
+      signDerbyReceipt,
     } from '../lib/agent-derby-chain';
 
     const root = document.querySelector('[data-agent-derby]');
@@ -700,9 +711,12 @@ const jsonLd = {
     const opLink = root?.querySelector('[data-chain-op]') as HTMLAnchorElement | null;
     const recordButton = root?.querySelector('[data-chain-record]') as HTMLButtonElement | null;
     const copyButton = root?.querySelector('[data-chain-copy]') as HTMLButtonElement | null;
+    const dataEl = document.getElementById('derby-data');
+    const chainConfig = dataEl ? (JSON.parse(dataEl.textContent || '{}').chain ?? {}) : {};
 
     let currentReceipt: any = null;
     let currentPacket: Awaited<ReturnType<typeof prepareDerbyChainPacket>> | null = null;
+    let currentSignature: Awaited<ReturnType<typeof signDerbyReceipt>> | null = null;
 
     function short(value: string, head = 8, tail = 6) {
       return value.length > head + tail + 1 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value;
@@ -720,7 +734,7 @@ const jsonLd = {
     }
 
     function renderIdle() {
-      const config = derbyChainConfig();
+      const config = derbyChainConfig(chainConfig);
       setText(statusEl, 'Run a race to build a Tezos receipt');
       setText(networkEl, config.network);
       setText(contractEl, config.isLive ? short(config.address) : 'pending KT1');
@@ -728,7 +742,7 @@ const jsonLd = {
       setOpLink('not recorded');
       if (recordButton) {
         recordButton.disabled = true;
-        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Deploy contract first';
+        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Sign with Tezos';
       }
       if (copyButton) copyButton.disabled = true;
     }
@@ -736,21 +750,22 @@ const jsonLd = {
     async function renderReceipt(receipt: any) {
       currentReceipt = receipt;
       currentPacket = null;
+      currentSignature = null;
       if (!receipt) {
         renderIdle();
         return;
       }
 
-      currentPacket = await prepareDerbyChainPacket(receipt);
+      currentPacket = await prepareDerbyChainPacket(receipt, chainConfig);
       const { config, receiptHash } = currentPacket;
-      setText(statusEl, config.isLive ? 'Ready for Beacon signature' : 'Chain packet ready');
+      setText(statusEl, config.isLive ? 'Ready for on-chain record' : 'Ready for Tezos signature');
       setText(networkEl, config.network);
       setText(contractEl, config.isLive ? short(config.address) : 'pending KT1');
       setText(hashEl, short(receiptHash, 10, 8));
-      setOpLink('not recorded');
+      setOpLink(config.isLive ? 'not recorded' : 'not signed');
       if (recordButton) {
-        recordButton.disabled = !config.isLive;
-        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Deploy contract first';
+        recordButton.disabled = false;
+        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Sign with Tezos';
       }
       if (copyButton) copyButton.disabled = false;
     }
@@ -774,6 +789,12 @@ const jsonLd = {
             entrypoint: currentPacket.config.entrypoint,
             receiptHash: currentPacket.receiptHash,
             payload: currentPacket.payload,
+            signature: currentSignature ? {
+              walletAddress: currentSignature.walletAddress,
+              signedAt: currentSignature.signedAt,
+              signature: currentSignature.signature,
+              signaturePayload: currentSignature.signaturePayload,
+            } : null,
           },
         }, null, 2));
         setText(statusEl, 'Chain packet copied');
@@ -782,21 +803,33 @@ const jsonLd = {
       if (name === 'record-chain') {
         if (!recordButton || !currentReceipt) return;
         recordButton.disabled = true;
-        recordButton.textContent = 'Open wallet...';
-        setText(statusEl, 'Awaiting Beacon signature');
+        const config = derbyChainConfig(chainConfig);
+        recordButton.textContent = config.isLive ? 'Open wallet...' : 'Open wallet...';
+        setText(statusEl, config.isLive ? 'Awaiting Beacon operation' : 'Awaiting Tezos signature');
         try {
-          const result = await recordDerbyReceiptOnChain(currentReceipt);
-          currentPacket = result;
-          setText(statusEl, 'Recorded on Tezos');
-          setText(hashEl, short(result.receiptHash, 10, 8));
-          setText(contractEl, short(result.config.address));
-          setOpLink(short(result.opHash, 10, 8), result.explorerUrl);
-          recordButton.textContent = 'Recorded';
+          if (config.isLive) {
+            const result = await recordDerbyReceiptOnChain(currentReceipt, chainConfig);
+            currentPacket = result;
+            setText(statusEl, 'Recorded on Tezos');
+            setText(hashEl, short(result.receiptHash, 10, 8));
+            setText(contractEl, short(result.config.address));
+            setOpLink(short(result.opHash, 10, 8), result.explorerUrl);
+            recordButton.textContent = 'Recorded';
+          } else {
+            const result = await signDerbyReceipt(currentReceipt, chainConfig);
+            currentPacket = result;
+            currentSignature = result;
+            setText(statusEl, 'Signed by Tezos wallet');
+            setText(hashEl, short(result.receiptHash, 10, 8));
+            setText(contractEl, 'pending KT1');
+            setOpLink(short(result.signature, 10, 8));
+            recordButton.textContent = 'Signed';
+          }
         } catch (error: any) {
           const message = String(error?.message || error);
-          setText(statusEl, /reject|cancel|abort/i.test(message) ? 'Wallet cancelled' : 'Record failed');
-          recordButton.textContent = 'Record on Tezos';
-          recordButton.disabled = !derbyChainConfig().isLive;
+          setText(statusEl, /reject|cancel|abort/i.test(message) ? 'Wallet cancelled' : config.isLive ? 'Record failed' : 'Sign failed');
+          recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Sign with Tezos';
+          recordButton.disabled = false;
           console.warn('Agent Derby Tezos record failed:', error);
         }
       }
@@ -861,6 +894,14 @@ const jsonLd = {
     font-weight: 500;
   }
 
+  .mast__dek {
+    max-width: 560px;
+    margin: 10px 0 0;
+    color: #38373a;
+    font-size: 17px;
+    line-height: 1.35;
+  }
+
   .mast__rail {
     display: grid;
     gap: 10px;
@@ -897,6 +938,104 @@ const jsonLd = {
     font-family: var(--pc-font-mono);
     font-size: 11px;
     text-transform: uppercase;
+  }
+
+  .play-deck {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.7fr) minmax(260px, 0.9fr);
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid #12110e;
+  }
+
+  .play-step {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #12110e;
+    background: #fffdf4;
+  }
+
+  .play-step > span {
+    color: #9a5a18;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .play-step--run {
+    background:
+      linear-gradient(135deg, rgba(247, 213, 107, 0.42), transparent 62%),
+      #fffdf4;
+  }
+
+  .play-step--chain {
+    background:
+      linear-gradient(135deg, rgba(47, 116, 208, 0.14), transparent 58%),
+      #fffdf4;
+  }
+
+  .play-step--chain strong {
+    min-height: 26px;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    line-height: 1.25;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .quick-picks {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .quick-picks button {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    min-height: 58px;
+    padding: 8px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    box-shadow: inset 4px 0 0 var(--coat);
+    color: #12110e;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .quick-picks button[aria-pressed="true"] {
+    border-color: #12110e;
+    background: color-mix(in srgb, var(--accent) 28%, #fff 72%);
+    box-shadow: inset 4px 0 0 var(--coat), 0 0 0 2px #12110e;
+  }
+
+  .quick-picks strong,
+  .quick-picks small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .quick-picks strong {
+    font-size: 12px;
+    line-height: 1.1;
+  }
+
+  .quick-picks small {
+    color: #5f5e5a;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .play-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
   }
 
   .control-deck {
@@ -1001,6 +1140,22 @@ const jsonLd = {
 
   .btn--primary {
     background: #f7d56b;
+  }
+
+  .btn--big {
+    min-height: 54px;
+    padding-inline: 14px;
+    font-size: 12px;
+  }
+
+  .btn--chain {
+    background: #d9f4ff;
+  }
+
+  .btn:disabled,
+  .mini-btn:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
   }
 
   .poster-wall {
@@ -1354,11 +1509,12 @@ const jsonLd = {
 
   .race-bottom {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1.1fr 0.9fr 0.9fr 0.9fr;
     gap: 0;
   }
 
   .result-card,
+  .chain-card,
   .log-card,
   .agent-card {
     min-width: 0;
@@ -1366,6 +1522,7 @@ const jsonLd = {
     border-right: 1px solid #c7c0ad;
   }
 
+  .chain-card,
   .log-card,
   .agent-card {
     padding-left: 16px;
@@ -1440,6 +1597,45 @@ const jsonLd = {
     font: 11px/1.5 var(--pc-font-mono);
   }
 
+  .chain-readout {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .chain-readout div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+  }
+
+  .chain-readout dt,
+  .chain-readout dd {
+    margin: 0;
+    min-width: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.35;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .chain-readout dt {
+    color: #5f5e5a;
+  }
+
+  .chain-readout dd {
+    color: #12110e;
+  }
+
+  .chain-readout a[aria-disabled="true"] {
+    color: #5f5e5a;
+    pointer-events: none;
+  }
+
   .race-log {
     display: grid;
     gap: 7px;
@@ -1503,6 +1699,7 @@ const jsonLd = {
     }
 
     .control-deck,
+    .play-deck,
     .race-grid,
     .race-bottom {
       grid-template-columns: 1fr;
@@ -1511,6 +1708,7 @@ const jsonLd = {
     .track-card,
     .stable-card,
     .result-card,
+    .chain-card,
     .log-card,
     .agent-card {
       padding-right: 0;
@@ -1536,6 +1734,7 @@ const jsonLd = {
     .mast,
     .mast__rail,
     .poster-wall__head,
+    .quick-picks,
     .poster-grid {
       grid-template-columns: 1fr;
     }

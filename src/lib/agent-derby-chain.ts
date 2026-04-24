@@ -1,5 +1,3 @@
-import contracts from '../data/contracts.json';
-
 type DerbyReceipt = {
   raceId: string;
   seed: string;
@@ -12,15 +10,17 @@ type DerbyReceipt = {
 };
 
 type DerbyChainNetwork = 'mainnet' | 'shadownet';
+type DerbyChainConfigInput = {
+  network?: DerbyChainNetwork;
+  address?: string;
+  entrypoint?: string;
+  explorerBase?: string;
+};
 
 const TZKT_BY_NETWORK: Record<DerbyChainNetwork, string> = {
   mainnet: 'https://tzkt.io',
   shadownet: 'https://shadownet.tzkt.io',
 };
-
-function derbyContracts() {
-  return (contracts as any).agent_derby_receipts ?? {};
-}
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -57,27 +57,29 @@ export async function hashDerbyReceipt(receipt: DerbyReceipt): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
-export function derbyChainConfig(network: DerbyChainNetwork = 'mainnet') {
-  const address = String(derbyContracts()[network] ?? '').trim();
+export function derbyChainConfig(input: DerbyChainConfigInput = {}) {
+  const network = input.network ?? 'mainnet';
+  const address = String(input.address ?? '').trim();
   return {
     network,
     address,
     isLive: /^KT1[1-9A-HJ-NP-Za-km-z]{33}$/.test(address),
-    entrypoint: String(derbyContracts().entrypoint ?? 'record_race'),
-    explorerBase: TZKT_BY_NETWORK[network],
+    entrypoint: String(input.entrypoint ?? 'record_race'),
+    explorerBase: input.explorerBase ?? TZKT_BY_NETWORK[network],
   };
 }
 
-export async function prepareDerbyChainPacket(receipt: DerbyReceipt, network: DerbyChainNetwork = 'mainnet') {
-  const config = derbyChainConfig(network);
+export async function prepareDerbyChainPacket(receipt: DerbyReceipt, input: DerbyChainConfigInput = {}) {
+  const config = derbyChainConfig(input);
   const receiptHash = await hashDerbyReceipt(receipt);
+  const canonicalReceipt = canonicalDerbyReceipt(receipt);
   return {
     config,
     receiptHash,
-    canonicalReceipt: canonicalDerbyReceipt(receipt),
+    canonicalReceipt,
     payload: {
       race_id: receipt.raceId,
-      receipt_hash: receiptHash,
+      receipt_hash: `0x${receiptHash}`,
       seed: receipt.seed,
       track: receipt.track,
       winner: receipt.winner,
@@ -86,8 +88,34 @@ export async function prepareDerbyChainPacket(receipt: DerbyReceipt, network: De
   };
 }
 
-export async function recordDerbyReceiptOnChain(receipt: DerbyReceipt, network: DerbyChainNetwork = 'mainnet') {
-  const packet = await prepareDerbyChainPacket(receipt, network);
+export function derbySignatureMessage(packet: Awaited<ReturnType<typeof prepareDerbyChainPacket>>): string {
+  return [
+    'PointCast Agent Derby receipt',
+    `network: ${packet.config.network}`,
+    `contract: ${packet.config.address || 'pending'}`,
+    `entrypoint: ${packet.config.entrypoint}`,
+    `receipt_hash: ${packet.receiptHash}`,
+    `receipt: ${packet.canonicalReceipt}`,
+  ].join('\n');
+}
+
+export async function signDerbyReceipt(receipt: DerbyReceipt, input: DerbyChainConfigInput = {}) {
+  const packet = await prepareDerbyChainPacket(receipt, input);
+  const { signTezosPayload } = await import('./tezos');
+  const message = derbySignatureMessage(packet);
+  const signed = await signTezosPayload(message);
+  return {
+    ...packet,
+    signatureMessage: message,
+    signaturePayload: signed.payload,
+    signature: signed.signature,
+    walletAddress: signed.address,
+    signedAt: new Date().toISOString(),
+  };
+}
+
+export async function recordDerbyReceiptOnChain(receipt: DerbyReceipt, input: DerbyChainConfigInput = {}) {
+  const packet = await prepareDerbyChainPacket(receipt, input);
   if (!packet.config.isLive) {
     throw new Error('Agent Derby receipt contract is not configured yet.');
   }
@@ -99,10 +127,12 @@ export async function recordDerbyReceiptOnChain(receipt: DerbyReceipt, network: 
   const walletAddress = await getActiveAddress();
   const tezos = await tezosClient();
   const contract = await tezos.wallet.at(packet.config.address);
+  const entrypoint = (contract.methodsObject as any)[packet.config.entrypoint];
+  if (typeof entrypoint !== 'function') {
+    throw new Error(`Agent Derby contract does not expose ${packet.config.entrypoint}.`);
+  }
 
-  const op = await contract.methodsObject
-    .record_race(packet.payload)
-    .send();
+  const op = await entrypoint(packet.payload).send();
 
   return {
     ...packet,
