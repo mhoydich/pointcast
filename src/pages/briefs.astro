@@ -21,6 +21,14 @@ const codexBriefs = briefs.filter((b) => b.assignee === 'codex' || b.assignee ==
 const manusBriefs = briefs.filter((b) => b.assignee === 'manus' || b.assignee === 'mixed');
 const ccBriefs    = briefs.filter((b) => b.assignee === 'cc');
 
+// Today's shelf — briefs dated today (PT-adjusted). Makes the fresh
+// handoffs visible without requiring agents to scan the whole list.
+// Using a PT-day derivation so the shelf matches the site's sense of
+// "today" (Front Door race day, etc.).
+const ptNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+const ptToday = `${ptNow.getFullYear()}-${String(ptNow.getMonth() + 1).padStart(2, '0')}-${String(ptNow.getDate()).padStart(2, '0')}`;
+const todayBriefs = briefs.filter((b) => b.date === ptToday && !b.complete);
+
 const title = 'Briefs — collaboration queue for Codex + Manus';
 const description = 'Every brief cc has handed off to Codex or Manus, plus cc-internal planning notes. Read, pick a task, open a PR or post a screenshot.';
 
@@ -63,6 +71,33 @@ function ghRawUrl(fileSlug: string) {
         <li><span class="stats__num mono">{stats.byAssignee.manus + stats.byAssignee.mixed}</span><span class="stats__lbl mono">FOR MANUS</span></li>
       </ul>
     </header>
+
+    {todayBriefs.length > 0 && (
+      <section class="section today-shelf" aria-label="Today's open briefs">
+        <div class="today-shelf__head">
+          <p class="kicker mono today-shelf__kicker">Today's shelf · {ptToday} · {todayBriefs.length} open</p>
+          <p class="today-shelf__dek">Fresh briefs from today. Pick one up — acceptance criteria at the top of each file.</p>
+        </div>
+        <ul class="brief-list">
+          {todayBriefs.map((b) => (
+            <li class={`brief-card brief-card--${b.assignee === 'mixed' ? 'codex' : b.assignee} today-shelf__card`}>
+              <a href={ghRawUrl(b.fileSlug)} target="_blank" rel="noopener" class="brief-card__link">
+                <div class="brief-card__head">
+                  <span class="brief-card__date mono">{b.date || '—'}</span>
+                  <span class={`brief-card__status mono today-shelf__chip today-shelf__chip--${b.assignee === 'mixed' ? 'codex' : b.assignee}`}>
+                    {b.assignee === 'manus' ? 'FOR MANUS' : b.assignee === 'codex' ? 'FOR CODEX' : b.assignee === 'mixed' ? 'FOR CODEX+MANUS' : 'FOR CC'}
+                  </span>
+                  {b.taskCount > 0 && <span class="brief-card__task-count mono">{b.taskCount} TASK{b.taskCount === 1 ? '' : 'S'}</span>}
+                </div>
+                <h2 class="brief-card__title">{b.title}</h2>
+                {b.lede && <p class="brief-card__lede">{b.lede}</p>}
+                <p class="brief-card__path mono">{b.path} ↗</p>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     {codexBriefs.length > 0 && (
       <section class="section" id="codex">
@@ -179,6 +214,47 @@ function ghRawUrl(fileSlug: string) {
 
     .section { margin-bottom: 24px; }
     .section__head { margin-bottom: 10px; }
+
+    .today-shelf {
+      padding: 14px 14px 16px;
+      margin-bottom: 26px;
+      border: 1px solid #d4b55a;
+      border-left: 4px solid #c4952e;
+      border-radius: 2px;
+      background: linear-gradient(180deg, #fdf7e6 0%, #fbf3dd 100%);
+      position: relative;
+    }
+    .today-shelf::before {
+      content: '';
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c4952e;
+      box-shadow: 0 0 0 0 rgba(196, 149, 46, 0.55);
+      animation: today-shelf-pulse 2.6s ease-out infinite;
+    }
+    @keyframes today-shelf-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(196, 149, 46, 0.55); }
+      70%  { box-shadow: 0 0 0 8px rgba(196, 149, 46, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(196, 149, 46, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .today-shelf::before { animation: none; }
+    }
+    .today-shelf__head { margin-bottom: 10px; }
+    .today-shelf__kicker { color: #a07722; font-size: 10.5px; }
+    .today-shelf__dek { margin: 0; color: #5F5E5A; font-size: 13.5px; line-height: 1.5; }
+    .today-shelf__chip { margin-left: auto; }
+    .today-shelf__chip--codex { background: #185FA5; color: #fff; }
+    .today-shelf__chip--manus { background: #C95019; color: #fff; }
+    .today-shelf__chip--cc    { background: #5F3DC4; color: #fff; }
+    .today-shelf__card .brief-card__link {
+      background: #fff;
+    }
+
     .section__kicker { font-size: 10px; }
     .section__kicker--codex { color: #185FA5; }
     .section__kicker--manus { color: #C95019; }
