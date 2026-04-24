@@ -1,32 +1,34 @@
 ---
 /**
- * CursorRoom — Noun cursor + chat bubbles v0.
+ * CursorRoom — Noun cursor + chat bubbles.
  *
- * Mike 2026-04-24 ~02:00 PT: "have the ability to turn on a see
- * cursors and then from your cursor, which should be your noun you
- * can chat, have a chat bar that you can read and then your noun has
- * a little chat bubble near the cursor that maybe goes away, chat
- * from the bottom bar, a bunch of the function."
+ * Phase 1 (Sprint 15, shipped): single-player. Your Noun follows your
+ * mouse, you type from the footer, bubbles appear above your cursor and
+ * fade, the chat log shows recent messages as a subtle ticker.
  *
- * v0 (this ship): single-player. Your Noun follows your mouse, you
- * type from the footer, bubbles appear above your cursor and fade,
- * the chat log shows recent messages as a subtle ticker above the bar.
+ * Phase 2 (Sprint 16, this ship): real multiplayer. When Room is toggled
+ * on we open a WebSocket to /api/room?url=<pathname>. Same class-level
+ * PresenceRoom DO as /api/presence, but sharded by URL so each page has
+ * its own room. Cursor updates quantize to viewport-normalized ×10000
+ * and throttle client-side to ≤15 Hz. Chat messages are ring-buffered
+ * by the DO (last 20). Peers render as 28px Nouns at their broadcast
+ * position with a 120ms lerp; stale peers (no cursor in 20s) fade out.
  *
- * v1 (Phase 2): extend the existing presence Durable Object at
- * workers/presence to broadcast `cursor` and `chat` messages. Add a
- * per-URL room isolation + throttled cursor updates (~15/s,
- * quantized) + chat ring buffer. Render other visitors' Nouns
- * at their broadcast positions. Toggle stays the same on the bar.
+ * Privacy: cursor/chat broadcast only when ROOM is toggled on. The DO
+ * drops any session that hasn't moved or chatted in 90s via the shared
+ * STALE_AFTER_MS idle timeout.
  *
- * Privacy: cursor/chat broadcast only when ROOM is toggled on.
- * localStorage: pc:room:on, pc:room:chat-log (last 20 messages).
+ * localStorage:
+ *   pc:room:on       — 1 when toggle on
+ *   pc:room:sid      — opaque session id (uuid-ish, persists across reloads)
+ *   pc:room:chat-log — last 20 chat entries (client-side cache of server log)
  *
  * Listens for events from FooterBar:
  *   pc:room:toggle {detail: {on: boolean}}
  *   pc:room:chat   {detail: {msg: string}}
  *
  * Dispatches back:
- *   pc:room:log-update {detail: {log: Array<{msg, at}>}}
+ *   pc:room:log-update {detail: {log: Array<{who, msg, at}>}}
  */
 
 // Day-seeded Noun ID as fallback when no wallet-bound Noun is known.
@@ -59,11 +61,14 @@ const seedNounId = dailyNounId();
     <div class="cr-cursor__tag mono" id="cr-cursor-tag">visitor</div>
   </div>
 
+  <!-- Peer cursors layer — populated dynamically when multiplayer active. -->
+  <div class="cr-peers" id="cr-peers" aria-hidden="true"></div>
+
   <!-- Chat log ticker (above the footer bar) -->
   <div class="cr-log" id="cr-log" hidden>
     <p class="cr-log__head mono">
       <span class="cr-log__dot" aria-hidden="true"></span>
-      <span>ROOM · RECENT</span>
+      <span id="cr-log-head-label">ROOM · RECENT</span>
     </p>
     <ol class="cr-log__list" id="cr-log-list"></ol>
   </div>
@@ -78,15 +83,21 @@ const seedNounId = dailyNounId();
 
     var CHAT_STORAGE = 'pc:room:chat-log';
     var ON_STORAGE = 'pc:room:on';
-    var MAX_LOG = 12;
+    var SID_STORAGE = 'pc:room:sid';
+    var MAX_LOG = 20;
     var BUBBLE_TTL_MS = 8_000;
+    var CURSOR_SEND_MIN_MS = 66; // ≤15 Hz outbound
+    var PEER_STALE_MS = 20_000;
+    var PEER_LERP = 0.22; // smoother than the self-cursor's 0.35
 
     var $cursor  = document.getElementById('cr-cursor');
     var $noun    = document.getElementById('cr-cursor-noun');
     var $bubble  = document.getElementById('cr-cursor-bubble');
     var $tag     = document.getElementById('cr-cursor-tag');
+    var $peers   = document.getElementById('cr-peers');
     var $log     = document.getElementById('cr-log');
     var $logList = document.getElementById('cr-log-list');
+    var $logHead = document.getElementById('cr-log-head-label');
 
     var state = {
       on: false,
@@ -95,8 +106,18 @@ const seedNounId = dailyNounId();
       renderX: 0,
       renderY: 0,
       hasMouse: false,
+      sid: null,
+      ws: null,
+      wsState: 'idle',           // idle | connecting | open | closed
+      wsBackoffMs: 800,
+      lastCursorSentAt: 0,
+      pingTimer: null,
+      peerCount: 0,
+      seenChatKeys: {}           // sid|at|msg → 1
     };
     var bubbleTimeout = null;
+    /** @type {Record<string, {el:HTMLElement, img:HTMLImageElement, bub:HTMLElement, tag:HTMLElement, tx:number, ty:number, rx:number, ry:number, nounId:number, tagText:string, lastAt:number, msg:string, msgAt:number}>} */
+    var peers = {};
 
     // ─── persistence ────────────────────────────────────────────
     function loadLog() {
@@ -116,6 +137,18 @@ const seedNounId = dailyNounId();
     function saveOn(on) {
       try { localStorage.setItem(ON_STORAGE, on ? '1' : '0'); } catch (e) {}
     }
+    function getSid() {
+      try {
+        var s = localStorage.getItem(SID_STORAGE);
+        if (s) return s;
+        s = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(SID_STORAGE, s);
+        return s;
+      } catch (e) {
+        return 's-' + Date.now().toString(36);
+      }
+    }
 
     // ─── wallet / noun resolution ───────────────────────────────
     function resolveMeTag() {
@@ -126,11 +159,13 @@ const seedNounId = dailyNounId();
       return 'visitor';
     }
 
+    function mySeedNoun() {
+      return parseInt(ROOT.getAttribute('data-seed-noun') || '0', 10) || 0;
+    }
+
     function refreshMe() {
       if ($tag) $tag.textContent = resolveMeTag();
-      // Noun may change with wallet binding later; for now use day-seeded.
-      var seed = parseInt(ROOT.getAttribute('data-seed-noun') || '0', 10);
-      if ($noun) $noun.src = 'https://noun.pics/' + seed + '.svg';
+      if ($noun) $noun.src = 'https://noun.pics/' + mySeedNoun() + '.svg';
     }
 
     // ─── log render ─────────────────────────────────────────────
@@ -139,10 +174,12 @@ const seedNounId = dailyNounId();
       var log = loadLog();
       $logList.innerHTML = '';
       if (log.length === 0) {
-        $log.hidden = true;
+        $log.hidden = !state.on; // show empty-state header when room is on
+        if ($logHead) $logHead.textContent = state.on ? (state.peerCount ? ('ROOM · ' + state.peerCount + ' HERE') : 'ROOM · ALONE') : 'ROOM · RECENT';
         return;
       }
       $log.hidden = false;
+      if ($logHead) $logHead.textContent = state.on ? (state.peerCount ? ('ROOM · ' + state.peerCount + ' HERE') : 'ROOM · RECENT') : 'ROOM · RECENT';
       // Show the last 5 lines in the ticker.
       log.slice(-5).forEach(function (entry) {
         var li = document.createElement('li');
@@ -160,24 +197,128 @@ const seedNounId = dailyNounId();
       window.dispatchEvent(new CustomEvent('pc:room:log-update', { detail: { log: log } }));
     }
 
+    function pushLocalLogEntry(entry) {
+      var log = loadLog();
+      var key = (entry.sid || '') + '|' + (entry.at || 0) + '|' + entry.msg;
+      if (state.seenChatKeys[key]) return false;
+      state.seenChatKeys[key] = 1;
+      log.push(entry);
+      saveLog(log);
+      return true;
+    }
+
     // ─── cursor motion ──────────────────────────────────────────
     function onMouseMove(e) {
       state.targetX = e.clientX;
       state.targetY = e.clientY;
       state.hasMouse = true;
+      maybeSendCursor();
+    }
+
+    function maybeSendCursor() {
+      if (state.wsState !== 'open') return;
+      var now = Date.now();
+      if (now - state.lastCursorSentAt < CURSOR_SEND_MIN_MS) return;
+      var vw = window.innerWidth || 1;
+      var vh = window.innerHeight || 1;
+      var nx = Math.max(0, Math.min(10000, Math.round(state.targetX / vw * 10000)));
+      var ny = Math.max(0, Math.min(10000, Math.round(state.targetY / vh * 10000)));
+      try {
+        state.ws.send(JSON.stringify({ type: 'cursor', x: nx, y: ny }));
+        state.lastCursorSentAt = now;
+      } catch (e) {}
     }
 
     function animate() {
-      // Smooth trailing cursor — lerp at ~0.3 toward target.
-      if (state.hasMouse) {
+      // Smooth trailing cursor — lerp at ~0.35 toward target.
+      if (state.hasMouse && state.on) {
         state.renderX += (state.targetX - state.renderX) * 0.35;
         state.renderY += (state.targetY - state.renderY) * 0.35;
         $cursor.style.transform = 'translate3d(' + (state.renderX - 16) + 'px, ' + (state.renderY - 16) + 'px, 0)';
       }
+      // Interpolate peer positions toward broadcast target.
+      var vw = window.innerWidth || 1;
+      var vh = window.innerHeight || 1;
+      var now = Date.now();
+      for (var k in peers) {
+        if (!peers.hasOwnProperty(k)) continue;
+        var p = peers[k];
+        // Expire stale peers (no cursor update in N ms).
+        if (now - p.lastAt > PEER_STALE_MS) {
+          if (p.el && p.el.parentNode) p.el.parentNode.removeChild(p.el);
+          delete peers[k];
+          continue;
+        }
+        var pxTarget = (p.tx / 10000) * vw;
+        var pyTarget = (p.ty / 10000) * vh;
+        p.rx += (pxTarget - p.rx) * PEER_LERP;
+        p.ry += (pyTarget - p.ry) * PEER_LERP;
+        p.el.style.transform = 'translate3d(' + (p.rx - 14) + 'px, ' + (p.ry - 14) + 'px, 0)';
+        // Fade bubble after 6s then hide after 8s.
+        if (p.msgAt && now - p.msgAt > 8_000) {
+          p.bub.hidden = true;
+          p.msg = '';
+          p.msgAt = 0;
+        } else if (p.msgAt && now - p.msgAt > 6_000) {
+          p.bub.classList.add('cr-peer__bubble--leaving');
+        }
+      }
       requestAnimationFrame(animate);
     }
 
-    // ─── chat bubble ────────────────────────────────────────────
+    // ─── peer render ────────────────────────────────────────────
+    function ensurePeer(sid, nounId, tagText) {
+      var p = peers[sid];
+      if (p) {
+        if (nounId !== p.nounId) {
+          p.nounId = nounId;
+          p.img.src = 'https://noun.pics/' + nounId + '.svg';
+        }
+        if (tagText !== p.tagText) {
+          p.tagText = tagText;
+          p.tag.textContent = tagText;
+        }
+        return p;
+      }
+      var el = document.createElement('div');
+      el.className = 'cr-peer';
+      var img = document.createElement('img');
+      img.className = 'cr-peer__noun';
+      img.alt = '';
+      img.width = 28;
+      img.height = 28;
+      img.src = 'https://noun.pics/' + nounId + '.svg';
+      var tag = document.createElement('div');
+      tag.className = 'cr-peer__tag mono';
+      tag.textContent = tagText;
+      var bub = document.createElement('div');
+      bub.className = 'cr-peer__bubble';
+      bub.hidden = true;
+      el.appendChild(img);
+      el.appendChild(tag);
+      el.appendChild(bub);
+      if ($peers) $peers.appendChild(el);
+      p = peers[sid] = {
+        el: el, img: img, bub: bub, tag: tag,
+        tx: 0, ty: 0, rx: 0, ry: 0,
+        nounId: nounId, tagText: tagText,
+        lastAt: Date.now(),
+        msg: '', msgAt: 0
+      };
+      return p;
+    }
+
+    function showPeerBubble(sid, msg) {
+      var p = peers[sid];
+      if (!p) return;
+      p.bub.textContent = msg;
+      p.bub.hidden = false;
+      p.bub.classList.remove('cr-peer__bubble--leaving');
+      p.msg = msg;
+      p.msgAt = Date.now();
+    }
+
+    // ─── chat bubble (self) ─────────────────────────────────────
     function showBubble(msg) {
       if (!$bubble) return;
       $bubble.textContent = msg;
@@ -193,6 +334,140 @@ const seedNounId = dailyNounId();
       }, BUBBLE_TTL_MS);
     }
 
+    // ─── ws lifecycle ───────────────────────────────────────────
+    function openSocket() {
+      if (state.ws || state.wsState === 'connecting' || state.wsState === 'open') return;
+      var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      var sid = state.sid || getSid();
+      state.sid = sid;
+      var url = proto + '://' + location.host + '/api/room?url=' + encodeURIComponent(location.pathname) +
+                '&sid=' + encodeURIComponent(sid) + '&kind=human';
+      state.wsState = 'connecting';
+      var ws;
+      try { ws = new WebSocket(url); }
+      catch (e) { state.wsState = 'closed'; scheduleReconnect(); return; }
+      state.ws = ws;
+
+      ws.addEventListener('open', function () {
+        state.wsState = 'open';
+        state.wsBackoffMs = 800;
+        // Handshake: identify self with nounId + tag. Server will merge
+        // with any existing visitor row on this sessionId.
+        try {
+          ws.send(JSON.stringify({
+            type: 'identify',
+            nounId: mySeedNoun(),
+            tag: resolveMeTag()
+          }));
+        } catch (e) {}
+        // Keepalive ping every 30s — well below the 90s idle cutoff.
+        if (state.pingTimer) clearInterval(state.pingTimer);
+        state.pingTimer = setInterval(function () {
+          if (state.wsState !== 'open') return;
+          try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
+        }, 30_000);
+      });
+
+      ws.addEventListener('message', function (ev) {
+        if (typeof ev.data !== 'string') return;
+        var payload;
+        try { payload = JSON.parse(ev.data); } catch (e) { return; }
+        applyServerPayload(payload);
+      });
+
+      ws.addEventListener('close', function () {
+        state.wsState = 'closed';
+        state.ws = null;
+        if (state.pingTimer) { clearInterval(state.pingTimer); state.pingTimer = null; }
+        if (state.on) scheduleReconnect();
+      });
+      ws.addEventListener('error', function () {
+        try { ws.close(); } catch (e) {}
+      });
+    }
+
+    function closeSocket() {
+      if (state.pingTimer) { clearInterval(state.pingTimer); state.pingTimer = null; }
+      if (state.ws) {
+        try { state.ws.close(1000, 'room off'); } catch (e) {}
+      }
+      state.ws = null;
+      state.wsState = 'closed';
+      // Sweep peer DOM.
+      for (var k in peers) {
+        if (!peers.hasOwnProperty(k)) continue;
+        var p = peers[k];
+        if (p.el && p.el.parentNode) p.el.parentNode.removeChild(p.el);
+      }
+      peers = {};
+      state.peerCount = 0;
+    }
+
+    function scheduleReconnect() {
+      if (!state.on) return;
+      var delay = state.wsBackoffMs;
+      state.wsBackoffMs = Math.min(10_000, Math.round(state.wsBackoffMs * 1.8));
+      setTimeout(function () { if (state.on) openSocket(); }, delay);
+    }
+
+    function applyServerPayload(payload) {
+      if (!payload || typeof payload !== 'object') return;
+      // Apply peer positions.
+      var seen = {};
+      if (Array.isArray(payload.peers)) {
+        for (var i = 0; i < payload.peers.length; i++) {
+          var pv = payload.peers[i];
+          if (!pv || typeof pv.sessionId !== 'string') continue;
+          var p = ensurePeer(pv.sessionId, pv.nounId | 0, String(pv.tag || 'visitor'));
+          p.tx = pv.x | 0;
+          p.ty = pv.y | 0;
+          p.lastAt = pv.at || Date.now();
+          // First time seeing a peer — snap to its current position so it
+          // doesn't lerp in from (0,0) which looks busted.
+          if (p.rx === 0 && p.ry === 0) {
+            var vw = window.innerWidth || 1;
+            var vh = window.innerHeight || 1;
+            p.rx = (p.tx / 10000) * vw;
+            p.ry = (p.ty / 10000) * vh;
+          }
+          seen[pv.sessionId] = 1;
+        }
+      }
+      // Prune peers that vanished from this broadcast and have no recent cursor.
+      var now = Date.now();
+      for (var k in peers) {
+        if (!peers.hasOwnProperty(k)) continue;
+        if (seen[k]) continue;
+        if (now - peers[k].lastAt > PEER_STALE_MS) {
+          var q = peers[k];
+          if (q.el && q.el.parentNode) q.el.parentNode.removeChild(q.el);
+          delete peers[k];
+        }
+      }
+      state.peerCount = 0;
+      for (var kk in peers) if (peers.hasOwnProperty(kk)) state.peerCount++;
+
+      // Apply chat log.
+      if (Array.isArray(payload.chat)) {
+        var changed = false;
+        for (var j = 0; j < payload.chat.length; j++) {
+          var c = payload.chat[j];
+          if (!c || typeof c.msg !== 'string') continue;
+          if (pushLocalLogEntry(c)) {
+            changed = true;
+            // Attach the last message to a peer bubble so you can see
+            // who just said it hovering above their cursor.
+            var peerSid = c.sid;
+            if (peerSid && peers[peerSid]) showPeerBubble(peerSid, c.msg);
+          }
+        }
+        if (changed) renderLog();
+        else renderLog(); // still refresh header count
+      } else {
+        renderLog();
+      }
+    }
+
     // ─── toggle on/off ──────────────────────────────────────────
     function setRoomOn(on) {
       state.on = on;
@@ -201,11 +476,14 @@ const seedNounId = dailyNounId();
         $cursor.style.display = 'block';
         document.documentElement.classList.add('cr-cursor-active');
         refreshMe();
+        if (!state.sid) state.sid = getSid();
+        openSocket();
         renderLog();
       } else {
         $cursor.style.display = 'none';
         document.documentElement.classList.remove('cr-cursor-active');
         $log.hidden = true;
+        closeSocket();
       }
       saveOn(on);
     }
@@ -214,11 +492,24 @@ const seedNounId = dailyNounId();
     function submitChat(msg) {
       msg = String(msg || '').trim().slice(0, 120);
       if (!msg) return;
-      var log = loadLog();
-      log.push({ who: resolveMeTag(), msg: msg, at: Date.now() });
-      saveLog(log);
+      // Always show locally so the sender sees their bubble even if WS is down.
       showBubble(msg);
+      var entry = {
+        who: resolveMeTag(),
+        nounId: mySeedNoun(),
+        msg: msg,
+        at: Date.now(),
+        sid: (state.sid || '').slice(0, 8)
+      };
+      // Mark seen so the server echo doesn't dupe.
+      var key = entry.sid + '|' + entry.at + '|' + entry.msg;
+      state.seenChatKeys[key] = 1;
+      pushLocalLogEntry(entry);
       renderLog();
+      // Forward to server when connected. If offline, message stays local.
+      if (state.wsState === 'open' && state.ws) {
+        try { state.ws.send(JSON.stringify({ type: 'chat', msg: msg })); } catch (e) {}
+      }
     }
 
     // ─── event bus ──────────────────────────────────────────────
@@ -235,6 +526,17 @@ const seedNounId = dailyNounId();
     document.addEventListener('mousemove', function (e) {
       if (state.on) onMouseMove(e);
     }, { passive: true });
+
+    // Close socket on navigation — each page load re-opens with the new URL.
+    window.addEventListener('beforeunload', closeSocket);
+    document.addEventListener('astro:before-swap', closeSocket);
+    document.addEventListener('astro:page-load', function () {
+      if (loadOn()) {
+        // Re-open for the new URL.
+        state.on = true;
+        openSocket();
+      }
+    });
 
     // Boot: if previously on, turn on again.
     if (loadOn()) setRoomOn(true);
@@ -259,6 +561,7 @@ const seedNounId = dailyNounId();
     cursor: auto !important;
   }
 
+  /* Self cursor */
   .cr-cursor {
     position: fixed;
     top: 0;
@@ -336,6 +639,80 @@ const seedNounId = dailyNounId();
   @keyframes cr-bubble-out {
     0%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
     100% { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
+  }
+
+  /* Peer layer ─ position:fixed parent, peers absolutely positioned inside. */
+  .cr-peers {
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    pointer-events: none;
+  }
+  .cr-peer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
+    will-change: transform;
+  }
+  .cr-peer__noun {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #11140b;
+    image-rendering: pixelated;
+    box-shadow:
+      inset 0 0 0 2px #3a5230,
+      0 0 10px rgba(120, 220, 140, 0.35);
+  }
+  .cr-peer__tag {
+    position: absolute;
+    left: 32px;
+    top: 6px;
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    color: #dff6d4;
+    background: rgba(17, 20, 11, 0.78);
+    padding: 2px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+  .cr-peer__bubble {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 220px;
+    padding: 5px 9px;
+    background: #f7fdf2;
+    color: #1f2d08;
+    border: 1px solid #3a5230;
+    border-radius: 8px;
+    font-family: Georgia, serif;
+    font-size: 12.5px;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    animation: cr-bubble-in 0.25s ease-out;
+  }
+  .cr-peer__bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid #f7fdf2;
+  }
+  .cr-peer__bubble--leaving {
+    animation: cr-bubble-out 0.5s ease-out forwards;
   }
 
   /* Chat log (above footer bar) */
@@ -417,6 +794,7 @@ const seedNounId = dailyNounId();
   @media (prefers-reduced-motion: reduce) {
     .cr-cursor { transition: none; }
     .cr-cursor__bubble { animation: none; }
+    .cr-peer__bubble { animation: none; }
     .cr-log__dot { animation: none; }
   }
 </style>
