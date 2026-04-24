@@ -100,24 +100,29 @@ export function normalizeSlug(raw: string): string {
  * single source of truth that the endpoints consult to find a race's
  * schedule + mode + scoring direction before touching KV.
  *
- * Front Door is pre-seeded per RFC 0002 but stays `scheduled` — no
- * opensAt in the past — until Mike opens the launch race.
+ * Sprint 25 (Mike 2026-04-24 Fri ~11:00 PT: "ok yah, run today") —
+ * flipped Front Door from its 2099 placeholder window to live today.
+ * opensAt is midnight PT this morning; closesAt is 23:59 PT tonight;
+ * resolvesAt is midnight PT tomorrow. Race is OPEN as of first page
+ * load after this deploy.
+ *
+ * Tomorrow (and every day after), a daily cron needs to rotate the
+ * slug + window — deferred to Sprint 26+; doc in docs/plans/front-
+ * door-daily-rotation.md. For today, the race is literally this
+ * calendar date and the scaffold proves end-to-end.
  */
 export const RACE_REGISTRY: RaceSpec[] = [
   {
     slug: 'front-door',
-    title: 'Front Door',
+    title: 'Front Door · 2026-04-24',
     channel: 'FD',
     mode: 'fastest',
-    // Placeholder window — Mike overrides these when launching the
-    // first real Front Door race (daily opens at 00:00 PT, closes
-    // 23:59 PT, resolves midnight next day). Kept far-future so
-    // deriveStatus() returns 'scheduled' out of the box.
-    opensAt: '2099-01-01T00:00:00-08:00',
-    closesAt: '2099-01-01T23:59:00-08:00',
-    resolvesAt: '2099-01-02T00:00:00-08:00',
+    opensAt: '2026-04-24T00:00:00-07:00',
+    closesAt: '2026-04-24T23:59:00-07:00',
+    resolvesAt: '2026-04-25T00:00:00-07:00',
     description:
-      'Fastest page-load-to-first-block-click on PointCast home. Lowest score wins the day. Launch race, Gamgee 1.0.',
+      'Fastest page-load-to-first-block-click on PointCast home. Lowest score wins the day. Launch race, running today (2026-04-24).',
+    prize: 'Attribution — winner\u2019s Noun on the home strip for the next day.',
     maxEntries: 1,
   },
 ];

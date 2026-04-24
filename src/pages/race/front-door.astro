@@ -1,0 +1,412 @@
+---
+/**
+ * /race/front-door — today's Front Door race page.
+ *
+ * Sprint 25 (Mike 2026-04-24 ~11:00 PT: "run today"). Minimal — just
+ * the leaderboard, the clock, and the rules. Hydrates live from
+ * /api/race/front-door/leaderboard on load and every 15s while the tab
+ * is open.
+ *
+ * Merge note: PR #18 (`feat/race-system-rfc`) has a larger /race hub +
+ * /race/front-door scaffold that hasn't been merged yet. This file
+ * will conflict with that PR on merge. The right call when #18 lands
+ * is to keep #18's fuller shell + port this file's live-hydration
+ * script into it — the endpoints it reads are already on main.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { findRace, deriveStatus } from '../../lib/races';
+
+const race = findRace('front-door');
+const status = race ? deriveStatus(race) : 'scheduled';
+
+const title = race ? `${race.title} · PointCast Race` : 'Front Door · PointCast Race';
+const description = race?.description ?? 'Today\u2019s Front Door race on PointCast.';
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="race-page" data-slug="front-door">
+    <header class="race-head">
+      <p class="race-head__kicker mono">POINTCAST · RACE · FRONT DOOR</p>
+      {race ? (
+        <>
+          <h1 class="race-head__title">{race.title}</h1>
+          <p class="race-head__dek">{race.description}</p>
+          <dl class="race-head__meta">
+            <div class="race-head__meta-row">
+              <dt class="mono">STATUS</dt>
+              <dd class="race-head__status mono" data-status={status}>{status.toUpperCase()}</dd>
+            </div>
+            <div class="race-head__meta-row">
+              <dt class="mono">OPENS</dt>
+              <dd><time datetime={race.opensAt}>{new Date(race.opensAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</time></dd>
+            </div>
+            <div class="race-head__meta-row">
+              <dt class="mono">CLOSES</dt>
+              <dd><time datetime={race.closesAt} id="race-closes-at">{new Date(race.closesAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</time></dd>
+            </div>
+            <div class="race-head__meta-row">
+              <dt class="mono">MODE</dt>
+              <dd>{race.mode} — lowest score wins</dd>
+            </div>
+            {race.prize && (
+              <div class="race-head__meta-row">
+                <dt class="mono">PRIZE</dt>
+                <dd>{race.prize}</dd>
+              </div>
+            )}
+          </dl>
+        </>
+      ) : (
+        <p class="race-head__missing">No race registered.</p>
+      )}
+    </header>
+
+    <section class="race-how mono" aria-label="How to enter">
+      <p class="race-how__label">HOW TO ENTER</p>
+      <ol class="race-how__steps">
+        <li>Open <a href="/">the home</a>.</li>
+        <li>Click any block card. Your time is measured from page load to that click.</li>
+        <li>Your score + rank appear in the <strong>RACE chip</strong> in the masthead.</li>
+      </ol>
+      <p class="race-how__fine">
+        One entry per session (per browser). If the server KV isn\u2019t bound yet, submissions show
+        <code>stored: false</code> — that\u2019s Mike\u2019s last provisioning step. Scoring is lowest-ms-wins.
+      </p>
+    </section>
+
+    <section class="race-board" aria-labelledby="race-board-title" id="race-board">
+      <header class="race-board__head">
+        <h2 id="race-board-title" class="race-board__title">Leaderboard</h2>
+        <p class="race-board__status mono" id="race-board-status">LOADING…</p>
+      </header>
+      <ol class="race-board__rows" id="race-board-rows">
+        <li class="race-row race-row--empty">
+          <span class="race-row__rank mono">—</span>
+          <span class="race-row__entrant mono">(waiting for the board)</span>
+        </li>
+      </ol>
+    </section>
+
+    <footer class="race-foot mono">
+      <a href="/api/race/front-door/leaderboard">leaderboard json</a>
+      <span>·</span>
+      <a href="/scoreboard">scoreboard</a>
+      <span>·</span>
+      <a href="/wire">wire</a>
+      <span>·</span>
+      <a href="/">home</a>
+    </footer>
+  </main>
+</BaseLayout>
+
+<script is:inline>
+  // Live-hydrate the leaderboard every 15s while the tab is open.
+  // Endpoint is graceful-no-op when PC_RACE_KV is unbound; we surface
+  // that explicitly in the status line.
+  (function () {
+    'use strict';
+    var rowsEl   = document.getElementById('race-board-rows');
+    var statusEl = document.getElementById('race-board-status');
+    if (!rowsEl || !statusEl) return;
+
+    function fmtScore(ms) {
+      if (!isFinite(ms)) return '—';
+      var s = ms / 1000;
+      if (s < 1)  return Math.round(ms) + ' ms';
+      if (s < 10) return s.toFixed(2) + ' s';
+      return Math.round(s) + ' s';
+    }
+
+    function trimId(id) {
+      if (!id) return '—';
+      if (id.length <= 14) return id;
+      return id.slice(0, 6) + '…' + id.slice(-4);
+    }
+
+    function render(data) {
+      var entries = (data && Array.isArray(data.entries)) ? data.entries : [];
+      var you = (data && data.you) || null;
+      var count = (data && typeof data.count === 'number') ? data.count : entries.length;
+      var reason = (data && data.reason) || '';
+
+      if (reason === 'kv-unbound') {
+        statusEl.textContent = 'WAITING FOR KV · ' + count + ' IN';
+      } else if (entries.length === 0) {
+        statusEl.textContent = 'NO ENTRIES YET · FIRST CLICK WINS';
+      } else {
+        statusEl.textContent = count + ' ENTRANTS';
+      }
+
+      if (entries.length === 0) {
+        rowsEl.innerHTML = '<li class="race-row race-row--empty"><span class="race-row__rank mono">—</span><span class="race-row__entrant mono">No entries yet. Go click a block.</span></li>';
+        return;
+      }
+
+      var html = entries.map(function (e) {
+        var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) {
+          return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+        }); };
+        var isYou = you && you.entrantId === e.entrantId;
+        return '<li class="race-row' + (isYou ? ' race-row--you' : '') + '">' +
+          '<span class="race-row__rank mono">#' + e.rank + '</span>' +
+          '<span class="race-row__entrant mono" title="' + esc(e.entrantId) + '">' + esc(trimId(e.entrantId)) + (isYou ? ' · you' : '') + '</span>' +
+          '<span class="race-row__kind mono">' + esc(e.entrantKind) + '</span>' +
+          '<span class="race-row__score mono">' + esc(fmtScore(e.score)) + '</span>' +
+          '</li>';
+      }).join('');
+
+      // Append "you" row if the viewer is in the pool but not in the
+      // top-N (i.e. ranked past the displayed limit).
+      if (you && !entries.some(function (e) { return e.entrantId === you.entrantId; })) {
+        html += '<li class="race-row race-row--you race-row--elsewhere">' +
+          '<span class="race-row__rank mono">#' + you.rank + '</span>' +
+          '<span class="race-row__entrant mono">' + trimId(you.entrantId) + ' · you</span>' +
+          '<span class="race-row__kind mono">' + you.entrantKind + '</span>' +
+          '<span class="race-row__score mono">' + fmtScore(you.score) + '</span>' +
+          '</li>';
+      }
+
+      rowsEl.innerHTML = html;
+    }
+
+    function getEntrantId() {
+      try {
+        var active = localStorage.getItem('pc:wallet-active');
+        if (active) return active;
+        return localStorage.getItem('pc:room:sid') || '';
+      } catch (e) { return ''; }
+    }
+
+    async function refresh() {
+      try {
+        var q = '';
+        var id = getEntrantId();
+        if (id) q = '?entrantId=' + encodeURIComponent(id) + '&limit=10';
+        else    q = '?limit=10';
+        var res = await fetch('/api/race/front-door/leaderboard' + q, { cache: 'no-store' });
+        if (!res.ok) { statusEl.textContent = 'OFFLINE · retry in 15s'; return; }
+        var data = await res.json();
+        render(data);
+      } catch (e) {
+        statusEl.textContent = 'OFFLINE · retry in 15s';
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 15_000);
+  })();
+</script>
+
+<style>
+  .race-page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 36px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); }
+
+  .race-head__kicker {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    font-weight: 700;
+    color: #8a2432;
+  }
+  .race-head__title {
+    margin: 0 0 10px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: clamp(32px, 5vw, 54px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .race-head__dek {
+    margin: 0 0 14px;
+    font-family: Georgia, serif;
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 640px;
+  }
+  .race-head__meta {
+    margin: 14px 0 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px 18px;
+  }
+  .race-head__meta-row {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+  }
+  .race-head__meta-row dt {
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+  }
+  .race-head__meta-row dd {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--pc-ink, #12110E);
+  }
+  .race-head__status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+  }
+  .race-head__status[data-status="open"] {
+    background: rgba(47,143,95,0.18);
+    color: #1b5033;
+  }
+  .race-head__status[data-status="scheduled"] {
+    background: rgba(245,159,0,0.22);
+    color: #8a5a00;
+  }
+  .race-head__status[data-status="closed"],
+  .race-head__status[data-status="resolved"] {
+    background: rgba(95,94,90,0.18);
+    color: #38373A;
+  }
+
+  .race-how {
+    margin: 26px 0;
+    padding: 14px 18px;
+    border-left: 3px solid #2f8f5f;
+    background: #fafaf7;
+    border-radius: 2px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--pc-ink, #12110E);
+  }
+  .race-how__label {
+    margin: 0 0 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #2f8f5f;
+  }
+  .race-how__steps {
+    margin: 0 0 8px;
+    padding-left: 20px;
+    font-family: Georgia, serif;
+  }
+  .race-how__steps a {
+    color: #8a2432;
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+  }
+  .race-how__fine {
+    margin: 10px 0 0;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .race-how__fine code {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10.5px;
+    background: rgba(47,143,95,0.12);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+
+  .race-board {
+    margin: 28px 0 16px;
+    padding: 16px 18px;
+    border: 1px solid rgba(18,17,14,0.12);
+    border-radius: 3px;
+    background: #fafaf7;
+  }
+  .race-board__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .race-board__title {
+    margin: 0;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .race-board__status {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: #8a2432;
+  }
+  .race-board__rows {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .race-row {
+    display: grid;
+    grid-template-columns: 40px 1fr auto auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 7px 10px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 2px;
+    font-size: 12px;
+  }
+  .race-row__rank { font-weight: 700; color: #8a2432; }
+  .race-row__entrant { font-size: 11.5px; color: var(--pc-ink, #12110E); }
+  .race-row__kind {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    padding: 2px 5px;
+    border-radius: 2px;
+    background: rgba(18,17,14,0.07);
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .race-row__score {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pc-ink, #12110E);
+    min-width: 70px;
+    text-align: right;
+  }
+  .race-row--you {
+    background: rgba(47,143,95,0.15);
+    box-shadow: inset 0 0 0 1px rgba(47,143,95,0.4);
+  }
+  .race-row--empty {
+    color: var(--pc-ink-muted, #5F5E5A);
+    opacity: 0.65;
+  }
+  .race-row--elsewhere {
+    margin-top: 6px;
+    border-top: 1px dashed rgba(18,17,14,0.15);
+  }
+
+  .race-foot {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(18,17,14,0.12);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    opacity: 0.72;
+  }
+  .race-foot a {
+    color: #8a2432;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+</style>

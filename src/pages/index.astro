@@ -12,6 +12,7 @@ import BlockCard from '../components/BlockCard.astro';
 import BlockReorder from '../components/BlockReorder.astro';
 import PresenceBar from '../components/PresenceBar.astro';
 import WalletChip from '../components/WalletChip.astro';
+import RaceInstrumentation from '../components/RaceInstrumentation.astro';
 import HomeMajors from '../components/HomeMajors.astro';
 import FreshDeck from '../components/FreshDeck.astro';
 import PollsOnHome from '../components/PollsOnHome.astro';
@@ -215,24 +216,51 @@ const alternates = [
         var status = document.getElementById('pc-race-status');
         if (chip && status) {
           chip.setAttribute('data-status', 'scheduled');
-          fetch('/api/race/front-door/leaderboard', { cache: 'no-store' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) {
-              if (!d || !d.race) return;
-              var s = (d.race.status || 'scheduled').toLowerCase();
-              chip.setAttribute('data-status', s);
-              var label = s.toUpperCase();
-              if (s === 'open' && typeof d.count === 'number' && d.count > 0) {
-                label = 'OPEN · ' + d.count + ' IN';
-              } else if (s === 'resolved' && d.race.resolvesAt) {
-                label = 'RESOLVED';
-              }
-              status.textContent = label;
-            })
-            .catch(function () { /* keep default SCHEDULED */ });
+
+          function refreshChip() {
+            fetch('/api/race/front-door/leaderboard', { cache: 'no-store' })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (d) {
+                if (!d || !d.race) return;
+                var s = (d.race.status || 'scheduled').toLowerCase();
+                chip.setAttribute('data-status', s);
+                var label = s.toUpperCase();
+                if (s === 'open' && typeof d.count === 'number' && d.count > 0) {
+                  label = 'OPEN · ' + d.count + ' IN';
+                } else if (s === 'resolved' && d.race.resolvesAt) {
+                  label = 'RESOLVED';
+                }
+                // Sprint 25: if the viewer has submitted and we know their
+                // rank, show it: "OPEN · #3 · 12 IN"
+                try {
+                  var rank = localStorage.getItem('pc:race:front-door:rank');
+                  if (s === 'open' && rank) {
+                    label = 'OPEN · #' + rank + (typeof d.count === 'number' && d.count > 0 ? ' · ' + d.count + ' IN' : '');
+                  }
+                } catch (e) {}
+                status.textContent = label;
+              })
+              .catch(function () { /* keep default SCHEDULED */ });
+          }
+          refreshChip();
+
+          // Re-fetch the leaderboard when our own instrumentation
+          // submits a score, so the viewer sees their own rank show up
+          // on the chip within ~400ms of clicking a block.
+          window.addEventListener('pc:race:submitted', function () {
+            setTimeout(refreshChip, 400);
+          });
+          // And every 45s while the tab is open so the count refreshes
+          // as other visitors submit.
+          setInterval(refreshChip, 45_000);
         }
       })();
     </script>
+
+    <!-- Race instrumentation — invisible; starts the Front Door clock
+         on page load and submits a score on the first block-card
+         click. Sprint 25. -->
+    <RaceInstrumentation slug="front-door" />
 
     <HomeFireplace />
 
