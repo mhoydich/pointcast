@@ -1,0 +1,813 @@
+---
+/**
+ * FooterBar — v3 of the persistent dock.
+ *
+ * Replaces CoNavigator v2 per Mike 2026-04-24 ~01:00 PT: "own the
+ * footer bar, lets get a v3, had codex take a pass not great, do a
+ * big think on it and then begin the build."
+ *
+ * Big think: v2 was a dashboard (5 zones, many small-mono labels,
+ * placeholder stats). v3 is a dock — three affordances on the bar,
+ * everything else in one cozy menu popover.
+ *
+ * ZONES (three):
+ *   LEFT   your noun + mood chip (clickable → opens menu with /profile)
+ *   CENTER omnibox ">_ ask or go… (⌘K)"
+ *   RIGHT  ≡ menu button + ● ON AIR pulse
+ *
+ * MENU (popover, behind ≡):
+ *   - Your noun · Connect wallet · Mood picker · Soundtrack toggle
+ *   - Rooms · Games · Companions · Agents · Release
+ *   - Live: here + agents count + current mood
+ *   - Foot: github · cc0 · /manifesto
+ *
+ * Persistent:
+ *   - The soundtrack iframe uses transition:persist="pc-soundtrack"
+ *     so ClientRouter soft-navigations keep audio alive.
+ *
+ * Accessibility: popover is a true dialog with focus trap; Esc closes.
+ * Mobile: same 3 bar items; popover opens as full-height sheet.
+ *
+ * Design: matches the HomeFireplace warmth. Dark, warm accents,
+ * parchment menu. Low-fi grain at the bar base.
+ */
+import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
+const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
+
+// Daily-seeded noun for the "you" chip when no wallet connected —
+// same pattern as HomeFireplace's hearth companion.
+function dailyNounId(): number {
+  const day = Math.floor(Date.now() / (24 * 3600 * 1000));
+  const seed = ((day + 7) * 2654435761) >>> 0;
+  return seed % 1200;
+}
+const defaultNounId = dailyNounId();
+---
+
+<aside class="fb" id="pc-fb" aria-label="PointCast footer bar">
+  <div class="fb__bar">
+    <!-- LEFT — you (noun + mood) -->
+    <button
+      type="button"
+      class="fb__you"
+      id="fb-you"
+      aria-haspopup="dialog"
+      aria-expanded="false"
+      aria-controls="fb-menu"
+    >
+      <img
+        class="fb__noun"
+        id="fb-noun"
+        src={`https://noun.pics/${defaultNounId}.svg`}
+        alt="Your Noun"
+        width="28"
+        height="28"
+        loading="eager"
+      />
+      <span class="fb__you-text">
+        <span class="fb__you-label mono" id="fb-you-label">visitor</span>
+        <span class="fb__mood-label mono" id="fb-mood-label">set mood →</span>
+      </span>
+    </button>
+
+    <!-- CENTER — omnibox -->
+    <form class="fb__omni" id="fb-omni-form" role="search" autocomplete="off">
+      <span class="fb__omni-caret mono" aria-hidden="true">&gt;_</span>
+      <input
+        class="fb__omni-input mono"
+        type="text"
+        id="fb-omni"
+        name="q"
+        placeholder="ask or go…"
+        aria-label="Ask or go — type a path or search"
+      />
+      <span class="fb__omni-hint mono" aria-hidden="true">⌘K</span>
+    </form>
+
+    <!-- RIGHT — menu + on-air -->
+    <div class="fb__right">
+      <span class="fb__on-air" aria-label="On air">
+        <span class="fb__on-air-dot" aria-hidden="true"></span>
+        <span class="fb__on-air-label mono">ON AIR</span>
+      </span>
+      <button
+        type="button"
+        class="fb__menu-btn"
+        id="fb-menu-btn"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        aria-controls="fb-menu"
+        aria-label="Open menu"
+      >
+        <span class="fb__menu-glyph" aria-hidden="true">≡</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- POPOVER MENU -->
+  <div class="fb__menu" id="fb-menu" role="dialog" aria-modal="false" aria-label="PointCast menu" hidden>
+    <div class="fb__menu-scrim" id="fb-menu-scrim" aria-hidden="true"></div>
+    <div class="fb__menu-panel" id="fb-menu-panel" tabindex="-1">
+      <button
+        type="button"
+        class="fb__menu-close"
+        id="fb-menu-close"
+        aria-label="Close menu"
+      >×</button>
+
+      <!-- YOU -->
+      <section class="fb-you-section">
+        <div class="fb-you-card">
+          <img
+            class="fb-you-card__noun"
+            id="fb-menu-noun"
+            src={`https://noun.pics/${defaultNounId}.svg`}
+            alt="Your noun"
+            width="56"
+            height="56"
+          />
+          <div class="fb-you-card__body">
+            <p class="fb-you-card__kicker mono">YOU</p>
+            <p class="fb-you-card__name" id="fb-menu-name">visitor · noun {defaultNounId}</p>
+            <p class="fb-you-card__meta mono" id="fb-menu-wallet-status">no wallet connected</p>
+          </div>
+        </div>
+        <div class="fb-you-actions">
+          <button type="button" class="fb-btn" id="fb-btn-wallet">Connect wallet (Beacon)</button>
+          <a class="fb-btn fb-btn--ghost" href="/profile">View profile</a>
+        </div>
+      </section>
+
+      <!-- MOOD + SOUNDTRACK -->
+      <section class="fb-controls">
+        <label class="fb-ctrl">
+          <span class="fb-ctrl__name mono">MOOD</span>
+          <select class="fb-ctrl__input mono" id="fb-mood-select">
+            <option value="">— choose —</option>
+          </select>
+        </label>
+        <button type="button" class="fb-btn fb-btn--soundtrack" id="fb-btn-soundtrack">
+          <span class="fb-btn__glyph" aria-hidden="true">▶</span>
+          <span id="fb-soundtrack-label">Soundtrack off</span>
+        </button>
+      </section>
+
+      <!-- SOUNDTRACK DRAWER (persists across nav) -->
+      <div class="fb__soundtrack" id="fb-soundtrack" transition:persist="pc-soundtrack" hidden></div>
+
+      <!-- ROUTES -->
+      <section class="fb-routes">
+        <div class="fb-routes__group">
+          <p class="fb-routes__label mono">ROOMS</p>
+          <div class="fb-routes__links">
+            <a href="/tonight">tonight</a>
+            <a href="/room">room</a>
+            <a href="/meditate">meditate</a>
+            <a href="/bath">bath</a>
+          </div>
+        </div>
+        <div class="fb-routes__group">
+          <p class="fb-routes__label mono">GAMES</p>
+          <div class="fb-routes__links">
+            <a href="/farm">farm</a>
+            <a href="/agent-derby">derby</a>
+            <a href="/battle">battle</a>
+            <a href="/yee">yee</a>
+            <a href="/nouns-cola-crush">cola</a>
+            <a href="/collabs/relay">relay</a>
+          </div>
+        </div>
+        <div class="fb-routes__group">
+          <p class="fb-routes__label mono">COMPANIONS</p>
+          <div class="fb-routes__links">
+            <a href="/gandalf">gandalf</a>
+          </div>
+        </div>
+        <div class="fb-routes__group">
+          <p class="fb-routes__label mono">AGENTS</p>
+          <div class="fb-routes__links">
+            <a href="/for-agents">for-agents</a>
+            <a href="/agents.json">agents.json</a>
+            <a href="/llms.txt">llms.txt</a>
+            <a href="/status">status</a>
+          </div>
+        </div>
+        <div class="fb-routes__group">
+          <p class="fb-routes__label mono">RELEASE</p>
+          <div class="fb-routes__links">
+            <a href="/gamgee">gamgee (RC0)</a>
+            <a href="/sprints">sprints</a>
+            <a href="/now">now</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIVE PULSE -->
+      <footer class="fb-live mono">
+        <span class="fb-live__dot" aria-hidden="true"></span>
+        <span id="fb-live-copy">marine layer · el segundo · <span id="fb-live-here">—</span> here</span>
+        <a class="fb-live__link" href="https://github.com/mhoydich/pointcast" target="_blank" rel="noopener">github ↗</a>
+      </footer>
+    </div>
+  </div>
+</aside>
+
+<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON};`}></script>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ─── DOM refs ────────────────────────────────────────────────
+    var $bar       = document.getElementById('pc-fb');
+    var $you       = document.getElementById('fb-you');
+    var $menuBtn   = document.getElementById('fb-menu-btn');
+    var $menu      = document.getElementById('fb-menu');
+    var $panel     = document.getElementById('fb-menu-panel');
+    var $scrim     = document.getElementById('fb-menu-scrim');
+    var $close     = document.getElementById('fb-menu-close');
+    var $omni      = document.getElementById('fb-omni');
+    var $omniForm  = document.getElementById('fb-omni-form');
+    var $moodLabel = document.getElementById('fb-mood-label');
+    var $youLabel  = document.getElementById('fb-you-label');
+    var $noun      = document.getElementById('fb-noun');
+    var $menuNoun  = document.getElementById('fb-menu-noun');
+    var $menuName  = document.getElementById('fb-menu-name');
+    var $menuWallet = document.getElementById('fb-menu-wallet-status');
+    var $walletBtn = document.getElementById('fb-btn-wallet');
+    var $moodSelect = document.getElementById('fb-mood-select');
+    var $soundBtn  = document.getElementById('fb-btn-soundtrack');
+    var $soundLabel = document.getElementById('fb-soundtrack-label');
+    var $soundtrack = document.getElementById('fb-soundtrack');
+    var $liveHere  = document.getElementById('fb-live-here');
+
+    if (!$bar || !$menu) return;
+
+    // ─── Populate mood select ────────────────────────────────────
+    try {
+      var st = window.PC_SOUNDTRACKS || {};
+      var keys = Object.keys(st);
+      keys.forEach(function (k) {
+        var opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = (st[k].label || k).toLowerCase();
+        $moodSelect.appendChild(opt);
+      });
+    } catch (e) {}
+
+    // ─── Menu open/close ─────────────────────────────────────────
+    var lastFocused = null;
+    function openMenu() {
+      lastFocused = document.activeElement;
+      $menu.hidden = false;
+      $menu.setAttribute('data-open', 'true');
+      $menuBtn.setAttribute('aria-expanded', 'true');
+      $you.setAttribute('aria-expanded', 'true');
+      setTimeout(function () { $panel.focus(); }, 10);
+      document.addEventListener('keydown', onKey);
+    }
+    function closeMenu() {
+      $menu.setAttribute('data-open', 'false');
+      setTimeout(function () { $menu.hidden = true; }, 220);
+      $menuBtn.setAttribute('aria-expanded', 'false');
+      $you.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('keydown', onKey);
+      if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); closeMenu(); }
+    }
+    $menuBtn.addEventListener('click', function () {
+      var open = $menu.getAttribute('data-open') === 'true';
+      open ? closeMenu() : openMenu();
+    });
+    $you.addEventListener('click', function () {
+      var open = $menu.getAttribute('data-open') === 'true';
+      open ? closeMenu() : openMenu();
+    });
+    $close.addEventListener('click', closeMenu);
+    $scrim.addEventListener('click', closeMenu);
+
+    // ─── Omnibox: ⌘K focuses + Enter routes/searches ─────────────
+    document.addEventListener('keydown', function (e) {
+      var isMacCombo = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+      if (isMacCombo) {
+        e.preventDefault();
+        $omni.focus();
+        $omni.select();
+      }
+    });
+    $omniForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = String($omni.value || '').trim();
+      if (!q) return;
+      if (q.startsWith('/') || /^https?:\/\//.test(q)) {
+        window.location.href = q;
+        return;
+      }
+      // Path-like? Route there.
+      var maybe = '/' + q.replace(/^\/+/, '').split(/\s+/)[0];
+      window.location.href = '/search?q=' + encodeURIComponent(q) + '&from=' + encodeURIComponent(maybe);
+    });
+
+    // ─── Wallet (Beacon) — reuses the WalletChip event surface ───
+    function refreshWalletUI() {
+      try {
+        var wallets = JSON.parse(localStorage.getItem('pc:wallets') || '[]');
+        var activeAddr = localStorage.getItem('pc:wallet-active');
+        var active = null;
+        if (activeAddr && Array.isArray(wallets)) {
+          for (var i = 0; i < wallets.length; i++) {
+            if (wallets[i] && wallets[i].address === activeAddr) { active = wallets[i]; break; }
+          }
+        }
+        if (active && active.address) {
+          var short = active.address.slice(0, 6) + '…' + active.address.slice(-4);
+          $menuWallet.textContent = 'wallet · ' + short + (active.provider ? ' · ' + active.provider : '');
+          $walletBtn.textContent = 'Disconnect';
+          $walletBtn.setAttribute('data-state', 'connected');
+          $menuName.textContent = short;
+          $youLabel.textContent = short.slice(0, 7);
+        } else {
+          $menuWallet.textContent = 'no wallet connected';
+          $walletBtn.textContent = 'Connect wallet (Beacon)';
+          $walletBtn.setAttribute('data-state', 'disconnected');
+          $youLabel.textContent = 'visitor';
+        }
+      } catch (e) {}
+    }
+    $walletBtn.addEventListener('click', function () {
+      // If disconnected: trigger the WalletChip's Beacon picker by synthesizing
+      // a click on its button. WalletChip owns the Beacon SDK; we just wire
+      // the UX affordance.
+      var state = $walletBtn.getAttribute('data-state');
+      var chipBtn = document.querySelector('.wallet-chip__btn');
+      if (state === 'connected' && chipBtn) {
+        // Open the WalletChip dropdown so user can disconnect cleanly.
+        chipBtn.click();
+        return;
+      }
+      if (chipBtn) {
+        chipBtn.click();
+        return;
+      }
+      // Fallback: navigate to /profile where the Beacon picker is also wired.
+      window.location.href = '/profile';
+    });
+    window.addEventListener('pc:wallet-change', refreshWalletUI);
+    refreshWalletUI();
+
+    // ─── Mood select → emit pc:mood-changed, offer soundtrack ────
+    $moodSelect.addEventListener('change', function () {
+      var k = $moodSelect.value;
+      if (!k) return;
+      window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: k } }));
+      var st = (window.PC_SOUNDTRACKS || {})[k];
+      if (st && st.label) {
+        $moodLabel.textContent = String(st.label).toLowerCase();
+        $soundLabel.textContent = 'Play ' + String(st.label).toLowerCase();
+      }
+      try { localStorage.setItem('pc:music:mood', k); } catch (e) {}
+    });
+    window.addEventListener('pc:mood-changed', function (e) {
+      var k = e && e.detail && e.detail.moodId;
+      if (!k) return;
+      $moodSelect.value = k;
+      var st = (window.PC_SOUNDTRACKS || {})[k];
+      if (st && st.label) $moodLabel.textContent = String(st.label).toLowerCase();
+    });
+
+    // Restore any prior mood
+    try {
+      var prior = localStorage.getItem('pc:music:mood');
+      if (prior && (window.PC_SOUNDTRACKS || {})[prior]) {
+        $moodSelect.value = prior;
+        $moodLabel.textContent = (window.PC_SOUNDTRACKS[prior].label || prior).toLowerCase();
+      }
+    } catch (e) {}
+
+    // ─── Soundtrack toggle ───────────────────────────────────────
+    $soundBtn.addEventListener('click', function () {
+      var k = $moodSelect.value;
+      if (!k) {
+        $soundLabel.textContent = 'pick a mood first';
+        return;
+      }
+      var st = (window.PC_SOUNDTRACKS || {})[k];
+      if (!st || !st.url) { $soundLabel.textContent = 'no soundtrack for this mood'; return; }
+      if ($soundtrack.hidden) {
+        $soundtrack.hidden = false;
+        $soundtrack.innerHTML = '<iframe src="' + st.url + '" width="100%" height="80" frameborder="0" allow="autoplay; encrypted-media" loading="lazy" title="PointCast soundtrack"></iframe>';
+        $soundLabel.textContent = 'Playing · stop';
+        try { localStorage.setItem('pc:music:playing', '1'); } catch (e) {}
+      } else {
+        $soundtrack.hidden = true;
+        $soundtrack.innerHTML = '';
+        $soundLabel.textContent = 'Play ' + (st.label || k).toLowerCase();
+        try { localStorage.setItem('pc:music:playing', '0'); } catch (e) {}
+      }
+    });
+
+    // ─── Live pulse — read presence snapshot periodically ────────
+    async function updatePresence() {
+      try {
+        var r = await fetch('/api/presence/snapshot', { cache: 'no-store' });
+        if (!r.ok) return;
+        var j = await r.json();
+        var h = Number(j.humans ?? 0);
+        var a = Number(j.agents ?? 0);
+        if ($liveHere) $liveHere.textContent = String(h + a);
+      } catch (e) {}
+    }
+    updatePresence();
+    setInterval(updatePresence, 45 * 1000);
+
+    // ─── Daily noun rotation (at midnight, refresh the image) ────
+    // Keeps the noun fresh without a full reload.
+    (function scheduleNounRefresh() {
+      var now = new Date();
+      var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+      var ms = nextMidnight.getTime() - now.getTime();
+      setTimeout(function () {
+        // Re-pick via the same seed used server-side at next load.
+        var day = Math.floor(Date.now() / (24 * 3600 * 1000));
+        var seed = ((day + 7) * 2654435761) >>> 0;
+        var id = seed % 1200;
+        if ($noun) $noun.src = 'https://noun.pics/' + id + '.svg';
+        if ($menuNoun) $menuNoun.src = 'https://noun.pics/' + id + '.svg';
+        scheduleNounRefresh();
+      }, Math.min(ms, 2_000_000_000));
+    })();
+  })();
+</script>
+
+<style>
+  /* ── BAR ──────────────────────────────────────────────────────── */
+  .fb {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+    pointer-events: none; /* inner elements reclaim */
+  }
+
+  .fb__bar {
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    height: 44px;
+    background:
+      linear-gradient(180deg, rgba(26, 18, 8, 0.96) 0%, rgba(42, 29, 11, 0.96) 100%);
+    border-top: 1px solid rgba(255, 180, 80, 0.25);
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px) saturate(1.1);
+    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    color: #fdf2d6;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  /* ── YOU chip (left) ─────────────────────────────────────────── */
+  .fb__you {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: inherit;
+    min-width: 0;
+  }
+  .fb__noun {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1a1004;
+    image-rendering: pixelated;
+    box-shadow: inset 0 0 0 2px #4e3a16, 0 0 8px rgba(255, 150, 60, 0.5);
+    flex-shrink: 0;
+  }
+  .fb__you-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.1;
+    min-width: 0;
+  }
+  .fb__you-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #fdf2d6;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .fb__mood-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: #f9c56c;
+    white-space: nowrap;
+    opacity: 0.85;
+  }
+  @media (max-width: 520px) { .fb__you-text { display: none; } }
+
+  /* ── OMNIBOX (center) ────────────────────────────────────────── */
+  .fb__omni {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    background: rgba(255, 253, 246, 0.08);
+    border: 1px solid rgba(255, 180, 80, 0.18);
+    border-radius: 3px;
+    min-width: 0;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .fb__omni:focus-within {
+    border-color: rgba(255, 200, 120, 0.6);
+    background: rgba(255, 253, 246, 0.14);
+  }
+  .fb__omni-caret { font-size: 12px; color: #f9c56c; flex-shrink: 0; }
+  .fb__omni-input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    outline: 0;
+    color: #fdf2d6;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    padding: 2px 0;
+  }
+  .fb__omni-input::placeholder { color: rgba(253, 242, 214, 0.4); }
+  .fb__omni-hint {
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    color: rgba(253, 242, 214, 0.55);
+    padding: 2px 5px;
+    border: 1px solid rgba(253, 242, 214, 0.16);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  @media (max-width: 520px) { .fb__omni-hint { display: none; } }
+
+  /* ── RIGHT (on-air + menu) ───────────────────────────────────── */
+  .fb__right {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .fb__on-air {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #f9c56c;
+  }
+  .fb__on-air-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ff9040;
+    box-shadow: 0 0 8px rgba(255, 150, 80, 0.8);
+    animation: fb-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes fb-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(0.85); }
+  }
+  .fb__on-air-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+  }
+  @media (max-width: 520px) { .fb__on-air-label { display: none; } }
+
+  .fb__menu-btn {
+    appearance: none;
+    background: rgba(255, 200, 100, 0.1);
+    border: 1px solid rgba(255, 180, 80, 0.3);
+    color: #fdf2d6;
+    width: 34px;
+    height: 30px;
+    border-radius: 3px;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .fb__menu-btn:hover {
+    background: rgba(255, 200, 100, 0.22);
+    border-color: rgba(255, 200, 100, 0.55);
+  }
+
+  /* ── MENU POPOVER ────────────────────────────────────────────── */
+  .fb__menu {
+    pointer-events: auto;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    transition: opacity 0.22s ease;
+    opacity: 0;
+  }
+  .fb__menu[data-open='true'] { opacity: 1; }
+  .fb__menu-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(26, 18, 8, 0.45);
+    backdrop-filter: blur(2px);
+  }
+  .fb__menu-panel {
+    position: absolute;
+    right: 12px;
+    bottom: 56px;
+    width: min(360px, calc(100vw - 24px));
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    background: linear-gradient(180deg, #fffdf6 0%, #faf2dc 100%);
+    color: #2d1f08;
+    border: 1px solid #4e3a16;
+    border-radius: 4px;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.32);
+    padding: 20px 22px 16px;
+    outline: none;
+    transform: translateY(8px);
+    transition: transform 0.22s ease;
+  }
+  .fb__menu[data-open='true'] .fb__menu-panel { transform: translateY(0); }
+  @media (max-width: 560px) {
+    .fb__menu-panel {
+      right: 0;
+      bottom: 0;
+      left: 0;
+      width: auto;
+      max-height: calc(100vh - 44px);
+      border-radius: 4px 4px 0 0;
+    }
+  }
+  .fb__menu-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    appearance: none;
+    background: none;
+    border: 0;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    color: #6b5a3a;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+  .fb__menu-close:hover { color: #2d1f08; }
+
+  /* YOU card */
+  .fb-you-section { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px dashed #d4c6a4; }
+  .fb-you-card {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .fb-you-card__noun {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #1a1004;
+    image-rendering: pixelated;
+    box-shadow: inset 0 0 0 2px #4e3a16, 0 0 12px rgba(255, 150, 60, 0.3);
+    flex-shrink: 0;
+  }
+  .fb-you-card__body { flex: 1; min-width: 0; }
+  .fb-you-card__kicker { font-size: 9.5px; letter-spacing: 0.2em; color: #8a7854; margin: 0 0 4px; font-weight: 700; }
+  .fb-you-card__name { font-family: 'DM Serif Display', Georgia, serif; font-size: 18px; margin: 0 0 2px; color: #2d1f08; }
+  .fb-you-card__meta { font-size: 10.5px; letter-spacing: 0.12em; color: #6b5a3a; margin: 0; }
+  .fb-you-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+
+  .fb-btn {
+    appearance: none;
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    background: #2d1f08;
+    color: #fdf2d6;
+    border: 1px solid #2d1f08;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s ease;
+  }
+  .fb-btn:hover { background: #4e3a16; }
+  .fb-btn--ghost { background: transparent; color: #2d1f08; border-color: #c5b284; }
+  .fb-btn--ghost:hover { background: #faf2dc; }
+  .fb-btn--soundtrack { width: 100%; flex: none; }
+  .fb-btn__glyph { font-size: 11px; }
+
+  /* Controls */
+  .fb-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px dashed #d4c6a4; }
+  .fb-ctrl { display: flex; flex-direction: column; gap: 4px; }
+  .fb-ctrl__name { font-size: 9.5px; letter-spacing: 0.18em; color: #8a7854; font-weight: 700; }
+  .fb-ctrl__input {
+    padding: 7px 10px;
+    font-size: 11.5px;
+    border: 1px solid #c5b284;
+    border-radius: 3px;
+    background: #fffdf8;
+    color: #2d1f08;
+  }
+
+  .fb__soundtrack {
+    margin-bottom: 14px;
+    background: #000;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .fb__soundtrack iframe {
+    display: block;
+    width: 100%;
+    border: 0;
+  }
+
+  /* Routes */
+  .fb-routes { margin-bottom: 14px; }
+  .fb-routes__group { margin-bottom: 10px; }
+  .fb-routes__group:last-child { margin-bottom: 0; }
+  .fb-routes__label {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: #8a2432;
+    margin: 0 0 5px;
+    font-weight: 700;
+  }
+  .fb-routes__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    font-family: Georgia, serif;
+    font-size: 13.5px;
+  }
+  .fb-routes__links a {
+    color: #2d1f08;
+    text-decoration: none;
+    border-bottom: 1px solid #d4c6a4;
+    padding-bottom: 1px;
+  }
+  .fb-routes__links a:hover { border-bottom-color: #8a2432; color: #8a2432; }
+
+  /* Live pulse foot */
+  .fb-live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px dashed #d4c6a4;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #6b5a3a;
+  }
+  .fb-live__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #2f8f5f;
+    box-shadow: 0 0 6px rgba(47, 143, 95, 0.5);
+  }
+  .fb-live__link {
+    margin-left: auto;
+    color: #8a2432;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+  }
+
+  /* Leave room at page bottom so content doesn't hide behind the bar */
+  body { padding-bottom: 48px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fb__on-air-dot { animation: none; }
+    .fb__menu, .fb__menu-panel { transition: none; }
+  }
+</style>

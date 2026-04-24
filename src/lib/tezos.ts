@@ -19,6 +19,17 @@ const RPC_URL = 'https://mainnet.api.tez.ie';
 let _tezos: TezosToolkit | null = null;
 let _wallet: BeaconWallet | null = null;
 
+const REQUIRED_SCOPES = ['operation_request', 'sign'] as any[];
+
+function hasRequiredScopes(account: any): boolean {
+  const scopes = Array.isArray(account?.scopes) ? account.scopes : [];
+  return REQUIRED_SCOPES.every((scope) => scopes.includes(scope));
+}
+
+function utf8ToHex(value: string): string {
+  return Array.from(new TextEncoder().encode(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
   if (_tezos && _wallet) return { tezos: _tezos, wallet: _wallet };
   _tezos = new TezosToolkit(RPC_URL);
@@ -32,7 +43,12 @@ function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
     name: 'PointCast',
     network: { type: 'mainnet' as any },
     preferredNetwork: 'mainnet' as any,
+    enableMetrics: false,
   } as any);
+  // Beacon 24.2 still attempts to write disabled metrics to an IndexedDB
+  // object store in some browsers. No-op it so connect/sign flows do not fail
+  // before the wallet UI opens.
+  (_wallet.client as any).sendMetrics = () => {};
   _tezos.setWalletProvider(_wallet);
   return { tezos: _tezos, wallet: _wallet };
 }
@@ -57,10 +73,10 @@ export async function getActiveAddress(): Promise<string | null> {
 export async function connectKukai(): Promise<string> {
   const { wallet } = getToolkit();
   const existing = await wallet.client.getActiveAccount();
-  if (existing) return existing.address;
+  if (existing && hasRequiredScopes(existing)) return existing.address;
   // `network` used to live here; the current Beacon SDK requires it
   // to be set at DAppClient construction and throws if passed here.
-  const perms = await wallet.client.requestPermissions();
+  const perms = await wallet.client.requestPermissions({ scopes: REQUIRED_SCOPES } as any);
   return perms.address;
 }
 
@@ -69,6 +85,22 @@ export async function disconnectKukai(): Promise<void> {
   try {
     await wallet.clearActiveAccount();
   } catch { /* ignore */ }
+}
+
+export async function signTezosPayload(message: string): Promise<{
+  address: string;
+  payload: string;
+  signature: string;
+}> {
+  const { wallet } = getToolkit();
+  const address = await connectKukai();
+  const payload = utf8ToHex(message);
+  const { signature } = await wallet.client.requestSignPayload({
+    signingType: 'raw' as any,
+    payload,
+    sourceAddress: address,
+  });
+  return { address, payload, signature };
 }
 
 /**
