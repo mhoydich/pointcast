@@ -5,7 +5,18 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import WalletChip from '../components/WalletChip.astro';
 import contracts from '../data/contracts.json';
-import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_STATS, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
+import {
+  DERBY_BADGES,
+  DERBY_DAILY_RACES,
+  DERBY_FAN_TIERS,
+  DERBY_POSTERS,
+  DERBY_ROSTER,
+  DERBY_RULEBOOK,
+  DERBY_STABLES,
+  DERBY_STATS,
+  DERBY_TRACKS,
+  DERBY_VERSION,
+} from '../lib/agent-derby';
 
 const derbyReceiptContract = (contracts as any).agent_derby_receipts ?? {};
 const derbyChain = {
@@ -20,6 +31,10 @@ const derbyData = {
   stats: DERBY_STATS,
   tracks: DERBY_TRACKS,
   roster: DERBY_ROSTER,
+  stables: DERBY_STABLES,
+  dailyRaces: DERBY_DAILY_RACES,
+  badges: DERBY_BADGES,
+  fanTiers: DERBY_FAN_TIERS,
   posters: DERBY_POSTERS,
   rulebook: DERBY_RULEBOOK,
   chain: derbyChain,
@@ -64,8 +79,8 @@ const jsonLd = {
       <header class="mast">
         <div class="mast__copy">
           <p class="kicker">CH.BTL / AGENT DERBY / v{DERBY_VERSION}</p>
-          <h1 id="derby-title">PointCast Agent Derby v2</h1>
-          <p class="mast__dek">Pick a racer, run the field, anchor the receipt.</p>
+          <h1 id="derby-title">PointCast Agent Derby v3</h1>
+          <p class="mast__dek">Daily cards, fan-backed stables, badge receipts, and a livelier wire.</p>
         </div>
         <div class="mast__rail">
           <div class="race-key" aria-label="Race status">
@@ -94,7 +109,7 @@ const jsonLd = {
         <div class="play-step play-step--run">
           <span>2 / Race</span>
           <div class="play-actions">
-            <button type="button" class="btn btn--primary btn--big" data-action="quick-run">Run v2 race</button>
+            <button type="button" class="btn btn--primary btn--big" data-action="quick-run">Run v3 race</button>
             <button type="button" class="btn" data-action="new-field">Shuffle field</button>
           </div>
         </div>
@@ -102,7 +117,7 @@ const jsonLd = {
           <span>3 / Tezos</span>
           <strong data-chain-status>Receipt pending</strong>
           <div class="play-actions">
-            <button type="button" class="btn btn--chain" data-action="record-chain" data-chain-record disabled>Record on Tezos</button>
+            <button type="button" class="btn btn--chain" data-action="record-chain" data-chain-record disabled>Sign with Tezos</button>
             <button type="button" class="btn" data-action="copy-chain-packet" data-chain-copy disabled>Copy packet</button>
           </div>
         </div>
@@ -118,6 +133,33 @@ const jsonLd = {
           <button type="button" class="btn btn--primary" data-action="run">Run race</button>
           <button type="button" class="btn" data-action="new-field">New field</button>
           <button type="button" class="btn" data-action="reset">Reset</button>
+        </div>
+      </section>
+
+      <section class="v3-board" aria-labelledby="derby-v3-title">
+        <div class="v3-board__head">
+          <div>
+            <p class="v3-board__kicker">CH.DERBY / DAILY CARD / STABLES</p>
+            <h2 id="derby-v3-title">Today at the agent track</h2>
+          </div>
+          <a href="/agent-derby.json">v3 manifest</a>
+        </div>
+        <div class="daily-card-grid" data-daily-board></div>
+        <div class="fan-grid">
+          <section class="fan-panel" aria-labelledby="stable-fan-title">
+            <div class="panel-head">
+              <span id="stable-fan-title">Stable fandom</span>
+              <strong data-fan-summary>Local rail loading</strong>
+            </div>
+            <div class="stable-fan-grid" data-stable-fan-grid></div>
+          </section>
+          <section class="badge-panel" aria-labelledby="derby-badge-title">
+            <div class="panel-head">
+              <span id="derby-badge-title">Badges</span>
+              <button type="button" class="mini-btn" data-fan-reset>Reset local fandom</button>
+            </div>
+            <div class="badge-grid" data-badge-grid></div>
+          </section>
         </div>
       </section>
 
@@ -237,7 +279,13 @@ const jsonLd = {
       var TRACKS = DATA.tracks || [];
       var ROSTER = DATA.roster || [];
       var STATS = DATA.stats || ['speed', 'stamina', 'burst', 'nerve', 'gate', 'grit'];
+      var STABLES = DATA.stables || [];
+      var DAILY_RACES = DATA.dailyRaces || [];
+      var BADGES = DATA.badges || [];
+      var FAN_TIERS = DATA.fanTiers || [];
       var STORAGE_KEY = 'pc:agent-derby:races';
+      var FAN_STORAGE_KEY = 'pc:agent-derby:fans';
+      var BADGE_STORAGE_KEY = 'pc:agent-derby:badges';
       var FRAME_COUNT = 120;
 
       var params = new URLSearchParams(window.location.search);
@@ -255,11 +303,17 @@ const jsonLd = {
       var trackLabel = root.querySelector('[data-track-label]');
       var trackMeta = root.querySelector('[data-track-meta]');
       var fieldSummary = root.querySelector('[data-field-summary]');
+      var dailyBoard = root.querySelector('[data-daily-board]');
+      var fanSummary = root.querySelector('[data-fan-summary]');
+      var stableFanGrid = root.querySelector('[data-stable-fan-grid]');
+      var badgeGrid = root.querySelector('[data-badge-grid]');
+      var fanReset = root.querySelector('[data-fan-reset]');
 
       var state = {
         seed: params.get('seed') || 'gamgee-rc0',
         trackId: params.get('track') || (TRACKS[0] && TRACKS[0].id),
         focusAgent: (params.get('agents') || '').split(',')[0].trim().toLowerCase(),
+        dailyRaceId: params.get('daily') || '',
         field: [],
         sim: null,
         timer: 0,
@@ -296,6 +350,197 @@ const jsonLd = {
           return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
         };
       }
+
+      function ptDateKey(date) {
+        var formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Los_Angeles',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        var parts = formatter.formatToParts(date || new Date()).reduce(function (acc, part) {
+          acc[part.type] = part.value;
+          return acc;
+        }, {});
+        return [parts.year, parts.month, parts.day].join('-');
+      }
+
+      function readJson(key, fallback) {
+        try {
+          var raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : fallback;
+        } catch (error) {
+          return fallback;
+        }
+      }
+
+      function writeJson(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch (error) {}
+      }
+
+      function defaultFanState() {
+        return { selectedStableId: '', stables: {}, visits: 0, updatedAt: null };
+      }
+
+      function normalizeFanState(value) {
+        var next = defaultFanState();
+        if (value && typeof value === 'object') {
+          next.selectedStableId = String(value.selectedStableId || '');
+          next.stables = value.stables && typeof value.stables === 'object' ? value.stables : {};
+          next.visits = Number(value.visits || 0);
+          next.updatedAt = value.updatedAt || null;
+        }
+        return next;
+      }
+
+      var fanState = normalizeFanState(readJson(FAN_STORAGE_KEY, defaultFanState()));
+
+      function stableSlug(name) {
+        return String(name || '')
+          .toLowerCase()
+          .replace(/&/g, 'and')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+      }
+
+      function stableById(id) {
+        return STABLES.find(function (stable) { return stable.id === id; }) || null;
+      }
+
+      function stableForHorse(horse) {
+        if (!horse) return null;
+        return stableById(stableSlug(horse.stable)) ||
+          STABLES.find(function (stable) { return stable.name === horse.stable; }) ||
+          null;
+      }
+
+      function stableSupport(id) {
+        var record = fanState.stables && fanState.stables[id] ? fanState.stables[id] : {};
+        return Number(record.support || 0);
+      }
+
+      function fanTier(support) {
+        return FAN_TIERS.slice().sort(function (a, b) { return b.minSupport - a.minSupport; })
+          .find(function (tier) { return support >= tier.minSupport; }) ||
+          FAN_TIERS[0] ||
+          { id: 'railbird', label: 'Railbird', minSupport: 0, boost: 0, note: 'Rail ready.' };
+      }
+
+      function stableBoostFor(horse) {
+        var stable = stableForHorse(horse);
+        if (!stable) return 0;
+        return Number(fanTier(stableSupport(stable.id)).boost || 0);
+      }
+
+      function touchFanVisit() {
+        fanState.visits = Number(fanState.visits || 0) + 1;
+        fanState.updatedAt = new Date().toISOString();
+        writeJson(FAN_STORAGE_KEY, fanState);
+      }
+
+      function saveFanState() {
+        fanState.updatedAt = new Date().toISOString();
+        writeJson(FAN_STORAGE_KEY, fanState);
+        renderStableFans();
+        renderBadges();
+      }
+
+      function readBadges() {
+        var value = readJson(BADGE_STORAGE_KEY, {});
+        return value && typeof value === 'object' ? value : {};
+      }
+
+      function writeBadges(value) {
+        writeJson(BADGE_STORAGE_KEY, value || {});
+      }
+
+      function awardBadge(id) {
+        if (!BADGES.some(function (badge) { return badge.id === id; })) return false;
+        var badges = readBadges();
+        if (badges[id]) return false;
+        badges[id] = new Date().toISOString();
+        writeBadges(badges);
+        renderBadges();
+        return true;
+      }
+
+      function activeDailyCards() {
+        if (!DAILY_RACES.length) return [];
+        var day = ptDateKey();
+        var start = hashString(day + ':agent-derby-daily') % DAILY_RACES.length;
+        return [0, 1, 2].map(function (offset) {
+          return DAILY_RACES[(start + offset) % DAILY_RACES.length];
+        });
+      }
+
+      function dailyRaceFor(id) {
+        return DAILY_RACES.find(function (race) { return race.id === id; }) || null;
+      }
+
+      function dailySeed(race) {
+        return race.seed + '-' + ptDateKey();
+      }
+
+      function renderDailyBoard() {
+        if (!dailyBoard) return;
+        var today = ptDateKey();
+        var cards = activeDailyCards();
+        dailyBoard.innerHTML = cards.map(function (race) {
+          var track = TRACKS.find(function (item) { return item.id === race.track; }) || TRACKS[0];
+          var stable = stableById(race.featuredStable);
+          var selected = race.id === state.dailyRaceId;
+          return '<article class="daily-race-card" data-selected="' + (selected ? 'true' : 'false') + '" style="--stable:' + escapeHtml(stable?.color || '#185fa5') + ';--stable-accent:' + escapeHtml(stable?.accent || '#f4b23f') + '">' +
+            '<div><span>' + escapeHtml(today) + '</span><strong>' + escapeHtml(race.label) + '</strong></div>' +
+            '<p>' + escapeHtml(track.label) + ' / ' + escapeHtml(race.window) + '</p>' +
+            '<small>' + escapeHtml(stable ? stable.name : 'Open stable') + ' / ' + escapeHtml(race.prize) + '</small>' +
+            '<button type="button" class="mini-btn" data-daily-race="' + escapeHtml(race.id) + '">' + (selected ? 'Loaded' : 'Load race') + '</button>' +
+          '</article>';
+        }).join('');
+      }
+
+      function renderBadges() {
+        if (!badgeGrid) return;
+        var earned = readBadges();
+        badgeGrid.innerHTML = BADGES.map(function (badge) {
+          var isEarned = Boolean(earned[badge.id]);
+          return '<article class="badge-token" data-earned="' + (isEarned ? 'true' : 'false') + '">' +
+            '<span>' + escapeHtml(badge.code) + '</span>' +
+            '<strong>' + escapeHtml(badge.label) + '</strong>' +
+            '<small>' + escapeHtml(isEarned ? 'earned' : badge.requirement) + '</small>' +
+          '</article>';
+        }).join('');
+      }
+
+      function renderStableFans() {
+        if (!stableFanGrid) return;
+        var selected = stableById(fanState.selectedStableId);
+        var selectedSupport = selected ? stableSupport(selected.id) : 0;
+        var selectedTier = fanTier(selectedSupport);
+        if (fanSummary) {
+          fanSummary.textContent = selected
+            ? selected.name + ' / ' + selectedTier.label + ' / ' + selectedSupport + ' support'
+            : 'Pick a stable from the rail';
+        }
+        stableFanGrid.innerHTML = STABLES.map(function (stable) {
+          var support = stableSupport(stable.id);
+          var tier = fanTier(support);
+          var picked = fanState.selectedStableId === stable.id;
+          return '<article class="stable-fan-card" data-selected="' + (picked ? 'true' : 'false') + '" style="--stable:' + escapeHtml(stable.color) + ';--stable-accent:' + escapeHtml(stable.accent) + '">' +
+            '<div><span>' + escapeHtml(stable.agent) + '</span><strong>' + escapeHtml(stable.name) + '</strong></div>' +
+            '<p>' + escapeHtml(stable.motto) + '</p>' +
+            '<small>' + escapeHtml(tier.label) + ' / ' + support + ' support / +' + Number(tier.boost || 0).toFixed(Number(tier.boost || 0) % 1 ? 1 : 0) + ' form</small>' +
+            '<div class="stable-fan-card__actions">' +
+              '<button type="button" class="mini-btn" data-fan-stable="' + escapeHtml(stable.id) + '">' + (picked ? 'Fan' : 'Become fan') + '</button>' +
+              '<button type="button" class="mini-btn" data-fan-back="' + escapeHtml(stable.id) + '" data-amount="50">Back +50</button>' +
+              '<button type="button" class="mini-btn" data-fan-back="' + escapeHtml(stable.id) + '" data-amount="150">Build +150</button>' +
+            '</div>' +
+          '</article>';
+        }).join('');
+      }
+
+      touchFanVisit();
 
       function activeTrack() {
         return TRACKS.find(function (track) { return track.id === state.trackId; }) || TRACKS[0];
@@ -339,7 +584,7 @@ const jsonLd = {
         STATS.forEach(function (stat) {
           total += horse.stats[stat] * (track.bias[stat] || 1);
         });
-        return total / STATS.length;
+        return total / STATS.length + stableBoostFor(horse);
       }
 
       function raceId(seed, track, field) {
@@ -355,6 +600,7 @@ const jsonLd = {
         var runners = field.map(function (horse, runnerIndex) {
           var rng = rngFrom(seed + ':' + track.id + ':' + horse.slug);
           var rating = ratings[runnerIndex];
+          var fanBoost = stableBoostFor(horse);
           var distance = 0;
           var raw = [0];
           var trouble = null;
@@ -382,6 +628,7 @@ const jsonLd = {
           var chance = Math.max(0.05, rating / totalRating);
           return Object.assign({}, horse, {
             rating: rating,
+            fanBoost: fanBoost,
             odds: (1 / chance).toFixed(1) + 'x',
             raw: raw,
             finish: raw[raw.length - 1],
@@ -466,7 +713,9 @@ const jsonLd = {
               '<strong data-live-leader>Awaiting break</strong>' +
               '<em data-live-gap>0.00L</em>' +
             '</div>' +
-            '<div class="race-cinema__signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
+            '<div class="race-cinema__signal" data-live-board>' +
+              '<span>TOP THREE</span><b>--</b><b>--</b><b>--</b><strong>0.00L</strong><i>GATES</i>' +
+            '</div>' +
           '</div>' +
           '<div class="track-ruler"><span>GATE</span><span>BACKSTRETCH</span><span>TURN</span><span>WIRE</span></div>' +
           sim.runners.map(function (runner) {
@@ -491,9 +740,11 @@ const jsonLd = {
 
       function renderField() {
         fieldList.innerHTML = state.sim.runners.map(function (runner) {
+          var fanBoost = Number(runner.fanBoost || 0);
+          var fanLine = fanBoost > 0 ? '+' + fanBoost.toFixed(fanBoost % 1 ? 1 : 0) + ' fan form' : 'base form';
           return '<article class="horse-card" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + '">' +
             '<div class="horse-card__top"><span>G' + runner.gate + '</span><strong>' + escapeHtml(runner.name) + '</strong><small>' + escapeHtml(runner.odds) + '</small></div>' +
-            '<p>' + escapeHtml(runner.stable) + '</p>' +
+            '<p>' + escapeHtml(runner.stable) + ' / ' + escapeHtml(fanLine) + '</p>' +
             '<em>' + escapeHtml(runner.bloodline) + '</em>' +
             '<div class="stats">' + statBars(runner) + '</div>' +
           '</article>';
@@ -501,18 +752,37 @@ const jsonLd = {
       }
 
       function receiptFor(sim) {
+        var selectedStable = stableById(fanState.selectedStableId);
+        var selectedSupport = selectedStable ? stableSupport(selectedStable.id) : 0;
+        var selectedTier = fanTier(selectedSupport);
+        var dailyRace = dailyRaceFor(state.dailyRaceId);
         return {
           version: DATA.version,
           raceId: sim.raceId,
           seed: sim.seed,
           track: sim.track.id,
+          dailyRace: dailyRace ? {
+            id: dailyRace.id,
+            label: dailyRace.label,
+            dateKey: ptDateKey(),
+          } : null,
           generatedAt: new Date().toISOString(),
           winner: sim.winner.slug,
+          fanBacking: {
+            mode: 'local-practice',
+            stableId: selectedStable ? selectedStable.id : null,
+            stable: selectedStable ? selectedStable.name : null,
+            support: selectedSupport,
+            tier: selectedTier.label,
+            boost: selectedTier.boost,
+          },
           field: sim.runners.map(function (runner) {
             return {
               slug: runner.slug,
               gate: runner.gate,
               agent: runner.agent,
+              stable: runner.stable,
+              fanBoost: runner.fanBoost,
               rating: Number(runner.rating.toFixed(2)),
             };
           }),
@@ -520,6 +790,7 @@ const jsonLd = {
           margins: sim.order.map(function (runner) {
             return { slug: runner.slug, margin: runner.margin, time: runner.time };
           }),
+          badges: Object.keys(readBadges()).sort(),
         };
       }
 
@@ -534,12 +805,13 @@ const jsonLd = {
         }
         var order = state.sim.order;
         var winner = order[0];
+        var winnerBoost = Number(winner.fanBoost || 0);
         podium.innerHTML =
           '<article class="finish-hero" style="--coat:' + escapeHtml(winner.coat) + ';--accent:' + escapeHtml(winner.accent) + '">' +
             '<div class="finish-hero__copy">' +
               '<span>PHOTO / WINNER</span>' +
               '<strong>' + escapeHtml(winner.name) + '</strong>' +
-              '<small>' + escapeHtml(winner.agent) + ' / ' + escapeHtml(winner.stable) + ' / ' + winner.time.toFixed(2) + 's</small>' +
+              '<small>' + escapeHtml(winner.agent) + ' / ' + escapeHtml(winner.stable) + ' / ' + winner.time.toFixed(2) + 's / +' + winnerBoost.toFixed(winnerBoost % 1 ? 1 : 0) + ' fan form</small>' +
             '</div>' +
             '<div class="finish-hero__mark">' + horseSvg() + '</div>' +
           '</article>' +
@@ -550,7 +822,7 @@ const jsonLd = {
               return '<article class="finish-row" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + ';--p:' + Math.max(8, 100 - runner.margin * 7) + '%">' +
                 '<span>' + String(place).padStart(2, '0') + '</span>' +
                 '<strong>' + escapeHtml(runner.name) + '</strong>' +
-                '<small>' + beaten + ' / ' + runner.time.toFixed(2) + 's</small>' +
+                '<small>' + beaten + ' / ' + runner.time.toFixed(2) + 's / ' + escapeHtml(runner.stable) + '</small>' +
                 '<i></i>' +
               '</article>';
             }).join('') +
@@ -605,6 +877,8 @@ const jsonLd = {
         url.searchParams.set('track', state.trackId);
         if (state.focusAgent) url.searchParams.set('agents', state.focusAgent);
         else url.searchParams.delete('agents');
+        if (state.dailyRaceId) url.searchParams.set('daily', state.dailyRaceId);
+        else url.searchParams.delete('daily');
         window.history.replaceState({}, '', url);
       }
 
@@ -623,9 +897,19 @@ const jsonLd = {
         var leaderEl = trackStage.querySelector('[data-live-leader]');
         var gapEl = trackStage.querySelector('[data-live-gap]');
         var heatEl = trackStage.querySelector('[data-race-heat]');
+        var liveBoard = trackStage.querySelector('[data-live-board]');
         if (leaderEl) leaderEl.textContent = leader ? leader.name + ' shows the way' : 'Awaiting break';
         if (gapEl) gapEl.textContent = gap.toFixed(2) + 'L';
         if (heatEl) heatEl.textContent = heat;
+        if (liveBoard) {
+          liveBoard.innerHTML =
+            '<span>TOP THREE</span>' +
+            indexed.slice(0, 3).map(function (item, index) {
+              return '<b><em>' + (index + 1) + '</em>' + escapeHtml(item.runner.name) + '</b>';
+            }).join('') +
+            '<strong>' + gap.toFixed(2) + 'L</strong>' +
+            '<i>' + escapeHtml(heat) + '</i>';
+        }
 
         indexed.forEach(function (item, index) {
           var runner = item.runner;
@@ -660,6 +944,9 @@ const jsonLd = {
         updateUrl();
         renderTrackTabs();
         renderQuickPicks();
+        renderDailyBoard();
+        renderStableFans();
+        renderBadges();
         renderTrack();
         renderField();
         renderReceipt(null);
@@ -696,6 +983,10 @@ const jsonLd = {
           if (state.frame >= FRAME_COUNT) {
             window.clearInterval(state.timer);
             state.racing = false;
+            awardBadge('first-race');
+            awardBadge('receipt-desk');
+            if (state.dailyRaceId) awardBadge('daily-runner');
+            if (state.sim.order[1] && state.sim.order[1].margin < 0.5) awardBadge('photo-hunter');
             state.receipt = receiptFor(state.sim);
             writeHistory(state.receipt);
             setStateLabel('PHOTO');
@@ -715,14 +1006,72 @@ const jsonLd = {
         var button = event.target.closest('[data-track]');
         if (!button || state.racing) return;
         state.trackId = button.getAttribute('data-track');
+        state.dailyRaceId = '';
         prepareRace({ keepField: true });
       });
 
       root.addEventListener('click', function (event) {
+        var dailyPick = event.target.closest('[data-daily-race]');
+        if (dailyPick && !state.racing) {
+          var dailyRace = dailyRaceFor(dailyPick.getAttribute('data-daily-race') || '');
+          if (dailyRace) {
+            var stable = stableById(dailyRace.featuredStable);
+            var featuredHorse = stable ? ROSTER.find(function (horse) {
+              var horseStable = stableForHorse(horse);
+              return horseStable && horseStable.id === stable.id;
+            }) : null;
+            state.dailyRaceId = dailyRace.id;
+            state.trackId = dailyRace.track;
+            state.seed = dailySeed(dailyRace);
+            state.focusAgent = featuredHorse ? featuredHorse.slug : '';
+            seedInput.value = state.seed;
+            prepareRace();
+          }
+          return;
+        }
+
+        var stablePick = event.target.closest('[data-fan-stable]');
+        if (stablePick && !state.racing) {
+          var stableId = stablePick.getAttribute('data-fan-stable') || '';
+          if (stableById(stableId)) {
+            fanState.selectedStableId = stableId;
+            fanState.stables[stableId] = fanState.stables[stableId] || { support: 0, fanSince: new Date().toISOString() };
+            awardBadge('first-fan');
+            saveFanState();
+            prepareRace({ keepField: true });
+          }
+          return;
+        }
+
+        var stableBack = event.target.closest('[data-fan-back]');
+        if (stableBack && !state.racing) {
+          var backStableId = stableBack.getAttribute('data-fan-back') || '';
+          var amount = Number(stableBack.getAttribute('data-amount') || 50);
+          if (stableById(backStableId)) {
+            fanState.selectedStableId = backStableId;
+            fanState.stables[backStableId] = fanState.stables[backStableId] || { support: 0, fanSince: new Date().toISOString() };
+            fanState.stables[backStableId].support = Math.max(0, Number(fanState.stables[backStableId].support || 0) + amount);
+            if (fanState.stables[backStableId].support >= 50) awardBadge('stable-backer');
+            if (fanState.stables[backStableId].support >= 150) awardBadge('stable-builder');
+            awardBadge('first-fan');
+            saveFanState();
+            prepareRace({ keepField: true });
+          }
+          return;
+        }
+
         var pick = event.target.closest('[data-quick-agent]');
         if (pick && !state.racing) {
           state.focusAgent = pick.getAttribute('data-quick-agent') || '';
+          state.dailyRaceId = '';
           prepareRace();
+          return;
+        }
+
+        if (fanReset && event.target === fanReset && !state.racing) {
+          fanState = defaultFanState();
+          writeJson(FAN_STORAGE_KEY, fanState);
+          prepareRace({ keepField: true });
           return;
         }
 
@@ -732,6 +1081,7 @@ const jsonLd = {
 
         if (name === 'run') playRace();
         if (name === 'quick-run' && !state.racing) {
+          state.dailyRaceId = '';
           state.seed = 'race-' + Date.now().toString(36).slice(-7);
           seedInput.value = state.seed;
           prepareRace();
@@ -740,6 +1090,7 @@ const jsonLd = {
         if (name === 'reset' && !state.racing) prepareRace({ keepField: true });
         if (name === 'new-field' && !state.racing) {
           state.focusAgent = '';
+          state.dailyRaceId = '';
           state.seed = 'race-' + Date.now().toString(36).slice(-7);
           seedInput.value = state.seed;
           prepareRace();
@@ -754,6 +1105,7 @@ const jsonLd = {
       seedInput.addEventListener('change', function () {
         if (state.racing) return;
         state.seed = seedInput.value.trim() || 'gamgee-rc0';
+        state.dailyRaceId = '';
         seedInput.value = state.seed;
         prepareRace();
       });
@@ -1135,7 +1487,7 @@ const jsonLd = {
 
   .track-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
     border: 1px solid #12110e;
     background: #fff;
   }
@@ -1223,6 +1575,70 @@ const jsonLd = {
   .mini-btn:disabled {
     opacity: 0.48;
     cursor: not-allowed;
+  }
+
+  .v3-board {
+    padding: 18px 0 20px;
+    border-bottom: 1px solid #c7c0ad;
+    background:
+      linear-gradient(90deg, rgba(24, 95, 165, 0.12), rgba(244, 178, 63, 0.12) 42%, rgba(190, 24, 93, 0.1)),
+      #fffaf0;
+  }
+
+  .v3-board__head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+
+  .v3-board__head h2 {
+    margin: 0;
+    font-size: 31px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .v3-board__head a {
+    align-self: center;
+    padding: 7px 9px;
+    border: 1px solid #12110e;
+    background: #fffdf4;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .v3-board__kicker {
+    margin: 0 0 5px;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .daily-card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .fan-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+    gap: 12px;
+  }
+
+  .fan-panel,
+  .badge-panel {
+    min-width: 0;
+    padding: 12px;
+    border: 1.5px solid #12110e;
+    background: rgba(255, 253, 244, 0.86);
+    box-shadow: 5px 5px 0 rgba(18, 17, 14, 0.1);
   }
 
   .poster-wall {
@@ -1475,28 +1891,59 @@ const jsonLd = {
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
-    align-items: end;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 10px;
+    align-content: center;
     padding: 14px;
     border-left: 1px solid rgba(255, 248, 223, 0.22);
+    background:
+      linear-gradient(135deg, rgba(255, 248, 223, 0.08), transparent),
+      rgba(18, 17, 14, 0.28);
+  }
+
+  .race-cinema__signal span,
+  .race-cinema__signal strong,
+  .race-cinema__signal i {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .race-cinema__signal span {
+    grid-column: 1 / -1;
+    color: #f4b23f;
+  }
+
+  .race-cinema__signal b {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+    color: #fff8df;
+    font-size: 12px;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .race-cinema__signal b em {
+    padding: 2px 4px;
+    background: #f4b23f;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-style: normal;
+    text-align: center;
+  }
+
+  .race-cinema__signal strong {
+    color: #8fd8ff;
   }
 
   .race-cinema__signal i {
-    display: block;
-    min-height: 16px;
-    background: #f4b23f;
-    transform: skewX(-12deg);
-  }
-
-  .race-cinema__signal i:nth-child(2n) {
-    min-height: 34px;
-    background: #8fd8ff;
-  }
-
-  .race-cinema__signal i:nth-child(3n) {
-    min-height: 48px;
-    background: #f27c5f;
+    color: #f27c5f;
+    font-style: normal;
   }
 
   .track-ruler {
@@ -2046,9 +2493,14 @@ const jsonLd = {
 
     .control-deck,
     .play-deck,
+    .fan-grid,
     .race-grid,
     .race-bottom {
       grid-template-columns: 1fr;
+    }
+
+    .daily-card-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .track-card,
@@ -2079,8 +2531,10 @@ const jsonLd = {
 
     .mast,
     .mast__rail,
+    .v3-board__head,
     .poster-wall__head,
     .quick-picks,
+    .daily-card-grid,
     .poster-grid {
       grid-template-columns: 1fr;
     }
@@ -2223,6 +2677,140 @@ const jsonLd = {
     color: #f4b23f;
   }
 
+  .derby-page .daily-race-card {
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    padding: 12px;
+    border: 1.5px solid #12110e;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--stable) 18%, transparent), transparent 62%),
+      #fffdf4;
+    box-shadow: inset 0 5px 0 var(--stable-accent);
+  }
+
+  .derby-page .daily-race-card[data-selected="true"] {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--stable) 28%, transparent), transparent 58%),
+      #fff8df;
+    box-shadow: inset 0 5px 0 var(--stable-accent), 0 0 0 2px #12110e;
+  }
+
+  .derby-page .daily-race-card div,
+  .derby-page .stable-fan-card div:first-child {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+  }
+
+  .derby-page .daily-race-card span,
+  .derby-page .stable-fan-card span {
+    padding: 4px 6px;
+    background: #12110e;
+    color: #fff8df;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .derby-page .daily-race-card strong,
+  .derby-page .stable-fan-card strong {
+    min-width: 0;
+    font-size: 17px;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .daily-race-card p,
+  .derby-page .daily-race-card small,
+  .derby-page .stable-fan-card p,
+  .derby-page .stable-fan-card small {
+    margin: 0;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .derby-page .daily-race-card small,
+  .derby-page .stable-fan-card small {
+    color: #5f5e5a;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .derby-page .stable-fan-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .derby-page .stable-fan-card {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    box-shadow: inset 5px 0 0 var(--stable);
+  }
+
+  .derby-page .stable-fan-card[data-selected="true"] {
+    border-color: #12110e;
+    background: color-mix(in srgb, var(--stable-accent) 24%, #fff 76%);
+    box-shadow: inset 5px 0 0 var(--stable), 0 0 0 2px #12110e;
+  }
+
+  .derby-page .stable-fan-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .derby-page .badge-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .derby-page .badge-token {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+    opacity: 0.58;
+  }
+
+  .derby-page .badge-token[data-earned="true"] {
+    border-color: #12110e;
+    background: #fff8df;
+    box-shadow: inset 0 5px 0 #f4b23f;
+    opacity: 1;
+  }
+
+  .derby-page .badge-token span {
+    justify-self: start;
+    padding: 4px 6px;
+    background: #12110e;
+    color: #f4b23f;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+  }
+
+  .derby-page .badge-token strong {
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
+  .derby-page .badge-token small {
+    color: #5f5e5a;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
   .derby-page .track-ruler {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2304,28 +2892,59 @@ const jsonLd = {
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
-    align-items: end;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 10px;
+    align-content: center;
     padding: 14px;
     border-left: 1px solid rgba(255, 248, 223, 0.22);
+    background:
+      linear-gradient(135deg, rgba(255, 248, 223, 0.08), transparent),
+      rgba(18, 17, 14, 0.28);
+  }
+
+  .derby-page .race-cinema__signal span,
+  .derby-page .race-cinema__signal strong,
+  .derby-page .race-cinema__signal i {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .derby-page .race-cinema__signal span {
+    grid-column: 1 / -1;
+    color: #f4b23f;
+  }
+
+  .derby-page .race-cinema__signal b {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+    color: #fff8df;
+    font-size: 12px;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .race-cinema__signal b em {
+    padding: 2px 4px;
+    background: #f4b23f;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-style: normal;
+    text-align: center;
+  }
+
+  .derby-page .race-cinema__signal strong {
+    color: #8fd8ff;
   }
 
   .derby-page .race-cinema__signal i {
-    display: block;
-    min-height: 16px;
-    background: #f4b23f;
-    transform: skewX(-12deg);
-  }
-
-  .derby-page .race-cinema__signal i:nth-child(2n) {
-    min-height: 34px;
-    background: #8fd8ff;
-  }
-
-  .derby-page .race-cinema__signal i:nth-child(3n) {
-    min-height: 48px;
-    background: #f27c5f;
+    color: #f27c5f;
+    font-style: normal;
   }
 
   .derby-page .lane {
@@ -2707,7 +3326,18 @@ const jsonLd = {
     font-size: 11px;
   }
 
+  @media (max-width: 1120px) {
+    .derby-page .stable-fan-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   @media (max-width: 720px) {
+    .derby-page .stable-fan-grid,
+    .derby-page .badge-grid {
+      grid-template-columns: 1fr;
+    }
+
     .derby-page .lane {
       grid-template-columns: 1fr;
     }
