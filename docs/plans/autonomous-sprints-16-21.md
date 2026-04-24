@@ -12,14 +12,27 @@ schedules the next wakeup and moves to the next item.
 
 ---
 
-## Sprint 16 — Room Phase 2: multi-visitor cursor + chat broadcast
+## Sprint 16 — Room Phase 2: multi-visitor cursor + chat broadcast ✅ SHIPPED
 
-**Wakeup:** 2026-04-24 00:41 PT (already scheduled)
+**Shipped:** 2026-04-24 ~00:55 PT · PR #40 squashed to main · deploy `ea0577c7`
 
-Extend `workers/presence/src/index.ts` PresenceRoom DO so the
-single-player Room v0 (shipped Sprint 15) becomes real multiplayer.
-Messages: `cursor` + `chat` per URL, throttled + ring-buffered.
-Worker redeploy via `cd workers/presence && npx wrangler deploy`.
+Extended PresenceRoom DO with `cursor` + `chat` message types (no
+migration — in-memory fields only). New `/api/room` Pages Function
+shards the same DO class per URL (`idFromName('room:<path>')`) so each
+URL is its own multiplayer room; `/api/presence → 'global'` stays
+untouched. CursorRoom client opens a WebSocket on toggle, quantizes
+cursor to viewport ×10000 at ≤15 Hz, renders peers as 28px Nouns with
+120ms lerp and their own chat bubbles. Broadcast cadence self-adapts:
+100ms while cursor/chat active, 1s when idle.
+
+Verified live: two concurrent WebSocket peers on `/smoke` each see the
+other's cursor (`peers:1`) and both chat messages (`chat:2`).
+
+Deploy sequence: Worker first (`cd workers/presence && npx wrangler
+deploy`), then Pages. Both already live.
+
+**Open follow-up:** chat rate-limit middleware (1 msg/s/session) is
+deferred to Sprint 18 alongside Voice Dispatch Phase 3's rate limiter.
 
 ---
 
