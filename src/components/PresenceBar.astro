@@ -100,9 +100,25 @@
       return;
     }
 
+    // Sprint 22 — time-aware "ALONE" label. "YOU | ALONE" at 09:00
+    // reads flat; flexing it by hour gives the same solo-visit a
+    // different mood in morning / day / golden / evening / small-hours.
+    function timeOfDayTag() {
+      const h = new Date().getHours();
+      if (h < 6)       return 'SMALL HRS';
+      if (h < 10)      return 'MORNING';
+      if (h < 15)      return 'MIDDAY';
+      if (h < 18)      return 'GOLDEN';
+      if (h < 21)      return 'BLUE HR';
+      return 'EVENING';
+    }
+    function aloneLabel() {
+      return `${timeOfDayTag()} · ONE UP`;
+    }
+
     ws.addEventListener('open', () => {
       if (degrade) clearTimeout(degrade);
-      setLabel('ALONE');
+      setLabel(aloneLabel());
       send('identify');
       stopHeartbeat();
       heartbeat = window.setInterval(() => send('ping'), 30_000);
@@ -118,7 +134,8 @@
         const parts = [];
         if (otherHumans > 0) parts.push(`+${otherHumans} ${otherHumans === 1 ? 'HUMAN' : 'HUMANS'}`);
         if (otherAgents > 0) parts.push(`+${otherAgents} ${otherAgents === 1 ? 'AGENT' : 'AGENTS'}`);
-        setLabel(parts.length ? parts.join(' · ') : 'ALONE');
+        // Solo state gets the time-of-day flex; crowded stays +N style.
+        setLabel(parts.length ? parts.join(' · ') : aloneLabel());
       } catch {}
     });
 

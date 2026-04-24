@@ -40,7 +40,8 @@ type AgentKey = 'codex' | 'manus' | 'claude' | 'mike';
 
 interface LedgerEntry {
   sha: string;
-  when: string;       // short relative, e.g. "12m ago"
+  iso: string;        // ISO8601 — source of truth; client re-renders rel-time on load
+  when: string;       // server-render fallback, e.g. "12m ago" — replaced live
   agent: AgentKey;
   label: string;      // "Codex" / "Manus" / "Claude" / "Mike"
   subject: string;    // commit subject, truncated
@@ -92,6 +93,7 @@ try {
       const cleanSubject = subject.replace(/^\[[a-z]+\]\s*/i, '').replace(/\s*\(#\d+\)\s*$/, '').trim();
       return {
         sha: sha.slice(0, 7),
+        iso,
         when: relTime(iso),
         agent,
         label: AGENT_STYLE[agent].label,
@@ -105,20 +107,117 @@ try {
 ---
 
 {entries.length > 0 && (
-  <aside class="agent-ledger" aria-label="Latest multi-agent commits">
+  <aside class="agent-ledger" aria-label="Latest multi-agent commits" id="agent-ledger">
     <p class="agent-ledger__label">LEDGER · LAST 5 SHIPS</p>
-    <ol class="agent-ledger__list">
+    <ol class="agent-ledger__list" id="agent-ledger-list">
       {entries.map((e) => (
-        <li class={`al al--${e.agent}`}>
+        <li class={`al al--${e.agent}`} data-iso={e.iso}>
           <span class="al__agent">{e.label}</span>
           <span class="al__subject" title={e.subject}>{e.subject}</span>
-          <span class="al__when">{e.when}</span>
+          <time class="al__when" datetime={e.iso}>{e.when}</time>
         </li>
       ))}
     </ol>
     <a class="agent-ledger__more" href="/status">full ledger /status →</a>
   </aside>
 )}
+
+<script is:inline>
+  // Sprint 22 (Mike 2026-04-24 Fri morning): "refresh this and have it
+  // timely, changing based on time of day, number of visits, etc."
+  //
+  // Two jobs:
+  //   1. Re-render rel-time strings from the <time datetime> source so
+  //      "33m ago" keeps ticking forward without a site rebuild. The
+  //      build-time `e.when` was stale the moment the page cached.
+  //   2. On first paint, hydrate the ledger from /api/wire-events so
+  //      any commits that landed AFTER the last deploy get surfaced
+  //      here — using the Sprint 18 MCP endpoint to do the work.
+  (function () {
+    'use strict';
+
+    var $list = document.getElementById('agent-ledger-list');
+    if (!$list) return;
+
+    var AGENT_CLASS = { codex: 'al--codex', manus: 'al--manus', claude: 'al--claude', mike: 'al--mike' };
+    var AGENT_LABEL = { codex: 'Codex', manus: 'Manus', claude: 'Claude', mike: 'Mike' };
+
+    function relTime(iso) {
+      var t = new Date(iso).getTime();
+      if (!isFinite(t)) return '';
+      var d = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (d < 60)            return d + 's ago';
+      if (d < 3600)          return Math.floor(d / 60) + 'm ago';
+      if (d < 86400)         return Math.floor(d / 3600) + 'h ago';
+      if (d < 86400 * 7)     return Math.floor(d / 86400) + 'd ago';
+      return new Date(iso).toISOString().slice(0, 10);
+    }
+
+    function updateRelTimes() {
+      var rows = $list.querySelectorAll('li[data-iso]');
+      rows.forEach(function (row) {
+        var iso = row.getAttribute('data-iso');
+        if (!iso) return;
+        var t = row.querySelector('.al__when');
+        if (t) t.textContent = relTime(iso);
+      });
+    }
+
+    // Rebuild the ledger from a fresh wire-events payload. Keeps the
+    // Mike/Manus attribution cheap — the server already mapped agent
+    // by email + trailer — we just remap to our 4-agent set.
+    function remapAgent(a) {
+      if (a === 'codex' || a === 'manus' || a === 'claude' || a === 'mike') return a;
+      return 'claude'; // safest fallback; 'block' events don't render here
+    }
+
+    function cleanSubject(s) {
+      return String(s || '').replace(/^\[[a-z]+\]\s*/i, '').replace(/\s*\(#\d+\)\s*$/, '').trim();
+    }
+
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+      });
+    }
+
+    async function hydrateFromWire() {
+      try {
+        var res = await fetch('/api/wire-events?kind=commit&limit=5', {
+          cache: 'no-store',
+          headers: { Accept: 'application/json' }
+        });
+        if (!res.ok) return;
+        var data = await res.json();
+        var events = (data && Array.isArray(data.events)) ? data.events : [];
+        if (!events.length) return;
+        var html = events.slice(0, 5).map(function (e) {
+          var agent = remapAgent(e.agent);
+          var cls = AGENT_CLASS[agent];
+          var subject = cleanSubject(e.subject);
+          if (subject.length > 58) subject = subject.slice(0, 55) + '…';
+          return '<li class="al ' + cls + '" data-iso="' + escapeHTML(e.at) + '">' +
+            '<span class="al__agent">' + escapeHTML(AGENT_LABEL[agent]) + '</span>' +
+            '<span class="al__subject" title="' + escapeHTML(subject) + '">' + escapeHTML(subject) + '</span>' +
+            '<time class="al__when" datetime="' + escapeHTML(e.at) + '">' + escapeHTML(relTime(e.at)) + '</time>' +
+          '</li>';
+        }).join('');
+        $list.innerHTML = html;
+      } catch (e) {
+        // Silent fail — build-time render stays.
+      }
+    }
+
+    // Run now + every 60s so the "2m ago" row ticks to "3m ago" while
+    // the tab is open.
+    updateRelTimes();
+    setInterval(updateRelTimes, 60_000);
+
+    // One-shot live hydrate on page load. Cheap — /api/wire-events has
+    // a 15s CDN cache, graceful no-op if the endpoint is unreachable.
+    if (typeof fetch === 'function') hydrateFromWire();
+  })();
+</script>
 
 <style>
   .agent-ledger {
