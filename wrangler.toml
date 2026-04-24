@@ -82,6 +82,26 @@ script_name = "pointcast-presence"
 # binding = "PC_RATES_KV"
 # id = "<paste-from-wrangler>"
 
+# PC_RACE_KV — Race System Phase 2 (RFC 0002) leaderboard store.
+# Keys: `race:{slug}` (full state + sorted entries list) and
+#       `race:{slug}:entrant:{id}` (per-entrant dedup + upsert).
+# TTL: 90 days. Resolved races get snapshotted to
+# src/data/races/{slug}.json via a cron (Phase 5) — KV is the hot
+# store, not the archive.
+# Currently used by:
+#   POST /api/race/{slug}/submit     — 10/hr/IP via PC_RATES_KV
+#   GET  /api/race/{slug}/leaderboard — 60/min/IP via PC_RATES_KV
+# Until bound, both endpoints return `{ reason: 'kv-unbound' }` and
+# degrade to a read-only static UX — matches the Sprint 18 pattern.
+#
+# Provision once:
+#   npx wrangler kv namespace create "PC_RACE_KV"
+#   # then paste the returned id into the block below.
+#
+# [[kv_namespaces]]
+# binding = "PC_RACE_KV"
+# id = "<paste-from-wrangler>"
+
 # TALK_AUDIO — R2 bucket for Voice Dispatch Phase 3 audio persistence.
 # Key layout + TTL + quota thinking in docs/plans/voice-dispatch-phase-3.md.
 # Gated behind env.TALK_AUDIO in functions/api/talk.ts, so adding/removing
