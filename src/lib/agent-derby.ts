@@ -1,4 +1,4 @@
-export const DERBY_VERSION = '0.3.0';
+export const DERBY_VERSION = '0.4.0-v2';
 
 export const DERBY_POSTERS = [
   {
@@ -290,6 +290,7 @@ export const DERBY_RULEBOOK = {
   deterministic: true,
   seedInputs: ['seed', 'track', 'agents'],
   phases: ['gate', 'backstretch', 'turn', 'home stretch', 'photo'],
+  v2Loop: ['pick', 'run', 'record'],
   scoring: {
     weightedTrackBias: 'Each horse stat is multiplied by the selected track bias.',
     gate: 'Gate matters most in the first 20 percent of the race.',
@@ -297,5 +298,10 @@ export const DERBY_RULEBOOK = {
     burst: 'Burst can flip the home stretch when the horse still has enough stamina.',
     nerve: 'Nerve reduces trouble and keeps pace stable in traffic.',
   },
-  storage: 'Race receipts are localStorage only at pc:agent-derby:races.',
+  storage: 'Race receipts are stored locally at pc:agent-derby:races and can be recorded to the Agent Derby Tezos receipt contract once a KT1 is configured.',
+  chain: {
+    network: 'tezos-mainnet',
+    entrypoint: 'record_race',
+    receiptHash: 'sha256(canonical race receipt JSON)',
+  },
 } as const;
