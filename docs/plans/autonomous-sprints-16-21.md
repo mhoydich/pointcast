@@ -134,10 +134,41 @@ whenever #18 lands; tiny PostJSON wire, separate PR.
 
 ---
 
-## Sprint 21 — Tezos planning docs (no origination)
+## Sprint 21 — Tezos planning docs (no origination) ✅ SHIPPED
 
-3 planning docs for tomorrow's mint run: admin transfer, Prize Cast
-spec, Passport Stamps next steps. Docs-only, no deploy needed.
+**Shipped:** 2026-04-24 ~03:55 PT · PR #50 squashed to main · docs-only, no deploy
+
+Three tactical Mike-runbooks filed under `docs/plans/`:
+
+1. **`2026-04-24-admin-transfer.md`** — Visit Nouns FA2 admin transfer
+   runbook. Pre-flight checks, the `scripts/transfer-admin.mjs`
+   invocation, post-transfer verification, a clear after-transfer
+   checklist, and notes for future originations (start admin on Mike's
+   main wallet directly, no throwaway step).
+2. **`2026-04-24-prize-cast-spec.md`** — Prize Cast next-hour tactical
+   plan. Three Mike-decisions that gate everything (compile path,
+   baker delegate, initial cadence + min deposit) + the 45-minute
+   runbook to get from "contract written, untouched" to "ghostnet
+   smoke test confirmed" with 4 core flows verified.
+3. **`2026-04-24-passport-stamps.md`** — v0.1 one-pager. Defines the
+   primitive, relates it to Visit Nouns / Race / Prize Cast / TALK,
+   proposes Path A (KV-only, 2 weeks) vs Path B (FA2, v1), maps seven
+   flagship stamp kinds to triggers, and closes with 7 open questions
+   for Mike + a 3-step go-path.
+
+---
+
+## The whole run: 16 → 21 ✅ COMPLETE
+
+All six sprints shipped one PR each, squash-merged to main, with no
+rollbacks and no deploys that stuck in a bad state. Cloudflare Pages
+ran clean across six deploys; the pointcast-presence Worker redeployed
+once (Sprint 16). Six branches opened, six merged, six deleted.
+
+Merged PRs: #40 · #42 · #44 · #46 · #48 · #50 — plus docs close-outs
+#41 · #43 · #45 · #47 · #49 · (this PR rolls its own close-out).
+
+The autonomous loop rests here until Mike is back.
 
 ---
 
