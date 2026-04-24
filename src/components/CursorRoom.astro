@@ -1,0 +1,422 @@
+---
+/**
+ * CursorRoom — Noun cursor + chat bubbles v0.
+ *
+ * Mike 2026-04-24 ~02:00 PT: "have the ability to turn on a see
+ * cursors and then from your cursor, which should be your noun you
+ * can chat, have a chat bar that you can read and then your noun has
+ * a little chat bubble near the cursor that maybe goes away, chat
+ * from the bottom bar, a bunch of the function."
+ *
+ * v0 (this ship): single-player. Your Noun follows your mouse, you
+ * type from the footer, bubbles appear above your cursor and fade,
+ * the chat log shows recent messages as a subtle ticker above the bar.
+ *
+ * v1 (Phase 2): extend the existing presence Durable Object at
+ * workers/presence to broadcast `cursor` and `chat` messages. Add a
+ * per-URL room isolation + throttled cursor updates (~15/s,
+ * quantized) + chat ring buffer. Render other visitors' Nouns
+ * at their broadcast positions. Toggle stays the same on the bar.
+ *
+ * Privacy: cursor/chat broadcast only when ROOM is toggled on.
+ * localStorage: pc:room:on, pc:room:chat-log (last 20 messages).
+ *
+ * Listens for events from FooterBar:
+ *   pc:room:toggle {detail: {on: boolean}}
+ *   pc:room:chat   {detail: {msg: string}}
+ *
+ * Dispatches back:
+ *   pc:room:log-update {detail: {log: Array<{msg, at}>}}
+ */
+
+// Day-seeded Noun ID as fallback when no wallet-bound Noun is known.
+function dailyNounId(): number {
+  const day = Math.floor(Date.now() / (24 * 3600 * 1000));
+  const seed = ((day + 13) * 2654435761) >>> 0;
+  return seed % 1200;
+}
+const seedNounId = dailyNounId();
+---
+
+<div
+  class="cursor-room"
+  id="cursor-room"
+  aria-hidden="true"
+  data-on="false"
+  data-seed-noun={seedNounId}
+>
+  <!-- Your Noun cursor -->
+  <div class="cr-cursor" id="cr-cursor" style="display:none;">
+    <img
+      class="cr-cursor__noun"
+      id="cr-cursor-noun"
+      src={`https://noun.pics/${seedNounId}.svg`}
+      alt=""
+      width="32"
+      height="32"
+    />
+    <div class="cr-cursor__bubble" id="cr-cursor-bubble" hidden></div>
+    <div class="cr-cursor__tag mono" id="cr-cursor-tag">visitor</div>
+  </div>
+
+  <!-- Chat log ticker (above the footer bar) -->
+  <div class="cr-log" id="cr-log" hidden>
+    <p class="cr-log__head mono">
+      <span class="cr-log__dot" aria-hidden="true"></span>
+      <span>ROOM · RECENT</span>
+    </p>
+    <ol class="cr-log__list" id="cr-log-list"></ol>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var ROOT = document.getElementById('cursor-room');
+    if (!ROOT) return;
+
+    var CHAT_STORAGE = 'pc:room:chat-log';
+    var ON_STORAGE = 'pc:room:on';
+    var MAX_LOG = 12;
+    var BUBBLE_TTL_MS = 8_000;
+
+    var $cursor  = document.getElementById('cr-cursor');
+    var $noun    = document.getElementById('cr-cursor-noun');
+    var $bubble  = document.getElementById('cr-cursor-bubble');
+    var $tag     = document.getElementById('cr-cursor-tag');
+    var $log     = document.getElementById('cr-log');
+    var $logList = document.getElementById('cr-log-list');
+
+    var state = {
+      on: false,
+      targetX: 0,
+      targetY: 0,
+      renderX: 0,
+      renderY: 0,
+      hasMouse: false,
+    };
+    var bubbleTimeout = null;
+
+    // ─── persistence ────────────────────────────────────────────
+    function loadLog() {
+      try {
+        var raw = sessionStorage.getItem(CHAT_STORAGE);
+        if (!raw) return [];
+        var p = JSON.parse(raw);
+        return Array.isArray(p) ? p.slice(-MAX_LOG) : [];
+      } catch (e) { return []; }
+    }
+    function saveLog(log) {
+      try { sessionStorage.setItem(CHAT_STORAGE, JSON.stringify(log.slice(-MAX_LOG))); } catch (e) {}
+    }
+    function loadOn() {
+      try { return localStorage.getItem(ON_STORAGE) === '1'; } catch (e) { return false; }
+    }
+    function saveOn(on) {
+      try { localStorage.setItem(ON_STORAGE, on ? '1' : '0'); } catch (e) {}
+    }
+
+    // ─── wallet / noun resolution ───────────────────────────────
+    function resolveMeTag() {
+      try {
+        var activeAddr = localStorage.getItem('pc:wallet-active');
+        if (activeAddr) return activeAddr.slice(0, 6) + '…' + activeAddr.slice(-4);
+      } catch (e) {}
+      return 'visitor';
+    }
+
+    function refreshMe() {
+      if ($tag) $tag.textContent = resolveMeTag();
+      // Noun may change with wallet binding later; for now use day-seeded.
+      var seed = parseInt(ROOT.getAttribute('data-seed-noun') || '0', 10);
+      if ($noun) $noun.src = 'https://noun.pics/' + seed + '.svg';
+    }
+
+    // ─── log render ─────────────────────────────────────────────
+    function renderLog() {
+      if (!$logList) return;
+      var log = loadLog();
+      $logList.innerHTML = '';
+      if (log.length === 0) {
+        $log.hidden = true;
+        return;
+      }
+      $log.hidden = false;
+      // Show the last 5 lines in the ticker.
+      log.slice(-5).forEach(function (entry) {
+        var li = document.createElement('li');
+        li.className = 'cr-log__line';
+        var who = document.createElement('span');
+        who.className = 'cr-log__who mono';
+        who.textContent = entry.who || 'visitor';
+        var msg = document.createElement('span');
+        msg.className = 'cr-log__msg';
+        msg.textContent = entry.msg;
+        li.appendChild(who);
+        li.appendChild(msg);
+        $logList.appendChild(li);
+      });
+      window.dispatchEvent(new CustomEvent('pc:room:log-update', { detail: { log: log } }));
+    }
+
+    // ─── cursor motion ──────────────────────────────────────────
+    function onMouseMove(e) {
+      state.targetX = e.clientX;
+      state.targetY = e.clientY;
+      state.hasMouse = true;
+    }
+
+    function animate() {
+      // Smooth trailing cursor — lerp at ~0.3 toward target.
+      if (state.hasMouse) {
+        state.renderX += (state.targetX - state.renderX) * 0.35;
+        state.renderY += (state.targetY - state.renderY) * 0.35;
+        $cursor.style.transform = 'translate3d(' + (state.renderX - 16) + 'px, ' + (state.renderY - 16) + 'px, 0)';
+      }
+      requestAnimationFrame(animate);
+    }
+
+    // ─── chat bubble ────────────────────────────────────────────
+    function showBubble(msg) {
+      if (!$bubble) return;
+      $bubble.textContent = msg;
+      $bubble.hidden = false;
+      $bubble.classList.remove('cr-cursor__bubble--leaving');
+      if (bubbleTimeout) clearTimeout(bubbleTimeout);
+      bubbleTimeout = setTimeout(function () {
+        $bubble.classList.add('cr-cursor__bubble--leaving');
+        setTimeout(function () {
+          $bubble.hidden = true;
+          $bubble.classList.remove('cr-cursor__bubble--leaving');
+        }, 500);
+      }, BUBBLE_TTL_MS);
+    }
+
+    // ─── toggle on/off ──────────────────────────────────────────
+    function setRoomOn(on) {
+      state.on = on;
+      ROOT.setAttribute('data-on', on ? 'true' : 'false');
+      if (on) {
+        $cursor.style.display = 'block';
+        document.documentElement.classList.add('cr-cursor-active');
+        refreshMe();
+        renderLog();
+      } else {
+        $cursor.style.display = 'none';
+        document.documentElement.classList.remove('cr-cursor-active');
+        $log.hidden = true;
+      }
+      saveOn(on);
+    }
+
+    // ─── chat submit ────────────────────────────────────────────
+    function submitChat(msg) {
+      msg = String(msg || '').trim().slice(0, 120);
+      if (!msg) return;
+      var log = loadLog();
+      log.push({ who: resolveMeTag(), msg: msg, at: Date.now() });
+      saveLog(log);
+      showBubble(msg);
+      renderLog();
+    }
+
+    // ─── event bus ──────────────────────────────────────────────
+    window.addEventListener('pc:room:toggle', function (e) {
+      var on = !!(e && e.detail && e.detail.on);
+      setRoomOn(on);
+    });
+    window.addEventListener('pc:room:chat', function (e) {
+      var msg = e && e.detail && e.detail.msg;
+      if (msg) submitChat(msg);
+    });
+    window.addEventListener('pc:wallet-change', refreshMe);
+
+    document.addEventListener('mousemove', function (e) {
+      if (state.on) onMouseMove(e);
+    }, { passive: true });
+
+    // Boot: if previously on, turn on again.
+    if (loadOn()) setRoomOn(true);
+    animate();
+  })();
+</script>
+
+<style>
+  .cursor-room { pointer-events: none; }
+
+  /* When active, hide the native cursor site-wide */
+  html.cr-cursor-active,
+  html.cr-cursor-active body {
+    cursor: none;
+  }
+  html.cr-cursor-active * { cursor: inherit !important; }
+  html.cr-cursor-active input,
+  html.cr-cursor-active textarea,
+  html.cr-cursor-active select,
+  html.cr-cursor-active button,
+  html.cr-cursor-active [contenteditable] {
+    cursor: auto !important;
+  }
+
+  .cr-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 32px;
+    height: 32px;
+    z-index: 60;
+    pointer-events: none;
+    will-change: transform;
+  }
+  .cr-cursor__noun {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #1a1004;
+    image-rendering: pixelated;
+    box-shadow:
+      inset 0 0 0 2px #4e3a16,
+      0 0 14px rgba(255, 150, 60, 0.45);
+  }
+  .cr-cursor__tag {
+    position: absolute;
+    left: 38px;
+    top: 8px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #fdf2d6;
+    background: rgba(26, 18, 8, 0.8);
+    padding: 2px 6px;
+    border-radius: 2px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+
+  /* Chat bubble above cursor */
+  .cr-cursor__bubble {
+    position: absolute;
+    bottom: 38px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 260px;
+    padding: 6px 10px;
+    background: #fffdf6;
+    color: #2d1f08;
+    border: 1px solid #4e3a16;
+    border-radius: 8px;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: cr-bubble-in 0.3s ease-out;
+  }
+  .cr-cursor__bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid #fffdf6;
+  }
+  .cr-cursor__bubble--leaving {
+    animation: cr-bubble-out 0.5s ease-out forwards;
+  }
+  @keyframes cr-bubble-in {
+    0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.9); }
+    100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  }
+  @keyframes cr-bubble-out {
+    0%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
+  }
+
+  /* Chat log (above footer bar) */
+  .cr-log {
+    pointer-events: auto;
+    position: fixed;
+    right: 12px;
+    bottom: 58px;
+    z-index: 39;
+    width: min(320px, calc(100vw - 24px));
+    padding: 10px 12px;
+    background: rgba(26, 18, 8, 0.85);
+    border: 1px solid rgba(255, 180, 80, 0.22);
+    border-radius: 3px;
+    color: #fdf2d6;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .cr-log__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    color: #f9c56c;
+    margin: 0 0 6px;
+  }
+  .cr-log__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #2f8f5f;
+    box-shadow: 0 0 6px rgba(47, 143, 95, 0.6);
+    animation: cr-log-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes cr-log-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  .cr-log__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .cr-log__line {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 6px;
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+  .cr-log__who {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: #f9c56c;
+    opacity: 0.85;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-top: 1px;
+  }
+  .cr-log__msg {
+    font-family: Georgia, serif;
+    color: #fdf2d6;
+    word-wrap: break-word;
+  }
+
+  @media (max-width: 560px) {
+    .cr-log { right: 6px; left: 6px; width: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cr-cursor { transition: none; }
+    .cr-cursor__bubble { animation: none; }
+    .cr-log__dot { animation: none; }
+  }
+</style>

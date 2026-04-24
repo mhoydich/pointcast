@@ -419,6 +419,13 @@ const jsonLd = {
           '</svg>';
       }
 
+      function laneTelemetry(runner) {
+        var topStat = STATS.slice().sort(function (a, b) {
+          return runner.stats[b] - runner.stats[a];
+        })[0];
+        return topStat.toUpperCase() + ' ' + runner.stats[topStat];
+      }
+
       function statBars(horse) {
         return STATS.map(function (stat) {
           var value = horse.stats[stat];
@@ -453,13 +460,30 @@ const jsonLd = {
         fieldSummary.textContent = sim.runners.length + ' gates loaded';
 
         trackStage.innerHTML =
+          '<div class="race-cinema">' +
+            '<div class="race-cinema__hud">' +
+              '<span data-race-heat>GATES READY</span>' +
+              '<strong data-live-leader>Awaiting break</strong>' +
+              '<em data-live-gap>0.00L</em>' +
+            '</div>' +
+            '<div class="race-cinema__signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
+          '</div>' +
           '<div class="track-ruler"><span>GATE</span><span>BACKSTRETCH</span><span>TURN</span><span>WIRE</span></div>' +
           sim.runners.map(function (runner) {
-            return '<div class="lane" data-lane="' + escapeHtml(runner.slug) + '">' +
-              '<div class="lane__meta"><span>G' + runner.gate + '</span><strong>' + escapeHtml(runner.name) + '</strong><small>' + escapeHtml(runner.agent) + ' / ' + runner.odds + '</small></div>' +
+            return '<div class="lane" data-lane="' + escapeHtml(runner.slug) + '" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + '">' +
+              '<div class="lane__meta">' +
+                '<span>G' + runner.gate + '</span>' +
+                '<strong>' + escapeHtml(runner.name) + '</strong>' +
+                '<small>' + escapeHtml(runner.agent) + ' / ' + runner.odds + '</small>' +
+                '<div class="lane__telemetry"><b data-rank="' + escapeHtml(runner.slug) + '">--</b><i>' + escapeHtml(laneTelemetry(runner)) + '</i></div>' +
+              '</div>' +
               '<div class="lane__rail">' +
                 '<span class="lane__fill" data-fill="' + escapeHtml(runner.slug) + '"></span>' +
-                '<span class="runner" data-runner="' + escapeHtml(runner.slug) + '" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + ';left:3%;">' + horseSvg() + '</span>' +
+                '<span class="lane__wake" data-wake="' + escapeHtml(runner.slug) + '"></span>' +
+                '<span class="runner" data-runner="' + escapeHtml(runner.slug) + '" style="left:3%;">' +
+                  horseSvg() +
+                  '<span class="runner__tag">' + escapeHtml(runner.agent) + '</span>' +
+                '</span>' +
               '</div>' +
             '</div>';
           }).join('');
@@ -505,18 +529,32 @@ const jsonLd = {
 
       function renderPodium() {
         if (!state.receipt) {
-          podium.innerHTML = '<p>Gates are loaded.</p>';
+          podium.innerHTML = '<p>Gates are loaded. The finish board will light after PHOTO.</p>';
           return;
         }
         var order = state.sim.order;
-        podium.innerHTML = order.slice(0, 3).map(function (runner, index) {
-          var place = index + 1;
-          return '<article class="podium-step podium-step--' + place + '" style="--coat:' + escapeHtml(runner.coat) + '">' +
-            '<span>' + place + '</span>' +
-            '<strong>' + escapeHtml(runner.name) + '</strong>' +
-            '<small>' + (runner.margin === 0 ? 'winner' : runner.margin + ' lengths') + '</small>' +
-          '</article>';
-        }).join('');
+        var winner = order[0];
+        podium.innerHTML =
+          '<article class="finish-hero" style="--coat:' + escapeHtml(winner.coat) + ';--accent:' + escapeHtml(winner.accent) + '">' +
+            '<div class="finish-hero__copy">' +
+              '<span>PHOTO / WINNER</span>' +
+              '<strong>' + escapeHtml(winner.name) + '</strong>' +
+              '<small>' + escapeHtml(winner.agent) + ' / ' + escapeHtml(winner.stable) + ' / ' + winner.time.toFixed(2) + 's</small>' +
+            '</div>' +
+            '<div class="finish-hero__mark">' + horseSvg() + '</div>' +
+          '</article>' +
+          '<div class="finish-board">' +
+            order.map(function (runner, index) {
+              var place = index + 1;
+              var beaten = runner.margin === 0 ? 'winner' : runner.margin.toFixed(2) + 'L';
+              return '<article class="finish-row" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + ';--p:' + Math.max(8, 100 - runner.margin * 7) + '%">' +
+                '<span>' + String(place).padStart(2, '0') + '</span>' +
+                '<strong>' + escapeHtml(runner.name) + '</strong>' +
+                '<small>' + beaten + ' / ' + runner.time.toFixed(2) + 's</small>' +
+                '<i></i>' +
+              '</article>';
+            }).join('') +
+          '</div>';
       }
 
       function readHistory() {
@@ -571,13 +609,42 @@ const jsonLd = {
       }
 
       function updatePositions(frame) {
-        state.sim.runners.forEach(function (runner) {
+        var indexed = state.sim.runners.map(function (runner) {
+          var progress = runner.positions[Math.min(frame, runner.positions.length - 1)] || 0;
+          return { runner: runner, progress: progress };
+        }).sort(function (a, b) {
+          return b.progress - a.progress || a.runner.gate - b.runner.gate;
+        });
+        var leader = indexed[0] && indexed[0].runner;
+        var secondProgress = indexed[1] ? indexed[1].progress : indexed[0]?.progress || 0;
+        var leaderProgress = indexed[0]?.progress || 0;
+        var gap = Math.max(0, (leaderProgress - secondProgress) * 0.12);
+        var heat = frame >= FRAME_COUNT ? 'PHOTO FINISH' : frame > 92 ? 'WIRE RUN' : frame > 58 ? 'FAR TURN' : frame > 25 ? 'BACKSTRETCH' : 'BREAK';
+        var leaderEl = trackStage.querySelector('[data-live-leader]');
+        var gapEl = trackStage.querySelector('[data-live-gap]');
+        var heatEl = trackStage.querySelector('[data-race-heat]');
+        if (leaderEl) leaderEl.textContent = leader ? leader.name + ' shows the way' : 'Awaiting break';
+        if (gapEl) gapEl.textContent = gap.toFixed(2) + 'L';
+        if (heatEl) heatEl.textContent = heat;
+
+        indexed.forEach(function (item, index) {
+          var runner = item.runner;
           var progress = runner.positions[Math.min(frame, runner.positions.length - 1)] || 0;
           var x = 3 + progress * 0.935;
+          var lane = trackStage.querySelector('[data-lane="' + runner.slug + '"]');
           var marker = trackStage.querySelector('[data-runner="' + runner.slug + '"]');
           var fill = trackStage.querySelector('[data-fill="' + runner.slug + '"]');
+          var wake = trackStage.querySelector('[data-wake="' + runner.slug + '"]');
+          var rank = trackStage.querySelector('[data-rank="' + runner.slug + '"]');
+          if (lane) {
+            lane.style.setProperty('--progress', progress.toFixed(2) + '%');
+            lane.style.setProperty('--rank', index + 1);
+            lane.classList.toggle('lane--leader', index === 0);
+          }
           if (marker) marker.style.left = x + '%';
           if (fill) fill.style.width = Math.max(0, x - 3) + '%';
+          if (wake) wake.style.width = Math.max(0, x - 8) + '%';
+          if (rank) rank.textContent = '#' + (index + 1);
         });
       }
 
@@ -1337,9 +1404,99 @@ const jsonLd = {
     position: relative;
     overflow: hidden;
     border: 1.5px solid #12110e;
+    box-shadow: 0 18px 0 rgba(18, 17, 14, 0.06);
     background:
+      repeating-linear-gradient(135deg, rgba(18, 17, 14, 0.035) 0 8px, transparent 8px 18px),
       linear-gradient(90deg, transparent 0 24%, rgba(24, 95, 165, 0.08) 24% 25%, transparent 25% 49%, rgba(32, 140, 75, 0.08) 49% 50%, transparent 50% 74%, rgba(154, 90, 24, 0.08) 74% 75%, transparent 75%),
       #fffaf0;
+  }
+
+  .race-cinema {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.72fr);
+    min-height: 78px;
+    overflow: hidden;
+    border-bottom: 1px solid #12110e;
+    background:
+      linear-gradient(90deg, rgba(244, 178, 63, 0.16), transparent 26%, rgba(141, 93, 211, 0.18) 68%, rgba(24, 95, 165, 0.22)),
+      #12110e;
+    color: #fff8df;
+  }
+
+  .race-cinema::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(180deg, rgba(255, 248, 223, 0.08) 0 1px, transparent 1px 6px);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  [data-race-phase="live"] .race-cinema::before {
+    animation: derby-scan 900ms linear infinite;
+  }
+
+  .race-cinema__hud {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+  }
+
+  .race-cinema__hud span,
+  .race-cinema__hud em {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .race-cinema__hud strong {
+    min-width: 0;
+    font-size: 24px;
+    line-height: 1;
+    overflow-wrap: anywhere;
+  }
+
+  .race-cinema__hud em {
+    min-width: 58px;
+    padding: 7px 8px;
+    border: 1px solid rgba(255, 248, 223, 0.38);
+    background: rgba(255, 248, 223, 0.08);
+    text-align: center;
+    font-style: normal;
+  }
+
+  .race-cinema__signal {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    align-items: end;
+    padding: 14px;
+    border-left: 1px solid rgba(255, 248, 223, 0.22);
+  }
+
+  .race-cinema__signal i {
+    display: block;
+    min-height: 16px;
+    background: #f4b23f;
+    transform: skewX(-12deg);
+  }
+
+  .race-cinema__signal i:nth-child(2n) {
+    min-height: 34px;
+    background: #8fd8ff;
+  }
+
+  .race-cinema__signal i:nth-child(3n) {
+    min-height: 48px;
+    background: #f27c5f;
   }
 
   .track-ruler {
@@ -1361,9 +1518,10 @@ const jsonLd = {
 
   .lane {
     display: grid;
-    grid-template-columns: 170px minmax(0, 1fr);
-    min-height: 78px;
+    grid-template-columns: 188px minmax(0, 1fr);
+    min-height: 92px;
     border-bottom: 1px solid #d9d1bd;
+    background: rgba(255, 253, 244, 0.62);
   }
 
   .lane:last-child {
@@ -1377,6 +1535,7 @@ const jsonLd = {
     padding: 10px;
     border-right: 1px solid #d9d1bd;
     background: rgba(255, 255, 255, 0.72);
+    box-shadow: inset 5px 0 0 var(--coat);
   }
 
   .lane__meta span,
@@ -1392,12 +1551,39 @@ const jsonLd = {
     line-height: 1.1;
   }
 
+  .lane__telemetry {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    margin-top: 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .lane__telemetry b {
+    padding: 3px 5px;
+    background: #12110e;
+    color: #fff8df;
+    font-weight: 500;
+  }
+
+  .lane__telemetry i {
+    min-width: 0;
+    color: #5f5e5a;
+    font-style: normal;
+    overflow-wrap: anywhere;
+  }
+
   .lane__rail {
     position: relative;
     min-width: 0;
+    overflow: hidden;
     background:
-      linear-gradient(90deg, rgba(18, 17, 14, 0.1) 1px, transparent 1px) 0 0 / 46px 100%,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(240, 229, 203, 0.45));
+      linear-gradient(90deg, rgba(18, 17, 14, 0.12) 1px, transparent 1px) 0 0 / 46px 100%,
+      repeating-linear-gradient(180deg, rgba(18, 17, 14, 0.045) 0 1px, transparent 1px 12px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(240, 229, 203, 0.48));
   }
 
   .lane__rail::after {
@@ -1416,17 +1602,62 @@ const jsonLd = {
     bottom: 0;
     left: 0;
     width: 0;
-    background: linear-gradient(90deg, rgba(244, 178, 63, 0.18), rgba(24, 95, 165, 0.08));
+    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 22%, transparent), rgba(244, 178, 63, 0.1));
+  }
+
+  .lane__wake {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--coat));
+    transform: translateY(-50%);
+    opacity: 0.72;
   }
 
   .runner {
     position: absolute;
     top: 50%;
     z-index: 2;
-    width: 72px;
+    width: 84px;
     transform: translate(-50%, -50%);
-    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08));
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 0 transparent);
     transition: left 80ms linear;
+  }
+
+  [data-race-phase="live"] .runner svg {
+    animation: derby-stride 220ms steps(2, end) infinite;
+  }
+
+  .runner__tag {
+    position: absolute;
+    right: 0;
+    bottom: -12px;
+    max-width: 78px;
+    padding: 2px 5px;
+    border: 1px solid #12110e;
+    background: #fff8df;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 8px;
+    line-height: 1;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lane--leader {
+    background: color-mix(in srgb, var(--accent) 18%, #fffdf4 82%);
+  }
+
+  .lane--leader .lane__meta {
+    background: #fff8df;
+  }
+
+  .lane--leader .runner {
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 55%, transparent));
   }
 
   .runner svg {
@@ -1546,9 +1777,9 @@ const jsonLd = {
 
   .podium {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
-    min-height: 90px;
+    min-height: 168px;
   }
 
   .podium p {
@@ -1584,6 +1815,121 @@ const jsonLd = {
 
   .podium-step small {
     color: #5f5e5a;
+  }
+
+  .finish-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    min-height: 132px;
+    padding: 13px;
+    border: 1.5px solid #12110e;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--coat) 20%, transparent), transparent 58%),
+      linear-gradient(90deg, rgba(255, 248, 223, 0.9), #fffdf4);
+    box-shadow: inset 0 7px 0 var(--accent);
+  }
+
+  .finish-hero__copy {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .finish-hero__copy span,
+  .finish-hero__copy small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.25;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .finish-hero__copy strong {
+    min-width: 0;
+    font-size: 28px;
+    line-height: 0.95;
+    overflow-wrap: anywhere;
+  }
+
+  .finish-hero__copy small {
+    color: #5f5e5a;
+    letter-spacing: 0;
+  }
+
+  .finish-hero__mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 86px;
+    border: 1px solid #12110e;
+    background:
+      repeating-linear-gradient(135deg, rgba(18, 17, 14, 0.08) 0 6px, transparent 6px 13px),
+      var(--coat);
+  }
+
+  .finish-hero__mark svg {
+    width: 92px;
+    max-width: 100%;
+    filter: drop-shadow(5px 6px 0 rgba(18, 17, 14, 0.18));
+  }
+
+  .finish-board {
+    display: grid;
+    gap: 6px;
+  }
+
+  .finish-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    min-height: 40px;
+    overflow: hidden;
+    padding: 8px 9px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+  }
+
+  .finish-row span,
+  .finish-row small {
+    position: relative;
+    z-index: 1;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .finish-row strong {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .finish-row small {
+    color: #5f5e5a;
+  }
+
+  .finish-row i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--p);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 18%, transparent), transparent);
+  }
+
+  @keyframes derby-stride {
+    0% { transform: translateY(0) rotate(-1deg); }
+    100% { transform: translateY(-3px) rotate(1deg); }
+  }
+
+  @keyframes derby-scan {
+    from { transform: translateY(-6px); }
+    to { transform: translateY(6px); }
   }
 
   .receipt {
@@ -1781,6 +2127,23 @@ const jsonLd = {
       grid-template-columns: 1fr;
     }
 
+    .race-cinema {
+      grid-template-columns: 1fr;
+    }
+
+    .race-cinema__hud {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+
+    .race-cinema__hud strong {
+      font-size: 19px;
+    }
+
+    .race-cinema__signal {
+      display: none;
+    }
+
     .lane__meta {
       grid-template-columns: 36px minmax(0, 1fr) auto;
       gap: 5px 10px;
@@ -1793,12 +2156,20 @@ const jsonLd = {
       grid-column: 2 / -1;
     }
 
+    .lane__telemetry {
+      grid-column: 1 / -1;
+    }
+
     .lane__rail {
       min-height: 58px;
     }
 
     .runner {
       width: 58px;
+    }
+
+    .finish-hero {
+      grid-template-columns: 1fr;
     }
   }
 </style>
@@ -1869,11 +2240,100 @@ const jsonLd = {
     overflow-wrap: anywhere;
   }
 
+  .derby-page .race-cinema {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.72fr);
+    min-height: 78px;
+    overflow: hidden;
+    border-bottom: 1px solid #12110e;
+    background:
+      linear-gradient(90deg, rgba(244, 178, 63, 0.16), transparent 26%, rgba(141, 93, 211, 0.18) 68%, rgba(24, 95, 165, 0.22)),
+      #12110e;
+    color: #fff8df;
+  }
+
+  .derby-page .race-cinema::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(180deg, rgba(255, 248, 223, 0.08) 0 1px, transparent 1px 6px);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  .derby-page[data-race-phase="live"] .race-cinema::before {
+    animation: derby-scan 900ms linear infinite;
+  }
+
+  .derby-page .race-cinema__hud {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+  }
+
+  .derby-page .race-cinema__hud span,
+  .derby-page .race-cinema__hud em {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .derby-page .race-cinema__hud strong {
+    min-width: 0;
+    font-size: 24px;
+    line-height: 1;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .race-cinema__hud em {
+    min-width: 58px;
+    padding: 7px 8px;
+    border: 1px solid rgba(255, 248, 223, 0.38);
+    background: rgba(255, 248, 223, 0.08);
+    text-align: center;
+    font-style: normal;
+  }
+
+  .derby-page .race-cinema__signal {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    align-items: end;
+    padding: 14px;
+    border-left: 1px solid rgba(255, 248, 223, 0.22);
+  }
+
+  .derby-page .race-cinema__signal i {
+    display: block;
+    min-height: 16px;
+    background: #f4b23f;
+    transform: skewX(-12deg);
+  }
+
+  .derby-page .race-cinema__signal i:nth-child(2n) {
+    min-height: 34px;
+    background: #8fd8ff;
+  }
+
+  .derby-page .race-cinema__signal i:nth-child(3n) {
+    min-height: 48px;
+    background: #f27c5f;
+  }
+
   .derby-page .lane {
     display: grid;
-    grid-template-columns: 170px minmax(0, 1fr);
-    min-height: 78px;
+    grid-template-columns: 188px minmax(0, 1fr);
+    min-height: 92px;
     border-bottom: 1px solid #d9d1bd;
+    background: rgba(255, 253, 244, 0.62);
   }
 
   .derby-page .lane:last-child {
@@ -1887,6 +2347,7 @@ const jsonLd = {
     padding: 10px;
     border-right: 1px solid #d9d1bd;
     background: rgba(255, 255, 255, 0.72);
+    box-shadow: inset 5px 0 0 var(--coat);
   }
 
   .derby-page .lane__meta span,
@@ -1902,12 +2363,39 @@ const jsonLd = {
     line-height: 1.1;
   }
 
+  .derby-page .lane__telemetry {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    margin-top: 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .derby-page .lane__telemetry b {
+    padding: 3px 5px;
+    background: #12110e;
+    color: #fff8df;
+    font-weight: 500;
+  }
+
+  .derby-page .lane__telemetry i {
+    min-width: 0;
+    color: #5f5e5a;
+    font-style: normal;
+    overflow-wrap: anywhere;
+  }
+
   .derby-page .lane__rail {
     position: relative;
     min-width: 0;
+    overflow: hidden;
     background:
-      linear-gradient(90deg, rgba(18, 17, 14, 0.1) 1px, transparent 1px) 0 0 / 46px 100%,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(240, 229, 203, 0.45));
+      linear-gradient(90deg, rgba(18, 17, 14, 0.12) 1px, transparent 1px) 0 0 / 46px 100%,
+      repeating-linear-gradient(180deg, rgba(18, 17, 14, 0.045) 0 1px, transparent 1px 12px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(240, 229, 203, 0.48));
   }
 
   .derby-page .lane__rail::after {
@@ -1926,17 +2414,62 @@ const jsonLd = {
     bottom: 0;
     left: 0;
     width: 0;
-    background: linear-gradient(90deg, rgba(244, 178, 63, 0.18), rgba(24, 95, 165, 0.08));
+    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 22%, transparent), rgba(244, 178, 63, 0.1));
+  }
+
+  .derby-page .lane__wake {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--coat));
+    transform: translateY(-50%);
+    opacity: 0.72;
   }
 
   .derby-page .runner {
     position: absolute;
     top: 50%;
     z-index: 2;
-    width: 72px;
+    width: 84px;
     transform: translate(-50%, -50%);
-    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08));
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 0 transparent);
     transition: left 80ms linear;
+  }
+
+  .derby-page[data-race-phase="live"] .runner svg {
+    animation: derby-stride 220ms steps(2, end) infinite;
+  }
+
+  .derby-page .runner__tag {
+    position: absolute;
+    right: 0;
+    bottom: -12px;
+    max-width: 78px;
+    padding: 2px 5px;
+    border: 1px solid #12110e;
+    background: #fff8df;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 8px;
+    line-height: 1;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .derby-page .lane--leader {
+    background: color-mix(in srgb, var(--accent) 18%, #fffdf4 82%);
+  }
+
+  .derby-page .lane--leader .lane__meta {
+    background: #fff8df;
+  }
+
+  .derby-page .lane--leader .runner {
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 55%, transparent));
   }
 
   .derby-page .runner svg {
@@ -2009,6 +2542,111 @@ const jsonLd = {
     background: #fff;
   }
 
+  .derby-page .finish-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    min-height: 132px;
+    padding: 13px;
+    border: 1.5px solid #12110e;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--coat) 20%, transparent), transparent 58%),
+      linear-gradient(90deg, rgba(255, 248, 223, 0.9), #fffdf4);
+    box-shadow: inset 0 7px 0 var(--accent);
+  }
+
+  .derby-page .finish-hero__copy {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .derby-page .finish-hero__copy span,
+  .derby-page .finish-hero__copy small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.25;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .derby-page .finish-hero__copy strong {
+    min-width: 0;
+    font-size: 28px;
+    line-height: 0.95;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .finish-hero__copy small {
+    color: #5f5e5a;
+    letter-spacing: 0;
+  }
+
+  .derby-page .finish-hero__mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 86px;
+    border: 1px solid #12110e;
+    background:
+      repeating-linear-gradient(135deg, rgba(18, 17, 14, 0.08) 0 6px, transparent 6px 13px),
+      var(--coat);
+  }
+
+  .derby-page .finish-hero__mark svg {
+    width: 92px;
+    max-width: 100%;
+    filter: drop-shadow(5px 6px 0 rgba(18, 17, 14, 0.18));
+  }
+
+  .derby-page .finish-board {
+    display: grid;
+    gap: 6px;
+  }
+
+  .derby-page .finish-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    min-height: 40px;
+    overflow: hidden;
+    padding: 8px 9px;
+    border: 1px solid #c7c0ad;
+    background: #fff;
+  }
+
+  .derby-page .finish-row span,
+  .derby-page .finish-row small {
+    position: relative;
+    z-index: 1;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .derby-page .finish-row strong {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .derby-page .finish-row small {
+    color: #5f5e5a;
+  }
+
+  .derby-page .finish-row i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--p);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 18%, transparent), transparent);
+  }
+
   .derby-page .podium-step {
     display: grid;
     gap: 6px;
@@ -2046,6 +2684,16 @@ const jsonLd = {
     line-height: 1.3;
   }
 
+  @keyframes derby-stride {
+    0% { transform: translateY(0) rotate(-1deg); }
+    100% { transform: translateY(-3px) rotate(1deg); }
+  }
+
+  @keyframes derby-scan {
+    from { transform: translateY(-6px); }
+    to { transform: translateY(6px); }
+  }
+
   .derby-page .history-list a,
   .derby-page .history-list p {
     display: flex;
@@ -2064,6 +2712,23 @@ const jsonLd = {
       grid-template-columns: 1fr;
     }
 
+    .derby-page .race-cinema {
+      grid-template-columns: 1fr;
+    }
+
+    .derby-page .race-cinema__hud {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+
+    .derby-page .race-cinema__hud strong {
+      font-size: 19px;
+    }
+
+    .derby-page .race-cinema__signal {
+      display: none;
+    }
+
     .derby-page .lane__meta {
       grid-template-columns: 36px minmax(0, 1fr) auto;
       gap: 5px 10px;
@@ -2076,12 +2741,20 @@ const jsonLd = {
       grid-column: 2 / -1;
     }
 
+    .derby-page .lane__telemetry {
+      grid-column: 1 / -1;
+    }
+
     .derby-page .lane__rail {
       min-height: 58px;
     }
 
     .derby-page .runner {
       width: 58px;
+    }
+
+    .derby-page .finish-hero {
+      grid-template-columns: 1fr;
     }
   }
 </style>
