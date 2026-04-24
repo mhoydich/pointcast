@@ -1,0 +1,203 @@
+---
+/**
+ * AgentLedger — the visible multi-agent build ledger, made concrete.
+ *
+ * Reads the last N commits via `git log` at build time and renders them as
+ * agent-attributed pills. The Gamgee release thesis says "visible multi-agent
+ * build ledger" — this component is that thesis in 5 pills.
+ *
+ * Agent attribution by author email + branch-prefix heuristic:
+ *   codex@pointcast.xyz or codex/* branches   → Codex
+ *   manus@pointcast.xyz or manus/* branches   → Manus
+ *   noreply@anthropic.com on committer/trailer → Claude
+ *   otherwise → Mike
+ *
+ * Build-time only. No runtime git dependency. Degrades to empty if git log
+ * fails (e.g. in a non-git deploy environment).
+ */
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
+
+// Walk up from this component's directory to find the repo root (where .git lives).
+// Astro's SSR cwd isn't always the project root; this is deterministic.
+function findRepoRoot(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  let dir = here;
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+
+const REPO_ROOT = findRepoRoot();
+
+type AgentKey = 'codex' | 'manus' | 'claude' | 'mike';
+
+interface LedgerEntry {
+  sha: string;
+  when: string;       // short relative, e.g. "12m ago"
+  agent: AgentKey;
+  label: string;      // "Codex" / "Manus" / "Claude" / "Mike"
+  subject: string;    // commit subject, truncated
+}
+
+const AGENT_STYLE: Record<AgentKey, { label: string; bg: string; fg: string }> = {
+  codex:  { label: 'Codex',  bg: '#1e293b', fg: '#67e8f9' },
+  manus:  { label: 'Manus',  bg: '#3b1219', fg: '#fbbf24' },
+  claude: { label: 'Claude', bg: '#4c1d95', fg: '#e9d5ff' },
+  mike:   { label: 'Mike',   bg: '#1b2818', fg: '#bbf7d0' },
+};
+
+function relTime(iso: string): string {
+  const now = Date.now();
+  const t = new Date(iso).getTime();
+  const delta = Math.max(0, Math.floor((now - t) / 1000));
+  if (delta < 60)       return `${delta}s ago`;
+  if (delta < 3600)     return `${Math.floor(delta / 60)}m ago`;
+  if (delta < 86400)    return `${Math.floor(delta / 3600)}h ago`;
+  if (delta < 86400 * 7) return `${Math.floor(delta / 86400)}d ago`;
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function attribute(email: string, subject: string, body: string): AgentKey {
+  const e = (email || '').toLowerCase();
+  const s = (subject || '');
+  const b = (body || '').toLowerCase();
+
+  if (e.includes('codex') || s.startsWith('[codex]'))   return 'codex';
+  if (e.includes('manus') || s.startsWith('[manus]'))   return 'manus';
+  if (b.includes('co-authored-by: claude') || b.includes('noreply@anthropic.com')) return 'claude';
+  return 'mike';
+}
+
+let entries: LedgerEntry[] = [];
+try {
+  // --- %H hash · %cI ISO8601 committer date · %ae author email · %s subject · %b body
+  const raw = execSync(
+    'git log -n 8 --pretty=format:"%H%x1f%cI%x1f%ae%x1f%s%x1f%b%x1e"',
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  entries = raw
+    .split('\x1e')
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [sha = '', iso = '', email = '', subject = '', body = ''] = chunk.split('\x1f');
+      const agent = attribute(email, subject, body);
+      const cleanSubject = subject.replace(/^\[[a-z]+\]\s*/i, '').replace(/\s*\(#\d+\)\s*$/, '').trim();
+      return {
+        sha: sha.slice(0, 7),
+        when: relTime(iso),
+        agent,
+        label: AGENT_STYLE[agent].label,
+        subject: cleanSubject.length > 58 ? cleanSubject.slice(0, 55) + '…' : cleanSubject,
+      };
+    })
+    .slice(0, 5);
+} catch (e) {
+  entries = [];
+}
+---
+
+{entries.length > 0 && (
+  <aside class="agent-ledger" aria-label="Latest multi-agent commits">
+    <p class="agent-ledger__label">LEDGER · LAST 5 SHIPS</p>
+    <ol class="agent-ledger__list">
+      {entries.map((e) => (
+        <li class={`al al--${e.agent}`}>
+          <span class="al__agent">{e.label}</span>
+          <span class="al__subject" title={e.subject}>{e.subject}</span>
+          <span class="al__when">{e.when}</span>
+        </li>
+      ))}
+    </ol>
+    <a class="agent-ledger__more" href="/status">full ledger /status →</a>
+  </aside>
+)}
+
+<style>
+  .agent-ledger {
+    margin: 18px 0 0;
+    padding: 14px 16px 12px;
+    background: #fafaf7;
+    border: 1px solid #e5e3de;
+    border-radius: 3px;
+  }
+  .agent-ledger__label {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    color: var(--pc-ink-muted, #5f5e5a);
+  }
+  .agent-ledger__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .al {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .al__agent {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .al--codex  .al__agent { background: #1e293b; color: #67e8f9; }
+  .al--manus  .al__agent { background: #3b1219; color: #fbbf24; }
+  .al--claude .al__agent { background: #4c1d95; color: #e9d5ff; }
+  .al--mike   .al__agent { background: #1b2818; color: #bbf7d0; }
+  .al__subject {
+    font-family: Georgia, serif;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--pc-ink, #121116);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .al__when {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted, #5f5e5a);
+    white-space: nowrap;
+  }
+  .agent-ledger__more {
+    display: inline-block;
+    margin-top: 8px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-accent, #8a2432);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+  }
+  .agent-ledger__more:hover { opacity: 0.7; }
+
+  @media (max-width: 560px) {
+    .al { grid-template-columns: 54px 1fr; }
+    .al__when { grid-column: 2; opacity: 0.7; }
+  }
+</style>
