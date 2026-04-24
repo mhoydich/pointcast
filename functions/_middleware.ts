@@ -39,6 +39,37 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // Pretty-URL rewrite — kill the 308 trailing-slash flash for top-level
+  // release + game + companion routes. CF Pages otherwise 308-redirects
+  // /gamgee → /gamgee/ before _redirects rules are parsed. We fetch the
+  // trailing-slash version server-side and stream the body back so the
+  // URL bar stays clean. Only routes that exist on main are listed.
+  const PRETTY_ROUTES = new Set([
+    '/gamgee',
+    '/gandalf',
+    '/farm',
+    '/agent-derby',
+    '/typing',
+    '/sitting-with-gandalf',
+  ]);
+  if (isGet && wantsHtml && PRETTY_ROUTES.has(url.pathname)) {
+    const internalUrl = new URL(url);
+    internalUrl.pathname = url.pathname + '/';
+    const upstream = await fetch(internalUrl.toString(), {
+      headers: request.headers,
+      redirect: 'follow',
+    });
+    // Re-emit the response at the original URL with the original pathname
+    // preserved. Strip set-cookie-style or redirect-y headers from upstream.
+    const headers = new Headers(upstream.headers);
+    headers.delete('location');
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers,
+    });
+  }
+
   // /admin/* gate — requires a matching token. Accepts either:
   //   • query ?k=<ADMIN_TOKEN>  (one-time, sets a cookie on success)
   //   • cookie pc_admin=<ADMIN_TOKEN>  (sticky across subsequent requests)
