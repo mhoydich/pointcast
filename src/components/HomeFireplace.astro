@@ -94,37 +94,82 @@ const nounUrl = `https://noun.pics/${nounId}.svg`;
     var $main = document.getElementById('hearth-main');
     if (!$mood || !$sub || !$main) return;
 
-    // Six cozy copy variants — picked by hour so the same hour reads
-    // the same line. Every hour rotates a different mood.
-    var COPY = [
-      { sub: 'Pull up a chair.',        main: "The kettle's on. The marine layer's in." },
-      { sub: 'Stoke the fire.',         main: 'The boulevards are a different city after 9pm.' },
-      { sub: 'Keep the pace.',          main: 'A garden is slow on purpose. So is a release.' },
-      { sub: 'Walk slow.',              main: "El Segundo's cool tonight. The jasmine is lying." },
-      { sub: 'Settle in.',              main: "Small hands change the course because the great have other things to do." },
-      { sub: 'Breathe through.',        main: 'The Strand is empty past the lifeguard tower. Come sit.' },
-    ];
+    // Bucketed copy — each time-of-day band carries its own set of
+    // coherent lines. Previous version keyed off `hour % COPY.length`
+    // which would show evening-jasmine copy at 09:00 etc. (Mike caught
+    // this on 2026-04-24 Fri morning: "El Segundo's cool tonight" was
+    // displaying next to "MORNING LIGHT · 09:00 PT".) Now the same
+    // intensity that drives the kicker also picks from its bucket.
+    var COPY_BY_BUCKET = {
+      smallhours: [
+        { sub: 'Walk slow.',       main: 'The city is forty blocks wide and half asleep.' },
+        { sub: 'Hold still.',      main: "The jasmine isn't lying — it's just been holding this note since eleven." },
+        { sub: 'Keep going.',      main: 'A night build is a slow garden. Something blooms before dawn.' },
+      ],
+      morning: [
+        { sub: 'Start gentle.',    main: 'The coffee finds its own cadence here.' },
+        { sub: 'Low and forward.', main: 'Marine layer still holding past Dockweiler. The boulevards are soft.' },
+        { sub: 'Open a window.',   main: 'The air is salt-fresh; you can taste it before you see the water.' },
+        { sub: 'Begin small.',     main: 'A garden is slow on purpose. So is a morning.' },
+      ],
+      midday: [
+        { sub: 'Keep the pace.',   main: 'Midday on the Strand is quieter than you remember.' },
+        { sub: 'Stay loose.',      main: 'The sun is direct; the work is patient.' },
+        { sub: 'Ship a thing.',    main: 'Small hands change the course because the great have other things to do.' },
+        { sub: 'Walk the block.',  main: 'Main Street at one pm has a particular honesty to it.' },
+      ],
+      golden: [
+        { sub: 'Look west.',       main: 'The light goes copper for about twelve minutes.' },
+        { sub: 'Slow the turn.',   main: "Golden hour is shorter than you'd like, which is the point." },
+        { sub: 'Walk toward it.',  main: 'Vista del Mar becomes a reason to be outside.' },
+      ],
+      blue: [
+        { sub: 'Settle in.',       main: 'Blue hour lasts longer at the coast. Let it.' },
+        { sub: 'Ease off.',        main: 'The boulevards are a different city after nine.' },
+        { sub: 'Hold the light.',  main: "The sky hasn't decided to be dark yet. Neither have you." },
+      ],
+      evening: [
+        { sub: 'Pull up a chair.', main: "The kettle's on. The marine layer's in." },
+        { sub: 'Stoke the fire.',  main: "El Segundo's cool tonight. The jasmine is lying." },
+        { sub: 'Breathe through.', main: 'The Strand is empty past the lifeguard tower. Come sit.' },
+        { sub: 'Stay a while.',    main: 'The day ran long. The block still holds up.' },
+      ],
+    };
+
+    // Day-index seed so everyone viewing in the same hour+day reads
+    // the same line, but the variant rotates across days. Prevents the
+    // home page from looking pinned.
+    function daySeededIndex(length, bucketSalt) {
+      var day = Math.floor(Date.now() / (24 * 3600 * 1000));
+      var hour = new Date().getHours();
+      var mix = ((day * 131) ^ (hour * 17) ^ bucketSalt) >>> 0;
+      return mix % length;
+    }
 
     function updateMood() {
       var now = new Date();
       var h = now.getHours() + now.getMinutes() / 60;
 
-      var label;
-      var intensity;
-      if (h < 6)        { label = 'SMALL HOURS · EL SEGUNDO'; intensity = 'evening'; }
-      else if (h < 10)  { label = 'MORNING LIGHT · EL SEGUNDO'; intensity = 'day'; }
-      else if (h < 15)  { label = 'MIDDAY · EL SEGUNDO'; intensity = 'day'; }
-      else if (h < 18)  { label = 'GOLDEN HOUR · EL SEGUNDO'; intensity = 'golden'; }
-      else if (h < 21)  { label = 'BLUE HOUR · EL SEGUNDO'; intensity = 'evening'; }
-      else              { label = 'EVENING · EL SEGUNDO'; intensity = 'evening'; }
+      var label, intensity, bucket, salt;
+      if (h < 6)        { label = 'SMALL HOURS · EL SEGUNDO'; intensity = 'evening'; bucket = 'smallhours'; salt = 1; }
+      else if (h < 10)  { label = 'MORNING LIGHT · EL SEGUNDO'; intensity = 'day';   bucket = 'morning';    salt = 2; }
+      else if (h < 15)  { label = 'MIDDAY · EL SEGUNDO';        intensity = 'day';   bucket = 'midday';     salt = 3; }
+      else if (h < 18)  { label = 'GOLDEN HOUR · EL SEGUNDO';   intensity = 'golden';bucket = 'golden';     salt = 4; }
+      else if (h < 21)  { label = 'BLUE HOUR · EL SEGUNDO';     intensity = 'evening';bucket = 'blue';      salt = 5; }
+      else              { label = 'EVENING · EL SEGUNDO';       intensity = 'evening';bucket = 'evening';   salt = 6; }
+
       $mood.textContent = label;
 
       var hearth = document.querySelector('.hearth');
-      if (hearth) hearth.setAttribute('data-mood', intensity);
+      if (hearth) {
+        hearth.setAttribute('data-mood', intensity);
+        hearth.setAttribute('data-bucket', bucket);
+      }
 
-      var idx = Math.floor(h) % COPY.length;
-      $sub.textContent = COPY[idx].sub;
-      $main.textContent = COPY[idx].main;
+      var lines = COPY_BY_BUCKET[bucket];
+      var idx = daySeededIndex(lines.length, salt);
+      $sub.textContent = lines[idx].sub;
+      $main.textContent = lines[idx].main;
     }
 
     updateMood();
