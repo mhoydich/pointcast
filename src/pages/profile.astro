@@ -80,6 +80,23 @@ const jsonLd = {
 
     <section id="profile-list" class="list" hidden></section>
 
+    <!-- ─── TEZOS NFT COLLECTION ─── -->
+    <section class="collection">
+      <header class="head">
+        <p class="kicker">COLLECTION · ON-CHAIN</p>
+        <h2 class="head__h2">
+          <span id="collection-owner-label">Tezos NFTs</span>
+        </h2>
+        <p class="dek" id="collection-dek">
+          Live from TzKT. <span id="collection-scope">Showing Mike's wallet — connect your own to see your collection here.</span>
+        </p>
+      </header>
+      <div class="collection__grid" id="collection-grid" aria-live="polite">
+        <p class="collection__loading mono">LOADING COLLECTION…</p>
+      </div>
+      <p class="collection__footer mono" id="collection-footer"></p>
+    </section>
+
     <aside class="agent-strip">
       <p class="agent-strip__label">MACHINE-READABLE</p>
       <ul>
@@ -128,6 +145,117 @@ const jsonLd = {
 
   const empty = document.getElementById('profile-empty')!;
   const list = document.getElementById('profile-list')!;
+
+  // ── COLLECTION · Tezos NFTs via TzKT ────────────────────────────
+  const MIKE_WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+  const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
+
+  interface NftToken {
+    contract: string;
+    tokenId: string;
+    name: string;
+    thumb: string | null;
+    mime: string;
+    supply: number;
+    balance: number;
+  }
+
+  function ipfsToHttp(uri: string | null | undefined): string | null {
+    if (!uri) return null;
+    if (uri.startsWith('ipfs://')) return IPFS_GATEWAY + uri.slice(7);
+    if (uri.startsWith('http')) return uri;
+    return null;
+  }
+
+  async function loadCollection(addr: string, isOwnWallet: boolean) {
+    const grid = document.getElementById('collection-grid');
+    const scope = document.getElementById('collection-scope');
+    const footer = document.getElementById('collection-footer');
+    const ownerLabel = document.getElementById('collection-owner-label');
+    if (!grid || !scope || !footer || !ownerLabel) return;
+
+    if (isOwnWallet) {
+      scope.textContent = `Your connected wallet · ${addr.slice(0, 6)}…${addr.slice(-4)}`;
+      ownerLabel.textContent = 'Your Tezos NFTs';
+    } else {
+      scope.textContent = `Showing Mike's wallet (${addr.slice(0, 6)}…${addr.slice(-4)}) — connect your own to see yours here.`;
+      ownerLabel.textContent = "Mike's Tezos NFTs";
+    }
+
+    try {
+      const url = `https://api.tzkt.io/v1/tokens/balances?account=${addr}&token.standard=fa2&balance.gt=0&limit=60&sort.desc=lastTime&select=token.contract.address as contract,token.tokenId as tokenId,token.metadata as metadata,token.totalSupply as supply,balance`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`TzKT ${r.status}`);
+      const raw: any[] = await r.json();
+
+      const tokens: NftToken[] = raw
+        .map((t) => {
+          const m = t.metadata || {};
+          const thumb =
+            ipfsToHttp(m.thumbnailUri) ||
+            ipfsToHttp(m.displayUri) ||
+            ipfsToHttp(m.artifactUri) ||
+            null;
+          return {
+            contract: t.contract,
+            tokenId: String(t.tokenId),
+            name: m.name || `Token #${t.tokenId}`,
+            thumb,
+            mime: m.formats?.[0]?.mimeType || '',
+            supply: Number(t.supply ?? 0),
+            balance: Number(t.balance ?? 0),
+          };
+        })
+        .filter((t) => t.thumb);
+
+      if (tokens.length === 0) {
+        grid.innerHTML = '<p class="collection__empty">No NFTs in this wallet yet.</p>';
+        footer.textContent = '';
+        return;
+      }
+
+      grid.innerHTML = tokens
+        .slice(0, 48)
+        .map((t) => {
+          const objktUrl = `https://objkt.com/tokens/${t.contract}/${t.tokenId}`;
+          return `
+            <a class="nft" href="${objktUrl}" target="_blank" rel="noopener">
+              <div class="nft__art">
+                <img src="${t.thumb}" alt="${nftEscAttr(t.name)}" loading="lazy" />
+              </div>
+              <p class="nft__name">${nftEscHtml(t.name)}</p>
+              <p class="nft__meta mono">×${t.balance}${t.supply > 0 ? ` · ${t.supply} ed` : ''}</p>
+            </a>
+          `;
+        })
+        .join('');
+
+      footer.textContent = `${tokens.length} held · fetched ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · objkt.com links`;
+    } catch (e: any) {
+      grid.innerHTML = `<p class="collection__error">Couldn't load collection: ${nftEscHtml(e?.message || 'unknown error')}. Try again in a minute.</p>`;
+      footer.textContent = '';
+    }
+  }
+
+  // Use the existing nftEscHtml helper defined below for string escaping.
+  function nftEscAttr(s: string): string { return nftEscHtml(s); }
+
+  // Pick which wallet to show: active connected wallet, or Mike's as fallback.
+  function resolveCollectionAddress(): { addr: string; isOwn: boolean } {
+    const active = activeAddress();
+    if (active) return { addr: active, isOwn: true };
+    const wallets = loadWallets();
+    if (wallets.length > 0) return { addr: wallets[0].address, isOwn: true };
+    return { addr: MIKE_WALLET, isOwn: false };
+  }
+
+  const { addr: collectionAddr, isOwn: collectionIsOwn } = resolveCollectionAddress();
+  loadCollection(collectionAddr, collectionIsOwn);
+
+  window.addEventListener('pc:wallet-change', () => {
+    const { addr, isOwn } = resolveCollectionAddress();
+    loadCollection(addr, isOwn);
+  });
 
   interface LiveStats { balance: string; nfts: string; ops: string; lastActivity: string; }
 
@@ -393,12 +521,12 @@ const jsonLd = {
     chipsEl.innerHTML = items.map((i) => `
       <li class="state-chip state-chip--${i.kind}">
         <span class="state-chip__label">${i.label}</span>
-        <span class="state-chip__value">${escapeHtml(i.value)}</span>
+        <span class="state-chip__value">${nftEscHtml(i.value)}</span>
       </li>
     `).join('');
   }
 
-  function escapeHtml(s: string): string {
+  function nftEscHtml(s: string): string {
     return s.replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     } as any)[c]);
@@ -450,7 +578,7 @@ const jsonLd = {
         <h3 class="detail__h3">polls voted <span class="detail__count">${votes.length}</span></h3>
         ${votes.length === 0 ? '<p class="detail__empty">tap a poll on the home page</p>' :
           `<ul class="detail__list">${votes.map((v) => `
-            <li><a href="/poll/${v.slug}"><span class="detail__slug">${v.slug}</span> <span class="detail__pick">→ ${escapeHtml(v.optionId)}</span></a></li>
+            <li><a href="/poll/${v.slug}"><span class="detail__slug">${v.slug}</span> <span class="detail__pick">→ ${nftEscHtml(v.optionId)}</span></a></li>
           `).join('')}</ul>`}
       </div>
       <div class="detail-col">
@@ -869,4 +997,89 @@ const jsonLd = {
   }
   .agent-strip__label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
   .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+  /* ── COLLECTION (Tezos NFTs) ────────────────────────────────────── */
+  .collection {
+    margin: 24px 0 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--pc-rule, #e5e3de);
+  }
+  .collection__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 14px 0 10px;
+  }
+  .collection__loading,
+  .collection__empty,
+  .collection__error {
+    grid-column: 1 / -1;
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5f5e5a);
+    padding: 14px 0;
+    text-align: center;
+    font-family: Georgia, serif;
+  }
+  .collection__loading {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    font-size: 10.5px;
+  }
+  .nft {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    text-decoration: none;
+    color: inherit;
+    background: #fffdf8;
+    border: 1px solid var(--pc-rule, #e5e3de);
+    border-radius: 3px;
+    padding: 8px 8px 10px;
+    transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  }
+  .nft:hover {
+    transform: translateY(-1px);
+    border-color: var(--pc-accent, #8a2432);
+    box-shadow: 0 4px 12px rgba(26, 18, 10, 0.08);
+  }
+  .nft__art {
+    aspect-ratio: 1;
+    background: #1a120a;
+    border-radius: 2px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nft__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: auto;
+  }
+  .nft__name {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 13.5px;
+    line-height: 1.2;
+    margin: 0;
+    color: var(--pc-ink, #121116);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nft__meta {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5f5e5a);
+    margin: 0;
+  }
+  .collection__footer {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--pc-ink-muted, #5f5e5a);
+    margin: 4px 0 0;
+    text-align: right;
+    font-weight: 700;
+  }
 </style>
