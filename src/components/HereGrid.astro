@@ -59,6 +59,19 @@ const { cap = 64 } = Astro.props;
   <p class="here-grid__quiet mono" id="here-grid-quiet">
     waiting for peoples · broadcast your presence by staying on the page
   </p>
+
+  {/*
+    YOUR FOOTPRINT — rendered only when the WS broadcast includes a `you`
+    envelope matching this session. Other visitors never see this card
+    (option-B privacy: rich edge metadata is you-only).
+  */}
+  <aside class="here-grid__footprint" id="here-grid-footprint" hidden aria-live="polite">
+    <header class="here-grid__footprint-head mono">
+      <span class="here-grid__footprint-dot" aria-hidden="true"></span>
+      YOUR FOOTPRINT · ONLY YOU SEE THIS
+    </header>
+    <dl class="here-grid__footprint-grid" id="here-grid-footprint-grid"></dl>
+  </aside>
 </section>
 
 <script is:inline define:vars={{ cap }}>
@@ -105,6 +118,8 @@ const { cap = 64 } = Astro.props;
   var overflowEl = document.getElementById('here-grid-overflow');
   var overflowCountEl = document.getElementById('here-grid-overflow-count');
   var quietEl = document.getElementById('here-grid-quiet');
+  var footprintEl = document.getElementById('here-grid-footprint');
+  var footprintGridEl = document.getElementById('here-grid-footprint-grid');
 
   // ---------- rendering ---------------------------------------------------
   var visibleCap = Math.max(1, cap | 0);
@@ -132,6 +147,73 @@ const { cap = 64 } = Astro.props;
     var top = pairs.slice(0, 4).map(function (p) { return p[1] + ' ' + p[0]; });
     if (unset > 0) top.push(unset + ' unset');
     return top.length ? top.join(' · ') : '—';
+  }
+
+  var DEVICE_GLYPH = { mobile: '📱', tablet: '🟫', desktop: '🖥', bot: '🤖' };
+
+  function countryFlag(cc) {
+    if (!cc || typeof cc !== 'string' || cc.length !== 2) return null;
+    var up = cc.toUpperCase();
+    if (!/^[A-Z]{2}$/.test(up)) return null;
+    var base = 0x1F1E6;
+    return String.fromCodePoint(base + (up.charCodeAt(0) - 65)) +
+           String.fromCodePoint(base + (up.charCodeAt(1) - 65));
+  }
+
+  function formatDwell(seconds) {
+    var s = Math.max(0, seconds | 0);
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ' + (s % 60) + 's';
+    var h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+  }
+
+  function appendFootprintRow(dl, label, value) {
+    if (value === undefined || value === null || value === '') return;
+    var dt = document.createElement('dt');
+    dt.className = 'mono';
+    dt.textContent = label;
+    var dd = document.createElement('dd');
+    dd.textContent = String(value);
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
+
+  function renderFootprint(you) {
+    if (!footprintEl || !footprintGridEl) return;
+    if (!you || typeof you !== 'object') {
+      footprintEl.hidden = true;
+      return;
+    }
+    footprintGridEl.innerHTML = '';
+
+    var flag = countryFlag(you.country);
+    var locParts = [];
+    if (you.city) locParts.push(you.city);
+    if (you.region && you.region !== you.city) locParts.push(you.region);
+    if (you.country) locParts.push((flag ? flag + ' ' : '') + you.country);
+    var location = locParts.join(', ');
+
+    appendFootprintRow(footprintGridEl, 'NOUN', '#' + you.nounId + (you.isReturning ? ' · returning' : ' · first visit'));
+    appendFootprintRow(footprintGridEl, 'LOCATION', location);
+    appendFootprintRow(footprintGridEl, 'TIMEZONE', you.timezone);
+    appendFootprintRow(footprintGridEl, 'DEVICE', you.deviceClass);
+    if (you.asOrg || you.asn) {
+      appendFootprintRow(footprintGridEl, 'NETWORK', (you.asOrg || '') + (you.asn ? ' · AS' + you.asn : ''));
+    }
+    appendFootprintRow(footprintGridEl, 'EDGE COLO', you.colo);
+    appendFootprintRow(footprintGridEl, 'ARRIVED FROM', you.referrerHost);
+    appendFootprintRow(footprintGridEl, 'RELAY TAG', you.relay);
+    appendFootprintRow(footprintGridEl, 'HERE FOR', formatDwell(you.dwellSeconds));
+    appendFootprintRow(footprintGridEl, 'CURRENT', you.where);
+    if (Array.isArray(you.pathTrail) && you.pathTrail.length) {
+      appendFootprintRow(footprintGridEl, 'TRAIL', you.pathTrail.join(' ← '));
+    }
+    appendFootprintRow(footprintGridEl, 'WALLET', you.walletAddress);
+    appendFootprintRow(footprintGridEl, 'NOSTR', you.nostrPubkey);
+
+    footprintEl.hidden = !footprintGridEl.childNodes.length;
   }
 
   function renderSessions(snapshot) {
@@ -181,6 +263,9 @@ const { cap = 64 } = Astro.props;
       var cell = buildCell(others[k], /* isYou */ false);
       cells.appendChild(cell);
     }
+
+    // Render YOUR FOOTPRINT card from the personalized `you` envelope (if present).
+    renderFootprint(snapshot && snapshot.you);
 
     // Overflow + quiet states
     var overflow = others.length - renderCount;
@@ -243,6 +328,22 @@ const { cap = 64 } = Astro.props;
       chip3.textContent = '· ' + String(s.where).slice(0, 24);
       chip3.title = String(s.where);
       cell.appendChild(chip3);
+    }
+    if (!isYou) {
+      var bits = [];
+      var flag = countryFlag(s.country);
+      if (flag) bits.push(flag + ' ' + s.country);
+      else if (s.country) bits.push(s.country);
+      if (s.deviceClass) {
+        var g = DEVICE_GLYPH[s.deviceClass];
+        bits.push((g ? g + ' ' : '') + s.deviceClass);
+      }
+      if (bits.length) {
+        var chip4 = document.createElement('span');
+        chip4.className = 'here-cell__chip here-cell__chip--edge mono';
+        chip4.textContent = bits.join(' · ');
+        cell.appendChild(chip4);
+      }
     }
   }
 
