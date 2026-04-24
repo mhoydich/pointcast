@@ -1,0 +1,633 @@
+---
+/**
+ * /talk — Voice Dispatch, Phase 2.
+ *
+ * Phase 2 per RFC 0001: real MediaRecorder capture client. Tap to
+ * start, tap to stop. 10-60 second cap, enforced client-side. Preview
+ * playback before submit. The Submit button wires to POST /api/talk
+ * which Phase 3 replaces with real R2 upload.
+ *
+ * Everything is local until Submit: the audio blob lives in a local
+ * object URL, no network calls, no storage.
+ *
+ * Channel chip chooser defaults to FD (Front Door). Title required.
+ * Dek optional. The page is mobile-first — recording happens on
+ * phones.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNEL_LIST } from '../lib/channels';
+
+const title = 'Talk — Voice Dispatch';
+const description = 'Record a 10-60 second voice dispatch. Phase 2 of RFC 0001 — real MediaRecorder capture, local preview, submit wired to the /api/talk stub.';
+const canonical = 'https://pointcast.xyz/talk';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': canonical,
+  name: title,
+  description,
+  url: canonical,
+  inLanguage: 'en-US',
+  about: ['voice dispatch', 'audio', 'broadcast', 'talk', 'pointcast'],
+  potentialAction: {
+    '@type': 'CreateAction',
+    '@id': `${canonical}#record`,
+    name: 'Record a voice dispatch',
+    description: '10-60 seconds, place-anchored, public.',
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="talk">
+    <nav class="talk__crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <a href="/gamgee">gamgee</a>
+      <span aria-hidden="true">›</span>
+      <span>talk</span>
+    </nav>
+
+    <header class="talk__hero">
+      <p class="talk__kicker mono">VOICE DISPATCH · PHASE 2 · RFC 0001</p>
+      <h1 class="talk__title">Record a voice dispatch.</h1>
+      <p class="talk__dek">
+        Ten to sixty seconds. One take. Public by default. Tap to start,
+        tap to stop. Preview before submit. Phase 3 wires the R2 upload;
+        right now Submit is a stub and nothing leaves your browser.
+      </p>
+    </header>
+
+    <section class="talk__recorder" aria-label="Voice recorder">
+      <div class="rec" id="rec-panel" data-state="idle">
+        <div class="rec__status-row">
+          <span class="rec__state-dot" aria-hidden="true"></span>
+          <span class="rec__state-label mono" id="rec-state">READY · TAP RECORD</span>
+          <span class="rec__time mono" id="rec-time">00 : 00</span>
+        </div>
+
+        <div class="rec__progress" aria-hidden="true">
+          <div class="rec__progress-fill" id="rec-fill"></div>
+          <div class="rec__progress-min" title="10s minimum"></div>
+        </div>
+
+        <div class="rec__actions">
+          <button class="rec__btn rec__btn--primary" id="btn-record" type="button">
+            <span class="rec__btn-glyph" aria-hidden="true">●</span>
+            <span class="rec__btn-label">Record</span>
+          </button>
+          <button class="rec__btn rec__btn--stop" id="btn-stop" type="button" disabled>
+            <span class="rec__btn-glyph" aria-hidden="true">■</span>
+            <span class="rec__btn-label">Stop</span>
+          </button>
+          <button class="rec__btn rec__btn--ghost" id="btn-rerecord" type="button" style="display:none;">
+            <span class="rec__btn-glyph" aria-hidden="true">↻</span>
+            <span class="rec__btn-label">Re-record</span>
+          </button>
+        </div>
+
+        <audio class="rec__audio" id="rec-audio" controls style="display:none;"></audio>
+
+        <p class="rec__hint mono" id="rec-hint">
+          10s min · 60s max · auto-stops
+        </p>
+      </div>
+    </section>
+
+    <section class="talk__form" aria-label="Voice dispatch details" id="form-panel" style="display:none;">
+      <h2 class="talk__h2">Add details</h2>
+      <form id="rec-form" class="rec-form" autocomplete="off">
+        <label class="rec-form__label">
+          <span class="rec-form__name mono">CHANNEL</span>
+          <select class="rec-form__input" name="channel" id="form-channel">
+            {CHANNEL_LIST.map((c) => (
+              <option value={c.code} selected={c.code === 'FD'}>{c.code} · {c.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <label class="rec-form__label">
+          <span class="rec-form__name mono">TITLE · required</span>
+          <input class="rec-form__input" name="title" id="form-title" type="text" maxlength="80" placeholder="Short title for your dispatch" required />
+        </label>
+
+        <label class="rec-form__label">
+          <span class="rec-form__name mono">DEK · optional</span>
+          <input class="rec-form__input" name="dek" id="form-dek" type="text" maxlength="160" placeholder="One-line description (optional)" />
+        </label>
+
+        <label class="rec-form__label">
+          <span class="rec-form__name mono">LOCATION</span>
+          <input class="rec-form__input" name="location" id="form-location" type="text" value="El Segundo, CA" />
+        </label>
+
+        <div class="rec-form__submit-row">
+          <button type="submit" class="rec__btn rec__btn--submit" id="btn-submit" disabled>Submit dispatch</button>
+          <p class="rec-form__phase-note mono" id="form-phase-note">
+            PHASE 3 COMING · R2 UPLOAD NOT YET WIRED
+          </p>
+        </div>
+      </form>
+    </section>
+
+    <section class="talk__spec">
+      <h2 class="talk__h2">What's live in Phase 2</h2>
+      <ul class="talk__bullets">
+        <li><strong>Mic permission flow</strong> via <code class="mono">navigator.mediaDevices.getUserMedia</code></li>
+        <li><strong>MediaRecorder capture</strong> with opus/webm (Firefox, Chrome, Edge) or AAC/mp4 (Safari)</li>
+        <li><strong>10-60 second enforcement</strong> — auto-stops at 60, Submit disabled below 10</li>
+        <li><strong>Live timer + progress bar</strong> with 10s minimum marker</li>
+        <li><strong>Preview playback</strong> via <code class="mono">&lt;audio&gt;</code> + blob URL</li>
+        <li><strong>Details form</strong> — channel chip, title, dek, location</li>
+        <li><strong>`POST /api/talk` stub</strong> — accepts multipart, returns mock block ID</li>
+      </ul>
+      <h2 class="talk__h2">What Phase 3 adds</h2>
+      <ul class="talk__bullets">
+        <li>Cloudflare R2 bucket (`pointcast-audio`) for real audio storage</li>
+        <li>Server-side duration validation after upload</li>
+        <li>Rate limit: 3 dispatches per IP per hour (PC_RATELIMIT_KV)</li>
+        <li>TALK block persistence via GitHub API commit or KV-backed draft</li>
+        <li>Profanity wordlist filter (flag, don't delete)</li>
+      </ul>
+    </section>
+
+    <section class="talk__related">
+      <h2 class="talk__h2">Related</h2>
+      <ul class="talk__links">
+        <li><a href="https://github.com/mhoydich/pointcast/blob/main/docs/rfc/0001-voice-dispatch.md"><code class="mono">RFC 0001</code></a> — full spec</li>
+        <li><a href="/listen"><code class="mono">/listen</code></a> — playback tuner (Phase 3)</li>
+        <li><a href="/gamgee"><code class="mono">/gamgee</code></a> — the release</li>
+        <li><a href="/for-agents"><code class="mono">/for-agents</code></a> — how agents read the broadcast</li>
+      </ul>
+    </section>
+
+    <footer class="talk__foot mono">
+      <span>PHASE 2 · 2026-04-24 · EL SEGUNDO · RFC 0001</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var MIN_MS = 10_000;
+    var MAX_MS = 60_000;
+
+    var state = 'idle'; // idle | arming | recording | preview | submitting
+    var mediaRecorder = null;
+    var mediaStream = null;
+    var chunks = [];
+    var audioBlob = null;
+    var audioUrl = null;
+    var startedAt = 0;
+    var timerId = null;
+
+    var $panel   = document.getElementById('rec-panel');
+    var $label   = document.getElementById('rec-state');
+    var $time    = document.getElementById('rec-time');
+    var $fill    = document.getElementById('rec-fill');
+    var $hint    = document.getElementById('rec-hint');
+    var $audio   = document.getElementById('rec-audio');
+    var $btnRec  = document.getElementById('btn-record');
+    var $btnStop = document.getElementById('btn-stop');
+    var $btnReRec = document.getElementById('btn-rerecord');
+    var $form    = document.getElementById('form-panel');
+    var $recForm = document.getElementById('rec-form');
+    var $submit  = document.getElementById('btn-submit');
+    var $phaseNote = document.getElementById('form-phase-note');
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function fmtTime(ms) {
+      var s = Math.floor(ms / 1000);
+      var mm = Math.floor(s / 60);
+      var ss = s % 60;
+      return pad2(mm) + ' : ' + pad2(ss);
+    }
+
+    function setState(next) {
+      state = next;
+      $panel.setAttribute('data-state', next);
+      if (next === 'idle') {
+        $label.textContent = 'READY · TAP RECORD';
+        $time.textContent = '00 : 00';
+        $fill.style.width = '0%';
+        $btnRec.disabled = false;
+        $btnStop.disabled = true;
+        $btnReRec.style.display = 'none';
+        $audio.style.display = 'none';
+        $hint.textContent = '10s min · 60s max · auto-stops';
+      } else if (next === 'arming') {
+        $label.textContent = 'ASKING FOR MIC…';
+        $btnRec.disabled = true;
+        $btnStop.disabled = true;
+      } else if (next === 'recording') {
+        $label.textContent = 'RECORDING';
+        $btnRec.disabled = true;
+        $btnStop.disabled = false;
+      } else if (next === 'preview') {
+        $label.textContent = 'PREVIEW · PLAY TO LISTEN';
+        $btnRec.disabled = true;
+        $btnStop.disabled = true;
+        $btnReRec.style.display = 'inline-flex';
+        $audio.style.display = 'block';
+        $form.style.display = 'block';
+        var elapsed = audioBlob ? (audioBlob.__duration || 0) : 0;
+        $submit.disabled = elapsed < MIN_MS;
+      } else if (next === 'submitting') {
+        $label.textContent = 'SUBMITTING…';
+        $submit.disabled = true;
+      }
+    }
+
+    function pickMimeType() {
+      var candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+      for (var i = 0; i < candidates.length; i++) {
+        if (window.MediaRecorder && window.MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+      }
+      return '';
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        $label.textContent = 'BROWSER DOES NOT SUPPORT MEDIARECORDER';
+        return;
+      }
+      setState('arming');
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        $label.textContent = 'MIC DENIED · CHECK BROWSER PERMISSIONS';
+        setState('idle');
+        return;
+      }
+      var mime = pickMimeType();
+      var opts = mime ? { mimeType: mime } : undefined;
+      try {
+        mediaRecorder = new MediaRecorder(mediaStream, opts);
+      } catch (e) {
+        $label.textContent = 'RECORDER INIT FAILED';
+        mediaStream.getTracks().forEach(function (t) { t.stop(); });
+        setState('idle');
+        return;
+      }
+
+      chunks = [];
+      mediaRecorder.addEventListener('dataavailable', function (ev) {
+        if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+      });
+      mediaRecorder.addEventListener('stop', function () {
+        var durationMs = Date.now() - startedAt;
+        if (timerId) { clearInterval(timerId); timerId = null; }
+        if (mediaStream) { mediaStream.getTracks().forEach(function (t) { t.stop(); }); mediaStream = null; }
+        audioBlob = new Blob(chunks, { type: mime || 'audio/webm' });
+        audioBlob.__duration = Math.min(durationMs, MAX_MS);
+        if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = null; }
+        audioUrl = URL.createObjectURL(audioBlob);
+        $audio.src = audioUrl;
+        $time.textContent = fmtTime(audioBlob.__duration);
+        $hint.textContent = 'CAPTURED ' + fmtTime(audioBlob.__duration) + ' · ' + (audioBlob.size / 1024).toFixed(1) + ' KB · ' + (mime || 'audio/webm');
+        setState('preview');
+      });
+
+      startedAt = Date.now();
+      mediaRecorder.start(500);
+      setState('recording');
+      timerId = setInterval(function () {
+        var elapsed = Date.now() - startedAt;
+        $time.textContent = fmtTime(elapsed);
+        $fill.style.width = Math.min(100, (elapsed / MAX_MS) * 100) + '%';
+        if (elapsed >= MAX_MS) stopRecording();
+      }, 100);
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        try { mediaRecorder.stop(); } catch (e) {}
+      }
+    }
+
+    function resetToIdle() {
+      chunks = [];
+      if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = null; }
+      audioBlob = null;
+      $audio.src = '';
+      $form.style.display = 'none';
+      setState('idle');
+    }
+
+    async function submitDispatch(ev) {
+      ev.preventDefault();
+      if (!audioBlob) return;
+      var durationMs = audioBlob.__duration || 0;
+      if (durationMs < MIN_MS) {
+        $phaseNote.textContent = 'TOO SHORT · 10S MINIMUM — RE-RECORD';
+        return;
+      }
+      setState('submitting');
+      var fd = new FormData($recForm);
+      fd.append('file', audioBlob, 'dispatch.webm');
+      fd.append('duration', String(Math.floor(durationMs / 1000)));
+      try {
+        var r = await fetch('/api/talk', { method: 'POST', body: fd });
+        var json = await r.json();
+        if (json && json.ok) {
+          $phaseNote.innerHTML = 'ACCEPTED · MOCK BLOCK ID <strong>' + json.block.id + '</strong> · PHASE 3 WIRES REAL R2 UPLOAD';
+          $submit.textContent = 'Submitted ✓';
+        } else {
+          $phaseNote.textContent = 'STUB RETURNED NON-OK · CHECK /api/talk';
+          $submit.disabled = false;
+          setState('preview');
+        }
+      } catch (e) {
+        $phaseNote.textContent = 'NETWORK FAIL · ' + (e && e.message ? e.message.slice(0, 60) : '');
+        $submit.disabled = false;
+        setState('preview');
+      }
+    }
+
+    $btnRec.addEventListener('click', startRecording);
+    $btnStop.addEventListener('click', stopRecording);
+    $btnReRec.addEventListener('click', resetToIdle);
+    $recForm.addEventListener('submit', submitDispatch);
+
+    setState('idle');
+  })();
+</script>
+
+<style>
+  .talk {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 20px 72px;
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+    color: #121116;
+  }
+  .mono { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+
+  .talk__crumb {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+    margin-bottom: 22px;
+  }
+  .talk__crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+  .talk__crumb span { margin: 0 6px; }
+
+  .talk__hero { padding-bottom: 22px; border-bottom: 2px solid #1a1a22; margin-bottom: 24px; }
+  .talk__kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #8a2432;
+    margin: 0 0 10px;
+  }
+  .talk__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4.5vw, 40px);
+    line-height: 1.12;
+    margin: 0 0 12px;
+    font-weight: 400;
+  }
+  .talk__dek {
+    font-family: Georgia, serif;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 60ch;
+    color: #38373a;
+  }
+
+  .talk__recorder { margin: 0 0 24px; }
+
+  .rec {
+    padding: 22px 22px 18px;
+    background: #fffdf8;
+    border: 1px solid #e5dfce;
+    border-top: 4px solid #8a2432;
+    border-radius: 3px;
+  }
+  .rec[data-state='recording'] { border-top-color: #dc2626; }
+  .rec[data-state='preview'] { border-top-color: #2f8f5f; }
+  .rec[data-state='submitting'] { border-top-color: #185fa5; }
+
+  .rec__status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .rec__state-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #c5c1b3;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .rec[data-state='recording'] .rec__state-dot {
+    background: #dc2626;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6);
+    animation: rec-pulse 1.2s ease-in-out infinite;
+  }
+  .rec[data-state='preview'] .rec__state-dot { background: #2f8f5f; }
+  @keyframes rec-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); transform: scale(1); }
+    50%      { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); transform: scale(1.15); }
+  }
+
+  .rec__state-label {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    color: #38373a;
+    flex: 1;
+  }
+  .rec__time {
+    font-size: 16px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: #121116;
+    font-variant-numeric: tabular-nums;
+  }
+  .rec[data-state='recording'] .rec__time { color: #dc2626; }
+
+  .rec__progress {
+    position: relative;
+    height: 6px;
+    background: #e8e3d3;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .rec__progress-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, #8a2432 0%, #dc2626 100%);
+    transition: width 0.1s linear;
+    width: 0%;
+  }
+  .rec__progress-min {
+    position: absolute;
+    left: 16.66%; top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(26, 26, 34, 0.3);
+  }
+  .rec__progress-min::after {
+    content: '10s';
+    position: absolute;
+    top: 8px;
+    left: 2px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 9px;
+    color: rgba(26, 26, 34, 0.5);
+  }
+
+  .rec__actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .rec__btn {
+    appearance: none;
+    padding: 10px 16px;
+    background: #1a1a22;
+    color: #fef5e7;
+    border: 1px solid #1a1a22;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .rec__btn:hover { background: #38373a; }
+  .rec__btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .rec__btn--primary { background: #8a2432; border-color: #8a2432; }
+  .rec__btn--primary:hover { background: #a6303f; }
+  .rec__btn--stop { background: #dc2626; border-color: #dc2626; }
+  .rec__btn--stop:hover { background: #ef4444; }
+  .rec__btn--ghost { background: transparent; color: #5f5e5a; border-color: #c5c1b3; }
+  .rec__btn--ghost:hover { background: #f5f3eb; color: #121116; }
+  .rec__btn--submit { background: #2f8f5f; border-color: #2f8f5f; padding: 11px 22px; }
+  .rec__btn--submit:hover { background: #3aaf77; }
+  .rec__btn-glyph { font-size: 14px; line-height: 1; }
+
+  .rec__audio {
+    display: block;
+    width: 100%;
+    margin: 12px 0;
+    border-radius: 3px;
+  }
+
+  .rec__hint {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #8a7854;
+    font-weight: 700;
+  }
+
+  .talk__form { margin: 0 0 28px; padding-bottom: 22px; border-bottom: 1px solid #e5dfce; }
+
+  .talk__h2 {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    margin: 0 0 14px;
+    color: #121116;
+  }
+
+  .rec-form { display: flex; flex-direction: column; gap: 14px; }
+  .rec-form__label { display: flex; flex-direction: column; gap: 5px; }
+  .rec-form__name {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: #5f5e5a;
+  }
+  .rec-form__input {
+    padding: 10px 12px;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    border: 1px solid #c5c1b3;
+    border-radius: 3px;
+    background: #fffdf8;
+    color: #121116;
+  }
+  .rec-form__input:focus {
+    outline: none;
+    border-color: #8a2432;
+    box-shadow: 0 0 0 2px rgba(138, 36, 50, 0.2);
+  }
+  select.rec-form__input { appearance: auto; }
+
+  .rec-form__submit-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .rec-form__phase-note {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #8a7854;
+    font-weight: 700;
+    flex: 1;
+  }
+  .rec-form__phase-note strong { color: #185fa5; }
+
+  .talk__spec, .talk__related { margin: 0 0 28px; padding-bottom: 22px; border-bottom: 1px solid #e5dfce; }
+  .talk__bullets {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .talk__bullets li {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 14px;
+    position: relative;
+    color: #1a1a22;
+  }
+  .talk__bullets li::before {
+    content: "·";
+    position: absolute;
+    left: 4px;
+    color: #8a2432;
+    font-weight: 700;
+  }
+  .talk__bullets code { font-size: 12.5px; background: rgba(18,17,22,0.07); padding: 1px 5px; border-radius: 2px; }
+  .talk__bullets strong { color: #121116; }
+
+  .talk__links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-family: Georgia, serif;
+    font-size: 14px;
+  }
+  .talk__links a { color: #8a2432; text-decoration: none; border-bottom: 1px solid transparent; }
+  .talk__links a:hover { border-bottom-color: #8a2432; }
+  .talk__links code { font-size: 12.5px; background: rgba(18,17,22,0.07); padding: 1px 5px; border-radius: 2px; }
+
+  .talk__foot {
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
+    color: #5f5e5a;
+  }
+</style>
