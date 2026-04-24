@@ -14,7 +14,17 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { CHANNEL_LIST } from '../lib/channels';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
+import { POINTCAST_IMAGE_GENERATOR } from '../lib/image-generation';
+import {
+  PASSPORT_COMPANION_COLLECTION,
+  PASSPORT_STAMP_COLLECTION,
+  PASSPORT_STAMP_PRD_PATH,
+} from '../lib/passport-mint';
+import { PASSPORT_STAMPS } from '../lib/passport';
+import { PASSPORT_ACHIEVEMENTS } from '../lib/passport-achievements';
+import { STATIONS, STATION_SHORTCUTS } from '../lib/local';
 import contracts from '../data/contracts.json';
+import posterSet from '../data/passport-posters.json';
 
 export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -43,6 +53,7 @@ export const GET: APIRoute = async () => {
     endpoints: {
       human: {
         home: 'https://pointcast.xyz/',
+        gamgee: 'https://pointcast.xyz/gamgee',
         manifesto: 'https://pointcast.xyz/manifesto',
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',
@@ -50,6 +61,7 @@ export const GET: APIRoute = async () => {
         share: 'https://pointcast.xyz/share',
         beacon: 'https://pointcast.xyz/beacon',
         aiStack: 'https://pointcast.xyz/ai-stack',
+        resources: 'https://pointcast.xyz/resources',
         mesh: 'https://pointcast.xyz/mesh',
         yeePlayer: 'https://pointcast.xyz/yee',
         collabs: 'https://pointcast.xyz/collabs',
@@ -80,6 +92,12 @@ export const GET: APIRoute = async () => {
         today: 'https://pointcast.xyz/today',
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
+        passport: 'https://pointcast.xyz/passport',
+        passportBook: 'https://pointcast.xyz/passport/book',
+        passportCollection: 'https://pointcast.xyz/passport/collection',
+        passportRoutes: 'https://pointcast.xyz/passport/routes',
+        passportReceipts: 'https://pointcast.xyz/passport/receipts',
+        passportPosters: 'https://pointcast.xyz/passport/posters',
         tv: 'https://pointcast.xyz/tv',
         here: 'https://pointcast.xyz/here',
         forAgents: 'https://pointcast.xyz/for-agents',
@@ -102,6 +120,7 @@ export const GET: APIRoute = async () => {
         share: 'https://pointcast.xyz/share.json',
         beacon: 'https://pointcast.xyz/beacon.json',
         aiStack: 'https://pointcast.xyz/ai-stack.json',
+        resources: 'https://pointcast.xyz/resources.json',
         collabs: 'https://pointcast.xyz/collabs.json',
         products: 'https://pointcast.xyz/products.json',
         sprint: 'https://pointcast.xyz/sprint.json',
@@ -110,6 +129,12 @@ export const GET: APIRoute = async () => {
         today: 'https://pointcast.xyz/today.json',
         moods: 'https://pointcast.xyz/moods.json',
         local: 'https://pointcast.xyz/local.json',
+        passport: 'https://pointcast.xyz/passport.json',
+        passportBook: 'https://pointcast.xyz/passport/book.json',
+        passportCollection: 'https://pointcast.xyz/passport/collection.json',
+        passportRoutes: 'https://pointcast.xyz/passport/routes.json',
+        passportReceipts: 'https://pointcast.xyz/passport/receipts.json',
+        passportPosters: 'https://pointcast.xyz/passport/posters.json',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
@@ -191,7 +216,34 @@ export const GET: APIRoute = async () => {
       perStation: {
         html: 'https://pointcast.xyz/tv/{station}',
         weather: 'https://pointcast.xyz/api/weather?station={station}',
-        note: 'STATIONS mode — 15 geo-stations within 100mi of El Segundo. Each route renders /tv in station-feed mode for that city. Keyboard: 1-9 + Q-Y for channel surfing across stations.',
+        stationCount: STATIONS.length,
+        keyboard: STATION_SHORTCUTS.join(' '),
+        note: 'STATIONS mode — geo-stations around the 100mi El Segundo lens. Each route renders /tv in station-feed mode for that city.',
+      },
+      passport: {
+        html: 'https://pointcast.xyz/passport',
+        json: 'https://pointcast.xyz/passport.json',
+        book: 'https://pointcast.xyz/passport/book',
+        bookJson: 'https://pointcast.xyz/passport/book.json',
+        collection: 'https://pointcast.xyz/passport/collection',
+        collectionJson: 'https://pointcast.xyz/passport/collection.json',
+        routes: 'https://pointcast.xyz/passport/routes',
+        routesJson: 'https://pointcast.xyz/passport/routes.json',
+        receipts: 'https://pointcast.xyz/passport/receipts',
+        receiptsJson: 'https://pointcast.xyz/passport/receipts.json',
+        stampMetadata: 'https://pointcast.xyz/passport/stamps/{slug}.json',
+        stampArt: 'https://pointcast.xyz/passport/art/{slug}.svg',
+        posters: 'https://pointcast.xyz/passport/posters',
+        postersJson: 'https://pointcast.xyz/passport/posters.json',
+        routeAchievementCount: PASSPORT_ACHIEVEMENTS.length,
+        posterCount: posterSet.posters.length,
+        posterGenerator: posterSet.generator.model,
+        storageKey: 'pc:station-passport:v1',
+        imageGenerator: POINTCAST_IMAGE_GENERATOR.model,
+        stampCount: PASSPORT_STAMPS.length,
+        minting:
+          'Current buttons mint Visit Nouns companion proofs on Tezos mainnet. Dedicated Passport Stamps FA2 is PRD-ready and pending origination.',
+        note: 'Client-side Station Passport: El Segundo origin stamp, /tv station stamps, and field-expansion stamps. Daily route generated from the PT date. The book, collection cabinet, route visas, and receipt drawer share the same localStorage state. Future wallet/KV attestation can reuse slug/code/date. Stamp-art prompts target gpt-image-2.',
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
@@ -257,6 +309,20 @@ export const GET: APIRoute = async () => {
         address: marketplace || null,
         status: marketplace ? 'live' : 'planned',
       },
+      passportStamps: {
+        ...PASSPORT_STAMP_COLLECTION,
+        currentCompanion: PASSPORT_COMPANION_COLLECTION,
+        prd: `https://pointcast.xyz${PASSPORT_STAMP_PRD_PATH}`,
+        metadataPattern: 'https://pointcast.xyz/passport/stamps/{slug}.json',
+        artPattern: 'https://pointcast.xyz/passport/art/{slug}.svg',
+        statusNote:
+          'Stamp metadata and art endpoints are live; actual station-stamp token contract is pending. Existing mint path uses Visit Nouns mint_noun as companion proof.',
+      },
+    },
+
+    imageGeneration: {
+      default: POINTCAST_IMAGE_GENERATOR,
+      passportStampArt: 'https://pointcast.xyz/passport.json',
     },
 
     agentMode: {
@@ -272,8 +338,10 @@ export const GET: APIRoute = async () => {
       applies: [
         '/agents.json', '/blocks.json', '/archive.json', '/editions.json',
         '/now.json', '/cast.json', '/battle.json', '/timeline.json',
-        '/stack.json', '/feed.json', '/feed.xml', '/b/*.json',
-        '/c/*.json', '/c/*.rss', '/llms.txt', '/llms-full.txt',
+        '/stack.json', '/resources.json', '/feed.json', '/feed.xml', '/b/*.json',
+        '/c/*.json', '/c/*.rss', '/passport.json', '/passport/book.json',
+        '/passport/collection.json', '/passport/routes.json', '/passport/receipts.json',
+        '/passport/posters.json', '/llms.txt', '/llms-full.txt',
       ],
       note: 'Agents can fetch from any origin. No preflight needed for GETs.',
     },
