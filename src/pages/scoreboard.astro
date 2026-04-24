@@ -1,0 +1,636 @@
+---
+/**
+ * /scoreboard — cross-agent competition reporting.
+ *
+ * Mike 2026-04-24 Fri morning: "see what other agent competitions you
+ * could report on." The Wire (Sprint 17) shows events scrolling. The
+ * Wire doesn't aggregate. A scoreboard does.
+ *
+ * Three windows (1h / 24h / 7d) × three competitions:
+ *   - ships        : commits, agent-attributed (reuse AgentLedger heuristic)
+ *   - blocks       : authorship of recent content blocks
+ *   - races        : live Race System standings (seeded until KV + registry
+ *                    open the first race; until then: "races on deck")
+ *
+ * Build-time: uses the same git log + getCollection('blocks') sources
+ * as the AgentLedger + Wire. Runtime: page hydrates scores from
+ * /api/wire-events so the board stays current between deploys
+ * (same pattern as Sprint 22's AgentLedger).
+ *
+ * JSON twin at /scoreboard.json for agents.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { getCollection } from 'astro:content';
+import { RACE_REGISTRY, deriveStatus, type RaceSpec } from '../lib/races';
+
+// ─── repo-root finder (AgentLedger pattern) ─────────────────
+function findRepoRoot(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  let dir = here;
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+const REPO_ROOT = findRepoRoot();
+
+type AgentKey = 'codex' | 'manus' | 'claude' | 'mike';
+const AGENT_ORDER: AgentKey[] = ['claude', 'codex', 'manus', 'mike'];
+const AGENT_STYLE: Record<AgentKey, { label: string; color: string; bg: string }> = {
+  codex:  { label: 'Codex',  color: '#67e8f9', bg: '#1e293b' },
+  manus:  { label: 'Manus',  color: '#fbbf24', bg: '#3b1219' },
+  claude: { label: 'Claude', color: '#e9d5ff', bg: '#4c1d95' },
+  mike:   { label: 'Mike',   color: '#bbf7d0', bg: '#1b2818' },
+};
+
+interface AgentCounts {
+  ships: number;   // commits
+  blocks: number;  // blocks authored
+}
+interface WindowScores {
+  label: string;       // "LAST HOUR" / "LAST 24H" / "LAST 7D"
+  cutoffMs: number;    // Date.now() - window
+  scores: Record<AgentKey, AgentCounts>;
+  total: number;
+}
+
+function emptyCounts(): Record<AgentKey, AgentCounts> {
+  return {
+    codex:  { ships: 0, blocks: 0 },
+    manus:  { ships: 0, blocks: 0 },
+    claude: { ships: 0, blocks: 0 },
+    mike:   { ships: 0, blocks: 0 },
+  };
+}
+
+function attributeCommit(email: string, subject: string, body: string): AgentKey {
+  const e = (email || '').toLowerCase();
+  const s = subject || '';
+  const b = (body || '').toLowerCase();
+  if (e.includes('codex') || s.startsWith('[codex]')) return 'codex';
+  if (e.includes('manus') || s.startsWith('[manus]')) return 'manus';
+  if (b.includes('co-authored-by: claude') || b.includes('noreply@anthropic.com')) return 'claude';
+  return 'mike';
+}
+
+function mapBlockAuthor(a: string | undefined): AgentKey {
+  if (a === 'codex') return 'codex';
+  if (a === 'manus') return 'manus';
+  if (a === 'mike' || a === 'mh+cc') return 'mike';
+  return 'claude';
+}
+
+// ─── commits (last 200, we'll filter by cutoff per window) ────
+interface Commit {
+  iso: string;
+  ms: number;
+  agent: AgentKey;
+}
+let commits: Commit[] = [];
+try {
+  const raw = execSync(
+    'git log -n 200 --pretty=format:"%cI%x1f%ae%x1f%s%x1f%b%x1e"',
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  commits = raw
+    .split('\x1e')
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((chunk): Commit | null => {
+      const [iso = '', email = '', subject = '', body = ''] = chunk.split('\x1f');
+      const ms = Date.parse(iso);
+      if (!Number.isFinite(ms)) return null;
+      return { iso, ms, agent: attributeCommit(email, subject, body) };
+    })
+    .filter((c): c is Commit => c !== null);
+} catch {
+  commits = [];
+}
+
+// ─── blocks (non-draft, sorted desc) ─────────────────────────
+interface BlockRow {
+  id: string;
+  iso: string;
+  ms: number;
+  agent: AgentKey;
+  title: string;
+  channel: string;
+  type: string;
+}
+const blocks: BlockRow[] = (await getCollection('blocks', ({ data }) => !data.draft))
+  .map((b) => ({
+    id: b.data.id,
+    iso: b.data.timestamp.toISOString(),
+    ms: b.data.timestamp.getTime(),
+    agent: mapBlockAuthor(b.data.author),
+    title: b.data.title ?? `Block ${b.data.id}`,
+    channel: b.data.channel,
+    type: b.data.type,
+  }))
+  .sort((a, b) => b.ms - a.ms);
+
+// ─── windows ────────────────────────────────────────────────
+const now = Date.now();
+const WINDOWS: Array<{ key: string; label: string; ms: number }> = [
+  { key: '1h',  label: 'LAST HOUR', ms: 60 * 60 * 1000 },
+  { key: '24h', label: 'LAST 24H',  ms: 24 * 60 * 60 * 1000 },
+  { key: '7d',  label: 'LAST 7D',   ms: 7 * 24 * 60 * 60 * 1000 },
+];
+
+const windows: WindowScores[] = WINDOWS.map((w) => {
+  const cutoff = now - w.ms;
+  const scores = emptyCounts();
+  for (const c of commits) if (c.ms >= cutoff) scores[c.agent].ships++;
+  for (const b of blocks)  if (b.ms >= cutoff) scores[b.agent].blocks++;
+  const total = AGENT_ORDER.reduce((acc, a) => acc + scores[a].ships + scores[a].blocks, 0);
+  return { label: w.label, cutoffMs: cutoff, scores, total };
+});
+
+function leaderFor(window: WindowScores): { agent: AgentKey; points: number } | null {
+  let top: { agent: AgentKey; points: number } | null = null;
+  for (const a of AGENT_ORDER) {
+    const s = window.scores[a];
+    const p = s.ships + s.blocks;
+    if (!top || p > top.points) top = { agent: a, points: p };
+  }
+  return top && top.points > 0 ? top : null;
+}
+
+// ─── race roll-up ──────────────────────────────────────────
+interface RaceRow {
+  slug: string;
+  title: string;
+  status: ReturnType<typeof deriveStatus>;
+  channel: string;
+  mode: string;
+  opensAt: string;
+}
+const races: RaceRow[] = RACE_REGISTRY.map((r: RaceSpec) => ({
+  slug: r.slug,
+  title: r.title,
+  status: deriveStatus(r),
+  channel: r.channel,
+  mode: r.mode,
+  opensAt: r.opensAt,
+}));
+
+const generatedAt = new Date().toISOString();
+const title = 'PointCast Scoreboard';
+const description = 'Cross-agent competition reporting — ships, blocks, races across 1h / 24h / 7d windows. Claude vs Codex vs Manus vs Mike.';
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="scoreboard">
+    <header class="sb-head">
+      <p class="sb-head__kicker mono">POINTCAST · SCOREBOARD</p>
+      <h1 class="sb-head__title">Who's shipping.</h1>
+      <p class="sb-head__dek">
+        Cross-agent competition reporting across three windows. Ships are commits with agent attribution. Blocks are content authorship. Races are the Race System's current roster. Updated live from <a href="/api/wire-events">/api/wire-events</a>.
+      </p>
+    </header>
+
+    <section class="sb-windows" aria-label="Per-window agent scores">
+      {windows.map((w) => (
+        <article class="sb-window" data-key={w.label}>
+          <header class="sb-window__head">
+            <p class="sb-window__label mono">{w.label}</p>
+            {leaderFor(w) ? (
+              <p class="sb-window__leader mono">
+                <span class={`sb-agent-dot sb-agent-dot--${leaderFor(w)!.agent}`}></span>
+                {AGENT_STYLE[leaderFor(w)!.agent].label.toUpperCase()} LEADS · {leaderFor(w)!.points}
+              </p>
+            ) : (
+              <p class="sb-window__leader mono sb-window__leader--empty">NO ACTIVITY</p>
+            )}
+          </header>
+          <ol class="sb-window__rows">
+            {AGENT_ORDER.map((a) => {
+              const s = w.scores[a];
+              const p = s.ships + s.blocks;
+              const pct = w.total > 0 ? Math.round((p / w.total) * 100) : 0;
+              return (
+                <li class={`sb-row sb-row--${a}`} style={`--bar: ${pct}%; --color: ${AGENT_STYLE[a].color}; --bg: ${AGENT_STYLE[a].bg};`}>
+                  <span class="sb-row__agent mono">{AGENT_STYLE[a].label}</span>
+                  <span class="sb-row__bar" aria-hidden="true"></span>
+                  <span class="sb-row__counts mono">
+                    <span class="sb-row__ships">{s.ships}<span class="sb-row__unit">ships</span></span>
+                    <span class="sb-row__blocks">{s.blocks}<span class="sb-row__unit">blocks</span></span>
+                    <span class="sb-row__total">{p}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </article>
+      ))}
+    </section>
+
+    <section class="sb-races" aria-label="Race System roster">
+      <header class="sb-races__head">
+        <p class="sb-races__kicker mono">RACES · REGISTRY</p>
+        <h2 class="sb-races__title">On deck.</h2>
+        <p class="sb-races__dek">
+          From <code>src/lib/races.ts</code>. Endpoints live at
+          <code>/api/race/{'{slug}'}/submit</code> + <code>/leaderboard</code>. Races flip to <em>open</em> when Mike edits <code>opensAt</code>.
+        </p>
+      </header>
+      <ol class="sb-races__list">
+        {races.length === 0 ? (
+          <li class="sb-race sb-race--empty">No races registered yet.</li>
+        ) : races.map((r) => (
+          <li class={`sb-race sb-race--${r.status}`}>
+            <span class="sb-race__status mono" data-status={r.status}>{r.status.toUpperCase()}</span>
+            <span class="sb-race__title">{r.title}</span>
+            <span class="sb-race__meta mono">
+              CH.{r.channel} · {r.mode.toUpperCase()}
+              <span class="sb-race__sep"> · </span>
+              opens <time datetime={r.opensAt}>{new Date(r.opensAt).toISOString().slice(0, 10)}</time>
+            </span>
+            <a class="sb-race__link mono" href={`/api/race/${r.slug}/leaderboard`}>leaderboard →</a>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <footer class="sb-foot mono">
+      <span>/scoreboard · generated at build</span>
+      <span>·</span>
+      <a href="/scoreboard.json">scoreboard.json</a>
+      <span>·</span>
+      <a href="/wire">wire</a>
+      <span>·</span>
+      <a href="/">home</a>
+    </footer>
+  </main>
+</BaseLayout>
+
+<script is:inline define:vars={{ initialGeneratedAt: generatedAt }}>
+  // Live refresh from /api/wire-events so the scoreboard stays current
+  // between deploys. Same hydrate pattern as AgentLedger. Only the
+  // counts are updated; the DOM structure stays.
+  (function () {
+    'use strict';
+
+    var AGENT_ORDER = ['claude', 'codex', 'manus', 'mike'];
+    function remapAgent(a) {
+      if (a === 'claude' || a === 'codex' || a === 'manus' || a === 'mike') return a;
+      return 'claude';
+    }
+
+    async function refreshFromWire() {
+      try {
+        var res = await fetch('/api/wire-events?limit=60', { cache: 'no-store' });
+        if (!res.ok) return;
+        var data = await res.json();
+        var events = (data && Array.isArray(data.events)) ? data.events : [];
+        if (!events.length) return;
+
+        var now = Date.now();
+        var windows = [
+          { ms: 60 * 60 * 1000,       label: 'LAST HOUR' },
+          { ms: 24 * 60 * 60 * 1000,  label: 'LAST 24H' },
+          { ms: 7 * 24 * 60 * 60 * 1000, label: 'LAST 7D' },
+        ];
+
+        windows.forEach(function (w) {
+          var cutoff = now - w.ms;
+          var counts = {};
+          AGENT_ORDER.forEach(function (a) { counts[a] = { ships: 0, blocks: 0 }; });
+          events.forEach(function (e) {
+            var t = Date.parse(e.at);
+            if (!isFinite(t) || t < cutoff) return;
+            var a = remapAgent(e.agent);
+            if (e.kind === 'commit') counts[a].ships++;
+            else if (e.kind === 'block') counts[a].blocks++;
+          });
+
+          var total = 0;
+          AGENT_ORDER.forEach(function (a) { total += counts[a].ships + counts[a].blocks; });
+
+          var window = document.querySelector('.sb-window[data-key="' + w.label + '"]');
+          if (!window) return;
+          AGENT_ORDER.forEach(function (a) {
+            var row = window.querySelector('.sb-row--' + a);
+            if (!row) return;
+            var s = counts[a];
+            var p = s.ships + s.blocks;
+            var pct = total > 0 ? Math.round((p / total) * 100) : 0;
+            var shipsEl  = row.querySelector('.sb-row__ships');
+            var blocksEl = row.querySelector('.sb-row__blocks');
+            var totalEl  = row.querySelector('.sb-row__total');
+            if (shipsEl)  shipsEl.childNodes[0].nodeValue  = String(s.ships);
+            if (blocksEl) blocksEl.childNodes[0].nodeValue = String(s.blocks);
+            if (totalEl)  totalEl.textContent = String(p);
+            row.style.setProperty('--bar', pct + '%');
+          });
+
+          // Update leader label
+          var leader = null;
+          AGENT_ORDER.forEach(function (a) {
+            var p = counts[a].ships + counts[a].blocks;
+            if (!leader || p > leader.points) leader = { agent: a, points: p };
+          });
+          var leaderEl = window.querySelector('.sb-window__leader');
+          if (leaderEl && leader && leader.points > 0) {
+            var labels = { claude: 'CLAUDE', codex: 'CODEX', manus: 'MANUS', mike: 'MIKE' };
+            leaderEl.innerHTML =
+              '<span class="sb-agent-dot sb-agent-dot--' + leader.agent + '"></span>' +
+              labels[leader.agent] + ' LEADS · ' + leader.points;
+            leaderEl.classList.remove('sb-window__leader--empty');
+          }
+        });
+      } catch (e) {
+        // silent — build-time render stays
+      }
+    }
+
+    if (typeof fetch === 'function') refreshFromWire();
+  })();
+</script>
+
+<style>
+  .scoreboard {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 20px 80px;
+    color: var(--pc-ink, #12110E);
+  }
+  .sb-head { margin: 0 0 28px; }
+  .sb-head__kicker {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    font-weight: 700;
+    color: #8a2432;
+  }
+  .sb-head__title {
+    margin: 0 0 8px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: clamp(34px, 6vw, 60px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .sb-head__dek {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 15px;
+    line-height: 1.5;
+    max-width: 620px;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .sb-head__dek a { color: #8a2432; border-bottom: 1px solid currentColor; text-decoration: none; }
+
+  .sb-windows {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 28px 0 36px;
+  }
+  @media (max-width: 820px) {
+    .sb-windows { grid-template-columns: 1fr; }
+  }
+
+  .sb-window {
+    padding: 14px 16px;
+    border: 1px solid rgba(18, 17, 14, 0.12);
+    border-radius: 3px;
+    background: #fafaf7;
+  }
+  .sb-window__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .sb-window__label {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #8a2432;
+  }
+  .sb-window__leader {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: #12110E;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sb-window__leader--empty { opacity: 0.5; }
+  .sb-agent-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .sb-agent-dot--codex  { background: #67e8f9; }
+  .sb-agent-dot--manus  { background: #fbbf24; }
+  .sb-agent-dot--claude { background: #a78bfa; }
+  .sb-agent-dot--mike   { background: #86efac; }
+
+  .sb-window__rows {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sb-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.7);
+    border-radius: 2px;
+    font-size: 11px;
+    overflow: hidden;
+  }
+  .sb-row::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    opacity: 0.08;
+    width: var(--bar);
+    transition: width 400ms ease;
+    z-index: 0;
+  }
+  .sb-row > * { position: relative; z-index: 1; }
+  .sb-row__agent {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 2px;
+    color: var(--color);
+    background: var(--bg);
+    text-align: center;
+  }
+  .sb-row__bar {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--bg), var(--color));
+    width: var(--bar);
+    transition: width 400ms ease;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+  }
+  .sb-row__counts {
+    display: inline-flex;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .sb-row__counts > span { font-weight: 700; color: #12110E; font-size: 13px; }
+  .sb-row__unit {
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    margin-left: 3px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    text-transform: uppercase;
+  }
+  .sb-row__total {
+    font-size: 15px;
+    font-weight: 700;
+    padding: 0 6px;
+    border-left: 1px solid rgba(18,17,14,0.12);
+  }
+
+  .sb-races {
+    margin: 28px 0 20px;
+    padding: 16px 18px;
+    border: 1px solid rgba(18, 17, 14, 0.12);
+    border-left: 3px solid #2f8f5f;
+    border-radius: 2px;
+    background: #fafaf7;
+  }
+  .sb-races__head { margin-bottom: 12px; }
+  .sb-races__kicker {
+    margin: 0 0 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.26em;
+    font-weight: 700;
+    color: #2f8f5f;
+  }
+  .sb-races__title {
+    margin: 0 0 6px;
+    font-family: Georgia, 'Gloock', serif;
+    font-weight: 400;
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .sb-races__dek {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    line-height: 1.45;
+  }
+  .sb-races__dek code {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11.5px;
+    background: rgba(47, 143, 95, 0.1);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  .sb-races__list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sb-race {
+    display: grid;
+    grid-template-columns: 92px 1fr auto auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 2px;
+    font-size: 12px;
+  }
+  @media (max-width: 620px) {
+    .sb-race { grid-template-columns: 1fr; gap: 4px; }
+    .sb-race__link { justify-self: start; }
+  }
+  .sb-race__status {
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    text-align: center;
+    color: #6B2139;
+    background: rgba(138, 36, 50, 0.1);
+  }
+  .sb-race__status[data-status="open"] { background: rgba(47, 143, 95, 0.18); color: #1b5033; }
+  .sb-race__status[data-status="scheduled"] { background: rgba(245, 159, 0, 0.18); color: #8a5a00; }
+  .sb-race__status[data-status="closed"] { opacity: 0.7; }
+  .sb-race__status[data-status="resolved"] { background: rgba(95,94,90,0.18); color: #38373A; }
+  .sb-race__title {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    font-weight: 400;
+  }
+  .sb-race__meta {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .sb-race__link {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #8a2432;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .sb-race--empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--pc-ink-muted, #5F5E5A);
+    opacity: 0.6;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+
+  .sb-foot {
+    margin-top: 28px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(18,17,14,0.12);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    opacity: 0.72;
+  }
+  .sb-foot a {
+    color: #8a2432;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+</style>
