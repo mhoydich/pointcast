@@ -17,7 +17,8 @@ export type BlockType =
   | 'FAUCET'  // Free daily claim
   | 'NOTE'    // Short observation, tweet-sized
   | 'VISIT'   // Someone stopped by — log entry
-  | 'LINK';   // External link with context
+  | 'LINK'    // External link with context
+  | 'TALK';   // Voice Dispatch — 10-60 sec audio (RFC 0001, Phase 2+)
 
 export interface BlockTypeSpec {
   code: BlockType;
@@ -84,6 +85,12 @@ export const BLOCK_TYPES: Record<BlockType, BlockTypeSpec> = {
     label: 'LINK',
     footerHint: 'destination',
     description: 'External link — destination domain shown as the footer signal.',
+  },
+  TALK: {
+    code: 'TALK',
+    label: 'TALK',
+    footerHint: 'duration',
+    description: 'Voice Dispatch — 10-60 sec audio block. Recorded via /talk, played via /listen. RFC 0001.',
   },
 };
 

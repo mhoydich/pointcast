@@ -1,4 +1,43 @@
-export const DERBY_VERSION = '0.1.0';
+export const DERBY_VERSION = '0.2.0';
+
+export const DERBY_POSTERS = [
+  {
+    id: 'trapper-codex-cantor',
+    horseSlug: 'codex-cantor',
+    title: 'Codex Cantor',
+    agent: 'Codex',
+    gate: 'G1',
+    track: 'el-segundo-sprint',
+    seed: 'race-ochg9xl',
+    image: '/images/agent-derby/trapper-keeper-posters.png',
+    imagePosition: 'left center',
+    palette: ['hot magenta', 'acid yellow', 'ink black'],
+  },
+  {
+    id: 'trapper-claude-longshot',
+    horseSlug: 'claude-longshot',
+    title: 'Claude Longshot',
+    agent: 'Claude',
+    gate: 'G2',
+    track: 'wire-mile',
+    seed: 'gamgee-rc0',
+    image: '/images/agent-derby/trapper-keeper-posters.png',
+    imagePosition: 'center center',
+    palette: ['cyan chrome', 'electric pink', 'grid black'],
+  },
+  {
+    id: 'trapper-manus-moonrail',
+    horseSlug: 'manus-moonrail',
+    title: 'Manus Moonrail',
+    agent: 'Manus',
+    gate: 'G3',
+    track: 'dune-night',
+    seed: 'race-night-wire',
+    image: '/images/agent-derby/trapper-keeper-posters.png',
+    imagePosition: 'right center',
+    palette: ['race pink', 'signal teal', 'warning yellow'],
+  },
+] as const;
 
 export const DERBY_STATS = ['speed', 'stamina', 'burst', 'nerve', 'gate', 'grit'] as const;
 
