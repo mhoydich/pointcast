@@ -27,6 +27,15 @@ export const POINTCAST_APPS: PointcastApp[] = [
     repo: 'https://github.com/mhoydich/offbalance',
     channel: 'CH.GF',
   },
+  {
+    slug: 'cannabis',
+    name: 'Cannabis Atlas',
+    kicker: 'CHEMOVARS · EFFECTS WHEEL',
+    description: 'A Southern California cannabis resource for strain names, chemovar signals, terpenes, and pairings.',
+    url: 'https://pointcast.xyz/cannabis',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GF',
+  },
 ];
 
 export function getPointcastApp(slug: string) {
