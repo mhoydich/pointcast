@@ -62,3 +62,36 @@ id = "7a49bba243c346068d9440122f79c4f1"
 name = "PRESENCE"
 class_name = "PresenceRoom"
 script_name = "pointcast-presence"
+
+# ─── Sprint 18 scaffolds — awaiting Mike-side provisioning ──────────
+#
+# PC_RATES_KV — shared rate-limit counter store for functions/_rate-limit.ts.
+# Keys shaped `rl:<bucket>:<clientId>:<windowIdx>` with TTL = windowSec + 5.
+# Currently bucketed for /api/talk (5/10min) and /api/wire-events (60/min).
+# Until bound, rate limiting is advisory-only — endpoints return a
+# `X-RateLimit-Mode: degraded-no-kv` header and otherwise behave normally.
+#
+# Provision once with either path:
+#   DASHBOARD:  CF → Workers & Pages → pointcast → Settings → Functions
+#               → KV bindings → Add → name: PC_RATES_KV → new namespace
+#                 "pointcast-rates"
+#   CLI:        npx wrangler kv namespace create "PC_RATES_KV"
+#               then paste the returned id into the block below.
+#
+# [[kv_namespaces]]
+# binding = "PC_RATES_KV"
+# id = "<paste-from-wrangler>"
+
+# TALK_AUDIO — R2 bucket for Voice Dispatch Phase 3 audio persistence.
+# Key layout + TTL + quota thinking in docs/plans/voice-dispatch-phase-3.md.
+# Gated behind env.TALK_AUDIO in functions/api/talk.ts, so adding/removing
+# the binding flips the behavior without a code change.
+#
+# Provision once (Mike, from the CF dashboard):
+#   CF → R2 → Create bucket → name: "pointcast-audio" → Standard class
+#   CF → Workers & Pages → pointcast → Settings → Functions
+#     → R2 bucket bindings → Add → variable: TALK_AUDIO → bucket: pointcast-audio
+#
+# [[r2_buckets]]
+# binding = "TALK_AUDIO"
+# bucket_name = "pointcast-audio"

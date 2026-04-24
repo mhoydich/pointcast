@@ -1,5 +1,5 @@
 /**
- * POST /api/talk — Voice Dispatch Phase 2 stub
+ * POST /api/talk — Voice Dispatch Phase 2 stub + Phase 3 rate limit
  *
  * Accepts a multipart/form-data POST from /talk with:
  *   - file:     audio blob (audio/webm or audio/mp4)
@@ -9,15 +9,20 @@
  *   - dek:      optional string
  *   - location: optional string
  *
- * Phase 2 scope: validate shape, return a mock block ID. No storage,
- * no persistence, no rate limit. Phase 3 wires the Cloudflare R2
- * bucket (`pointcast-audio`), per-IP rate limits, and TALK block
- * persistence via GitHub commit or KV-backed draft per RFC 0001.
+ * Phase 2 scope: validate shape, return a mock block ID.
+ * Phase 3 (Sprint 18): per-IP rate limit (5 uploads per 10 min) via the
+ * shared `_rate-limit.ts` helper. R2 storage + TALK block persistence
+ * still deferred until `env.TALK_AUDIO` bucket is provisioned by Mike.
  *
  * GET /api/talk returns a JSON status + schema hint for agents.
  */
 
-type Env = Record<string, unknown>;
+import { rateLimit, rateLimitResponse, applyRateLimitHeaders } from '../_rate-limit';
+
+type Env = {
+  PC_RATES_KV?: KVNamespace;
+  TALK_AUDIO?: R2Bucket; // present only after bucket is provisioned + bound
+};
 
 export const onRequestGet: PagesFunction<Env> = async () => {
   const payload = {
@@ -52,12 +57,24 @@ export const onRequestGet: PagesFunction<Env> = async () => {
   });
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  // 5 Voice Dispatches per 10 minutes per IP. Generous for a human
+  // talking; tight enough that a loop can't flood the stub endpoint.
+  const rl = await rateLimit(request, env, {
+    bucket: 'talk:post',
+    windowSec: 600,
+    maxRequests: 5,
+  });
+  if (!rl.allowed) return rateLimitResponse(rl, 'too many voice dispatches; slow down');
+
   let form: FormData;
   try {
     form = await request.formData();
   } catch (e) {
-    return json({ ok: false, error: 'expected multipart/form-data' }, 400);
+    return applyRateLimitHeaders(
+      json({ ok: false, error: 'expected multipart/form-data' }, 400),
+      rl,
+    );
   }
 
   const file = form.get('file');
@@ -70,31 +87,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
   // Basic validation. Phase 3 adds server-side duration re-check via
   // ffprobe / media inspection.
   if (!(file instanceof File) && !(file instanceof Blob)) {
-    return json({ ok: false, error: 'file missing' }, 400);
+    return applyRateLimitHeaders(json({ ok: false, error: 'file missing' }, 400), rl);
   }
   const sizeBytes = (file as Blob).size;
   if (sizeBytes <= 0) {
-    return json({ ok: false, error: 'empty file' }, 400);
+    return applyRateLimitHeaders(json({ ok: false, error: 'empty file' }, 400), rl);
   }
   if (sizeBytes > 2_500_000) {
-    return json({ ok: false, error: 'file too large (max ~2.5 MB)' }, 413);
+    return applyRateLimitHeaders(json({ ok: false, error: 'file too large (max ~2.5 MB)' }, 413), rl);
   }
 
   const duration = Number.parseInt(durationStr, 10);
   if (!Number.isFinite(duration) || duration < 10 || duration > 65) {
-    return json({ ok: false, error: 'duration must be 10-60 sec' }, 400);
+    return applyRateLimitHeaders(json({ ok: false, error: 'duration must be 10-60 sec' }, 400), rl);
   }
 
   if (!title || title.length < 2) {
-    return json({ ok: false, error: 'title required (2+ chars)' }, 400);
+    return applyRateLimitHeaders(json({ ok: false, error: 'title required (2+ chars)' }, 400), rl);
   }
   if (title.length > 80) {
-    return json({ ok: false, error: 'title too long (max 80)' }, 400);
+    return applyRateLimitHeaders(json({ ok: false, error: 'title too long (max 80)' }, 400), rl);
   }
 
   const VALID_CHANNELS = new Set(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST', 'BTL']);
   if (!VALID_CHANNELS.has(channel)) {
-    return json({ ok: false, error: 'invalid channel code' }, 400);
+    return applyRateLimitHeaders(json({ ok: false, error: 'invalid channel code' }, 400), rl);
   }
 
   // Phase 2: generate a mock block ID. Phase 3 replaces this with a
@@ -103,9 +120,40 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
   const mimeType = (file as Blob).type || 'audio/webm';
   const format = mimeType.split(';')[0].split('/')[1] || 'webm';
 
-  return json({
+  // Phase 3 scaffold — if the R2 bucket is bound, attempt to persist
+  // the blob. Until Mike provisions + binds `TALK_AUDIO` in the CF
+  // dashboard, env.TALK_AUDIO is undefined and this branch is skipped;
+  // the response falls through to the Phase 2 stub shape as before.
+  // (See docs/plans/voice-dispatch-phase-3.md for the key layout +
+  // TTL + quota thinking.)
+  let audioKey: string | null = null;
+  let audioUrl: string | null = null;
+  let phase = '2-stub';
+  if (env.TALK_AUDIO) {
+    try {
+      // Scaffolded but intentionally NOT wired in this sprint — final
+      // key layout + publishing flow is specified in the Phase 3 doc.
+      // The bound-bucket branch stays behind this flag until the doc
+      // questions are answered (mintage approach, agent bloom policy).
+      // Flip this `false` to `true` after RFC 0001 Q7 + Q8 resolve.
+      if (false as boolean) {
+        audioKey = `drafts/${mockId}.${format}`;
+        await env.TALK_AUDIO.put(audioKey, file as Blob, {
+          httpMetadata: { contentType: mimeType },
+        });
+        audioUrl = `https://pointcast.xyz/audio/${mockId}.${format}`;
+        phase = '3-r2-draft';
+      }
+    } catch (e) {
+      // Fall back to stub — never fail the upload on storage error.
+      audioKey = null;
+      audioUrl = null;
+    }
+  }
+
+  return applyRateLimitHeaders(json({
     ok: true,
-    phase: '2-stub',
+    phase,
     block: {
       id: mockId,
       type: 'TALK',
@@ -116,10 +164,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
       mockDurationSec: duration,
       mockSizeBytes: sizeBytes,
       mockFormat: format,
-      note: 'Phase 2 stub — audio was NOT stored. Phase 3 writes to R2 and returns a real /audio/{id}.{ext} URL.',
+      ...(audioKey ? { audio: { key: audioKey, url: audioUrl, format, durationSec: duration, sizeBytes } } : {}),
+      note: audioKey
+        ? 'Phase 3 draft — audio persisted to R2; block promotion pending human review.'
+        : 'Phase 2 stub — audio was NOT stored. Phase 3 writes to R2 once the bucket is bound.',
     },
     rfc: 'https://github.com/mhoydich/pointcast/blob/main/docs/rfc/0001-voice-dispatch.md',
-  });
+    rateLimit: { remaining: rl.remaining, resetInSec: rl.retryAfter, limit: rl.limit },
+  }), rl);
 };
 
 export const onRequestOptions: PagesFunction<Env> = async () => {

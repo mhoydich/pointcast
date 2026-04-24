@@ -139,6 +139,9 @@ export const GET: APIRoute = async () => {
         queue: 'https://pointcast.xyz/api/queue',
         drop: 'https://pointcast.xyz/api/drop',
         poll: 'https://pointcast.xyz/api/poll',
+        talk: 'https://pointcast.xyz/api/talk',
+        wireEvents: 'https://pointcast.xyz/api/wire-events',
+        room: 'wss://pointcast.xyz/api/room',
         presence: 'wss://pointcast.xyz/api/presence',
         presenceSnapshot: 'https://pointcast.xyz/api/presence/snapshot',
         presenceProtocol: {
