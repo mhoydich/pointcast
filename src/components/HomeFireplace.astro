@@ -1,0 +1,269 @@
+---
+/**
+ * HomeFireplace — a small, warm, SoCal-cozy fireplace module for the
+ * top of the home page.
+ *
+ * Mike 2026-04-23 23:xx PT: "on the home page, very clinical, bring
+ * some socal cozyness back, and try a fireplace module on the home
+ * page above the fold, a block i guess."
+ *
+ * Sits between the masthead and the Gamgee front-door strip. ~140px
+ * tall. Animated fire glow + crackle. One-line copy. Link into
+ * /gandalf (the companion page that pairs with this vibe).
+ *
+ * Time-aware: evening hours get warmer + softer, daytime hours get a
+ * cooler "fire is out" palette. All client-side via a small inline
+ * script — no server-side date logic, so cache stays simple.
+ */
+---
+
+<aside class="hearth" aria-label="Evening hearth — cozy companion to the Gamgee release">
+  <div class="hearth__glow" aria-hidden="true"></div>
+  <div class="hearth__embers" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span>
+  </div>
+
+  <div class="hearth__body">
+    <p class="hearth__kicker mono">
+      <span class="hearth__dot"></span>
+      <span id="hearth-mood">EVENING · EL SEGUNDO</span>
+    </p>
+    <h2 class="hearth__line">
+      <span class="hearth__sub">Pull up a chair.</span>
+      <span class="hearth__main">The kettle's on. The marine layer's in.</span>
+    </h2>
+    <div class="hearth__cta">
+      <a href="/gandalf" class="hearth__link">
+        <span class="hearth__link-glyph" aria-hidden="true">🔥</span>
+        <span class="hearth__link-label mono">SIT A WHILE <span class="hearth__arrow">→</span></span>
+        <span class="hearth__link-sub">/gandalf · /tonight · /meditate</span>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var $mood = document.getElementById('hearth-mood');
+    if (!$mood) return;
+
+    function updateMood() {
+      var now = new Date();
+      var h = now.getHours() + now.getMinutes() / 60;
+      var label;
+      if (h < 6)        label = 'SMALL HOURS · EL SEGUNDO';
+      else if (h < 10)  label = 'MORNING LIGHT · EL SEGUNDO';
+      else if (h < 15)  label = 'MIDDAY · EL SEGUNDO';
+      else if (h < 18)  label = 'GOLDEN HOUR · EL SEGUNDO';
+      else if (h < 21)  label = 'BLUE HOUR · EL SEGUNDO';
+      else              label = 'EVENING · EL SEGUNDO';
+      $mood.textContent = label;
+
+      var hearth = document.querySelector('.hearth');
+      if (hearth) {
+        // Intensify the glow in evening hours
+        var intensity = (h >= 18 || h < 6) ? 'evening' : (h >= 15 ? 'golden' : 'day');
+        hearth.setAttribute('data-mood', intensity);
+      }
+    }
+    updateMood();
+    setInterval(updateMood, 60 * 1000);
+  })();
+</script>
+
+<style>
+  .hearth {
+    position: relative;
+    margin: 10px 0 14px;
+    padding: 18px 22px 20px;
+    background: linear-gradient(180deg, #1f150a 0%, #2a1d0b 58%, #3d2712 100%);
+    border-radius: 4px;
+    border: 1px solid #4e3a16;
+    overflow: hidden;
+    color: #f9eccf;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    isolation: isolate;
+  }
+  .hearth[data-mood='day'] {
+    background: linear-gradient(180deg, #2a2215 0%, #3d3220 58%, #4e3f27 100%);
+    color: #e8dfc8;
+  }
+  .hearth[data-mood='golden'] {
+    background: linear-gradient(180deg, #2d1e0c 0%, #3d2a12 58%, #4e3419 100%);
+  }
+
+  .hearth__glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 80% at 18% 100%, rgba(255, 150, 60, 0.55) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 60% at 82% 100%, rgba(240, 100, 40, 0.35) 0%, transparent 55%),
+      radial-gradient(ellipse 30% 40% at 50% 100%, rgba(255, 200, 100, 0.28) 0%, transparent 60%);
+    animation: hearth-flicker 4.3s ease-in-out infinite;
+    z-index: 0;
+  }
+  .hearth[data-mood='day'] .hearth__glow { opacity: 0.35; }
+  @keyframes hearth-flicker {
+    0%, 100% { opacity: 0.9; transform: scale(1); }
+    22%      { opacity: 1;   transform: scale(1.04) translateY(-1px); }
+    48%      { opacity: 0.85; transform: scale(0.98); }
+    70%      { opacity: 0.95; transform: scale(1.02) translateY(1px); }
+  }
+
+  .hearth__embers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .hearth__embers span {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffb060 0%, #d97020 60%, transparent 100%);
+    opacity: 0;
+    animation: ember-rise 4s linear infinite;
+  }
+  .hearth__embers span:nth-child(1) { left: 12%; animation-delay: 0s;   animation-duration: 5.2s; }
+  .hearth__embers span:nth-child(2) { left: 22%; animation-delay: 1.3s; animation-duration: 4.1s; }
+  .hearth__embers span:nth-child(3) { left: 36%; animation-delay: 2.2s; animation-duration: 5.8s; }
+  .hearth__embers span:nth-child(4) { left: 48%; animation-delay: 0.6s; animation-duration: 4.6s; }
+  .hearth__embers span:nth-child(5) { left: 62%; animation-delay: 3.1s; animation-duration: 5.3s; }
+  .hearth__embers span:nth-child(6) { left: 74%; animation-delay: 1.9s; animation-duration: 4.8s; }
+  .hearth__embers span:nth-child(7) { left: 84%; animation-delay: 2.7s; animation-duration: 5.0s; }
+  .hearth__embers span:nth-child(8) { left: 92%; animation-delay: 0.9s; animation-duration: 4.4s; }
+  @keyframes ember-rise {
+    0%   { bottom: 0;   opacity: 0;   transform: translateX(0); }
+    12%  { opacity: 1; }
+    100% { bottom: 110%; opacity: 0; transform: translateX(calc(-4px + (var(--drift, 0) * 8px))); }
+  }
+  .hearth[data-mood='day'] .hearth__embers { display: none; }
+
+  .hearth__body {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+  }
+  @media (max-width: 560px) {
+    .hearth__body {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+  }
+
+  .hearth__kicker {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #f9c56c;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hearth[data-mood='day'] .hearth__kicker { color: #d9b570; }
+
+  .hearth__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ff9040;
+    box-shadow: 0 0 8px rgba(255, 150, 80, 0.8);
+    animation: dot-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(0.85); }
+  }
+
+  .hearth__line {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: 0;
+    margin: 0;
+    line-height: 1.2;
+    color: #fdf2d6;
+  }
+  .hearth[data-mood='day'] .hearth__line { color: #ece1c3; }
+
+  .hearth__sub {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #f9c56c;
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .hearth[data-mood='day'] .hearth__sub { color: #c9a872; }
+
+  .hearth__main {
+    display: block;
+    font-size: clamp(18px, 2.4vw, 23px);
+    font-style: italic;
+    color: #fdf2d6;
+  }
+
+  .hearth__cta {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+  @media (max-width: 560px) { .hearth__cta { justify-content: flex-start; } }
+
+  .hearth__link {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 16px;
+    text-decoration: none;
+    background: rgba(255, 200, 100, 0.1);
+    border: 1px solid rgba(255, 180, 80, 0.3);
+    border-radius: 3px;
+    color: #fdf2d6;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    white-space: nowrap;
+  }
+  .hearth__link:hover {
+    background: rgba(255, 200, 100, 0.2);
+    border-color: rgba(255, 200, 100, 0.5);
+  }
+  .hearth__link-glyph {
+    font-size: 18px;
+    line-height: 1;
+  }
+  .hearth__link-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: #ffc878;
+  }
+  .hearth__arrow { font-size: 14px; }
+  .hearth__link-sub {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    color: rgba(253, 242, 214, 0.65);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hearth__glow { animation: none; }
+    .hearth__embers span { animation: none; display: none; }
+    .hearth__dot { animation: none; }
+  }
+</style>
