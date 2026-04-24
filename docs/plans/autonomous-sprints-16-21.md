@@ -36,10 +36,22 @@ deferred to Sprint 18 alongside Voice Dispatch Phase 3's rate limiter.
 
 ---
 
-## Sprint 17 — /wire Codex task follow-through
+## Sprint 17 — /wire Codex task follow-through ✅ SHIPPED
 
-Check Codex Issue #31. If shipped, review + merge. If not, build
-myself from the spec.
+**Shipped:** 2026-04-24 ~01:30 PT · PR #42 squashed to main · deploy `b04ead42` · closes Issue #31
+
+Codex didn't pick up #31 in the 30+ hrs after filing, so cc built it.
+`/wire` is a right-to-left marquee of the last 24 events (commits +
+recent blocks) with agent-colored chips, an active-tonight sidebar,
+and an hour-tinted sky. `/wire.json` twin for agents. Registered in
+`/agents.json`, `/for-agents`, and `_middleware.ts` PRETTY_ROUTES so
+the URL resolves without 308.
+
+Cut and deferred:
+- Click-to-expand modal with full commit + diff
+- Sound-on teletype click
+- WebMCP `pointcast_wire_events` tool hook (→ Sprint 18 with the
+  rate-limit middleware scaffold, same infra)
 
 ---
 
