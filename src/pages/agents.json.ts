@@ -91,6 +91,7 @@ export const GET: APIRoute = async () => {
         here: 'https://pointcast.xyz/here',
         forAgents: 'https://pointcast.xyz/for-agents',
         forNodes: 'https://pointcast.xyz/for-nodes',
+        farm: 'https://pointcast.xyz/farm',
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',

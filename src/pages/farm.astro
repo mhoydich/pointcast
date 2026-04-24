@@ -1,0 +1,705 @@
+---
+/**
+ * /farm — Sam's Plot. A small, zen, async farming game.
+ *
+ * Opened in parallel with the Gamgee RC0 release work, at Mike's
+ * request: "and yah, create a farming game in parallel." Named after
+ * the release codename — Samwise Gamgee would have a small, careful
+ * garden, and he would tend it slowly.
+ *
+ * Design principles (carried from the Gamgee release thesis):
+ *   - Finite > infinite (9-tile plot, fixed seed catalog)
+ *   - Events > feeds (plant → grow → harvest, discrete cycle)
+ *   - Participation > consumption (every move costs intention)
+ *   - "Not trapped. Completed." — you water once, you close the tab
+ *
+ * State lives entirely in browser localStorage. No server, no account,
+ * no account-level save. Loss of storage = fresh plot.
+ *
+ * Seeds have real-wall-clock growth times in the 30s-10min range so
+ * you can see the cycle in one session, but also come back tomorrow
+ * and find everything ripe.
+ *
+ * This is v0. If Mike says "bigger plot / more seeds / seasons / prize
+ * pool," those are v1+.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Farm — Sam\'s Plot';
+const description = 'A small, zen farming game on PointCast. Tend a 9-tile plot with four seed types. Plant, water, harvest. Async-friendly. LocalStorage-backed.';
+const canonical = 'https://pointcast.xyz/farm';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': canonical,
+  name: "Sam's Plot",
+  alternateName: 'PointCast Farm',
+  description,
+  url: canonical,
+  gamePlatform: ['Web browser'],
+  numberOfPlayers: { '@type': 'QuantitativeValue', value: 1 },
+  about: ['farming', 'garden', 'gamgee', 'pointcast', 'zen', 'async'],
+  inLanguage: 'en-US',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="farm">
+    <nav class="farm__crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>farm</span>
+    </nav>
+
+    <header class="farm__hero">
+      <p class="farm__kicker mono">FARM · SAM'S PLOT · v0</p>
+      <h1 class="farm__title">A small, careful garden.</h1>
+      <p class="farm__dek">
+        Nine tiles. Four seeds. Plant sparingly. Water with care. Come back
+        tomorrow. A garden is slow on purpose — this one is no different.
+      </p>
+    </header>
+
+    <section class="farm__seeds" aria-label="Seed catalog">
+      <h2 class="farm__h2">Seed catalog</h2>
+      <div class="farm__seed-grid">
+        <button class="seed-card" data-seed="corn" type="button">
+          <div class="seed-card__glyph" aria-hidden="true">🌽</div>
+          <div class="seed-card__name">Corn</div>
+          <div class="seed-card__time mono">30 SEC</div>
+          <div class="seed-card__note">Fast, sturdy, warm.</div>
+        </button>
+        <button class="seed-card" data-seed="tomato" type="button">
+          <div class="seed-card__glyph" aria-hidden="true">🍅</div>
+          <div class="seed-card__name">Tomato</div>
+          <div class="seed-card__time mono">2 MIN</div>
+          <div class="seed-card__note">The summer one.</div>
+        </button>
+        <button class="seed-card" data-seed="tater" type="button">
+          <div class="seed-card__glyph" aria-hidden="true">🥔</div>
+          <div class="seed-card__name">Tater</div>
+          <div class="seed-card__time mono">5 MIN</div>
+          <div class="seed-card__note">Sam's favorite. Boil 'em, mash 'em…</div>
+        </button>
+        <button class="seed-card" data-seed="pipeweed" type="button">
+          <div class="seed-card__glyph" aria-hidden="true">🌿</div>
+          <div class="seed-card__name">Pipeweed</div>
+          <div class="seed-card__time mono">10 MIN</div>
+          <div class="seed-card__note">Old Toby. The slow one.</div>
+        </button>
+      </div>
+      <p class="farm__hint">Click a seed. Then click an empty tile to plant.</p>
+    </section>
+
+    <section class="farm__plot-section" aria-label="Your plot">
+      <div class="farm__plot-head">
+        <h2 class="farm__h2">Sam's plot</h2>
+        <div class="farm__selected-hint mono" id="farm-selected-hint">CHOOSE A SEED →</div>
+      </div>
+      <div class="farm__plot" id="farm-plot" role="grid" aria-label="3 by 3 farming plot">
+        <button class="tile" data-idx="0" aria-label="Tile 1" type="button"></button>
+        <button class="tile" data-idx="1" aria-label="Tile 2" type="button"></button>
+        <button class="tile" data-idx="2" aria-label="Tile 3" type="button"></button>
+        <button class="tile" data-idx="3" aria-label="Tile 4" type="button"></button>
+        <button class="tile" data-idx="4" aria-label="Tile 5" type="button"></button>
+        <button class="tile" data-idx="5" aria-label="Tile 6" type="button"></button>
+        <button class="tile" data-idx="6" aria-label="Tile 7" type="button"></button>
+        <button class="tile" data-idx="7" aria-label="Tile 8" type="button"></button>
+        <button class="tile" data-idx="8" aria-label="Tile 9" type="button"></button>
+      </div>
+      <div class="farm__actions">
+        <button id="farm-water" class="farm__btn" type="button">Water everything 💧</button>
+        <button id="farm-reset" class="farm__btn farm__btn--ghost" type="button">Reset plot</button>
+      </div>
+    </section>
+
+    <section class="farm__ledger" aria-label="Harvest ledger">
+      <h2 class="farm__h2">Harvest ledger</h2>
+      <p class="farm__ledger-line mono" id="farm-ledger-count">0 HARVESTS</p>
+      <ul class="farm__ledger-list mono" id="farm-ledger-list" aria-live="polite">
+        <li class="farm__ledger-empty">Nothing harvested yet. Plant a seed.</li>
+      </ul>
+    </section>
+
+    <section class="farm__rules">
+      <h2 class="farm__h2">How a garden works</h2>
+      <ul class="farm__rules-list">
+        <li>Pick a seed from the catalog. It lights up.</li>
+        <li>Click an empty tile — the seed plants and starts growing.</li>
+        <li>Growth stages: <code>seed → sprout → young → mature → ripe</code>.</li>
+        <li>Water once or twice during growth. Unwatered plants grow slowly.</li>
+        <li>When a tile is <strong>ripe</strong>, click it to harvest. That tile empties.</li>
+        <li>Harvests go to your ledger below. No scoring, no leaderboard, no streak pressure.</li>
+        <li>Everything is saved to your browser. If you clear storage, the plot resets.</li>
+        <li>Come back in the morning. Something will be ripe.</li>
+      </ul>
+    </section>
+
+    <section class="farm__related">
+      <h2 class="farm__h2">Related</h2>
+      <ul class="farm__links">
+        <li><a href="/gamgee"><code class="mono">/gamgee</code></a> — the release this belongs to (named for Sam)</li>
+        <li><a href="/garden-yield"><code class="mono">/garden-yield</code></a> — the real-world native planting companion</li>
+        <li><a href="/houseplants"><code class="mono">/houseplants</code></a> — the indoor learning lab</li>
+        <li><a href="/nature"><code class="mono">/nature</code></a> — El Segundo field guide</li>
+        <li><a href="/meditate"><code class="mono">/meditate</code></a> — the quiet room</li>
+      </ul>
+    </section>
+
+    <footer class="farm__foot mono">
+      <span>SAM'S PLOT · v0 · LOCAL-ONLY · EL SEGUNDO · 2026-04-23</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var STORAGE_KEY = 'pc:farm:v0';
+    var NOW = function () { return Date.now(); };
+
+    // Seed catalog — wall-clock growth times (in ms)
+    var SEEDS = {
+      corn:     { name: 'Corn',     glyph: '🌽', seedEmoji: '·',  time: 30 * 1000,        water: 15 * 1000,        color: '#f59e0b' },
+      tomato:   { name: 'Tomato',   glyph: '🍅', seedEmoji: '·',  time: 2 * 60 * 1000,    water: 60 * 1000,        color: '#ef4444' },
+      tater:    { name: 'Tater',    glyph: '🥔', seedEmoji: '·',  time: 5 * 60 * 1000,    water: 120 * 1000,       color: '#b45309' },
+      pipeweed: { name: 'Pipeweed', glyph: '🌿', seedEmoji: '·',  time: 10 * 60 * 1000,   water: 240 * 1000,       color: '#166534' },
+    };
+
+    // Growth stages by progress ratio
+    function stageFor(progress) {
+      if (progress < 0.15) return 'seed';
+      if (progress < 0.45) return 'sprout';
+      if (progress < 0.80) return 'young';
+      if (progress < 1.00) return 'mature';
+      return 'ripe';
+    }
+
+    function stageGlyph(seedKey, stage) {
+      if (stage === 'ripe') return SEEDS[seedKey].glyph;
+      if (stage === 'mature') return '🌿';
+      if (stage === 'young') return '🌱';
+      if (stage === 'sprout') return '・';
+      return '·';
+    }
+
+    function loadState() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.version === 1 && Array.isArray(parsed.plot) && parsed.plot.length === 9) {
+            return parsed;
+          }
+        }
+      } catch (e) {}
+      return freshState();
+    }
+
+    function freshState() {
+      var plot = [];
+      for (var i = 0; i < 9; i++) plot.push({ idx: i, state: 'empty' });
+      return { version: 1, plot: plot, harvested: [], started: NOW() };
+    }
+
+    function saveState(s) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
+    }
+
+    var state = loadState();
+    var selectedSeed = null;
+
+    var plotEl = document.getElementById('farm-plot');
+    var tiles = Array.prototype.slice.call(plotEl.querySelectorAll('.tile'));
+    var seedCards = Array.prototype.slice.call(document.querySelectorAll('.seed-card'));
+    var hintEl = document.getElementById('farm-selected-hint');
+    var waterAllBtn = document.getElementById('farm-water');
+    var resetBtn = document.getElementById('farm-reset');
+    var ledgerCountEl = document.getElementById('farm-ledger-count');
+    var ledgerListEl = document.getElementById('farm-ledger-list');
+
+    function relTimeShort(ms) {
+      var s = Math.max(0, Math.floor(ms / 1000));
+      if (s < 60) return s + 's';
+      if (s < 3600) return Math.floor(s / 60) + 'm';
+      if (s < 86400) return Math.floor(s / 3600) + 'h';
+      return Math.floor(s / 86400) + 'd';
+    }
+
+    function progressFor(tile) {
+      if (tile.state !== 'growing') return 0;
+      var spec = SEEDS[tile.seed];
+      if (!spec) return 0;
+      var now = NOW();
+      var elapsed = now - tile.plantedAt;
+      // Water penalty: if long past lastWatered, growth slows by 40%
+      var sinceWater = now - (tile.lastWatered || tile.plantedAt);
+      var penalty = sinceWater > spec.water ? 0.6 : 1.0;
+      return Math.min(1, (elapsed * penalty) / spec.time);
+    }
+
+    function render() {
+      tiles.forEach(function (btn, i) {
+        var tile = state.plot[i];
+        btn.className = 'tile';
+        btn.innerHTML = '';
+
+        if (tile.state === 'empty') {
+          btn.classList.add('tile--empty');
+          if (selectedSeed) btn.classList.add('tile--plantable');
+          btn.setAttribute('aria-label', 'Empty tile ' + (i + 1) + ' — click to plant ' + (selectedSeed || 'nothing'));
+        } else if (tile.state === 'growing' || tile.state === 'ripe') {
+          var progress = progressFor(tile);
+          var stage = stageFor(progress);
+          if (progress >= 1 && tile.state !== 'ripe') {
+            tile.state = 'ripe';
+            saveState(state);
+          }
+          btn.classList.add('tile--' + stage);
+          btn.classList.add('tile--seed-' + tile.seed);
+
+          var inner = document.createElement('div');
+          inner.className = 'tile__inner';
+
+          var glyph = document.createElement('div');
+          glyph.className = 'tile__glyph';
+          glyph.textContent = stageGlyph(tile.seed, stage);
+          inner.appendChild(glyph);
+
+          var meta = document.createElement('div');
+          meta.className = 'tile__meta';
+          if (stage === 'ripe') {
+            meta.textContent = 'RIPE — TAP';
+          } else {
+            var remainingMs = SEEDS[tile.seed].time - (NOW() - tile.plantedAt);
+            meta.textContent = stage.toUpperCase() + ' · ' + relTimeShort(remainingMs);
+          }
+          inner.appendChild(meta);
+
+          var water = document.createElement('div');
+          water.className = 'tile__water';
+          var sinceWater = NOW() - (tile.lastWatered || tile.plantedAt);
+          var needsWater = sinceWater > SEEDS[tile.seed].water;
+          water.textContent = needsWater ? '💧 thirsty' : '💧 ok';
+          if (needsWater) water.classList.add('tile__water--low');
+          inner.appendChild(water);
+
+          btn.appendChild(inner);
+
+          btn.setAttribute('aria-label', SEEDS[tile.seed].name + ' tile ' + (i + 1) + ', stage ' + stage);
+        }
+      });
+
+      // Ledger
+      ledgerCountEl.textContent = state.harvested.length + ' HARVEST' + (state.harvested.length === 1 ? '' : 'S');
+      ledgerListEl.innerHTML = '';
+      if (state.harvested.length === 0) {
+        var empty = document.createElement('li');
+        empty.className = 'farm__ledger-empty';
+        empty.textContent = 'Nothing harvested yet. Plant a seed.';
+        ledgerListEl.appendChild(empty);
+      } else {
+        var recent = state.harvested.slice(-8).reverse();
+        recent.forEach(function (h) {
+          var li = document.createElement('li');
+          var ago = relTimeShort(NOW() - h.at);
+          li.innerHTML = '<span class="ledger__glyph">' + SEEDS[h.seed].glyph + '</span>' +
+            '<span class="ledger__name">' + SEEDS[h.seed].name + '</span>' +
+            '<span class="ledger__ago">' + ago + ' ago</span>';
+          ledgerListEl.appendChild(li);
+        });
+      }
+    }
+
+    seedCards.forEach(function (card) {
+      card.addEventListener('click', function () {
+        var key = card.getAttribute('data-seed');
+        if (selectedSeed === key) {
+          selectedSeed = null;
+          card.classList.remove('seed-card--selected');
+          hintEl.textContent = 'CHOOSE A SEED →';
+        } else {
+          selectedSeed = key;
+          seedCards.forEach(function (c) { c.classList.remove('seed-card--selected'); });
+          card.classList.add('seed-card--selected');
+          hintEl.textContent = 'PLANTING: ' + SEEDS[key].name.toUpperCase();
+        }
+        render();
+      });
+    });
+
+    plotEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('.tile');
+      if (!btn) return;
+      var idx = parseInt(btn.getAttribute('data-idx'), 10);
+      var tile = state.plot[idx];
+      if (tile.state === 'empty') {
+        if (!selectedSeed) {
+          hintEl.textContent = '↑ CHOOSE A SEED FIRST';
+          hintEl.classList.add('hint--warn');
+          setTimeout(function () { hintEl.classList.remove('hint--warn'); }, 900);
+          return;
+        }
+        tile.state = 'growing';
+        tile.seed = selectedSeed;
+        tile.plantedAt = NOW();
+        tile.lastWatered = NOW();
+        saveState(state);
+        render();
+      } else if (tile.state === 'ripe') {
+        state.harvested.push({ seed: tile.seed, at: NOW() });
+        state.plot[idx] = { idx: idx, state: 'empty' };
+        saveState(state);
+        render();
+      } else if (tile.state === 'growing') {
+        // Tap growing tile = water just that one
+        tile.lastWatered = NOW();
+        saveState(state);
+        render();
+      }
+    });
+
+    waterAllBtn.addEventListener('click', function () {
+      var now = NOW();
+      state.plot.forEach(function (tile) {
+        if (tile.state === 'growing') tile.lastWatered = now;
+      });
+      saveState(state);
+      render();
+    });
+
+    resetBtn.addEventListener('click', function () {
+      if (!confirm('Reset the whole plot? Your harvest ledger will be kept.')) return;
+      var preservedLedger = state.harvested;
+      state = freshState();
+      state.harvested = preservedLedger;
+      saveState(state);
+      render();
+    });
+
+    render();
+    setInterval(render, 1000);
+  })();
+</script>
+
+<style>
+  .farm {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 20px 72px;
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+    color: #1a1d17;
+    background: linear-gradient(180deg, #faf8f1 0%, #f3ede0 100%);
+    min-height: calc(100vh - 60px);
+  }
+  .mono { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+
+  .farm__crumb {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+    margin-bottom: 22px;
+  }
+  .farm__crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+  .farm__crumb span { margin: 0 6px; }
+
+  .farm__hero { padding-bottom: 20px; border-bottom: 2px solid #2d3c1e; margin-bottom: 26px; }
+  .farm__kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.24em;
+    font-weight: 700;
+    color: #2f8f5f;
+    margin: 0 0 10px;
+  }
+  .farm__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4.5vw, 40px);
+    line-height: 1.12;
+    margin: 0 0 12px;
+    font-weight: 400;
+    color: #1a2811;
+  }
+  .farm__dek {
+    font-family: Georgia, serif;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 60ch;
+    color: #2e3326;
+  }
+
+  .farm__h2 {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    margin: 0 0 12px;
+    color: #1a2811;
+  }
+
+  .farm__seeds { margin: 0 0 28px; }
+  .farm__seed-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 560px) {
+    .farm__seed-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .seed-card {
+    appearance: none;
+    background: #fffdf6;
+    border: 1px solid #d4cdb8;
+    border-top: 4px solid #2f8f5f;
+    border-radius: 3px;
+    padding: 12px 10px 10px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, transform 0.1s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font: inherit;
+    color: inherit;
+  }
+  .seed-card:hover { background: #fff7dc; }
+  .seed-card--selected {
+    background: #e7f4ea;
+    border-top-color: #185fa5;
+    border-color: #2f8f5f;
+    box-shadow: 0 0 0 2px #2f8f5f;
+  }
+  .seed-card__glyph { font-size: 28px; line-height: 1; }
+  .seed-card__name { font-family: 'DM Serif Display', Georgia, serif; font-size: 17px; font-weight: 400; color: #1a2811; }
+  .seed-card__time { font-size: 10px; letter-spacing: 0.18em; font-weight: 700; color: #8a2432; }
+  .seed-card__note { font-family: Georgia, serif; font-size: 12px; line-height: 1.4; color: #5a5a4b; }
+  .farm__hint {
+    font-family: Georgia, serif;
+    font-size: 13px;
+    color: #5a5a4b;
+    margin: 8px 0 0;
+    text-align: center;
+    font-style: italic;
+  }
+
+  .farm__plot-section { margin: 0 0 28px; }
+  .farm__plot-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .farm__selected-hint {
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    color: #2f8f5f;
+    font-weight: 700;
+    transition: color 0.2s ease;
+  }
+  .farm__selected-hint.hint--warn { color: #8a2432; }
+
+  .farm__plot {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    aspect-ratio: 1;
+    background: #3d2f1d;
+    padding: 10px;
+    border-radius: 4px;
+    border: 2px solid #2d2111;
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.3);
+  }
+
+  .tile {
+    appearance: none;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    background: #6b4a2b;
+    background-image: radial-gradient(ellipse at 30% 30%, #7a583a 0%, #5c3f22 70%);
+    cursor: pointer;
+    transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.2s ease;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font: inherit;
+    position: relative;
+    overflow: hidden;
+  }
+  .tile--empty:hover { border-color: rgba(255,255,255,0.35); }
+  .tile--empty.tile--plantable {
+    border-color: #2f8f5f;
+    box-shadow: inset 0 0 0 1px rgba(47,143,95,0.5);
+  }
+  .tile--empty.tile--plantable:hover {
+    background-image: radial-gradient(ellipse at 30% 30%, #8b693e 0%, #6e4f2a 70%);
+    transform: translateY(-1px);
+  }
+  .tile--seed, .tile--sprout, .tile--young, .tile--mature, .tile--ripe {
+    cursor: pointer;
+  }
+  .tile--ripe {
+    animation: ripe-pulse 2s ease-in-out infinite;
+  }
+  @keyframes ripe-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 220, 100, 0.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(255, 220, 100, 0); }
+  }
+  .tile__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px;
+    text-align: center;
+    width: 100%;
+  }
+  .tile__glyph {
+    font-size: clamp(22px, 6vw, 38px);
+    line-height: 1;
+  }
+  .tile--seed .tile__glyph, .tile--sprout .tile__glyph { font-size: 16px; color: #d9cfa4; }
+  .tile__meta {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.82);
+    font-weight: 700;
+  }
+  .tile--ripe .tile__meta {
+    color: #ffec9c;
+    font-size: 10px;
+  }
+  .tile__water {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+    color: rgba(200, 220, 255, 0.75);
+  }
+  .tile__water--low { color: #ffa085; }
+
+  .farm__actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    justify-content: center;
+  }
+  .farm__btn {
+    appearance: none;
+    background: #1a2811;
+    color: #faf8f1;
+    border: 1px solid #1a2811;
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+  }
+  .farm__btn:hover { background: #2d3c1e; }
+  .farm__btn--ghost {
+    background: transparent;
+    color: #5a5a4b;
+    border-color: #d4cdb8;
+  }
+  .farm__btn--ghost:hover { background: #fffdf6; color: #1a2811; }
+
+  .farm__ledger { margin: 0 0 28px; padding: 14px 16px; background: rgba(255,255,255,0.5); border: 1px solid #d4cdb8; border-radius: 3px; }
+  .farm__ledger-line {
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    font-weight: 700;
+    color: #5a5a4b;
+    margin: 0 0 10px;
+  }
+  .farm__ledger-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+  }
+  .farm__ledger-list li {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 2px 0;
+  }
+  .farm__ledger-list .ledger__glyph { font-size: 14px; }
+  .farm__ledger-list .ledger__name { font-family: Georgia, serif; font-size: 13px; color: #1a2811; letter-spacing: 0; text-transform: none; }
+  .farm__ledger-list .ledger__ago { font-size: 10px; color: #5a5a4b; letter-spacing: 0.08em; }
+  .farm__ledger-empty {
+    font-family: Georgia, serif !important;
+    font-size: 13px !important;
+    color: #5a5a4b !important;
+    font-style: italic;
+    display: block !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+  }
+
+  .farm__rules { margin: 0 0 28px; padding-bottom: 20px; border-bottom: 1px solid #d4cdb8; }
+  .farm__rules-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .farm__rules-list li {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 14px;
+    position: relative;
+    color: #2e3326;
+  }
+  .farm__rules-list li::before {
+    content: "·";
+    position: absolute;
+    left: 4px;
+    color: #2f8f5f;
+    font-weight: 700;
+  }
+  .farm__rules-list code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 12px;
+    background: rgba(26,40,17,0.08);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .farm__related { margin: 0 0 24px; padding-bottom: 20px; border-bottom: 1px solid #d4cdb8; }
+  .farm__links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-family: Georgia, serif;
+    font-size: 14px;
+  }
+  .farm__links a { color: #8a2432; text-decoration: none; border-bottom: 1px solid transparent; }
+  .farm__links a:hover { border-bottom-color: #8a2432; }
+  .farm__links code { font-size: 12.5px; background: rgba(26,40,17,0.06); padding: 1px 5px; border-radius: 2px; }
+
+  .farm__foot {
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
+    color: #5a5a4b;
+    text-align: center;
+  }
+</style>

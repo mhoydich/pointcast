@@ -30,6 +30,14 @@
 import { buildUnsubUrl } from './signing';
 import { sendViaMailChannels as sendMail, type SendResult } from './send';
 import { collectAcrossRelays, newestPerAuthorByDTag, type NostrEvent } from './nostr';
+import {
+  isDeadLettered,
+  recordFailure,
+  clearFailure,
+  deadLetter,
+  listDeadLetter,
+  releaseDeadLetter,
+} from './deadletter';
 
 export interface Env {
   SPARROW_DIGEST_KV: KVNamespace;
@@ -40,6 +48,10 @@ export interface Env {
    *  value on the Pages Function (`functions/api/sparrow/digest-subscribe.ts`)
    *  so the unsubscribe link in the email footer verifies on click. */
   SPARROW_DIGEST_SIGNING_KEY: string;
+  /** v0.36: bearer token gating `/ops/dead-letter` and `/ops/release`.
+   *  Set with `wrangler secret put SPARROW_OPS_TOKEN`. When unset, the
+   *  ops routes return 503 `ops-not-configured`. */
+  SPARROW_OPS_TOKEN?: string;
 }
 
 interface Subscription {
@@ -239,7 +251,18 @@ export default {
     let sent = 0;
     let failed = 0;
     let retriableFailed = 0;
+    let deadLetteredNow = 0;
+    let skippedDead = 0;
     for (const sub of due) {
+      // v0.36: skip subs already in the dead-letter bucket. They stay
+      // in `sub:<email>` untouched so an operator can inspect and
+      // release them via /ops/release — at which point the failure
+      // counter is cleared and the next cron tick retries normally.
+      if (await isDeadLettered(env.SPARROW_DIGEST_KV, sub.email)) {
+        skippedDead += 1;
+        continue;
+      }
+
       const email = await renderDigestEmail(sub, env);
       const result = await sendViaMailChannels(sub, env, email);
       if (result.ok) {
@@ -248,34 +271,51 @@ export default {
           expirationTtl: 60 * 60 * 24 * 400,
           metadata: { frequency: sub.frequency, last_sent_at: sub.last_sent_at },
         });
+        // v0.36: successful send wipes the failure counter.
+        await clearFailure(env.SPARROW_DIGEST_KV, sub.email);
         sent += 1;
       } else {
         failed += 1;
         if (result.retriable) retriableFailed += 1;
-        // v0.35: retriable failures do NOT update last_sent_at, so the
-        // next cron tick tries again. Permanent failures (401/403/422)
-        // also don't update last_sent_at here — ops needs to see them;
-        // a future sprint may add a dead-letter KV bucket and
-        // exponential-backoff across cron ticks.
-        console.warn(
-          `[sparrow-digest] send failed for ${sub.email} · status=${result.status} · ` +
-          `attempts=${result.attempts} · retriable=${result.retriable} · ${result.finalError ?? ''}`,
+        // v0.36: retriable failures count up; non-retriable (401/403/422)
+        // dead-letter on first hit. Neither path touches last_sent_at,
+        // so a released sub resumes cleanly on the next tick.
+        const { record, shouldDeadLetter, reason } = await recordFailure(
+          env.SPARROW_DIGEST_KV,
+          sub.email,
+          result.status,
+          result.attempts,
+          result.retriable,
+          result.finalError,
         );
+        if (shouldDeadLetter && reason) {
+          await deadLetter(env.SPARROW_DIGEST_KV, sub.email, reason, record);
+          deadLetteredNow += 1;
+          console.warn(
+            `[sparrow-digest] DEAD-LETTERED ${sub.email} · reason=${reason} · ` +
+            `status=${result.status} · consecutive=${record.consecutive}`,
+          );
+        } else {
+          console.warn(
+            `[sparrow-digest] send failed for ${sub.email} · status=${result.status} · ` +
+            `attempts=${result.attempts} · retriable=${result.retriable} · ` +
+            `consecutive=${record.consecutive} · ${result.finalError ?? ''}`,
+          );
+        }
       }
     }
 
     ctx.waitUntil(Promise.resolve());
     console.log(
       `[sparrow-digest] done · sent ${sent} · failed ${failed} ` +
-      `(${retriableFailed} retriable) · elapsed ${Date.now() - started}ms`,
+      `(${retriableFailed} retriable · ${deadLetteredNow} dead-lettered this tick · ${skippedDead} already-dead skipped) ` +
+      `· elapsed ${Date.now() - started}ms`,
     );
   },
 
   async fetch(request: Request, env: Env) {
-    // Manual trigger endpoint for testing: GET /dry-run simulates a
-    // scheduled tick and returns a summary. Deploy-time, guard this
-    // with an auth header or route it through an admin domain.
     const url = new URL(request.url);
+
     if (url.pathname === '/dry-run') {
       const subs = await listAllSubscriptions(env);
       const now = new Date();
@@ -285,13 +325,56 @@ export default {
         total: subs.length,
         due: due.length,
         now: now.toISOString(),
-        worker_version: 'v0.35',
+        worker_version: 'v0.36',
       }, null, 2), {
         headers: { 'content-type': 'application/json; charset=utf-8' },
       });
     }
-    return new Response('sparrow-digest cron worker · v0.35\nsee README.md for deploy instructions.\n', {
+
+    // v0.36: ops endpoints — bearer-token gated, JSON-only.
+    //   GET  /ops/dead-letter           · list all dead-letter records
+    //   POST /ops/release?email=<addr>  · clear the dead-letter + failure counter
+    //                                     (the sub row itself is untouched)
+    if (url.pathname === '/ops/dead-letter' || url.pathname === '/ops/release') {
+      if (!env.SPARROW_OPS_TOKEN) {
+        return jsonResp(503, { ok: false, reason: 'ops-not-configured', note: 'set SPARROW_OPS_TOKEN secret' });
+      }
+      const auth = request.headers.get('authorization') || '';
+      const expected = `Bearer ${env.SPARROW_OPS_TOKEN}`;
+      if (auth !== expected) {
+        return jsonResp(401, { ok: false, reason: 'bad-token' });
+      }
+
+      if (url.pathname === '/ops/dead-letter' && request.method === 'GET') {
+        const records = await listDeadLetter(env.SPARROW_DIGEST_KV);
+        records.sort((a, b) => b.dead_lettered_at.localeCompare(a.dead_lettered_at));
+        return jsonResp(200, {
+          ok: true,
+          count: records.length,
+          records,
+          now: new Date().toISOString(),
+        });
+      }
+
+      if (url.pathname === '/ops/release' && request.method === 'POST') {
+        const email = (url.searchParams.get('email') || '').trim().toLowerCase();
+        if (!email) return jsonResp(400, { ok: false, reason: 'email required (?email=)' });
+        await releaseDeadLetter(env.SPARROW_DIGEST_KV, email);
+        return jsonResp(200, { ok: true, released: email });
+      }
+
+      return jsonResp(405, { ok: false, reason: 'method-not-allowed' });
+    }
+
+    return new Response('sparrow-digest cron worker · v0.36\nsee README.md for deploy instructions.\n', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     });
   },
 };
+
+function jsonResp(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}

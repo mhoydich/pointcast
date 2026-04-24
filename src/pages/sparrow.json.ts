@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.35',
-    protocol_version: '0.35',
+    version: '0.36',
+    protocol_version: '0.36',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -594,7 +594,7 @@ export const GET: APIRoute = async () => {
           },
           cron_worker: {
             since: 'v0.33',
-            status: 'v0.35 · Nostr TS client live, MailChannels retry live, friends-saved summary live in email body; full signals aggregation (co-saves + channel distribution) queued for v0.36',
+            status: 'v0.36 · dead-letter bucket live (3-strike threshold + immediate on non-retriable); /ops/dead-letter + /ops/release routes (bearer-token gated). Full signals aggregation (co-saves + channel distribution) planned for v0.37 after it got rolled back during branch churn.',
             location: 'workers/sparrow-digest/ (wrangler.toml + src/{index,signing,send,nostr}.ts + README.md)',
             schedule: '0 8 * * 1 (Mondays 08:00 UTC) — biweekly/monthly gates applied per-subscriber based on last_sent_at',
             transport: 'MailChannels · retry-with-jitter: 3 attempts max, exponential backoff with full jitter (800ms/1600ms/3200ms ceilings). 5xx + 429 + 408 retriable; 401/403/422 fail-fast and do not touch last_sent_at (ops can redeploy and the next cron tick retries).',
@@ -603,7 +603,30 @@ export const GET: APIRoute = async () => {
             nostr_client: 'workers/sparrow-digest/src/nostr.ts — URLSessionWebSocketTask-style WebSocket client ported from sparrow-app/Sources/SparrowApp/NostrRelayClient.swift. collectFromRelay + collectAcrossRelays + newestPerAuthorByDTag helpers. 6s timeout per relay, 500-event safety cap. No signature verification yet — downstream re-filters by author.',
             email_body_v035: 'Subscribers with npub + relays: live fetch of their kind-3 contact list + kind-30078 saved events across their relays; surfaces "N of M followed signers published public saved lists · K total saved-block references." Subscribers without npub get a short "open signals" prompt.',
             dry_run: 'GET /dry-run on the worker returns {total, due, now, worker_version:"v0.35"} without sending',
-            not_yet: 'full signals aggregation (co-saves + recent adds + channel distribution mirroring /sparrow/signals) · block-lookup prefetch into KV · dead-letter bucket for repeated retriable failures',
+            not_yet: 'full signals aggregation (co-saves + channel distribution mirror) · block-lookup prefetch · native Sparrow.app NIP-01 kind-0 profile lookup · /sparrow/digest preview page',
+            dead_letter: {
+              since: 'v0.36',
+              module: 'workers/sparrow-digest/src/deadletter.ts',
+              kv_keys: {
+                'fail:<email>': 'consecutive-failure counter · 60-day TTL · cleared on success',
+                'dl:<email>':   'dead-letter record · 1-year TTL · persists until /ops/release',
+              },
+              thresholds: {
+                retriable: '3 consecutive retriable failures (5xx/429/408) → dead-letter',
+                permanent: 'any non-retriable failure (401/403/422) → immediate dead-letter',
+              },
+              sub_row_untouched: 'main sub:<email> subscription row is never deleted; scheduled() just skips dead-lettered entries',
+              release_path: 'POST /ops/release?email=<addr> with Bearer SPARROW_OPS_TOKEN clears both dl: and fail: entries',
+            },
+            ops_endpoints: {
+              since: 'v0.36',
+              auth: 'Bearer <SPARROW_OPS_TOKEN> on the Authorization header · missing secret returns 503 ops-not-configured',
+              routes: {
+                'GET  /ops/dead-letter':       '{ ok, count, records[], now } · records sorted by dead_lettered_at desc',
+                'POST /ops/release?email=<a>': '{ ok, released } · clears dl:<email> + fail:<email>',
+              },
+              token_setup: 'wrangler secret put SPARROW_OPS_TOKEN · not bound on the Pages Function (ops is a worker-only concern)',
+            },
           },
           worker_security_posture: 'never holds secret material — stores email + npub + relay list + frequency only. Recomputes signals bundle at send time by subscribing to the same public kind-30078 d-tag the web client uses.',
           why_client_first: 'We shipped the intent capture + schema doc in v0.30 before the worker went live so early users were queued, not blocked. v0.32 lands the endpoint; v0.33 lands the cron scaffold + DELETE modes; v0.34 lands the actual email dispatch + token signing.',
@@ -1088,7 +1111,8 @@ export const GET: APIRoute = async () => {
       'v0.32': 'Digest worker live + federation.json + friends/profiles in reader-state. (1) POST /api/sparrow/digest-subscribe (Cloudflare Pages Function) validates sparrow-digest-subscription-v1 shape, returns 202 Accept with { stored, key, echo } — stores in SPARROW_DIGEST_KV if bound, otherwise still acks so the v0.30 client stops retrying. Cron dispatch ships separately. (2) GET /sparrow/federation.json carries an editorial starters list (sparrow-federation-v1 · hex + alias + optional note) so curation is a data edit in src/pages/sparrow/federation.json.ts; friends.astro fetches on boot, falls back to a 2-item internal seed. (3) Reader-state mirror gains two new keys: friends + profiles, each with their own :updated_at timestamp — cross-device federation follows the same newest-wins contract the other MIRROR_KEYS use. window.__sparrow.scheduleReaderMirror is exposed so route-local pages can trigger a push after mutating those keys. Sparrow.app ambient pickup deferred to v0.33 — native Swift Nostr client + tray UI deserves focus.',
       'v0.33': 'Native ambient pickup + digest cron scaffold + unsubscribe. (1) Sparrow.app gains NostrRelayClient.swift (URLSessionWebSocketTask · ws:// REQ/EVENT/EOSE) + FriendsService.swift (reads friends from SparrowServer\'s sparrow.readerState UserDefaults, opens kind-20078 presence + kind-30078 saved subscriptions across damus/primal/nos.lol, tracks freshness over 90s window, decays every 20s). MenuBarController.setFriendsPresence(count, aliases) adds a "✦ N here · alias1, alias2, +K" menu item above the separator, hidden when zero. (2) workers/sparrow-digest/ scaffold: wrangler.toml (weekly cron Mon 08:00 UTC, shared SPARROW_DIGEST_KV binding, MailChannels transport via DKIM+DMARC lockdown), src/index.ts (listAllSubscriptions + isDue frequency gate + placeholder HTML email + /dry-run test route), README (deploy recipe + MailChannels DNS requirements + what\'s deferred to v0.34). (3) DELETE /api/sparrow/digest-subscribe shipped with two modes: x-unsub-intent: local-clear for web-initiated clears (no auth, same-user trust), x-unsub-token for email-footer links (501 in v0.33; signing lands with the cron worker).',
       'v0.34': 'HMAC unsubscribe tokens live. workers/sparrow-digest/src/signing.ts — Web Crypto HMAC-SHA256, 30-day TTL, shape `<email>.<expires_at>.<hex-hmac>`, constant-time compare, buildUnsubUrl helper for the cron email footer. DELETE /api/sparrow/digest-subscribe now verifies the token against SPARROW_DIGEST_SIGNING_KEY (400 on malformed/bad-hmac, 410 on expired, 200 on verify + KV delete). Token arrives via either x-unsub-token header OR ?unsub_token query param so email-footer clicks work from any browser. Worker renderDigestEmail wires the signed URL into the email body/text. Signing key must be bound to both the Pages Function AND the cron worker with the same value; rotating invalidates outstanding tokens. Cron dispatch + signals aggregation + native NIP-01 profile lookup still pending.',
-      'v0.35': 'Cron worker gains a Nostr client + retry-with-jitter + live friends-saved summary. workers/sparrow-digest/src/nostr.ts ports NostrRelayClient.swift to TypeScript (Web WebSocket + JSON frames, no deps). collectFromRelay + collectAcrossRelays + newestPerAuthorByDTag helpers · 6s timeout per relay · 500-event safety cap. workers/sparrow-digest/src/send.ts extracts MailChannels transport with retry (3 attempts max, 800ms/1600ms/3200ms exponential-jitter backoff), 5xx/429/408 retriable, 401/403/422 fail-fast without touching last_sent_at so ops sees them + next cron retries. renderDigestEmail now fetches each subscriber\'s kind-3 contact list + their friends\' kind-30078 public saved events, surfacing "N of M followed signers published public saved lists · K total saved-block references" in the email body (text + HTML). Subscribers without npub get the existing short prompt. Full signals aggregation (co-saves + channel distribution) queued for v0.36. (current)',
+      'v0.35': 'Cron worker gains a Nostr client + retry-with-jitter + live friends-saved summary. workers/sparrow-digest/src/nostr.ts ports NostrRelayClient.swift to TypeScript (Web WebSocket + JSON frames, no deps). collectFromRelay + collectAcrossRelays + newestPerAuthorByDTag helpers · 6s timeout per relay · 500-event safety cap. workers/sparrow-digest/src/send.ts extracts MailChannels transport with retry (3 attempts max, 800ms/1600ms/3200ms exponential-jitter backoff), 5xx/429/408 retriable, 401/403/422 fail-fast without touching last_sent_at so ops sees them + next cron retries. renderDigestEmail now fetches each subscriber\'s kind-3 contact list + their friends\' kind-30078 public saved events, surfacing "N of M followed signers published public saved lists · K total saved-block references" in the email body (text + HTML). Subscribers without npub get the existing short prompt.',
+      'v0.36': 'Dead-letter bucket + ops endpoints. workers/sparrow-digest/src/deadletter.ts carries KV-backed failure counter (`fail:<email>`, 60-day TTL) + dead-letter record (`dl:<email>`, 1-year TTL). Threshold: 3 consecutive retriable failures OR any non-retriable failure (401/403/422) → dead-letter immediately. scheduled() skips dead-lettered subs every tick, clears the counter on success. Two new fetch routes, bearer-token gated via SPARROW_OPS_TOKEN: GET /ops/dead-letter lists every dead-letter record newest-first; POST /ops/release?email=<addr> clears both dl: and fail: entries (sub row untouched) so the next cron tick retries. Missing token → 503 ops-not-configured. Full signals aggregation (co-saves + channel distribution) from prior v0.35/v0.36 work got rolled back during branch churn — re-lands in v0.37. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 
