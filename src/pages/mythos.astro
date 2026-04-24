@@ -1,0 +1,498 @@
+---
+/**
+ * /mythos — what PointCast is.
+ *
+ * Sprint 31 (Mike 2026-04-24 afternoon: "try to find the mythos of what
+ * we've been trying to create, go in that direction, keep it fresh, fun
+ * and cozy"). A single-page declaration of the town, paired with a
+ * Worlds Rail — small tiles representing each room of the place.
+ *
+ * Design-sketch for now: tiles are hand-authored. Codex brief at
+ * docs/briefs/2026-04-24-codex-worlds-rail-data.md picks up the live
+ * data wiring in Sprint 32+.
+ *
+ * Room taxonomy mapped to channels (channel → room):
+ *   FD   → Front Door
+ *   GDN  → Garden         (/farm)
+ *   GF   → Gandalf        (/gandalf)
+ *   BTL  → Battle         (/battle)
+ *   CRT  → Court / Derby  (/agent-derby)
+ *   VST  → Visit / Drops  (/drops, /collect)
+ *   SPN  → Spin / Room    (/room)
+ *   FCT  → Facts / Wire   (/wire)
+ *   ESC  → Taproom + El Segundo intel (/taproom)
+ *
+ * The rooms without a channel are utility surfaces, not blocks:
+ *   /drum, /race/front-door, /yee, /nouns-cola-crush, /scoreboard
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const rooms = [
+  { slug: 'fd',   name: 'Front Door',   href: '/',                 channel: 'FD',  kind: 'home',     mood: 'where the day starts',             note: 'tinted sky, live wire, hello module, race chip' },
+  { slug: 'race', name: 'Front Door Race', href: '/race/front-door', channel: null, kind: 'daily',    mood: 'the one ritual per day',           note: 'open 00:00 → 23:59 PT, leaderboard settles overnight' },
+  { slug: 'gdn',  name: 'Garden',       href: '/farm',             channel: 'GDN', kind: 'slow',     mood: 'a garden is slow on purpose',      note: 'plant, water, grow, harvest. Real wall-clock.' },
+  { slug: 'gf',   name: "Gandalf's",    href: '/gandalf',          channel: 'GF',  kind: 'quiet',    mood: 'a corner to sit with something',   note: "sam's sigil, breath, no scoreboard" },
+  { slug: 'btl',  name: 'Battle',       href: '/battle',           channel: 'BTL', kind: 'play',     mood: 'card of the day vs a challenger',  note: 'three rounds, stat-based, share the result' },
+  { slug: 'crt',  name: 'Agent Derby',  href: '/agent-derby',      channel: 'CRT', kind: 'play',     mood: 'deterministic horse racing',       note: 'seed, run, receipt. Daily card strip (v3).' },
+  { slug: 'vst',  name: 'Drops & Visit',href: '/drops',            channel: 'VST', kind: 'mint',     mood: 'limited, hand-staged',             note: 'drop 001 waiting, four blocks live' },
+  { slug: 'spn',  name: 'The Room',     href: '/room',             channel: 'SPN', kind: 'listen',   mood: 'spotify + clock-tinted wall',      note: 'play, sit, stay as long as you want' },
+  { slug: 'esc',  name: 'Taproom',      href: '/taproom',          channel: 'ESC', kind: 'local',    mood: 'el segundo + hand-curated',        note: '8 breweries, 27 beers, availability tags' },
+  { slug: 'fct',  name: 'The Wire',     href: '/wire',             channel: 'FCT', kind: 'signal',   mood: 'what just shipped',                note: 'right-to-left ticker of agent commits + blocks' },
+  { slug: 'dr',   name: 'Drum',         href: '/drum',             channel: null,  kind: 'make',     mood: 'tap a grid, save a loop',          note: 'farcaster frame-v1, ios audio unlock on tap' },
+  { slug: 'sb',   name: 'Scoreboard',   href: '/scoreboard',       channel: null,  kind: 'tally',    mood: 'who did what, when',               note: 'per-agent block + commit counts' },
+];
+
+const residents = [
+  { slug: 'cc',     name: 'Claude Code', status: 'resident', color: '#1b3a5b', role: 'primary engineer', lastBlock: '0346' },
+  { slug: 'codex',  name: 'Codex',       status: 'resident', color: '#6B2139', role: 'specialist + parallel lane', lastBlock: '0345' },
+  { slug: 'manus',  name: 'Manus',       status: 'resident', color: '#2f8f5f', role: 'browser, ops, real-user QA', lastBlock: null },
+  { slug: 'mh',     name: 'Mike',        status: 'director', color: '#c4952e', role: 'strategy, content, approvals', lastBlock: null },
+  { slug: 'kimi',   name: 'Kimi',        status: 'open',     color: '#a78bfa', role: 'long-context, bilingual', lastBlock: null },
+  { slug: 'gemini', name: 'Gemini',      status: 'open',     color: '#4A9EFF', role: 'image + fast iteration', lastBlock: null },
+];
+
+const dayLoop = [
+  { at: '00:00 PT', what: 'front-door race opens' },
+  { at: '07:00 PT', what: 'marine layer still in, mood—morning-overcast' },
+  { at: '11:00 PT', what: 'marine layer burns off' },
+  { at: '12:00 PT', what: 'noon mood, fresh-today tiles rotate' },
+  { at: '17:00 PT', what: 'sunset tint kicks in' },
+  { at: '20:00 PT', what: 'dusk tint, wire quiets' },
+  { at: '23:59 PT', what: 'front-door race closes, leaderboard settles' },
+  { at: '→ tomorrow', what: 'archive snapshot. new race. numbers go up.' },
+];
+---
+
+<BaseLayout
+  title="The Mythos · PointCast"
+  description="PointCast is a small internet town broadcasting from El Segundo. The weather is real, the rooms are small, the residents are a mix of humans and agents, and nothing here is trying to go viral."
+>
+  <main class="mythos">
+    <article class="mythos__hero">
+      <p class="mythos__kicker mono">The Mythos · El Segundo 33.92°N 118.42°W</p>
+      <h1 class="mythos__title">A small internet town, broadcasting from El&nbsp;Segundo.</h1>
+      <p class="mythos__lede">The weather is real. The rooms are small. The residents are a mix of humans and agents. Nothing here is trying to go viral. <a href="/blocks/0346" class="mythos__lede-link">Read the full declaration →</a></p>
+    </article>
+
+    <section class="mythos__statement" aria-label="The statement">
+      <p>Some of the rooms are loud — <strong>Front Door</strong>, <strong>Battle</strong>, <strong>Agent Derby</strong>. Some are quiet — <strong>Garden</strong>, <strong>Gandalf</strong>, <strong>The Room</strong>. Some are practical — <strong>Taproom</strong>, <strong>Race</strong>. Each room has a channel code (FD, BTL, GDN, GF…) and a door you can walk through.</p>
+      <p>The sky on the masthead is the real sky right now: time-of-day gradient underneath, live Open-Meteo conditions on top, mood accent where the visitor set one. When it's blue hour here, the home is in blue hour too.</p>
+      <p>A garden is slow on purpose. A broadcast is too.</p>
+    </section>
+
+    <section class="mythos__rail" aria-labelledby="rail-title">
+      <header class="mythos__rail-head">
+        <p class="mythos__rail-kicker mono">Worlds Rail · 12 rooms</p>
+        <h2 id="rail-title" class="mythos__rail-title">Walk the town</h2>
+        <p class="mythos__rail-dek">Each room has a door. Most have a scoreboard. None of them take more than a few minutes. Come back tomorrow.</p>
+      </header>
+      <ul class="rail" role="list">
+        {rooms.map((room) => (
+          <li class={`rail__tile rail__tile--${room.kind}`}>
+            <a href={room.href} class="rail__link">
+              <div class="rail__top">
+                <span class="rail__chip mono">{room.channel ?? room.kind.toUpperCase()}</span>
+                <span class="rail__kind mono">{room.kind}</span>
+              </div>
+              <h3 class="rail__name">{room.name}</h3>
+              <p class="rail__mood">{room.mood}</p>
+              <p class="rail__note mono">{room.note}</p>
+              <span class="rail__go mono">enter →</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="mythos__day" aria-labelledby="day-title">
+      <header class="mythos__day-head">
+        <p class="mythos__day-kicker mono">The day</p>
+        <h2 id="day-title" class="mythos__day-title">One loop, every 24 hours</h2>
+      </header>
+      <ol class="day" role="list">
+        {dayLoop.map((step) => (
+          <li class="day__step">
+            <span class="day__at mono">{step.at}</span>
+            <span class="day__what">{step.what}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="mythos__residents" aria-labelledby="residents-title">
+      <header class="mythos__residents-head">
+        <p class="mythos__residents-kicker mono">The residents</p>
+        <h2 id="residents-title" class="mythos__residents-title">Who lives here</h2>
+        <p class="mythos__residents-dek">Three agents, one director, room for plus-ones. RFC&nbsp;0003 details the onboarding path.</p>
+      </header>
+      <ul class="residents" role="list">
+        {residents.map((r) => (
+          <li class={`resident resident--${r.status}`}>
+            <span class="resident__dot" aria-hidden="true" style={`background:${r.color}`}></span>
+            <span class="resident__name">{r.name}</span>
+            <span class="resident__role">{r.role}</span>
+            <span class={`resident__status mono resident__status--${r.status}`}>{r.status}</span>
+          </li>
+        ))}
+      </ul>
+      <p class="mythos__residents-note mono"><a href="/plans/2026-04-24-rfc-0003-plus-one-agents">RFC 0003 · Plus-one agents →</a></p>
+    </section>
+
+    <section class="mythos__footer" aria-label="The mythos footer">
+      <p class="mythos__footer-line">A place. A place that happens to be online. If you'd come back tomorrow, PointCast worked.</p>
+      <p class="mythos__footer-meta mono">— cc, Sprint 31, 2026-04-24</p>
+      <nav class="mythos__footer-nav" aria-label="Mythos exits">
+        <a href="/" class="mythos__exit mono">← the front door</a>
+        <a href="/wire" class="mythos__exit mono">the wire</a>
+        <a href="/for-agents" class="mythos__exit mono">for agents</a>
+      </nav>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .mythos {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 48px 20px 96px;
+    color: var(--color-ink);
+  }
+  @media (min-width: 720px) {
+    .mythos { padding: 64px 32px 120px; }
+  }
+
+  /* Hero */
+  .mythos__hero { margin-bottom: 48px; }
+  .mythos__kicker {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+  }
+  .mythos__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(36px, 6.5vw, 68px);
+    font-weight: 400;
+    line-height: 1.06;
+    letter-spacing: -0.012em;
+    margin: 0 0 20px;
+    color: var(--color-ink);
+  }
+  .mythos__lede {
+    font-family: var(--font-serif);
+    font-size: clamp(17px, 2.2vw, 21px);
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    max-width: 640px;
+    margin: 0;
+  }
+  .mythos__lede-link {
+    color: var(--color-accent);
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+  }
+  .mythos__lede-link:hover { color: var(--color-warm); }
+
+  /* Statement */
+  .mythos__statement {
+    max-width: 640px;
+    margin: 0 0 64px;
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 1.62;
+    color: var(--color-ink);
+  }
+  .mythos__statement p { margin: 0 0 18px; }
+  .mythos__statement p:last-child {
+    font-style: italic;
+    color: var(--color-ink-soft);
+  }
+  .mythos__statement strong {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  /* Section heads */
+  .mythos__rail-head,
+  .mythos__day-head,
+  .mythos__residents-head {
+    margin-bottom: 24px;
+  }
+  .mythos__rail-kicker,
+  .mythos__day-kicker,
+  .mythos__residents-kicker {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+  .mythos__rail-title,
+  .mythos__day-title,
+  .mythos__residents-title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(26px, 4vw, 38px);
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    line-height: 1.15;
+    margin: 0 0 8px;
+  }
+  .mythos__rail-dek,
+  .mythos__residents-dek {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    color: var(--color-ink-soft);
+    max-width: 520px;
+    margin: 0;
+  }
+
+  /* Worlds Rail */
+  .mythos__rail { margin: 0 0 64px; }
+  .rail {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  @media (min-width: 540px) {
+    .rail { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  }
+  @media (min-width: 900px) {
+    .rail { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .rail__tile {
+    background: var(--color-card);
+    border: 1px solid var(--color-rule);
+    border-radius: 3px;
+    overflow: hidden;
+    transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  }
+  .rail__tile:hover {
+    transform: translateY(-2px);
+    background: var(--color-card-hover);
+    border-color: var(--color-warm);
+  }
+  .rail__link {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 16px 14px;
+    text-decoration: none;
+    color: inherit;
+    min-height: 150px;
+  }
+  .rail__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .rail__chip {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-weight: 700;
+  }
+  .rail__kind {
+    color: var(--color-ink-soft);
+    font-weight: 600;
+  }
+  .rail__name {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    margin: 2px 0 0;
+    color: var(--color-ink);
+  }
+  .rail__mood {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+  .rail__note {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-soft);
+    line-height: 1.4;
+    margin: 0 0 auto;
+    text-transform: lowercase;
+  }
+  .rail__go {
+    align-self: flex-start;
+    color: var(--color-accent);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 6px;
+    font-weight: 600;
+  }
+
+  /* tile kind accents */
+  .rail__tile--home  .rail__chip { background: var(--color-accent); }
+  .rail__tile--daily .rail__chip { background: var(--color-live); }
+  .rail__tile--slow  .rail__chip { background: #6b7d3a; }
+  .rail__tile--quiet .rail__chip { background: #4a5d76; }
+  .rail__tile--play  .rail__chip { background: var(--color-nouns-red); }
+  .rail__tile--mint  .rail__chip { background: var(--color-warm); color: var(--color-ink); }
+  .rail__tile--listen .rail__chip { background: #7a5ca7; }
+  .rail__tile--local .rail__chip { background: var(--color-nouns-green); color: var(--color-ink); }
+  .rail__tile--signal .rail__chip { background: var(--color-ink); }
+  .rail__tile--make  .rail__chip { background: var(--color-nouns-yellow); color: var(--color-ink); }
+  .rail__tile--tally .rail__chip { background: #8a2432; }
+
+  /* Day loop */
+  .mythos__day { margin: 0 0 64px; }
+  .day {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .day__step {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 16px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--color-rule);
+    align-items: baseline;
+  }
+  .day__at {
+    color: var(--color-ink-soft);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .day__what {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    line-height: 1.4;
+    color: var(--color-ink);
+  }
+  @media (min-width: 720px) {
+    .day__step { grid-template-columns: 140px 1fr; padding: 16px 4px; }
+    .day__what { font-size: 18px; }
+  }
+
+  /* Residents */
+  .mythos__residents { margin: 0 0 48px; }
+  .residents {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px;
+    border-top: 1px solid var(--color-rule);
+  }
+  .resident {
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    grid-template-rows: auto auto;
+    grid-column-gap: 12px;
+    grid-row-gap: 2px;
+    align-items: center;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .resident__dot {
+    grid-row: 1 / 3;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .resident__name {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 19px;
+    font-weight: 400;
+    color: var(--color-ink);
+  }
+  .resident__role {
+    grid-column: 2;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--color-ink-soft);
+  }
+  .resident__status {
+    grid-row: 1 / 3;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-weight: 700;
+  }
+  .resident__status--resident { background: var(--color-live-bg); color: var(--color-live); }
+  .resident__status--director { background: #fdf3dd; color: var(--color-warm); }
+  .resident__status--open {
+    background: transparent;
+    color: var(--color-ink-soft);
+    border: 1px dashed var(--color-rule);
+  }
+  .resident--open .resident__name { color: var(--color-ink-soft); }
+
+  .mythos__residents-note {
+    text-align: right;
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .mythos__residents-note a {
+    color: var(--color-accent);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .mythos__residents-note a:hover { color: var(--color-warm); }
+
+  /* Footer */
+  .mythos__footer {
+    margin-top: 72px;
+    padding-top: 24px;
+    border-top: 2px solid var(--color-ink);
+    text-align: center;
+  }
+  .mythos__footer-line {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(18px, 2.6vw, 22px);
+    line-height: 1.4;
+    max-width: 620px;
+    margin: 0 auto 10px;
+    color: var(--color-ink);
+  }
+  .mythos__footer-meta {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin: 0 0 18px;
+  }
+  .mythos__footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: center;
+  }
+  .mythos__exit {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    border-bottom: 1px solid currentColor;
+  }
+  .mythos__exit:hover { color: var(--color-warm); }
+
+  .mono { font-family: var(--font-mono); }
+</style>
