@@ -20,18 +20,24 @@
  *   {
  *     humans: number,
  *     agents: number,
- *     sessions: Array<{
- *       nounId: number,
- *       kind: 'human' | 'agent' | 'wallet',
- *       joinedAt: string,
- *       mood?: string,
- *       listening?: string,
- *       where?: string,
- *     }>
+ *     sessions: Array<PublicSessionView>,  // every viewer sees this
+ *     you?: PrivateSessionView,            // only for the session-matched viewer
+ *   }
+ *   PublicSessionView = {
+ *     nounId, kind, joinedAt,
+ *     mood?, listening?, where?,
+ *     country?, deviceClass?,
+ *   }
+ *   PrivateSessionView = PublicSessionView & {
+ *     city?, region?, timezone?, asn?, asOrg?, colo?,
+ *     referrerHost?, relay?, walletAddress?, nostrPubkey?,
+ *     pathTrail?, isReturning?, dwellSeconds?,
  *   }
  *
- * Privacy: session ids never leave the DO. Broadcast only carries
- * derived noun ids + opt-in self-reported state.
+ * Privacy (option-B): session ids never leave the DO. Rich edge metadata
+ * (city, referrer, ASN, etc.) is only surfaced back to the session it
+ * belongs to, as `you`. Other visitors see only country + deviceClass on
+ * each public session entry.
  */
 
 interface Env {

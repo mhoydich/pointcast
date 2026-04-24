@@ -36,13 +36,16 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const id = env.PRESENCE.idFromName('global');
     const stub = env.PRESENCE.get(id);
-    const url = new URL(request.url);
-    url.pathname = '/snapshot';
-    url.search = '';
+    const incomingUrl = new URL(request.url);
+    const viewerSid = incomingUrl.searchParams.get('sid');
+    const doUrl = new URL(incomingUrl.toString());
+    doUrl.pathname = '/snapshot';
+    doUrl.search = viewerSid ? '?sid=' + encodeURIComponent(viewerSid) : '';
 
-    const response = await stub.fetch(new Request(url.toString(), { method: 'GET' }));
+    const response = await stub.fetch(new Request(doUrl.toString(), { method: 'GET' }));
     const headers = new Headers(response.headers);
-    headers.set('Cache-Control', 'public, max-age=5, s-maxage=5');
+    // Personalized responses must not be edge-cached (different viewers → different payloads).
+    headers.set('Cache-Control', viewerSid ? 'private, no-store' : 'public, max-age=5, s-maxage=5');
     headers.set('Content-Type', 'application/json');
 
     return new Response(response.body, {

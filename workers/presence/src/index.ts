@@ -9,6 +9,15 @@
  * 90s idle timeout, broadcast cap — is implemented inside PresenceRoom
  * exactly as it was when living in functions/api/presence.ts.
  *
+ * Visitor intel (option-B privacy):
+ *   Public surface (what every visitor sees about every other visitor):
+ *     nounId, kind, joinedAt, mood, listening, where, country, deviceClass.
+ *   Private surface (only visible to the session it belongs to, as `you`):
+ *     city, region, timezone, asn, asOrg, colo, referrerHost, relay,
+ *     walletAddress, nostrPubkey, pathTrail, isReturning, dwellSeconds.
+ *   The DO personalizes every broadcast + /snapshot response per viewer
+ *   — your own full detail arrives as `you`; everyone else is trimmed.
+ *
  * Deploy: `cd workers/presence && npx wrangler deploy`.
  * Bind from Pages: root wrangler.toml has
  *   [[durable_objects.bindings]]
@@ -22,6 +31,20 @@ interface Env {
 }
 
 type PresenceKind = 'human' | 'agent' | 'wallet';
+type DeviceClass = 'mobile' | 'tablet' | 'desktop' | 'bot' | 'unknown';
+
+interface EdgeContext {
+  country?: string;
+  city?: string;
+  region?: string;
+  timezone?: string;
+  asn?: number;
+  asOrg?: string;
+  colo?: string;
+  deviceClass?: DeviceClass;
+  referrerHost?: string;
+  relay?: string;
+}
 
 interface Connection {
   id: string;
@@ -39,21 +62,45 @@ interface VisitorSession {
   kind: PresenceKind;
   joinedAt: string;
   lastSeen: number;
+  edge: EdgeContext;
+  walletAddress?: string;
+  nostrPubkey?: string;
+  pathTrail: string[];
+  isReturning: boolean;
 }
 
-interface BroadcastSession {
+interface PublicSessionView {
   nounId: number;
   kind: PresenceKind;
   joinedAt: string;
   mood?: string;
   listening?: string;
   where?: string;
+  country?: string;
+  deviceClass?: DeviceClass;
+}
+
+interface PrivateSessionView extends PublicSessionView {
+  city?: string;
+  region?: string;
+  timezone?: string;
+  asn?: number;
+  asOrg?: string;
+  colo?: string;
+  referrerHost?: string;
+  relay?: string;
+  walletAddress?: string;
+  nostrPubkey?: string;
+  pathTrail?: string[];
+  isReturning?: boolean;
+  dwellSeconds?: number;
 }
 
 interface BroadcastPayload {
   humans: number;
   agents: number;
-  sessions: BroadcastSession[];
+  sessions: PublicSessionView[];
+  you?: PrivateSessionView;
 }
 
 type ClientMessage =
@@ -63,12 +110,16 @@ type ClientMessage =
       mood?: unknown;
       listening?: unknown;
       where?: unknown;
+      walletAddress?: unknown;
+      nostrPubkey?: unknown;
     }
   | null
   | undefined;
 
 const MAX_BROADCAST_SESSIONS = 50;
 const STALE_AFTER_MS = 90_000;
+const MAX_PATH_TRAIL = 5;
+const SEEN_KEY_PREFIX = 'seen:';
 
 function cheapHash(input: string): number {
   let hash = 5381;
@@ -114,6 +165,62 @@ function hasOwn(obj: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
 
+function parseDeviceClass(ua: string | null | undefined): DeviceClass {
+  if (!ua) return 'unknown';
+  const lower = ua.toLowerCase();
+  if (/bot|crawler|spider|httpclient|curl|wget|headless/.test(lower)) return 'bot';
+  if (/ipad|tablet/.test(lower)) return 'tablet';
+  if (/mobi|iphone|ipod|android.*mobile/.test(lower)) return 'mobile';
+  if (/android|iphone|ipod/.test(lower)) return 'mobile';
+  if (/mozilla|webkit|chrome|safari|firefox|edge|opera/.test(lower)) return 'desktop';
+  return 'unknown';
+}
+
+function parseReferrerHost(referer: string | null | undefined): string | undefined {
+  if (!referer) return undefined;
+  try {
+    const url = new URL(referer);
+    const host = url.host;
+    if (!host) return undefined;
+    if (host === 'pointcast.xyz' || host.endsWith('.pointcast.xyz')) return undefined;
+    return host.slice(0, 80);
+  } catch {
+    return undefined;
+  }
+}
+
+function extractEdge(request: Request): EdgeContext {
+  const url = new URL(request.url);
+  const ua = request.headers.get('User-Agent');
+  const referer = request.headers.get('Referer');
+  const cf = (request as unknown as { cf?: Record<string, unknown> }).cf ?? {};
+
+  const country = typeof cf.country === 'string' ? cf.country.slice(0, 3) : undefined;
+  const city = typeof cf.city === 'string' ? cf.city.slice(0, 64) : undefined;
+  const region = typeof cf.region === 'string' ? cf.region.slice(0, 64) : undefined;
+  const timezone = typeof cf.timezone === 'string' ? cf.timezone.slice(0, 64) : undefined;
+  const asnRaw = cf.asn;
+  const asn = typeof asnRaw === 'number' && Number.isFinite(asnRaw) ? asnRaw : undefined;
+  const asOrg = typeof cf.asOrganization === 'string' ? cf.asOrganization.slice(0, 80) : undefined;
+  const colo = typeof cf.colo === 'string' ? cf.colo.slice(0, 16) : undefined;
+
+  const relayParam = url.searchParams.get('relay');
+  const relay = relayParam ? normalizeText(relayParam, 40) : undefined;
+
+  return {
+    country,
+    city,
+    region,
+    timezone,
+    asn,
+    asOrg,
+    colo,
+    deviceClass: parseDeviceClass(ua),
+    referrerHost: parseReferrerHost(referer),
+    relay,
+  };
+}
+
 export class PresenceRoom {
   state: DurableObjectState;
   connections: Map<string, Connection> = new Map();
@@ -127,7 +234,8 @@ export class PresenceRoom {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname.endsWith('/snapshot')) {
-      return Response.json(this.snapshot());
+      const viewerSid = url.searchParams.get('sid') ?? undefined;
+      return Response.json(this.snapshotFor(viewerSid));
     }
 
     const upgradeHeader = request.headers.get('Upgrade');
@@ -137,6 +245,7 @@ export class PresenceRoom {
 
     const sessionId = url.searchParams.get('sid') ?? crypto.randomUUID();
     const kind = normalizeKind(url.searchParams.get('kind'));
+    const edge = extractEdge(request);
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
@@ -152,10 +261,12 @@ export class PresenceRoom {
     };
     this.connections.set(connectionId, connection);
 
+    const isReturning = await this.checkAndMarkSeen(sessionId);
     const existingVisitor = this.visitors.get(sessionId);
     if (existingVisitor) {
       existingVisitor.kind = mergeKinds(existingVisitor.kind, kind);
       existingVisitor.lastSeen = now;
+      existingVisitor.edge = mergeEdge(existingVisitor.edge, edge);
     } else {
       this.visitors.set(sessionId, {
         sessionId,
@@ -163,6 +274,9 @@ export class PresenceRoom {
         kind,
         joinedAt: new Date(now).toISOString(),
         lastSeen: now,
+        edge,
+        pathTrail: [],
+        isReturning,
       });
     }
 
@@ -185,6 +299,17 @@ export class PresenceRoom {
     this.broadcast();
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async checkAndMarkSeen(sessionId: string): Promise<boolean> {
+    const key = SEEN_KEY_PREFIX + sessionId;
+    try {
+      const prior = await this.state.storage.get<number>(key);
+      await this.state.storage.put(key, Date.now());
+      return typeof prior === 'number';
+    } catch {
+      return false;
+    }
   }
 
   touchVisitor(sessionId: string, at: number) {
@@ -225,6 +350,9 @@ export class PresenceRoom {
       delete visitor.mood;
       delete visitor.listening;
       delete visitor.where;
+      visitor.walletAddress = undefined;
+      visitor.nostrPubkey = undefined;
+      visitor.pathTrail = [];
       return;
     }
 
@@ -237,8 +365,29 @@ export class PresenceRoom {
       if (!visitor.listening) delete visitor.listening;
     }
     if (hasOwn(patch, 'where')) {
-      visitor.where = normalizeText(patch.where, 80);
-      if (!visitor.where) delete visitor.where;
+      const nextWhere = normalizeText(patch.where, 80);
+      const priorWhere = visitor.where;
+      if (nextWhere) {
+        visitor.where = nextWhere;
+      } else {
+        delete visitor.where;
+      }
+      if (priorWhere && priorWhere !== nextWhere) {
+        visitor.pathTrail = [priorWhere, ...visitor.pathTrail.filter((p) => p !== priorWhere)].slice(
+          0,
+          MAX_PATH_TRAIL,
+        );
+      }
+    }
+    if (hasOwn(patch, 'walletAddress')) {
+      const wallet = normalizeText(patch.walletAddress, 80);
+      if (wallet) visitor.walletAddress = wallet;
+      else visitor.walletAddress = undefined;
+    }
+    if (hasOwn(patch, 'nostrPubkey')) {
+      const pk = normalizeText(patch.nostrPubkey, 80);
+      if (pk) visitor.nostrPubkey = pk;
+      else visitor.nostrPubkey = undefined;
     }
   }
 
@@ -271,7 +420,46 @@ export class PresenceRoom {
     }
   }
 
-  snapshot(): BroadcastPayload {
+  toPublicView(visitor: VisitorSession): PublicSessionView {
+    const out: PublicSessionView = {
+      nounId: visitor.nounId,
+      kind: visitor.kind,
+      joinedAt: visitor.joinedAt,
+    };
+    if (visitor.kind !== 'agent') {
+      if (visitor.mood) out.mood = visitor.mood;
+      if (visitor.listening) out.listening = visitor.listening;
+      if (visitor.where) out.where = visitor.where;
+    }
+    if (visitor.edge.country) out.country = visitor.edge.country;
+    if (visitor.edge.deviceClass && visitor.edge.deviceClass !== 'unknown') {
+      out.deviceClass = visitor.edge.deviceClass;
+    }
+    return out;
+  }
+
+  toPrivateView(visitor: VisitorSession): PrivateSessionView {
+    const base = this.toPublicView(visitor);
+    const priv: PrivateSessionView = {
+      ...base,
+      dwellSeconds: Math.max(0, Math.round((visitor.lastSeen - Date.parse(visitor.joinedAt)) / 1000)),
+      isReturning: visitor.isReturning,
+    };
+    if (visitor.edge.city) priv.city = visitor.edge.city;
+    if (visitor.edge.region) priv.region = visitor.edge.region;
+    if (visitor.edge.timezone) priv.timezone = visitor.edge.timezone;
+    if (typeof visitor.edge.asn === 'number') priv.asn = visitor.edge.asn;
+    if (visitor.edge.asOrg) priv.asOrg = visitor.edge.asOrg;
+    if (visitor.edge.colo) priv.colo = visitor.edge.colo;
+    if (visitor.edge.referrerHost) priv.referrerHost = visitor.edge.referrerHost;
+    if (visitor.edge.relay) priv.relay = visitor.edge.relay;
+    if (visitor.walletAddress) priv.walletAddress = visitor.walletAddress;
+    if (visitor.nostrPubkey) priv.nostrPubkey = visitor.nostrPubkey;
+    if (visitor.pathTrail.length) priv.pathTrail = [...visitor.pathTrail];
+    return priv;
+  }
+
+  snapshotFor(viewerSessionId?: string): BroadcastPayload {
     const visitors = Array.from(this.visitors.values()).sort((a, b) =>
       a.joinedAt.localeCompare(b.joinedAt),
     );
@@ -283,28 +471,32 @@ export class PresenceRoom {
       else humans += 1;
     }
 
-    const sessions = visitors.slice(0, MAX_BROADCAST_SESSIONS).map((visitor) => {
-      const out: BroadcastSession = {
-        nounId: visitor.nounId,
-        kind: visitor.kind,
-        joinedAt: visitor.joinedAt,
-      };
-      if (visitor.kind !== 'agent') {
-        if (visitor.mood) out.mood = visitor.mood;
-        if (visitor.listening) out.listening = visitor.listening;
-        if (visitor.where) out.where = visitor.where;
-      }
-      return out;
-    });
+    const sessions = visitors.slice(0, MAX_BROADCAST_SESSIONS).map((v) => this.toPublicView(v));
 
-    return { humans, agents, sessions };
+    const payload: BroadcastPayload = { humans, agents, sessions };
+    if (viewerSessionId) {
+      const you = this.visitors.get(viewerSessionId);
+      if (you) payload.you = this.toPrivateView(you);
+    }
+    return payload;
   }
 
   broadcast() {
-    const payload = JSON.stringify(this.snapshot());
+    const basePayload = this.snapshotFor();
+    const publicSerialized = JSON.stringify(basePayload);
+
     for (const connection of this.connections.values()) {
       try {
-        connection.ws.send(payload);
+        const visitor = this.visitors.get(connection.sessionId);
+        if (visitor) {
+          const personalized: BroadcastPayload = {
+            ...basePayload,
+            you: this.toPrivateView(visitor),
+          };
+          connection.ws.send(JSON.stringify(personalized));
+        } else {
+          connection.ws.send(publicSerialized);
+        }
       } catch {}
     }
   }
@@ -326,6 +518,21 @@ export class PresenceRoom {
     clearInterval(this.broadcastInterval);
     this.broadcastInterval = null;
   }
+}
+
+function mergeEdge(current: EdgeContext, incoming: EdgeContext): EdgeContext {
+  return {
+    country: incoming.country ?? current.country,
+    city: incoming.city ?? current.city,
+    region: incoming.region ?? current.region,
+    timezone: incoming.timezone ?? current.timezone,
+    asn: incoming.asn ?? current.asn,
+    asOrg: incoming.asOrg ?? current.asOrg,
+    colo: incoming.colo ?? current.colo,
+    deviceClass: incoming.deviceClass ?? current.deviceClass,
+    referrerHost: incoming.referrerHost ?? current.referrerHost,
+    relay: incoming.relay ?? current.relay,
+  };
 }
 
 /**
