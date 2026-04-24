@@ -6,19 +6,24 @@ Open `index.html` in a browser. The page has no build step and references only l
 
 ## V2
 
+- Four selectable Gandalf companions: Hearth, Rain, Road, and Stars.
+- A live guide card that says what to do now: choose, start, inhale, hold, exhale, pause, or return.
+- The smoke/breath ritual is visible by default instead of hidden under extras.
 - Four scene presets: Fire, Rain, Road, and Stars.
 - Web Audio ambience with procedural crackle, rain patter, road wind/steps, and soft bell tones.
 - Canvas atmosphere with smoke rings, embers, rain streaks, road dust, and starlight motes.
 - Warmth and Smoke sliders stored locally.
 - Lantern view for a quieter timer-only room.
 - Session phases that shift from Settle to Drift to Return.
-- Simplified control hierarchy: choose a room, set ambience, then use pipe ritual extras only when wanted.
+- Simplified control hierarchy: choose a Gandalf, choose a room, set ambience, then follow the smoke ritual.
 
-## Asset
+## Assets
 
 The backdrop was generated with the built-in image generation tool and copied into `assets/wizard-study.png`.
 
-Final prompt:
+The companion portrait sheet was generated with the built-in image generation tool and copied into `assets/wizard-companions.jpg`.
+
+Backdrop prompt:
 
 ```text
 Use case: stylized-concept
@@ -32,4 +37,19 @@ Lighting/mood: amber firelight, deep forest green shadows, slow contemplative ev
 Color palette: amber, deep green, soot charcoal, muted parchment, small brass highlights
 Materials/textures: rough stone, worn wood, wool robe, parchment maps, pipe smoke
 Constraints: no text, no logos, no watermark, no exact Gandalf/movie likeness, no copyrighted dialogue
+```
+
+Companion portrait prompt:
+
+```text
+Use case: stylized-concept
+Asset type: web app UI companion portrait sprite sheet
+Primary request: a 2x2 grid of four distinct original elderly grey-wizard companion portraits for a cozy meditation/smoking companion web app called Sitting with Gandalf
+Scene/backdrop: each portrait is a close, warm seated companion vignette with pipe smoke and a quiet fantasy-study mood; top-left hearth fire amber, top-right rainy window blue-green, bottom-left road-at-dusk ochre, bottom-right starlight midnight blue
+Subject: four different original wise grey-robed wizard-like companions, old beards, broad hats or hoods, kind watchful presence, each clearly distinct in pose and mood, no recognizable actor likeness and not copied from any film
+Style/medium: painterly digital illustration, rich texture, cinematic but cozy, refined UI asset quality
+Composition/framing: perfectly square image divided into four equal square portraits with clean gutters; each portrait centered, readable at small card size, no text anywhere
+Lighting/mood: meditative, slow, inviting, pipe smoke curls, gentle color differences per quadrant
+Color palette: amber hearth, rain blue-green, road brass/ochre, starlight indigo/silver, balanced with deep charcoal and muted parchment
+Constraints: no text, no logos, no watermark, no exact Gandalf/movie likeness, no recognizable actor, no copyrighted film still, no hard horror, no modern objects
 ```

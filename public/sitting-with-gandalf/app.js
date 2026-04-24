@@ -43,6 +43,81 @@
     stars: { low: 92.5, high: 138.59, drone: 0.1 }
   };
 
+  const companions = {
+    hearth: {
+      name: "Hearth Gandalf",
+      mode: "fire",
+      idle: "Begin warm: start the quiet sit, then breathe with the ring.",
+      paused: "The fire will keep its place. Return when you are ready.",
+      complete: "Good. Carry one ember of that quiet with you.",
+      phases: {
+        Settle: "Let the pipe find its first slow glow.",
+        Drift: "Let the room do most of the work.",
+        Return: "Bring back one ember, not the whole fire."
+      },
+      lines: [
+        "Warmth first. Wisdom can take the second chair.",
+        "The hearth knows how to wait without becoming idle.",
+        "Draw slowly. Even old magic begins with breath.",
+        "A good chair has ended more quarrels than a loud speech."
+      ]
+    },
+    rain: {
+      name: "Rain Gandalf",
+      mode: "rain",
+      idle: "Begin soft: let the rain carry the hurry away before you draw.",
+      paused: "Rain does not mind interruption. It simply continues.",
+      complete: "There. Washed clean enough for the next small thing.",
+      phases: {
+        Settle: "Hear the roof before you hear your thoughts.",
+        Drift: "Let the weather travel for you.",
+        Return: "Take the quiet part of the storm back with you."
+      },
+      lines: [
+        "Rain has a thousand fingers and no need to hurry.",
+        "A wet road is still a road, only more honest.",
+        "Let each drop answer one thought and leave you with fewer.",
+        "The window is doing enough. Sit behind it."
+      ]
+    },
+    road: {
+      name: "Road Gandalf",
+      mode: "road",
+      idle: "Begin steady: set your pack down, draw once, and leave the road outside.",
+      paused: "The road bends, waits, and goes on. So may you.",
+      complete: "You have walked without leaving. That counts.",
+      phases: {
+        Settle: "Put the pack down before you inspect the map.",
+        Drift: "Let the dust fall behind you.",
+        Return: "Choose the next step, not the whole journey."
+      },
+      lines: [
+        "Not every road asks to be answered tonight.",
+        "Dust is only the road remembering your feet.",
+        "A map is better after tea and worse after panic.",
+        "Rest is also a direction."
+      ]
+    },
+    stars: {
+      name: "Star Gandalf",
+      mode: "stars",
+      idle: "Begin quiet: look upward, draw lightly, and let the night widen.",
+      paused: "The stars do not scold a pause within a pause.",
+      complete: "A little night-sense is enough for one pocket.",
+      phases: {
+        Settle: "Let the dark become spacious rather than empty.",
+        Drift: "Borrow the patience of distant light.",
+        Return: "Bring back one small lamp for the path."
+      },
+      lines: [
+        "Old light arrives late and is not ashamed.",
+        "The sky is full because it leaves room.",
+        "A quiet pipe can make a window out of any wall.",
+        "Look up long enough and the hour grows gentler."
+      ]
+    }
+  };
+
   const phases = [
     { threshold: 0, name: "Settle", hint: "Shoulders down. Let the room find you." },
     { threshold: 0.22, name: "Drift", hint: "No errands here. Just the fire and the next breath." },
@@ -61,6 +136,7 @@
     remaining: DEFAULT_MINUTES * 60,
     running: false,
     mode: savedSettings.mode || "fire",
+    companion: companions[savedSettings.companion] ? savedSettings.companion : "hearth",
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -68,7 +144,8 @@
     warmth: savedSettings.warmth ?? 0.62,
     smoke: savedSettings.smoke ?? 0.58,
     lantern: false,
-    phaseName: "Settle"
+    phaseName: "Settle",
+    guidePace: ""
   };
 
   const dom = {
@@ -79,7 +156,11 @@
     wizardLine: document.getElementById("wizardLine"),
     phaseName: document.getElementById("phaseName"),
     phaseHint: document.getElementById("phaseHint"),
+    guideStep: document.getElementById("guideStep"),
+    guideTitle: document.getElementById("guideTitle"),
+    guideText: document.getElementById("guideText"),
     durationButtons: Array.from(document.querySelectorAll(".duration-button")),
+    companionButtons: Array.from(document.querySelectorAll(".wizard-button")),
     modeButtons: Array.from(document.querySelectorAll(".mode-button")),
     startButton: document.getElementById("startButton"),
     pauseButton: document.getElementById("pauseButton"),
@@ -160,14 +241,43 @@
       SETTINGS_KEY,
       JSON.stringify({
         mode: state.mode,
+        companion: state.companion,
         warmth: state.warmth,
         smoke: state.smoke
       })
     );
   }
 
+  function activeCompanion() {
+    return companions[state.companion] || companions.hearth;
+  }
+
+  function setGuide(step, title, text) {
+    dom.guideStep.textContent = step;
+    dom.guideTitle.textContent = title;
+    dom.guideText.textContent = text;
+  }
+
+  function updateGuideIdle(step) {
+    const companion = activeCompanion();
+    setGuide(step || "Next", companion.name, companion.idle);
+  }
+
+  function updateGuideForPace(label, countdown) {
+    const companion = activeCompanion();
+    const lowerLabel = label.toLowerCase();
+    const copy = {
+      Inhale: `Draw in for ${countdown}. Let ${companion.name} keep the room steady.`,
+      Hold: `Hold for ${countdown}. Nothing needs chasing.`,
+      Exhale: `Exhale for ${countdown}. Let the smoke drift; tap Smoke ring if you want to see it go.`
+    };
+
+    setGuide(`Now: ${lowerLabel}`, companion.name, copy[label] || companion.idle);
+  }
+
   function chooseLine() {
-    const pool = modeLines[state.mode];
+    const companion = activeCompanion();
+    const pool = Math.random() > 0.38 ? companion.lines : modeLines[state.mode];
     const next = pool[Math.floor(Math.random() * pool.length)];
     dom.wizardLine.textContent = next;
   }
@@ -192,7 +302,7 @@
     }
 
     dom.phaseName.textContent = active.name;
-    dom.phaseHint.textContent = active.hint;
+    dom.phaseHint.textContent = activeCompanion().phases[active.name] || active.hint;
   }
 
   function updateStats() {
@@ -221,11 +331,12 @@
       const left = document.createElement("span");
       const right = document.createElement("span");
       const mode = entry.mode ? ` / ${entry.mode}` : "";
+      const companion = entry.companion ? ` / ${entry.companion.replace(" Gandalf", "")}` : "";
 
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${entry.minutes} min / ${entry.blend}${mode}`;
+      left.textContent = `${entry.minutes} min / ${entry.blend}${mode}${companion}`;
       right.textContent = entry.date;
       note.textContent = entry.note || "A quiet bowl, kept well.";
 
@@ -244,10 +355,12 @@
 
     state.running = true;
     state.paceStartedAt = performance.now();
+    state.guidePace = "";
     dom.startButton.textContent = "Running";
     dom.startButton.disabled = true;
     dom.pauseButton.disabled = false;
     chooseLine();
+    updateGuideIdle("Sit has begun");
 
     if (!state.soundOn) {
       await setSound(true);
@@ -260,6 +373,7 @@
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.timerCaption.textContent = "pipe pause";
+    setGuide("Paused", activeCompanion().name, activeCompanion().paused);
   }
 
   function resetSession() {
@@ -272,6 +386,8 @@
     dom.paceLabel.textContent = "Settle";
     dom.paceCount.textContent = "0";
     dom.paceBar.style.width = "0%";
+    state.guidePace = "";
+    updateGuideIdle("Next");
     updateTimer();
   }
 
@@ -281,6 +397,7 @@
     state.remaining = 0;
     updateTimer();
     dom.wizardLine.textContent = "There. A little more room in the world.";
+    setGuide("Complete", activeCompanion().name, activeCompanion().complete);
     addSmoke({ count: 12, power: 1.2, spread: 100, countTowardSession: true });
     spawnParticles(18);
   }
@@ -308,6 +425,30 @@
       clearSoundTimers();
       scheduleAmbience();
     }
+
+    if (!state.running) {
+      updateGuideIdle("Next");
+    }
+  }
+
+  function setCompanion(companion, options) {
+    const next = companions[companion] ? companion : "hearth";
+    const settings = options || {};
+
+    state.companion = next;
+    dom.body.dataset.companion = next;
+    dom.companionButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.companion === next);
+    });
+
+    if (settings.syncMode !== false) {
+      setMode(companions[next].mode);
+    } else {
+      saveSettings();
+    }
+
+    chooseLine();
+    updateGuideIdle(settings.syncMode === false ? "Choose your Gandalf" : "Companion chosen");
   }
 
   function setWarmth(value) {
@@ -336,6 +477,7 @@
       blend: dom.blendSelect.value,
       rings: state.rings,
       mode: state.mode,
+      companion: activeCompanion().name,
       note: dom.noteInput.value.trim()
     });
 
@@ -371,6 +513,10 @@
         dom.paceLabel.textContent = item.label;
         dom.paceCount.textContent = String(countdown);
         dom.paceBar.style.width = `${width}%`;
+        if (state.guidePace !== `${item.label}-${countdown}`) {
+          state.guidePace = `${item.label}-${countdown}`;
+          updateGuideForPace(item.label, countdown);
+        }
         return;
       }
       cursor = nextCursor;
@@ -761,6 +907,7 @@
     visuals.rings = [];
     visuals.particles = [];
     dom.wizardLine.textContent = "A good silence asks for nothing.";
+    setGuide("Quiet", activeCompanion().name, "Ambience is off. The room can stay still for a while.");
   }
 
   function toggleLantern(force) {
@@ -771,6 +918,10 @@
 
   dom.durationButtons.forEach((button) => {
     button.addEventListener("click", () => setDuration(Number(button.dataset.minutes)));
+  });
+
+  dom.companionButtons.forEach((button) => {
+    button.addEventListener("click", () => setCompanion(button.dataset.companion));
   });
 
   dom.modeButtons.forEach((button) => {
@@ -803,6 +954,7 @@
 
   resizeCanvas();
   renderLog();
+  setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
   requestAnimationFrame(tick);
