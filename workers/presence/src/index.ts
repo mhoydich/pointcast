@@ -4,10 +4,21 @@
  * Cloudflare Pages Functions cannot export DO classes; DOs must live in
  * a dedicated Worker that Pages references via `script_name` binding.
  * This Worker holds the PresenceRoom class + a minimal fetch handler
- * that routes every request to the DO. All behavior — WebSocket
- * upgrade, /snapshot HTTP endpoint, identify/update/ping messages,
- * 90s idle timeout, broadcast cap — is implemented inside PresenceRoom
- * exactly as it was when living in functions/api/presence.ts.
+ * that routes every request to the DO.
+ *
+ * Two consumption modes — same class, different name derivations:
+ *   1. Global presence (functions/api/presence.ts → idFromName('global'))
+ *      — visitor count, here grid, intel. Broadcasts at 1 Hz.
+ *   2. Cursor/chat rooms (functions/api/room.ts → idFromName('room:<path>'))
+ *      — per-URL multiplayer cursors + chat ring buffer. Broadcasts
+ *      at 100 ms while any visitor is actively cursor-moving, then
+ *      relaxes to 1 Hz when idle.
+ *
+ * New message types (Phase 2):
+ *   cursor : { type:'cursor', x:int, y:int }  // viewport-normalized ×10000
+ *   chat   : { type:'chat', msg:string }      // <=120 chars, ring buffered
+ * These are additive — the broadcast payload simply gains `peers` and
+ * `chat` arrays (empty in the global room since nobody sends there).
  *
  * Visitor intel (option-B privacy):
  *   Public surface (what every visitor sees about every other visitor):
@@ -67,6 +78,27 @@ interface VisitorSession {
   nostrPubkey?: string;
   pathTrail: string[];
   isReturning: boolean;
+  // Phase 2 — cursor/chat rooms. Null until the visitor starts moving.
+  cursor?: { x: number; y: number; at: number } | null;
+  tag?: string; // short display tag attached to cursor + chat ('visitor', '0x12…abcd')
+}
+
+interface PeerView {
+  sessionId: string; // opaque id used only client-side for DOM reuse
+  nounId: number;
+  kind: PresenceKind;
+  tag: string;
+  x: number; // quantized 0–10000
+  y: number; // quantized 0–10000
+  at: number; // server time of last cursor update
+}
+
+interface ChatEntry {
+  who: string; // tag
+  nounId: number;
+  msg: string;
+  at: number; // server ms
+  sid: string; // first 8 chars of session id — stable-per-visitor grouping
 }
 
 interface PublicSessionView {
@@ -100,18 +132,24 @@ interface BroadcastPayload {
   humans: number;
   agents: number;
   sessions: PublicSessionView[];
+  peers?: PeerView[]; // cursor positions of other active visitors (last 20s)
+  chat?: ChatEntry[]; // room chat ring buffer (last 20 entries)
   you?: PrivateSessionView;
 }
 
 type ClientMessage =
   | {
-      type?: 'identify' | 'update' | 'ping';
+      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat';
       nounId?: unknown;
       mood?: unknown;
       listening?: unknown;
       where?: unknown;
       walletAddress?: unknown;
       nostrPubkey?: unknown;
+      tag?: unknown;
+      x?: unknown;
+      y?: unknown;
+      msg?: unknown;
     }
   | null
   | undefined;
@@ -120,6 +158,16 @@ const MAX_BROADCAST_SESSIONS = 50;
 const STALE_AFTER_MS = 90_000;
 const MAX_PATH_TRAIL = 5;
 const SEEN_KEY_PREFIX = 'seen:';
+
+// Phase 2 — cursor/chat room tunables.
+const CURSOR_COORD_MAX = 10_000; // viewport-normalized integer coords
+const PEER_CURSOR_TTL_MS = 20_000; // hide peers whose last cursor > 20s old
+const MAX_PEER_BROADCAST = 30; // cap broadcast peer list
+const MAX_CHAT_BUFFER = 20; // ring buffer depth
+const MAX_CHAT_MSG = 120; // char cap
+const FAST_BROADCAST_MS = 100; // 10 Hz while active
+const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
+const ACTIVITY_WINDOW_MS = 3000; // fast mode window after last cursor/chat
 
 function cheapHash(input: string): number {
   let hash = 5381;
@@ -226,6 +274,15 @@ export class PresenceRoom {
   connections: Map<string, Connection> = new Map();
   visitors: Map<string, VisitorSession> = new Map();
   broadcastInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Phase 2 — per-room cursor/chat state.
+  // `chatLog` is the room's ring buffer. `lastActivity` tracks the latest
+  // cursor or chat message to decide broadcast cadence (fast vs idle).
+  // `broadcastMode` is the current tick rate so we only reschedule when it
+  // actually flips — setInterval churn is otherwise wasteful.
+  chatLog: ChatEntry[] = [];
+  lastActivity: number = 0;
+  broadcastMode: 'idle' | 'fast' = 'idle';
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -336,8 +393,69 @@ export class PresenceRoom {
     const type = message.type;
     if (type === 'ping') return;
 
+    // ─── Phase 2: cursor updates ──────────────────────────────
+    // Accept high-frequency cursor events but DO NOT broadcast per-event
+    // — the fast-mode interval handles that. Just mutate state + mark
+    // activity so the next tick picks the new positions up.
+    if (type === 'cursor') {
+      this.applyCursorUpdate(sessionId, message);
+      this.lastActivity = Date.now();
+      this.ensureFastMode();
+      return;
+    }
+
+    // ─── Phase 2: chat submit ─────────────────────────────────
+    // Low frequency, broadcast immediately so the sender + peers see
+    // the message without waiting for the next tick. Ring-buffered.
+    if (type === 'chat') {
+      this.applyChat(sessionId, message);
+      this.lastActivity = Date.now();
+      this.ensureFastMode();
+      this.broadcast();
+      return;
+    }
+
     this.applyVisitorPatch(sessionId, message);
+    if (hasOwn(message, 'tag')) {
+      const tag = normalizeText(message.tag, 40);
+      const visitor = this.visitors.get(sessionId);
+      if (visitor) {
+        if (tag) visitor.tag = tag;
+        else delete visitor.tag;
+      }
+    }
     this.broadcast();
+  }
+
+  applyCursorUpdate(sessionId: string, patch: Record<string, unknown>) {
+    const visitor = this.visitors.get(sessionId);
+    if (!visitor) return;
+    const rawX = Number(patch.x);
+    const rawY = Number(patch.y);
+    if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return;
+    // Quantize — coords arrive viewport-normalized ×10000. Clamp defensively.
+    const x = Math.max(0, Math.min(CURSOR_COORD_MAX, Math.round(rawX)));
+    const y = Math.max(0, Math.min(CURSOR_COORD_MAX, Math.round(rawY)));
+    visitor.cursor = { x, y, at: Date.now() };
+  }
+
+  applyChat(sessionId: string, patch: Record<string, unknown>) {
+    const visitor = this.visitors.get(sessionId);
+    if (!visitor) return;
+    const msg = normalizeText(patch.msg, MAX_CHAT_MSG);
+    if (!msg) return;
+    const who = visitor.tag ?? 'visitor';
+    const entry: ChatEntry = {
+      who,
+      nounId: visitor.nounId,
+      msg,
+      at: Date.now(),
+      sid: sessionId.slice(0, 8),
+    };
+    this.chatLog.push(entry);
+    if (this.chatLog.length > MAX_CHAT_BUFFER) {
+      this.chatLog.splice(0, this.chatLog.length - MAX_CHAT_BUFFER);
+    }
   }
 
   applyVisitorPatch(sessionId: string, patch: Record<string, unknown>) {
@@ -474,6 +592,13 @@ export class PresenceRoom {
     const sessions = visitors.slice(0, MAX_BROADCAST_SESSIONS).map((v) => this.toPublicView(v));
 
     const payload: BroadcastPayload = { humans, agents, sessions };
+
+    // Phase 2 — attach peer cursors + chat when the room has any. Empty
+    // arrays are omitted so global-room consumers see the same shape.
+    const peers = this.collectPeers(viewerSessionId);
+    if (peers.length) payload.peers = peers;
+    if (this.chatLog.length) payload.chat = [...this.chatLog];
+
     if (viewerSessionId) {
       const you = this.visitors.get(viewerSessionId);
       if (you) payload.you = this.toPrivateView(you);
@@ -481,7 +606,31 @@ export class PresenceRoom {
     return payload;
   }
 
+  collectPeers(excludeSessionId?: string): PeerView[] {
+    const cutoff = Date.now() - PEER_CURSOR_TTL_MS;
+    const peers: PeerView[] = [];
+    for (const visitor of this.visitors.values()) {
+      if (excludeSessionId && visitor.sessionId === excludeSessionId) continue;
+      const c = visitor.cursor;
+      if (!c || c.at < cutoff) continue;
+      peers.push({
+        sessionId: visitor.sessionId.slice(0, 8),
+        nounId: visitor.nounId,
+        kind: visitor.kind,
+        tag: visitor.tag ?? 'visitor',
+        x: c.x,
+        y: c.y,
+        at: c.at,
+      });
+      if (peers.length >= MAX_PEER_BROADCAST) break;
+    }
+    return peers;
+  }
+
   broadcast() {
+    // Per-viewer personalization: peers excludes self, `you` carries private
+    // edge intel. Base payload (no viewer context) computed once for fallback
+    // on connections whose visitor record has been pruned.
     const basePayload = this.snapshotFor();
     const publicSerialized = JSON.stringify(basePayload);
 
@@ -493,6 +642,10 @@ export class PresenceRoom {
             ...basePayload,
             you: this.toPrivateView(visitor),
           };
+          // Recompute peers excluding this viewer so you don't see yourself
+          const personalizedPeers = this.collectPeers(connection.sessionId);
+          if (personalizedPeers.length) personalized.peers = personalizedPeers;
+          else delete personalized.peers;
           connection.ws.send(JSON.stringify(personalized));
         } else {
           connection.ws.send(publicSerialized);
@@ -503,14 +656,47 @@ export class PresenceRoom {
 
   startBroadcast() {
     if (this.broadcastInterval) return;
+    this.scheduleTick(this.desiredMode());
+  }
+
+  desiredMode(): 'idle' | 'fast' {
+    return this.lastActivity && Date.now() - this.lastActivity < ACTIVITY_WINDOW_MS
+      ? 'fast'
+      : 'idle';
+  }
+
+  ensureFastMode() {
+    if (this.broadcastMode === 'fast') return;
+    if (!this.broadcastInterval) {
+      // No interval yet — start one now in fast mode.
+      this.scheduleTick('fast');
+      return;
+    }
+    clearInterval(this.broadcastInterval);
+    this.broadcastInterval = null;
+    this.scheduleTick('fast');
+  }
+
+  scheduleTick(mode: 'idle' | 'fast') {
+    this.broadcastMode = mode;
+    const delay = mode === 'fast' ? FAST_BROADCAST_MS : IDLE_BROADCAST_MS;
     this.broadcastInterval = setInterval(() => {
       this.cleanupStaleConnections();
       if (this.connections.size === 0) {
         this.stopBroadcast();
         return;
       }
+      // Auto-relax from fast back to idle when no recent activity.
+      const desired = this.desiredMode();
+      if (desired !== this.broadcastMode) {
+        if (this.broadcastInterval) {
+          clearInterval(this.broadcastInterval);
+          this.broadcastInterval = null;
+        }
+        this.scheduleTick(desired);
+      }
       this.broadcast();
-    }, 1000);
+    }, delay);
   }
 
   stopBroadcast() {
