@@ -368,6 +368,74 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       )}
     </section>
 
+    <!-- Mint (LIVE FA2 with a known mint entrypoint) -->
+    {liveKt1 && entry.mintEntrypoint && (
+      <section id="mint" class="mb-6">
+        <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5">
+          mint
+        </h2>
+        <p class="text-[0.85rem] text-ink-soft/80 mb-3 leading-relaxed">
+          Public free mint &mdash; anyone with a Tezos wallet can call
+          <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">{entry.mintEntrypoint}(token_id)</code> from /admin
+          or from the public surface. This form mints to your connected wallet so
+          you can sanity-check the flow before sharing.
+        </p>
+
+        <details class="mb-2 p-3 rounded-md border border-emerald-500/30 bg-emerald-500/5" open>
+          <summary class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+            {entry.mintEntrypoint} <span class="text-emerald-700 ml-1">— mint to your wallet</span>
+          </summary>
+          <form
+            class="admin-action-form mt-3 space-y-2"
+            data-entrypoint={entry.mintEntrypoint}
+            data-arg-type="nat"
+            data-kt1={liveKt1}
+            data-slug={slug}
+          >
+            <label class="block">
+              <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                token_id
+              </span>
+              {entry.tokens && Object.keys(entry.tokens).length > 0 ? (
+                <select
+                  name="value"
+                  class="w-full font-mono text-[0.78rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+                >
+                  {Object.entries(entry.tokens).map(([id, tokenVal]: any) => {
+                    const name = typeof tokenVal === 'string' ? tokenVal : (tokenVal?.recipient_name ?? tokenVal?.name ?? `token ${id}`);
+                    const cap = entry.edition_caps && entry.edition_caps[id];
+                    return (
+                      <option value={id}>
+                        {id} &mdash; {name}{cap ? ` (cap ${cap})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  name="value"
+                  min="0"
+                  placeholder="0"
+                  class="w-full font-mono text-[0.78rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+                />
+              )}
+            </label>
+            <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50">
+              gas-only mint · respects edition caps and registration on-chain
+            </p>
+            <button
+              type="submit"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-emerald-600 text-paper font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+            >
+              <span class="btn-label">Sign + mint</span>
+            </button>
+            <p class="action-status font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]" role="status" aria-live="polite"></p>
+          </form>
+        </details>
+      </section>
+    )}
+
     <!-- Admin actions (LIVE FA2 only) -->
     {liveKt1 && (
       <section id="admin-actions" class="mb-6">
@@ -965,6 +1033,15 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       const raw = (fd.get('value') || '').toString().trim();
       if (!raw) throw new Error('string value is required');
       return { args: raw, summary: entrypoint + '("' + raw.slice(0, 40) + (raw.length > 40 ? '…' : '') + '")' };
+    }
+    // Natural number — used by mint_mug / mint_noun / mint_birthday_card.
+    // Taquito accepts JS numbers for sp.nat params; validate >= 0 first.
+    if (argType === 'nat') {
+      const raw = (fd.get('value') || '').toString().trim();
+      const n = parseInt(raw, 10);
+      if (!raw || Number.isNaN(n)) throw new Error('nat value is required (a non-negative integer)');
+      if (n < 0) throw new Error('nat must be >= 0');
+      return { args: n, summary: entrypoint + '(' + n + ')' };
     }
     // map nat → string. Submit as a MichelsonMap.
     if (argType === 'nat-string-map') {
