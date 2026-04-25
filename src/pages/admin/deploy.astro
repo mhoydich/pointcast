@@ -106,7 +106,7 @@ import WalletConnect from '../../components/WalletConnect.astro';
     <section class="mb-5">
       <label for="storage-input" class="flex items-center justify-between mb-2">
         <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
-          initial storage <span class="text-warm">(json OR michelson — e.g. (Pair "tz1..." (Pair {Elt 0 333; ...} ...)))</span>
+          initial storage <span class="text-warm">(json OR michelson — e.g. (Pair "tz1..." (Pair &#123;Elt 0 333; ...&#125; ...)))</span>
         </span>
         <span id="storage-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
           0 B
@@ -199,11 +199,15 @@ import WalletConnect from '../../components/WalletConnect.astro';
   </div>
 </BaseLayout>
 
-<script>
+<script lang="ts">
   /**
    * Browser-side originator. Uses the same Taquito + Beacon setup as
    * the /collect flow (src/lib/tezos.ts) — lazy-loaded on first click so
    * ~700KB of crypto libs don't land on every /admin/deploy pageload.
+   *
+   * lang="ts" because the Michelson-text parsing block added in #90 carries
+   * type annotations (`code: unknown`, `as 'mainnet' | 'shadownet'`, etc).
+   * esbuild rejects those when the script is parsed as plain JS.
    */
 
   const codeInput = document.getElementById('code-input') as HTMLTextAreaElement;
@@ -367,6 +371,32 @@ import WalletConnect from '../../components/WalletConnect.astro';
         // Ghostnet/Mainnet session collides with a new Shadownet request.
         try { await wallet.clearActiveAccount(); } catch {}
         await wallet.client.requestPermissions();
+      }
+
+      // ── Admin auto-patch ─────────────────────────────────────────
+      // SmartPy IDE bakes the test scenario's admin (sp.test_account
+      // generates a deterministic tz1UyQDepgt-style address) into the
+      // exported storage. If we originate as-is, the contract is
+      // admin'd by a public test key — anyone deriving the same key
+      // can call set_administrator / register_tokens / withdraw_mutez.
+      // Mirrors the visit_nouns deploy script's storage-admin patch.
+      const activeAccount = await wallet.client.getActiveAccount();
+      const activePkh = (activeAccount as any)?.address;
+      if (activePkh && storage && typeof storage === 'object') {
+        const isTzAddr = (s: unknown): s is string =>
+          typeof s === 'string' && /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/.test(s);
+        const node: any = storage;
+        if (node.prim === 'Pair' && Array.isArray(node.args) && node.args[0]) {
+          const first = node.args[0];
+          if (first && typeof first === 'object' && isTzAddr(first.string)) {
+            const old = first.string as string;
+            if (old !== activePkh) {
+              first.string = activePkh;
+              setStatus(`admin patched: ${old.slice(0,8)}…${old.slice(-4)} → ${activePkh.slice(0,8)}…${activePkh.slice(-4)} (your wallet)`);
+              await new Promise((r) => setTimeout(r, 600));
+            }
+          }
+        }
       }
 
       // Let Kukai estimate fees/gas/storage itself. Setting a fee cap too
