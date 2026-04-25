@@ -1,0 +1,679 @@
+---
+/**
+ * /admin/deploy/new — Publisher.
+ *
+ * Browser-based contract originator. Mirrors the legacy /admin/deploy
+ * paste-and-deploy flow but rebuilt clean:
+ *
+ *   • <script> with NO `is:inline` and NO `lang="ts"` — Astro/Vite bundles
+ *     and transpiles via esbuild, which means TypeScript-shaped syntax
+ *     would error at build time (and so never reach the browser as
+ *     unparseable JS — which is what bit us across PRs #91-#95).
+ *     The contract here: this file is plain ES2022 JavaScript. No type
+ *     annotations, no generics, no `as` casts, no `!` non-null. If you
+ *     want types, use JSDoc — Vite preserves those as comments.
+ *
+ *   • Pre-flight admin auto-patch — every origination, before broadcast,
+ *     scans the parsed Michelson storage tree, finds the FA2 admin
+ *     %administrator field (typically the first `string` leaf in a
+ *     `Pair`), and rewrites it to the connected wallet address. This
+ *     prevents the orphan-origination class of bug — the SmartPy IDE's
+ *     test scenario bakes a deterministic test address into the storage,
+ *     and originating it as-is hands the contract to a public test key
+ *     that anyone can derive. KT1U6TrcN... (Coffee Mugs, 2026-04-25) is
+ *     the cautionary tale.
+ *
+ *   • `?prefill=<slug>` query support — fetches
+ *     /admin/_artifacts/<slug>-{contract,storage}.json on mount and
+ *     fills the textareas, so STAGED contracts are one click away
+ *     from origination.
+ *
+ *   • Accepts BOTH Michelson-JSON and Michelson-text for both code and
+ *     storage. Auto-detect via leading `[` / `{`.
+ *
+ *   • Shadownet vs. Mainnet radio. Shadownet defaults so dry-runs are
+ *     the easy path.
+ *
+ * Security posture:
+ *   - No private keys touch this page. Origination is signed in Kukai
+ *     via Beacon. The wallet user authorizes every op.
+ *   - Anyone landing on this URL can paste their own contract and
+ *     originate from THEIR wallet — they pay their own gas, they get
+ *     their own KT1. So the page is "open" but doesn't grant access
+ *     to anything that isn't a stranger's own funds.
+ *   - The `pc:wallet` localStorage entry from WalletConnect is read
+ *     for the auto-admin-patch but never sent anywhere.
+ */
+
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import WalletConnect from '../../../components/WalletConnect.astro';
+import contracts from '../../../data/contracts.json';
+
+// Surface the prefill options that have artifacts staged. Build-time
+// only — the script reads window.location.search at runtime to pick.
+const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
+---
+
+<BaseLayout title="Publisher · Admin · Deploy" description="PointCast contract originator">
+  <div class="max-w-[52rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+
+    <!-- Masthead band -->
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-6">
+      <div class="flex items-center gap-3">
+        <a
+          href="/"
+          class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline"
+        >
+          PointCast
+        </a>
+        <a
+          href="/admin/deploy"
+          class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm hover:text-ink transition-colors no-underline"
+        >
+          / admin / deploy /
+        </a>
+        <span class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/70">
+          new
+        </span>
+      </div>
+      <WalletConnect />
+    </div>
+
+    <!-- Header -->
+    <header class="mb-8">
+      <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm mb-2">
+        admin · publisher
+      </p>
+      <h1 class="font-serif italic text-[1.8rem] md:text-[2.2rem] text-ink font-medium leading-[1.1] mb-3">
+        Originate a contract
+      </h1>
+      <p class="text-[0.95rem] text-ink/70 leading-relaxed">
+        Paste compiled Michelson + initial storage below. Pick a network.
+        Click <strong>Originate</strong>. Kukai pops a signing prompt; the
+        origination lands on-chain a few seconds later and the contract
+        address appears here. The admin field is auto-patched to your
+        connected wallet before signing &mdash; no orphan originations.
+      </p>
+    </header>
+
+    <!-- Chain selector (Tezos for v1 — ETH/Sol surface here when ready) -->
+    <section class="mb-5">
+      <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60 mb-2">
+        chain
+      </p>
+      <div class="flex gap-2">
+        <label class="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-md border border-warm bg-warm/10">
+          <input type="radio" name="chain" value="tezos" checked class="accent-warm" />
+          <span class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-ink">tezos</span>
+        </label>
+        <label class="flex items-center gap-2 px-3 py-1.5 rounded-md border border-rule/30 bg-card/40 opacity-50 cursor-not-allowed">
+          <input type="radio" name="chain" value="eth" disabled class="accent-warm" />
+          <span class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-ink-soft/60">
+            ethereum <span class="text-ink-soft/40">(soon)</span>
+          </span>
+        </label>
+        <label class="flex items-center gap-2 px-3 py-1.5 rounded-md border border-rule/30 bg-card/40 opacity-50 cursor-not-allowed">
+          <input type="radio" name="chain" value="solana" disabled class="accent-warm" />
+          <span class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-ink-soft/60">
+            solana <span class="text-ink-soft/40">(soon)</span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Network selector -->
+    <section class="mb-5">
+      <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60 mb-2">
+        network
+      </p>
+      <div class="flex gap-3" role="radiogroup">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="network" value="shadownet" checked class="accent-warm" />
+          <span class="font-mono text-[0.68rem] tracking-[0.14em] uppercase">
+            Shadownet <span class="text-ink-soft/50">(testnet · free faucet)</span>
+          </span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="network" value="mainnet" class="accent-warm" />
+          <span class="font-mono text-[0.68rem] tracking-[0.14em] uppercase">
+            Mainnet <span class="text-ink-soft/50">(real ꜩ · production)</span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Prefill picker -->
+    <section class="mb-5 p-3 rounded-md border border-rule/30 bg-card/40">
+      <div class="flex items-center justify-between mb-2 gap-2">
+        <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
+          quick load
+        </p>
+        <p id="prefill-status" class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">
+          &mdash;
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        {slugs.map((slug) => (
+          <button
+            type="button"
+            data-prefill={slug}
+            class="prefill-btn inline-flex items-center px-2 py-1 rounded-sm bg-paper border border-rule/40 text-ink-soft font-mono text-[0.55rem] tracking-[0.14em] uppercase hover:border-warm hover:text-warm transition-colors cursor-pointer"
+          >
+            {slug.replace(/_/g, ' ')}
+          </button>
+        ))}
+      </div>
+    </section>
+
+    <!-- Code textarea -->
+    <section class="mb-5">
+      <label for="code-input" class="flex items-center justify-between mb-2">
+        <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
+          michelson code <span class="text-warm">(json array OR michelson text — auto-detect)</span>
+        </span>
+        <span id="code-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
+          0 B
+        </span>
+      </label>
+      <textarea
+        id="code-input"
+        rows="6"
+        placeholder='[ { "prim": "parameter", "args": [...] }, { "prim": "storage", ... }, { "prim": "code", ... } ]'
+        class="w-full font-mono text-[0.7rem] p-3 rounded-md border border-rule/40 bg-card/60 text-ink focus:border-warm focus:outline-none"
+      ></textarea>
+    </section>
+
+    <!-- Storage textarea -->
+    <section class="mb-5">
+      <label for="storage-input" class="flex items-center justify-between mb-2">
+        <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
+          initial storage
+          <span class="text-warm">(json or michelson — admin field auto-patched)</span>
+        </span>
+        <span id="storage-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
+          0 B
+        </span>
+      </label>
+      <textarea
+        id="storage-input"
+        rows="5"
+        placeholder='{ "prim": "Pair", "args": [ ... ] }'
+        class="w-full font-mono text-[0.7rem] p-3 rounded-md border border-rule/40 bg-card/60 text-ink focus:border-warm focus:outline-none"
+      ></textarea>
+    </section>
+
+    <!-- Admin preview -->
+    <section class="mb-5 p-3 rounded-md border border-rule/30 bg-card/40">
+      <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60 mb-1">
+        admin field (will be patched on originate)
+      </p>
+      <p id="admin-preview" class="font-mono text-[0.65rem] text-ink-soft break-all">
+        connect a wallet to preview &mdash; the storage's first <code class="bg-paper px-1 rounded text-warm">tz</code> address is replaced with your connected pkh.
+      </p>
+    </section>
+
+    <!-- Originate button + status -->
+    <section class="mb-8">
+      <button
+        id="deploy-btn"
+        type="button"
+        class="w-full inline-flex items-center justify-center px-5 py-3 rounded-md bg-ink text-paper font-mono text-[0.66rem] tracking-[0.16em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+      >
+        <span id="deploy-btn-label">Originate &rarr;</span>
+      </button>
+
+      <p
+        id="deploy-status"
+        class="mt-3 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </section>
+
+    <!-- Result panel -->
+    <section
+      id="deploy-result"
+      class="hidden mb-8 p-4 rounded-md border border-warm/40 bg-warm/5"
+    >
+      <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm mb-2">
+        ✓ Contract originated
+      </p>
+      <p class="font-mono text-[0.8rem] text-ink mb-3 break-all" id="deploy-address">
+        KT1…
+      </p>
+      <div class="flex flex-wrap gap-2 mb-3" id="deploy-links"></div>
+      <p class="font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft mb-1">
+        next steps
+      </p>
+      <p class="text-[0.85rem] text-ink-soft/80 leading-relaxed" id="deploy-next-steps">
+        Paste the KT1 into <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">src/data/contracts.json</code>
+        under the relevant slug, then redeploy the site.
+      </p>
+    </section>
+
+    <!-- Help -->
+    <details class="mt-8 p-4 rounded-md border border-rule/30 bg-card/40">
+      <summary class="font-mono text-[0.58rem] tracking-[0.2em] uppercase text-ink-soft cursor-pointer">
+        How to compile a contract
+      </summary>
+      <ol class="mt-3 text-[0.85rem] text-ink-soft/80 leading-relaxed space-y-1 list-decimal list-inside">
+        <li>Open <a href="https://smartpy.io/ide" target="_blank" rel="noopener" class="text-warm hover:underline">smartpy.io/ide</a>.</li>
+        <li>Paste <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">contracts/v2/&lt;slug&gt;.py</code>.</li>
+        <li>Click <strong>Run</strong>. When tests pass, the IDE generates Michelson under the build directory.</li>
+        <li>Open the <strong>Deploy Michelson Contract</strong> tab &mdash; download <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">step_nnn_cont_0_contract.json</code> and <code class="font-mono text-[0.78rem] bg-card px-1 py-0.5 rounded">step_nnn_cont_0_storage.json</code>.</li>
+        <li>Paste them into the textareas above.</li>
+        <li>Pick Shadownet first (faucet: <a href="https://faucet.shadownet.teztnets.com" target="_blank" rel="noopener" class="text-warm hover:underline">faucet.shadownet.teztnets.com</a>).</li>
+        <li>Confirm the admin patch preview shows your connected wallet.</li>
+        <li>Click <strong>Originate</strong>, sign in Kukai, capture the KT1.</li>
+      </ol>
+    </details>
+
+  </div>
+</BaseLayout>
+
+<script>
+  // PURE JAVASCRIPT — no TypeScript syntax. Vite/esbuild treats this as
+  // .js and will error if any TS-only constructs creep in. JSDoc only
+  // for type hints.
+  //
+  // History: PRs #91–#95 chased TS-shaped syntax escaping `<script is:inline>`
+  // into the browser. Switching to a regular `<script>` block lets Vite
+  // catch those at build time. If you must add TS, change to lang="ts".
+
+  const codeInput = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('code-input'));
+  const storageInput = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('storage-input'));
+  const codeStats = document.getElementById('code-stats');
+  const storageStats = document.getElementById('storage-stats');
+  const deployBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('deploy-btn'));
+  const deployLabel = document.getElementById('deploy-btn-label');
+  const statusEl = document.getElementById('deploy-status');
+  const resultPanel = document.getElementById('deploy-result');
+  const addressEl = document.getElementById('deploy-address');
+  const linksEl = document.getElementById('deploy-links');
+  const adminPreview = document.getElementById('admin-preview');
+  const prefillStatus = document.getElementById('prefill-status');
+
+  function setStatus(html) {
+    if (statusEl) statusEl.innerHTML = html;
+  }
+
+  // Stats — show approx size in B/KB so paste-too-small mistakes are visible.
+  function updateStats() {
+    const codeBytes = codeInput ? new Blob([codeInput.value]).size : 0;
+    const storageBytes = storageInput ? new Blob([storageInput.value]).size : 0;
+    if (codeStats)
+      codeStats.textContent =
+        codeBytes > 1024 ? (codeBytes / 1024).toFixed(1) + ' KB' : codeBytes + ' B';
+    if (storageStats)
+      storageStats.textContent =
+        storageBytes > 1024 ? (storageBytes / 1024).toFixed(1) + ' KB' : storageBytes + ' B';
+    // Refresh admin preview when storage changes.
+    refreshAdminPreview();
+  }
+  if (codeInput) codeInput.addEventListener('input', updateStats);
+  if (storageInput) storageInput.addEventListener('input', updateStats);
+
+  // Read connected wallet from the WalletConnect-saved localStorage entry.
+  function connectedAddress() {
+    try {
+      const raw = localStorage.getItem('pc:wallet');
+      if (!raw) return null;
+      const w = JSON.parse(raw);
+      if (w && typeof w.address === 'string' && w.chain === 'tezos') return w.address;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  const tzAddrRe = /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/;
+
+  // Find the first tz-address-shaped string anywhere in a parsed Michelson
+  // tree. FA2 storage typically has %administrator as the first arg of the
+  // outermost Pair, but contracts vary — walk the tree to be safe.
+  function findFirstTzString(node) {
+    if (!node || typeof node !== 'object') return null;
+    if (typeof node.string === 'string' && tzAddrRe.test(node.string)) return node.string;
+    if (Array.isArray(node.args)) {
+      for (const a of node.args) {
+        const found = findFirstTzString(a);
+        if (found) return found;
+      }
+    }
+    if (Array.isArray(node)) {
+      for (const a of node) {
+        const found = findFirstTzString(a);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  // Replace the first tz-string in the tree with the connected address.
+  // Returns { old, replaced: bool }.
+  function patchFirstTzString(node, replacement) {
+    if (!node || typeof node !== 'object') return { old: null, replaced: false };
+    if (typeof node.string === 'string' && tzAddrRe.test(node.string)) {
+      const old = node.string;
+      if (old !== replacement) {
+        node.string = replacement;
+        return { old, replaced: true };
+      }
+      return { old, replaced: false };
+    }
+    if (Array.isArray(node.args)) {
+      for (const a of node.args) {
+        const r = patchFirstTzString(a, replacement);
+        if (r.replaced || r.old) return r;
+      }
+    }
+    if (Array.isArray(node)) {
+      for (const a of node) {
+        const r = patchFirstTzString(a, replacement);
+        if (r.replaced || r.old) return r;
+      }
+    }
+    return { old: null, replaced: false };
+  }
+
+  function looksLikeJson(s) {
+    const t = s.trim();
+    return t.startsWith('[') || t.startsWith('{');
+  }
+
+  // Best-effort parse of storage to surface the admin field in the preview
+  // box without waiting for the user to click Originate.
+  async function refreshAdminPreview() {
+    if (!adminPreview || !storageInput) return;
+    const raw = storageInput.value.trim();
+    if (!raw) {
+      adminPreview.innerHTML = 'paste storage above to preview the admin field';
+      return;
+    }
+    let storage = null;
+    try {
+      if (looksLikeJson(raw)) {
+        storage = JSON.parse(raw);
+      } else {
+        const { Parser } = await import('@taquito/michel-codec');
+        const parser = new Parser();
+        storage = parser.parseMichelineExpression(raw);
+      }
+    } catch {
+      adminPreview.innerHTML = 'storage couldn’t be parsed yet (still typing? &mdash; or check format)';
+      return;
+    }
+    const found = findFirstTzString(storage);
+    const connected = connectedAddress();
+    if (!found) {
+      adminPreview.innerHTML = 'no <code class="bg-paper px-1 rounded">tz</code> address found in storage';
+      return;
+    }
+    if (!connected) {
+      adminPreview.innerHTML =
+        'storage admin: <code class="bg-paper px-1 rounded text-ink">' + found + '</code><br/>' +
+        '<span class="text-warm">connect a wallet</span> to auto-patch on originate.';
+      return;
+    }
+    if (found === connected) {
+      adminPreview.innerHTML =
+        '<span class="text-emerald-600">✓</span> storage admin already set to your connected wallet ' +
+        '<code class="bg-paper px-1 rounded">' + found.slice(0, 8) + '…' + found.slice(-6) + '</code>';
+      return;
+    }
+    adminPreview.innerHTML =
+      '<span class="text-warm">will patch:</span> ' +
+      '<code class="bg-paper px-1 rounded text-ink-soft">' + found.slice(0, 8) + '…' + found.slice(-4) + '</code>' +
+      ' → <code class="bg-paper px-1 rounded text-ink">' + connected.slice(0, 8) + '…' + connected.slice(-6) + '</code>';
+  }
+
+  // Prefill — fetch /admin/_artifacts/<slug>-contract.json + storage.json.
+  async function prefillFrom(slug) {
+    if (!codeInput || !storageInput) return;
+    if (prefillStatus) prefillStatus.textContent = 'loading ' + slug + '…';
+    try {
+      const [contractRes, storageRes] = await Promise.all([
+        fetch('/admin/_artifacts/' + slug + '-contract.json', { cache: 'no-store' }),
+        fetch('/admin/_artifacts/' + slug + '-storage.json', { cache: 'no-store' }),
+      ]);
+      if (!contractRes.ok || !storageRes.ok) {
+        if (prefillStatus) prefillStatus.textContent =
+          'no artifacts staged for ' + slug + ' — paste manually';
+        return;
+      }
+      const contractText = await contractRes.text();
+      const storageText = await storageRes.text();
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value',
+      ).set;
+      setter.call(codeInput, contractText);
+      setter.call(storageInput, storageText);
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      storageInput.dispatchEvent(new Event('input', { bubbles: true }));
+      if (prefillStatus) prefillStatus.textContent = 'loaded ' + slug;
+    } catch (err) {
+      if (prefillStatus)
+        prefillStatus.textContent = 'prefill failed: ' + (err && err.message ? err.message : 'unknown');
+    }
+  }
+
+  // Wire up prefill buttons.
+  document.querySelectorAll('.prefill-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const slug = btn.getAttribute('data-prefill');
+      if (slug) prefillFrom(slug);
+    });
+  });
+
+  // Auto-prefill from ?prefill= query parameter.
+  (function autoPrefill() {
+    try {
+      const url = new URL(window.location.href);
+      const slug = url.searchParams.get('prefill');
+      if (slug) prefillFrom(slug);
+    } catch {
+      /* ignore */
+    }
+  })();
+
+  // Re-render the admin preview when the wallet changes.
+  window.addEventListener('pc:wallet-change', () => {
+    refreshAdminPreview();
+  });
+
+  function selectedNetwork() {
+    const checked = document.querySelector('input[name="network"]:checked');
+    return checked && checked.value ? checked.value : 'shadownet';
+  }
+
+  function rpcFor(network) {
+    return network === 'mainnet'
+      ? 'https://mainnet.api.tez.ie'
+      : 'https://shadownet.smartpy.io';
+  }
+
+  if (deployBtn) {
+    deployBtn.addEventListener('click', async () => {
+      if (!codeInput || !storageInput) return;
+      const codeRaw = codeInput.value.trim();
+      const storageRaw = storageInput.value.trim();
+      if (!codeRaw || !storageRaw) {
+        setStatus('paste michelson code and initial storage first');
+        return;
+      }
+
+      // Parse both — accept JSON or Michelson text.
+      let code, storage;
+      try {
+        if (looksLikeJson(codeRaw)) {
+          code = JSON.parse(codeRaw);
+        } else {
+          const { Parser } = await import('@taquito/michel-codec');
+          const parser = new Parser();
+          code = parser.parseScript(codeRaw);
+          if (!code) throw new Error('parseScript returned null');
+          setStatus('michelson text parsed — ' + (Array.isArray(code) ? code.length : 0) + ' sections');
+        }
+      } catch (e) {
+        setStatus(
+          'michelson code couldn’t be parsed: ' + (e && e.message ? e.message : 'unknown') + ' — check the paste',
+        );
+        return;
+      }
+      try {
+        if (looksLikeJson(storageRaw)) {
+          storage = JSON.parse(storageRaw);
+        } else {
+          const { Parser } = await import('@taquito/michel-codec');
+          const parser = new Parser();
+          storage = parser.parseMichelineExpression(storageRaw);
+          if (!storage) throw new Error('parseMichelineExpression returned null');
+        }
+      } catch (e) {
+        setStatus(
+          'storage couldn’t be parsed: ' + (e && e.message ? e.message : 'unknown') + ' — check the paste',
+        );
+        return;
+      }
+      if (!Array.isArray(code)) {
+        setStatus('michelson code must be an array of sections after parsing');
+        return;
+      }
+
+      const network = selectedNetwork();
+      const rpcUrl = rpcFor(network);
+
+      deployBtn.disabled = true;
+      if (deployLabel) deployLabel.textContent = 'Loading Taquito…';
+      setStatus('initializing ' + network + ' · ' + rpcUrl);
+
+      try {
+        const { TezosToolkit } = await import('@taquito/taquito');
+        const { BeaconWallet } = await import('@taquito/beacon-wallet');
+
+        const tezos = new TezosToolkit(rpcUrl);
+        const wallet = new BeaconWallet({
+          name: 'PointCast Publisher',
+          network: {
+            type: network,
+            name: network === 'shadownet' ? 'Shadownet' : undefined,
+            rpcUrl,
+          },
+        });
+        tezos.setWalletProvider(wallet);
+
+        if (deployLabel) deployLabel.textContent = 'Waiting for Kukai…';
+        setStatus('confirm permissions in kukai…');
+
+        const existing = await wallet.client.getActiveAccount();
+        if (!existing || (existing.network && existing.network.type !== network)) {
+          try {
+            await wallet.clearActiveAccount();
+          } catch { /* ignore */ }
+          await wallet.client.requestPermissions();
+        }
+
+        // Pre-flight admin auto-patch.
+        const active = await wallet.client.getActiveAccount();
+        const activePkh = active && active.address;
+        if (activePkh && tzAddrRe.test(activePkh)) {
+          const { old, replaced } = patchFirstTzString(storage, activePkh);
+          if (replaced && old) {
+            setStatus(
+              'admin patched: ' + old.slice(0, 8) + '…' + old.slice(-4) +
+              ' → ' + activePkh.slice(0, 8) + '…' + activePkh.slice(-4) +
+              ' (your wallet)',
+            );
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+
+        if (deployLabel) deployLabel.textContent = 'Confirm in Kukai…';
+        setStatus('confirm origination in kukai…');
+
+        const op = await tezos.wallet
+          .originate({ code: code, init: storage })
+          .send();
+
+        const opHash = op && op.opHash ? op.opHash : '';
+        if (opHash) setStatus('✓ broadcast ' + opHash.slice(0, 10) + '… · confirming…');
+
+        const contract = await op.contract();
+        const address = contract.address;
+
+        // Success panel
+        if (resultPanel) resultPanel.classList.remove('hidden');
+        if (addressEl) addressEl.textContent = address;
+        if (linksEl) {
+          const tzktBase = network === 'mainnet' ? 'https://tzkt.io' : 'https://shadownet.tzkt.io';
+          const bcdNet = network === 'mainnet' ? 'mainnet' : 'shadownet';
+          const objktBase = 'https://objkt.com/collection/' + address;
+          const adminLink = '/admin/deploy';
+          linksEl.innerHTML =
+            '<a href="' + tzktBase + '/' + address + '/operations" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors">tzkt &nearr;</a>' +
+            '<a href="https://better-call.dev/' + bcdNet + '/' + address + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors">better-call.dev &nearr;</a>' +
+            (network === 'mainnet'
+              ? '<a href="' + objktBase + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors">objkt &nearr;</a>'
+              : '') +
+            '<a href="' + adminLink + '" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.56rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline">deploy center</a>';
+        }
+        setStatus('✓ originated at ' + address);
+        if (deployLabel) deployLabel.textContent = 'Deployed ✓';
+
+        // Persist for the per-contract admin page.
+        try {
+          localStorage.setItem(
+            'pc:contract:lastDeploy',
+            JSON.stringify({ address, network, opHash, deployedAt: Date.now() }),
+          );
+        } catch { /* storage full? ignore */ }
+      } catch (err) {
+        // Verbose error capture — Beacon/Taquito stash useful text in
+        // weird places. Walk the entire object so we surface anything.
+        const ownProps = {};
+        try {
+          for (const k of Object.getOwnPropertyNames(err || {})) {
+            ownProps[k] = err[k];
+          }
+        } catch { /* ignore */ }
+        // eslint-disable-next-line no-console
+        console.error('Originate failed — full error:', err, 'ownProps:', ownProps);
+        try { window.__pcLastErr = { err, ownProps }; } catch { /* ignore */ }
+
+        let msg = err && err.message ? err.message : null;
+        if (!msg && err && err.name && err.name !== 'Error') msg = err.name;
+        if (!msg && err && err.errorType) msg = err.errorType;
+        if (!msg && err && err.errors && err.errors[0]) {
+          const e0 = err.errors[0];
+          msg = (e0.id || e0.kind || '') + (e0.msg ? ': ' + e0.msg : '');
+        }
+        if (!msg && err && err.description) msg = err.description;
+        if (!msg && err && err.title) msg = err.title;
+        if (!msg && err && err.data) {
+          msg = typeof err.data === 'string' ? err.data : JSON.stringify(err.data).slice(0, 200);
+        }
+        if (!msg) {
+          try { msg = JSON.stringify(err, Object.getOwnPropertyNames(err || {})); } catch { /* ignore */ }
+        }
+        if (!msg || msg === '{}') msg = String(err);
+
+        if (/ABORTED|reject|cancel/i.test(msg)) {
+          setStatus('signing cancelled · try again when ready');
+        } else if (/NotEnoughBalance|balance/i.test(msg)) {
+          setStatus('not enough tez for origination · fund wallet (~5–10 ꜩ) and retry');
+        } else if (/gas.*limit|gas_limit/i.test(msg)) {
+          setStatus('gas limit rejected by wallet · try again');
+        } else {
+          setStatus('error: ' + String(msg).slice(0, 300));
+        }
+        if (deployLabel) deployLabel.textContent = 'Originate →';
+        deployBtn.disabled = false;
+      }
+    });
+  }
+
+  // Initial render
+  updateStats();
+  refreshAdminPreview();
+</script>
