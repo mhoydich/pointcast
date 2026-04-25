@@ -185,6 +185,49 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       </p>
     </header>
 
+    <!-- Throwaway-admin banner — surfaces post-origination handoff
+         requirement when contracts.json lists a tz1 originator that
+         doesn't match Mike's mainwallet. Build-time check based on
+         _mainnet_notes (live tzkt check is on the form's pre-flight). -->
+    {liveKt1 && (() => {
+      const originator: string = mainnetNotes?.originator ?? '';
+      const adminInNotes: string = mainnetNotes?.administrator ?? '';
+      const explicitAdmin = adminInNotes || originator;
+      const isThrowaway = explicitAdmin && /^tz1/.test(explicitAdmin) && explicitAdmin !== 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+      if (!isThrowaway) return null;
+      const cmd = `node scripts/transfer-admin.mjs --contract ${slug}`;
+      return (
+        <section class="mb-6 p-4 rounded-md border border-rose-500/40 bg-rose-500/5">
+          <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-rose-700 mb-2">
+            ⚠ admin handoff required
+          </p>
+          <p class="text-[0.92rem] text-ink/85 mb-3 leading-relaxed">
+            On-chain admin is the throwaway origination signer
+            (<code class="font-mono text-[0.78rem] bg-paper px-1 py-0.5 rounded">{explicitAdmin}</code>).
+            Your mainwallet can't call admin entrypoints until you transfer admin to it.
+            The transfer requires the throwaway's private key — held locally at
+            <code class="font-mono text-[0.78rem] bg-paper px-1 py-0.5 rounded">/tmp/pointcast-mainnet-signer.json</code>
+            — so the web form can't do it. Run this on your machine:
+          </p>
+          <div class="flex items-center gap-2 mb-2 p-2.5 rounded bg-card border border-rule/40 font-mono text-[0.78rem] text-ink overflow-x-auto">
+            <span class="text-warm select-none shrink-0">$</span>
+            <span id="transfer-admin-cmd" class="flex-1 break-all">node scripts/transfer-admin.mjs</span>
+            <button
+              type="button"
+              id="copy-transfer-admin-btn"
+              class="shrink-0 px-2 py-1 rounded border border-rule/40 bg-paper text-ink-soft hover:border-warm hover:text-warm font-mono text-[0.55rem] tracking-[0.14em] uppercase cursor-pointer"
+              data-source="transfer-admin-cmd"
+            >
+              copy
+            </button>
+          </div>
+          <p class="font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70">
+            after the script confirms, refresh this page · admin status flips to "you ✓" and admin entrypoints unlock
+          </p>
+        </section>
+      );
+    })()}
+
     <!-- KT1 panel -->
     {liveKt1 && (
       <section class="mb-6 p-4 rounded-md border border-emerald-500/30 bg-emerald-500/5">
@@ -1004,7 +1047,38 @@ const shadownetNotes = entry._shadownet_notes ?? null;
   /admin/deploy/new for the rationale.
 -->
 <script>
-  // ── Copy source button (DRAFT contracts) ─────────────────────────
+  // ── Generic copy-to-clipboard for [data-source] buttons ─────────
+  // Used by both the source-preview button and the transfer-admin
+  // command banner. Handles fallback for non-secure contexts.
+  document.querySelectorAll('button[data-source]').forEach((btn) => {
+    const sourceId = btn.getAttribute('data-source');
+    if (!sourceId) return;
+    btn.addEventListener('click', async () => {
+      const el = document.getElementById(sourceId);
+      if (!el) return;
+      const text = (el.textContent || '').trim();
+      const orig = btn.textContent;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta);
+        }
+        btn.textContent = '✓ copied';
+        setTimeout(() => { btn.textContent = orig; }, 1800);
+      } catch (err) {
+        btn.textContent = 'copy failed';
+        setTimeout(() => { btn.textContent = orig; }, 1800);
+      }
+    });
+  });
+
+  // ── Copy source button (DRAFT contracts) — legacy specific handler
+  // (kept for the source-preview which uses data-source-id, not data-source). ─
   // Reads the <pre id="contract-source-pre"> textContent and writes it
   // to the clipboard. Same content was rendered server-side at build
   // time from contracts/v2/<slug>.py — no fetch needed at runtime.
