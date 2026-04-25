@@ -1,15 +1,15 @@
 """
-DRUM Token — FA1.2 Fungible Token with Signed-Voucher Claim Flow
+DRUM Token - FA1.2 Fungible Token with Signed-Voucher Claim Flow
 SmartPy v0.24.1
 
 Storage layout:
-  admin        : address       — contract administrator
-  signer       : key           — off-chain signer whose public key is trusted for vouchers
-  paused       : bool          — global pause flag
-  total_supply : nat           — total tokens in circulation
+  admin        : address       - contract administrator
+  signer       : key           - off-chain signer whose public key is trusted for vouchers
+  paused       : bool          - global pause flag
+  total_supply : nat           - total tokens in circulation
   ledger       : big_map[address, {balance: nat, approvals: map[address, nat]}]
-  used_nonces  : big_map[nat, unit]  — replay-protection registry
-  metadata     : big_map[string, bytes]  — TZIP-016 contract metadata
+  used_nonces  : big_map[nat, unit]  - replay-protection registry
+  metadata     : big_map[string, bytes]  - TZIP-016 contract metadata
 
 Entrypoints:
   FA1.2 standard:
@@ -27,11 +27,11 @@ Entrypoints:
 
   Claim flow:
     claim(recipient, amount, nonce, expiry, signature)
-      — verifies sp.check_signature over sp.pack({amount, expiry, nonce, recipient})
-      — checks nonce not in used_nonces (replay protection)
-      — checks sp.now <= expiry
-      — requires sp.sender == recipient (anti-spoof)
-      — mints amount to recipient and records nonce
+      - verifies sp.check_signature over sp.pack({amount, expiry, nonce, recipient})
+      - checks nonce not in used_nonces (replay protection)
+      - checks sp.now <= expiry
+      - requires sp.sender == recipient (anti-spoof)
+      - mints amount to recipient and records nonce
 """
 
 import smartpy as sp
@@ -46,10 +46,10 @@ def m():
     class DrumToken(sp.Contract):
         def __init__(self, admin, signer):
             """
-            Positional init — both arguments are required at origination.
+            Positional init - both arguments are required at origination.
 
-            admin  : sp.address  — the administrator address
-            signer : sp.key      — the Ed25519/secp256k1 public key used to sign vouchers
+            admin  : sp.address  - the administrator address
+            signer : sp.key      - the Ed25519/secp256k1 public key used to sign vouchers
             """
             self.data.admin = admin
             self.data.signer = signer
@@ -302,7 +302,7 @@ if "main" in __name__:
     @sp.add_test()
     def test():
         sc = sp.test_scenario("DRUM Token", m)
-        sc.h1("DRUM Token — FA1.2 + Signed-Voucher Claim")
+        sc.h1("DRUM Token - FA1.2 + Signed-Voucher Claim")
 
         # Deterministic test accounts
         admin = sp.test_account("Admin")
@@ -350,7 +350,7 @@ if "main" in __name__:
         sc.verify(c1.data.ledger[bob.address].approvals[charlie.address] == 15)
 
         # ------------------------------------------------------------------ #
-        # Claim — valid voucher                                                #
+        # Claim - valid voucher                                                #
         # ------------------------------------------------------------------ #
         sc.h1("Claim: Valid Voucher")
         expiry_time = sp.timestamp_from_utc(2030, 1, 1, 0, 0, 0)
@@ -377,7 +377,7 @@ if "main" in __name__:
         sc.verify(c1.data.used_nonces.contains(1))
 
         # ------------------------------------------------------------------ #
-        # Claim — replay rejection                                             #
+        # Claim - replay rejection                                             #
         # ------------------------------------------------------------------ #
         sc.h1("Claim: Replay Rejection (same nonce)")
         c1.claim(
@@ -392,7 +392,7 @@ if "main" in __name__:
         )
 
         # ------------------------------------------------------------------ #
-        # Claim — expired voucher                                              #
+        # Claim - expired voucher                                              #
         # ------------------------------------------------------------------ #
         sc.h1("Claim: Expired Voucher")
         expired_time = sp.timestamp(0)
@@ -418,7 +418,7 @@ if "main" in __name__:
         )
 
         # ------------------------------------------------------------------ #
-        # Claim — wrong sender (anti-spoof)                                   #
+        # Claim - wrong sender (anti-spoof)                                   #
         # ------------------------------------------------------------------ #
         sc.h1("Claim: Wrong Sender Rejection")
         payload3 = sp.pack(
@@ -436,13 +436,13 @@ if "main" in __name__:
             nonce=3,
             expiry=expiry_time,
             signature=sig3,
-            _sender=alice,  # Alice tries to claim Bob's voucher — rejected
+            _sender=alice,  # Alice tries to claim Bob's voucher - rejected
             _valid=False,
             _exception="Claim_WrongSender",
         )
 
         # ------------------------------------------------------------------ #
-        # Claim — paused contract blocks claims                                #
+        # Claim - paused contract blocks claims                                #
         # ------------------------------------------------------------------ #
         sc.h1("Claim: Paused Contract Blocks Claims")
         c1.set_paused(True, _sender=admin)

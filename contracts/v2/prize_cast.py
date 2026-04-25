@@ -1,5 +1,5 @@
 """
-prize_cast.py — Prize Cast no-loss prize-linked savings on Tezos
+prize_cast.py - Prize Cast no-loss prize-linked savings on Tezos
 SmartPy v0.24.x
 
 Core idea
