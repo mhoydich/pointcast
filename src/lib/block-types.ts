@@ -18,7 +18,8 @@ export type BlockType =
   | 'NOTE'    // Short observation, tweet-sized
   | 'VISIT'   // Someone stopped by — log entry
   | 'LINK'    // External link with context
-  | 'TALK';   // Voice Dispatch — 10-60 sec audio (RFC 0001, Phase 2+)
+  | 'TALK'    // Voice Dispatch — 10-60 sec audio (RFC 0001, Phase 2+)
+  | 'BIRTHDAY'; // Birthday card — open-edition FA2 keyed to one person per year (added 2026-04-25)
 
 export interface BlockTypeSpec {
   code: BlockType;
@@ -32,7 +33,8 @@ export interface BlockTypeSpec {
     | 'claimStatus'
     | 'location'
     | 'agent'
-    | 'destination';
+    | 'destination'
+    | 'birthday';
   /** Short description — shown on /for-agents. */
   description: string;
 }
@@ -91,6 +93,12 @@ export const BLOCK_TYPES: Record<BlockType, BlockTypeSpec> = {
     label: 'TALK',
     footerHint: 'duration',
     description: 'Voice Dispatch — 10-60 sec audio block. Recorded via /talk, played via /listen. RFC 0001.',
+  },
+  BIRTHDAY: {
+    code: 'BIRTHDAY',
+    label: 'BIRTHDAY',
+    footerHint: 'birthday',
+    description: 'Birthday card — open-edition FA2 token keyed to one person per year. Free, gas-only, indexed at /cake.',
   },
 };
 

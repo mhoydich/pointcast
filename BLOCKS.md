@@ -66,7 +66,7 @@ Every field except `id`, `channel`, `type`, `title`, and `timestamp` is optional
 
 ### Channels
 
-Eight channels. Each has a code, a color, and a purpose. Do not add a ninth without Mike's decision.
+Ten channels. Each has a code, a color, and a purpose. Do not add an eleventh without Mike's decision.
 
 | Code  | Name            | Color (hex / ramp)       | Purpose                                    |
 |-------|-----------------|--------------------------|--------------------------------------------|
@@ -78,6 +78,8 @@ Eight channels. Each has a code, a color, and a purpose. Do not add a ninth with
 | ESC   | El Segundo      | `#534AB7` / purple-600   | ESCU fiction, local, community             |
 | FCT   | Faucet          | `#BA7517` / amber-600    | Free daily claims, giveaways               |
 | VST   | Visit           | `#5F5E5A` / gray-600     | Human/agent visit log entries              |
+| BTL   | Battler         | `#8A2432` / oxblood-600  | Nouns Battler — deterministic Nouns duels  |
+| BDY   | Birthday        | `#D86440` / coral-600    | Birthdays celebrated on PointCast (indexed at /cake) |
 
 Channel code appears in monospace as `CH.{CODE} · {ID}` at the top of every block.
 
@@ -95,8 +97,10 @@ Types govern internal treatment. Not about-ness (that's channel), but form.
 | NOTE     | Short observation, tweet-sized       | Location tag               |
 | VISIT    | Someone stopped by and signed log    | Agent vendor or geo        |
 | LINK     | External link with context           | Destination domain         |
+| TALK     | Voice Dispatch — 10-60 sec audio (RFC 0001) | Duration            |
+| BIRTHDAY | Open-edition card, one person per year, free FA2 | Recipient · Noun · claimed |
 
-Eight channels × eight types = 64 combinations. Most will never appear. That's fine.
+Ten channels × ten types = 100 combinations. Most will never appear. That's fine.
 
 ---
 

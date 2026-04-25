@@ -1,0 +1,560 @@
+---
+/**
+ * /cake — the place where birthdays are celebrated online.
+ *
+ * Index of every BIRTHDAY-type block on PointCast, plus an upcoming list
+ * driven by family-entry `birthday: MM-DD` opt-in fields. Sibling room to
+ * /battle, /drum, /cast — single coral-themed page, JSON twin at /cake.json,
+ * per-recipient aggregator at /cake/[slug].
+ *
+ * v0 (this file): index + upcoming + per-recipient links. Mint counts are
+ * placeholders until the birthdays_fa2 contract ships.
+ * v1: live `mintCount` per row via TzKT, mint button per card.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+
+const ch = CHANNELS.BDY;
+
+const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
+const birthdayBlocks = allBlocks
+  .filter((b) => b.data.channel === 'BDY' || b.data.type === 'BIRTHDAY')
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+
+const family = await getCollection('family', ({ data }) => data.listed);
+
+// Upcoming: family members with birthday MM-DD, sorted by next-occurrence
+// distance from today PT. Window: next 60 days.
+function todayPT(): Date {
+  const now = new Date();
+  const ptStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  return new Date(ptStr + 'T00:00:00');
+}
+
+function nextOccurrence(mmdd: string, from: Date): Date {
+  const [mm, dd] = mmdd.split('-').map(Number);
+  const yr = from.getFullYear();
+  let candidate = new Date(yr, mm - 1, dd);
+  if (candidate < from) candidate = new Date(yr + 1, mm - 1, dd);
+  return candidate;
+}
+
+const today = todayPT();
+const horizon = new Date(today);
+horizon.setDate(horizon.getDate() + 60);
+
+const upcoming = family
+  .filter((f) => f.data.birthday)
+  .map((f) => {
+    const next = nextOccurrence(f.data.birthday!, today);
+    const isToday = +next === +today;
+    return {
+      slug: f.data.slug,
+      name: f.data.name,
+      relationship: f.data.relationship,
+      birthday: f.data.birthday!,
+      noun: f.data.permanentNoun,
+      next,
+      isToday,
+      daysAway: Math.round((+next - +today) / 86_400_000),
+    };
+  })
+  .filter((u) => u.next <= horizon)
+  .sort((a, b) => +a.next - +b.next);
+
+// Recipients aggregation — slug → list of their birthday blocks
+const recipientMap = new Map<string, typeof birthdayBlocks>();
+for (const b of birthdayBlocks) {
+  const slug = (b.data.meta?.for as string | undefined) || 'unknown';
+  if (!recipientMap.has(slug)) recipientMap.set(slug, []);
+  recipientMap.get(slug)!.push(b);
+}
+const recipients = Array.from(recipientMap.entries())
+  .map(([slug, blocks]) => {
+    const fam = family.find((f) => f.data.slug === slug);
+    return {
+      slug,
+      name: fam?.data.name ?? slug,
+      noun: fam?.data.permanentNoun ?? blocks[0]?.data.noun,
+      count: blocks.length,
+      latest: blocks[0],
+    };
+  })
+  .sort((a, b) => b.count - a.count);
+
+const totalBirthdays = birthdayBlocks.length;
+const totalRecipients = recipients.length;
+
+const longDate = (d: Date) =>
+  new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'America/Los_Angeles',
+  }).format(d);
+
+const blockYear = (b: (typeof birthdayBlocks)[number]) =>
+  new Date(b.data.timestamp).getUTCFullYear();
+
+const title = '/cake — the place where birthdays are celebrated online';
+const description = `Every birthday celebrated on PointCast. ${totalBirthdays} birthday block${totalBirthdays === 1 ? '' : 's'} across ${totalRecipients} recipient${totalRecipients === 1 ? '' : 's'}. One block per person per year. One Noun per person, forever. Free open-edition mints on Tezos when the birthdays_fa2 contract ships.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/cake',
+  name: '/cake',
+  alternateName: 'the place where birthdays are celebrated online',
+  description,
+  url: 'https://pointcast.xyz/cake',
+  isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz' },
+  numberOfItems: totalBirthdays,
+  hasPart: birthdayBlocks.map((b) => ({
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz/b/${b.data.id}`,
+    name: b.data.title,
+    url: `https://pointcast.xyz/b/${b.data.id}`,
+    dateCreated: b.data.timestamp,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/cake.png" jsonLd={jsonLd}>
+  <div class="cake" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <a href={`/c/${ch.slug}`} style={`color: var(--ch-800);`}>CH.{ch.code} · Birthday</a>
+      <span aria-hidden="true">/</span>
+      <span>cake</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">CH.BDY · /CAKE · v0</p>
+      <h1 class="head__title">cake.</h1>
+      <p class="head__lede">
+        the place where birthdays are celebrated online.
+      </p>
+      <p class="head__sub">
+        One block per person per year. One Noun per person, forever. Numbered
+        like Nouns, indexed like a magazine, mintable like an edition,
+        addressed to one person.
+      </p>
+      <div class="stats mono">
+        <span class="stats__cell"><strong>{totalBirthdays}</strong> celebrated</span>
+        <span class="stats__sep">·</span>
+        <span class="stats__cell"><strong>{totalRecipients}</strong> {totalRecipients === 1 ? 'recipient' : 'recipients'}</span>
+        <span class="stats__sep">·</span>
+        <span class="stats__cell">since 2026-04-25</span>
+        <span class="stats__sep">·</span>
+        <a href="/cake.json" class="stats__cell">/cake.json ↗</a>
+      </div>
+    </header>
+
+    {upcoming.length > 0 && (
+      <section class="section section--upcoming">
+        <h2 class="section__title mono">Upcoming · next 60 days</h2>
+        <ul class="row-list">
+          {upcoming.map((u) => (
+            <li class={`row${u.isToday ? ' row--today' : ''}`}>
+              <span class="row__date mono">
+                {u.isToday ? 'TODAY' : longDate(u.next).toUpperCase()}
+              </span>
+              {u.noun != null && (
+                <img
+                  class="row__noun"
+                  src={`https://noun.pics/${u.noun}.svg`}
+                  alt={`Noun ${u.noun}`}
+                  width="36"
+                  height="36"
+                  loading="lazy"
+                />
+              )}
+              <span class="row__name">
+                <strong>{u.name}</strong>
+                {u.relationship && <span class="row__rel"> · {u.relationship}</span>}
+              </span>
+              <span class="row__meta mono">
+                {u.noun != null ? `NOUN ${u.noun}` : 'NO NOUN YET'}
+                <span class="row__sep">·</span>
+                {u.isToday
+                  ? 'TODAY'
+                  : u.daysAway === 1
+                  ? 'TOMORROW'
+                  : `IN ${u.daysAway} DAYS`}
+              </span>
+              <a class="row__link mono" href={`/cake/${u.slug}`}>
+                /cake/{u.slug} →
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {recipients.length > 0 && (
+      <section class="section section--recipients">
+        <h2 class="section__title mono">Recipients · permanent Nouns</h2>
+        <div class="grid">
+          {recipients.map((r) => (
+            <a class="rcard" href={`/cake/${r.slug}`}>
+              {r.noun != null && (
+                <img
+                  class="rcard__noun"
+                  src={`https://noun.pics/${r.noun}.svg`}
+                  alt={`Noun ${r.noun}`}
+                  width="80"
+                  height="80"
+                  loading="lazy"
+                />
+              )}
+              <div class="rcard__body">
+                <p class="rcard__name">{r.name}</p>
+                <p class="rcard__meta mono">
+                  {r.noun != null ? `NOUN ${r.noun}` : 'NO NOUN'}
+                  <span class="rcard__sep">·</span>
+                  {r.count} {r.count === 1 ? 'block' : 'blocks'}
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {birthdayBlocks.length > 0 ? (
+      <section class="section section--archive">
+        <h2 class="section__title mono">Archive · most recent first</h2>
+        <ul class="bday-list">
+          {birthdayBlocks.map((b) => (
+            <li class="bday">
+              <a class="bday__link" href={`/b/${b.data.id}`}>
+                {b.data.noun != null && (
+                  <img
+                    class="bday__noun"
+                    src={`https://noun.pics/${b.data.noun}.svg`}
+                    alt={`Noun ${b.data.noun}`}
+                    width="56"
+                    height="56"
+                    loading="lazy"
+                  />
+                )}
+                <div class="bday__body">
+                  <p class="bday__id mono">№{b.data.id} · {blockYear(b)}</p>
+                  <p class="bday__title">{b.data.title}</p>
+                  {b.data.dek && <p class="bday__dek">{b.data.dek}</p>}
+                  <p class="bday__meta mono">
+                    {(b.data.meta?.for as string | undefined)?.toUpperCase() ?? '—'}
+                    <span class="bday__sep">·</span>
+                    {b.data.noun != null ? `NOUN ${b.data.noun}` : 'NO NOUN'}
+                    <span class="bday__sep">·</span>
+                    CLAIMED {b.data.edition?.minted ?? 0}/∞
+                  </p>
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : (
+      <section class="section section--empty">
+        <p class="empty mono">no birthday blocks yet — №0001 ships 2026-04-25.</p>
+      </section>
+    )}
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>WHAT THIS IS.</strong> Birthday cards online are usually
+        private and ephemeral — a text, an Instagram story, a phone call.
+        PointCast is a public, permanent, agent-readable broadcast. A
+        birthday block is the inverse: numbered, immutable, indexed forever,
+        mintable as a record of presence. One block per person per year.
+        One Noun per person, forever.
+      </p>
+      <p class="foot__line mono">
+        <strong>HOW TO BE INCLUDED.</strong> The birthday list is opt-in
+        per person, same consent rule as
+        <a href="/family"> /family</a> entries. Mike adds entries by
+        editing <code>src/content/family/&#123;slug&#125;.json</code> and
+        adding a <code>birthday: MM-DD</code> field — never on someone's
+        behalf without their explicit ok.
+      </p>
+      <p class="foot__line mono">
+        <strong>CONTRACT.</strong> The birthdays FA2 contract ships next
+        sprint. Free open editions, gas-only mint, claim-once-per-wallet.
+        Token IDs derive from PointCast block IDs (block 0366 → token #366).
+        Until live, the URL itself is the gift.
+      </p>
+      <p class="foot__brief mono">
+        spec: <a href="https://github.com/mhoydich/pointcast/blob/main/docs/briefs/2026-04-25-cake-room-bdy-channel.md">/docs/briefs/2026-04-25-cake-room-bdy-channel.md</a>
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<style>
+  .cake {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', ui-sans-serif, system-ui, sans-serif);
+    color: var(--pc-ink, #12110E);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  /* Breadcrumb */
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin-bottom: 24px;
+  }
+  .crumb a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  /* Header */
+  .head {
+    border-top: 4px solid var(--ch-600);
+    background: var(--ch-50);
+    padding: 22px 22px 18px;
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .head::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ch-600);
+    box-shadow:
+      -14px 6px 0 color-mix(in oklab, var(--ch-600) 60%, #fff),
+      6px 16px 0 color-mix(in oklab, var(--ch-600) 40%, #fff),
+      -22px 18px 0 color-mix(in oklab, var(--ch-600) 80%, #fff),
+      14px -2px 0 color-mix(in oklab, var(--ch-600) 35%, #fff);
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ch-800);
+    margin: 0 0 14px;
+  }
+  .head__title {
+    font-family: var(--pc-font-serif, 'Lora', Georgia, serif);
+    font-size: clamp(48px, 9vw, 96px);
+    line-height: 0.95;
+    margin: 0 0 6px;
+    color: var(--ch-800);
+    letter-spacing: -0.03em;
+  }
+  .head__lede {
+    font-size: 18px;
+    line-height: 1.4;
+    margin: 0 0 12px;
+    color: var(--pc-ink, #12110E);
+    max-width: 60ch;
+  }
+  .head__sub {
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 0 0 16px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 64ch;
+  }
+  .stats {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    border-top: 1px dashed var(--ch-600);
+    padding-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .stats__cell { color: var(--ch-800); }
+  .stats__cell strong { color: var(--ch-800); font-weight: 600; }
+  .stats__sep { color: var(--pc-ink-muted, #5F5E5A); }
+  .stats a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  /* Sections */
+  .section {
+    margin: 0 0 32px;
+  }
+  .section__title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0 0 12px;
+    border-bottom: 1px solid var(--pc-rule, #E5E3DD);
+    padding-bottom: 8px;
+  }
+
+  /* Upcoming row list */
+  .row-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .row {
+    display: grid;
+    grid-template-columns: 100px 36px 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px dashed var(--pc-rule, #E5E3DD);
+    background: #fff;
+  }
+  .row--today {
+    background: var(--ch-50);
+    border-color: var(--ch-600);
+    border-style: solid;
+  }
+  .row__date {
+    font-size: 11px;
+    color: var(--ch-800);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .row__noun { display: block; border-radius: 50%; }
+  .row__name { font-size: 14px; }
+  .row__rel { color: var(--pc-ink-muted, #5F5E5A); }
+  .row__meta {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .row__sep { margin: 0 4px; }
+  .row__link {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ch-800);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .row__link:hover { border-bottom-color: currentColor; }
+
+  /* Recipients grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .rcard {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--ch-600);
+    background: #fff;
+    color: inherit;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .rcard:hover { background: var(--ch-50); }
+  .rcard__noun { display: block; border-radius: 6px; }
+  .rcard__body { min-width: 0; }
+  .rcard__name { font-size: 16px; margin: 0 0 2px; font-weight: 500; }
+  .rcard__meta { font-size: 10.5px; color: var(--pc-ink-muted, #5F5E5A); margin: 0; text-transform: uppercase; letter-spacing: 0.1em; }
+  .rcard__sep { margin: 0 4px; }
+
+  /* Archive list */
+  .bday-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .bday__link {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 14px;
+    align-items: start;
+    padding: 14px;
+    border: 1.5px dashed var(--ch-600);
+    background: #fff;
+    color: inherit;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .bday__link:hover { background: var(--ch-50); }
+  .bday__noun { display: block; border-radius: 6px; align-self: start; }
+  .bday__id {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ch-800);
+    margin: 0 0 4px;
+  }
+  .bday__title { font-size: 18px; line-height: 1.25; margin: 0 0 4px; font-weight: 500; }
+  .bday__dek { font-size: 13px; line-height: 1.5; color: var(--pc-ink-muted, #5F5E5A); margin: 0 0 8px; max-width: 72ch; }
+  .bday__meta { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--pc-ink-muted, #5F5E5A); margin: 0; }
+  .bday__sep { margin: 0 4px; }
+
+  .empty { font-size: 12px; color: var(--pc-ink-muted, #5F5E5A); padding: 24px; border: 1px dashed var(--pc-rule, #E5E3DD); text-align: center; }
+
+  /* Footer */
+  .foot {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--pc-rule, #E5E3DD);
+  }
+  .foot__line {
+    font-size: 11px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 72ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--ch-800);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 8px;
+  }
+  .foot__line code {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 10.5px;
+    background: var(--ch-50);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  .foot__line a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr; gap: 6px; }
+    .row__date { font-size: 12px; }
+    .head__title { font-size: 56px; }
+  }
+</style>

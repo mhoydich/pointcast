@@ -45,12 +45,16 @@ from smartpy.templates import fa2_lib as fa2
 main = fa2.main
 
 
-# Stdlib helpers.
-import smartpy.stdlib.string_utils as string_utils
-
-
 @sp.module
 def m():
+    # SmartPy v0.24 pattern: stdlib + main module imports live INSIDE the
+    # @sp.module function body so the SmartPy compiler processes them
+    # alongside the contract source. Top-level imports break the IDE's
+    # pyodide module resolution (ModuleNotFoundError on smartpy.stdlib.*).
+    # Mirrors visit_nouns_fa2.py @sp.module def my_module() pattern.
+    import main
+    import smartpy.stdlib.string_utils as string_utils
+
     class CoffeeMugsFA2(
         main.Admin,
         main.Fungible,
