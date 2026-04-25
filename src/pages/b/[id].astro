@@ -11,6 +11,7 @@ import FeedbackStrip from '../../components/FeedbackStrip.astro';
 import ShareThis from '../../components/ShareThis.astro';
 import NativePlantingYield from '../../components/NativePlantingYield.astro';
 import { CHANNELS } from '../../lib/channels';
+import contractsRegistry from '../../data/contracts.json';
 
 export async function getStaticPaths() {
   const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
@@ -217,6 +218,43 @@ const frame = {
     )}
 
     {block.data.id === '0331' && <NativePlantingYield context="block" />}
+
+    {/* Birthday FA2 mint surface — only on BIRTHDAY blocks where the
+        contract is configured (KT1 set in src/data/contracts.json). The
+        token_id is the block ID as integer (block 0366 → token 366), per
+        contracts.json `tokenIdConvention`. Free open edition, gas-only.
+        When the contract isn't yet originated, the strip shows a "mint
+        coming when contract ships" note instead of the button. */}
+    {block.data.type === 'BIRTHDAY' && (() => {
+      const bdContract = (contractsRegistry as any)?.birthdays?.mainnet as string | undefined;
+      const tokenIdNum = parseInt(block.data.id, 10);
+      const hasContract = bdContract && bdContract.startsWith('KT1');
+      return (
+        <div class="mint-strip mint-strip--birthday">
+          {hasContract ? (
+            <MintButton
+              contract={bdContract!}
+              tokenId={tokenIdNum}
+              priceMutez={0}
+              kind="mint"
+              label="Mint this card · free →"
+            />
+          ) : (
+            <p class="mint-pending mono">
+              ★ MINT COMING SOON · contracts/v2/birthdays_fa2.py awaiting origination
+              · until then, send the URL or drop confetti below
+            </p>
+          )}
+          <a
+            class="mint-strip__secondary"
+            href={`https://objkt.com/collections/${bdContract || ''}`}
+            target="_blank"
+            rel="noopener"
+            style={hasContract ? '' : 'display: none;'}
+          >View collection on objkt ↗</a>
+        </div>
+      );
+    })()}
 
     {/* Celebrate + guestbook — only on BIRTHDAY blocks. The Schelling-point
         surface: anyone can drop a confetti + signature. Public ritual,
@@ -436,6 +474,20 @@ const frame = {
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .mint-strip--birthday {
+    border: 1.5px solid #D86440;
+    background: #FCEEE8;
+  }
+
+  .mint-pending {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #8E3F25;
+    margin: 0;
+    line-height: 1.5;
   }
 
   .mint-strip__secondary {
