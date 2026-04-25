@@ -230,7 +230,7 @@ const MUGS = [
         <p class="coffee__section-kicker mono">Mintables</p>
         <h2 id="coffee-mint-title" class="coffee__section-title">Five mugs. Five tiers. Connect a wallet.</h2>
         <p class="coffee__section-dek">
-          Each mug is a tiny edition. Pour past the threshold and the mug becomes claimable to your Tezos wallet. Today claims are <em>banked</em> as signed receipts; the FA2 contract goes live with Mike's go.
+          Each mug is a tiny edition. Pour past the threshold and the mug becomes claimable to your Tezos wallet. The FA2 contract is <em>live</em> on mainnet (<a href="https://tzkt.io/KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt" target="_blank" rel="noopener">KT1JQ3Aj…</a>) — claims fire <code>mint_mug</code> from your wallet, gas-only.
         </p>
         <div class="coffee__mint-wallet">
           <WalletConnect />
@@ -265,7 +265,8 @@ const MUGS = [
         })}
       </ul>
       <p class="coffee__mint-foot mono">
-        FA2 contract pending · status moves from <em>preview</em> → <em>eligible</em> → <em>banked</em> → <em>minted</em>. <a href="/b/0356">how Tezos staking works →</a>
+        Status moves <em>preview</em> → <em>eligible</em> → <em>minting</em> → <em>minted</em>. Banked claims (from before the contract went live 2026-04-25) stay redeemable.
+        <a href="/b/0356">how Tezos staking works →</a>
       </p>
     </section>
 
@@ -591,12 +592,20 @@ const MUGS = [
         var btn  = document.querySelector('[data-mug-claim="' + slug + '"]');
         if (!chip || !btn) continue;
 
-        var banked = claims && claims[slug];
+        var entry = claims && claims[slug];
+        var minted = entry && entry.opHash;
+        var banked = entry && !entry.opHash;
         var eligible = localCount >= threshold;
         var hasWallet = !!(wallet && wallet.address);
 
         btn.disabled = true;
-        if (banked) {
+        if (minted) {
+          // Already minted — show a tzkt link, button stays disabled.
+          chip.innerHTML = '✓ <a href="https://tzkt.io/' + entry.opHash +
+            '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">minted ↗</a>';
+          btn.setAttribute('data-state', 'minted');
+        } else if (banked) {
+          // Banked locally — contract was off when claimed; redeem path TBD.
           chip.textContent = 'banked';
           btn.setAttribute('data-state', 'banked');
         } else if (eligible && hasWallet) {
@@ -615,43 +624,145 @@ const MUGS = [
     }
     refreshMintables();
 
-    // Click handlers on each claim button — bank the claim locally.
-    // Real on-chain mint waits for the FA2 contract to be originated.
-    function bankClaim(slug) {
+    // Click handlers on each claim button.
+    //
+    // Two-phase claim: first POST /api/coffee/claim, which returns either
+    //   • mode: 'banked'   — contract not live; receipt stored locally
+    //   • mode: 'mintable' — contract live; we fire mint_mug(token_id)
+    //     from the visitor's wallet via Beacon and surface the tzkt link
+    //
+    // The /api/coffee/claim endpoint reads contracts.coffee_mugs.mainnet
+    // at request time, so it auto-flips banked → mintable on origination
+    // without a frontend deploy. After this lands, the loop closes.
+    function setMintRowState(slug, status, label) {
+      var chip = document.querySelector('[data-mug-state="' + slug + '"]');
+      var btn = document.querySelector('[data-mug-claim="' + slug + '"]');
+      if (chip) chip.textContent = label;
+      if (btn) btn.setAttribute('data-state', status);
+    }
+
+    async function claimMug(slug) {
       var wallet = readWallet();
       if (!wallet) {
-        // Open the wallet menu via the global event from WalletConnect.
         try { window.dispatchEvent(new CustomEvent('pc:open-wallet-menu')); }
         catch (e) {}
         return;
       }
       if (readCups() < MUG_THRESHOLDS[slug]) return;
 
-      var claims = readClaims();
-      if (claims[slug]) return; // already banked
+      var existing = readClaims();
+      if (existing[slug] && existing[slug].opHash) return; // already minted
 
-      claims[slug] = {
-        mug: slug,
-        address: wallet.address,
-        bankedAt: new Date().toISOString(),
-        // Pseudo-receipt id — when the FA2 lands, a real signed receipt
-        // replaces this and becomes redeemable.
-        receipt: 'pcvm-' + slug.slice(0,3) + '-' + Math.random().toString(36).slice(2, 10),
-      };
-      writeClaims(claims);
-      refreshMintables();
+      var btn = document.querySelector('[data-mug-claim="' + slug + '"]');
+      if (btn) btn.disabled = true;
+      setMintRowState(slug, 'requesting', 'requesting receipt…');
 
-      // Brief visual nudge on the row
-      var row = document.querySelector('[data-mug="' + slug + '"]');
-      if (row) {
-        row.classList.add('coffee-mint--just-banked');
-        setTimeout(function () { row.classList.remove('coffee-mint--just-banked'); }, 900);
+      var payload;
+      try {
+        var res = await fetch('/api/coffee/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mug: slug, address: wallet.address }),
+        });
+        payload = await res.json();
+        if (!payload || payload.ok === false) {
+          var msg = (payload && (payload.error || payload.reason)) || 'request failed';
+          setMintRowState(slug, 'error', msg);
+          if (btn) btn.disabled = false;
+          return;
+        }
+      } catch (err) {
+        setMintRowState(slug, 'error', 'network error');
+        if (btn) btn.disabled = false;
+        return;
+      }
+
+      // Banked mode — contract not live. Persist the receipt locally and
+      // wait for the contract to flip on. Same UX as before this rewrite.
+      if (payload.mode === 'banked' || !payload.mint) {
+        var claims = readClaims();
+        claims[slug] = payload.receipt || {
+          mug: slug, address: wallet.address, bankedAt: new Date().toISOString(),
+        };
+        writeClaims(claims);
+        refreshMintables();
+        var row = document.querySelector('[data-mug="' + slug + '"]');
+        if (row) {
+          row.classList.add('coffee-mint--just-banked');
+          setTimeout(function () { row.classList.remove('coffee-mint--just-banked'); }, 900);
+        }
+        return;
+      }
+
+      // Mintable mode — call mint_mug(token_id) via Beacon. Same plumbing
+      // as /admin/deploy/[slug] but driven from a visitor's wallet.
+      setMintRowState(slug, 'minting', 'awaiting kukai…');
+      try {
+        var taquito = await import('@taquito/taquito');
+        var beacon = await import('@taquito/beacon-wallet');
+        var tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+        var beaconWallet = new beacon.BeaconWallet({
+          name: 'PointCast',
+          network: { type: 'mainnet' },
+        });
+        tezos.setWalletProvider(beaconWallet);
+
+        var active = await beaconWallet.client.getActiveAccount();
+        if (!active || (active.network && active.network.type !== 'mainnet')) {
+          try { await beaconWallet.clearActiveAccount(); } catch (e) {}
+          await beaconWallet.client.requestPermissions();
+        }
+
+        var mint = payload.mint;
+        var contract = await tezos.wallet.at(mint.contract);
+        var op = await contract.methodsObject[mint.entrypoint](mint.params.token_id).send();
+        var opHash = (op && op.opHash) ? op.opHash : '';
+
+        // Persist the in-flight mint so a refresh shows "minting" → tzkt.
+        var claims = readClaims();
+        claims[slug] = Object.assign({}, payload.receipt || {}, {
+          opHash: opHash,
+          mintedAt: new Date().toISOString(),
+        });
+        writeClaims(claims);
+
+        setMintRowState(slug, 'minting', 'broadcast ' + opHash.slice(0, 10) + '…');
+        await op.confirmation();
+        setMintRowState(slug, 'minted', '✓ minted');
+
+        // Replace the chip with a clickable tzkt link.
+        var chip = document.querySelector('[data-mug-state="' + slug + '"]');
+        if (chip && opHash) {
+          chip.innerHTML = '✓ <a href="https://tzkt.io/' + opHash +
+            '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">minted ↗</a>';
+        }
+        refreshMintables();
+
+        // Brief visual nudge — same just-banked animation.
+        var row = document.querySelector('[data-mug="' + slug + '"]');
+        if (row) {
+          row.classList.add('coffee-mint--just-banked');
+          setTimeout(function () { row.classList.remove('coffee-mint--just-banked'); }, 1500);
+        }
+      } catch (err) {
+        var msg = (err && err.message) ? err.message : String(err || 'unknown');
+        if (/ABORTED|reject|cancel/i.test(msg)) {
+          setMintRowState(slug, 'eligible', 'cancelled · try again');
+        } else if (/NotEnoughBalance|balance/i.test(msg)) {
+          setMintRowState(slug, 'eligible', 'fund wallet (~0.5 ꜩ for gas)');
+        } else if (/EDITION_CAP_REACHED/i.test(msg)) {
+          setMintRowState(slug, 'capped', 'edition cap reached');
+        } else {
+          setMintRowState(slug, 'error', String(msg).slice(0, 40));
+        }
+        if (btn) btn.disabled = false;
       }
     }
+
     document.querySelectorAll('[data-mug-claim]').forEach(function (b) {
       b.addEventListener('click', function () {
         var slug = b.getAttribute('data-mug-claim');
-        if (slug) bankClaim(slug);
+        if (slug) claimMug(slug);
       });
     });
 
