@@ -331,6 +331,132 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       )}
     </section>
 
+    <!-- Admin actions (LIVE FA2 only) -->
+    {liveKt1 && (
+      <section id="admin-actions" class="mb-6">
+        <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5">
+          admin actions
+        </h2>
+        <p class="text-[0.85rem] text-ink-soft/80 mb-3 leading-relaxed">
+          These call FA2 admin entrypoints from your connected wallet. Each
+          op is signed in Kukai and broadcast to mainnet &mdash; you pay gas,
+          you bear the consequence. Read the field labels carefully before
+          signing.
+        </p>
+
+        <!-- register_tokens — for FA2 contracts with a tokens registry in contracts.json -->
+        {entry.tokens && Object.keys(entry.tokens).length > 0 && entry.registerEntrypoint !== false && slug !== 'visit_nouns' && (
+          <details id="register-tokens" class="mb-2 p-3 rounded-md border border-warm/40 bg-warm/5" open>
+            <summary class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+              register_tokens <span class="text-warm ml-1">— register {Object.keys(entry.tokens).length} token names</span>
+            </summary>
+            <form
+              class="admin-action-form mt-3 space-y-2"
+              data-entrypoint="register_tokens"
+              data-arg-type="nat-string-map"
+              data-kt1={liveKt1}
+              data-slug={slug}
+            >
+              <label class="block">
+                <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                  token names (token_id → display name)
+                </span>
+                <textarea
+                  name="mug_names"
+                  rows="6"
+                  class="w-full font-mono text-[0.78rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+                >{JSON.stringify(typeof entry.tokens === 'object' && !Array.isArray(entry.tokens) && entry.tokens && typeof Object.values(entry.tokens)[0] === 'string' ? entry.tokens : Object.fromEntries(Object.entries(entry.tokens).map(([k, v]: any) => [k, v?.recipient_name ?? v?.name ?? k])), null, 2)}</textarea>
+              </label>
+              <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50">
+                idempotent: contract rejects with ALREADY_REGISTERED if tokens were registered already
+              </p>
+              <button
+                type="submit"
+                class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-warm text-paper font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:bg-ink transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              >
+                <span class="btn-label">Sign + send</span>
+              </button>
+              <p class="action-status font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]" role="status" aria-live="polite"></p>
+            </form>
+          </details>
+        )}
+
+        <!-- set_metadata_base_uri — only for contracts that use this entrypoint pattern -->
+        {entry.metadata_base_uri && (
+          <details class="mb-2 p-3 rounded-md border border-rule/30 bg-card/40">
+            <summary class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+              set_metadata_base_uri <span class="text-ink-soft ml-1">— update token metadata host</span>
+            </summary>
+            <form
+              class="admin-action-form mt-3 space-y-2"
+              data-entrypoint="set_metadata_base_uri"
+              data-arg-type="string"
+              data-kt1={liveKt1}
+              data-slug={slug}
+            >
+              <label class="block">
+                <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                  new base URI
+                </span>
+                <input
+                  type="text"
+                  name="value"
+                  value={entry.metadata_base_uri}
+                  class="w-full font-mono text-[0.78rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+                />
+              </label>
+              <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50">
+                migrate to ipfs:// or rotate gateway without re-originating
+              </p>
+              <button
+                type="submit"
+                class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-ink text-paper font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:bg-warm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              >
+                <span class="btn-label">Sign + send</span>
+              </button>
+              <p class="action-status font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]" role="status" aria-live="polite"></p>
+            </form>
+          </details>
+        )}
+
+        <!-- set_administrator — universal -->
+        <details id="transfer-admin" class="mb-2 p-3 rounded-md border border-rose-500/30 bg-rose-500/5">
+          <summary class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+            set_administrator <span class="text-rose-700 ml-1">— transfer admin</span>
+          </summary>
+          <form
+            class="admin-action-form mt-3 space-y-2"
+            data-entrypoint="set_administrator"
+            data-arg-type="address"
+            data-kt1={liveKt1}
+            data-slug={slug}
+          >
+            <label class="block">
+              <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                new admin address
+              </span>
+              <input
+                type="text"
+                name="value"
+                placeholder="tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw (your connected wallet by default)"
+                class="w-full font-mono text-[0.78rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+              />
+            </label>
+            <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50">
+              leave blank to use your connected wallet · double-check before signing — this is irreversible
+            </p>
+            <button
+              type="submit"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-rose-600 text-paper font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+            >
+              <span class="btn-label">Sign + send</span>
+            </button>
+            <p class="action-status font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]" role="status" aria-live="polite"></p>
+          </form>
+        </details>
+      </section>
+    )}
+
     <!-- Docs panel -->
     {(brief || runbook || contractFile) && (
       <section class="mb-6">
@@ -596,3 +722,207 @@ const shadownetNotes = entry._shadownet_notes ?? null;
     })();
   </script>
 )}
+
+<!--
+  Admin action dispatcher — handles every form with class "admin-action-form".
+  Reads data-entrypoint + data-kt1 + data-slug from the form, builds the
+  Taquito call, and signs via Beacon. Currently only set_administrator is
+  wired; future entrypoints (set_metadata_base_cid, register_tokens, etc.)
+  drop into the same dispatcher by adding a case in `buildArgs(...)`.
+
+  Plain JavaScript inside a regular <script> (no is:inline, no lang="ts")
+  so Vite bundles + transpiles. Type hints via JSDoc only — see
+  /admin/deploy/new for the rationale.
+-->
+<script>
+  const tzAddrRe = /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/;
+  const RPC_MAINNET = 'https://mainnet.api.tez.ie';
+
+  /**
+   * Build the call arguments for an entrypoint based on its declared
+   * data-arg-type. Returns the args ready to pass into
+   * `methodsObject[entrypoint](args)` plus a summary string for status.
+   * Throws with a user-readable message if validation fails.
+   *
+   * Supported arg types:
+   *   - "address"        → string, validated as tz-shaped
+   *   - "string"         → arbitrary non-empty string
+   *   - "nat-string-map" → JSON object {"0":"name", "1":"name", ...} → MichelsonMap
+   *
+   * @param {string} entrypoint
+   * @param {string} argType
+   * @param {FormData} fd
+   * @param {string} connectedAddr
+   * @param {any} mmCtor          MichelsonMap constructor (lazy-imported)
+   */
+  function buildCall(entrypoint, argType, fd, connectedAddr, mmCtor) {
+    // Address — validated, defaults to connected wallet if blank.
+    if (argType === 'address') {
+      const raw = (fd.get('value') || fd.get('new_admin') || '').toString().trim();
+      const target = raw || connectedAddr;
+      if (!target || !tzAddrRe.test(target)) {
+        throw new Error('address must be tz1/tz2/tz3 (' + (raw ? 'invalid format' : 'no wallet connected') + ')');
+      }
+      return { args: target, summary: entrypoint + '(' + target.slice(0, 8) + '…' + target.slice(-4) + ')' };
+    }
+    // Plain string.
+    if (argType === 'string') {
+      const raw = (fd.get('value') || '').toString().trim();
+      if (!raw) throw new Error('string value is required');
+      return { args: raw, summary: entrypoint + '("' + raw.slice(0, 40) + (raw.length > 40 ? '…' : '') + '")' };
+    }
+    // map nat → string. Submit as a MichelsonMap.
+    if (argType === 'nat-string-map') {
+      const raw = (fd.get('mug_names') || fd.get('value') || '').toString().trim();
+      if (!raw) throw new Error('JSON map is required');
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        throw new Error('JSON parse failed: ' + (e && e.message ? e.message : 'invalid'));
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('expected a JSON object (e.g. {"0": "Ceramic Mug", "1": "Espresso Cup"})');
+      }
+      const entries = Object.entries(parsed);
+      if (entries.length === 0) throw new Error('map is empty');
+      const m = new mmCtor();
+      for (const [k, v] of entries) {
+        const id = parseInt(k, 10);
+        if (Number.isNaN(id)) throw new Error('map key "' + k + '" is not a valid nat');
+        if (typeof v !== 'string') throw new Error('value for ' + k + ' must be a string');
+        m.set(id, v);
+      }
+      return { args: m, summary: entrypoint + '(' + entries.length + ' entries)' };
+    }
+    // Fallback: legacy single-arg "address" (set_administrator without arg-type set).
+    if (entrypoint === 'set_administrator') {
+      return buildCall(entrypoint, 'address', fd, connectedAddr, mmCtor);
+    }
+    throw new Error('unsupported arg-type: ' + argType);
+  }
+
+  function connectedAddress() {
+    try {
+      const raw = localStorage.getItem('pc:wallet');
+      if (!raw) return null;
+      const w = JSON.parse(raw);
+      if (w && typeof w.address === 'string' && w.chain === 'tezos') return w.address;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  document.querySelectorAll('.admin-action-form').forEach((form) => {
+    const f = /** @type {HTMLFormElement} */ (form);
+    const statusEl = f.querySelector('.action-status');
+    const btn = /** @type {HTMLButtonElement|null} */ (f.querySelector('button[type="submit"]'));
+    const btnLabel = f.querySelector('.btn-label');
+
+    function setStatus(html) {
+      if (statusEl) statusEl.innerHTML = html;
+    }
+    function setBusy(busy, label) {
+      if (btn) btn.disabled = busy;
+      if (btnLabel && label) btnLabel.textContent = label;
+    }
+
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const entrypoint = f.getAttribute('data-entrypoint') || '';
+      const argType = f.getAttribute('data-arg-type') || 'address';
+      const kt1 = f.getAttribute('data-kt1') || '';
+      if (!entrypoint || !kt1) {
+        setStatus('form misconfigured · missing data-entrypoint or data-kt1');
+        return;
+      }
+
+      setBusy(true, 'Loading Taquito…');
+      setStatus('loading taquito…');
+
+      let TezosToolkit, BeaconWallet, MichelsonMap;
+      try {
+        ({ TezosToolkit, MichelsonMap } = await import('@taquito/taquito'));
+        ({ BeaconWallet } = await import('@taquito/beacon-wallet'));
+      } catch (err) {
+        setStatus('failed to load taquito: ' + (err && err.message ? err.message : 'unknown'));
+        setBusy(false, 'Sign + send');
+        return;
+      }
+
+      let call;
+      try {
+        const connected = connectedAddress() || '';
+        const fd = new FormData(f);
+        call = buildCall(entrypoint, argType, fd, connected, MichelsonMap);
+      } catch (err) {
+        setStatus('input error: ' + (err && err.message ? err.message : 'unknown'));
+        setBusy(false, 'Sign + send');
+        return;
+      }
+
+      setStatus('preparing · ' + call.summary);
+
+      try {
+
+        const tezos = new TezosToolkit(RPC_MAINNET);
+        const wallet = new BeaconWallet({
+          name: 'PointCast Admin',
+          network: { type: 'mainnet', rpcUrl: RPC_MAINNET },
+        });
+        tezos.setWalletProvider(wallet);
+
+        setBusy(true, 'Connecting…');
+        setStatus('connect kukai…');
+
+        const existing = await wallet.client.getActiveAccount();
+        if (!existing || (existing.network && existing.network.type !== 'mainnet')) {
+          try { await wallet.clearActiveAccount(); } catch { /* ignore */ }
+          await wallet.client.requestPermissions();
+        }
+
+        setBusy(true, 'Confirm in Kukai…');
+        setStatus('confirm in kukai · ' + call.summary);
+
+        const contract = await tezos.wallet.at(kt1);
+        const methods = contract.methodsObject;
+        if (typeof methods[entrypoint] !== 'function') {
+          throw new Error('contract does not expose entrypoint ' + entrypoint);
+        }
+        const op = await methods[entrypoint](call.args).send();
+        const opHash = op && op.opHash ? op.opHash : '';
+        if (opHash) setStatus('✓ broadcast ' + opHash.slice(0, 10) + '… · confirming…');
+
+        await op.confirmation();
+        setStatus(
+          '✓ confirmed · <a href="https://tzkt.io/' + (opHash || kt1) +
+          '" target="_blank" rel="noopener" class="text-warm hover:text-ink no-underline">tzkt &nearr;</a>',
+        );
+        setBusy(false, 'Done ✓');
+
+        // Auto-refresh the live state panel after 3s so the new admin
+        // shows up without a manual reload.
+        setTimeout(() => window.location.reload(), 3000);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('admin action failed:', err);
+        let msg = err && err.message ? err.message : null;
+        if (!msg && err && err.errors && err.errors[0]) {
+          const e0 = err.errors[0];
+          msg = (e0.id || e0.kind || '') + (e0.msg ? ': ' + e0.msg : '');
+        }
+        if (!msg) msg = String(err);
+        if (/ABORTED|reject|cancel/i.test(msg)) {
+          setStatus('signing cancelled');
+        } else if (/NOT_ADMIN|admin/i.test(msg) && /assert/i.test(msg)) {
+          setStatus('rejected: contract says you are not the admin');
+        } else {
+          setStatus('error: ' + String(msg).slice(0, 280));
+        }
+        setBusy(false, 'Sign + send');
+      }
+    });
+  });
+</script>
+

@@ -152,43 +152,51 @@ function deriveApprovals(): Approval[] {
     const { status, kt1 } = statusFor(slug, entry);
     const name = SLUG_DISPLAY[slug] || slug;
 
-    // Special case: Coffee Mugs has a documented orphan origination at
-    // KT1U6Trc... with the wrong admin (test address). Surface as the
-    // single highest-priority approval until contracts.json points at a
-    // clean KT1.
-    if (slug === 'coffee_mugs' && status !== 'LIVE') {
-      out.push({
-        slug,
-        contractName: name,
-        title: 'Re-originate Coffee Mugs FA2 (clean storage)',
-        rationale:
-          'Earlier origination at KT1U6Trc… orphaned (admin = SmartPy test address). The Publisher auto-patches the admin field — re-originate to claim a usable contract.',
-        ctaHref: '/admin/deploy/new?prefill=coffee_mugs',
-        ctaLabel: 'Originate →',
-        severity: 'high',
-      });
-      continue;
-    }
-
     if (status === 'LIVE' && kt1) {
-      const note: string = entry?._mainnet_notes?.note || '';
+      const adminInNotes: string = entry?._mainnet_notes?.administrator || '';
       const originator: string = entry?._mainnet_notes?.originator || '';
-      // If origination notes flag a throwaway signer, the admin transfer
-      // is still pending. Surface as a high-severity approval — anyone
-      // who derives the same throwaway signer key can call admin entrypoints.
-      if (
-        /throwaway/i.test(note) ||
-        (originator && originator !== MIKE_MAINWALLET && /tz1/.test(originator))
-      ) {
+
+      // Admin transfer pending: the on-chain admin is known to differ
+      // from Mike's mainwallet. Two sources of truth:
+      //   (a) _mainnet_notes.administrator — explicit, populated when
+      //       /admin/deploy/new auto-patches at origination time
+      //   (b) _mainnet_notes.originator — fallback when (a) absent and
+      //       the origination signer is the implicit admin
+      // We only surface the approval when we're confident — if neither
+      // field is set we stay silent rather than fire on every contract.
+      const adminKnown = !!adminInNotes;
+      const adminIsMike = adminInNotes === MIKE_MAINWALLET;
+      const originatorIsMike = originator === MIKE_MAINWALLET;
+      const transferPending = adminKnown ? !adminIsMike : (!!originator && !originatorIsMike);
+
+      if (transferPending) {
+        const currentAdmin = adminInNotes || originator;
         out.push({
           slug,
           contractName: name,
           title: `Transfer ${name} admin to your mainwallet`,
-          rationale: `Admin is currently the origination signer (${
-            originator ? originator.slice(0, 8) + '…' + originator.slice(-4) : 'throwaway'
-          }). Call set_administrator(${MIKE_MAINWALLET.slice(0, 8)}…) to claim it.`,
+          rationale: `Admin is currently ${currentAdmin.slice(0, 8)}…${currentAdmin.slice(-4)}. Call set_administrator(${MIKE_MAINWALLET.slice(0, 8)}…) to claim it.`,
           ctaHref: `/admin/deploy/${slug}#transfer-admin`,
           ctaLabel: 'Transfer admin →',
+          severity: 'high',
+        });
+      }
+
+      // Token registration pending: contract has a tokens registry in
+      // contracts.json and we haven't logged that they were registered.
+      // After registering via the inline register_tokens form, set
+      // _tokens_registered: true in contracts.json to clear this approval.
+      const tokens: any = (entry as any).tokens;
+      const tokensRegistered = (entry as any)._tokens_registered === true;
+      const hasTokensRegistry = tokens && typeof tokens === 'object' && Object.keys(tokens).length > 0;
+      if (hasTokensRegistry && !tokensRegistered) {
+        out.push({
+          slug,
+          contractName: name,
+          title: `Register tokens for ${name}`,
+          rationale: `${Object.keys(tokens).length} token names defined in contracts.json. Call register_tokens(...) once to bind names to token_ids; required before public mint can succeed.`,
+          ctaHref: `/admin/deploy/${slug}#register-tokens`,
+          ctaLabel: 'Register →',
           severity: 'high',
         });
       }
@@ -199,14 +207,15 @@ function deriveApprovals(): Approval[] {
         slug,
         contractName: name,
         title: `Originate ${name}`,
-        rationale: 'Compiled artifacts staged at /admin/_artifacts/. The Publisher will load them, auto-patch the admin field, and originate via Kukai.',
+        rationale:
+          'Compiled artifacts staged at /admin/_artifacts/. The Publisher will load them, auto-patch the admin field, and originate via Kukai.',
         ctaHref: `/admin/deploy/new?prefill=${slug}`,
         ctaLabel: 'Originate →',
         severity: 'medium',
       });
     }
 
-    if (status === 'DRAFT' && slug !== 'coffee_mugs') {
+    if (status === 'DRAFT') {
       out.push({
         slug,
         contractName: name,
