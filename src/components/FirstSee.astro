@@ -1,0 +1,225 @@
+---
+/**
+ * FirstSee — small one-time visitor hint.
+ *
+ * Sprint 44 (overnight visitor-acquisition cadence per
+ * docs/plans/2026-04-24-overnight-product-direction.md). Fires once
+ * per browser, sets `pc:first-seen` in localStorage, slides in a
+ * small floating card at the bottom-center after a brief delay,
+ * auto-dismisses on a 15s timer if untouched, hard-dismisses on ×
+ * click (sets the flag forever).
+ *
+ * The hint copy: "first time? this is a small internet town from el
+ * segundo. read the mythos →" — pointed at /mythos as the canonical
+ * 60-second read.
+ *
+ * Mounted in BaseLayout so it shows on every page. Renders nothing
+ * server-side; the inline script reads localStorage and shows the
+ * card only if the flag is unset.
+ *
+ * prefers-reduced-motion stops the slide animation but keeps the
+ * card.
+ */
+---
+
+<div
+  class="first-see"
+  id="pc-first-see"
+  role="dialog"
+  aria-labelledby="pc-first-see-label"
+  aria-hidden="true"
+  hidden
+>
+  <a href="/mythos" class="first-see__link" id="pc-first-see-link">
+    <span class="first-see__kicker mono">First time?</span>
+    <span class="first-see__copy" id="pc-first-see-label">
+      This is a small internet town from El Segundo. <span class="first-see__cta">Read the mythos →</span>
+    </span>
+  </a>
+  <button
+    type="button"
+    class="first-see__dismiss mono"
+    id="pc-first-see-dismiss"
+    aria-label="Dismiss first-time hint"
+  >×</button>
+</div>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var KEY      = 'pc:first-seen';
+    var SHOW_AT  = 4000;     // delay before showing — let the page settle
+    var AUTO_GO  = 15_000;   // dismiss after this if untouched
+
+    var root, link, dismiss, autoTimer, showTimer;
+
+    function readSeen() {
+      try { return localStorage.getItem(KEY) === '1'; }
+      catch (e) { return true; } // private mode → don't bug the user
+    }
+    function writeSeen() {
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+    }
+
+    function hide(reason) {
+      if (!root) return;
+      root.classList.remove('first-see--in');
+      root.classList.add('first-see--out');
+      // After the slide-out animation completes, fully hide.
+      setTimeout(function () {
+        if (root) {
+          root.hidden = true;
+          root.setAttribute('aria-hidden', 'true');
+        }
+      }, 320);
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+      if (reason !== 'auto') writeSeen();
+    }
+
+    function show() {
+      if (!root) return;
+      root.hidden = false;
+      root.setAttribute('aria-hidden', 'false');
+      // Force a reflow so the slide-in animation runs.
+      void root.offsetHeight;
+      root.classList.add('first-see--in');
+      autoTimer = setTimeout(function () { hide('auto'); }, AUTO_GO);
+    }
+
+    function init() {
+      root    = document.getElementById('pc-first-see');
+      link    = document.getElementById('pc-first-see-link');
+      dismiss = document.getElementById('pc-first-see-dismiss');
+      if (!root) return;
+      if (readSeen()) return;
+
+      // The clicking-the-link path also marks seen so the hint
+      // doesn't reappear after the user follows it.
+      if (link) {
+        link.addEventListener('click', function () {
+          writeSeen();
+        });
+      }
+      if (dismiss) {
+        dismiss.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hide('user');
+        });
+      }
+
+      showTimer = setTimeout(show, SHOW_AT);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+</script>
+
+<style>
+  .first-see {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%) translateY(40px);
+    opacity: 0;
+    z-index: 50;
+    display: flex;
+    align-items: stretch;
+    max-width: min(420px, calc(100vw - 32px));
+    background: var(--color-paper, #f5efe4);
+    border: 1px solid var(--color-rule, #d8cdb8);
+    border-left: 3px solid var(--color-warm, #c4952e);
+    border-radius: 3px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+    pointer-events: auto;
+    transition: transform 0.32s ease-out, opacity 0.32s ease-out;
+  }
+  .first-see[hidden] { display: none; }
+
+  .first-see--in {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  .first-see--out {
+    transform: translateX(-50%) translateY(40px);
+    opacity: 0;
+  }
+
+  .first-see__link {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px 14px;
+    color: var(--color-ink, #1f1b15);
+    text-decoration: none;
+    border-right: 1px dashed var(--color-rule, #d8cdb8);
+    transition: background 0.14s;
+  }
+  .first-see__link:hover {
+    background: var(--color-card-hover, #fff4dc);
+  }
+
+  .first-see__kicker {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-warm, #c4952e);
+    font-weight: 700;
+  }
+
+  .first-see__copy {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--color-ink, #1f1b15);
+  }
+
+  .first-see__cta {
+    color: var(--color-accent, #1b3a5b);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .first-see__dismiss {
+    flex: 0 0 auto;
+    padding: 0 14px;
+    background: transparent;
+    color: var(--color-ink-soft, #6a6154);
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    font-weight: 700;
+    transition: color 0.14s, background 0.14s;
+  }
+  .first-see__dismiss:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--color-ink, #1f1b15);
+  }
+  .first-see__dismiss:focus-visible {
+    outline: 2px solid var(--color-warm, #c4952e);
+    outline-offset: -2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .first-see {
+      transition: none;
+    }
+    .first-see--in {
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .first-see {
+      bottom: 16px;
+      max-width: calc(100vw - 24px);
+    }
+    .first-see__copy { font-size: 13px; }
+  }
+</style>
