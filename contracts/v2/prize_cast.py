@@ -24,7 +24,9 @@ import smartpy as sp
 
 
 @sp.module
-def main():
+def m():
+    # SmartPy IDE imports user code as `import main` at runtime; naming the
+    # @sp.module function `main` collides with that. Use `m`.
     Principal = sp.record(
         amount=sp.mutez,
         last_update=sp.timestamp,
@@ -317,7 +319,7 @@ if "main" in __name__:
 
     @sp.add_test()
     def test():
-        sc = sp.test_scenario("prize_cast", main)
+        sc = sp.test_scenario("prize_cast", m)
         sc.h1("Prize Cast")
 
         admin = sp.test_account("Admin")
@@ -327,14 +329,14 @@ if "main" in __name__:
         ops = sp.test_account("Ops")
 
         sc.h2("Two depositors over two weeks, deterministic winner, caller incentive")
-        prize_cast = main.PrizeCast(
+        prize_cast = m.PrizeCast(
             admin=admin.address,
             draw_cadence_blocks=sp.nat(10),
             min_deposit_mutez=sp.mutez(1_000_000),
             caller_incentive_bps=sp.nat(50),  # 0.5 %
             starting_draw_level=sp.nat(1_000),
         )
-        draw_caller = main.DrawCaller()
+        draw_caller = m.DrawCaller()
         sc += prize_cast
         sc += draw_caller
 
@@ -391,7 +393,7 @@ if "main" in __name__:
         sc.verify(prize_cast.data.principals[bob.address].weight_snapshot == 0)
 
         sc.h2("Same-block deposit + withdraw leaves zero ticket weight")
-        edge_cast = main.PrizeCast(
+        edge_cast = m.PrizeCast(
             admin=admin.address,
             draw_cadence_blocks=sp.nat(10),
             min_deposit_mutez=sp.mutez(1_000_000),
@@ -419,7 +421,7 @@ if "main" in __name__:
         sc.verify(not (charlie.address in edge_cast.data.principals))
 
         sc.h2("Zero depositors cannot draw")
-        empty_cast = main.PrizeCast(
+        empty_cast = m.PrizeCast(
             admin=admin.address,
             draw_cadence_blocks=sp.nat(5),
             min_deposit_mutez=sp.mutez(1_000_000),
