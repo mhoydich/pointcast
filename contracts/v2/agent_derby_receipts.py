@@ -11,7 +11,9 @@ import smartpy as sp
 
 
 @sp.module
-def main():
+def m():
+    # SmartPy IDE imports user code as `import main` at runtime; naming the
+    # @sp.module function `main` collides with that. Use `m`.
     RaceRecord = sp.record(
         player=sp.address,
         race_id=sp.string,
@@ -81,11 +83,11 @@ def main():
 
 @sp.add_test()
 def test():
-    scenario = sp.test_scenario("AgentDerbyReceipts", main)
+    scenario = sp.test_scenario("AgentDerbyReceipts", m)
     admin = sp.test_account("admin")
     alice = sp.test_account("alice")
 
-    c = main.AgentDerbyReceipts(
+    c = m.AgentDerbyReceipts(
         admin.address,
         sp.big_map({"": sp.bytes("0x74657a6f732d73746f726167653a6465726279")}),
     )

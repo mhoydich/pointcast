@@ -36,7 +36,9 @@ import smartpy as sp
 # Main module — contains the Marketplace contract
 # ---------------------------------------------------------------------------
 @sp.module
-def main():
+def m():
+    # SmartPy IDE imports user code as `import main` at runtime; naming the
+    # @sp.module function `main` collides with that. Use `m`.
     class Marketplace(sp.Contract):
         """
         Objkt-style FA2 marketplace.
@@ -305,7 +307,7 @@ def mock_fa2_module():
 # ---------------------------------------------------------------------------
 @sp.add_test()
 def test():
-    scenario = sp.test_scenario("Marketplace", main)
+    scenario = sp.test_scenario("Marketplace", m)
     scenario.add_module(mock_fa2_module)
 
     # ── Accounts ────────────────────────────────────────────────────────────
@@ -321,7 +323,7 @@ def test():
     mock_fa2 = mock_fa2_module.MockFA2()
     scenario += mock_fa2
 
-    marketplace = main.Marketplace(
+    marketplace = m.Marketplace(
         admin=admin.address,
         fa2_contract=mock_fa2.address,
         platform_fee_bps=sp.nat(250),  # 2.5 %

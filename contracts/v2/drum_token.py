@@ -38,7 +38,11 @@ import smartpy as sp
 
 
 @sp.module
-def main():
+def m():
+    # SmartPy IDE imports user code as `import main` at runtime; naming the
+    # @sp.module function `main` collides with that, raising NameError on
+    # `sp` because the runtime evaluates the decorator before the import
+    # finishes. Use `m` (matches coffee_mugs_fa2.py + visit_nouns_fa2.py).
     class DrumToken(sp.Contract):
         def __init__(self, admin, signer):
             """
@@ -297,7 +301,7 @@ if "main" in __name__:
 
     @sp.add_test()
     def test():
-        sc = sp.test_scenario("DRUM Token", main)
+        sc = sp.test_scenario("DRUM Token", m)
         sc.h1("DRUM Token — FA1.2 + Signed-Voucher Claim")
 
         # Deterministic test accounts
@@ -314,7 +318,7 @@ if "main" in __name__:
         # Originate                                                            #
         # ------------------------------------------------------------------ #
         sc.h1("Originate Contract")
-        c1 = main.DrumToken(admin=admin.address, signer=signer.public_key)
+        c1 = m.DrumToken(admin=admin.address, signer=signer.public_key)
         sc += c1
 
         # ------------------------------------------------------------------ #
@@ -481,21 +485,21 @@ if "main" in __name__:
         sc.h1("View Entrypoints")
 
         sc.h2("getBalance")
-        view_balance = main.Viewer_nat()
+        view_balance = m.Viewer_nat()
         sc += view_balance
         target_nat = sp.contract(sp.nat, view_balance.address, "target").unwrap_some()
         c1.getBalance((alice.address, target_nat))
         sc.verify_equal(view_balance.data.last, sp.Some(130))
 
         sc.h2("getTotalSupply")
-        view_supply = main.Viewer_nat()
+        view_supply = m.Viewer_nat()
         sc += view_supply
         target_supply = sp.contract(sp.nat, view_supply.address, "target").unwrap_some()
         c1.getTotalSupply((sp.unit, target_supply))
         sc.verify_equal(view_supply.data.last, sp.Some(150))
 
         sc.h2("getAllowance")
-        view_allowance = main.Viewer_nat()
+        view_allowance = m.Viewer_nat()
         sc += view_allowance
         target_allowance = sp.contract(
             sp.nat, view_allowance.address, "target"
