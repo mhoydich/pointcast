@@ -167,9 +167,13 @@ const MUGS = [
     </section>
 
     <section class="coffee__shelf" aria-labelledby="shelf-title" hidden id="coffee-shelf">
-      <h2 id="shelf-title" class="coffee__shelf-title mono">Today's mugs</h2>
+      <h2 id="shelf-title" class="coffee__shelf-title mono">
+        <span id="coffee-shelf-heading">Today's mugs</span>
+      </h2>
       <ul class="coffee__shelf-list" id="coffee-shelf-list" role="list"></ul>
-      <p class="coffee__shelf-note mono">5 variants, cycling. Resets at midnight PT.</p>
+      <p class="coffee__shelf-note mono" id="coffee-shelf-note">
+        Resets at midnight PT.
+      </p>
     </section>
 
     <!-- Hidden template — rendered as <template>s for the JS to clone. -->
@@ -296,41 +300,78 @@ const MUGS = [
     var greetingEl = document.getElementById('coffee-greeting');
     var globalRoot = document.getElementById('coffee-global');
     var globalNum  = document.getElementById('coffee-global-num');
-    var shelfRoot  = document.getElementById('coffee-shelf');
-    var shelfList  = document.getElementById('coffee-shelf-list');
+    var shelfRoot   = document.getElementById('coffee-shelf');
+    var shelfList   = document.getElementById('coffee-shelf-list');
+    var shelfHead   = document.getElementById('coffee-shelf-heading');
+    var shelfNote   = document.getElementById('coffee-shelf-note');
 
-    var MUG_VARIANT_COUNT = 5; // matches the MUGS array in frontmatter
+    // Variants must match MUGS array in frontmatter + MUG_VARIANTS in
+    // functions/api/coffee/pour.ts.
+    var VARIANT_TO_TPL_IDX = {
+      ceramic:  0,
+      espresso: 1,
+      latte:    2,
+      paper:    3,
+      bistro:   4,
+    };
 
-    function mugTemplate(idx) {
-      // The pour-index → variant mapping. Cycles deterministically so
-      // the same Nth pour always renders the same mug.
-      return document.getElementById('coffee-mug-' + (idx % MUG_VARIANT_COUNT));
+    function mugTemplateBySlug(slug) {
+      var idx = VARIANT_TO_TPL_IDX[slug];
+      if (idx == null) return null;
+      return document.getElementById('coffee-mug-' + idx);
     }
 
-    function renderMugAt(pourIndex, animate) {
-      var tpl = mugTemplate(pourIndex);
+    function shortRel(iso) {
+      var t = new Date(iso).getTime();
+      if (!isFinite(t)) return '';
+      var s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (s < 60)    return s + 's';
+      if (s < 3600)  return Math.floor(s / 60) + 'm';
+      if (s < 86400) return Math.floor(s / 3600) + 'h';
+      return Math.floor(s / 86400) + 'd';
+    }
+
+    function renderMugRecord(record, animate) {
+      var tpl = mugTemplateBySlug(record.mug);
       if (!tpl || !shelfList) return;
       var clone = tpl.content.cloneNode(true);
-      var li    = clone.querySelector('li');
+      var li = clone.querySelector('li');
       if (!li) return;
       if (animate) li.classList.add('coffee-mug--new');
+      // Annotate with hover title showing how long ago.
+      var rel = shortRel(record.at);
+      if (rel) li.setAttribute('title', li.getAttribute('title') + ' · ' + rel + ' ago');
       shelfList.appendChild(clone);
-      // Trim to the last 24 to avoid unbounded growth on the page.
+      // Trim to last 24 visible.
       while (shelfList.children.length > 24) {
         shelfList.removeChild(shelfList.firstElementChild);
       }
-      if (shelfRoot && shelfList.children.length > 0) shelfRoot.hidden = false;
     }
 
-    function rerenderShelf(count) {
-      if (!shelfList) return;
-      shelfList.innerHTML = '';
-      // Render the last min(count, 24) mugs, oldest-to-newest.
-      var start = Math.max(0, count - 24);
-      for (var i = start; i < count; i++) {
-        renderMugAt(i, false);
+    function setShelfHead(count, others) {
+      if (!shelfHead) return;
+      if (count <= 0) {
+        shelfHead.textContent = "No cups poured yet today";
+        return;
       }
-      if (shelfRoot) shelfRoot.hidden = count <= 0;
+      if (others <= 0) {
+        shelfHead.textContent = "Today's mugs · " + count + " poured";
+      } else {
+        shelfHead.textContent = "Today's mugs · " + count + " poured · " + others + " from others";
+      }
+    }
+
+    function renderGlobalShelf(globalMugs, localCount) {
+      if (!shelfList || !shelfRoot) return;
+      shelfList.innerHTML = '';
+      var visible = (globalMugs || []).slice(-24);
+      for (var i = 0; i < visible.length; i++) {
+        renderMugRecord(visible[i], false);
+      }
+      var totalCount = (globalMugs || []).length;
+      var others = Math.max(0, totalCount - localCount);
+      setShelfHead(totalCount, others);
+      shelfRoot.hidden = totalCount <= 0;
     }
 
     if (greetingEl) {
@@ -340,27 +381,26 @@ const MUGS = [
     var cups = readCups();
     if (numEl) numEl.textContent = String(cups);
     if (noteEl) noteEl.textContent = noteFor(cups);
-    rerenderShelf(cups);
 
-    // Hydrate the global cup count from /api/coffee/today. Hides the
-    // line on any failure / kv-unbound to keep the page quiet rather
-    // than show "—".
+    // Hydrate the global cup count + mug shelf from /api/coffee/today.
+    // The shelf shows the last 24 mugs from EVERYONE today, including
+    // mugs other visitors poured before you arrived.
     function hydrateGlobal() {
       fetch('/api/coffee/today', { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (!data || data.count == null) {
             if (globalRoot) globalRoot.hidden = true;
+            renderGlobalShelf([], cups);
             return;
           }
           if (globalNum)  globalNum.textContent = String(data.count);
           if (globalRoot) globalRoot.hidden = false;
+          renderGlobalShelf(Array.isArray(data.mugs) ? data.mugs : [], cups);
         })
-        .catch(function () { /* network blip — leave hidden */ });
+        .catch(function () { /* network blip — leave shelf as-is */ });
     }
     hydrateGlobal();
-    // Refresh occasionally while the tab is open so the count climbs
-    // visibly when other people pour.
     setInterval(hydrateGlobal, 30_000);
 
     if (btn) {
@@ -370,24 +410,32 @@ const MUGS = [
         if (numEl) numEl.textContent = String(cups);
         if (noteEl) noteEl.textContent = noteFor(cups);
 
-        // Add a new mug to the shelf (animated). Pour-index = cups - 1
-        // because cups is 1-based after the increment.
-        renderMugAt(cups - 1, true);
+        // Local optimistic mug append — server will return canonical
+        // record and we re-render the shelf from that on .then below.
+        var localVariants = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+        var optimistic = {
+          mug: localVariants[(cups - 1) % localVariants.length],
+          at: new Date().toISOString(),
+        };
+        renderMugRecord(optimistic, true);
+        if (shelfRoot) shelfRoot.hidden = false;
 
         // Tiny visual nudge — the button briefly glows.
         btn.classList.add('coffee__pour--poured');
         setTimeout(function () { btn.classList.remove('coffee__pour--poured'); }, 600);
 
-        // Best-effort global increment. Update the visible global
-        // count optimistically with the server's response.
+        // Best-effort global increment. Server returns canonical
+        // count + mug list; re-render the shelf from that.
         fetch('/api/coffee/pour', { method: 'POST', cache: 'no-store' })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (data) {
             if (!data || data.count == null) return;
             if (globalNum)  globalNum.textContent = String(data.count);
             if (globalRoot) globalRoot.hidden = false;
+            // Rerender from canonical server list (replaces optimistic mug).
+            renderGlobalShelf(Array.isArray(data.mugs) ? data.mugs : [], cups);
           })
-          .catch(function () { /* offline / blocked — local count still good */ });
+          .catch(function () { /* offline / blocked — local optimistic mug stays */ });
       });
     }
   })();

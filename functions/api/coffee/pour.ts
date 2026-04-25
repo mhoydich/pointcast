@@ -64,6 +64,14 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
   });
 };
 
+// Five mug variants — must match MUGS array in src/pages/coffee.astro.
+const MUG_VARIANTS = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'] as const;
+
+interface MugRecord {
+  mug: string;     // variant slug
+  at: string;      // ISO timestamp
+}
+
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const rl = await rateLimit(ctx.request, ctx.env, {
     bucket: 'coffee-pour',
@@ -75,26 +83,50 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const kv = ctx.env.PC_RACE_KV;
   if (!kv) {
     return applyRateLimitHeaders(
-      json({ ok: true, reason: 'kv-unbound', count: null }),
+      json({ ok: true, reason: 'kv-unbound', count: null, mugs: [] }),
       rl
     );
   }
 
   const day = ptDayKey();
-  const key = `coffee:cups:${day}`;
+  const cupsKey = `coffee:cups:${day}`;
+  const mugsKey = `coffee:mugs:${day}`;
 
+  // Read current count + mug list in parallel.
   let current = 0;
+  let mugs: MugRecord[] = [];
   try {
-    const raw = await kv.get(key);
-    current = raw ? parseInt(raw, 10) || 0 : 0;
+    const [cupsRaw, mugsRaw] = await Promise.all([
+      kv.get(cupsKey),
+      kv.get(mugsKey),
+    ]);
+    current = cupsRaw ? parseInt(cupsRaw, 10) || 0 : 0;
+    if (mugsRaw) {
+      try {
+        const parsed = JSON.parse(mugsRaw);
+        if (Array.isArray(parsed)) mugs = parsed;
+      } catch (e) { /* corrupt — treat as empty */ }
+    }
   } catch (e) {
-    // Read failure — treat as 0, still increment.
+    // Read failure — treat as 0/empty, still increment.
   }
 
   const next = current + 1;
+  // Pick variant deterministically from the new pour-index.
+  const variant = MUG_VARIANTS[(next - 1) % MUG_VARIANTS.length];
+  const newRecord: MugRecord = {
+    mug: variant,
+    at: new Date().toISOString(),
+  };
+
+  // Append + cap at last 48 mugs to keep KV value small.
+  const updatedMugs = [...mugs, newRecord].slice(-48);
+
   try {
-    // 48h TTL — covers the day plus rollover slack. Keys auto-clean.
-    await kv.put(key, String(next), { expirationTtl: 60 * 60 * 48 });
+    await Promise.all([
+      kv.put(cupsKey, String(next), { expirationTtl: 60 * 60 * 48 }),
+      kv.put(mugsKey, JSON.stringify(updatedMugs), { expirationTtl: 60 * 60 * 48 }),
+    ]);
   } catch (e) {
     return applyRateLimitHeaders(
       json({ ok: false, error: 'kv-write-failed', count: current }, 500),
@@ -103,7 +135,13 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   }
 
   return applyRateLimitHeaders(
-    json({ ok: true, count: next, day }),
+    json({
+      ok: true,
+      count: next,
+      day,
+      mug: newRecord,
+      mugs: updatedMugs,
+    }),
     rl
   );
 };
