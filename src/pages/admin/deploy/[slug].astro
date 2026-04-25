@@ -23,7 +23,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import WalletConnect from '../../../components/WalletConnect.astro';
 import contracts from '../../../data/contracts.json';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export async function getStaticPaths() {
@@ -90,6 +90,23 @@ const contractFile = existsSync(resolve(`contracts/v2/${slug}_fa2.py`))
   : existsSync(resolve(`contracts/v2/${slug}.py`))
     ? `contracts/v2/${slug}.py`
     : null;
+
+// Read the SmartPy source at build time so the per-contract page can
+// expose a "Copy source" button. The button writes the source to the
+// clipboard via navigator.clipboard.writeText so Mike can paste a fresh
+// buffer into the SmartPy IDE without his previous session bleeding
+// through (the IDE persists the last edit per browser → opening
+// smartpy.io/ide while compiling Coffee Mugs would re-open Coffee
+// Mugs even when the goal is Prize Cast or Birthdays).
+const contractSource: string | null = contractFile
+  ? (() => {
+      try {
+        return readFileSync(resolve(contractFile), 'utf-8');
+      } catch {
+        return null;
+      }
+    })()
+  : null;
 
 const artifactsAvailable =
   existsSync(resolve(`public/admin/_artifacts/${slug}-contract.json`)) &&
@@ -280,16 +297,28 @@ const shadownetNotes = entry._shadownet_notes ?? null;
         <div class="space-y-3">
           <div class="p-3 rounded-md border border-rule/30 bg-card/40">
             <p class="font-medium text-ink mb-1">Compile to Michelson</p>
-            <p class="text-[0.85rem] text-ink-soft mb-2">
-              The SmartPy source is in the repo, but the Michelson + storage JSON
-              haven't been generated yet. Compile in the SmartPy IDE, then paste
-              the artifacts into the Publisher.
+            <p class="text-[0.85rem] text-ink-soft mb-3 leading-relaxed">
+              SmartPy IDE persists the last open buffer per browser, so opening it
+              cold often shows a different contract. Click <strong>Copy source</strong>{' '}
+              first, open the IDE, <kbd class="px-1 rounded bg-paper border border-rule/40 text-[0.7rem]">⌘A</kbd> to
+              select all, paste, then <strong>Run</strong> &mdash; download the contract +
+              storage JSONs and paste them into the Publisher.
             </p>
-            <div class="flex flex-wrap gap-1.5">
+            <div class="flex flex-wrap gap-1.5 mb-2">
+              {contractSource && (
+                <button
+                  type="button"
+                  id="copy-source-btn"
+                  data-source-id="contract-source-pre"
+                  class="inline-flex items-center px-2.5 py-1 rounded-sm bg-warm text-paper font-mono text-[0.55rem] tracking-[0.14em] uppercase hover:bg-ink transition-colors cursor-pointer"
+                >
+                  <span class="copy-label">↥ Copy source ({(contractSource.length / 1024).toFixed(1)} KB)</span>
+                </button>
+              )}
               <a
                 href="https://smartpy.io/ide"
                 target="_blank" rel="noopener"
-                class="inline-flex items-center px-2.5 py-1 rounded-sm bg-warm text-paper font-mono text-[0.55rem] tracking-[0.14em] uppercase hover:bg-ink transition-colors no-underline"
+                class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
               >
                 smartpy.io/ide &nearr;
               </a>
@@ -299,10 +328,18 @@ const shadownetNotes = entry._shadownet_notes ?? null;
                   target="_blank" rel="noopener"
                   class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
                 >
-                  source &nearr;
+                  github &nearr;
                 </a>
               )}
             </div>
+            {contractSource && (
+              <details class="mt-3">
+                <summary class="font-mono text-[0.55rem] tracking-[0.18em] uppercase text-ink-soft cursor-pointer hover:text-warm">
+                  preview source ({contractSource.split(/\r?\n/).length} lines)
+                </summary>
+                <pre id="contract-source-pre" class="mt-2 font-mono text-[0.62rem] text-ink/85 overflow-x-auto whitespace-pre p-2 rounded bg-paper border border-rule/30 max-h-[24rem] overflow-y-auto">{contractSource}</pre>
+              </details>
+            )}
           </div>
           <a
             href={`/admin/deploy/new?prefill=${slug}`}
@@ -310,9 +347,9 @@ const shadownetNotes = entry._shadownet_notes ?? null;
           >
             <p class="font-medium text-ink mb-0.5">Originate (manual paste) &rarr;</p>
             <p class="text-[0.85rem] text-ink-soft">
-              Open the Publisher and paste compiled JSON manually. The
+              Open the Publisher and paste the compiled JSON. The
               <code class="font-mono text-[0.78rem] bg-paper px-1 py-0.5 rounded">?prefill</code>
-              query will try to load artifacts and fall back to manual paste.
+              query tries to load pre-staged artifacts first, then falls back to manual paste.
             </p>
           </a>
         </div>
@@ -730,11 +767,63 @@ const shadownetNotes = entry._shadownet_notes ?? null;
   wired; future entrypoints (set_metadata_base_cid, register_tokens, etc.)
   drop into the same dispatcher by adding a case in `buildArgs(...)`.
 
+  Two responsibilities, isolated:
+
+  1. Copy-source button — wired up unconditionally because it lives on
+     DRAFT-status pages (no liveKt1), and the user just wants the source
+     in their clipboard.
+
+  2. Admin action dispatcher (LIVE contracts only) — handles every form
+     with class "admin-action-form".
+
   Plain JavaScript inside a regular <script> (no is:inline, no lang="ts")
   so Vite bundles + transpiles. Type hints via JSDoc only — see
   /admin/deploy/new for the rationale.
 -->
 <script>
+  // ── Copy source button (DRAFT contracts) ─────────────────────────
+  // Reads the <pre id="contract-source-pre"> textContent and writes it
+  // to the clipboard. Same content was rendered server-side at build
+  // time from contracts/v2/<slug>.py — no fetch needed at runtime.
+  (function wireCopySource() {
+    const btn = document.getElementById('copy-source-btn');
+    if (!btn) return;
+    const sourceId = btn.getAttribute('data-source-id') || 'contract-source-pre';
+    const labelEl = btn.querySelector('.copy-label');
+    const originalLabel = labelEl ? labelEl.textContent : btn.textContent;
+
+    btn.addEventListener('click', async () => {
+      const pre = document.getElementById(sourceId);
+      if (!pre) {
+        if (labelEl) labelEl.textContent = 'source not found';
+        return;
+      }
+      const text = pre.textContent || '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // Fallback for older browsers / non-secure contexts.
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        if (labelEl) labelEl.textContent = '✓ copied — paste in smartpy.io/ide';
+        setTimeout(() => {
+          if (labelEl && originalLabel) labelEl.textContent = originalLabel;
+        }, 2500);
+      } catch (err) {
+        if (labelEl) labelEl.textContent = 'copy failed: ' + (err && err.message ? err.message : 'unknown');
+      }
+    });
+  })();
+
+  // ── Admin action dispatcher (LIVE contracts only) ────────────────
   const tzAddrRe = /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/;
   const RPC_MAINNET = 'https://mainnet.api.tez.ie';
 
