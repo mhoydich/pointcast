@@ -15,6 +15,7 @@ import { getCollection } from 'astro:content';
 import { CHANNEL_LIST } from '../lib/channels';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import contracts from '../data/contracts.json';
+import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 
 export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -333,78 +334,25 @@ export const GET: APIRoute = async () => {
     ],
 
     // Resident agents — per RFC 0003 (docs/plans/2026-04-24-rfc-0003-plus-one-agents.md).
+    // Single source of truth at src/data/residents.ts — same list powers /residents.
     // Plus-one agents can claim an `open` slot by opening a PR per RFC §7 Sprint C.
     residents: {
       schema: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents',
-      agents: [
-        {
-          slug: 'cc',
-          name: 'Claude Code',
-          builtBy: 'Anthropic',
-          role: 'primary engineer',
-          status: 'resident',
-          color: '#1b3a5b',
-          voice: 'https://pointcast.xyz/mythos#residents',
-          logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/claude-code-logs',
-        },
-        {
-          slug: 'codex',
-          name: 'Codex',
-          builtBy: 'OpenAI',
-          role: 'specialist + parallel lane (tezos bakery, kowloon, derby v3)',
-          status: 'resident',
-          color: '#6B2139',
-          voice: 'https://pointcast.xyz/mythos#residents',
-          logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/codex-logs',
-        },
-        {
-          slug: 'manus',
-          name: 'Manus',
-          role: 'browser, ops, real-user QA',
-          status: 'resident',
-          color: '#2f8f5f',
-          voice: 'https://pointcast.xyz/mythos#residents',
-          logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/manus-logs',
-        },
-        {
-          slug: 'mh',
-          name: 'Mike Hoydich',
-          role: 'director — strategy, content, approvals',
-          status: 'director',
-          color: '#c4952e',
-          twitter: '@mhoydich',
-        },
-        {
-          slug: 'kimi',
-          name: 'Kimi',
-          builtBy: 'Moonshot AI',
-          role: 'long-context + bilingual — open slot',
-          status: 'open',
-          color: '#a78bfa',
-          firstTaskBrief: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents#kimi-moonshot',
-          note: 'Door unlocked. First-task brief proposes bilingual liner notes for the Kowloon Kitchen arcade.',
-        },
-        {
-          slug: 'gemini',
-          name: 'Gemini',
-          builtBy: 'Google',
-          role: 'multi-modal + fast iteration — open slot',
-          status: 'open',
-          color: '#4A9EFF',
-          firstTaskBrief: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents#gemini-google',
-          note: 'Door unlocked. First-task brief proposes a 24-hour weather-tint validation sweep.',
-        },
-      ],
-      contract: {
-        capabilities: [
-          'read the repo',
-          'open a PR',
-          'read AGENTS.md and honor the handoff protocol',
-          'write dated logs to docs/{slug}-logs/',
-          'respect Mike approval gates on main',
-        ],
-        offRamp: 'After 14 days of silence, status flips `resident` → `dormant`. Logs stay. Re-entry is automatic on next PR.',
-      },
+      page: 'https://pointcast.xyz/residents',
+      agents: RESIDENTS.map((r) => ({
+        slug: r.slug,
+        name: r.name,
+        builtBy: r.builtBy,
+        role: r.role,
+        status: r.status,
+        color: r.color,
+        voice: r.voice,
+        logs: r.logs,
+        twitter: r.twitter,
+        firstTaskBrief: r.firstTaskBrief,
+        note: r.note,
+      })),
+      contract: RESIDENTS_CONTRACT,
     },
   };
 
