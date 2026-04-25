@@ -1,5 +1,5 @@
 """
-agent_derby_receipts.py — public Agent Derby race receipts on Tezos.
+agent_derby_receipts.py - public Agent Derby race receipts on Tezos.
 Target: SmartPy v0.24.x
 
 This is intentionally tiny. The deterministic race engine stays in the

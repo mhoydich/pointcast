@@ -221,8 +221,63 @@ const shadownetNotes = entry._shadownet_notes ?? null;
               copy
             </button>
           </div>
-          <p class="font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70">
-            after the script confirms, refresh this page · admin status flips to "you ✓" and admin entrypoints unlock
+          <p class="font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 mb-3">
+            or do it inline below — paste the throwaway key from <code class="bg-paper px-1 rounded">/tmp/pointcast-mainnet-signer.json</code> and sign here. one click. no terminal.
+          </p>
+          <details class="rounded-md border border-rose-500/30 bg-paper/50">
+            <summary class="px-3 py-2 cursor-pointer font-mono text-[0.6rem] tracking-[0.18em] uppercase text-rose-700 hover:text-ink">
+              ▶ Inline transfer-admin (paste throwaway key)
+            </summary>
+            <form
+              id="throwaway-transfer-form"
+              class="p-3 space-y-2"
+              action="javascript:void(0)"
+              data-kt1={liveKt1}
+              data-target="tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw"
+            >
+              <label class="block">
+                <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                  throwaway secret key
+                </span>
+                <textarea
+                  id="throwaway-key-input"
+                  name="key"
+                  rows="3"
+                  placeholder="paste edsk... or the JSON contents of pointcast-mainnet-signer.json"
+                  class="w-full font-mono text-[0.7rem] p-2 rounded border border-rule/40 bg-card text-ink focus:border-warm focus:outline-none"
+                ></textarea>
+                <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50 mt-1">
+                  key is used in this browser tab only · never sent to a server · cleared on submit
+                </p>
+              </label>
+              <label class="block">
+                <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                  new admin address (defaults to your mainwallet)
+                </span>
+                <input
+                  type="text"
+                  id="throwaway-new-admin-input"
+                  name="newAdmin"
+                  placeholder="tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw"
+                  class="w-full font-mono text-[0.78rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+                />
+              </label>
+              <button
+                type="submit"
+                id="throwaway-transfer-btn"
+                class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-rose-600 text-paper font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              >
+                <span id="throwaway-transfer-label">Sign + transfer admin</span>
+              </button>
+              <p
+                id="throwaway-transfer-status"
+                class="font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]"
+                role="status" aria-live="polite"
+              ></p>
+            </form>
+          </details>
+          <p class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/60 mt-3">
+            after the op confirms, refresh this page · admin status flips to "you ✓" and admin entrypoints unlock
           </p>
         </section>
       );
@@ -1047,6 +1102,146 @@ const shadownetNotes = entry._shadownet_notes ?? null;
   /admin/deploy/new for the rationale.
 -->
 <script>
+  // ── Inline throwaway transfer-admin (paste key + sign in browser) ─
+  // Replaces the "open terminal, run scripts/transfer-admin.mjs" friction
+  // with a one-paste, one-click flow. The pasted key is wrapped in a
+  // Taquito InMemorySigner just for this op — never sent to a server,
+  // never persisted (textarea cleared after success).
+  (function wireThrowawayTransfer() {
+    const form = /** @type {HTMLFormElement|null} */ (document.getElementById('throwaway-transfer-form'));
+    if (!form) return;
+    const keyInput = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('throwaway-key-input'));
+    const newAdminInput = /** @type {HTMLInputElement|null} */ (document.getElementById('throwaway-new-admin-input'));
+    const btn = /** @type {HTMLButtonElement|null} */ (document.getElementById('throwaway-transfer-btn'));
+    const label = document.getElementById('throwaway-transfer-label');
+    const status = document.getElementById('throwaway-transfer-status');
+
+    function setStatus(html) { if (status) status.innerHTML = html; }
+    function setBusy(busy, lab) {
+      if (btn) btn.disabled = busy;
+      if (label && lab) label.textContent = lab;
+    }
+
+    function parseKey(raw) {
+      // Accept three forms:
+      //   1. raw edsk... / spsk... / p2sk... key string
+      //   2. JSON object { secretKey: 'edsk...' }
+      //   3. JSON object { sk: 'edsk...' } (alt name)
+      const trimmed = (raw || '').trim();
+      if (!trimmed) throw new Error('paste a key first');
+      if (/^(edsk|spsk|p2sk)/.test(trimmed) && !trimmed.includes('{')) {
+        return trimmed;
+      }
+      try {
+        const obj = JSON.parse(trimmed);
+        const sk = obj.secretKey || obj.sk || obj.privateKey || null;
+        if (!sk) throw new Error('JSON has no secretKey/sk/privateKey field');
+        if (!/^(edsk|spsk|p2sk)/.test(sk)) throw new Error('key field is not a Tezos secret key (expected edsk/spsk/p2sk)');
+        return sk;
+      } catch (e) {
+        if (/^(edsk|spsk|p2sk)/.test(trimmed)) return trimmed;
+        throw new Error('paste either an edsk/spsk/p2sk key or the JSON contents of pointcast-mainnet-signer.json');
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const kt1 = form.getAttribute('data-kt1') || '';
+      const fallback = form.getAttribute('data-target') || '';
+      if (!kt1) { setStatus('contract address missing'); return; }
+
+      let secretKey;
+      try {
+        secretKey = parseKey(keyInput ? keyInput.value : '');
+      } catch (err) {
+        setStatus(err && err.message ? err.message : 'invalid key');
+        return;
+      }
+
+      const newAdmin = ((newAdminInput && newAdminInput.value) || fallback).trim();
+      if (!/^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/.test(newAdmin)) {
+        setStatus('new-admin address must be tz1/tz2/tz3');
+        return;
+      }
+
+      setBusy(true, 'Loading Taquito…');
+      setStatus('loading taquito + signer…');
+
+      let TezosToolkit, InMemorySigner;
+      try {
+        ({ TezosToolkit } = await import('@taquito/taquito'));
+        ({ InMemorySigner } = await import('@taquito/signer'));
+      } catch (err) {
+        setStatus('failed to load taquito: ' + (err && err.message ? err.message : 'unknown'));
+        setBusy(false, 'Sign + transfer admin');
+        return;
+      }
+
+      try {
+        const tezos = new TezosToolkit('https://mainnet.api.tez.ie');
+        let signer;
+        try {
+          signer = new InMemorySigner(secretKey);
+        } catch (err) {
+          setStatus('signer rejected key: ' + (err && err.message ? err.message : 'invalid'));
+          setBusy(false, 'Sign + transfer admin');
+          return;
+        }
+        const signerAddress = await signer.publicKeyHash();
+        tezos.setSignerProvider(signer);
+
+        // Fetch on-chain admin to confirm the key matches.
+        try {
+          const sRes = await fetch('https://api.tzkt.io/v1/contracts/' + kt1 + '/storage', { cache: 'no-store' });
+          if (sRes.ok) {
+            const storage = await sRes.json();
+            const admin = (storage && (storage.administrator || storage.admin)) || '';
+            if (admin && admin !== signerAddress) {
+              setStatus('key mismatch: contract admin is ' + admin.slice(0,8) + '…' + admin.slice(-4) +
+                ', but the pasted key signs as ' + signerAddress.slice(0,8) + '…' + signerAddress.slice(-4));
+              setBusy(false, 'Sign + transfer admin');
+              return;
+            }
+          }
+        } catch { /* tzkt down — let on-chain handle */ }
+
+        setBusy(true, 'Signing…');
+        setStatus('signing set_administrator(' + newAdmin.slice(0,8) + '…' + newAdmin.slice(-4) + ') from ' + signerAddress.slice(0,8) + '…' + signerAddress.slice(-4));
+
+        const contract = await tezos.contract.at(kt1);
+        const op = await contract.methodsObject.set_administrator(newAdmin).send();
+        const opHash = op && op.hash ? op.hash : '';
+        if (opHash) setStatus('✓ broadcast ' + opHash.slice(0, 10) + '… · confirming on mainnet…');
+
+        await op.confirmation();
+
+        // Wipe the key from the textarea immediately on success — it's
+        // useless now (admin transferred away from this address) but
+        // good hygiene to clear it.
+        if (keyInput) keyInput.value = '';
+
+        setStatus('✓ admin transferred to ' + newAdmin.slice(0,8) + '…' + newAdmin.slice(-4) +
+          ' · <a href="https://tzkt.io/' + opHash + '" target="_blank" rel="noopener" class="text-warm">tzkt &nearr;</a>' +
+          ' · refresh page to update banner');
+        setBusy(false, 'Done ✓');
+        // Auto-refresh after 4s so the banner clears + admin status flips.
+        setTimeout(() => window.location.reload(), 4000);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('throwaway transfer failed:', err);
+        let msg = (err && err.message) ? err.message : String(err || 'unknown');
+        if (/NotEnoughBalance|balance/i.test(msg)) {
+          setStatus('throwaway has no tez · send ~0.1 ꜩ to ' + (await new (await import('@taquito/signer')).InMemorySigner(secretKey).publicKeyHash()).slice(0,8) + '… first');
+        } else if (/NOT_ADMIN/i.test(msg)) {
+          setStatus('contract rejected: this key isn\'t the current admin');
+        } else {
+          setStatus('error: ' + msg.slice(0, 200));
+        }
+        setBusy(false, 'Sign + transfer admin');
+      }
+    });
+  })();
+
   // ── Generic copy-to-clipboard for [data-source] buttons ─────────
   // Used by both the source-preview button and the transfer-admin
   // command banner. Handles fallback for non-secure contexts.

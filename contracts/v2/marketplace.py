@@ -1,10 +1,10 @@
 """
-marketplace.py — objkt-style FA2 NFT Marketplace
+marketplace.py - objkt-style FA2 NFT Marketplace
 SmartPy v0.24.1
 
 Architecture
 ============
-A single @sp.module wraps the Marketplace contract (plain sp.Contract — no
+A single @sp.module wraps the Marketplace contract (plain sp.Contract - no
 fa2_lib mixin needed here since the marketplace does not hold tokens itself).
 A second @sp.module (mock_fa2_module) provides a minimal stub FA2 contract
 used exclusively by the test scenario.
@@ -18,22 +18,22 @@ Royalty flow on fulfill
 
 Error codes
 ===========
-  M_NO_SELF_FULFILL       — buyer == seller
-  ASK_NOT_FOUND           — ask_id does not exist
-  NOT_SELLER              — caller is not the listing seller
-  NOT_ADMIN               — caller is not the admin
-  INCORRECT_AMOUNT        — sp.amount ≠ ask.amount_mutez
-  MARKETPLACE_PAUSED      — contract is paused
-  INVALID_ROYALTY_BPS     — royalty_bps > 10000
-  FEE_CAPPED_AT_10_PERCENT— new platform fee > 1000 bps (10 %)
-  INVALID_FA2_CONTRACT    — fa2_contract address does not expose a transfer entrypoint
+  M_NO_SELF_FULFILL       - buyer == seller
+  ASK_NOT_FOUND           - ask_id does not exist
+  NOT_SELLER              - caller is not the listing seller
+  NOT_ADMIN               - caller is not the admin
+  INCORRECT_AMOUNT        - sp.amount ≠ ask.amount_mutez
+  MARKETPLACE_PAUSED      - contract is paused
+  INVALID_ROYALTY_BPS     - royalty_bps > 10000
+  FEE_CAPPED_AT_10_PERCENT- new platform fee > 1000 bps (10 %)
+  INVALID_FA2_CONTRACT    - fa2_contract address does not expose a transfer entrypoint
 """
 
 import smartpy as sp
 
 
 # ---------------------------------------------------------------------------
-# Main module — contains the Marketplace contract
+# Main module - contains the Marketplace contract
 # ---------------------------------------------------------------------------
 @sp.module
 def m():
@@ -45,14 +45,14 @@ def m():
 
         Storage fields
         --------------
-        admin                : sp.address  — privileged account
-        fa2_contract         : sp.address  — the NFT FA2 contract address
-        platform_fee_bps     : sp.nat      — platform fee in basis points (max 1000 = 10 %)
-        platform_fee_receiver: sp.address  — receives platform fee on each sale
-        royalty_receiver     : sp.address  — receives creator royalty on each sale
-        paused               : sp.bool     — if True, list/update/fulfill are disabled
-        next_ask_id          : sp.nat      — auto-incrementing listing counter
-        asks                 : big_map     — ask_id → Ask record
+        admin                : sp.address  - privileged account
+        fa2_contract         : sp.address  - the NFT FA2 contract address
+        platform_fee_bps     : sp.nat      - platform fee in basis points (max 1000 = 10 %)
+        platform_fee_receiver: sp.address  - receives platform fee on each sale
+        royalty_receiver     : sp.address  - receives creator royalty on each sale
+        paused               : sp.bool     - if True, list/update/fulfill are disabled
+        next_ask_id          : sp.nat      - auto-incrementing listing counter
+        asks                 : big_map     - ask_id → Ask record
         """
 
         def __init__(
@@ -96,9 +96,9 @@ def m():
 
             Parameters
             ----------
-            token_id     : sp.nat   — FA2 token ID to list
-            amount_mutez : sp.mutez — asking price in mutez
-            royalty_bps  : sp.nat   — royalty share in basis points (0–10000)
+            token_id     : sp.nat   - FA2 token ID to list
+            amount_mutez : sp.mutez - asking price in mutez
+            royalty_bps  : sp.nat   - royalty share in basis points (0-10000)
             """
             assert not self.data.paused, "MARKETPLACE_PAUSED"
             assert royalty_bps <= 10000, "INVALID_ROYALTY_BPS"
@@ -119,7 +119,7 @@ def m():
 
             Parameters
             ----------
-            ask_id : sp.nat — ID of the listing to cancel
+            ask_id : sp.nat - ID of the listing to cancel
             """
             assert self.data.asks.contains(ask_id), "ASK_NOT_FOUND"
             ask = self.data.asks[ask_id]
@@ -134,8 +134,8 @@ def m():
 
             Parameters
             ----------
-            ask_id          : sp.nat   — ID of the listing to update
-            new_amount_mutez: sp.mutez — new asking price in mutez
+            ask_id          : sp.nat   - ID of the listing to update
+            new_amount_mutez: sp.mutez - new asking price in mutez
             """
             assert not self.data.paused, "MARKETPLACE_PAUSED"
             assert self.data.asks.contains(ask_id), "ASK_NOT_FOUND"
@@ -162,7 +162,7 @@ def m():
 
             Parameters
             ----------
-            ask_id : sp.nat — ID of the listing to fulfill
+            ask_id : sp.nat - ID of the listing to fulfill
             """
             assert not self.data.paused, "MARKETPLACE_PAUSED"
             assert self.data.asks.contains(ask_id), "ASK_NOT_FOUND"
@@ -248,7 +248,7 @@ def m():
 
             Parameters
             ----------
-            new_fee_bps : sp.nat — new fee in basis points (0–1000)
+            new_fee_bps : sp.nat - new fee in basis points (0-1000)
             """
             assert sp.sender == self.data.admin, "NOT_ADMIN"
             assert new_fee_bps <= 1000, "FEE_CAPPED_AT_10_PERCENT"
@@ -268,7 +268,7 @@ def m():
 
 
 # ---------------------------------------------------------------------------
-# Mock FA2 module — used only in the test scenario
+# Mock FA2 module - used only in the test scenario
 # ---------------------------------------------------------------------------
 @sp.module
 def mock_fa2_module():
@@ -333,7 +333,7 @@ def test():
     scenario += marketplace
 
     # ── Test 1: List Ask ─────────────────────────────────────────────────────
-    scenario.h2("Test 1 — List Ask")
+    scenario.h2("Test 1 - List Ask")
     marketplace.list_ask(
         token_id=sp.nat(1),
         amount_mutez=sp.mutez(1_000_000),  # 1 tez
@@ -346,7 +346,7 @@ def test():
     scenario.verify(marketplace.data.asks[0].royalty_bps == sp.nat(1000))
 
     # ── Test 2: Update Ask ───────────────────────────────────────────────────
-    scenario.h2("Test 2 — Update Ask")
+    scenario.h2("Test 2 - Update Ask")
     marketplace.update_ask(
         ask_id=sp.nat(0),
         new_amount_mutez=sp.mutez(2_000_000),  # raise to 2 tez
@@ -355,7 +355,7 @@ def test():
     scenario.verify(marketplace.data.asks[0].amount_mutez == sp.mutez(2_000_000))
 
     # ── Test 3: Self-fulfill rejection ───────────────────────────────────────
-    scenario.h2("Test 3 — Self-fulfill rejection (M_NO_SELF_FULFILL)")
+    scenario.h2("Test 3 - Self-fulfill rejection (M_NO_SELF_FULFILL)")
     marketplace.fulfill_ask(
         0,
         _sender=seller.address,
@@ -365,7 +365,7 @@ def test():
     )
 
     # ── Test 4: Fulfill Ask & Royalty Split ──────────────────────────────────
-    scenario.h2("Test 4 — Fulfill Ask & Royalty Split")
+    scenario.h2("Test 4 - Fulfill Ask & Royalty Split")
     # Price  = 2,000,000 mutez
     # Fee    = split_tokens(2_000_000, 250, 10000) = 50,000 mutez  (2.5 %)
     # Royalty= split_tokens(2_000_000, 1000, 10000) = 200,000 mutez (10 %)
@@ -381,7 +381,7 @@ def test():
     scenario.verify(mock_fa2.data.last_transfer.is_some())
 
     # ── Test 5: Cancel Ask ───────────────────────────────────────────────────
-    scenario.h2("Test 5 — Cancel Ask")
+    scenario.h2("Test 5 - Cancel Ask")
     marketplace.list_ask(
         token_id=sp.nat(2),
         amount_mutez=sp.mutez(1_000_000),
@@ -393,7 +393,7 @@ def test():
     scenario.verify(~marketplace.data.asks.contains(1))
 
     # ── Test 6: Pause ────────────────────────────────────────────────────────
-    scenario.h2("Test 6 — Admin Pause")
+    scenario.h2("Test 6 - Admin Pause")
     marketplace.set_paused(True, _sender=admin.address)
     scenario.verify(marketplace.data.paused)
 
@@ -408,7 +408,7 @@ def test():
     )
 
     # ── Test 7: Admin fee change ─────────────────────────────────────────────
-    scenario.h2("Test 7 — Admin Fee Change")
+    scenario.h2("Test 7 - Admin Fee Change")
     # Unpause first so the marketplace is operational again
     marketplace.set_paused(False, _sender=admin.address)
 
