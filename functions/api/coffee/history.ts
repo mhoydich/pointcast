@@ -12,10 +12,21 @@
  * Caching: 60s edge cache (history changes slowly — yesterday's
  * count never changes after midnight PT).
  */
-import { rateLimit, applyRateLimitHeaders, rateLimitResponse, json } from '../../_rate-limit';
+import { rateLimit, applyRateLimitHeaders, rateLimitResponse } from '../../_rate-limit';
 
 interface Env {
   PC_RACE_KV?: KVNamespace;
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=60',
+    },
+  });
 }
 
 function ptDayKey(d: Date = new Date()): string {
@@ -70,8 +81,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const results = await Promise.all(reads);
   const total = results.reduce((sum, r) => sum + r.count, 0);
 
-  const res = json({ ok: true, days: results, total, since: dayKeys[0], today });
-  // 60s edge cache — yesterday's value never changes after midnight.
-  res.headers.set('Cache-Control', 'public, max-age=60');
-  return applyRateLimitHeaders(res, rl);
+  return applyRateLimitHeaders(
+    json({ ok: true, days: results, total, since: dayKeys[0], today }),
+    rl
+  );
 };
