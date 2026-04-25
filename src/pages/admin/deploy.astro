@@ -89,25 +89,27 @@ function statusFor(slug: string, entry: any) {
   return { status, contractFile, artifactsAvailable, kt1: liveKt1 };
 }
 
-const rows: ContractRow[] = Object.entries(contracts as Record<string, any>)
-  .filter(([k]) => !k.startsWith('_'))
-  .map(([slug, entry]) => {
-    const { status, contractFile, artifactsAvailable, kt1 } = statusFor(slug, entry);
-    return {
-      slug,
-      name: SLUG_DISPLAY[slug] || slug,
-      description: SLUG_DESCRIPTION[slug] || '',
-      status,
-      chain: 'tezos' as const,
-      symbol: entry.symbol ?? null,
-      kt1,
-      contractFile,
-      artifactsAvailable,
-      runbook: entry?._notes?.runbook ?? null,
-      brief: entry?._notes?.brief ?? null,
-      origNotes: entry?._mainnet_notes ?? entry?._shadownet_notes ?? null,
-    };
-  });
+const rawEntries: Array<[string, any]> = Object.entries(contracts as Record<string, any>).filter(
+  ([k]) => !k.startsWith('_'),
+);
+
+const rows: ContractRow[] = rawEntries.map(([slug, entry]) => {
+  const { status, contractFile, artifactsAvailable, kt1 } = statusFor(slug, entry);
+  return {
+    slug,
+    name: SLUG_DISPLAY[slug] || slug,
+    description: SLUG_DESCRIPTION[slug] || '',
+    status,
+    chain: 'tezos' as const,
+    symbol: entry.symbol ?? null,
+    kt1,
+    contractFile,
+    artifactsAvailable,
+    runbook: entry?._notes?.runbook ?? null,
+    brief: entry?._notes?.brief ?? null,
+    origNotes: entry?._mainnet_notes ?? entry?._shadownet_notes ?? null,
+  };
+});
 
 const ORDER: Status[] = ['STAGED', 'DRAFT', 'LIVE', 'WRITTEN'];
 const grouped: Record<Status, ContractRow[]> = { LIVE: [], STAGED: [], DRAFT: [], WRITTEN: [] };
@@ -119,6 +121,126 @@ const counts = {
   staged: grouped.STAGED.length,
   draft: grouped.DRAFT.length,
   written: grouped.WRITTEN.length,
+};
+
+// ── Pending approvals ─────────────────────────────────────────────────
+// Heuristic-derived list of admin actions awaiting Mike's signature.
+// Surfaces at the top of the dashboard so the most important next move
+// is one click away. Each approval has a CTA href + a rationale; the
+// actual signing happens on /admin/deploy/new or /admin/deploy/[slug].
+
+type Severity = 'high' | 'medium' | 'low';
+
+interface Approval {
+  slug: string;
+  contractName: string;
+  title: string;
+  rationale: string;
+  ctaHref: string;
+  ctaLabel: string;
+  severity: Severity;
+}
+
+// Mike's mainnet wallet — for cross-checking _mainnet_notes admin fields.
+// Source: docs/briefs/2026-04-25-mike-coffee-mugs-fa2.md "Royalty / final admin".
+const MIKE_MAINWALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+
+function deriveApprovals(): Approval[] {
+  const out: Approval[] = [];
+
+  for (const [slug, entry] of rawEntries) {
+    const { status, kt1 } = statusFor(slug, entry);
+    const name = SLUG_DISPLAY[slug] || slug;
+
+    // Special case: Coffee Mugs has a documented orphan origination at
+    // KT1U6Trc... with the wrong admin (test address). Surface as the
+    // single highest-priority approval until contracts.json points at a
+    // clean KT1.
+    if (slug === 'coffee_mugs' && status !== 'LIVE') {
+      out.push({
+        slug,
+        contractName: name,
+        title: 'Re-originate Coffee Mugs FA2 (clean storage)',
+        rationale:
+          'Earlier origination at KT1U6Trc… orphaned (admin = SmartPy test address). The Publisher auto-patches the admin field — re-originate to claim a usable contract.',
+        ctaHref: '/admin/deploy/new?prefill=coffee_mugs',
+        ctaLabel: 'Originate →',
+        severity: 'high',
+      });
+      continue;
+    }
+
+    if (status === 'LIVE' && kt1) {
+      const note: string = entry?._mainnet_notes?.note || '';
+      const originator: string = entry?._mainnet_notes?.originator || '';
+      // If origination notes flag a throwaway signer, the admin transfer
+      // is still pending. Surface as a high-severity approval — anyone
+      // who derives the same throwaway signer key can call admin entrypoints.
+      if (
+        /throwaway/i.test(note) ||
+        (originator && originator !== MIKE_MAINWALLET && /tz1/.test(originator))
+      ) {
+        out.push({
+          slug,
+          contractName: name,
+          title: `Transfer ${name} admin to your mainwallet`,
+          rationale: `Admin is currently the origination signer (${
+            originator ? originator.slice(0, 8) + '…' + originator.slice(-4) : 'throwaway'
+          }). Call set_administrator(${MIKE_MAINWALLET.slice(0, 8)}…) to claim it.`,
+          ctaHref: `/admin/deploy/${slug}#transfer-admin`,
+          ctaLabel: 'Transfer admin →',
+          severity: 'high',
+        });
+      }
+    }
+
+    if (status === 'STAGED') {
+      out.push({
+        slug,
+        contractName: name,
+        title: `Originate ${name}`,
+        rationale: 'Compiled artifacts staged at /admin/_artifacts/. The Publisher will load them, auto-patch the admin field, and originate via Kukai.',
+        ctaHref: `/admin/deploy/new?prefill=${slug}`,
+        ctaLabel: 'Originate →',
+        severity: 'medium',
+      });
+    }
+
+    if (status === 'DRAFT' && slug !== 'coffee_mugs') {
+      out.push({
+        slug,
+        contractName: name,
+        title: `Compile + originate ${name}`,
+        rationale: 'SmartPy source is committed. Compile via the IDE, then paste the JSONs into the Publisher.',
+        ctaHref: `/admin/deploy/${slug}`,
+        ctaLabel: 'Compile path →',
+        severity: 'medium',
+      });
+    }
+  }
+
+  // Sort: high first, then medium, then low.
+  const rank: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
+  out.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  return out;
+}
+
+const approvals = deriveApprovals();
+
+const SEVERITY_TONE: Record<Severity, string> = {
+  high: 'border-rose-500/40 bg-rose-500/5',
+  medium: 'border-warm/40 bg-warm/5',
+  low: 'border-rule/30 bg-card/40',
+};
+const SEVERITY_BADGE: Record<Severity, string> = {
+  high: 'bg-rose-500/15 text-rose-700 border-rose-500/30',
+  medium: 'bg-warm/20 text-warm border-warm/40',
+  low: 'bg-card text-ink-soft border-rule/30',
+};
+const SEVERITY_LABEL: Record<Severity, string> = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 };
 
 const STATUS_TONE: Record<Status, string> = {
@@ -186,6 +308,47 @@ const STATUS_LABEL: Record<Status, string> = {
         </span>
       </div>
     </header>
+
+    <!-- Pending approvals — highest-priority next moves -->
+    {approvals.length > 0 && (
+      <section class="mb-8">
+        <div class="flex items-center justify-between mb-3 -mx-1 px-1 border-b border-rule/40 pb-1.5">
+          <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink">
+            pending approvals
+          </h2>
+          <span class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60">
+            {approvals.length} awaiting signature
+          </span>
+        </div>
+        <div class="space-y-2">
+          {approvals.map((a) => (
+            <a
+              href={a.ctaHref}
+              class={`block p-3 rounded-md border transition-colors no-underline hover:bg-card ${SEVERITY_TONE[a.severity]}`}
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap mb-1">
+                    <p class="font-medium text-ink leading-tight">
+                      {a.title}
+                    </p>
+                    <span class={`px-1.5 py-0.5 rounded-sm border text-[0.5rem] tracking-[0.16em] uppercase font-mono leading-none ${SEVERITY_BADGE[a.severity]}`}>
+                      {SEVERITY_LABEL[a.severity]}
+                    </span>
+                  </div>
+                  <p class="text-[0.85rem] text-ink-soft leading-snug">
+                    {a.rationale}
+                  </p>
+                </div>
+                <span class="shrink-0 inline-flex items-center px-2.5 py-1.5 rounded-sm bg-ink text-paper font-mono text-[0.55rem] tracking-[0.14em] uppercase">
+                  {a.ctaLabel}
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
 
     <!-- Quick actions -->
     <section class="mb-8 p-4 rounded-md border border-warm/40 bg-warm/5">
