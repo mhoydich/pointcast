@@ -391,28 +391,36 @@ const DRUM_NOUN_ID = DRUMS[1].id;
       ></div>
     </section>
 
-    <!-- Claim CTA — placeholder until FA1.2 DRUM contract is live. -->
-    <section class="mb-8 p-4 rounded-md border-2 border-rule/50 bg-card/40">
+    <!-- Claim CTA — three-mode: pending origination → awaiting signer → live.
+         The button is owned by the script in this file (see "drum-claim"
+         block below); /api/drum/voucher returns the current mode. -->
+    <section class="mb-8 p-4 rounded-md border-2 border-warm/40 bg-warm/5" id="drum-claim-section">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-warm mb-1">
             Claim DRUM on Tezos
           </p>
-          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/55">
-            N drums &rarr; 1 DRUM &middot; claim ratio set at token launch
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/65" id="drum-claim-hint">
+            checking contract status…
           </p>
         </div>
         <button
           id="drum-claim-btn"
           type="button"
           disabled
-          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-ink/10 border border-ink/20 text-ink-soft font-mono text-[0.58rem] tracking-[0.14em] uppercase cursor-not-allowed"
-          title="Ships with Phase C (DRUM FA1.2)"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-ink/10 border border-ink/20 text-ink-soft font-mono text-[0.58rem] tracking-[0.14em] uppercase cursor-not-allowed transition-colors"
+          title="Phase C — DRUM FA1.2"
         >
-          <span>Claim DRUM</span>
-          <span class="font-mono text-[0.48rem] tracking-[0.2em] uppercase text-warm/80 px-1.5 py-0.5 rounded-sm bg-warm/10 border border-warm/20">soon</span>
+          <span id="drum-claim-label">checking…</span>
+          <span id="drum-claim-pill" class="font-mono text-[0.48rem] tracking-[0.2em] uppercase text-warm/80 px-1.5 py-0.5 rounded-sm bg-warm/10 border border-warm/20">soon</span>
         </button>
       </div>
+      <p
+        id="drum-claim-status"
+        class="mt-3 font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/60 min-h-[0.7rem]"
+        role="status"
+        aria-live="polite"
+      ></p>
     </section>
 
   </div>
@@ -1728,4 +1736,160 @@ const DRUM_NOUN_ID = DRUMS[1].id;
   refreshPresence();
   setInterval(refreshStats, 5000);
   setInterval(refreshPresence, 15000);
+</script>
+
+<!-- DRUM Token claim — three-mode flow driven by /api/drum/voucher.
+     Lives in its own <script> tag so the cookie-clicker logic above
+     stays isolated. Plain JS, Vite-bundled. -->
+<script>
+  const drumClaimBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('drum-claim-btn'));
+  const drumClaimLabel = document.getElementById('drum-claim-label');
+  const drumClaimPill = document.getElementById('drum-claim-pill');
+  const drumClaimHint = document.getElementById('drum-claim-hint');
+  const drumClaimStatus = document.getElementById('drum-claim-status');
+
+  function readWalletForDrum() {
+    try {
+      const raw = localStorage.getItem('pc:wallet');
+      if (!raw) return null;
+      const w = JSON.parse(raw);
+      return (w && w.address && w.chain === 'tezos') ? w : null;
+    } catch (e) { return null; }
+  }
+
+  function setDrumMode(mode, hint, label, pill, disabled) {
+    if (drumClaimHint) drumClaimHint.textContent = hint;
+    if (drumClaimLabel) drumClaimLabel.textContent = label;
+    if (drumClaimPill) drumClaimPill.textContent = pill;
+    if (drumClaimBtn) {
+      drumClaimBtn.disabled = !!disabled;
+      drumClaimBtn.classList.toggle('cursor-not-allowed', !!disabled);
+      drumClaimBtn.classList.toggle('hover:border-warm', !disabled);
+      drumClaimBtn.classList.toggle('hover:text-warm', !disabled);
+    }
+  }
+
+  async function probeDrumMode() {
+    const wallet = readWalletForDrum();
+    try {
+      const res = await fetch('/api/drum/voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ probe: true, address: wallet ? wallet.address : null }),
+      });
+      const data = await res.json();
+      const mode = (data && data.mode) || 'pending';
+      if (mode === 'live') {
+        setDrumMode('live',
+          wallet
+            ? 'connected · ' + wallet.address.slice(0, 6) + '…' + wallet.address.slice(-4) + ' · 1 DRUM/day'
+            : 'connect a wallet to claim 1 DRUM/day',
+          'Claim DRUM',
+          'live',
+          !wallet);
+      } else if (mode === 'awaiting-signer') {
+        setDrumMode('awaiting-signer',
+          'contract live · voucher signing not yet configured',
+          'Claim DRUM',
+          'soon',
+          true);
+      } else {
+        setDrumMode('pending',
+          'N drums → 1 DRUM · contract awaiting origination at /admin/deploy/drum_token',
+          'Claim DRUM',
+          'soon',
+          true);
+      }
+    } catch (err) {
+      setDrumMode('pending',
+        'voucher endpoint unreachable · refresh in a minute',
+        'Claim DRUM',
+        'retry',
+        false);
+    }
+  }
+
+  async function claimDrumToken() {
+    const wallet = readWalletForDrum();
+    if (!wallet) {
+      try { window.dispatchEvent(new CustomEvent('pc:open-wallet-menu')); } catch (e) {}
+      return;
+    }
+    if (!drumClaimBtn) return;
+    drumClaimBtn.disabled = true;
+    if (drumClaimLabel) drumClaimLabel.textContent = 'requesting…';
+    if (drumClaimStatus) drumClaimStatus.textContent = 'asking server for voucher…';
+
+    let voucher;
+    try {
+      const res = await fetch('/api/drum/voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: wallet.address }),
+      });
+      voucher = await res.json();
+    } catch (err) {
+      if (drumClaimStatus) drumClaimStatus.textContent = 'network error';
+      drumClaimBtn.disabled = false;
+      if (drumClaimLabel) drumClaimLabel.textContent = 'try again';
+      return;
+    }
+
+    if (!voucher || voucher.ok === false || voucher.mode !== 'live' || !voucher.claim) {
+      if (drumClaimStatus) drumClaimStatus.textContent =
+        (voucher && (voucher.error || voucher.reason)) || 'voucher unavailable';
+      if (drumClaimLabel) drumClaimLabel.textContent = 'unavailable';
+      return;
+    }
+
+    if (drumClaimLabel) drumClaimLabel.textContent = 'awaiting kukai…';
+    if (drumClaimStatus) drumClaimStatus.textContent = 'sign claim() in kukai…';
+
+    try {
+      const taquito = await import('@taquito/taquito');
+      const beacon = await import('@taquito/beacon-wallet');
+      const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+      const beaconWallet = new beacon.BeaconWallet({
+        name: 'PointCast Drum',
+        network: { type: 'mainnet' },
+      });
+      tezos.setWalletProvider(beaconWallet);
+
+      const active = await beaconWallet.client.getActiveAccount();
+      if (!active || (active.network && active.network.type !== 'mainnet')) {
+        try { await beaconWallet.clearActiveAccount(); } catch (e) {}
+        await beaconWallet.client.requestPermissions();
+      }
+
+      const contract = await tezos.wallet.at(voucher.claim.contract);
+      const op = await contract.methodsObject.claim({
+        recipient: voucher.claim.recipient,
+        amount: voucher.claim.amount,
+        nonce: voucher.claim.nonce,
+        expiry: voucher.claim.expiry,
+        signature: voucher.claim.signature,
+      }).send();
+      const opHash = (op && op.opHash) || '';
+      if (drumClaimStatus) drumClaimStatus.textContent = 'broadcast ' + opHash.slice(0, 10) + '… · confirming…';
+      await op.confirmation();
+      if (drumClaimStatus) drumClaimStatus.innerHTML =
+        '✓ claimed · <a href="https://tzkt.io/' + opHash + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">tzkt &nearr;</a>';
+      if (drumClaimLabel) drumClaimLabel.textContent = 'claimed ✓';
+      setTimeout(probeDrumMode, 5000);
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err || 'unknown');
+      if (drumClaimStatus) {
+        if (/ABORTED|reject|cancel/i.test(msg)) drumClaimStatus.textContent = 'cancelled';
+        else if (/Claim_Expired/i.test(msg)) drumClaimStatus.textContent = 'voucher expired · refresh';
+        else if (/Claim_NonceReplay/i.test(msg)) drumClaimStatus.textContent = 'already claimed';
+        else drumClaimStatus.textContent = 'error: ' + msg.slice(0, 60);
+      }
+      if (drumClaimLabel) drumClaimLabel.textContent = 'try again';
+      drumClaimBtn.disabled = false;
+    }
+  }
+
+  if (drumClaimBtn) drumClaimBtn.addEventListener('click', claimDrumToken);
+  window.addEventListener('pc:wallet-change', probeDrumMode);
+  probeDrumMode();
 </script>
