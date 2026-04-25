@@ -45,6 +45,11 @@ import CoffeePot from '../components/CoffeePot.astro';
         <span class="coffee__tally-lbl">cups poured here · today</span>
       </p>
       <p class="coffee__tally-note mono" id="coffee-tally-note" aria-live="polite"></p>
+      <p class="coffee__global mono" id="coffee-global" aria-live="polite" hidden>
+        <span class="coffee__global-icon" aria-hidden="true">·</span>
+        <span id="coffee-global-num">0</span>
+        <span class="coffee__global-lbl">poured globally today</span>
+      </p>
     </section>
 
     <section class="coffee__about" aria-label="About the pot">
@@ -154,6 +159,8 @@ import CoffeePot from '../components/CoffeePot.astro';
     var numEl      = document.getElementById('coffee-cups-num');
     var noteEl     = document.getElementById('coffee-tally-note');
     var greetingEl = document.getElementById('coffee-greeting');
+    var globalRoot = document.getElementById('coffee-global');
+    var globalNum  = document.getElementById('coffee-global-num');
 
     if (greetingEl) {
       greetingEl.textContent = greetingFor(ptHour());
@@ -162,6 +169,27 @@ import CoffeePot from '../components/CoffeePot.astro';
     var cups = readCups();
     if (numEl) numEl.textContent = String(cups);
     if (noteEl) noteEl.textContent = noteFor(cups);
+
+    // Hydrate the global cup count from /api/coffee/today. Hides the
+    // line on any failure / kv-unbound to keep the page quiet rather
+    // than show "—".
+    function hydrateGlobal() {
+      fetch('/api/coffee/today', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || data.count == null) {
+            if (globalRoot) globalRoot.hidden = true;
+            return;
+          }
+          if (globalNum)  globalNum.textContent = String(data.count);
+          if (globalRoot) globalRoot.hidden = false;
+        })
+        .catch(function () { /* network blip — leave hidden */ });
+    }
+    hydrateGlobal();
+    // Refresh occasionally while the tab is open so the count climbs
+    // visibly when other people pour.
+    setInterval(hydrateGlobal, 30_000);
 
     if (btn) {
       btn.addEventListener('click', function () {
@@ -173,6 +201,17 @@ import CoffeePot from '../components/CoffeePot.astro';
         // Tiny visual nudge — the button briefly glows.
         btn.classList.add('coffee__pour--poured');
         setTimeout(function () { btn.classList.remove('coffee__pour--poured'); }, 600);
+
+        // Best-effort global increment. Update the visible global
+        // count optimistically with the server's response.
+        fetch('/api/coffee/pour', { method: 'POST', cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || data.count == null) return;
+            if (globalNum)  globalNum.textContent = String(data.count);
+            if (globalRoot) globalRoot.hidden = false;
+          })
+          .catch(function () { /* offline / blocked — local count still good */ });
       });
     }
   })();
@@ -283,6 +322,26 @@ import CoffeePot from '../components/CoffeePot.astro';
     font-weight: 600;
     min-height: 1em; /* prevent jump on first pour */
   }
+
+  .coffee__global {
+    margin: 4px 0 0;
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    opacity: 0.85;
+  }
+  .coffee__global[hidden] { display: none; }
+  .coffee__global-icon { color: var(--color-warm); font-weight: 700; }
+  #coffee-global-num {
+    font-weight: 700;
+    color: var(--color-ink);
+    letter-spacing: 0.04em;
+  }
+  .coffee__global-lbl { color: var(--color-ink-soft); }
 
   .coffee__about {
     text-align: left;
