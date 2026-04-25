@@ -274,6 +274,16 @@ const MUGS = [
         Status moves <em>preview</em> → <em>eligible</em> → <em>minting</em> → <em>minted</em>. Banked claims (from before the contract went live 2026-04-25) stay redeemable.
         <a href="/b/0356">how Tezos staking works →</a>
       </p>
+
+      <!-- Latest mints — live on-chain feed. Visitors see who's minted
+           recently + a click path to tzkt for each op. Polls every 60s.
+           Hidden until tzkt returns at least one row. -->
+      <aside class="coffee__mint-feed-wrap" hidden id="coffee-mint-feed-wrap" aria-labelledby="coffee-mint-feed-title">
+        <h3 class="coffee__mint-feed-title mono" id="coffee-mint-feed-title">Latest mints</h3>
+        <ol class="coffee__mint-feed mono" id="coffee-mint-feed" role="list">
+          <li class="coffee__mint-feed-empty">loading…</li>
+        </ol>
+      </aside>
     </section>
 
     <section class="coffee__about" aria-label="About the pot">
@@ -896,6 +906,77 @@ const MUGS = [
     fetchEditionCounts();
     setInterval(fetchEditionCounts, 60_000);
 
+    // ── Latest mints feed (visitor-facing social proof) ──────────────
+    var SLUG_LABEL = {
+      ceramic: 'Ceramic Mug',
+      espresso: 'Espresso Cup',
+      latte: 'Latte Glass',
+      paper: 'Paper Cup',
+      bistro: 'Bistro Cup',
+    };
+
+    function relativeTime(iso) {
+      try {
+        var t = new Date(iso).getTime();
+        if (!t) return '';
+        var diff = Math.max(0, (Date.now() - t) / 1000);
+        if (diff < 60) return Math.floor(diff) + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+      } catch (e) { return ''; }
+    }
+
+    async function fetchLatestMints() {
+      var wrap = document.getElementById('coffee-mint-feed-wrap');
+      var list = document.getElementById('coffee-mint-feed');
+      if (!list || !wrap) return;
+      try {
+        var url = 'https://api.tzkt.io/v1/operations/transactions?target=' + COFFEE_KT1 +
+          '&entrypoint=mint_mug&status=applied' +
+          '&select=hash,sender,parameter,timestamp&limit=8&sort.desc=id';
+        var res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('tzkt ' + res.status);
+        var rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) {
+          wrap.hidden = true;
+          return;
+        }
+        wrap.hidden = false;
+        var myAddr = (readWallet() || {}).address || '';
+        list.innerHTML = rows.map(function (op) {
+          var raw = op && op.parameter && (op.parameter.value !== undefined ? op.parameter.value : op.parameter);
+          var tokenIdStr = (raw && typeof raw === 'object') ? String(raw.value !== undefined ? raw.value : raw) : String(raw);
+          var slug = TOKEN_ID_TO_SLUG[tokenIdStr] || ('token ' + tokenIdStr);
+          var label = SLUG_LABEL[slug] || slug;
+          var senderRaw = (op.sender && (op.sender.address || op.sender)) || '';
+          var sender = typeof senderRaw === 'string' ? senderRaw : '';
+          var senderShort = sender ? (sender.slice(0, 6) + '…' + sender.slice(-4)) : '?';
+          var isMe = sender && myAddr && sender === myAddr;
+          var ts = relativeTime(op.timestamp);
+          var hashShort = op.hash ? op.hash.slice(0, 8) : '';
+          return (
+            '<li class="coffee__mint-feed-row' + (isMe ? ' coffee__mint-feed-row--me' : '') + '">' +
+              '<span class="coffee__mint-feed-mug">' + label + '</span>' +
+              '<span class="coffee__mint-feed-dot">·</span>' +
+              '<span class="coffee__mint-feed-by">' + (isMe ? 'you' : senderShort) + '</span>' +
+              '<span class="coffee__mint-feed-dot">·</span>' +
+              '<span class="coffee__mint-feed-time">' + ts + '</span>' +
+              (hashShort ?
+                '<a class="coffee__mint-feed-link" href="https://tzkt.io/' + op.hash +
+                '" target="_blank" rel="noopener" title="' + op.hash + '">tzkt ↗</a>' : '') +
+            '</li>'
+          );
+        }).join('');
+      } catch (e) {
+        // Don't surface error noise on the public page — just hide.
+        wrap.hidden = true;
+      }
+    }
+
+    fetchLatestMints();
+    setInterval(fetchLatestMints, 60_000);
+
     // On-chain sync runs whenever the wallet changes (connect / switch).
     syncOnChainOwnership();
 
@@ -1321,6 +1402,75 @@ const MUGS = [
     letter-spacing: 0.16em;
     text-transform: uppercase;
     margin: 0;
+  }
+  .coffee__mint-feed-wrap {
+    margin: 18px auto 0;
+    padding: 14px 16px;
+    max-width: 540px;
+    background: var(--color-card, rgba(0,0,0,0.025));
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.08));
+    border-radius: 10px;
+  }
+  .coffee__mint-feed-title {
+    margin: 0 0 8px;
+    text-align: center;
+    color: var(--color-ink);
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .coffee__mint-feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .coffee__mint-feed-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+    color: var(--color-ink-soft);
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--color-rule, rgba(0,0,0,0.08));
+  }
+  .coffee__mint-feed-row:last-child { border-bottom: none; }
+  .coffee__mint-feed-row--me {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .coffee__mint-feed-row--me .coffee__mint-feed-by {
+    color: var(--color-warm);
+  }
+  .coffee__mint-feed-mug {
+    color: var(--color-ink);
+    font-weight: 500;
+  }
+  .coffee__mint-feed-dot { opacity: 0.4; }
+  .coffee__mint-feed-time {
+    margin-left: auto;
+    font-size: 10px;
+    opacity: 0.7;
+  }
+  .coffee__mint-feed-link {
+    color: var(--color-warm);
+    text-decoration: none;
+    font-size: 10px;
+    margin-left: 6px;
+    border-bottom: 1px solid currentColor;
+  }
+  .coffee__mint-feed-link:hover { color: var(--color-ink); }
+  .coffee__mint-feed-empty {
+    text-align: center;
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    opacity: 0.6;
+    padding: 8px 0;
   }
   .coffee__mint-foot a {
     color: var(--color-warm);
