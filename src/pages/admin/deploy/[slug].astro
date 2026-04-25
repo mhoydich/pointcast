@@ -1169,6 +1169,10 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       if (btnLabel && label) btnLabel.textContent = label;
     }
 
+    // Public mint entrypoints don't require admin status. Anything else
+    // we treat as admin-only for the pre-flight check.
+    const PUBLIC_ENTRYPOINTS = /^(mint_mug|mint_noun|mint_birthday_card|claim|transfer|approve)$/;
+
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const entrypoint = f.getAttribute('data-entrypoint') || '';
@@ -1177,6 +1181,38 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       if (!entrypoint || !kt1) {
         setStatus('form misconfigured · missing data-entrypoint or data-kt1');
         return;
+      }
+
+      // Pre-flight admin check — fetch on-chain storage and verify the
+      // connected wallet matches the contract's `administrator` field
+      // before burning gas on a NOT_ADMIN rejection. Skipped for public
+      // entrypoints (mint_*, claim, transfer, approve).
+      const connectedNow = connectedAddress() || '';
+      const isAdminOnly = !PUBLIC_ENTRYPOINTS.test(entrypoint);
+      if (isAdminOnly && connectedNow) {
+        setStatus('checking admin status…');
+        try {
+          const sRes = await fetch('https://api.tzkt.io/v1/contracts/' + kt1 + '/storage', { cache: 'no-store' });
+          if (sRes.ok) {
+            const storage = await sRes.json();
+            const onChainAdmin = (storage && (storage.administrator || storage.admin)) || null;
+            if (onChainAdmin && onChainAdmin !== connectedNow) {
+              const isThrowaway = /^tz1/.test(onChainAdmin);
+              const scriptHint = isThrowaway
+                ? ' · run <code class="bg-paper px-1 rounded">node scripts/transfer-admin.mjs</code> with the throwaway key first'
+                : '';
+              setStatus(
+                'rejected before broadcast: contract admin is <code class="bg-paper px-1 rounded">' +
+                onChainAdmin.slice(0, 8) + '…' + onChainAdmin.slice(-4) +
+                '</code>, your wallet is <code class="bg-paper px-1 rounded">' +
+                connectedNow.slice(0, 8) + '…' + connectedNow.slice(-4) +
+                '</code>' + scriptHint,
+              );
+              setBusy(false, 'Sign + send');
+              return;
+            }
+          }
+        } catch { /* tzkt down — let the on-chain check decide instead */ }
       }
 
       setBusy(true, 'Loading Taquito…');

@@ -30,6 +30,15 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 type Status = 'LIVE' | 'STAGED' | 'DRAFT' | 'WRITTEN';
+type AdminStatus = 'mine' | 'throwaway' | 'other' | 'unknown';
+
+interface LiveStats {
+  totalSupply: number | null;
+  holders: number | null;
+  onChainAdmin: string | null;
+  adminStatus: AdminStatus;
+  recentOpAt: string | null;
+}
 
 interface ContractRow {
   slug: string;
@@ -44,6 +53,54 @@ interface ContractRow {
   runbook: string | null;
   brief: string | null;
   origNotes: Record<string, any> | null;
+  live: LiveStats | null;
+}
+
+const MIKE_MAINWALLET_BUILD = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+
+async function fetchLiveStats(kt1: string): Promise<LiveStats> {
+  const stats: LiveStats = {
+    totalSupply: null,
+    holders: null,
+    onChainAdmin: null,
+    adminStatus: 'unknown',
+    recentOpAt: null,
+  };
+  try {
+    const [tokensRes, storageRes, opsRes] = await Promise.all([
+      fetch(`https://api.tzkt.io/v1/tokens?contract=${kt1}&select=totalSupply,holdersCount&limit=200`),
+      fetch(`https://api.tzkt.io/v1/contracts/${kt1}/storage`),
+      fetch(`https://api.tzkt.io/v1/operations/transactions?target=${kt1}&limit=1&sort.desc=id&select=timestamp`),
+    ]);
+    if (tokensRes.ok) {
+      const tokens = await tokensRes.json();
+      if (Array.isArray(tokens) && tokens.length) {
+        stats.totalSupply = tokens.reduce((sum: number, t: any) => sum + Number(t.totalSupply ?? 0), 0);
+        stats.holders = tokens.reduce((max: number, t: any) => Math.max(max, t.holdersCount ?? 0), 0);
+      } else {
+        stats.totalSupply = 0;
+        stats.holders = 0;
+      }
+    }
+    if (storageRes.ok) {
+      const storage = await storageRes.json();
+      const admin = (storage && (storage.administrator || storage.admin)) || null;
+      stats.onChainAdmin = typeof admin === 'string' ? admin : null;
+      if (stats.onChainAdmin === MIKE_MAINWALLET_BUILD) stats.adminStatus = 'mine';
+      else if (stats.onChainAdmin && /^tz1/.test(stats.onChainAdmin)) stats.adminStatus = 'throwaway';
+      else if (stats.onChainAdmin) stats.adminStatus = 'other';
+      else stats.adminStatus = 'unknown';
+    }
+    if (opsRes.ok) {
+      const ops = await opsRes.json();
+      if (Array.isArray(ops) && ops.length) {
+        stats.recentOpAt = ops[0]?.timestamp ?? null;
+      }
+    }
+  } catch {
+    /* tzkt down — return whatever we got */
+  }
+  return stats;
 }
 
 const SLUG_DISPLAY: Record<string, string> = {
@@ -93,6 +150,21 @@ const rawEntries: Array<[string, any]> = Object.entries(contracts as Record<stri
   ([k]) => !k.startsWith('_'),
 );
 
+// Build-time tzkt fetch for every LIVE contract — gives us totalSupply,
+// holders, on-chain admin, and most-recent op timestamp. Parallel fetch
+// across all contracts so the build doesn't serialize multi-second waits.
+const liveLookups = await Promise.all(
+  rawEntries.map(async ([slug, entry]) => {
+    const { status, kt1 } = statusFor(slug, entry);
+    if (status === 'LIVE' && kt1) {
+      const live = await fetchLiveStats(kt1);
+      return [slug, live] as const;
+    }
+    return [slug, null] as const;
+  }),
+);
+const liveBySlug: Record<string, LiveStats | null> = Object.fromEntries(liveLookups);
+
 const rows: ContractRow[] = rawEntries.map(([slug, entry]) => {
   const { status, contractFile, artifactsAvailable, kt1 } = statusFor(slug, entry);
   return {
@@ -108,6 +180,7 @@ const rows: ContractRow[] = rawEntries.map(([slug, entry]) => {
     runbook: entry?._notes?.runbook ?? null,
     brief: entry?._notes?.brief ?? null,
     origNotes: entry?._mainnet_notes ?? entry?._shadownet_notes ?? null,
+    live: liveBySlug[slug] ?? null,
   };
 });
 
@@ -121,6 +194,46 @@ const counts = {
   staged: grouped.STAGED.length,
   draft: grouped.DRAFT.length,
   written: grouped.WRITTEN.length,
+};
+
+// Aggregate live stats across all LIVE contracts for the dashboard hero.
+const liveAggregate = grouped.LIVE.reduce(
+  (acc, r) => {
+    if (r.live?.totalSupply != null) acc.minted += r.live.totalSupply;
+    if (r.live?.holders != null) acc.holders += r.live.holders;
+    if (r.live?.adminStatus === 'mine') acc.mineCount += 1;
+    if (r.live?.adminStatus === 'throwaway') acc.throwawayCount += 1;
+    return acc;
+  },
+  { minted: 0, holders: 0, mineCount: 0, throwawayCount: 0 },
+);
+
+function relativeTimeFromIso(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    const t = new Date(iso).getTime();
+    if (!t) return '';
+    const diff = Math.max(0, (Date.now() - t) / 1000);
+    if (diff < 60) return Math.floor(diff) + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  } catch {
+    return '';
+  }
+}
+
+const ADMIN_TONE: Record<AdminStatus, string> = {
+  mine: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30',
+  throwaway: 'bg-rose-500/15 text-rose-700 border-rose-500/30',
+  other: 'bg-amber-500/15 text-amber-700 border-amber-500/30',
+  unknown: 'bg-card text-ink-soft border-rule/30',
+};
+const ADMIN_LABEL: Record<AdminStatus, string> = {
+  mine: 'admin: you ✓',
+  throwaway: 'admin: throwaway ⚠',
+  other: 'admin: other',
+  unknown: 'admin: unknown',
 };
 
 // ── Pending approvals ─────────────────────────────────────────────────
@@ -318,6 +431,45 @@ const STATUS_LABEL: Record<Status, string> = {
       </div>
     </header>
 
+    {/* Live now — aggregate stats across mainnet contracts. Build-time tzkt
+        fetch so the numbers freeze at deploy; per-contract pages do live
+        polling for fresher data. */}
+    {counts.live > 0 && (
+      <section class="mb-8 p-4 rounded-md border border-emerald-500/30 bg-emerald-500/5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-emerald-700">
+            live · mainnet
+          </p>
+          <span class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/60">
+            via tzkt at build · {new Date().toISOString().slice(0, 16).replace('T', ' ')}Z
+          </span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/70 mb-0.5">total minted</p>
+            <p class="text-[1.4rem] font-medium text-ink leading-none">{liveAggregate.minted}</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/70 mb-0.5">live contracts</p>
+            <p class="text-[1.4rem] font-medium text-ink leading-none">{counts.live}</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/70 mb-0.5">your admin</p>
+            <p class="text-[1.4rem] font-medium text-emerald-700 leading-none">{liveAggregate.mineCount}</p>
+          </div>
+          <div>
+            <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/70 mb-0.5">throwaway admin</p>
+            <p class={`text-[1.4rem] font-medium leading-none ${liveAggregate.throwawayCount > 0 ? 'text-rose-700' : 'text-ink-soft'}`}>{liveAggregate.throwawayCount}</p>
+          </div>
+        </div>
+        {liveAggregate.throwawayCount > 0 && (
+          <p class="mt-3 pt-3 border-t border-emerald-500/20 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-rose-700">
+            ⚠ {liveAggregate.throwawayCount} contract{liveAggregate.throwawayCount === 1 ? '' : 's'} still admin'd by the throwaway origination signer · run <code class="bg-paper px-1 rounded">node scripts/transfer-admin.mjs</code> locally to take over
+          </p>
+        )}
+      </section>
+    )}
+
     <!-- Pending approvals — highest-priority next moves -->
     {approvals.length > 0 && (
       <section class="mb-8">
@@ -428,6 +580,28 @@ const STATUS_LABEL: Record<Status, string> = {
                     <p class="font-mono text-[0.6rem] tracking-[0.04em] text-ink/60 break-all">
                       {row.kt1}
                     </p>
+                  )}
+                  {row.live && (
+                    <div class="mt-1.5 flex flex-wrap gap-1.5 items-center">
+                      <span class={`px-1.5 py-0.5 rounded-sm border text-[0.5rem] tracking-[0.16em] uppercase font-mono leading-none ${ADMIN_TONE[row.live.adminStatus]}`}>
+                        {ADMIN_LABEL[row.live.adminStatus]}
+                      </span>
+                      {row.live.totalSupply !== null && (
+                        <span class="px-1.5 py-0.5 rounded-sm border border-rule/40 text-[0.5rem] tracking-[0.16em] uppercase font-mono leading-none text-ink bg-card">
+                          {row.live.totalSupply} minted
+                        </span>
+                      )}
+                      {row.live.holders !== null && row.live.holders > 0 && (
+                        <span class="px-1.5 py-0.5 rounded-sm border border-rule/40 text-[0.5rem] tracking-[0.16em] uppercase font-mono leading-none text-ink-soft bg-card">
+                          {row.live.holders} holder{row.live.holders === 1 ? '' : 's'}
+                        </span>
+                      )}
+                      {row.live.recentOpAt && (
+                        <span class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/60">
+                          last op {relativeTimeFromIso(row.live.recentOpAt)}
+                        </span>
+                      )}
+                    </div>
                   )}
                   {row.contractFile && (
                     <p class="font-mono text-[0.55rem] tracking-[0.04em] text-ink-soft/60 mt-0.5">
