@@ -581,6 +581,21 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       </section>
     )}
 
+    <!-- Editions (FA2 with edition_caps + tokens registry) -->
+    {liveKt1 && entry.edition_caps && entry.tokens && (
+      <section class="mb-6">
+        <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5 flex items-center justify-between">
+          <span>editions</span>
+          <span class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">
+            via tzkt · supply bigmap
+          </span>
+        </h2>
+        <div id="editions-state" class="space-y-2 text-[0.85rem]">
+          <p class="font-mono text-[0.7rem] text-ink-soft/50 italic">loading editions…</p>
+        </div>
+      </section>
+    )}
+
     <!-- Recent ops (LIVE only) -->
     {liveKt1 && (
       <section class="mb-6">
@@ -606,7 +621,12 @@ const shadownetNotes = entry._shadownet_notes ?? null;
 </BaseLayout>
 
 {liveKt1 && (
-  <script define:vars={{ kt1: liveKt1, mikeWallet: 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw' }}>
+  <script define:vars={{
+    kt1: liveKt1,
+    mikeWallet: 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw',
+    editionCaps: entry.edition_caps || null,
+    tokens: entry.tokens || null,
+  }}>
     // Live state + recent ops, both via tzkt's free public API.
     // No auth, generous rate limits — fine to hit on every pageload.
     // Each fetch's failure is isolated so a partial degrade still
@@ -715,6 +735,92 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       } catch (err) {
         root.innerHTML =
           '<p class="font-mono text-[0.7rem] text-ink-soft/60 italic">storage fetch failed: ' +
+          (err && err.message ? err.message : 'error') + '</p>';
+      }
+    })();
+
+    // ── Editions (per-token mint counts) ─────────────────────────────
+    // Only runs if the contract has edition_caps + tokens declared in
+    // contracts.json. Reads the FA2-standard `supply` bigmap pointer
+    // from the contract storage, then fetches each token_id's keys
+    // value (= number minted). Renders a row per token with a progress
+    // bar. Falls back to empty rows if a key isn't yet present (e.g.
+    // pre-mint state).
+    (async function loadEditions() {
+      const root = document.getElementById('editions-state');
+      if (!root || !editionCaps || !tokens) return;
+      try {
+        // 1. Find the supply bigmap pointer from the contract's storage.
+        const storageRes = await fetch(
+          'https://api.tzkt.io/v1/contracts/' + kt1 + '/storage',
+          { cache: 'no-store' },
+        );
+        if (!storageRes.ok) throw new Error('tzkt /storage ' + storageRes.status);
+        const storage = await storageRes.json();
+        const supplyPointer = (typeof storage.supply === 'number') ? storage.supply : null;
+        const mugSupplyPointer = (typeof storage.mug_supply === 'number') ? storage.mug_supply : null;
+        // Prefer mug_supply (contract-specific) over supply (FA2 lib internal).
+        const pointer = mugSupplyPointer != null ? mugSupplyPointer : supplyPointer;
+        if (pointer == null) {
+          root.innerHTML =
+            '<p class="font-mono text-[0.7rem] text-ink-soft/60 italic">storage has no supply / mug_supply field</p>';
+          return;
+        }
+
+        // 2. Fetch all bigmap keys in one shot. mug_supply for Coffee
+        //    Mugs has at most 5 keys (one per rarity tier).
+        const keysRes = await fetch(
+          'https://api.tzkt.io/v1/bigmaps/' + pointer + '/keys?limit=100&select=key,value',
+          { cache: 'no-store' },
+        );
+        if (!keysRes.ok) throw new Error('tzkt /bigmaps ' + keysRes.status);
+        const keys = await keysRes.json();
+        const supplyByKey = {};
+        for (const row of (Array.isArray(keys) ? keys : [])) {
+          if (row && row.key !== undefined) {
+            supplyByKey[String(row.key)] = parseInt(row.value, 10) || 0;
+          }
+        }
+
+        // 3. Render one row per token_id. Iterate in token_id order.
+        const tokenIds = Object.keys(editionCaps).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        let totalMinted = 0;
+        let totalCap = 0;
+        const rows = tokenIds.map((id) => {
+          const cap = parseInt(editionCaps[id], 10) || 0;
+          const minted = supplyByKey[id] || 0;
+          totalMinted += minted;
+          totalCap += cap;
+          const pct = cap > 0 ? Math.min(100, Math.round((minted / cap) * 100)) : 0;
+          const name = (tokens[id] && (typeof tokens[id] === 'string' ? tokens[id] : tokens[id].recipient_name || tokens[id].name)) || ('token ' + id);
+          const filled = minted >= cap;
+          const tone = filled ? 'bg-rose-500/40' : minted > 0 ? 'bg-warm/60' : 'bg-ink/20';
+          return (
+            '<div class="space-y-1">' +
+              '<div class="flex items-baseline justify-between gap-2 flex-wrap">' +
+                '<span class="font-medium text-ink">' + name + '</span>' +
+                '<span class="font-mono text-[0.72rem] text-ink-soft">' +
+                  '<span class="text-ink">' + minted + '</span>' +
+                  ' / ' + cap +
+                  (filled ? ' <span class="text-rose-700 ml-1">cap reached</span>' : '') +
+                '</span>' +
+              '</div>' +
+              '<div class="h-1.5 rounded-full bg-card overflow-hidden border border-rule/30">' +
+                '<div class="h-full ' + tone + '" style="width: ' + pct + '%"></div>' +
+              '</div>' +
+            '</div>'
+          );
+        });
+
+        const totalPct = totalCap > 0 ? Math.round((totalMinted / totalCap) * 100) : 0;
+        root.innerHTML =
+          '<div class="space-y-2.5">' + rows.join('') + '</div>' +
+          '<p class="mt-3 pt-3 border-t border-rule/30 font-mono text-[0.6rem] tracking-[0.14em] uppercase text-ink-soft/70">' +
+            totalMinted + ' minted of ' + totalCap + ' total · ' + totalPct + '% claimed' +
+          '</p>';
+      } catch (err) {
+        root.innerHTML =
+          '<p class="font-mono text-[0.7rem] text-ink-soft/60 italic">editions fetch failed: ' +
           (err && err.message ? err.message : 'error') + '</p>';
       }
     })();
