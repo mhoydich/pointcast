@@ -380,16 +380,17 @@ import WalletConnect from '../../components/WalletConnect.astro';
       // admin'd by a public test key — anyone deriving the same key
       // can call set_administrator / register_tokens / withdraw_mutez.
       // Mirrors the visit_nouns deploy script's storage-admin patch.
-      const activeAccount = await wallet.client.getActiveAccount();
-      const activePkh = (activeAccount as any)?.address;
+      // NOTE: this block is plain JS (no TypeScript predicates) so
+      // esbuild's <script> transpile pass handles it cleanly.
+      const activeAccount2 = await wallet.client.getActiveAccount();
+      const activePkh = activeAccount2 && (activeAccount2 as any).address;
+      const tzAddrRe = /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/;
       if (activePkh && storage && typeof storage === 'object') {
-        const isTzAddr = (s: unknown): s is string =>
-          typeof s === 'string' && /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/.test(s);
         const node: any = storage;
         if (node.prim === 'Pair' && Array.isArray(node.args) && node.args[0]) {
           const first = node.args[0];
-          if (first && typeof first === 'object' && isTzAddr(first.string)) {
-            const old = first.string as string;
+          if (first && typeof first === 'object' && typeof first.string === 'string' && tzAddrRe.test(first.string)) {
+            const old: string = first.string;
             if (old !== activePkh) {
               first.string = activePkh;
               setStatus(`admin patched: ${old.slice(0,8)}…${old.slice(-4)} → ${activePkh.slice(0,8)}…${activePkh.slice(-4)} (your wallet)`);
