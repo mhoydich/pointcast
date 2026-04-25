@@ -153,36 +153,116 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     }
   }
 
-  // Voucher signing — TODO when DRUM_SIGNER_SK is wired up. Implementation
-  // sketch (commented because it requires @taquito/signer in the Functions
-  // bundle, which isn't yet imported here):
-  //
-  //   import { InMemorySigner } from '@taquito/signer';
-  //   import { localForger } from '@taquito/local-forging';
-  //
-  //   const signer = await InMemorySigner.fromSecretKey(ctx.env.DRUM_SIGNER_SK);
-  //   const nonce = Math.floor(Math.random() * 1e12);
-  //   const expiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-  //   const packed = packMichelson({
-  //     prim: 'Pair',
-  //     args: [
-  //       { int: String(DAILY_AMOUNT) },     // amount
-  //       { int: String(toUnixSeconds(expiry)) }, // expiry
-  //       { int: String(nonce) },            // nonce
-  //       { string: address },               // recipient (alphabetical last)
-  //     ],
-  //   });
-  //   const sig = await signer.sign(packed);
-  //
-  // For now, return 503 so the frontend can render an "awaiting-signer
-  // implementation" state. Mike + cc can wire signing in a follow-up
-  // PR once the contract is originated and DRUM_SIGNER_SK is set as
-  // a Pages secret.
+  // Voucher signing — packs the Michelson record + signs with the
+  // configured DRUM_SIGNER_SK. Field order matters: SmartPy sorts record
+  // fields alphabetically when packing, so the Michelson schema must be
+  // amount → expiry → nonce → recipient. Taquito's packDataBytes does
+  // the Michelson encoding; InMemorySigner adds the 0x05 PACK prefix and
+  // hashes + signs.
+  let signer, packDataBytes;
+  try {
+    const signerMod = await import('@taquito/signer');
+    const codecMod = await import('@taquito/michel-codec');
+    signer = new signerMod.InMemorySigner(ctx.env.DRUM_SIGNER_SK);
+    packDataBytes = codecMod.packDataBytes;
+  } catch (err: any) {
+    return jsonResponse({
+      ok: false,
+      mode: 'awaiting-signer',
+      error: 'signer-init-failed',
+      detail: err?.message || 'unknown',
+    }, 503);
+  }
+
+  // Issue voucher: 5-minute expiry, random 12-digit nonce.
+  const nonce = Math.floor(Math.random() * 1e12);
+  const expirySec = Math.floor((Date.now() + 5 * 60 * 1000) / 1000);
+
+  // Build the Michelson value (alphabetical: amount, expiry, nonce, recipient)
+  // as a right-leaning Pair tree, matching how SmartPy emits sp.pack(record).
+  const value = {
+    prim: 'Pair',
+    args: [
+      { int: String(DAILY_AMOUNT) },
+      {
+        prim: 'Pair',
+        args: [
+          { int: String(expirySec) },
+          {
+            prim: 'Pair',
+            args: [
+              { int: String(nonce) },
+              { string: address },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const type = {
+    prim: 'pair',
+    args: [
+      { prim: 'nat',       annots: ['%amount'] },
+      { prim: 'pair',
+        args: [
+          { prim: 'timestamp', annots: ['%expiry'] },
+          { prim: 'pair',
+            args: [
+              { prim: 'nat',     annots: ['%nonce'] },
+              { prim: 'address', annots: ['%recipient'] },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  let packedHex: string;
+  try {
+    const packed = packDataBytes(value as any, type as any);
+    packedHex = packed.bytes;
+  } catch (err: any) {
+    return jsonResponse({
+      ok: false, mode: 'awaiting-signer',
+      error: 'pack-failed', detail: err?.message || 'unknown',
+    }, 500);
+  }
+
+  let signature: string;
+  try {
+    // signer.sign() expects the raw payload as hex; it prepends nothing
+    // by default (SmartPy's sp.check_signature works on raw packed bytes).
+    const sig = await signer.sign(packedHex);
+    signature = sig.prefixSig;
+  } catch (err: any) {
+    return jsonResponse({
+      ok: false, mode: 'awaiting-signer',
+      error: 'sign-failed', detail: err?.message || 'unknown',
+    }, 500);
+  }
+
+  // Persist the dedup record. 48h TTL covers the PT day boundary.
+  if (ctx.env.PC_DRUM_KV) {
+    try {
+      await ctx.env.PC_DRUM_KV.put(claimKey, new Date().toISOString(), {
+        expirationTtl: 60 * 60 * 48,
+      });
+    } catch { /* dedup is best-effort; if KV is down, allow the claim */ }
+  }
+
+  const expiryIso = new Date(expirySec * 1000).toISOString();
+
   return jsonResponse({
-    ok: false,
-    mode: 'awaiting-signer-impl',
-    contract: drumKt1,
-    error: 'voucher-signing-not-implemented',
-    hint: 'Voucher signing scaffold landed; finalize once DRUM_SIGNER_SK + Taquito InMemorySigner are wired in this Function.',
-  }, 503);
+    ok: true,
+    mode: 'live',
+    claim: {
+      contract: drumKt1,
+      recipient: address,
+      amount: DAILY_AMOUNT,
+      nonce,
+      expiry: expiryIso,
+      signature,
+    },
+    hint: 'voucher valid 5 minutes · sign claim() in Kukai before expiry',
+  });
 };
