@@ -1,0 +1,588 @@
+---
+/**
+ * /cake/register — public birthday registration form.
+ *
+ * Three fields (handle, MM-DD, name? + about?). Submit → POST to
+ * /api/cake/register. KV-backed, auto-approved, one-per-fingerprint.
+ *
+ * No wallet, no payment, no moderation queue. The Cake Circle is open
+ * by social pressure. Mike retains override by deleting KV keys.
+ *
+ * Per Mike 2026-04-25: "do v2 where people can register their birthday
+ * in a simple way".
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+
+const ch = CHANNELS.BDY;
+
+const title = '/cake/register — drop your birthday on PointCast';
+const description = "Register your birthday on PointCast's open cake circle. Free, no wallet required. Pick a handle, drop your MM-DD, get a permanent /cake/{handle} page. On your day, the broadcast tips its hat.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/cake/register',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/cake/register',
+  isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz' },
+  potentialAction: {
+    '@type': 'RegisterAction',
+    target: 'https://pointcast.xyz/api/cake/register',
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="page" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <a href="/cake" style={`color: var(--ch-800);`}>/cake</a>
+      <span aria-hidden="true">/</span>
+      <span>register</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">CH.BDY · /CAKE/REGISTER · v2</p>
+      <h1 class="head__title">drop your birthday.</h1>
+      <p class="head__lede">
+        Pick a handle. Pick a date. Get a permanent <code>/cake/{'{handle}'}</code> page.
+        On your day, the broadcast tips its hat.
+      </p>
+      <p class="head__sub mono">
+        FREE · NO WALLET · NO PAYMENT · ONE REGISTRATION PER PERSON · OPEN CIRCLE
+      </p>
+    </header>
+
+    <form id="cake-form" class="form" novalidate>
+      <div class="field">
+        <label for="handle" class="label mono">HANDLE *</label>
+        <div class="handle-row">
+          <span class="handle-prefix mono">/cake/</span>
+          <input
+            id="handle"
+            name="handle"
+            type="text"
+            required
+            minlength="2"
+            maxlength="30"
+            pattern="[a-z0-9][a-z0-9-]{1,29}"
+            placeholder="rachel"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
+            inputmode="text"
+            aria-describedby="handle-help handle-status"
+          />
+        </div>
+        <p id="handle-help" class="help">
+          2-30 chars, lowercase letters / numbers / hyphens, starts with a letter or number.
+        </p>
+        <p id="handle-status" class="status mono" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="field">
+        <label for="birthday" class="label mono">BIRTHDAY · MM-DD *</label>
+        <div class="mmdd-row">
+          <input
+            id="bday-month"
+            type="number"
+            min="1"
+            max="12"
+            required
+            placeholder="MM"
+            inputmode="numeric"
+            aria-label="Month (01-12)"
+          />
+          <span class="mmdd-sep mono">/</span>
+          <input
+            id="bday-day"
+            type="number"
+            min="1"
+            max="31"
+            required
+            placeholder="DD"
+            inputmode="numeric"
+            aria-label="Day (01-31)"
+          />
+        </div>
+        <p class="help">
+          Year is omitted on purpose — privacy + age-agnostic. Feb 29 is allowed.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="name" class="label mono">NAME · OPTIONAL</label>
+        <input
+          id="name"
+          name="name"
+          type="text"
+          maxlength="80"
+          placeholder="Rachel from Brooklyn"
+        />
+        <p class="help">≤80 chars. Used for the /cake card display.</p>
+      </div>
+
+      <div class="field">
+        <label for="about" class="label mono">ONE-LINE · OPTIONAL</label>
+        <input
+          id="about"
+          name="about"
+          type="text"
+          maxlength="140"
+          placeholder="ceramicist, mother, two cats"
+        />
+        <p class="help">≤140 chars. Goes under your name on the /cake/{'{handle}'} page.</p>
+      </div>
+
+      <button type="submit" id="submit" class="submit mono">
+        REGISTER →
+      </button>
+
+      <p id="form-status" class="form-status mono" role="status" aria-live="polite"></p>
+    </form>
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>HOW THIS WORKS.</strong> Auto-approved on submit. Your handle is yours
+        forever (unless Mike has reason to revoke it). On your birthday, the broadcast
+        marks the day on <a href="/cake">/cake</a> — and if there's a block written
+        for you, it lives at <code>/b/{'{id}'}</code> permanently and anyone can
+        celebrate on it (signature + confetti, no wallet needed).
+      </p>
+      <p class="foot__line mono">
+        <strong>WHY THIS EXISTS.</strong> Birthdays are Schelling points: everyone
+        knows when to show up. The block is the focal point: everyone knows where.
+        Registration locks in a permanent slot in a permanent archive — numbered
+        like Nouns, indexed like a magazine, addressed to one person.
+      </p>
+      <p class="foot__line mono">
+        <strong>SPAM CONTROL.</strong> One registration per device (UA + IP fingerprint).
+        Soft gate, not hard. Reserved handles list excludes obvious collisions
+        (admin / family slugs / route names).
+      </p>
+      <p class="foot__brief mono">
+        spec: <a href="https://github.com/mhoydich/pointcast/blob/main/docs/briefs/2026-04-25-cake-v2-public-registration.md">/docs/briefs/2026-04-25-cake-v2-public-registration.md</a>
+        · <a href="/cake">← back to /cake</a>
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<script>
+  const form = document.getElementById('cake-form') as HTMLFormElement;
+  const handleInput = document.getElementById('handle') as HTMLInputElement;
+  const handleStatus = document.getElementById('handle-status') as HTMLParagraphElement;
+  const monthInput = document.getElementById('bday-month') as HTMLInputElement;
+  const dayInput = document.getElementById('bday-day') as HTMLInputElement;
+  const nameInput = document.getElementById('name') as HTMLInputElement;
+  const aboutInput = document.getElementById('about') as HTMLInputElement;
+  const submitBtn = document.getElementById('submit') as HTMLButtonElement;
+  const formStatus = document.getElementById('form-status') as HTMLParagraphElement;
+
+  // Live handle availability check (debounced).
+  let availabilityTimer: number | undefined;
+  handleInput.addEventListener('input', () => {
+    handleInput.value = handleInput.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    handleStatus.textContent = '';
+    handleStatus.className = 'status mono';
+    if (availabilityTimer) clearTimeout(availabilityTimer);
+    if (handleInput.value.length < 2) return;
+    availabilityTimer = window.setTimeout(checkAvailability, 350);
+  });
+
+  async function checkAvailability() {
+    const h = handleInput.value;
+    if (!h || !/^[a-z0-9][a-z0-9-]{1,29}$/.test(h)) return;
+    handleStatus.textContent = 'checking…';
+    try {
+      const res = await fetch(`/api/cake/register?handle=${encodeURIComponent(h)}`);
+      const j = await res.json();
+      if (j.ok && j.taken) {
+        handleStatus.textContent = j.reason === 'reserved' ? '✗ reserved' : '✗ taken';
+        handleStatus.className = 'status mono status--bad';
+      } else if (j.ok && !j.taken) {
+        handleStatus.textContent = '✓ available';
+        handleStatus.className = 'status mono status--good';
+      } else if (j.reason === 'kv-unbound') {
+        handleStatus.textContent = '· registration coming soon (KV unbound)';
+        handleStatus.className = 'status mono status--soft';
+      } else {
+        handleStatus.textContent = '— unknown';
+      }
+    } catch {
+      handleStatus.textContent = '— offline';
+    }
+  }
+
+  function pad(n: number) { return String(n).padStart(2, '0'); }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formStatus.textContent = '';
+    formStatus.className = 'form-status mono';
+
+    const handle = handleInput.value.trim();
+    const month = Number(monthInput.value);
+    const day = Number(dayInput.value);
+    const name = nameInput.value.trim();
+    const about = aboutInput.value.trim();
+
+    if (!/^[a-z0-9][a-z0-9-]{1,29}$/.test(handle)) {
+      formStatus.textContent = '✗ handle must be 2-30 chars, lowercase + hyphens';
+      formStatus.className = 'form-status mono status--bad';
+      handleInput.focus();
+      return;
+    }
+    if (!month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
+      formStatus.textContent = '✗ birthday must be valid MM-DD';
+      formStatus.className = 'form-status mono status--bad';
+      monthInput.focus();
+      return;
+    }
+
+    const birthday = `${pad(month)}-${pad(day)}`;
+
+    submitBtn.disabled = true;
+    const origLabel = submitBtn.textContent;
+    submitBtn.textContent = 'REGISTERING…';
+    formStatus.textContent = 'sending…';
+
+    try {
+      const res = await fetch('/api/cake/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'pc-cake-register-v1',
+          handle,
+          birthday,
+          name: name || undefined,
+          about: about || undefined,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+      const j = await res.json();
+      if (j.ok) {
+        formStatus.innerHTML = `✓ welcome to the cake circle — see yourself on <a href="/cake#cake-circle" style="color: var(--ch-800); text-decoration: underline;">/cake</a> as <strong>@${handle}</strong>`;
+        formStatus.className = 'form-status mono status--good';
+        submitBtn.textContent = 'REGISTERED ✓';
+        // Trigger confetti to celebrate the registration.
+        burst();
+      } else if (j.error === 'handle-taken') {
+        formStatus.textContent = '✗ that handle is already taken — try another';
+        formStatus.className = 'form-status mono status--bad';
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+      } else if (j.error === 'already-registered') {
+        formStatus.innerHTML = `· you're already registered as <a href="/cake/${j.existingHandle}" style="color: var(--ch-800); text-decoration: underline;">/cake/${j.existingHandle}</a>`;
+        formStatus.className = 'form-status mono status--soft';
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+      } else if (j.reason === 'kv-unbound') {
+        formStatus.textContent = '· registration is coming soon (server KV not bound yet) — try later or DM Mike';
+        formStatus.className = 'form-status mono status--soft';
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+      } else {
+        formStatus.textContent = '✗ ' + (j.error || 'unknown error');
+        formStatus.className = 'form-status mono status--bad';
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+      }
+    } catch (err: any) {
+      formStatus.textContent = '✗ network error — try again';
+      formStatus.className = 'form-status mono status--bad';
+      submitBtn.disabled = false;
+      submitBtn.textContent = origLabel;
+    }
+  });
+
+  // Confetti burst — pure CSS particles. No deps.
+  function burst() {
+    const overlay = document.createElement('div');
+    overlay.className = 'confetti-overlay';
+    document.body.appendChild(overlay);
+    const colors = ['#D86440', '#8E3F25', '#FCEEE8', '#185FA5', '#3B6D11', '#993556', '#BA7517'];
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('span');
+      p.className = 'confetti-particle';
+      const left = Math.random() * 100;
+      const dx = (Math.random() - 0.5) * 200;
+      const rot = Math.random() * 720;
+      const dur = 1500 + Math.random() * 1500;
+      const delay = Math.random() * 200;
+      p.style.left = left + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', dx + 'px');
+      p.style.setProperty('--rot', rot + 'deg');
+      p.style.animationDuration = dur + 'ms';
+      p.style.animationDelay = delay + 'ms';
+      overlay.appendChild(p);
+    }
+    setTimeout(() => overlay.remove(), 4000);
+  }
+</script>
+
+<style>
+  .page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', ui-sans-serif, system-ui, sans-serif);
+    color: var(--pc-ink, #12110E);
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin-bottom: 24px;
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  .head {
+    border-top: 4px solid var(--ch-600);
+    background: var(--ch-50);
+    padding: 22px;
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .head::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ch-600);
+    box-shadow:
+      -14px 6px 0 color-mix(in oklab, var(--ch-600) 60%, #fff),
+      6px 16px 0 color-mix(in oklab, var(--ch-600) 40%, #fff),
+      -22px 18px 0 color-mix(in oklab, var(--ch-600) 80%, #fff),
+      14px -2px 0 color-mix(in oklab, var(--ch-600) 35%, #fff);
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ch-800);
+    margin: 0 0 12px;
+  }
+  .head__title {
+    font-family: var(--pc-font-serif, 'Lora', Georgia, serif);
+    font-size: clamp(36px, 7vw, 64px);
+    line-height: 0.95;
+    margin: 0 0 8px;
+    color: var(--ch-800);
+    letter-spacing: -0.02em;
+  }
+  .head__lede {
+    font-size: 16px;
+    line-height: 1.45;
+    margin: 0 0 12px;
+    color: var(--pc-ink, #12110E);
+    max-width: 56ch;
+  }
+  .head__lede code { font-family: var(--pc-font-mono); font-size: 14px; background: #fff; padding: 1px 4px; border-radius: 2px; }
+  .head__sub {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+  }
+
+  .form {
+    display: grid;
+    gap: 22px;
+  }
+  .field {
+    display: grid;
+    gap: 6px;
+  }
+  .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ch-800);
+  }
+  input[type='text'], input[type='number'] {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    padding: 10px 12px;
+    border: 1.5px solid var(--pc-ink, #12110E);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink, #12110E);
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--ch-600);
+    box-shadow: 0 0 0 3px var(--ch-50);
+  }
+  .help {
+    font-size: 12px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+    line-height: 1.4;
+  }
+  .status {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0;
+    min-height: 1.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .status--good { color: #2F7A20; }
+  .status--bad { color: #B22834; }
+  .status--soft { color: var(--ch-800); }
+
+  .handle-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
+    border: 1.5px solid var(--pc-ink, #12110E);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .handle-row:focus-within { border-color: var(--ch-600); box-shadow: 0 0 0 3px var(--ch-50); }
+  .handle-prefix {
+    font-size: 14px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    background: var(--ch-50);
+    padding: 10px 10px;
+    border-right: 1px solid var(--pc-ink, #12110E);
+    display: flex;
+    align-items: center;
+  }
+  .handle-row input { border: none; box-shadow: none; }
+  .handle-row input:focus { box-shadow: none; }
+
+  .mmdd-row {
+    display: grid;
+    grid-template-columns: 80px auto 80px;
+    gap: 8px;
+    align-items: center;
+  }
+  .mmdd-sep { font-size: 22px; color: var(--pc-ink-muted, #5F5E5A); text-align: center; }
+
+  .submit {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 14px 22px;
+    border: 1.5px solid var(--pc-ink, #12110E);
+    background: var(--pc-ink, #12110E);
+    color: #fff;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, transform 0.12s;
+    align-self: start;
+  }
+  .submit:hover:not(:disabled) {
+    background: var(--ch-600);
+    border-color: var(--ch-600);
+    transform: translateY(-1px);
+  }
+  .submit:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .form-status {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: -8px 0 0;
+    min-height: 1.2em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+
+  .foot {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--pc-rule, #E5E3DD);
+  }
+  .foot__line {
+    font-size: 11px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 64ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--ch-800);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 8px;
+  }
+  .foot__line code {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    background: var(--ch-50);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  .foot__line a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid currentColor; }
+</style>
+
+<style is:global>
+  /* Confetti — global so the overlay can sit above everything */
+  .confetti-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-particle {
+    position: absolute;
+    top: -20px;
+    width: 9px;
+    height: 14px;
+    border-radius: 1px;
+    animation: confetti-fall linear forwards;
+    transform-origin: 50% 50%;
+  }
+  @keyframes confetti-fall {
+    0% {
+      transform: translate3d(0, -20px, 0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg));
+      opacity: 0.85;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+</style>

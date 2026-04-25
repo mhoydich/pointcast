@@ -88,7 +88,7 @@ import WalletConnect from '../../components/WalletConnect.astro';
     <section class="mb-5">
       <label for="code-input" class="flex items-center justify-between mb-2">
         <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
-          michelson code <span class="text-warm">(json array from smartpy → contract.json)</span>
+          michelson code <span class="text-warm">(json array OR michelson text — auto-detect)</span>
         </span>
         <span id="code-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
           0 KB
@@ -106,7 +106,7 @@ import WalletConnect from '../../components/WalletConnect.astro';
     <section class="mb-5">
       <label for="storage-input" class="flex items-center justify-between mb-2">
         <span class="font-mono text-[0.54rem] tracking-[0.2em] uppercase text-ink-soft/60">
-          initial storage <span class="text-warm">(michelson-json value)</span>
+          initial storage <span class="text-warm">(json OR michelson — e.g. (Pair "tz1..." (Pair {Elt 0 333; ...} ...)))</span>
         </span>
         <span id="storage-stats" class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/40">
           0 B
@@ -286,22 +286,46 @@ import WalletConnect from '../../components/WalletConnect.astro';
       return;
     }
 
+    // Accept BOTH Michelson-JSON ([{ "prim": "parameter", ... }]) and
+    // Michelson text format ((parameter ...) ... or (Pair ...) for storage).
+    // SmartPy IDE's "WITH TEZOS CLIENT" tab gives Michelson text; smartpy.io's
+    // older flow gives JSON. Both work now.
+    function looksLikeJson(s: string): boolean {
+      const t = s.trim();
+      return t.startsWith('[') || t.startsWith('{');
+    }
+
     let code: unknown;
     let storage: unknown;
     try {
-      code = JSON.parse(codeRaw);
-    } catch (e) {
-      setStatus('michelson code is not valid JSON — check the paste');
+      if (looksLikeJson(codeRaw)) {
+        code = JSON.parse(codeRaw);
+      } else {
+        const { Parser } = await import('@taquito/michel-codec');
+        const parser = new Parser();
+        code = parser.parseScript(codeRaw);
+        if (!code) throw new Error('parseScript returned null');
+        setStatus(`michelson text parsed — ${(code as any[]).length} sections`);
+      }
+    } catch (e: any) {
+      setStatus(`michelson code couldn't be parsed: ${e?.message ?? 'unknown'} — check the paste`);
       return;
     }
     try {
-      storage = JSON.parse(storageRaw);
-    } catch (e) {
-      setStatus('initial storage is not valid JSON — check the paste');
+      if (looksLikeJson(storageRaw)) {
+        storage = JSON.parse(storageRaw);
+      } else {
+        const { Parser } = await import('@taquito/michel-codec');
+        const parser = new Parser();
+        storage = parser.parseMichelineExpression(storageRaw);
+        if (!storage) throw new Error('parseMichelineExpression returned null');
+      }
+    } catch (e: any) {
+      setStatus(`initial storage couldn't be parsed: ${e?.message ?? 'unknown'} — check the paste`);
       return;
     }
     if (!Array.isArray(code)) {
-      setStatus('michelson code must be a JSON array (parameter/storage/code sections)');
+      setStatus('michelson code must be an array (parameter/storage/code sections) after parsing');
       return;
     }
 
