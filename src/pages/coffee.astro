@@ -193,6 +193,58 @@ const MUGS = [
       ))}
     </div>
 
+    <!-- HISTORY · through the days -->
+    <section class="coffee__history" aria-labelledby="coffee-history-title">
+      <header class="coffee__section-head">
+        <p class="coffee__section-kicker mono">Through the days</p>
+        <h2 id="coffee-history-title" class="coffee__section-title">Cups poured · since the pot lit.</h2>
+      </header>
+      <div class="coffee__history-stat" id="coffee-history-stat">
+        <span class="coffee__history-num mono" id="coffee-history-total">—</span>
+        <span class="coffee__history-num-lbl mono">cumulative</span>
+      </div>
+      <div class="coffee__history-rail" id="coffee-history-rail" aria-label="Last 7 days, daily cup counts">
+        <!-- Bars hydrated client-side from /api/coffee/history?days=7 -->
+        <div class="coffee__history-skel mono">loading…</div>
+      </div>
+      <p class="coffee__history-note mono">
+        The pot lit Friday April 24. Every PT-day is a fresh count; the bars hold the shape.
+      </p>
+    </section>
+
+    <!-- MINTABLES · what you can take with you (preview) -->
+    <section class="coffee__mintables" aria-labelledby="coffee-mint-title">
+      <header class="coffee__section-head">
+        <p class="coffee__section-kicker mono">Mintables · preview</p>
+        <h2 id="coffee-mint-title" class="coffee__section-title">Five mugs you can claim.</h2>
+        <p class="coffee__section-dek">
+          Each mug is a tiny edition — when the contract goes live, pour the cup, claim the cup. Today these are previews of how it'll work. The pixel art is real.
+        </p>
+      </header>
+      <ul class="coffee__mint-list" role="list">
+        {MUGS.map((mug, idx) => (
+          <li class={`coffee-mint coffee-mint--${mug.slug}`} data-mug={mug.slug} data-idx={idx}>
+            <div class="coffee-mint__art" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="64" height="64" shape-rendering="crispEdges" aria-label={mug.label} role="img">
+                {mug.pixels.map(([x, y, w, h, fill]) => (
+                  <rect x={x} y={y} width={w} height={h} fill={fill} />
+                ))}
+              </svg>
+            </div>
+            <div class="coffee-mint__meta">
+              <p class="coffee-mint__name">{mug.label}</p>
+              <p class="coffee-mint__edition mono">edition · {(idx + 1) * 11}</p>
+              <p class="coffee-mint__unlock mono" data-mug-unlock={mug.slug}>unlock at {idx + 1} cup{idx === 0 ? '' : 's'}</p>
+            </div>
+            <div class="coffee-mint__chip mono" data-mug-state={mug.slug}>preview</div>
+          </li>
+        ))}
+      </ul>
+      <p class="coffee__mint-foot mono">
+        FA2 contract pending · status moves from <em>preview</em> → <em>eligible</em> → <em>claim</em> as the path lands. <a href="/b/0356">how Tezos staking works →</a>
+      </p>
+    </section>
+
     <section class="coffee__about" aria-label="About the pot">
       <p>
         This corner exists because the line "coffee pot, still on" has been closing cc's blocks for a few sprints now. Mike asked for the motif made literal. Here it is.
@@ -204,6 +256,12 @@ const MUGS = [
         A garden is slow on purpose. A broadcast is too. A good cup of coffee is in the same family.
       </p>
     </section>
+
+    <!-- Nouns companion · walks across the bottom of the page on a slow loop. -->
+    <!-- Discovery, not in your face. Builds in /coffee but sits at fixed bottom. -->
+    <div class="coffee__noun" aria-hidden="true" id="coffee-noun">
+      <img class="coffee__noun-img" id="coffee-noun-img" alt="" decoding="async" loading="lazy" />
+    </div>
 
     <nav class="coffee__exits" aria-label="Coffee exits">
       <a href="/" class="coffee__exit mono">← the front door</a>
@@ -308,6 +366,10 @@ const MUGS = [
     var shelfList   = document.getElementById('coffee-shelf-list');
     var shelfHead   = document.getElementById('coffee-shelf-heading');
     var shelfNote   = document.getElementById('coffee-shelf-note');
+    var historyRail = document.getElementById('coffee-history-rail');
+    var historyTotalEl = document.getElementById('coffee-history-total');
+    var nounEl      = document.getElementById('coffee-noun');
+    var nounImg     = document.getElementById('coffee-noun-img');
 
     // Variants must match MUGS array in frontmatter + MUG_VARIANTS in
     // functions/api/coffee/pour.ts.
@@ -406,6 +468,100 @@ const MUGS = [
     }
     hydrateGlobal();
     setInterval(hydrateGlobal, 30_000);
+
+    // ── HISTORY ──────────────────────────────────────────────────
+    function fmtDayShort(iso) {
+      // iso like "2026-04-25" → "Sat 04-25"
+      try {
+        var d = new Date(iso + 'T12:00:00Z');
+        var dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()];
+        return dow + ' ' + iso.slice(5);
+      } catch (e) { return iso; }
+    }
+
+    function renderHistory(data) {
+      if (!historyRail) return;
+      var days = (data && data.days) ? data.days : [];
+      if (days.length === 0) {
+        historyRail.innerHTML = '<div class="coffee__history-skel mono">no data yet</div>';
+        return;
+      }
+      var max = days.reduce(function (m, d) { return d.count > m ? d.count : m; }, 1);
+      var html = '';
+      for (var i = 0; i < days.length; i++) {
+        var d = days[i];
+        var pct = max > 0 ? Math.round((d.count / max) * 100) : 0;
+        var heightStyle = 'height:' + Math.max(pct, 4) + '%';
+        var isToday = (i === days.length - 1);
+        var bar = '<div class="coffee__hbar' + (isToday ? ' coffee__hbar--today' : '') + (d.count > 0 ? '' : ' coffee__hbar--empty') + '">' +
+          '<div class="coffee__hbar-fill" style="' + heightStyle + '" title="' + d.day + ' · ' + d.count + ' cups"></div>' +
+          '<div class="coffee__hbar-num mono">' + d.count + '</div>' +
+          '<div class="coffee__hbar-day mono">' + fmtDayShort(d.day) + '</div>' +
+          '</div>';
+        html += bar;
+      }
+      historyRail.innerHTML = html;
+      if (historyTotalEl && data.total != null) {
+        historyTotalEl.textContent = String(data.total);
+      }
+    }
+
+    function hydrateHistory() {
+      fetch('/api/coffee/history?days=7', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) { if (data && data.days) renderHistory(data); })
+        .catch(function () { /* leave skel */ });
+    }
+    hydrateHistory();
+    setInterval(hydrateHistory, 60_000);
+
+    // ── MINTABLES — update unlock states based on local cup count
+    function refreshMintables() {
+      var localCount = readCups();
+      // For each mug, the unlock threshold is (idx + 1) cups.
+      var slugs = ['ceramic','espresso','latte','paper','bistro'];
+      for (var i = 0; i < slugs.length; i++) {
+        var threshold = i + 1;
+        var chip = document.querySelector('[data-mug-state="' + slugs[i] + '"]');
+        if (!chip) continue;
+        if (localCount >= threshold) {
+          chip.textContent = 'eligible';
+          chip.setAttribute('data-state', 'eligible');
+        } else {
+          chip.textContent = 'preview';
+          chip.setAttribute('data-state', 'preview');
+        }
+      }
+    }
+    refreshMintables();
+
+    // ── NOUNS COMPANION — random noun walks across the bottom slowly.
+    // Discovery, not in your face. Click = friendly nudge.
+    function placeNoun() {
+      if (!nounEl || !nounImg) return;
+      var nounId = Math.floor(Math.random() * 1200);
+      nounImg.src = 'https://noun.pics/' + nounId + '.svg';
+      nounImg.alt = 'noun ' + nounId;
+      nounEl.setAttribute('data-noun-id', String(nounId));
+      nounEl.classList.add('coffee__noun--in');
+    }
+    if (nounEl) {
+      // Show only after a delay so first impression is the pot, not a wandering noun.
+      setTimeout(placeNoun, 8000);
+      nounEl.addEventListener('click', function () {
+        // Click bonus — pour an extra mug. Discovery reward.
+        if (!btn) return;
+        btn.click();
+        // Brief sparkle on the noun
+        nounEl.classList.add('coffee__noun--blip');
+        setTimeout(function () { nounEl.classList.remove('coffee__noun--blip'); }, 600);
+      });
+    }
+
+    // Update mintables when a pour happens
+    if (btn) {
+      btn.addEventListener('click', refreshMintables);
+    }
 
     if (btn) {
       btn.addEventListener('click', function () {
@@ -646,6 +802,287 @@ const MUGS = [
     .coffee-mug:hover { transform: none; }
   }
   .coffee__templates { display: none; }
+
+  /* ── HISTORY · through the days ───────────────────────────────── */
+  .coffee__history,
+  .coffee__mintables {
+    margin: 32px auto 24px;
+    max-width: 560px;
+    text-align: left;
+  }
+  .coffee__section-head { margin-bottom: 14px; text-align: center; }
+  .coffee__section-kicker {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin: 0 0 8px;
+  }
+  .coffee__section-title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(22px, 3.4vw, 30px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.005em;
+    margin: 0 0 6px;
+    color: var(--color-ink);
+  }
+  .coffee__section-dek {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0 auto;
+    max-width: 460px;
+  }
+
+  .coffee__history-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+  .coffee__history-num {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 42px;
+    font-weight: 400;
+    color: var(--color-ink);
+  }
+  .coffee__history-num-lbl {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .coffee__history-rail {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    align-items: end;
+    height: 140px;
+    padding: 12px;
+    border: 1px solid var(--color-rule);
+    border-radius: 3px;
+    background: linear-gradient(180deg, #fbf6e8 0%, #f5efe4 100%);
+    margin-bottom: 8px;
+  }
+  .coffee__history-skel {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    align-self: center;
+    opacity: 0.6;
+  }
+  .coffee__hbar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    gap: 4px;
+    position: relative;
+  }
+  .coffee__hbar-fill {
+    width: 100%;
+    background: linear-gradient(180deg, #5a3b22 0%, #3c2817 100%);
+    border-radius: 1px;
+    transition: height 0.4s ease-out;
+    min-height: 2px;
+  }
+  .coffee__hbar--today .coffee__hbar-fill {
+    background: linear-gradient(180deg, #c4952e 0%, #8a6219 100%);
+    box-shadow: 0 0 8px rgba(196, 149, 46, 0.4);
+  }
+  .coffee__hbar--empty .coffee__hbar-fill {
+    background: var(--color-rule);
+  }
+  .coffee__hbar-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-ink);
+    line-height: 1;
+  }
+  .coffee__hbar-day {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  .coffee__history-note,
+  .coffee__mint-foot {
+    text-align: center;
+    color: var(--color-ink-soft);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .coffee__mint-foot a {
+    color: var(--color-warm);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .coffee__mint-foot a:hover { color: var(--color-ink); }
+  .coffee__mint-foot em {
+    font-style: normal;
+    color: var(--color-ink);
+    font-weight: 600;
+    padding: 0 2px;
+  }
+
+  /* ── MINTABLES ─────────────────────────────────────────────────── */
+  .coffee__mint-list {
+    list-style: none;
+    margin: 0 0 14px;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .coffee-mint {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 14px;
+    border: 1px solid var(--color-rule);
+    border-radius: 3px;
+    background: var(--color-card);
+    transition: background 0.14s, border-color 0.14s, transform 0.14s;
+  }
+  .coffee-mint:hover {
+    background: var(--color-card-hover);
+    border-color: var(--color-warm);
+    transform: translateY(-1px);
+  }
+  .coffee-mint__art {
+    line-height: 0;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, transparent 0%, rgba(196, 149, 46, 0.08) 100%);
+    border-radius: 2px;
+  }
+  .coffee-mint__art svg {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .coffee-mint__meta { min-width: 0; }
+  .coffee-mint__name {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 17px;
+    font-weight: 400;
+    margin: 0;
+    color: var(--color-ink);
+    line-height: 1.2;
+    text-transform: capitalize;
+  }
+  .coffee-mint__edition {
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin: 2px 0 0;
+  }
+  .coffee-mint__unlock {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 4px 0 0;
+    opacity: 0.85;
+  }
+  .coffee-mint__chip {
+    align-self: center;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--color-ink-soft);
+    border: 1px dashed var(--color-rule);
+    padding: 4px 9px;
+    border-radius: 2px;
+    font-weight: 700;
+    transition: all 0.18s;
+  }
+  .coffee-mint__chip[data-state="eligible"] {
+    background: var(--color-live-bg);
+    color: var(--color-live);
+    border: 1px solid var(--color-live);
+  }
+
+  /* ── NOUNS COMPANION · discoverable, walks across bottom ────────── */
+  .coffee__noun {
+    position: fixed;
+    left: -64px;
+    bottom: 90px;
+    width: 56px;
+    height: 56px;
+    z-index: 30;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  .coffee__noun--in {
+    opacity: 1;
+    pointer-events: auto;
+    animation: coffee-noun-walk 90s linear infinite;
+  }
+  .coffee__noun-img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
+    transition: transform 0.18s;
+  }
+  .coffee__noun:hover .coffee__noun-img {
+    transform: scale(1.15) rotate(-4deg);
+  }
+  .coffee__noun--blip .coffee__noun-img {
+    animation: coffee-noun-blip 0.6s ease-out;
+  }
+
+  @keyframes coffee-noun-walk {
+    0%   { left: -64px; }
+    45%  { left: 38vw; }
+    50%  { left: 38vw; transform: scaleX(-1); }     /* pause + flip */
+    55%  { left: 38vw; transform: scaleX(-1); }
+    100% { left: 110vw; transform: scaleX(-1); }
+  }
+  @keyframes coffee-noun-blip {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.4) rotate(8deg); filter: drop-shadow(0 0 10px rgba(196,149,46,0.7)); }
+    100% { transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .coffee__noun { display: none; }
+    .coffee__hbar-fill { transition: none; }
+  }
+
+  @media (max-width: 540px) {
+    .coffee-mint {
+      grid-template-columns: 56px 1fr auto;
+      gap: 10px;
+      padding: 8px 12px;
+    }
+    .coffee-mint__art { width: 48px; height: 48px; }
+    .coffee-mint__art svg { width: 48px; height: 48px; }
+    .coffee-mint__name { font-size: 15px; }
+    .coffee__history-num { font-size: 32px; }
+    .coffee__history-rail { height: 110px; }
+    .coffee__hbar-day { font-size: 7px; }
+  }
 
   .coffee__about {
     text-align: left;
