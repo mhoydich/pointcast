@@ -1,0 +1,432 @@
+---
+/**
+ * BirthdayCelebrate — celebration + guestbook for BIRTHDAY-type blocks.
+ *
+ * The Schelling-point mechanic: anyone visiting the block can drop a
+ * confetti + signature. Stacks up over time as a public ritual on the
+ * block. One celebration per fingerprint per block (KV-deduped server-side).
+ *
+ * No wallet, no registration. Handle is free-text. Message optional.
+ *
+ * Per Mike 2026-04-25: "people celebrate there animations" + "birthday
+ * shelling point" — this is the surface that makes the block a focal
+ * point others can show up to.
+ */
+interface Props {
+  blockId: string;
+  recipientName?: string | null;
+}
+const { blockId, recipientName } = Astro.props;
+---
+
+<section class="bcel" data-block-id={blockId} aria-label="Celebrate this birthday">
+  <header class="bcel__header">
+    <p class="bcel__kicker mono">★ CELEBRATE · GUESTBOOK</p>
+    <p class="bcel__lede">
+      Drop confetti for <strong>{recipientName ?? 'this birthday'}</strong>. One celebration per
+      visitor — yours stays on the block forever.
+    </p>
+  </header>
+
+  <button type="button" class="bcel__btn mono" id={`bcel-trigger-${blockId}`}>
+    🎉 CELEBRATE →
+  </button>
+
+  <form class="bcel__form" id={`bcel-form-${blockId}`} hidden novalidate>
+    <div class="bcel__field">
+      <label for={`bcel-handle-${blockId}`} class="bcel__label mono">YOUR NAME *</label>
+      <input
+        id={`bcel-handle-${blockId}`}
+        name="handle"
+        type="text"
+        required
+        minlength="1"
+        maxlength="40"
+        placeholder="anyone — first name, handle, or initials"
+        autocomplete="given-name"
+      />
+    </div>
+    <div class="bcel__field">
+      <label for={`bcel-message-${blockId}`} class="bcel__label mono">MESSAGE · OPTIONAL</label>
+      <input
+        id={`bcel-message-${blockId}`}
+        name="message"
+        type="text"
+        maxlength="200"
+        placeholder="happy birthday!"
+      />
+    </div>
+    <div class="bcel__actions">
+      <button type="submit" class="bcel__submit mono">DROP CONFETTI →</button>
+      <button type="button" class="bcel__cancel mono" data-cancel>cancel</button>
+    </div>
+    <p class="bcel__status mono" role="status" aria-live="polite"></p>
+  </form>
+
+  <div class="bcel__guestbook" aria-live="polite">
+    <p class="bcel__count mono" id={`bcel-count-${blockId}`}>· loading guestbook…</p>
+    <ol class="bcel__list" id={`bcel-list-${blockId}`}></ol>
+  </div>
+</section>
+
+<script define:vars={{ blockId }}>
+  (() => {
+    const trigger = document.getElementById(`bcel-trigger-${blockId}`);
+    const form = document.getElementById(`bcel-form-${blockId}`);
+    const handleInput = document.getElementById(`bcel-handle-${blockId}`);
+    const messageInput = document.getElementById(`bcel-message-${blockId}`);
+    const status = form?.querySelector('.bcel__status');
+    const submit = form?.querySelector('.bcel__submit');
+    const cancel = form?.querySelector('[data-cancel]');
+    const countEl = document.getElementById(`bcel-count-${blockId}`);
+    const listEl = document.getElementById(`bcel-list-${blockId}`);
+
+    if (!trigger || !form || !handleInput || !submit || !countEl || !listEl) return;
+
+    trigger.addEventListener('click', () => {
+      form.hidden = false;
+      trigger.style.display = 'none';
+      handleInput.focus();
+    });
+
+    cancel?.addEventListener('click', () => {
+      form.hidden = true;
+      trigger.style.display = '';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (status) { status.textContent = 'sending…'; status.className = 'bcel__status mono'; }
+
+      const handle = handleInput.value.trim();
+      const message = (messageInput?.value || '').trim();
+      if (!handle) {
+        if (status) { status.textContent = '✗ name required'; status.className = 'bcel__status mono bcel__status--bad'; }
+        return;
+      }
+
+      submit.disabled = true;
+      const orig = submit.textContent;
+      submit.textContent = 'DROPPING…';
+
+      try {
+        const res = await fetch('/api/cake/celebrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'pc-cake-celebrate-v1',
+            blockId,
+            handle,
+            message: message || undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+        const j = await res.json();
+        if (j.ok) {
+          if (status) { status.textContent = '✓ added — see your signature below'; status.className = 'bcel__status mono bcel__status--good'; }
+          burst();
+          await loadGuestbook();
+          form.hidden = true;
+          trigger.textContent = '✓ CELEBRATED';
+          trigger.disabled = true;
+          trigger.style.display = '';
+        } else if (j.error === 'already-celebrated') {
+          if (status) { status.textContent = `· you already celebrated this block (as ${j.priorHandle})`; status.className = 'bcel__status mono bcel__status--soft'; }
+          submit.disabled = false;
+          submit.textContent = orig;
+        } else if (j.reason === 'kv-unbound') {
+          if (status) { status.textContent = '· guestbook coming soon (KV unbound)'; status.className = 'bcel__status mono bcel__status--soft'; }
+          submit.disabled = false;
+          submit.textContent = orig;
+        } else {
+          if (status) { status.textContent = '✗ ' + (j.error || 'unknown error'); status.className = 'bcel__status mono bcel__status--bad'; }
+          submit.disabled = false;
+          submit.textContent = orig;
+        }
+      } catch (err) {
+        if (status) { status.textContent = '✗ network error — try again'; status.className = 'bcel__status mono bcel__status--bad'; }
+        submit.disabled = false;
+        submit.textContent = orig;
+      }
+    });
+
+    async function loadGuestbook() {
+      try {
+        const res = await fetch(`/api/cake/celebrate?blockId=${blockId}`);
+        const j = await res.json();
+        if (!j.ok) {
+          if (j.reason === 'kv-unbound') {
+            countEl.textContent = '· guestbook coming soon';
+            return;
+          }
+          countEl.textContent = '· guestbook unavailable';
+          return;
+        }
+        const n = j.count || 0;
+        countEl.textContent = n === 0
+          ? '· no celebrations yet — be the first'
+          : `· ${n} ${n === 1 ? 'celebration' : 'celebrations'}`;
+        listEl.innerHTML = '';
+        for (const e of j.entries || []) {
+          const li = document.createElement('li');
+          li.className = 'bcel__entry';
+          const ts = new Date(e.at);
+          const tsStr = isFinite(+ts) ? ts.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+          li.innerHTML = `
+            <span class="bcel__entry-handle">${escapeHtml(e.handle)}</span>
+            ${e.message ? `<span class="bcel__entry-msg">"${escapeHtml(e.message)}"</span>` : ''}
+            <span class="bcel__entry-ts mono">${escapeHtml(tsStr)}</span>
+          `;
+          listEl.appendChild(li);
+        }
+      } catch {
+        countEl.textContent = '· guestbook unavailable (offline?)';
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function burst() {
+      const overlay = document.createElement('div');
+      overlay.className = 'confetti-overlay';
+      document.body.appendChild(overlay);
+      const colors = ['#D86440', '#8E3F25', '#FCEEE8', '#185FA5', '#3B6D11', '#993556', '#BA7517', '#534AB7'];
+      for (let i = 0; i < 90; i++) {
+        const p = document.createElement('span');
+        p.className = 'confetti-particle';
+        const left = Math.random() * 100;
+        const dx = (Math.random() - 0.5) * 240;
+        const rot = Math.random() * 720;
+        const dur = 1500 + Math.random() * 1800;
+        const delay = Math.random() * 250;
+        p.style.left = left + '%';
+        p.style.background = colors[i % colors.length];
+        p.style.setProperty('--dx', dx + 'px');
+        p.style.setProperty('--rot', rot + 'deg');
+        p.style.animationDuration = dur + 'ms';
+        p.style.animationDelay = delay + 'ms';
+        overlay.appendChild(p);
+      }
+      setTimeout(() => overlay.remove(), 4500);
+    }
+
+    // Load on mount.
+    loadGuestbook();
+  })();
+</script>
+
+<style>
+  .bcel {
+    margin: 28px 0;
+    padding: 22px;
+    border: 2px dashed #D86440;
+    background: #FCEEE8;
+    border-radius: 4px;
+    position: relative;
+  }
+  .bcel::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #D86440;
+    box-shadow:
+      -14px 6px 0 color-mix(in oklab, #D86440 60%, #fff),
+      6px 16px 0 color-mix(in oklab, #D86440 40%, #fff),
+      -22px 18px 0 color-mix(in oklab, #D86440 80%, #fff);
+  }
+  .bcel__header { margin-bottom: 14px; }
+  .bcel__kicker {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #8E3F25;
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+  .bcel__lede {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink, #12110E);
+    margin: 0;
+    max-width: 60ch;
+  }
+  .bcel__lede strong { color: #8E3F25; font-weight: 600; }
+
+  .bcel__btn {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 12px 18px;
+    border: 2px solid #8E3F25;
+    background: #fff;
+    color: #8E3F25;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, transform 0.12s;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    margin-top: 6px;
+  }
+  .bcel__btn:hover:not(:disabled) {
+    background: #D86440;
+    color: #fff;
+    transform: translateY(-1px);
+  }
+  .bcel__btn:disabled { opacity: 0.7; cursor: default; }
+
+  .bcel__form {
+    margin-top: 14px;
+    display: grid;
+    gap: 12px;
+    background: #fff;
+    padding: 14px;
+    border-radius: 2px;
+    border: 1px solid #D86440;
+  }
+  /* The hidden attribute should win over display: grid */
+  .bcel__form[hidden] { display: none; }
+  .bcel__field { display: grid; gap: 4px; }
+  .bcel__label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #8E3F25;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+  .bcel__form input {
+    font-family: var(--pc-font-sans, 'Inter Variable', ui-sans-serif, system-ui, sans-serif);
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1.5px solid var(--pc-ink, #12110E);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink, #12110E);
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .bcel__form input:focus {
+    outline: none;
+    border-color: #D86440;
+    box-shadow: 0 0 0 3px #FCEEE8;
+  }
+  .bcel__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .bcel__submit {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 10px 16px;
+    border: 1.5px solid var(--pc-ink, #12110E);
+    background: var(--pc-ink, #12110E);
+    color: #fff;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+  .bcel__submit:hover:not(:disabled) {
+    background: #D86440;
+    border-color: #D86440;
+  }
+  .bcel__submit:disabled { opacity: 0.55; cursor: not-allowed; }
+  .bcel__cancel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: var(--pc-ink-muted, #5F5E5A);
+    cursor: pointer;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+  }
+  .bcel__cancel:hover { color: var(--pc-ink, #12110E); text-decoration: underline; }
+
+  .bcel__status {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0;
+    min-height: 1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .bcel__status--good { color: #2F7A20; }
+  .bcel__status--bad { color: #B22834; }
+  .bcel__status--soft { color: #8E3F25; }
+
+  .bcel__guestbook { margin-top: 18px; }
+  .bcel__count {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0 0 8px;
+  }
+  .bcel__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .bcel__entry {
+    background: #fff;
+    border: 1px solid #FCEEE8;
+    padding: 8px 12px;
+    border-radius: 2px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 13px;
+  }
+  .bcel__entry-handle { font-weight: 600; color: #8E3F25; }
+  .bcel__entry-msg { color: var(--pc-ink, #12110E); font-style: italic; }
+  .bcel__entry-ts { font-size: 10px; color: var(--pc-ink-muted, #5F5E5A); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  @media (max-width: 540px) {
+    .bcel__entry {
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
+    .bcel__entry-ts { justify-self: start; }
+  }
+</style>
+
+<style is:global>
+  /* Confetti — global so the overlay can sit above everything. Same engine
+     as cake/register.astro's confetti; sharing one stylesheet is fine since
+     they're both keyed off .confetti-overlay / .confetti-particle. */
+  .confetti-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-particle {
+    position: absolute;
+    top: -20px;
+    width: 9px;
+    height: 14px;
+    border-radius: 1px;
+    animation: confetti-fall linear forwards;
+    transform-origin: 50% 50%;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg)); opacity: 0.85; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+</style>

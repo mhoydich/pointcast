@@ -156,6 +156,9 @@ const jsonLd = {
         <span class="stats__sep">·</span>
         <a href="/cake.json" class="stats__cell">/cake.json ↗</a>
       </div>
+      <div class="head__cta-row">
+        <a class="head__cta mono" href="/cake/register">+ register your birthday →</a>
+      </div>
     </header>
 
     {upcoming.length > 0 && (
@@ -199,9 +202,24 @@ const jsonLd = {
       </section>
     )}
 
+    <section class="section section--circle" id="cake-circle">
+      <div class="section__head">
+        <h2 class="section__title mono">Cake Circle · public registry</h2>
+        <a class="section__cta mono" href="/cake/register">+ register your birthday →</a>
+      </div>
+      <p class="circle-lede">
+        Anyone can drop their birthday on PointCast. Free, no wallet, no
+        moderation queue. <strong>One per device.</strong> Your handle is
+        yours; on your day, the broadcast tips its hat. People can celebrate
+        on your block (signature + confetti) when one's written.
+      </p>
+      <p class="circle-count mono" id="circle-count">· loading the circle…</p>
+      <ul class="circle-list" id="circle-list"></ul>
+    </section>
+
     {recipients.length > 0 && (
       <section class="section section--recipients">
-        <h2 class="section__title mono">Recipients · permanent Nouns</h2>
+        <h2 class="section__title mono">Recipients · permanent Nouns (curated)</h2>
         <div class="grid">
           {recipients.map((r) => (
             <a class="rcard" href={`/cake/${r.slug}`}>
@@ -299,6 +317,87 @@ const jsonLd = {
 
   </div>
 </BlockLayout>
+
+<script>
+  // Cake Circle — fetches the public registry from KV-backed function and
+  // renders. Falls back to a "coming soon" message if the KV namespace is
+  // unbound (server returns 503 with reason: 'kv-unbound'). Renders a
+  // grouped-by-month list so visitors can scan for "who's celebrating in
+  // April" — birthday Schelling-point shape.
+  (async () => {
+    const countEl = document.getElementById('circle-count');
+    const listEl = document.getElementById('circle-list');
+    if (!countEl || !listEl) return;
+
+    try {
+      const res = await fetch('/api/cake/register?list=1');
+      const j = await res.json();
+      if (!j.ok) {
+        if (j.reason === 'kv-unbound') {
+          countEl.textContent = '· public registry coming soon (server KV not bound yet)';
+          return;
+        }
+        countEl.textContent = '· cake circle unavailable';
+        return;
+      }
+
+      const regs = (j.registrations || []) as Array<{ handle: string; birthday: string; name: string | null; about: string | null; at: string }>;
+      countEl.textContent = regs.length === 0
+        ? '· no public registrations yet — be the first via /cake/register'
+        : `· ${regs.length} ${regs.length === 1 ? 'person' : 'people'} in the circle`;
+
+      // Sort by next-occurrence (closest birthday first), then by registration time
+      function todayPT(): Date {
+        const ptStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Los_Angeles',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+        return new Date(ptStr + 'T00:00:00');
+      }
+      function nextOccurrence(mmdd: string, from: Date): Date {
+        const [m, d] = mmdd.split('-').map(Number);
+        let c = new Date(from.getFullYear(), m - 1, d);
+        if (c < from) c = new Date(from.getFullYear() + 1, m - 1, d);
+        return c;
+      }
+
+      const today = todayPT();
+      const sorted = [...regs].sort((a, b) => +nextOccurrence(a.birthday, today) - +nextOccurrence(b.birthday, today));
+
+      function escapeHtml(s: string) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+      }
+      function monthName(mm: string) {
+        return ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][parseInt(mm, 10) - 1] || mm;
+      }
+
+      listEl.innerHTML = '';
+      for (const r of sorted) {
+        const next = nextOccurrence(r.birthday, today);
+        const isToday = +next === +today;
+        const days = Math.round((+next - +today) / 86_400_000);
+        const li = document.createElement('li');
+        li.className = 'circle-item' + (isToday ? ' circle-item--today' : '');
+        const [mm, dd] = r.birthday.split('-');
+        const dayLabel = isToday ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
+        li.innerHTML = `
+          <span class="circle-date mono">${escapeHtml(monthName(mm))} ${escapeHtml(dd)}</span>
+          <span class="circle-id">
+            <strong>@${escapeHtml(r.handle)}</strong>
+            ${r.name ? `<span class="circle-name"> · ${escapeHtml(r.name)}</span>` : ''}
+            ${r.about ? `<div class="circle-about">${escapeHtml(r.about)}</div>` : ''}
+          </span>
+          <span class="circle-when mono">${escapeHtml(dayLabel)}</span>
+        `;
+        listEl.appendChild(li);
+      }
+    } catch {
+      countEl.textContent = '· cake circle unavailable (offline?)';
+    }
+  })();
+</script>
 
 <style>
   .cake {
@@ -402,6 +501,23 @@ const jsonLd = {
   .stats__sep { color: var(--pc-ink-muted, #5F5E5A); }
   .stats a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid currentColor; }
 
+  .head__cta-row { margin-top: 14px; }
+  .head__cta {
+    display: inline-block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #fff;
+    background: var(--ch-600);
+    border: 1.5px solid var(--ch-800);
+    padding: 10px 16px;
+    border-radius: 2px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.12s, transform 0.12s;
+  }
+  .head__cta:hover { background: var(--ch-800); transform: translateY(-1px); }
+
   /* Sections */
   .section {
     margin: 0 0 32px;
@@ -414,6 +530,89 @@ const jsonLd = {
     margin: 0 0 12px;
     border-bottom: 1px solid var(--pc-rule, #E5E3DD);
     padding-bottom: 8px;
+  }
+  .section__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--pc-rule, #E5E3DD);
+    padding-bottom: 8px;
+    margin: 0 0 12px;
+  }
+  .section__head .section__title {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin: 0;
+  }
+  .section__cta {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ch-800);
+    text-decoration: none;
+    border: 1.5px solid var(--ch-600);
+    background: var(--ch-50);
+    padding: 6px 12px;
+    border-radius: 2px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .section__cta:hover {
+    background: var(--ch-600);
+    color: #fff;
+  }
+
+  /* Cake Circle (public registry) */
+  .circle-lede {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 64ch;
+    margin: 0 0 12px;
+  }
+  .circle-lede strong { color: var(--ch-800); }
+  .circle-count {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0 0 8px;
+  }
+  .circle-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .circle-item {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 10px 12px;
+    border: 1px dashed var(--pc-rule, #E5E3DD);
+    background: #fff;
+  }
+  .circle-item--today {
+    background: var(--ch-50);
+    border-color: var(--ch-600);
+    border-style: solid;
+  }
+  .circle-date {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ch-800);
+    font-weight: 600;
+  }
+  .circle-id { font-size: 14px; }
+  .circle-name { color: var(--pc-ink-muted, #5F5E5A); }
+  .circle-about { font-size: 12px; color: var(--pc-ink-muted, #5F5E5A); margin-top: 2px; font-style: italic; }
+  .circle-when {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  @media (max-width: 540px) {
+    .circle-item { grid-template-columns: 1fr; gap: 4px; }
+    .circle-when { justify-self: start; }
   }
 
   /* Upcoming row list */
