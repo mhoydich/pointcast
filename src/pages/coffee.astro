@@ -225,6 +225,41 @@ const MUGS = [
     </section>
 
     <!-- MINTABLES · five mugs, five rarity tiers, real wallet connect -->
+    <!-- Your minted shelf — visible only when the connected wallet has
+         minted at least one mug on-chain. Server-rendered with all 5
+         tiles hidden; the script unhides the ones the wallet owns and
+         updates each link to the relevant tzkt op. -->
+    <section class="coffee__shelf" id="coffee-shelf" hidden aria-labelledby="coffee-shelf-title">
+      <header class="coffee__shelf-head">
+        <p class="coffee__shelf-kicker mono">Your shelf</p>
+        <h2 id="coffee-shelf-title" class="coffee__shelf-title">
+          <span id="coffee-shelf-count">0</span> mug<span id="coffee-shelf-count-s"></span> on this wallet
+        </h2>
+        <p class="coffee__shelf-dek mono">click any mug to view the mint on tzkt · they live in your Tezos wallet</p>
+      </header>
+      <ul class="coffee__shelf-list" role="list">
+        {MUGS.map((mug) => {
+          const tier = MUG_TIERS[mug.slug as keyof typeof MUG_TIERS];
+          return (
+            <li class={`coffee-shelf-tile coffee-shelf-tile--${tier.rarity}`} data-shelf-tile={mug.slug} hidden>
+              <a class="coffee-shelf-tile__link" data-shelf-link={mug.slug} target="_blank" rel="noopener" href="#" title={`Your ${mug.label} mint on tzkt`}>
+                <span class="coffee-shelf-tile__art" style={`--rarity-color:${tier.hex}`} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="56" height="56" shape-rendering="crispEdges">
+                    {mug.pixels.map(([x, y, w, h, fill]) => (
+                      <rect x={x} y={y} width={w} height={h} fill={fill} />
+                    ))}
+                  </svg>
+                </span>
+                <span class="coffee-shelf-tile__name">{mug.label}</span>
+                <span class={`coffee-shelf-tile__rarity mono coffee-shelf-tile__rarity--${tier.rarity}`}>{tier.rarity}</span>
+                <span class="coffee-shelf-tile__hash mono" data-shelf-hash={mug.slug}></span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
     <section class="coffee__mintables" aria-labelledby="coffee-mint-title">
       <header class="coffee__section-head">
         <p class="coffee__section-kicker mono">Mintables</p>
@@ -587,6 +622,41 @@ const MUGS = [
       return addr.slice(0, 5) + '…' + addr.slice(-4);
     }
 
+    // ── Your shelf — visual display of mugs owned on the connected wallet ─
+    // Server renders all 5 tiles hidden inside #coffee-shelf. We unhide
+    // the ones with a corresponding claims[slug].opHash and link each to
+    // tzkt. Section auto-hides if no mugs are owned (wallet not connected
+    // or wallet owns zero mugs).
+    function refreshShelf() {
+      var shelfWrap = document.getElementById('coffee-shelf');
+      var countEl = document.getElementById('coffee-shelf-count');
+      var pluralEl = document.getElementById('coffee-shelf-count-s');
+      if (!shelfWrap) return;
+      var claims = readClaims();
+      var owned = 0;
+      var slugs = ['ceramic','espresso','latte','paper','bistro'];
+      slugs.forEach(function (slug) {
+        var tile = document.querySelector('[data-shelf-tile="' + slug + '"]');
+        var link = document.querySelector('[data-shelf-link="' + slug + '"]');
+        var hashEl = document.querySelector('[data-shelf-hash="' + slug + '"]');
+        if (!tile || !link) return;
+        var entry = claims[slug];
+        if (entry && entry.opHash) {
+          tile.hidden = false;
+          link.href = 'https://tzkt.io/' + entry.opHash;
+          if (hashEl) hashEl.textContent = entry.opHash.slice(0, 8) + '…';
+          owned++;
+        } else {
+          tile.hidden = true;
+          link.href = '#';
+          if (hashEl) hashEl.textContent = '';
+        }
+      });
+      shelfWrap.hidden = (owned === 0);
+      if (countEl) countEl.textContent = String(owned);
+      if (pluralEl) pluralEl.textContent = (owned === 1 ? '' : 's');
+    }
+
     function refreshMintables() {
       var localCount = readCups();
       var wallet = readWallet();
@@ -639,6 +709,7 @@ const MUGS = [
       }
     }
     refreshMintables();
+    refreshShelf();
 
     // Click handlers on each claim button.
     //
@@ -702,6 +773,7 @@ const MUGS = [
         };
         writeClaims(claims);
         refreshMintables();
+      refreshShelf();
         var row = document.querySelector('[data-mug="' + slug + '"]');
         if (row) {
           row.classList.add('coffee-mint--just-banked');
@@ -753,6 +825,7 @@ const MUGS = [
             '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">minted ↗</a>';
         }
         refreshMintables();
+      refreshShelf();
 
         // Brief visual nudge — same just-banked animation.
         var row = document.querySelector('[data-mug="' + slug + '"]');
@@ -898,6 +971,7 @@ const MUGS = [
         if (changed) {
           writeClaims(claims);
           refreshMintables();
+      refreshShelf();
         }
       } catch (e) { /* tzkt down? skip */ }
     }
@@ -983,6 +1057,7 @@ const MUGS = [
     // Re-render whenever the wallet connects or disconnects.
     window.addEventListener('pc:wallet-change', function () {
       refreshMintables();
+      refreshShelf();
       syncOnChainOwnership();
     });
 
@@ -1402,6 +1477,123 @@ const MUGS = [
     letter-spacing: 0.16em;
     text-transform: uppercase;
     margin: 0;
+  }
+  /* ── Your shelf ────────────────────────────────────────────────── */
+  .coffee__shelf {
+    margin: 16px auto 24px;
+    padding: 18px 18px 20px;
+    max-width: 640px;
+    background: linear-gradient(180deg, var(--color-warm, #b87333) 0%, transparent 0.4%), var(--color-card, rgba(0,0,0,0.04));
+    border: 1px solid var(--color-warm, #b87333);
+    border-radius: 14px;
+    box-shadow: 0 6px 24px -12px rgba(184, 115, 51, 0.4);
+    text-align: center;
+  }
+  .coffee__shelf-head { margin-bottom: 14px; }
+  .coffee__shelf-kicker {
+    color: var(--color-warm);
+    font-size: 9.5px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  .coffee__shelf-title {
+    font-family: var(--font-display, serif);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-ink);
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .coffee__shelf-title #coffee-shelf-count {
+    color: var(--color-warm);
+    font-weight: 700;
+  }
+  .coffee__shelf-dek {
+    color: var(--color-ink-soft);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .coffee__shelf-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  .coffee-shelf-tile {
+    background: var(--color-paper, #fff);
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.1));
+    border-radius: 12px;
+    padding: 12px 14px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    min-width: 130px;
+  }
+  .coffee-shelf-tile:hover {
+    transform: translateY(-2px);
+    border-color: var(--rarity-color, var(--color-warm));
+    box-shadow: 0 6px 18px -8px var(--rarity-color, rgba(184,115,51,0.35));
+  }
+  .coffee-shelf-tile__link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .coffee-shelf-tile__art {
+    display: inline-block;
+    line-height: 0;
+    padding: 6px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, var(--rarity-color, var(--color-warm))/12% 0%, transparent 100%);
+  }
+  .coffee-shelf-tile__name {
+    font-weight: 600;
+    color: var(--color-ink);
+    font-size: 13px;
+  }
+  .coffee-shelf-tile__rarity {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--color-card, rgba(0,0,0,0.05));
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.08));
+  }
+  .coffee-shelf-tile__rarity--legendary {
+    background: rgba(220, 38, 38, 0.08);
+    color: rgb(180, 30, 30);
+    border-color: rgba(220, 38, 38, 0.25);
+  }
+  .coffee-shelf-tile__rarity--ultra-rare {
+    background: rgba(168, 85, 247, 0.08);
+    color: rgb(126, 60, 200);
+    border-color: rgba(168, 85, 247, 0.25);
+  }
+  .coffee-shelf-tile__rarity--rare {
+    background: rgba(59, 130, 246, 0.08);
+    color: rgb(40, 95, 200);
+    border-color: rgba(59, 130, 246, 0.25);
+  }
+  .coffee-shelf-tile__rarity--uncommon {
+    background: rgba(34, 197, 94, 0.08);
+    color: rgb(20, 130, 60);
+    border-color: rgba(34, 197, 94, 0.25);
+  }
+  .coffee-shelf-tile__hash {
+    font-size: 9.5px;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.06em;
+    opacity: 0.7;
   }
   .coffee__mint-feed-wrap {
     margin: 18px auto 0;
