@@ -236,6 +236,9 @@ const MUGS = [
           <WalletConnect />
           <p class="coffee__mint-wallet-hint mono" id="coffee-mint-wallet-hint">connect to claim · cups stay yours either way</p>
         </div>
+        <p class="coffee__mint-total mono" id="coffee-mint-total" aria-live="polite">
+          loading on-chain count…
+        </p>
       </header>
       <ul class="coffee__mint-list" role="list">
         {MUGS.map((mug) => {
@@ -254,7 +257,10 @@ const MUGS = [
                   <p class="coffee-mint__name">{mug.label}</p>
                   <span class={`coffee-mint__rarity mono coffee-mint__rarity--${tier.rarity}`}>{tier.rarity}</span>
                 </div>
-                <p class="coffee-mint__edition mono">edition · {tier.editions} · threshold · {tier.threshold} cup{tier.threshold === 1 ? '' : 's'}</p>
+                <p class="coffee-mint__edition mono">
+                  edition · {tier.editions} · threshold · {tier.threshold} cup{tier.threshold === 1 ? '' : 's'}
+                  <span class="coffee-mint__supply" data-mug-supply={mug.slug}> · — minted</span>
+                </p>
                 <p class="coffee-mint__unlock mono" data-mug-unlock={mug.slug}>{tier.threshold === 1 ? 'unlock with first pour' : `unlock at ${tier.threshold} cumulative cups`}</p>
               </div>
               <button type="button" class="coffee-mint__claim mono" data-mug-claim={mug.slug} disabled aria-label={`Claim ${mug.label}`}>
@@ -766,8 +772,138 @@ const MUGS = [
       });
     });
 
+    // ── On-chain editions panel + wallet-aware ownership sync ──────────
+    // Reads:
+    //   • /v1/contracts/<KT1>/storage      → bigmap pointers (mug_supply, ledger)
+    //   • /v1/bigmaps/<mug_supply_id>/keys → per-token mint counts
+    //   • /v1/operations/transactions?...  → wallet's mint_mug history → opHashes
+    // and:
+    //   • populates [data-mug-supply] chips with "X minted" labels
+    //   • populates #coffee-mint-total with "X minted of 570 total"
+    //   • when wallet is connected, marks any mug the wallet has minted
+    //     as "minted ↗ tzkt" in localStorage so refreshMintables shows
+    //     the success state — bridges /admin/deploy mints over to /coffee.
+    var COFFEE_KT1 = 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt';
+    var TOKEN_ID_TO_SLUG = { '0': 'ceramic', '1': 'espresso', '2': 'latte', '3': 'paper', '4': 'bistro' };
+    var SLUG_TO_TOKEN_ID = { ceramic: 0, espresso: 1, latte: 2, paper: 3, bistro: 4 };
+    var MUG_CAPS = { ceramic: 333, espresso: 144, latte: 64, paper: 21, bistro: 8 };
+    var MUG_TOTAL_CAP = 333 + 144 + 64 + 21 + 8; // 570
+
+    async function fetchEditionCounts() {
+      var totalEl = document.getElementById('coffee-mint-total');
+      try {
+        // Fetch storage to discover the mug_supply bigmap pointer.
+        var storageRes = await fetch(
+          'https://api.tzkt.io/v1/contracts/' + COFFEE_KT1 + '/storage',
+          { cache: 'no-store' }
+        );
+        if (!storageRes.ok) throw new Error('tzkt /storage ' + storageRes.status);
+        var storage = await storageRes.json();
+        var pointer = (typeof storage.mug_supply === 'number') ? storage.mug_supply
+          : (typeof storage.supply === 'number') ? storage.supply
+          : null;
+        if (pointer == null) {
+          if (totalEl) totalEl.textContent = '— minted of ' + MUG_TOTAL_CAP + ' total';
+          return null;
+        }
+        var keysRes = await fetch(
+          'https://api.tzkt.io/v1/bigmaps/' + pointer + '/keys?limit=100&select=key,value',
+          { cache: 'no-store' }
+        );
+        if (!keysRes.ok) throw new Error('tzkt /bigmaps ' + keysRes.status);
+        var keys = await keysRes.json();
+        var supplyByTokenId = {};
+        var totalMinted = 0;
+        if (Array.isArray(keys)) {
+          keys.forEach(function (row) {
+            if (row && row.key !== undefined) {
+              var n = parseInt(row.value, 10) || 0;
+              supplyByTokenId[String(row.key)] = n;
+              totalMinted += n;
+            }
+          });
+        }
+        // Populate per-mug supply chips.
+        var slugs = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+        slugs.forEach(function (slug) {
+          var tokenId = SLUG_TO_TOKEN_ID[slug];
+          var minted = supplyByTokenId[String(tokenId)] || 0;
+          var cap = MUG_CAPS[slug];
+          var label = ' · ' + minted + ' / ' + cap + ' minted';
+          var chip = document.querySelector('[data-mug-supply="' + slug + '"]');
+          if (chip) chip.textContent = label;
+        });
+        if (totalEl) {
+          var pct = MUG_TOTAL_CAP > 0 ? Math.round((totalMinted / MUG_TOTAL_CAP) * 100) : 0;
+          totalEl.innerHTML =
+            '<strong>' + totalMinted + '</strong> minted of ' + MUG_TOTAL_CAP +
+            ' total · ' + pct + '% claimed · <a href="https://tzkt.io/' + COFFEE_KT1 +
+            '" target="_blank" rel="noopener">on-chain ↗</a>';
+        }
+        return supplyByTokenId;
+      } catch (err) {
+        if (totalEl) totalEl.textContent = 'on-chain count unavailable';
+        return null;
+      }
+    }
+
+    // For a connected wallet, find every mint_mug they've called and
+    // sync /coffee localStorage so refreshMintables shows "minted ↗"
+    // even if the mint was done from /admin/deploy.
+    async function syncOnChainOwnership() {
+      var wallet = readWallet();
+      if (!wallet || !wallet.address) return;
+      try {
+        var url = 'https://api.tzkt.io/v1/operations/transactions?target=' + COFFEE_KT1 +
+          '&sender=' + wallet.address + '&entrypoint=mint_mug&status=applied' +
+          '&select=hash,parameter,timestamp&limit=50&sort.desc=id';
+        var res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return;
+        var rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        var claims = readClaims();
+        var changed = false;
+        rows.forEach(function (op) {
+          // tzkt returns parameter.value as the unwrapped Michelson value;
+          // for mint_mug(token_id) this is the nat as a string.
+          var raw = op && op.parameter && (op.parameter.value !== undefined ? op.parameter.value : op.parameter);
+          var tokenIdStr = (raw && typeof raw === 'object') ? String(raw.value || raw) : String(raw);
+          var slug = TOKEN_ID_TO_SLUG[tokenIdStr];
+          if (!slug) return;
+          var existing = claims[slug] || {};
+          // Keep the FIRST opHash we find per slug — sort.desc means we
+          // see the most recent first, but we want the one that matches
+          // their first claim. Both are equally valid for tzkt linking.
+          if (!existing.opHash) {
+            claims[slug] = Object.assign({}, existing, {
+              mug: slug,
+              address: wallet.address,
+              opHash: op.hash || '',
+              mintedAt: op.timestamp || new Date().toISOString(),
+              source: 'on-chain-sync',
+            });
+            changed = true;
+          }
+        });
+        if (changed) {
+          writeClaims(claims);
+          refreshMintables();
+        }
+      } catch (e) { /* tzkt down? skip */ }
+    }
+
+    // Initial fetch on load + every 60s for live updates.
+    fetchEditionCounts();
+    setInterval(fetchEditionCounts, 60_000);
+
+    // On-chain sync runs whenever the wallet changes (connect / switch).
+    syncOnChainOwnership();
+
     // Re-render whenever the wallet connects or disconnects.
-    window.addEventListener('pc:wallet-change', refreshMintables);
+    window.addEventListener('pc:wallet-change', function () {
+      refreshMintables();
+      syncOnChainOwnership();
+    });
 
     // ── NOUNS COMPANION — random noun walks across the bottom slowly.
     // Discovery, not in your face. Click = friendly nudge.
@@ -1150,6 +1286,34 @@ const MUGS = [
   }
 
   .coffee__history-note,
+  .coffee__mint-total {
+    margin: 12px 0 0;
+    padding: 8px 14px;
+    text-align: center;
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    background: var(--color-card, rgba(0,0,0,0.03));
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.1));
+    border-radius: 999px;
+    display: inline-block;
+    align-self: center;
+  }
+  .coffee__mint-total strong {
+    color: var(--color-warm);
+    font-weight: 700;
+  }
+  .coffee__mint-total a {
+    color: var(--color-warm);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .coffee__mint-total a:hover { color: var(--color-ink); }
+  .coffee-mint__supply {
+    color: var(--color-ink-soft);
+    margin-left: 4px;
+  }
   .coffee__mint-foot {
     text-align: center;
     color: var(--color-ink-soft);
