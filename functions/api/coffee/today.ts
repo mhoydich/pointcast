@@ -57,18 +57,29 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   }
 
   const day = ptDayKey();
-  const key = `coffee:cups:${day}`;
+  const cupsKey = `coffee:cups:${day}`;
+  const mugsKey = `coffee:mugs:${day}`;
 
   let count = 0;
+  let mugs: unknown[] = [];
   try {
-    const raw = await kv.get(key);
-    count = raw ? parseInt(raw, 10) || 0 : 0;
+    const [cupsRaw, mugsRaw] = await Promise.all([
+      kv.get(cupsKey),
+      kv.get(mugsKey),
+    ]);
+    count = cupsRaw ? parseInt(cupsRaw, 10) || 0 : 0;
+    if (mugsRaw) {
+      try {
+        const parsed = JSON.parse(mugsRaw);
+        if (Array.isArray(parsed)) mugs = parsed;
+      } catch (e) { /* corrupt — treat as empty */ }
+    }
   } catch (e) {
-    // Keep count = 0, return ok still.
+    // Keep zero/empty, return ok still.
   }
 
   return applyRateLimitHeaders(
-    json({ ok: true, count, day }),
+    json({ ok: true, count, day, mugs }),
     rl
   );
 };
