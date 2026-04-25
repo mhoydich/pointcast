@@ -199,7 +199,7 @@ import WalletConnect from '../../components/WalletConnect.astro';
   </div>
 </BaseLayout>
 
-<script lang="ts">
+<script is:inline>
   /**
    * Browser-side originator. Uses the same Taquito + Beacon setup as
    * the /collect flow (src/lib/tezos.ts) — lazy-loaded on first click so
@@ -210,18 +210,18 @@ import WalletConnect from '../../components/WalletConnect.astro';
    * esbuild rejects those when the script is parsed as plain JS.
    */
 
-  const codeInput = document.getElementById('code-input') as HTMLTextAreaElement;
-  const storageInput = document.getElementById('storage-input') as HTMLTextAreaElement;
+  const codeInput = document.getElementById('code-input');
+  const storageInput = document.getElementById('storage-input');
   const codeStats = document.getElementById('code-stats');
   const storageStats = document.getElementById('storage-stats');
-  const deployBtn = document.getElementById('deploy-btn') as HTMLButtonElement;
+  const deployBtn = document.getElementById('deploy-btn');
   const deployLabel = document.getElementById('deploy-btn-label');
   const statusEl = document.getElementById('deploy-status');
   const resultPanel = document.getElementById('deploy-result');
   const addressEl = document.getElementById('deploy-address');
   const linksEl = document.getElementById('deploy-links');
 
-  function setStatus(html: string): void {
+  function setStatus(html) {
     if (statusEl) statusEl.innerHTML = html;
   }
 
@@ -250,7 +250,7 @@ import WalletConnect from '../../components/WalletConnect.astro';
         fetch('/admin/_artifacts/visit-nouns-storage.json', { cache: 'no-store' }).then(r => r.text()),
       ]);
       // Patch admin to the currently-connected wallet if available
-      let wallet: { address?: string } | null = null;
+      let wallet = null;
       try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
       const connected = wallet?.address;
       const storage = connected
@@ -266,17 +266,17 @@ import WalletConnect from '../../components/WalletConnect.astro';
           ? `loaded · admin set to ${connected.slice(0,8)}…${connected.slice(-6)}`
           : 'loaded · admin = default (connect wallet to auto-patch)';
       }
-    } catch (err: any) {
+    } catch (err) {
       if (loadStatus) loadStatus.textContent = 'failed: ' + (err?.message || 'unknown error');
     }
   });
 
   function selectedNetwork(): 'mainnet' | 'shadownet' {
     const checked = document.querySelector<HTMLInputElement>('input[name="network"]:checked');
-    return (checked?.value as 'mainnet' | 'shadownet') ?? 'shadownet';
+    return (checked?.value) ?? 'shadownet';
   }
 
-  function rpcFor(network: 'mainnet' | 'shadownet'): string {
+  function rpcFor(network) {
     return network === 'mainnet'
       ? 'https://mainnet.api.tez.ie'
       : 'https://shadownet.smartpy.io';
@@ -294,13 +294,13 @@ import WalletConnect from '../../components/WalletConnect.astro';
     // Michelson text format ((parameter ...) ... or (Pair ...) for storage).
     // SmartPy IDE's "WITH TEZOS CLIENT" tab gives Michelson text; smartpy.io's
     // older flow gives JSON. Both work now.
-    function looksLikeJson(s: string): boolean {
+    function looksLikeJson(s) {
       const t = s.trim();
       return t.startsWith('[') || t.startsWith('{');
     }
 
-    let code: unknown;
-    let storage: unknown;
+    let code;
+    let storage;
     try {
       if (looksLikeJson(codeRaw)) {
         code = JSON.parse(codeRaw);
@@ -309,9 +309,9 @@ import WalletConnect from '../../components/WalletConnect.astro';
         const parser = new Parser();
         code = parser.parseScript(codeRaw);
         if (!code) throw new Error('parseScript returned null');
-        setStatus(`michelson text parsed — ${(code as any[]).length} sections`);
+        setStatus(`michelson text parsed — ${(code).length} sections`);
       }
-    } catch (e: any) {
+    } catch (e) {
       setStatus(`michelson code couldn't be parsed: ${e?.message ?? 'unknown'} — check the paste`);
       return;
     }
@@ -324,7 +324,7 @@ import WalletConnect from '../../components/WalletConnect.astro';
         storage = parser.parseMichelineExpression(storageRaw);
         if (!storage) throw new Error('parseMichelineExpression returned null');
       }
-    } catch (e: any) {
+    } catch (e) {
       setStatus(`initial storage couldn't be parsed: ${e?.message ?? 'unknown'} — check the paste`);
       return;
     }
@@ -354,18 +354,18 @@ import WalletConnect from '../../components/WalletConnect.astro';
       const wallet = new BeaconWallet({
         name: 'PointCast Admin',
         network: {
-          type: network as any,
+          type: network,
           name: network === 'shadownet' ? 'Shadownet' : undefined,
           rpcUrl,
         },
-      } as any);
+      });
       tezos.setWalletProvider(wallet);
 
       if (deployLabel) deployLabel.textContent = 'Waiting for Kukai…';
       setStatus('confirm the origination in kukai…');
 
       const existing = await wallet.client.getActiveAccount();
-      if (!existing || (existing as any).network?.type !== network) {
+      if (!existing || (existing).network?.type !== network) {
         // Clear any stale session tied to the other network — this unblocks
         // the common "Awaiting confirmation" stall that happens when an old
         // Ghostnet/Mainnet session collides with a new Shadownet request.
@@ -383,14 +383,14 @@ import WalletConnect from '../../components/WalletConnect.astro';
       // NOTE: this block is plain JS (no TypeScript predicates) so
       // esbuild's <script> transpile pass handles it cleanly.
       const activeAccount2 = await wallet.client.getActiveAccount();
-      const activePkh = activeAccount2 && (activeAccount2 as any).address;
+      const activePkh = activeAccount2 && (activeAccount2).address;
       const tzAddrRe = /^tz[123][1-9A-HJ-NP-Za-km-z]{33}$/;
       if (activePkh && storage && typeof storage === 'object') {
-        const node: any = storage;
+        const node = storage;
         if (node.prim === 'Pair' && Array.isArray(node.args) && node.args[0]) {
           const first = node.args[0];
           if (first && typeof first === 'object' && typeof first.string === 'string' && tzAddrRe.test(first.string)) {
-            const old: string = first.string;
+            const old = first.string;
             if (old !== activePkh) {
               first.string = activePkh;
               setStatus(`admin patched: ${old.slice(0,8)}…${old.slice(-4)} → ${activePkh.slice(0,8)}…${activePkh.slice(-4)} (your wallet)`);
@@ -406,11 +406,11 @@ import WalletConnect from '../../components/WalletConnect.astro';
       // alone can be 8–15 ꜩ; hard-coding a fee cap fights that. Kukai will
       // still surface the real number in the confirm dialog.
       const op = await tezos.wallet.originate({
-        code: code as any,
-        init: storage as any,
-      } as any).send();
+        code: code,
+        init: storage,
+      }).send();
 
-      const opHash = (op as any).opHash;
+      const opHash = (op).opHash;
       setStatus(`✓ broadcast ${opHash.slice(0, 10)}… · confirming on ${network}…`);
 
       const contract = await op.contract();
@@ -445,19 +445,19 @@ import WalletConnect from '../../components/WalletConnect.astro';
         );
       } catch { /* storage full? ignore */ }
 
-    } catch (err: any) {
+    } catch (err) {
       // Dump EVERY field we can get at — Beacon/Taquito errors frequently
       // put the useful text in non-enumerable props, aggregated `errors[]`,
       // or custom fields like errorType / data.
       const ownProps: Record<string, any> = {};
       try {
-        for (const k of Object.getOwnPropertyNames(err || {})) ownProps[k] = (err as any)[k];
+        for (const k of Object.getOwnPropertyNames(err || {})) ownProps[k] = (err)[k];
       } catch {}
       console.error('Deploy failed — full error:', err, 'ownProps:', ownProps);
-      (window as any).__pcLastErr = { err, ownProps };
+      (window).__pcLastErr = { err, ownProps };
 
       // Pull out whatever reads best.
-      let msg: string | undefined = err?.message;
+      let msg = err?.message;
       if (!msg && err?.name && err?.name !== 'Error') msg = err.name;
       if (!msg && err?.errorType) msg = err.errorType;
       if (!msg && err?.errors?.[0]?.id) msg = err.errors[0].id + ': ' + (err.errors[0].msg || '');
