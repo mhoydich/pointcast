@@ -39,42 +39,51 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
-  // Pretty-URL rewrite — kill the 308 trailing-slash flash for top-level
-  // release + game + companion routes. CF Pages otherwise 308-redirects
-  // /gamgee → /gamgee/ before _redirects rules are parsed. We fetch the
-  // trailing-slash version server-side and stream the body back so the
-  // URL bar stays clean. Only routes that exist on main are listed.
-  const PRETTY_ROUTES = new Set([
-    '/gamgee',
-    '/gandalf',
-    '/farm',
-    '/agent-derby',
-    '/sitting-with-gandalf',
-    '/talk',  // Voice Dispatch Phase 2 — merged via PR #30
-    '/room',  // Spotify playlist companion — merged via PR #32
-    '/profile',
-    '/wire',  // PointCast Wire ticker — Sprint 17 (closes #31)
-    '/scoreboard',  // cross-agent competition reporting — Sprint 24
-    '/race/front-door',  // today's Front Door race — Sprint 25 (PR #18 scaffolds the /race hub)
-    '/taproom',  // curated SoCal brewery carry list — Sprint 26
-    // /listen still on PR #17 scaffold branch
-  ]);
-  if (isGet && wantsHtml && PRETTY_ROUTES.has(url.pathname)) {
+  // Generic trailing-slash rewrite — applies to ANY path that
+  //   • is a GET asking for HTML
+  //   • doesn't already end in `/`
+  //   • doesn't have a file extension (`/foo.png`, `/sitemap.xml` skip)
+  //   • isn't an `/api/*` route (those are Functions; never need a slash)
+  //
+  // The supersedes the older PRETTY_ROUTES Set + ADMIN_DEPLOY regex —
+  // both were enumerating subsets of the same pattern. Astro emits every
+  // route as `<route>/index.html`, so requests without a slash always
+  // need rewriting to find the actual file. Without this, CF Pages
+  // falls back to the homepage on a no-slash hit (the bug Mike flagged
+  // around `/gandalf`, `/signal`, `/admin/deploy/coffee_mugs`).
+  //
+  // We do an internal fetch to the with-slash version and stream the
+  // response back at the original (no-slash) URL so the URL bar stays
+  // clean. If the upstream 200 turns out to be the homepage anyway
+  // (i.e. the route truly doesn't exist), we still emit it — one
+  // redirect saved either way.
+  const looksLikeDirectoryPath =
+    isGet
+    && wantsHtml
+    && url.pathname !== '/'
+    && !url.pathname.endsWith('/')
+    && !STATIC_ASSET_REGEX.test(url.pathname)
+    && !isApiRoute;
+  if (looksLikeDirectoryPath) {
     const internalUrl = new URL(url);
     internalUrl.pathname = url.pathname + '/';
     const upstream = await fetch(internalUrl.toString(), {
       headers: request.headers,
       redirect: 'follow',
     });
-    // Re-emit the response at the original URL with the original pathname
-    // preserved. Strip set-cookie-style or redirect-y headers from upstream.
-    const headers = new Headers(upstream.headers);
-    headers.delete('location');
-    return new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers,
-    });
+    // Only adopt the upstream response if it found something. A 404 here
+    // means the route doesn't exist with-slash either, so fall through
+    // to next() with the original URL — that gives Pages a chance to
+    // serve a 404 against the original pathname.
+    if (upstream.status === 200) {
+      const headers = new Headers(upstream.headers);
+      headers.delete('location');
+      return new Response(upstream.body, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers,
+      });
+    }
   }
 
   // /admin/* gate — requires a matching token. Accepts either:

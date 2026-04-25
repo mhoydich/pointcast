@@ -449,8 +449,57 @@ const shadownetNotes = entry._shadownet_notes ?? null;
           signing.
         </p>
 
-        <!-- register_tokens — for FA2 contracts with a tokens registry in contracts.json -->
-        {entry.tokens && Object.keys(entry.tokens).length > 0 && entry.registerEntrypoint !== false && slug !== 'visit_nouns' && (
+        <!-- register_birthday — Birthdays FA2 specific (record-typed param) -->
+        {entry.registerEntrypoint === 'register_birthday' && entry.tokens && Object.keys(entry.tokens).length > 0 && (() => {
+          const firstId = Object.keys(entry.tokens)[0];
+          const firstToken: any = entry.tokens[firstId];
+          const prefill = {
+            token_id: parseInt(firstId, 10),
+            recipient_slug: firstToken?.recipient_slug ?? '',
+            recipient_name: firstToken?.recipient_name ?? '',
+            block_id: firstToken?.block_id ?? '',
+            noun_id: parseInt(firstToken?.noun_id ?? 0, 10),
+            birthday_year: parseInt(firstToken?.birthday_year ?? 2026, 10),
+          };
+          return (
+            <details id="register-birthday" class="mb-2 p-3 rounded-md border border-warm/40 bg-warm/5" open>
+              <summary class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+                register_birthday <span class="text-warm ml-1">— register one birthday card</span>
+              </summary>
+              <form
+                class="admin-action-form mt-3 space-y-2"
+                data-entrypoint="register_birthday"
+                data-arg-type="record-json"
+                data-kt1={liveKt1}
+                data-slug={slug}
+              >
+                <label class="block">
+                  <span class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/70 block mb-1">
+                    birthday record (JSON)
+                  </span>
+                  <textarea
+                    name="value"
+                    rows="9"
+                    class="w-full font-mono text-[0.72rem] p-2 rounded border border-rule/40 bg-paper text-ink focus:border-warm focus:outline-none"
+                  >{JSON.stringify(prefill, null, 2)}</textarea>
+                </label>
+                <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/50">
+                  one call per birthday · idempotent (rejects ALREADY_REGISTERED) · admin-only
+                </p>
+                <button
+                  type="submit"
+                  class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-warm text-paper font-mono text-[0.6rem] tracking-[0.14em] uppercase hover:bg-ink transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                >
+                  <span class="btn-label">Sign + send</span>
+                </button>
+                <p class="action-status font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70 min-h-[0.9rem]" role="status" aria-live="polite"></p>
+              </form>
+            </details>
+          );
+        })()}
+
+        <!-- register_tokens — for FA2 contracts with a tokens registry (map-shaped) -->
+        {entry.tokens && Object.keys(entry.tokens).length > 0 && entry.registerEntrypoint !== false && entry.registerEntrypoint !== 'register_birthday' && slug !== 'visit_nouns' && (
           <details id="register-tokens" class="mb-2 p-3 rounded-md border border-warm/40 bg-warm/5" open>
             <summary class="font-mono text-[0.62rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
               register_tokens <span class="text-warm ml-1">— register {Object.keys(entry.tokens).length} token names</span>
@@ -1042,6 +1091,26 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       if (!raw || Number.isNaN(n)) throw new Error('nat value is required (a non-negative integer)');
       if (n < 0) throw new Error('nat must be >= 0');
       return { args: n, summary: entrypoint + '(' + n + ')' };
+    }
+    // Record (JSON object) — used by register_birthday and any other
+    // entrypoint that takes a multi-field sp.record param. The field
+    // names must match the contract's expected record schema; Taquito
+    // passes the JS object straight through to methodsObject.<ep>(obj).
+    if (argType === 'record-json') {
+      const raw = (fd.get('value') || '').toString().trim();
+      if (!raw) throw new Error('JSON record is required');
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        throw new Error('JSON parse failed: ' + (e && e.message ? e.message : 'invalid'));
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('expected a JSON object (record), not array/scalar');
+      }
+      const fieldCount = Object.keys(parsed).length;
+      if (fieldCount === 0) throw new Error('record has no fields');
+      return { args: parsed, summary: entrypoint + '({' + fieldCount + ' fields})' };
     }
     // map nat → string. Submit as a MichelsonMap.
     if (argType === 'nat-string-map') {
