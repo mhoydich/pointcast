@@ -1,0 +1,281 @@
+---
+/**
+ * ShareThis — small, cozy share-affordance row.
+ *
+ * Sprint 43 (overnight visitor-acquisition cadence per
+ * docs/plans/2026-04-24-overnight-product-direction.md). Mounts on the
+ * four new rooms (/mythos, /coffee, /window, /residents) plus
+ * individual block pages. Five chips: Bluesky, Farcaster, X,
+ * copy-link, mailto. Each pre-fills a cozy, in-character message.
+ *
+ * NOT promotional. The voice draws from §5 of the direction doc —
+ * factual + warm + lower-case, no calls-to-action, no "check this
+ * out!!" language.
+ *
+ * Each platform's compose URL takes a `text` query param; we URL-
+ * encode the prefilled string and let the platform's own client
+ * complete the post. cc never posts on Mike's behalf — the user
+ * always confirms in-platform.
+ */
+
+interface Props {
+  /** Absolute or path-relative URL of the surface being shared. */
+  url: string;
+  /** Optional title (block title, room name) — used to vary voice. */
+  title?: string;
+  /** Surface kind — selects voice copy. Defaults to 'home'. */
+  kind?: 'block' | 'mythos' | 'coffee' | 'window' | 'residents' | 'home';
+  /** Optional class on the wrapper for layout integration. */
+  className?: string;
+}
+
+const { url, title = '', kind = 'home', className = '' } = Astro.props;
+
+// Resolve to absolute URL for shares.
+function absUrl(u: string): string {
+  if (u.startsWith('http')) return u;
+  if (u.startsWith('/'))    return `https://pointcast.xyz${u}`;
+  return `https://pointcast.xyz/${u}`;
+}
+const fullUrl = absUrl(url);
+
+// Voice copy per kind. Lowercase by intent — matches site tone.
+interface VoiceCopy {
+  bluesky:        string;
+  farcaster:      string;
+  x:              string;
+  mailtoSubject:  string;
+  mailtoBody:     string;
+}
+
+function copyFor(kind: Props['kind'], title: string, fullUrl: string): VoiceCopy {
+  const t = title || 'this';
+  switch (kind) {
+    case 'mythos':
+      return {
+        bluesky:       `found a small internet town: ${fullUrl} — three agents and a director, real weather, a coffee pot.`,
+        farcaster:     `pointcast — a small el segundo broadcast. claude + codex + manus + mike. ${fullUrl}`,
+        x:             `${fullUrl} — a small internet town from el segundo. real weather, agents, daily race, coffee pot.`,
+        mailtoSubject: `saw this and thought of you`,
+        mailtoBody:    `${fullUrl}\n\nsmall thing — a coffee pot, a daily race, a window onto el segundo. cozy 5 min.`,
+      };
+    case 'coffee':
+      return {
+        bluesky:       `the coffee pot at ${fullUrl} is still on. pour a cup.`,
+        farcaster:     `${fullUrl} — pixel-art moka pot, animated steam, pour a cup. cozy 2 min.`,
+        x:             `${fullUrl} — pixel-art coffee pot, real steam (CSS), pour a cup. small thing.`,
+        mailtoSubject: `the pot is on`,
+        mailtoBody:    `${fullUrl}\n\npour a cup. real steam, real heat dots, the lights are low this time of day.`,
+      };
+    case 'window':
+      return {
+        bluesky:       `a small el segundo window: ${fullUrl} — live time-of-day, live weather. sun, moon, marine layer.`,
+        farcaster:     `the window at ${fullUrl} — live el segundo sky. cozy 1 min.`,
+        x:             `${fullUrl} — live el segundo sky. sun, moon, clouds, marine layer when foggy.`,
+        mailtoSubject: `a small window`,
+        mailtoBody:    `${fullUrl}\n\nlive el segundo sky, refreshes every 5 min. cozy.`,
+      };
+    case 'residents':
+      return {
+        bluesky:       `${fullUrl} — three resident agents (claude, codex, manus), one director, two open rooms (kimi, gemini).`,
+        farcaster:     `${fullUrl} — small team running things. RFC 0003 has the path for plus-one agents.`,
+        x:             `${fullUrl} — multi-agent town. claude + codex + manus + mike. open rooms for kimi + gemini.`,
+        mailtoSubject: `small multi-agent town`,
+        mailtoBody:    `${fullUrl}\n\nthree AI agents and a human director live here. open rooms for plus-ones. RFC 0003.`,
+      };
+    case 'block':
+      return {
+        bluesky:       `from a small internet town: "${t}" — ${fullUrl}`,
+        farcaster:     `"${t}" on pointcast — a small el segundo broadcast. ${fullUrl}`,
+        x:             `"${t}" via pointcast.xyz — small internet town from el segundo. ${fullUrl}`,
+        mailtoSubject: `saw this and thought of you`,
+        mailtoBody:    `"${t}"\n${fullUrl}\n\nfrom pointcast.xyz, a small internet town in el segundo. cozy.`,
+      };
+    case 'home':
+    default:
+      return {
+        bluesky:       `${fullUrl} — a small internet town from el segundo. real weather. coffee pot, on.`,
+        farcaster:     `${fullUrl} — small el segundo broadcast. agents + a director. cozy.`,
+        x:             `${fullUrl} — a tiny internet town from el segundo. coffee pot's still on.`,
+        mailtoSubject: `saw this and thought of you`,
+        mailtoBody:    `${fullUrl}\n\na small internet town from el segundo. cozy 5 min.`,
+      };
+  }
+}
+
+const voice = copyFor(kind, title, fullUrl);
+
+// Build platform compose URLs. Each platform picks the URL out of
+// the encoded text on its end, so we don't need to repeat it.
+const blueskyHref   = `https://bsky.app/intent/compose?text=${encodeURIComponent(voice.bluesky)}`;
+const farcasterHref = `https://warpcast.com/~/compose?text=${encodeURIComponent(voice.farcaster)}`;
+const xHref         = `https://x.com/intent/tweet?text=${encodeURIComponent(voice.x)}`;
+const mailtoHref    = `mailto:?subject=${encodeURIComponent(voice.mailtoSubject)}&body=${encodeURIComponent(voice.mailtoBody)}`;
+---
+
+<aside class={`share-this ${className}`} aria-labelledby="share-this-title">
+  <p id="share-this-title" class="share-this__label mono">Pass this on</p>
+  <ul class="share-this__list" role="list">
+    <li>
+      <a class="share-this__chip share-this__chip--bsky" href={blueskyHref} target="_blank" rel="noopener noreferrer" aria-label="Share to Bluesky">
+        <span class="share-this__icon" aria-hidden="true">🦋</span>
+        <span class="share-this__text">Bluesky</span>
+      </a>
+    </li>
+    <li>
+      <a class="share-this__chip share-this__chip--farcaster" href={farcasterHref} target="_blank" rel="noopener noreferrer" aria-label="Share to Farcaster">
+        <span class="share-this__icon" aria-hidden="true">⌘</span>
+        <span class="share-this__text">Farcaster</span>
+      </a>
+    </li>
+    <li>
+      <a class="share-this__chip share-this__chip--x" href={xHref} target="_blank" rel="noopener noreferrer" aria-label="Share to X">
+        <span class="share-this__icon" aria-hidden="true">𝕏</span>
+        <span class="share-this__text">X</span>
+      </a>
+    </li>
+    <li>
+      <button type="button" class="share-this__chip share-this__chip--copy" data-share-copy={fullUrl} aria-label="Copy link to clipboard">
+        <span class="share-this__icon" aria-hidden="true">⧉</span>
+        <span class="share-this__text" data-share-copy-label>Copy link</span>
+      </button>
+    </li>
+    <li>
+      <a class="share-this__chip share-this__chip--mail" href={mailtoHref} aria-label="Share via email">
+        <span class="share-this__icon" aria-hidden="true">✉</span>
+        <span class="share-this__text">Email</span>
+      </a>
+    </li>
+  </ul>
+</aside>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var buttons = document.querySelectorAll('[data-share-copy]');
+    if (!buttons || !buttons.length) return;
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var url = btn.getAttribute('data-share-copy') || '';
+        var label = btn.querySelector('[data-share-copy-label]');
+        var prev = label ? label.textContent : '';
+        function showOk() {
+          if (label) label.textContent = '✓ copied';
+          btn.classList.add('share-this__chip--copied');
+          setTimeout(function () {
+            if (label) label.textContent = prev;
+            btn.classList.remove('share-this__chip--copied');
+          }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(showOk).catch(function () {
+            // Fallback — execCommand on a temporary input.
+            try {
+              var ta = document.createElement('textarea');
+              ta.value = url;
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              showOk();
+            } catch (e) { /* clipboard unavailable — user can long-press the URL */ }
+          });
+        } else {
+          // No clipboard API — same fallback path
+          try {
+            var ta2 = document.createElement('textarea');
+            ta2.value = url;
+            ta2.style.position = 'fixed';
+            ta2.style.opacity = '0';
+            document.body.appendChild(ta2);
+            ta2.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta2);
+            showOk();
+          } catch (e) {}
+        }
+      });
+    });
+  })();
+</script>
+
+<style>
+  .share-this {
+    margin: 28px 0 16px;
+    padding: 14px 16px 16px;
+    border: 1px dashed var(--color-rule, #d8cdb8);
+    border-radius: 3px;
+    background: rgba(245, 239, 228, 0.5);
+  }
+  .share-this__label {
+    margin: 0 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft, #6a6154);
+  }
+  .share-this__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .share-this__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 11px;
+    background: var(--color-card, #fbf7ee);
+    color: var(--color-ink, #1f1b15);
+    border: 1px solid var(--color-rule, #d8cdb8);
+    border-radius: 2px;
+    text-decoration: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease, transform 0.1s;
+  }
+  .share-this__chip:hover {
+    background: var(--color-card-hover, #fff4dc);
+    border-color: var(--color-warm, #c4952e);
+  }
+  .share-this__chip:active {
+    transform: translateY(1px);
+  }
+  .share-this__chip--copied {
+    background: var(--color-live-bg, #e4efe5);
+    border-color: var(--color-live, #2f8f5f);
+    color: var(--color-live, #2f8f5f);
+  }
+  .share-this__icon {
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.85;
+  }
+  .share-this__text {
+    line-height: 1;
+  }
+
+  /* Each platform gets a subtle hover tint matching its identity */
+  .share-this__chip--bsky:hover      { border-color: #1185fe; }
+  .share-this__chip--farcaster:hover { border-color: #855dcd; }
+  .share-this__chip--x:hover         { border-color: #1f1b15; }
+  .share-this__chip--copy:hover      { border-color: var(--color-warm, #c4952e); }
+  .share-this__chip--mail:hover      { border-color: var(--color-accent, #1b3a5b); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .share-this__chip { transition: none; }
+    .share-this__chip:active { transform: none; }
+  }
+
+  @media (max-width: 480px) {
+    .share-this__chip { padding: 5px 9px; font-size: 10.5px; }
+  }
+</style>
