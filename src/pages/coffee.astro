@@ -21,6 +21,18 @@
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CoffeePot from '../components/CoffeePot.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+
+// Per-mug rarity + unlock thresholds. Common at 1 cup → legendary at
+// 30 cumulative. Edition counts shrink as rarity climbs. The mug
+// cards below read these to render rarity chips + unlock thresholds.
+const MUG_TIERS = {
+  ceramic:  { rarity: 'common',     editions: 333, threshold: 1,  hex: '#5F5E5A' },
+  espresso: { rarity: 'uncommon',   editions: 144, threshold: 3,  hex: '#0F6E56' },
+  latte:    { rarity: 'rare',       editions:  64, threshold: 7,  hex: '#185FA5' },
+  paper:    { rarity: 'ultra-rare', editions:  21, threshold: 15, hex: '#993556' },
+  bistro:   { rarity: 'legendary',  editions:   8, threshold: 30, hex: '#c4952e' },
+};
 import ShareThis from '../components/ShareThis.astro';
 
 // Five mug variants, defined as 24x24 SVG <rect> compositions.
@@ -212,36 +224,48 @@ const MUGS = [
       </p>
     </section>
 
-    <!-- MINTABLES · what you can take with you (preview) -->
+    <!-- MINTABLES · five mugs, five rarity tiers, real wallet connect -->
     <section class="coffee__mintables" aria-labelledby="coffee-mint-title">
       <header class="coffee__section-head">
-        <p class="coffee__section-kicker mono">Mintables · preview</p>
-        <h2 id="coffee-mint-title" class="coffee__section-title">Five mugs you can claim.</h2>
+        <p class="coffee__section-kicker mono">Mintables</p>
+        <h2 id="coffee-mint-title" class="coffee__section-title">Five mugs. Five tiers. Connect a wallet.</h2>
         <p class="coffee__section-dek">
-          Each mug is a tiny edition — when the contract goes live, pour the cup, claim the cup. Today these are previews of how it'll work. The pixel art is real.
+          Each mug is a tiny edition. Pour past the threshold and the mug becomes claimable to your Tezos wallet. Today claims are <em>banked</em> as signed receipts; the FA2 contract goes live with Mike's go.
         </p>
+        <div class="coffee__mint-wallet">
+          <WalletConnect />
+          <p class="coffee__mint-wallet-hint mono" id="coffee-mint-wallet-hint">connect to claim · cups stay yours either way</p>
+        </div>
       </header>
       <ul class="coffee__mint-list" role="list">
-        {MUGS.map((mug, idx) => (
-          <li class={`coffee-mint coffee-mint--${mug.slug}`} data-mug={mug.slug} data-idx={idx}>
-            <div class="coffee-mint__art" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="64" height="64" shape-rendering="crispEdges" aria-label={mug.label} role="img">
-                {mug.pixels.map(([x, y, w, h, fill]) => (
-                  <rect x={x} y={y} width={w} height={h} fill={fill} />
-                ))}
-              </svg>
-            </div>
-            <div class="coffee-mint__meta">
-              <p class="coffee-mint__name">{mug.label}</p>
-              <p class="coffee-mint__edition mono">edition · {(idx + 1) * 11}</p>
-              <p class="coffee-mint__unlock mono" data-mug-unlock={mug.slug}>unlock at {idx + 1} cup{idx === 0 ? '' : 's'}</p>
-            </div>
-            <div class="coffee-mint__chip mono" data-mug-state={mug.slug}>preview</div>
-          </li>
-        ))}
+        {MUGS.map((mug) => {
+          const tier = MUG_TIERS[mug.slug as keyof typeof MUG_TIERS];
+          return (
+            <li class={`coffee-mint coffee-mint--${mug.slug} coffee-mint--${tier.rarity}`} data-mug={mug.slug} data-threshold={tier.threshold}>
+              <div class="coffee-mint__art" aria-hidden="true" style={`--rarity-color:${tier.hex}`}>
+                <svg viewBox="0 0 24 24" width="64" height="64" shape-rendering="crispEdges" aria-label={mug.label} role="img">
+                  {mug.pixels.map(([x, y, w, h, fill]) => (
+                    <rect x={x} y={y} width={w} height={h} fill={fill} />
+                  ))}
+                </svg>
+              </div>
+              <div class="coffee-mint__meta">
+                <div class="coffee-mint__name-row">
+                  <p class="coffee-mint__name">{mug.label}</p>
+                  <span class={`coffee-mint__rarity mono coffee-mint__rarity--${tier.rarity}`}>{tier.rarity}</span>
+                </div>
+                <p class="coffee-mint__edition mono">edition · {tier.editions} · threshold · {tier.threshold} cup{tier.threshold === 1 ? '' : 's'}</p>
+                <p class="coffee-mint__unlock mono" data-mug-unlock={mug.slug}>{tier.threshold === 1 ? 'unlock with first pour' : `unlock at ${tier.threshold} cumulative cups`}</p>
+              </div>
+              <button type="button" class="coffee-mint__claim mono" data-mug-claim={mug.slug} disabled aria-label={`Claim ${mug.label}`}>
+                <span data-mug-state={mug.slug}>preview</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
       <p class="coffee__mint-foot mono">
-        FA2 contract pending · status moves from <em>preview</em> → <em>eligible</em> → <em>claim</em> as the path lands. <a href="/b/0356">how Tezos staking works →</a>
+        FA2 contract pending · status moves from <em>preview</em> → <em>eligible</em> → <em>banked</em> → <em>minted</em>. <a href="/b/0356">how Tezos staking works →</a>
       </p>
     </section>
 
@@ -515,25 +539,124 @@ const MUGS = [
     hydrateHistory();
     setInterval(hydrateHistory, 60_000);
 
-    // ── MINTABLES — update unlock states based on local cup count
+    // ── MINTABLES — wallet-aware claim flow with banked receipts
+    var MUG_THRESHOLDS = { ceramic: 1, espresso: 3, latte: 7, paper: 15, bistro: 30 };
+    var CLAIMS_KEY = 'pc:coffee:claims';
+
+    function readWallet() {
+      try {
+        var raw = localStorage.getItem('pc:wallet');
+        if (!raw) return null;
+        var w = JSON.parse(raw);
+        return (w && w.address) ? w : null;
+      } catch (e) { return null; }
+    }
+
+    function readClaims() {
+      try {
+        var raw = localStorage.getItem(CLAIMS_KEY);
+        if (!raw) return {};
+        return JSON.parse(raw) || {};
+      } catch (e) { return {}; }
+    }
+
+    function writeClaims(claims) {
+      try { localStorage.setItem(CLAIMS_KEY, JSON.stringify(claims)); }
+      catch (e) {}
+    }
+
+    function shortAddr(addr) {
+      if (!addr) return '';
+      return addr.slice(0, 5) + '…' + addr.slice(-4);
+    }
+
     function refreshMintables() {
       var localCount = readCups();
-      // For each mug, the unlock threshold is (idx + 1) cups.
+      var wallet = readWallet();
+      var claims = readClaims();
+      var hint = document.getElementById('coffee-mint-wallet-hint');
+      if (hint) {
+        if (wallet && wallet.address) {
+          hint.textContent = 'connected · ' + shortAddr(wallet.address) + ' · claim eligible mugs below';
+        } else {
+          hint.textContent = 'connect to claim · cups stay yours either way';
+        }
+      }
+
       var slugs = ['ceramic','espresso','latte','paper','bistro'];
       for (var i = 0; i < slugs.length; i++) {
-        var threshold = i + 1;
-        var chip = document.querySelector('[data-mug-state="' + slugs[i] + '"]');
-        if (!chip) continue;
-        if (localCount >= threshold) {
-          chip.textContent = 'eligible';
-          chip.setAttribute('data-state', 'eligible');
+        var slug = slugs[i];
+        var threshold = MUG_THRESHOLDS[slug];
+        var chip = document.querySelector('[data-mug-state="' + slug + '"]');
+        var btn  = document.querySelector('[data-mug-claim="' + slug + '"]');
+        if (!chip || !btn) continue;
+
+        var banked = claims && claims[slug];
+        var eligible = localCount >= threshold;
+        var hasWallet = !!(wallet && wallet.address);
+
+        btn.disabled = true;
+        if (banked) {
+          chip.textContent = 'banked';
+          btn.setAttribute('data-state', 'banked');
+        } else if (eligible && hasWallet) {
+          chip.textContent = 'mint to ' + shortAddr(wallet.address);
+          btn.disabled = false;
+          btn.setAttribute('data-state', 'eligible');
+        } else if (eligible && !hasWallet) {
+          chip.textContent = 'connect wallet';
+          btn.setAttribute('data-state', 'connect');
         } else {
-          chip.textContent = 'preview';
-          chip.setAttribute('data-state', 'preview');
+          var remain = threshold - localCount;
+          chip.textContent = remain + ' more cup' + (remain === 1 ? '' : 's');
+          btn.setAttribute('data-state', 'preview');
         }
       }
     }
     refreshMintables();
+
+    // Click handlers on each claim button — bank the claim locally.
+    // Real on-chain mint waits for the FA2 contract to be originated.
+    function bankClaim(slug) {
+      var wallet = readWallet();
+      if (!wallet) {
+        // Open the wallet menu via the global event from WalletConnect.
+        try { window.dispatchEvent(new CustomEvent('pc:open-wallet-menu')); }
+        catch (e) {}
+        return;
+      }
+      if (readCups() < MUG_THRESHOLDS[slug]) return;
+
+      var claims = readClaims();
+      if (claims[slug]) return; // already banked
+
+      claims[slug] = {
+        mug: slug,
+        address: wallet.address,
+        bankedAt: new Date().toISOString(),
+        // Pseudo-receipt id — when the FA2 lands, a real signed receipt
+        // replaces this and becomes redeemable.
+        receipt: 'pcvm-' + slug.slice(0,3) + '-' + Math.random().toString(36).slice(2, 10),
+      };
+      writeClaims(claims);
+      refreshMintables();
+
+      // Brief visual nudge on the row
+      var row = document.querySelector('[data-mug="' + slug + '"]');
+      if (row) {
+        row.classList.add('coffee-mint--just-banked');
+        setTimeout(function () { row.classList.remove('coffee-mint--just-banked'); }, 900);
+      }
+    }
+    document.querySelectorAll('[data-mug-claim]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var slug = b.getAttribute('data-mug-claim');
+        if (slug) bankClaim(slug);
+      });
+    });
+
+    // Re-render whenever the wallet connects or disconnects.
+    window.addEventListener('pc:wallet-change', refreshMintables);
 
     // ── NOUNS COMPANION — random noun walks across the bottom slowly.
     // Discovery, not in your face. Click = friendly nudge.
@@ -1000,7 +1123,8 @@ const MUGS = [
     margin: 4px 0 0;
     opacity: 0.85;
   }
-  .coffee-mint__chip {
+  /* Claim button — replaces the static chip; reflects state */
+  .coffee-mint__claim {
     align-self: center;
     font-size: 9px;
     letter-spacing: 0.18em;
@@ -1008,15 +1132,106 @@ const MUGS = [
     background: transparent;
     color: var(--color-ink-soft);
     border: 1px dashed var(--color-rule);
-    padding: 4px 9px;
+    padding: 6px 10px;
     border-radius: 2px;
     font-weight: 700;
+    cursor: not-allowed;
     transition: all 0.18s;
+    font-family: var(--font-mono);
+    white-space: nowrap;
   }
-  .coffee-mint__chip[data-state="eligible"] {
+  .coffee-mint__claim:not(:disabled) {
+    cursor: pointer;
+  }
+  .coffee-mint__claim [data-state="eligible"] {
+    color: var(--color-paper);
+  }
+  .coffee-mint__claim:not(:disabled) {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-color: var(--color-ink);
+  }
+  .coffee-mint__claim:not(:disabled):hover {
+    background: var(--color-warm);
+    border-color: var(--color-warm);
+    color: var(--color-ink);
+  }
+  .coffee-mint__claim [data-state="banked"] {
+    color: var(--color-live);
+  }
+  .coffee-mint__claim:has([data-state="banked"]) {
     background: var(--color-live-bg);
     color: var(--color-live);
     border: 1px solid var(--color-live);
+    cursor: default;
+  }
+  .coffee-mint__claim:has([data-state="connect"]) {
+    background: rgba(196, 149, 46, 0.08);
+    color: var(--color-warm);
+    border: 1px dashed var(--color-warm);
+    cursor: pointer;
+  }
+  .coffee-mint__claim:has([data-state="connect"]):hover {
+    background: rgba(196, 149, 46, 0.16);
+  }
+
+  /* Name + rarity row */
+  .coffee-mint__name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .coffee-mint__rarity {
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-weight: 700;
+    color: var(--color-paper);
+  }
+  .coffee-mint__rarity--common     { background: #5F5E5A; }
+  .coffee-mint__rarity--uncommon   { background: #0F6E56; }
+  .coffee-mint__rarity--rare       { background: #185FA5; }
+  .coffee-mint__rarity--ultra-rare { background: #993556; }
+  .coffee-mint__rarity--legendary  {
+    background: linear-gradient(90deg, #c4952e 0%, #ffe07a 50%, #c4952e 100%);
+    color: var(--color-ink);
+  }
+
+  /* Rarity art glow — color tint behind the SVG via --rarity-color */
+  .coffee-mint__art {
+    background: linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--rarity-color, #c4952e) 14%, transparent) 100%) !important;
+  }
+  .coffee-mint--legendary .coffee-mint__art {
+    background: radial-gradient(circle at 50% 60%, rgba(255, 224, 122, 0.32) 0%, transparent 70%) !important;
+  }
+
+  /* Just-banked visual nudge */
+  .coffee-mint--just-banked {
+    animation: coffee-mint-bank 0.9s cubic-bezier(.5,1.6,.4,.9);
+  }
+  @keyframes coffee-mint-bank {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.5); }
+    40%  { box-shadow: 0 0 0 8px rgba(47, 143, 95, 0.18); transform: translateY(-2px); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
+  }
+
+  /* Wallet area in mintables header */
+  .coffee__mint-wallet {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .coffee__mint-wallet-hint {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin: 0;
   }
 
   /* ── NOUNS COMPANION · discoverable, walks across bottom ────────── */
