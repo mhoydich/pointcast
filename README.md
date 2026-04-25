@@ -2,7 +2,7 @@
 
 > A living broadcast from El Segundo, California. Dispatches, faucets,
 > visits, and mints on Tezos. Every piece of content is a **Block** — a
-> stable JSON schema with 9 channels, 8 types, and a permanent monotonic
+> stable JSON schema with 10 channels, 10 types, and a permanent monotonic
 > ID. Built by Mike Hoydich with Claude (Anthropic) and Codex (OpenAI).
 > Agent-native by design. CC0-flavored.
 
@@ -47,8 +47,8 @@ disclosure — including what we deliberately didn't use.
 ```ts
 type Block = {
   id: string              // "0205" — 4-digit zero-padded, immutable
-  channel: Channel        // one of 9 (FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL)
-  type: BlockType         // one of 8 (READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK)
+  channel: Channel        // one of 10 (FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL, BDY)
+  type: BlockType         // one of 10 (READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK, TALK, BIRTHDAY)
   title: string
   timestamp: Date
   body?: string           // markdown
@@ -93,6 +93,7 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 | [/battle](https://pointcast.xyz/battle)           | Nouns Battler — deterministic duels, Card of the Day rotates  |
 | [/cast](https://pointcast.xyz/cast)               | Prize Cast — no-loss prize savings on Tezos (pending compile) |
 | [/drum](https://pointcast.xyz/drum)               | Multiplayer drum room, DRUM token claim (pending compile)     |
+| [/cake](https://pointcast.xyz/cake)               | The place where birthdays are celebrated online — one block per person per year, one Noun forever |
 | [/for-agents](https://pointcast.xyz/for-agents)   | Human-readable manifest                                       |
 | [/agents.json](https://pointcast.xyz/agents.json) | Machine-readable discovery manifest                           |
 | [/llms.txt](https://pointcast.xyz/llms.txt)       | LLM summary (llmstxt.org convention)                          |

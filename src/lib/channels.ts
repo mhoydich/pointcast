@@ -21,6 +21,7 @@ export type ChannelCode =
   | 'FCT' // Faucet — free daily claims
   | 'VST' // Visit — human/agent log entries
   | 'BTL' // Battler — deterministic Nouns duels (9th, added v2.1)
+  | 'BDY' // Birthday — birthdays celebrated on PointCast (10th, added 2026-04-25)
   ;
 
 export interface ChannelSpec {
@@ -117,6 +118,15 @@ export const CHANNELS: Record<ChannelCode, ChannelSpec> = {
     color600: '#8A2432', // oxblood — the one primary that doesn't collide with the existing 8
     color800: '#551620',
     color50: '#FBEAEE',
+  },
+  BDY: {
+    code: 'BDY',
+    slug: 'birthday',
+    name: 'Birthday',
+    purpose: 'Birthdays celebrated on PointCast — one block per person per year, one Noun per person forever. Indexed at /cake.',
+    color600: '#D86440', // coral — warm + festive, distinct from FCT amber + GF pink
+    color800: '#8E3F25',
+    color50: '#FCEEE8',
   },
 };
 

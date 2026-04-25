@@ -60,6 +60,13 @@ function footerMeta(data: CollectionEntry<'blocks'>['data'], hint: string): stri
     case 'agent':
       if (!data.visitor) return null;
       return data.visitor.vendor ?? data.visitor.name ?? (data.visitor.kind === 'agent' ? 'AGENT' : 'HUMAN');
+    case 'birthday': {
+      // BIRTHDAY footer: RECIPIENT · NOUN N · CLAIMED N/∞
+      const recipient = (data.meta?.for as string | undefined)?.toUpperCase();
+      const nounStr = data.noun != null ? `NOUN ${data.noun}` : null;
+      const claimStr = ed ? `CLAIMED ${ed.minted}/${supplyStr(ed.supply)}` : null;
+      return [recipient, nounStr, claimStr].filter(Boolean).join(' · ') || null;
+    }
   }
   return null;
 }
@@ -208,6 +215,11 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     {data.type === 'MINT' && (
       <p class="block-card__kicker block-card__kicker--mint">
         ◆ MINT · EDITION
+      </p>
+    )}
+    {data.type === 'BIRTHDAY' && (
+      <p class="block-card__kicker block-card__kicker--birthday">
+        ★ BIRTHDAY · OPEN EDITION
       </p>
     )}
     {data.type === 'FAUCET' && (
@@ -503,6 +515,16 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     align-self: flex-start;
     font-weight: 500;
   }
+  .block-card__kicker--birthday {
+    /* BIRTHDAY card — same pop as MINT, dashed border to suggest confetti */
+    background: var(--ch-50);
+    border: 1px dashed var(--ch-600);
+    padding: 2px 6px;
+    border-radius: 2px;
+    align-self: flex-start;
+    font-weight: 500;
+    color: var(--ch-800);
+  }
   .block-card__kicker--link {
     color: var(--pc-accent, #185FA5);
   }
@@ -661,6 +683,30 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     bottom: 0;
     width: 0;
     border-right: 2px dashed color-mix(in oklab, var(--ch-600) 40%, #fff);
+    pointer-events: none;
+  }
+
+  /* BIRTHDAY — full dashed border like a card you'd cut out of a magazine.
+     Subtle confetti-dot top-right. The card is meant to feel like an artifact
+     a friend would mail you, not a stock-ticker mint. */
+  .block-card.type-birthday:not(.block-card--detail) {
+    border-style: dashed;
+    border-width: 1.5px;
+  }
+
+  .block-card.type-birthday:not(.block-card--detail)::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ch-600);
+    box-shadow:
+      -10px 4px 0 color-mix(in oklab, var(--ch-600) 60%, #fff),
+      4px 12px 0 color-mix(in oklab, var(--ch-600) 40%, #fff),
+      -16px 14px 0 color-mix(in oklab, var(--ch-600) 80%, #fff);
     pointer-events: none;
   }
 

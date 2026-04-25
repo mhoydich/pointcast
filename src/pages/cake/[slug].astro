@@ -1,0 +1,384 @@
+---
+/**
+ * /cake/[slug] — per-recipient birthday timeline.
+ *
+ * One page per family member who has either (a) a birthday block in the
+ * archive or (b) a `birthday: MM-DD` field in their /family entry.
+ * Renders their permanent Noun, every birthday block they've gotten
+ * year-by-year, and a small banner with their next birthday countdown.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+
+export async function getStaticPaths() {
+  const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
+  const family = await getCollection('family', ({ data }) => data.listed);
+
+  const slugs = new Set<string>();
+  for (const b of allBlocks) {
+    if ((b.data.channel === 'BDY' || b.data.type === 'BIRTHDAY')) {
+      const s = b.data.meta?.for as string | undefined;
+      if (s) slugs.add(s);
+    }
+  }
+  for (const f of family) {
+    if (f.data.birthday) slugs.add(f.data.slug);
+  }
+
+  return Array.from(slugs).map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params as { slug: string };
+const ch = CHANNELS.BDY;
+
+const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
+const family = await getCollection('family', ({ data }) => data.listed);
+
+const fam = family.find((f) => f.data.slug === slug);
+const blocks: CollectionEntry<'blocks'>[] = allBlocks
+  .filter((b) =>
+    (b.data.channel === 'BDY' || b.data.type === 'BIRTHDAY') &&
+    (b.data.meta?.for as string | undefined) === slug,
+  )
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+
+const displayName = fam?.data.name ?? slug;
+const noun = fam?.data.permanentNoun ?? blocks[0]?.data.noun;
+const relationship = fam?.data.relationship;
+const birthday = fam?.data.birthday;
+
+// Next-occurrence countdown
+function todayPT(): Date {
+  const ptStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  return new Date(ptStr + 'T00:00:00');
+}
+
+function nextOccurrence(mmdd: string, from: Date): Date {
+  const [mm, dd] = mmdd.split('-').map(Number);
+  const yr = from.getFullYear();
+  let candidate = new Date(yr, mm - 1, dd);
+  if (candidate < from) candidate = new Date(yr + 1, mm - 1, dd);
+  return candidate;
+}
+
+const today = todayPT();
+const next = birthday ? nextOccurrence(birthday, today) : null;
+const isToday = next && +next === +today;
+const daysAway = next ? Math.round((+next - +today) / 86_400_000) : null;
+const longDate = next
+  ? new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'America/Los_Angeles',
+    }).format(next)
+  : null;
+
+const blockYear = (b: CollectionEntry<'blocks'>) =>
+  new Date(b.data.timestamp).getUTCFullYear();
+
+const title = `${displayName} · /cake — birthday timeline`;
+const description = `Every birthday block PointCast has published for ${displayName}${noun != null ? `, Noun ${noun}` : ''}. ${blocks.length} block${blocks.length === 1 ? '' : 's'} on file. ${birthday ? `Next birthday: ${birthday} (MM-DD).` : 'No birthday in registry yet.'}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': `https://pointcast.xyz/cake/${slug}`,
+  name: title,
+  description,
+  url: `https://pointcast.xyz/cake/${slug}`,
+  about: {
+    '@type': 'Person',
+    name: displayName,
+    identifier: slug,
+  },
+  numberOfItems: blocks.length,
+  hasPart: blocks.map((b) => ({
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz/b/${b.data.id}`,
+    name: b.data.title,
+    url: `https://pointcast.xyz/b/${b.data.id}`,
+    dateCreated: b.data.timestamp,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="page" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <a href="/cake" style={`color: var(--ch-800);`}>/cake</a>
+      <span aria-hidden="true">/</span>
+      <span>{slug}</span>
+    </nav>
+
+    <header class="head">
+      <div class="head__row">
+        {noun != null && (
+          <img
+            class="head__noun"
+            src={`https://noun.pics/${noun}.svg`}
+            alt={`Noun ${noun}`}
+            width="120"
+            height="120"
+          />
+        )}
+        <div class="head__copy">
+          <p class="head__kicker mono">CH.BDY · /CAKE/{slug.toUpperCase()}</p>
+          <h1 class="head__title">{displayName}</h1>
+          {relationship && <p class="head__rel">{relationship}</p>}
+          <p class="head__sub mono">
+            {noun != null ? `PERMANENT NOUN ${noun}` : 'NO PERMANENT NOUN YET'}
+            <span class="head__sep">·</span>
+            {blocks.length} {blocks.length === 1 ? 'BLOCK' : 'BLOCKS'} ON FILE
+            {birthday && (
+              <>
+                <span class="head__sep">·</span>
+                BIRTHDAY {birthday} (MM-DD)
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {next && (
+        <div class={`countdown mono${isToday ? ' countdown--today' : ''}`}>
+          {isToday ? (
+            <span><strong>TODAY.</strong> Happy birthday, {displayName}.</span>
+          ) : daysAway === 1 ? (
+            <span><strong>TOMORROW</strong> · next birthday — {longDate}</span>
+          ) : (
+            <span><strong>IN {daysAway} DAYS</strong> · next birthday — {longDate}</span>
+          )}
+        </div>
+      )}
+    </header>
+
+    {blocks.length > 0 ? (
+      <section class="timeline">
+        <h2 class="section__title mono">Timeline · most recent first</h2>
+        <ul class="timeline__list">
+          {blocks.map((b) => (
+            <li class="t-item">
+              <a class="t-link" href={`/b/${b.data.id}`}>
+                <span class="t-year mono">{blockYear(b)}</span>
+                <div class="t-body">
+                  <p class="t-id mono">№{b.data.id}</p>
+                  <p class="t-title">{b.data.title}</p>
+                  {b.data.dek && <p class="t-dek">{b.data.dek}</p>}
+                  <p class="t-meta mono">
+                    {b.data.noun != null ? `NOUN ${b.data.noun}` : 'NO NOUN'}
+                    <span class="t-sep">·</span>
+                    CLAIMED {b.data.edition?.minted ?? 0}/∞
+                  </p>
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : (
+      <section class="empty-section">
+        <p class="empty mono">
+          no birthday blocks for <strong>{displayName}</strong> yet.
+          {birthday && next && (
+            <>
+              <br />Next birthday is {longDate}.
+            </>
+          )}
+        </p>
+      </section>
+    )}
+
+    <footer class="foot mono">
+      <a href="/cake">← back to /cake</a>
+      <span aria-hidden="true">·</span>
+      <a href={`/cake/${slug}.json`}>/cake/{slug}.json (coming soon)</a>
+      {fam && (
+        <>
+          <span aria-hidden="true">·</span>
+          <a href="/family">/family entry ↗</a>
+        </>
+      )}
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', ui-sans-serif, system-ui, sans-serif);
+    color: var(--pc-ink, #12110E);
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin-bottom: 24px;
+  }
+  .crumb a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  .head {
+    border-top: 4px solid var(--ch-600);
+    background: var(--ch-50);
+    padding: 22px;
+    margin-bottom: 28px;
+  }
+  .head__row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 22px;
+    align-items: center;
+  }
+  .head__noun {
+    display: block;
+    border-radius: 8px;
+    border: 2px solid var(--ch-600);
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ch-800);
+    margin: 0 0 8px;
+  }
+  .head__title {
+    font-family: var(--pc-font-serif, 'Lora', Georgia, serif);
+    font-size: clamp(36px, 6vw, 64px);
+    line-height: 0.95;
+    margin: 0 0 6px;
+    color: var(--ch-800);
+    letter-spacing: -0.02em;
+  }
+  .head__rel {
+    font-size: 14px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0 0 8px;
+  }
+  .head__sub {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0;
+  }
+  .head__sep { margin: 0 6px; color: var(--pc-ink-muted, #5F5E5A); }
+
+  .countdown {
+    margin-top: 18px;
+    padding: 12px 14px;
+    border: 1px dashed var(--ch-600);
+    background: #fff;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ch-800);
+  }
+  .countdown--today {
+    background: var(--ch-600);
+    color: #fff;
+    border-style: solid;
+    border-color: var(--ch-800);
+    font-size: 14px;
+  }
+  .countdown strong { font-weight: 600; }
+
+  .section__title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0 0 12px;
+    border-bottom: 1px solid var(--pc-rule, #E5E3DD);
+    padding-bottom: 8px;
+  }
+
+  .timeline__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .t-link {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 14px;
+    border: 1.5px dashed var(--ch-600);
+    background: #fff;
+    color: inherit;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .t-link:hover { background: var(--ch-50); }
+  .t-year {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ch-800);
+    letter-spacing: 0;
+  }
+  .t-id {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    margin: 0 0 4px;
+  }
+  .t-title { font-size: 18px; line-height: 1.25; margin: 0 0 4px; font-weight: 500; }
+  .t-dek { font-size: 13px; color: var(--pc-ink-muted, #5F5E5A); margin: 0 0 8px; line-height: 1.5; }
+  .t-meta { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--pc-ink-muted, #5F5E5A); margin: 0; }
+  .t-sep { margin: 0 4px; }
+
+  .empty {
+    font-size: 12px;
+    color: var(--pc-ink-muted, #5F5E5A);
+    padding: 24px;
+    border: 1px dashed var(--pc-rule, #E5E3DD);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .foot {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--pc-rule, #E5E3DD);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5F5E5A);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .foot a { color: var(--ch-800); text-decoration: none; border-bottom: 1px solid transparent; }
+  .foot a:hover { border-bottom-color: currentColor; }
+
+  @media (max-width: 640px) {
+    .head__row { grid-template-columns: 1fr; gap: 14px; text-align: left; }
+    .head__noun { width: 88px; height: 88px; }
+    .t-link { grid-template-columns: 56px 1fr; gap: 10px; }
+    .t-year { font-size: 18px; }
+  }
+</style>

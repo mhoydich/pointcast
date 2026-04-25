@@ -16,8 +16,8 @@ const blocks = defineCollection({
   loader: glob({ pattern: '**/*.json', base: './src/content/blocks' }),
   schema: z.object({
     id: z.string().regex(/^\d{4}$/, 'id must be 4-digit zero-padded string'),
-    channel: z.enum(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST', 'BTL']),
-    type: z.enum(['READ', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'NOTE', 'VISIT', 'LINK', 'TALK']),
+    channel: z.enum(['FD', 'CRT', 'SPN', 'GF', 'GDN', 'ESC', 'FCT', 'VST', 'BTL', 'BDY']),
+    type: z.enum(['READ', 'LISTEN', 'WATCH', 'MINT', 'FAUCET', 'NOTE', 'VISIT', 'LINK', 'TALK', 'BIRTHDAY']),
     title: z.string(),
     body: z.string().optional(),
     timestamp: z.coerce.date(),
@@ -419,6 +419,16 @@ const family = defineCollection({
     /** Optional avatar — typically a noun.pics URL. */
     avatar: z.string().optional(),
     since: z.coerce.date().optional(),
+    /** Optional birthday — MM-DD only. Year omitted on purpose (privacy +
+     *  age-agnostic rendering). Drives /cake upcoming list and the per-person
+     *  birthday-block annual cadence. Opt-in per person, same consent rule
+     *  as tezosAddress. */
+    birthday: z.string().regex(/^\d{2}-\d{2}$/, 'birthday must be MM-DD').optional(),
+    /** Optional permanent Noun seed — locked in by the person's first
+     *  birthday block. Same Noun is reused for every future birthday block,
+     *  every avatar, every cross-link to them on PointCast. 0–1199 per
+     *  noun.pics range. */
+    permanentNoun: z.number().int().min(0).max(1199).optional(),
     /** When false, hidden from the public /family page. Default true per Mike's consent. */
     listed: z.boolean().default(true),
     author: z.enum(['cc', 'mike', 'mh+cc']).default('mh+cc'),
@@ -472,4 +482,59 @@ const mesh = defineCollection({
   }),
 });
 
-export const collections = { blocks, posts, projects, drops, products, polls, gallery, ethLegacy, family, mesh };
+/**
+ * seeingTheFuture — daily intelligence dispatch series.
+ *
+ * Lives in its own lane, parallel to `blocks` (per BLOCKS.md, channel
+ * additions are a Mike-decision item; this surface has its own schema and
+ * preserves per-vertical aesthetics via raw HTML bodies). Mounted at
+ * /c/seeing-the-future/. One JSON file per dispatch at
+ * src/content/seeing-the-future/{issue}.json, with a sibling .html body
+ * file referenced by `bodyHtmlPath` so the dispatch's distinct inline-CSS
+ * aesthetic survives unmodified.
+ *
+ * Issue numbers are series-local (0001-padded), monotonically increasing
+ * within this series only — independent of the global block ID space.
+ */
+const seeingTheFuture = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/seeing-the-future' }),
+  schema: z.object({
+    /** Series-local issue number, zero-padded to 4 digits. */
+    issue: z.string().regex(/^\d{4}$/, 'issue must be 4-digit zero-padded string'),
+    /** Publication date — anchors day-of-week and rotation lookup. */
+    date: z.coerce.date(),
+    /** Locked vertical — drives palette, day, idiom. */
+    vertical: z.enum([
+      'cannabis',
+      'ai-frontdoor',
+      'pickleball',
+      'hemp-thc',
+      'streetwear',
+      'recovery',
+      'meridians',
+    ]),
+    /** Day-of-week shorthand. Must match vertical's locked day. */
+    day: z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']),
+    /** Headline of the dispatch — pulled from the source HTML's hed/thesis. */
+    thesis: z.string().min(1),
+    /** 1-2 sentence summary of the dispatch's argument, used in feeds + list. */
+    summary: z.string().min(1).max(600),
+    /** Vertical's primary hex — denormalized for fast list rendering. */
+    palette: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    /** Vertical's accent hex — denormalized. */
+    accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    /** Block-shape carryover for cross-system parity. */
+    blockType: z.literal('READ').default('READ'),
+    mood: z.literal('morning').default('morning'),
+    byline: z.string().default('MH × Opus 4.6'),
+    /** Optional reading-time hint. */
+    readingTime: z.string().optional(),
+    /** Path to the raw HTML body, relative to this collection's base. */
+    bodyHtmlPath: z.string().regex(/^[a-z0-9][a-z0-9-]*\.html$/),
+    /** Original source filename + Cowork session for traceability. */
+    source: z.string().optional(),
+    draft: z.boolean().default(false),
+  }),
+});
+
+export const collections = { blocks, posts, projects, drops, products, polls, gallery, ethLegacy, family, mesh, seeingTheFuture };
