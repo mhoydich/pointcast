@@ -1,0 +1,420 @@
+---
+/**
+ * /window — a small El Segundo window view.
+ *
+ * Sprint 38 (Mike 2026-04-24 evening autonomous: "create your own next
+ * set of sprints do some fun stuffs"). A pixel-art window frame
+ * overlaying a sky that responds to live time-of-day + Open-Meteo
+ * conditions. Sun rises and sets, moon shows after dusk, clouds drift
+ * when overcast, marine layer rises when foggy, stars sparkle at
+ * night.
+ *
+ * No database, no logic state — just a pretty window that knows what
+ * time it is and what the weather is doing in El Segundo, refreshed
+ * every 5 minutes while the tab is open. Pairs with /coffee as a
+ * quiet sit-with-it room.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+interface Weather {
+  ok: boolean;
+  name?: string;
+  tempF?: number;
+  condition?: string;
+  sunset?: string;
+  updatedAt?: string;
+}
+
+// Build-time fetch of current conditions. Falls back to a sensible
+// stub if the API is unreachable so the page always renders.
+let weather: Weather = { ok: false };
+try {
+  const res = await fetch('https://pointcast.xyz/api/weather?lat=33.92&lng=-118.42&label=el-segundo', {
+    signal: AbortSignal.timeout(2500),
+  });
+  if (res.ok) weather = await res.json();
+} catch {
+  // ignore — render stub below
+}
+const tempF = weather.tempF ?? 62;
+const condition = (weather.condition ?? 'overcast').toLowerCase();
+
+// Derive time-of-day bucket from current PT hour (server-side initial).
+// Client refreshes every minute so the bucket updates as time passes.
+function timeOfDayFromHour(h: number): 'dawn' | 'morning' | 'midday' | 'afternoon' | 'sunset' | 'dusk' | 'night' {
+  if (h >= 5  && h <  7)  return 'dawn';
+  if (h >= 7  && h < 11)  return 'morning';
+  if (h >= 11 && h < 14)  return 'midday';
+  if (h >= 14 && h < 17)  return 'afternoon';
+  if (h >= 17 && h < 19)  return 'sunset';
+  if (h >= 19 && h < 21)  return 'dusk';
+  return 'night';
+}
+const ptHourFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false,
+});
+const ptHour = parseInt(ptHourFmt.format(new Date()), 10);
+const tod = timeOfDayFromHour(ptHour);
+
+// Condition tag for cloud + marine-layer rendering.
+function conditionTag(c: string): 'clear' | 'cloudy' | 'foggy' | 'overcast' {
+  if (/fog|mist|marine/.test(c))   return 'foggy';
+  if (/clear|sun/.test(c))         return 'clear';
+  if (/overcast/.test(c))          return 'overcast';
+  return 'cloudy';
+}
+const cond = conditionTag(condition);
+---
+
+<BaseLayout
+  title="The window · PointCast"
+  description="A small El Segundo window view that responds to live time-of-day and Open-Meteo conditions. Sun, moon, marine layer, stars."
+>
+  <main class="window-page">
+    <header class="window-page__head">
+      <p class="window-page__kicker mono">El Segundo · 33.92°N 118.42°W</p>
+      <h1 class="window-page__title">The window.</h1>
+      <p class="window-page__lede" id="window-lede">
+        <span id="window-temp">{tempF}</span>°F · <span id="window-condition">{condition}</span> · <span id="window-tod">{tod}</span>
+      </p>
+    </header>
+
+    <section class="window-stage" aria-label="A live window onto the sky">
+      <div class="window-frame" data-tod={tod} data-cond={cond} id="window-frame">
+        <div class="window-sky">
+          <!-- Sun — visible morning through sunset -->
+          <div class="window-sun" aria-hidden="true"></div>
+          <!-- Moon — visible dusk through dawn -->
+          <div class="window-moon" aria-hidden="true"></div>
+          <!-- Stars — visible after dusk -->
+          <div class="window-stars" aria-hidden="true">
+            <span class="star" style="left:14%; top:18%; animation-delay: 0s;"></span>
+            <span class="star" style="left:28%; top:32%; animation-delay: 1.4s;"></span>
+            <span class="star" style="left:46%; top:12%; animation-delay: 0.6s;"></span>
+            <span class="star" style="left:62%; top:24%; animation-delay: 2.1s;"></span>
+            <span class="star" style="left:78%; top:40%; animation-delay: 0.9s;"></span>
+            <span class="star" style="left:88%; top:14%; animation-delay: 1.7s;"></span>
+            <span class="star" style="left:18%; top:48%; animation-delay: 2.5s;"></span>
+            <span class="star" style="left:54%; top:54%; animation-delay: 0.3s;"></span>
+          </div>
+          <!-- Drifting clouds — opacity gated by data-cond -->
+          <div class="window-cloud window-cloud--1" aria-hidden="true"></div>
+          <div class="window-cloud window-cloud--2" aria-hidden="true"></div>
+          <div class="window-cloud window-cloud--3" aria-hidden="true"></div>
+          <!-- Marine layer — rises in foggy / morning conditions -->
+          <div class="window-marine" aria-hidden="true"></div>
+          <!-- Distant horizon — a thin band of warmer color -->
+          <div class="window-horizon" aria-hidden="true"></div>
+        </div>
+        <!-- Window mullions — wood crossbars over the glass -->
+        <div class="window-mullion window-mullion--v" aria-hidden="true"></div>
+        <div class="window-mullion window-mullion--h" aria-hidden="true"></div>
+        <!-- Inner sash shadow — gives the window depth -->
+        <div class="window-sash" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section class="window-page__about">
+      <p>Live from El Segundo. Time-of-day decides the sky — dawn pinks, midday blues, sunset oranges, dusk purples, night navy with stars. The condition decides the clouds — overcast piles them on, foggy raises the marine layer, clear thins the sky out. The view refreshes every five minutes while the tab is open.</p>
+      <p class="window-page__quiet">Pair it with the <a href="/coffee">coffee pot</a> at this hour. The pot is on, the sun is going, the air outside is sixty-two and grey.</p>
+    </section>
+
+    <nav class="window-page__exits" aria-label="Window exits">
+      <a href="/" class="window-page__exit mono">← the front door</a>
+      <a href="/coffee" class="window-page__exit mono">the coffee pot</a>
+      <a href="/mythos" class="window-page__exit mono">the mythos</a>
+      <a href="/wire" class="window-page__exit mono">the wire</a>
+    </nav>
+  </main>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var frame    = document.getElementById('window-frame');
+    var tempEl   = document.getElementById('window-temp');
+    var condEl   = document.getElementById('window-condition');
+    var todEl    = document.getElementById('window-tod');
+    if (!frame) return;
+
+    function ptHour() {
+      try {
+        var fmt = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false,
+        });
+        return parseInt(fmt.format(new Date()), 10);
+      } catch (e) { return new Date().getHours(); }
+    }
+    function timeOfDay(h) {
+      if (h >=  5 && h <  7) return 'dawn';
+      if (h >=  7 && h < 11) return 'morning';
+      if (h >= 11 && h < 14) return 'midday';
+      if (h >= 14 && h < 17) return 'afternoon';
+      if (h >= 17 && h < 19) return 'sunset';
+      if (h >= 19 && h < 21) return 'dusk';
+      return 'night';
+    }
+    function conditionTag(c) {
+      c = (c || '').toLowerCase();
+      if (/fog|mist|marine/.test(c)) return 'foggy';
+      if (/clear|sun/.test(c))       return 'clear';
+      if (/overcast/.test(c))        return 'overcast';
+      return 'cloudy';
+    }
+    function refreshTod() {
+      var tod = timeOfDay(ptHour());
+      frame.setAttribute('data-tod', tod);
+      if (todEl) todEl.textContent = tod;
+    }
+    function refreshWeather() {
+      fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !data.ok) return;
+          if (tempEl && data.tempF != null) tempEl.textContent = String(data.tempF);
+          if (condEl && data.condition)     condEl.textContent = String(data.condition).toLowerCase();
+          frame.setAttribute('data-cond', conditionTag(data.condition));
+        })
+        .catch(function () { /* keep current state */ });
+    }
+    refreshTod();
+    setInterval(refreshTod,     60_000);   // every minute
+    setInterval(refreshWeather, 300_000);  // every 5 min
+  })();
+</script>
+
+<style>
+  .window-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 56px 20px 96px;
+    text-align: center;
+    color: var(--color-ink);
+  }
+  .window-page__head { margin-bottom: 24px; }
+  .window-page__kicker {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .window-page__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(46px, 9vw, 76px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.012em;
+    margin: 0 0 10px;
+  }
+  .window-page__lede {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+
+  .window-stage {
+    margin: 24px auto 28px;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Window frame — white painted wood with depth */
+  .window-frame {
+    width: min(360px, 86vw);
+    aspect-ratio: 3 / 4;
+    border: 14px solid #f3ece0;
+    border-radius: 4px;
+    box-shadow:
+      inset 0 0 0 2px #d8cdb8,
+      inset 0 0 0 4px rgba(0,0,0,0.04),
+      0 6px 20px rgba(0,0,0,0.12),
+      0 1px 0 rgba(255,255,255,0.7);
+    position: relative;
+    overflow: hidden;
+    background: #b8e0f0;
+  }
+
+  .window-sky {
+    position: absolute; inset: 0;
+    transition: background 4s ease-in-out;
+  }
+
+  /* Sky tints by time of day */
+  .window-frame[data-tod="dawn"]      .window-sky { background: linear-gradient(180deg, #f7c0a0 0%, #ffd5b4 35%, #c8b495 75%, #a89880 100%); }
+  .window-frame[data-tod="morning"]   .window-sky { background: linear-gradient(180deg, #b8d8e6 0%, #d4e4ec 50%, #e0d8c4 100%); }
+  .window-frame[data-tod="midday"]    .window-sky { background: linear-gradient(180deg, #6cb4d8 0%, #a8d4e8 50%, #c8e0ec 100%); }
+  .window-frame[data-tod="afternoon"] .window-sky { background: linear-gradient(180deg, #88b8d4 0%, #c4d4e0 60%, #e6d8c0 100%); }
+  .window-frame[data-tod="sunset"]    .window-sky { background: linear-gradient(180deg, #d68a4e 0%, #e87a5a 30%, #c46478 60%, #6c4a78 100%); }
+  .window-frame[data-tod="dusk"]      .window-sky { background: linear-gradient(180deg, #3c3680 0%, #5a4488 35%, #7c4878 70%, #a06082 100%); }
+  .window-frame[data-tod="night"]     .window-sky { background: linear-gradient(180deg, #0a1428 0%, #1a2440 60%, #2a3058 100%); }
+
+  /* Sun — visible during day, sliding by tod */
+  .window-sun {
+    position: absolute;
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: #ffe07a;
+    box-shadow: 0 0 30px rgba(255, 224, 122, 0.6);
+    left: 60%;
+    top: 18%;
+    transition: opacity 4s, top 4s ease-in-out, left 4s ease-in-out, background 4s, box-shadow 4s;
+    opacity: 0;
+  }
+  .window-frame[data-tod="dawn"]      .window-sun { opacity: 1; left: 18%; top: 62%; background: #ffb088; box-shadow: 0 0 20px rgba(255, 130, 90, 0.5); }
+  .window-frame[data-tod="morning"]   .window-sun { opacity: 0.85; left: 30%; top: 32%; background: #fff0c8; }
+  .window-frame[data-tod="midday"]    .window-sun { opacity: 1; left: 60%; top: 14%; background: #fff5b0; box-shadow: 0 0 35px rgba(255, 245, 176, 0.6); }
+  .window-frame[data-tod="afternoon"] .window-sun { opacity: 1; left: 72%; top: 28%; background: #ffe07a; }
+  .window-frame[data-tod="sunset"]    .window-sun { opacity: 1; left: 80%; top: 60%; background: #ff7a4e; box-shadow: 0 0 40px rgba(255, 122, 78, 0.7); }
+  .window-frame[data-tod="dusk"]      .window-sun { opacity: 0.3; left: 88%; top: 78%; background: #c46478; }
+  .window-frame[data-tod="night"]     .window-sun { opacity: 0; }
+
+  /* Moon — visible dusk through dawn */
+  .window-moon {
+    position: absolute;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: #f0ebd8;
+    box-shadow:
+      inset -8px -2px 0 0 rgba(0, 0, 0, 0.15),
+      0 0 16px rgba(240, 235, 216, 0.4);
+    left: 30%;
+    top: 22%;
+    opacity: 0;
+    transition: opacity 4s, top 4s ease-in-out, left 4s ease-in-out;
+  }
+  .window-frame[data-tod="dusk"]  .window-moon { opacity: 0.7; left: 28%; top: 28%; }
+  .window-frame[data-tod="night"] .window-moon { opacity: 1;   left: 36%; top: 18%; }
+  .window-frame[data-tod="dawn"]  .window-moon { opacity: 0.4; left: 70%; top: 30%; }
+
+  /* Stars — visible at night */
+  .window-stars {
+    position: absolute; inset: 0;
+    opacity: 0;
+    transition: opacity 4s;
+  }
+  .window-frame[data-tod="dusk"]  .window-stars { opacity: 0.5; }
+  .window-frame[data-tod="night"] .window-stars { opacity: 1; }
+  .window-frame[data-tod="dawn"]  .window-stars { opacity: 0.3; }
+  .star {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: #fffaf0;
+    border-radius: 50%;
+    box-shadow: 0 0 3px rgba(255, 250, 240, 0.7);
+    animation: window-twinkle 3.4s ease-in-out infinite;
+  }
+  @keyframes window-twinkle {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.4); }
+  }
+
+  /* Clouds — drift across, opacity by condition */
+  .window-cloud {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 50%;
+    filter: blur(0.5px);
+    will-change: transform;
+  }
+  .window-cloud--1 { width: 80px; height: 22px; top: 22%; left: -90px; animation: window-drift 70s linear infinite; }
+  .window-cloud--2 { width: 60px; height: 18px; top: 38%; left: -70px; animation: window-drift 55s linear infinite; animation-delay: -25s; }
+  .window-cloud--3 { width: 96px; height: 24px; top: 14%; left: -100px; animation: window-drift 90s linear infinite; animation-delay: -40s; }
+  @keyframes window-drift {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(calc(360px + 100px)); }
+  }
+  .window-frame[data-cond="clear"]    .window-cloud { opacity: 0.15; }
+  .window-frame[data-cond="cloudy"]   .window-cloud { opacity: 0.65; }
+  .window-frame[data-cond="overcast"] .window-cloud { opacity: 0.85; background: rgba(220, 220, 220, 0.92); }
+  .window-frame[data-cond="foggy"]    .window-cloud { opacity: 0.5;  filter: blur(2px); }
+  /* Recolor clouds at night so they read as dimmer */
+  .window-frame[data-tod="night"] .window-cloud { background: rgba(140, 140, 160, 0.7); }
+  .window-frame[data-tod="dusk"]  .window-cloud { background: rgba(180, 160, 180, 0.7); }
+
+  /* Marine layer — soft fog bottom band, raised when foggy */
+  .window-marine {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 22%;
+    background: linear-gradient(180deg, transparent 0%, rgba(220, 224, 230, 0.45) 60%, rgba(220, 224, 230, 0.7) 100%);
+    transition: height 4s, opacity 4s;
+    opacity: 0.6;
+  }
+  .window-frame[data-cond="foggy"]    .window-marine { height: 56%; opacity: 0.9; }
+  .window-frame[data-cond="overcast"] .window-marine { height: 32%; opacity: 0.7; }
+  .window-frame[data-cond="clear"]    .window-marine { opacity: 0.25; }
+
+  /* Horizon band — a thin warm tint at the meeting line */
+  .window-horizon {
+    position: absolute;
+    left: 0; right: 0; bottom: 30%;
+    height: 2px;
+    background: rgba(255, 220, 180, 0.4);
+    opacity: 0;
+    transition: opacity 4s;
+  }
+  .window-frame[data-tod="sunset"] .window-horizon,
+  .window-frame[data-tod="dawn"]   .window-horizon { opacity: 1; }
+
+  /* Mullions (window crossbars) over the sky */
+  .window-mullion {
+    position: absolute;
+    background: #f3ece0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+  .window-mullion--v { left: 50%; top: 0; bottom: 0; width: 6px; transform: translateX(-50%); }
+  .window-mullion--h { top: 50%; left: 0; right: 0; height: 6px; transform: translateY(-50%); }
+
+  /* Inner sash shadow */
+  .window-sash {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.12);
+  }
+
+  .window-page__about {
+    max-width: 520px;
+    margin: 18px auto 28px;
+    padding: 18px 22px;
+    border: 1px solid var(--color-rule);
+    border-radius: 3px;
+    background: var(--color-card);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.55;
+    text-align: left;
+    color: var(--color-ink);
+  }
+  .window-page__about p { margin: 0 0 12px; }
+  .window-page__about p:last-child { margin: 0; }
+  .window-page__quiet { font-style: italic; color: var(--color-ink-soft); }
+  .window-page__about a { color: var(--color-accent); border-bottom: 1px solid currentColor; text-decoration: none; }
+  .window-page__about a:hover { color: var(--color-warm); }
+
+  .window-page__exits {
+    display: flex; flex-wrap: wrap; gap: 18px;
+    justify-content: center;
+    padding-top: 18px;
+    border-top: 1px dashed var(--color-rule);
+  }
+  .window-page__exit {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    border-bottom: 1px solid currentColor;
+  }
+  .window-page__exit:hover { color: var(--color-warm); }
+
+  .mono { font-family: var(--font-mono); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .window-cloud, .star, .window-sky, .window-sun, .window-moon { animation: none !important; transition: none !important; }
+  }
+</style>
