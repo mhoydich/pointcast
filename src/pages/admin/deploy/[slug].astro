@@ -1,0 +1,473 @@
+---
+/**
+ * /admin/deploy/[slug] — per-contract management.
+ *
+ * Reads `src/data/contracts.json[slug]` at build time and renders a focused
+ * landing page for one contract. Surfaces:
+ *   - Status badge + KT1 (if live)
+ *   - Links: tzkt, better-call.dev, objkt, GitHub source, runbook, brief
+ *   - Action recommendations based on status
+ *   - Recent on-chain ops (client-side fetch from tzkt API for LIVE
+ *     contracts only — kept lightweight so a stale tzkt response doesn't
+ *     block the page from rendering)
+ *
+ * v1 doesn't yet expose register-tokens / set-metadata / transfer-admin
+ * forms inline (those still flow through the per-feature surface — e.g.
+ * /coffee for mug minting). The Originate action lands on
+ * /admin/deploy/new?prefill=<slug> which is the one wallet-aware path
+ * we keep tightly maintained.
+ *
+ * Pre-renders one page per registered contract via getStaticPaths.
+ */
+
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import WalletConnect from '../../../components/WalletConnect.astro';
+import contracts from '../../../data/contracts.json';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+export async function getStaticPaths() {
+  const data = (await import('../../../data/contracts.json')).default as Record<string, any>;
+  return Object.keys(data)
+    .filter((k) => !k.startsWith('_'))
+    .map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params;
+const all = contracts as Record<string, any>;
+const entry = slug && typeof slug === 'string' ? all[slug] : null;
+
+if (!entry) {
+  // Astro 4+ supports `Astro.redirect`; this is the simplest way to
+  // bounce unknown slugs back to the dashboard.
+  return Astro.redirect('/admin/deploy');
+}
+
+const SLUG_DISPLAY: Record<string, string> = {
+  visit_nouns: 'Visit Nouns FA2',
+  coffee_mugs: 'Coffee Mugs FA2',
+  birthdays: 'Birthdays FA2',
+  drum_token: 'Drum Token',
+  marketplace: 'PointCast Marketplace',
+  prize_cast: 'Prize Cast',
+  agent_derby_receipts: 'Agent Derby Receipts',
+};
+
+const SLUG_DESCRIPTION: Record<string, string> = {
+  visit_nouns:
+    'One Noun NFT per visit · public mint · royalty 5% · Sprint v1 launch contract.',
+  coffee_mugs:
+    'Five rarity-tiered mug NFTs claimable from /coffee · public free mint (gas-only) · edition caps 333/144/64/21/8.',
+  birthdays:
+    'Open-edition birthday cards · one token_id per BIRTHDAY block · claimable from /b/{id} and /cake.',
+  drum_token: 'PointCast utility token (FA1.2 plan).',
+  marketplace: 'On-site listings + sales escrow (planned).',
+  prize_cast: 'Race-winner prize escrow contract (planned).',
+  agent_derby_receipts: 'Public receipt ledger for Agent Derby races.',
+};
+
+const SLUG_FEATURE_PAGE: Record<string, string> = {
+  visit_nouns: '/',
+  coffee_mugs: '/coffee',
+  birthdays: '/cake',
+};
+
+const name = SLUG_DISPLAY[slug as string] || (slug as string);
+const description = SLUG_DESCRIPTION[slug as string] || '';
+const featurePage = SLUG_FEATURE_PAGE[slug as string] || null;
+
+const liveKt1 =
+  entry.mainnet && typeof entry.mainnet === 'string' && entry.mainnet.startsWith('KT1')
+    ? entry.mainnet
+    : null;
+const shadowKt1 =
+  entry.shadownet && typeof entry.shadownet === 'string' && entry.shadownet.startsWith('KT1')
+    ? entry.shadownet
+    : null;
+
+const contractFile = existsSync(resolve(`contracts/v2/${slug}_fa2.py`))
+  ? `contracts/v2/${slug}_fa2.py`
+  : existsSync(resolve(`contracts/v2/${slug}.py`))
+    ? `contracts/v2/${slug}.py`
+    : null;
+
+const artifactsAvailable =
+  existsSync(resolve(`public/admin/_artifacts/${slug}-contract.json`)) &&
+  existsSync(resolve(`public/admin/_artifacts/${slug}-storage.json`));
+
+type Status = 'LIVE' | 'STAGED' | 'DRAFT' | 'WRITTEN';
+let status: Status;
+if (liveKt1) status = 'LIVE';
+else if (artifactsAvailable) status = 'STAGED';
+else if (contractFile) status = 'DRAFT';
+else status = 'WRITTEN';
+
+const STATUS_TONE: Record<Status, string> = {
+  LIVE: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30',
+  STAGED: 'bg-warm/20 text-warm border-warm/40',
+  DRAFT: 'bg-amber-500/15 text-amber-700 border-amber-500/30',
+  WRITTEN: 'bg-ink-soft/15 text-ink-soft border-ink-soft/30',
+};
+
+const symbol = entry.symbol ?? null;
+const runbook = entry?._notes?.runbook ?? null;
+const brief = entry?._notes?.brief ?? null;
+const purpose = entry?._notes?.purpose ?? null;
+const mainnetNotes = entry._mainnet_notes ?? null;
+const shadownetNotes = entry._shadownet_notes ?? null;
+---
+
+<BaseLayout title={`${name} · Admin · Deploy`} description={description}>
+  <div class="max-w-[52rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+
+    <!-- Masthead band -->
+    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-6">
+      <div class="flex items-center gap-3 min-w-0">
+        <a
+          href="/"
+          class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline"
+        >
+          PointCast
+        </a>
+        <a
+          href="/admin/deploy"
+          class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm hover:text-ink transition-colors no-underline"
+        >
+          / admin / deploy /
+        </a>
+        <span class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-ink-soft/70 truncate">
+          {slug}
+        </span>
+      </div>
+      <WalletConnect />
+    </div>
+
+    <!-- Header -->
+    <header class="mb-6">
+      <div class="flex items-center gap-2 flex-wrap mb-2">
+        <span class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm">
+          contract
+        </span>
+        <span class={`px-1.5 py-0.5 rounded-sm border text-[0.5rem] tracking-[0.16em] uppercase font-mono leading-none ${STATUS_TONE[status]}`}>
+          {status}
+        </span>
+        <span class="px-1.5 py-0.5 rounded-sm border border-rule/40 text-[0.5rem] tracking-[0.16em] uppercase font-mono leading-none text-ink-soft bg-card">
+          tz
+        </span>
+        {symbol && (
+          <span class="font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink-soft/70">
+            ${symbol}
+          </span>
+        )}
+      </div>
+      <h1 class="font-serif italic text-[1.8rem] md:text-[2.2rem] text-ink font-medium leading-[1.1] mb-2">
+        {name}
+      </h1>
+      <p class="text-[0.92rem] text-ink/70 leading-relaxed">
+        {purpose || description}
+      </p>
+    </header>
+
+    <!-- KT1 panel -->
+    {liveKt1 && (
+      <section class="mb-6 p-4 rounded-md border border-emerald-500/30 bg-emerald-500/5">
+        <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-emerald-700 mb-1">
+          mainnet · live
+        </p>
+        <p class="font-mono text-[0.85rem] text-ink mb-3 break-all">
+          {liveKt1}
+        </p>
+        <div class="flex flex-wrap gap-1.5">
+          <a
+            href={`https://tzkt.io/${liveKt1}/operations`}
+            target="_blank" rel="noopener"
+            class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
+          >
+            tzkt &nearr;
+          </a>
+          <a
+            href={`https://better-call.dev/mainnet/${liveKt1}`}
+            target="_blank" rel="noopener"
+            class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
+          >
+            better-call.dev &nearr;
+          </a>
+          <a
+            href={`https://objkt.com/collection/${liveKt1}`}
+            target="_blank" rel="noopener"
+            class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
+          >
+            objkt &nearr;
+          </a>
+          {featurePage && (
+            <a
+              href={featurePage}
+              class="inline-flex items-center px-2.5 py-1 rounded-sm bg-warm text-paper font-mono text-[0.55rem] tracking-[0.14em] uppercase hover:bg-ink transition-colors no-underline"
+            >
+              {featurePage} &rarr;
+            </a>
+          )}
+        </div>
+      </section>
+    )}
+
+    {shadowKt1 && !liveKt1 && (
+      <section class="mb-6 p-4 rounded-md border border-warm/40 bg-warm/5">
+        <p class="font-mono text-[0.54rem] tracking-[0.22em] uppercase text-warm mb-1">
+          shadownet · testnet
+        </p>
+        <p class="font-mono text-[0.85rem] text-ink mb-3 break-all">
+          {shadowKt1}
+        </p>
+        <a
+          href={`https://shadownet.tzkt.io/${shadowKt1}/operations`}
+          target="_blank" rel="noopener"
+          class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
+        >
+          shadownet tzkt &nearr;
+        </a>
+      </section>
+    )}
+
+    <!-- Action panel — varies by status -->
+    <section class="mb-6">
+      <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5">
+        actions
+      </h2>
+
+      {status === 'LIVE' && (
+        <div class="space-y-3">
+          {featurePage && (
+            <a
+              href={featurePage}
+              class="block p-3 rounded-md border border-rule/30 bg-card/40 hover:border-warm hover:bg-card transition-colors no-underline"
+            >
+              <p class="font-medium text-ink mb-0.5">Mint / interact &rarr;</p>
+              <p class="text-[0.85rem] text-ink-soft">
+                Open the public-facing page where wallets can mint or interact with this contract.
+              </p>
+            </a>
+          )}
+          <a
+            href={`/admin/deploy/new?prefill=${slug}`}
+            class="block p-3 rounded-md border border-rule/30 bg-card/40 hover:border-warm hover:bg-card transition-colors no-underline"
+          >
+            <p class="font-medium text-ink mb-0.5">Re-deploy a fresh copy &rarr;</p>
+            <p class="text-[0.85rem] text-ink-soft">
+              Originate a new instance of this contract (e.g. for a separate edition or to fix an orphan).
+              Auto-patches the admin field to your wallet.
+            </p>
+          </a>
+        </div>
+      )}
+
+      {status === 'STAGED' && (
+        <div class="space-y-3">
+          <a
+            href={`/admin/deploy/new?prefill=${slug}`}
+            class="block p-3 rounded-md border border-warm/40 bg-warm/10 hover:bg-warm/20 transition-colors no-underline"
+          >
+            <p class="font-medium text-ink mb-0.5">Originate &rarr;</p>
+            <p class="text-[0.85rem] text-ink-soft">
+              Pre-staged Michelson is ready. The Publisher will load it,
+              auto-patch the admin field, and send the origination through Kukai.
+            </p>
+          </a>
+        </div>
+      )}
+
+      {status === 'DRAFT' && (
+        <div class="space-y-3">
+          <div class="p-3 rounded-md border border-rule/30 bg-card/40">
+            <p class="font-medium text-ink mb-1">Compile to Michelson</p>
+            <p class="text-[0.85rem] text-ink-soft mb-2">
+              The SmartPy source is in the repo, but the Michelson + storage JSON
+              haven't been generated yet. Compile in the SmartPy IDE, then paste
+              the artifacts into the Publisher.
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              <a
+                href="https://smartpy.io/ide"
+                target="_blank" rel="noopener"
+                class="inline-flex items-center px-2.5 py-1 rounded-sm bg-warm text-paper font-mono text-[0.55rem] tracking-[0.14em] uppercase hover:bg-ink transition-colors no-underline"
+              >
+                smartpy.io/ide &nearr;
+              </a>
+              {contractFile && (
+                <a
+                  href={`https://github.com/mhoydich/pointcast/blob/main/${contractFile}`}
+                  target="_blank" rel="noopener"
+                  class="inline-flex items-center px-2.5 py-1 rounded-sm bg-card border border-rule/40 font-mono text-[0.55rem] tracking-[0.14em] uppercase text-ink hover:border-warm hover:text-warm transition-colors no-underline"
+                >
+                  source &nearr;
+                </a>
+              )}
+            </div>
+          </div>
+          <a
+            href={`/admin/deploy/new?prefill=${slug}`}
+            class="block p-3 rounded-md border border-rule/30 bg-card/40 hover:border-warm hover:bg-card transition-colors no-underline"
+          >
+            <p class="font-medium text-ink mb-0.5">Originate (manual paste) &rarr;</p>
+            <p class="text-[0.85rem] text-ink-soft">
+              Open the Publisher and paste compiled JSON manually. The
+              <code class="font-mono text-[0.78rem] bg-paper px-1 py-0.5 rounded">?prefill</code>
+              query will try to load artifacts and fall back to manual paste.
+            </p>
+          </a>
+        </div>
+      )}
+
+      {status === 'WRITTEN' && (
+        <div class="p-3 rounded-md border border-rule/30 bg-card/40">
+          <p class="font-medium text-ink mb-1">Sketch only &mdash; no source yet</p>
+          <p class="text-[0.85rem] text-ink-soft">
+            The slot exists in <code class="font-mono text-[0.78rem] bg-paper px-1 py-0.5 rounded">contracts.json</code>
+            but no SmartPy source has been written yet. Add
+            <code class="font-mono text-[0.78rem] bg-paper px-1 py-0.5 rounded">contracts/v2/{slug}.py</code>
+            to advance to DRAFT.
+          </p>
+        </div>
+      )}
+    </section>
+
+    <!-- Docs panel -->
+    {(brief || runbook || contractFile) && (
+      <section class="mb-6">
+        <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5">
+          docs
+        </h2>
+        <ul class="space-y-1 text-[0.9rem]">
+          {contractFile && (
+            <li>
+              <a
+                href={`https://github.com/mhoydich/pointcast/blob/main/${contractFile}`}
+                target="_blank" rel="noopener"
+                class="text-warm hover:text-ink transition-colors"
+              >
+                <span class="font-mono text-[0.7rem] text-ink-soft mr-2">source</span>
+                {contractFile} &nearr;
+              </a>
+            </li>
+          )}
+          {runbook && (
+            <li>
+              <a
+                href={`https://github.com/mhoydich/pointcast/blob/main/${runbook}`}
+                target="_blank" rel="noopener"
+                class="text-warm hover:text-ink transition-colors"
+              >
+                <span class="font-mono text-[0.7rem] text-ink-soft mr-2">runbook</span>
+                {runbook} &nearr;
+              </a>
+            </li>
+          )}
+          {brief && (
+            <li>
+              <a
+                href={`https://github.com/mhoydich/pointcast/blob/main/${brief}`}
+                target="_blank" rel="noopener"
+                class="text-warm hover:text-ink transition-colors"
+              >
+                <span class="font-mono text-[0.7rem] text-ink-soft mr-2">brief</span>
+                {brief} &nearr;
+              </a>
+            </li>
+          )}
+        </ul>
+      </section>
+    )}
+
+    <!-- Origination notes -->
+    {(mainnetNotes || shadownetNotes) && (
+      <section class="mb-6">
+        <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5">
+          origination history
+        </h2>
+        {mainnetNotes && (
+          <details class="mb-2 p-3 rounded-md border border-rule/30 bg-card/40">
+            <summary class="font-mono text-[0.58rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+              mainnet
+            </summary>
+            <pre class="mt-2 font-mono text-[0.65rem] text-ink-soft/80 overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(mainnetNotes, null, 2)}</pre>
+          </details>
+        )}
+        {shadownetNotes && (
+          <details class="p-3 rounded-md border border-rule/30 bg-card/40">
+            <summary class="font-mono text-[0.58rem] tracking-[0.18em] uppercase text-ink cursor-pointer">
+              shadownet
+            </summary>
+            <pre class="mt-2 font-mono text-[0.65rem] text-ink-soft/80 overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(shadownetNotes, null, 2)}</pre>
+          </details>
+        )}
+      </section>
+    )}
+
+    <!-- Recent ops (LIVE only) -->
+    {liveKt1 && (
+      <section class="mb-6">
+        <h2 class="font-mono text-[0.6rem] tracking-[0.2em] uppercase text-ink mb-3 border-b border-rule/40 pb-1.5 flex items-center justify-between">
+          <span>recent ops</span>
+          <span class="font-mono text-[0.5rem] tracking-[0.14em] uppercase text-ink-soft/50">
+            via tzkt
+          </span>
+        </h2>
+        <ul id="ops-list" class="space-y-1 text-[0.85rem] font-mono text-ink-soft/80">
+          <li class="text-ink-soft/50 italic">loading…</li>
+        </ul>
+      </section>
+    )}
+
+    <a
+      href="/admin/deploy"
+      class="inline-flex items-center font-mono text-[0.58rem] tracking-[0.18em] uppercase text-ink-soft hover:text-warm transition-colors no-underline"
+    >
+      &larr; back to deploy center
+    </a>
+  </div>
+</BaseLayout>
+
+{liveKt1 && (
+  <script define:vars={{ kt1: liveKt1 }}>
+    // Fetch the 8 most recent operations affecting this contract from
+    // tzkt's free public API. No auth, generous rate limits — fine to
+    // hit on every page load. If it fails, the placeholder remains.
+    (async function loadOps() {
+      const list = document.getElementById('ops-list');
+      if (!list) return;
+      try {
+        const res = await fetch(
+          'https://api.tzkt.io/v1/operations/transactions?target=' + kt1 + '&limit=8&sort.desc=id',
+          { cache: 'no-store' },
+        );
+        if (!res.ok) throw new Error('tzkt ' + res.status);
+        const ops = await res.json();
+        if (!Array.isArray(ops) || ops.length === 0) {
+          list.innerHTML = '<li class="text-ink-soft/50 italic">no transactions yet</li>';
+          return;
+        }
+        list.innerHTML = ops
+          .map((op) => {
+            const ts = op.timestamp ? new Date(op.timestamp).toLocaleString() : '';
+            const ep = (op.parameter && op.parameter.entrypoint) || 'transfer';
+            const sender = op.sender && op.sender.address ? op.sender.address : '';
+            const senderShort = sender ? sender.slice(0, 6) + '…' + sender.slice(-4) : '?';
+            const status = op.status || 'applied';
+            return (
+              '<li class="flex items-baseline gap-2">' +
+                '<a href="https://tzkt.io/' + (op.hash || '') + '" target="_blank" rel="noopener" class="text-warm hover:text-ink no-underline">' + ep + '</a>' +
+                '<span class="text-ink-soft/50">·</span>' +
+                '<span>' + senderShort + '</span>' +
+                '<span class="text-ink-soft/50">·</span>' +
+                '<span class="text-ink-soft/60 text-[0.78rem]">' + ts + '</span>' +
+                (status !== 'applied' ? '<span class="text-amber-600 ml-1">(' + status + ')</span>' : '') +
+              '</li>'
+            );
+          })
+          .join('');
+      } catch (err) {
+        list.innerHTML = '<li class="text-ink-soft/50 italic">tzkt unavailable: ' + (err && err.message ? err.message : 'error') + '</li>';
+      }
+    })();
+  </script>
+)}
