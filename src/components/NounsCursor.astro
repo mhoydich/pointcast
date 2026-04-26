@@ -1,0 +1,120 @@
+---
+/**
+ * NounsCursor — a pixel-art Nouns glasses cursor that follows the
+ * pointer across the page. Custom CSS cursor + a JS-driven shadow that
+ * bounces on click for the satisfying "tap" feedback.
+ *
+ * Activated on drum pages by including this component in DrumLayout.
+ * Hidden on touch devices (no `pointer:fine`) since they have no cursor.
+ *
+ * Per Mike 2026-04-26: "where is the nouns cursor, very cool". This.
+ */
+---
+
+<div id="nouns-cursor" aria-hidden="true">
+  <svg width="40" height="20" viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+    <!-- Left frame -->
+    <rect x="0"  y="2"  width="14" height="14" fill="#000000"/>
+    <rect x="2"  y="4"  width="10" height="10" fill="#FFFFFF"/>
+    <rect x="6"  y="6"  width="6"  height="6"  fill="#000000"/>
+    <rect x="8"  y="6"  width="2"  height="6"  fill="#FFFFFF"/>
+    <!-- Bridge -->
+    <rect x="14" y="8"  width="6"  height="2"  fill="#000000"/>
+    <!-- Right frame -->
+    <rect x="20" y="2"  width="14" height="14" fill="#000000"/>
+    <rect x="22" y="4"  width="10" height="10" fill="#FFFFFF"/>
+    <rect x="26" y="6"  width="6"  height="6"  fill="#000000"/>
+    <rect x="28" y="6"  width="2"  height="6"  fill="#FFFFFF"/>
+  </svg>
+</div>
+
+<style is:global>
+  /* Hide native cursor only on devices with a real pointer. Phones/tablets
+     keep the default behavior since they don't have a cursor at all. */
+  @media (hover: hover) and (pointer: fine) {
+    body.drum-body, body.drum-body * { cursor: none !important; }
+    /* Inputs + textareas keep a text caret so Mike can see where he's typing */
+    body.drum-body input,
+    body.drum-body textarea,
+    body.drum-body [contenteditable="true"] {
+      cursor: text !important;
+    }
+  }
+
+  #nouns-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 40px;
+    height: 20px;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-9999px, -9999px); /* hidden off-screen until first mousemove */
+    transition: transform 60ms linear, scale 100ms ease-out;
+    image-rendering: pixelated;
+    will-change: transform;
+    filter: drop-shadow(0 1px 0 rgba(18,17,14,0.18));
+  }
+  #nouns-cursor svg {
+    display: block;
+    image-rendering: pixelated;
+    shape-rendering: crispEdges;
+  }
+  #nouns-cursor.tap   { scale: 1.35; }
+  #nouns-cursor.over-link {
+    /* Subtle warm tint when hovering an interactive element */
+    filter: drop-shadow(0 0 4px rgba(194,106,74,0.7));
+  }
+  /* Hide on touch where no cursor exists */
+  @media (hover: none), (pointer: coarse) {
+    #nouns-cursor { display: none; }
+  }
+</style>
+
+<script>
+  // ────────────────────────────────────────────────────────────────────
+  //  NounsCursor — track the pointer.
+  //
+  //  Snappy follow (no easing) so it feels glued to the cursor; CSS adds
+  //  a small transition for the click-bump scale. Hover detection uses
+  //  document.elementFromPoint to flip an "over-link" class for the warm
+  //  glow when the noun is over a button/link/input — gives it the
+  //  hand-pointer affordance without using the native pointer.
+  // ────────────────────────────────────────────────────────────────────
+  const el = document.getElementById('nouns-cursor');
+  if (el && !matchMedia('(pointer: coarse)').matches) {
+    let x = 0, y = 0;
+    let lastOverInteractive = false;
+
+    function isInteractive(node: Element | null): boolean {
+      while (node) {
+        if (!('tagName' in node)) return false;
+        const t = (node as HTMLElement).tagName;
+        if (t === 'A' || t === 'BUTTON' || t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || t === 'LABEL') return true;
+        if ((node as HTMLElement).getAttribute?.('role') === 'button') return true;
+        if ((node as HTMLElement).onclick) return true;
+        node = (node as HTMLElement).parentElement;
+      }
+      return false;
+    }
+
+    document.addEventListener('mousemove', (e) => {
+      x = e.clientX; y = e.clientY;
+      // Hotspot is the bridge at (~20, 10) of the 40x20 SVG, so offset.
+      el.style.transform = `translate(${x - 20}px, ${y - 10}px)`;
+      // Hover state — ~30/sec is enough; throttle by skipping every other frame
+      const target = document.elementFromPoint(x, y);
+      const interactive = isInteractive(target);
+      if (interactive !== lastOverInteractive) {
+        lastOverInteractive = interactive;
+        el.classList.toggle('over-link', interactive);
+      }
+    }, { passive: true });
+
+    document.addEventListener('mousedown', () => el.classList.add('tap'));
+    document.addEventListener('mouseup', () => el.classList.remove('tap'));
+    document.addEventListener('mouseleave', () => {
+      el.style.transform = 'translate(-9999px, -9999px)';
+    });
+  }
+</script>
