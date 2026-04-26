@@ -13,6 +13,7 @@ import {
 import {
   ANCHOR,
   NATURE_NOTES,
+  NATURE_OVERVIEW_AREAS,
   NATIVE_PLANTING_PALETTE,
   PLANTING_VALUE_SYSTEM,
   PLANTING_YIELD_SITES,
@@ -43,6 +44,13 @@ export const GET: APIRoute = async () => {
       id: '0330',
       url: 'https://pointcast.xyz/b/0330',
       jsonUrl: 'https://pointcast.xyz/b/0330.json',
+    },
+    overview: {
+      title: 'El Segundo nature overview',
+      description:
+        'A high-level read of the local nature register: ocean, flora, trees, and wildlife before the detailed dune field guide.',
+      areas: NATURE_OVERVIEW_AREAS,
+      signals: NATURE_OVERVIEW_AREAS.flatMap((area) => area.signals),
     },
     plantingBlock: {
       id: '0331',

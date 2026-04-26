@@ -1,12 +1,13 @@
 # PointCast
 
-> A living broadcast from El Segundo, California. Dispatches, faucets,
-> visits, and mints on Tezos. Every piece of content is a **Block** — a
-> stable JSON schema with 10 channels, 10 types, and a permanent monotonic
-> ID. Built by Mike Hoydich with Claude (Anthropic) and Codex (OpenAI).
-> Agent-native by design. CC0-flavored.
+> An agent-native broadcast from El Segundo, California: human-readable
+> pages, machine-readable feeds, stable Blocks, and a transparent human-AI
+> collaboration ledger. Every piece of content is a **Block** — a stable
+> JSON schema with 9 channels, 8 types, and a permanent monotonic ID.
+> Built by Mike Hoydich with Claude (Anthropic), Codex (OpenAI), and Manus.
+> CC0-flavored.
 
-**Live:** [pointcast.xyz](https://pointcast.xyz) · **Canonical:** [/manifesto](https://pointcast.xyz/manifesto) · **Agents:** [/agents.json](https://pointcast.xyz/agents.json) · **LLMs:** [/llms.txt](https://pointcast.xyz/llms.txt)
+**Live:** [pointcast.xyz](https://pointcast.xyz) · **Pattern:** [/agent-native-publishing](https://pointcast.xyz/agent-native-publishing) · **Canonical:** [/manifesto](https://pointcast.xyz/manifesto) · **Agents:** [/agents.json](https://pointcast.xyz/agents.json) · **LLMs:** [/llms.txt](https://pointcast.xyz/llms.txt)
 
 ---
 
@@ -21,7 +22,8 @@ the edge (`functions/_middleware.ts`), humans get the full styled page.
 Every human HTML route has a machine-readable JSON counterpart at the
 same logical URL. Agents don't scrape — they read the endpoints.
 
-Jump to the explainer: **[/manifesto](https://pointcast.xyz/manifesto)**.
+Jump to the pattern explainer: **[/agent-native-publishing](https://pointcast.xyz/agent-native-publishing)**.
+Jump to the project definition: **[/manifesto](https://pointcast.xyz/manifesto)**.
 
 ---
 
@@ -47,8 +49,8 @@ disclosure — including what we deliberately didn't use.
 ```ts
 type Block = {
   id: string              // "0205" — 4-digit zero-padded, immutable
-  channel: Channel        // one of 10 (FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL, BDY)
-  type: BlockType         // one of 10 (READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK, TALK, BIRTHDAY)
+  channel: Channel        // one of 9 (FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL)
+  type: BlockType         // one of 8 (READ, LISTEN, WATCH, MINT, FAUCET, NOTE, VISIT, LINK)
   title: string
   timestamp: Date
   body?: string           // markdown
@@ -77,6 +79,7 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 | Route                  | Purpose                                                                   |
 |------------------------|---------------------------------------------------------------------------|
 | [/](https://pointcast.xyz/)                       | Home feed — dense auto-fit grid of every Block                |
+| [/agent-native-publishing](https://pointcast.xyz/agent-native-publishing) | Concise explainer for the website pattern PointCast implements |
 | [/manifesto](https://pointcast.xyz/manifesto)     | Canonical Q&A, FAQPage + DefinedTerm JSON-LD                  |
 | [/glossary](https://pointcast.xyz/glossary)       | Dictionary of PointCast-specific terms with stable anchors    |
 | [/local](https://pointcast.xyz/local)             | 100-mile El Segundo lens: institutions, stations, local blocks |
@@ -93,7 +96,6 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 | [/battle](https://pointcast.xyz/battle)           | Nouns Battler — deterministic duels, Card of the Day rotates  |
 | [/cast](https://pointcast.xyz/cast)               | Prize Cast — no-loss prize savings on Tezos (pending compile) |
 | [/drum](https://pointcast.xyz/drum)               | Multiplayer drum room, DRUM token claim (pending compile)     |
-| [/cake](https://pointcast.xyz/cake)               | The place where birthdays are celebrated online — one block per person per year, one Noun forever |
 | [/for-agents](https://pointcast.xyz/for-agents)   | Human-readable manifest                                       |
 | [/agents.json](https://pointcast.xyz/agents.json) | Machine-readable discovery manifest                           |
 | [/llms.txt](https://pointcast.xyz/llms.txt)       | LLM summary (llmstxt.org convention)                          |

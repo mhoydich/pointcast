@@ -44,37 +44,58 @@ const jsonLd = {
 
 <BlockLayout title="Here now" description="Live congregation — visitors currently connected to PointCast, as noun avatars." jsonLd={jsonLd}>
   <div class="here-shell">
-    <nav class="here-crumb mono">
-      <a href="/">← Home</a>
-      <span aria-hidden="true">·</span>
-      <a href="/tv">TV</a>
-      <span aria-hidden="true">·</span>
-      <a href="/for-agents">For agents</a>
-    </nav>
-
-    <header class="here-masthead">
-      <p class="here-masthead__kicker mono">PC · HERE NOW · LIVE</p>
-      <h1 class="here-masthead__title">The peoples, right now.</h1>
-      <p class="here-masthead__intro">
-        Every visitor — human, wallet, agent, bot — gets a noun avatar.
-        This page shows everyone currently connected. Refresh-free; it
-        updates as people arrive and leave.
-      </p>
+    <header class="here-topbar">
+      <a class="here-brand mono" href="/" aria-label="PointCast home">
+        <span class="here-brand__mark">PC</span>
+        <span>PointCast</span>
+      </a>
+      <nav class="here-nav mono" aria-label="Here navigation">
+        <a href="/">Home</a>
+        <a href="/tv">TV</a>
+        <a href="/workbench">Workbench</a>
+        <a href="/for-agents">Agents</a>
+      </nav>
     </header>
 
-    <HereGrid cap={64} />
+    <section class="here-room" aria-labelledby="here-title">
+      <div class="here-room__intro">
+        <p class="here-room__kicker mono">
+          <span class="here-room__live" aria-hidden="true"></span>
+          HERE NOW · LIVE ROOM
+        </p>
+        <h1 id="here-title">The peoples, right now.</h1>
+        <p>
+          Humans, wallets, agents, and bots arrive as noun avatars. Keep
+          the page open and the room updates around you without refresh.
+        </p>
+        <div class="here-room__actions mono" aria-label="Quick links">
+          <a href="/api/presence/snapshot">Snapshot</a>
+          <a href="/api/presence">Live WS</a>
+          <a href="/for-nodes">Broadcast</a>
+        </div>
+      </div>
 
-    <HerePoll />
+      <div class="here-room__stage" aria-label="Live congregation">
+        <HereGrid cap={64} />
+      </div>
+    </section>
 
-    <HereBeat />
+    <section class="here-tools" aria-label="Live room tools">
+      <div class="here-tools__primary">
+        <HerePoll />
+      </div>
+      <div class="here-tools__secondary">
+        <HereBeat />
+      </div>
+    </section>
 
     <aside class="here-agent-strip">
-      <p class="here-agent-strip__label mono">MACHINE-READABLE</p>
+      <p class="here-agent-strip__label mono">MACHINE-READABLE SURFACES</p>
       <ul>
-        <li><a href="/api/presence/snapshot">/api/presence/snapshot</a> — current state, cached 5s</li>
-        <li><a href="/api/presence">/api/presence</a> — live WS, identify + updates</li>
-        <li><a href="/for-agents">/for-agents</a> — full manifest</li>
-        <li><a href="/for-nodes">/for-nodes</a> — how to broadcast here</li>
+        <li><a href="/api/presence/snapshot">/api/presence/snapshot</a><span>current state, cached 5s</span></li>
+        <li><a href="/api/presence">/api/presence</a><span>live WebSocket, identify + updates</span></li>
+        <li><a href="/for-agents">/for-agents</a><span>full manifest</span></li>
+        <li><a href="/for-nodes">/for-nodes</a><span>how outside nodes broadcast here</span></li>
       </ul>
     </aside>
   </div>
@@ -82,86 +103,423 @@ const jsonLd = {
 
 <style is:global>
   body:has(.here-shell) {
-    background: #0b0b0b;
-    color: #f3e6d8;
+    background: #08090c;
+    color: #f7f0e3;
+  }
+  body:has(.here-shell) .skip-link:focus {
+    background: #f7f0e3;
+    color: #101014;
   }
 </style>
 
 <style>
   .here-shell {
     min-height: 100vh;
-    padding: 24px 16px 80px;
-    color: #f3e6d8;
-    background: #0b0b0b;
-    font-family: Georgia, 'Times New Roman', serif;
+    padding: 16px clamp(14px, 3vw, 28px) 86px;
+    color: #f7f0e3;
+    background:
+      linear-gradient(180deg, rgba(17, 21, 30, 0.92) 0%, rgba(8, 9, 12, 0.98) 58%, #08090c 100%),
+      radial-gradient(circle at 18% 16%, rgba(58, 121, 186, 0.26), transparent 28%),
+      radial-gradient(circle at 82% 8%, rgba(221, 174, 71, 0.22), transparent 30%),
+      linear-gradient(135deg, #0e1621 0%, #08090c 52%, #15110b 100%);
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+    overflow: hidden;
   }
-  .here-crumb {
-    max-width: 1100px;
-    margin: 0 auto 20px;
+  .here-shell::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 78%);
+  }
+  .here-topbar,
+  .here-room,
+  .here-tools,
+  .here-agent-strip {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 1240px);
+    margin-inline: auto;
+  }
+  .here-topbar {
+    min-height: 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: clamp(18px, 3vw, 34px);
+  }
+  .here-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #f7f0e3;
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .here-brand__mark {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(247, 240, 227, 0.22);
+    background: #f7f0e3;
+    color: #101014;
+    font-weight: 800;
+  }
+  .here-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .here-nav a {
+    color: #bfc7d4;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    border: 1px solid rgba(191, 199, 212, 0.16);
+    background: rgba(8, 9, 12, 0.36);
+    text-decoration: none;
+  }
+  .here-nav a:hover {
+    border-color: rgba(221, 174, 71, 0.55);
+    color: #f0c66a;
+  }
+  .here-room {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.55fr) minmax(0, 1fr);
+    gap: clamp(18px, 4vw, 42px);
+    align-items: stretch;
+    min-height: min(720px, calc(100vh - 122px));
+  }
+  .here-room__intro {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(20px, 4vw, 46px) 0;
+  }
+  .here-room__kicker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 16px;
+    color: #f0c66a;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .here-room__live {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #50d890;
+    box-shadow: 0 0 0 0 rgba(80, 216, 144, 0.55);
+    animation: hereLivePulse 1.8s ease-out infinite;
+  }
+  .here-room h1 {
+    max-width: 9ch;
+    margin: 0 0 18px;
+    color: #fffaf0;
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+    font-size: clamp(48px, 8vw, 104px);
+    line-height: 0.9;
+    letter-spacing: 0;
+  }
+  .here-room__intro p:not(.here-room__kicker) {
+    max-width: 560px;
+    margin: 0;
+    color: #cad2de;
+    font-size: clamp(16px, 1.6vw, 19px);
+    line-height: 1.55;
+  }
+  .here-room__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 28px;
     font-size: 11px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #9a8571;
   }
-  .here-crumb a {
-    color: #e89a2d;
+  .here-room__actions a {
+    color: #101014;
+    background: #f0c66a;
+    border: 1px solid #f0c66a;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
     text-decoration: none;
-    margin: 0 4px;
   }
-  .here-crumb a:first-child { margin-left: 0; }
-  .here-crumb span { opacity: 0.55; }
-  .here-masthead {
-    max-width: 1100px;
-    margin: 0 auto 36px;
-    padding: 0 4px;
+  .here-room__actions a:nth-child(2) {
+    color: #f7f0e3;
+    background: rgba(45, 93, 143, 0.38);
+    border-color: rgba(114, 169, 217, 0.42);
   }
-  .here-masthead__kicker {
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    color: #e89a2d;
-    margin: 0 0 8px;
+  .here-room__actions a:nth-child(3) {
+    color: #f7f0e3;
+    background: rgba(80, 216, 144, 0.12);
+    border-color: rgba(80, 216, 144, 0.36);
   }
-  .here-masthead__title {
-    font-family: Georgia, serif;
-    font-size: 40px;
-    line-height: 1.05;
-    margin: 0 0 14px;
-    font-weight: 700;
-    color: #f3e6d8;
+  .here-room__stage {
+    min-width: 0;
+    min-height: 420px;
+    display: flex;
+    align-items: stretch;
+    border: 1px solid rgba(247, 240, 227, 0.16);
+    background:
+      linear-gradient(180deg, rgba(247, 240, 227, 0.08), rgba(247, 240, 227, 0.025)),
+      rgba(8, 9, 12, 0.58);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(18px);
   }
-  .here-masthead__intro {
-    font-size: 16px;
-    line-height: 1.55;
-    max-width: 620px;
-    color: #d4c2ad;
-    margin: 0;
+  .here-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: 18px;
+    margin-top: 22px;
   }
   .here-agent-strip {
-    max-width: 1100px;
-    margin: 40px auto 0;
-    padding: 16px 18px;
-    background: rgba(243, 230, 216, 0.04);
-    border: 1px solid rgba(232, 154, 45, 0.18);
-    border-radius: 6px;
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid rgba(247, 240, 227, 0.14);
+    background: rgba(8, 9, 12, 0.46);
   }
   .here-agent-strip__label {
     font-size: 11px;
     letter-spacing: 0.14em;
-    color: #e89a2d;
-    margin: 0 0 8px;
+    color: #8fc6ff;
+    margin: 0 0 12px;
   }
   .here-agent-strip ul {
     list-style: none;
     padding: 0;
     margin: 0;
-    font-family: 'Monaco', 'Menlo', monospace;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace);
     font-size: 12px;
-    color: #d4c2ad;
+    color: #bfc7d4;
   }
-  .here-agent-strip li { margin: 4px 0; }
-  .here-agent-strip a { color: #e89a2d; text-decoration: none; }
-  .mono { font-family: 'Monaco', 'Menlo', monospace; }
-  @media (max-width: 720px) {
-    .here-masthead__title { font-size: 30px; }
+  .here-agent-strip li {
+    min-height: 82px;
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    padding: 12px;
+    border: 1px solid rgba(247, 240, 227, 0.1);
+    background: rgba(247, 240, 227, 0.035);
+  }
+  .here-agent-strip a {
+    color: #f0c66a;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .here-agent-strip span {
+    color: #9da8b6;
+    line-height: 1.35;
+  }
+  .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', monospace); }
+  @keyframes hereLivePulse {
+    0% { box-shadow: 0 0 0 0 rgba(80, 216, 144, 0.55); }
+    70% { box-shadow: 0 0 0 10px rgba(80, 216, 144, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(80, 216, 144, 0); }
+  }
+  @media (max-width: 980px) {
+    .here-room,
+    .here-tools {
+      grid-template-columns: 1fr;
+    }
+    .here-room {
+      min-height: 0;
+    }
+    .here-room__intro {
+      padding: 18px 0 0;
+    }
+    .here-room h1 {
+      max-width: 10ch;
+    }
+    .here-agent-strip ul {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 640px) {
+    .here-shell {
+      padding-inline: 12px;
+    }
+    .here-topbar {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .here-nav {
+      justify-content: flex-start;
+    }
+    .here-nav a {
+      padding-inline: 8px;
+      font-size: 11px;
+    }
+    .here-room h1 {
+      font-size: 50px;
+    }
+    .here-room__stage {
+      min-height: 360px;
+    }
+    .here-agent-strip ul {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<style is:global>
+  body:has(.here-shell) .here-grid,
+  body:has(.here-shell) .here-poll,
+  body:has(.here-shell) .here-beat {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    color: #f7f0e3;
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+  }
+  body:has(.here-shell) .here-grid {
+    min-height: 100%;
+    padding: clamp(16px, 2.4vw, 24px);
+    display: flex;
+    flex-direction: column;
+  }
+  body:has(.here-shell) .here-grid__head {
+    border-bottom-color: rgba(247, 240, 227, 0.14);
+    margin-bottom: 16px;
+  }
+  body:has(.here-shell) .here-grid__kicker,
+  body:has(.here-shell) .here-poll__live,
+  body:has(.here-shell) .here-beat__kicker,
+  body:has(.here-shell) .here-cell--you .here-cell__label {
+    color: #f0c66a;
+  }
+  body:has(.here-shell) .here-grid__time,
+  body:has(.here-shell) .here-poll__kicker,
+  body:has(.here-shell) .here-beat__foot,
+  body:has(.here-shell) .here-cell__label {
+    color: #9da8b6;
+  }
+  body:has(.here-shell) .here-grid__cells {
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    gap: 10px;
+    align-content: start;
+  }
+  body:has(.here-shell) .here-cell {
+    min-height: 132px;
+    border-radius: 0;
+    border-color: rgba(247, 240, 227, 0.12);
+    background: rgba(247, 240, 227, 0.055);
+  }
+  body:has(.here-shell) .here-cell--you {
+    border-color: rgba(240, 198, 106, 0.7);
+    background: linear-gradient(180deg, rgba(240, 198, 106, 0.18), rgba(247, 240, 227, 0.045));
+  }
+  body:has(.here-shell) .here-cell__noun {
+    background: #f7f0e3;
+  }
+  body:has(.here-shell) .here-cell__chip {
+    border-radius: 0;
+    background: rgba(143, 198, 255, 0.13);
+    color: #dbe7f4;
+  }
+  body:has(.here-shell) .here-cell__chip--mood {
+    background: #50d890;
+    color: #07130c;
+  }
+  body:has(.here-shell) .here-poll,
+  body:has(.here-shell) .here-beat {
+    min-height: 100%;
+    padding: clamp(16px, 2vw, 22px);
+    border-radius: 0;
+    border-color: rgba(247, 240, 227, 0.14);
+    background:
+      linear-gradient(180deg, rgba(247, 240, 227, 0.07), rgba(247, 240, 227, 0.025)),
+      rgba(8, 9, 12, 0.58);
+    backdrop-filter: blur(18px);
+  }
+  body:has(.here-shell) .here-poll__q {
+    color: #fffaf0;
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+    font-size: clamp(20px, 2vw, 28px);
+    letter-spacing: 0;
+  }
+  body:has(.here-shell) .here-poll__dek,
+  body:has(.here-shell) .here-beat__dek {
+    color: #cad2de;
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+  }
+  body:has(.here-shell) .here-poll__slug,
+  body:has(.here-shell) .here-poll__opt-pct,
+  body:has(.here-shell) .here-poll__followup-kicker,
+  body:has(.here-shell) .here-poll__followup-link {
+    color: #f0c66a;
+  }
+  body:has(.here-shell) .here-poll__opt {
+    min-height: 46px;
+    border-radius: 0;
+    border-color: rgba(247, 240, 227, 0.13);
+    background: rgba(247, 240, 227, 0.045);
+    color: #f7f0e3;
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+  }
+  body:has(.here-shell) .here-poll__opt:hover {
+    border-color: rgba(143, 198, 255, 0.5);
+    background: rgba(45, 93, 143, 0.22);
+  }
+  body:has(.here-shell) .here-poll__opt-bar {
+    background: linear-gradient(90deg, rgba(80, 216, 144, 0.18), rgba(143, 198, 255, 0.22));
+  }
+  body:has(.here-shell) .here-poll__opt--voted {
+    border-color: #50d890;
+  }
+  body:has(.here-shell) .here-poll__opt--voted .here-poll__opt-label::before {
+    color: #50d890;
+  }
+  body:has(.here-shell) .here-poll__followup {
+    border-radius: 0;
+    border-color: rgba(240, 198, 106, 0.28);
+    border-left-color: #50d890;
+    background: rgba(240, 198, 106, 0.08);
+  }
+  body:has(.here-shell) .here-beat__pads {
+    gap: 8px;
+  }
+  body:has(.here-shell) .here-beat__pad {
+    min-height: 72px;
+    border-radius: 0;
+    border-color: rgba(247, 240, 227, 0.13);
+    background: rgba(247, 240, 227, 0.05);
+  }
+  body:has(.here-shell) .here-beat__pad:hover {
+    border-color: rgba(80, 216, 144, 0.5);
+    background: rgba(80, 216, 144, 0.08);
+  }
+  @media (max-width: 640px) {
+    body:has(.here-shell) .here-grid__cells {
+      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    }
+    body:has(.here-shell) .here-cell {
+      min-height: 122px;
+    }
+    body:has(.here-shell) .here-cell__noun {
+      width: 64px;
+      height: 64px;
+    }
   }
 </style>

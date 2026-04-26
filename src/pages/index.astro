@@ -12,7 +12,6 @@ import BlockCard from '../components/BlockCard.astro';
 import BlockReorder from '../components/BlockReorder.astro';
 import PresenceBar from '../components/PresenceBar.astro';
 import WalletChip from '../components/WalletChip.astro';
-import RaceInstrumentation from '../components/RaceInstrumentation.astro';
 import HomeMajors from '../components/HomeMajors.astro';
 import FreshDeck from '../components/FreshDeck.astro';
 import PollsOnHome from '../components/PollsOnHome.astro';
@@ -27,12 +26,12 @@ import MorningPara from '../components/MorningPara.astro';
 import NativePlantingYield from '../components/NativePlantingYield.astro';
 import AgentLedger from '../components/AgentLedger.astro';
 import HomeFireplace from '../components/HomeFireplace.astro';
-import GameRail from '../components/GameRail.astro';
 import AppLaunchStrip from '../components/AppLaunchStrip.astro';
-import FreshToday from '../components/FreshToday.astro';
-import ThisWeek from '../components/ThisWeek.astro';
+import BuddhaHeadRotator from '../components/BuddhaHeadRotator.astro';
 import PointCastPlayStrip from '../components/PointCastPlayStrip.astro';
 import ZenCatTodayCard from '../components/ZenCatTodayCard.astro';
+import NounsPortraitStrip from '../components/NounsPortraitStrip.astro';
+import FeedbackBlock from '../components/FeedbackBlock.astro';
 
 // Removed 2026-04-19 21:55 PT per Mike: "six things isn't working,
 // morning brief isn't working, novice voter isn't working, remove
@@ -41,64 +40,18 @@ import ZenCatTodayCard from '../components/ZenCatTodayCard.astro';
 import { CHANNEL_LIST } from '../lib/channels';
 import { getCollection } from 'astro:content';
 
-// Sprint 23 (Mike 2026-04-24 Fri morning): "lets get the landing page
-// landing correct, need to keep the content fresh, this has been
-// around for days."
-//
-// Previous version pinned HELLO_MIKE_BLOCK_ID='0334' + HOUSEPLANTS_
-// FIRST_BLOCK_ID='0333' literally — blocks authored 2026-04-22 that
-// kept showing up as the two blocks above the fold. Replaced with a
-// dynamic picker that always surfaces the freshest editorial:
-//
-//   helloMikeBlock  — latest VISIT-type block (top-of-home greeting)
-//   firstBlock      — latest READ-type block (main editorial)
-//
-// Falls back cleanly when no block of a type exists. No hardcoded ids,
-// so new blocks (like 0344 this morning) bubble up without a code
-// change.
+const HELLO_MIKE_BLOCK_ID = '0334';
+const HOUSEPLANTS_FIRST_BLOCK_ID = '0333';
+
 const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-// Freshness gates — prevent stale blocks from camping the top of the
-// home when no newer block of that type has landed. Different
-// thresholds per slot:
-//   · helloMikeBlock (VISIT, top-of-home greeting) — 24h. "Someone
-//     just visited" signal. Anything older reads as stale.
-//   · firstBlock (READ, main editorial pin) — 120h (5d). Editorial
-//     recaps have more shelf life; the Four-Sprints block is relevant
-//     all weekend.
-// When a slot's candidate is too old the slot goes empty and the grid
-// below takes over.
-const FRESH_VISIT_MS = 24 * 60 * 60 * 1000;
-const FRESH_READ_MS = 120 * 60 * 60 * 1000;
-const nowMs = Date.now();
-function ageMs(b: { data: { timestamp: Date } }): number {
-  return nowMs - b.data.timestamp.getTime();
-}
-
-const latestRead = allBlocks.find((b) => b.data.type === 'READ') ?? allBlocks[0] ?? null;
-const firstBlock = latestRead && ageMs(latestRead) < FRESH_READ_MS ? latestRead : null;
-
-const latestVisit = allBlocks.find(
-  (b) => b.data.type === 'VISIT' && b.data.id !== firstBlock?.data.id,
-);
-const helloMikeBlock = latestVisit && ageMs(latestVisit) < FRESH_VISIT_MS ? latestVisit : null;
+const firstBlock = allBlocks.find((block) => block.data.id === HOUSEPLANTS_FIRST_BLOCK_ID) ?? allBlocks[0] ?? null;
+const helloMikeCandidate = allBlocks.find((block) => block.data.id === HELLO_MIKE_BLOCK_ID) ?? null;
+const helloMikeBlock = helloMikeCandidate?.data.id !== firstBlock?.data.id ? helloMikeCandidate : null;
 const pinnedBlockIds = new Set([firstBlock?.data.id, helloMikeBlock?.data.id].filter(Boolean));
 const blocks = allBlocks.filter((block) => !pinnedBlockIds.has(block.data.id));
 const blockCount = allBlocks.length;
-
-// Count blocks shipped today in PT — a tiny "+N today" affordance on
-// the masthead when the day has been busy. Sprint 34 cozy flourish.
-const ptDayKey = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
-  .toISOString().slice(0, 10);
-const blocksToday = allBlocks.filter((b) => {
-  const t = b.data.timestamp instanceof Date ? b.data.timestamp : new Date(b.data.timestamp);
-  // Convert block timestamp to PT day for comparison.
-  const ptStr = new Date(t.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
-    .toISOString().slice(0, 10);
-  return ptStr === ptDayKey;
-}).length;
-
 const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: a human-readable home, machine-readable feeds, and the Gamgee release train in one place.';
 
 // JSON-LD — make the home a CollectionPage so agents can parse the list.
@@ -129,6 +82,22 @@ const alternates = [
     title: `PointCast · ${c.name} (RSS)`,
   })),
 ];
+
+const contents = [
+  { href: '#release', label: 'Release', note: 'Gamgee RC0 and agent paths' },
+  { href: '#pattern', label: 'Pattern', note: 'Agent-native publishing' },
+  { href: '#featured', label: 'Featured', note: 'Pinned blocks' },
+  { href: '#fresh', label: 'Fresh', note: 'New, mood, and presence' },
+  { href: '#nouns-portraits', label: 'Portraits', note: 'Five Tezos-mintable Nouns' },
+  { href: '#network', label: 'Network', note: 'People, apps, and activity' },
+  { href: '#play', label: 'Play', note: 'Passport, quests, walk, radio' },
+  { href: '#today', label: 'Today', note: 'Highlights, drop, sports' },
+  { href: '#interact', label: 'Interact', note: 'Polls, random deck, channels' },
+  { href: '#feedback', label: 'Feedback', note: 'Share what should change' },
+  { href: '#majors', label: 'Majors', note: 'Drum, Cast, Meditate' },
+  { href: '#blocks', label: 'Blocks', note: 'Full public grid' },
+  { href: '#endpoints', label: 'Endpoints', note: 'Site map and feeds' },
+];
 ---
 
 <BlockLayout
@@ -141,7 +110,6 @@ const alternates = [
     buttons: [
       { label: 'Open /gamgee', action: 'link', target: 'https://pointcast.xyz/gamgee' },
       { label: 'Open /now', action: 'link', target: 'https://pointcast.xyz/now' },
-      { label: 'Open /marketplace', action: 'link', target: 'https://pointcast.xyz/marketplace' },
       { label: '/for-agents', action: 'link', target: 'https://pointcast.xyz/for-agents' },
       { label: '/agents.json', action: 'link', target: 'https://pointcast.xyz/agents.json' },
     ],
@@ -151,200 +119,51 @@ const alternates = [
 
     <h1 class="sr-only">PointCast Gamgee - an agent-native broadcast from El Segundo with human and machine-readable paths.</h1>
 
-    <!-- Masthead — one line. Wordmark, block count, current time, agent
-         link. Sprint 23 adds:
-         · hour-tinted sky strip above the row (client-set data-bucket)
-         · Front Door race chip (scheduled until Mike flips opensAt in
-           src/lib/races.ts). Uses the same buckets as /wire.
-         Sprint 24 adds:
-         · mood-tinted accent (data-mood) responding to MoodChip's
-           `pc:mood-changed` event. Layers a colored glow on top of the
-           sky without overriding the time-of-day gradient — mood is an
-           accent, time-of-day is the base. -->
-    <div class="masthead-sky" data-sky-bucket="midday" data-mood="" data-weather="" aria-hidden="true"></div>
-    <header class="masthead" id="pc-masthead" data-sky-bucket="midday" data-mood="" data-weather="">
+    <!-- Masthead — one line. Wordmark, block count, current time, agent link. -->
+    <header class="masthead">
       <a href="/" class="wordmark" aria-label="PointCast home">POINTCAST</a>
       <span class="sep" aria-hidden="true">·</span>
-      <span class="meta">{blockCount} BLOCKS{blocksToday > 0 && (<span class="meta__today" title="Blocks shipped today">{` · +${blocksToday} TODAY`}</span>)}</span>
+      <span class="meta">{blockCount} BLOCKS</span>
       <span class="sep" aria-hidden="true">·</span>
       <time class="meta time" id="pc-clock">— : —</time>
       <PresenceBar />
-      <a
-        href="/race/front-door"
-        class="race-chip mono"
-        id="pc-race-chip"
-        title="Front Door race — fastest page-load to first-click, daily."
-      >
-        <span class="race-chip__dot" aria-hidden="true"></span>
-        <span class="race-chip__label">RACE · FRONT DOOR</span>
-        <span class="race-chip__status" id="pc-race-status">SCHEDULED</span>
-      </a>
       <span class="spacer" aria-hidden="true"></span>
       <WalletChip />
       <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
 
-    <script is:inline>
-      // Sprint 23: tint the masthead sky strip by time-of-day and show
-      // a Front Door race chip. Buckets match /wire's sky pick so the
-      // whole site reads coherent as the day moves.
-      (function () {
-        'use strict';
-        var head = document.getElementById('pc-masthead');
-        var sky  = document.querySelector('.masthead-sky');
-        if (!head || !sky) return;
-        function bucket() {
-          var h = new Date().getHours() + new Date().getMinutes() / 60;
-          if (h < 6)       return 'smallhours';
-          if (h < 10)      return 'morning';
-          if (h < 15)      return 'midday';
-          if (h < 18)      return 'golden';
-          if (h < 21)      return 'blue';
-          return 'evening';
-        }
-        function apply() {
-          var b = bucket();
-          head.setAttribute('data-sky-bucket', b);
-          sky.setAttribute('data-sky-bucket', b);
-        }
-        apply();
-        setInterval(apply, 60_000);
-
-        // Sprint 24: mood → masthead accent. MoodChip writes the
-        // mood id to localStorage.pc:mood and dispatches
-        // pc:mood-changed{detail:{moodId}}. We apply both on load
-        // (so persisted mood tints on arrival) and on change.
-        function applyMood(id) {
-          var m = (id || '').toLowerCase();
-          head.setAttribute('data-mood', m);
-          sky.setAttribute('data-mood', m);
-        }
-        try { applyMood(localStorage.getItem('pc:mood') || ''); } catch (e) {}
-        window.addEventListener('pc:mood-changed', function (e) {
-          var id = e && e.detail && e.detail.moodId;
-          applyMood(id);
-        });
-
-        // Sprint 27: weather → masthead secondary tint. Hits the
-        // existing /api/weather ad-hoc endpoint for El Segundo
-        // (33.92, -118.42). Returns `{ condition, tempF, sunset }`
-        // with condition in: clear / mostly clear / partly cloudy /
-        // overcast / fog / drizzle / rain / showers / storm / snow /
-        // unknown. We map to a small set of tint tokens + cache the
-        // label in sessionStorage so subsequent tab-opens paint
-        // immediately without a round-trip.
-        function weatherTokenFromCondition(cond) {
-          var c = (cond || '').toLowerCase();
-          if (c === 'clear' || c === 'mostly clear') return 'clear';
-          if (c === 'partly cloudy')                 return 'partly';
-          if (c === 'overcast')                      return 'overcast';
-          if (c === 'fog')                           return 'marine';
-          if (c === 'drizzle' || c === 'rain' || c === 'showers') return 'rain';
-          if (c === 'storm')                         return 'storm';
-          if (c === 'snow')                          return 'cold';
-          return '';
-        }
-        function applyWeather(token, tempF) {
-          var t = token || '';
-          head.setAttribute('data-weather', t);
-          sky.setAttribute('data-weather', t);
-          if (typeof tempF === 'number' && !isNaN(tempF)) {
-            head.setAttribute('data-weather-temp', String(Math.round(tempF)));
-            sky.setAttribute('data-weather-temp', String(Math.round(tempF)));
-          }
-        }
-        // Paint from cache first so reloads feel instant.
-        try {
-          var cached = sessionStorage.getItem('pc:weather');
-          if (cached) {
-            var c = JSON.parse(cached);
-            if (c && c.ts && Date.now() - c.ts < 900_000) {
-              applyWeather(c.token, c.tempF);
-            }
-          }
-        } catch (e) {}
-        // Then refresh from the endpoint.
-        fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo', { cache: 'no-store' })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
-            if (!d || !d.ok) return;
-            var token = weatherTokenFromCondition(d.condition);
-            applyWeather(token, d.tempF);
-            try {
-              sessionStorage.setItem('pc:weather', JSON.stringify({
-                ts: Date.now(), token: token, tempF: d.tempF, condition: d.condition
-              }));
-            } catch (e) {}
-            // Broadcast for any other component that cares (e.g. the
-            // hearth could dial back the ember animation on rain).
-            window.dispatchEvent(new CustomEvent('pc:weather-changed', {
-              detail: { token: token, tempF: d.tempF, condition: d.condition }
-            }));
-          })
-          .catch(function () { /* keep whatever was cached */ });
-
-        // Front Door race chip live hydrate. /api/race/front-door/
-        // leaderboard returns race meta including derived status
-        // ('scheduled' | 'open' | 'closed' | 'resolved'). When the KV
-        // isn't bound, the endpoint still returns race meta with
-        // `reason: kv-unbound` so we can color + label correctly.
-        var chip   = document.getElementById('pc-race-chip');
-        var status = document.getElementById('pc-race-status');
-        if (chip && status) {
-          chip.setAttribute('data-status', 'scheduled');
-
-          function refreshChip() {
-            fetch('/api/race/front-door/leaderboard', { cache: 'no-store' })
-              .then(function (r) { return r.ok ? r.json() : null; })
-              .then(function (d) {
-                if (!d || !d.race) return;
-                var s = (d.race.status || 'scheduled').toLowerCase();
-                chip.setAttribute('data-status', s);
-                var label = s.toUpperCase();
-                if (s === 'open' && typeof d.count === 'number' && d.count > 0) {
-                  label = 'OPEN · ' + d.count + ' IN';
-                } else if (s === 'resolved' && d.race.resolvesAt) {
-                  label = 'RESOLVED';
-                }
-                // Sprint 25: if the viewer has submitted and we know their
-                // rank, show it: "OPEN · #3 · 12 IN"
-                try {
-                  var rank = localStorage.getItem('pc:race:front-door:rank');
-                  if (s === 'open' && rank) {
-                    label = 'OPEN · #' + rank + (typeof d.count === 'number' && d.count > 0 ? ' · ' + d.count + ' IN' : '');
-                  }
-                } catch (e) {}
-                status.textContent = label;
-              })
-              .catch(function () { /* keep default SCHEDULED */ });
-          }
-          refreshChip();
-
-          // Re-fetch the leaderboard when our own instrumentation
-          // submits a score, so the viewer sees their own rank show up
-          // on the chip within ~400ms of clicking a block.
-          window.addEventListener('pc:race:submitted', function () {
-            setTimeout(refreshChip, 400);
-          });
-          // And every 45s while the tab is open so the count refreshes
-          // as other visitors submit.
-          setInterval(refreshChip, 45_000);
-        }
-      })();
-    </script>
-
-    <!-- Race instrumentation — invisible; starts the Front Door clock
-         on page load and submits a score on the first block-card
-         click. Sprint 25. -->
-    <RaceInstrumentation slug="front-door" />
+    <nav class="contents" aria-labelledby="contents-title">
+      <div class="contents__header">
+        <p class="contents__eyebrow">Table of Contents</p>
+        <h2 id="contents-title" class="contents__title">What is on PointCast</h2>
+      </div>
+      <ol class="contents__list">
+        {contents.map((item, index) => (
+          <li class="contents__item">
+            <a href={item.href} class="contents__link">
+              <span class="contents__number">{String(index + 1).padStart(2, '0')}</span>
+              <span class="contents__copy">
+                <span class="contents__label">{item.label}</span>
+                <span class="contents__note">{item.note}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ol>
+      <div class="contents__routes" aria-label="Common PointCast routes">
+        <a href="/now">/now</a>
+        <a href="/for-agents">/for-agents</a>
+        <a href="/search">/search</a>
+        <a href="/archive">/archive</a>
+        <a href="/blocks.json">/blocks.json</a>
+      </div>
+    </nav>
 
     <HomeFireplace />
 
-    <GameRail />
-
-    <section class="gamgee-front-door" aria-labelledby="gamgee-front-door-title">
+    <section id="release" class="gamgee-front-door" aria-labelledby="gamgee-front-door-title">
       <div class="gamgee-front-door__copy">
-        <p class="gamgee-front-door__kicker">Gamgee RC0 · <a href="/mythos" class="gamgee-front-door__mythos">The Mythos →</a></p>
+        <p class="gamgee-front-door__kicker">Gamgee RC0</p>
         <h2 id="gamgee-front-door-title" class="gamgee-front-door__title">PointCast is an agent-native broadcast from El Segundo.</h2>
         <p class="gamgee-front-door__dek">Humans get the live home. Agents get stable manifests, feeds, and a visible release ledger. Gamgee is the clean release candidate that keeps both sides pointed at the same truth.</p>
         <ul class="gamgee-front-door__signals" aria-label="Gamgee release signals">
@@ -369,6 +188,11 @@ const alternates = [
           <span class="gamgee-front-door__target">/for-agents</span>
           <span class="gamgee-front-door__note">Read the operating surface.</span>
         </a>
+        <a href="/agent-native-publishing" class="gamgee-front-door__path">
+          <span class="gamgee-front-door__label">For builders</span>
+          <span class="gamgee-front-door__target">/agent-native-publishing</span>
+          <span class="gamgee-front-door__note">Copy the website pattern.</span>
+        </a>
         <a href="/agents.json" class="gamgee-front-door__path">
           <span class="gamgee-front-door__label">For tools</span>
           <span class="gamgee-front-door__target">/agents.json</span>
@@ -376,21 +200,71 @@ const alternates = [
         </a>
       </nav>
       <AgentLedger />
-      <FreshToday />
-      <ThisWeek />
+    </section>
+
+    <section id="pattern" class="agent-native-brief" aria-labelledby="agent-native-brief-title">
+      <div class="agent-native-brief__copy">
+        <p class="agent-native-brief__kicker">Agent-native publishing · new explainer</p>
+        <h2 id="agent-native-brief-title" class="agent-native-brief__title">A website for people and agents at the same time.</h2>
+        <p class="agent-native-brief__dek">
+          The new pattern page turns PointCast into a reference implementation:
+          canonical human pages, JSON mirrors, discovery manifests, feeds,
+          sitemaps, LLM context, and citation-ready permalinks.
+        </p>
+        <div class="agent-native-brief__nouns" aria-label="Nouns signal markers">
+          {[313, 523, 742, 1042].map((nounId) => (
+            <a href={`https://noun.pics/${nounId}.svg`} target="_blank" rel="noopener" class="agent-native-brief__noun">
+              <img src={`https://noun.pics/${nounId}.svg`} alt={`Noun ${nounId}`} width="44" height="44" loading="lazy" />
+              <span>N{nounId}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+      <div class="agent-native-brief__matrix" aria-label="Agent-native publishing surfaces">
+        <a href="/agent-native-publishing" class="agent-native-brief__cell agent-native-brief__cell--primary">
+          <span class="agent-native-brief__label">Pattern</span>
+          <strong>/agent-native-publishing</strong>
+          <span>Six rules plus the reusable brief.</span>
+        </a>
+        <a href="/agents.json" class="agent-native-brief__cell">
+          <span class="agent-native-brief__label">Manifest</span>
+          <strong>/agents.json</strong>
+          <span>One request maps the surface.</span>
+        </a>
+        <a href="/llms.txt" class="agent-native-brief__cell">
+          <span class="agent-native-brief__label">Context</span>
+          <strong>/llms.txt</strong>
+          <span>Short answer and retrieval order.</span>
+        </a>
+        <a href="/BLOCKS.md" class="agent-native-brief__cell">
+          <span class="agent-native-brief__label">Schema</span>
+          <strong>/BLOCKS.md</strong>
+          <span>Stable Block primitive.</span>
+        </a>
+      </div>
+      <ul class="agent-native-brief__signals" aria-label="Agent-native publishing checklist">
+        <li>human HTML</li>
+        <li>JSON mirrors</li>
+        <li>stable IDs</li>
+        <li>RSS + JSON Feed</li>
+        <li>LLM context</li>
+        <li>citation contract</li>
+      </ul>
     </section>
 
     {helloMikeBlock && (
-      <section class="hello-module" aria-label="Hello Mike module">
+      <section id="featured" class="hello-module" aria-label="Hello Mike module">
         <BlockCard block={helloMikeBlock} />
       </section>
     )}
 
     {firstBlock && (
-      <section class="first-block" aria-label="Featured block on PointCast">
+      <section id={helloMikeBlock ? undefined : 'featured'} class="first-block" aria-label="Featured block on PointCast">
         <BlockCard block={firstBlock} />
       </section>
     )}
+
+    <div id="fresh" class="section-anchor" aria-hidden="true"></div>
 
     <!-- Fresh strip — top-of-page freshness signal + one-tap action.
          Per Mike 2026-04-19 morning feedback "top not fresh enough and
@@ -411,6 +285,10 @@ const alternates = [
          2026-04-19 20:30 PT. -->
     <VisitorHereStrip />
 
+    <NounsPortraitStrip context="home" />
+
+    <div id="network" class="section-anchor" aria-hidden="true"></div>
+
     <!-- Network strip — surfaces /here (live congregation), /for-nodes
          (become a node), /workbench (who's building what). Per Mike
          2026-04-20 11:15 PT: "look to refresh homepage, include new
@@ -421,9 +299,13 @@ const alternates = [
 
     <AppLaunchStrip />
 
+    <div id="play" class="section-anchor" aria-hidden="true"></div>
+
     <ZenCatTodayCard />
 
     <PointCastPlayStrip />
+
+    <div id="today" class="section-anchor" aria-hidden="true"></div>
 
     <!-- Today on PointCast — hand-curated day-specific highlights.
          Per Mike 2026-04-20 12:20 PT: "on homepage, it should likely
@@ -444,6 +326,8 @@ const alternates = [
          fetches ESPN scoreboards, 10-min cache. -->
     <SportsStrip />
 
+    <div id="interact" class="section-anchor" aria-hidden="true"></div>
+
     {/* MoodChip moved above VisitorHereStrip per Mike 2026-04-20 13:55 PT. */}
 
     {/* MorningPara removed 2026-04-20 13:00 PT per Mike: "remove brief
@@ -461,6 +345,10 @@ const alternates = [
          0272 + /sprint pick. -->
     <FreshDeck />
 
+    <BuddhaHeadRotator context="home" />
+
+    <FeedbackBlock />
+
     <!-- Channel legend — sticky-horizontal on mobile, flex-wrap on desktop. -->
     <nav class="channels" aria-label="Channels">
       {CHANNEL_LIST.map((ch) => (
@@ -476,6 +364,8 @@ const alternates = [
          Mike 2026-04-17: "make sure the majors, like drum or pool
          together, have some type of module on the home page prior to
          click" + "likely have ability to drum get started". -->
+    <div id="majors" class="section-anchor" aria-hidden="true"></div>
+
     <HomeMajors />
 
     <NativePlantingYield />
@@ -483,13 +373,13 @@ const alternates = [
     <!-- The grid — every block. Drag-and-drop reordering is client-side +
          localStorage-only; no server state. -->
     <BlockReorder>
-      <section class="grid" role="main">
+      <section id="blocks" class="grid" role="main">
         {blocks.map((block) => <BlockCard block={block} />)}
       </section>
     </BlockReorder>
 
     <!-- Footer — endpoint list. Agent-oriented, no social nav. -->
-    <footer class="endpoints">
+    <footer id="endpoints" class="endpoints">
       <p class="endpoints__label">ENDPOINTS</p>
       <ul class="endpoints__list">
         <li><a href="/manifesto">/manifesto</a></li>
@@ -497,8 +387,10 @@ const alternates = [
         <li><a href="/yield">/yield</a></li>
         <li><a href="/nouns-cola">/nouns-cola</a></li>
         <li><a href="/nouns-cola-crush">/nouns-cola-crush</a></li>
+        <li><a href="/nouns-cards">/nouns-cards</a></li>
         <li><a href="/nouns-cards-v2">/nouns-cards-v2</a></li>
         <li><a href="/nouns-cards-v3">/nouns-cards-v3</a></li>
+        <li><a href="/nouns-portraits">/nouns-portraits</a></li>
         <li><a href="/publish">/publish</a></li>
         <li><a href="/beacon">/beacon</a></li>
         <li><a href="/nature">/nature</a></li>
@@ -507,6 +399,7 @@ const alternates = [
         <li><a href="/nature-yield.json">/nature-yield.json</a></li>
         <li><a href="/gamgee">/gamgee</a></li>
         <li><a href="/meditate">/meditate</a></li>
+        <li><a href="/agent-native-publishing">/agent-native-publishing</a></li>
         <li><a href="/glossary">/glossary</a></li>
         <li><a href="/now">/now</a></li>
         <li><a href="/search">/search</a></li>
@@ -559,9 +452,6 @@ const alternates = [
         <li><a href="/collection">/collection</a></li>
         <li><a href="/profile">/profile</a></li>
         <li><a href="/collect">/collect</a></li>
-        <li><a href="/marketplace">/marketplace</a></li>
-        <li><a href="/market">/market</a></li>
-        <li><a href="/wallet">/wallet</a></li>
         <li><a href="/about">/about</a></li>
       </ul>
     </footer>
@@ -636,112 +526,6 @@ const alternates = [
     border: 0;
   }
 
-  /* Sprint 23: hour-tinted sky band sits above the masthead and
-     breathes with the time of day. Subtle — doesn't dominate the
-     layout, just gives the page a diurnal pulse. Data attribute
-     driven so the inline script in the header block can swap it. */
-  .masthead-sky {
-    height: 6px;
-    margin: 0 0 10px;
-    border-radius: 2px;
-    background: linear-gradient(90deg, #bcd0e3 0%, #7e9ebf 50%, #2e5c8a 100%);
-    opacity: 0.7;
-    transition: background 400ms linear, opacity 400ms linear;
-  }
-  .masthead-sky[data-sky-bucket="smallhours"] {
-    background: linear-gradient(90deg, #08090f 0%, #121230 55%, #1a1830 100%);
-    opacity: 0.85;
-  }
-  .masthead-sky[data-sky-bucket="morning"] {
-    background: linear-gradient(90deg, #f2c8a0 0%, #f9a26c 50%, #e9c79a 100%);
-    opacity: 0.75;
-  }
-  .masthead-sky[data-sky-bucket="midday"] {
-    background: linear-gradient(90deg, #bcd0e3 0%, #7e9ebf 50%, #2e5c8a 100%);
-    opacity: 0.7;
-  }
-  .masthead-sky[data-sky-bucket="golden"] {
-    background: linear-gradient(90deg, #f2a35f 0%, #e97a42 50%, #8a2432 100%);
-    opacity: 0.78;
-  }
-  .masthead-sky[data-sky-bucket="blue"] {
-    background: linear-gradient(90deg, #4a2a5a 0%, #2b1d4a 50%, #121230 100%);
-    opacity: 0.82;
-  }
-  .masthead-sky[data-sky-bucket="evening"] {
-    background: linear-gradient(90deg, #1a1830 0%, #2a1e36 50%, #47345e 100%);
-    opacity: 0.85;
-  }
-
-  /* Sprint 27 — weather accent. Sits below mood, above hour-bucket.
-     Each weather token overlays a thin horizontal gradient + a
-     distinctive box-shadow that reads as "conditions" without
-     fighting the hour-tinted base gradient.
-     Tokens: clear / partly / overcast / marine / rain / storm / cold */
-  .masthead-sky[data-weather="clear"] {
-    box-shadow: inset 0 0 0 1px rgba(255, 214, 120, 0.35);
-    filter: saturate(1.15) brightness(1.04);
-  }
-  .masthead-sky[data-weather="partly"] {
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.32);
-  }
-  .masthead-sky[data-weather="overcast"] {
-    background-image: linear-gradient(90deg, rgba(200, 205, 210, 0.55), rgba(180, 188, 198, 0.55));
-    background-blend-mode: screen;
-    filter: saturate(0.5) brightness(0.94);
-  }
-  /* Marine layer — the defining El Segundo morning pattern. Silver,
-     soft, slightly foggy. Gets its own visible tint even overriding
-     the hour gradient's chroma a bit. */
-  .masthead-sky[data-weather="marine"] {
-    background-image: linear-gradient(90deg, rgba(195, 200, 206, 0.7), rgba(168, 175, 185, 0.7));
-    background-blend-mode: screen;
-    filter: saturate(0.3) brightness(0.96);
-  }
-  .masthead-sky[data-weather="rain"] {
-    background-image: linear-gradient(90deg, rgba(71, 85, 112, 0.55), rgba(46, 55, 76, 0.55));
-    background-blend-mode: multiply;
-    filter: saturate(0.55) brightness(0.88);
-  }
-  .masthead-sky[data-weather="storm"] {
-    background-image: linear-gradient(90deg, rgba(28, 30, 48, 0.75), rgba(12, 14, 28, 0.75));
-    background-blend-mode: multiply;
-    filter: saturate(0.35) brightness(0.78);
-    box-shadow: inset 0 -2px 0 0 rgba(140, 160, 210, 0.4);
-  }
-  .masthead-sky[data-weather="cold"] {
-    filter: saturate(0.25) brightness(1.05);
-    background-blend-mode: lighten;
-  }
-
-  /* Sprint 24 — mood accent layered on top of the sky.
-     Per mood palette from MoodChip:
-       chill #2B8A3E · hype #C92A2A · focus #1864AB · flow #5F3DC4
-       curious #E8590C · quiet #5F5E5A
-     Height grows slightly + a colored border-bottom paints the mood. */
-  .masthead-sky {
-    position: relative;
-    transition: height 300ms ease, background 400ms linear, opacity 400ms linear, box-shadow 300ms ease;
-  }
-  .masthead-sky[data-mood]:not([data-mood=""]) {
-    height: 8px;
-  }
-  .masthead-sky[data-mood="chill"]   { box-shadow: inset 0 -2px 0 0 #2B8A3E, 0 0 14px -2px rgba(43, 138, 62, 0.55); }
-  .masthead-sky[data-mood="hype"]    { box-shadow: inset 0 -2px 0 0 #C92A2A, 0 0 14px -2px rgba(201, 42, 42, 0.6); }
-  .masthead-sky[data-mood="focus"]   { box-shadow: inset 0 -2px 0 0 #1864AB, 0 0 14px -2px rgba(24, 100, 171, 0.6); }
-  .masthead-sky[data-mood="flow"]    { box-shadow: inset 0 -2px 0 0 #5F3DC4, 0 0 14px -2px rgba(95, 61, 196, 0.6); }
-  .masthead-sky[data-mood="curious"] { box-shadow: inset 0 -2px 0 0 #E8590C, 0 0 14px -2px rgba(232, 89, 12, 0.6); }
-  .masthead-sky[data-mood="quiet"]   { box-shadow: inset 0 -2px 0 0 #5F5E5A, 0 0 10px -3px rgba(95, 94, 90, 0.4); }
-
-  /* The wordmark also picks up a subtle mood cast — tiny accent so
-     the header feels connected to the selected mood, not just the sky. */
-  .masthead[data-mood="chill"]   .wordmark:hover { color: #2B8A3E; }
-  .masthead[data-mood="hype"]    .wordmark:hover { color: #C92A2A; }
-  .masthead[data-mood="focus"]   .wordmark:hover { color: #1864AB; }
-  .masthead[data-mood="flow"]    .wordmark:hover { color: #5F3DC4; }
-  .masthead[data-mood="curious"] .wordmark:hover { color: #E8590C; }
-  .masthead[data-mood="quiet"]   .wordmark:hover { color: #5F5E5A; }
-
   .masthead {
     display: flex;
     align-items: baseline;
@@ -754,71 +538,6 @@ const alternates = [
     text-transform: uppercase;
   }
 
-  /* Sprint 23: Front Door daily race chip. Three states:
-     · SCHEDULED (default today, waiting for Mike to flip opensAt)
-     · OPEN (race accepting entries — pulse)
-     · CLOSED / RESOLVED (no pulse, muted)
-     Hydrated live by the inline script below from
-     /api/race/front-door/leaderboard. */
-  .race-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 8px;
-    border: 1px solid rgba(138, 36, 50, 0.5);
-    background: rgba(255, 255, 255, 0.7);
-    border-radius: 999px;
-    color: #6B2139;
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    font-weight: 700;
-    text-transform: uppercase;
-    text-decoration: none;
-    transition: background 0.12s, border-color 0.12s;
-  }
-  .race-chip:hover {
-    background: #8a2432;
-    color: #fef5e7;
-    border-color: #8a2432;
-    text-decoration: none;
-  }
-  .race-chip__dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #c4c2bc;
-    box-shadow: 0 0 0 0 rgba(196, 194, 188, 0.5);
-  }
-  .race-chip[data-status="open"] {
-    border-color: #2f8f5f;
-    color: #1b5033;
-    background: rgba(220, 255, 235, 0.6);
-  }
-  .race-chip[data-status="open"] .race-chip__dot {
-    background: #2f8f5f;
-    animation: race-pulse 2.4s ease-out infinite;
-  }
-  .race-chip[data-status="scheduled"] .race-chip__dot {
-    background: #F59F00;
-  }
-  .race-chip[data-status="closed"],
-  .race-chip[data-status="resolved"] {
-    opacity: 0.6;
-  }
-  @keyframes race-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0.7); }
-    70%  { box-shadow: 0 0 0 8px rgba(47, 143, 95, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(47, 143, 95, 0); }
-  }
-  .race-chip__status {
-    font-size: 8.5px;
-    letter-spacing: 0.18em;
-    opacity: 0.85;
-  }
-  @media (max-width: 560px) {
-    .race-chip__label { display: none; }
-  }
-
   .wordmark {
     font-family: var(--pc-font-mono);
     font-size: 22px;
@@ -829,17 +548,15 @@ const alternates = [
   .wordmark:hover { color: var(--pc-accent); text-decoration: none; }
 
   .meta { color: var(--pc-ink-soft); font-weight: 400; }
-  .meta__today {
-    color: var(--color-warm, #c4952e);
-    font-weight: 600;
-    margin-left: 1px;
-    letter-spacing: 0.02em;
-  }
   .time { min-width: 60px; }
   .sep { color: var(--pc-rule); }
   .spacer { flex: 1; }
 
   .agent-link { color: var(--pc-accent); font-weight: 500; }
+
+  .section-anchor {
+    scroll-margin-top: 72px;
+  }
 
   @media (max-width: 767px) {
     .masthead {
@@ -854,6 +571,140 @@ const alternates = [
 
     .agent-link {
       margin-left: auto;
+    }
+  }
+
+  .contents {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.28fr) minmax(0, 1fr);
+    gap: 14px 20px;
+    margin: 12px 0 14px;
+    padding: 14px 0;
+    border-bottom: 1.5px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+  }
+
+  .contents__header {
+    min-width: 0;
+  }
+
+  .contents__eyebrow {
+    margin: 0 0 6px;
+    color: var(--pc-accent);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .contents__title {
+    margin: 0;
+    color: var(--pc-ink);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .contents__list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .contents__item {
+    min-width: 0;
+  }
+
+  .contents__link {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    min-height: 58px;
+    padding: 8px;
+    border: 1px solid var(--pc-rule);
+    background: #fafaf7;
+    color: var(--pc-ink);
+  }
+
+  .contents__link:hover {
+    border-color: var(--pc-accent);
+    background: #f4f8fb;
+    text-decoration: none;
+  }
+
+  .contents__number {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+
+  .contents__copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .contents__label {
+    overflow-wrap: anywhere;
+    color: var(--pc-ink);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .contents__note {
+    overflow-wrap: anywhere;
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .contents__routes {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-width: 0;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .contents__routes a {
+    color: var(--pc-accent);
+  }
+
+  @media (max-width: 980px) {
+    .contents {
+      grid-template-columns: 1fr;
+    }
+
+    .contents__list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contents__routes {
+      grid-column: 1;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .contents {
+      gap: 12px;
+    }
+
+    .contents__list {
+      grid-template-columns: 1fr;
+    }
+
+    .contents__link {
+      min-height: 0;
     }
   }
 
@@ -879,17 +730,6 @@ const alternates = [
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--pc-accent);
-  }
-
-  .gamgee-front-door__mythos {
-    color: var(--color-warm, #c4952e);
-    text-decoration: none;
-    border-bottom: 1px solid currentColor;
-    transition: color 0.12s;
-  }
-
-  .gamgee-front-door__mythos:hover {
-    color: var(--color-ink, #1f1b15);
   }
 
   .gamgee-front-door__title {
@@ -1029,6 +869,203 @@ const alternates = [
     .gamgee-front-door__path {
       grid-template-columns: 1fr;
       gap: 2px;
+    }
+  }
+
+  .agent-native-brief {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(360px, 1.15fr);
+    gap: 20px 26px;
+    margin: 14px 0 18px;
+    padding: 18px 0;
+    border-top: 1px solid var(--pc-rule);
+    border-bottom: 1.5px solid var(--pc-ink);
+    background:
+      linear-gradient(90deg, rgba(24, 95, 165, 0.06), transparent 38%),
+      linear-gradient(180deg, transparent, rgba(196, 149, 46, 0.07));
+    font-family: var(--pc-font-sans);
+  }
+
+  .agent-native-brief__copy {
+    min-width: 0;
+  }
+
+  .agent-native-brief__kicker {
+    margin: 0 0 9px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8A2432;
+  }
+
+  .agent-native-brief__title {
+    max-width: 640px;
+    margin: 0;
+    font-size: 32px;
+    line-height: 1.02;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--pc-ink);
+  }
+
+  .agent-native-brief__dek {
+    max-width: 660px;
+    margin: 12px 0 0;
+    font-size: 15px;
+    line-height: 1.52;
+    color: var(--pc-ink-soft);
+  }
+
+  .agent-native-brief__nouns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .agent-native-brief__noun {
+    display: inline-grid;
+    grid-template-columns: 28px auto;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 3px 8px 3px 3px;
+    border: 1px solid var(--pc-rule);
+    background: rgba(255, 255, 255, 0.74);
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .agent-native-brief__noun:hover {
+    border-color: #185fa5;
+    color: #185fa5;
+    text-decoration: none;
+  }
+
+  .agent-native-brief__noun img {
+    display: block;
+    width: 28px;
+    height: 28px;
+    image-rendering: pixelated;
+  }
+
+  .agent-native-brief__matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .agent-native-brief__cell {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    min-height: 118px;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    border-top: 4px solid #8A2432;
+    background: #fafaf7;
+    color: var(--pc-ink);
+  }
+
+  .agent-native-brief__cell:nth-child(2) {
+    border-top-color: #185fa5;
+  }
+
+  .agent-native-brief__cell:nth-child(3) {
+    border-top-color: #2f8f5f;
+  }
+
+  .agent-native-brief__cell:nth-child(4) {
+    border-top-color: #c4952e;
+  }
+
+  .agent-native-brief__cell:hover {
+    border-color: #8A2432;
+    background: #fff7f8;
+    text-decoration: none;
+  }
+
+  .agent-native-brief__cell--primary {
+    background: #fbecee;
+  }
+
+  .agent-native-brief__label,
+  .agent-native-brief__cell strong,
+  .agent-native-brief__signals {
+    font-family: var(--pc-font-mono);
+  }
+
+  .agent-native-brief__label {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .agent-native-brief__cell strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: #8A2432;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+
+  .agent-native-brief__cell span:last-child {
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .agent-native-brief__signals {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .agent-native-brief__signals li {
+    border: 1px solid var(--pc-rule);
+    padding: 5px 8px;
+    background: #fff;
+    color: var(--pc-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 920px) {
+    .agent-native-brief {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .agent-native-brief {
+      width: calc(100vw - 40px);
+      max-width: calc(100vw - 40px);
+      overflow: hidden;
+    }
+
+    .agent-native-brief__title {
+      font-size: 27px;
+    }
+
+    .agent-native-brief__matrix {
+      grid-template-columns: 1fr;
+    }
+
+    .agent-native-brief__cell {
+      min-height: 0;
     }
   }
 

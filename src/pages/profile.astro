@@ -1,151 +1,605 @@
 ---
 /**
- * /profile — v2 redesign.
+ * /profile — visualize every wallet this browser has paired with.
  *
- * Trading-card / arcade-board hybrid in the PointCast palette.
- * Big Noun portrait, saturated stat tiles, poster-wall block grid,
- * cassette-style bath saves, ledger-style wallet table, NFT vault.
+ * Reads pc:wallets from localStorage (set by WalletChip). Pulls live
+ * TzKT data for each (balance, NFT count, ops count, last activity).
+ * Shows which is active. Lets the user switch active / remove any.
  *
- * All data flows from localStorage (pc:*) and TzKT — no server state.
+ * All client-side — no server state. "Your profile" is scoped to this
+ * browser + whatever Beacon sessions live in its storage.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import contracts from '../data/contracts.json';
+import market from '../data/market.json';
+import { ZEN_CAT_GENESIS_COLLECTIBLES, ZEN_CAT_WORLD_COLLECTIBLES } from '../data/zen-cat-collectibles';
+import {
+  SHARE_CAMPAIGN_PACKETS,
+  SHARE_LANDING_PAGES,
+  SHARE_LAUNCH_ASSETS,
+  SHARE_SNIPPETS,
+} from '../lib/share-kit';
+
+const SITE_URL = 'https://pointcast.xyz';
+const absolute = (path: string) => new URL(path, SITE_URL).href;
+const isUrl = (value: unknown): value is string => typeof value === 'string' && /^https?:\/\//.test(value);
+const local = (path: string) => path.startsWith('http') ? path : absolute(path);
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+const drops = (await getCollection('drops', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const products = (await getCollection('products', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+const gallery = (await getCollection('gallery', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.createdAt.getTime() - a.data.createdAt.getTime());
+const ethLegacy = (await getCollection('ethLegacy', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+const mesh = (await getCollection('mesh', ({ data }) => data.listed !== false))
+  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+
+const marketTokens = ((market as any).tokens ?? []) as Array<any>;
+const listedMarketTokens = marketTokens.filter((token) => token.listed);
+const editionBlocks = blocks.filter((block) => block.data.edition || block.data.type === 'MINT' || block.data.type === 'FAUCET');
+const mintBlocks = blocks.filter((block) => block.data.type === 'MINT');
+const faucetBlocks = blocks.filter((block) => block.data.type === 'FAUCET');
+const mediaBlocks = blocks.filter((block) => block.data.media);
+const spotifyBlocks = blocks.filter((block) => {
+  const mediaSrc = block.data.media?.src ?? '';
+  const externalUrl = block.data.external?.url ?? '';
+  return /spotify\.com/i.test(mediaSrc) || /spotify\.com/i.test(externalUrl);
+});
+const companionBlocks = blocks.filter((block) => (block.data.companions ?? []).length > 0);
+const nounBlocks = blocks.filter((block) => typeof block.data.noun === 'number');
+const recentNounBlocks = nounBlocks.slice(0, 18);
+
+const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
+const drumTokenKt1 = ((contracts as any).drum_token?.mainnet ?? '').trim();
+const prizeCastKt1 = ((contracts as any).prize_cast?.mainnet ?? '').trim();
+const zenCatCount = ZEN_CAT_GENESIS_COLLECTIBLES.length + ZEN_CAT_WORLD_COLLECTIBLES.length;
+
+type UrlRow = { label: string; url: string; source: string; kind: string };
+const urlRows: UrlRow[] = [];
+const addUrl = (label: string, url: unknown, source: string, kind: string) => {
+  if (!isUrl(url)) return;
+  urlRows.push({ label, url, source, kind });
+};
+
+for (const block of blocks) {
+  addUrl(block.data.title, block.data.external?.url, `/b/${block.data.id} external`, block.data.type);
+  addUrl(block.data.title, block.data.media?.src, `/b/${block.data.id} media`, block.data.media?.kind ?? 'media');
+  for (const companion of block.data.companions ?? []) {
+    if (companion.surface === 'external') addUrl(companion.label, companion.id, `/b/${block.data.id} companion`, 'companion');
+  }
+}
+for (const drop of drops) addUrl(drop.data.title ?? drop.id, drop.data.url, `/drop/${drop.id}`, drop.data.type);
+for (const product of products) addUrl(product.data.name, product.data.url, `/products/${product.data.slug}`, 'product');
+for (const node of mesh) {
+  addUrl(node.data.name, node.data.url, `/mesh/${node.data.slug}`, 'mesh');
+  addUrl(`${node.data.name} feed`, node.data.feedUrl, `/mesh/${node.data.slug}`, 'feed');
+}
+for (const page of SHARE_LANDING_PAGES) addUrl(page.title, local(page.path), '/share landing page', 'share');
+for (const snippet of SHARE_SNIPPETS) addUrl(snippet.label, local(snippet.target), '/share snippet', 'share');
+for (const asset of SHARE_LAUNCH_ASSETS) addUrl(asset.title, local(asset.url), '/share launch asset', 'share');
+for (const packet of SHARE_CAMPAIGN_PACKETS) {
+  addUrl(packet.title, local(packet.targetPath), '/share campaign', 'campaign');
+  for (const proof of packet.proofLinks) addUrl(`${packet.title} proof`, local(proof), '/share proof', 'campaign-proof');
+}
+
+const urlMap = new Map<string, UrlRow>();
+for (const row of urlRows) if (!urlMap.has(row.url)) urlMap.set(row.url, row);
+const sourcedUrls = [...urlMap.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label));
+
+const collectibleLanes = [
+  {
+    label: 'Visit Nouns',
+    value: visitNounsKt1 ? 'live' : 'pending',
+    note: 'Open-supply Tezos FA2; every tokenId maps to a Nouns seed.',
+    href: '/collection/visit-nouns',
+    noun: 137,
+  },
+  {
+    label: 'Market inventory',
+    value: `${marketTokens.length}`,
+    note: `${listedMarketTokens.length} listed from objkt snapshot in src/data/market.json.`,
+    href: '/collect',
+    noun: 221,
+  },
+  {
+    label: 'Mint + faucet blocks',
+    value: `${editionBlocks.length}`,
+    note: `${mintBlocks.length} mint blocks and ${faucetBlocks.length} faucet blocks sourced from block JSON.`,
+    href: '/editions',
+    noun: editionBlocks[0]?.data.noun ?? 927,
+  },
+  {
+    label: 'Tezos holdings',
+    value: 'live',
+    note: 'Build-time TzKT wallet collection rendered at /collection.',
+    href: '/collection',
+    noun: 304,
+  },
+  {
+    label: 'Zen Cats',
+    value: `${zenCatCount}`,
+    note: `${ZEN_CAT_GENESIS_COLLECTIBLES.length} genesis and ${ZEN_CAT_WORLD_COLLECTIBLES.length} world collectibles.`,
+    href: '/zen-cats',
+    noun: 368,
+  },
+  {
+    label: 'ETH legacy',
+    value: `${ethLegacy.length}`,
+    note: 'Retrospective token deployments indexed from src/content/eth-legacy.',
+    href: '/eth-legacy',
+    noun: 45,
+  },
+];
+
+const surfaceLanes = [
+  { label: 'Shared URLs', value: `${sourcedUrls.length}`, note: 'External, media, drop, mesh, product, and share-kit URLs.', href: '/share', noun: 889 },
+  { label: 'Spotify / listen', value: `${spotifyBlocks.length}`, note: 'LISTEN blocks and Spotify embeds discovered from block media + external URLs.', href: spotifyBlocks[0] ? `/b/${spotifyBlocks[0].data.id}` : '/blocks.json', noun: spotifyBlocks[0]?.data.noun ?? 222 },
+  { label: 'Polls / voting', value: `${polls.length}`, note: 'Schelling-point polls with local vote memory and KV-backed tally endpoints.', href: '/polls', noun: 272 },
+  { label: 'Drops', value: `${drops.length}`, note: 'Paste-a-URL inbox archive: Spotify, products, places, articles, and generic links.', href: '/drop', noun: 91 },
+  { label: 'Companions', value: `${companionBlocks.length}`, note: 'Blocks with linked polls, clocks, YeePlayer titles, externals, or sibling blocks.', href: '/blocks.json', noun: 1111 },
+  { label: 'Gallery + media', value: `${gallery.length + mediaBlocks.length}`, note: `${gallery.length} gallery entries and ${mediaBlocks.length} block media embeds.`, href: '/gallery', noun: 404 },
+];
+
+const recentEditionBlocks = editionBlocks.slice(0, 6);
+const recentUrls = sourcedUrls.slice(0, 72);
 
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'ProfilePage',
   '@id': 'https://pointcast.xyz/profile',
-  name: 'Your PointCast profile',
-  description: 'Your PointCast broadcast card — Noun, collected blocks, Tezos NFTs, bath saves, paired wallets.',
+  name: 'PointCast profile v3',
+  description: 'Sourced PointCast profile: collectible audit, shared URLs, Spotify/listen links, polls, drops, products, and wallet-local memory.',
   url: 'https://pointcast.xyz/profile',
 };
 ---
 
-<BlockLayout title="Profile" description="Your PointCast broadcast card." jsonLd={jsonLd}>
+<BlockLayout title="Profile v3" description="Sourced PointCast profile: collectibles, shared URLs, Spotify/listen links, voting, drops, products, and wallet-local memory." jsonLd={jsonLd}>
+  <div class="page" data-profile-version="v3">
+    <nav class="crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <span>profile</span>
+    </nav>
 
-  <main class="pf">
+    <nav class="version-switch" aria-label="Profile version">
+      <button type="button" data-version-switch="v3" aria-pressed="true">v3 sourced audit</button>
+      <button type="button" data-version-switch="v2" aria-pressed="false">v2 activity</button>
+      <button type="button" data-version-switch="v1" aria-pressed="false">v1 identity</button>
+    </nav>
 
-    <section class="pf-hero">
-      <div class="pf-hero__chrome">
-        <p class="pf-hero__kicker">PROFILE · POINTCAST · CC0 · EL SEGUNDO</p>
-        <div class="pf-hero__inner">
-          <div class="pf-hero__avatar">
-            <img id="pf-noun-img" alt="" src="" />
-            <span class="pf-hero__noun-tag" id="pf-noun-tag">noun #—</span>
-          </div>
-          <div class="pf-hero__id">
-            <h1 class="pf-hero__name" id="pf-name">visitor</h1>
-            <p class="pf-hero__sub" id="pf-sub">Loading the broadcast card…</p>
-            <ul class="pf-hero__chips" id="pf-chips"></ul>
-            <p class="pf-hero__state" id="pf-state-line"></p>
-          </div>
-          <div class="pf-hero__stamp" aria-hidden="true">
-            <span class="pf-hero__stamp-line">ON</span>
-            <span class="pf-hero__stamp-line pf-hero__stamp-line--big">AIR</span>
-            <span class="pf-hero__stamp-line">FM 96.1</span>
-          </div>
+    <!-- ─── V3 SOURCED PROFILE ─── -->
+    <section class="v3" data-profile-panel="v3">
+      <header class="v3-hero">
+        <p class="kicker">PROFILE V3 · SOURCED POINTCAST</p>
+        <h1>Collectibles, shared URLs, votes, links, drops, and weird useful surfaces.</h1>
+        <p class="v3-hero__dek">
+          This profile audits what PointCast already knows at build time:
+          block editions, Tezos collections, market inventory, Zen Cats, ETH
+          legacy tokens, Spotify/listen embeds, polls, products, drops, mesh
+          nodes, and share-kit URLs. Older browser-local profile views stay one
+          tap away.
+        </p>
+        <div class="noun-rail" aria-label="Recent PointCast nouns">
+          {recentNounBlocks.slice(0, 10).map((block) => (
+            <a href={`/b/${block.data.id}`} title={`${block.data.title} · Noun ${block.data.noun}`}>
+              <img src={`https://noun.pics/${block.data.noun}.svg`} alt={`Noun ${block.data.noun}`} loading="lazy" />
+              <span>№{block.data.noun}</span>
+            </a>
+          ))}
         </div>
+      </header>
+
+      <section class="audit-grid" aria-label="Collectible sources">
+        {collectibleLanes.map((lane) => (
+          <a class="audit-card" href={lane.href}>
+            <img class="audit-card__noun" src={`https://noun.pics/${lane.noun}.svg`} alt="" loading="lazy" />
+            <span class="audit-card__label">{lane.label}</span>
+            <strong>{lane.value}</strong>
+            <span>{lane.note}</span>
+          </a>
+        ))}
+      </section>
+
+      <section class="audit-grid audit-grid--surfaces" aria-label="PointCast surfaces">
+        {surfaceLanes.map((lane) => (
+          <a class="audit-card audit-card--surface" href={lane.href}>
+            <img class="audit-card__noun" src={`https://noun.pics/${lane.noun}.svg`} alt="" loading="lazy" />
+            <span class="audit-card__label">{lane.label}</span>
+            <strong>{lane.value}</strong>
+            <span>{lane.note}</span>
+          </a>
+        ))}
+      </section>
+
+      <section class="source-panel">
+        <div class="source-panel__head">
+          <div>
+            <p class="kicker">COLLECTIBLE LEDGER</p>
+            <h2>Every source lane feeding profile v3.</h2>
+          </div>
+          <a href="/editions.json">/editions.json</a>
+        </div>
+        <div class="ledger">
+          <article>
+            <h3>On-chain + market</h3>
+            <ul>
+              <li><a href="/collection/visit-nouns">Visit Nouns</a> · contract <code>{visitNounsKt1 || 'pending'}</code></li>
+              <li><a href="/collect">Collector market</a> · <code>{(market as any).contract}</code> · {marketTokens.length} tokens · {listedMarketTokens.length} listed</li>
+              <li><a href="/collection">Mike's Tezos holdings</a> · TzKT live at build time</li>
+              <li>DRUM · <code>{drumTokenKt1 || 'pending origination'}</code></li>
+              <li>Prize Cast · <code>{prizeCastKt1 || 'pending origination'}</code></li>
+            </ul>
+          </article>
+          <article>
+            <h3>Native PointCast collectibles</h3>
+            <ul>
+              <li><a href="/editions">Editions dashboard</a> · {editionBlocks.length} edition/faucet/mint blocks</li>
+              <li><a href="/zen-cats">Zen Cats</a> · {zenCatCount} browser-local collectible cats</li>
+              <li><a href="/eth-legacy">ETH legacy</a> · {ethLegacy.length} historical deployments</li>
+              <li><a href="/gallery">Gallery</a> · {gallery.length} image works</li>
+              <li><a href="/today">Daily drop</a> · browser-local collection at <code>pc:daily:collected</code></li>
+            </ul>
+          </article>
+          <article>
+            <h3>Interaction surfaces</h3>
+            <ul>
+              <li><a href="/polls">Voting</a> · {polls.length} poll definitions</li>
+              <li><a href="/drop">Drop inbox</a> · {drops.length} archived dropped URLs</li>
+              <li><a href="/products">Products</a> · {products.length} Good Feels/product entries</li>
+              <li><a href="/mesh">Mesh</a> · {mesh.length} nodes and feeds</li>
+              <li><a href="/share">Share kit</a> · {SHARE_CAMPAIGN_PACKETS.length} campaign packets</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="source-panel">
+        <div class="source-panel__head">
+          <div>
+            <p class="kicker">NOUN TRAIL</p>
+            <h2>{nounBlocks.length} blocks currently carry sourced Noun IDs.</h2>
+          </div>
+          <a href="/collection/visit-nouns">Visit Nouns</a>
+        </div>
+        <div class="noun-grid">
+          {recentNounBlocks.map((block) => (
+            <a href={`/b/${block.data.id}`}>
+              <img src={`https://noun.pics/${block.data.noun}.svg`} alt={`Noun ${block.data.noun}`} loading="lazy" />
+              <span>№{block.data.noun}</span>
+              <strong>{block.data.title}</strong>
+              <em>/b/{block.data.id}</em>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section class="source-panel">
+        <div class="source-panel__head">
+          <div>
+            <p class="kicker">RECENT EDITION BLOCKS</p>
+            <h2>Mintable, faucet, and collectible block trail.</h2>
+          </div>
+          <a href="/blocks.json">/blocks.json</a>
+        </div>
+        <div class="mini-list">
+          {recentEditionBlocks.map((block) => (
+            <a href={`/b/${block.data.id}`}>
+              <span>№{block.data.id} · {block.data.type}</span>
+              <strong>{block.data.title}</strong>
+              <em>{block.data.edition?.contract ? `${block.data.edition.contract} · token ${block.data.edition.tokenId}` : block.data.dek}</em>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section class="source-panel">
+        <div class="source-panel__head">
+          <div>
+            <p class="kicker">ALL SOURCED URLS</p>
+            <h2>{sourcedUrls.length} deduped URLs from blocks, drops, products, mesh, media, and share kit.</h2>
+          </div>
+          <a href="/share.json">/share.json</a>
+        </div>
+        <details class="url-audit" open>
+          <summary>Show URL audit</summary>
+          <div class="url-list">
+            {recentUrls.map((row) => (
+              <a href={row.url} target="_blank" rel="noopener">
+                <span>{row.kind}</span>
+                <strong>{row.label}</strong>
+                <em>{row.source}</em>
+              </a>
+            ))}
+          </div>
+        </details>
+      </section>
+    </section>
+
+    <!-- ─── IDENTITY CARD ─── -->
+    <section class="identity" id="identity-card" data-profile-panel="v1">
+      <div class="identity__avatar">
+        <img class="identity__noun" id="identity-noun" alt="" src="" />
+      </div>
+      <div class="identity__meta">
+        <p class="kicker">YOU · PROFILE</p>
+        <h1 class="identity__name" id="identity-name">visitor</h1>
+        <p class="identity__dek" id="identity-dek">
+          Loading…
+        </p>
+        <p class="identity__hint mono" id="identity-hint"></p>
       </div>
     </section>
 
-    <section class="pf-arcade">
-      <header class="pf-section-head">
-        <h2 class="pf-section-title">STATS</h2>
-        <p class="pf-section-sub">this browser&apos;s memory</p>
-      </header>
-      <div class="pf-arcade__grid" id="pf-stats-grid"></div>
+    <!-- ─── CURRENT STATE (what you told the peoples) ─── -->
+    <section class="state-panel" id="state-panel" data-profile-panel="v1" hidden>
+      <p class="kicker">CURRENT STATE · <a href="/#here-tell-panel" id="state-edit-link">edit ↗</a></p>
+      <ul class="state-chips" id="state-chips"></ul>
     </section>
 
-    <section class="pf-poster">
-      <header class="pf-section-head pf-section-head--blue">
-        <h2 class="pf-section-title">COLLECTED</h2>
-        <p class="pf-section-sub"><span id="pf-poster-count">0</span> blocks · /today drop history</p>
-      </header>
-      <div class="pf-poster__wall" id="pf-poster-wall">
-        <p class="pf-poster__empty">Loading…</p>
+    <!-- ─── ACTIVITY ─── -->
+    <section class="activity" data-profile-panel="v2">
+      <p class="kicker">ACTIVITY · this browser's memory</p>
+      <div class="activity__grid" id="activity-grid">
+        <!-- JS fills -->
+      </div>
+      <div class="activity__detail" id="activity-detail">
+        <!-- JS fills votes + drops lists -->
       </div>
     </section>
 
-    <section class="pf-earned">
-      <header class="pf-section-head pf-section-head--red">
-        <h2 class="pf-section-title">EARNED</h2>
-        <p class="pf-section-sub">drum trophies + coffee mugs · pointcast collectibles</p>
-      </header>
-      <div class="pf-earned__group">
-        <p class="pf-earned__group-label">DRUM TROPHIES · <span id="pf-trophy-count">0</span> / 8</p>
-        <div class="pf-trophy-grid" id="pf-trophy-grid"></div>
-      </div>
-      <div class="pf-earned__group">
-        <p class="pf-earned__group-label">COFFEE MUGS · <span id="pf-mug-count">0</span> / 5</p>
-        <div class="pf-mug-grid" id="pf-mug-grid"></div>
-      </div>
+    <!-- ─── WALLETS ─── -->
+    <header class="head" data-profile-panel="v2">
+      <p class="kicker">WALLETS</p>
+      <h2 class="head__h2">Paired on this browser</h2>
+      <p class="dek" id="profile-dek">
+        Tezos wallets you've connected via Beacon. Live balances + NFT
+        counts from TzKT. Server-side: nothing. Clear browser data =
+        clear this list.
+      </p>
+    </header>
+
+    <section id="profile-empty" class="empty" data-profile-panel="v2" hidden>
+      <p class="empty__title">No wallets connected yet.</p>
+      <p class="empty__body">Connect via the wallet chip in the top-right of the home page. Kukai, Temple, Umami, Airgap — anything on Beacon.</p>
+      <p class="empty__cta"><a href="/">← Back to home</a></p>
     </section>
 
-    <section class="pf-rotation" id="pf-rotation-section" hidden>
-      <header class="pf-section-head pf-section-head--green">
-        <h2 class="pf-section-title">ROTATION</h2>
-        <p class="pf-section-sub"><span id="pf-rot-count">0</span> spotify saves from <a href="/bath">/bath</a></p>
-      </header>
-      <div class="pf-rotation__grid" id="pf-rotation-grid"></div>
-    </section>
+    <section id="profile-list" class="list" data-profile-panel="v2" hidden></section>
 
-    <section class="pf-ledger">
-      <header class="pf-section-head pf-section-head--purple">
-        <h2 class="pf-section-title">WALLETS</h2>
-        <p class="pf-section-sub">paired on this browser · live tzkt data</p>
-      </header>
-      <div class="pf-ledger__body" id="pf-ledger-body">
-        <p class="pf-ledger__empty">No wallets paired yet. <a href="/">Connect via the wallet chip on the home page.</a></p>
-      </div>
-    </section>
-
-    <section class="pf-vault">
-      <header class="pf-section-head pf-section-head--orange">
-        <h2 class="pf-section-title">VAULT</h2>
-        <p class="pf-section-sub" id="pf-vault-sub">Tezos NFTs · live from tzkt</p>
-      </header>
-      <div class="pf-vault__grid" id="pf-vault-grid">
-        <p class="pf-vault__loading">LOADING VAULT…</p>
-      </div>
-      <p class="pf-vault__footer" id="pf-vault-footer"></p>
-    </section>
-
-    <aside class="pf-machine">
-      <p class="pf-machine__label">MACHINE-READABLE</p>
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
       <ul>
         <li><a href="/for-agents">/for-agents</a></li>
         <li><a href="/blocks.json">/blocks.json</a></li>
       </ul>
     </aside>
-
-  </main>
+  </div>
 </BlockLayout>
 
 <script>
   type Wallet = { chain: 'tezos'; address: string; provider: string; addedAt: number; label?: string };
-  type CollectedItem = { date: string; blockId: string; at?: string };
-  type Save = { spotify_url: string; spotify_type: string; spotify_id: string; mood: string; address?: string; timestamp: string };
 
-  const KEY_WALLETS = 'pc:wallets';
-  const KEY_ACTIVE = 'pc:wallet-active';
-
-  function ls(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
-  function shortAddr(a: string): string { return a.length > 12 ? `${a.slice(0,6)}…${a.slice(-4)}` : a; }
-  function escHtml(s: string): string { return s.replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[c]); }
-  function escAttr(s: string): string { return escHtml(s); }
-  function cheapHashL(s: string): number { let h=5381; for (let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return h>>>0; }
-  function prettyDate(iso: string | null): string {
-    if (!iso) return '—';
-    try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return iso; }
+  function setProfileVersion(version: 'v1' | 'v2' | 'v3') {
+    const page = document.querySelector<HTMLElement>('.page');
+    if (!page) return;
+    page.dataset.profileVersion = version;
+    document.querySelectorAll<HTMLButtonElement>('[data-version-switch]').forEach((button) => {
+      const active = button.dataset.versionSwitch === version;
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    try { localStorage.setItem('pc:profile-version', version); } catch {}
   }
 
-  function loadWallets(): Wallet[] { try { const r = ls(KEY_WALLETS); if (!r) return []; const a = JSON.parse(r); return Array.isArray(a) ? a : []; } catch { return []; } }
-  function activeAddress(): string | null { return ls(KEY_ACTIVE); }
-  function collectedList(): CollectedItem[] { try { const r = ls('pc:daily:collected'); if (!r) return []; const a = JSON.parse(r); return Array.isArray(a) ? a : []; } catch { return []; } }
-  function bathSaves(): Save[] { try { const r = ls('pc:bath:saves'); if (!r) return []; const a = JSON.parse(r); return Array.isArray(a) ? a : []; } catch { return []; } }
-  function pollsVotedCount(): number {
-    let n = 0;
-    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('pc:poll:voted:')) n++; } } catch {}
-    return n;
+  document.querySelectorAll<HTMLButtonElement>('[data-version-switch]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const version = button.dataset.versionSwitch;
+      if (version === 'v1' || version === 'v2' || version === 'v3') setProfileVersion(version);
+    });
+  });
+
+  try {
+    const saved = localStorage.getItem('pc:profile-version');
+    if (saved === 'v1' || saved === 'v2' || saved === 'v3') setProfileVersion(saved);
+  } catch {}
+
+  const KEY_WALLETS = 'pc:wallets';
+  const KEY_ACTIVE_ADDR = 'pc:wallet-active';
+  const KEY_LEGACY = 'pc:wallet';
+
+  function loadWallets(): Wallet[] {
+    try {
+      const raw = localStorage.getItem(KEY_WALLETS);
+      if (raw) {
+        const list = JSON.parse(raw) as Wallet[];
+        if (Array.isArray(list)) return list;
+      }
+    } catch { /* ignore */ }
+    return [];
+  }
+
+  function activeAddress(): string | null {
+    try { return localStorage.getItem(KEY_ACTIVE_ADDR); } catch { return null; }
+  }
+
+  function saveWallets(list: Wallet[], newActive: string | null) {
+    localStorage.setItem(KEY_WALLETS, JSON.stringify(list));
+    if (newActive) localStorage.setItem(KEY_ACTIVE_ADDR, newActive);
+    else localStorage.removeItem(KEY_ACTIVE_ADDR);
+    const active = list.find((w) => w.address === newActive) ?? null;
+    if (active) localStorage.setItem(KEY_LEGACY, JSON.stringify(active));
+    else localStorage.removeItem(KEY_LEGACY);
+    window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: active }));
+  }
+
+  function short(addr: string) {
+    return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+  }
+
+  const empty = document.getElementById('profile-empty')!;
+  const list = document.getElementById('profile-list')!;
+
+  interface LiveStats { balance: string; nfts: string; ops: string; lastActivity: string; }
+
+  async function fetchStats(addr: string): Promise<LiveStats> {
+    try {
+      const [acc, tokens] = await Promise.all([
+        fetch(`https://api.tzkt.io/v1/accounts/${addr}`),
+        fetch(`https://api.tzkt.io/v1/tokens/balances/count?account=${addr}&balance.gt=0`),
+      ]);
+      const a = acc.ok ? await acc.json() : {};
+      const n = tokens.ok ? (await tokens.text()).trim() : '—';
+      return {
+        balance: ((a.balance ?? 0) / 1_000_000).toFixed(4) + ' ꜩ',
+        nfts: String(n),
+        ops: String(a.numTransactions ?? '—'),
+        lastActivity: a.lastActivity
+          ? new Date(a.lastActivity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : '—',
+      };
+    } catch {
+      return { balance: '—', nfts: '—', ops: '—', lastActivity: '—' };
+    }
+  }
+
+  async function render() {
+    const wallets = loadWallets();
+    const active = activeAddress();
+
+    if (wallets.length === 0) {
+      empty.hidden = false;
+      list.hidden = true;
+      return;
+    }
+    empty.hidden = true;
+    list.hidden = false;
+    list.innerHTML = '';
+
+    // Sort newest-first
+    const sorted = [...wallets].sort((a, b) => b.addedAt - a.addedAt);
+
+    for (const w of sorted) {
+      const isActive = w.address === active || (!active && w === sorted[0]);
+      const addedFmt = new Date(w.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      const card = document.createElement('article');
+      card.className = 'card' + (isActive ? ' card--active' : '');
+      card.innerHTML = `
+        <header class="card__head">
+          <span class="card__tag">${isActive ? 'active' : 'remembered'}</span>
+          <span class="card__provider">${w.provider}</span>
+        </header>
+        <p class="card__addr">${w.address}</p>
+        <div class="card__stats">
+          <div class="card__stat"><span>balance</span><b data-stat="balance">…</b></div>
+          <div class="card__stat"><span>nfts held</span><b data-stat="nfts">…</b></div>
+          <div class="card__stat"><span>total ops</span><b data-stat="ops">…</b></div>
+          <div class="card__stat"><span>last active</span><b data-stat="lastActivity">…</b></div>
+          <div class="card__stat"><span>connected</span><b>${addedFmt}</b></div>
+        </div>
+        <div class="card__actions">
+          <a class="card__tzkt" href="https://tzkt.io/${w.address}" target="_blank" rel="noopener">TzKT ↗</a>
+          <a class="card__tzkt" href="https://objkt.com/profile/${w.address}/owned" target="_blank" rel="noopener">objkt ↗</a>
+          ${isActive ? '' : `<button type="button" class="card__switch" data-action="switch" data-addr="${w.address}">Make active</button>`}
+          <button type="button" class="card__remove" data-action="remove" data-addr="${w.address}">Remove</button>
+        </div>
+      `;
+      list.appendChild(card);
+
+      // Fetch stats (fire-and-forget, fills the — placeholders)
+      fetchStats(w.address).then((stats) => {
+        const q = (k: string) => card.querySelector<HTMLElement>(`[data-stat="${k}"]`);
+        if (q('balance')) q('balance')!.textContent = stats.balance;
+        if (q('nfts')) q('nfts')!.textContent = stats.nfts;
+        if (q('ops')) q('ops')!.textContent = stats.ops;
+        if (q('lastActivity')) q('lastActivity')!.textContent = stats.lastActivity;
+      });
+    }
+
+    // Wire switch / remove buttons
+    list.querySelectorAll<HTMLElement>('[data-action]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const addr = el.dataset.addr!;
+        const action = el.dataset.action!;
+        const current = loadWallets();
+        if (action === 'switch') {
+          saveWallets(current, addr);
+        } else if (action === 'remove') {
+          const next = current.filter((w) => w.address !== addr);
+          const nextActive = activeAddress() === addr
+            ? (next.length > 0 ? next[next.length - 1].address : null)
+            : activeAddress();
+          saveWallets(next, nextActive);
+        }
+        void render();
+      });
+    });
+  }
+
+  window.addEventListener('pc:wallet-change', () => void render());
+  window.addEventListener('storage', (e) => {
+    if (e.key === KEY_WALLETS || e.key === KEY_ACTIVE_ADDR) void render();
+  });
+
+  void render();
+
+  // ─── IDENTITY + ACTIVITY BLOCK ─────────────────────────────────
+  // Reads every `pc:*` localStorage key the site has written and
+  // renders: identity card (noun, name, first-seen), current state
+  // panel (mood/listening/where), activity stats grid, and detail
+  // lists for votes + drops. No server state; if cleared, everything
+  // resets.
+  function cheapHashL(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return h >>> 0;
+  }
+  function ls(k: string): string | null {
+    try { return localStorage.getItem(k); } catch { return null; }
+  }
+  function shortAddr(a: string): string {
+    return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+  }
+  function prettyDate(iso: string | null): string {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return iso; }
+  }
+  function countCollected(): number {
+    try {
+      const raw = ls('pc:daily:collected');
+      if (!raw) return 0;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.length : 0;
+    } catch { return 0; }
+  }
+  function collectedList(): Array<{date: string, blockId: string, at?: string}> {
+    try {
+      const raw = ls('pc:daily:collected');
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+  function pollsVotedList(): Array<{slug: string, optionId: string}> {
+    const out: Array<{slug: string, optionId: string}> = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith('pc:poll:voted:')) continue;
+        const slug = k.replace('pc:poll:voted:', '');
+        const optionId = localStorage.getItem(k) || '';
+        out.push({ slug, optionId });
+      }
+    } catch {}
+    return out;
   }
   function currentStreak(): number {
     try {
@@ -153,7 +607,8 @@ const jsonLd = {
       const dates: Record<string, boolean> = {};
       for (const c of arr) if (c && c.date) dates[c.date] = true;
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
-      let streak = 0; let cur = today;
+      let streak = 0;
+      let cur = today;
       while (dates[cur]) {
         streak++;
         const [y, m, d] = cur.split('-').map((s: string) => parseInt(s, 10));
@@ -165,709 +620,953 @@ const jsonLd = {
     } catch { return 0; }
   }
 
-  function paintHero() {
-    let session = ls('pc:session');
-    if (!session) {
-      try { session = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)); localStorage.setItem('pc:session', session); }
-      catch { session = 'anon-' + Math.random().toString(36).slice(2); }
+  function paintIdentity() {
+    let sessionId = ls('pc:session');
+    if (!sessionId) {
+      try {
+        sessionId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+        localStorage.setItem('pc:session', sessionId);
+      } catch { sessionId = 'anonymous-' + Math.random().toString(36).slice(2); }
     }
+
+    // Noun id
     let nounId = 0;
-    const cn = ls('pc:visitor:noun');
-    if (cn) nounId = parseInt(cn, 10);
+    const cachedNoun = ls('pc:visitor:noun');
+    if (cachedNoun) nounId = parseInt(cachedNoun, 10);
     if (!(nounId >= 0 && nounId < 1200)) {
-      nounId = cheapHashL(session) % 1200;
+      nounId = cheapHashL(sessionId) % 1200;
       try { localStorage.setItem('pc:visitor:noun', String(nounId)); } catch {}
     }
+
+    // First seen
     let firstSeen = ls('pc:visitor:firstSeenAt');
-    if (!firstSeen) { firstSeen = new Date().toISOString(); try { localStorage.setItem('pc:visitor:firstSeenAt', firstSeen); } catch {} }
+    if (!firstSeen) {
+      firstSeen = new Date().toISOString();
+      try { localStorage.setItem('pc:visitor:firstSeenAt', firstSeen); } catch {}
+    }
 
     const wallets = loadWallets();
-    const active = activeAddress() || (wallets.length ? wallets[wallets.length - 1].address : null);
+    const active = activeAddress() ||
+      (wallets.length > 0 ? wallets[wallets.length - 1].address : null);
+
+    // Display name preference: user-set > wallet-short > agent-ua > noun-nnn
     const override = ls('pc:visitor:display');
     const isAgent = /gptbot|claudebot|claude-user|anthropic-ai|perplexitybot|oai-searchbot|atlas|google-extended|googlebot|bingbot/i.test(navigator.userAgent);
-
     let displayName = 'visitor';
     let kindLabel = 'human';
-    if (override && override.trim()) { displayName = override.trim(); kindLabel = 'human · named'; }
-    else if (active) { displayName = shortAddr(active); kindLabel = 'wallet'; }
-    else if (isAgent) {
-      const agents = ['GPTBot','ClaudeBot','Claude-User','anthropic-ai','PerplexityBot','OAI-SearchBot','Atlas','Google-Extended','Googlebot','Bingbot'];
-      displayName = agents.find((a) => navigator.userAgent.toLowerCase().includes(a.toLowerCase())) || 'agent';
+    if (override && override.trim()) {
+      displayName = override.trim();
+      kindLabel = 'human · named';
+    } else if (active) {
+      displayName = shortAddr(active);
+      kindLabel = 'wallet';
+    } else if (isAgent) {
+      const agents = ['GPTBot', 'ClaudeBot', 'Claude-User', 'anthropic-ai', 'PerplexityBot', 'OAI-SearchBot', 'Atlas', 'Google-Extended', 'Googlebot', 'Bingbot'];
+      const ua = navigator.userAgent;
+      const match = agents.find((a) => ua.toLowerCase().includes(a.toLowerCase()));
+      displayName = match || 'agent';
       kindLabel = 'agent';
+    } else {
+      displayName = 'noun-' + String(nounId).padStart(3, '0');
+      kindLabel = 'human · anonymous';
     }
-    else { displayName = 'noun-' + String(nounId).padStart(3, '0'); kindLabel = 'human · anonymous'; }
 
-    const img = document.getElementById('pf-noun-img') as HTMLImageElement | null;
+    const img = document.getElementById('identity-noun') as HTMLImageElement;
+    const nameEl = document.getElementById('identity-name');
+    const dekEl = document.getElementById('identity-dek');
+    const hintEl = document.getElementById('identity-hint');
     if (img) { img.src = `https://noun.pics/${nounId}.svg`; img.alt = `your noun · ${nounId}`; }
-
-    const tag = document.getElementById('pf-noun-tag');
-    if (tag) tag.textContent = `noun #${nounId}`;
-
-    const nameEl = document.getElementById('pf-name');
     if (nameEl) nameEl.textContent = displayName;
-
-    const subEl = document.getElementById('pf-sub');
-    if (subEl) {
-      subEl.innerHTML = `<span class="pf-kind">${escHtml(kindLabel)}</span> · here since <time datetime="${firstSeen}">${prettyDate(firstSeen)}</time>`;
+    if (dekEl) {
+      dekEl.innerHTML = `
+        Noun № <strong>${nounId}</strong> ·
+        <span class="identity__kind">${kindLabel}</span> ·
+        here since <time datetime="${firstSeen}">${prettyDate(firstSeen)}</time>
+      `;
     }
-
-    const chipsEl = document.getElementById('pf-chips');
-    if (chipsEl) {
-      const chips: string[] = [];
-      if (active) chips.push(`<li class="pf-chip pf-chip--wallet"><span>WALLET</span><b>${escHtml(shortAddr(active))}</b></li>`);
-      chips.push(`<li class="pf-chip pf-chip--noun"><span>NOUN</span><b>#${nounId}</b></li>`);
-      chips.push(`<li class="pf-chip pf-chip--since"><span>SINCE</span><b>${escHtml(prettyDate(firstSeen))}</b></li>`);
-      const sessHash = String(cheapHashL(session) % 100000).padStart(5, '0');
-      chips.push(`<li class="pf-chip pf-chip--id"><span>SESSION</span><b>${sessHash}</b></li>`);
-      chipsEl.innerHTML = chips.join('');
+    if (hintEl) {
+      const notes: string[] = [];
+      if (active) notes.push(`active wallet ${shortAddr(active)}`);
+      if (!override) notes.push(`anonymous identity — noun id is deterministic from this browser's session`);
+      hintEl.textContent = notes.join(' · ');
     }
+  }
 
+  function paintState() {
     const mood = ls('pc:visitor:mood');
     const listening = ls('pc:visitor:listening');
     const where = ls('pc:visitor:where');
-    const stateEl = document.getElementById('pf-state-line');
-    if (stateEl) {
-      const parts: string[] = [];
-      if (mood) parts.push(`<span class="pf-state-pill pf-state-pill--mood">mood · ${escHtml(mood)}</span>`);
-      if (listening) parts.push(`<span class="pf-state-pill">playing · ${escHtml(listening)}</span>`);
-      if (where) parts.push(`<span class="pf-state-pill">where · ${escHtml(where)}</span>`);
-      stateEl.innerHTML = parts.join(' ');
-    }
+    const panel = document.getElementById('state-panel');
+    const chipsEl = document.getElementById('state-chips');
+    if (!panel || !chipsEl) return;
+    const any = mood || listening || where;
+    panel.hidden = !any;
+    if (!any) return;
+    const items: Array<{label: string, value: string, kind: string}> = [];
+    if (mood) items.push({ label: 'mood', value: mood, kind: 'mood' });
+    if (listening) items.push({ label: '🎵 now playing', value: listening, kind: 'listening' });
+    if (where) items.push({ label: '📍 where', value: where, kind: 'where' });
+    chipsEl.innerHTML = items.map((i) => `
+      <li class="state-chip state-chip--${i.kind}">
+        <span class="state-chip__label">${i.label}</span>
+        <span class="state-chip__value">${escapeHtml(i.value)}</span>
+      </li>
+    `).join('');
   }
 
-  function paintStats() {
-    const grid = document.getElementById('pf-stats-grid');
-    if (!grid) return;
-    const helloCount = parseInt(ls('pc:hello:count') || '0', 10);
-    const drops = collectedList().length;
-    const streak = currentStreak();
-    const polls = pollsVotedCount();
-    const saves = bathSaves().length;
-    const voter = (() => { try { const r = ls('pc:voter:state'); return r ? JSON.parse(r) : null; } catch { return null; } })();
-    const level = voter?.level ?? 1;
-    const xp = voter?.xp ?? 0;
-    const wallets = loadWallets().length;
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    } as any)[c]);
+  }
 
+  function paintActivity() {
+    const helloCount = parseInt(ls('pc:hello:count') || '0', 10);
+    const helloLastDay = ls('pc:hello:lastDay') || '—';
+    const dropsCount = countCollected();
+    const dropsStreak = currentStreak();
+    const votesCount = pollsVotedList().length;
+    // VoterStats
+    const voterState = (() => {
+      try {
+        const raw = ls('pc:voter:state');
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch { return null; }
+    })();
+    const level = voterState?.level ?? 1;
+    const xp = voterState?.xp ?? 0;
+    const streak = voterState?.streak ?? 0;
+    const title = voterState?.title ?? 'Novice Voter';
+
+    const grid = document.getElementById('activity-grid');
+    if (!grid) return;
     const stats = [
-      { k: 'BLOCKS',  v: drops,       sub: drops ? `${streak}-day streak` : 'visit /today',  color: 'yellow' },
-      { k: 'SAVES',   v: saves,       sub: saves ? 'on rotation'           : 'visit /bath',   color: 'green'  },
-      { k: 'POLLS',   v: polls,       sub: polls ? 'votes cast'            : 'tap a poll',    color: 'red'    },
-      { k: 'HELLO',   v: helloCount,  sub: 'lifetime',                                         color: 'blue'   },
-      { k: 'LEVEL',   v: 'L' + level, sub: xp + ' xp',                                         color: 'purple' },
-      { k: 'WALLETS', v: wallets,     sub: wallets ? 'paired'              : 'none paired',   color: 'orange' },
+      { label: 'HELLO', value: String(helloCount), sub: helloLastDay !== '—' ? `last earned ${helloLastDay}` : '—' },
+      { label: 'drops collected', value: String(dropsCount), sub: dropsStreak > 0 ? `${dropsStreak}-day streak` : 'no active streak' },
+      { label: 'polls voted', value: String(votesCount), sub: votesCount === 0 ? 'no votes yet' : `unique: ${votesCount}` },
+      { label: 'voter level', value: `L${level}`, sub: `${xp} XP · ${title.toLowerCase()}` },
     ];
     grid.innerHTML = stats.map((s) => `
-      <div class="pf-tile pf-tile--${s.color}">
-        <span class="pf-tile__label">${s.k}</span>
-        <span class="pf-tile__value">${s.v}</span>
-        <span class="pf-tile__sub">${escHtml(s.sub)}</span>
+      <div class="stat">
+        <span class="stat__label">${s.label}</span>
+        <span class="stat__value">${s.value}</span>
+        <span class="stat__sub">${s.sub}</span>
       </div>
     `).join('');
-  }
 
-  function paintPosters() {
-    const list = collectedList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    const wall = document.getElementById('pf-poster-wall');
-    const count = document.getElementById('pf-poster-count');
-    if (count) count.textContent = String(list.length);
-    if (!wall) return;
-    if (list.length === 0) {
-      wall.innerHTML = '<p class="pf-poster__empty">Nothing collected yet. Visit <a href="/today">/today</a> to collect today&apos;s drop.</p>';
-      return;
-    }
-    wall.innerHTML = list.slice(0, 36).map((d) => `
-      <a class="pf-poster__tile" href="/b/${escAttr(d.blockId)}" title="Block №${escAttr(d.blockId)}">
-        <div class="pf-poster__img">
-          <img src="/images/og/b/${escAttr(d.blockId)}.png" alt="Block №${escAttr(d.blockId)}" loading="lazy"
-            onerror="this.parentElement.classList.add('pf-poster__img--err')" />
-          <span class="pf-poster__num">№${escHtml(d.blockId)}</span>
-        </div>
-        <div class="pf-poster__caption">
-          <span class="pf-poster__date">${escHtml(d.date || '—')}</span>
-        </div>
-      </a>
-    `).join('');
-  }
+    // Detail: votes list + drops list
+    const detail = document.getElementById('activity-detail');
+    if (!detail) return;
+    const votes = pollsVotedList();
+    const drops = collectedList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-  const MOOD_DOT: Record<string, string> = {
-    warm:'#F5A623', cool:'#4A9EFF', electric:'#FF00AA', earth:'#7B9E5E',
-    void:'#8060C0', dawn:'#FFB4A2', neon:'#39FF14', ocean:'#00B4D8',
-  };
-  function paintRotation() {
-    const saves = bathSaves();
-    const sec = document.getElementById('pf-rotation-section');
-    const grid = document.getElementById('pf-rotation-grid');
-    const cnt = document.getElementById('pf-rot-count');
-    if (!sec || !grid) return;
-    if (!saves.length) { sec.hidden = true; return; }
-    sec.hidden = false;
-    if (cnt) cnt.textContent = String(saves.length);
-    grid.innerHTML = saves.slice(0, 18).map((s) => {
-      const dot = MOOD_DOT[s.mood] || '#888';
-      const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-      const type = (s.spotify_type || '').toUpperCase();
-      const url = s.spotify_url || `https://open.spotify.com/${escAttr(s.spotify_type)}/${escAttr(s.spotify_id)}`;
-      const eh = s.spotify_type === 'track' ? '80' : '152';
-      return `
-        <div class="pf-cassette">
-          <div class="pf-cassette__stripe" style="background:${dot};box-shadow:0 0 12px ${dot}55"></div>
-          <div class="pf-cassette__body">
-            <iframe src="https://open.spotify.com/embed/${escAttr(s.spotify_type)}/${escAttr(s.spotify_id)}?utm_source=pointcast"
-              width="100%" height="${eh}" frameborder="0"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
-            <div class="pf-cassette__meta">
-              <span class="pf-cassette__type">${type}</span>
-              <span class="pf-cassette__mood">${escHtml(s.mood)}</span>
-              <span class="pf-cassette__date">${date}</span>
-              <a class="pf-cassette__open" href="${escAttr(url)}" target="_blank" rel="noopener">open ↗</a>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  interface Stats { balance: string; nfts: string; ops: string; lastActivity: string; }
-  async function fetchStats(addr: string): Promise<Stats> {
-    try {
-      const [a, n] = await Promise.all([
-        fetch(`https://api.tzkt.io/v1/accounts/${addr}`),
-        fetch(`https://api.tzkt.io/v1/tokens/balances/count?account=${addr}&balance.gt=0`),
-      ]);
-      const acc = a.ok ? await a.json() : {};
-      const nfts = n.ok ? (await n.text()).trim() : '—';
-      return {
-        balance: ((acc.balance ?? 0) / 1_000_000).toFixed(2) + ' ꜩ',
-        nfts: String(nfts),
-        ops: String(acc.numTransactions ?? '—'),
-        lastActivity: acc.lastActivity
-          ? new Date(acc.lastActivity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
-          : '—',
-      };
-    } catch { return { balance:'—', nfts:'—', ops:'—', lastActivity:'—' }; }
-  }
-
-  function paintLedger() {
-    const wallets = loadWallets();
-    const active = activeAddress();
-    const body = document.getElementById('pf-ledger-body');
-    if (!body) return;
-    if (wallets.length === 0) {
-      body.innerHTML = '<p class="pf-ledger__empty">No wallets paired yet. <a href="/">Connect via the wallet chip on the home page.</a></p>';
-      return;
-    }
-    const sorted = [...wallets].sort((a, b) => b.addedAt - a.addedAt);
-    body.innerHTML = `
-      <div class="pf-table">
-        <div class="pf-table__head">
-          <span>provider</span>
-          <span>address</span>
-          <span class="pf-table__num">balance</span>
-          <span class="pf-table__num">nfts</span>
-          <span class="pf-table__num">ops</span>
-          <span class="pf-table__num">last</span>
-          <span>added</span>
-          <span></span>
-        </div>
-        ${sorted.map((w) => {
-          const isActive = w.address === active || (!active && w === sorted[0]);
-          const added = new Date(w.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-          return `
-            <div class="pf-table__row${isActive ? ' pf-table__row--active' : ''}" data-addr="${escAttr(w.address)}">
-              <span class="pf-table__provider">
-                ${isActive ? '<span class="pf-table__dot" title="active"></span>' : '<span class="pf-table__dot pf-table__dot--off" title="paired"></span>'}
-                ${escHtml(w.provider)}
-              </span>
-              <span class="pf-table__addr"><a href="https://tzkt.io/${escAttr(w.address)}" target="_blank" rel="noopener">${escHtml(shortAddr(w.address))}</a></span>
-              <span class="pf-table__num" data-stat="balance">…</span>
-              <span class="pf-table__num" data-stat="nfts">…</span>
-              <span class="pf-table__num" data-stat="ops">…</span>
-              <span class="pf-table__num" data-stat="lastActivity">…</span>
-              <span class="pf-table__added">${added}</span>
-              <span class="pf-table__actions">
-                ${isActive ? '<span class="pf-table__pill">active</span>' : `<button class="pf-table__btn" data-action="switch" data-addr="${escAttr(w.address)}">use</button>`}
-                <a class="pf-table__btn" href="https://objkt.com/profile/${escAttr(w.address)}/owned" target="_blank" rel="noopener">objkt</a>
-              </span>
-            </div>
-          `;
-        }).join('')}
+    detail.innerHTML = `
+      <div class="detail-col">
+        <h3 class="detail__h3">polls voted <span class="detail__count">${votes.length}</span></h3>
+        ${votes.length === 0 ? '<p class="detail__empty">tap a poll on the home page</p>' :
+          `<ul class="detail__list">${votes.map((v) => `
+            <li><a href="/poll/${v.slug}"><span class="detail__slug">${v.slug}</span> <span class="detail__pick">→ ${escapeHtml(v.optionId)}</span></a></li>
+          `).join('')}</ul>`}
+      </div>
+      <div class="detail-col">
+        <h3 class="detail__h3">drops collected <span class="detail__count">${drops.length}</span></h3>
+        ${drops.length === 0 ? '<p class="detail__empty">collect today\'s drop at <a href="/today">/today</a></p>' :
+          `<ul class="detail__list">${drops.map((d) => `
+            <li><a href="/b/${d.blockId}"><span class="detail__slug">${d.date}</span> <span class="detail__pick">№${d.blockId}</span></a></li>
+          `).join('')}</ul>`}
       </div>
     `;
-
-    sorted.forEach((w) => {
-      const row = body.querySelector(`[data-addr="${w.address}"]`);
-      if (!row) return;
-      fetchStats(w.address).then((s) => {
-        const q = (k: string) => row.querySelector(`[data-stat="${k}"]`);
-        if (q('balance'))      (q('balance') as HTMLElement).textContent = s.balance;
-        if (q('nfts'))         (q('nfts') as HTMLElement).textContent = s.nfts;
-        if (q('ops'))          (q('ops') as HTMLElement).textContent = s.ops;
-        if (q('lastActivity')) (q('lastActivity') as HTMLElement).textContent = s.lastActivity;
-      });
-    });
-
-    body.querySelectorAll<HTMLElement>('[data-action="switch"]').forEach((b) => {
-      b.addEventListener('click', () => {
-        const addr = b.dataset.addr!;
-        const list = loadWallets();
-        try { localStorage.setItem(KEY_WALLETS, JSON.stringify(list)); } catch {}
-        try { localStorage.setItem(KEY_ACTIVE, addr); } catch {}
-        const active = list.find((w) => w.address === addr) ?? null;
-        if (active) try { localStorage.setItem('pc:wallet', JSON.stringify(active)); } catch {}
-        window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: active }));
-        repaint();
-      });
-    });
   }
 
-  const MIKE_WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
-  const IPFS = 'https://ipfs.io/ipfs/';
-  function ipfsHttp(u: string | null | undefined): string | null {
-    if (!u) return null;
-    if (u.startsWith('ipfs://')) return IPFS + u.slice(7);
-    if (u.startsWith('http')) return u;
-    return null;
-  }
-  async function paintVault() {
-    const grid = document.getElementById('pf-vault-grid');
-    const sub = document.getElementById('pf-vault-sub');
-    const footer = document.getElementById('pf-vault-footer');
-    if (!grid || !sub || !footer) return;
-    const active = activeAddress();
-    const wallets = loadWallets();
-    const target = active || (wallets[0]?.address) || MIKE_WALLET;
-    const isOwn = !!active || wallets.length > 0;
-    sub.innerHTML = isOwn
-      ? `your wallet · <code>${escHtml(shortAddr(target))}</code> · live from tzkt`
-      : `Mike&apos;s wallet · <code>${escHtml(shortAddr(target))}</code> · connect your own to see yours`;
-    try {
-      const url = `https://api.tzkt.io/v1/tokens/balances?account=${target}&token.standard=fa2&balance.gt=0&limit=60&sort.desc=lastTime&select=token.contract.address as contract,token.tokenId as tokenId,token.metadata as metadata,token.totalSupply as supply,balance`;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`tzkt ${r.status}`);
-      const raw: any[] = await r.json();
-      const tokens = raw.map((t) => {
-        const m = t.metadata || {};
-        return {
-          contract: t.contract,
-          tokenId: String(t.tokenId),
-          name: m.name || `Token #${t.tokenId}`,
-          thumb: ipfsHttp(m.thumbnailUri) || ipfsHttp(m.displayUri) || ipfsHttp(m.artifactUri) || null,
-          supply: Number(t.supply ?? 0),
-          balance: Number(t.balance ?? 0),
-        };
-      }).filter((t) => t.thumb);
-
-      if (tokens.length === 0) {
-        grid.innerHTML = '<p class="pf-vault__empty">No NFTs in this wallet yet.</p>';
-        footer.textContent = '';
-        return;
-      }
-      grid.innerHTML = tokens.slice(0, 36).map((t) => `
-        <a class="pf-nft" href="https://objkt.com/tokens/${escAttr(t.contract)}/${escAttr(t.tokenId)}" target="_blank" rel="noopener">
-          <div class="pf-nft__art"><img src="${escAttr(t.thumb!)}" alt="${escAttr(t.name)}" loading="lazy" /></div>
-          <p class="pf-nft__name">${escHtml(t.name)}</p>
-          <p class="pf-nft__meta">×${t.balance}${t.supply > 0 ? ` · ${t.supply} ed` : ''}</p>
-        </a>
-      `).join('');
-      footer.textContent = `${tokens.length} held · objkt.com links`;
-    } catch (e: any) {
-      grid.innerHTML = `<p class="pf-vault__error">Couldn&apos;t load vault: ${escHtml(e?.message || 'unknown')}.</p>`;
-      footer.textContent = '';
-    }
-  }
-
-  type Trophy = { id: string; title: string; nounId: number; eyebrow: string; surface: string; threshold: number; progressKey: string; progressType: 'count' | 'set' | 'meta' };
-  const TROPHIES: Trophy[] = [
-    { id: 'first-tap',        title: 'First Tap',        nounId: 666, eyebrow: 'novice',           surface: '/drum',          threshold:    1, progressKey: 'pc:drumLocalCount',       progressType: 'count' },
-    { id: 'true-drummer',     title: 'True Drummer',     nounId: 700, eyebrow: '100 drums',        surface: '/drum-v2',       threshold:  100, progressKey: 'pc:drumLocalCount',       progressType: 'count' },
-    { id: 'master-drummer',   title: 'Master Drummer',   nounId: 777, eyebrow: '1,000 drums',      surface: '/drum-v2',       threshold: 1000, progressKey: 'pc:drumLocalCount',       progressType: 'count' },
-    { id: 'orchestra-master', title: 'Orchestra Master', nounId: 808, eyebrow: 'all 12 instruments', surface: '/drum-v4',     threshold:   12, progressKey: 'pc:drum-v4:collected',    progressType: 'set'   },
-    { id: 'choir-master',     title: 'Choir Master',     nounId: 888, eyebrow: 'all 12 voices',    surface: '/drum-v6',       threshold:   12, progressKey: 'pc:drum-v6:sung',         progressType: 'set'   },
-    { id: 'loop-creator',     title: 'Loop Creator',     nounId: 909, eyebrow: 'shared a loop',    surface: '/drum-v5',       threshold:    1, progressKey: 'pc:drum-v5:shared-count', progressType: 'count' },
-    { id: 'spotify-jam',      title: 'Spotify Jam',      nounId: 420, eyebrow: 'set the room track', surface: '/drum-v3',     threshold:    1, progressKey: 'pc:drum-v3:track-count',  progressType: 'count' },
-    { id: 'grand-master',     title: 'Grand Master',     nounId: 999, eyebrow: 'all trophies',     surface: '/drum-trophies', threshold:    7, progressKey: '_meta',                   progressType: 'meta'  },
-  ];
-  function trophyProgress(t: Trophy, earnedSet: Set<string>): { current: number; earned: boolean } {
-    if (t.progressType === 'meta') return { current: earnedSet.size, earned: earnedSet.size >= t.threshold };
-    const raw = ls(t.progressKey);
-    if (t.progressType === 'count') { const n = raw ? parseInt(raw, 10) || 0 : 0; return { current: n, earned: n >= t.threshold }; }
-    let size = 0;
-    if (raw) { try { const a = JSON.parse(raw); if (Array.isArray(a)) size = a.length; else if (a && typeof a === 'object') size = Object.keys(a).length; } catch {} }
-    return { current: size, earned: size >= t.threshold };
-  }
-  function paintTrophies() {
-    const grid = document.getElementById('pf-trophy-grid');
-    const countEl = document.getElementById('pf-trophy-count');
-    if (!grid) return;
-    const earnedIds = new Set<string>();
-    TROPHIES.forEach((t) => { if (t.progressType !== 'meta') { const { earned } = trophyProgress(t, earnedIds); if (earned) earnedIds.add(t.id); } });
-    let total = 0;
-    grid.innerHTML = TROPHIES.map((t) => {
-      const { current, earned } = trophyProgress(t, earnedIds);
-      if (earned) total++;
-      const remaining = Math.max(0, t.threshold - current);
-      const status = earned ? '<span class="pf-trophy__pill pf-trophy__pill--won">earned</span>' : `<span class="pf-trophy__pill">${remaining} to go</span>`;
-      const pct = Math.min(100, Math.round((current / Math.max(1, t.threshold)) * 100));
-      return `<a class="pf-trophy${earned ? ' pf-trophy--earned' : ''}" href="${escAttr(t.surface)}" title="${escAttr(t.title)}"><div class="pf-trophy__noun"><img src="https://noun.pics/${t.nounId}.svg" alt="Noun ${t.nounId}" loading="lazy" /><span class="pf-trophy__nounid">#${t.nounId}</span></div><div class="pf-trophy__body"><p class="pf-trophy__eyebrow">${escHtml(t.eyebrow)}</p><h3 class="pf-trophy__title">${escHtml(t.title)}</h3>${status}<div class="pf-trophy__bar"><div class="pf-trophy__bar-fill" style="width:${pct}%"></div></div></div></a>`;
-    }).join('');
-    if (countEl) countEl.textContent = String(total);
-  }
-  function paintMugs() {
-    const grid = document.getElementById('pf-mug-grid');
-    const countEl = document.getElementById('pf-mug-count');
-    if (!grid) return;
-    const MUGS = [
-      { slug: 'ceramic',  label: 'Ceramic',  rarity: 'common',     editions: 333, threshold: 1,  hex: '#5F5E5A' },
-      { slug: 'espresso', label: 'Espresso', rarity: 'uncommon',   editions: 144, threshold: 3,  hex: '#0F6E56' },
-      { slug: 'latte',    label: 'Latte',    rarity: 'rare',       editions:  64, threshold: 7,  hex: '#185FA5' },
-      { slug: 'paper',    label: 'Paper',    rarity: 'ultra-rare', editions:  21, threshold: 15, hex: '#993556' },
-      { slug: 'bistro',   label: 'Bistro',   rarity: 'legendary',  editions:   8, threshold: 30, hex: '#c4952e' },
-    ];
-    let claims: Record<string, any> = {};
-    try { const raw = ls('pc:coffee:claims'); if (raw) claims = JSON.parse(raw) || {}; } catch {}
-    const cups = (() => { try { return parseInt(ls('pc:coffee:count') || '0', 10) || 0; } catch { return 0; } })();
-    let claimed = 0;
-    grid.innerHTML = MUGS.map((m) => {
-      const has = !!claims[m.slug];
-      if (has) claimed++;
-      const remaining = Math.max(0, m.threshold - cups);
-      const state = has ? '<span class="pf-mug__pill pf-mug__pill--won">claimed</span>' : (remaining === 0 ? '<span class="pf-mug__pill pf-mug__pill--ready">ready</span>' : `<span class="pf-mug__pill">${remaining} cups</span>`);
-      return `<a class="pf-mug${has ? ' pf-mug--won' : ''}" href="/coffee" title="${escAttr(m.label)} · ${escAttr(m.rarity)} · ${m.editions} editions"><div class="pf-mug__art" style="background:${m.hex}22;border-color:${m.hex}"><img src="/images/coffee-mugs/${m.slug}.svg" alt="${escAttr(m.label)} mug" loading="lazy" /></div><p class="pf-mug__label">${escHtml(m.label)}</p><p class="pf-mug__rarity" style="color:${m.hex}">${escHtml(m.rarity.toUpperCase())} · ${m.editions} ED</p>${state}</a>`;
-    }).join('');
-    if (countEl) countEl.textContent = String(claimed);
-  }
-
-  function repaint() {
-    paintHero();
-    paintStats();
-    paintPosters();
-    paintTrophies();
-    paintMugs();
-    paintRotation();
-    paintLedger();
-    void paintVault();
-  }
-  repaint();
-  window.addEventListener('storage', repaint);
-  window.addEventListener('pc:wallet-change', repaint);
+  paintIdentity();
+  paintState();
+  paintActivity();
+  window.addEventListener('storage', () => { paintIdentity(); paintState(); paintActivity(); });
 </script>
 
-<style is:global>
-  :root {
-    --pf-paper:    #f5efe4;
-    --pf-paper-2:  #ede5d3;
-    --pf-ink:      #1f1b15;
-    --pf-ink-soft: #5f5e5a;
-    --pf-rule:     #d8cdb8;
-    --pf-yellow:   #F7C325;
-    --pf-red:      #E84D6A;
-    --pf-blue:     #4A9EFF;
-    --pf-green:    #2CC5A0;
-    --pf-purple:   #9B59B6;
-    --pf-orange:   #FF7F50;
+<style>
+  .page { max-width: 880px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .page[data-profile-version="v3"] [data-profile-panel]:not([data-profile-panel="v3"]),
+  .page[data-profile-version="v2"] [data-profile-panel]:not([data-profile-panel="v2"]),
+  .page[data-profile-version="v1"] [data-profile-panel]:not([data-profile-panel="v1"]) {
+    display: none !important;
   }
 
-  .pf {
-    max-width: 980px;
-    margin: 0 auto;
-    padding: 28px 18px 100px;
-    background:
-      radial-gradient(circle at 1px 1px, rgba(31,27,21,.06) 1px, transparent 0) 0 0/22px 22px,
-      var(--pf-paper);
-    color: var(--pf-ink);
-    font-family: 'Inter Variable', system-ui, sans-serif;
+  .crumb {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 16px;
   }
+  .crumb a { color: var(--pc-accent); }
 
-  .pf-section-head {
+  .version-switch {
     display: flex;
-    align-items: baseline;
-    gap: 14px;
     flex-wrap: wrap;
-    padding: 10px 0 12px;
-    border-top: 5px solid var(--pf-yellow);
-    margin: 28px 0 16px;
+    gap: 8px;
+    margin: 0 0 18px;
+    padding: 6px;
+    border: 1.5px solid #12110E;
+    background: #fff;
   }
-  .pf-section-head--blue   { border-top-color: var(--pf-blue); }
-  .pf-section-head--green  { border-top-color: var(--pf-green); }
-  .pf-section-head--purple { border-top-color: var(--pf-purple); }
-  .pf-section-head--orange { border-top-color: var(--pf-orange); }
-  .pf-section-head--red    { border-top-color: var(--pf-red); }
 
-  .pf-section-title {
-    font-family: 'Lora', Georgia, serif;
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    margin: 0;
-    color: var(--pf-ink);
-  }
-  .pf-section-sub {
-    font-family: 'JetBrains Mono Variable', monospace;
-    font-size: 11px;
-    letter-spacing: 0.10em;
+  .version-switch button {
+    appearance: none;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    background: #faf9f5;
+    color: #12110E;
+    cursor: pointer;
+    padding: 8px 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    line-height: 1.1;
     text-transform: uppercase;
-    color: var(--pf-ink-soft);
-    margin: 0;
   }
-  .pf-section-sub a { color: var(--pf-ink); font-weight: 700; }
 
-  .pf-hero { margin-bottom: 32px; }
-  .pf-hero__chrome {
-    background: linear-gradient(180deg, #fefaf0 0%, #f8f0dc 100%);
-    border: 2px solid var(--pf-ink);
-    box-shadow: 6px 6px 0 0 var(--pf-ink);
-    padding: 16px 20px 22px;
-    position: relative;
+  .version-switch button[aria-pressed="true"] {
+    background: #12110E;
+    border-color: #12110E;
+    color: #fff7e8;
   }
-  .pf-hero__kicker {
-    font-family: 'JetBrains Mono Variable', monospace;
-    font-size: 9.5px;
-    letter-spacing: 0.26em;
-    margin: 0 0 14px;
-    color: var(--pf-ink);
-    font-weight: 700;
-    border-bottom: 1px dashed var(--pf-rule);
-    padding-bottom: 10px;
-  }
-  .pf-hero__inner {
+
+  /* ─── V3 AUDIT ─── */
+  .v3 {
     display: grid;
-    grid-template-columns: 180px 1fr auto;
-    gap: 22px;
-    align-items: center;
+    gap: 18px;
   }
-  .pf-hero__avatar {
-    position: relative;
-    width: 180px;
-    height: 180px;
-    background: var(--pf-yellow);
-    border: 3px solid var(--pf-ink);
-    box-shadow: 5px 5px 0 0 var(--pf-ink);
+
+  .v3-hero {
+    padding: 22px 0 18px;
+    border-block: 1.5px solid #12110E;
+  }
+
+  .v3-hero h1 {
+    margin: 0 0 12px;
+    max-width: 13ch;
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.35rem, 10vw, 4.6rem);
+    font-weight: 500;
+    line-height: 0.96;
+    color: #12110E;
+  }
+
+  .v3-hero__dek {
+    max-width: 68ch;
+    margin: 0;
+    color: #3c3933;
+    font-size: 15.5px;
+    line-height: 1.55;
+  }
+
+  .noun-rail {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 18px;
+  }
+
+  .noun-rail a {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 5px;
+    border: 1px solid #12110E;
+    border-radius: 2px;
+    background: #fff;
+    color: #12110E;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .noun-rail img,
+  .noun-grid img,
+  .audit-card__noun {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    image-rendering: pixelated;
+  }
+
+  .noun-rail span {
     overflow: hidden;
-  }
-  .pf-hero__avatar img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-  .pf-hero__noun-tag {
-    position: absolute;
-    bottom: 6px; left: 6px;
-    font-family: 'JetBrains Mono Variable', monospace;
+    font-family: var(--pc-font-mono);
     font-size: 9px;
-    letter-spacing: 0.16em;
-    background: var(--pf-ink);
-    color: var(--pf-paper);
-    padding: 2px 7px;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .audit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .audit-card {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 8px 12px;
+    min-height: 150px;
+    padding: 14px;
+    border: 1.5px solid #12110E;
+    border-radius: 3px;
+    background: #fffaf0;
+    color: #12110E;
+    text-decoration: none;
+  }
+
+  .audit-card__noun {
+    grid-row: 1 / span 3;
+    align-self: start;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    background: #fff;
+    padding: 4px;
+  }
+
+  .audit-card:hover {
+    background: #fff3d8;
+  }
+
+  .audit-card--surface {
+    background: #f3f8f7;
+    border-color: #0F6E56;
+  }
+
+  .audit-card--surface:hover {
+    background: #e7f4ef;
+  }
+
+  .audit-card__label {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
     font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
   }
-  .pf-hero__id { display: grid; gap: 8px; }
-  .pf-hero__name {
-    font-family: 'Lora', Georgia, serif;
-    font-size: clamp(34px, 5.6vw, 56px);
-    line-height: 1.0;
+
+  .audit-card strong {
+    font-family: var(--pc-font-sans);
+    font-size: 34px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .audit-card span:last-child {
+    color: #3c3933;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .source-panel {
+    padding: 16px;
+    border: 1px solid #d6d4cd;
+    background: #fff;
+  }
+
+  .source-panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #d6d4cd;
+  }
+
+  .source-panel__head h2 {
     margin: 0;
-    color: var(--pf-ink);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    word-break: break-word;
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.15;
   }
-  .pf-hero__sub {
-    font-family: 'JetBrains Mono Variable', monospace;
+
+  .source-panel__head > a {
+    flex: 0 0 auto;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8a2432;
+  }
+
+  .ledger {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .ledger h3 {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .ledger ul {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: #2a2925;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .ledger a,
+  .mini-list a,
+  .url-list a {
+    color: #8a2432;
+  }
+
+  .ledger code {
     font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--pf-ink-soft);
-    margin: 0;
+    word-break: break-all;
   }
-  .pf-kind {
-    display: inline-block;
-    background: var(--pf-ink);
-    color: var(--pf-paper);
-    padding: 2px 8px;
+
+  .mini-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .mini-list a,
+  .url-list a {
+    display: grid;
+    gap: 3px;
+    padding: 10px 0;
+    border-bottom: 1px dashed #d6d4cd;
+    color: #12110E;
+    text-decoration: none;
+  }
+
+  .mini-list a:last-child,
+  .url-list a:last-child {
+    border-bottom: 0;
+  }
+
+  .mini-list span,
+  .url-list span {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .mini-list strong,
+  .url-list strong {
+    font-size: 14px;
+    font-weight: 650;
+    color: #12110E;
+  }
+
+  .mini-list em,
+  .url-list em {
+    overflow-wrap: anywhere;
+    color: #5f5e5a;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.35;
+  }
+
+  .url-audit summary {
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    font-size: 9.5px;
+    color: #8a2432;
   }
-  .pf-hero__chips { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-  .pf-chip {
-    display: inline-flex; flex-direction: column;
-    background: #fff;
-    border: 1.5px solid var(--pf-ink);
-    box-shadow: 2px 2px 0 var(--pf-ink);
-    padding: 4px 10px;
-    line-height: 1.2;
+
+  .url-list {
+    max-height: 560px;
+    overflow: auto;
+    margin-top: 10px;
+    padding-right: 8px;
   }
-  .pf-chip span {
-    font-family: 'JetBrains Mono Variable', monospace;
-    font-size: 8px; letter-spacing: 0.18em; color: var(--pf-ink-soft); font-weight: 700;
+
+  .noun-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
   }
-  .pf-chip b {
-    font-family: 'JetBrains Mono Variable', monospace;
-    font-size: 11px; color: var(--pf-ink); letter-spacing: 0.04em;
+
+  .noun-grid a {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid #d6d4cd;
+    border-radius: 2px;
+    background: #faf9f5;
+    color: #12110E;
+    text-decoration: none;
   }
-  .pf-chip--wallet { background: linear-gradient(180deg, #fffbe6 0%, #fef0bd 100%); }
-  .pf-chip--noun   { background: linear-gradient(180deg, #fef0bd 0%, #f8d878 100%); }
-  .pf-chip--since  { background: #fff; }
-  .pf-chip--id     { background: #f4f0e4; }
 
-  .pf-hero__state { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
-  .pf-state-pill {
-    display: inline-block; background: #fff; border: 1px dashed var(--pf-rule);
-    padding: 3px 9px; font-family: 'JetBrains Mono Variable', monospace;
-    font-size: 10px; letter-spacing: 0.10em; color: var(--pf-ink);
+  .noun-grid a:hover {
+    background: #fff3d8;
+    border-color: #12110E;
   }
-  .pf-state-pill--mood { border-color: var(--pf-red); color: var(--pf-red); text-transform: uppercase; font-weight: 700; }
 
-  .pf-hero__stamp {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    width: 86px; height: 86px;
-    background: var(--pf-red); color: #fff;
-    border: 3px solid var(--pf-ink);
-    box-shadow: 4px 4px 0 var(--pf-ink);
-    transform: rotate(-7deg);
-    font-family: 'JetBrains Mono Variable', monospace;
-    text-align: center; line-height: 1.05; flex-shrink: 0;
+  .noun-grid span {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8a2432;
   }
-  .pf-hero__stamp-line { font-size: 10px; letter-spacing: 0.14em; font-weight: 700; opacity: 0.95; }
-  .pf-hero__stamp-line--big { font-size: 22px; letter-spacing: 0.04em; line-height: 1; margin: 2px 0; }
 
-  .pf-arcade__grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-  .pf-tile {
-    border: 2px solid var(--pf-ink);
-    box-shadow: 3px 3px 0 0 var(--pf-ink);
-    padding: 10px 12px 12px;
-    display: grid; gap: 4px;
-    background: #fff; position: relative; overflow: hidden;
+  .noun-grid strong {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.25;
+    color: #12110E;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
-  .pf-tile::after {
-    content: ''; position: absolute; inset: 0;
-    background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(31,27,21,0.03) 6px 7px);
-    pointer-events: none;
+
+  .noun-grid em {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-style: normal;
+    letter-spacing: 0.1em;
+    color: #5f5e5a;
   }
-  .pf-tile__label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.20em; color: var(--pf-ink); opacity: 0.78; }
-  .pf-tile__value { font-family: 'Lora', Georgia, serif; font-size: 32px; font-weight: 700; color: var(--pf-ink); line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .pf-tile__sub { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.08em; color: var(--pf-ink); opacity: 0.68; line-height: 1.3; }
-  .pf-tile--yellow { background: var(--pf-yellow); }
-  .pf-tile--red    { background: var(--pf-red);    }
-  .pf-tile--red    .pf-tile__label, .pf-tile--red .pf-tile__value, .pf-tile--red .pf-tile__sub { color: #fff; }
-  .pf-tile--blue   { background: var(--pf-blue);   }
-  .pf-tile--blue   .pf-tile__label, .pf-tile--blue .pf-tile__value, .pf-tile--blue .pf-tile__sub { color: #fff; }
-  .pf-tile--green  { background: var(--pf-green); }
-  .pf-tile--purple { background: var(--pf-purple); }
-  .pf-tile--purple .pf-tile__label, .pf-tile--purple .pf-tile__value, .pf-tile--purple .pf-tile__sub { color: #fff; }
-  .pf-tile--orange { background: var(--pf-orange); }
-
-  .pf-poster__wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
-  .pf-poster__tile {
-    display: block; text-decoration: none; color: inherit;
-    background: #fff;
-    border: 2px solid var(--pf-ink);
-    box-shadow: 4px 4px 0 0 var(--pf-ink);
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
-  }
-  .pf-poster__tile:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 var(--pf-ink); }
-  .pf-poster__img { position: relative; aspect-ratio: 1200 / 630; background: var(--pf-paper-2); overflow: hidden; border-bottom: 2px solid var(--pf-ink); }
-  .pf-poster__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .pf-poster__img--err { background: linear-gradient(135deg, #eeeae0 0%, #ddd8cc 100%); }
-  .pf-poster__img--err::after { content: 'no image yet'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; color: #999; }
-  .pf-poster__num { position: absolute; top: 6px; left: 6px; background: var(--pf-ink); color: var(--pf-paper); padding: 2px 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.10em; font-weight: 700; }
-  .pf-poster__caption { padding: 6px 10px 8px; background: #fff; display: flex; justify-content: space-between; align-items: baseline; }
-  .pf-poster__date { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.10em; color: var(--pf-ink-soft); }
-  .pf-poster__empty { grid-column: 1 / -1; background: #fff; border: 2px dashed var(--pf-rule); padding: 20px; text-align: center; font-family: 'Lora', Georgia, serif; font-size: 14px; color: var(--pf-ink-soft); }
-  .pf-poster__empty a { color: var(--pf-blue); font-weight: 700; }
-
-  .pf-earned__group { margin: 0 0 18px; }
-  .pf-earned__group:last-child { margin-bottom: 0; }
-  .pf-earned__group-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9.5px; letter-spacing: 0.20em; font-weight: 700; margin: 0 0 10px; color: var(--pf-ink); opacity: 0.78; }
-  .pf-earned__group-label span { color: var(--pf-red); }
-  .pf-trophy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-  .pf-trophy { display: flex; align-items: stretch; text-decoration: none; color: inherit; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); transition: transform 0.12s ease, box-shadow 0.12s ease; overflow: hidden; opacity: 0.6; }
-  .pf-trophy:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--pf-ink); }
-  .pf-trophy--earned { opacity: 1; background: linear-gradient(180deg, #fffbe6 0%, #fef0bd 100%); }
-  .pf-trophy__noun { width: 80px; flex-shrink: 0; background: var(--pf-paper-2); border-right: 2px solid var(--pf-ink); position: relative; display: flex; align-items: center; justify-content: center; }
-  .pf-trophy--earned .pf-trophy__noun { background: var(--pf-yellow); }
-  .pf-trophy__noun img { width: 100%; height: auto; display: block; image-rendering: pixelated; filter: grayscale(0.85) opacity(0.6); }
-  .pf-trophy--earned .pf-trophy__noun img { filter: none; }
-  .pf-trophy__nounid { position: absolute; bottom: 3px; left: 3px; background: var(--pf-ink); color: var(--pf-paper); font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.10em; padding: 1px 4px; font-weight: 700; }
-  .pf-trophy__body { flex: 1; min-width: 0; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
-  .pf-trophy__eyebrow { font-family: 'JetBrains Mono Variable', monospace; font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pf-ink-soft); margin: 0; font-weight: 700; }
-  .pf-trophy__title { font-family: 'Lora', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.1; margin: 0; color: var(--pf-ink); }
-  .pf-trophy__pill { display: inline-block; align-self: flex-start; background: #fff; border: 1px solid var(--pf-ink-soft); padding: 1px 7px; font-family: 'JetBrains Mono Variable', monospace; font-size: 8.5px; letter-spacing: 0.14em; font-weight: 700; color: var(--pf-ink-soft); margin-top: 2px; }
-  .pf-trophy__pill--won { background: var(--pf-green); border-color: var(--pf-ink); color: var(--pf-ink); }
-  .pf-trophy__bar { height: 4px; background: var(--pf-paper-2); border: 1px solid var(--pf-ink); margin-top: auto; overflow: hidden; }
-  .pf-trophy__bar-fill { height: 100%; background: var(--pf-yellow); transition: width 0.5s ease; }
-  .pf-trophy--earned .pf-trophy__bar-fill { background: var(--pf-green); }
-  .pf-mug-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-  .pf-mug { display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: inherit; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); padding: 10px 8px 8px; transition: transform 0.12s ease, box-shadow 0.12s ease; opacity: 0.7; }
-  .pf-mug:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--pf-ink); }
-  .pf-mug--won { opacity: 1; }
-  .pf-mug__art { width: 100%; aspect-ratio: 1; background: var(--pf-paper-2); border: 2px solid var(--pf-ink); display: flex; align-items: center; justify-content: center; image-rendering: pixelated; }
-  .pf-mug__art img { width: 80%; height: 80%; image-rendering: pixelated; }
-  .pf-mug__label { font-family: 'Lora', Georgia, serif; font-size: 13px; font-weight: 600; margin: 4px 0 0; color: var(--pf-ink); }
-  .pf-mug__rarity { font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.16em; font-weight: 700; margin: 0; opacity: 0.85; }
-  .pf-mug__pill { background: #fff; border: 1px solid var(--pf-ink-soft); padding: 1px 7px; font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.14em; font-weight: 700; color: var(--pf-ink-soft); margin-top: 2px; }
-  .pf-mug__pill--won { background: var(--pf-green); border-color: var(--pf-ink); color: var(--pf-ink); }
-  .pf-mug__pill--ready { background: var(--pf-yellow); border-color: var(--pf-ink); color: var(--pf-ink); }
-  @media (max-width: 580px) { .pf-mug-grid { grid-template-columns: repeat(3, 1fr); } .pf-trophy-grid { grid-template-columns: 1fr; } }
-
-  .pf-rotation__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-  .pf-cassette { display: flex; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); overflow: hidden; }
-  .pf-cassette__stripe { width: 8px; flex-shrink: 0; }
-  .pf-cassette__body { flex: 1; min-width: 0; }
-  .pf-cassette__body iframe { display: block; width: 100%; border: none; }
-  .pf-cassette__meta { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px dashed var(--pf-rule); font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.10em; flex-wrap: wrap; }
-  .pf-cassette__type { background: var(--pf-ink); color: var(--pf-paper); padding: 2px 6px; font-weight: 700; }
-  .pf-cassette__mood { color: var(--pf-ink-soft); text-transform: uppercase; }
-  .pf-cassette__date { color: var(--pf-ink-soft); margin-left: auto; }
-  .pf-cassette__open { color: var(--pf-blue); text-decoration: none; font-weight: 700; }
-  .pf-cassette__open:hover { text-decoration: underline; }
-
-  .pf-ledger__body { background: #fff; border: 2px solid var(--pf-ink); box-shadow: 4px 4px 0 0 var(--pf-ink); }
-  .pf-ledger__empty { padding: 18px 16px; font-family: 'Lora', Georgia, serif; font-size: 14px; color: var(--pf-ink-soft); margin: 0; text-align: center; }
-  .pf-ledger__empty a { color: var(--pf-purple); font-weight: 700; }
-  .pf-table { display: grid; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
-  .pf-table__head, .pf-table__row { display: grid; grid-template-columns: 100px 110px 90px 60px 70px 70px 80px 1fr; align-items: center; gap: 6px; padding: 8px 12px; }
-  .pf-table__head { background: var(--pf-ink); color: var(--pf-paper); font-size: 9px; letter-spacing: 0.16em; font-weight: 700; text-transform: uppercase; }
-  .pf-table__row { border-top: 1px solid var(--pf-rule); }
-  .pf-table__row--active { background: #fff8e0; }
-  .pf-table__num { text-align: right; font-variant-numeric: tabular-nums; color: var(--pf-ink); }
-  .pf-table__head .pf-table__num { color: var(--pf-paper); text-align: right; }
-  .pf-table__provider { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
-  .pf-table__dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pf-green); box-shadow: 0 0 6px var(--pf-green); }
-  .pf-table__dot--off { background: var(--pf-rule); box-shadow: none; }
-  .pf-table__addr a { color: var(--pf-blue); text-decoration: none; }
-  .pf-table__addr a:hover { text-decoration: underline; }
-  .pf-table__added { color: var(--pf-ink-soft); }
-  .pf-table__actions { display: inline-flex; gap: 5px; align-items: center; justify-content: flex-end; }
-  .pf-table__pill { background: var(--pf-green); color: var(--pf-ink); padding: 2px 8px; font-weight: 700; font-size: 9px; letter-spacing: 0.14em; }
-  .pf-table__btn { background: #fff; color: var(--pf-ink); border: 1px solid var(--pf-ink); padding: 2px 8px; font-family: inherit; font-size: 9px; letter-spacing: 0.14em; cursor: pointer; text-decoration: none; font-weight: 700; }
-  .pf-table__btn:hover { background: var(--pf-yellow); }
-
-  .pf-vault__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-  .pf-nft { display: block; text-decoration: none; color: inherit; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); transition: transform 0.12s ease, box-shadow 0.12s ease; }
-  .pf-nft:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--pf-ink); }
-  .pf-nft__art { aspect-ratio: 1; background: var(--pf-paper-2); overflow: hidden; border-bottom: 2px solid var(--pf-ink); }
-  .pf-nft__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .pf-nft__name { font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.25; padding: 6px 8px 2px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pf-nft__meta { font-family: 'JetBrains Mono Variable', monospace; font-size: 9.5px; letter-spacing: 0.10em; padding: 0 8px 6px; color: var(--pf-ink-soft); margin: 0; }
-  .pf-vault__loading, .pf-vault__empty, .pf-vault__error { grid-column: 1 / -1; padding: 16px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; color: var(--pf-ink-soft); text-align: center; }
-  .pf-vault__footer { margin: 10px 0 0; text-align: right; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.14em; color: var(--pf-ink-soft); }
-
-  .pf-machine { margin-top: 36px; padding: 12px 14px; border: 1px dashed var(--pf-rule); background: rgba(255,255,255,0.5); }
-  .pf-machine__label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.20em; font-weight: 700; margin: 0 0 6px; color: var(--pf-ink-soft); }
-  .pf-machine ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
-  .pf-machine a { color: var(--pf-ink); }
 
   @media (max-width: 760px) {
-    .pf-arcade__grid { grid-template-columns: repeat(3, 1fr); }
-    .pf-hero__inner { grid-template-columns: 140px 1fr; gap: 16px; }
-    .pf-hero__avatar { width: 140px; height: 140px; }
-    .pf-hero__stamp { display: none; }
-    .pf-table__head, .pf-table__row { grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 10px; }
-    .pf-table__head { display: none; }
-    .pf-table__num, .pf-table__added { text-align: left; }
-    .pf-table__row { padding: 10px 12px; gap: 4px 14px; }
-    .pf-table__actions { grid-column: 1 / -1; justify-content: flex-start; margin-top: 4px; }
+    .noun-rail {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .audit-grid,
+    .ledger {
+      grid-template-columns: 1fr;
+    }
+
+    .audit-card {
+      min-height: 128px;
+    }
+
+    .source-panel__head {
+      display: grid;
+    }
+
+    .noun-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
-  @media (max-width: 480px) {
-    .pf-arcade__grid { grid-template-columns: repeat(2, 1fr); }
-    .pf-hero__name { font-size: 30px; }
-    .pf-section-title { font-size: 22px; }
+
+  @media (max-width: 440px) {
+    .audit-card {
+      grid-template-columns: 52px 1fr;
+    }
+
+    .noun-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
+
+  /* ─── IDENTITY ─── */
+  .identity {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 22px;
+    border: 1.5px solid #12110E;
+    border-left: 5px solid #F59F00;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #fef5e7 0%, #faf9f5 100%);
+    margin-bottom: 22px;
+  }
+  .identity__avatar {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #fff;
+    border: 3px solid #F59F00;
+    padding: 4px;
+  }
+  .identity__noun {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 50%;
+  }
+  .identity__meta { display: grid; gap: 4px; }
+  .identity__name {
+    margin: 6px 0 2px;
+    font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 32px;
+    font-weight: 500;
+    color: #12110E;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .identity__dek {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: 14px;
+    color: #2a2925;
+    line-height: 1.5;
+  }
+  .identity__dek strong { color: #8a2432; font-weight: 700; }
+  .identity__dek time { color: var(--pc-ink); font-weight: 600; }
+  .identity__kind {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #12110E;
+    color: #fef5e7;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border-radius: 8px;
+    vertical-align: 1px;
+  }
+  .identity__hint {
+    margin: 2px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--pc-ink-soft);
+    text-transform: none;
+  }
+
+  @media (max-width: 640px) {
+    .identity {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      text-align: center;
+    }
+    .identity__avatar { margin: 0 auto; width: 120px; height: 120px; }
+    .identity__name { font-size: 26px; }
+  }
+
+  /* ─── STATE PANEL ─── */
+  .state-panel {
+    padding: 14px 18px;
+    border: 1px dashed #534AB7;
+    border-radius: 3px;
+    background: #f6f5fc;
+    margin-bottom: 22px;
+  }
+  .state-panel .kicker { margin: 0 0 10px; }
+  .state-panel .kicker a { color: #534AB7; text-decoration: none; font-weight: 700; }
+  .state-panel .kicker a:hover { text-decoration: underline; }
+  .state-chips {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .state-chip {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 12px;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    background: #fff;
+    min-width: 140px;
+  }
+  .state-chip__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+  .state-chip__value {
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: 14px;
+    color: #12110E;
+    word-break: break-word;
+  }
+  .state-chip--mood .state-chip__value {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #F59F00;
+    font-weight: 700;
+  }
+
+  /* ─── ACTIVITY ─── */
+  .activity {
+    margin-bottom: 32px;
+  }
+  .activity .kicker { margin: 0 0 10px; }
+  .activity__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    padding: 12px 14px;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    background: #fff;
+    display: grid;
+    gap: 2px;
+  }
+  .stat__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 600;
+  }
+  .stat__value {
+    font-family: var(--pc-font-mono);
+    font-size: 24px;
+    color: #8a2432;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .stat__sub {
+    font-size: 11px;
+    color: var(--pc-ink-soft);
+    letter-spacing: 0.06em;
+  }
+
+  .activity__detail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 640px) {
+    .activity__detail { grid-template-columns: 1fr; }
+  }
+  .detail-col {
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    background: #fafaf7;
+  }
+  .detail__h3 {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    font-weight: 700;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .detail__count {
+    color: #8a2432;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .detail__list {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .detail__list a {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    font-size: 12px;
+    text-decoration: none;
+    color: #12110E;
+    border-radius: 2px;
+  }
+  .detail__list a:hover { background: #fef5e7; }
+  .detail__slug {
+    font-family: var(--pc-font-mono);
+    color: var(--pc-ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .detail__pick {
+    font-family: var(--pc-font-mono);
+    color: #534AB7;
+    font-weight: 600;
+  }
+  .detail__empty {
+    margin: 0;
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+    font-style: italic;
+  }
+  .detail__empty a { color: #534AB7; }
+
+  .head__h2 {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 8px;
+    color: var(--pc-ink);
+  }
+
+  .head { margin-bottom: 24px; }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 8px;
+  }
+  .head h1 {
+    font-family: var(--pc-font-sans);
+    font-size: 36px; line-height: 1.05; font-weight: 500;
+    margin: 0 0 10px; color: var(--pc-ink);
+  }
+  .dek {
+    font-family: var(--pc-font-sans);
+    font-size: 15.5px; line-height: 1.5;
+    color: var(--pc-ink-soft); margin: 0; max-width: 58ch;
+  }
+
+  .empty {
+    padding: 32px 20px;
+    border: 1px dashed var(--pc-rule);
+    border-radius: 2px;
+    text-align: center;
+    background: #fafafa;
+  }
+  .empty__title {
+    font-family: var(--pc-font-sans);
+    font-size: 18px; font-weight: 500;
+    margin: 0 0 8px;
+    color: var(--pc-ink);
+  }
+  .empty__body {
+    font-family: var(--pc-font-sans);
+    font-size: 14px; line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0 auto 12px; max-width: 44ch;
+  }
+  .empty__cta {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin: 0;
+  }
+  .empty__cta a { color: var(--pc-accent); }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card {
+    padding: 16px 18px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .card--active {
+    border-color: #2F8F5F;
+    box-shadow: 0 0 0 3px rgba(47,143,95,0.08);
+  }
+
+  .card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .card__tag {
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    color: var(--pc-ink-muted);
+  }
+  .card--active .card__tag { color: #2F8F5F; }
+  .card__provider {
+    color: var(--pc-ink-muted);
+  }
+
+  .card__addr {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    color: var(--pc-ink);
+    margin: 0 0 12px;
+    word-break: break-all;
+  }
+
+  .card__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 4px 18px;
+    padding: 10px 0;
+    border-top: 1px dashed var(--pc-rule);
+    border-bottom: 1px dashed var(--pc-rule);
+    margin-bottom: 12px;
+  }
+  .card__stat {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .card__stat span { color: var(--pc-ink-muted); }
+  .card__stat b { display: block; font-weight: 500; color: var(--pc-ink); letter-spacing: 0; font-size: 13px; text-transform: none; }
+
+  .card__actions {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .card__tzkt { color: var(--pc-accent); }
+  .card__switch,
+  .card__remove {
+    padding: 5px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+  .card__switch:hover {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+  .card__remove {
+    border-color: #A33;
+    color: #A33;
+  }
+  .card__remove:hover {
+    background: #A33;
+    color: #fff;
+  }
+
+  .agent-strip {
+    margin-top: 32px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--pc-rule);
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .agent-strip__label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
+  .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
 </style>

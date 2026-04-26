@@ -75,6 +75,7 @@ export const GET: APIRoute = async () => {
         canonical: 'https://pointcast.xyz/agents.json',
         wellKnownAgents: 'https://pointcast.xyz/.well-known/agents.json',
         wellKnownAi: 'https://pointcast.xyz/.well-known/ai.json',
+        agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         llms: 'https://pointcast.xyz/llms.txt',
         llmsFull: 'https://pointcast.xyz/llms-full.txt',
         robots: 'https://pointcast.xyz/robots.txt',
@@ -84,6 +85,7 @@ export const GET: APIRoute = async () => {
       },
       human: {
         home: 'https://pointcast.xyz/',
+        agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         manifesto: 'https://pointcast.xyz/manifesto',
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',

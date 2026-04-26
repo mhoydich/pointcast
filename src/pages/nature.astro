@@ -15,6 +15,7 @@ import { GARDEN_YIELD_CONTEXT, GARDEN_YIELD_METRICS } from '../lib/garden-yield'
 import {
   ANCHOR,
   NATURE_NOTES,
+  NATURE_OVERVIEW_AREAS,
   NATIVE_PLANTING_PALETTE,
   SEASONAL_SIGNALS,
   filterInRangeBlocks,
@@ -30,6 +31,7 @@ const relatedBlocks = filterInRangeBlocks(blocks)
 const plantCount = NATURE_NOTES.filter((note) => note.kind === 'plant').length;
 const sourceCount = new Set(NATURE_NOTES.map((note) => note.sourceUrl)).size;
 const paletteCount = NATIVE_PLANTING_PALETTE.length;
+const overviewSignals = NATURE_OVERVIEW_AREAS.flatMap((area) => area.signals);
 
 const title = 'Nature · El Segundo field guide';
 const description = 'PointCast field guide for El Segundo local flora, dunes, and the El Segundo blue butterfly.';
@@ -99,10 +101,57 @@ const jsonLd = {
           <div><dt class="mono">PLANTS</dt><dd>{plantCount}</dd></div>
           <div><dt class="mono">HABITAT</dt><dd>Dunes</dd></div>
           <div><dt class="mono">PALETTE</dt><dd>{paletteCount}</dd></div>
+          <div><dt class="mono">SIGNALS</dt><dd>{overviewSignals.length}</dd></div>
           <div><dt class="mono">SOURCES</dt><dd>{sourceCount}</dd></div>
         </dl>
       </div>
     </header>
+
+    <section class="overview" aria-labelledby="overview-title">
+      <div class="overview__intro">
+        <p class="kicker">OVERVIEW · OCEAN TO TOWN</p>
+        <h2 id="overview-title">El Segundo reads in layers.</h2>
+        <p>
+          Start with the Pacific, then move inland through repaired dunes,
+          native flora, low scrub, street trees, parks, yards, and the small
+          wildlife that uses each edge. This is the fast orientation before
+          the plant-by-plant field guide.
+        </p>
+      </div>
+
+      <div class="overview__panel" aria-label="El Segundo habitat mix">
+        <p class="overview__panel-label mono">HABITAT MIX</p>
+        <div class="overview__meter" aria-hidden="true">
+          {NATURE_OVERVIEW_AREAS.map((area) => (
+            <span style={`--share:${area.share}%; --area-color:${area.color}`}></span>
+          ))}
+        </div>
+        <dl>
+          {NATURE_OVERVIEW_AREAS.map((area) => (
+            <div>
+              <dt>{area.label}</dt>
+              <dd>{area.signals.slice(0, 3).join(' · ')}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div class="overview__cards">
+        {NATURE_OVERVIEW_AREAS.map((area) => (
+          <article class={`overview-card overview-card--${area.slug}`}>
+            <div class="overview-card__top">
+              <span class="overview-card__label mono">{area.label}</span>
+              <span class="overview-card__share mono">{area.share}%</span>
+            </div>
+            <h3>{area.title}</h3>
+            <p>{area.summary}</p>
+            <ul aria-label={`${area.label} signals`}>
+              {area.signals.map((signal) => <li>{signal}</li>)}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
 
     <section class="houseplant-bridge" aria-label="Houseplant learning module">
       <div>
@@ -289,9 +338,17 @@ const jsonLd = {
 
 <style>
   .page {
+    box-sizing: border-box;
+    width: 100%;
     max-width: 1080px;
     margin: 0 auto;
     padding: 18px 18px 80px;
+    overflow-x: hidden;
+  }
+  .page *,
+  .page *::before,
+  .page *::after {
+    box-sizing: border-box;
   }
   .mono {
     font-family: var(--pc-font-mono);
@@ -343,6 +400,11 @@ const jsonLd = {
     line-height: 1.52;
     color: var(--pc-ink-soft);
   }
+  .dek,
+  .overview__intro p:not(.kicker),
+  .overview-card p {
+    overflow-wrap: break-word;
+  }
   .hero__signal {
     display: grid;
     align-content: space-between;
@@ -366,6 +428,7 @@ const jsonLd = {
   }
   .hero__signal div {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 12px;
     border-top: 1px solid #cddbd0;
@@ -378,6 +441,176 @@ const jsonLd = {
   .hero__signal dd {
     color: #12110E;
     font-weight: 500;
+  }
+
+  .overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 12px;
+    margin: 24px 0;
+    padding: 16px;
+    border: 1.5px solid #0F6E56;
+    border-radius: 2px;
+    background:
+      linear-gradient(135deg, rgba(31, 122, 140, 0.12), transparent 34%),
+      linear-gradient(315deg, rgba(186, 117, 23, 0.12), transparent 36%),
+      #fbfcf9;
+  }
+
+  .overview__intro {
+    min-width: 0;
+  }
+
+  .overview__intro h2 {
+    max-width: 12ch;
+    margin: 0 0 10px;
+    font-size: clamp(38px, 7vw, 76px);
+    line-height: 0.92;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #12110E;
+  }
+
+  .overview__intro p:not(.kicker) {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 15px;
+    line-height: 1.52;
+  }
+
+  .overview__panel {
+    display: grid;
+    align-content: end;
+    gap: 12px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #cbd9d1;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.74);
+  }
+
+  .overview__panel-label {
+    margin: 0;
+    color: #074638;
+    font-weight: 500;
+  }
+
+  .overview__meter {
+    display: flex;
+    height: 14px;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 1px solid rgba(18, 17, 14, 0.1);
+    background: #edf3ef;
+  }
+
+  .overview__meter span {
+    width: var(--share);
+    background: var(--area-color);
+  }
+
+  .overview__panel dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .overview__panel dl div {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #d7ded8;
+  }
+
+  .overview__panel dt,
+  .overview__panel dd {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .overview__panel dt {
+    font-weight: 700;
+    color: #12110E;
+  }
+
+  .overview__panel dd {
+    color: var(--pc-ink-soft);
+    text-align: right;
+  }
+
+  .overview__cards {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 10px;
+    min-height: 280px;
+    padding: 14px;
+    border: 1px solid #d4d8cf;
+    border-top: 5px solid var(--area-color, #0F6E56);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .overview-card--ocean { --area-color: #1f7a8c; background: #f4fbfc; }
+  .overview-card--flora { --area-color: #ba7517; background: #fffaf2; }
+  .overview-card--trees { --area-color: #3b6d11; background: #f6faf3; }
+  .overview-card--wildlife { --area-color: #534ab7; background: #f8f7fc; }
+
+  .overview-card__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--area-color);
+    font-weight: 500;
+  }
+
+  .overview-card__share {
+    text-align: right;
+  }
+
+  .overview-card h3 {
+    margin: 0;
+    font-size: 23px;
+    line-height: 1.05;
+    font-weight: 500;
+  }
+
+  .overview-card p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+    line-height: 1.48;
+  }
+
+  .overview-card ul {
+    align-self: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .overview-card li {
+    padding: 5px 7px;
+    border: 1px solid color-mix(in srgb, var(--area-color), white 62%);
+    border-radius: 999px;
+    color: #12110E;
+    background: rgba(255, 255, 255, 0.62);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.1;
   }
 
   .houseplant-bridge {
@@ -752,6 +985,7 @@ const jsonLd = {
 
   @media (max-width: 760px) {
     .hero,
+    .overview,
     .houseplant-bridge,
     .value-bridge,
     .transect__steps,
@@ -762,9 +996,45 @@ const jsonLd = {
     .hero h1 {
       max-width: none;
     }
+    .overview__intro h2 {
+      max-width: none;
+    }
+    .overview__cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .blocks a {
       grid-template-columns: 1fr;
       gap: 4px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .page {
+      padding-inline: 14px;
+    }
+    .hero h1,
+    .overview__intro h2 {
+      font-size: clamp(36px, 12vw, 48px);
+      line-height: 0.96;
+    }
+    .overview__intro h2 {
+      max-width: 9ch;
+    }
+    .dek,
+    .overview__intro p:not(.kicker) {
+      font-size: 14.5px;
+      line-height: 1.48;
+      max-width: 30ch;
+    }
+    .overview {
+      padding: 12px;
+    }
+    .overview__panel dl div,
+    .overview__cards {
+      grid-template-columns: 1fr;
+    }
+    .overview__panel dd {
+      text-align: left;
     }
   }
 </style>

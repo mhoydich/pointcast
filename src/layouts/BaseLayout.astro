@@ -4,6 +4,7 @@ import CoNavigator from '../components/CoNavigator.astro';
 import FreshnessChip from '../components/FreshnessChip.astro';
 import FirstSee from '../components/FirstSee.astro';
 import { ClientRouter } from 'astro:transitions';
+import { DISCOVERY_LINKS, SITE_DESCRIPTION, SITE_KEYWORDS, buildIdentityJsonLd } from '../lib/seo';
 import '../styles/global.css';
 
 interface Props {
@@ -28,7 +29,7 @@ interface Props {
 
 const {
   title,
-  description = 'Mike Hoydich & Claude Cowork Publishings — articles, projects, art, and essays born from human-AI collaboration.',
+  description = SITE_DESCRIPTION,
   // Versioned filename busts iMessage's aggressive LinkPresentation cache —
   // any client that previously cached the old og-default.png treats this as
   // a different URL and refetches. Bump the suffix when we change the art.
@@ -41,6 +42,7 @@ const siteTitle = title === 'Home' ? 'PointCast' : `${title} | PointCast`;
 const siteBase = Astro.site || 'https://pointcast.xyz';
 const canonicalURL = new URL(Astro.url.pathname, siteBase);
 const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
+const identityJsonLd = buildIdentityJsonLd();
 ---
 
 <!doctype html>
@@ -50,6 +52,21 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="author" content="Mike Hoydich" />
+    <meta name="creator" content="Mike Hoydich" />
+    <meta name="publisher" content="PointCast" />
+    <meta name="keywords" content={SITE_KEYWORDS.join(', ')} />
+    <meta name="application-name" content="PointCast" />
+    <meta name="geo.region" content="US-CA" />
+    <meta name="geo.placename" content="El Segundo, California" />
+    <meta name="geo.position" content="33.9192;-118.4165" />
+    <meta name="ICBM" content="33.9192, -118.4165" />
+    <meta name="pc-agents-manifest" content="https://pointcast.xyz/agents.json" />
+    <meta name="pc-llms" content="https://pointcast.xyz/llms.txt" />
+    <meta name="llm:manifest" content="https://pointcast.xyz/agents.json" />
+    <meta name="llm:summary" content="https://pointcast.xyz/llms.txt" />
+    <meta name="llm:context" content="https://pointcast.xyz/llms-full.txt" />
     <!-- Mood persistence — read pc:mood from localStorage BEFORE paint
          so the page renders in the visitor's chosen mood from the first
          frame, no flicker. Per Mike 2026-04-20 13:55 PT: "rolling thru
@@ -65,6 +82,11 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
     <meta name="theme-color" content="#f5efe4" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#12110e" media="(prefers-color-scheme: dark)" />
     <link rel="canonical" href={canonicalURL} />
+    <link rel="alternate" hreflang="en-US" href={canonicalURL} />
+    <link rel="alternate" hreflang="x-default" href={canonicalURL} />
+    {DISCOVERY_LINKS.map((link) => (
+      <link rel={link.rel} type={link.type} href={link.href} title={link.title} />
+    ))}
 
     <!-- Open Graph — explicit dimensions + type + secure_url dramatically
          improve unfurl reliability in iMessage (Apple's LinkPresentation
@@ -128,57 +150,7 @@ const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href
          and what it is. `@graph` pattern so all three entities (Website,
          Organization, Person) are declared in a single script without
          duplication across pages. -->
-    <script type="application/ld+json" is:inline set:html={JSON.stringify({
-      '@context': 'https://schema.org',
-      '@graph': [
-        {
-          '@type': 'WebSite',
-          '@id': 'https://pointcast.xyz/#website',
-          name: 'PointCast',
-          alternateName: 'PointCast Network',
-          url: 'https://pointcast.xyz',
-          description: 'A living broadcast by Mike Hoydich × Claude. Art, music, on-chain moments, and multiplayer play — from El Segundo.',
-          publisher: { '@id': 'https://pointcast.xyz/#org' },
-          author: { '@id': 'https://pointcast.xyz/#person' },
-          inLanguage: 'en-US',
-        },
-        {
-          '@type': 'Organization',
-          '@id': 'https://pointcast.xyz/#org',
-          name: 'PointCast',
-          url: 'https://pointcast.xyz',
-          logo: 'https://pointcast.xyz/images/og-home-v3.png',
-          founder: { '@id': 'https://pointcast.xyz/#person' },
-          sameAs: [
-            'https://x.com/mhoydich',
-            'https://github.com/MikeHoydich',
-            'https://www.linkedin.com/in/mhoydich/',
-          ],
-        },
-        {
-          '@type': 'Person',
-          '@id': 'https://pointcast.xyz/#person',
-          name: 'Mike Hoydich',
-          alternateName: 'Michael Hoydich',
-          url: 'https://pointcast.xyz/about',
-          jobTitle: 'COO, Good Feels',
-          worksFor: { '@type': 'Organization', name: 'Good Feels', url: 'https://shop.getgoodfeels.com' },
-          homeLocation: {
-            '@type': 'Place',
-            address: { '@type': 'PostalAddress', addressLocality: 'El Segundo', addressRegion: 'CA', postalCode: '90245', addressCountry: 'US' },
-          },
-          sameAs: [
-            'https://x.com/mhoydich',
-            'https://github.com/MikeHoydich',
-            'https://www.linkedin.com/in/mhoydich/',
-            'https://www.instagram.com/mhoydich/',
-            'https://www.are.na/michael-hoydich/channels',
-            'https://soundcloud.com/mikeisnice',
-            'https://medium.com/@mhoydich',
-          ],
-        },
-      ],
-    })} />
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(identityJsonLd)} />
     <!-- Mood tint — site-wide, paired with the mood-persistence script
          above. Moved out of MoodChip's scoped styles so the tint
          applies on every page, not just home. -->

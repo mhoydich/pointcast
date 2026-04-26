@@ -1,0 +1,589 @@
+---
+/**
+ * /froggos - hosted collection front door for the Froggos objkt collection.
+ *
+ * Sales settle on objkt. PointCast handles the public page, JSON mirror,
+ * search surface, and buyer routing.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { FROGGOS_COLLECTION_URL, fetchFroggosData } from '../lib/froggos';
+
+const data = await fetchFroggosData();
+const { collection, listedTokens, sampleTokens } = data;
+const heroToken = listedTokens[0] ?? sampleTokens[0] ?? null;
+
+function price(value: number | null | undefined): string {
+  return typeof value === 'number' ? `${value.toFixed(value >= 10 ? 0 : 2)} XTZ` : 'objkt';
+}
+
+function numberish(value: number | null | undefined): string {
+  return typeof value === 'number' ? value.toLocaleString('en-US') : 'live';
+}
+
+function shortAddr(value: string | null | undefined): string {
+  if (!value) return 'seller';
+  return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
+}
+
+const title = 'Froggos';
+const description = `${collection.name} hosted on PointCast with live objkt market links. Sales settle on objkt; this page is the clean front door.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/froggos',
+  name: 'PointCast Froggos',
+  description,
+  url: 'https://pointcast.xyz/froggos',
+  image: heroToken?.image ?? collection.logo,
+  about: {
+    '@type': 'CreativeWorkSeries',
+    name: collection.name,
+    description: collection.description,
+    url: collection.objktUrl,
+    identifier: collection.contract,
+  },
+  offers: listedTokens.slice(0, 8).map((token) => ({
+    '@type': 'Offer',
+    name: token.name,
+    price: token.listing?.priceXtz ?? token.lowestAskXtz ?? undefined,
+    priceCurrency: 'XTZ',
+    url: token.objktUrl,
+    availability: 'https://schema.org/InStock',
+  })),
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={heroToken?.image ?? collection.logo}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/froggos.json', title: 'Froggos market data (JSON)' },
+  ]}
+  frame={{
+    image: heroToken?.image ?? collection.logo,
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Open Froggos', action: 'link', target: 'https://pointcast.xyz/froggos' },
+      { label: 'Buy on objkt', action: 'link', target: FROGGOS_COLLECTION_URL },
+    ],
+  }}
+>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>froggos</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker">FROGGOS · TEZOS MARKET</p>
+        <h1>A clean little storefront for the pond.</h1>
+        <p class="dek">
+          PointCast can host the front door: collection story, live market
+          stats, active listings, JSON for agents, and direct routes to objkt.
+          The sale still settles on Tezos through objkt, where wallet signing,
+          royalties, and marketplace inventory already live.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href={FROGGOS_COLLECTION_URL} target="_blank" rel="noopener">Buy on objkt</a>
+          <a class="btn" href="/froggos.json">JSON mirror</a>
+          {collection.website && <a class="btn" href={collection.website} target="_blank" rel="noopener">Project site</a>}
+        </div>
+      </div>
+
+      <figure class="hero__art">
+        <img
+          src={heroToken?.image ?? collection.logo}
+          alt={heroToken?.name ?? `${collection.name} collection logo`}
+          loading="eager"
+          data-fallback={heroToken?.ipfsFallback ?? collection.logo}
+          onerror="if(this.dataset.fallback && this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}"
+        />
+        <figcaption class="mono">{heroToken?.name ?? collection.name} · {price(collection.floorXtz)} floor</figcaption>
+      </figure>
+    </header>
+
+    {data.error && (
+      <section class="notice" aria-label="Data notice">
+        objkt data fallback active: {data.error}
+      </section>
+    )}
+
+    <section class="stats" aria-label="Collection stats">
+      <article>
+        <span class="mono">CONTRACT</span>
+        <strong>{collection.contract.slice(0, 8)}...{collection.contract.slice(-5)}</strong>
+      </article>
+      <article>
+        <span class="mono">FLOOR</span>
+        <strong>{price(collection.floorXtz)}</strong>
+      </article>
+      <article>
+        <span class="mono">ITEMS</span>
+        <strong>{numberish(collection.items)}</strong>
+      </article>
+      <article>
+        <span class="mono">OWNERS</span>
+        <strong>{numberish(collection.owners)}</strong>
+      </article>
+    </section>
+
+    <section class="host-sell" aria-label="Host and sell plan">
+      <div class="section-head">
+        <p class="kicker">HOW THIS WORKS</p>
+        <h2>Host here. Sell there. Upgrade later.</h2>
+      </div>
+
+      <div class="steps">
+        <article>
+          <span class="step-num mono">01</span>
+          <h3>Host the page</h3>
+          <p>
+            PointCast owns the narrative surface at <code>/froggos</code>:
+            fast HTML, OG tags, schema.org offers, and a CORS-open JSON mirror.
+          </p>
+        </article>
+        <article>
+          <span class="step-num mono">02</span>
+          <h3>Sell through objkt</h3>
+          <p>
+            Buyers click into objkt token pages. Sellers list from objkt with
+            their wallet, so PointCast never touches custody, cards, or payout data.
+          </p>
+        </article>
+        <article>
+          <span class="step-num mono">03</span>
+          <h3>Bring collect on-site</h3>
+          <p>
+            When ready, reuse the existing PointCast Tezos collector flow:
+            active listing ask id, marketplace contract, Beacon wallet, then
+            an objkt <code>fulfill_ask</code> transaction.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="market" aria-label="Active listings">
+      <div class="section-head section-head--split">
+        <div>
+          <p class="kicker">ACTIVE LISTINGS</p>
+          <h2>For sale now.</h2>
+        </div>
+        <a href={FROGGOS_COLLECTION_URL} target="_blank" rel="noopener">View all on objkt</a>
+      </div>
+
+      {listedTokens.length > 0 ? (
+        <div class="listing-grid">
+          {listedTokens.slice(0, 8).map((token) => (
+            <article class="token-card">
+              <a class="token-card__image" href={token.objktUrl} target="_blank" rel="noopener">
+                <img
+                  src={token.image}
+                  alt={token.name}
+                  loading="lazy"
+                  data-fallback={token.ipfsFallback ?? ''}
+                  onerror="if(this.dataset.fallback && this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}else{this.parentElement.style.display='none';}"
+                />
+              </a>
+              <div class="token-card__body">
+                <h3>{token.name}</h3>
+                <p class="token-card__price">{price(token.listing?.priceXtz ?? token.lowestAskXtz)}</p>
+                <p class="token-card__seller mono">{shortAddr(token.listing?.seller)}</p>
+                <a href={token.objktUrl} target="_blank" rel="noopener">Buy on objkt</a>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p class="empty">No active listings came back from objkt at build time. Use the collection link for live inventory.</p>
+      )}
+    </section>
+
+    <section class="machine" aria-label="Machine-readable links">
+      <p class="machine__label mono">MACHINE READABLE</p>
+      <ul>
+        <li><a href="/froggos.json">/froggos.json</a></li>
+        <li><a href={FROGGOS_COLLECTION_URL} target="_blank" rel="noopener">objkt collection</a></li>
+        <li><a href={`https://tzkt.io/${collection.contract}/tokens`} target="_blank" rel="noopener">TzKT tokens</a></li>
+        <li><a href="/collection">PointCast collection</a></li>
+      </ul>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 16px 20px 80px;
+  }
+
+  .mono,
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+    gap: 18px;
+    align-items: stretch;
+    margin-bottom: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__copy {
+    min-height: 430px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 28px 0;
+  }
+
+  .kicker {
+    margin: 0 0 12px;
+    color: #196b4b;
+  }
+
+  h1 {
+    max-width: 760px;
+    margin: 0;
+    font-size: 60px;
+    line-height: 0.98;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .dek {
+    max-width: 720px;
+    margin: 18px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 19px;
+    line-height: 1.55;
+  }
+
+  .hero__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 26px;
+  }
+
+  .btn {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    padding: 9px 14px;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+    color: #196b4b;
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .btn--primary {
+    color: #fff;
+    background: #196b4b;
+  }
+
+  .btn--primary:hover {
+    background: #0d4f36;
+    text-decoration: none;
+  }
+
+  .hero__art {
+    margin: 0;
+    min-height: 430px;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    border: 1.5px solid #196b4b;
+    background: #eaf7ee;
+  }
+
+  .hero__art img {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .hero__art figcaption {
+    padding: 10px;
+    border-top: 1.5px solid #196b4b;
+    color: #0d4f36;
+    background: #fff;
+  }
+
+  .notice {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border: 1px dashed #9b6a10;
+    background: #fff8e7;
+    color: #5b3c05;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .stats article {
+    min-height: 104px;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .stats span {
+    display: block;
+    color: var(--pc-ink-muted);
+    margin-bottom: 12px;
+  }
+
+  .stats strong {
+    display: block;
+    font-family: var(--pc-font-mono);
+    font-size: 23px;
+    line-height: 1.1;
+    font-weight: 500;
+    color: #196b4b;
+  }
+
+  .section-head {
+    margin-bottom: 14px;
+  }
+
+  .section-head--split {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: end;
+  }
+
+  .section-head h2 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .section-head a {
+    color: #196b4b;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .host-sell,
+  .market,
+  .machine {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1.5px solid var(--pc-ink);
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .steps article {
+    min-height: 210px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    background: #f8fbf4;
+  }
+
+  .step-num {
+    display: block;
+    margin-bottom: 24px;
+    color: #7d8b2f;
+  }
+
+  .steps h3,
+  .token-card h3 {
+    margin: 0;
+    font-size: 21px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .steps p {
+    margin: 12px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  code {
+    font-family: var(--pc-font-mono);
+    background: #e8f2dc;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .listing-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .token-card {
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .token-card__image {
+    display: block;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #eaf7ee;
+  }
+
+  .token-card__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .token-card__body {
+    min-height: 148px;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .token-card__price {
+    margin: 10px 0 0;
+    color: #196b4b;
+    font-family: var(--pc-font-mono);
+    font-size: 18px;
+  }
+
+  .token-card__seller {
+    margin: 6px 0 0;
+    color: var(--pc-ink-muted);
+  }
+
+  .token-card__body a {
+    margin-top: auto;
+    color: #196b4b;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .empty {
+    margin: 0;
+    padding: 16px;
+    border: 1px dashed var(--pc-rule);
+    color: var(--pc-ink-soft);
+  }
+
+  .machine {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 18px;
+  }
+
+  .machine__label {
+    margin: 0;
+    color: #196b4b;
+  }
+
+  .machine ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .machine a {
+    color: var(--pc-accent);
+  }
+
+  @media (max-width: 920px) {
+    .hero,
+    .machine {
+      grid-template-columns: 1fr;
+    }
+
+    .hero__copy,
+    .hero__art {
+      min-height: auto;
+    }
+
+    .stats,
+    .steps,
+    .listing-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    h1 {
+      font-size: 46px;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .page {
+      padding: 12px 12px 60px;
+    }
+
+    .stats,
+    .steps,
+    .listing-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .section-head--split {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    h1 {
+      font-size: 36px;
+    }
+
+    .dek {
+      font-size: 17px;
+    }
+  }
+</style>

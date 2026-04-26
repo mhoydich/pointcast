@@ -41,6 +41,59 @@ export type NatureNote = {
   sourceUrl: string;
 };
 
+export type NatureOverviewArea = {
+  slug: 'ocean' | 'flora' | 'trees' | 'wildlife';
+  label: string;
+  title: string;
+  share: number;
+  color: string;
+  summary: string;
+  signals: string[];
+};
+
+export const NATURE_OVERVIEW_AREAS: NatureOverviewArea[] = [
+  {
+    slug: 'ocean',
+    label: 'Ocean',
+    title: 'Pacific shoreline',
+    share: 36,
+    color: '#1f7a8c',
+    summary:
+      'The west edge is surf, marine layer, salt air, beach sand, and nearshore birds. It sets the weather and the tempo for the whole local nature register.',
+    signals: ['surf line', 'morning fog', 'gulls and pelicans', 'offshore marine life'],
+  },
+  {
+    slug: 'flora',
+    label: 'Flora',
+    title: 'Dune plants',
+    share: 27,
+    color: '#ba7517',
+    summary:
+      'Seacliff buckwheat, beach suncups, deerweed, coyote brush, and other coastal scrub plants make El Segundo nature legible close to the ground.',
+    signals: ['seacliff buckwheat', 'beach suncups', 'deerweed', 'coastal scrub'],
+  },
+  {
+    slug: 'trees',
+    label: 'Trees',
+    title: 'Wind-shaped canopy',
+    share: 21,
+    color: '#3b6d11',
+    summary:
+      'The exposed dune edge is more scrub than woodland, while streets, parks, and yards carry shade, nesting structure, and human-scale refuge.',
+    signals: ['park shade', 'street canopy', 'yard edges', 'bird perches'],
+  },
+  {
+    slug: 'wildlife',
+    label: 'Wildlife',
+    title: 'Small but active',
+    share: 16,
+    color: '#534ab7',
+    summary:
+      'The signature species is the endangered El Segundo blue butterfly, with shorebirds, seabirds, lizards, pollinators, and occasional marine mammals in the broader coastal pass.',
+    signals: ['El Segundo blue', 'shorebirds', 'lizards', 'pollinators'],
+  },
+];
+
 /**
  * El Segundo nature signals: dune plants, one signature pollinator, and
  * the coastal habitat grammar around LAX / Dockweiler / the South Bay.

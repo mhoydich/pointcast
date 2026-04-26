@@ -4,16 +4,7 @@
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import WalletChip from '../components/WalletChip.astro';
-import contracts from '../data/contracts.json';
 import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_SEASON, DERBY_STATS, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
-
-const derbyReceiptContract = (contracts as any).agent_derby_receipts ?? {};
-const derbyChain = {
-  network: 'mainnet',
-  address: String(derbyReceiptContract.mainnet ?? ''),
-  entrypoint: String(derbyReceiptContract.entrypoint ?? 'record_race'),
-  explorerBase: 'https://tzkt.io',
-};
 
 const derbyData = {
   version: DERBY_VERSION,
@@ -23,7 +14,6 @@ const derbyData = {
   posters: DERBY_POSTERS,
   rulebook: DERBY_RULEBOOK,
   season: DERBY_SEASON,
-  chain: derbyChain,
 };
 
 const jsonLd = {
@@ -65,8 +55,7 @@ const jsonLd = {
       <header class="mast">
         <div class="mast__copy">
           <p class="kicker">CH.BTL / AGENT DERBY / v{DERBY_VERSION}</p>
-          <h1 id="derby-title">PointCast Agent Derby v2</h1>
-          <p class="mast__dek">Pick a racer, run the field, anchor the receipt.</p>
+          <h1 id="derby-title">PointCast Agent Derby</h1>
         </div>
         <div class="mast__rail">
           <div class="race-key" aria-label="Race status">
@@ -79,35 +68,6 @@ const jsonLd = {
           </div>
         </div>
       </header>
-
-      <section class="play-deck" aria-label="Fast play">
-        <div class="play-step play-step--pick">
-          <span>1 / Pick</span>
-          <div class="quick-picks" data-quick-picks>
-            {DERBY_ROSTER.map((horse) => (
-              <button type="button" data-quick-agent={horse.slug} style={`--coat:${horse.coat};--accent:${horse.accent}`}>
-                <strong>{horse.name}</strong>
-                <small>{horse.agent}</small>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div class="play-step play-step--run">
-          <span>2 / Race</span>
-          <div class="play-actions">
-            <button type="button" class="btn btn--primary btn--big" data-action="quick-run">Run v2 race</button>
-            <button type="button" class="btn" data-action="new-field">Shuffle field</button>
-          </div>
-        </div>
-        <div class="play-step play-step--chain">
-          <span>3 / Tezos</span>
-          <strong data-chain-status>Receipt pending</strong>
-          <div class="play-actions">
-            <button type="button" class="btn btn--chain" data-action="record-chain" data-chain-record disabled>Record on Tezos</button>
-            <button type="button" class="btn" data-action="copy-chain-packet" data-chain-copy disabled>Copy packet</button>
-          </div>
-        </div>
-      </section>
 
       <section class="control-deck" aria-label="Race controls">
         <label class="seed-box">
@@ -125,8 +85,8 @@ const jsonLd = {
       <section class="poster-wall" aria-labelledby="poster-wall-title">
         <div class="poster-wall__head">
           <div>
-            <p class="poster-wall__kicker">CH.POSTER / STYLE BOOK / 10 HEATS</p>
-            <h2 id="poster-wall-title">Ten poster heats</h2>
+            <p class="poster-wall__kicker">1980s trapper heat / agent durby posters</p>
+            <h2 id="poster-wall-title">Mean stable sheets</h2>
           </div>
           <a href="/agent-derby.json">Poster manifest</a>
         </div>
@@ -134,15 +94,14 @@ const jsonLd = {
           {DERBY_POSTERS.map((poster) => (
             <a
               class="poster-card"
-              href={`/agent-derby?seed=${poster.seed}&track=${poster.track}&agents=${poster.horseSlug}`}
+              href={`/agent-derby?seed=${poster.seed}&track=${poster.track}&agents=${poster.agent.toLowerCase()}`}
               style={`--poster-position:${poster.imagePosition}`}
-              aria-label={`Run ${poster.title} in ${poster.styleName}`}
+              aria-label={`Run ${poster.title}`}
             >
               <img src={poster.image} alt="" loading="lazy" decoding="async" />
               <span class="poster-card__gate">{poster.gate}</span>
               <span class="poster-card__agent">{poster.agent}</span>
               <strong>{poster.title}</strong>
-              <em>{poster.styleName}</em>
               <small>{poster.palette.join(' / ')}</small>
             </a>
           ))}
@@ -225,31 +184,6 @@ const jsonLd = {
           <pre class="receipt" data-receipt aria-label="Race receipt">{}</pre>
         </section>
 
-        <section class="chain-card" aria-label="Tezos receipt">
-          <div class="panel-head">
-            <span>Tezos receipt</span>
-            <a href="/agent-derby.json">manifest</a>
-          </div>
-          <dl class="chain-readout">
-            <div>
-              <dt>Network</dt>
-              <dd data-chain-network>mainnet</dd>
-            </div>
-            <div>
-              <dt>Contract</dt>
-              <dd data-chain-contract>pending KT1</dd>
-            </div>
-            <div>
-              <dt>Receipt hash</dt>
-              <dd data-chain-hash>run race first</dd>
-            </div>
-            <div>
-              <dt>Operation</dt>
-              <dd><a data-chain-op href="/agent-derby" aria-disabled="true">not recorded</a></dd>
-            </div>
-          </dl>
-        </section>
-
         <section class="log-card" aria-label="Race call">
           <div class="panel-head">
             <span>Call</span>
@@ -289,7 +223,6 @@ const jsonLd = {
 
       var params = new URLSearchParams(window.location.search);
       var seedInput = root.querySelector('[data-seed-input]');
-      var quickPicks = root.querySelector('[data-quick-picks]');
       var trackTabs = root.querySelector('[data-track-tabs]');
       var trackStage = root.querySelector('[data-track-stage]');
       var fieldList = root.querySelector('[data-field-list]');
@@ -306,7 +239,6 @@ const jsonLd = {
       var state = {
         seed: params.get('seed') || 'gamgee-rc0',
         trackId: params.get('track') || (TRACKS[0] && TRACKS[0].id),
-        focusAgent: (params.get('agents') || '').split(',')[0].trim().toLowerCase(),
         field: [],
         sim: null,
         timer: 0,
@@ -349,7 +281,6 @@ const jsonLd = {
       }
 
       function agentTokens() {
-        if (state.focusAgent) return [state.focusAgent];
         return (new URLSearchParams(window.location.search).get('agents') || '')
           .split(',')
           .map(function (token) { return token.trim().toLowerCase(); })
@@ -466,13 +397,6 @@ const jsonLd = {
           '</svg>';
       }
 
-      function laneTelemetry(runner) {
-        var topStat = STATS.slice().sort(function (a, b) {
-          return runner.stats[b] - runner.stats[a];
-        })[0];
-        return topStat.toUpperCase() + ' ' + runner.stats[topStat];
-      }
-
       function statBars(horse) {
         return STATS.map(function (stat) {
           var value = horse.stats[stat];
@@ -490,14 +414,6 @@ const jsonLd = {
         }).join('');
       }
 
-      function renderQuickPicks() {
-        if (!quickPicks) return;
-        quickPicks.querySelectorAll('[data-quick-agent]').forEach(function (button) {
-          var selected = button.getAttribute('data-quick-agent') === state.focusAgent;
-          button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-        });
-      }
-
       function renderTrack() {
         var sim = state.sim;
         var track = sim.track;
@@ -507,30 +423,13 @@ const jsonLd = {
         fieldSummary.textContent = sim.runners.length + ' gates loaded';
 
         trackStage.innerHTML =
-          '<div class="race-cinema">' +
-            '<div class="race-cinema__hud">' +
-              '<span data-race-heat>GATES READY</span>' +
-              '<strong data-live-leader>Awaiting break</strong>' +
-              '<em data-live-gap>0.00L</em>' +
-            '</div>' +
-            '<div class="race-cinema__signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
-          '</div>' +
           '<div class="track-ruler"><span>GATE</span><span>BACKSTRETCH</span><span>TURN</span><span>WIRE</span></div>' +
           sim.runners.map(function (runner) {
-            return '<div class="lane" data-lane="' + escapeHtml(runner.slug) + '" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + '">' +
-              '<div class="lane__meta">' +
-                '<span>G' + runner.gate + '</span>' +
-                '<strong>' + escapeHtml(runner.name) + '</strong>' +
-                '<small>' + escapeHtml(runner.agent) + ' / ' + runner.odds + '</small>' +
-                '<div class="lane__telemetry"><b data-rank="' + escapeHtml(runner.slug) + '">--</b><i>' + escapeHtml(laneTelemetry(runner)) + '</i></div>' +
-              '</div>' +
+            return '<div class="lane" data-lane="' + escapeHtml(runner.slug) + '">' +
+              '<div class="lane__meta"><span>G' + runner.gate + '</span><strong>' + escapeHtml(runner.name) + '</strong><small>' + escapeHtml(runner.agent) + ' / ' + runner.odds + '</small></div>' +
               '<div class="lane__rail">' +
                 '<span class="lane__fill" data-fill="' + escapeHtml(runner.slug) + '"></span>' +
-                '<span class="lane__wake" data-wake="' + escapeHtml(runner.slug) + '"></span>' +
-                '<span class="runner" data-runner="' + escapeHtml(runner.slug) + '" style="left:3%;">' +
-                  horseSvg() +
-                  '<span class="runner__tag">' + escapeHtml(runner.agent) + '</span>' +
-                '</span>' +
+                '<span class="runner" data-runner="' + escapeHtml(runner.slug) + '" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + ';left:3%;">' + horseSvg() + '</span>' +
               '</div>' +
             '</div>';
           }).join('');
@@ -549,20 +448,11 @@ const jsonLd = {
 
       function receiptFor(sim) {
         return {
-          version: DATA.version,
           raceId: sim.raceId,
           seed: sim.seed,
           track: sim.track.id,
           generatedAt: new Date().toISOString(),
           winner: sim.winner.slug,
-          field: sim.runners.map(function (runner) {
-            return {
-              slug: runner.slug,
-              gate: runner.gate,
-              agent: runner.agent,
-              rating: Number(runner.rating.toFixed(2)),
-            };
-          }),
           order: sim.order.map(function (runner) { return runner.slug; }),
           margins: sim.order.map(function (runner) {
             return { slug: runner.slug, margin: runner.margin, time: runner.time };
@@ -576,32 +466,18 @@ const jsonLd = {
 
       function renderPodium() {
         if (!state.receipt) {
-          podium.innerHTML = '<p>Gates are loaded. The finish board will light after PHOTO.</p>';
+          podium.innerHTML = '<p>Gates are loaded.</p>';
           return;
         }
         var order = state.sim.order;
-        var winner = order[0];
-        podium.innerHTML =
-          '<article class="finish-hero" style="--coat:' + escapeHtml(winner.coat) + ';--accent:' + escapeHtml(winner.accent) + '">' +
-            '<div class="finish-hero__copy">' +
-              '<span>PHOTO / WINNER</span>' +
-              '<strong>' + escapeHtml(winner.name) + '</strong>' +
-              '<small>' + escapeHtml(winner.agent) + ' / ' + escapeHtml(winner.stable) + ' / ' + winner.time.toFixed(2) + 's</small>' +
-            '</div>' +
-            '<div class="finish-hero__mark">' + horseSvg() + '</div>' +
-          '</article>' +
-          '<div class="finish-board">' +
-            order.map(function (runner, index) {
-              var place = index + 1;
-              var beaten = runner.margin === 0 ? 'winner' : runner.margin.toFixed(2) + 'L';
-              return '<article class="finish-row" style="--coat:' + escapeHtml(runner.coat) + ';--accent:' + escapeHtml(runner.accent) + ';--p:' + Math.max(8, 100 - runner.margin * 7) + '%">' +
-                '<span>' + String(place).padStart(2, '0') + '</span>' +
-                '<strong>' + escapeHtml(runner.name) + '</strong>' +
-                '<small>' + beaten + ' / ' + runner.time.toFixed(2) + 's</small>' +
-                '<i></i>' +
-              '</article>';
-            }).join('') +
-          '</div>';
+        podium.innerHTML = order.slice(0, 3).map(function (runner, index) {
+          var place = index + 1;
+          return '<article class="podium-step podium-step--' + place + '" style="--coat:' + escapeHtml(runner.coat) + '">' +
+            '<span>' + place + '</span>' +
+            '<strong>' + escapeHtml(runner.name) + '</strong>' +
+            '<small>' + (runner.margin === 0 ? 'winner' : runner.margin + ' lengths') + '</small>' +
+          '</article>';
+        }).join('');
       }
 
       function readHistory() {
@@ -642,56 +518,21 @@ const jsonLd = {
         root.dataset.racePhase = value.toLowerCase();
       }
 
-      function dispatchReceipt(receipt) {
-        window.dispatchEvent(new CustomEvent('pc:agent-derby-receipt', { detail: receipt }));
-      }
-
       function updateUrl() {
         var url = new URL(window.location.href);
         url.searchParams.set('seed', state.seed);
         url.searchParams.set('track', state.trackId);
-        if (state.focusAgent) url.searchParams.set('agents', state.focusAgent);
-        else url.searchParams.delete('agents');
         window.history.replaceState({}, '', url);
       }
 
       function updatePositions(frame) {
-        var indexed = state.sim.runners.map(function (runner) {
-          var progress = runner.positions[Math.min(frame, runner.positions.length - 1)] || 0;
-          return { runner: runner, progress: progress };
-        }).sort(function (a, b) {
-          return b.progress - a.progress || a.runner.gate - b.runner.gate;
-        });
-        var leader = indexed[0] && indexed[0].runner;
-        var secondProgress = indexed[1] ? indexed[1].progress : indexed[0]?.progress || 0;
-        var leaderProgress = indexed[0]?.progress || 0;
-        var gap = Math.max(0, (leaderProgress - secondProgress) * 0.12);
-        var heat = frame >= FRAME_COUNT ? 'PHOTO FINISH' : frame > 92 ? 'WIRE RUN' : frame > 58 ? 'FAR TURN' : frame > 25 ? 'BACKSTRETCH' : 'BREAK';
-        var leaderEl = trackStage.querySelector('[data-live-leader]');
-        var gapEl = trackStage.querySelector('[data-live-gap]');
-        var heatEl = trackStage.querySelector('[data-race-heat]');
-        if (leaderEl) leaderEl.textContent = leader ? leader.name + ' shows the way' : 'Awaiting break';
-        if (gapEl) gapEl.textContent = gap.toFixed(2) + 'L';
-        if (heatEl) heatEl.textContent = heat;
-
-        indexed.forEach(function (item, index) {
-          var runner = item.runner;
+        state.sim.runners.forEach(function (runner) {
           var progress = runner.positions[Math.min(frame, runner.positions.length - 1)] || 0;
           var x = 3 + progress * 0.935;
-          var lane = trackStage.querySelector('[data-lane="' + runner.slug + '"]');
           var marker = trackStage.querySelector('[data-runner="' + runner.slug + '"]');
           var fill = trackStage.querySelector('[data-fill="' + runner.slug + '"]');
-          var wake = trackStage.querySelector('[data-wake="' + runner.slug + '"]');
-          var rank = trackStage.querySelector('[data-rank="' + runner.slug + '"]');
-          if (lane) {
-            lane.style.setProperty('--progress', progress.toFixed(2) + '%');
-            lane.style.setProperty('--rank', index + 1);
-            lane.classList.toggle('lane--leader', index === 0);
-          }
           if (marker) marker.style.left = x + '%';
           if (fill) fill.style.width = Math.max(0, x - 3) + '%';
-          if (wake) wake.style.width = Math.max(0, x - 8) + '%';
-          if (rank) rank.textContent = '#' + (index + 1);
         });
       }
 
@@ -706,13 +547,11 @@ const jsonLd = {
         setStateLabel('GATES');
         updateUrl();
         renderTrackTabs();
-        renderQuickPicks();
         renderTrack();
         renderField();
         renderReceipt(null);
         renderPodium();
         renderHistory();
-        dispatchReceipt(null);
         updatePositions(0);
       }
 
@@ -753,7 +592,6 @@ const jsonLd = {
             renderReceipt(state.receipt);
             renderPodium();
             renderHistory();
-            dispatchReceipt(state.receipt);
           }
         }, 38);
       }
@@ -766,27 +604,13 @@ const jsonLd = {
       });
 
       root.addEventListener('click', function (event) {
-        var pick = event.target.closest('[data-quick-agent]');
-        if (pick && !state.racing) {
-          state.focusAgent = pick.getAttribute('data-quick-agent') || '';
-          prepareRace();
-          return;
-        }
-
         var action = event.target.closest('[data-action]');
         if (!action) return;
         var name = action.getAttribute('data-action');
 
         if (name === 'run') playRace();
-        if (name === 'quick-run' && !state.racing) {
-          state.seed = 'race-' + Date.now().toString(36).slice(-7);
-          seedInput.value = state.seed;
-          prepareRace();
-          playRace();
-        }
         if (name === 'reset' && !state.racing) prepareRace({ keepField: true });
         if (name === 'new-field' && !state.racing) {
-          state.focusAgent = '';
           state.seed = 'race-' + Date.now().toString(36).slice(-7);
           seedInput.value = state.seed;
           prepareRace();
@@ -807,149 +631,6 @@ const jsonLd = {
 
       prepareRace();
     })();
-  </script>
-
-  <script>
-    import {
-      derbyChainConfig,
-      prepareDerbyChainPacket,
-      recordDerbyReceiptOnChain,
-      signDerbyReceipt,
-    } from '../lib/agent-derby-chain';
-
-    const root = document.querySelector('[data-agent-derby]');
-    const statusEl = root?.querySelector('[data-chain-status]');
-    const networkEl = root?.querySelector('[data-chain-network]');
-    const contractEl = root?.querySelector('[data-chain-contract]');
-    const hashEl = root?.querySelector('[data-chain-hash]');
-    const opLink = root?.querySelector('[data-chain-op]') as HTMLAnchorElement | null;
-    const recordButton = root?.querySelector('[data-chain-record]') as HTMLButtonElement | null;
-    const copyButton = root?.querySelector('[data-chain-copy]') as HTMLButtonElement | null;
-    const dataEl = document.getElementById('derby-data');
-    const chainConfig = dataEl ? (JSON.parse(dataEl.textContent || '{}').chain ?? {}) : {};
-
-    let currentReceipt: any = null;
-    let currentPacket: Awaited<ReturnType<typeof prepareDerbyChainPacket>> | null = null;
-    let currentSignature: Awaited<ReturnType<typeof signDerbyReceipt>> | null = null;
-
-    function short(value: string, head = 8, tail = 6) {
-      return value.length > head + tail + 1 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value;
-    }
-
-    function setText(el: Element | null | undefined, value: string) {
-      if (el) el.textContent = value;
-    }
-
-    function setOpLink(label: string, href?: string) {
-      if (!opLink) return;
-      opLink.textContent = label;
-      opLink.href = href || '/agent-derby';
-      opLink.setAttribute('aria-disabled', href ? 'false' : 'true');
-    }
-
-    function renderIdle() {
-      const config = derbyChainConfig(chainConfig);
-      setText(statusEl, 'Run a race to build a Tezos receipt');
-      setText(networkEl, config.network);
-      setText(contractEl, config.isLive ? short(config.address) : 'pending KT1');
-      setText(hashEl, 'run race first');
-      setOpLink('not recorded');
-      if (recordButton) {
-        recordButton.disabled = true;
-        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Sign with Tezos';
-      }
-      if (copyButton) copyButton.disabled = true;
-    }
-
-    async function renderReceipt(receipt: any) {
-      currentReceipt = receipt;
-      currentPacket = null;
-      currentSignature = null;
-      if (!receipt) {
-        renderIdle();
-        return;
-      }
-
-      currentPacket = await prepareDerbyChainPacket(receipt, chainConfig);
-      const { config, receiptHash } = currentPacket;
-      setText(statusEl, config.isLive ? 'Ready for on-chain record' : 'Ready for Tezos signature');
-      setText(networkEl, config.network);
-      setText(contractEl, config.isLive ? short(config.address) : 'pending KT1');
-      setText(hashEl, short(receiptHash, 10, 8));
-      setOpLink(config.isLive ? 'not recorded' : 'not signed');
-      if (recordButton) {
-        recordButton.disabled = false;
-        recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Sign with Tezos';
-      }
-      if (copyButton) copyButton.disabled = false;
-    }
-
-    window.addEventListener('pc:agent-derby-receipt', (event) => {
-      void renderReceipt((event as CustomEvent).detail);
-    });
-
-    root?.addEventListener('click', async (event) => {
-      const action = (event.target as Element | null)?.closest?.('[data-action]');
-      if (!action) return;
-      const name = action.getAttribute('data-action');
-
-      if (name === 'copy-chain-packet') {
-        if (!currentReceipt || !currentPacket) return;
-        await navigator.clipboard?.writeText(JSON.stringify({
-          receipt: currentReceipt,
-          chain: {
-            network: currentPacket.config.network,
-            contract: currentPacket.config.address || null,
-            entrypoint: currentPacket.config.entrypoint,
-            receiptHash: currentPacket.receiptHash,
-            payload: currentPacket.payload,
-            signature: currentSignature ? {
-              walletAddress: currentSignature.walletAddress,
-              signedAt: currentSignature.signedAt,
-              signature: currentSignature.signature,
-              signaturePayload: currentSignature.signaturePayload,
-            } : null,
-          },
-        }, null, 2));
-        setText(statusEl, 'Chain packet copied');
-      }
-
-      if (name === 'record-chain') {
-        if (!recordButton || !currentReceipt) return;
-        recordButton.disabled = true;
-        const config = derbyChainConfig(chainConfig);
-        recordButton.textContent = config.isLive ? 'Open wallet...' : 'Open wallet...';
-        setText(statusEl, config.isLive ? 'Awaiting Beacon operation' : 'Awaiting Tezos signature');
-        try {
-          if (config.isLive) {
-            const result = await recordDerbyReceiptOnChain(currentReceipt, chainConfig);
-            currentPacket = result;
-            setText(statusEl, 'Recorded on Tezos');
-            setText(hashEl, short(result.receiptHash, 10, 8));
-            setText(contractEl, short(result.config.address));
-            setOpLink(short(result.opHash, 10, 8), result.explorerUrl);
-            recordButton.textContent = 'Recorded';
-          } else {
-            const result = await signDerbyReceipt(currentReceipt, chainConfig);
-            currentPacket = result;
-            currentSignature = result;
-            setText(statusEl, 'Signed by Tezos wallet');
-            setText(hashEl, short(result.receiptHash, 10, 8));
-            setText(contractEl, 'pending KT1');
-            setOpLink(short(result.signature, 10, 8));
-            recordButton.textContent = 'Signed';
-          }
-        } catch (error: any) {
-          const message = String(error?.message || error);
-          setText(statusEl, /reject|cancel|abort/i.test(message) ? 'Wallet cancelled' : config.isLive ? 'Record failed' : 'Sign failed');
-          recordButton.textContent = config.isLive ? 'Record on Tezos' : 'Sign with Tezos';
-          recordButton.disabled = false;
-          console.warn('Agent Derby Tezos record failed:', error);
-        }
-      }
-    });
-
-    renderIdle();
   </script>
 </BlockLayout>
 
@@ -1008,14 +689,6 @@ const jsonLd = {
     font-weight: 500;
   }
 
-  .mast__dek {
-    max-width: 560px;
-    margin: 10px 0 0;
-    color: #38373a;
-    font-size: 17px;
-    line-height: 1.35;
-  }
-
   .mast__rail {
     display: grid;
     gap: 10px;
@@ -1052,104 +725,6 @@ const jsonLd = {
     font-family: var(--pc-font-mono);
     font-size: 11px;
     text-transform: uppercase;
-  }
-
-  .play-deck {
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.7fr) minmax(260px, 0.9fr);
-    gap: 12px;
-    padding: 14px 0;
-    border-bottom: 1px solid #12110e;
-  }
-
-  .play-step {
-    display: grid;
-    gap: 10px;
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid #12110e;
-    background: #fffdf4;
-  }
-
-  .play-step > span {
-    color: #9a5a18;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .play-step--run {
-    background:
-      linear-gradient(135deg, rgba(247, 213, 107, 0.42), transparent 62%),
-      #fffdf4;
-  }
-
-  .play-step--chain {
-    background:
-      linear-gradient(135deg, rgba(47, 116, 208, 0.14), transparent 58%),
-      #fffdf4;
-  }
-
-  .play-step--chain strong {
-    min-height: 26px;
-    color: #185fa5;
-    font-family: var(--pc-font-mono);
-    font-size: 13px;
-    line-height: 1.25;
-    text-transform: uppercase;
-    overflow-wrap: anywhere;
-  }
-
-  .quick-picks {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .quick-picks button {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-    min-height: 58px;
-    padding: 8px;
-    border: 1px solid #c7c0ad;
-    background: #fff;
-    box-shadow: inset 4px 0 0 var(--coat);
-    color: #12110e;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .quick-picks button[aria-pressed="true"] {
-    border-color: #12110e;
-    background: color-mix(in srgb, var(--accent) 28%, #fff 72%);
-    box-shadow: inset 4px 0 0 var(--coat), 0 0 0 2px #12110e;
-  }
-
-  .quick-picks strong,
-  .quick-picks small {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .quick-picks strong {
-    font-size: 12px;
-    line-height: 1.1;
-  }
-
-  .quick-picks small {
-    color: #5f5e5a;
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    text-transform: uppercase;
-  }
-
-  .play-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
   }
 
   .control-deck {
@@ -1256,22 +831,6 @@ const jsonLd = {
     background: #f7d56b;
   }
 
-  .btn--big {
-    min-height: 54px;
-    padding-inline: 14px;
-    font-size: 12px;
-  }
-
-  .btn--chain {
-    background: #d9f4ff;
-  }
-
-  .btn:disabled,
-  .mini-btn:disabled {
-    opacity: 0.48;
-    cursor: not-allowed;
-  }
-
   .poster-wall {
     padding: 18px 0 20px;
     border-bottom: 1px solid #c7c0ad;
@@ -1316,7 +875,7 @@ const jsonLd = {
 
   .poster-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
   }
 
@@ -1325,14 +884,14 @@ const jsonLd = {
     display: grid;
     align-content: end;
     min-width: 0;
-    min-height: 320px;
+    min-height: 360px;
     overflow: hidden;
     aspect-ratio: 3 / 4;
-    padding: 14px;
+    padding: 18px;
     border: 2px solid #12110e;
     background: #09080b;
     color: #fffdf4;
-    box-shadow: 6px 6px 0 #12110e;
+    box-shadow: 8px 8px 0 #12110e;
     isolation: isolate;
   }
 
@@ -1387,25 +946,13 @@ const jsonLd = {
 
   .poster-card strong {
     display: block;
-    max-width: 10ch;
+    max-width: 11ch;
     margin: 0;
-    font-size: 30px;
+    font-size: 38px;
     line-height: 0.95;
     font-weight: 500;
     text-shadow: 3px 3px 0 #12110e;
     overflow-wrap: anywhere;
-  }
-
-  .poster-card em {
-    display: block;
-    margin-top: 7px;
-    color: #f7d56b;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    line-height: 1.2;
-    font-style: normal;
-    text-transform: uppercase;
-    text-shadow: 2px 2px 0 #12110e;
   }
 
   .poster-card small {
@@ -1591,99 +1138,9 @@ const jsonLd = {
     position: relative;
     overflow: hidden;
     border: 1.5px solid #12110e;
-    box-shadow: 0 18px 0 rgba(18, 17, 14, 0.06);
     background:
-      repeating-linear-gradient(135deg, rgba(18, 17, 14, 0.035) 0 8px, transparent 8px 18px),
       linear-gradient(90deg, transparent 0 24%, rgba(24, 95, 165, 0.08) 24% 25%, transparent 25% 49%, rgba(32, 140, 75, 0.08) 49% 50%, transparent 50% 74%, rgba(154, 90, 24, 0.08) 74% 75%, transparent 75%),
       #fffaf0;
-  }
-
-  .race-cinema {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.72fr);
-    min-height: 78px;
-    overflow: hidden;
-    border-bottom: 1px solid #12110e;
-    background:
-      linear-gradient(90deg, rgba(244, 178, 63, 0.16), transparent 26%, rgba(141, 93, 211, 0.18) 68%, rgba(24, 95, 165, 0.22)),
-      #12110e;
-    color: #fff8df;
-  }
-
-  .race-cinema::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(180deg, rgba(255, 248, 223, 0.08) 0 1px, transparent 1px 6px);
-    opacity: 0.7;
-    pointer-events: none;
-  }
-
-  [data-race-phase="live"] .race-cinema::before {
-    animation: derby-scan 900ms linear infinite;
-  }
-
-  .race-cinema__hud {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 12px;
-    align-items: center;
-    padding: 14px;
-  }
-
-  .race-cinema__hud span,
-  .race-cinema__hud em {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .race-cinema__hud strong {
-    min-width: 0;
-    font-size: 24px;
-    line-height: 1;
-    overflow-wrap: anywhere;
-  }
-
-  .race-cinema__hud em {
-    min-width: 58px;
-    padding: 7px 8px;
-    border: 1px solid rgba(255, 248, 223, 0.38);
-    background: rgba(255, 248, 223, 0.08);
-    text-align: center;
-    font-style: normal;
-  }
-
-  .race-cinema__signal {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
-    align-items: end;
-    padding: 14px;
-    border-left: 1px solid rgba(255, 248, 223, 0.22);
-  }
-
-  .race-cinema__signal i {
-    display: block;
-    min-height: 16px;
-    background: #f4b23f;
-    transform: skewX(-12deg);
-  }
-
-  .race-cinema__signal i:nth-child(2n) {
-    min-height: 34px;
-    background: #8fd8ff;
-  }
-
-  .race-cinema__signal i:nth-child(3n) {
-    min-height: 48px;
-    background: #f27c5f;
   }
 
   .track-ruler {
@@ -1705,10 +1162,9 @@ const jsonLd = {
 
   .lane {
     display: grid;
-    grid-template-columns: 188px minmax(0, 1fr);
-    min-height: 92px;
+    grid-template-columns: 170px minmax(0, 1fr);
+    min-height: 78px;
     border-bottom: 1px solid #d9d1bd;
-    background: rgba(255, 253, 244, 0.62);
   }
 
   .lane:last-child {
@@ -1722,7 +1178,6 @@ const jsonLd = {
     padding: 10px;
     border-right: 1px solid #d9d1bd;
     background: rgba(255, 255, 255, 0.72);
-    box-shadow: inset 5px 0 0 var(--coat);
   }
 
   .lane__meta span,
@@ -1738,39 +1193,12 @@ const jsonLd = {
     line-height: 1.1;
   }
 
-  .lane__telemetry {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
-    align-items: center;
-    margin-top: 4px;
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    text-transform: uppercase;
-  }
-
-  .lane__telemetry b {
-    padding: 3px 5px;
-    background: #12110e;
-    color: #fff8df;
-    font-weight: 500;
-  }
-
-  .lane__telemetry i {
-    min-width: 0;
-    color: #5f5e5a;
-    font-style: normal;
-    overflow-wrap: anywhere;
-  }
-
   .lane__rail {
     position: relative;
     min-width: 0;
-    overflow: hidden;
     background:
-      linear-gradient(90deg, rgba(18, 17, 14, 0.12) 1px, transparent 1px) 0 0 / 46px 100%,
-      repeating-linear-gradient(180deg, rgba(18, 17, 14, 0.045) 0 1px, transparent 1px 12px),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(240, 229, 203, 0.48));
+      linear-gradient(90deg, rgba(18, 17, 14, 0.1) 1px, transparent 1px) 0 0 / 46px 100%,
+      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(240, 229, 203, 0.45));
   }
 
   .lane__rail::after {
@@ -1789,62 +1217,17 @@ const jsonLd = {
     bottom: 0;
     left: 0;
     width: 0;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 22%, transparent), rgba(244, 178, 63, 0.1));
-  }
-
-  .lane__wake {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), var(--coat));
-    transform: translateY(-50%);
-    opacity: 0.72;
+    background: linear-gradient(90deg, rgba(244, 178, 63, 0.18), rgba(24, 95, 165, 0.08));
   }
 
   .runner {
     position: absolute;
     top: 50%;
     z-index: 2;
-    width: 84px;
+    width: 72px;
     transform: translate(-50%, -50%);
-    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 0 transparent);
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08));
     transition: left 80ms linear;
-  }
-
-  [data-race-phase="live"] .runner svg {
-    animation: derby-stride 220ms steps(2, end) infinite;
-  }
-
-  .runner__tag {
-    position: absolute;
-    right: 0;
-    bottom: -12px;
-    max-width: 78px;
-    padding: 2px 5px;
-    border: 1px solid #12110e;
-    background: #fff8df;
-    color: #12110e;
-    font-family: var(--pc-font-mono);
-    font-size: 8px;
-    line-height: 1;
-    text-transform: uppercase;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lane--leader {
-    background: color-mix(in srgb, var(--accent) 18%, #fffdf4 82%);
-  }
-
-  .lane--leader .lane__meta {
-    background: #fff8df;
-  }
-
-  .lane--leader .runner {
-    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 55%, transparent));
   }
 
   .runner svg {
@@ -1927,12 +1310,11 @@ const jsonLd = {
 
   .race-bottom {
     display: grid;
-    grid-template-columns: 1.1fr 0.9fr 0.9fr 0.9fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0;
   }
 
   .result-card,
-  .chain-card,
   .log-card,
   .agent-card {
     min-width: 0;
@@ -1940,7 +1322,6 @@ const jsonLd = {
     border-right: 1px solid #c7c0ad;
   }
 
-  .chain-card,
   .log-card,
   .agent-card {
     padding-left: 16px;
@@ -1964,9 +1345,9 @@ const jsonLd = {
 
   .podium {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
-    min-height: 168px;
+    min-height: 90px;
   }
 
   .podium p {
@@ -2004,121 +1385,6 @@ const jsonLd = {
     color: #5f5e5a;
   }
 
-  .finish-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 96px;
-    gap: 12px;
-    align-items: center;
-    min-width: 0;
-    min-height: 132px;
-    padding: 13px;
-    border: 1.5px solid #12110e;
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--coat) 20%, transparent), transparent 58%),
-      linear-gradient(90deg, rgba(255, 248, 223, 0.9), #fffdf4);
-    box-shadow: inset 0 7px 0 var(--accent);
-  }
-
-  .finish-hero__copy {
-    display: grid;
-    gap: 7px;
-    min-width: 0;
-  }
-
-  .finish-hero__copy span,
-  .finish-hero__copy small {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    line-height: 1.25;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-  }
-
-  .finish-hero__copy strong {
-    min-width: 0;
-    font-size: 28px;
-    line-height: 0.95;
-    overflow-wrap: anywhere;
-  }
-
-  .finish-hero__copy small {
-    color: #5f5e5a;
-    letter-spacing: 0;
-  }
-
-  .finish-hero__mark {
-    position: relative;
-    display: grid;
-    place-items: center;
-    min-height: 86px;
-    border: 1px solid #12110e;
-    background:
-      repeating-linear-gradient(135deg, rgba(18, 17, 14, 0.08) 0 6px, transparent 6px 13px),
-      var(--coat);
-  }
-
-  .finish-hero__mark svg {
-    width: 92px;
-    max-width: 100%;
-    filter: drop-shadow(5px 6px 0 rgba(18, 17, 14, 0.18));
-  }
-
-  .finish-board {
-    display: grid;
-    gap: 6px;
-  }
-
-  .finish-row {
-    position: relative;
-    display: grid;
-    grid-template-columns: 34px minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-    min-height: 40px;
-    overflow: hidden;
-    padding: 8px 9px;
-    border: 1px solid #c7c0ad;
-    background: #fff;
-  }
-
-  .finish-row span,
-  .finish-row small {
-    position: relative;
-    z-index: 1;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-  }
-
-  .finish-row strong {
-    position: relative;
-    z-index: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .finish-row small {
-    color: #5f5e5a;
-  }
-
-  .finish-row i {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: var(--p);
-    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 18%, transparent), transparent);
-  }
-
-  @keyframes derby-stride {
-    0% { transform: translateY(0) rotate(-1deg); }
-    100% { transform: translateY(-3px) rotate(1deg); }
-  }
-
-  @keyframes derby-scan {
-    from { transform: translateY(-6px); }
-    to { transform: translateY(6px); }
-  }
-
   .receipt {
     overflow: auto;
     max-height: 210px;
@@ -2128,45 +1394,6 @@ const jsonLd = {
     background: #12110e;
     color: #fff8df;
     font: 11px/1.5 var(--pc-font-mono);
-  }
-
-  .chain-readout {
-    display: grid;
-    gap: 8px;
-    margin: 0;
-  }
-
-  .chain-readout div {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-    padding: 9px 10px;
-    border: 1px solid #c7c0ad;
-    background: #fff;
-  }
-
-  .chain-readout dt,
-  .chain-readout dd {
-    margin: 0;
-    min-width: 0;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    line-height: 1.35;
-    text-transform: uppercase;
-    overflow-wrap: anywhere;
-  }
-
-  .chain-readout dt {
-    color: #5f5e5a;
-  }
-
-  .chain-readout dd {
-    color: #12110e;
-  }
-
-  .chain-readout a[aria-disabled="true"] {
-    color: #5f5e5a;
-    pointer-events: none;
   }
 
   .race-log {
@@ -2227,12 +1454,7 @@ const jsonLd = {
       justify-items: start;
     }
 
-    .poster-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .control-deck,
-    .play-deck,
     .race-grid,
     .race-bottom,
     .season-board__grid {
@@ -2242,7 +1464,6 @@ const jsonLd = {
     .track-card,
     .stable-card,
     .result-card,
-    .chain-card,
     .log-card,
     .agent-card {
       padding-right: 0;
@@ -2256,7 +1477,7 @@ const jsonLd = {
     }
 
     .poster-card {
-      min-height: 360px;
+      min-height: 320px;
     }
   }
 
@@ -2268,7 +1489,6 @@ const jsonLd = {
     .mast,
     .mast__rail,
     .poster-wall__head,
-    .quick-picks,
     .season-board__head,
     .poster-grid {
       grid-template-columns: 1fr;
@@ -2318,23 +1538,6 @@ const jsonLd = {
       grid-template-columns: 1fr;
     }
 
-    .race-cinema {
-      grid-template-columns: 1fr;
-    }
-
-    .race-cinema__hud {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
-
-    .race-cinema__hud strong {
-      font-size: 19px;
-    }
-
-    .race-cinema__signal {
-      display: none;
-    }
-
     .lane__meta {
       grid-template-columns: 36px minmax(0, 1fr) auto;
       gap: 5px 10px;
@@ -2347,20 +1550,12 @@ const jsonLd = {
       grid-column: 2 / -1;
     }
 
-    .lane__telemetry {
-      grid-column: 1 / -1;
-    }
-
     .lane__rail {
       min-height: 58px;
     }
 
     .runner {
       width: 58px;
-    }
-
-    .finish-hero {
-      grid-template-columns: 1fr;
     }
   }
 </style>
@@ -2431,100 +1626,11 @@ const jsonLd = {
     overflow-wrap: anywhere;
   }
 
-  .derby-page .race-cinema {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.72fr);
-    min-height: 78px;
-    overflow: hidden;
-    border-bottom: 1px solid #12110e;
-    background:
-      linear-gradient(90deg, rgba(244, 178, 63, 0.16), transparent 26%, rgba(141, 93, 211, 0.18) 68%, rgba(24, 95, 165, 0.22)),
-      #12110e;
-    color: #fff8df;
-  }
-
-  .derby-page .race-cinema::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(180deg, rgba(255, 248, 223, 0.08) 0 1px, transparent 1px 6px);
-    opacity: 0.7;
-    pointer-events: none;
-  }
-
-  .derby-page[data-race-phase="live"] .race-cinema::before {
-    animation: derby-scan 900ms linear infinite;
-  }
-
-  .derby-page .race-cinema__hud {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 12px;
-    align-items: center;
-    padding: 14px;
-  }
-
-  .derby-page .race-cinema__hud span,
-  .derby-page .race-cinema__hud em {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .derby-page .race-cinema__hud strong {
-    min-width: 0;
-    font-size: 24px;
-    line-height: 1;
-    overflow-wrap: anywhere;
-  }
-
-  .derby-page .race-cinema__hud em {
-    min-width: 58px;
-    padding: 7px 8px;
-    border: 1px solid rgba(255, 248, 223, 0.38);
-    background: rgba(255, 248, 223, 0.08);
-    text-align: center;
-    font-style: normal;
-  }
-
-  .derby-page .race-cinema__signal {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
-    align-items: end;
-    padding: 14px;
-    border-left: 1px solid rgba(255, 248, 223, 0.22);
-  }
-
-  .derby-page .race-cinema__signal i {
-    display: block;
-    min-height: 16px;
-    background: #f4b23f;
-    transform: skewX(-12deg);
-  }
-
-  .derby-page .race-cinema__signal i:nth-child(2n) {
-    min-height: 34px;
-    background: #8fd8ff;
-  }
-
-  .derby-page .race-cinema__signal i:nth-child(3n) {
-    min-height: 48px;
-    background: #f27c5f;
-  }
-
   .derby-page .lane {
     display: grid;
-    grid-template-columns: 188px minmax(0, 1fr);
-    min-height: 92px;
+    grid-template-columns: 170px minmax(0, 1fr);
+    min-height: 78px;
     border-bottom: 1px solid #d9d1bd;
-    background: rgba(255, 253, 244, 0.62);
   }
 
   .derby-page .lane:last-child {
@@ -2538,7 +1644,6 @@ const jsonLd = {
     padding: 10px;
     border-right: 1px solid #d9d1bd;
     background: rgba(255, 255, 255, 0.72);
-    box-shadow: inset 5px 0 0 var(--coat);
   }
 
   .derby-page .lane__meta span,
@@ -2554,39 +1659,12 @@ const jsonLd = {
     line-height: 1.1;
   }
 
-  .derby-page .lane__telemetry {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
-    align-items: center;
-    margin-top: 4px;
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    text-transform: uppercase;
-  }
-
-  .derby-page .lane__telemetry b {
-    padding: 3px 5px;
-    background: #12110e;
-    color: #fff8df;
-    font-weight: 500;
-  }
-
-  .derby-page .lane__telemetry i {
-    min-width: 0;
-    color: #5f5e5a;
-    font-style: normal;
-    overflow-wrap: anywhere;
-  }
-
   .derby-page .lane__rail {
     position: relative;
     min-width: 0;
-    overflow: hidden;
     background:
-      linear-gradient(90deg, rgba(18, 17, 14, 0.12) 1px, transparent 1px) 0 0 / 46px 100%,
-      repeating-linear-gradient(180deg, rgba(18, 17, 14, 0.045) 0 1px, transparent 1px 12px),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(240, 229, 203, 0.48));
+      linear-gradient(90deg, rgba(18, 17, 14, 0.1) 1px, transparent 1px) 0 0 / 46px 100%,
+      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(240, 229, 203, 0.45));
   }
 
   .derby-page .lane__rail::after {
@@ -2605,62 +1683,17 @@ const jsonLd = {
     bottom: 0;
     left: 0;
     width: 0;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 22%, transparent), rgba(244, 178, 63, 0.1));
-  }
-
-  .derby-page .lane__wake {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), var(--coat));
-    transform: translateY(-50%);
-    opacity: 0.72;
+    background: linear-gradient(90deg, rgba(244, 178, 63, 0.18), rgba(24, 95, 165, 0.08));
   }
 
   .derby-page .runner {
     position: absolute;
     top: 50%;
     z-index: 2;
-    width: 84px;
+    width: 72px;
     transform: translate(-50%, -50%);
-    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 0 transparent);
+    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08));
     transition: left 80ms linear;
-  }
-
-  .derby-page[data-race-phase="live"] .runner svg {
-    animation: derby-stride 220ms steps(2, end) infinite;
-  }
-
-  .derby-page .runner__tag {
-    position: absolute;
-    right: 0;
-    bottom: -12px;
-    max-width: 78px;
-    padding: 2px 5px;
-    border: 1px solid #12110e;
-    background: #fff8df;
-    color: #12110e;
-    font-family: var(--pc-font-mono);
-    font-size: 8px;
-    line-height: 1;
-    text-transform: uppercase;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .derby-page .lane--leader {
-    background: color-mix(in srgb, var(--accent) 18%, #fffdf4 82%);
-  }
-
-  .derby-page .lane--leader .lane__meta {
-    background: #fff8df;
-  }
-
-  .derby-page .lane--leader .runner {
-    filter: drop-shadow(0 9px 0 rgba(18, 17, 14, 0.08)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 55%, transparent));
   }
 
   .derby-page .runner svg {
@@ -2733,111 +1766,6 @@ const jsonLd = {
     background: #fff;
   }
 
-  .derby-page .finish-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 96px;
-    gap: 12px;
-    align-items: center;
-    min-width: 0;
-    min-height: 132px;
-    padding: 13px;
-    border: 1.5px solid #12110e;
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--coat) 20%, transparent), transparent 58%),
-      linear-gradient(90deg, rgba(255, 248, 223, 0.9), #fffdf4);
-    box-shadow: inset 0 7px 0 var(--accent);
-  }
-
-  .derby-page .finish-hero__copy {
-    display: grid;
-    gap: 7px;
-    min-width: 0;
-  }
-
-  .derby-page .finish-hero__copy span,
-  .derby-page .finish-hero__copy small {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    line-height: 1.25;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-  }
-
-  .derby-page .finish-hero__copy strong {
-    min-width: 0;
-    font-size: 28px;
-    line-height: 0.95;
-    overflow-wrap: anywhere;
-  }
-
-  .derby-page .finish-hero__copy small {
-    color: #5f5e5a;
-    letter-spacing: 0;
-  }
-
-  .derby-page .finish-hero__mark {
-    position: relative;
-    display: grid;
-    place-items: center;
-    min-height: 86px;
-    border: 1px solid #12110e;
-    background:
-      repeating-linear-gradient(135deg, rgba(18, 17, 14, 0.08) 0 6px, transparent 6px 13px),
-      var(--coat);
-  }
-
-  .derby-page .finish-hero__mark svg {
-    width: 92px;
-    max-width: 100%;
-    filter: drop-shadow(5px 6px 0 rgba(18, 17, 14, 0.18));
-  }
-
-  .derby-page .finish-board {
-    display: grid;
-    gap: 6px;
-  }
-
-  .derby-page .finish-row {
-    position: relative;
-    display: grid;
-    grid-template-columns: 34px minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-    min-height: 40px;
-    overflow: hidden;
-    padding: 8px 9px;
-    border: 1px solid #c7c0ad;
-    background: #fff;
-  }
-
-  .derby-page .finish-row span,
-  .derby-page .finish-row small {
-    position: relative;
-    z-index: 1;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-  }
-
-  .derby-page .finish-row strong {
-    position: relative;
-    z-index: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .derby-page .finish-row small {
-    color: #5f5e5a;
-  }
-
-  .derby-page .finish-row i {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: var(--p);
-    background: linear-gradient(90deg, color-mix(in srgb, var(--coat) 18%, transparent), transparent);
-  }
-
   .derby-page .podium-step {
     display: grid;
     gap: 6px;
@@ -2875,16 +1803,6 @@ const jsonLd = {
     line-height: 1.3;
   }
 
-  @keyframes derby-stride {
-    0% { transform: translateY(0) rotate(-1deg); }
-    100% { transform: translateY(-3px) rotate(1deg); }
-  }
-
-  @keyframes derby-scan {
-    from { transform: translateY(-6px); }
-    to { transform: translateY(6px); }
-  }
-
   .derby-page .history-list a,
   .derby-page .history-list p {
     display: flex;
@@ -2903,23 +1821,6 @@ const jsonLd = {
       grid-template-columns: 1fr;
     }
 
-    .derby-page .race-cinema {
-      grid-template-columns: 1fr;
-    }
-
-    .derby-page .race-cinema__hud {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
-
-    .derby-page .race-cinema__hud strong {
-      font-size: 19px;
-    }
-
-    .derby-page .race-cinema__signal {
-      display: none;
-    }
-
     .derby-page .lane__meta {
       grid-template-columns: 36px minmax(0, 1fr) auto;
       gap: 5px 10px;
@@ -2932,20 +1833,12 @@ const jsonLd = {
       grid-column: 2 / -1;
     }
 
-    .derby-page .lane__telemetry {
-      grid-column: 1 / -1;
-    }
-
     .derby-page .lane__rail {
       min-height: 58px;
     }
 
     .derby-page .runner {
       width: 58px;
-    }
-
-    .derby-page .finish-hero {
-      grid-template-columns: 1fr;
     }
   }
 </style>
