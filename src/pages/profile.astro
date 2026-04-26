@@ -65,6 +65,21 @@ const jsonLd = {
       </div>
     </section>
 
+    <section class="pf-earned">
+      <header class="pf-section-head pf-section-head--red">
+        <h2 class="pf-section-title">EARNED</h2>
+        <p class="pf-section-sub">drum trophies + coffee mugs · pointcast collectibles</p>
+      </header>
+      <div class="pf-earned__group">
+        <p class="pf-earned__group-label">DRUM TROPHIES · <span id="pf-trophy-count">0</span> / 8</p>
+        <div class="pf-trophy-grid" id="pf-trophy-grid"></div>
+      </div>
+      <div class="pf-earned__group">
+        <p class="pf-earned__group-label">COFFEE MUGS · <span id="pf-mug-count">0</span> / 5</p>
+        <div class="pf-mug-grid" id="pf-mug-grid"></div>
+      </div>
+    </section>
+
     <section class="pf-rotation" id="pf-rotation-section" hidden>
       <header class="pf-section-head pf-section-head--green">
         <h2 class="pf-section-title">ROTATION</h2>
@@ -461,10 +476,73 @@ const jsonLd = {
     }
   }
 
+  type Trophy = { id: string; title: string; nounId: number; eyebrow: string; surface: string; threshold: number; progressKey: string; progressType: 'count' | 'set' | 'meta' };
+  const TROPHIES: Trophy[] = [
+    { id: 'first-tap',        title: 'First Tap',        nounId: 666, eyebrow: 'novice',           surface: '/drum',          threshold:    1, progressKey: 'pc:drumLocalCount',       progressType: 'count' },
+    { id: 'true-drummer',     title: 'True Drummer',     nounId: 700, eyebrow: '100 drums',        surface: '/drum-v2',       threshold:  100, progressKey: 'pc:drumLocalCount',       progressType: 'count' },
+    { id: 'master-drummer',   title: 'Master Drummer',   nounId: 777, eyebrow: '1,000 drums',      surface: '/drum-v2',       threshold: 1000, progressKey: 'pc:drumLocalCount',       progressType: 'count' },
+    { id: 'orchestra-master', title: 'Orchestra Master', nounId: 808, eyebrow: 'all 12 instruments', surface: '/drum-v4',     threshold:   12, progressKey: 'pc:drum-v4:collected',    progressType: 'set'   },
+    { id: 'choir-master',     title: 'Choir Master',     nounId: 888, eyebrow: 'all 12 voices',    surface: '/drum-v6',       threshold:   12, progressKey: 'pc:drum-v6:sung',         progressType: 'set'   },
+    { id: 'loop-creator',     title: 'Loop Creator',     nounId: 909, eyebrow: 'shared a loop',    surface: '/drum-v5',       threshold:    1, progressKey: 'pc:drum-v5:shared-count', progressType: 'count' },
+    { id: 'spotify-jam',      title: 'Spotify Jam',      nounId: 420, eyebrow: 'set the room track', surface: '/drum-v3',     threshold:    1, progressKey: 'pc:drum-v3:track-count',  progressType: 'count' },
+    { id: 'grand-master',     title: 'Grand Master',     nounId: 999, eyebrow: 'all trophies',     surface: '/drum-trophies', threshold:    7, progressKey: '_meta',                   progressType: 'meta'  },
+  ];
+  function trophyProgress(t: Trophy, earnedSet: Set<string>): { current: number; earned: boolean } {
+    if (t.progressType === 'meta') return { current: earnedSet.size, earned: earnedSet.size >= t.threshold };
+    const raw = ls(t.progressKey);
+    if (t.progressType === 'count') { const n = raw ? parseInt(raw, 10) || 0 : 0; return { current: n, earned: n >= t.threshold }; }
+    let size = 0;
+    if (raw) { try { const a = JSON.parse(raw); if (Array.isArray(a)) size = a.length; else if (a && typeof a === 'object') size = Object.keys(a).length; } catch {} }
+    return { current: size, earned: size >= t.threshold };
+  }
+  function paintTrophies() {
+    const grid = document.getElementById('pf-trophy-grid');
+    const countEl = document.getElementById('pf-trophy-count');
+    if (!grid) return;
+    const earnedIds = new Set<string>();
+    TROPHIES.forEach((t) => { if (t.progressType !== 'meta') { const { earned } = trophyProgress(t, earnedIds); if (earned) earnedIds.add(t.id); } });
+    let total = 0;
+    grid.innerHTML = TROPHIES.map((t) => {
+      const { current, earned } = trophyProgress(t, earnedIds);
+      if (earned) total++;
+      const remaining = Math.max(0, t.threshold - current);
+      const status = earned ? '<span class="pf-trophy__pill pf-trophy__pill--won">earned</span>' : `<span class="pf-trophy__pill">${remaining} to go</span>`;
+      const pct = Math.min(100, Math.round((current / Math.max(1, t.threshold)) * 100));
+      return `<a class="pf-trophy${earned ? ' pf-trophy--earned' : ''}" href="${escAttr(t.surface)}" title="${escAttr(t.title)}"><div class="pf-trophy__noun"><img src="https://noun.pics/${t.nounId}.svg" alt="Noun ${t.nounId}" loading="lazy" /><span class="pf-trophy__nounid">#${t.nounId}</span></div><div class="pf-trophy__body"><p class="pf-trophy__eyebrow">${escHtml(t.eyebrow)}</p><h3 class="pf-trophy__title">${escHtml(t.title)}</h3>${status}<div class="pf-trophy__bar"><div class="pf-trophy__bar-fill" style="width:${pct}%"></div></div></div></a>`;
+    }).join('');
+    if (countEl) countEl.textContent = String(total);
+  }
+  function paintMugs() {
+    const grid = document.getElementById('pf-mug-grid');
+    const countEl = document.getElementById('pf-mug-count');
+    if (!grid) return;
+    const MUGS = [
+      { slug: 'ceramic',  label: 'Ceramic',  rarity: 'common',     editions: 333, threshold: 1,  hex: '#5F5E5A' },
+      { slug: 'espresso', label: 'Espresso', rarity: 'uncommon',   editions: 144, threshold: 3,  hex: '#0F6E56' },
+      { slug: 'latte',    label: 'Latte',    rarity: 'rare',       editions:  64, threshold: 7,  hex: '#185FA5' },
+      { slug: 'paper',    label: 'Paper',    rarity: 'ultra-rare', editions:  21, threshold: 15, hex: '#993556' },
+      { slug: 'bistro',   label: 'Bistro',   rarity: 'legendary',  editions:   8, threshold: 30, hex: '#c4952e' },
+    ];
+    let claims: Record<string, any> = {};
+    try { const raw = ls('pc:coffee:claims'); if (raw) claims = JSON.parse(raw) || {}; } catch {}
+    const cups = (() => { try { return parseInt(ls('pc:coffee:count') || '0', 10) || 0; } catch { return 0; } })();
+    let claimed = 0;
+    grid.innerHTML = MUGS.map((m) => {
+      const has = !!claims[m.slug];
+      if (has) claimed++;
+      const remaining = Math.max(0, m.threshold - cups);
+      const state = has ? '<span class="pf-mug__pill pf-mug__pill--won">claimed</span>' : (remaining === 0 ? '<span class="pf-mug__pill pf-mug__pill--ready">ready</span>' : `<span class="pf-mug__pill">${remaining} cups</span>`);
+      return `<a class="pf-mug${has ? ' pf-mug--won' : ''}" href="/coffee" title="${escAttr(m.label)} · ${escAttr(m.rarity)} · ${m.editions} editions"><div class="pf-mug__art" style="background:${m.hex}22;border-color:${m.hex}"><img src="/images/coffee-mugs/${m.slug}.svg" alt="${escAttr(m.label)} mug" loading="lazy" /></div><p class="pf-mug__label">${escHtml(m.label)}</p><p class="pf-mug__rarity" style="color:${m.hex}">${escHtml(m.rarity.toUpperCase())} · ${m.editions} ED</p>${state}</a>`;
+    }).join('');
+    if (countEl) countEl.textContent = String(claimed);
+  }
+
   function repaint() {
     paintHero();
     paintStats();
     paintPosters();
+    paintTrophies();
+    paintMugs();
     paintRotation();
     paintLedger();
     void paintVault();
@@ -693,6 +771,40 @@ const jsonLd = {
   .pf-poster__date { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.10em; color: var(--pf-ink-soft); }
   .pf-poster__empty { grid-column: 1 / -1; background: #fff; border: 2px dashed var(--pf-rule); padding: 20px; text-align: center; font-family: 'Lora', Georgia, serif; font-size: 14px; color: var(--pf-ink-soft); }
   .pf-poster__empty a { color: var(--pf-blue); font-weight: 700; }
+
+  .pf-earned__group { margin: 0 0 18px; }
+  .pf-earned__group:last-child { margin-bottom: 0; }
+  .pf-earned__group-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9.5px; letter-spacing: 0.20em; font-weight: 700; margin: 0 0 10px; color: var(--pf-ink); opacity: 0.78; }
+  .pf-earned__group-label span { color: var(--pf-red); }
+  .pf-trophy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .pf-trophy { display: flex; align-items: stretch; text-decoration: none; color: inherit; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); transition: transform 0.12s ease, box-shadow 0.12s ease; overflow: hidden; opacity: 0.6; }
+  .pf-trophy:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--pf-ink); }
+  .pf-trophy--earned { opacity: 1; background: linear-gradient(180deg, #fffbe6 0%, #fef0bd 100%); }
+  .pf-trophy__noun { width: 80px; flex-shrink: 0; background: var(--pf-paper-2); border-right: 2px solid var(--pf-ink); position: relative; display: flex; align-items: center; justify-content: center; }
+  .pf-trophy--earned .pf-trophy__noun { background: var(--pf-yellow); }
+  .pf-trophy__noun img { width: 100%; height: auto; display: block; image-rendering: pixelated; filter: grayscale(0.85) opacity(0.6); }
+  .pf-trophy--earned .pf-trophy__noun img { filter: none; }
+  .pf-trophy__nounid { position: absolute; bottom: 3px; left: 3px; background: var(--pf-ink); color: var(--pf-paper); font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.10em; padding: 1px 4px; font-weight: 700; }
+  .pf-trophy__body { flex: 1; min-width: 0; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .pf-trophy__eyebrow { font-family: 'JetBrains Mono Variable', monospace; font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pf-ink-soft); margin: 0; font-weight: 700; }
+  .pf-trophy__title { font-family: 'Lora', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.1; margin: 0; color: var(--pf-ink); }
+  .pf-trophy__pill { display: inline-block; align-self: flex-start; background: #fff; border: 1px solid var(--pf-ink-soft); padding: 1px 7px; font-family: 'JetBrains Mono Variable', monospace; font-size: 8.5px; letter-spacing: 0.14em; font-weight: 700; color: var(--pf-ink-soft); margin-top: 2px; }
+  .pf-trophy__pill--won { background: var(--pf-green); border-color: var(--pf-ink); color: var(--pf-ink); }
+  .pf-trophy__bar { height: 4px; background: var(--pf-paper-2); border: 1px solid var(--pf-ink); margin-top: auto; overflow: hidden; }
+  .pf-trophy__bar-fill { height: 100%; background: var(--pf-yellow); transition: width 0.5s ease; }
+  .pf-trophy--earned .pf-trophy__bar-fill { background: var(--pf-green); }
+  .pf-mug-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .pf-mug { display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: inherit; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); padding: 10px 8px 8px; transition: transform 0.12s ease, box-shadow 0.12s ease; opacity: 0.7; }
+  .pf-mug:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--pf-ink); }
+  .pf-mug--won { opacity: 1; }
+  .pf-mug__art { width: 100%; aspect-ratio: 1; background: var(--pf-paper-2); border: 2px solid var(--pf-ink); display: flex; align-items: center; justify-content: center; image-rendering: pixelated; }
+  .pf-mug__art img { width: 80%; height: 80%; image-rendering: pixelated; }
+  .pf-mug__label { font-family: 'Lora', Georgia, serif; font-size: 13px; font-weight: 600; margin: 4px 0 0; color: var(--pf-ink); }
+  .pf-mug__rarity { font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.16em; font-weight: 700; margin: 0; opacity: 0.85; }
+  .pf-mug__pill { background: #fff; border: 1px solid var(--pf-ink-soft); padding: 1px 7px; font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.14em; font-weight: 700; color: var(--pf-ink-soft); margin-top: 2px; }
+  .pf-mug__pill--won { background: var(--pf-green); border-color: var(--pf-ink); color: var(--pf-ink); }
+  .pf-mug__pill--ready { background: var(--pf-yellow); border-color: var(--pf-ink); color: var(--pf-ink); }
+  @media (max-width: 580px) { .pf-mug-grid { grid-template-columns: repeat(3, 1fr); } .pf-trophy-grid { grid-template-columns: 1fr; } }
 
   .pf-rotation__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
   .pf-cassette { display: flex; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); overflow: hidden; }
