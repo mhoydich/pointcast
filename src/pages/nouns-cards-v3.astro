@@ -1,0 +1,662 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MintButton from '../components/MintButton.astro';
+import contracts from '../data/contracts.json';
+
+const KT1 = (contracts as any).visit_nouns?.mainnet ?? '';
+const mintPriceMutez = Number((contracts as any).visit_nouns?.mintPriceMutez ?? 0);
+const description = 'PointCast Nouns Cards v3: a 100-edition grit-art set with Tezos minting, local wallet view, and shareable cards.';
+
+const places = [
+  'Brutalist Plaza', 'Repair Shop', 'Skate Park', 'Forest Park', 'Rec Court',
+  'Basketball Hoops', 'Rothko Wall', 'Warhol Press', 'Mondrian Yard', 'Miro Lot',
+  'Degas Room', 'Monet Pond', 'Picasso Alley', 'Train Underpass', 'Beach Ramp',
+  'Civic Garage', 'Night Market', 'Backboard Garden', 'Concrete Arcade', 'Trail Kiosk',
+];
+
+const tones = [
+  'Charcoal', 'Bone', 'Faded Red', 'Oxide Blue', 'Park Green',
+  'Old Gold', 'Ink Black', 'Dust Pink', 'Teal Gray', 'Concrete Lilac',
+];
+
+const routes = [
+  '/nouns-cards-v3', '/collection/visit-nouns', '/share', '/routes', '/walk',
+  '/radio', '/play', '/room-weather', '/garden-yield', '/mesh',
+];
+
+const notes = [
+  'photocopied edge, gallery-safe grit',
+  'monochrome filter, scuffed but tidy',
+  'multi-noun scene, edition board energy',
+  'place texture with clean mint rails',
+  'art history nod, no fake Nouns',
+];
+
+const nounIds = Array.from({ length: 100 }, (_, index) => (33 + index * 47) % 1200);
+
+const cards = nounIds.map((id, index) => ({
+  id,
+  edition: index + 1,
+  title: `${places[index % places.length]} ${String(index + 1).padStart(2, '0')}`,
+  place: places[index % places.length],
+  tone: tones[index % tones.length],
+  route: routes[index % routes.length],
+  note: notes[index % notes.length],
+  board: (index % 3) + 1,
+  panel: index % 4,
+  multi: index % 7 === 0,
+  partnerA: (id + 137) % 1200,
+  partnerB: (id + 313) % 1200,
+  filter: `filter-${index % 10}`,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/nouns-cards-v3',
+  name: 'PointCast Nouns Cards v3',
+  description,
+  url: 'https://pointcast.xyz/nouns-cards-v3',
+};
+---
+
+<BlockLayout title="Nouns Cards v3" description={description} jsonLd={jsonLd}>
+  <main class="page" data-kt1={KT1}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span>/</span>
+      <a href="/nouns-cards-v2">v2</a>
+      <span>/</span>
+      <span>v3</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">Actual Nouns · 100 edition · Tezos mintable</p>
+      <h1>Grit boards for a global Nouns run.</h1>
+      <p>
+        One hundred real <code>noun.pics</code> Nouns staged on PointCast boards:
+        skate-mag texture, brutalist places, repair-shop dust, parks, courts, and
+        art-history color systems. Conservative by default, rough at the edges.
+      </p>
+      <div class="hero__actions">
+        <a href="#wallet">Wallet view</a>
+        <a href="#editions">100 editions</a>
+        <a href="#multi">Multi-Noun scenes</a>
+        <button type="button" data-share-page>Share v3</button>
+      </div>
+    </header>
+
+    <section id="wallet" class="wallet" aria-labelledby="wallet-title">
+      <div>
+        <p class="kicker">Collected</p>
+        <h2 id="wallet-title">Your local mint wallet</h2>
+        <p>
+          Successful mints from this browser are saved as receipts here. Each receipt links back to
+          TzKT and can be shared as a small collector proof.
+        </p>
+      </div>
+      <div class="wallet__panel">
+        <p class="wallet__address" data-wallet-address>No wallet connected yet</p>
+        <div class="wallet__grid" data-wallet-grid>
+          <p class="wallet__empty">Mint an edition below and it will appear here.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="multi" class="scene-strip" aria-label="Multi-Noun scene preview">
+      {cards.filter((card) => card.multi).slice(0, 6).map((card) => (
+        <article class={`scene-strip__card ${card.filter}`}>
+          <img src={`https://noun.pics/${card.partnerA}.svg`} alt={`Noun ${card.partnerA}`} loading="lazy" />
+          <img src={`https://noun.pics/${card.id}.svg`} alt={`Noun ${card.id}`} loading="lazy" />
+          <img src={`https://noun.pics/${card.partnerB}.svg`} alt={`Noun ${card.partnerB}`} loading="lazy" />
+          <span>{card.place}</span>
+        </article>
+      ))}
+    </section>
+
+    <section id="editions" class="editions" aria-labelledby="editions-title">
+      <div class="section-head">
+        <p class="kicker">Edition board</p>
+        <h2 id="editions-title">100 mintable cards</h2>
+      </div>
+
+      <div class="grid">
+        {cards.map((card) => (
+          <article
+            class={`card ${card.filter}`}
+            id={`edition-${card.edition}`}
+            style={`--board:url('/images/nouns-cards-v3/grit-board-0${card.board}.png'); --px:${(card.panel % 2) * 100}%; --py:${card.panel > 1 ? 100 : 0}%;`}
+            data-edition={card.edition}
+            data-token-id={card.id}
+            data-title={card.title}
+          >
+            <header>
+              <span>PCVN-GRIT</span>
+              <span>{String(card.edition).padStart(3, '0')}/100</span>
+            </header>
+
+            <div class="art">
+              <div class="art__bg"></div>
+              <div class={`noun-stack ${card.multi ? 'is-multi' : ''}`}>
+                {card.multi && <img class="noun noun--side" src={`https://noun.pics/${card.partnerA}.svg`} alt={`Noun ${card.partnerA}`} loading="lazy" />}
+                <img class="noun noun--main" src={`https://noun.pics/${card.id}.svg`} alt={`Noun ${card.id}`} loading="lazy" />
+                {card.multi && <img class="noun noun--side noun--right" src={`https://noun.pics/${card.partnerB}.svg`} alt={`Noun ${card.partnerB}`} loading="lazy" />}
+              </div>
+              <span class="edition-badge">{card.tone}</span>
+            </div>
+
+            <div class="copy">
+              <p>{card.place}</p>
+              <h3>{card.title}</h3>
+              <span>Noun #{card.id} · {card.note}</span>
+            </div>
+
+            <footer>
+              <a href={card.route}>Open</a>
+              <a href={`https://noun.pics/${card.id}.svg`} target="_blank" rel="noopener">Noun</a>
+              <a href={`https://objkt.com/tokens/${KT1}/${card.id}`} target="_blank" rel="noopener">objkt</a>
+              <button type="button" data-share-card={`#${card.edition} ${card.title}`}>Share</button>
+            </footer>
+
+            <div class="mint">
+              <MintButton contract={KT1} tokenId={card.id} priceMutez={mintPriceMutez} label="Mint edition" />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  </main>
+
+<script>
+  const RECEIPTS_KEY = 'pc:mint-receipts:v1';
+  const KT1 = document.querySelector<HTMLElement>('.page')?.dataset.kt1 || '';
+  const validIds = new Set(Array.from(document.querySelectorAll<HTMLElement>('[data-token-id]')).map((el) => Number(el.dataset.tokenId)));
+
+  function shortAddress(address: string) {
+    return address ? `${address.slice(0, 7)}...${address.slice(-5)}` : '';
+  }
+
+  async function shareUrl(title: string, url: string, status?: HTMLElement | null) {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text: title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        if (status) status.textContent = 'copied';
+      }
+    } catch {}
+  }
+
+  function walletLabel() {
+    const el = document.querySelector<HTMLElement>('[data-wallet-address]');
+    let wallet: any = null;
+    try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
+    if (el) el.textContent = wallet?.address ? `Connected: ${shortAddress(wallet.address)}` : 'No wallet connected yet';
+  }
+
+  function renderWallet() {
+    walletLabel();
+    const grid = document.querySelector<HTMLElement>('[data-wallet-grid]');
+    if (!grid) return;
+    let receipts: any[] = [];
+    try { receipts = JSON.parse(localStorage.getItem(RECEIPTS_KEY) || '[]'); } catch {}
+    const mine = receipts.filter((item) => item.contract === KT1 && validIds.has(Number(item.tokenId)));
+    if (!mine.length) {
+      grid.innerHTML = '<p class="wallet__empty">Mint an edition below and it will appear here.</p>';
+      return;
+    }
+    grid.innerHTML = mine.map((item) => {
+      const card = document.querySelector<HTMLElement>(`[data-token-id="${item.tokenId}"]`);
+      const title = card?.dataset.title || `Noun ${item.tokenId}`;
+      const edition = card?.dataset.edition || '--';
+      const hash = item.opHash || '';
+      return `
+        <article class="wallet-card">
+          <img src="https://noun.pics/${item.tokenId}.svg" alt="Noun ${item.tokenId}" loading="lazy">
+          <div>
+            <strong>${title}</strong>
+            <span>edition ${String(edition).padStart(3, '0')} · ${shortAddress(item.wallet || '')}</span>
+            <a href="https://tzkt.io/${hash}" target="_blank" rel="noopener">${hash ? hash.slice(0, 12) + '...' : 'pending'}</a>
+          </div>
+          <button type="button" data-share-receipt="${hash}" data-title="${title}">Share</button>
+        </article>
+      `;
+    }).join('');
+  }
+
+  document.querySelector('[data-share-page]')?.addEventListener('click', () => {
+    void shareUrl('PointCast Nouns Cards v3 · 100 grit editions', 'https://pointcast.xyz/nouns-cards-v3/');
+  });
+
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const cardBtn = target.closest<HTMLElement>('[data-share-card]');
+    if (cardBtn) {
+      const card = cardBtn.closest<HTMLElement>('[data-edition]');
+      const edition = card?.dataset.edition || '';
+      void shareUrl(`PointCast Nouns v3 edition ${edition}`, `https://pointcast.xyz/nouns-cards-v3/#edition-${edition}`);
+    }
+    const receiptBtn = target.closest<HTMLElement>('[data-share-receipt]');
+    if (receiptBtn) {
+      const hash = receiptBtn.dataset.shareReceipt || '';
+      void shareUrl(`Minted ${receiptBtn.dataset.title || 'a PointCast Noun'}`, hash ? `https://tzkt.io/${hash}` : 'https://pointcast.xyz/nouns-cards-v3/');
+    }
+  });
+
+  window.addEventListener('pc:mint-receipt', renderWallet);
+  window.addEventListener('pc:wallet-change', renderWallet);
+  renderWallet();
+</script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 20px 18px 96px;
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.04) 1px, transparent 1px),
+      linear-gradient(rgba(18, 17, 14, 0.035) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .crumb,
+  .kicker,
+  .hero__actions,
+  .wallet__address,
+  .card header,
+  .card footer,
+  .copy p,
+  .copy span,
+  .edition-badge,
+  .wallet-card span,
+  .wallet-card a {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    color: #5f5e5a;
+    font-size: 10px;
+  }
+
+  a,
+  button {
+    color: inherit;
+  }
+
+  .hero {
+    display: grid;
+    gap: 14px;
+    padding: 18px 0 22px;
+    border-top: 2px solid #12110e;
+    border-bottom: 2px solid #12110e;
+  }
+
+  .kicker {
+    margin: 0;
+    color: #8a2d24;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    color: #12110e;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    letter-spacing: 0;
+  }
+
+  h1 {
+    max-width: 980px;
+    font-size: clamp(48px, 9vw, 118px);
+    line-height: 0.88;
+    font-weight: 760;
+  }
+
+  .hero p:not(.kicker),
+  .wallet p:not(.kicker) {
+    max-width: 76ch;
+    margin: 0;
+    color: #4e4b45;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    font-size: 10px;
+  }
+
+  .hero__actions a,
+  .hero__actions button,
+  .card footer a,
+  .card footer button,
+  .wallet-card button {
+    padding: 8px 10px;
+    border: 1.5px solid #12110e;
+    background: #fffaf0;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .wallet {
+    display: grid;
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    gap: 18px;
+    margin-top: 18px;
+    padding: 16px;
+    border: 2px solid #12110e;
+    background: #e8e1d4;
+  }
+
+  .wallet h2,
+  .section-head h2 {
+    font-size: clamp(30px, 5vw, 62px);
+    line-height: 0.94;
+    font-weight: 720;
+  }
+
+  .wallet__panel {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .wallet__address {
+    margin: 0;
+    font-size: 10px;
+    color: #12110e;
+  }
+
+  .wallet__grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .wallet__empty {
+    margin: 0;
+    padding: 18px;
+    border: 1.5px dashed #12110e;
+    background: #fffaf0;
+    color: #5f5e5a;
+  }
+
+  .wallet-card {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px;
+    border: 1.5px solid #12110e;
+    background: #fffaf0;
+  }
+
+  .wallet-card img {
+    width: 58px;
+    height: 58px;
+    image-rendering: pixelated;
+  }
+
+  .wallet-card div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .wallet-card strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wallet-card span,
+  .wallet-card a {
+    overflow-wrap: anywhere;
+    color: #5f5e5a;
+    font-size: 9px;
+  }
+
+  .scene-strip {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .scene-strip__card {
+    position: relative;
+    display: flex;
+    min-height: 136px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 2px solid #12110e;
+    background: #d9d2c6;
+  }
+
+  .scene-strip__card img {
+    width: 34%;
+    image-rendering: pixelated;
+    filter: drop-shadow(8px 10px 0 rgba(18, 17, 14, 0.24));
+  }
+
+  .scene-strip__card span {
+    position: absolute;
+    inset: auto 8px 8px;
+    padding: 4px 6px;
+    background: #fffaf0;
+    border: 1.5px solid #12110e;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 28px 0 12px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #12110e;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .card {
+    min-width: 0;
+    overflow: hidden;
+    border: 2px solid #12110e;
+    background: #fffaf0;
+    box-shadow: 4px 4px 0 #12110e;
+  }
+
+  .card header,
+  .card footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px;
+    font-size: 8.5px;
+  }
+
+  .card header {
+    border-bottom: 2px solid #12110e;
+  }
+
+  .card footer {
+    border-top: 2px solid #12110e;
+  }
+
+  .card footer button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .art {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: #ddd4c7;
+  }
+
+  .art__bg {
+    position: absolute;
+    inset: 0;
+    background-image: var(--board);
+    background-size: 210% 210%;
+    background-position: var(--px) var(--py);
+    filter: grayscale(1) contrast(1.2);
+    transform: scale(1.05);
+  }
+
+  .art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(18, 17, 14, 0.11) 0 1px, transparent 1px 4px),
+      radial-gradient(circle at 20% 10%, rgba(255, 250, 240, 0.42), transparent 30%);
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+
+  .noun-stack {
+    position: absolute;
+    inset: 16% 12% 18%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(-2deg);
+  }
+
+  .noun {
+    image-rendering: pixelated;
+    filter: drop-shadow(13px 15px 0 rgba(18, 17, 14, 0.28));
+  }
+
+  .noun--main {
+    width: 74%;
+    max-width: 260px;
+    padding: 9px;
+    border: 2px solid #12110e;
+    background: rgba(255, 250, 240, 0.88);
+  }
+
+  .is-multi .noun--main {
+    width: 52%;
+    z-index: 2;
+  }
+
+  .noun--side {
+    width: 36%;
+    margin-right: -10%;
+    transform: rotate(-8deg) translateY(14%);
+    opacity: 0.92;
+  }
+
+  .noun--right {
+    margin-right: 0;
+    margin-left: -10%;
+    transform: rotate(9deg) translateY(9%);
+  }
+
+  .edition-badge {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 3;
+    padding: 5px 7px;
+    border: 1.5px solid #12110e;
+    background: #fffaf0;
+    color: #12110e;
+    font-size: 8px;
+  }
+
+  .copy {
+    display: grid;
+    gap: 4px;
+    min-height: 122px;
+    padding: 10px;
+    border-top: 2px solid #12110e;
+  }
+
+  .copy p,
+  .copy span {
+    margin: 0;
+    color: #5f5e5a;
+    font-size: 8.5px;
+  }
+
+  .copy h3 {
+    font-size: clamp(18px, 2vw, 24px);
+    line-height: 0.98;
+  }
+
+  .mint {
+    padding: 9px;
+    border-top: 2px solid #12110e;
+    background: #ece4d7;
+  }
+
+  .mint :global(.mint-btn) {
+    width: 100%;
+  }
+
+  .mint :global(.mint-status) {
+    overflow-wrap: anywhere;
+  }
+
+  .filter-0 { --tint: rgba(18, 17, 14, 0.18); }
+  .filter-1 .art__bg { filter: grayscale(1) sepia(0.4) contrast(1.28); }
+  .filter-2 .art__bg { filter: grayscale(1) sepia(0.3) hue-rotate(315deg) contrast(1.25); }
+  .filter-3 .art__bg { filter: grayscale(0.8) sepia(0.2) hue-rotate(165deg) contrast(1.24); }
+  .filter-4 .art__bg { filter: grayscale(0.9) sepia(0.4) hue-rotate(80deg) contrast(1.18); }
+  .filter-5 .art__bg { filter: grayscale(0.86) sepia(0.5) hue-rotate(18deg) contrast(1.2); }
+  .filter-6 .art__bg { filter: grayscale(1) invert(0.08) contrast(1.34); }
+  .filter-7 .art__bg { filter: grayscale(0.76) sepia(0.34) hue-rotate(285deg) contrast(1.14); }
+  .filter-8 .art__bg { filter: grayscale(0.84) sepia(0.26) hue-rotate(185deg) contrast(1.18); }
+  .filter-9 .art__bg { filter: grayscale(0.8) sepia(0.22) hue-rotate(235deg) contrast(1.16); }
+
+  @media (max-width: 1180px) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .scene-strip {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 760px) {
+    .wallet,
+    .grid,
+    .scene-strip {
+      grid-template-columns: 1fr;
+    }
+
+    .wallet-card {
+      grid-template-columns: 48px minmax(0, 1fr);
+    }
+
+    .wallet-card button {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

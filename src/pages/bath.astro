@@ -1,0 +1,209 @@
+---
+/**
+ * /bath — the color-wave room. Eight moods, four blob fields.
+ *
+ * Modules:
+ *   1. Animated lava-lamp blobs (CSS morph + drift, palette per mood)
+ *   2. Web Audio ambient drone (3 osc + LFO wobble, user-toggled)
+ *   3. Spotify input → live embed → save to /api/bath
+ *
+ * Palettes: WARM · COOL · ELECTRIC · EARTH · VOID · DAWN · NEON · OCEAN
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Bath — color-wave room · PointCast';
+const description = 'Eight moods. Ambient generated tones. Any Spotify link. WARM · COOL · ELECTRIC · EARTH · VOID · DAWN · NEON · OCEAN.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="bath" id="bath-main" data-mood="warm">
+    <div class="bath__blobs" aria-hidden="true">
+      <div class="bath__blob bath__blob--a"></div>
+      <div class="bath__blob bath__blob--b"></div>
+      <div class="bath__blob bath__blob--c"></div>
+      <div class="bath__blob bath__blob--d"></div>
+    </div>
+    <div class="bath__frame">
+      <header class="bath__head">
+        <p class="bath__kicker">ROOM · BATH · EL SEGUNDO</p>
+        <h1 class="bath__title">The Bath</h1>
+        <p class="bath__dek">Step in. The color fills from below.</p>
+      </header>
+      <p class="bath__note" id="bath-note" aria-live="polite">amber · coral · gold · the warm side of morning</p>
+      <nav class="bath__moods" aria-label="Color moods">
+        <button class="bath__mood" data-m="warm"     aria-pressed="true" ><span class="bath__mood-dot"></span><span class="bath__mood-name">WARM</span></button>
+        <button class="bath__mood" data-m="cool"     aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">COOL</span></button>
+        <button class="bath__mood" data-m="electric" aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">ELECTRIC</span></button>
+        <button class="bath__mood" data-m="earth"    aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">EARTH</span></button>
+        <button class="bath__mood" data-m="void"     aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">VOID</span></button>
+        <button class="bath__mood" data-m="dawn"     aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">DAWN</span></button>
+        <button class="bath__mood" data-m="neon"     aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">NEON</span></button>
+        <button class="bath__mood" data-m="ocean"    aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">OCEAN</span></button>
+      </nav>
+      <div class="bath__audio">
+        <button class="bath__sound-btn" id="bath-sound-btn" data-on="0">SOUND OFF</button>
+        <span class="bath__sound-note" id="bath-sound-note">generated drone · no network</span>
+      </div>
+      <section class="bath__spotify" aria-label="Spotify">
+        <div class="bath__input-row">
+          <input class="bath__spotify-input" id="bath-spotify-input" type="url" placeholder="paste any spotify link..." autocomplete="off" spellcheck="false" />
+          <button class="bath__clear-btn" id="bath-clear-btn" style="display:none" aria-label="Clear">x</button>
+        </div>
+        <div id="bath-embed"></div>
+        <div class="bath__save-row" id="bath-save-row" style="display:none">
+          <button class="bath__save-btn" id="bath-save-btn">SAVE TO BATH</button>
+          <span class="bath__wallet-note" id="bath-wallet-note"></span>
+        </div>
+      </section>
+      <nav class="bath__links" aria-label="Other rooms">
+        <a class="bath__link" href="/anytime"><span class="bath__link-label">/ANYTIME</span><span class="bath__link-desc">I'd Have You Anytime · George Harrison</span></a>
+        <a class="bath__link" href="/room"><span class="bath__link-label">/ROOM</span><span class="bath__link-desc">the mix room · 10 tracks</span></a>
+        <a class="bath__link" href="/meditate"><span class="bath__link-label">/MEDITATE</span><span class="bath__link-desc">ocean room · breathing</span></a>
+        <a class="bath__link" href="/"><span class="bath__link-label">/</span><span class="bath__link-desc">back to the broadcast</span></a>
+      </nav>
+      <footer class="bath__foot">
+        <span>on air · el segundo · fm 96.1 · cc0</span>
+        <span id="bath-clock">--</span>
+      </footer>
+    </div>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function(){
+  'use strict';
+  var NOTES={warm:'amber · coral · gold · the warm side of morning',cool:'teal · sapphire · mist · the clear side of afternoon',electric:'magenta · cyan · arc · the lit side of midnight',earth:'sage · ochre · loam · the slow side of dusk',void:'charcoal · silver · pitch · the deep side of nothing',dawn:'peach · rose · lilac · the soft side of waking',neon:'green · yellow · shock · the loud side of alive',ocean:'cerulean · navy · deep · the still side of the sea'};
+  var TONES={warm:{freqs:[220,440,329.6],g:.056,lpf:800},cool:{freqs:[220,293.7,440],g:.048,lpf:580},electric:{freqs:[277.2,369.9,554.4],g:.06,lpf:1200},earth:{freqs:[130.8,196,261.6],g:.058,lpf:480},void:{freqs:[55,110,164.8],g:.07,lpf:260},dawn:{freqs:[261.6,392,523.3],g:.048,lpf:900},neon:{freqs:[440,554.4,659.3],g:.055,lpf:1800},ocean:{freqs:[138.6,207.7,277.2],g:.064,lpf:400}};
+  var ctx=null,mGain=null,nodes=[],soundOn=false,mood='warm',spot=null;
+  function stopNodes(){nodes.forEach(function(n){try{n.o.stop()}catch(e){}try{n.l.stop()}catch(e){}});nodes=[];}
+  function startDrone(m){
+    if(!ctx||!soundOn)return;
+    stopNodes();
+    var c=TONES[m]||TONES.warm,pg=c.g/c.freqs.length;
+    c.freqs.forEach(function(f,i){
+      var o=ctx.createOscillator(),og=ctx.createGain(),lp=ctx.createBiquadFilter(),lf=ctx.createOscillator(),lg=ctx.createGain();
+      o.type='sine';o.frequency.value=f;og.gain.value=pg;
+      lp.type='lowpass';lp.frequency.value=c.lpf;lp.Q.value=0.7;
+      lf.type='sine';lf.frequency.value=0.07+i*0.025;lg.gain.value=2.5;
+      lf.connect(lg);lg.connect(o.detune);o.connect(lp);lp.connect(og);og.connect(mGain);
+      o.start();lf.start();nodes.push({o:o,l:lf});
+    });
+  }
+  function toggleSound(){
+    var AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return;
+    if(!ctx){ctx=new AC();mGain=ctx.createGain();mGain.gain.value=0;mGain.connect(ctx.destination);}
+    soundOn=!soundOn;
+    var btn=document.getElementById('bath-sound-btn'),sn=document.getElementById('bath-sound-note');
+    if(soundOn){mGain.gain.setTargetAtTime(0.85,ctx.currentTime,0.6);startDrone(mood);if(btn)btn.textContent='SOUND ON';if(btn)btn.setAttribute('data-on','1');if(sn)sn.textContent='generated drone · '+mood+' · web audio';}
+    else{mGain.gain.setTargetAtTime(0,ctx.currentTime,0.4);setTimeout(stopNodes,1800);if(btn)btn.textContent='SOUND OFF';if(btn)btn.setAttribute('data-on','0');if(sn)sn.textContent='generated drone · no network';}
+  }
+  function setMood(m){
+    mood=m;
+    var el=document.getElementById('bath-main');if(el)el.dataset.mood=m;
+    var n=document.getElementById('bath-note');if(n)n.textContent=NOTES[m]||'';
+    document.querySelectorAll('.bath__mood').forEach(function(b){var on=b.dataset.m===m;b.setAttribute('aria-pressed',on?'true':'false');b.classList.toggle('bath__mood--active',on);});
+    if(soundOn&&ctx){startDrone(m);var sn=document.getElementById('bath-sound-note');if(sn)sn.textContent='generated drone · '+m+' · web audio';}
+  }
+  function clockMood(){var h=new Date().getHours();if(h<5)return'void';if(h<8)return'dawn';if(h<11)return'warm';if(h<16)return'cool';if(h<19)return'earth';if(h<22)return'electric';return'ocean';}
+  function parseSpot(raw){var m=raw.match(/open\.spotify\.com\/(track|playlist|album|episode)\/([A-Za-z0-9]{22})/);return m?{type:m[1],id:m[2]}:null;}
+  function updateWallet(){var el=document.getElementById('bath-wallet-note');if(!el)return;var a=localStorage.getItem('pc:wallet-active');el.textContent=a?'saves to '+a.slice(0,6)+'...'+a.slice(-4):'connect wallet (footer) to link to your address';}
+  function handleInput(val){
+    var p=parseSpot(val.trim()),em=document.getElementById('bath-embed'),sr=document.getElementById('bath-save-row'),cb=document.getElementById('bath-clear-btn');
+    if(cb)cb.style.display=val.length?'flex':'none';
+    spot=p;
+    if(em){if(p){var h=p.type==='track'?'152':'352';em.innerHTML='<iframe src="https://open.spotify.com/embed/'+p.type+'/'+p.id+'?utm_source=pointcast" width="100%" height="'+h+'" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="display:block;border-radius:10px;margin-top:10px;box-shadow:0 4px 28px rgba(0,0,0,.45)"></iframe>';}else{em.innerHTML='';}}
+    if(sr)sr.style.display=p?'flex':'none';
+    if(p)updateWallet();
+  }
+  function saveToBath(){
+    if(!spot)return;
+    var btn=document.getElementById('bath-save-btn');
+    if(btn){btn.textContent='SAVING...';btn.disabled=true;}
+    var addr=localStorage.getItem('pc:wallet-active')||undefined;
+    var entry={spotify_url:'https://open.spotify.com/'+spot.type+'/'+spot.id,spotify_type:spot.type,spotify_id:spot.id,mood:mood,address:addr,timestamp:new Date().toISOString()};
+    try{var prev=JSON.parse(localStorage.getItem('pc:bath:saves')||'[]');localStorage.setItem('pc:bath:saves',JSON.stringify([entry].concat(prev.filter(function(e){return e.spotify_id!==entry.spotify_id})).slice(0,50)));}catch(e){}
+    fetch('/api/bath',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)}).then(function(r){return r.json();}).then(function(d){if(btn){btn.textContent=d.ok?'SAVED':'SAVED LOCALLY';btn.disabled=false;setTimeout(function(){btn.textContent='SAVE TO BATH';},2500);}}).catch(function(){if(btn){btn.textContent='SAVED LOCALLY';btn.disabled=false;setTimeout(function(){btn.textContent='SAVE TO BATH';},2500);}});
+  }
+  function tick(){var el=document.getElementById('bath-clock');if(!el)return;var n=new Date();el.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+' PT';}
+  document.querySelectorAll('.bath__mood').forEach(function(b){b.addEventListener('click',function(){setMood(b.dataset.m);});});
+  var sb=document.getElementById('bath-sound-btn');if(sb)sb.addEventListener('click',toggleSound);
+  var inp=document.getElementById('bath-spotify-input');
+  if(inp){inp.addEventListener('input',function(){handleInput(inp.value);});inp.addEventListener('paste',function(){setTimeout(function(){handleInput(inp.value);},0);});}
+  var clr=document.getElementById('bath-clear-btn');if(clr)clr.addEventListener('click',function(){if(inp)inp.value='';handleInput('');});
+  var sv=document.getElementById('bath-save-btn');if(sv)sv.addEventListener('click',saveToBath);
+  setMood(clockMood());tick();setInterval(tick,60000);
+})();
+</script>
+
+<style>
+  .bath                       {--bg:#120a06;--a:#F5A623;--b:#E84D6A;--c:#F7C325;--d:#FF7F50;--ink:#fdf2d6}
+  .bath[data-mood="warm"]     {--bg:#120a06;--a:#F5A623;--b:#E84D6A;--c:#F7C325;--d:#FF7F50;--ink:#fdf2d6}
+  .bath[data-mood="cool"]     {--bg:#060e18;--a:#2CC5A0;--b:#4A9EFF;--c:#7B68EE;--d:#00C9FF;--ink:#d8f0ff}
+  .bath[data-mood="electric"] {--bg:#080612;--a:#FF00AA;--b:#00FFCC;--c:#9B4DCA;--d:#FF6B6B;--ink:#f4e8ff}
+  .bath[data-mood="earth"]    {--bg:#090e06;--a:#7B9E5E;--b:#C4821A;--c:#8B5E3C;--d:#5C8A5C;--ink:#f0ead8}
+  .bath[data-mood="void"]     {--bg:#030306;--a:#5040A0;--b:#2A1E6A;--c:#7050C8;--d:#3A2860;--ink:#c8c0e0}
+  .bath[data-mood="dawn"]     {--bg:#160a10;--a:#FFB4A2;--b:#E8ADC8;--c:#FFCBA4;--d:#D4A4D4;--ink:#fde8f4}
+  .bath[data-mood="neon"]     {--bg:#040a04;--a:#39FF14;--b:#FFE000;--c:#FF6B35;--d:#00FF87;--ink:#e8ffe8}
+  .bath[data-mood="ocean"]    {--bg:#020810;--a:#0077B6;--b:#00B4D8;--c:#023E8A;--d:#48CAE4;--ink:#d0f0ff}
+  .bath{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 20px 56px;position:relative;overflow:hidden;background:var(--bg);color:var(--ink);transition:background 2s ease,color 1.4s ease;font-family:'JetBrains Mono Variable','Courier New',monospace}
+  .bath__blobs{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .bath__blob{position:absolute;filter:blur(90px);opacity:.62;transition:background 2s ease;will-change:border-radius,transform}
+  .bath__blob--a{width:60vmax;height:60vmax;top:-20%;left:-15%;background:var(--a);animation:morph-a 22s ease-in-out infinite,drift-a 28s ease-in-out infinite}
+  .bath__blob--b{width:45vmax;height:45vmax;top:-10%;right:-12%;background:var(--b);opacity:.55;animation:morph-b 17s ease-in-out infinite,drift-b 32s ease-in-out infinite}
+  .bath__blob--c{width:55vmax;height:55vmax;bottom:-22%;left:15%;background:var(--c);opacity:.5;animation:morph-c 25s ease-in-out infinite,drift-c 36s ease-in-out infinite}
+  .bath__blob--d{width:35vmax;height:35vmax;top:35%;right:5%;background:var(--d);opacity:.45;animation:morph-d 14s ease-in-out infinite,drift-d 24s ease-in-out infinite}
+  @keyframes morph-a{0%{border-radius:40% 60% 70% 30%/40% 50% 60% 50%}33%{border-radius:70% 30% 50% 50%/30% 30% 70% 70%}66%{border-radius:30% 70% 40% 60%/50% 60% 40% 50%}100%{border-radius:40% 60% 70% 30%/40% 50% 60% 50%}}
+  @keyframes morph-b{0%{border-radius:60% 40% 30% 70%/60% 30% 70% 40%}33%{border-radius:30% 70% 70% 30%/30% 50% 50% 70%}66%{border-radius:50% 50% 60% 40%/40% 60% 40% 60%}100%{border-radius:60% 40% 30% 70%/60% 30% 70% 40%}}
+  @keyframes morph-c{0%{border-radius:50% 50% 40% 60%/60% 40% 60% 40%}33%{border-radius:40% 60% 60% 40%/40% 70% 30% 60%}66%{border-radius:70% 30% 50% 50%/50% 40% 60% 50%}100%{border-radius:50% 50% 40% 60%/60% 40% 60% 40%}}
+  @keyframes morph-d{0%,100%{border-radius:30% 70% 50% 50%/50% 30% 70% 50%}50%{border-radius:60% 40% 70% 30%/30% 60% 40% 70%}}
+  @keyframes drift-a{0%,100%{transform:translate(0,0)}50%{transform:translate(3vw,4vh)}}
+  @keyframes drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(-4vw,3vh)}}
+  @keyframes drift-c{0%,100%{transform:translate(0,0)}50%{transform:translate(2vw,-3vh)}}
+  @keyframes drift-d{0%,100%{transform:translate(0,0)}50%{transform:translate(-3vw,-4vh)}}
+  .bath__frame{position:relative;z-index:1;max-width:680px;width:100%;padding:30px 28px 26px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.10);border-radius:2px;backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3)}
+  .bath__head{text-align:center;margin-bottom:14px}
+  .bath__kicker{font-size:10px;letter-spacing:.28em;font-weight:700;margin:0 0 14px;opacity:.58}
+  .bath__title{font-family:'DM Serif Display','Lora',Georgia,serif;font-size:clamp(30px,5vw,46px);font-weight:400;letter-spacing:-.01em;line-height:1.05;margin:0 0 6px}
+  .bath__dek{font-family:Georgia,serif;font-size:14.5px;margin:0;opacity:.72}
+  .bath__note{text-align:center;font-size:9.5px;letter-spacing:.20em;margin:0 0 18px;opacity:.52;min-height:1.4em}
+  .bath__moods{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 14px}
+  .bath__mood{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px 8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:2px;color:inherit;cursor:pointer;font-family:'JetBrains Mono Variable',monospace;transition:background .18s ease,border-color .18s ease,transform .12s ease}
+  .bath__mood:hover{background:rgba(255,255,255,.12);transform:translateY(-1px)}
+  .bath__mood--active,.bath__mood[aria-pressed="true"]{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.32)}
+  .bath__mood-dot{display:block;width:12px;height:12px;border-radius:50%}
+  [data-m="warm"]     .bath__mood-dot{background:#F5A623;box-shadow:0 0 7px #F5A623}
+  [data-m="cool"]     .bath__mood-dot{background:#4A9EFF;box-shadow:0 0 7px #4A9EFF}
+  [data-m="electric"] .bath__mood-dot{background:#FF00AA;box-shadow:0 0 7px #FF00AA}
+  [data-m="earth"]    .bath__mood-dot{background:#7B9E5E;box-shadow:0 0 7px #7B9E5E}
+  [data-m="void"]     .bath__mood-dot{background:#8060C0;box-shadow:0 0 7px #8060C0}
+  [data-m="dawn"]     .bath__mood-dot{background:#FFB4A2;box-shadow:0 0 7px #FFB4A2}
+  [data-m="neon"]     .bath__mood-dot{background:#39FF14;box-shadow:0 0 7px #39FF14}
+  [data-m="ocean"]    .bath__mood-dot{background:#00B4D8;box-shadow:0 0 7px #00B4D8}
+  .bath__mood-name{font-size:8px;font-weight:700;letter-spacing:.16em;opacity:.82}
+  .bath__audio{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+  .bath__sound-btn{font-family:'JetBrains Mono Variable',monospace;font-size:9px;font-weight:700;letter-spacing:.18em;padding:6px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:1px;color:inherit;cursor:pointer;white-space:nowrap;transition:background .18s ease,border-color .18s ease}
+  .bath__sound-btn:hover{background:rgba(255,255,255,.14)}
+  .bath__sound-btn[data-on="1"]{border-color:rgba(255,255,255,.38);background:rgba(255,255,255,.16)}
+  .bath__sound-note{font-size:9px;letter-spacing:.12em;opacity:.42;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bath__spotify{margin:0 0 16px}
+  .bath__input-row{display:flex;gap:6px;align-items:center}
+  .bath__spotify-input{flex:1;min-width:0;font-family:'JetBrains Mono Variable',monospace;font-size:11px;letter-spacing:.04em;padding:8px 12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:2px;color:inherit;outline:none;transition:border-color .18s ease,background .18s ease}
+  .bath__spotify-input::placeholder{opacity:.38}
+  .bath__spotify-input:focus{border-color:rgba(255,255,255,.36);background:rgba(255,255,255,.12)}
+  .bath__clear-btn{display:flex;align-items:center;justify-content:center;width:28px;height:32px;flex-shrink:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:2px;color:inherit;cursor:pointer;font-size:12px;transition:background .15s ease}
+  .bath__clear-btn:hover{background:rgba(255,255,255,.18)}
+  .bath__save-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+  .bath__save-btn{font-family:'JetBrains Mono Variable',monospace;font-size:9px;font-weight:700;letter-spacing:.20em;padding:6px 16px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:1px;color:inherit;cursor:pointer;white-space:nowrap;transition:background .18s ease,border-color .18s ease}
+  .bath__save-btn:hover{background:rgba(255,255,255,.20);border-color:rgba(255,255,255,.44)}
+  .bath__save-btn:disabled{opacity:.45;cursor:default}
+  .bath__wallet-note{font-size:9px;letter-spacing:.08em;opacity:.40;line-height:1.4}
+  .bath__links{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:7px;margin:0 0 18px}
+  .bath__link{display:flex;flex-direction:column;gap:2px;padding:8px 11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:2px;text-decoration:none;color:inherit;transition:background .18s ease,transform .12s ease}
+  .bath__link:hover{background:rgba(255,255,255,.12);transform:translateY(-1px)}
+  .bath__link-label{font-size:10px;letter-spacing:.16em;font-weight:700}
+  .bath__link-desc{font-size:11px;font-family:Georgia,serif;opacity:.60;line-height:1.3}
+  .bath__foot{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;letter-spacing:.18em;padding-top:14px;border-top:1px dashed rgba(255,255,255,.12);opacity:.52}
+  @media(max-width:520px){.bath{padding:28px 12px 44px}.bath__frame{padding:20px 14px 18px}.bath__title{font-size:28px}}
+  @media(max-width:380px){.bath__moods{grid-template-columns:repeat(2,1fr)}}
+</style>

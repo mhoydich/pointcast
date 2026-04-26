@@ -4,7 +4,24 @@
   const STORAGE_KEY = "sitting-with-gandalf-log";
   const SETTINGS_KEY = "sitting-with-gandalf-settings";
   const DEFAULT_MINUTES = 15;
-  const versions = new Set(["v1", "v2", "v3"]);
+  const RELEASE_VERSION = "v4";
+  const versions = new Set(["v1", "v2", "v3", "v4"]);
+  const renderStyles = {
+    storybook: {
+      name: "Storybook glow",
+      idle: "The picture stays painterly and warm, like a page you can breathe inside.",
+      lines: ["Let the brushwork soften the edges.", "The old quiet has good color today."]
+    },
+    pixel: {
+      name: "Pixel campfire",
+      idle: "The world has gone tiny and bright. Let each little square carry less than a thought.",
+      lines: [
+        "A small pixel can hold a surprising amount of peace.",
+        "Step lightly. Even the moss has gone 16-bit.",
+        "Tiny lights, tiny worries, plenty of room."
+      ]
+    }
+  };
 
   const modeLines = {
     fire: [
@@ -246,15 +263,23 @@
   ];
 
   const savedSettings = loadSettings();
+  const savedRelease = savedSettings.release === RELEASE_VERSION;
+  const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
+  const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
+    ? savedSettings.renderStyle
+    : initialVersion === "v4"
+      ? "pixel"
+      : "storybook";
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
     running: false,
     mode: savedSettings.mode || "fire",
-    version: versions.has(savedSettings.version) ? savedSettings.version : "v3",
+    version: initialVersion,
     companion: companions[savedSettings.companion] ? savedSettings.companion : "hearth",
     visual: natureViews[savedSettings.visual] ? savedSettings.visual : "glade",
     intention: intentions[savedSettings.intention] ? savedSettings.intention : "rest",
+    renderStyle: initialRenderStyle,
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -370,11 +395,13 @@
     localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
+        release: RELEASE_VERSION,
         version: state.version,
         mode: state.mode,
         companion: state.companion,
         visual: state.visual,
         intention: state.intention,
+        renderStyle: state.renderStyle,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -393,6 +420,14 @@
     return intentions[state.intention] || intentions.rest;
   }
 
+  function activeRenderStyle() {
+    return renderStyles[state.renderStyle] || renderStyles.storybook;
+  }
+
+  function isNatureVersion(version = state.version) {
+    return version === "v3" || version === "v4";
+  }
+
   function setGuide(step, title, text) {
     dom.guideStep.textContent = step;
     dom.guideTitle.textContent = title;
@@ -404,10 +439,11 @@
       return;
     }
 
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       const view = activeView();
       const intention = activeIntention();
-      setGuide(step || "Nature cue", view.name, `${view.idle} ${intention.text}`);
+      const renderStyle = activeRenderStyle();
+      setGuide(step || "Nature cue", `${view.name} · ${renderStyle.name}`, `${view.idle} ${intention.text} ${renderStyle.idle}`);
       return;
     }
 
@@ -420,7 +456,7 @@
       return;
     }
 
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       const view = activeView();
       const lowerLabel = label.toLowerCase();
       const copy = {
@@ -445,10 +481,10 @@
   }
 
   function chooseLine() {
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       const view = activeView();
       const intention = activeIntention();
-      const pool = view.lines.concat(intention.lines);
+      const pool = view.lines.concat(intention.lines, activeRenderStyle().lines);
       const next = pool[Math.floor(Math.random() * pool.length)];
       dom.wizardLine.textContent = next;
       return;
@@ -466,10 +502,10 @@
     dom.timerFace.style.setProperty("--progress", `${degrees}deg`);
     dom.timerText.textContent = formatTime(state.remaining);
     dom.timerCaption.textContent = state.running
-      ? state.version === "v3"
+      ? isNatureVersion()
         ? "breathing slowly"
         : "keeping watch"
-      : state.version === "v3"
+      : isNatureVersion()
         ? "nature sit"
         : "pipe pause";
     updatePhase(progress);
@@ -486,7 +522,7 @@
     }
 
     dom.phaseName.textContent = active.name;
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       dom.phaseHint.textContent = activeView().phases[active.name] || active.hint;
     } else {
       dom.phaseHint.textContent = state.version === "v1" ? active.hint : activeCompanion().phases[active.name] || active.hint;
@@ -522,12 +558,13 @@
       const companion = entry.companion ? ` / ${entry.companion.replace(" Gandalf", "")}` : "";
       const visual = entry.visual ? ` / ${entry.visual}` : "";
       const intention = entry.intention ? ` / ${entry.intention}` : "";
+      const style = entry.style ? ` / ${entry.style}` : "";
       const version = entry.version ? `${entry.version.toUpperCase()} / ` : "";
 
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${mode}${companion}${visual}${intention}`;
+      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${mode}${companion}${visual}${intention}${style}`;
       right.textContent = entry.date;
       note.textContent = entry.note || "A quiet bowl, kept well.";
 
@@ -560,11 +597,11 @@
 
   function pauseSession() {
     state.running = false;
-    dom.startButton.textContent = state.version === "v3" ? "Resume nature sit" : "Resume quiet sit";
+    dom.startButton.textContent = isNatureVersion() ? "Resume nature sit" : "Resume quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
-    dom.timerCaption.textContent = state.version === "v3" ? "nature sit" : "pipe pause";
-    if (state.version === "v3") {
+    dom.timerCaption.textContent = isNatureVersion() ? "nature sit" : "pipe pause";
+    if (isNatureVersion()) {
       setGuide("Paused", activeView().name, "The place will keep waiting. Come back without hurry.");
     } else if (state.version === "v2") {
       setGuide("Paused", activeCompanion().name, activeCompanion().paused);
@@ -575,7 +612,7 @@
     state.running = false;
     state.remaining = state.duration;
     state.phaseName = "";
-    dom.startButton.textContent = state.version === "v3" ? "Start nature sit" : "Start quiet sit";
+    dom.startButton.textContent = isNatureVersion() ? "Start nature sit" : "Start quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.paceLabel.textContent = "Settle";
@@ -588,11 +625,11 @@
 
   function completeSession() {
     pauseSession();
-    dom.startButton.textContent = state.version === "v3" ? "Start nature sit" : "Start quiet sit";
+    dom.startButton.textContent = isNatureVersion() ? "Start nature sit" : "Start quiet sit";
     state.remaining = 0;
     updateTimer();
-    dom.wizardLine.textContent = state.version === "v3" ? "There. The room feels less crowded now." : "There. A little more room in the world.";
-    if (state.version === "v3") {
+    dom.wizardLine.textContent = isNatureVersion() ? "There. The room feels less crowded now." : "There. A little more room in the world.";
+    if (isNatureVersion()) {
       setGuide("Complete", activeView().name, "Carry one color, one sound, and one easier breath back with you.");
     } else if (state.version === "v2") {
       setGuide("Complete", activeCompanion().name, activeCompanion().complete);
@@ -611,7 +648,7 @@
   }
 
   function setVersion(version) {
-    const next = versions.has(version) ? version : "v3";
+    const next = versions.has(version) ? version : "v4";
     state.version = next;
     dom.body.dataset.version = next;
     dom.versionButtons.forEach((button) => {
@@ -620,11 +657,11 @@
 
     dom.roomStep.textContent = next === "v1" ? "1" : "2";
     dom.ambienceStep.textContent = next === "v1" ? "2" : "3";
-    dom.ritualSummary.textContent = next === "v3" ? "Session scent and tally" : "Pipe leaf and tally";
-    dom.blendLabel.textContent = next === "v3" ? "Session scent" : "Pipe leaf";
-    dom.smokeLabel.textContent = next === "v3" ? "Atmosphere" : "Smoke";
-    dom.ringLabel.textContent = next === "v3" ? "cues" : "rings";
-    dom.startButton.textContent = state.running ? "Running" : next === "v3" ? "Start nature sit" : "Start quiet sit";
+    dom.ritualSummary.textContent = isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
+    dom.blendLabel.textContent = isNatureVersion(next) ? "Session scent" : "Pipe leaf";
+    dom.smokeLabel.textContent = isNatureVersion(next) ? "Atmosphere" : "Smoke";
+    dom.ringLabel.textContent = isNatureVersion(next) ? "cues" : "rings";
+    dom.startButton.textContent = state.running ? "Running" : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
 
     if (next === "v1" && state.mode === "stars") {
       setMode("fire");
@@ -634,10 +671,15 @@
     if (next === "v1") {
       dom.phaseHint.textContent = phases.find((phase) => phase.name === state.phaseName)?.hint || phases[0].hint;
       chooseLine();
-    } else if (next === "v3") {
+    } else if (isNatureVersion(next)) {
+      if (next === "v4" && state.renderStyle !== "pixel") {
+        setRenderStyle("pixel");
+      } else if (next === "v3" && state.renderStyle !== "storybook") {
+        setRenderStyle("storybook");
+      }
       setVisual(state.visual);
       setIntention(state.intention);
-      updateGuideIdle("Nature ready");
+      updateGuideIdle(next === "v4" ? "V4 ready" : "Nature ready");
     } else {
       updateGuideIdle("V2 ready");
     }
@@ -662,7 +704,7 @@
     }
 
     if (!state.running) {
-      updateGuideIdle(state.version === "v3" ? "Sound set" : "Next");
+      updateGuideIdle(isNatureVersion() ? "Sound set" : "Next");
     }
   }
 
@@ -684,7 +726,7 @@
 
     chooseLine();
     updateGuideIdle(
-      state.version === "v3"
+      isNatureVersion()
         ? "Nature ready"
         : settings.syncMode === false
           ? "Choose your Gandalf"
@@ -708,7 +750,7 @@
       saveSettings();
     }
 
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       chooseLine();
       updateGuideIdle("View chosen");
     }
@@ -727,9 +769,22 @@
     dom.intentionText.textContent = active.text;
     saveSettings();
 
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       chooseLine();
       updateGuideIdle("Intention set");
+    }
+  }
+
+  function setRenderStyle(renderStyle) {
+    const next = renderStyles[renderStyle] ? renderStyle : "storybook";
+    state.renderStyle = next;
+    dom.body.dataset.render = next;
+    saveSettings();
+
+    if (isNatureVersion()) {
+      chooseLine();
+      updateGuideIdle(next === "pixel" ? "Pixel style" : "Storybook style");
+      spawnParticles(next === "pixel" ? 10 : 5);
     }
   }
 
@@ -784,8 +839,9 @@
       mode: state.mode,
       version: state.version,
       companion: state.version === "v2" ? activeCompanion().name : "",
-      visual: state.version === "v3" ? activeView().name : "",
-      intention: state.version === "v3" ? activeIntention().title : "",
+      visual: isNatureVersion() ? activeView().name : "",
+      intention: isNatureVersion() ? activeIntention().title : "",
+      style: isNatureVersion() ? activeRenderStyle().name : "",
       note: dom.noteInput.value.trim()
     });
 
@@ -1215,7 +1271,7 @@
     visuals.rings = [];
     visuals.particles = [];
     dom.wizardLine.textContent = "A good silence asks for nothing.";
-    if (state.version === "v3") {
+    if (isNatureVersion()) {
       setGuide("Quiet", activeView().name, "Ambience is off. Let the picture do the holding for a while.");
     } else if (state.version === "v2") {
       setGuide("Quiet", activeCompanion().name, "Ambience is off. The room can stay still for a while.");
@@ -1282,11 +1338,12 @@
 
   resizeCanvas();
   renderLog();
+  setRenderStyle(state.renderStyle);
   setVersion(state.version);
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
-  updateGuideIdle(state.version === "v3" ? "Nature ready" : "Next");
+  updateGuideIdle(isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();
