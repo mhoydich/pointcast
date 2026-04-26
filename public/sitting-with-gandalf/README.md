@@ -6,7 +6,7 @@ Open `index.html` in a browser. The page has no build step and references only l
 
 ## Versions
 
-The app defaults to V3, with a V1/V2/V3 toggle in the masthead. The selected version is saved locally.
+The app defaults to V4, with a V1/V2/V3/V4 toggle in the masthead. The selected version is saved locally after the V4 release is seen once.
 
 ### V1
 
@@ -29,7 +29,7 @@ The app defaults to V3, with a V1/V2/V3 toggle in the masthead. The selected ver
 
 ### V3
 
-- Defaults to a nature-first meditation room.
+- Nature-first meditation room.
 - Adds a generated 2x2 nature visual sheet with no Gandalf, people, pipes, or smoking objects: Moss glade, Rain garden, Meadow path, and Moon lake.
 - Keeps V1 and V2 available from the version toggle.
 - Adds a nature visual selector that also syncs the best matching ambience sound.
@@ -38,7 +38,16 @@ The app defaults to V3, with a V1/V2/V3 toggle in the masthead. The selected ver
 - Logs V3 notes with the selected nature view and intention.
 - Keeps the same timer, ambience, focus view, notes, and local storage behavior.
 
-## V4 Notes
+### V4
+
+- Next-version release that defaults to Pixel campfire.
+- Keeps V1, V2, and V3 available from the version toggle.
+- Adds a generated pixel-art 2x2 nature sheet for Moss glade, Rain garden, Meadow path, and Moon lake.
+- Uses the version switch as the single release control: V3 snaps to Storybook and V4 snaps to Pixel when selected.
+- Adds blockier V4 UI polish: squared controls, pixelated background/thumbs, subtle grid texture, and monospace timer treatment.
+- Migrates prior local settings to V4 once, then saves whichever version the visitor chooses next.
+
+## V5 Notes
 
 - Audio mixer: separate Fire, Weather, Road, Bells, and Drone levels instead of one master ambience slider.
 - Companion memory: remember preferred Gandalf, nature view, room, duration, and last note without making the UI busier.
@@ -52,6 +61,8 @@ The backdrop was generated with the built-in image generation tool and copied in
 The companion portrait sheet was generated with the built-in image generation tool and copied into `assets/wizard-companions.jpg`.
 
 The V3 nature visual sheet was generated with the built-in image generation tool and copied into `assets/nature-visuals-v3.jpg`.
+
+The V4 pixel visual sheet was generated with the built-in image generation tool and copied into `assets/nature-visuals-pixel-v4.png`.
 
 Backdrop prompt:
 
@@ -96,5 +107,20 @@ Style/medium: painterly digital illustration, rich texture, calm premium app bac
 Composition/framing: perfectly square 2x2 grid with clean gutters; each quadrant should work as a thumbnail and as a soft background crop; no text anywhere
 Lighting/mood: meditative, quiet, warm, restorative, slow breathing energy; balanced contrast with soft negative space
 Color palette: moss green, rain blue-green, meadow gold, moonlit indigo, natural amber highlights, muted cream, no harsh neon
+Constraints: no text, no logos, no watermark, no people, no wizard, no recognizable copyrighted locations, no film still, no smoking object, no pipe, no modern objects, no horror
+```
+
+V4 pixel visual prompt:
+
+```text
+Use case: stylized-concept
+Asset type: web app ambient background illustration sprite sheet for a cozy meditation companion
+Primary request: a pixel-art visual style option for Sitting with Gandalf V4, matching the existing four nature scenes in a neat, fun, cozy way
+Scene/backdrop: four distinct calm fantasy-adjacent nature rooms in a 2x2 sprite sheet: top-left mossy forest glade with warm firefly pixels, top-right rainy cottage garden seen from under a porch roof, bottom-left sunlit meadow path with soft distant hills, bottom-right moonlit lakeside with reeds and stars reflected in water
+Subject: nature itself as the companion; tiny environmental details only, no people, no wizard, no characters, no pipe, no smoking object
+Style/medium: high-quality pixel art, cozy 16-bit / 32-bit adventure-game mood, crisp blocky pixels, refined color clusters, premium app background asset
+Composition/framing: perfectly square 2x2 grid with clean gutters; each quadrant readable as a separate scene, usable as a soft full-screen background crop and as thumbnails; no text anywhere
+Lighting/mood: meditative, playful, restorative, warm, quiet, pleasing to stare at for a short sit
+Color palette: moss green, rain blue-green, meadow gold, moonlit indigo, natural amber highlights, muted cream; gentle contrast, no harsh neon
 Constraints: no text, no logos, no watermark, no people, no wizard, no recognizable copyrighted locations, no film still, no smoking object, no pipe, no modern objects, no horror
 ```
