@@ -12,9 +12,9 @@ used exclusively by the test scenario.
 Royalty flow on fulfill
 =======================
   price_mutez
-    ├─ platform_fee  = split_tokens(price, platform_fee_bps, 10000)  → platform_fee_receiver
-    ├─ royalty_fee   = split_tokens(price, royalty_bps,       10000)  → royalty_receiver
-    └─ seller_amount = price - platform_fee - royalty_fee             → seller
+    ├─ platform_fee  = split_tokens(price, platform_fee_bps, 10000)  - platform_fee_receiver
+    ├─ royalty_fee   = split_tokens(price, royalty_bps,       10000)  - royalty_receiver
+    └─ seller_amount = price - platform_fee - royalty_fee             - seller
 
 Error codes
 ===========
@@ -41,43 +41,60 @@ def m():
     # @sp.module function `main` collides with that. Use `m`.
     class Marketplace(sp.Contract):
         """
-        Objkt-style FA2 marketplace.
+        Objkt-style multi-collection FA2 marketplace.
+
+        One originated marketplace handles every PointCast FA2 (Coffee
+        Mugs, Visit Nouns, Birthdays, future drops). The fa2_contract
+        address lives per-ask rather than per-marketplace, so any FA2
+        token can be listed through the same surface and same ask_id
+        space.
 
         Storage fields
         --------------
         admin                : sp.address  - privileged account
-        fa2_contract         : sp.address  - the NFT FA2 contract address
         platform_fee_bps     : sp.nat      - platform fee in basis points (max 1000 = 10 %)
         platform_fee_receiver: sp.address  - receives platform fee on each sale
         royalty_receiver     : sp.address  - receives creator royalty on each sale
         paused               : sp.bool     - if True, list/update/fulfill are disabled
         next_ask_id          : sp.nat      - auto-incrementing listing counter
-        asks                 : big_map     - ask_id → Ask record
+        asks                 : big_map     - ask_id -> Ask record (includes fa2_contract)
+
+        Ask record fields
+        -----------------
+        seller       : sp.address  - lister (must be FA2 owner + have approved this marketplace as operator)
+        fa2_contract : sp.address  - which collection the token lives on
+        token_id     : sp.nat      - which token within that collection
+        amount_mutez : sp.mutez    - asking price
+        royalty_bps  : sp.nat      - royalty share (per-listing, 0-10000)
         """
 
         def __init__(
             self,
             admin: sp.address,
-            fa2_contract: sp.address,
             platform_fee_bps: sp.nat,
             platform_fee_receiver: sp.address,
             royalty_receiver: sp.address,
         ):
+            # Multi-collection marketplace: fa2_contract lives per-ask
+            # rather than per-marketplace, so one originated marketplace
+            # handles every PointCast FA2 (Coffee Mugs, Visit Nouns,
+            # Birthdays, future drops). Sellers list by passing the
+            # contract address into list_ask.
             self.data.admin = admin
-            self.data.fa2_contract = fa2_contract
             self.data.platform_fee_bps = platform_fee_bps
             self.data.platform_fee_receiver = platform_fee_receiver
             self.data.royalty_receiver = royalty_receiver
             self.data.paused = False
             self.data.next_ask_id = sp.nat(0)
 
-            # Typed big map: ask_id → Ask record
+            # Typed big map: ask_id -> Ask record
             self.data.asks = sp.cast(
                 sp.big_map(),
                 sp.big_map[
                     sp.nat,
                     sp.record(
                         seller=sp.address,
+                        fa2_contract=sp.address,
                         token_id=sp.nat,
                         amount_mutez=sp.mutez,
                         royalty_bps=sp.nat,
@@ -90,15 +107,16 @@ def m():
         # ------------------------------------------------------------------
 
         @sp.entrypoint
-        def list_ask(self, token_id, amount_mutez, royalty_bps):
+        def list_ask(self, fa2_contract, token_id, amount_mutez, royalty_bps):
             """
             Seller creates a new listing.
 
             Parameters
             ----------
-            token_id     : sp.nat   - FA2 token ID to list
-            amount_mutez : sp.mutez - asking price in mutez
-            royalty_bps  : sp.nat   - royalty share in basis points (0-10000)
+            fa2_contract : sp.address - FA2 contract the token lives on
+            token_id     : sp.nat     - FA2 token ID to list
+            amount_mutez : sp.mutez   - asking price in mutez
+            royalty_bps  : sp.nat     - royalty share in basis points (0-10000)
             """
             assert not self.data.paused, "MARKETPLACE_PAUSED"
             assert royalty_bps <= 10000, "INVALID_ROYALTY_BPS"
@@ -106,6 +124,7 @@ def m():
             ask_id = self.data.next_ask_id
             self.data.asks[ask_id] = sp.record(
                 seller=sp.sender,
+                fa2_contract=fa2_contract,
                 token_id=token_id,
                 amount_mutez=amount_mutez,
                 royalty_bps=royalty_bps,
@@ -157,7 +176,7 @@ def m():
               1. Validates the ask exists, caller is not the seller, and
                  sp.amount equals the listed price.
               2. Splits the payment: seller share, platform fee, royalty.
-              3. Dispatches an FA2 transfer from seller → buyer.
+              3. Dispatches an FA2 transfer from seller - buyer.
               4. Deletes the ask from storage.
 
             Parameters
@@ -190,7 +209,7 @@ def m():
             if royalty_fee > sp.mutez(0):
                 sp.send(self.data.royalty_receiver, royalty_fee)
 
-            # ── FA2 transfer: seller → buyer ─────────────────────────────
+            # ── FA2 transfer: seller - buyer ─────────────────────────────
             # Build the FA2 transfer_params list (TZIP-12 layout).
             transfer_tx = sp.record(
                 to_=sp.sender,
@@ -216,7 +235,7 @@ def m():
                         ],
                     )
                 ],
-                self.data.fa2_contract,
+                ask.fa2_contract,
                 entrypoint="transfer",
             ).unwrap_some(error="INVALID_FA2_CONTRACT")
 
@@ -325,7 +344,6 @@ def test():
 
     marketplace = m.Marketplace(
         admin=admin.address,
-        fa2_contract=mock_fa2.address,
         platform_fee_bps=sp.nat(250),  # 2.5 %
         platform_fee_receiver=platform_fee_receiver.address,
         royalty_receiver=royalty_receiver.address,
@@ -335,6 +353,7 @@ def test():
     # ── Test 1: List Ask ─────────────────────────────────────────────────────
     scenario.h2("Test 1 - List Ask")
     marketplace.list_ask(
+        fa2_contract=mock_fa2.address,
         token_id=sp.nat(1),
         amount_mutez=sp.mutez(1_000_000),  # 1 tez
         royalty_bps=sp.nat(1000),          # 10 %
@@ -342,6 +361,7 @@ def test():
     )
     scenario.verify(marketplace.data.asks.contains(0))
     scenario.verify(marketplace.data.asks[0].seller == seller.address)
+    scenario.verify(marketplace.data.asks[0].fa2_contract == mock_fa2.address)
     scenario.verify(marketplace.data.asks[0].amount_mutez == sp.mutez(1_000_000))
     scenario.verify(marketplace.data.asks[0].royalty_bps == sp.nat(1000))
 
@@ -383,6 +403,7 @@ def test():
     # ── Test 5: Cancel Ask ───────────────────────────────────────────────────
     scenario.h2("Test 5 - Cancel Ask")
     marketplace.list_ask(
+        fa2_contract=mock_fa2.address,
         token_id=sp.nat(2),
         amount_mutez=sp.mutez(1_000_000),
         royalty_bps=sp.nat(500),
@@ -399,6 +420,7 @@ def test():
 
     # Listing must be rejected while paused
     marketplace.list_ask(
+        fa2_contract=mock_fa2.address,
         token_id=sp.nat(3),
         amount_mutez=sp.mutez(1_000_000),
         royalty_bps=sp.nat(500),
