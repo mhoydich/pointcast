@@ -61,6 +61,20 @@ const jsonLd = {
       </div>
     </section>
 
+    <!-- ─── COLLECTED BLOCKS ─── -->
+    <section class="blocks-history">
+      <p class="kicker">COLLECTED · <span id="blocks-count">0</span> BLOCKS</p>
+      <div class="blocks-strip" id="blocks-strip">
+        <p class="blocks-empty">Loading…</p>
+      </div>
+    </section>
+
+    <!-- ─── BATH SAVES ─── -->
+    <section class="bath-saves-section" id="bath-saves-section" hidden>
+      <p class="kicker">BATH SAVES · <span id="saves-count">0</span> · <a href="/bath">/bath</a></p>
+      <div class="saves-grid" id="saves-grid"></div>
+    </section>
+
     <!-- ─── WALLETS ─── -->
     <header class="head">
       <p class="kicker">WALLETS</p>
@@ -516,8 +530,8 @@ const jsonLd = {
     if (!any) return;
     const items: Array<{label: string, value: string, kind: string}> = [];
     if (mood) items.push({ label: 'mood', value: mood, kind: 'mood' });
-    if (listening) items.push({ label: '🎵 now playing', value: listening, kind: 'listening' });
-    if (where) items.push({ label: '📍 where', value: where, kind: 'where' });
+    if (listening) items.push({ label: 'now playing', value: listening, kind: 'listening' });
+    if (where) items.push({ label: 'where', value: where, kind: 'where' });
     chipsEl.innerHTML = items.map((i) => `
       <li class="state-chip state-chip--${i.kind}">
         <span class="state-chip__label">${i.label}</span>
@@ -553,11 +567,13 @@ const jsonLd = {
 
     const grid = document.getElementById('activity-grid');
     if (!grid) return;
+    const bathSaves = (() => { try { const r = ls('pc:bath:saves'); if (!r) return 0; const a = JSON.parse(r); return Array.isArray(a) ? a.length : 0; } catch { return 0; } })();
     const stats = [
       { label: 'HELLO', value: String(helloCount), sub: helloLastDay !== '—' ? `last earned ${helloLastDay}` : '—' },
       { label: 'drops collected', value: String(dropsCount), sub: dropsStreak > 0 ? `${dropsStreak}-day streak` : 'no active streak' },
       { label: 'polls voted', value: String(votesCount), sub: votesCount === 0 ? 'no votes yet' : `unique: ${votesCount}` },
       { label: 'voter level', value: `L${level}`, sub: `${xp} XP · ${title.toLowerCase()}` },
+      { label: 'bath saves', value: String(bathSaves), sub: bathSaves > 0 ? 'spotify links saved' : 'none yet — visit /bath' },
     ];
     grid.innerHTML = stats.map((s) => `
       <div class="stat">
@@ -591,10 +607,82 @@ const jsonLd = {
     `;
   }
 
+  // ── COLLECTED BLOCKS visual strip ──────────────────────────────────
+  function paintBlocks() {
+    const list = collectedList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const countEl = document.getElementById('blocks-count');
+    const strip = document.getElementById('blocks-strip');
+    if (countEl) countEl.textContent = String(list.length);
+    if (!strip) return;
+    if (list.length === 0) {
+      strip.innerHTML = '<p class="blocks-empty">No blocks collected yet. Visit <a href="/today">/today</a> to collect today\'s drop.</p>';
+      return;
+    }
+    strip.innerHTML = list.slice(0, 30).map((d) => `
+      <a class="block-tile" href="/b/${nftEscHtml(d.blockId)}" title="Block №${nftEscAttr(d.blockId)}">
+        <div class="block-tile__img">
+          <img
+            src="/images/og/b/${nftEscAttr(d.blockId)}.png"
+            alt="Block №${nftEscAttr(d.blockId)}"
+            loading="lazy"
+            onerror="this.parentElement.classList.add('block-tile__img--err')"
+          />
+        </div>
+        <p class="block-tile__id mono">№${nftEscHtml(d.blockId)}</p>
+        <p class="block-tile__date">${nftEscHtml(d.date || '—')}</p>
+      </a>
+    `).join('');
+  }
+
+  // ── BATH SAVES cards ────────────────────────────────────────────────
+  const MOOD_DOT: Record<string, string> = {
+    warm:'#F5A623', cool:'#4A9EFF', electric:'#FF00AA', earth:'#7B9E5E',
+    void:'#8060C0', dawn:'#FFB4A2', neon:'#39FF14', ocean:'#00B4D8',
+  };
+  function paintBathSaves() {
+    const saves: Array<{spotify_url:string;spotify_type:string;spotify_id:string;mood:string;address?:string;timestamp:string}> = [];
+    try { const r = ls('pc:bath:saves'); if (r) { const a = JSON.parse(r); if (Array.isArray(a)) saves.push(...a); } } catch {}
+    const section = document.getElementById('bath-saves-section');
+    const grid = document.getElementById('saves-grid');
+    const countEl = document.getElementById('saves-count');
+    if (!section || !grid) return;
+    if (saves.length === 0) { section.hidden = true; return; }
+    section.hidden = false;
+    if (countEl) countEl.textContent = String(saves.length);
+    grid.innerHTML = saves.slice(0, 16).map((s) => {
+      const dot = MOOD_DOT[s.mood] || '#aaa';
+      const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—';
+      const type = (s.spotify_type || '').toUpperCase();
+      const url = s.spotify_url || `https://open.spotify.com/${nftEscAttr(s.spotify_type)}/${nftEscAttr(s.spotify_id)}`;
+      const embedH = s.spotify_type === 'track' ? '80' : '152';
+      return `
+        <div class="save-card">
+          <div class="save-card__embed">
+            <iframe
+              src="https://open.spotify.com/embed/${nftEscAttr(s.spotify_type)}/${nftEscAttr(s.spotify_id)}?utm_source=pointcast"
+              width="100%" height="${embedH}" frameborder="0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="lazy"
+            ></iframe>
+          </div>
+          <div class="save-card__meta">
+            <span class="save-card__type">${type}</span>
+            <span class="save-card__mood-dot" style="background:${dot};box-shadow:0 0 5px ${dot}" title="${nftEscAttr(s.mood)}"></span>
+            <span class="save-card__mood-name">${nftEscHtml(s.mood)}</span>
+            <span class="save-card__date">${date}</span>
+            <a class="save-card__open" href="${nftEscAttr(url)}" target="_blank" rel="noopener">open ↗</a>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   paintIdentity();
   paintState();
   paintActivity();
-  window.addEventListener('storage', () => { paintIdentity(); paintState(); paintActivity(); });
+  paintBlocks();
+  paintBathSaves();
+  window.addEventListener('storage', () => { paintIdentity(); paintState(); paintActivity(); paintBlocks(); paintBathSaves(); });
 </script>
 
 <style>
@@ -1082,4 +1170,143 @@ const jsonLd = {
     text-align: right;
     font-weight: 700;
   }
+
+  /* ── COLLECTED BLOCKS strip ── */
+  .blocks-history {
+    margin-bottom: 32px;
+  }
+  .blocks-history .kicker { margin: 0 0 10px; }
+  .blocks-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+  .block-tile {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    overflow: hidden;
+    background: #fff;
+    transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  }
+  .block-tile:hover {
+    border-color: var(--pc-accent, #185FA5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+  }
+  .block-tile__img {
+    width: 100%;
+    aspect-ratio: 1200 / 630;
+    overflow: hidden;
+    background: #f2f0ea;
+    position: relative;
+  }
+  .block-tile__img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .block-tile__img--err {
+    background: linear-gradient(135deg, #eeeae0 0%, #ddd8cc 100%);
+  }
+  .block-tile__img--err::after {
+    content: 'no image';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: #aaa;
+  }
+  .block-tile__id {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.10em;
+    font-weight: 700;
+    color: var(--pc-accent, #185FA5);
+    margin: 6px 8px 2px;
+  }
+  .block-tile__date {
+    font-size: 10px;
+    color: var(--pc-ink-muted, #5f5e5a);
+    margin: 0 8px 6px;
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.06em;
+  }
+  .blocks-empty {
+    font-size: 13px;
+    color: var(--pc-ink-muted, #5f5e5a);
+    padding: 12px 0;
+  }
+  .blocks-empty a { color: var(--pc-accent, #185FA5); }
+
+  /* ── BATH SAVES grid ── */
+  .bath-saves-section {
+    margin-bottom: 32px;
+  }
+  .bath-saves-section .kicker { margin: 0 0 10px; }
+  .bath-saves-section .kicker a { color: var(--pc-accent, #185FA5); text-decoration: none; font-weight: 700; }
+  .saves-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .save-card {
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .save-card__embed iframe {
+    display: block;
+    width: 100%;
+    border: none;
+  }
+  .save-card__meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border-top: 1px solid var(--pc-rule-soft, #e5e3de);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    flex-wrap: wrap;
+  }
+  .save-card__type {
+    font-weight: 700;
+    color: var(--pc-ink-soft, #38373A);
+    background: #f2f0ea;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  .save-card__mood-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .save-card__mood-name {
+    color: var(--pc-ink-soft, #38373A);
+    opacity: 0.7;
+    text-transform: uppercase;
+  }
+  .save-card__date {
+    color: var(--pc-ink-muted, #5f5e5a);
+    margin-left: auto;
+  }
+  .save-card__open {
+    color: var(--pc-accent, #185FA5);
+    text-decoration: none;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .save-card__open:hover { text-decoration: underline; }
 </style>
