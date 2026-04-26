@@ -222,6 +222,19 @@ def m():
             )
             transfer_params = [transfer_batch]
 
+            # TZIP-12 canonical layout for FA2 transfer entrypoint —
+            # MUST match the FA2's compiled type exactly or sp.contract
+            # returns None and we fail with INVALID_FA2_CONTRACT.
+            #
+            # Outer record: (from_, txs)
+            # Inner record: (to_, (token_id, amount))
+            #
+            # Without .layout(), SmartPy v0.24 defaults to alphabetical
+            # field order, which puts the inner record as (amount, to_,
+            # token_id) — incompatible with FA2 lib (smartpy.templates.
+            # fa2_lib) which uses canonical TZIP-12 ordering. That
+            # mismatch was the cause of the v1 marketplace's fulfill_ask
+            # failing in simulation against Coffee Mugs FA2 (Sun 2026-04-26).
             fa2_transfer_handle = sp.contract(
                 sp.list[
                     sp.record(
@@ -231,9 +244,9 @@ def m():
                                 to_=sp.address,
                                 token_id=sp.nat,
                                 amount=sp.nat,
-                            )
+                            ).layout(("to_", ("token_id", "amount")))
                         ],
-                    )
+                    ).layout(("from_", "txs"))
                 ],
                 ask.fa2_contract,
                 entrypoint="transfer",
