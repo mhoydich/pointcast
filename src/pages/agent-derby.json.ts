@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
+import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_SEASON, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
 
 export const GET: APIRoute = async () => {
   const payload = {
@@ -29,6 +29,7 @@ export const GET: APIRoute = async () => {
     tracks: DERBY_TRACKS,
     roster: DERBY_ROSTER,
     posters: DERBY_POSTERS,
+    season: DERBY_SEASON,
     rulebook: DERBY_RULEBOOK,
     entrypoints: {
       game: 'https://pointcast.xyz/agent-derby',

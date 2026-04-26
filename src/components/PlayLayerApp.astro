@@ -1,0 +1,1414 @@
+---
+import {
+  AGENT_QUESTS,
+  BUILDER_GHOSTS,
+  CIVIC_WISHES,
+  COLLECTIBLE_ROUTES,
+  DAILY_WALK_STEPS,
+  PASSPORT_STAMPS,
+  PET_CARE_ACTIONS,
+  PLAY_LAYER_VERSION,
+  PLAY_SURFACES,
+  RADIO_BULLETINS,
+  ROOM_WEATHER,
+} from '../lib/play-layer';
+import { DERBY_ROSTER, DERBY_SEASON } from '../lib/agent-derby';
+import { todayPT } from '../lib/daily';
+
+interface Props {
+  focus?: string;
+}
+
+const { focus = 'overview' } = Astro.props;
+const today = todayPT();
+const activeSurface = PLAY_SURFACES.find((surface) => surface.id === focus) ?? null;
+const totalPoints = PASSPORT_STAMPS.reduce((sum, stamp) => sum + stamp.points, 0);
+const stampById = new Map(PASSPORT_STAMPS.map((stamp) => [stamp.id, stamp]));
+
+const appData = {
+  today,
+  focus,
+  stamps: PASSPORT_STAMPS,
+  walkSteps: DAILY_WALK_STEPS,
+  quests: AGENT_QUESTS,
+  routes: COLLECTIBLE_ROUTES,
+  petActions: PET_CARE_ACTIONS,
+  derbySeason: DERBY_SEASON,
+};
+---
+
+<div class="play-layer" data-play-layer data-focus={focus} data-today={today}>
+  <nav class="crumb" aria-label="Breadcrumb">
+    <a href="/">Home</a>
+    <span aria-hidden="true">/</span>
+    <a href="/play">play</a>
+    {activeSurface && (
+      <>
+        <span aria-hidden="true">/</span>
+        <span>{activeSurface.id}</span>
+      </>
+    )}
+  </nav>
+
+  <header class="play-hero" id="overview">
+    <div class="play-hero__copy">
+      <p class="kicker">PLAY LAYER · v{PLAY_LAYER_VERSION} · {today}</p>
+      <h1>{activeSurface ? activeSurface.title : 'PointCast Play Layer'}</h1>
+      <p>
+        Passport, quests, daily walk, room weather, radio, routes, builder ghosts,
+        civic wishes, a site pet, Zen Cats, and the Derby league now share one local ritual layer.
+      </p>
+      <div class="play-hero__actions" aria-label="Primary play routes">
+        <a href="/passport">Passport</a>
+        <a href="/walk">Daily Walk</a>
+        <a href="/quests">Quests</a>
+        <a href="/zen-cats">Zen Cats</a>
+        <a href="/play.json">JSON</a>
+      </div>
+    </div>
+
+    <aside class="passport-meter" aria-label="Passport progress">
+      <img src="https://noun.pics/137.svg" alt="" width="84" height="84" loading="eager" />
+      <div>
+        <span class="passport-meter__label">Passport</span>
+        <strong><span data-passport-count>0</span> / {PASSPORT_STAMPS.length}</strong>
+        <span class="passport-meter__points"><span data-passport-points>0</span> / {totalPoints} points</span>
+      </div>
+    </aside>
+  </header>
+
+  <nav class="surface-rail" aria-label="Play surfaces">
+    {PLAY_SURFACES.map((surface) => (
+      <a class:list={['surface-chip', surface.id === focus && 'is-active']} href={surface.route}>
+        <span>{surface.code}</span>
+        <strong>{surface.title}</strong>
+      </a>
+    ))}
+  </nav>
+
+  <section class="play-section play-section--overview" aria-labelledby="systems-title">
+    <div class="section-head">
+      <p class="kicker">SYSTEMS</p>
+      <h2 id="systems-title">All {PLAY_SURFACES.length} pieces are wired together.</h2>
+    </div>
+    <div class="system-grid">
+      {PLAY_SURFACES.map((surface) => (
+        <a class="system-tile" href={surface.route}>
+          <span>{surface.code}</span>
+          <strong>{surface.title}</strong>
+          <em>{surface.summary}</em>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section id="passport" class="play-section" aria-labelledby="passport-title" data-play-section="passport">
+    <div class="section-head">
+      <p class="kicker">PASSPORT</p>
+      <h2 id="passport-title">Stamp the things that make PointCast feel alive.</h2>
+    </div>
+    <div class="stamp-grid">
+      {PASSPORT_STAMPS.map((stamp) => (
+        <article class="stamp" data-passport-stamp={stamp.id}>
+          <div class="stamp__top">
+            <span class="stamp__category">{stamp.category}</span>
+            <strong>{stamp.points}</strong>
+          </div>
+          <h3>{stamp.label}</h3>
+          <p>{stamp.description}</p>
+          <div class="stamp__actions">
+            <a href={stamp.route}>{stamp.action}</a>
+            <button type="button" data-stamp-button data-stamp-id={stamp.id}>Stamp</button>
+          </div>
+          <small data-stamp-status>open</small>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="walk" class="play-section" aria-labelledby="walk-title" data-play-section="walk">
+    <div class="section-head section-head--split">
+      <div>
+        <p class="kicker">DAILY WALK</p>
+        <h2 id="walk-title">Five stops, one day key.</h2>
+      </div>
+      <div class="progress-pill">
+        <span data-walk-count>0</span> / {DAILY_WALK_STEPS.length}
+      </div>
+    </div>
+    <div class="walk-track" data-walk-progress style="--walk-progress: 0%">
+      {DAILY_WALK_STEPS.map((step, index) => (
+        <article class="walk-step" data-walk-step={step.id} data-step-stamp={step.stampId}>
+          <span class="walk-step__num">{String(index + 1).padStart(2, '0')}</span>
+          <div>
+            <h3>{step.title}</h3>
+            <p>{step.line}</p>
+            <a href={step.href}>{step.href}</a>
+          </div>
+          <button type="button" data-walk-button data-step-id={step.id}>Done</button>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="quests" class="play-section" aria-labelledby="quests-title" data-play-section="quests">
+    <div class="section-head section-head--split">
+      <div>
+        <p class="kicker">QUEST BOARD</p>
+        <h2 id="quests-title">Small, receipt-shaped jobs for humans and agents.</h2>
+      </div>
+      <a class="section-link" href="/play.json">Quest JSON</a>
+    </div>
+    <div class="quest-grid">
+      {AGENT_QUESTS.map((quest) => (
+        <article class="quest" data-quest-id={quest.id}>
+          <div class="quest__head">
+            <span>{quest.difficulty}</span>
+            <strong data-quest-state>open</strong>
+          </div>
+          <h3>{quest.title}</h3>
+          <p>{quest.agentBrief}</p>
+          <dl>
+            <div>
+              <dt>Reward</dt>
+              <dd>{quest.reward}</dd>
+            </div>
+            <div>
+              <dt>Receipt</dt>
+              <dd>{quest.receiptShape.join(', ')}</dd>
+            </div>
+          </dl>
+          <div class="quest__actions">
+            <a href={quest.href}>Source</a>
+            <button type="button" data-quest-action="claimed" data-quest-id={quest.id}>Claim</button>
+            <button type="button" data-quest-action="done" data-quest-id={quest.id}>Done</button>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="weather" class="play-section" aria-labelledby="weather-title" data-play-section="weather">
+    <div class="section-head">
+      <p class="kicker">ROOM WEATHER</p>
+      <h2 id="weather-title">Every room gets a forecast.</h2>
+    </div>
+    <div class="weather-grid">
+      {ROOM_WEATHER.map((room) => (
+        <article class="room" style={`--room-color: ${room.color}; --room-intensity: ${room.intensity}%`}>
+          <div class="room__bar" aria-hidden="true"></div>
+          <div class="room__head">
+            <span>{room.condition}</span>
+            <strong>{room.intensity}</strong>
+          </div>
+          <h3>{room.name}</h3>
+          <p>{room.agentAdvice}</p>
+          <ul>
+            {room.signals.map((signal) => <li>{signal}</li>)}
+          </ul>
+          <div class="room__actions">
+            <a href={room.href}>Open</a>
+            <button type="button" data-stamp-button data-stamp-id="room-weather">Log</button>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="radio" class="play-section play-section--radio" aria-labelledby="radio-title" data-play-section="radio">
+    <div class="section-head section-head--split">
+      <div>
+        <p class="kicker">POINTCAST RADIO</p>
+        <h2 id="radio-title">The broadcast desk has copy.</h2>
+      </div>
+      <button type="button" class="radio-tune" data-stamp-button data-stamp-id="radio-tune">Tune In</button>
+    </div>
+    <div class="radio-board">
+      <div class="radio-dial" aria-hidden="true">
+        <span>PC</span>
+        <strong>90245</strong>
+      </div>
+      <div class="bulletin-list">
+        {RADIO_BULLETINS.map((bulletin) => (
+          <a class="bulletin" href={bulletin.href}>
+            <span>{bulletin.band}</span>
+            <strong>{bulletin.title}</strong>
+            <em>{bulletin.copy}</em>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section id="routes" class="play-section" aria-labelledby="routes-title" data-play-section="routes">
+    <div class="section-head">
+      <p class="kicker">COLLECTIBLE ROUTES</p>
+      <h2 id="routes-title">Finish loops, unlock route cards.</h2>
+    </div>
+    <div class="route-grid">
+      {COLLECTIBLE_ROUTES.map((route) => (
+        <article class="route-card" data-route-id={route.id} data-route-stamps={route.stamps.join(',')} style={`--route-color: ${route.color}`}>
+          <div class="route-card__head">
+            <span data-route-count>0 / {route.stamps.length}</span>
+            <strong data-route-state>open</strong>
+          </div>
+          <h3>{route.title}</h3>
+          <p>{route.deck}</p>
+          <ol>
+            {route.stamps.map((stampId, index) => (
+              <li data-route-stamp={stampId}>
+                <a href={route.hrefs[index]}>{stampById.get(stampId)?.label ?? stampId}</a>
+              </li>
+            ))}
+          </ol>
+          <button type="button" data-route-button>Claim Card</button>
+          <small>{route.reward}</small>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="builders" class="play-section" aria-labelledby="builders-title" data-play-section="builders">
+    <div class="section-head">
+      <p class="kicker">BUILDER GHOSTS</p>
+      <h2 id="builders-title">Contribution trails become visible.</h2>
+    </div>
+    <div class="ghost-grid">
+      {BUILDER_GHOSTS.map((ghost, index) => (
+        <article class="ghost">
+          <img src={`https://noun.pics/${137 + index * 77}.svg`} alt="" width="52" height="52" loading="lazy" />
+          <div>
+            <span>{ghost.role}</span>
+            <h3><a href={ghost.href}>{ghost.name}</a></h3>
+            <p>{ghost.signal}</p>
+            <nav aria-label={`${ghost.name} trails`}>
+              {ghost.trails.map((trail) => <a href={trail}>{trail}</a>)}
+            </nav>
+            <button type="button" data-stamp-button data-stamp-id="builder-ghost">Trace</button>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="civic" class="play-section" aria-labelledby="civic-title" data-play-section="civic">
+    <div class="section-head section-head--split">
+      <div>
+        <p class="kicker">TINY CIVIC LAYER</p>
+        <h2 id="civic-title">Wishes route the next public artifact.</h2>
+      </div>
+      <a class="section-link" href="/poll/pointcast-next-build">Vote</a>
+    </div>
+    <div class="civic-grid">
+      {CIVIC_WISHES.map((wish) => (
+        <a class="wish" href={wish.href}>
+          <span>{wish.status}</span>
+          <strong>{wish.title}</strong>
+          <em>{wish.outcome}</em>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section id="pet" class="play-section play-section--pet" aria-labelledby="pet-title" data-play-section="pet">
+    <div class="section-head">
+      <p class="kicker">POINTCAST PET</p>
+      <h2 id="pet-title">It grows from what you do here.</h2>
+    </div>
+    <div class="pet-shell">
+      <div class="pet-stage">
+        <img src="https://noun.pics/404.svg" alt="" width="120" height="120" loading="lazy" />
+        <strong data-pet-state>sleepy signal</strong>
+      </div>
+      <div class="pet-panel">
+        <div class="pet-gauges">
+          {['signal', 'glow', 'calm', 'charge'].map((stat) => (
+            <div class="pet-gauge" data-pet-gauge={stat}>
+              <span>{stat}</span>
+              <i style="--pet-gauge: 8%"></i>
+              <strong data-pet-value>8</strong>
+            </div>
+          ))}
+        </div>
+        <div class="pet-actions">
+          {PET_CARE_ACTIONS.map((action) => (
+            <button type="button" data-pet-action={action.id} data-pet-stamp={action.stampId}>
+              <strong>{action.label}</strong>
+              <span>{action.line}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="derby-season" class="play-section" aria-labelledby="derby-season-title" data-play-section="derby-season">
+    <div class="section-head section-head--split">
+      <div>
+        <p class="kicker">DERBY SEASON</p>
+        <h2 id="derby-season-title">{DERBY_SEASON.title}</h2>
+      </div>
+      <a class="section-link" href="/agent-derby">Run Race</a>
+    </div>
+    <div class="season-grid">
+      <article class="season-panel">
+        <p>{DERBY_SEASON.cadence}</p>
+        <div class="ticket-row">
+          {DERBY_SEASON.ticketRewards.map((ticket) => (
+            <span>{ticket.label} +{ticket.points}</span>
+          ))}
+        </div>
+      </article>
+      <article class="season-panel">
+        <h3>Standings</h3>
+        <ol class="standings">
+          {DERBY_SEASON.standings.map((row) => {
+            const horse = DERBY_ROSTER.find((entry) => entry.slug === row.horseSlug);
+            return (
+              <li>
+                <span>{row.rank}</span>
+                <strong>{horse?.name ?? row.horseSlug}</strong>
+                <em>{row.points} pts · {row.record}</em>
+              </li>
+            );
+          })}
+        </ol>
+      </article>
+      <article class="season-panel">
+        <h3>Feature Seeds</h3>
+        <div class="feature-list">
+          {DERBY_SEASON.featureRaces.map((race) => (
+            <a href={`/agent-derby?seed=${race.seed}&track=${race.track}&agents=${race.agents.join(',')}`}>
+              <strong>{race.label}</strong>
+              <span>{race.track} · {race.seed}</span>
+            </a>
+          ))}
+        </div>
+      </article>
+    </div>
+  </section>
+</div>
+
+<script type="application/json" id="play-layer-data" set:html={JSON.stringify(appData)}></script>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-play-layer]');
+    var dataEl = document.getElementById('play-layer-data');
+    if (!root || !dataEl) return;
+
+    var DATA = JSON.parse(dataEl.textContent || '{}');
+    var STAMP_KEY = 'pc:passport:stamps';
+    var QUEST_KEY = 'pc:quests';
+    var PET_KEY = 'pc:pet:care';
+    var WALK_KEY = 'pc:walk:' + (DATA.today || 'today');
+    var stampMeta = {};
+    (DATA.stamps || []).forEach(function (stamp) { stampMeta[stamp.id] = stamp; });
+
+    function readJson(key, fallback) {
+      try {
+        var raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        var parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function writeJson(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+
+    function stamps() {
+      return readJson(STAMP_KEY, {});
+    }
+
+    function setStamp(id, via) {
+      if (!id) return;
+      var current = stamps();
+      current[id] = current[id] || { id: id, at: new Date().toISOString(), via: via || 'play-layer' };
+      writeJson(STAMP_KEY, current);
+      paint();
+    }
+
+    function completedStampIds() {
+      return Object.keys(stamps()).filter(function (id) { return !!stampMeta[id]; });
+    }
+
+    function paintPassport() {
+      var current = stamps();
+      var ids = completedStampIds();
+      var points = ids.reduce(function (sum, id) {
+        return sum + (Number(stampMeta[id] && stampMeta[id].points) || 0);
+      }, 0);
+
+      root.querySelectorAll('[data-passport-count]').forEach(function (el) { el.textContent = String(ids.length); });
+      root.querySelectorAll('[data-passport-points]').forEach(function (el) { el.textContent = String(points); });
+
+      root.querySelectorAll('[data-passport-stamp]').forEach(function (el) {
+        var id = el.getAttribute('data-passport-stamp');
+        var done = !!current[id];
+        el.classList.toggle('is-collected', done);
+        var status = el.querySelector('[data-stamp-status]');
+        if (status) status.textContent = done ? 'stamped ' + new Date(current[id].at).toLocaleDateString() : 'open';
+      });
+
+      root.querySelectorAll('[data-stamp-button]').forEach(function (button) {
+        var id = button.getAttribute('data-stamp-id');
+        var done = !!current[id];
+        button.classList.toggle('is-done', done);
+        if (!button.hasAttribute('data-pet-action')) button.textContent = done ? 'Stamped' : (button.dataset.defaultText || button.textContent || 'Stamp');
+      });
+    }
+
+    function walkState() {
+      return readJson(WALK_KEY, {});
+    }
+
+    function paintWalk() {
+      var state = walkState();
+      var total = (DATA.walkSteps || []).length || 1;
+      var done = 0;
+      root.querySelectorAll('[data-walk-step]').forEach(function (el) {
+        var id = el.getAttribute('data-walk-step');
+        var isDone = !!state[id];
+        if (isDone) done += 1;
+        el.classList.toggle('is-done', isDone);
+        var button = el.querySelector('[data-walk-button]');
+        if (button) button.textContent = isDone ? 'Done' : 'Done';
+      });
+      root.querySelectorAll('[data-walk-count]').forEach(function (el) { el.textContent = String(done); });
+      var pct = Math.round((done / total) * 100);
+      root.querySelectorAll('[data-walk-progress]').forEach(function (el) { el.style.setProperty('--walk-progress', pct + '%'); });
+    }
+
+    function questState() {
+      return readJson(QUEST_KEY, {});
+    }
+
+    function paintQuests() {
+      var state = questState();
+      root.querySelectorAll('[data-quest-id]').forEach(function (el) {
+        var id = el.getAttribute('data-quest-id');
+        var value = state[id] || 'open';
+        el.classList.toggle('is-claimed', value === 'claimed');
+        el.classList.toggle('is-done', value === 'done');
+        var stateEl = el.querySelector('[data-quest-state]');
+        if (stateEl) stateEl.textContent = value;
+      });
+    }
+
+    function paintRoutes() {
+      var current = stamps();
+      root.querySelectorAll('[data-route-id]').forEach(function (el) {
+        var ids = (el.getAttribute('data-route-stamps') || '').split(',').filter(Boolean);
+        var done = ids.filter(function (id) { return !!current[id]; });
+        var complete = ids.length > 0 && done.length === ids.length;
+        el.classList.toggle('is-complete', complete);
+        var count = el.querySelector('[data-route-count]');
+        if (count) count.textContent = done.length + ' / ' + ids.length;
+        var state = el.querySelector('[data-route-state]');
+        if (state) state.textContent = complete ? 'ready' : 'open';
+        el.querySelectorAll('[data-route-stamp]').forEach(function (row) {
+          row.classList.toggle('is-done', !!current[row.getAttribute('data-route-stamp')]);
+        });
+      });
+    }
+
+    function petCare() {
+      var raw = readJson(PET_KEY, []);
+      return Array.isArray(raw) ? raw : [];
+    }
+
+    function paintPet() {
+      var current = stamps();
+      var care = petCare();
+      var scores = { signal: 8, glow: 8, calm: 8, charge: 8 };
+      (DATA.petActions || []).forEach(function (action) {
+        if (current[action.stampId]) scores[action.stat] += Number(action.effect || 0);
+      });
+      care.forEach(function (entry) {
+        var action = (DATA.petActions || []).find(function (candidate) { return candidate.id === entry.id; });
+        if (action) scores[action.stat] += 10;
+      });
+
+      Object.keys(scores).forEach(function (key) {
+        scores[key] = Math.max(0, Math.min(100, scores[key]));
+        root.querySelectorAll('[data-pet-gauge="' + key + '"]').forEach(function (el) {
+          var bar = el.querySelector('i');
+          var value = el.querySelector('[data-pet-value]');
+          if (bar) bar.style.setProperty('--pet-gauge', scores[key] + '%');
+          if (value) value.textContent = String(scores[key]);
+        });
+      });
+
+      var avg = Math.round((scores.signal + scores.glow + scores.calm + scores.charge) / 4);
+      var label = avg >= 70 ? 'bright signal' : avg >= 44 ? 'awake signal' : 'sleepy signal';
+      root.querySelectorAll('[data-pet-state]').forEach(function (el) { el.textContent = label; });
+    }
+
+    function paint() {
+      paintPassport();
+      paintWalk();
+      paintQuests();
+      paintRoutes();
+      paintPet();
+    }
+
+    root.querySelectorAll('[data-stamp-button]').forEach(function (button) {
+      button.dataset.defaultText = button.textContent || 'Stamp';
+      button.addEventListener('click', function () {
+        setStamp(button.getAttribute('data-stamp-id'), 'button');
+      });
+    });
+
+    root.querySelectorAll('[data-walk-button]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var id = button.getAttribute('data-step-id');
+        var state = walkState();
+        state[id] = { at: new Date().toISOString() };
+        writeJson(WALK_KEY, state);
+        var parent = button.closest('[data-walk-step]');
+        var stampId = parent && parent.getAttribute('data-step-stamp');
+        if (stampId) setStamp(stampId, 'daily-walk');
+        paint();
+      });
+    });
+
+    root.querySelectorAll('[data-quest-action]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var id = button.getAttribute('data-quest-id');
+        var action = button.getAttribute('data-quest-action') || 'claimed';
+        var state = questState();
+        state[id] = action;
+        writeJson(QUEST_KEY, state);
+        setStamp('quest-claim', 'quest-board');
+        paint();
+      });
+    });
+
+    root.querySelectorAll('[data-route-button]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var card = button.closest('[data-route-id]');
+        if (!card || !card.classList.contains('is-complete')) return;
+        setStamp('route-card', 'route-complete');
+      });
+    });
+
+    root.querySelectorAll('[data-pet-action]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var id = button.getAttribute('data-pet-action');
+        var care = petCare();
+        care.push({ id: id, at: new Date().toISOString() });
+        writeJson(PET_KEY, care.slice(-24));
+        setStamp('pet-care', 'pet');
+        paint();
+      });
+    });
+
+    paint();
+
+    if (DATA.focus && DATA.focus !== 'overview') {
+      var target = document.getElementById(DATA.focus);
+      if (target) {
+        setTimeout(function () { target.scrollIntoView({ block: 'start' }); }, 60);
+      }
+    }
+  })();
+</script>
+
+<style>
+  .play-layer {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 18px 20px 92px;
+    color: var(--pc-ink);
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .play-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 340px);
+    gap: 18px;
+    align-items: stretch;
+    padding: 22px 0 18px;
+    border-top: 1.5px solid var(--pc-ink);
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .play-hero h1 {
+    max-width: 920px;
+    margin: 0;
+    font-size: clamp(42px, 7vw, 92px);
+    line-height: 0.92;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .play-hero p {
+    max-width: 720px;
+    margin: 12px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 18px;
+    line-height: 1.45;
+  }
+
+  .play-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .play-hero__actions a,
+  .section-link,
+  .radio-tune,
+  .stamp__actions a,
+  .stamp__actions button,
+  .quest__actions a,
+  .quest__actions button,
+  .room__actions a,
+  .room__actions button,
+  .route-card button,
+  .ghost button,
+  .walk-step button {
+    min-height: 34px;
+    border: 1px solid var(--pc-ink);
+    border-radius: 0;
+    padding: 8px 10px;
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .play-hero__actions a:hover,
+  .section-link:hover,
+  button:hover {
+    background: #eef4fa;
+    text-decoration: none;
+  }
+
+  .passport-meter {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    padding: 16px;
+    border: 1px solid var(--pc-ink);
+    background:
+      linear-gradient(135deg, rgba(24, 95, 165, 0.12), transparent 46%),
+      #fafaf7;
+  }
+
+  .passport-meter img,
+  .ghost img,
+  .pet-stage img {
+    image-rendering: pixelated;
+  }
+
+  .passport-meter__label,
+  .passport-meter__points {
+    display: block;
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .passport-meter strong {
+    display: block;
+    margin: 4px 0;
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .surface-rail {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1px;
+    margin: 14px 0;
+    border: 1px solid var(--pc-rule);
+    background: var(--pc-rule);
+  }
+
+  .surface-chip {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px;
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .surface-chip:hover,
+  .surface-chip.is-active {
+    background: #12110e;
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .surface-chip span {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+  }
+
+  .surface-chip.is-active span {
+    color: #f7d56b;
+  }
+
+  .surface-chip strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .play-section {
+    scroll-margin-top: 18px;
+    padding: 22px 0;
+    border-top: 1px solid var(--pc-rule);
+  }
+
+  .section-head {
+    margin-bottom: 14px;
+  }
+
+  .section-head--split {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .section-head h2 {
+    max-width: 840px;
+    margin: 0;
+    font-size: clamp(26px, 4vw, 46px);
+    line-height: 1;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .progress-pill {
+    padding: 10px 12px;
+    border: 1px solid var(--pc-ink);
+    background: #f7d56b;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .system-grid,
+  .stamp-grid,
+  .quest-grid,
+  .weather-grid,
+  .route-grid,
+  .ghost-grid,
+  .civic-grid,
+  .season-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .system-tile,
+  .stamp,
+  .quest,
+  .room,
+  .route-card,
+  .ghost,
+  .wish,
+  .season-panel {
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .system-tile,
+  .wish {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    color: var(--pc-ink);
+  }
+
+  .system-tile:hover,
+  .wish:hover {
+    border-color: var(--pc-ink);
+    background: #fafaf7;
+    text-decoration: none;
+  }
+
+  .system-tile span,
+  .wish span,
+  .stamp__category,
+  .quest__head,
+  .room__head,
+  .route-card__head,
+  .ghost span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .system-tile strong,
+  .wish strong,
+  .stamp h3,
+  .quest h3,
+  .room h3,
+  .route-card h3,
+  .ghost h3,
+  .season-panel h3 {
+    margin: 0;
+    color: var(--pc-ink);
+    font-size: 18px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .system-tile em,
+  .wish em {
+    color: var(--pc-ink-soft);
+    font-style: normal;
+    line-height: 1.35;
+  }
+
+  .stamp,
+  .quest,
+  .room,
+  .route-card,
+  .season-panel {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .stamp {
+    min-height: 205px;
+  }
+
+  .stamp.is-collected {
+    border-color: #2f8f5f;
+    background: #f4f8f4;
+    box-shadow: inset 0 4px 0 #2f8f5f;
+  }
+
+  .stamp__top,
+  .quest__head,
+  .room__head,
+  .route-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .stamp__top strong {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-weight: 500;
+  }
+
+  .stamp p,
+  .quest p,
+  .room p,
+  .route-card p,
+  .ghost p,
+  .season-panel p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .stamp__actions,
+  .quest__actions,
+  .room__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: auto;
+  }
+
+  .stamp small,
+  .route-card small {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  button.is-done {
+    background: #12110e;
+    color: #fff;
+  }
+
+  .walk-track {
+    position: relative;
+    display: grid;
+    gap: 8px;
+  }
+
+  .walk-track::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 0;
+    width: var(--walk-progress);
+    height: 4px;
+    background: #185fa5;
+  }
+
+  .walk-step {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .walk-step.is-done {
+    border-color: #2f8f5f;
+    background: #f4f8f4;
+  }
+
+  .walk-step__num {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 24px;
+  }
+
+  .walk-step h3 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  .walk-step p {
+    margin: 0 0 4px;
+    color: var(--pc-ink-soft);
+  }
+
+  .walk-step a {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .quest {
+    min-height: 285px;
+  }
+
+  .quest.is-claimed {
+    border-color: #f4b23f;
+    box-shadow: inset 0 4px 0 #f4b23f;
+  }
+
+  .quest.is-done {
+    border-color: #2f8f5f;
+    box-shadow: inset 0 4px 0 #2f8f5f;
+  }
+
+  .quest dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .quest dt {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .quest dd {
+    margin: 2px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .room {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .room__bar {
+    height: 7px;
+    background: linear-gradient(90deg, var(--room-color) var(--room-intensity), #ebe8df var(--room-intensity));
+  }
+
+  .room ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .room li {
+    padding: 4px 6px;
+    background: color-mix(in oklab, var(--room-color) 12%, #fff);
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .radio-board {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .radio-dial {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    min-height: 280px;
+    border: 1px solid var(--pc-ink);
+    background:
+      repeating-linear-gradient(90deg, rgba(18, 17, 14, 0.08) 0 2px, transparent 2px 14px),
+      #f7d56b;
+    color: #12110e;
+  }
+
+  .radio-dial span {
+    font-family: var(--pc-font-mono);
+    font-size: 20px;
+  }
+
+  .radio-dial strong {
+    font-size: 54px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .bulletin-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .bulletin {
+    display: grid;
+    gap: 5px;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+  }
+
+  .bulletin:hover {
+    border-color: var(--pc-ink);
+    background: #fafaf7;
+    text-decoration: none;
+  }
+
+  .bulletin span,
+  .ticket-row span,
+  .feature-list span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .bulletin strong,
+  .feature-list strong {
+    font-weight: 500;
+  }
+
+  .bulletin em {
+    color: var(--pc-ink-soft);
+    font-style: normal;
+  }
+
+  .route-card {
+    border-top: 5px solid var(--route-color);
+  }
+
+  .route-card.is-complete {
+    background: color-mix(in oklab, var(--route-color) 8%, #fff);
+  }
+
+  .route-card ol {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .route-card li {
+    color: var(--pc-ink-muted);
+  }
+
+  .route-card li.is-done {
+    color: #2f8f5f;
+  }
+
+  .route-card li.is-done a {
+    color: #2f8f5f;
+  }
+
+  .route-card button {
+    width: max-content;
+    max-width: 100%;
+  }
+
+  .ghost-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ghost {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .ghost nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+  }
+
+  .ghost nav a {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .pet-shell {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .pet-stage {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    min-height: 320px;
+    border: 1px solid var(--pc-ink);
+    background:
+      repeating-linear-gradient(135deg, rgba(47, 143, 95, 0.12) 0 2px, transparent 2px 16px),
+      #f4f8f4;
+  }
+
+  .pet-stage strong {
+    margin-top: 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .pet-panel {
+    display: grid;
+    gap: 12px;
+  }
+
+  .pet-gauges,
+  .pet-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pet-gauge,
+  .pet-actions button {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .pet-gauge span,
+  .pet-actions span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .pet-gauge i {
+    display: block;
+    height: 8px;
+    background: linear-gradient(90deg, #2f8f5f var(--pet-gauge), #ebe8df var(--pet-gauge));
+  }
+
+  .pet-gauge strong,
+  .pet-actions strong {
+    font-weight: 500;
+  }
+
+  .ticket-row,
+  .feature-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ticket-row span {
+    padding: 5px 7px;
+    background: #fff8df;
+    border: 1px solid #e6d286;
+  }
+
+  .standings {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .standings li {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+
+  .standings span {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+  }
+
+  .standings strong,
+  .standings em {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .standings em {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .feature-list {
+    display: grid;
+  }
+
+  .feature-list a {
+    display: grid;
+    gap: 3px;
+    padding: 8px;
+    border: 1px solid var(--pc-rule);
+  }
+
+  .feature-list a:hover {
+    border-color: var(--pc-ink);
+    text-decoration: none;
+  }
+
+  @media (max-width: 1080px) {
+    .surface-rail,
+    .system-grid,
+    .stamp-grid,
+    .quest-grid,
+    .weather-grid,
+    .route-grid,
+    .civic-grid,
+    .season-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .play-hero,
+    .radio-board,
+    .pet-shell {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .play-layer {
+      padding: 12px 12px 88px;
+    }
+
+    .play-hero h1 {
+      font-size: 42px;
+    }
+
+    .play-hero p {
+      font-size: 16px;
+    }
+
+    .surface-rail,
+    .system-grid,
+    .stamp-grid,
+    .quest-grid,
+    .weather-grid,
+    .route-grid,
+    .ghost-grid,
+    .civic-grid,
+    .season-grid,
+    .pet-gauges,
+    .pet-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .section-head--split {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    .walk-step {
+      grid-template-columns: 38px minmax(0, 1fr);
+    }
+
+    .walk-step button {
+      grid-column: 2;
+      width: max-content;
+      max-width: 100%;
+    }
+
+    .standings li {
+      grid-template-columns: 28px minmax(0, 1fr);
+    }
+
+    .standings em {
+      grid-column: 2;
+    }
+  }
+</style>

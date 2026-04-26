@@ -5,7 +5,7 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import WalletChip from '../components/WalletChip.astro';
 import contracts from '../data/contracts.json';
-import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_STATS, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
+import { DERBY_POSTERS, DERBY_ROSTER, DERBY_RULEBOOK, DERBY_SEASON, DERBY_STATS, DERBY_TRACKS, DERBY_VERSION } from '../lib/agent-derby';
 
 const derbyReceiptContract = (contracts as any).agent_derby_receipts ?? {};
 const derbyChain = {
@@ -22,6 +22,7 @@ const derbyData = {
   roster: DERBY_ROSTER,
   posters: DERBY_POSTERS,
   rulebook: DERBY_RULEBOOK,
+  season: DERBY_SEASON,
   chain: derbyChain,
 };
 
@@ -145,6 +146,52 @@ const jsonLd = {
               <small>{poster.palette.join(' / ')}</small>
             </a>
           ))}
+        </div>
+      </section>
+
+      <section class="season-board" aria-labelledby="season-board-title">
+        <div class="season-board__head">
+          <div>
+            <p class="season-board__kicker">league table / tickets / feature seeds</p>
+            <h2 id="season-board-title">{DERBY_SEASON.title}</h2>
+          </div>
+          <a href="/play#derby-season">Play layer</a>
+        </div>
+        <div class="season-board__grid">
+          <article class="season-card season-card--intro">
+            <p>{DERBY_SEASON.cadence}</p>
+            <div class="ticket-row">
+              {DERBY_SEASON.ticketRewards.map((ticket) => (
+                <span>{ticket.label} · +{ticket.points}</span>
+              ))}
+            </div>
+          </article>
+          <article class="season-card">
+            <h3>Standings</h3>
+            <ol class="season-standings">
+              {DERBY_SEASON.standings.map((row) => {
+                const horse = DERBY_ROSTER.find((entry) => entry.slug === row.horseSlug);
+                return (
+                  <li>
+                    <span>{row.rank}</span>
+                    <strong>{horse?.name ?? row.horseSlug}</strong>
+                    <em>{row.points} pts · {row.record}</em>
+                  </li>
+                );
+              })}
+            </ol>
+          </article>
+          <article class="season-card">
+            <h3>Feature Seeds</h3>
+            <div class="feature-races">
+              {DERBY_SEASON.featureRaces.map((race) => (
+                <a href={`/agent-derby?seed=${race.seed}&track=${race.track}&agents=${race.agents.join(',')}`}>
+                  <strong>{race.label}</strong>
+                  <span>{race.track} · {race.seed}</span>
+                </a>
+              ))}
+            </div>
+          </article>
         </div>
       </section>
 
@@ -1373,6 +1420,146 @@ const jsonLd = {
     text-transform: uppercase;
   }
 
+  .season-board {
+    padding: 18px 0;
+    border-bottom: 1px solid #c7c0ad;
+    background:
+      linear-gradient(90deg, rgba(24, 95, 165, 0.08), transparent 48%),
+      #fffdf4;
+  }
+
+  .season-board__head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+
+  .season-board__kicker {
+    margin: 0 0 5px;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .season-board__head h2 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .season-board__head a {
+    align-self: center;
+    padding: 7px 9px;
+    border: 1px solid #12110e;
+    background: #fff;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .season-board__grid {
+    display: grid;
+    grid-template-columns: 0.9fr 1fr 1fr;
+    gap: 10px;
+  }
+
+  .season-card {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #12110e;
+    background: #fff;
+  }
+
+  .season-card h3 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .season-card p {
+    margin: 0;
+    color: #38373a;
+    line-height: 1.45;
+  }
+
+  .ticket-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 12px;
+  }
+
+  .ticket-row span {
+    padding: 5px 7px;
+    border: 1px solid #e6d286;
+    background: #fff8df;
+    color: #5f5e5a;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .season-standings {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .season-standings li {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #ebe6d7;
+  }
+
+  .season-standings span,
+  .season-standings em,
+  .feature-races span {
+    color: #5f5e5a;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .season-standings strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+  }
+
+  .feature-races {
+    display: grid;
+    gap: 6px;
+  }
+
+  .feature-races a {
+    display: grid;
+    gap: 3px;
+    padding: 8px;
+    border: 1px solid #c7c0ad;
+    color: #12110e;
+  }
+
+  .feature-races a:hover {
+    border-color: #12110e;
+    background: #eef6f0;
+    text-decoration: none;
+  }
+
+  .feature-races strong {
+    font-weight: 500;
+  }
+
   .race-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
@@ -2047,7 +2234,8 @@ const jsonLd = {
     .control-deck,
     .play-deck,
     .race-grid,
-    .race-bottom {
+    .race-bottom,
+    .season-board__grid {
       grid-template-columns: 1fr;
     }
 
@@ -2081,6 +2269,7 @@ const jsonLd = {
     .mast__rail,
     .poster-wall__head,
     .quick-picks,
+    .season-board__head,
     .poster-grid {
       grid-template-columns: 1fr;
     }
@@ -2096,7 +2285,8 @@ const jsonLd = {
       overflow-wrap: anywhere;
     }
 
-    .poster-wall__head a {
+    .poster-wall__head a,
+    .season-board__head a {
       justify-self: start;
     }
 
@@ -2110,6 +2300,7 @@ const jsonLd = {
     }
 
     .track-tabs,
+    .season-standings li,
     .podium,
     .stats {
       grid-template-columns: 1fr;
