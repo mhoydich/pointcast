@@ -47,6 +47,56 @@ const siteBase = Astro.site || new URL('https://pointcast.xyz');
 const canonicalURL = new URL(Astro.url.pathname, siteBase);
 const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
 const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} — PointCast`;
+
+// Default Schema.org JSON-LD for drum surfaces. Marks each /drum* page as
+// a WebApplication / MusicComposition hybrid so AI agents and rich-result
+// consumers (Google, ChatGPT, Perplexity, etc.) can discover that this
+// is an interactive collaborative music tool. A page can override by
+// passing its own jsonLd prop.
+const defaultJsonLd = jsonLd ?? {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebApplication',
+      '@id': `${canonicalURL.href}#webapp`,
+      name: siteTitle,
+      url: canonicalURL.href,
+      description,
+      applicationCategory: 'Game',
+      applicationSubCategory: 'Music',
+      operatingSystem: 'Any (web browser)',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      browserRequirements: 'Requires JavaScript and Web Audio API support.',
+      featureList: [
+        'Multiplayer drum room',
+        'Pentatonic voice assignment for harmonic collaboration',
+        'Real-time peer drum events',
+        'Tezos DRUM token rewards (Phase C)',
+        'Spotify track sync (v3)',
+      ],
+      potentialAction: {
+        '@type': 'PlayAction',
+        target: canonicalURL.href,
+      },
+    },
+    {
+      '@type': 'CreativeWork',
+      '@id': `${canonicalURL.href}#creative`,
+      name: 'PointCast Drum Room',
+      author: {
+        '@type': 'Person',
+        name: 'Mike Hoydich',
+        url: 'https://pointcast.xyz/about',
+      },
+      isPartOf: {
+        '@type': 'WebSite',
+        name: 'PointCast',
+        url: 'https://pointcast.xyz',
+      },
+      keywords: 'collaborative drum machine, online drum, pentatonic, Tezos, Nouns, multiplayer music, real-time browser audio',
+    },
+  ],
+};
 ---
 
 <!doctype html>
@@ -73,7 +123,7 @@ const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} —
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:site" content="@mhoydich" />
 
-    {jsonLd && <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />}
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(defaultJsonLd)} />
 
     <title>{siteTitle}</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

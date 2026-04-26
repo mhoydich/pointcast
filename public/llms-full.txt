@@ -143,9 +143,64 @@ objkt: https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh
 
 Contract: `contracts/v2/drum_token.py` (511 LOC, written)
 Standard: FA1.2 fungible token with signed-voucher claim flow
-Purpose: Attention token earned by drumming on /drum
-Issuance: Drum tokens claimable via voucher after N taps
+Purpose: Attention token earned by drumming on /drum*
+Issuance: 100 drums = 1 DRUM token, claimable to a connected Tezos
+wallet via signed voucher. Drum count aggregates across all four drum
+surfaces (v1 classic, v2 collab, v3 spotify, apr26 sequencer) since
+they share localStorage state.
 Status: Awaiting ghostnet origination (blocked on SmartPy compile)
+
+## Drum Room (four surfaces, one shared count)
+
+The drum surfaces are PointCast's most playable and most multi-agent:
+several Claude sessions have shipped variants in parallel and they all
+coexist behind a `<DrumNav>` 4-pill toggle.
+
+- /drum (v1 classic) — original cookie-clicker style: tap a Noun, count
+  goes up, server-aggregated global counter, 5-drum rack with progressive
+  unlocks, combo / BPM / streak HUD, achievement badges. Single player
+  with presence strip showing other people in the room.
+
+- /drum-v2 (collab) — pentatonic music maker. Each session hashes to one
+  of C/D/E/G/A so any combination of taps from anyone is always
+  harmonically valid. Combos layer chord tones (x2 5th, x3 3rd, x5
+  octave + 12th). Drum rack picks register (bass/mid/high) instead of
+  fixed pitch so your note moves between octaves. Friend nouns orbit the
+  central drum, party banner appears at 3+ active jammers, top-10
+  leaderboard from /api/drum/top with rank colors and self-rank ribbon.
+  Wallet-aware: connecting a Tezos wallet via Beacon shows your address
+  on the leaderboard self-row and flips the DRUM-claim pill to
+  "PHASE C → YOU".
+
+- /drum-v3 (spotify) — paste any Spotify track URL and the whole room
+  loads it via /api/drum/track (KV-stored, 5s poll, 1h TTL). Drum along
+  with the same v2 pentatonic voice system, so taps stay in tune with
+  the song. /api/spotify/search and /api/spotify/track wrap the
+  Spotify Web API via Client Credentials Flow when SPOTIFY_CLIENT_ID +
+  SPOTIFY_CLIENT_SECRET env vars are set on Pages. Without them, paste-
+  URL still works; search bar gracefully hides. BPM-driven metronome
+  pill pulses to the track's tempo.
+
+- /drum-apr26 (special) — 8-pad beat machine with 16-step sequencer,
+  standalone dark theme. Pads: kick / snare / hats / open-hat / clap /
+  toms / ride. QWER + ASDF keyboard pads. All sounds synthesized in-
+  browser via Web Audio.
+
+Shared state across all four:
+- localStorage `pc:drumLocalCount` — your total tap count
+- localStorage `pc:drumBadgesV1`, `pc:drumUnlocks` — earned badges/tiers
+- localStorage `pc:wallets`, `pc:wallet-active` — Tezos wallet via Beacon
+- KV `drum:total` — global cumulative count
+- KV `drum:top` — top-10 leaderboard
+- KV `drum:track:current` — collaborative now-playing track for v3
+- KV `sounds:buffer` — broadcast events for cross-page real-time echo
+
+Audio architecture (v2/v3): Web Audio API, AudioContext with
+`latencyHint: 'interactive'`, sine fundamental + triangle octave for
+mallet warmth, exponential gain decay. Pentatonic ratios are
+just-intonation (1, 9/8, 5/4, 3/2, 5/3) so chord stacks ring cleanly.
+Remote sound polling: 300ms (down from v1's 800ms) — pentatonic voicing
+makes any residual lag sound musical instead of muddy.
 
 ### Prize Cast — PENDING COMPILE
 
