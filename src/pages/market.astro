@@ -689,7 +689,7 @@ const collections = supported
               '<p class="market-card__price">' + priceXtz + ' ꜩ</p>' +
               '<p class="market-card__seller">seller ' + shortAddr(seller) + (royaltyBps > 0 ? ' · ' + (royaltyBps / 100).toFixed(1) + '% royalty' : '') + '</p>' +
               (isSelf
-                ? '<button class="market-card__buy" data-state="self" disabled title="you are the seller">your listing · cancel via dashboard</button>'
+                ? '<button class="market-card__buy" data-state="self" data-cancel-ask="' + askId + '" title="cancel this listing">your listing · cancel</button>'
                 : '<button class="market-card__buy" data-buy-ask="' + askId + '">Buy for ' + priceXtz + ' ꜩ</button>') +
             '</div>' +
           '</li>'
@@ -702,6 +702,12 @@ const collections = supported
           const card = btn.closest('.market-card');
           if (!card) return;
           buyAsk(parseInt(btn.getAttribute('data-buy-ask'), 10), parseInt(card.getAttribute('data-price'), 10), btn);
+        });
+      });
+      // Wire cancel handlers for own listings
+      grid.querySelectorAll('[data-cancel-ask]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          cancelAsk(parseInt(btn.getAttribute('data-cancel-ask'), 10), btn);
         });
       });
     } catch (err) {
@@ -753,6 +759,48 @@ const collections = supported
       if (/ABORTED|reject|cancel/i.test(msg)) btn.textContent = 'cancelled';
       else if (/INCORRECT_AMOUNT/i.test(msg)) btn.textContent = 'price changed · refresh';
       else if (/NotEnoughBalance|balance/i.test(msg)) btn.textContent = 'not enough ꜩ';
+      else btn.textContent = 'error: ' + msg.slice(0, 40);
+      setTimeout(function () { btn.disabled = false; btn.textContent = original; }, 4000);
+    }
+  }
+
+  // ── Cancel flow (seller's own listings) ─────────────────────────────
+  async function cancelAsk(askId, btn) {
+    const wallet = readWallet();
+    if (!wallet) return;
+    const kt1 = readMarketplaceKt1();
+    if (!kt1) return;
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'awaiting kukai…';
+
+    try {
+      const taquito = await import('@taquito/taquito');
+      const beacon = await import('@taquito/beacon-wallet');
+      const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+      const beaconWallet = new beacon.BeaconWallet({
+        name: 'PointCast Market',
+        network: { type: 'mainnet' },
+      });
+      tezos.setWalletProvider(beaconWallet);
+      const active = await beaconWallet.client.getActiveAccount();
+      if (!active || (active.network && active.network.type !== 'mainnet')) {
+        try { await beaconWallet.clearActiveAccount(); } catch (e) {}
+        await beaconWallet.client.requestPermissions();
+      }
+      const contract = await tezos.wallet.at(kt1);
+      const op = await contract.methodsObject.cancel_ask(askId).send();
+      btn.textContent = 'broadcast ' + (op.opHash || '').slice(0, 8) + '…';
+      await op.confirmation();
+      btn.textContent = '✓ cancelled';
+      // Refresh the grid to drop the now-cancelled ask.
+      setTimeout(loadAsks, 1500);
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      if (/ABORTED|reject|cancel/i.test(msg)) btn.textContent = 'cancelled · retry?';
+      else if (/NOT_SELLER/i.test(msg)) btn.textContent = 'not the seller (?)';
+      else if (/ASK_NOT_FOUND/i.test(msg)) btn.textContent = 'already gone';
       else btn.textContent = 'error: ' + msg.slice(0, 40);
       setTimeout(function () { btn.disabled = false; btn.textContent = original; }, 4000);
     }
