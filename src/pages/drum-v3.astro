@@ -1,0 +1,1210 @@
+---
+/**
+ * /drum-v3 — Spotify-synced collaborative drum room.
+ *
+ * Paste a Spotify track URL (or search if env's configured) → Spotify's
+ * embed iframe loads the track → drum along to it. The track choice is
+ * collaborative: it broadcasts to /api/drum/track so anyone else in the
+ * room loads the same track. BPM-aware: the metronome dot pulses to the
+ * track's tempo, so even though we can't get precise iframe playback time
+ * (Spotify's embed locks that down), the visual feel is "the room is on
+ * this song right now".
+ *
+ * Inherits the v2 pentatonic voice + chord-on-combo synth so when a
+ * couple of strangers tap together, it sounds harmonically valid.
+ *
+ * Signed: Michael Hoydich · Claude Sonnet 4.6 High · 2026-04-26
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+---
+
+<DrumLayout
+  title="Drum Room v3 · Spotify"
+  description="Collaborative drum room synced to a Spotify track. Paste any track URL, drum along together, hear each other in pentatonic harmony."
+  image="/images/og-drum.png"
+>
+
+<div class="v3-root">
+
+  <DrumNav current="v3" />
+
+  <!-- ══ HERO ══ -->
+  <header class="v3-hero">
+    <p class="v3-hero-eyebrow">v3 · spotify · collab</p>
+    <h1 class="v3-hero-title">drum along to a track</h1>
+    <p class="v3-hero-dek">
+      paste a Spotify URL · the room hears it together · pentatonic taps
+      stay in tune · skill rewards build chords.
+    </p>
+  </header>
+
+  <!-- ══ TRACK PICKER ══ -->
+  <section class="v3-picker" aria-label="Pick a Spotify track for the room">
+    <div class="v3-picker-row">
+      <input
+        type="text"
+        id="v3-track-input"
+        class="v3-track-input"
+        placeholder="paste spotify track url or search…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button type="button" id="v3-load-btn" class="v3-load-btn">load &rarr;</button>
+    </div>
+    <p class="v3-picker-status" id="v3-picker-status">
+      the whole room loads what you load · share-paste works (https://open.spotify.com/track/…)
+    </p>
+    <ul id="v3-search-results" class="v3-search-results" role="listbox" hidden></ul>
+  </section>
+
+  <!-- ══ NOW PLAYING ══ -->
+  <section class="v3-now" id="v3-now" hidden>
+    <div class="v3-now-meta">
+      <img id="v3-now-cover" class="v3-now-cover" src="" alt="" loading="lazy" />
+      <div class="v3-now-text">
+        <p class="v3-now-eyebrow">now playing · room shared</p>
+        <p class="v3-now-title" id="v3-now-title">—</p>
+        <p class="v3-now-artist" id="v3-now-artist">—</p>
+        <div class="v3-now-pills">
+          <span class="v3-now-pill" id="v3-now-bpm-pill">bpm —</span>
+          <span class="v3-now-pill" id="v3-now-key-pill" hidden>key —</span>
+          <span class="v3-now-pill v3-now-pill--metro" id="v3-metro" aria-hidden="true">●</span>
+          <span class="v3-now-pill" id="v3-now-set-by">set by —</span>
+        </div>
+      </div>
+    </div>
+    <div class="v3-embed-wrap">
+      <iframe
+        id="v3-embed"
+        title="Spotify track"
+        style="border-radius:12px"
+        src=""
+        width="100%"
+        height="152"
+        frameborder="0"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+      ></iframe>
+    </div>
+  </section>
+
+  <!-- ══ VOICE STRIP — your assigned pentatonic note ══ -->
+  <div class="v3-voice-strip" aria-live="polite">
+    <span class="v3-voice-glyph">⌐◨-◨</span>
+    <span class="v3-voice-prefix">your voice</span>
+    <span class="v3-voice-note" id="v3-voice-note">—</span>
+    <span class="v3-voice-reg">·  pentatonic · always in tune with the track</span>
+  </div>
+
+  <!-- ══ MAIN STAGE — big drum, friend orbit ══ -->
+  <div class="v3-stage" id="v3-stage">
+    <div class="v3-orbit" id="v3-orbit" aria-hidden="true"></div>
+    <button
+      id="v3-drum-btn"
+      type="button"
+      class="v3-main-drum"
+      aria-label="Tap to drum"
+      style="touch-action: manipulation;"
+    >
+      <div class="v3-drum-frame" id="v3-drum-frame">
+        <div class="v3-drum-corner v3-drum-corner-tl" aria-hidden="true"></div>
+        <div class="v3-drum-corner v3-drum-corner-tr" aria-hidden="true"></div>
+        <div class="v3-drum-corner v3-drum-corner-bl" aria-hidden="true"></div>
+        <div class="v3-drum-corner v3-drum-corner-br" aria-hidden="true"></div>
+        <img
+          id="v3-drum-img"
+          src="https://noun.pics/42.svg"
+          alt="Drum Noun"
+          width="220"
+          height="220"
+          class="v3-drum-img"
+          style="image-rendering: pixelated;"
+          draggable="false"
+        />
+      </div>
+      <div class="v3-drum-tap-label" id="v3-drum-label">TAP</div>
+    </button>
+    <div class="v3-ripples" id="v3-ripples" aria-hidden="true"></div>
+  </div>
+
+  <!-- ══ HUD ══ -->
+  <div class="v3-hud">
+    <div class="v3-hud-card">
+      <div class="v3-hud-label">Your Drums</div>
+      <div class="v3-hud-val" id="v3-your">0</div>
+    </div>
+    <div class="v3-hud-card v3-hud-combo" id="v3-combo-card">
+      <div class="v3-hud-label">Combo</div>
+      <div class="v3-hud-val" id="v3-combo">×1</div>
+    </div>
+    <div class="v3-hud-card">
+      <div class="v3-hud-label">Your BPM</div>
+      <div class="v3-hud-val" id="v3-bpm">—</div>
+    </div>
+    <div class="v3-hud-card v3-hud-jammers">
+      <div class="v3-hud-label">Jammers</div>
+      <div class="v3-hud-val" id="v3-jammers">1</div>
+    </div>
+  </div>
+
+  <!-- ══ TIP — when nobody's set a track yet ══ -->
+  <div class="v3-tip" id="v3-tip">
+    <p class="v3-tip-line">
+      <strong>tip:</strong> any Spotify track url works. try
+      <button type="button" class="v3-tip-link" data-track="0vFOzaXqZHahrZp6enQwQb">a sample track →</button>
+      or paste your own.
+    </p>
+    <p class="v3-tip-note">
+      if no spotify search bar appears, the API isn't configured yet — paste-URL still works.
+    </p>
+  </div>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="v3-footer">
+    <span>⌐◨-◨ PointCast · Drum Room · v3 spotify</span>
+    <span>Signed: Michael Hoydich · Claude Sonnet 4.6 High · 2026</span>
+  </footer>
+
+</div>
+
+</DrumLayout>
+
+<style is:global>
+  /* ════════════════════════════════════════════════════════════
+     /drum-v3 — Spotify drum room. Global so dynamic search results
+     and orbit nouns inherit styles. All v3- prefixed.
+     ════════════════════════════════════════════════════════════ */
+
+  .v3-root {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    font-family: var(--pc-font-mono);
+  }
+
+  /* ── Hero ─────────────────────────────────────────── */
+  .v3-hero {
+    padding: 14px 0 18px;
+    border-bottom: 1.5px solid var(--pc-rule);
+    margin-bottom: 16px;
+  }
+  .v3-hero-eyebrow {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #1ed760; /* spotify green */
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .v3-hero-title {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(1.5rem, 4vw, 2.25rem);
+    font-weight: 500;
+    color: var(--pc-ink);
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .v3-hero-dek {
+    font-family: var(--pc-font-sans);
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+    line-height: 1.5;
+    margin: 0;
+    max-width: 56ch;
+  }
+
+  /* ── Track picker ─────────────────────────────────── */
+  .v3-picker {
+    margin-bottom: 16px;
+  }
+  .v3-picker-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .v3-track-input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 6px;
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--pc-ink);
+    outline: none;
+    transition: border-color 120ms;
+  }
+  .v3-track-input:focus { border-color: #1ed760; }
+  .v3-load-btn {
+    padding: 10px 18px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 6px;
+    background: var(--pc-ink);
+    color: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .v3-load-btn:hover { background: #1ed760; border-color: #1ed760; }
+  .v3-load-btn[disabled] { opacity: 0.45; cursor: not-allowed; background: var(--pc-ink); }
+  .v3-picker-status {
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .v3-search-results {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 4px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 6px;
+    background: #fff;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .v3-search-result {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 100ms;
+  }
+  .v3-search-result:hover, .v3-search-result:focus { background: var(--pc-rule-soft); outline: none; }
+  .v3-search-result img {
+    width: 40px; height: 40px;
+    border-radius: 3px;
+    object-fit: cover;
+  }
+  .v3-search-result-title { font-size: 11px; font-weight: 600; color: var(--pc-ink); }
+  .v3-search-result-artist { font-size: 9px; color: var(--pc-ink-muted); letter-spacing: 0.06em; }
+  .v3-search-result-bpm {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    color: #1ed760;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* ── Now playing ──────────────────────────────────── */
+  .v3-now {
+    border: 2px solid var(--pc-ink);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 16px;
+    background: #fafaf9;
+    position: relative;
+    overflow: hidden;
+  }
+  .v3-now::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #1ed760, #1db954);
+  }
+  .v3-now-meta {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .v3-now-cover {
+    width: 64px; height: 64px;
+    border-radius: 4px;
+    border: 1.5px solid var(--pc-rule);
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .v3-now-text { flex: 1; min-width: 0; }
+  .v3-now-eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #1ed760;
+    margin: 0 0 4px;
+    font-weight: 600;
+  }
+  .v3-now-title {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    margin: 0 0 2px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .v3-now-artist {
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    color: var(--pc-ink-soft);
+    margin: 0 0 8px;
+  }
+  .v3-now-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .v3-now-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--pc-rule);
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .v3-now-pill--metro {
+    border-color: #1ed760;
+    color: #1ed760;
+    font-size: 12px;
+    line-height: 1;
+    padding: 3px 10px;
+    transition: transform 100ms ease-out, color 100ms;
+  }
+  .v3-now-pill--metro.beat {
+    transform: scale(1.4);
+    color: #fff;
+    background: #1ed760;
+  }
+  .v3-embed-wrap {
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .v3-embed-wrap iframe {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+  }
+
+  /* ── Voice strip ───────────────────────────────────── */
+  .v3-voice-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 999px;
+    background: #fafaf9;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    flex-wrap: wrap;
+  }
+  .v3-voice-glyph { color: var(--pc-ink); font-size: 11px; letter-spacing: 0; }
+  .v3-voice-prefix { color: var(--pc-ink-muted); }
+  .v3-voice-note {
+    font-family: var(--pc-font-mono);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    color: var(--pc-ink);
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1.5px solid var(--pc-ink);
+    min-width: 32px;
+    text-align: center;
+    transition: transform 200ms;
+  }
+  .v3-voice-note.note-C { background: #fef3c7; border-color: #f59e0b; }
+  .v3-voice-note.note-D { background: #dbeafe; border-color: #3b82f6; }
+  .v3-voice-note.note-E { background: #dcfce7; border-color: #16a34a; }
+  .v3-voice-note.note-G { background: #fce7f3; border-color: #ec4899; }
+  .v3-voice-note.note-A { background: #ede9fe; border-color: #8b5cf6; }
+  .v3-voice-note.tapping { transform: scale(1.18); }
+  .v3-voice-reg { color: var(--pc-ink-muted); font-size: 8px; }
+
+  /* ── Stage ─────────────────────────────────────────── */
+  .v3-stage {
+    position: relative;
+    width: 340px;
+    height: 340px;
+    max-width: 100%;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (max-width: 400px) { .v3-stage { width: 280px; height: 280px; } }
+
+  .v3-orbit {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .v3-orbit-friend {
+    position: absolute;
+    width: 52px; height: 52px;
+    border-radius: 6px;
+    border: 2px solid var(--pc-ink);
+    background: #fff;
+    padding: 3px;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    animation: v3-orbit-float 3s ease-in-out infinite;
+  }
+  .v3-orbit-friend img {
+    width: 100%; height: 100%;
+    display: block;
+    image-rendering: pixelated;
+  }
+  @keyframes v3-orbit-float {
+    0%,100% { transform: translate(-50%, -50%) scale(1); }
+    50%      { transform: translate(-50%, calc(-50% - 5px)) scale(1.04); }
+  }
+
+  .v3-main-drum {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v3-drum-frame {
+    position: relative;
+    border: 3px solid var(--pc-ink);
+    background: #fff;
+    padding: 10px;
+    transition: box-shadow 120ms ease, transform 80ms ease;
+  }
+  .v3-main-drum:active .v3-drum-frame,
+  .v3-drum-frame.tapped {
+    transform: scale(0.93);
+    box-shadow: 0 0 0 4px rgba(30,215,96,0.4);
+  }
+  .v3-drum-frame.released { transform: scale(1.05); }
+  .v3-drum-frame.on-fire {
+    box-shadow: 0 0 0 4px rgba(30,215,96,0.6), 0 0 20px rgba(30,215,96,0.3);
+    border-color: #1ed760;
+  }
+  .v3-drum-corner {
+    position: absolute;
+    width: 10px; height: 10px;
+  }
+  .v3-drum-corner-tl { top: -2px; left: -2px; background: #1ed760; }
+  .v3-drum-corner-tr { top: -2px; right: -2px; background: var(--pc-ink); }
+  .v3-drum-corner-bl { bottom: -2px; left: -2px; background: var(--pc-ink); }
+  .v3-drum-corner-br { bottom: -2px; right: -2px; background: #1ed760; }
+  .v3-drum-img {
+    width: 200px; height: 200px;
+    display: block;
+    image-rendering: pixelated;
+    transition: transform 80ms ease-out;
+  }
+  @media (max-width: 400px) { .v3-drum-img { width: 160px; height: 160px; } }
+
+  .v3-drum-tap-label {
+    margin-top: 8px;
+    font-size: 8px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    text-align: center;
+  }
+  .v3-drum-tap-label.hot { color: #1ed760; font-weight: 700; }
+
+  .v3-ripples {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: visible;
+  }
+  @keyframes v3-ripple {
+    0%   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -280%) scale(1.6); }
+  }
+
+  /* ── HUD ───────────────────────────────────────────── */
+  .v3-hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 480px) { .v3-hud { grid-template-columns: repeat(2, 1fr); } }
+  .v3-hud-card {
+    padding: 10px 12px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 6px;
+    background: #fafaf9;
+    min-width: 0;
+  }
+  .v3-hud-label {
+    font-size: 7.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 4px;
+    white-space: nowrap;
+  }
+  .v3-hud-val {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--pc-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .v3-hud-combo.hot .v3-hud-val { color: #1ed760; }
+  .v3-hud-combo.hot { border-color: #1ed760; background: rgba(30,215,96,0.06); }
+  .v3-hud-jammers .v3-hud-val { color: #16a34a; }
+
+  /* ── Tip + footer ──────────────────────────────────── */
+  .v3-tip {
+    border: 1px dashed var(--pc-rule);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 24px;
+    background: #fafaf9;
+  }
+  .v3-tip-line {
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    color: var(--pc-ink-soft);
+    margin: 0 0 4px;
+    line-height: 1.5;
+  }
+  .v3-tip-line strong { color: var(--pc-ink); font-weight: 600; }
+  .v3-tip-link {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: #1ed760;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .v3-tip-note {
+    font-family: var(--pc-font-mono);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0;
+  }
+
+  .v3-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    border-top: 1.5px solid var(--pc-rule);
+    padding-top: 16px;
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-v3 client. Spotify-track-aware version of v2's pentatonic
+  // collaborative synth. Shares localStorage state with v1 + v2.
+  // ══════════════════════════════════════════════════════════════════
+
+  // Session ID (shared)
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // ── Pentatonic voice (same algorithm as v2) ──
+  const PENTA_NAMES  = ['C', 'D', 'E', 'G', 'A'] as const;
+  const PENTA_RATIOS = [1, 9/8, 5/4, 3/2, 5/3];
+  const REGISTER_BASE: Record<string, number> = { bass: 130.81, mid: 261.63, high: 523.25 };
+
+  function simpleHash(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h = h | 0; }
+    return Math.abs(h);
+  }
+  function voiceStepFor(idLike: string): number {
+    if (!idLike) return 0;
+    return simpleHash(idLike) % 5;
+  }
+  const myVoiceStep = voiceStepFor(sessionId);
+  const myVoiceName = PENTA_NAMES[myVoiceStep];
+
+  const voiceNoteEl = document.getElementById('v3-voice-note');
+  if (voiceNoteEl) {
+    voiceNoteEl.textContent = myVoiceName;
+    voiceNoteEl.classList.add(`note-${myVoiceName}`);
+  }
+  function flashVoiceChip() {
+    if (!voiceNoteEl) return;
+    voiceNoteEl.classList.add('tapping');
+    setTimeout(() => voiceNoteEl.classList.remove('tapping'), 140);
+  }
+
+  // ── Audio (re-uses v2 synth, all music-theory aware) ──
+  let audioCtx: AudioContext | null = null;
+  function getCtx(): AudioContext | null {
+    if (audioCtx) return audioCtx;
+    try {
+      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!Ctx) return null;
+      audioCtx = new Ctx({ latencyHint: 'interactive' });
+    } catch { audioCtx = null; }
+    return audioCtx;
+  }
+  const primeAudio = () => { const c = getCtx(); if (c?.state === 'suspended') c.resume().catch(() => {}); };
+  ['pointerdown','keydown','touchstart','scroll'].forEach(e => document.addEventListener(e as any, primeAudio, { once: true, passive: true, capture: true }));
+
+  function playNote(freq: number, gain: number, decay: number, type: OscillatorType = 'sine', whenOffset = 0) {
+    const ctx = getCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const now = ctx.currentTime + whenOffset;
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
+    out.gain.setValueAtTime(0, now);
+    out.gain.linearRampToValueAtTime(gain, now + 0.005);
+    out.gain.exponentialRampToValueAtTime(0.001, now + decay);
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    osc.connect(out); osc.start(now); osc.stop(now + decay + 0.05);
+    const o2 = ctx.createOscillator();
+    o2.type = 'triangle';
+    o2.frequency.setValueAtTime(freq * 2, now);
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0, now);
+    g2.gain.linearRampToValueAtTime(gain * 0.18, now + 0.01);
+    g2.gain.exponentialRampToValueAtTime(0.001, now + decay * 0.5);
+    o2.connect(g2); g2.connect(out);
+    o2.start(now); o2.stop(now + decay * 0.6);
+  }
+
+  function playVoice(register: string, voiceStep: number, comboMult: number, gain: number) {
+    const base = REGISTER_BASE[register] ?? REGISTER_BASE.mid;
+    const root = base * PENTA_RATIOS[voiceStep];
+    playNote(root, gain, 0.5, 'sine');
+    if (comboMult >= 2) playNote(root * 1.5,  gain * 0.42, 0.4, 'sine', 0.025);
+    if (comboMult >= 3) playNote(root * 1.25, gain * 0.36, 0.4, 'sine', 0.05);
+    if (comboMult >= 5) {
+      playNote(root * 2, gain * 0.32, 0.55, 'sine', 0.08);
+      playNote(root * 3, gain * 0.22, 0.55, 'sine', 0.12);
+    }
+  }
+
+  // ── State ──
+  const LOCAL_KEY = 'pc:drumLocalCount';
+  function loadLocal(): number { try { return Number(localStorage.getItem(LOCAL_KEY)) || 0; } catch { return 0; } }
+  function saveLocal(n: number) { try { localStorage.setItem(LOCAL_KEY, String(n)); } catch {} }
+  let localCount = loadLocal();
+
+  const yourEl = document.getElementById('v3-your');
+  const comboEl = document.getElementById('v3-combo');
+  const comboCard = document.getElementById('v3-combo-card');
+  const drumFrame = document.getElementById('v3-drum-frame');
+  const drumLabel = document.getElementById('v3-drum-label');
+  const bpmEl = document.getElementById('v3-bpm');
+  const jammersEl = document.getElementById('v3-jammers');
+  const ripplesEl = document.getElementById('v3-ripples');
+  const drumBtn = document.getElementById('v3-drum-btn') as HTMLButtonElement | null;
+  const orbitEl = document.getElementById('v3-orbit');
+
+  if (yourEl) yourEl.textContent = String(localCount);
+
+  // Combo
+  const COMBO_WINDOW = 380;
+  const COMBO_MULTS  = [1, 2, 3, 5];
+  let comboIdx = 0;
+  let lastTapAt = 0;
+  const tapTimes: number[] = [];
+
+  function renderCombo() {
+    const m = COMBO_MULTS[comboIdx];
+    if (comboEl) comboEl.textContent = `×${m}`;
+    if (comboCard) {
+      if (m >= 3) {
+        comboCard.classList.add('hot');
+        if (drumFrame) drumFrame.classList.add('on-fire');
+      } else {
+        comboCard.classList.remove('hot');
+        if (drumFrame) drumFrame.classList.remove('on-fire');
+      }
+    }
+    if (drumLabel) {
+      if (m >= 5) { drumLabel.textContent = 'ON FIRE ×5'; drumLabel.classList.add('hot'); }
+      else if (m >= 3) { drumLabel.textContent = `COMBO ×${m}!`; drumLabel.classList.add('hot'); }
+      else { drumLabel.textContent = m > 1 ? `COMBO ×${m}` : 'TAP'; drumLabel.classList.remove('hot'); }
+    }
+  }
+  setInterval(() => {
+    if (comboIdx > 0 && Date.now() - lastTapAt > 800) { comboIdx = 0; renderCombo(); }
+  }, 300);
+
+  function spawnRipple(x: number, y: number, label = '+1', color = '#1ed760') {
+    if (!ripplesEl) return;
+    const rect = ripplesEl.getBoundingClientRect();
+    const el = document.createElement('div');
+    el.style.cssText = `
+      position:absolute;
+      left:${x - rect.left}px;
+      top:${y - rect.top}px;
+      transform:translate(-50%,-50%);
+      color:${color};
+      font-family:var(--pc-font-mono),monospace;
+      font-weight:700;
+      font-size:16px;
+      pointer-events:none;
+      animation:v3-ripple 900ms cubic-bezier(.2,.8,.3,1) forwards;
+    `;
+    el.textContent = label;
+    ripplesEl.appendChild(el);
+    setTimeout(() => el.isConnected && el.remove(), 1000);
+  }
+
+  // ── Server sync (count + presence + remote drums) ──
+  let pendingDelta = 0;
+  let flushTimer: number | null = null;
+  async function flushDelta() {
+    if (pendingDelta <= 0) return;
+    const delta = pendingDelta;
+    pendingDelta = 0;
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    try {
+      const res = await fetch('/api/drum', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta, sessionId }),
+        keepalive: true,
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      if (typeof data.yourTotal === 'number' && data.yourTotal > localCount) {
+        localCount = data.yourTotal;
+        saveLocal(localCount);
+        if (yourEl) yourEl.textContent = String(localCount);
+      }
+    } catch { pendingDelta += delta; }
+  }
+  function scheduleFlush() {
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = window.setTimeout(flushDelta, 2500);
+  }
+
+  // ── Tap ──
+  function performTap(x: number, y: number) {
+    const now = Date.now();
+    if (now - lastTapAt < COMBO_WINDOW && lastTapAt > 0) {
+      comboIdx = Math.min(COMBO_MULTS.length - 1, comboIdx + 1);
+    }
+    lastTapAt = now;
+    tapTimes.push(now);
+    if (tapTimes.length > 32) tapTimes.shift();
+    const mult = COMBO_MULTS[comboIdx];
+    localCount += mult;
+    saveLocal(localCount);
+    if (yourEl) yourEl.textContent = String(localCount);
+    renderCombo();
+
+    if (tapTimes.length >= 2 && bpmEl) {
+      const window = tapTimes.slice(-8);
+      const diff = window[window.length - 1] - window[0];
+      if (diff > 0) {
+        const bpm = Math.round(((window.length - 1) * 60_000) / diff);
+        bpmEl.textContent = String(bpm);
+      }
+    }
+
+    playVoice('mid', myVoiceStep, mult, 0.42);
+    flashVoiceChip();
+    try { navigator.vibrate?.(mult >= 3 ? 20 : 10); } catch {}
+
+    if (drumFrame) {
+      drumFrame.classList.add('tapped');
+      setTimeout(() => {
+        drumFrame?.classList.remove('tapped');
+        drumFrame?.classList.add('released');
+        setTimeout(() => drumFrame?.classList.remove('released'), 70);
+      }, 55);
+    }
+    spawnRipple(x, y, `+${mult}`, mult >= 3 ? '#0ea5e9' : '#1ed760');
+
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'drum', seed: mult, sessionId }),
+      keepalive: true,
+    }).catch(() => {});
+
+    pendingDelta += mult;
+    if (pendingDelta >= 10) flushDelta();
+    else scheduleFlush();
+  }
+
+  if (drumBtn) {
+    drumBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const r = drumBtn.getBoundingClientRect();
+      performTap(e.clientX || r.left + r.width / 2, e.clientY || r.top + r.height / 2);
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return;
+    if (e.code !== 'Space' && e.code !== 'Enter') return;
+    if (!drumBtn) return;
+    const r = drumBtn.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return;
+    e.preventDefault();
+    performTap(r.left + r.width / 2, r.top + r.height / 2);
+  });
+
+  // ── Remote drums + presence (orbit) ──
+  let lastSoundT = Date.now();
+  let ownPid = '';
+  (async () => {
+    try {
+      const buf = new TextEncoder().encode(sessionId);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      ownPid = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0,10);
+    } catch {}
+  })();
+
+  const remoteActive = new Map<string, number>();
+  function activeCount(): number {
+    const now = Date.now();
+    for (const [pid, t] of remoteActive) if (now - t > 10_000) remoteActive.delete(pid);
+    return remoteActive.size + (Date.now() - lastTapAt < 10_000 ? 1 : 0);
+  }
+  function renderActive() {
+    if (jammersEl) jammersEl.textContent = String(activeCount());
+  }
+
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) {
+        if (ev.pid === ownPid || ev.type !== 'drum') continue;
+        if (ev.pid) remoteActive.set(ev.pid, Date.now());
+        if (!drumBtn) continue;
+        const rect = drumBtn.getBoundingClientRect();
+        const angle = Math.random() * Math.PI * 2;
+        const rad = 90 + Math.random() * 40;
+        const x = rect.left + rect.width / 2 + Math.cos(angle) * rad;
+        const y = rect.top + rect.height / 2 + Math.sin(angle) * rad;
+        spawnRipple(x, y, '+1', '#8c7a5e');
+        const theirStep = voiceStepFor(ev.pid || '');
+        const theirMult = Number(ev.seed) || 1;
+        playVoice('mid', theirStep, theirMult, 0.22);
+      }
+      renderActive();
+    } catch {}
+  }
+  setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 300);
+  setInterval(renderActive, 2000);
+
+  // Orbit nouns from /api/visit
+  let orbitNouns: Array<{ nounId: number; pid: string }> = [];
+  function updateOrbit() {
+    if (!orbitEl) return;
+    orbitEl.innerHTML = '';
+    const friends = orbitNouns.slice(0, 6);
+    if (!friends.length) return;
+    const stage = document.getElementById('v3-stage');
+    const w = stage ? stage.offsetWidth : 340;
+    const cx = w / 2, cy = w / 2;
+    const r = Math.min(w / 2 - 40, 155);
+    friends.forEach((f, i) => {
+      const a = (i / friends.length) * 2 * Math.PI - Math.PI / 2;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      const el = document.createElement('div');
+      el.className = 'v3-orbit-friend';
+      el.style.left = `${x}px`;
+      el.style.top  = `${y}px`;
+      const img = document.createElement('img');
+      img.src = `https://noun.pics/${f.nounId}.svg`;
+      img.alt = '';
+      img.width = 44; img.height = 44;
+      img.style.imageRendering = 'pixelated';
+      el.appendChild(img);
+      orbitEl.appendChild(el);
+    });
+  }
+  async function refreshPresence() {
+    try {
+      const r = await fetch('/api/visit');
+      if (!r.ok) return;
+      const data = await r.json();
+      const present = Array.isArray(data.present) ? data.present : [];
+      const yourPid = data.yourPid;
+      const others = (yourPid ? present.filter((p: any) => p.pid !== yourPid) : present)
+        .filter((p: any) => p.type === 'human');
+      orbitNouns = others.slice(0, 6).map((p: any) => ({ nounId: Number(p.nounId) || 42, pid: p.pid || '' }));
+      updateOrbit();
+    } catch {}
+  }
+  refreshPresence();
+  setInterval(() => { if (document.visibilityState === 'visible') refreshPresence(); }, 8000);
+
+  // ══════════════════════════════════════════════════════════════════
+  // SPOTIFY — the v3 specific bits.
+  // ══════════════════════════════════════════════════════════════════
+  const trackInput  = document.getElementById('v3-track-input') as HTMLInputElement | null;
+  const loadBtn     = document.getElementById('v3-load-btn') as HTMLButtonElement | null;
+  const pickerStat  = document.getElementById('v3-picker-status');
+  const searchList  = document.getElementById('v3-search-results');
+  const nowEl       = document.getElementById('v3-now');
+  const nowTitle    = document.getElementById('v3-now-title');
+  const nowArtist   = document.getElementById('v3-now-artist');
+  const nowCover    = document.getElementById('v3-now-cover') as HTMLImageElement | null;
+  const nowBpmPill  = document.getElementById('v3-now-bpm-pill');
+  const nowKeyPill  = document.getElementById('v3-now-key-pill');
+  const nowSetBy    = document.getElementById('v3-now-set-by');
+  const metroEl     = document.getElementById('v3-metro');
+  const embedEl     = document.getElementById('v3-embed') as HTMLIFrameElement | null;
+  const tipEl       = document.getElementById('v3-tip');
+
+  // Sample track button
+  document.querySelectorAll<HTMLElement>('.v3-tip-link[data-track]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.track;
+      if (!id || !trackInput) return;
+      trackInput.value = `https://open.spotify.com/track/${id}`;
+      loadFromInput();
+    });
+  });
+
+  function parseSpotifyId(input: string): string | null {
+    const trimmed = input.trim();
+    if (/^[A-Za-z0-9]{22}$/.test(trimmed)) return trimmed;
+    const m = trimmed.match(/(?:open\.spotify\.com\/(?:embed\/)?track\/|spotify:track:)([A-Za-z0-9]{22})/);
+    return m ? m[1] : null;
+  }
+
+  let lastLoadedTrackId = '';
+  async function loadTrack(spotifyId: string, options: { broadcast?: boolean } = {}) {
+    if (spotifyId === lastLoadedTrackId) return;
+    lastLoadedTrackId = spotifyId;
+
+    // Embed immediately — works without API
+    if (embedEl) {
+      embedEl.src = `https://open.spotify.com/embed/track/${spotifyId}?utm_source=pointcast`;
+    }
+    if (nowEl) nowEl.hidden = false;
+    if (tipEl) tipEl.hidden = true;
+
+    // Try features — graceful degrade
+    if (nowTitle) nowTitle.textContent = 'loading…';
+    if (nowArtist) nowArtist.textContent = '';
+    if (nowBpmPill) nowBpmPill.textContent = 'bpm —';
+    if (nowKeyPill) nowKeyPill.hidden = true;
+
+    try {
+      const r = await fetch(`/api/spotify/track?id=${spotifyId}`);
+      if (r.ok) {
+        const data = await r.json();
+        const t = data.track;
+        if (nowTitle)  nowTitle.textContent  = t.name ?? 'unknown';
+        if (nowArtist) nowArtist.textContent = (t.artists ?? []).map((a: any) => a.name).join(', ');
+        if (nowCover && t.album?.image) { nowCover.src = t.album.image; nowCover.alt = t.album.name ?? ''; }
+        if (nowBpmPill) nowBpmPill.textContent = t.bpm ? `${t.bpm} bpm` : 'bpm —';
+        if (nowKeyPill && t.key) { nowKeyPill.hidden = false; nowKeyPill.textContent = `key ${t.key}`; }
+        if (t.bpm) startMetronome(t.bpm);
+      } else if (r.status === 503) {
+        if (nowTitle) nowTitle.textContent = 'spotify track loaded';
+        if (nowArtist) nowArtist.textContent = 'metadata API not configured · paste-mode only';
+      } else {
+        if (nowTitle) nowTitle.textContent = 'track loaded';
+        if (nowArtist) nowArtist.textContent = '';
+      }
+    } catch {
+      if (nowTitle) nowTitle.textContent = 'track loaded';
+      if (nowArtist) nowArtist.textContent = '';
+    }
+
+    if (options.broadcast) {
+      fetch('/api/drum/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackId: spotifyId, sessionId, source: 'spotify' }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+  }
+
+  function loadFromInput() {
+    if (!trackInput) return;
+    const id = parseSpotifyId(trackInput.value);
+    if (!id) {
+      // Treat as search query (if API available)
+      runSearch(trackInput.value.trim());
+      return;
+    }
+    loadTrack(id, { broadcast: true });
+    if (searchList) { searchList.hidden = true; searchList.innerHTML = ''; }
+  }
+
+  if (loadBtn) loadBtn.addEventListener('click', loadFromInput);
+  if (trackInput) {
+    trackInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loadFromInput(); }
+    });
+    // Live search-as-you-type, debounced. Only fires for text that doesn't
+    // look like a URL. If search endpoint returns 503, we silently fall
+    // back to "paste-only" mode and don't bug the user about it.
+    let searchTimer: number | null = null;
+    let searchDisabled = false;
+    trackInput.addEventListener('input', () => {
+      if (searchDisabled) return;
+      const v = trackInput.value.trim();
+      if (parseSpotifyId(v)) { if (searchList) { searchList.hidden = true; searchList.innerHTML = ''; } return; }
+      if (v.length < 2) { if (searchList) { searchList.hidden = true; searchList.innerHTML = ''; } return; }
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => runSearch(v), 350);
+    });
+
+    async function runSearch(q: string) {
+      if (searchDisabled || !q || !searchList) return;
+      try {
+        const r = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`);
+        if (r.status === 503) {
+          searchDisabled = true;
+          if (pickerStat) pickerStat.textContent = 'search api not configured · paste a spotify url';
+          searchList.hidden = true;
+          return;
+        }
+        if (!r.ok) return;
+        const data = await r.json();
+        const tracks = data.tracks ?? [];
+        if (tracks.length === 0) {
+          searchList.hidden = true;
+          searchList.innerHTML = '';
+          return;
+        }
+        searchList.hidden = false;
+        searchList.innerHTML = tracks.map((t: any) => `
+          <li class="v3-search-result" tabindex="0" data-id="${t.id}">
+            <img src="${t.album?.image ?? ''}" alt="" loading="lazy" />
+            <div>
+              <div class="v3-search-result-title">${escapeHtml(t.name)}</div>
+              <div class="v3-search-result-artist">${escapeHtml((t.artists ?? []).map((a: any) => a.name).join(', '))}</div>
+            </div>
+            <div class="v3-search-result-bpm">load →</div>
+          </li>
+        `).join('');
+        searchList.querySelectorAll<HTMLElement>('.v3-search-result').forEach((el) => {
+          el.addEventListener('click', () => {
+            const id = el.dataset.id;
+            if (id) {
+              if (trackInput) trackInput.value = `https://open.spotify.com/track/${id}`;
+              loadTrack(id, { broadcast: true });
+              searchList.hidden = true;
+              searchList.innerHTML = '';
+            }
+          });
+        });
+      } catch { /* ignore */ }
+    }
+
+    function escapeHtml(s: string): string {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[c] as string));
+    }
+
+    // Expose for the autocomplete
+    (window as any).runSearch = runSearch;
+  }
+
+  // ── Room track sync — poll /api/drum/track every 5s ──
+  let lastSeenTrackId = '';
+  async function pollRoomTrack() {
+    try {
+      const r = await fetch('/api/drum/track');
+      if (!r.ok) return;
+      const data = await r.json();
+      const t = data?.track;
+      if (t && typeof t.id === 'string' && t.id !== lastSeenTrackId) {
+        lastSeenTrackId = t.id;
+        if (nowSetBy) nowSetBy.textContent = `set by ${String(t.setBy ?? 'someone').slice(0, 6)}`;
+        // Don't auto-broadcast on poll — only set it locally.
+        loadTrack(t.id, { broadcast: false });
+        if (trackInput && !trackInput.value) {
+          trackInput.value = `https://open.spotify.com/track/${t.id}`;
+        }
+      }
+    } catch {}
+  }
+  pollRoomTrack();
+  setInterval(() => { if (document.visibilityState === 'visible') pollRoomTrack(); }, 5000);
+
+  // ── Visual metronome — pulses at the track's BPM ──
+  // Spotify's iframe embed doesn't expose playback time, so this is a
+  // free-running visual pulse. Aligns rhythmically once you start tapping
+  // along (your eye locks the dot to the audio you're hearing).
+  let metroTimer: number | null = null;
+  function startMetronome(bpm: number) {
+    if (metroTimer) clearInterval(metroTimer);
+    if (!metroEl || !bpm || bpm < 30 || bpm > 300) return;
+    const intervalMs = 60_000 / bpm;
+    metroTimer = window.setInterval(() => {
+      metroEl.classList.add('beat');
+      setTimeout(() => metroEl?.classList.remove('beat'), 90);
+    }, intervalMs);
+  }
+
+  // Auto-load track from URL hash or query — supports share URLs like
+  // /drum-v3?track=<id> or /drum-v3#track=<id>
+  (function autoload() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery = params.get('track');
+      const fromHash = window.location.hash.match(/track=([A-Za-z0-9]{22})/)?.[1];
+      const id = fromQuery && /^[A-Za-z0-9]{22}$/.test(fromQuery) ? fromQuery : fromHash;
+      if (id) {
+        if (trackInput) trackInput.value = `https://open.spotify.com/track/${id}`;
+        loadTrack(id, { broadcast: true });
+      }
+    } catch {}
+  })();
+</script>
+
+</DrumLayout>
