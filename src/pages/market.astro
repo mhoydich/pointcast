@@ -1,0 +1,875 @@
+---
+/**
+ * /market — PointCast NFT marketplace.
+ *
+ * Browse + list + buy across every PointCast FA2 collection through
+ * the multi-collection marketplace contract (contracts/v2/marketplace.py).
+ *
+ * Three-mode page:
+ *   1. PENDING  — contracts.marketplace.mainnet not yet populated. Shows
+ *      "marketplace launching soon" with a link to /admin/deploy/marketplace
+ *      so Mike (or any admin) can originate from the Publisher.
+ *   2. EMPTY    — contract live but no asks yet. Shows the "list a token"
+ *      form for connected wallets that own a PointCast NFT, plus a "be
+ *      the first to list" empty state on the browse side.
+ *   3. ACTIVE   — contract live with at least one ask. Browse grid renders
+ *      from tzkt's asks bigmap; each card is buyable with one Beacon sign.
+ *
+ * Listing flow (seller, two ops batched into one Kukai signature):
+ *   1. fa2.update_operators([{add_operator: {owner: seller,
+ *      operator: marketplace_kt1, token_id}}])
+ *   2. marketplace.list_ask(fa2_contract, token_id, price_mutez, royalty_bps)
+ *
+ * Buying flow (buyer, one signature):
+ *   marketplace.fulfill_ask(ask_id) with amount = ask.amount_mutez (mutez).
+ *
+ * Mode is detected at runtime via tzkt's /storage endpoint — page can ship
+ * before the contract is live and auto-flip when contracts.json is updated
+ * with the originated KT1.
+ */
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import contracts from '../data/contracts.json';
+
+const marketplaceKt1 = ((contracts as any).marketplace?.mainnet ?? '').trim();
+const marketplaceLive = marketplaceKt1.startsWith('KT1');
+const platformFeeBps = (contracts as any).marketplace?.platformFeeBps ?? 250;
+
+const supported = ((contracts as any).marketplace?.supportedCollections ?? []) as string[];
+// Each supported collection becomes a select option in the list form +
+// a filter chip on the browse grid. We pull KT1 + display name for each.
+const SLUG_NAMES: Record<string, string> = {
+  coffee_mugs: 'Coffee Mugs',
+  visit_nouns: 'Visit Nouns',
+  birthdays: 'Birthdays',
+  drum_token: 'Drum Token',
+};
+const collections = supported
+  .map((slug) => {
+    const entry = (contracts as any)[slug];
+    const kt1 = entry?.mainnet?.trim?.() || '';
+    return {
+      slug,
+      name: SLUG_NAMES[slug] || slug,
+      kt1,
+      live: kt1.startsWith('KT1'),
+    };
+  })
+  .filter((c) => c.live); // only show collections with a live KT1
+---
+
+<BaseLayout
+  title="Market · PointCast"
+  description="PointCast NFT marketplace — buy and list Coffee Mugs, Visit Nouns, and every PointCast FA2 collection on Tezos."
+>
+  <div class="market">
+    <!-- Masthead — same warm-mono treatment as /coffee + /drum + /admin. -->
+    <header class="market__masthead">
+      <a href="/" class="market__home">PointCast</a>
+      <span class="market__path">/ market</span>
+      <span class="market__masthead-spacer"></span>
+      <WalletConnect />
+    </header>
+
+    <header class="market__hero">
+      <p class="market__kicker mono">PointCast Market · Tezos · multi-collection</p>
+      <h1 class="market__title">Trade every mug, noun, and card on PointCast.</h1>
+      <p class="market__dek">
+        One marketplace, every collection. Sellers list with a price they pick.
+        Buyers fill the ask with one signature. {platformFeeBps / 100}% platform
+        fee, royalty per-listing, payment splits at fulfill time.
+      </p>
+      <div class="market__status-row mono" id="market-status-row" data-mode="loading">
+        <span class="market__status-dot" aria-hidden="true"></span>
+        <span class="market__status-label" id="market-status-label">checking marketplace status…</span>
+      </div>
+    </header>
+
+    <!-- Browse grid — populated from tzkt at runtime. -->
+    <section class="market__section" aria-labelledby="market-browse-title">
+      <header class="market__section-head">
+        <h2 id="market-browse-title" class="market__section-title">Listings</h2>
+        <p class="market__section-dek mono" id="market-browse-summary">loading…</p>
+      </header>
+      <ul class="market__grid" id="market-grid" role="list">
+        <li class="market__empty mono" id="market-empty">no listings yet · be the first to list below</li>
+      </ul>
+    </section>
+
+    <!-- List a token — only meaningful when a wallet is connected. -->
+    <section class="market__section" aria-labelledby="market-list-title">
+      <header class="market__section-head">
+        <h2 id="market-list-title" class="market__section-title">List your token</h2>
+        <p class="market__section-dek mono">connect a wallet that owns a PointCast NFT · pick the collection + token + price · sign once.</p>
+      </header>
+      <form class="market__list-form" id="market-list-form" action="javascript:void(0)" data-marketplace-kt1={marketplaceKt1}>
+        <label class="market__field">
+          <span class="market__field-label mono">collection</span>
+          <select name="collection" id="market-list-collection" required>
+            {collections.length === 0 ? (
+              <option value="" disabled selected>no live collections yet</option>
+            ) : (
+              collections.map((c) => (
+                <option value={c.kt1} data-slug={c.slug}>{c.name}</option>
+              ))
+            )}
+          </select>
+        </label>
+        <label class="market__field">
+          <span class="market__field-label mono">token id</span>
+          <input type="number" name="token_id" id="market-list-token-id" min="0" placeholder="0" required />
+        </label>
+        <label class="market__field">
+          <span class="market__field-label mono">price (ꜩ)</span>
+          <input type="number" name="price_xtz" id="market-list-price" min="0" step="0.000001" placeholder="1.0" required />
+        </label>
+        <label class="market__field">
+          <span class="market__field-label mono">royalty (bps · 750 = 7.5%)</span>
+          <input type="number" name="royalty_bps" id="market-list-royalty" min="0" max="10000" value="750" required />
+        </label>
+        <div class="market__list-actions">
+          <button type="submit" id="market-list-btn" class="market__btn mono" disabled>
+            <span id="market-list-label">awaiting marketplace contract</span>
+          </button>
+          <p class="market__list-status mono" id="market-list-status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+      <p class="market__list-foot mono">
+        listing fires two ops in one Kukai signature: <code>update_operators</code> on the FA2 (gives the marketplace permission to transfer your token) + <code>list_ask</code> on the marketplace (creates the listing). cancel anytime via <code>cancel_ask(ask_id)</code> in the dashboard.
+      </p>
+    </section>
+
+    <!-- About / spec -->
+    <section class="market__section" aria-labelledby="market-about-title">
+      <h2 id="market-about-title" class="market__section-title">How it works</h2>
+      <dl class="market__about">
+        <div>
+          <dt>Contract</dt>
+          <dd>
+            {marketplaceLive ? (
+              <a class="market__link" href={`https://tzkt.io/${marketplaceKt1}`} target="_blank" rel="noopener">{marketplaceKt1}</a>
+            ) : (
+              <span class="market__pending-pill">awaiting origination · /admin/deploy/marketplace</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Platform fee</dt>
+          <dd>{platformFeeBps / 100}% per sale · routes to PointCast treasury</dd>
+        </div>
+        <div>
+          <dt>Royalty</dt>
+          <dd>seller-set per listing · default 7.5% · routes to creator on each sale</dd>
+        </div>
+        <div>
+          <dt>Supported collections</dt>
+          <dd>
+            {collections.length > 0
+              ? collections.map((c) => c.name).join(' · ')
+              : 'awaiting at least one live collection'}
+          </dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>
+            <a class="market__link" href="https://github.com/mhoydich/pointcast/blob/main/contracts/v2/marketplace.py" target="_blank" rel="noopener">contracts/v2/marketplace.py &nearr;</a>
+          </dd>
+        </div>
+        <div>
+          <dt>Admin</dt>
+          <dd>
+            <a class="market__link" href="/admin/deploy/marketplace/">/admin/deploy/marketplace &rarr;</a>
+          </dd>
+        </div>
+      </dl>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .market {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px 20px 96px;
+    color: var(--color-ink);
+  }
+  .market__masthead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0 14px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--color-rule, rgba(0,0,0,0.08));
+  }
+  .market__home {
+    font-family: var(--font-mono, monospace);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+  .market__home:hover { color: var(--color-warm); }
+  .market__path {
+    font-family: var(--font-mono, monospace);
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+  }
+  .market__masthead-spacer { flex: 1; }
+
+  .market__hero { margin-bottom: 36px; }
+  .market__kicker {
+    color: var(--color-warm);
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  .market__title {
+    font-family: var(--font-display, serif);
+    font-style: italic;
+    font-size: 38px;
+    line-height: 1.05;
+    color: var(--color-ink);
+    margin: 0 0 14px;
+    font-weight: 500;
+  }
+  .market__dek {
+    color: var(--color-ink-soft);
+    font-size: 16px;
+    line-height: 1.5;
+    margin: 0 0 16px;
+    max-width: 640px;
+  }
+  .market__status-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--color-card, rgba(0,0,0,0.04));
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.1));
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .market__status-dot {
+    display: block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-ink-soft);
+  }
+  .market__status-row[data-mode="pending"] .market__status-dot { background: rgb(168, 130, 50); }
+  .market__status-row[data-mode="empty"] .market__status-dot { background: rgb(120, 120, 120); }
+  .market__status-row[data-mode="active"] .market__status-dot { background: rgb(30, 160, 80); animation: market-pulse 2.4s infinite; }
+  @keyframes market-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(30, 160, 80, 0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(30, 160, 80, 0); }
+  }
+
+  .market__section {
+    margin-bottom: 48px;
+  }
+  .market__section-head {
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-rule, rgba(0,0,0,0.08));
+  }
+  .market__section-title {
+    font-family: var(--font-display, serif);
+    font-size: 22px;
+    margin: 0 0 4px;
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .market__section-dek {
+    color: var(--color-ink-soft);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .market__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .market__empty {
+    grid-column: 1 / -1;
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    border: 1px dashed var(--color-rule, rgba(0,0,0,0.15));
+    border-radius: 12px;
+  }
+  .market-card {
+    background: var(--color-paper, #fff);
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.1));
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .market-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-warm);
+    box-shadow: 0 8px 24px -12px rgba(184, 115, 51, 0.35);
+  }
+  .market-card__art {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-card, rgba(0,0,0,0.03));
+    overflow: hidden;
+  }
+  .market-card__art img,
+  .market-card__art svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .market-card__body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+  }
+  .market-card__name {
+    font-weight: 600;
+    color: var(--color-ink);
+    font-size: 13px;
+    margin: 0;
+  }
+  .market-card__collection {
+    font-family: var(--font-mono, monospace);
+    color: var(--color-warm);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .market-card__price {
+    font-family: var(--font-mono, monospace);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-ink);
+    margin: 0;
+  }
+  .market-card__seller {
+    font-family: var(--font-mono, monospace);
+    color: var(--color-ink-soft);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+  .market-card__buy {
+    margin-top: auto;
+    padding: 8px 12px;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .market-card__buy:hover:not(:disabled) {
+    background: var(--color-warm);
+    border-color: var(--color-warm);
+  }
+  .market-card__buy:disabled { opacity: 0.5; cursor: not-allowed; }
+  .market-card__buy[data-state="self"] {
+    background: var(--color-card, rgba(0,0,0,0.04));
+    color: var(--color-ink-soft);
+    border-color: var(--color-rule, rgba(0,0,0,0.15));
+    cursor: not-allowed;
+  }
+
+  .market__list-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    background: var(--color-card, rgba(0,0,0,0.025));
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.08));
+  }
+  .market__field { display: flex; flex-direction: column; gap: 4px; }
+  .market__field-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .market__field input,
+  .market__field select {
+    padding: 8px 10px;
+    border: 1px solid var(--color-rule, rgba(0,0,0,0.15));
+    background: var(--color-paper, #fff);
+    border-radius: 8px;
+    font-family: var(--font-mono, monospace);
+    font-size: 13px;
+    color: var(--color-ink);
+  }
+  .market__list-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .market__btn {
+    padding: 12px 18px;
+    border-radius: 999px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border: 1px solid var(--color-ink);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    align-self: flex-start;
+  }
+  .market__btn:not(:disabled):hover {
+    background: var(--color-warm);
+    border-color: var(--color-warm);
+  }
+  .market__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .market__list-status {
+    color: var(--color-ink-soft);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    min-height: 1em;
+    margin: 0;
+  }
+  .market__list-foot {
+    color: var(--color-ink-soft);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 12px 0 0;
+    opacity: 0.7;
+  }
+  .market__list-foot code {
+    font-family: var(--font-mono, monospace);
+    background: var(--color-card, rgba(0,0,0,0.05));
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--color-ink);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .market__about {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 24px;
+    margin: 0;
+  }
+  .market__about > div {
+    border-bottom: 1px dashed var(--color-rule, rgba(0,0,0,0.06));
+    padding-bottom: 8px;
+  }
+  .market__about dt {
+    font-family: var(--font-mono, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin-bottom: 4px;
+  }
+  .market__about dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-ink);
+    word-break: break-all;
+  }
+  .market__link {
+    color: var(--color-warm);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .market__link:hover { color: var(--color-ink); }
+  .market__pending-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: rgba(168, 130, 50, 0.1);
+    color: rgb(150, 110, 30);
+    border: 1px solid rgba(168, 130, 50, 0.25);
+    font-family: var(--font-mono, monospace);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 540px) {
+    .market__about { grid-template-columns: 1fr; }
+    .market__title { font-size: 30px; }
+    .market__dek { font-size: 15px; }
+  }
+</style>
+
+<script>
+  // /market — three-mode flow + browse grid + list form + buy.
+  // Plain JS, Vite-bundled. Lazy-imports Taquito + Beacon on the actual
+  // sign click so the browse path stays fast (~200ms vs. ~3s with eager
+  // Taquito loaded).
+
+  const MARKETPLACE_KT1 = "MARKETPLACE_KT1_PLACEHOLDER";  // overwritten below
+
+  function readMarketplaceKt1() {
+    const form = document.getElementById('market-list-form');
+    return (form && form.getAttribute('data-marketplace-kt1')) || '';
+  }
+
+  function readWallet() {
+    try {
+      const raw = localStorage.getItem('pc:wallet');
+      if (!raw) return null;
+      const w = JSON.parse(raw);
+      return (w && w.address && w.chain === 'tezos') ? w : null;
+    } catch (e) { return null; }
+  }
+
+  // Per-collection image URL helpers — used to render card art without a
+  // tzkt metadata round-trip per ask. If the slug is unknown, fall back
+  // to tzkt's own image redirect at /v1/contracts/<KT1>/tokens/<id>/...
+  // (left for a follow-up). Hardcoded for now.
+  function imageUriFor(fa2Kt1, tokenId) {
+    if (fa2Kt1 === 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt') {
+      // Coffee Mugs FA2
+      const slugs = { 0: 'ceramic', 1: 'espresso', 2: 'latte', 3: 'paper', 4: 'bistro' };
+      const slug = slugs[String(tokenId)];
+      return slug ? '/images/coffee-mugs/' + slug + '.svg' : null;
+    }
+    if (fa2Kt1 === 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh') {
+      // Visit Nouns FA2
+      return 'https://noun.pics/' + tokenId + '.svg';
+    }
+    return null;
+  }
+
+  function collectionNameFor(fa2Kt1) {
+    if (fa2Kt1 === 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt') return 'Coffee Mugs';
+    if (fa2Kt1 === 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh') return 'Visit Nouns';
+    return fa2Kt1.slice(0, 8) + '…' + fa2Kt1.slice(-4);
+  }
+
+  function tokenNameFor(fa2Kt1, tokenId) {
+    if (fa2Kt1 === 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt') {
+      const names = { 0: 'Ceramic Mug', 1: 'Espresso Cup', 2: 'Latte Glass', 3: 'Paper Cup', 4: 'Bistro Cup' };
+      return names[String(tokenId)] || ('Coffee Mug #' + tokenId);
+    }
+    if (fa2Kt1 === 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh') {
+      return 'Visit Noun #' + tokenId;
+    }
+    return 'Token #' + tokenId;
+  }
+
+  function shortAddr(a) {
+    if (!a) return '?';
+    return a.slice(0, 6) + '…' + a.slice(-4);
+  }
+
+  function setMode(mode, label) {
+    const row = document.getElementById('market-status-row');
+    const lbl = document.getElementById('market-status-label');
+    if (row) row.setAttribute('data-mode', mode);
+    if (lbl) lbl.textContent = label;
+  }
+
+  function setListEnabled(enabled, label) {
+    const btn = document.getElementById('market-list-btn');
+    const lbl = document.getElementById('market-list-label');
+    if (btn) btn.disabled = !enabled;
+    if (lbl && label) lbl.textContent = label;
+  }
+
+  // ── Browse grid ──────────────────────────────────────────────────────
+  async function loadAsks() {
+    const grid = document.getElementById('market-grid');
+    const empty = document.getElementById('market-empty');
+    const summary = document.getElementById('market-browse-summary');
+    const kt1 = readMarketplaceKt1();
+
+    if (!grid) return;
+
+    if (!kt1 || !kt1.startsWith('KT1')) {
+      setMode('pending', 'marketplace · awaiting origination');
+      setListEnabled(false, 'awaiting marketplace contract');
+      if (summary) summary.textContent = 'marketplace contract not yet originated · ' +
+        'admin can deploy at /admin/deploy/marketplace';
+      return;
+    }
+
+    setMode('loading', 'fetching listings…');
+    if (summary) summary.textContent = 'reading marketplace storage…';
+
+    try {
+      // 1. Find the asks bigmap pointer
+      const sRes = await fetch('https://api.tzkt.io/v1/contracts/' + kt1 + '/storage', { cache: 'no-store' });
+      if (!sRes.ok) throw new Error('tzkt /storage ' + sRes.status);
+      const storage = await sRes.json();
+      const asksPointer = (typeof storage.asks === 'number') ? storage.asks : null;
+      if (asksPointer == null) throw new Error('storage.asks missing or not a bigmap pointer');
+
+      // 2. List the ask records
+      const kRes = await fetch(
+        'https://api.tzkt.io/v1/bigmaps/' + asksPointer + '/keys?limit=100&select=key,value&active=true&sort.desc=id',
+        { cache: 'no-store' },
+      );
+      if (!kRes.ok) throw new Error('tzkt /bigmaps ' + kRes.status);
+      const keys = await kRes.json();
+
+      const wallet = readWallet();
+      const myAddr = (wallet && wallet.address) || '';
+
+      grid.innerHTML = '';
+      if (!Array.isArray(keys) || keys.length === 0) {
+        setMode('empty', 'live · no listings yet');
+        if (summary) summary.textContent = 'no listings · be the first to list below';
+        if (empty) empty.style.display = '';
+        else grid.innerHTML = '<li class="market__empty mono">no listings yet · be the first to list below</li>';
+        return;
+      }
+      setMode('active', keys.length + ' listing' + (keys.length === 1 ? '' : 's') + ' live');
+      if (summary) summary.textContent = keys.length + ' active listing' + (keys.length === 1 ? '' : 's');
+
+      grid.innerHTML = keys.map(function (row) {
+        const askId = row.key;
+        const v = row.value || {};
+        const fa2Kt1 = v.fa2_contract;
+        const tokenId = v.token_id;
+        const seller = v.seller;
+        const priceMutez = parseInt(v.amount_mutez, 10) || 0;
+        const priceXtz = (priceMutez / 1_000_000).toFixed(priceMutez % 1_000_000 === 0 ? 0 : 2);
+        const royaltyBps = parseInt(v.royalty_bps, 10) || 0;
+
+        const imageUri = imageUriFor(fa2Kt1, tokenId);
+        const name = tokenNameFor(fa2Kt1, tokenId);
+        const collection = collectionNameFor(fa2Kt1);
+        const isSelf = myAddr && seller && seller.toLowerCase() === myAddr.toLowerCase();
+
+        return (
+          '<li class="market-card" data-ask-id="' + askId + '" data-fa2="' + fa2Kt1 + '" data-token-id="' + tokenId + '" data-price="' + priceMutez + '">' +
+            '<div class="market-card__art">' +
+              (imageUri ? '<img src="' + imageUri + '" alt="' + name + '" loading="lazy" />' : '<svg viewBox="0 0 24 24"><rect width="24" height="24" fill="#eee"/></svg>') +
+            '</div>' +
+            '<div class="market-card__body">' +
+              '<p class="market-card__collection">' + collection + ' · #' + tokenId + '</p>' +
+              '<p class="market-card__name">' + name + '</p>' +
+              '<p class="market-card__price">' + priceXtz + ' ꜩ</p>' +
+              '<p class="market-card__seller">seller ' + shortAddr(seller) + (royaltyBps > 0 ? ' · ' + (royaltyBps / 100).toFixed(1) + '% royalty' : '') + '</p>' +
+              (isSelf
+                ? '<button class="market-card__buy" data-state="self" disabled title="you are the seller">your listing · cancel via dashboard</button>'
+                : '<button class="market-card__buy" data-buy-ask="' + askId + '">Buy for ' + priceXtz + ' ꜩ</button>') +
+            '</div>' +
+          '</li>'
+        );
+      }).join('');
+
+      // Wire buy handlers per card
+      grid.querySelectorAll('[data-buy-ask]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const card = btn.closest('.market-card');
+          if (!card) return;
+          buyAsk(parseInt(btn.getAttribute('data-buy-ask'), 10), parseInt(card.getAttribute('data-price'), 10), btn);
+        });
+      });
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      setMode('pending', 'marketplace · tzkt error');
+      if (summary) summary.textContent = 'failed to load listings: ' + msg;
+    }
+  }
+
+  // ── Buy flow ─────────────────────────────────────────────────────────
+  async function buyAsk(askId, priceMutez, btn) {
+    const wallet = readWallet();
+    if (!wallet) {
+      try { window.dispatchEvent(new CustomEvent('pc:open-wallet-menu')); } catch (e) {}
+      return;
+    }
+    const kt1 = readMarketplaceKt1();
+    if (!kt1) return;
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'awaiting kukai…';
+
+    try {
+      const taquito = await import('@taquito/taquito');
+      const beacon = await import('@taquito/beacon-wallet');
+      const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+      const beaconWallet = new beacon.BeaconWallet({
+        name: 'PointCast Market',
+        network: { type: 'mainnet' },
+      });
+      tezos.setWalletProvider(beaconWallet);
+      const active = await beaconWallet.client.getActiveAccount();
+      if (!active || (active.network && active.network.type !== 'mainnet')) {
+        try { await beaconWallet.clearActiveAccount(); } catch (e) {}
+        await beaconWallet.client.requestPermissions();
+      }
+      const contract = await tezos.wallet.at(kt1);
+      const op = await contract.methodsObject
+        .fulfill_ask(askId)
+        .send({ amount: priceMutez, mutez: true });
+      btn.textContent = 'broadcast ' + (op.opHash || '').slice(0, 8) + '…';
+      await op.confirmation();
+      btn.textContent = '✓ bought';
+      // Refresh the grid to drop the now-fulfilled ask.
+      setTimeout(loadAsks, 1500);
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      if (/ABORTED|reject|cancel/i.test(msg)) btn.textContent = 'cancelled';
+      else if (/INCORRECT_AMOUNT/i.test(msg)) btn.textContent = 'price changed · refresh';
+      else if (/NotEnoughBalance|balance/i.test(msg)) btn.textContent = 'not enough ꜩ';
+      else btn.textContent = 'error: ' + msg.slice(0, 40);
+      setTimeout(function () { btn.disabled = false; btn.textContent = original; }, 4000);
+    }
+  }
+
+  // ── List form ────────────────────────────────────────────────────────
+  async function listToken(e) {
+    e.preventDefault();
+    const wallet = readWallet();
+    if (!wallet) {
+      try { window.dispatchEvent(new CustomEvent('pc:open-wallet-menu')); } catch (err) {}
+      return;
+    }
+    const kt1 = readMarketplaceKt1();
+    if (!kt1) return;
+
+    const collEl = document.getElementById('market-list-collection');
+    const tokenEl = document.getElementById('market-list-token-id');
+    const priceEl = document.getElementById('market-list-price');
+    const royaltyEl = document.getElementById('market-list-royalty');
+    const status = document.getElementById('market-list-status');
+    const fa2Kt1 = collEl && collEl.value;
+    const tokenId = parseInt(tokenEl && tokenEl.value, 10);
+    const priceXtz = parseFloat(priceEl && priceEl.value);
+    const royaltyBps = parseInt(royaltyEl && royaltyEl.value, 10);
+
+    if (!fa2Kt1 || Number.isNaN(tokenId) || Number.isNaN(priceXtz) || Number.isNaN(royaltyBps)) {
+      if (status) status.textContent = 'fill all fields first';
+      return;
+    }
+    if (royaltyBps < 0 || royaltyBps > 10000) {
+      if (status) status.textContent = 'royalty must be 0-10000 bps';
+      return;
+    }
+    const priceMutez = Math.floor(priceXtz * 1_000_000);
+
+    setListEnabled(false, 'awaiting kukai…');
+    if (status) status.textContent = 'preparing batched ops…';
+
+    try {
+      const taquito = await import('@taquito/taquito');
+      const beacon = await import('@taquito/beacon-wallet');
+      const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+      const beaconWallet = new beacon.BeaconWallet({
+        name: 'PointCast Market',
+        network: { type: 'mainnet' },
+      });
+      tezos.setWalletProvider(beaconWallet);
+      const active = await beaconWallet.client.getActiveAccount();
+      if (!active || (active.network && active.network.type !== 'mainnet')) {
+        try { await beaconWallet.clearActiveAccount(); } catch (e) {}
+        await beaconWallet.client.requestPermissions();
+      }
+
+      const fa2 = await tezos.wallet.at(fa2Kt1);
+      const market = await tezos.wallet.at(kt1);
+
+      // FA2 update_operators expects a list of variants; Taquito's
+      // methodsObject for update_operators takes an array of records
+      // with add_operator or remove_operator fields.
+      const updateOpsParams = [
+        { add_operator: { owner: wallet.address, operator: kt1, token_id: tokenId } },
+      ];
+
+      const batch = tezos.wallet.batch()
+        .withContractCall(fa2.methodsObject.update_operators(updateOpsParams))
+        .withContractCall(market.methodsObject.list_ask({
+          fa2_contract: fa2Kt1,
+          token_id: tokenId,
+          amount_mutez: priceMutez,
+          royalty_bps: royaltyBps,
+        }));
+      const op = await batch.send();
+      if (status) status.textContent = 'broadcast ' + (op.opHash || '').slice(0, 10) + '… · confirming';
+      await op.confirmation();
+      if (status) status.innerHTML = '✓ listed · <a href="https://tzkt.io/' + (op.opHash || '') + '" target="_blank" rel="noopener">tzkt &nearr;</a>';
+      setListEnabled(true, 'List another');
+      // Refresh the browse grid so the new ask shows up.
+      setTimeout(loadAsks, 1800);
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      if (status) {
+        if (/ABORTED|reject|cancel/i.test(msg)) status.textContent = 'cancelled';
+        else status.textContent = 'error: ' + msg.slice(0, 80);
+      }
+      setListEnabled(true, 'Try again');
+    }
+  }
+
+  // Wire form submit
+  const form = document.getElementById('market-list-form');
+  if (form) form.addEventListener('submit', listToken);
+
+  // Initial: enable list button if marketplace + collections + wallet line up.
+  function syncListButtonState() {
+    const kt1 = readMarketplaceKt1();
+    const wallet = readWallet();
+    const collEl = /** @type {HTMLSelectElement|null} */ (document.getElementById('market-list-collection'));
+    const hasCollections = !!(collEl && collEl.options.length > 0 && collEl.options[0].value);
+    if (!kt1) {
+      setListEnabled(false, 'awaiting marketplace contract');
+    } else if (!hasCollections) {
+      setListEnabled(false, 'no live collections to list from');
+    } else if (!wallet) {
+      setListEnabled(true, 'Connect wallet to list');
+    } else {
+      setListEnabled(true, 'Sign + list (one signature, two ops)');
+    }
+  }
+  syncListButtonState();
+
+  window.addEventListener('pc:wallet-change', function () {
+    syncListButtonState();
+    loadAsks();
+  });
+
+  // Kick off the browse fetch on load + every 60s.
+  loadAsks();
+  setInterval(loadAsks, 60_000);
+</script>
