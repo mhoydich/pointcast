@@ -1,0 +1,474 @@
+---
+/**
+ * /wallet — shareable PointCast collector view.
+ *
+ * /profile is personal/browser-scoped. This route is URL-scoped:
+ * /wallet?address=tz... renders a public collector shelf for PointCast
+ * FA2s and can be copied into chat, objkt descriptions, or cast replies.
+ */
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import contracts from '../data/contracts.json';
+
+const DEFAULT_WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+const marketplaceKt1 = String((contracts as any).marketplace?.mainnet ?? '');
+const supportedSlugs = ((contracts as any).marketplace?.supportedCollections ?? []) as string[];
+const names: Record<string, string> = {
+  coffee_mugs: 'Coffee Mugs',
+  visit_nouns: 'Visit Nouns',
+  window_snapshots: 'Window Snapshots',
+};
+const collections = supportedSlugs
+  .map((slug) => {
+    const entry = (contracts as any)[slug] ?? {};
+    const kt1 = String(entry.mainnet ?? '');
+    return {
+      slug,
+      name: names[slug] ?? slug.replaceAll('_', ' '),
+      kt1,
+      symbol: entry.symbol ?? 'PC',
+      royaltyBps: Number(entry.royalty_bps ?? 750),
+    };
+  })
+  .filter((c) => c.kt1.startsWith('KT1'));
+---
+
+<BaseLayout
+  title="Wallet · PointCast"
+  description="A shareable PointCast wallet shelf for Tezos collectibles, live from TzKT."
+>
+  <main
+    class="wallet"
+    data-default-wallet={DEFAULT_WALLET}
+    data-marketplace={marketplaceKt1}
+    data-collections={JSON.stringify(collections)}
+  >
+    <header class="topbar">
+      <a class="brand" href="/">PointCast</a>
+      <nav class="nav mono" aria-label="Wallet">
+        <a href="/marketplace">Marketplace</a>
+        <a href="/market">Live asks</a>
+        <a href="/profile">Profile</a>
+      </nav>
+      <WalletConnect />
+    </header>
+
+    <section class="hero" aria-labelledby="wallet-title">
+      <div>
+        <p class="kicker mono">Collector shelf · Tezos · shareable</p>
+        <h1 id="wallet-title">PointCast wallet view.</h1>
+        <p class="dek">
+          Paste any Tezos address, connect your own, or share the URL. This
+          view filters live TzKT balances to PointCast collections and keeps
+          every token one click from objkt, TzKT, and the PointCast market.
+        </p>
+      </div>
+      <aside class="summary" aria-label="Wallet summary">
+        <p class="mono" id="wallet-status">ready</p>
+        <strong id="wallet-total">0 tokens</strong>
+        <span id="wallet-owner">no address loaded</span>
+      </aside>
+    </section>
+
+    <section class="panel controls" aria-label="Wallet controls">
+      <label>
+        <span class="mono">wallet address</span>
+        <input id="wallet-address" type="text" spellcheck="false" value={DEFAULT_WALLET} />
+      </label>
+      <button class="button button--dark mono" type="button" id="load-wallet">Load shelf</button>
+      <button class="button mono" type="button" id="use-connected">Use connected</button>
+      <button class="button mono" type="button" id="share-wallet">Share</button>
+      <output class="share-output mono" id="share-output">share link copies here</output>
+    </section>
+
+    <section class="panel" aria-labelledby="collections-title">
+      <div class="panel__head">
+        <div>
+          <p class="kicker mono">PointCast collections</p>
+          <h2 id="collections-title">Held here</h2>
+        </div>
+        <a class="text-link mono" href="/marketplace">marketplace →</a>
+      </div>
+      <div class="collection-tabs mono" id="collection-tabs"></div>
+      <div class="grid" id="wallet-grid" aria-live="polite">
+        <p class="empty mono">load a wallet to see held PointCast tokens</p>
+      </div>
+    </section>
+
+    <section class="panel lane-panel" aria-labelledby="lanes-title">
+      <div class="panel__head">
+        <div>
+          <p class="kicker mono">known lanes</p>
+          <h2 id="lanes-title">Mint, list, collect</h2>
+        </div>
+      </div>
+      <div class="lanes">
+        {collections.map((collection) => (
+          <article class="lane">
+            <p class="mono">{collection.symbol} · {collection.royaltyBps / 100}% royalty</p>
+            <h3>{collection.name}</h3>
+            <a class="text-link mono" href={`/market?collection=${collection.kt1}`}>open floor →</a>
+          </article>
+        ))}
+      </div>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .wallet {
+    --ink: #171717;
+    --paper: #f4efe5;
+    --muted: #686158;
+    --rule: rgba(23, 23, 23, 0.16);
+    --blue: #235f9e;
+    --green: #3f785d;
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 14px 18px 96px;
+    background:
+      linear-gradient(90deg, rgba(23,23,23,0.035) 1px, transparent 1px),
+      linear-gradient(180deg, #fbf8f0, var(--paper));
+    background-size: 34px 34px, auto;
+  }
+  .mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); letter-spacing: 0.12em; text-transform: uppercase; }
+  .topbar, .hero, .panel { max-width: 1180px; margin-inline: auto; }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .brand {
+    color: var(--ink);
+    font: 800 15px/1 var(--font-mono, monospace);
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .nav { margin-left: auto; display: flex; gap: 12px; flex-wrap: wrap; font-size: 10px; }
+  .nav a, .text-link { color: var(--blue); text-decoration: none; }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
+    gap: 18px;
+    padding: 32px 0 18px;
+  }
+  .hero > div, .summary, .panel {
+    border: 2px solid var(--ink);
+    background: rgba(255, 253, 248, 0.95);
+    box-shadow: 8px 8px 0 rgba(23,23,23,0.08);
+  }
+  .hero > div {
+    min-height: 270px;
+    padding: clamp(22px, 4vw, 44px);
+    background:
+      linear-gradient(135deg, rgba(35,95,158,0.12), transparent 42%),
+      radial-gradient(circle at 84% 74%, rgba(63,120,93,0.18) 0 12%, transparent 12.5%),
+      #fffdf8;
+  }
+  .summary {
+    padding: 18px;
+    display: grid;
+    align-content: end;
+    gap: 8px;
+  }
+  .summary p { margin: 0; color: var(--green); font-size: 10px; }
+  .summary strong { font-size: clamp(36px, 7vw, 72px); line-height: 0.9; letter-spacing: 0; }
+  .summary span { color: var(--muted); overflow-wrap: anywhere; }
+  .kicker { margin: 0 0 12px; color: var(--muted); font-size: 10px; }
+  h1 { margin: 0; font-size: clamp(48px, 10vw, 116px); line-height: 0.88; letter-spacing: 0; }
+  h2 { margin: 0; font-size: clamp(30px, 5vw, 58px); line-height: 0.95; letter-spacing: 0; }
+  h3 { margin: 4px 0 8px; font-size: 22px; line-height: 1; letter-spacing: 0; }
+  .dek { max-width: 760px; margin: 18px 0 0; color: #332f2b; font-size: clamp(16px, 2vw, 21px); line-height: 1.36; }
+  .panel { padding: 18px; margin-top: 18px; }
+  .controls {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto auto auto minmax(220px, 0.48fr);
+    gap: 10px;
+    align-items: end;
+  }
+  label { display: grid; gap: 6px; }
+  label span { color: var(--muted); font-size: 10px; }
+  input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    padding: 0 10px;
+    font: 750 15px/1.2 var(--font-sans, system-ui, sans-serif);
+  }
+  .button {
+    appearance: none;
+    border: 2px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    min-height: 42px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+  }
+  .button--dark { background: var(--ink); color: #fff; }
+  .share-output {
+    display: block;
+    min-height: 42px;
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--muted);
+    padding: 11px 10px;
+    overflow-wrap: anywhere;
+    font-size: 10px;
+  }
+  .panel__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: end;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+  }
+  .collection-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .tab {
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--ink);
+    min-height: 32px;
+    padding: 0 10px;
+    cursor: pointer;
+    font-size: 9px;
+  }
+  .tab[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+  }
+  .token {
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--ink);
+    text-decoration: none;
+    display: grid;
+    min-width: 0;
+  }
+  .token__art {
+    aspect-ratio: 1;
+    background: #ede6d8;
+    border-bottom: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .token__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .token__body { padding: 10px; display: grid; gap: 6px; }
+  .token__meta { color: var(--muted); font-size: 9px; margin: 0; overflow-wrap: anywhere; }
+  .token__name { margin: 0; font-weight: 850; line-height: 1.05; }
+  .token__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .token__actions a { color: var(--blue); text-decoration: none; font-size: 9px; }
+  .empty { border: 1px dashed var(--rule); padding: 20px; color: var(--muted); background: rgba(255,255,255,0.72); }
+  .lanes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .lane { border: 1px solid var(--rule); background: #fff; padding: 12px; }
+  .lane p { margin: 0; color: var(--muted); font-size: 10px; }
+  @media (max-width: 860px) {
+    .wallet { padding-inline: 12px; }
+    .topbar { flex-wrap: wrap; align-items: start; }
+    .nav { order: 3; width: 100%; margin-left: 0; }
+    .hero, .controls { grid-template-columns: 1fr; }
+    h1 { font-size: clamp(48px, 17vw, 78px); }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  }
+</style>
+
+<script>
+  const root = document.querySelector('.wallet');
+  const DEFAULT_WALLET = root?.getAttribute('data-default-wallet') || '';
+  const MARKETPLACE = root?.getAttribute('data-marketplace') || '';
+  const COLLECTIONS = JSON.parse(root?.getAttribute('data-collections') || '[]');
+  const collectionByKt1 = new Map(COLLECTIONS.map((c) => [String(c.kt1).toLowerCase(), c]));
+  let activeFilter = 'all';
+  let loadedTokens = [];
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const short = (addr) => addr && addr.length > 13 ? `${addr.slice(0, 7)}…${addr.slice(-5)}` : addr || '';
+  const mugSlugs = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+
+  function getStoredWallet() {
+    try {
+      const raw = localStorage.getItem('pc:wallet');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function tokenArt(token) {
+    const contract = String(token.contract || '').toLowerCase();
+    const tokenId = String(token.tokenId || '0');
+    if (contract === 'kt1lp1otbuudrubayqderh7i7mswazvdohxh') return `/api/tezos-token-card/${tokenId}.svg`;
+    if (contract === 'kt1jq3ajzfvmnjz9mgqrm13aj8lqbX9jpoxt'.toLowerCase()) return `/images/coffee-mugs/${mugSlugs[Number(tokenId)] || 'ceramic'}.svg`;
+    return token.image || '/images/og-home-v2.png';
+  }
+
+  function cleanName(token) {
+    const collection = collectionByKt1.get(String(token.contract).toLowerCase());
+    if (collection?.slug === 'visit_nouns') return `Visit Noun #${token.tokenId}`;
+    if (collection?.slug === 'coffee_mugs') {
+      const label = ['Ceramic Mug', 'Espresso Cup', 'Latte Glass', 'Paper Cup', 'Bistro Cup'][Number(token.tokenId)];
+      return label || `Coffee Mug #${token.tokenId}`;
+    }
+    return token.name || `${collection?.name || 'PointCast'} #${token.tokenId}`;
+  }
+
+  function imageFromMetadata(metadata) {
+    const uri = metadata?.thumbnailUri || metadata?.displayUri || metadata?.artifactUri || metadata?.image || '';
+    if (uri.startsWith('ipfs://')) return `https://ipfs.io/ipfs/${uri.slice(7)}`;
+    if (uri.startsWith('http')) return uri;
+    return '';
+  }
+
+  function setUrlAddress(addr) {
+    const url = new URL(location.href);
+    url.searchParams.set('address', addr);
+    history.replaceState(null, '', url);
+  }
+
+  function renderTabs() {
+    const holder = $('collection-tabs');
+    if (!holder) return;
+    const counts = loadedTokens.reduce((memo, token) => {
+      memo[token.slug] = (memo[token.slug] || 0) + Number(token.balance || 0);
+      return memo;
+    }, {});
+    const total = loadedTokens.reduce((sum, token) => sum + Number(token.balance || 0), 0);
+    const tabs = [{ slug: 'all', name: 'All', count: total }, ...COLLECTIONS.map((c) => ({ ...c, count: counts[c.slug] || 0 }))];
+    holder.innerHTML = tabs.map((tab) => `
+      <button class="tab mono" type="button" data-filter="${esc(tab.slug)}" aria-pressed="${tab.slug === activeFilter}">
+        ${esc(tab.name)} · ${tab.count}
+      </button>
+    `).join('');
+    holder.querySelectorAll('[data-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        activeFilter = button.getAttribute('data-filter') || 'all';
+        renderTokens();
+      });
+    });
+  }
+
+  function renderTokens() {
+    const grid = $('wallet-grid');
+    if (!grid) return;
+    renderTabs();
+    const tokens = activeFilter === 'all' ? loadedTokens : loadedTokens.filter((token) => token.slug === activeFilter);
+    if (tokens.length === 0) {
+      grid.innerHTML = '<p class="empty mono">no held tokens in this lane yet</p>';
+      return;
+    }
+    grid.innerHTML = tokens.map((token) => {
+      const name = cleanName(token);
+      const objkt = `https://objkt.com/tokens/${token.contract}/${token.tokenId}`;
+      const tzkt = `https://tzkt.io/${token.contract}/tokens/${token.tokenId}`;
+      const market = `/market?collection=${encodeURIComponent(token.contract)}&token_id=${encodeURIComponent(token.tokenId)}`;
+      return `
+        <article class="token">
+          <a class="token__art" href="${objkt}" target="_blank" rel="noopener">
+            <img src="${esc(tokenArt(token))}" alt="${esc(name)}" loading="lazy" />
+          </a>
+          <div class="token__body">
+            <p class="token__meta mono">${esc(token.collectionName)} · #${esc(token.tokenId)} · balance ${esc(token.balance)}</p>
+            <h3 class="token__name">${esc(name)}</h3>
+            <div class="token__actions mono">
+              <a href="${market}">market</a>
+              <a href="${objkt}" target="_blank" rel="noopener">objkt</a>
+              <a href="${tzkt}" target="_blank" rel="noopener">tzkt</a>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join('');
+  }
+
+  async function loadWallet(addr) {
+    const address = String(addr || '').trim();
+    const grid = $('wallet-grid');
+    if (!address || !address.startsWith('tz')) {
+      grid.innerHTML = '<p class="empty mono">enter a Tezos tz address</p>';
+      return;
+    }
+    $('wallet-status').textContent = 'loading TzKT';
+    $('wallet-owner').textContent = address;
+    $('wallet-total').textContent = '...';
+    grid.innerHTML = '<p class="empty mono">loading held PointCast tokens...</p>';
+    setUrlAddress(address);
+
+    try {
+      const urls = COLLECTIONS.map((collection) =>
+        fetch(`https://api.tzkt.io/v1/tokens/balances?account=${encodeURIComponent(address)}&token.contract=${encodeURIComponent(collection.kt1)}&balance.gt=0&limit=100&sort.desc=lastTime`)
+          .then((r) => r.ok ? r.json() : [])
+          .then((rows) => rows.map((row) => ({ row, collection })))
+      );
+      const groups = await Promise.all(urls);
+      loadedTokens = groups.flat().map(({ row, collection }) => ({
+        slug: collection.slug,
+        collectionName: collection.name,
+        contract: row.token?.contract?.address || collection.kt1,
+        tokenId: row.token?.tokenId || '0',
+        name: row.token?.metadata?.name || '',
+        image: imageFromMetadata(row.token?.metadata),
+        balance: row.balance || '0',
+        lastTime: row.lastTime || '',
+      }));
+      const total = loadedTokens.reduce((sum, token) => sum + Number(token.balance || 0), 0);
+      $('wallet-status').textContent = 'live from TzKT';
+      $('wallet-total').textContent = `${total} token${total === 1 ? '' : 's'}`;
+      activeFilter = 'all';
+      renderTokens();
+    } catch (err) {
+      console.error(err);
+      $('wallet-status').textContent = 'TzKT error';
+      grid.innerHTML = '<p class="empty mono">could not load this wallet right now</p>';
+    }
+  }
+
+  function shareWallet() {
+    const addr = $('wallet-address')?.value?.trim() || DEFAULT_WALLET;
+    const url = `${location.origin}/wallet?address=${encodeURIComponent(addr)}`;
+    navigator.clipboard?.writeText(url).catch(() => {});
+    $('share-output').textContent = url;
+  }
+
+  $('load-wallet')?.addEventListener('click', () => loadWallet($('wallet-address').value));
+  $('share-wallet')?.addEventListener('click', shareWallet);
+  $('use-connected')?.addEventListener('click', () => {
+    const wallet = getStoredWallet();
+    if (wallet?.address) {
+      $('wallet-address').value = wallet.address;
+      loadWallet(wallet.address);
+    } else {
+      $('share-output').textContent = 'connect a Tezos wallet first';
+      window.dispatchEvent(new CustomEvent('pc:open-wallet-menu'));
+    }
+  });
+  window.addEventListener('pc:wallet-change', (event) => {
+    const addr = event?.detail?.address;
+    if (addr) $('wallet-address').value = addr;
+  });
+
+  const initial = new URL(location.href).searchParams.get('address') || getStoredWallet()?.address || DEFAULT_WALLET;
+  $('wallet-address').value = initial;
+  loadWallet(initial);
+</script>
