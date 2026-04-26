@@ -2,6 +2,10 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import contracts from '../data/contracts.json';
 import {
+  ZEN_CAT_GENESIS_COLLECTIBLES,
+  ZEN_CAT_WORLD_COLLECTIBLES,
+} from '../data/zen-cat-collectibles';
+import {
   ZEN_CAT_RITUALS,
   ZEN_CATS_STORAGE_KEYS,
   ZEN_CATS_SYMBOL,
@@ -12,6 +16,9 @@ import {
 
 const today = todayZenCat();
 const recent = recentZenCats(9);
+const genesisCollectibles = ZEN_CAT_GENESIS_COLLECTIBLES;
+const worldCollectibles = ZEN_CAT_WORLD_COLLECTIBLES;
+const worldProofImage = '/images/zen-cats/world/world-atelier-proof.webp';
 const cat = today.cat;
 const palette = cat.palette;
 const zenCatsMainnet = ((contracts as any).zen_cats?.mainnet ?? '').trim();
@@ -31,6 +38,18 @@ const clientData = {
   },
   storageKeys: ZEN_CATS_STORAGE_KEYS,
   passportStamp: 'zen-cat',
+  genesis: genesisCollectibles.map((item) => ({
+    id: item.id,
+    title: item.title,
+    cat: item.cat,
+    gem: item.gem,
+    rarity: item.rarity,
+    imageUrl: item.imageUrl,
+  })),
+  worldAtelier: {
+    count: worldCollectibles.length,
+    proofImageUrl: worldProofImage,
+  },
 };
 
 const jsonLd = {
@@ -157,7 +176,10 @@ const jsonLd = {
       <div class="panel-head">
         <p class="kicker">COLLECTION SHELF</p>
         <h2 id="shelf-title">Nine recent cats, one per Pacific day.</h2>
-        <p><span data-collection-count>0</span> cats collected in this browser.</p>
+        <p>
+          <span data-collection-count>0</span> daily cats and
+          <span data-genesis-count>0</span> Genesis cats collected in this browser.
+        </p>
       </div>
       <ol class="cat-shelf">
         {recent.map((entry) => (
@@ -172,14 +194,90 @@ const jsonLd = {
       </ol>
     </section>
 
+    <section class="genesis-panel" aria-labelledby="genesis-title">
+      <div class="panel-head">
+        <p class="kicker">GENESIS GARDEN · EARLY COLLECTIBLES</p>
+        <h2 id="genesis-title">The first 16 cats are now inside the garden.</h2>
+        <p>
+          These are the founding art cards: textile texture, quiet luxury, blue-coral rooms,
+          and gem-linked traits before the PCCAT contract goes live.
+        </p>
+      </div>
+      <div class="genesis-grid">
+        {genesisCollectibles.map((item) => (
+          <article
+            class="genesis-card"
+            data-genesis-card={item.id}
+            style={`--genesis-ground:${item.palette.ground};--genesis-accent:${item.palette.accent};--genesis-ink:${item.palette.ink};`}
+          >
+            <a href={item.imageUrl} aria-label={`Open ${item.title}`}>
+              <img src={item.imageUrl} alt={`${item.title}, ${item.cat}`} width="1024" height="768" loading="lazy" decoding="async" />
+            </a>
+            <div class="genesis-card__body">
+              <p>#{String(item.number).padStart(3, '0')} · {item.rarity}</p>
+              <h3>{item.title}</h3>
+              <dl>
+                <div><dt>Gem</dt><dd>{item.gem}</dd></div>
+                <div><dt>Cat</dt><dd>{item.cat}</dd></div>
+                <div><dt>Mood</dt><dd>{item.mood}</dd></div>
+              </dl>
+              <button type="button" data-genesis-id={item.id}>Add to shelf</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="world-panel" aria-labelledby="world-title">
+      <div class="panel-head">
+        <p class="kicker">WORLD ATELIER · 50 PASSPORT CATS</p>
+        <h2 id="world-title">Luxury, landmark, gemstone, calm.</h2>
+        <p>
+          The next collection is mapped as 50 global art prompts: each cat gets a place,
+          a landmark cue, a gemstone color story, and a quiet high-end mood.
+        </p>
+      </div>
+      <figure class="world-proof">
+        <a href={worldProofImage} aria-label="Open the World Atelier proof sheet">
+          <img
+            src={worldProofImage}
+            alt="World Atelier proof sheet with 50 luxury zen cat collectible studies"
+            width="887"
+            height="1774"
+            loading="lazy"
+            decoding="async"
+          />
+        </a>
+      </figure>
+      <ol class="world-grid">
+        {worldCollectibles.map((item) => (
+          <li style={`--world-ground:${item.palette.ground};--world-accent:${item.palette.accent};--world-ink:${item.palette.ink};`}>
+            <span class="world-grid__number">{String(item.number).padStart(2, '0')}</span>
+            <h3>{item.title}</h3>
+            <p>{item.city}, {item.country}</p>
+            <dl>
+              <div><dt>Landmark</dt><dd>{item.landmark}</dd></div>
+              <div><dt>Gem</dt><dd>{item.gem}</dd></div>
+              <div><dt>Cat</dt><dd>{item.cat}</dd></div>
+            </dl>
+          </li>
+        ))}
+      </ol>
+    </section>
+
     <section class="agent-note" aria-labelledby="agent-note-title">
       <p class="kicker">AGENT HOOK</p>
       <h2 id="agent-note-title">The cat surface is machine-readable.</h2>
       <p>
         Agents can read <a href="/zen-cats.json">/zen-cats.json</a> for today's cat, localStorage keys,
-        token id scheme, Tezos contract status, metadata base, and mint readiness.
+        Genesis collectibles, the 50-cat world series, Tezos contract status, metadata base, and mint readiness.
       </p>
-      <pre>{JSON.stringify({ today: manifest.today, tezos: manifest.tezos }, null, 2)}</pre>
+      <pre>{JSON.stringify({
+        today: manifest.today,
+        genesis: { count: manifest.genesis.count, storageKey: manifest.genesis.storageKey },
+        worldAtelier: { count: manifest.worldAtelier.count },
+        tezos: manifest.tezos,
+      }, null, 2)}</pre>
     </section>
   </main>
 
@@ -194,13 +292,16 @@ const jsonLd = {
     if (root && dataEl) {
       const DATA = JSON.parse(dataEl.textContent || '{}');
       const collectionKey = DATA.storageKeys.collection;
+      const genesisKey = DATA.storageKeys.genesisCollection;
       const ritualKey = DATA.storageKeys.ritualPrefix + DATA.today.date;
       const ritualButtons = Array.from(root.querySelectorAll('[data-ritual-id]'));
+      const genesisButtons = Array.from(root.querySelectorAll('[data-genesis-id]'));
       const collectButton = root.querySelector('[data-collect-cat]');
       const mintButton = root.querySelector('[data-mint-cat]');
       const ritualStatus = root.querySelector('[data-ritual-status]');
       const collectionStatus = root.querySelector('[data-collection-status]');
       const collectionCount = root.querySelector('[data-collection-count]');
+      const genesisCount = root.querySelector('[data-genesis-count]');
       const mintStatus = root.querySelector('[data-mint-status]');
       const shelves = Array.from(root.querySelectorAll('[data-shelf-date]'));
 
@@ -223,6 +324,11 @@ const jsonLd = {
 
       function collection() {
         const items = readJson(collectionKey, []);
+        return Array.isArray(items) ? items : [];
+      }
+
+      function genesisCollection() {
+        const items = readJson(genesisKey, []);
         return Array.isArray(items) ? items : [];
       }
 
@@ -263,12 +369,33 @@ const jsonLd = {
         render();
       }
 
+      function collectGenesis(id) {
+        const collectible = DATA.genesis.find((item) => item.id === id);
+        if (!collectible) return;
+        const items = genesisCollection().filter((item) => item.id !== id);
+        items.unshift({
+          id: collectible.id,
+          title: collectible.title,
+          cat: collectible.cat,
+          gem: collectible.gem,
+          rarity: collectible.rarity,
+          imageUrl: collectible.imageUrl,
+          source: 'genesis',
+          collectedAt: new Date().toISOString(),
+        });
+        writeJson(genesisKey, items.slice(0, 64));
+        passportStamp();
+        render();
+      }
+
       function render() {
         const state = ritualState();
         const done = DATA.rituals.filter((ritual) => state[ritual.id]).length;
         const complete = done >= DATA.rituals.length;
         const collected = isCollectedToday();
         const items = collection();
+        const genesisItems = genesisCollection();
+        const genesisIds = new Set(genesisItems.map((item) => item.id));
 
         ritualButtons.forEach((button) => {
           const id = button.getAttribute('data-ritual-id');
@@ -288,6 +415,7 @@ const jsonLd = {
               : 'Complete the ritual to collect today\'s cat.';
         }
         if (collectionCount) collectionCount.textContent = String(items.length);
+        if (genesisCount) genesisCount.textContent = String(genesisItems.length);
         if (collectButton) {
           collectButton.disabled = !complete || collected;
           collectButton.textContent = collected ? 'Collected' : 'Collect locally';
@@ -299,6 +427,14 @@ const jsonLd = {
         shelves.forEach((item) => {
           const date = item.getAttribute('data-shelf-date');
           item.classList.toggle('is-collected', items.some((entry) => entry.date === date));
+        });
+        genesisButtons.forEach((button) => {
+          const id = button.getAttribute('data-genesis-id');
+          const isCollected = genesisIds.has(id);
+          const card = id ? root.querySelector(`[data-genesis-card="${id}"]`) : null;
+          button.textContent = isCollected ? 'Collected' : 'Add to shelf';
+          button.disabled = isCollected;
+          card?.classList.toggle('is-collected', isCollected);
         });
       }
 
@@ -313,6 +449,13 @@ const jsonLd = {
       });
 
       collectButton?.addEventListener('click', collectToday);
+
+      genesisButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = button.getAttribute('data-genesis-id');
+          if (id) collectGenesis(id);
+        });
+      });
 
       mintButton?.addEventListener('click', async () => {
         if (!DATA.contract.live || !isCollectedToday()) return;
@@ -381,6 +524,8 @@ const jsonLd = {
   .cat-card,
   .ritual-panel,
   .shelf-panel,
+  .genesis-panel,
+  .world-panel,
   .agent-note {
     border: 1.5px solid var(--pc-ink);
     background: #fffef8;
@@ -499,6 +644,8 @@ const jsonLd = {
 
   .ritual-panel,
   .shelf-panel,
+  .genesis-panel,
+  .world-panel,
   .agent-note {
     display: grid;
     gap: 14px;
@@ -683,6 +830,163 @@ const jsonLd = {
     font-size: 10px;
   }
 
+  .genesis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .genesis-card {
+    display: grid;
+    min-width: 0;
+    border: 1px solid color-mix(in oklab, var(--genesis-ink) 72%, var(--pc-rule));
+    background: var(--genesis-ground);
+    color: #fffef8;
+  }
+
+  .genesis-card.is-collected {
+    box-shadow: inset 0 0 0 3px var(--genesis-accent);
+  }
+
+  .genesis-card a {
+    display: block;
+    overflow: hidden;
+    background: #f6efe4;
+  }
+
+  .genesis-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+
+  .genesis-card__body {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .genesis-card__body p,
+  .genesis-card__body h3,
+  .genesis-card__body dl {
+    margin: 0;
+  }
+
+  .genesis-card__body p,
+  .world-grid__number {
+    color: color-mix(in oklab, var(--genesis-accent, var(--world-accent)) 84%, #fff);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .genesis-card h3 {
+    min-height: 2.4em;
+    font-size: 18px;
+    line-height: 1.12;
+    letter-spacing: 0;
+  }
+
+  .genesis-card dl,
+  .world-grid dl {
+    display: grid;
+    gap: 5px;
+  }
+
+  .genesis-card dt,
+  .world-grid dt {
+    color: color-mix(in oklab, var(--genesis-accent, var(--world-accent)) 76%, #fff);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .genesis-card dd,
+  .world-grid dd {
+    margin: 1px 0 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .genesis-card button {
+    min-height: 38px;
+    border: 1px solid color-mix(in oklab, var(--genesis-accent) 72%, #fff);
+    background: #fffef8;
+    color: var(--genesis-ink);
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .genesis-card button:disabled {
+    cursor: default;
+    opacity: 0.72;
+  }
+
+  .world-proof {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--pc-rule);
+    background: #f6efe4;
+  }
+
+  .world-proof a,
+  .world-proof img {
+    display: block;
+  }
+
+  .world-proof img {
+    width: 100%;
+    height: auto;
+    max-height: 720px;
+    object-fit: cover;
+    object-position: center top;
+  }
+
+  .world-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .world-grid li {
+    display: grid;
+    gap: 7px;
+    min-height: 250px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid color-mix(in oklab, var(--world-ink) 66%, var(--pc-rule));
+    background:
+      linear-gradient(135deg, color-mix(in oklab, var(--world-accent) 18%, transparent), transparent 52%),
+      var(--world-ground);
+    color: #fffef8;
+  }
+
+  .world-grid h3,
+  .world-grid p {
+    margin: 0;
+  }
+
+  .world-grid h3 {
+    min-height: 3em;
+    font-size: 18px;
+    line-height: 1.1;
+    letter-spacing: 0;
+  }
+
+  .world-grid p {
+    color: color-mix(in oklab, #fffef8 82%, var(--world-accent));
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
   .agent-note pre {
     max-height: 320px;
     margin: 0;
@@ -701,6 +1005,11 @@ const jsonLd = {
       grid-template-columns: 1fr;
     }
 
+    .genesis-grid,
+    .world-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .cat-shelf {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -717,6 +1026,8 @@ const jsonLd = {
 
     .ritual-grid,
     .cat-facts,
+    .genesis-grid,
+    .world-grid,
     .cat-shelf {
       grid-template-columns: 1fr;
     }

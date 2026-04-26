@@ -1,9 +1,15 @@
 import { todayPT } from './daily';
+import {
+  ZEN_CAT_GENESIS_COLLECTIBLES,
+  ZEN_CAT_WORLD_COLLECTIBLES,
+  ZEN_CAT_WORLD_STYLE_PROMPT,
+} from '../data/zen-cat-collectibles';
 
 export const ZEN_CATS_VERSION = '0.1.0';
 export const ZEN_CATS_SYMBOL = 'PCCAT';
 export const ZEN_CATS_STORAGE_KEYS = {
   collection: 'pc:zen-cats:collection',
+  genesisCollection: 'pc:zen-cats:genesis',
   ritualPrefix: 'pc:zen-cats:rituals:',
 } as const;
 
@@ -303,6 +309,18 @@ export function buildZenCatsManifest(now: Date = new Date()) {
     rituals: ZEN_CAT_RITUALS,
     storageKeys: ZEN_CATS_STORAGE_KEYS,
     recent: recentZenCats(9, now),
+    genesis: {
+      title: 'Genesis Garden',
+      count: ZEN_CAT_GENESIS_COLLECTIBLES.length,
+      storageKey: ZEN_CATS_STORAGE_KEYS.genesisCollection,
+      collectibles: ZEN_CAT_GENESIS_COLLECTIBLES,
+    },
+    worldAtelier: {
+      title: 'World Atelier',
+      count: ZEN_CAT_WORLD_COLLECTIBLES.length,
+      stylePrompt: ZEN_CAT_WORLD_STYLE_PROMPT,
+      collectibles: ZEN_CAT_WORLD_COLLECTIBLES,
+    },
     tezos: {
       standard: 'FA2 / TZIP-21',
       metadataBase: 'https://pointcast.xyz/api/zen-cat-metadata',
