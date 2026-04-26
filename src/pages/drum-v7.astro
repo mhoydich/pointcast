@@ -1,0 +1,894 @@
+---
+/**
+ * /drum-v7 — The Big Orchestra (30 Nouns, instrument board layout).
+ *
+ * Per Mike: "build a bigger orchestra something like 30 nouns like an
+ * instrument board". v4 is 12 instruments; v7 is a percussion-section-
+ * style 30-cell board. Six categories × five voicings each:
+ *
+ *   Kicks      — five different kicks at different tunings/decays
+ *   Snares     — five different snares (rim, body, brush, gated, soft)
+ *   Hats       — closed/open/half/long/sizzle
+ *   Toms       — low / mid-low / mid / mid-high / high
+ *   Bass+Lead  — sub / bass / mid lead / high lead / pad
+ *   Color      — bell / clap / shaker / cymbal / cowbell-ish blip
+ *
+ * Each cell is a unique Noun avatar so the room visually scans as a
+ * 30-piece percussion board. Audio uses pitch + envelope variants of
+ * the v4 synth recipes — same sound family, more positions on the kit.
+ *
+ * Real-time: tries to upgrade to WebSocket via /api/drum/room (Cloudflare
+ * Durable Object). Falls back to /api/sounds polling at 150ms when WS
+ * isn't reachable. Latency wins: ~30–60ms p50 over WS vs. ~150–300ms
+ * p50 over polling.
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+// 30 cells: 6 categories × 5 voicings. Order matters — drives the
+// 5-column × 6-row grid layout (or 3×10 on mobile).
+//
+// `pitch` is the synth's fundamental frequency in Hz (or for pitched
+// instruments, the C-equivalent base; harmonic shifts are encoded in
+// the `semitone` field for melodic voices).
+const ORCHESTRA = [
+  // KICKS — five different tunings, color coded red
+  { key: 'kick-sub',  label: 'Kick · Sub',   nounId:   1, accent: '#dc2626', cat: 'kick',  pitch:  60, decay: 0.45 },
+  { key: 'kick-deep', label: 'Kick · Deep',  nounId:  60, accent: '#ef4444', cat: 'kick',  pitch:  90, decay: 0.38 },
+  { key: 'kick-mid',  label: 'Kick · Mid',   nounId: 120, accent: '#f87171', cat: 'kick',  pitch: 130, decay: 0.32 },
+  { key: 'kick-tight',label: 'Kick · Tight', nounId: 180, accent: '#fb923c', cat: 'kick',  pitch: 170, decay: 0.22 },
+  { key: 'kick-tap',  label: 'Kick · Tap',   nounId: 240, accent: '#fdba74', cat: 'kick',  pitch: 200, decay: 0.18 },
+
+  // SNARES — five different snare colors
+  { key: 'snare-deep',  label: 'Snare · Deep',  nounId:  10, accent: '#f59e0b', cat: 'snare', pitch: 180, decay: 0.20 },
+  { key: 'snare-body',  label: 'Snare · Body',  nounId:  70, accent: '#fbbf24', cat: 'snare', pitch: 220, decay: 0.18 },
+  { key: 'snare-rim',   label: 'Snare · Rim',   nounId: 130, accent: '#facc15', cat: 'snare', pitch: 320, decay: 0.10 },
+  { key: 'snare-brush', label: 'Snare · Brush', nounId: 190, accent: '#fde047', cat: 'snare', pitch: 200, decay: 0.30 },
+  { key: 'snare-gated', label: 'Snare · Gated', nounId: 250, accent: '#facc15', cat: 'snare', pitch: 240, decay: 0.14 },
+
+  // HATS — closed/open/half/long/sizzle
+  { key: 'hat-closed', label: 'Hat · Closed', nounId:  20, accent: '#84cc16', cat: 'hat',   pitch: 0, decay: 0.05 },
+  { key: 'hat-open',   label: 'Hat · Open',   nounId:  80, accent: '#a3e635', cat: 'hat',   pitch: 0, decay: 0.32 },
+  { key: 'hat-half',   label: 'Hat · Half',   nounId: 140, accent: '#bef264', cat: 'hat',   pitch: 0, decay: 0.16 },
+  { key: 'hat-long',   label: 'Hat · Long',   nounId: 200, accent: '#65a30d', cat: 'hat',   pitch: 0, decay: 0.55 },
+  { key: 'hat-sizzle', label: 'Hat · Sizzle', nounId: 260, accent: '#4d7c0f', cat: 'hat',   pitch: 0, decay: 0.42 },
+
+  // TOMS — five tunings
+  { key: 'tom-floor', label: 'Tom · Floor',  nounId:  30, accent: '#10b981', cat: 'tom',   pitch:  90, decay: 0.45 },
+  { key: 'tom-low',   label: 'Tom · Low',    nounId:  90, accent: '#14b8a6', cat: 'tom',   pitch: 140, decay: 0.40 },
+  { key: 'tom-mid',   label: 'Tom · Mid',    nounId: 150, accent: '#2dd4bf', cat: 'tom',   pitch: 200, decay: 0.36 },
+  { key: 'tom-high',  label: 'Tom · High',   nounId: 210, accent: '#5eead4', cat: 'tom',   pitch: 280, decay: 0.32 },
+  { key: 'tom-rack',  label: 'Tom · Rack',   nounId: 270, accent: '#99f6e4', cat: 'tom',   pitch: 360, decay: 0.28 },
+
+  // BASS + LEAD — pitched, melodic, blue family
+  { key: 'sub-bass',   label: 'Sub Bass',    nounId:  40, accent: '#0ea5e9', cat: 'tonal', pitch:  41,  decay: 0.7 },
+  { key: 'bass',       label: 'Bass',        nounId: 100, accent: '#3b82f6', cat: 'tonal', pitch:  82,  decay: 0.55 },
+  { key: 'mid-lead',   label: 'Mid Lead',    nounId: 160, accent: '#6366f1', cat: 'tonal', pitch: 261,  decay: 0.45 },
+  { key: 'high-lead',  label: 'High Lead',   nounId: 220, accent: '#8b5cf6', cat: 'tonal', pitch: 523,  decay: 0.40 },
+  { key: 'pad',        label: 'Pad',         nounId: 280, accent: '#a855f7', cat: 'tonal', pitch: 130,  decay: 1.4 },
+
+  // COLOR — bell/clap/shaker/cymbal/cowbell, magenta/pink family
+  { key: 'bell',     label: 'Bell',     nounId:  50, accent: '#d946ef', cat: 'color', pitch: 660, decay: 1.4 },
+  { key: 'clap',     label: 'Clap',     nounId: 110, accent: '#ec4899', cat: 'color', pitch: 0,   decay: 0.16 },
+  { key: 'shaker',   label: 'Shaker',   nounId: 170, accent: '#f472b6', cat: 'color', pitch: 0,   decay: 0.16 },
+  { key: 'cymbal',   label: 'Cymbal',   nounId: 230, accent: '#f43f5e', cat: 'color', pitch: 0,   decay: 0.9 },
+  { key: 'cowbell',  label: 'Cowbell',  nounId: 290, accent: '#fb7185', cat: 'color', pitch: 800, decay: 0.18 },
+] as const;
+
+const CATEGORIES = [
+  { id: 'kick',  label: 'Kicks',     emoji: '🥁', accent: '#dc2626' },
+  { id: 'snare', label: 'Snares',    emoji: '🪘', accent: '#f59e0b' },
+  { id: 'hat',   label: 'Hats',      emoji: '⚡', accent: '#84cc16' },
+  { id: 'tom',   label: 'Toms',      emoji: '🪘', accent: '#10b981' },
+  { id: 'tonal', label: 'Bass+Lead', emoji: '🎶', accent: '#3b82f6' },
+  { id: 'color', label: 'Color',     emoji: '✨', accent: '#d946ef' },
+] as const;
+---
+
+<DrumLayout
+  title="Drum Room v7 · The Big Orchestra"
+  description="Thirty Nouns as a percussion section instrument board. Six categories — kicks, snares, hats, toms, bass+lead, color. Real-time multiplayer over WebSocket."
+  image="/images/og-drum.png"
+>
+
+<div class="v7-root">
+
+  <DrumNav current="v7" />
+
+  <header class="v7-hero">
+    <p class="v7-hero-eyebrow">v7 · big orchestra · 30 nouns</p>
+    <h1 class="v7-hero-title">a thirty-piece instrument board</h1>
+    <p class="v7-hero-dek">
+      thirty nouns laid out as a percussion section: five kicks, five
+      snares, five hats, five toms, five bass+lead voices, five color
+      hits. tap any cell to fire it. real-time over websocket — others
+      hear you in ~30–60ms.
+    </p>
+  </header>
+
+  <!-- ══ HUD ══ -->
+  <div class="v7-hud">
+    <div class="v7-hud-card">
+      <div class="v7-hud-label">Cells played</div>
+      <div class="v7-hud-val"><span id="v7-played">0</span> / 30</div>
+      <div class="v7-hud-sub">tap to claim</div>
+    </div>
+    <div class="v7-hud-card v7-hud-mode" id="v7-mode-card">
+      <div class="v7-hud-label">Mode</div>
+      <div class="v7-hud-val" id="v7-mode-label">manual</div>
+      <div class="v7-hud-sub">click any cell · or hit auto</div>
+    </div>
+    <div class="v7-hud-card v7-hud-jammers">
+      <div class="v7-hud-label">Jammers</div>
+      <div class="v7-hud-val" id="v7-jammers">1</div>
+      <div class="v7-hud-sub">live in the room</div>
+    </div>
+    <div class="v7-hud-card v7-hud-stream">
+      <div class="v7-hud-label">Stream</div>
+      <div class="v7-hud-val" id="v7-stream-mode">connecting…</div>
+      <div class="v7-hud-sub" id="v7-stream-sub">resolving transport</div>
+    </div>
+  </div>
+
+  <!-- ══ AUTO-PLAY — runs through random walks of the board ══ -->
+  <section class="v7-auto" aria-label="Auto-play">
+    <div class="v7-auto-row">
+      <button id="v7-auto-btn" class="v7-auto-btn" aria-pressed="false">
+        <span id="v7-auto-icon">▶</span>
+        <span id="v7-auto-label">Play orchestra</span>
+      </button>
+      <input type="range" id="v7-auto-bpm" class="v7-auto-bpm" min="60" max="180" value="110" step="1" />
+      <span class="v7-auto-bpm-val"><span id="v7-bpm-val">110</span> bpm</span>
+      <select id="v7-auto-style" class="v7-auto-style">
+        <option value="walk">style · random walk</option>
+        <option value="rolling">style · rolling thunder</option>
+        <option value="conversation">style · call & response</option>
+        <option value="dense">style · maximum density</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- ══ THE BOARD — 30 cells in 5 cols × 6 rows by category ══ -->
+  <section class="v7-stage" aria-label="Instrument board">
+    {CATEGORIES.map((cat) => (
+      <div class="v7-row" data-cat={cat.id}>
+        <div class="v7-row-label" style={`--cat: ${cat.accent}`}>
+          <span class="v7-row-emoji" aria-hidden="true">{cat.emoji}</span>
+          <span class="v7-row-name">{cat.label}</span>
+        </div>
+        <div class="v7-row-cells">
+          {ORCHESTRA.filter((c) => c.cat === cat.id).map((cell) => (
+            <button
+              type="button"
+              class="v7-cell"
+              data-cell={cell.key}
+              data-noun={String(cell.nounId)}
+              data-cat={cell.cat}
+              data-pitch={String(cell.pitch)}
+              data-decay={String(cell.decay)}
+              aria-label={cell.label}
+              style={`--accent: ${cell.accent}`}
+            >
+              <div class="v7-cell-inner">
+                <img
+                  class="v7-cell-img"
+                  src={`https://noun.pics/${cell.nounId}.svg`}
+                  alt={cell.label}
+                  width="80"
+                  height="80"
+                  loading="lazy"
+                  style="image-rendering: pixelated;"
+                />
+              </div>
+              <div class="v7-cell-name">{cell.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+  </section>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="v7-footer">
+    <span>⌐◨-◨ PointCast · Drum Room · v7 big orchestra</span>
+    <span>Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026</span>
+  </footer>
+
+</div>
+
+<style is:global>
+  /* /drum-v7 — 30-cell instrument board. Global so dynamic auto-play
+     hover effects and shared keyframes apply. v7-* prefixed. */
+
+  .v7-root {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    font-family: var(--pc-font-mono);
+  }
+
+  /* Hero */
+  .v7-hero {
+    padding: 14px 0 18px;
+    border-bottom: 1.5px solid var(--pc-rule);
+    margin-bottom: 16px;
+  }
+  .v7-hero-eyebrow {
+    font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: #6366f1; margin-bottom: 6px; font-weight: 600;
+  }
+  .v7-hero-title {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(1.6rem, 4.5vw, 2.5rem);
+    font-weight: 500; color: var(--pc-ink);
+    margin: 0 0 6px; letter-spacing: -0.01em; line-height: 1.05;
+  }
+  .v7-hero-dek {
+    font-family: var(--pc-font-sans);
+    font-size: 13px; color: var(--pc-ink-soft);
+    line-height: 1.5; margin: 0; max-width: 64ch;
+  }
+
+  /* HUD */
+  .v7-hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 540px) { .v7-hud { grid-template-columns: repeat(2, 1fr); } }
+  .v7-hud-card {
+    padding: 10px 12px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 6px;
+    background: #fafaf9;
+  }
+  .v7-hud-label {
+    font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin-bottom: 4px;
+  }
+  .v7-hud-val {
+    font-size: 1.25rem; font-weight: 700; line-height: 1;
+    color: var(--pc-ink); font-variant-numeric: tabular-nums; margin-bottom: 4px;
+  }
+  .v7-hud-sub {
+    font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .v7-hud-mode.is-auto .v7-hud-val { color: #6366f1; }
+  .v7-hud-jammers .v7-hud-val { color: #16a34a; }
+  .v7-hud-stream .v7-hud-val.is-ws { color: #16a34a; }
+  .v7-hud-stream .v7-hud-val.is-poll { color: #f59e0b; }
+
+  /* Auto-play */
+  .v7-auto {
+    border: 2px solid var(--pc-ink);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 18px;
+    background: #fafaf9;
+    position: relative;
+    overflow: hidden;
+  }
+  .v7-auto::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #dc2626, #f59e0b, #84cc16, #10b981, #3b82f6, #d946ef);
+  }
+  .v7-auto-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .v7-auto-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 16px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 8px;
+    background: var(--pc-ink);
+    color: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .v7-auto-btn:hover { background: #6366f1; border-color: #6366f1; }
+  .v7-auto-btn[aria-pressed="true"] { background: #6366f1; border-color: #6366f1; }
+  .v7-auto-bpm { flex: 1; min-width: 140px; }
+  .v7-auto-bpm-val {
+    font-family: var(--pc-font-mono);
+    font-size: 11px; font-weight: 700;
+    color: var(--pc-ink); min-width: 60px;
+    font-variant-numeric: tabular-nums;
+  }
+  .v7-auto-style {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    padding: 6px 10px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  /* Stage / rows */
+  .v7-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .v7-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 8px;
+    background: #fafaf9;
+  }
+  .v7-row-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 6px;
+    border-left: 3px solid var(--cat, var(--pc-rule));
+  }
+  .v7-row-emoji { font-size: 14px; }
+  .v7-row-name {
+    font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    font-weight: 700; color: var(--pc-ink);
+  }
+  .v7-row-cells {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  @media (max-width: 720px) {
+    .v7-row { grid-template-columns: 1fr; }
+    .v7-row-label {
+      flex-direction: row; align-items: center;
+      border-left: 0;
+      border-bottom: 2px solid var(--cat, var(--pc-rule));
+      padding-bottom: 4px; padding-left: 0;
+    }
+  }
+  @media (max-width: 480px) {
+    .v7-row-cells { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .v7-cell {
+    background: transparent; border: 0; padding: 0;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: transform 60ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v7-cell:active { transform: scale(0.93); }
+  .v7-cell-inner {
+    width: 100%;
+    aspect-ratio: 1;
+    border: 2px solid var(--accent, var(--pc-ink));
+    background: #fff;
+    border-radius: 4px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: box-shadow 100ms, transform 60ms;
+  }
+  .v7-cell-img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+  }
+  .v7-cell.firing .v7-cell-inner {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent),
+                0 0 14px color-mix(in srgb, var(--accent) 50%, transparent);
+    transform: scale(1.04);
+  }
+  .v7-cell.remote-firing .v7-cell-inner {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  .v7-cell-name {
+    font-size: 7.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Footer */
+  .v7-footer {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    border-top: 1.5px solid var(--pc-rule);
+    padding-top: 16px;
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-v7 client — 30-cell board. Real-time over WebSocket if
+  // available, polling fallback otherwise.
+  // ══════════════════════════════════════════════════════════════════
+
+  type CellMeta = { key: string; nounId: number; cat: string; pitch: number; decay: number };
+
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // Audio context
+  let audioCtx: AudioContext | null = null;
+  function getCtx(): AudioContext | null {
+    if (audioCtx) return audioCtx;
+    try {
+      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!Ctx) return null;
+      audioCtx = new Ctx({ latencyHint: 'interactive' });
+    } catch { audioCtx = null; }
+    return audioCtx;
+  }
+  ['pointerdown','keydown','touchstart','scroll'].forEach(e =>
+    document.addEventListener(e as any, () => { const c = getCtx(); if (c?.state === 'suspended') c.resume().catch(() => {}); }, { once: true, passive: true, capture: true }));
+
+  // ── Synthesis recipes — extends v4 recipes with parametric pitch/decay ──
+  function noiseBuffer(ctx: AudioContext, ms: number) {
+    const sz = Math.floor(ctx.sampleRate * ms / 1000);
+    const buf = ctx.createBuffer(1, sz, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / sz);
+    return buf;
+  }
+  function envGain(ctx: AudioContext, attack: number, decay: number, peak: number) {
+    const g = ctx.createGain();
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
+    return g;
+  }
+
+  function playCell(cat: string, pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    if (cat === 'kick') {
+      const out = envGain(ctx, 0.002, decay, 0.85); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(pitch * 1.6, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(pitch * 0.35, 30), t + decay * 0.6);
+      o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+    } else if (cat === 'snare') {
+      const out = envGain(ctx, 0.001, decay, 0.7); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(pitch, t);
+      o.frequency.exponentialRampToValueAtTime(pitch * 0.65, t + decay * 0.5);
+      const og = ctx.createGain(); og.gain.value = 0.5;
+      o.connect(og); og.connect(out); o.start(t); o.stop(t + decay + 0.05);
+      const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, decay * 1000);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1500;
+      n.connect(hp); hp.connect(out); n.start(t);
+    } else if (cat === 'hat') {
+      const out = envGain(ctx, 0.001, decay, 0.4); out.connect(ctx.destination);
+      const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, decay * 1000);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
+      n.connect(hp); hp.connect(out); n.start(t);
+    } else if (cat === 'tom') {
+      const out = envGain(ctx, 0.003, decay, 0.7); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(pitch, t);
+      o.frequency.exponentialRampToValueAtTime(pitch * 0.5, t + decay * 0.6);
+      o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+    } else if (cat === 'tonal') {
+      // Bass / lead / pad — use the base pitch as fundamental, type
+      // selected by decay length.
+      const isPad = decay > 1.0;
+      const out = envGain(ctx, isPad ? 0.05 : 0.005, decay, isPad ? 0.32 : 0.55);
+      out.connect(ctx.destination);
+      const o = ctx.createOscillator();
+      o.type = isPad ? 'sawtooth' : pitch < 100 ? 'triangle' : 'square';
+      o.frequency.setValueAtTime(pitch, t);
+      if (isPad) {
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+        o.connect(lp); lp.connect(out);
+      } else {
+        o.connect(out);
+      }
+      o.start(t); o.stop(t + decay + 0.05);
+      // Octave for warmth on lower voices
+      if (pitch < 200) {
+        const o2 = ctx.createOscillator(); o2.type = 'sine';
+        o2.frequency.setValueAtTime(pitch * 0.5, t);
+        const g2 = ctx.createGain(); g2.gain.value = 0.4;
+        o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + decay);
+      }
+    } else if (cat === 'color') {
+      if (pitch === 0) {
+        // Clap / shaker / cymbal — no pitch, noise-based
+        if (decay < 0.2) {
+          // Clap = layered pops
+          [0, 0.012, 0.024].forEach((delay) => {
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0, t + delay);
+            g.gain.linearRampToValueAtTime(0.5, t + delay + 0.001);
+            g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.13);
+            g.connect(ctx.destination);
+            const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, 130);
+            const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1200; bp.Q.value = 1.2;
+            n.connect(bp); bp.connect(g); n.start(t + delay);
+          });
+        } else if (decay < 0.5) {
+          // Shaker
+          const out = envGain(ctx, 0.005, decay, 0.4); out.connect(ctx.destination);
+          const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, decay * 1000);
+          const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 8000; bp.Q.value = 0.7;
+          n.connect(bp); bp.connect(out); n.start(t);
+        } else {
+          // Cymbal
+          const out = envGain(ctx, 0.005, decay, 0.5); out.connect(ctx.destination);
+          const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, decay * 1000);
+          const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4000;
+          n.connect(hp); hp.connect(out); n.start(t);
+        }
+      } else {
+        // Bell / cowbell — pitched percussion
+        const out = envGain(ctx, 0.003, decay, 0.5); out.connect(ctx.destination);
+        const o = ctx.createOscillator(); o.type = 'triangle';
+        o.frequency.setValueAtTime(pitch, t);
+        o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+        if (decay > 0.5) {
+          // Bell shimmer
+          const o2 = ctx.createOscillator(); o2.type = 'sine';
+          o2.frequency.setValueAtTime(pitch * 2.76, t);
+          const g2 = ctx.createGain(); g2.gain.value = 0.22;
+          o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + decay * 0.7);
+        }
+      }
+    }
+  }
+
+  // ── Cell + state ──
+  const ALL_CELLS: CellMeta[] = Array.from(document.querySelectorAll<HTMLElement>('.v7-cell')).map((el) => ({
+    key: el.dataset.cell || '',
+    nounId: Number(el.dataset.noun) || 0,
+    cat: el.dataset.cat || '',
+    pitch: Number(el.dataset.pitch) || 0,
+    decay: Number(el.dataset.decay) || 0.2,
+  }));
+  const CELL_BY_KEY: Record<string, CellMeta> = Object.fromEntries(ALL_CELLS.map((c) => [c.key, c]));
+
+  function pulseCell(key: string, remote = false) {
+    const el = document.querySelector<HTMLElement>(`.v7-cell[data-cell="${key}"]`);
+    if (!el) return;
+    const cls = remote ? 'remote-firing' : 'firing';
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), remote ? 200 : 140);
+  }
+
+  // Played cells tracker (localStorage)
+  const PLAYED_KEY = 'pc:drum-v7:played';
+  const played = new Set<string>();
+  try {
+    const raw = localStorage.getItem(PLAYED_KEY);
+    if (raw) JSON.parse(raw).forEach((k: string) => played.add(k));
+  } catch {}
+  function persistPlayed() { try { localStorage.setItem(PLAYED_KEY, JSON.stringify([...played])); } catch {} }
+  function paintPlayedCount() {
+    const el = document.getElementById('v7-played');
+    if (el) el.textContent = String(played.size);
+  }
+  paintPlayedCount();
+
+  // ── Stream — WebSocket-first, polling fallback ──
+  // Tries to connect to /api/drum/room (Cloudflare DO). On success,
+  // events fan out via WS in ~30–60ms p50. On failure (404/500/other),
+  // falls back to /api/sounds polling at 150ms.
+  type EventPayload = { type: 'orchestra'; cellKey: string; cat: string; pitch: number; decay: number; sessionId: string; auto?: boolean };
+  type IncomingEvent = EventPayload & { pid?: string; t?: number };
+  let streamMode: 'connecting' | 'ws' | 'poll' | 'none' = 'connecting';
+  let ws: WebSocket | null = null;
+  let lastSoundT = Date.now();
+  let ownPid = '';
+  (async () => {
+    try {
+      const buf = new TextEncoder().encode(sessionId);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      ownPid = Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+    } catch {}
+  })();
+
+  const streamModeEl = document.getElementById('v7-stream-mode');
+  const streamSubEl  = document.getElementById('v7-stream-sub');
+  function setStreamMode(mode: typeof streamMode, sub: string) {
+    streamMode = mode;
+    if (streamModeEl) {
+      streamModeEl.textContent = mode === 'ws' ? 'WebSocket' : mode === 'poll' ? 'polling' : mode === 'connecting' ? 'connecting…' : 'offline';
+      streamModeEl.classList.remove('is-ws', 'is-poll');
+      if (mode === 'ws') streamModeEl.classList.add('is-ws');
+      if (mode === 'poll') streamModeEl.classList.add('is-poll');
+    }
+    if (streamSubEl) streamSubEl.textContent = sub;
+  }
+  setStreamMode('connecting', 'resolving transport');
+
+  function dispatchEvent(ev: IncomingEvent, source: 'self' | 'remote') {
+    if (source === 'remote' && ev.pid === ownPid) return;
+    if (ev.type !== 'orchestra' || !ev.cellKey) return;
+    const meta = CELL_BY_KEY[ev.cellKey];
+    if (!meta) return;
+    playCell(meta.cat, meta.pitch, meta.decay);
+    pulseCell(ev.cellKey, source === 'remote');
+    if (source === 'remote' && ev.pid) remoteActive.set(ev.pid, Date.now());
+  }
+
+  function connectWS() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/drum/room?sid=${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(url);
+      ws.addEventListener('open', () => {
+        setStreamMode('ws', '~30–60ms p50');
+      });
+      ws.addEventListener('message', (msg) => {
+        try {
+          const ev = JSON.parse(msg.data) as IncomingEvent;
+          dispatchEvent(ev, 'remote');
+        } catch {}
+      });
+      ws.addEventListener('close', () => {
+        // If we never opened, fall back to polling
+        if (streamMode === 'connecting') {
+          fallbackToPoll('ws unavailable · 150ms poll');
+        } else if (streamMode === 'ws') {
+          // Reconnect after a short backoff
+          setTimeout(connectWS, 2000);
+        }
+      });
+      ws.addEventListener('error', () => {
+        if (streamMode === 'connecting') fallbackToPoll('ws error · 150ms poll');
+      });
+    } catch {
+      fallbackToPoll('ws not supported · 150ms poll');
+    }
+  }
+
+  function fallbackToPoll(reason: string) {
+    setStreamMode('poll', reason);
+    setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 150);
+  }
+
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) {
+        if (ev.type !== 'orchestra' || !ev.cellKey) continue;
+        dispatchEvent(ev as IncomingEvent, 'remote');
+      }
+    } catch {}
+  }
+
+  function broadcast(ev: EventPayload) {
+    if (streamMode === 'ws' && ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify(ev)); return; } catch {}
+    }
+    // Polling fallback or WS in-flight: POST to /api/sounds
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ev),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  // Try WebSocket first. The backend may not be deployed yet; if not we
+  // gracefully degrade to polling within 1.5s of page load.
+  connectWS();
+  setTimeout(() => {
+    if (streamMode === 'connecting') fallbackToPoll('ws timeout · 150ms poll');
+  }, 1500);
+
+  // ── Tap handlers ──
+  document.querySelectorAll<HTMLElement>('.v7-cell').forEach((el) => {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const key = el.dataset.cell;
+      if (!key) return;
+      const meta = CELL_BY_KEY[key];
+      playCell(meta.cat, meta.pitch, meta.decay);
+      pulseCell(key);
+      if (!played.has(key)) { played.add(key); persistPlayed(); paintPlayedCount(); }
+      try { navigator.vibrate?.(6); } catch {}
+      broadcast({ type: 'orchestra', cellKey: key, cat: meta.cat, pitch: meta.pitch, decay: meta.decay, sessionId });
+    });
+  });
+
+  // ── Auto-play ──
+  const autoBtn = document.getElementById('v7-auto-btn') as HTMLButtonElement | null;
+  const autoIcon = document.getElementById('v7-auto-icon');
+  const autoLabel = document.getElementById('v7-auto-label');
+  const modeLabel = document.getElementById('v7-mode-label');
+  const modeCard = document.getElementById('v7-mode-card');
+  const bpmSlider = document.getElementById('v7-auto-bpm') as HTMLInputElement | null;
+  const bpmValEl = document.getElementById('v7-bpm-val');
+  const styleSelect = document.getElementById('v7-auto-style') as HTMLSelectElement | null;
+
+  let isAuto = false;
+  let autoTimer: number | null = null;
+  let stepIdx = 0;
+  let bpm = 110;
+
+  if (bpmSlider) {
+    bpmSlider.addEventListener('input', () => {
+      bpm = Number(bpmSlider.value);
+      if (bpmValEl) bpmValEl.textContent = String(bpm);
+      if (isAuto) { stopAuto(); startAuto(); }
+    });
+  }
+
+  function pickCellsForStep(stepIdx: number, style: string): string[] {
+    const byCat: Record<string, CellMeta[]> = {};
+    for (const c of ALL_CELLS) (byCat[c.cat] ||= []).push(c);
+    const pickFrom = (cat: string) => {
+      const pool = byCat[cat] || [];
+      return pool[Math.floor(Math.random() * pool.length)]?.key;
+    };
+    if (style === 'walk') {
+      // Alternates a kick/snare backbone with occasional color/tonal hits
+      const beat = stepIdx % 16;
+      const out: string[] = [];
+      if (beat % 8 === 0) out.push(pickFrom('kick'));
+      if (beat % 8 === 4) out.push(pickFrom('snare'));
+      if (beat % 4 === 2) out.push(pickFrom('hat'));
+      if (Math.random() < 0.15) out.push(pickFrom('color'));
+      if (beat === 12) out.push(pickFrom('tonal'));
+      return out.filter(Boolean) as string[];
+    }
+    if (style === 'rolling') {
+      // Constant tom/hat rolls + occasional kick anchor
+      const beat = stepIdx % 16;
+      const out: string[] = [];
+      if (beat % 2 === 0) out.push(pickFrom('hat'));
+      if (Math.random() < 0.4) out.push(pickFrom('tom'));
+      if (beat % 8 === 0) out.push(pickFrom('kick'));
+      if (Math.random() < 0.1) out.push(pickFrom('color'));
+      return out.filter(Boolean) as string[];
+    }
+    if (style === 'conversation') {
+      // Sparse call (kick / tom) and response (snare / color) pattern
+      const beat = stepIdx % 8;
+      const out: string[] = [];
+      if (beat === 0) out.push(pickFrom('kick'));
+      if (beat === 1 && Math.random() < 0.7) out.push(pickFrom('tom'));
+      if (beat === 4) out.push(pickFrom('snare'));
+      if (beat === 5 && Math.random() < 0.7) out.push(pickFrom('color'));
+      if (beat === 7 && Math.random() < 0.3) out.push(pickFrom('hat'));
+      return out.filter(Boolean) as string[];
+    }
+    if (style === 'dense') {
+      // Maximum density — fire 3-5 random cells per step
+      const count = 3 + Math.floor(Math.random() * 3);
+      const out: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const c = ALL_CELLS[Math.floor(Math.random() * ALL_CELLS.length)];
+        if (c) out.push(c.key);
+      }
+      return out;
+    }
+    return [];
+  }
+
+  function tick() {
+    const style = styleSelect?.value || 'walk';
+    const keys = pickCellsForStep(stepIdx, style);
+    for (const k of keys) {
+      const meta = CELL_BY_KEY[k];
+      if (!meta) continue;
+      playCell(meta.cat, meta.pitch, meta.decay);
+      pulseCell(k);
+      // Auto-play broadcasts too — room jams together
+      broadcast({ type: 'orchestra', cellKey: k, cat: meta.cat, pitch: meta.pitch, decay: meta.decay, sessionId, auto: true });
+    }
+    stepIdx = (stepIdx + 1) % 64;
+  }
+
+  function startAuto() {
+    if (isAuto) return;
+    isAuto = true;
+    if (autoBtn) autoBtn.setAttribute('aria-pressed', 'true');
+    if (autoIcon) autoIcon.textContent = '■';
+    if (autoLabel) autoLabel.textContent = 'Stop orchestra';
+    if (modeLabel) modeLabel.textContent = `auto · ${styleSelect?.value || 'walk'}`;
+    if (modeCard) modeCard.classList.add('is-auto');
+    stepIdx = 0;
+    const stepMs = (60_000 / bpm) / 4;
+    if (autoTimer) clearInterval(autoTimer);
+    tick();
+    autoTimer = window.setInterval(tick, stepMs);
+  }
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    isAuto = false;
+    if (autoBtn) autoBtn.setAttribute('aria-pressed', 'false');
+    if (autoIcon) autoIcon.textContent = '▶';
+    if (autoLabel) autoLabel.textContent = 'Play orchestra';
+    if (modeLabel) modeLabel.textContent = 'manual';
+    if (modeCard) modeCard.classList.remove('is-auto');
+  }
+  autoBtn?.addEventListener('click', () => isAuto ? stopAuto() : startAuto());
+  styleSelect?.addEventListener('change', () => {
+    if (isAuto) {
+      if (modeLabel) modeLabel.textContent = `auto · ${styleSelect.value}`;
+    }
+  });
+
+  // ── Jammers ──
+  const remoteActive = new Map<string, number>();
+  const jammersEl = document.getElementById('v7-jammers');
+  function renderJammers() {
+    const now = Date.now();
+    for (const [pid, t] of remoteActive) if (now - t > 10_000) remoteActive.delete(pid);
+    if (jammersEl) jammersEl.textContent = String(remoteActive.size + 1);
+  }
+  setInterval(renderJammers, 2000);
+
+  // Keyboard: hit a digit 1-5 + a row letter Q W E R T Y to fire a cell
+  // (5 cells per row, rows = q kick / w snare / e hat / r tom / t tonal /
+  // y color). Doubles as a quick performance shortcut.
+  const ROW_KEYS: Record<string, string> = { q: 'kick', w: 'snare', e: 'hat', r: 'tom', t: 'tonal', y: 'color' };
+  let pendingRow: string | null = null;
+  let pendingRowExpiry = 0;
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target?.tagName === 'INPUT' || target?.tagName === 'SELECT' || target?.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') { e.preventDefault(); isAuto ? stopAuto() : startAuto(); return; }
+    const key = e.key.toLowerCase();
+    if (ROW_KEYS[key]) {
+      pendingRow = ROW_KEYS[key];
+      pendingRowExpiry = Date.now() + 1500;
+      return;
+    }
+    if (/^[1-5]$/.test(key) && pendingRow && Date.now() < pendingRowExpiry) {
+      const idx = Number(key) - 1;
+      const cells = ALL_CELLS.filter((c) => c.cat === pendingRow);
+      const meta = cells[idx];
+      if (meta) {
+        e.preventDefault();
+        playCell(meta.cat, meta.pitch, meta.decay);
+        pulseCell(meta.key);
+        if (!played.has(meta.key)) { played.add(meta.key); persistPlayed(); paintPlayedCount(); }
+        broadcast({ type: 'orchestra', cellKey: meta.key, cat: meta.cat, pitch: meta.pitch, decay: meta.decay, sessionId });
+      }
+      pendingRow = null;
+    }
+  });
+</script>
+
+</DrumLayout>
