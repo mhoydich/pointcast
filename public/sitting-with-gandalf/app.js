@@ -3,9 +3,10 @@
 
   const STORAGE_KEY = "sitting-with-gandalf-log";
   const SETTINGS_KEY = "sitting-with-gandalf-settings";
+  const NOUNS_COLLECTION_KEY = "sitting-with-gandalf-nouns-collection";
   const DEFAULT_MINUTES = 15;
-  const RELEASE_VERSION = "v4";
-  const versions = new Set(["v1", "v2", "v3", "v4"]);
+  const RELEASE_VERSION = "v5";
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -22,6 +23,579 @@
       ]
     }
   };
+
+  const nounsGandalfs = [
+    {
+      id: "moss",
+      noun: "Moss",
+      name: "Moss Gandalf",
+      trait: "keeps the small green quiet",
+      rarity: "Common",
+      mode: "fire",
+      visual: "glade",
+      intention: "rest",
+      bg: "#253827",
+      hat: "#5f7345",
+      robe: "#24392f",
+      lens: "#c8df81",
+      spark: "#f0c96a",
+      mantra: "Rest your attention in one green place.",
+      cue: "Let the moss keep one thought you do not need to carry.",
+      breath: "Inhale shade. Exhale the road-dust of the day.",
+      line: "Green is not in a hurry, and it has survived more than you think."
+    },
+    {
+      id: "lantern",
+      noun: "Lantern",
+      name: "Lantern Gandalf",
+      trait: "carries a little useful light",
+      rarity: "Common",
+      mode: "fire",
+      visual: "glade",
+      intention: "ground",
+      bg: "#3a2f20",
+      hat: "#8b6738",
+      robe: "#302b23",
+      lens: "#ffd37a",
+      spark: "#f39a46",
+      mantra: "Let one small light be enough.",
+      cue: "Name the nearest warm color, then soften around it.",
+      breath: "Inhale the glow. Exhale the extra room.",
+      line: "A lantern is just a brave little yes in the dark."
+    },
+    {
+      id: "teapot",
+      noun: "Teapot",
+      name: "Teapot Gandalf",
+      trait: "knows when to steep",
+      rarity: "Common",
+      mode: "rain",
+      visual: "garden",
+      intention: "rest",
+      bg: "#24373a",
+      hat: "#607b76",
+      robe: "#27363a",
+      lens: "#bfe8dd",
+      spark: "#e0bf6b",
+      mantra: "Let the moment steep before you answer.",
+      cue: "Wait three breaths before improving anything.",
+      breath: "Inhale steam. Exhale the need to be finished.",
+      line: "Some wisdom only arrives after the water stops shouting."
+    },
+    {
+      id: "map",
+      noun: "Map",
+      name: "Map Gandalf",
+      trait: "folds the far road smaller",
+      rarity: "Common",
+      mode: "road",
+      visual: "meadow",
+      intention: "wander",
+      bg: "#3c3425",
+      hat: "#8d7a49",
+      robe: "#393120",
+      lens: "#f0c96a",
+      spark: "#b9d37d",
+      mantra: "Choose the next inch, not the whole horizon.",
+      cue: "Let the path exist without asking it for a promise.",
+      breath: "Inhale open air. Exhale the clenched map.",
+      line: "A map is friendlier once you stop asking it to be a prophecy."
+    },
+    {
+      id: "moon",
+      noun: "Moon",
+      name: "Moon Gandalf",
+      trait: "holds light without gripping it",
+      rarity: "Rare",
+      mode: "stars",
+      visual: "lake",
+      intention: "sleep",
+      bg: "#222b42",
+      hat: "#53648e",
+      robe: "#242b3a",
+      lens: "#d9e4ff",
+      spark: "#9bbde4",
+      mantra: "Reflect the day; do not replay it.",
+      cue: "Look for the softest edge in the dark.",
+      breath: "Inhale cool water. Exhale the last bright noise.",
+      line: "The moon has never mistaken reflection for possession."
+    },
+    {
+      id: "acorn",
+      noun: "Acorn",
+      name: "Acorn Gandalf",
+      trait: "protects the beginning",
+      rarity: "Common",
+      mode: "fire",
+      visual: "glade",
+      intention: "ground",
+      bg: "#332a1f",
+      hat: "#7b603a",
+      robe: "#2c382c",
+      lens: "#d4b46f",
+      spark: "#82a35e",
+      mantra: "Begin seed-small.",
+      cue: "Make the next breath modest enough to trust.",
+      breath: "Inhale low. Exhale into the chair.",
+      line: "Large oaks have the manners to begin as pockets."
+    },
+    {
+      id: "pebble",
+      noun: "Pebble",
+      name: "Pebble Gandalf",
+      trait: "makes weight feel simple",
+      rarity: "Common",
+      mode: "road",
+      visual: "meadow",
+      intention: "ground",
+      bg: "#333734",
+      hat: "#6f746f",
+      robe: "#27312d",
+      lens: "#c7d1bf",
+      spark: "#e0bf6b",
+      mantra: "Feel what is actually here.",
+      cue: "Notice one point of contact and let it become enough.",
+      breath: "Inhale the floor. Exhale the argument.",
+      line: "A pebble does not apologize for being precise."
+    },
+    {
+      id: "fern",
+      noun: "Fern",
+      name: "Fern Gandalf",
+      trait: "unfurls without fanfare",
+      rarity: "Common",
+      mode: "fire",
+      visual: "glade",
+      intention: "rest",
+      bg: "#1f3a2d",
+      hat: "#4f8459",
+      robe: "#22362a",
+      lens: "#9fdc97",
+      spark: "#f0c96a",
+      mantra: "Uncurl one place in the body.",
+      cue: "Let the shoulders unfold at their own pace.",
+      breath: "Inhale gently. Exhale as if making room for leaves.",
+      line: "The fern knows that opening is not the same as explaining."
+    },
+    {
+      id: "rainboot",
+      noun: "Rainboot",
+      name: "Rainboot Gandalf",
+      trait: "walks through weather anyway",
+      rarity: "Uncommon",
+      mode: "rain",
+      visual: "garden",
+      intention: "wander",
+      bg: "#20343d",
+      hat: "#45616a",
+      robe: "#20353b",
+      lens: "#9bd7e0",
+      spark: "#d1a85b",
+      mantra: "Weather is not the whole story.",
+      cue: "Let the rain do the moving while you stay dry inside.",
+      breath: "Inhale cool. Exhale resistance to the weather.",
+      line: "A wet path can still be kind to steady feet."
+    },
+    {
+      id: "mushroom",
+      noun: "Mushroom",
+      name: "Mushroom Gandalf",
+      trait: "thrives under soft cover",
+      rarity: "Uncommon",
+      mode: "fire",
+      visual: "glade",
+      intention: "rest",
+      bg: "#302a31",
+      hat: "#8f5f60",
+      robe: "#2d3328",
+      lens: "#f1d7a1",
+      spark: "#b9d37d",
+      mantra: "Be hidden if hidden helps.",
+      cue: "Let privacy be part of the medicine.",
+      breath: "Inhale earth. Exhale being seen too sharply.",
+      line: "Not every good thing grows in full view."
+    },
+    {
+      id: "river",
+      noun: "River",
+      name: "River Gandalf",
+      trait: "continues by yielding",
+      rarity: "Uncommon",
+      mode: "rain",
+      visual: "garden",
+      intention: "wander",
+      bg: "#1d3840",
+      hat: "#477b83",
+      robe: "#1f3037",
+      lens: "#b5edf0",
+      spark: "#8fc3bf",
+      mantra: "Move by softening first.",
+      cue: "Let the next thought pass without building a bridge.",
+      breath: "Inhale current. Exhale the stone in the chest.",
+      line: "A river wins no argument and reaches the sea all the same."
+    },
+    {
+      id: "ember",
+      noun: "Ember",
+      name: "Ember Gandalf",
+      trait: "keeps warmth quiet",
+      rarity: "Rare",
+      mode: "fire",
+      visual: "glade",
+      intention: "ground",
+      bg: "#3a241f",
+      hat: "#9a5134",
+      robe: "#2e2721",
+      lens: "#ffc16f",
+      spark: "#e89c43",
+      mantra: "Warmth can be small and still be real.",
+      cue: "Find the quietest warmth in the body.",
+      breath: "Inhale ember. Exhale smoke.",
+      line: "A low glow has outlasted many bonfires."
+    },
+    {
+      id: "blanket",
+      noun: "Blanket",
+      name: "Blanket Gandalf",
+      trait: "makes permission tactile",
+      rarity: "Common",
+      mode: "rain",
+      visual: "garden",
+      intention: "rest",
+      bg: "#302c3a",
+      hat: "#6a5a86",
+      robe: "#312b3b",
+      lens: "#ddd0ff",
+      spark: "#8fc3bf",
+      mantra: "Let comfort do some of the work.",
+      cue: "Relax the jaw as if accepting warmth.",
+      breath: "Inhale covered. Exhale guarded.",
+      line: "There are evenings when softness is the wisest tool."
+    },
+    {
+      id: "clover",
+      noun: "Clover",
+      name: "Clover Gandalf",
+      trait: "finds luck in small repeats",
+      rarity: "Rare",
+      mode: "fire",
+      visual: "glade",
+      intention: "rest",
+      bg: "#1f3d2c",
+      hat: "#4f8e55",
+      robe: "#223f31",
+      lens: "#d6f5a2",
+      spark: "#f0c96a",
+      mantra: "Count blessings only until counting gets noisy.",
+      cue: "Notice three small comforts, then stop tallying.",
+      breath: "Inhale one. Exhale enough.",
+      line: "Luck often arrives dressed as something ordinary."
+    },
+    {
+      id: "pinecone",
+      noun: "Pinecone",
+      name: "Pinecone Gandalf",
+      trait: "keeps a forest folded up",
+      rarity: "Uncommon",
+      mode: "road",
+      visual: "meadow",
+      intention: "ground",
+      bg: "#352d22",
+      hat: "#735a3b",
+      robe: "#2b382d",
+      lens: "#d0bc82",
+      spark: "#b9d37d",
+      mantra: "Hold complexity without opening every scale.",
+      cue: "Let one problem stay folded for now.",
+      breath: "Inhale resin. Exhale the list.",
+      line: "A whole forest can wait inside a small patience."
+    },
+    {
+      id: "cloud",
+      noun: "Cloud",
+      name: "Cloud Gandalf",
+      trait: "changes shape without panic",
+      rarity: "Common",
+      mode: "stars",
+      visual: "lake",
+      intention: "wander",
+      bg: "#273346",
+      hat: "#6e7f9b",
+      robe: "#293442",
+      lens: "#eef3ff",
+      spark: "#9bbde4",
+      mantra: "Let the shape change.",
+      cue: "Watch one thought drift without naming its destination.",
+      breath: "Inhale sky. Exhale outline.",
+      line: "A cloud has never failed by refusing to stay itself."
+    },
+    {
+      id: "door",
+      noun: "Door",
+      name: "Door Gandalf",
+      trait: "knows when closed is kind",
+      rarity: "Uncommon",
+      mode: "fire",
+      visual: "glade",
+      intention: "ground",
+      bg: "#3a2c24",
+      hat: "#7a573b",
+      robe: "#312a25",
+      lens: "#f1cc8f",
+      spark: "#e89c43",
+      mantra: "Close one door in the mind.",
+      cue: "Leave outside what cannot help this sit.",
+      breath: "Inhale threshold. Exhale the hallway.",
+      line: "A closed door is sometimes hospitality for the soul."
+    },
+    {
+      id: "compass",
+      noun: "Compass",
+      name: "Compass Gandalf",
+      trait: "prefers direction to speed",
+      rarity: "Rare",
+      mode: "road",
+      visual: "meadow",
+      intention: "wander",
+      bg: "#25313a",
+      hat: "#526b70",
+      robe: "#252f32",
+      lens: "#c8e5e1",
+      spark: "#e0bf6b",
+      mantra: "A direction is enough for now.",
+      cue: "Ask what feels north, then take no action yet.",
+      breath: "Inhale toward. Exhale urgency.",
+      line: "Speed is a poor substitute for knowing which way is kind."
+    },
+    {
+      id: "biscuit",
+      noun: "Biscuit",
+      name: "Biscuit Gandalf",
+      trait: "believes in humble comforts",
+      rarity: "Common",
+      mode: "fire",
+      visual: "glade",
+      intention: "rest",
+      bg: "#3a2d20",
+      hat: "#a47a43",
+      robe: "#31291f",
+      lens: "#ffe0a0",
+      spark: "#f0c96a",
+      mantra: "Take the ordinary kindness seriously.",
+      cue: "Let one plain comfort count.",
+      breath: "Inhale warm bread. Exhale performance.",
+      line: "A biscuit may not save the world, but it can improve the council."
+    },
+    {
+      id: "thimble",
+      noun: "Thimble",
+      name: "Thimble Gandalf",
+      trait: "mends tiny tears",
+      rarity: "Uncommon",
+      mode: "rain",
+      visual: "garden",
+      intention: "ground",
+      bg: "#26313a",
+      hat: "#60717d",
+      robe: "#293139",
+      lens: "#d7e7ef",
+      spark: "#8fc3bf",
+      mantra: "Repair one stitch, not the whole cloak.",
+      cue: "Find the smallest repair available in this breath.",
+      breath: "Inhale thread. Exhale fray.",
+      line: "Tiny mending has embarrassed many grand disasters."
+    },
+    {
+      id: "window",
+      noun: "Window",
+      name: "Window Gandalf",
+      trait: "lets the outside stay outside",
+      rarity: "Common",
+      mode: "rain",
+      visual: "garden",
+      intention: "rest",
+      bg: "#26383f",
+      hat: "#55747a",
+      robe: "#26343a",
+      lens: "#c9f0ee",
+      spark: "#d1a85b",
+      mantra: "Witness without opening the latch.",
+      cue: "Look at the world without joining every motion.",
+      breath: "Inhale behind glass. Exhale the weather.",
+      line: "A window is proof that distance can still be tender."
+    },
+    {
+      id: "shell",
+      noun: "Shell",
+      name: "Shell Gandalf",
+      trait: "keeps an old hush",
+      rarity: "Rare",
+      mode: "stars",
+      visual: "lake",
+      intention: "sleep",
+      bg: "#2d3443",
+      hat: "#747b8d",
+      robe: "#2b3140",
+      lens: "#f4ead6",
+      spark: "#9bbde4",
+      mantra: "Listen for the small held sea.",
+      cue: "Let one sound become spacious.",
+      breath: "Inhale tide. Exhale shore.",
+      line: "Even a shell can remember vastness without making a speech."
+    },
+    {
+      id: "candle",
+      noun: "Candle",
+      name: "Candle Gandalf",
+      trait: "turns attention into flame",
+      rarity: "Common",
+      mode: "fire",
+      visual: "glade",
+      intention: "ground",
+      bg: "#33251f",
+      hat: "#85613c",
+      robe: "#2e2922",
+      lens: "#fff0a8",
+      spark: "#e89c43",
+      mantra: "Let attention stand upright.",
+      cue: "Rest the eyes as if watching a candle.",
+      breath: "Inhale flame. Exhale flicker.",
+      line: "A candle does not conquer darkness; it makes a room."
+    },
+    {
+      id: "key",
+      noun: "Key",
+      name: "Key Gandalf",
+      trait: "opens less by forcing",
+      rarity: "Rare",
+      mode: "road",
+      visual: "meadow",
+      intention: "ground",
+      bg: "#303329",
+      hat: "#747045",
+      robe: "#2d342a",
+      lens: "#f0dc89",
+      spark: "#b9d37d",
+      mantra: "Turn gently.",
+      cue: "Loosen one place before trying to open it.",
+      breath: "Inhale patience. Exhale force.",
+      line: "Many doors prefer a quiet key to a brave shoulder."
+    },
+    {
+      id: "apple",
+      noun: "Apple",
+      name: "Apple Gandalf",
+      trait: "returns you to simple sweetness",
+      rarity: "Common",
+      mode: "fire",
+      visual: "meadow",
+      intention: "rest",
+      bg: "#3a2525",
+      hat: "#8f4541",
+      robe: "#2f3328",
+      lens: "#ffe2a4",
+      spark: "#b9d37d",
+      mantra: "Let the simple thing be sufficient.",
+      cue: "Notice one pleasant detail without improving it.",
+      breath: "Inhale crisp. Exhale excess.",
+      line: "A good apple is a sermon with better manners."
+    },
+    {
+      id: "button",
+      noun: "Button",
+      name: "Button Gandalf",
+      trait: "fastens what matters",
+      rarity: "Uncommon",
+      mode: "rain",
+      visual: "garden",
+      intention: "ground",
+      bg: "#2d3340",
+      hat: "#566782",
+      robe: "#27323d",
+      lens: "#d8e3ff",
+      spark: "#8fc3bf",
+      mantra: "Fasten attention to one small thing.",
+      cue: "Return to the breath as if buttoning a coat.",
+      breath: "Inhale close. Exhale loose ends.",
+      line: "The smallest fastening can keep out a surprising draft."
+    },
+    {
+      id: "cup",
+      noun: "Cup",
+      name: "Cup Gandalf",
+      trait: "knows enough by holding less",
+      rarity: "Common",
+      mode: "rain",
+      visual: "garden",
+      intention: "rest",
+      bg: "#25373a",
+      hat: "#65827c",
+      robe: "#26343a",
+      lens: "#d5eee8",
+      spark: "#d1a85b",
+      mantra: "Make room before asking to be filled.",
+      cue: "Empty the next exhale completely enough.",
+      breath: "Inhale steam. Exhale the brim.",
+      line: "A cup is useful because it keeps a little emptiness."
+    },
+    {
+      id: "root",
+      noun: "Root",
+      name: "Root Gandalf",
+      trait: "goes down before forward",
+      rarity: "Rare",
+      mode: "fire",
+      visual: "glade",
+      intention: "ground",
+      bg: "#2f2a22",
+      hat: "#6c5b3c",
+      robe: "#27382d",
+      lens: "#cfc08a",
+      spark: "#82a35e",
+      mantra: "Down is also a direction.",
+      cue: "Feel the body choose the ground.",
+      breath: "Inhale through the soles. Exhale into the earth.",
+      line: "Roots are proof that depth can be quiet progress."
+    },
+    {
+      id: "dew",
+      noun: "Dew",
+      name: "Dew Gandalf",
+      trait: "makes morning without noise",
+      rarity: "Uncommon",
+      mode: "stars",
+      visual: "lake",
+      intention: "sleep",
+      bg: "#203444",
+      hat: "#5f7f8d",
+      robe: "#243443",
+      lens: "#d8fbff",
+      spark: "#9bbde4",
+      mantra: "Let softness gather by itself.",
+      cue: "Do not force the calm; let it condense.",
+      breath: "Inhale cool. Exhale softly enough to disappear.",
+      line: "Dew does not announce the morning. It simply arrives."
+    },
+    {
+      id: "meadow",
+      noun: "Meadow",
+      name: "Meadow Gandalf",
+      trait: "gives the feeling room",
+      rarity: "Common",
+      mode: "road",
+      visual: "meadow",
+      intention: "wander",
+      bg: "#333923",
+      hat: "#748348",
+      robe: "#2b3829",
+      lens: "#f1db8b",
+      spark: "#e0bf6b",
+      mantra: "Widen around the feeling.",
+      cue: "Let the horizon be larger than the thought.",
+      breath: "Inhale open. Exhale narrow.",
+      line: "A meadow is what happens when space decides to be kind."
+    }
+  ];
 
   const modeLines = {
     fire: [
@@ -267,9 +841,12 @@
   const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
-    : initialVersion === "v4"
+    : initialVersion === "v4" || initialVersion === "v5"
       ? "pixel"
       : "storybook";
+  const initialNounsGandalf = savedRelease && nounsGandalfs.some((card) => card.id === savedSettings.nounsActive)
+    ? savedSettings.nounsActive
+    : nounsGandalfs[0].id;
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -280,6 +857,8 @@
     visual: natureViews[savedSettings.visual] ? savedSettings.visual : "glade",
     intention: intentions[savedSettings.intention] ? savedSettings.intention : "rest",
     renderStyle: initialRenderStyle,
+    nounsActive: initialNounsGandalf,
+    nounsCollection: loadNounsCollection(),
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -313,6 +892,16 @@
     durationButtons: Array.from(document.querySelectorAll(".duration-button")),
     companionButtons: Array.from(document.querySelectorAll(".wizard-button")),
     modeButtons: Array.from(document.querySelectorAll(".mode-button")),
+    nounsAvatar: document.getElementById("nounsAvatar"),
+    nounsName: document.getElementById("nounsName"),
+    nounsMeta: document.getElementById("nounsMeta"),
+    nounsMantra: document.getElementById("nounsMantra"),
+    nounsCollected: document.getElementById("nounsCollected"),
+    nounsCount: document.getElementById("nounsCount"),
+    nounsGrid: document.getElementById("nounsGrid"),
+    pullGandalfButton: document.getElementById("pullGandalfButton"),
+    collectGandalfButton: document.getElementById("collectGandalfButton"),
+    meditateGandalfButton: document.getElementById("meditateGandalfButton"),
     startButton: document.getElementById("startButton"),
     pauseButton: document.getElementById("pauseButton"),
     resetButton: document.getElementById("resetButton"),
@@ -387,6 +976,17 @@
     }
   }
 
+  function loadNounsCollection() {
+    try {
+      const raw = localStorage.getItem(NOUNS_COLLECTION_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const validIds = new Set(nounsGandalfs.map((card) => card.id));
+      return new Set(Array.isArray(parsed) ? parsed.filter((id) => validIds.has(id)) : []);
+    } catch (error) {
+      return new Set();
+    }
+  }
+
   function saveLog() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.log.slice(0, 12)));
   }
@@ -402,10 +1002,15 @@
         visual: state.visual,
         intention: state.intention,
         renderStyle: state.renderStyle,
+        nounsActive: state.nounsActive,
         warmth: state.warmth,
         smoke: state.smoke
       })
     );
+  }
+
+  function saveNounsCollection() {
+    localStorage.setItem(NOUNS_COLLECTION_KEY, JSON.stringify(Array.from(state.nounsCollection)));
   }
 
   function activeCompanion() {
@@ -424,8 +1029,98 @@
     return renderStyles[state.renderStyle] || renderStyles.storybook;
   }
 
+  function activeNounsGandalf() {
+    return nounsGandalfs.find((card) => card.id === state.nounsActive) || nounsGandalfs[0];
+  }
+
   function isNatureVersion(version = state.version) {
-    return version === "v3" || version === "v4";
+    return version === "v3" || version === "v4" || version === "v5";
+  }
+
+  function isCollectibleVersion(version = state.version) {
+    return version === "v5";
+  }
+
+  function applyNounStyle(element, card) {
+    element.style.setProperty("--card-bg", card.bg);
+    element.style.setProperty("--hat", card.hat);
+    element.style.setProperty("--robe", card.robe);
+    element.style.setProperty("--lens", card.lens);
+    element.style.setProperty("--spark", card.spark);
+  }
+
+  function renderNounAvatar(target, card, isSmall) {
+    if (!target) {
+      return;
+    }
+
+    target.replaceChildren();
+    target.className = isSmall ? "noun-avatar noun-avatar-small" : "noun-avatar";
+    target.title = card.name;
+    applyNounStyle(target, card);
+
+    ["noun-robe", "noun-staff", "noun-hat", "noun-face", "noun-beard", "noun-glasses"].forEach((className) => {
+      const part = document.createElement("span");
+      part.className = className;
+      target.append(part);
+    });
+
+    const mark = document.createElement("span");
+    mark.className = "noun-mark";
+    mark.textContent = card.noun.slice(0, 2).toUpperCase();
+    target.append(mark);
+  }
+
+  function updateNounsPanel() {
+    if (!dom.nounsGrid) {
+      return;
+    }
+
+    const card = activeNounsGandalf();
+    const collected = state.nounsCollection.has(card.id);
+    renderNounAvatar(dom.nounsAvatar, card, false);
+    dom.body.dataset.collectible = card.id;
+    dom.nounsName.textContent = card.name;
+    dom.nounsMeta.textContent = `${card.rarity} · ${natureViews[card.visual].name} · ${intentions[card.intention].title}`;
+    dom.nounsMantra.textContent = card.mantra;
+    dom.nounsCollected.textContent = collected ? "collected" : "new cue";
+    dom.collectGandalfButton.textContent = collected ? "Collected" : "Collect cue";
+    dom.collectGandalfButton.disabled = collected;
+    dom.nounsCount.textContent = `${state.nounsCollection.size} / ${nounsGandalfs.length} collected`;
+  }
+
+  function renderNounsCollection() {
+    if (!dom.nounsGrid) {
+      return;
+    }
+
+    dom.nounsGrid.replaceChildren();
+    nounsGandalfs.forEach((card) => {
+      const button = document.createElement("button");
+      const avatar = document.createElement("span");
+      const name = document.createElement("strong");
+      const status = document.createElement("small");
+      const collected = state.nounsCollection.has(card.id);
+
+      button.type = "button";
+      button.className = "nouns-card";
+      button.classList.toggle("is-active", card.id === state.nounsActive);
+      button.classList.toggle("is-collected", collected);
+      button.dataset.nounsId = card.id;
+      button.setAttribute("aria-pressed", String(card.id === state.nounsActive));
+      button.setAttribute("aria-label", `${card.name}, ${collected ? "collected" : "not collected"}`);
+      applyNounStyle(button, card);
+
+      renderNounAvatar(avatar, card, true);
+      name.textContent = card.noun;
+      status.textContent = collected ? "kept" : card.mode;
+
+      button.append(avatar, name, status);
+      button.addEventListener("click", () => setNounsGandalf(card.id));
+      dom.nounsGrid.append(button);
+    });
+
+    updateNounsPanel();
   }
 
   function setGuide(step, title, text) {
@@ -436,6 +1131,13 @@
 
   function updateGuideIdle(step) {
     if (state.version === "v1") {
+      return;
+    }
+
+    if (isCollectibleVersion()) {
+      const card = activeNounsGandalf();
+      const view = activeView();
+      setGuide(step || "Deck cue", card.name, `${card.mantra} ${view.idle}`);
       return;
     }
 
@@ -453,6 +1155,19 @@
 
   function updateGuideForPace(label, countdown) {
     if (state.version === "v1") {
+      return;
+    }
+
+    if (isCollectibleVersion()) {
+      const card = activeNounsGandalf();
+      const lowerLabel = label.toLowerCase();
+      const copy = {
+        Inhale: `Breathe in for ${countdown}. ${card.breath.split(".")[0]}.`,
+        Hold: `Hold for ${countdown}. Let ${card.name} keep the cue for you.`,
+        Exhale: `Breathe out for ${countdown}. ${card.cue}`
+      };
+
+      setGuide(`Now: ${lowerLabel}`, card.name, copy[label] || card.mantra);
       return;
     }
 
@@ -481,6 +1196,15 @@
   }
 
   function chooseLine() {
+    if (isCollectibleVersion()) {
+      const card = activeNounsGandalf();
+      const intention = activeIntention();
+      const pool = [card.line, card.mantra, card.cue, card.breath].concat(activeView().lines, intention.lines, activeRenderStyle().lines);
+      const next = pool[Math.floor(Math.random() * pool.length)];
+      dom.wizardLine.textContent = next;
+      return;
+    }
+
     if (isNatureVersion()) {
       const view = activeView();
       const intention = activeIntention();
@@ -502,10 +1226,14 @@
     dom.timerFace.style.setProperty("--progress", `${degrees}deg`);
     dom.timerText.textContent = formatTime(state.remaining);
     dom.timerCaption.textContent = state.running
-      ? isNatureVersion()
+      ? isCollectibleVersion()
+        ? "card sit"
+        : isNatureVersion()
         ? "breathing slowly"
         : "keeping watch"
-      : isNatureVersion()
+      : isCollectibleVersion()
+        ? "collectible sit"
+        : isNatureVersion()
         ? "nature sit"
         : "pipe pause";
     updatePhase(progress);
@@ -522,7 +1250,15 @@
     }
 
     dom.phaseName.textContent = active.name;
-    if (isNatureVersion()) {
+    if (isCollectibleVersion()) {
+      const card = activeNounsGandalf();
+      const hints = {
+        Settle: `${card.mantra} Let the first minute be simple.`,
+        Drift: card.cue,
+        Return: `Bring back ${card.noun.toLowerCase()}-sized calm.`
+      };
+      dom.phaseHint.textContent = hints[active.name] || card.mantra;
+    } else if (isNatureVersion()) {
       dom.phaseHint.textContent = activeView().phases[active.name] || active.hint;
     } else {
       dom.phaseHint.textContent = state.version === "v1" ? active.hint : activeCompanion().phases[active.name] || active.hint;
@@ -531,7 +1267,7 @@
 
   function updateStats() {
     const totalMinutes = state.log.reduce((sum, entry) => sum + entry.minutes, 0);
-    dom.ringCount.textContent = String(state.rings);
+    dom.ringCount.textContent = String(isCollectibleVersion() ? state.nounsCollection.size : state.rings);
     dom.sessionCount.textContent = String(state.log.length);
     dom.totalMinutes.textContent = String(totalMinutes);
   }
@@ -581,6 +1317,10 @@
       state.remaining = state.duration;
     }
 
+    if (isCollectibleVersion()) {
+      collectNounsGandalf(state.nounsActive, { quiet: true });
+    }
+
     state.running = true;
     state.paceStartedAt = performance.now();
     state.guidePace = "";
@@ -597,11 +1337,13 @@
 
   function pauseSession() {
     state.running = false;
-    dom.startButton.textContent = isNatureVersion() ? "Resume nature sit" : "Resume quiet sit";
+    dom.startButton.textContent = isCollectibleVersion() ? "Resume card sit" : isNatureVersion() ? "Resume nature sit" : "Resume quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
-    dom.timerCaption.textContent = isNatureVersion() ? "nature sit" : "pipe pause";
-    if (isNatureVersion()) {
+    dom.timerCaption.textContent = isCollectibleVersion() ? "collectible sit" : isNatureVersion() ? "nature sit" : "pipe pause";
+    if (isCollectibleVersion()) {
+      setGuide("Paused", activeNounsGandalf().name, "The card will keep its place. Return without fuss.");
+    } else if (isNatureVersion()) {
       setGuide("Paused", activeView().name, "The place will keep waiting. Come back without hurry.");
     } else if (state.version === "v2") {
       setGuide("Paused", activeCompanion().name, activeCompanion().paused);
@@ -612,7 +1354,7 @@
     state.running = false;
     state.remaining = state.duration;
     state.phaseName = "";
-    dom.startButton.textContent = isNatureVersion() ? "Start nature sit" : "Start quiet sit";
+    dom.startButton.textContent = isCollectibleVersion() ? "Start card sit" : isNatureVersion() ? "Start nature sit" : "Start quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.paceLabel.textContent = "Settle";
@@ -625,14 +1367,21 @@
 
   function completeSession() {
     pauseSession();
-    dom.startButton.textContent = isNatureVersion() ? "Start nature sit" : "Start quiet sit";
+    dom.startButton.textContent = isCollectibleVersion() ? "Start card sit" : isNatureVersion() ? "Start nature sit" : "Start quiet sit";
     state.remaining = 0;
     updateTimer();
-    dom.wizardLine.textContent = isNatureVersion() ? "There. The room feels less crowded now." : "There. A little more room in the world.";
-    if (isNatureVersion()) {
+    if (isCollectibleVersion()) {
+      collectNounsGandalf(state.nounsActive, { quiet: true });
+      dom.wizardLine.textContent = "There. One small Gandalf kept, one quieter minute carried.";
+      setGuide("Complete", activeNounsGandalf().name, "The cue is in your collection. Carry it lightly.");
+    } else if (isNatureVersion()) {
+      dom.wizardLine.textContent = "There. The room feels less crowded now.";
       setGuide("Complete", activeView().name, "Carry one color, one sound, and one easier breath back with you.");
     } else if (state.version === "v2") {
+      dom.wizardLine.textContent = "There. A little more room in the world.";
       setGuide("Complete", activeCompanion().name, activeCompanion().complete);
+    } else {
+      dom.wizardLine.textContent = "There. A little more room in the world.";
     }
     addSmoke({ count: 12, power: 1.2, spread: 100, countTowardSession: true });
     spawnParticles(18);
@@ -648,7 +1397,7 @@
   }
 
   function setVersion(version) {
-    const next = versions.has(version) ? version : "v4";
+    const next = versions.has(version) ? version : RELEASE_VERSION;
     state.version = next;
     dom.body.dataset.version = next;
     dom.versionButtons.forEach((button) => {
@@ -657,11 +1406,11 @@
 
     dom.roomStep.textContent = next === "v1" ? "1" : "2";
     dom.ambienceStep.textContent = next === "v1" ? "2" : "3";
-    dom.ritualSummary.textContent = isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
-    dom.blendLabel.textContent = isNatureVersion(next) ? "Session scent" : "Pipe leaf";
+    dom.ritualSummary.textContent = isCollectibleVersion(next) ? "Collection scent and tally" : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
+    dom.blendLabel.textContent = isCollectibleVersion(next) ? "Keepsake scent" : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
     dom.smokeLabel.textContent = isNatureVersion(next) ? "Atmosphere" : "Smoke";
-    dom.ringLabel.textContent = isNatureVersion(next) ? "cues" : "rings";
-    dom.startButton.textContent = state.running ? "Running" : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
+    dom.ringLabel.textContent = isCollectibleVersion(next) ? "cards" : isNatureVersion(next) ? "cues" : "rings";
+    dom.startButton.textContent = state.running ? "Running" : isCollectibleVersion(next) ? "Start card sit" : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
 
     if (next === "v1" && state.mode === "stars") {
       setMode("fire");
@@ -670,6 +1419,14 @@
 
     if (next === "v1") {
       dom.phaseHint.textContent = phases.find((phase) => phase.name === state.phaseName)?.hint || phases[0].hint;
+      chooseLine();
+    } else if (isCollectibleVersion(next)) {
+      if (state.renderStyle !== "pixel") {
+        setRenderStyle("pixel");
+      }
+      setNounsGandalf(state.nounsActive, { announce: false });
+      renderNounsCollection();
+      updateGuideIdle("V5 ready");
       chooseLine();
     } else if (isNatureVersion(next)) {
       if (next === "v4" && state.renderStyle !== "pixel") {
@@ -685,6 +1442,72 @@
     }
 
     saveSettings();
+  }
+
+  function setNounsGandalf(id, options) {
+    const settings = options || {};
+    const next = nounsGandalfs.some((card) => card.id === id) ? id : nounsGandalfs[0].id;
+    const card = nounsGandalfs.find((item) => item.id === next) || nounsGandalfs[0];
+
+    state.nounsActive = next;
+    dom.body.dataset.collectible = next;
+
+    if (settings.syncWorld !== false) {
+      setVisual(card.visual, { syncMode: false });
+      setIntention(card.intention);
+      setMode(card.mode);
+    } else {
+      saveSettings();
+    }
+
+    renderNounsCollection();
+
+    if (settings.announce !== false && isCollectibleVersion()) {
+      dom.wizardLine.textContent = card.line;
+      setGuide("Card chosen", card.name, `${card.mantra} ${card.trait}.`);
+      spawnParticles(6);
+    }
+
+    saveSettings();
+  }
+
+  function collectNounsGandalf(id, options) {
+    const card = nounsGandalfs.find((item) => item.id === id) || activeNounsGandalf();
+    const wasCollected = state.nounsCollection.has(card.id);
+    const settings = options || {};
+
+    state.nounsCollection.add(card.id);
+    saveNounsCollection();
+    renderNounsCollection();
+    updateStats();
+
+    if (!settings.quiet) {
+      dom.wizardLine.textContent = wasCollected ? `${card.name} is already in your keepsake pouch.` : card.cue;
+      setGuide(wasCollected ? "Already kept" : "Cue collected", card.name, card.breath);
+      spawnParticles(wasCollected ? 4 : 12);
+    }
+  }
+
+  function pullNounsGandalf() {
+    const uncollected = nounsGandalfs.filter((card) => !state.nounsCollection.has(card.id));
+    const pool = uncollected.length > 0 ? uncollected : nounsGandalfs;
+    const current = activeNounsGandalf();
+    const choices = pool.length > 1 ? pool.filter((card) => card.id !== current.id) : pool;
+    const card = choices[Math.floor(Math.random() * choices.length)];
+
+    setNounsGandalf(card.id, { announce: false });
+    dom.wizardLine.textContent = card.line;
+    setGuide("Pulled", card.name, `${card.mantra} ${card.cue}`);
+    spawnParticles(10);
+  }
+
+  async function beginNounsMeditation() {
+    collectNounsGandalf(state.nounsActive, { quiet: true });
+    if (state.duration !== 5 * 60) {
+      setDuration(5);
+    }
+    await startSession();
+    setGuide("Card sit started", activeNounsGandalf().name, activeNounsGandalf().breath);
   }
 
   function setMode(mode) {
@@ -704,7 +1527,7 @@
     }
 
     if (!state.running) {
-      updateGuideIdle(isNatureVersion() ? "Sound set" : "Next");
+      updateGuideIdle(isCollectibleVersion() ? "Room set" : isNatureVersion() ? "Sound set" : "Next");
     }
   }
 
@@ -726,7 +1549,9 @@
 
     chooseLine();
     updateGuideIdle(
-      isNatureVersion()
+      isCollectibleVersion()
+        ? "Deck ready"
+        : isNatureVersion()
         ? "Nature ready"
         : settings.syncMode === false
           ? "Choose your Gandalf"
@@ -752,7 +1577,7 @@
 
     if (isNatureVersion()) {
       chooseLine();
-      updateGuideIdle("View chosen");
+      updateGuideIdle(isCollectibleVersion() ? "Card view" : "View chosen");
     }
   }
 
@@ -771,7 +1596,7 @@
 
     if (isNatureVersion()) {
       chooseLine();
-      updateGuideIdle("Intention set");
+      updateGuideIdle(isCollectibleVersion() ? "Card cue" : "Intention set");
     }
   }
 
@@ -783,14 +1608,22 @@
 
     if (isNatureVersion()) {
       chooseLine();
-      updateGuideIdle(next === "pixel" ? "Pixel style" : "Storybook style");
+      updateGuideIdle(isCollectibleVersion() ? "Deck style" : next === "pixel" ? "Pixel style" : "Storybook style");
       spawnParticles(next === "pixel" ? 10 : 5);
     }
   }
 
   function playCue(cue) {
     const view = activeView();
-    const text = view.cues[cue] || view.idle;
+    const card = activeNounsGandalf();
+    const text = isCollectibleVersion()
+      ? {
+        look: card.cue,
+        listen: card.mantra,
+        breathe: card.breath,
+        release: `Let ${card.noun.toLowerCase()}-sized calm be enough.`
+      }[cue] || card.mantra
+      : view.cues[cue] || view.idle;
     const labels = {
       look: "Look",
       listen: "Listen",
@@ -799,7 +1632,7 @@
     };
 
     dom.wizardLine.textContent = text;
-    setGuide(labels[cue] || "Cue", view.name, text);
+    setGuide(labels[cue] || "Cue", isCollectibleVersion() ? card.name : view.name, text);
 
     if (cue === "breathe") {
       addSmoke({ count: 4, power: 0.55, spread: 70, countTowardSession: false });
@@ -838,7 +1671,7 @@
       rings: state.rings,
       mode: state.mode,
       version: state.version,
-      companion: state.version === "v2" ? activeCompanion().name : "",
+      companion: state.version === "v2" ? activeCompanion().name : isCollectibleVersion() ? activeNounsGandalf().name : "",
       visual: isNatureVersion() ? activeView().name : "",
       intention: isNatureVersion() ? activeIntention().title : "",
       style: isNatureVersion() ? activeRenderStyle().name : "",
@@ -1271,7 +2104,9 @@
     visuals.rings = [];
     visuals.particles = [];
     dom.wizardLine.textContent = "A good silence asks for nothing.";
-    if (isNatureVersion()) {
+    if (isCollectibleVersion()) {
+      setGuide("Quiet", activeNounsGandalf().name, "Ambience is off. Keep the card, keep the cue, keep it simple.");
+    } else if (isNatureVersion()) {
       setGuide("Quiet", activeView().name, "Ambience is off. Let the picture do the holding for a while.");
     } else if (state.version === "v2") {
       setGuide("Quiet", activeCompanion().name, "Ambience is off. The room can stay still for a while.");
@@ -1312,6 +2147,9 @@
     button.addEventListener("click", () => setMode(button.dataset.mode));
   });
 
+  dom.pullGandalfButton.addEventListener("click", pullNounsGandalf);
+  dom.collectGandalfButton.addEventListener("click", () => collectNounsGandalf(state.nounsActive));
+  dom.meditateGandalfButton.addEventListener("click", () => beginNounsMeditation());
   dom.startButton.addEventListener("click", startSession);
   dom.pauseButton.addEventListener("click", pauseSession);
   dom.resetButton.addEventListener("click", resetSession);
@@ -1338,12 +2176,13 @@
 
   resizeCanvas();
   renderLog();
+  renderNounsCollection();
   setRenderStyle(state.renderStyle);
   setVersion(state.version);
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
-  updateGuideIdle(isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
+  updateGuideIdle(isCollectibleVersion() ? "V5 ready" : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();

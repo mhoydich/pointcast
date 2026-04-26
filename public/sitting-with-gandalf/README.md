@@ -6,7 +6,7 @@ Open `index.html` in a browser. The page has no build step and references only l
 
 ## Versions
 
-The app defaults to V4, with a V1/V2/V3/V4 toggle in the masthead. The selected version is saved locally after the V4 release is seen once.
+The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The selected version is saved locally after the V5 release is seen once.
 
 ### V1
 
@@ -40,19 +40,28 @@ The app defaults to V4, with a V1/V2/V3/V4 toggle in the masthead. The selected 
 
 ### V4
 
-- Next-version release that defaults to Pixel campfire.
+- Pixel campfire release.
 - Keeps V1, V2, and V3 available from the version toggle.
 - Adds a generated pixel-art 2x2 nature sheet for Moss glade, Rain garden, Meadow path, and Moon lake.
 - Uses the version switch as the single release control: V3 snaps to Storybook and V4 snaps to Pixel when selected.
 - Adds blockier V4 UI polish: squared controls, pixelated background/thumbs, subtle grid texture, and monospace timer treatment.
 - Migrates prior local settings to V4 once, then saves whichever version the visitor chooses next.
 
-## V5 Notes
+### V5
+
+- Defaults to a collectible Nouns Gandalf deck.
+- Adds 30 tiny Gandalf companion cards, each with a noun, visual mood, room, intention, mantra, breath cue, and original wizard line.
+- Makes the first action clearer: pull a Gandalf, collect the cue, then begin a 5-minute card sit.
+- Keeps V1, V2, V3, and V4 available from the version toggle.
+- Stores the local collection in `localStorage` under `sitting-with-gandalf-nouns-collection`.
+- Logs V5 notes with the active card, view, intention, and pixel style.
+
+## V6 Notes
 
 - Audio mixer: separate Fire, Weather, Road, Bells, and Drone levels instead of one master ambience slider.
 - Companion memory: remember preferred Gandalf, nature view, room, duration, and last note without making the UI busier.
 - Visual focus table: closer nature crops and a calmer timer-only view for longer sits.
-- Route polish: keep `/sitting-with-gandalf/` as the main room and consider a short `/gandalf/` alias after deploy behavior is confirmed.
+- Collection rituals: daily card, gentle streaks, and exportable keepsake sheet.
 
 ## Assets
 
