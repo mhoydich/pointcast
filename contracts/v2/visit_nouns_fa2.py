@@ -70,10 +70,12 @@
 #   Both do the same thing; keep whichever you prefer and remove the
 #   other before deploying to avoid confusion.
 #
-# • The royalties record is packed with sp.pack(), which produces
-#   Michelson-encoded bytes.  objkt's indexer reads this correctly.
-#   If you need a raw JSON string instead, replace sp.pack(...) with
-#   sp.pack(json_string) where json_string is built via string_utils.
+# • URI/name/decimals token_info values must be raw UTF-8 bytes, not
+#   Micheline-packed strings. Marketplaces like OBJKT, TzKT, and Kukai read the
+#   empty-string key as a raw URI. `sp.pack("https://...")` produces a `0501...`
+#   Micheline payload and shows up as an unknown token in wallets.
+# • The royalties record is intentionally packed with sp.pack(), which produces
+#   the common TZIP-21 `royalties` token_info shape.
 #
 # ============================================================
 
@@ -192,11 +194,11 @@ def my_module():
                 #   )
                 #   objkt, teia, and most Tezos marketplaces read this key.
                 token_info = sp.cast({}, sp.map[sp.string, sp.bytes])
-                token_info[""] = sp.pack(uri)
-                token_info["name"] = sp.pack(
+                token_info[""] = sp.utils.bytes_of_string(uri)
+                token_info["name"] = sp.utils.bytes_of_string(
                     "Noun " + string_utils.from_int(sp.to_int(noun_id))
                 )
-                token_info["decimals"] = sp.pack("0")
+                token_info["decimals"] = sp.utils.bytes_of_string("0")
                 token_info["royalties"] = sp.pack(
                     sp.record(
                         decimals=sp.nat(4),
@@ -310,7 +312,7 @@ def test():
     # At origination we use a placeholder; admin calls set_metadata
     # post-deploy to point at the real IPFS document.
     contract_metadata = sp.cast(
-        sp.big_map({"": sp.pack("ipfs://QmTZIP16StubReplaceMePostDeploy")}),
+        sp.big_map({"": sp.utils.bytes_of_string("ipfs://QmTZIP16StubReplaceMePostDeploy")}),
         sp.big_map[sp.string, sp.bytes],
     )
 

@@ -121,7 +121,10 @@ def main():
                     + ".json"
                 )
                 token_info = {
-                    "": sp.pack(uri_str),  # TZIP-12 empty-key = off-chain URI
+                    # TZIP-12 empty-key = off-chain URI. This must be raw
+                    # UTF-8 bytes; sp.pack(uri_str) produces a Micheline
+                    # payload that wallets index as an unknown token.
+                    "": sp.utils.bytes_of_string(uri_str),
                 }
                 self.data.token_metadata[noun_id] = sp.record(
                     token_id=noun_id,
