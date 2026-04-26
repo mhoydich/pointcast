@@ -1,13 +1,13 @@
 # PointCast adds a marketplace
 
 **FOR PRESS / PUBLISHING USE — DRAFT**
-**Filed by:** cc · **Status:** ready for review · **KT1 patched + live as of 2026-04-26 13:35 PT**
+**Filed by:** cc · **Status:** ready for review · **v3 KT1 live as of 2026-04-26 21:49 UTC · first sale closed (Ceramic Mug #0, 1 ꜩ)**
 
 ---
 
 **EL SEGUNDO, CA — Sunday, April 26, 2026** — pointcast.xyz, the small living broadcast that has been running daily out of El Segundo since spring, today added a marketplace at [pointcast.xyz/market](https://pointcast.xyz/market). It is one beat in a steady drumbeat — not a relaunch, not a token sale.
 
-The marketplace is a single SmartPy contract on Tezos mainnet at `KT1ABfp7cMEgPBEzLTR7tDut64mHgQfCYN5c`. It is multi-collection by design: a per-listing `fa2_contract` field means every PointCast FA2 plugs into the same surface without re-deploying the marketplace. Coffee Mugs (`KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt`) are listable on day one. Visit Nouns (`KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh`) follow the same path. Birthdays, Drum, and a queued Window Snapshots collection slot in as their contracts originate — same KT1, no migration.
+The marketplace is a single SmartPy contract on Tezos mainnet at `KT1DoUowvD6a5TJnYMXwtR9YsjiqBKkzptc5`. It is multi-collection by design: a per-listing `fa2_contract` field means every PointCast FA2 plugs into the same surface without re-deploying the marketplace. Coffee Mugs (`KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt`) are listable on day one. Visit Nouns (`KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh`) follow the same path. Birthdays, Drum, and a queued Window Snapshots collection slot in as their contracts originate — same KT1, no migration.
 
 Listing is one Kukai signature that batches an FA2 `update_operators` and a `list_ask`. Buying is one signature on `fulfill_ask` — the contract dispatches the FA2 transfer and splits the payment in a single Michelson operation: seller, a 2.5% platform fee, and a per-listing royalty that the seller chooses at list time. There is no PointCast token. There is no protocol fee beyond the 2.5%. Sellers can cancel or update price any time; the contract enforces no-self-fulfill and a 100% royalty cap.
 
@@ -23,6 +23,6 @@ PointCast is a content network where every post is a numbered Block, every Block
 
 **Press contact** — hello@pointcast.xyz · [@mhoydich on X](https://x.com/mhoydich) · [@mhoydich on Farcaster](https://warpcast.com/mhoydich)
 
-**On-chain** — Marketplace contract [`KT1ABfp7cMEgPBEzLTR7tDut64mHgQfCYN5c`](https://tzkt.io/KT1ABfp7cMEgPBEzLTR7tDut64mHgQfCYN5c) (origination [op `ooESkgyRC…`](https://tzkt.io/ooESkgyRCVD8vZXkir6wVpkzU9Mi1L4rH1dQzDzNUNpAEvAr7XC)) · runbook + contract source at [`docs/plans/2026-04-26-marketplace-deploy-runbook.md`](https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-26-marketplace-deploy-runbook.md) and [`contracts/v2/marketplace.py`](https://github.com/mhoydich/pointcast/blob/main/contracts/v2/marketplace.py).
+**On-chain** — Marketplace contract [`KT1DoUowvD6a5TJnYMXwtR9YsjiqBKkzptc5`](https://tzkt.io/KT1DoUowvD6a5TJnYMXwtR9YsjiqBKkzptc5) (origination [op `opG32iDS…`](https://tzkt.io/opG32iDS3YRPXJKpB5ZvpzWfsKcBB8qP7qaExEffDpnFNPWMmru)) · runbook + contract source at [`docs/plans/2026-04-26-marketplace-deploy-runbook.md`](https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-26-marketplace-deploy-runbook.md) and [`contracts/v2/marketplace.py`](https://github.com/mhoydich/pointcast/blob/main/contracts/v2/marketplace.py).
 
 — end —

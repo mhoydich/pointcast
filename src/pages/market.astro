@@ -35,6 +35,13 @@ import contracts from '../data/contracts.json';
 const marketplaceKt1 = ((contracts as any).marketplace?.mainnet ?? '').trim();
 const marketplaceLive = marketplaceKt1.startsWith('KT1');
 const platformFeeBps = (contracts as any).marketplace?.platformFeeBps ?? 250;
+// Legacy marketplace KT1s — older originated marketplaces that still hold
+// open asks. We read + display + allow cancel/buy against them, but the
+// list-a-token form always points at the current `mainnet` address.
+// Empty until v4 ships and v3 KT1 is moved here.
+const legacyMarketplaceKt1s = ((((contracts as any).marketplace?._legacy_marketplace ?? []) as unknown[])
+  .filter((s) => typeof s === 'string' && (s as string).trim().startsWith('KT1')) as string[])
+  .map((s) => s.trim());
 
 const supported = ((contracts as any).marketplace?.supportedCollections ?? []) as string[];
 // Each supported collection becomes a select option in the list form +
@@ -122,7 +129,7 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
         <h2 id="market-list-title" class="market__section-title">List your token</h2>
         <p class="market__section-dek mono">connect a wallet that owns a PointCast NFT · pick the collection + token + price · sign once.</p>
       </header>
-      <form class="market__list-form" id="market-list-form" action="javascript:void(0)" data-marketplace-kt1={marketplaceKt1} data-collections={JSON.stringify(collectionsRegistry)}>
+      <form class="market__list-form" id="market-list-form" action="javascript:void(0)" data-marketplace-kt1={marketplaceKt1} data-legacy-marketplace={JSON.stringify(legacyMarketplaceKt1s)} data-collections={JSON.stringify(collectionsRegistry)}>
         <label class="market__field">
           <span class="market__field-label mono">collection</span>
           <select name="collection" id="market-list-collection" required>
@@ -377,6 +384,22 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
     justify-content: center;
     background: var(--color-card, rgba(0,0,0,0.03));
     overflow: hidden;
+    position: relative;
+  }
+  .market-card--legacy { opacity: 0.85; }
+  .market-card--legacy:hover { opacity: 1; }
+  .market-card__legacy {
+    position: absolute;
+    top: 6px; left: 6px;
+    background: rgba(184, 115, 51, 0.95);
+    color: #fff;
+    padding: 2px 8px;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    border-radius: 1px;
+    z-index: 1;
+    pointer-events: auto;
   }
   .market-card__art img,
   .market-card__art svg {
@@ -723,6 +746,17 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
     return (form && form.getAttribute('data-marketplace-kt1')) || '';
   }
 
+  // Legacy marketplace KT1s (e.g. v3 once v4 ships). Empty by default.
+  // We read open asks from these and let sellers cancel them, but new
+  // listings always go to the primary marketplace KT1.
+  function readLegacyMarketplaces() {
+    const form = document.getElementById('market-list-form');
+    const raw = form && form.getAttribute('data-legacy-marketplace');
+    if (!raw) return [];
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a.filter(function (s) { return typeof s === 'string' && s.indexOf('KT1') === 0; }) : []; }
+    catch (e) { return []; }
+  }
+
   function readWallet() {
     try {
       const raw = localStorage.getItem('pc:wallet');
@@ -973,20 +1007,39 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
     if (summary) summary.textContent = 'reading marketplace storage…';
 
     try {
-      // 1. Find the asks bigmap pointer
-      const sRes = await fetch('https://api.tzkt.io/v1/contracts/' + kt1 + '/storage', { cache: 'no-store' });
-      if (!sRes.ok) throw new Error('tzkt /storage ' + sRes.status);
-      const storage = await sRes.json();
-      const asksPointer = (typeof storage.asks === 'number') ? storage.asks : null;
-      if (asksPointer == null) throw new Error('storage.asks missing or not a bigmap pointer');
+      // 1. Helper — fetch all open asks from one marketplace KT1, tagged.
+      async function fetchAsksFor(addr, isLegacy) {
+        const sRes = await fetch('https://api.tzkt.io/v1/contracts/' + addr + '/storage', { cache: 'no-store' });
+        if (!sRes.ok) throw new Error('tzkt /storage ' + addr + ' ' + sRes.status);
+        const storage = await sRes.json();
+        const ptr = (typeof storage.asks === 'number') ? storage.asks : null;
+        if (ptr == null) {
+          if (isLegacy) return []; // legacy with non-standard storage just gets skipped
+          throw new Error('storage.asks missing or not a bigmap pointer on ' + addr);
+        }
+        const kRes = await fetch(
+          'https://api.tzkt.io/v1/bigmaps/' + ptr + '/keys?limit=100&select=key,value&active=true&sort.desc=id',
+          { cache: 'no-store' },
+        );
+        if (!kRes.ok) {
+          if (isLegacy) return [];
+          throw new Error('tzkt /bigmaps ' + addr + ' ' + kRes.status);
+        }
+        const rows = await kRes.json();
+        if (!Array.isArray(rows)) return [];
+        return rows.map(function (r) { return { key: r.key, value: r.value, _kt1: addr, _legacy: !!isLegacy }; });
+      }
 
-      // 2. List the ask records
-      const kRes = await fetch(
-        'https://api.tzkt.io/v1/bigmaps/' + asksPointer + '/keys?limit=100&select=key,value&active=true&sort.desc=id',
-        { cache: 'no-store' },
-      );
-      if (!kRes.ok) throw new Error('tzkt /bigmaps ' + kRes.status);
-      const keys = await kRes.json();
+      // 2. Pull primary + every legacy in parallel.
+      const legacyKt1s = readLegacyMarketplaces();
+      const primaryPromise = fetchAsksFor(kt1, false);
+      const legacyPromises = legacyKt1s.map(function (l) {
+        return fetchAsksFor(l, true).catch(function () { return []; });
+      });
+      const [primaryAsks, ...legacyResults] = await Promise.all([primaryPromise, ...legacyPromises]);
+
+      // Primary first (newest from mainnet), then legacy below.
+      const keys = primaryAsks.concat(legacyResults.flat());
 
       const wallet = readWallet();
       const myAddr = (wallet && wallet.address) || '';
@@ -1011,16 +1064,31 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
         const priceMutez = parseInt(v.amount_mutez, 10) || 0;
         const priceXtz = (priceMutez / 1_000_000).toFixed(priceMutez % 1_000_000 === 0 ? 0 : 2);
         const royaltyBps = parseInt(v.royalty_bps, 10) || 0;
+        const askKt1 = row._kt1 || kt1;
+        const isLegacy = !!row._legacy;
 
         const imageUri = imageUriFor(fa2Kt1, tokenId);
         const name = tokenNameFor(fa2Kt1, tokenId);
         const collection = collectionNameFor(fa2Kt1);
         const isSelf = myAddr && seller && seller.toLowerCase() === myAddr.toLowerCase();
 
+        // Legacy asks get a badge + read-only buy button (sellers can still
+        // cancel their own legacy ask; non-sellers see the "legacy" pill but
+        // the buy button still works against the legacy contract).
+        const legacyBadge = isLegacy
+          ? '<span class="market-card__legacy mono" title="On a legacy marketplace contract — still tradeable, but new listings go to the current marketplace">LEGACY</span>'
+          : '';
+
         return (
-          '<li class="market-card" data-ask-id="' + askId + '" data-fa2="' + fa2Kt1 + '" data-token-id="' + tokenId + '" data-price="' + priceMutez + '">' +
+          '<li class="market-card' + (isLegacy ? ' market-card--legacy' : '') +
+            '" data-ask-id="' + askId +
+            '" data-fa2="' + fa2Kt1 +
+            '" data-token-id="' + tokenId +
+            '" data-price="' + priceMutez +
+            '" data-marketplace-kt1="' + askKt1 + '">' +
             '<div class="market-card__art">' +
               (imageUri ? '<img src="' + imageUri + '" alt="' + name + '" loading="lazy" />' : '<svg viewBox="0 0 24 24"><rect width="24" height="24" fill="#eee"/></svg>') +
+              legacyBadge +
             '</div>' +
             '<div class="market-card__body">' +
               '<p class="market-card__collection">' + collection + ' · #' + tokenId + '</p>' +
@@ -1029,10 +1097,12 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
               '<p class="market-card__seller">seller ' + shortAddr(seller) + (royaltyBps > 0 ? ' · ' + (royaltyBps / 100).toFixed(1) + '% royalty' : '') + '</p>' +
               (isSelf
                 ? '<div class="market-card__own">' +
-                    '<div class="market-card__update-row">' +
-                      '<input type="number" class="market-card__update-input" data-update-input="' + askId + '" min="0" step="0.000001" placeholder="' + priceXtz + '" />' +
-                      '<button class="market-card__update-btn" data-update-ask="' + askId + '" title="update price">↻</button>' +
-                    '</div>' +
+                    (isLegacy
+                      ? ''
+                      : '<div class="market-card__update-row">' +
+                          '<input type="number" class="market-card__update-input" data-update-input="' + askId + '" min="0" step="0.000001" placeholder="' + priceXtz + '" />' +
+                          '<button class="market-card__update-btn" data-update-ask="' + askId + '" title="update price">↻</button>' +
+                        '</div>') +
                     '<button class="market-card__buy" data-state="self" data-cancel-ask="' + askId + '" title="cancel this listing">your listing · cancel</button>' +
                   '</div>'
                 : '<button class="market-card__buy" data-buy-ask="' + askId + '">Buy for ' + priceXtz + ' ꜩ</button>') +
@@ -1046,16 +1116,19 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
         btn.addEventListener('click', function () {
           const card = btn.closest('.market-card');
           if (!card) return;
-          buyAsk(parseInt(btn.getAttribute('data-buy-ask'), 10), parseInt(card.getAttribute('data-price'), 10), btn);
+          const askKt1 = card.getAttribute('data-marketplace-kt1') || readMarketplaceKt1();
+          buyAsk(parseInt(btn.getAttribute('data-buy-ask'), 10), parseInt(card.getAttribute('data-price'), 10), btn, askKt1);
         });
       });
       // Wire cancel handlers for own listings
       grid.querySelectorAll('[data-cancel-ask]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          cancelAsk(parseInt(btn.getAttribute('data-cancel-ask'), 10), btn);
+          const card = btn.closest('.market-card');
+          const askKt1 = (card && card.getAttribute('data-marketplace-kt1')) || readMarketplaceKt1();
+          cancelAsk(parseInt(btn.getAttribute('data-cancel-ask'), 10), btn, askKt1);
         });
       });
-      // Wire update_ask handlers for own listings
+      // Wire update_ask handlers for own listings (legacy asks have no update button)
       grid.querySelectorAll('[data-update-ask]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           const askId = parseInt(btn.getAttribute('data-update-ask'), 10);
@@ -1066,7 +1139,9 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
             setTimeout(function () { btn.textContent = '↻'; }, 1500);
             return;
           }
-          updateAsk(askId, Math.floor(newXtz * 1_000_000), btn);
+          const card = btn.closest('.market-card');
+          const askKt1 = (card && card.getAttribute('data-marketplace-kt1')) || readMarketplaceKt1();
+          updateAsk(askId, Math.floor(newXtz * 1_000_000), btn, askKt1);
         });
       });
     } catch (err) {
@@ -1077,13 +1152,13 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
   }
 
   // ── Buy flow ─────────────────────────────────────────────────────────
-  async function buyAsk(askId, priceMutez, btn) {
+  async function buyAsk(askId, priceMutez, btn, askKt1) {
     const wallet = readWallet();
     if (!wallet) {
       try { window.dispatchEvent(new CustomEvent('pc:open-wallet-menu')); } catch (e) {}
       return;
     }
-    const kt1 = readMarketplaceKt1();
+    const kt1 = askKt1 || readMarketplaceKt1();
     if (!kt1) return;
 
     const original = btn.textContent;
@@ -1124,10 +1199,10 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
   }
 
   // ── Cancel flow (seller's own listings) ─────────────────────────────
-  async function cancelAsk(askId, btn) {
+  async function cancelAsk(askId, btn, askKt1) {
     const wallet = readWallet();
     if (!wallet) return;
-    const kt1 = readMarketplaceKt1();
+    const kt1 = askKt1 || readMarketplaceKt1();
     if (!kt1) return;
 
     const original = btn.textContent;
@@ -1166,10 +1241,10 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
   }
 
   // ── Update flow (seller's own listings, change price w/o cancel+relist) ─
-  async function updateAsk(askId, newPriceMutez, btn) {
+  async function updateAsk(askId, newPriceMutez, btn, askKt1) {
     const wallet = readWallet();
     if (!wallet) return;
-    const kt1 = readMarketplaceKt1();
+    const kt1 = askKt1 || readMarketplaceKt1();
     if (!kt1) return;
 
     const original = btn.textContent;
