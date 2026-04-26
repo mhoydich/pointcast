@@ -1,0 +1,351 @@
+---
+import { ZEN_CAT_RITUALS, ZEN_CATS_STORAGE_KEYS, todayZenCat } from '../lib/zen-cats';
+
+const today = todayZenCat();
+const cat = today.cat;
+const palette = cat.palette;
+const clientData = {
+  today,
+  rituals: ZEN_CAT_RITUALS,
+  storageKeys: ZEN_CATS_STORAGE_KEYS,
+  passportStamp: 'zen-cat',
+};
+---
+
+<section
+  class="zen-cat-today"
+  aria-labelledby="zen-cat-today-title"
+  data-zen-cat-today-card
+  style={`--cat-ground:${palette.ground};--cat-paper:${palette.paper};--cat-accent:${palette.accent};--cat-ink:${palette.ink};`}
+>
+  <a class="zen-cat-today__art" href="/zen-cats" aria-label={`Open today's Zen Cat, ${cat.name}`}>
+    <img src={today.imageUrl} alt={`${cat.name}, the daily Zen Cat`} width="220" height="220" loading="lazy" decoding="async" />
+  </a>
+
+  <div class="zen-cat-today__copy">
+    <p class="zen-cat-today__kicker">PLAY LAYER · DAILY ZEN CAT</p>
+    <h2 id="zen-cat-today-title">Today's cat is {cat.name} - {cat.mood}.</h2>
+    <p>
+      {cat.coat}, {today.room}, {today.weather}. Run the three quiet rituals here,
+      then mint when the dedicated PCCAT contract is live on Tezos.
+    </p>
+
+    <dl class="zen-cat-today__facts">
+      <div>
+        <dt>Token</dt>
+        <dd>#{today.tokenId}</dd>
+      </div>
+      <div>
+        <dt>Rarity</dt>
+        <dd>{today.rarity}</dd>
+      </div>
+      <div>
+        <dt>Mantra</dt>
+        <dd>{cat.mantra}</dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="zen-cat-today__actions">
+    <div class="zen-cat-today__rituals" aria-label="Zen Cat daily rituals">
+      {ZEN_CAT_RITUALS.map((ritual) => (
+        <button type="button" data-home-ritual-id={ritual.id} aria-pressed="false">
+          <span>{ritual.label}</span>
+        </button>
+      ))}
+    </div>
+    <p class="zen-cat-today__status" data-home-zen-status>0 / {ZEN_CAT_RITUALS.length} rituals complete.</p>
+    <div class="zen-cat-today__links">
+      <button type="button" data-home-collect-cat disabled>Collect here</button>
+      <a href="/zen-cats">Open garden</a>
+      <a href="/play">Play layer</a>
+    </div>
+  </div>
+</section>
+
+<script type="application/json" id="zen-cat-home-data" set:html={JSON.stringify(clientData)}></script>
+
+<script>
+  const root = document.querySelector('[data-zen-cat-today-card]');
+  const dataEl = document.getElementById('zen-cat-home-data');
+
+  if (root && dataEl) {
+    const DATA = JSON.parse(dataEl.textContent || '{}');
+    const ritualKey = DATA.storageKeys.ritualPrefix + DATA.today.date;
+    const collectionKey = DATA.storageKeys.collection;
+    const ritualButtons = Array.from(root.querySelectorAll('[data-home-ritual-id]'));
+    const status = root.querySelector('[data-home-zen-status]');
+    const collectButton = root.querySelector('[data-home-collect-cat]');
+
+    function readJson(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function writeJson(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch {}
+    }
+
+    function collection() {
+      const items = readJson(collectionKey, []);
+      return Array.isArray(items) ? items : [];
+    }
+
+    function ritualState() {
+      const state = readJson(ritualKey, {});
+      return state && typeof state === 'object' ? state : {};
+    }
+
+    function collectedToday() {
+      return collection().some((item) => item.date === DATA.today.date);
+    }
+
+    function stampPassport() {
+      const key = 'pc:passport:stamps';
+      const current = readJson(key, {});
+      if (!current || typeof current !== 'object') return;
+      current[DATA.passportStamp] = current[DATA.passportStamp] || {
+        id: DATA.passportStamp,
+        at: new Date().toISOString(),
+        via: 'zen-cats',
+      };
+      writeJson(key, current);
+    }
+
+    function collectToday() {
+      const state = ritualState();
+      const items = collection().filter((item) => item.date !== DATA.today.date);
+      items.unshift({
+        date: DATA.today.date,
+        tokenId: DATA.today.tokenId,
+        cat: DATA.today.cat.name,
+        rarity: DATA.today.rarity,
+        rituals: DATA.rituals.filter((ritual) => state[ritual.id]).map((ritual) => ritual.id),
+        collectedAt: new Date().toISOString(),
+      });
+      writeJson(collectionKey, items.slice(0, 64));
+      stampPassport();
+      render();
+    }
+
+    function render() {
+      const state = ritualState();
+      const done = DATA.rituals.filter((ritual) => state[ritual.id]).length;
+      const complete = done >= DATA.rituals.length;
+      const collected = collectedToday();
+
+      ritualButtons.forEach((button) => {
+        const id = button.getAttribute('data-home-ritual-id');
+        const active = Boolean(state[id]);
+        button.classList.toggle('is-done', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+
+      if (status) {
+        status.textContent = collected
+          ? DATA.today.cat.name + ' is on your shelf.'
+          : done + ' / ' + DATA.rituals.length + ' rituals complete.';
+      }
+
+      if (collectButton) {
+        collectButton.disabled = !complete || collected;
+        collectButton.textContent = collected ? 'Collected' : 'Collect here';
+      }
+    }
+
+    ritualButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const id = button.getAttribute('data-home-ritual-id');
+        const state = ritualState();
+        state[id] = state[id] || new Date().toISOString();
+        writeJson(ritualKey, state);
+        render();
+      });
+    });
+
+    collectButton?.addEventListener('click', collectToday);
+    render();
+  }
+</script>
+
+<style>
+  .zen-cat-today {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr) minmax(240px, 0.55fr);
+    gap: 14px;
+    align-items: stretch;
+    margin: 14px 0;
+    padding: 14px;
+    border: 1.5px solid var(--pc-ink);
+    background:
+      linear-gradient(135deg, color-mix(in oklab, var(--cat-accent) 14%, transparent), transparent 48%),
+      var(--cat-ground);
+    color: var(--cat-ink);
+  }
+
+  .zen-cat-today__art {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    border: 1px solid color-mix(in oklab, var(--cat-accent) 65%, var(--pc-ink));
+    background: var(--cat-paper);
+    text-decoration: none;
+  }
+
+  .zen-cat-today__art img {
+    display: block;
+    width: min(100%, 170px);
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .zen-cat-today__copy {
+    display: grid;
+    align-content: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .zen-cat-today__kicker {
+    margin: 0;
+    color: color-mix(in oklab, var(--cat-accent) 72%, var(--pc-ink));
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .zen-cat-today h2 {
+    margin: 0;
+    max-width: 760px;
+    font-size: clamp(26px, 4vw, 42px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    font-weight: 560;
+  }
+
+  .zen-cat-today p {
+    margin: 0;
+    max-width: 680px;
+    color: color-mix(in oklab, var(--cat-ink) 72%, #fff);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .zen-cat-today__facts {
+    display: grid;
+    grid-template-columns: 0.5fr 0.5fr 1fr;
+    gap: 8px;
+    margin: 4px 0 0;
+  }
+
+  .zen-cat-today__facts div {
+    min-width: 0;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in oklab, var(--cat-accent) 45%, transparent);
+  }
+
+  .zen-cat-today__facts dt {
+    color: color-mix(in oklab, var(--cat-accent) 72%, var(--pc-ink));
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .zen-cat-today__facts dd {
+    margin: 3px 0 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .zen-cat-today__actions {
+    display: grid;
+    align-content: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .zen-cat-today__rituals,
+  .zen-cat-today__links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .zen-cat-today button,
+  .zen-cat-today__links a {
+    min-width: 0;
+    min-height: 38px;
+    border: 1px solid color-mix(in oklab, var(--cat-accent) 60%, var(--pc-ink));
+    background: #fff;
+    color: var(--cat-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.1;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .zen-cat-today button {
+    cursor: pointer;
+  }
+
+  .zen-cat-today button:disabled {
+    cursor: default;
+    opacity: 0.52;
+  }
+
+  .zen-cat-today__links a {
+    display: grid;
+    place-items: center;
+    padding: 0 8px;
+  }
+
+  .zen-cat-today button:not(:disabled):hover,
+  .zen-cat-today__links a:hover,
+  .zen-cat-today button.is-done {
+    background: color-mix(in oklab, var(--cat-accent) 18%, #fff);
+    text-decoration: none;
+  }
+
+  .zen-cat-today__status {
+    min-height: 20px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px !important;
+  }
+
+  @media (max-width: 1040px) {
+    .zen-cat-today {
+      grid-template-columns: 150px minmax(0, 1fr);
+    }
+
+    .zen-cat-today__actions {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .zen-cat-today {
+      grid-template-columns: 1fr;
+    }
+
+    .zen-cat-today__art {
+      min-height: 190px;
+    }
+
+    .zen-cat-today__facts,
+    .zen-cat-today__rituals,
+    .zen-cat-today__links {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
