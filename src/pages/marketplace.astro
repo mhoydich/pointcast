@@ -1,0 +1,662 @@
+---
+/**
+ * /marketplace — PointCast marketplace console.
+ *
+ * The live /market page handles direct ask listing + buying against the
+ * Tezos marketplace contract. This console is the friendlier operating
+ * room around it: live contract status, fee math, collection lanes,
+ * share/referral links, and trade-intent tickets for the next marketplace
+ * contract iteration.
+ */
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import contracts from '../data/contracts.json';
+
+const marketplace = (contracts as any).marketplace ?? {};
+const marketplaceKt1 = String(marketplace.mainnet ?? '').trim();
+const marketplaceLive = marketplaceKt1.startsWith('KT1');
+const platformFeeBps = Number(marketplace.platformFeeBps ?? 250);
+const treasury = String(marketplace.platformFeeReceiver ?? 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw');
+const royaltyReceiver = String(marketplace.royaltyReceiver ?? treasury);
+const supported = (marketplace.supportedCollections ?? []) as string[];
+
+const collectionNames: Record<string, string> = {
+  coffee_mugs: 'Coffee Mugs',
+  visit_nouns: 'Visit Nouns',
+  birthdays: 'Birthdays',
+  drum_token: 'Drum Token',
+};
+
+const collectionArt: Record<string, string> = {
+  coffee_mugs: '/images/coffee-mugs/ceramic.svg',
+  visit_nouns: '/images/nouns-cards-v3/grit-board-01.png',
+};
+
+const collections = supported
+  .map((slug) => {
+    const entry = (contracts as any)[slug] ?? {};
+    const kt1 = String(entry.mainnet ?? '').trim();
+    return {
+      slug,
+      name: collectionNames[slug] ?? slug.replaceAll('_', ' '),
+      kt1,
+      live: kt1.startsWith('KT1'),
+      art: collectionArt[slug] ?? '/images/og/og-home-v2.png',
+      symbol: entry.symbol ?? 'PC',
+      royalty: Number(entry.royalty_bps ?? 750),
+    };
+  })
+  .filter((c) => c.live);
+
+const short = (addr: string) => addr ? `${addr.slice(0, 7)}…${addr.slice(-5)}` : 'pending';
+---
+
+<BaseLayout
+  title="Marketplace · PointCast"
+  description="PointCast marketplace for buying, selling, trading, and sharing Tezos collectibles with platform fees, creator royalties, and referral intent tooling."
+>
+  <main
+    class="marketplace"
+    data-marketplace-kt1={marketplaceKt1}
+    data-platform-bps={platformFeeBps}
+    data-treasury={treasury}
+    data-royalty-receiver={royaltyReceiver}
+  >
+    <header class="topbar">
+      <a class="brand" href="/">PointCast</a>
+      <nav class="nav mono" aria-label="Marketplace">
+        <a href="/market">Live asks</a>
+        <a href="/nouns-cards-v3">Nouns</a>
+        <a href="/collect">Collect</a>
+      </nav>
+      <WalletConnect />
+    </header>
+
+    <section class="hero" aria-labelledby="marketplace-title">
+      <div class="hero__copy">
+        <p class="kicker mono">Tezos marketplace · royalties · referrals · trades</p>
+        <h1 id="marketplace-title">Buy, sell, trade, and share PointCast collectibles.</h1>
+        <p class="dek">
+          The live contract handles fixed-price asks today. This console adds
+          the marketplace layer around it: royalty math, PointCast treasury
+          yield, referral links, trade tickets, and shareable collection lanes.
+        </p>
+        <div class="hero__actions mono">
+          <a class="button button--dark" href="/market">Open buy / sell floor</a>
+          <button class="button" type="button" id="copy-market-link">Share marketplace</button>
+        </div>
+      </div>
+
+      <aside class="contract-card" aria-label="Marketplace contract status">
+        <div class="contract-card__head">
+          <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+          <span class="mono" id="contract-status">checking live contract</span>
+        </div>
+        <dl>
+          <div>
+            <dt>Contract</dt>
+            <dd>
+              {marketplaceLive ? (
+                <a href={`https://tzkt.io/${marketplaceKt1}`} target="_blank" rel="noopener">{short(marketplaceKt1)}</a>
+              ) : (
+                'pending'
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>PointCast fee</dt>
+            <dd>{platformFeeBps / 100}%</dd>
+          </div>
+          <div>
+            <dt>Treasury</dt>
+            <dd><a href={`https://tzkt.io/${treasury}`} target="_blank" rel="noopener">{short(treasury)}</a></dd>
+          </div>
+          <div>
+            <dt>Originator royalty</dt>
+            <dd><a href={`https://tzkt.io/${royaltyReceiver}`} target="_blank" rel="noopener">{short(royaltyReceiver)}</a></dd>
+          </div>
+        </dl>
+      </aside>
+    </section>
+
+    <section class="panel live-panel" aria-labelledby="live-title">
+      <div class="panel__head">
+        <div>
+          <p class="kicker mono">live floor</p>
+          <h2 id="live-title">Open asks</h2>
+        </div>
+        <a class="text-link mono" href="/market">manage listings →</a>
+      </div>
+      <ul class="asks" id="marketplace-asks" role="list">
+        <li class="empty mono">loading TzKT asks…</li>
+      </ul>
+    </section>
+
+    <section class="split">
+      <div class="panel" aria-labelledby="split-title">
+        <div class="panel__head">
+          <div>
+            <p class="kicker mono">sale yield</p>
+            <h2 id="split-title">Royalty + referral calculator</h2>
+          </div>
+        </div>
+        <form class="calc" id="fee-calc" action="javascript:void(0)">
+          <label>
+            <span class="mono">sale price (ꜩ)</span>
+            <input type="number" min="0" step="0.000001" value="10" id="calc-price" />
+          </label>
+          <label>
+            <span class="mono">originator royalty</span>
+            <input type="number" min="0" max="50" step="0.25" value="7.5" id="calc-royalty" />
+          </label>
+          <label>
+            <span class="mono">referral yield</span>
+            <input type="number" min="0" max="25" step="0.25" value="2" id="calc-referral" />
+          </label>
+        </form>
+        <dl class="splits" id="split-output">
+          <div><dt>Seller</dt><dd id="split-seller">—</dd></div>
+          <div><dt>PointCast</dt><dd id="split-platform">—</dd></div>
+          <div><dt>Originator</dt><dd id="split-royalty">—</dd></div>
+          <div><dt>Referral</dt><dd id="split-referral">—</dd></div>
+        </dl>
+        <p class="fineprint mono">
+          Today: buy, sell, platform fee, and royalty split are on-chain. Referral yield and trade tickets are saved as shareable marketplace intent for the v3 settlement contract.
+        </p>
+      </div>
+
+      <div class="panel" aria-labelledby="ref-title">
+        <div class="panel__head">
+          <div>
+            <p class="kicker mono">share rail</p>
+            <h2 id="ref-title">Referral link</h2>
+          </div>
+        </div>
+        <form class="ref-form" id="ref-form" action="javascript:void(0)">
+          <label>
+            <span class="mono">referrer wallet</span>
+            <input type="text" id="ref-wallet" value={treasury} spellcheck="false" />
+          </label>
+          <label>
+            <span class="mono">collection or ask</span>
+            <select id="ref-target">
+              <option value="/marketplace">Marketplace</option>
+              <option value="/market">Live asks</option>
+              <option value="/nouns-cards-v3">Visit Nouns</option>
+              <option value="/coffee">Coffee Mugs</option>
+            </select>
+          </label>
+          <button class="button button--dark mono" type="submit">Create share link</button>
+        </form>
+        <output class="share-output mono" id="share-output">ready</output>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="collections-title">
+      <div class="panel__head">
+        <div>
+          <p class="kicker mono">collections</p>
+          <h2 id="collections-title">Minted lanes</h2>
+        </div>
+      </div>
+      <div class="collections">
+        {collections.map((collection) => (
+          <article class="collection-card">
+            <img src={collection.art} alt={`${collection.name} marketplace preview`} loading="lazy" />
+            <div>
+              <p class="mono">{collection.symbol} · royalty default {collection.royalty / 100}%</p>
+              <h3>{collection.name}</h3>
+              <a class="text-link mono" href={`/market?collection=${collection.kt1}`}>list / buy →</a>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="panel trade-panel" aria-labelledby="trade-title">
+      <div class="panel__head">
+        <div>
+          <p class="kicker mono">trade desk</p>
+          <h2 id="trade-title">Create a trade ticket</h2>
+        </div>
+      </div>
+      <form class="trade-form" id="trade-form" action="javascript:void(0)">
+        <label>
+          <span class="mono">your wallet</span>
+          <input type="text" id="trade-wallet" value={treasury} spellcheck="false" />
+        </label>
+        <label>
+          <span class="mono">offering</span>
+          <input type="text" id="trade-offer" placeholder="PCVN #557 + 3 tez" />
+        </label>
+        <label>
+          <span class="mono">looking for</span>
+          <input type="text" id="trade-want" placeholder="Coffee Mug #0 or another Noun" />
+        </label>
+        <button class="button button--dark mono" type="submit">Save trade ticket</button>
+      </form>
+      <ul class="tickets" id="trade-tickets" role="list"></ul>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .marketplace {
+    --ink: #161616;
+    --paper: #f6f1e7;
+    --muted: #68625a;
+    --rule: rgba(22, 22, 22, 0.16);
+    --red: #d34836;
+    --green: #387b61;
+    --blue: #2466a8;
+    --gold: #b88722;
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 14px 18px 96px;
+    background:
+      linear-gradient(90deg, rgba(22,22,22,0.035) 1px, transparent 1px),
+      linear-gradient(180deg, #faf8f3 0%, var(--paper) 60%, #ece6d8 100%);
+    background-size: 34px 34px, auto;
+  }
+  .mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); letter-spacing: 0.12em; text-transform: uppercase; }
+  .topbar {
+    max-width: 1180px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 12px;
+  }
+  .brand {
+    color: var(--ink);
+    font: 800 15px/1 var(--font-mono, monospace);
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .nav { margin-left: auto; display: flex; gap: 12px; flex-wrap: wrap; font-size: 10px; }
+  .nav a, .text-link, .contract-card a { color: var(--blue); text-decoration: none; }
+  .hero, .panel, .split {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
+    gap: 18px;
+    align-items: stretch;
+    padding: 28px 0 18px;
+  }
+  .hero__copy {
+    min-height: 330px;
+    padding: clamp(22px, 4vw, 44px);
+    border: 2px solid var(--ink);
+    background:
+      radial-gradient(circle at 18% 22%, rgba(211,72,54,0.20) 0 8%, transparent 8.5%),
+      linear-gradient(135deg, rgba(36,102,168,0.14), transparent 36%),
+      #fffdf8;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero__copy::after {
+    content: "";
+    position: absolute;
+    inset: auto -30px -52px auto;
+    width: 300px;
+    height: 180px;
+    background:
+      linear-gradient(90deg, var(--red) 0 18%, transparent 18% 24%, var(--gold) 24% 44%, transparent 44% 52%, var(--blue) 52% 72%, transparent 72% 80%, var(--green) 80%);
+    transform: rotate(-8deg);
+    opacity: 0.35;
+  }
+  .kicker {
+    color: var(--muted);
+    font-size: 10px;
+    margin: 0 0 12px;
+  }
+  h1 {
+    max-width: 860px;
+    margin: 0;
+    font-size: clamp(44px, 8vw, 104px);
+    line-height: 0.9;
+    letter-spacing: 0;
+  }
+  .dek {
+    max-width: 720px;
+    margin: 18px 0 0;
+    color: #332f2a;
+    font-size: clamp(16px, 2vw, 21px);
+    line-height: 1.35;
+  }
+  .hero__actions {
+    margin-top: 24px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+  .button {
+    appearance: none;
+    border: 2px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    min-height: 42px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 10px;
+  }
+  .button--dark { background: var(--ink); color: #fff; }
+  .contract-card, .panel {
+    border: 2px solid var(--ink);
+    background: rgba(255, 253, 248, 0.94);
+    box-shadow: 8px 8px 0 rgba(22,22,22,0.08);
+  }
+  .contract-card { padding: 18px; }
+  .contract-card__head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+    font-size: 10px;
+  }
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--ink);
+    background: var(--gold);
+    display: inline-block;
+  }
+  .status-dot[data-live="true"] { background: var(--green); }
+  dl { margin: 0; }
+  .contract-card dl, .splits {
+    display: grid;
+    gap: 12px;
+  }
+  dt {
+    color: var(--muted);
+    font: 700 10px/1.1 var(--font-mono, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  dd { margin: 4px 0 0; font-weight: 750; overflow-wrap: anywhere; }
+  .panel {
+    padding: 18px;
+    margin-top: 18px;
+  }
+  .panel__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 12px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+  }
+  h2 { margin: 0; font-size: clamp(26px, 4vw, 48px); line-height: 0.95; letter-spacing: 0; }
+  .asks, .tickets {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 10px;
+  }
+  .ask-card, .ticket-card {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    border: 1px solid var(--rule);
+    background: #fff;
+    padding: 10px;
+  }
+  .ask-card img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+    background: #ece6d8;
+  }
+  .ask-card h3, .collection-card h3 { margin: 2px 0 4px; font-size: 20px; line-height: 1; letter-spacing: 0; }
+  .ask-card p, .collection-card p, .fineprint, .share-output { margin: 0; color: var(--muted); font-size: 10px; }
+  .empty {
+    color: var(--muted);
+    border: 1px dashed var(--rule);
+    padding: 18px;
+    background: rgba(255,255,255,0.7);
+    font-size: 10px;
+  }
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .calc, .ref-form, .trade-form {
+    display: grid;
+    gap: 12px;
+  }
+  label { display: grid; gap: 6px; }
+  label span { color: var(--muted); font-size: 10px; }
+  input, select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    padding: 0 10px;
+    font: 700 15px/1.2 var(--font-sans, system-ui, sans-serif);
+  }
+  .splits {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 16px;
+  }
+  .splits div {
+    border: 1px solid var(--rule);
+    padding: 10px;
+    background: #fff;
+  }
+  .share-output {
+    display: block;
+    margin-top: 12px;
+    border: 1px solid var(--rule);
+    background: #fff;
+    padding: 10px;
+    overflow-wrap: anywhere;
+  }
+  .collections {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .collection-card {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    border: 1px solid var(--rule);
+    background: #fff;
+    padding: 10px;
+  }
+  .collection-card img {
+    width: 112px;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+    background: #f3eee4;
+  }
+  .trade-form {
+    grid-template-columns: 1.1fr 1fr 1fr auto;
+    align-items: end;
+  }
+  .ticket-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-top: 10px;
+  }
+  @media (max-width: 820px) {
+    .marketplace { padding-inline: 12px; }
+    .topbar { align-items: start; flex-wrap: wrap; }
+    .nav { order: 3; width: 100%; margin-left: 0; }
+    .hero, .split, .trade-form { grid-template-columns: 1fr; }
+    h1 { font-size: clamp(42px, 16vw, 72px); }
+    .splits { grid-template-columns: 1fr 1fr; }
+    .ask-card { grid-template-columns: 56px minmax(0, 1fr); }
+    .ask-card img { width: 56px; height: 56px; }
+    .ask-card .button { grid-column: 1 / -1; }
+  }
+</style>
+
+<script>
+  const root = document.querySelector('.marketplace');
+  const marketplaceKt1 = root?.getAttribute('data-marketplace-kt1') || '';
+  const platformBps = Number(root?.getAttribute('data-platform-bps') || '250');
+  const treasury = root?.getAttribute('data-treasury') || '';
+  const royaltyReceiver = root?.getAttribute('data-royalty-receiver') || treasury;
+
+  const xtz = (value) => `${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })} ꜩ`;
+  const short = (value) => value ? `${value.slice(0, 7)}…${value.slice(-5)}` : 'pending';
+  const storageUrl = (kt1) => `https://api.tzkt.io/v1/contracts/${kt1}/storage`;
+
+  function assetForAsk(ask) {
+    const tokenId = ask.token_id ?? ask.tokenId ?? 0;
+    const fa2 = String(ask.fa2_contract || ask.fa2 || '').toLowerCase();
+    const visitNouns = 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh'.toLowerCase();
+    const mugs = 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt'.toLowerCase();
+    const mugSlugs = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+    if (fa2 === visitNouns) return `/api/tezos-token-card/${tokenId}.svg`;
+    if (fa2 === mugs) return `/images/coffee-mugs/${mugSlugs[Number(tokenId)] || 'ceramic'}.svg`;
+    return '/images/og/og-home-v2.png';
+  }
+
+  function collectionName(fa2) {
+    const lower = String(fa2 || '').toLowerCase();
+    if (lower === 'kt1lp1otbuudrubayqderh7i7mswazvdohxh') return 'Visit Nouns';
+    if (lower === 'kt1jq3ajzfvmnjz9mgqrm13aj8lqbX9jpoxt'.toLowerCase()) return 'Coffee Mugs';
+    return 'PointCast NFT';
+  }
+
+  async function loadAsks() {
+    const list = document.getElementById('marketplace-asks');
+    const status = document.getElementById('contract-status');
+    const dot = document.getElementById('status-dot');
+    if (!list || !status || !dot) return;
+    if (!marketplaceKt1.startsWith('KT1')) {
+      status.textContent = 'marketplace contract pending';
+      list.innerHTML = '<li class="empty mono">contract pending · deploy from /admin/deploy</li>';
+      return;
+    }
+    try {
+      const storage = await fetch(storageUrl(marketplaceKt1)).then((r) => r.json());
+      dot.setAttribute('data-live', String(!storage.paused));
+      status.textContent = storage.paused ? 'contract paused' : `live · next ask ${storage.next_ask_id}`;
+      const asksBigmap = storage.asks;
+      const keys = await fetch(`https://api.tzkt.io/v1/bigmaps/${asksBigmap}/keys?active=true&limit=12&sort.desc=id`).then((r) => r.json());
+      if (!Array.isArray(keys) || keys.length === 0) {
+        list.innerHTML = '<li class="empty mono">no open asks yet · list the first token on /market</li>';
+        return;
+      }
+      list.innerHTML = keys.map((item) => {
+        const ask = item.value || {};
+        const askId = item.key ?? item.id;
+        const price = Number(ask.amount_mutez || 0) / 1_000_000;
+        const tokenId = ask.token_id ?? 0;
+        const name = collectionName(ask.fa2_contract);
+        return `
+          <li class="ask-card">
+            <img src="${assetForAsk(ask)}" alt="${name} #${tokenId}" loading="lazy" />
+            <div>
+              <p class="mono">${name} · ask ${askId} · seller ${short(String(ask.seller || ''))}</p>
+              <h3>${name} #${tokenId}</h3>
+              <p class="mono">${xtz(price)} · royalty ${(Number(ask.royalty_bps || 0) / 100).toFixed(2)}%</p>
+            </div>
+            <a class="button button--dark mono" href="/market#ask-${askId}">Buy / inspect</a>
+          </li>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error(err);
+      status.textContent = 'status unavailable';
+      list.innerHTML = '<li class="empty mono">could not load TzKT asks · open /market directly</li>';
+    }
+  }
+
+  function updateCalc() {
+    const price = Number(document.getElementById('calc-price')?.value || 0);
+    const royaltyPct = Number(document.getElementById('calc-royalty')?.value || 0);
+    const referralPct = Number(document.getElementById('calc-referral')?.value || 0);
+    const platform = price * (platformBps / 10_000);
+    const royalty = price * (royaltyPct / 100);
+    const referral = price * (referralPct / 100);
+    const seller = Math.max(0, price - platform - royalty - referral);
+    document.getElementById('split-seller').textContent = xtz(seller);
+    document.getElementById('split-platform').textContent = `${xtz(platform)} → ${short(treasury)}`;
+    document.getElementById('split-royalty').textContent = `${xtz(royalty)} → ${short(royaltyReceiver)}`;
+    document.getElementById('split-referral').textContent = xtz(referral);
+  }
+
+  function copyText(text, target) {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    if (target) target.textContent = text;
+  }
+
+  function loadTickets() {
+    const ul = document.getElementById('trade-tickets');
+    if (!ul) return;
+    const tickets = JSON.parse(localStorage.getItem('pc:marketplace:tickets:v1') || '[]');
+    ul.innerHTML = tickets.length
+      ? tickets.map((ticket) => `
+        <li class="ticket-card">
+          <div>
+            <p class="mono">${short(ticket.wallet)} · ${new Date(ticket.createdAt).toLocaleDateString()}</p>
+            <strong>Offering ${ticket.offer || 'open offer'} for ${ticket.want || 'best PointCast trade'}</strong>
+          </div>
+          <button class="button mono" type="button" data-ticket-share="${ticket.id}">Share</button>
+        </li>
+      `).join('')
+      : '<li class="empty mono">no local trade tickets yet</li>';
+    ul.querySelectorAll('[data-ticket-share]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const ticket = tickets.find((item) => item.id === button.getAttribute('data-ticket-share'));
+        if (!ticket) return;
+        const url = `${location.origin}/marketplace?ticket=${encodeURIComponent(ticket.id)}&offer=${encodeURIComponent(ticket.offer)}&want=${encodeURIComponent(ticket.want)}`;
+        copyText(url, document.getElementById('share-output'));
+      });
+    });
+  }
+
+  document.getElementById('fee-calc')?.addEventListener('input', updateCalc);
+  document.getElementById('copy-market-link')?.addEventListener('click', () => {
+    copyText(`${location.origin}/marketplace`, document.getElementById('share-output'));
+  });
+  document.getElementById('ref-form')?.addEventListener('submit', () => {
+    const wallet = document.getElementById('ref-wallet')?.value || treasury;
+    const target = document.getElementById('ref-target')?.value || '/marketplace';
+    const link = `${location.origin}${target}?ref=${encodeURIComponent(wallet)}`;
+    copyText(link, document.getElementById('share-output'));
+  });
+  document.getElementById('trade-form')?.addEventListener('submit', () => {
+    const tickets = JSON.parse(localStorage.getItem('pc:marketplace:tickets:v1') || '[]');
+    tickets.unshift({
+      id: `pc-trade-${Date.now().toString(36)}`,
+      wallet: document.getElementById('trade-wallet')?.value || treasury,
+      offer: document.getElementById('trade-offer')?.value || '',
+      want: document.getElementById('trade-want')?.value || '',
+      createdAt: new Date().toISOString(),
+    });
+    localStorage.setItem('pc:marketplace:tickets:v1', JSON.stringify(tickets.slice(0, 12)));
+    document.getElementById('trade-offer').value = '';
+    document.getElementById('trade-want').value = '';
+    loadTickets();
+  });
+
+  updateCalc();
+  loadTickets();
+  loadAsks();
+</script>
