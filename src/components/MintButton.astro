@@ -123,6 +123,24 @@ const displayLabel = label ?? (kind === 'faucet' ? 'Claim →' : priceMutez > 0 
         await op.confirmation?.();
         setStatus(`✓ done — <a href="https://tzkt.io/${op.opHash}" target="_blank" rel="noopener">tzkt</a>`);
         label.textContent = kind === 'faucet' ? 'Claimed ✓' : 'Minted ✓';
+
+        try {
+          const key = 'pc:mint-receipts:v1';
+          const existing = JSON.parse(localStorage.getItem(key) || '[]');
+          const receipt = {
+            contract,
+            tokenId,
+            priceMutez,
+            kind,
+            opHash: op.opHash,
+            mintedAt: new Date().toISOString(),
+            wallet: addr,
+            network: 'mainnet',
+          };
+          const next = [receipt, ...existing.filter((item: any) => !(item.contract === contract && item.tokenId === tokenId && item.opHash === op.opHash))].slice(0, 200);
+          localStorage.setItem(key, JSON.stringify(next));
+          window.dispatchEvent(new CustomEvent('pc:mint-receipt', { detail: receipt }));
+        } catch {}
       } catch (err: any) {
         const msg = err?.message || err?.errorType || String(err);
         if (/reject|cancel|abort/i.test(msg)) {
