@@ -311,6 +311,11 @@ def mock_fa2_module():
 
     class MockFA2(sp.Contract):
         def __init__(self):
+            # Mock FA2 must declare the SAME layout the marketplace expects
+            # via sp.contract(...) — without these .layout() calls the inner
+            # record defaults to alphabetical (amount, to_, token_id), which
+            # makes sp.contract return None and fulfill_ask fails with
+            # INVALID_FA2_CONTRACT (caught in Test 4).
             self.data.last_transfer = sp.cast(
                 None,
                 sp.option[
@@ -322,9 +327,9 @@ def mock_fa2_module():
                                     to_=sp.address,
                                     token_id=sp.nat,
                                     amount=sp.nat,
-                                )
+                                ).layout(("to_", ("token_id", "amount")))
                             ],
-                        )
+                        ).layout(("from_", "txs"))
                     ]
                 ],
             )
