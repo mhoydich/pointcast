@@ -118,6 +118,7 @@ export const GET: APIRoute = async () => {
         drum: 'https://pointcast.xyz/drum',
         drumV2: 'https://pointcast.xyz/drum-v2',
         drumV3: 'https://pointcast.xyz/drum-v3',
+        drumV4: 'https://pointcast.xyz/drum-v4',
         drumApr26: 'https://pointcast.xyz/drum-apr26',
         agentDerby: 'https://pointcast.xyz/agent-derby',
         battle: 'https://pointcast.xyz/battle',
