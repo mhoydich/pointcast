@@ -86,6 +86,15 @@
             fit: "PointCast can produce public local channels, digital posters, explainers, and workshops with clear community benefit.",
             next: "Make a reusable city/culture version of the packet after the AI and protocol pass.",
             url: "https://pointcast.xyz/"
+        },
+        {
+            name: "PointCast Reward Pools",
+            priority: "P1",
+            tags: ["crypto", "creator", "public-goods"],
+            ask: "Grant-funded task pools paid in tokens for collecting, room participation, feedback, testing, and remix work.",
+            fit: "This is the clearest v2 proof loop: grants buy visible ecosystem activity, participants earn token credit, and PointCast publishes the receipts.",
+            next: "Use /rewards/ as the public task board and attach its milestones to Tezos, Ethereum, Solana, Zora, and AI grant requests.",
+            url: "https://pointcast.xyz/rewards/"
         }
     ];
 
