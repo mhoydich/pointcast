@@ -1,0 +1,1151 @@
+---
+/**
+ * /drum-v8 — The Symphony.
+ *
+ * Per Mike: "yah tho like an orchestra with horns, drums, flute,
+ * clarinet, tuba, triangle, xylophone, a giant one"
+ *
+ * 42 instruments arranged in 6 orchestral sections × 7 voicings each.
+ * Every Noun is a distinct timbre — strings get a sawtooth-through-
+ * lowpass body, brass get a buzzy bandpass formant, woodwinds get a
+ * sine + breath-noise blend, mallets get a pitched triangle with
+ * inharmonic shimmer, etc.
+ *
+ * Real-time over the DrumRoom Durable Object (now that Cloudflare paid
+ * tier is on); falls back to /api/sounds polling if WebSocket fails.
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+// Six sections × seven voicings = 42 instruments. The `family` field
+// drives synth recipe selection; `pitch` is the fundamental in Hz
+// (standard A4=440 reference); `decay` is envelope tail in seconds.
+const SYMPHONY = [
+  // ════ STRINGS ════ — sawtooth + lowpass + slow attack
+  { key: 'violin1',    label: 'Violin I',    nounId:  11, family: 'string', pitch: 659, decay: 1.4, accent: '#dc2626' }, // E5
+  { key: 'violin2',    label: 'Violin II',   nounId:  73, family: 'string', pitch: 587, decay: 1.4, accent: '#ef4444' }, // D5
+  { key: 'viola',      label: 'Viola',       nounId: 145, family: 'string', pitch: 440, decay: 1.5, accent: '#f87171' }, // A4
+  { key: 'cello',      label: 'Cello',       nounId: 217, family: 'string', pitch: 220, decay: 1.6, accent: '#fb7185' }, // A3
+  { key: 'doublebass', label: 'Double Bass', nounId: 289, family: 'string', pitch: 110, decay: 1.7, accent: '#e11d48' }, // A2
+  { key: 'harp',       label: 'Harp',        nounId: 361, family: 'harp',   pitch: 523, decay: 2.4, accent: '#be123c' }, // C5 plucked
+  { key: 'pizz',       label: 'Pizzicato',   nounId: 433, family: 'pizz',   pitch: 392, decay: 0.4, accent: '#9f1239' }, // G4 plucked
+
+  // ════ WOODWINDS ════ — sine + breath noise + soft bandpass
+  { key: 'piccolo',    label: 'Piccolo',     nounId:  22, family: 'wind',   pitch: 1047, decay: 1.0, accent: '#f59e0b' }, // C6
+  { key: 'flute',      label: 'Flute',       nounId:  84, family: 'wind',   pitch: 784,  decay: 1.1, accent: '#fbbf24' }, // G5
+  { key: 'oboe',       label: 'Oboe',        nounId: 156, family: 'reed',   pitch: 587,  decay: 1.0, accent: '#fcd34d' }, // D5 reedy
+  { key: 'clarinet',   label: 'Clarinet',    nounId: 228, family: 'reed',   pitch: 392,  decay: 1.2, accent: '#facc15' }, // G4 reedy
+  { key: 'bassclar',   label: 'Bass Clar.',  nounId: 300, family: 'reed',   pitch: 196,  decay: 1.4, accent: '#eab308' }, // G3 reedy
+  { key: 'bassoon',    label: 'Bassoon',     nounId: 372, family: 'reed',   pitch: 147,  decay: 1.5, accent: '#ca8a04' }, // D3 reedy
+  { key: 'engl-horn',  label: 'English Horn',nounId: 444, family: 'reed',   pitch: 330,  decay: 1.2, accent: '#a16207' }, // E4 reedy
+
+  // ════ BRASS ════ — sawtooth + bandpass formant + medium attack
+  { key: 'trumpet',    label: 'Trumpet',     nounId:  33, family: 'brass',  pitch: 523, decay: 1.0, accent: '#84cc16' }, // C5
+  { key: 'cornet',     label: 'Cornet',      nounId:  95, family: 'brass',  pitch: 587, decay: 1.0, accent: '#a3e635' }, // D5
+  { key: 'french-horn',label: 'French Horn', nounId: 167, family: 'horn',   pitch: 392, decay: 1.4, accent: '#bef264' }, // G4 mellow
+  { key: 'trombone',   label: 'Trombone',    nounId: 239, family: 'brass',  pitch: 220, decay: 1.3, accent: '#65a30d' }, // A3
+  { key: 'basstromb',  label: 'Bass Tromb.', nounId: 311, family: 'brass',  pitch: 165, decay: 1.4, accent: '#4d7c0f' }, // E3
+  { key: 'tuba',       label: 'Tuba',        nounId: 383, family: 'brass',  pitch:  87, decay: 1.6, accent: '#3f6212' }, // F2
+  { key: 'sousaphone', label: 'Sousaphone',  nounId: 455, family: 'brass',  pitch:  73, decay: 1.7, accent: '#365314' }, // D2
+
+  // ════ PERCUSSION ════ — noise + tone with pitch drop
+  { key: 'timpani',    label: 'Timpani',     nounId:  44, family: 'timp',   pitch: 110, decay: 0.9, accent: '#10b981' }, // A2 tuned
+  { key: 'bassdrum',   label: 'Bass Drum',   nounId: 106, family: 'kick',   pitch:  60, decay: 0.5, accent: '#14b8a6' },
+  { key: 'snare',      label: 'Snare',       nounId: 178, family: 'snare',  pitch: 200, decay: 0.18, accent: '#2dd4bf' },
+  { key: 'tom',        label: 'Tom',         nounId: 250, family: 'tom',    pitch: 180, decay: 0.4, accent: '#5eead4' },
+  { key: 'tambourine', label: 'Tambourine',  nounId: 322, family: 'tamb',   pitch:   0, decay: 0.25, accent: '#99f6e4' },
+  { key: 'cymbal',     label: 'Cymbal',      nounId: 394, family: 'cymbal', pitch:   0, decay: 1.2, accent: '#0d9488' },
+  { key: 'gong',       label: 'Gong',        nounId: 466, family: 'gong',   pitch:  80, decay: 2.6, accent: '#0f766e' },
+
+  // ════ MALLET ════ — pitched percussion with quick bright decay
+  { key: 'xylophone',  label: 'Xylophone',   nounId:  55, family: 'xylo',   pitch: 880, decay: 0.4, accent: '#3b82f6' },
+  { key: 'marimba',    label: 'Marimba',     nounId: 117, family: 'marimba',pitch: 392, decay: 0.7, accent: '#6366f1' },
+  { key: 'glock',      label: 'Glockenspiel',nounId: 189, family: 'glock',  pitch:1568, decay: 0.6, accent: '#8b5cf6' }, // G6
+  { key: 'vibes',      label: 'Vibraphone',  nounId: 261, family: 'vibes',  pitch: 523, decay: 1.2, accent: '#a855f7' },
+  { key: 'tubularbell',label: 'Tubular Bell',nounId: 333, family: 'tubular',pitch: 659, decay: 2.0, accent: '#c026d3' },
+  { key: 'triangle',   label: 'Triangle',    nounId: 405, family: 'triangle',pitch: 2349, decay: 1.6, accent: '#d946ef' },
+  { key: 'woodblock',  label: 'Wood Block',  nounId: 477, family: 'wood',   pitch: 880, decay: 0.06, accent: '#e879f9' },
+
+  // ════ VOICE ════ — vowel-formant choir voices (matches v6 architecture)
+  { key: 'soprano-c',  label: 'Soprano',     nounId:  66, family: 'voice',  pitch: 523, decay: 1.6, accent: '#ec4899' }, // C5 AH
+  { key: 'mezzo',      label: 'Mezzo',       nounId: 128, family: 'voice',  pitch: 392, decay: 1.6, accent: '#f472b6' }, // G4 EE
+  { key: 'alto',       label: 'Alto',        nounId: 200, family: 'voice',  pitch: 330, decay: 1.6, accent: '#f9a8d4' }, // E4 OH
+  { key: 'tenor',      label: 'Tenor',       nounId: 272, family: 'voice',  pitch: 262, decay: 1.7, accent: '#fbcfe8' }, // C4 AH
+  { key: 'baritone',   label: 'Baritone',    nounId: 344, family: 'voice',  pitch: 196, decay: 1.7, accent: '#fb7185' }, // G3 OH
+  { key: 'bass-voice', label: 'Bass',        nounId: 416, family: 'voice',  pitch: 131, decay: 1.8, accent: '#f43f5e' }, // C3 OOH
+  { key: 'whistle',    label: 'Whistle',     nounId: 488, family: 'whistle',pitch: 1976,decay: 0.8, accent: '#e11d48' }, // B6 pure tone
+] as const;
+
+const SECTIONS = [
+  { id: 'string',     label: 'Strings',     emoji: '🎻', color: '#dc2626' },
+  { id: 'wind',       label: 'Woodwinds',   emoji: '🎼', color: '#f59e0b' },
+  { id: 'brass',      label: 'Brass',       emoji: '🎺', color: '#84cc16' },
+  { id: 'percussion', label: 'Percussion',  emoji: '🥁', color: '#10b981' },
+  { id: 'mallet',     label: 'Mallets',     emoji: '🎵', color: '#3b82f6' },
+  { id: 'voice',      label: 'Voice',       emoji: '🎤', color: '#ec4899' },
+] as const;
+
+// Map family → which UI section header it appears under
+const FAMILY_TO_SECTION: Record<string, string> = {
+  string: 'string', harp: 'string', pizz: 'string',
+  wind: 'wind', reed: 'wind',
+  brass: 'brass', horn: 'brass',
+  timp: 'percussion', kick: 'percussion', snare: 'percussion',
+  tom: 'percussion', tamb: 'percussion', cymbal: 'percussion', gong: 'percussion',
+  xylo: 'mallet', marimba: 'mallet', glock: 'mallet', vibes: 'mallet',
+  tubular: 'mallet', triangle: 'mallet', wood: 'mallet',
+  voice: 'voice', whistle: 'voice',
+};
+---
+
+<DrumLayout
+  title="Drum Room v8 · The Symphony"
+  description="A 42-piece classical orchestra of Nouns. Strings, woodwinds, brass, percussion, mallets, voice. Tap any seat to play, hit auto for an algorithmic symphony."
+  image="/images/og-drum.png"
+>
+
+<div class="v8-root">
+
+  <DrumNav current="v8" />
+
+  <header class="v8-hero">
+    <p class="v8-hero-eyebrow">v8 · the symphony · 42 nouns</p>
+    <h1 class="v8-hero-title">a giant orchestra of nouns</h1>
+    <p class="v8-hero-dek">
+      forty-two seats across six sections — strings, woodwinds, brass,
+      percussion, mallets, voice. tap any noun to play their instrument.
+      hit auto and the conductor walks an algorithmic symphony. real-time
+      over websocket — others hear you in tens of milliseconds.
+    </p>
+  </header>
+
+  <!-- ══ HUD ══ -->
+  <div class="v8-hud">
+    <div class="v8-hud-card">
+      <div class="v8-hud-label">Seats</div>
+      <div class="v8-hud-val"><span id="v8-played">0</span> / 42</div>
+      <div class="v8-hud-sub">tap to claim</div>
+    </div>
+    <div class="v8-hud-card v8-hud-mode" id="v8-mode-card">
+      <div class="v8-hud-label">Mode</div>
+      <div class="v8-hud-val" id="v8-mode-label">manual</div>
+      <div class="v8-hud-sub">click any seat · or hit auto</div>
+    </div>
+    <div class="v8-hud-card v8-hud-jammers">
+      <div class="v8-hud-label">Players</div>
+      <div class="v8-hud-val" id="v8-jammers">1</div>
+      <div class="v8-hud-sub">live in the hall</div>
+    </div>
+    <div class="v8-hud-card v8-hud-stream">
+      <div class="v8-hud-label">Stream</div>
+      <div class="v8-hud-val" id="v8-stream-mode">connecting…</div>
+      <div class="v8-hud-sub" id="v8-stream-sub">resolving transport</div>
+    </div>
+  </div>
+
+  <!-- ══ AUTO-PLAY — symphonic patterns ══ -->
+  <section class="v8-auto" aria-label="Conductor controls">
+    <div class="v8-auto-row">
+      <button id="v8-auto-btn" class="v8-auto-btn" aria-pressed="false">
+        <span id="v8-auto-icon">▶</span>
+        <span id="v8-auto-label">Conduct</span>
+      </button>
+      <input type="range" id="v8-auto-bpm" class="v8-auto-bpm" min="60" max="160" value="96" step="1" />
+      <span class="v8-auto-bpm-val"><span id="v8-bpm-val">96</span> bpm</span>
+      <select id="v8-auto-mvt" class="v8-auto-mvt">
+        <option value="overture">i. overture · grand opening</option>
+        <option value="adagio">ii. adagio · slow lyrical</option>
+        <option value="allegro">iii. allegro · fast joyful</option>
+        <option value="finale">iv. finale · all sections</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- ══ THE STAGE — 6 sections × 7 seats ══ -->
+  <section class="v8-stage" aria-label="Orchestra stage">
+    {SECTIONS.map((section) => (
+      <div class="v8-row" data-section={section.id} style={`--section: ${section.color}`}>
+        <div class="v8-row-label">
+          <span class="v8-row-emoji" aria-hidden="true">{section.emoji}</span>
+          <span class="v8-row-name">{section.label}</span>
+        </div>
+        <div class="v8-row-seats">
+          {SYMPHONY.filter((c) => FAMILY_TO_SECTION[c.family] === section.id).map((seat) => (
+            <button
+              type="button"
+              class="v8-seat"
+              data-seat={seat.key}
+              data-noun={String(seat.nounId)}
+              data-family={seat.family}
+              data-pitch={String(seat.pitch)}
+              data-decay={String(seat.decay)}
+              aria-label={seat.label}
+              style={`--accent: ${seat.accent}`}
+            >
+              <div class="v8-seat-card">
+                <img
+                  class="v8-seat-img"
+                  src={`https://noun.pics/${seat.nounId}.svg`}
+                  alt={seat.label}
+                  width="64"
+                  height="64"
+                  loading="lazy"
+                  style="image-rendering: pixelated;"
+                />
+              </div>
+              <div class="v8-seat-name">{seat.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+  </section>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="v8-footer">
+    <span>⌐◨-◨ PointCast · Drum Room · v8 the symphony</span>
+    <span>Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026</span>
+  </footer>
+
+</div>
+
+<style is:global>
+  /* /drum-v8 — global because dynamic seats inherit styles. v8-* prefix. */
+
+  .v8-root {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    font-family: var(--pc-font-mono);
+  }
+
+  /* Hero */
+  .v8-hero {
+    padding: 14px 0 18px;
+    border-bottom: 1.5px solid var(--pc-rule);
+    margin-bottom: 16px;
+  }
+  .v8-hero-eyebrow {
+    font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: #8b5cf6; margin-bottom: 6px; font-weight: 600;
+  }
+  .v8-hero-title {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(1.6rem, 5vw, 2.7rem);
+    font-weight: 500; color: var(--pc-ink);
+    margin: 0 0 6px; letter-spacing: -0.01em; line-height: 1.05;
+  }
+  .v8-hero-dek {
+    font-family: var(--pc-font-sans);
+    font-size: 13px; color: var(--pc-ink-soft);
+    line-height: 1.5; margin: 0; max-width: 70ch;
+  }
+
+  /* HUD */
+  .v8-hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 540px) { .v8-hud { grid-template-columns: repeat(2, 1fr); } }
+  .v8-hud-card {
+    padding: 10px 12px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 6px;
+    background: #fafaf9;
+  }
+  .v8-hud-label {
+    font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin-bottom: 4px;
+  }
+  .v8-hud-val {
+    font-size: 1.25rem; font-weight: 700; line-height: 1;
+    color: var(--pc-ink); font-variant-numeric: tabular-nums; margin-bottom: 4px;
+  }
+  .v8-hud-sub {
+    font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .v8-hud-mode.is-auto .v8-hud-val { color: #8b5cf6; }
+  .v8-hud-jammers .v8-hud-val { color: #16a34a; }
+  .v8-hud-stream .v8-hud-val.is-ws { color: #16a34a; }
+  .v8-hud-stream .v8-hud-val.is-poll { color: #f59e0b; }
+
+  /* Auto-play */
+  .v8-auto {
+    border: 2px solid var(--pc-ink);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 18px;
+    background: #fafaf9;
+    position: relative;
+    overflow: hidden;
+  }
+  .v8-auto::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #dc2626, #f59e0b, #84cc16, #10b981, #3b82f6, #ec4899);
+  }
+  .v8-auto-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .v8-auto-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 16px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 8px;
+    background: var(--pc-ink); color: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700; cursor: pointer;
+  }
+  .v8-auto-btn:hover { background: #8b5cf6; border-color: #8b5cf6; }
+  .v8-auto-btn[aria-pressed="true"] { background: #8b5cf6; border-color: #8b5cf6; }
+  .v8-auto-bpm { flex: 1; min-width: 140px; }
+  .v8-auto-bpm-val {
+    font-family: var(--pc-font-mono);
+    font-size: 11px; font-weight: 700;
+    color: var(--pc-ink); min-width: 60px;
+    font-variant-numeric: tabular-nums;
+  }
+  .v8-auto-mvt {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    padding: 6px 10px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  /* Stage */
+  .v8-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .v8-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 8px;
+    background: #fafaf9;
+  }
+  .v8-row-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 6px;
+    border-left: 3px solid var(--section, var(--pc-rule));
+  }
+  .v8-row-emoji { font-size: 14px; }
+  .v8-row-name {
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    font-weight: 700; color: var(--pc-ink);
+  }
+  .v8-row-seats {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+  }
+  @media (max-width: 900px) { .v8-row-seats { grid-template-columns: repeat(5, 1fr); } }
+  @media (max-width: 720px) {
+    .v8-row { grid-template-columns: 1fr; }
+    .v8-row-label {
+      flex-direction: row; align-items: center;
+      border-left: 0;
+      border-bottom: 2px solid var(--section, var(--pc-rule));
+      padding-bottom: 4px; padding-left: 0;
+    }
+    .v8-row-seats { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .v8-row-seats { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .v8-seat {
+    background: transparent; border: 0; padding: 0;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: transform 60ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v8-seat:active { transform: scale(0.92); }
+  .v8-seat-card {
+    width: 100%;
+    aspect-ratio: 1;
+    border: 2px solid var(--accent, var(--pc-ink));
+    background: #fff;
+    border-radius: 4px;
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: box-shadow 100ms, transform 60ms;
+  }
+  .v8-seat-img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+  }
+  .v8-seat.firing .v8-seat-card {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent),
+                0 0 14px color-mix(in srgb, var(--accent) 50%, transparent);
+    transform: scale(1.05);
+  }
+  .v8-seat.remote-firing .v8-seat-card {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  .v8-seat-name {
+    font-size: 7px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    text-align: center;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Footer */
+  .v8-footer {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    border-top: 1.5px solid var(--pc-rule);
+    padding-top: 16px;
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-v8 — symphony orchestra client.
+  // ══════════════════════════════════════════════════════════════════
+
+  type SeatMeta = { key: string; nounId: number; family: string; pitch: number; decay: number };
+
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // Audio context
+  let audioCtx: AudioContext | null = null;
+  function getCtx(): AudioContext | null {
+    if (audioCtx) return audioCtx;
+    try {
+      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!Ctx) return null;
+      audioCtx = new Ctx({ latencyHint: 'interactive' });
+    } catch { audioCtx = null; }
+    return audioCtx;
+  }
+  ['pointerdown','keydown','touchstart','scroll'].forEach(e =>
+    document.addEventListener(e as any, () => { const c = getCtx(); if (c?.state === 'suspended') c.resume().catch(() => {}); }, { once: true, passive: true, capture: true }));
+
+  // ══ Synthesis recipes — one per family ═══════════════════════════
+  function noiseBuf(ctx: AudioContext, ms: number) {
+    const sz = Math.floor(ctx.sampleRate * ms / 1000);
+    const buf = ctx.createBuffer(1, sz, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / sz);
+    return buf;
+  }
+  function envG(ctx: AudioContext, attack: number, decay: number, peak: number) {
+    const g = ctx.createGain();
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
+    return g;
+  }
+
+  // ── Strings: bowed sawtooth + lowpass for warm body, slow attack
+  function playString(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.06, decay, 0.32);
+    out.connect(ctx.destination);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.value = pitch * 8;
+    lp.Q.value = 0.7;
+    const o1 = ctx.createOscillator(); o1.type = 'sawtooth';
+    o1.frequency.setValueAtTime(pitch, t);
+    const o2 = ctx.createOscillator(); o2.type = 'sawtooth';
+    o2.frequency.setValueAtTime(pitch * 1.003, t); // detune for chorus
+    o1.connect(lp); o2.connect(lp); lp.connect(out);
+    o1.start(t); o1.stop(t + decay + 0.1);
+    o2.start(t); o2.stop(t + decay + 0.1);
+  }
+
+  // ── Harp: plucked pure tone with soft fall-off, no attack
+  function playHarp(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.005, decay, 0.5);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.1);
+    // Octave shimmer
+    const o2 = ctx.createOscillator(); o2.type = 'sine';
+    o2.frequency.setValueAtTime(pitch * 2, t);
+    const g2 = ctx.createGain(); g2.gain.value = 0.18;
+    o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + decay * 0.8);
+  }
+
+  // ── Pizzicato: short plucked
+  function playPizz(pitch: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.003, 0.35, 0.5);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(pitch, t);
+    o.frequency.exponentialRampToValueAtTime(pitch * 0.95, t + 0.05);
+    o.connect(out); o.start(t); o.stop(t + 0.4);
+  }
+
+  // ── Wind (flute-like): pure sine + soft breath noise
+  function playWind(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.04, decay, 0.4);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.1);
+    // Breath layer
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, decay * 1000);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = pitch * 1.5; bp.Q.value = 1.5;
+    const ng = ctx.createGain(); ng.gain.value = 0.08;
+    n.connect(bp); bp.connect(ng); ng.connect(out); n.start(t);
+  }
+
+  // ── Reed (clarinet/oboe): square + bandpass formant gives that buzzy
+  // reed quality
+  function playReed(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.025, decay, 0.32);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'square';
+    o.frequency.setValueAtTime(pitch, t);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = pitch * 4;
+    bp.Q.value = 5;
+    o.connect(bp); bp.connect(out);
+    o.start(t); o.stop(t + decay + 0.1);
+    // Body
+    const o2 = ctx.createOscillator(); o2.type = 'triangle';
+    o2.frequency.setValueAtTime(pitch, t);
+    const g2 = ctx.createGain(); g2.gain.value = 0.3;
+    o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + decay);
+  }
+
+  // ── Brass (trumpet/trombone): sawtooth + bandpass formant + buzzy
+  function playBrass(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.018, decay, 0.4);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(pitch * 0.5, t);
+    o.frequency.linearRampToValueAtTime(pitch, t + 0.05); // gliss-up attack
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = pitch * 3;
+    bp.Q.value = 3;
+    o.connect(bp); bp.connect(out);
+    o.start(t); o.stop(t + decay + 0.1);
+    // Sub
+    const o2 = ctx.createOscillator(); o2.type = 'sine';
+    o2.frequency.setValueAtTime(pitch, t);
+    const g2 = ctx.createGain(); g2.gain.value = 0.2;
+    o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + decay);
+  }
+
+  // ── Horn (mellow brass): sawtooth + softer lowpass
+  function playHorn(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.05, decay, 0.36);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(pitch, t);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.value = pitch * 4;
+    lp.Q.value = 0.6;
+    o.connect(lp); lp.connect(out);
+    o.start(t); o.stop(t + decay + 0.1);
+  }
+
+  // ── Timpani: tuned drum
+  function playTimp(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.005, decay, 0.7);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch * 1.3, t);
+    o.frequency.exponentialRampToValueAtTime(pitch * 0.7, t + decay * 0.6);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.1);
+    // Body noise
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, 80);
+    const ng = ctx.createGain(); ng.gain.value = 0.18;
+    n.connect(ng); ng.connect(out); n.start(t);
+  }
+
+  function playKick(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.002, decay, 0.85); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch * 1.6, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(pitch * 0.35, 30), t + decay * 0.6);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+  }
+
+  function playSnare(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.001, decay, 0.7); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(pitch, t);
+    o.frequency.exponentialRampToValueAtTime(pitch * 0.65, t + decay * 0.5);
+    const og = ctx.createGain(); og.gain.value = 0.5;
+    o.connect(og); og.connect(out); o.start(t); o.stop(t + decay + 0.05);
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, decay * 1000);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1500;
+    n.connect(hp); hp.connect(out); n.start(t);
+  }
+
+  function playTom(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.003, decay, 0.7); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch, t);
+    o.frequency.exponentialRampToValueAtTime(pitch * 0.5, t + decay * 0.6);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+  }
+
+  function playTamb(decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.003, decay, 0.45); out.connect(ctx.destination);
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, decay * 1000);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = 4500; bp.Q.value = 2;
+    n.connect(bp); bp.connect(out); n.start(t);
+    // Jingle layer
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(7000, t);
+    const og = ctx.createGain(); og.gain.value = 0.15;
+    o.connect(og); og.connect(out); o.start(t); o.stop(t + decay * 0.5);
+  }
+
+  function playCymbal(decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.005, decay, 0.55); out.connect(ctx.destination);
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, decay * 1000);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4000;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 9000; bp.Q.value = 0.5;
+    n.connect(hp); hp.connect(bp); bp.connect(out); n.start(t);
+  }
+
+  function playGong(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.01, decay, 0.55); out.connect(ctx.destination);
+    // Big inharmonic mix
+    [1, 1.31, 1.78, 2.23].forEach((mult, i) => {
+      const o = ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(pitch * mult, t);
+      const og = ctx.createGain(); og.gain.value = 0.4 / (i + 1);
+      o.connect(og); og.connect(out); o.start(t); o.stop(t + decay * 0.9);
+    });
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, decay * 600);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
+    const ng = ctx.createGain(); ng.gain.value = 0.18;
+    n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
+  }
+
+  // ── Mallet — pitched percussion with quick decay
+  function playXylo(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.001, decay, 0.55); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'square';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+    const o2 = ctx.createOscillator(); o2.type = 'sine';
+    o2.frequency.setValueAtTime(pitch * 4, t);
+    const og = ctx.createGain(); og.gain.value = 0.18;
+    o2.connect(og); og.connect(out); o2.start(t); o2.stop(t + decay * 0.4);
+  }
+
+  function playMarimba(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.002, decay, 0.55); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+    // Gentle 4th-harmonic sparkle
+    const o2 = ctx.createOscillator(); o2.type = 'sine';
+    o2.frequency.setValueAtTime(pitch * 4, t);
+    const og = ctx.createGain(); og.gain.value = 0.12;
+    o2.connect(og); og.connect(out); o2.start(t); o2.stop(t + decay * 0.5);
+  }
+
+  function playGlock(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.001, decay, 0.4); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.05);
+    // Inharmonic high partial
+    const o2 = ctx.createOscillator(); o2.type = 'sine';
+    o2.frequency.setValueAtTime(pitch * 3.4, t);
+    const og = ctx.createGain(); og.gain.value = 0.25;
+    o2.connect(og); og.connect(out); o2.start(t); o2.stop(t + decay * 0.7);
+  }
+
+  function playVibes(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.005, decay, 0.42); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch, t);
+    // LFO tremolo for vibraphone shimmer
+    const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 5.5;
+    const lfoG = ctx.createGain(); lfoG.gain.value = 0.06;
+    lfo.connect(lfoG); lfoG.connect(out.gain);
+    lfo.start(t); lfo.stop(t + decay);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.1);
+  }
+
+  function playTubular(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.002, decay, 0.5); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.1);
+    // Inharmonic overtones characteristic of tubular bell
+    [2.76, 5.4].forEach((mult, i) => {
+      const o2 = ctx.createOscillator(); o2.type = 'sine';
+      o2.frequency.setValueAtTime(pitch * mult, t);
+      const og = ctx.createGain(); og.gain.value = 0.2 / (i + 1);
+      o2.connect(og); og.connect(out); o2.start(t); o2.stop(t + decay * 0.6);
+    });
+  }
+
+  function playTriangle(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.001, decay, 0.32); out.connect(ctx.destination);
+    // Two close partials for the metallic ting
+    [pitch, pitch * 1.35, pitch * 1.86].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f, t);
+      const og = ctx.createGain(); og.gain.value = 0.5 / (i + 1);
+      o.connect(og); og.connect(out); o.start(t); o.stop(t + decay);
+    });
+  }
+
+  function playWood(pitch: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.001, 0.06, 0.6); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'square';
+    o.frequency.setValueAtTime(pitch, t);
+    o.frequency.exponentialRampToValueAtTime(pitch * 0.7, t + 0.04);
+    o.connect(out); o.start(t); o.stop(t + 0.08);
+  }
+
+  // ── Voice — vowel-formant, vowel rotates by seat for variety
+  const VOICE_FORMANTS: Record<string, { f: [number, number, number]; q: [number, number, number]; gain: [number, number, number] }> = {
+    AH:  { f: [730, 1090, 2440], q: [12, 8, 6], gain: [1.0, 0.7, 0.4] },
+    EE:  { f: [270, 2290, 3010], q: [10, 8, 6], gain: [0.8, 0.9, 0.5] },
+    OH:  { f: [570,  840, 2410], q: [12, 9, 6], gain: [1.0, 0.7, 0.3] },
+    OOH: { f: [300,  870, 2240], q: [10, 8, 5], gain: [0.9, 0.5, 0.25] },
+  };
+  function playVoice(pitch: number, decay: number, vowel: 'AH' | 'EE' | 'OH' | 'OOH' = 'AH') {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.06, decay, 0.18);
+    out.connect(ctx.destination);
+    const formants = VOICE_FORMANTS[vowel];
+    const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = pitch;
+    const o2 = ctx.createOscillator(); o2.type = 'sawtooth';
+    o2.frequency.value = pitch * Math.pow(2, 4 / 1200);
+    formants.f.forEach((freq, i) => {
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+      bp.frequency.value = freq; bp.Q.value = formants.q[i];
+      const fg = ctx.createGain(); fg.gain.value = formants.gain[i];
+      o1.connect(bp); o2.connect(bp); bp.connect(fg); fg.connect(out);
+    });
+    o1.start(t); o1.stop(t + decay + 0.1);
+    o2.start(t); o2.stop(t + decay + 0.1);
+  }
+
+  function playWhistle(pitch: number, decay: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = envG(ctx, 0.04, decay, 0.32); out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(pitch, t);
+    // Subtle vibrato
+    const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 5.5;
+    const lfoG = ctx.createGain(); lfoG.gain.value = pitch * 0.005;
+    lfo.connect(lfoG); lfoG.connect(o.frequency);
+    lfo.start(t); lfo.stop(t + decay);
+    o.connect(out); o.start(t); o.stop(t + decay + 0.1);
+  }
+
+  // ══ Master playback dispatch ══
+  function playSeat(family: string, pitch: number, decay: number, key?: string) {
+    switch (family) {
+      case 'string':   return playString(pitch, decay);
+      case 'harp':     return playHarp(pitch, decay);
+      case 'pizz':     return playPizz(pitch);
+      case 'wind':     return playWind(pitch, decay);
+      case 'reed':     return playReed(pitch, decay);
+      case 'brass':    return playBrass(pitch, decay);
+      case 'horn':     return playHorn(pitch, decay);
+      case 'timp':     return playTimp(pitch, decay);
+      case 'kick':     return playKick(pitch, decay);
+      case 'snare':    return playSnare(pitch, decay);
+      case 'tom':      return playTom(pitch, decay);
+      case 'tamb':     return playTamb(decay);
+      case 'cymbal':   return playCymbal(decay);
+      case 'gong':     return playGong(pitch, decay);
+      case 'xylo':     return playXylo(pitch, decay);
+      case 'marimba':  return playMarimba(pitch, decay);
+      case 'glock':    return playGlock(pitch, decay);
+      case 'vibes':    return playVibes(pitch, decay);
+      case 'tubular':  return playTubular(pitch, decay);
+      case 'triangle': return playTriangle(pitch, decay);
+      case 'wood':     return playWood(pitch);
+      case 'voice': {
+        // Rotate vowel by seat key for variety
+        const vowels: Array<'AH' | 'EE' | 'OH' | 'OOH'> = ['AH', 'EE', 'OH', 'OOH'];
+        const idx = key ? key.charCodeAt(key.length - 1) % 4 : 0;
+        return playVoice(pitch, decay, vowels[idx]);
+      }
+      case 'whistle':  return playWhistle(pitch, decay);
+    }
+  }
+
+  // ══ Cell wiring ══
+  const ALL_SEATS: SeatMeta[] = Array.from(document.querySelectorAll<HTMLElement>('.v8-seat')).map((el) => ({
+    key: el.dataset.seat || '',
+    nounId: Number(el.dataset.noun) || 0,
+    family: el.dataset.family || 'wood',
+    pitch: Number(el.dataset.pitch) || 0,
+    decay: Number(el.dataset.decay) || 0.5,
+  }));
+  const SEAT_BY_KEY: Record<string, SeatMeta> = Object.fromEntries(ALL_SEATS.map((s) => [s.key, s]));
+
+  function pulseSeat(key: string, remote = false) {
+    const el = document.querySelector<HTMLElement>(`.v8-seat[data-seat="${key}"]`);
+    if (!el) return;
+    const cls = remote ? 'remote-firing' : 'firing';
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), remote ? 200 : 160);
+  }
+
+  // Played tracker
+  const PLAYED_KEY = 'pc:drum-v8:played';
+  const played = new Set<string>();
+  try {
+    const raw = localStorage.getItem(PLAYED_KEY);
+    if (raw) JSON.parse(raw).forEach((k: string) => played.add(k));
+  } catch {}
+  function persistPlayed() { try { localStorage.setItem(PLAYED_KEY, JSON.stringify([...played])); } catch {} }
+  function paintPlayedCount() {
+    const el = document.getElementById('v8-played');
+    if (el) el.textContent = String(played.size);
+  }
+  paintPlayedCount();
+
+  // ══ Real-time stream — WebSocket-first ══
+  type EventPayload = { type: 'symphony'; seatKey: string; family: string; pitch: number; decay: number; sessionId: string; auto?: boolean };
+  type IncomingEvent = EventPayload & { pid?: string; t?: number };
+  let streamMode: 'connecting' | 'ws' | 'poll' | 'none' = 'connecting';
+  let ws: WebSocket | null = null;
+  let lastSoundT = Date.now();
+  let ownPid = '';
+  (async () => {
+    try {
+      const buf = new TextEncoder().encode(sessionId);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      ownPid = Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+    } catch {}
+  })();
+
+  const streamModeEl = document.getElementById('v8-stream-mode');
+  const streamSubEl  = document.getElementById('v8-stream-sub');
+  function setStreamMode(mode: typeof streamMode, sub: string) {
+    streamMode = mode;
+    if (streamModeEl) {
+      streamModeEl.textContent = mode === 'ws' ? 'WebSocket' : mode === 'poll' ? 'polling' : mode === 'connecting' ? 'connecting…' : 'offline';
+      streamModeEl.classList.remove('is-ws', 'is-poll');
+      if (mode === 'ws') streamModeEl.classList.add('is-ws');
+      if (mode === 'poll') streamModeEl.classList.add('is-poll');
+    }
+    if (streamSubEl) streamSubEl.textContent = sub;
+  }
+  setStreamMode('connecting', 'resolving transport');
+
+  function dispatchIncoming(ev: IncomingEvent, source: 'self' | 'remote') {
+    if (source === 'remote' && ev.pid === ownPid) return;
+    if (ev.type !== 'symphony' || !ev.seatKey) return;
+    const meta = SEAT_BY_KEY[ev.seatKey];
+    if (!meta) return;
+    playSeat(meta.family, meta.pitch, meta.decay, meta.key);
+    pulseSeat(ev.seatKey, source === 'remote');
+    if (source === 'remote' && ev.pid) remoteActive.set(ev.pid, Date.now());
+  }
+
+  function connectWS() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/drum/room?sid=${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(url);
+      ws.addEventListener('open', () => {
+        setStreamMode('ws', '~30–60ms p50 · live');
+      });
+      ws.addEventListener('message', (msg) => {
+        try {
+          const ev = JSON.parse(msg.data) as IncomingEvent;
+          dispatchIncoming(ev, 'remote');
+        } catch {}
+      });
+      ws.addEventListener('close', () => {
+        if (streamMode === 'connecting') {
+          fallbackToPoll('ws unavailable · 150ms poll');
+        } else if (streamMode === 'ws') {
+          setTimeout(connectWS, 2000);
+        }
+      });
+      ws.addEventListener('error', () => {
+        if (streamMode === 'connecting') fallbackToPoll('ws error · 150ms poll');
+      });
+    } catch {
+      fallbackToPoll('ws not supported · 150ms poll');
+    }
+  }
+
+  function fallbackToPoll(reason: string) {
+    setStreamMode('poll', reason);
+    setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 150);
+  }
+
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) {
+        if (ev.type !== 'symphony' || !ev.seatKey) continue;
+        dispatchIncoming(ev as IncomingEvent, 'remote');
+      }
+    } catch {}
+  }
+
+  function broadcast(ev: EventPayload) {
+    if (streamMode === 'ws' && ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify(ev)); return; } catch {}
+    }
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ev),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  connectWS();
+  setTimeout(() => {
+    if (streamMode === 'connecting') fallbackToPoll('ws timeout · 150ms poll');
+  }, 1500);
+
+  // ══ Tap handlers ══
+  document.querySelectorAll<HTMLElement>('.v8-seat').forEach((el) => {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const key = el.dataset.seat;
+      if (!key) return;
+      const meta = SEAT_BY_KEY[key];
+      playSeat(meta.family, meta.pitch, meta.decay, meta.key);
+      pulseSeat(key);
+      if (!played.has(key)) { played.add(key); persistPlayed(); paintPlayedCount(); }
+      try { navigator.vibrate?.(6); } catch {}
+      broadcast({ type: 'symphony', seatKey: key, family: meta.family, pitch: meta.pitch, decay: meta.decay, sessionId });
+    });
+  });
+
+  // ══ Auto-play (the conductor) ══
+  const autoBtn = document.getElementById('v8-auto-btn') as HTMLButtonElement | null;
+  const autoIcon = document.getElementById('v8-auto-icon');
+  const autoLabel = document.getElementById('v8-auto-label');
+  const modeLabel = document.getElementById('v8-mode-label');
+  const modeCard = document.getElementById('v8-mode-card');
+  const bpmSlider = document.getElementById('v8-auto-bpm') as HTMLInputElement | null;
+  const bpmValEl = document.getElementById('v8-bpm-val');
+  const mvtSelect = document.getElementById('v8-auto-mvt') as HTMLSelectElement | null;
+
+  let isAuto = false;
+  let autoTimer: number | null = null;
+  let stepIdx = 0;
+  let bpm = 96;
+
+  if (bpmSlider) {
+    bpmSlider.addEventListener('input', () => {
+      bpm = Number(bpmSlider.value);
+      if (bpmValEl) bpmValEl.textContent = String(bpm);
+      if (isAuto) { stopAuto(); startAuto(); }
+    });
+  }
+
+  function pickFromSection(sectionId: string): string | undefined {
+    const family = sectionId === 'string' ? ['string', 'harp', 'pizz']
+      : sectionId === 'wind' ? ['wind', 'reed']
+      : sectionId === 'brass' ? ['brass', 'horn']
+      : sectionId === 'percussion' ? ['timp','kick','snare','tom','tamb','cymbal','gong']
+      : sectionId === 'mallet' ? ['xylo','marimba','glock','vibes','tubular','triangle','wood']
+      : ['voice','whistle'];
+    const pool = ALL_SEATS.filter((s) => family.includes(s.family));
+    return pool[Math.floor(Math.random() * pool.length)]?.key;
+  }
+
+  // Movement-style patterns. Each returns the seat keys that should fire
+  // on the current step.
+  function pickStep(stepIdx: number, mvt: string): string[] {
+    const beat = stepIdx % 16;
+    const out: string[] = [];
+    if (mvt === 'overture') {
+      // Big sweeping intro — strings + brass + timpani on the 1
+      if (beat === 0) {
+        out.push(pickFromSection('percussion')!); // timp
+        out.push(pickFromSection('brass')!);
+      }
+      if (beat % 4 === 0) out.push(pickFromSection('string')!);
+      if (beat === 8) out.push(pickFromSection('mallet')!);
+      if (beat === 14 && Math.random() < 0.6) out.push(pickFromSection('wind')!);
+    } else if (mvt === 'adagio') {
+      // Slow lyrical — sustained strings + occasional woodwind solo
+      if (beat % 8 === 0) out.push(pickFromSection('string')!);
+      if (beat === 4) out.push(pickFromSection('wind')!);
+      if (beat === 10 && Math.random() < 0.4) out.push(pickFromSection('voice')!);
+      if (beat === 14 && Math.random() < 0.3) out.push(pickFromSection('mallet')!);
+    } else if (mvt === 'allegro') {
+      // Fast joyful — bright mallet runs + plucked strings + winds
+      if (beat % 2 === 0) out.push(pickFromSection('mallet')!);
+      if (beat % 4 === 1) out.push(pickFromSection('wind')!);
+      if (beat % 4 === 0) out.push(pickFromSection('string')!);
+      if (beat === 12 && Math.random() < 0.5) out.push(pickFromSection('brass')!);
+      if (beat === 6 && Math.random() < 0.3) out.push(pickFromSection('percussion')!);
+    } else if (mvt === 'finale') {
+      // All sections firing — the climax
+      if (beat % 4 === 0) {
+        out.push(pickFromSection('string')!);
+        out.push(pickFromSection('brass')!);
+      }
+      if (beat % 8 === 4) out.push(pickFromSection('percussion')!);
+      if (beat % 2 === 1) out.push(pickFromSection('mallet')!);
+      if (beat === 12) out.push(pickFromSection('voice')!);
+      if (beat === 14) out.push(pickFromSection('wind')!);
+      if (beat === 0 || beat === 8) out.push(pickFromSection('percussion')!);
+    }
+    return out.filter(Boolean);
+  }
+
+  function tick() {
+    const mvt = mvtSelect?.value || 'overture';
+    const keys = pickStep(stepIdx, mvt);
+    for (const k of keys) {
+      const meta = SEAT_BY_KEY[k];
+      if (!meta) continue;
+      playSeat(meta.family, meta.pitch, meta.decay, meta.key);
+      pulseSeat(k);
+      broadcast({ type: 'symphony', seatKey: k, family: meta.family, pitch: meta.pitch, decay: meta.decay, sessionId, auto: true });
+    }
+    stepIdx = (stepIdx + 1) % 64;
+  }
+
+  function startAuto() {
+    if (isAuto) return;
+    isAuto = true;
+    if (autoBtn) autoBtn.setAttribute('aria-pressed', 'true');
+    if (autoIcon) autoIcon.textContent = '■';
+    if (autoLabel) autoLabel.textContent = 'Stop conductor';
+    if (modeLabel) modeLabel.textContent = `auto · ${mvtSelect?.value || 'overture'}`;
+    if (modeCard) modeCard.classList.add('is-auto');
+    stepIdx = 0;
+    const stepMs = (60_000 / bpm) / 4;
+    if (autoTimer) clearInterval(autoTimer);
+    tick();
+    autoTimer = window.setInterval(tick, stepMs);
+  }
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    isAuto = false;
+    if (autoBtn) autoBtn.setAttribute('aria-pressed', 'false');
+    if (autoIcon) autoIcon.textContent = '▶';
+    if (autoLabel) autoLabel.textContent = 'Conduct';
+    if (modeLabel) modeLabel.textContent = 'manual';
+    if (modeCard) modeCard.classList.remove('is-auto');
+  }
+  autoBtn?.addEventListener('click', () => isAuto ? stopAuto() : startAuto());
+
+  // Jammers
+  const remoteActive = new Map<string, number>();
+  const jammersEl = document.getElementById('v8-jammers');
+  function renderJammers() {
+    const now = Date.now();
+    for (const [pid, t] of remoteActive) if (now - t > 10_000) remoteActive.delete(pid);
+    if (jammersEl) jammersEl.textContent = String(remoteActive.size + 1);
+  }
+  setInterval(renderJammers, 2000);
+
+  // Spacebar toggles auto
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target?.tagName === 'INPUT' || target?.tagName === 'SELECT' || target?.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') { e.preventDefault(); isAuto ? stopAuto() : startAuto(); }
+  });
+</script>
+
+</DrumLayout>
