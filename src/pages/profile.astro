@@ -1,13 +1,12 @@
 ---
 /**
- * /profile — visualize every wallet this browser has paired with.
+ * /profile — v2 redesign.
  *
- * Reads pc:wallets from localStorage (set by WalletChip). Pulls live
- * TzKT data for each (balance, NFT count, ops count, last activity).
- * Shows which is active. Lets the user switch active / remove any.
+ * Trading-card / arcade-board hybrid in the PointCast palette.
+ * Big Noun portrait, saturated stat tiles, poster-wall block grid,
+ * cassette-style bath saves, ledger-style wallet table, NFT vault.
  *
- * All client-side — no server state. "Your profile" is scoped to this
- * browser + whatever Beacon sessions live in its storage.
+ * All data flows from localStorage (pc:*) and TzKT — no server state.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 
@@ -16,416 +15,122 @@ const jsonLd = {
   '@type': 'ProfilePage',
   '@id': 'https://pointcast.xyz/profile',
   name: 'Your PointCast profile',
-  description: 'Every Tezos wallet this browser has paired with PointCast, with live TzKT balance / NFT / activity data.',
+  description: 'Your PointCast broadcast card — Noun, collected blocks, Tezos NFTs, bath saves, paired wallets.',
   url: 'https://pointcast.xyz/profile',
 };
 ---
 
-<BlockLayout title="Profile" description="Your connected Tezos wallets, visualized." jsonLd={jsonLd}>
-  <div class="page">
-    <nav class="crumb">
-      <a href="/">← Home</a>
-      <span aria-hidden="true">/</span>
-      <span>profile</span>
-    </nav>
+<BlockLayout title="Profile" description="Your PointCast broadcast card." jsonLd={jsonLd}>
 
-    <!-- ─── IDENTITY CARD ─── -->
-    <section class="identity" id="identity-card">
-      <div class="identity__avatar">
-        <img class="identity__noun" id="identity-noun" alt="" src="" />
-      </div>
-      <div class="identity__meta">
-        <p class="kicker">YOU · PROFILE</p>
-        <h1 class="identity__name" id="identity-name">visitor</h1>
-        <p class="identity__dek" id="identity-dek">
-          Loading…
-        </p>
-        <p class="identity__hint mono" id="identity-hint"></p>
-      </div>
-    </section>
+  <main class="pf">
 
-    <!-- ─── CURRENT STATE (what you told the peoples) ─── -->
-    <section class="state-panel" id="state-panel" hidden>
-      <p class="kicker">CURRENT STATE · <a href="/#here-tell-panel" id="state-edit-link">edit ↗</a></p>
-      <ul class="state-chips" id="state-chips"></ul>
-    </section>
-
-    <!-- ─── ACTIVITY ─── -->
-    <section class="activity">
-      <p class="kicker">ACTIVITY · this browser's memory</p>
-      <div class="activity__grid" id="activity-grid">
-        <!-- JS fills -->
-      </div>
-      <div class="activity__detail" id="activity-detail">
-        <!-- JS fills votes + drops lists -->
+    <section class="pf-hero">
+      <div class="pf-hero__chrome">
+        <p class="pf-hero__kicker">PROFILE · POINTCAST · CC0 · EL SEGUNDO</p>
+        <div class="pf-hero__inner">
+          <div class="pf-hero__avatar">
+            <img id="pf-noun-img" alt="" src="" />
+            <span class="pf-hero__noun-tag" id="pf-noun-tag">noun #—</span>
+          </div>
+          <div class="pf-hero__id">
+            <h1 class="pf-hero__name" id="pf-name">visitor</h1>
+            <p class="pf-hero__sub" id="pf-sub">Loading the broadcast card…</p>
+            <ul class="pf-hero__chips" id="pf-chips"></ul>
+            <p class="pf-hero__state" id="pf-state-line"></p>
+          </div>
+          <div class="pf-hero__stamp" aria-hidden="true">
+            <span class="pf-hero__stamp-line">ON</span>
+            <span class="pf-hero__stamp-line pf-hero__stamp-line--big">AIR</span>
+            <span class="pf-hero__stamp-line">FM 96.1</span>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- ─── COLLECTED BLOCKS ─── -->
-    <section class="blocks-history">
-      <p class="kicker">COLLECTED · <span id="blocks-count">0</span> BLOCKS</p>
-      <div class="blocks-strip" id="blocks-strip">
-        <p class="blocks-empty">Loading…</p>
-      </div>
-    </section>
-
-    <!-- ─── BATH SAVES ─── -->
-    <section class="bath-saves-section" id="bath-saves-section" hidden>
-      <p class="kicker">BATH SAVES · <span id="saves-count">0</span> · <a href="/bath">/bath</a></p>
-      <div class="saves-grid" id="saves-grid"></div>
-    </section>
-
-    <!-- ─── WALLETS ─── -->
-    <header class="head">
-      <p class="kicker">WALLETS</p>
-      <h2 class="head__h2">Paired on this browser</h2>
-      <p class="dek" id="profile-dek">
-        Tezos wallets you've connected via Beacon. Live balances + NFT
-        counts from TzKT. Server-side: nothing. Clear browser data =
-        clear this list.
-      </p>
-    </header>
-
-    <section id="profile-empty" class="empty" hidden>
-      <p class="empty__title">No wallets connected yet.</p>
-      <p class="empty__body">Connect via the wallet chip in the top-right of the home page. Kukai, Temple, Umami, Airgap — anything on Beacon.</p>
-      <p class="empty__cta"><a href="/">← Back to home</a></p>
-    </section>
-
-    <section id="profile-list" class="list" hidden></section>
-
-    <!-- ─── TEZOS NFT COLLECTION ─── -->
-    <section class="collection">
-      <header class="head">
-        <p class="kicker">COLLECTION · ON-CHAIN</p>
-        <h2 class="head__h2">
-          <span id="collection-owner-label">Tezos NFTs</span>
-        </h2>
-        <p class="dek" id="collection-dek">
-          Live from TzKT. <span id="collection-scope">Showing Mike's wallet — connect your own to see your collection here.</span>
-        </p>
+    <section class="pf-arcade">
+      <header class="pf-section-head">
+        <h2 class="pf-section-title">STATS</h2>
+        <p class="pf-section-sub">this browser&apos;s memory</p>
       </header>
-      <div class="collection__grid" id="collection-grid" aria-live="polite">
-        <p class="collection__loading mono">LOADING COLLECTION…</p>
-      </div>
-      <p class="collection__footer mono" id="collection-footer"></p>
+      <div class="pf-arcade__grid" id="pf-stats-grid"></div>
     </section>
 
-    <aside class="agent-strip">
-      <p class="agent-strip__label">MACHINE-READABLE</p>
+    <section class="pf-poster">
+      <header class="pf-section-head pf-section-head--blue">
+        <h2 class="pf-section-title">COLLECTED</h2>
+        <p class="pf-section-sub"><span id="pf-poster-count">0</span> blocks · /today drop history</p>
+      </header>
+      <div class="pf-poster__wall" id="pf-poster-wall">
+        <p class="pf-poster__empty">Loading…</p>
+      </div>
+    </section>
+
+    <section class="pf-rotation" id="pf-rotation-section" hidden>
+      <header class="pf-section-head pf-section-head--green">
+        <h2 class="pf-section-title">ROTATION</h2>
+        <p class="pf-section-sub"><span id="pf-rot-count">0</span> spotify saves from <a href="/bath">/bath</a></p>
+      </header>
+      <div class="pf-rotation__grid" id="pf-rotation-grid"></div>
+    </section>
+
+    <section class="pf-ledger">
+      <header class="pf-section-head pf-section-head--purple">
+        <h2 class="pf-section-title">WALLETS</h2>
+        <p class="pf-section-sub">paired on this browser · live tzkt data</p>
+      </header>
+      <div class="pf-ledger__body" id="pf-ledger-body">
+        <p class="pf-ledger__empty">No wallets paired yet. <a href="/">Connect via the wallet chip on the home page.</a></p>
+      </div>
+    </section>
+
+    <section class="pf-vault">
+      <header class="pf-section-head pf-section-head--orange">
+        <h2 class="pf-section-title">VAULT</h2>
+        <p class="pf-section-sub" id="pf-vault-sub">Tezos NFTs · live from tzkt</p>
+      </header>
+      <div class="pf-vault__grid" id="pf-vault-grid">
+        <p class="pf-vault__loading">LOADING VAULT…</p>
+      </div>
+      <p class="pf-vault__footer" id="pf-vault-footer"></p>
+    </section>
+
+    <aside class="pf-machine">
+      <p class="pf-machine__label">MACHINE-READABLE</p>
       <ul>
         <li><a href="/for-agents">/for-agents</a></li>
         <li><a href="/blocks.json">/blocks.json</a></li>
       </ul>
     </aside>
-  </div>
+
+  </main>
 </BlockLayout>
 
 <script>
   type Wallet = { chain: 'tezos'; address: string; provider: string; addedAt: number; label?: string };
+  type CollectedItem = { date: string; blockId: string; at?: string };
+  type Save = { spotify_url: string; spotify_type: string; spotify_id: string; mood: string; address?: string; timestamp: string };
 
   const KEY_WALLETS = 'pc:wallets';
-  const KEY_ACTIVE_ADDR = 'pc:wallet-active';
-  const KEY_LEGACY = 'pc:wallet';
+  const KEY_ACTIVE = 'pc:wallet-active';
 
-  function loadWallets(): Wallet[] {
-    try {
-      const raw = localStorage.getItem(KEY_WALLETS);
-      if (raw) {
-        const list = JSON.parse(raw) as Wallet[];
-        if (Array.isArray(list)) return list;
-      }
-    } catch { /* ignore */ }
-    return [];
-  }
-
-  function activeAddress(): string | null {
-    try { return localStorage.getItem(KEY_ACTIVE_ADDR); } catch { return null; }
-  }
-
-  function saveWallets(list: Wallet[], newActive: string | null) {
-    localStorage.setItem(KEY_WALLETS, JSON.stringify(list));
-    if (newActive) localStorage.setItem(KEY_ACTIVE_ADDR, newActive);
-    else localStorage.removeItem(KEY_ACTIVE_ADDR);
-    const active = list.find((w) => w.address === newActive) ?? null;
-    if (active) localStorage.setItem(KEY_LEGACY, JSON.stringify(active));
-    else localStorage.removeItem(KEY_LEGACY);
-    window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: active }));
-  }
-
-  function short(addr: string) {
-    return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
-  }
-
-  const empty = document.getElementById('profile-empty')!;
-  const list = document.getElementById('profile-list')!;
-
-  // ── COLLECTION · Tezos NFTs via TzKT ────────────────────────────
-  const MIKE_WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
-  const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
-
-  interface NftToken {
-    contract: string;
-    tokenId: string;
-    name: string;
-    thumb: string | null;
-    mime: string;
-    supply: number;
-    balance: number;
-  }
-
-  function ipfsToHttp(uri: string | null | undefined): string | null {
-    if (!uri) return null;
-    if (uri.startsWith('ipfs://')) return IPFS_GATEWAY + uri.slice(7);
-    if (uri.startsWith('http')) return uri;
-    return null;
-  }
-
-  async function loadCollection(addr: string, isOwnWallet: boolean) {
-    const grid = document.getElementById('collection-grid');
-    const scope = document.getElementById('collection-scope');
-    const footer = document.getElementById('collection-footer');
-    const ownerLabel = document.getElementById('collection-owner-label');
-    if (!grid || !scope || !footer || !ownerLabel) return;
-
-    if (isOwnWallet) {
-      scope.textContent = `Your connected wallet · ${addr.slice(0, 6)}…${addr.slice(-4)}`;
-      ownerLabel.textContent = 'Your Tezos NFTs';
-    } else {
-      scope.textContent = `Showing Mike's wallet (${addr.slice(0, 6)}…${addr.slice(-4)}) — connect your own to see yours here.`;
-      ownerLabel.textContent = "Mike's Tezos NFTs";
-    }
-
-    try {
-      const url = `https://api.tzkt.io/v1/tokens/balances?account=${addr}&token.standard=fa2&balance.gt=0&limit=60&sort.desc=lastTime&select=token.contract.address as contract,token.tokenId as tokenId,token.metadata as metadata,token.totalSupply as supply,balance`;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`TzKT ${r.status}`);
-      const raw: any[] = await r.json();
-
-      const tokens: NftToken[] = raw
-        .map((t) => {
-          const m = t.metadata || {};
-          const thumb =
-            ipfsToHttp(m.thumbnailUri) ||
-            ipfsToHttp(m.displayUri) ||
-            ipfsToHttp(m.artifactUri) ||
-            null;
-          return {
-            contract: t.contract,
-            tokenId: String(t.tokenId),
-            name: m.name || `Token #${t.tokenId}`,
-            thumb,
-            mime: m.formats?.[0]?.mimeType || '',
-            supply: Number(t.supply ?? 0),
-            balance: Number(t.balance ?? 0),
-          };
-        })
-        .filter((t) => t.thumb);
-
-      if (tokens.length === 0) {
-        grid.innerHTML = '<p class="collection__empty">No NFTs in this wallet yet.</p>';
-        footer.textContent = '';
-        return;
-      }
-
-      grid.innerHTML = tokens
-        .slice(0, 48)
-        .map((t) => {
-          const objktUrl = `https://objkt.com/tokens/${t.contract}/${t.tokenId}`;
-          return `
-            <a class="nft" href="${objktUrl}" target="_blank" rel="noopener">
-              <div class="nft__art">
-                <img src="${t.thumb}" alt="${nftEscAttr(t.name)}" loading="lazy" />
-              </div>
-              <p class="nft__name">${nftEscHtml(t.name)}</p>
-              <p class="nft__meta mono">×${t.balance}${t.supply > 0 ? ` · ${t.supply} ed` : ''}</p>
-            </a>
-          `;
-        })
-        .join('');
-
-      footer.textContent = `${tokens.length} held · fetched ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · objkt.com links`;
-    } catch (e: any) {
-      grid.innerHTML = `<p class="collection__error">Couldn't load collection: ${nftEscHtml(e?.message || 'unknown error')}. Try again in a minute.</p>`;
-      footer.textContent = '';
-    }
-  }
-
-  // Use the existing nftEscHtml helper defined below for string escaping.
-  function nftEscAttr(s: string): string { return nftEscHtml(s); }
-
-  // Pick which wallet to show: active connected wallet, or Mike's as fallback.
-  function resolveCollectionAddress(): { addr: string; isOwn: boolean } {
-    const active = activeAddress();
-    if (active) return { addr: active, isOwn: true };
-    const wallets = loadWallets();
-    if (wallets.length > 0) return { addr: wallets[0].address, isOwn: true };
-    return { addr: MIKE_WALLET, isOwn: false };
-  }
-
-  const { addr: collectionAddr, isOwn: collectionIsOwn } = resolveCollectionAddress();
-  loadCollection(collectionAddr, collectionIsOwn);
-
-  window.addEventListener('pc:wallet-change', () => {
-    const { addr, isOwn } = resolveCollectionAddress();
-    loadCollection(addr, isOwn);
-  });
-
-  interface LiveStats { balance: string; nfts: string; ops: string; lastActivity: string; }
-
-  async function fetchStats(addr: string): Promise<LiveStats> {
-    try {
-      const [acc, tokens] = await Promise.all([
-        fetch(`https://api.tzkt.io/v1/accounts/${addr}`),
-        fetch(`https://api.tzkt.io/v1/tokens/balances/count?account=${addr}&balance.gt=0`),
-      ]);
-      const a = acc.ok ? await acc.json() : {};
-      const n = tokens.ok ? (await tokens.text()).trim() : '—';
-      return {
-        balance: ((a.balance ?? 0) / 1_000_000).toFixed(4) + ' ꜩ',
-        nfts: String(n),
-        ops: String(a.numTransactions ?? '—'),
-        lastActivity: a.lastActivity
-          ? new Date(a.lastActivity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          : '—',
-      };
-    } catch {
-      return { balance: '—', nfts: '—', ops: '—', lastActivity: '—' };
-    }
-  }
-
-  async function render() {
-    const wallets = loadWallets();
-    const active = activeAddress();
-
-    if (wallets.length === 0) {
-      empty.hidden = false;
-      list.hidden = true;
-      return;
-    }
-    empty.hidden = true;
-    list.hidden = false;
-    list.innerHTML = '';
-
-    // Sort newest-first
-    const sorted = [...wallets].sort((a, b) => b.addedAt - a.addedAt);
-
-    for (const w of sorted) {
-      const isActive = w.address === active || (!active && w === sorted[0]);
-      const addedFmt = new Date(w.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-      const card = document.createElement('article');
-      card.className = 'card' + (isActive ? ' card--active' : '');
-      card.innerHTML = `
-        <header class="card__head">
-          <span class="card__tag">${isActive ? 'active' : 'remembered'}</span>
-          <span class="card__provider">${w.provider}</span>
-        </header>
-        <p class="card__addr">${w.address}</p>
-        <div class="card__stats">
-          <div class="card__stat"><span>balance</span><b data-stat="balance">…</b></div>
-          <div class="card__stat"><span>nfts held</span><b data-stat="nfts">…</b></div>
-          <div class="card__stat"><span>total ops</span><b data-stat="ops">…</b></div>
-          <div class="card__stat"><span>last active</span><b data-stat="lastActivity">…</b></div>
-          <div class="card__stat"><span>connected</span><b>${addedFmt}</b></div>
-        </div>
-        <div class="card__actions">
-          <a class="card__tzkt" href="https://tzkt.io/${w.address}" target="_blank" rel="noopener">TzKT ↗</a>
-          <a class="card__tzkt" href="https://objkt.com/profile/${w.address}/owned" target="_blank" rel="noopener">objkt ↗</a>
-          ${isActive ? '' : `<button type="button" class="card__switch" data-action="switch" data-addr="${w.address}">Make active</button>`}
-          <button type="button" class="card__remove" data-action="remove" data-addr="${w.address}">Remove</button>
-        </div>
-      `;
-      list.appendChild(card);
-
-      // Fetch stats (fire-and-forget, fills the — placeholders)
-      fetchStats(w.address).then((stats) => {
-        const q = (k: string) => card.querySelector<HTMLElement>(`[data-stat="${k}"]`);
-        if (q('balance')) q('balance')!.textContent = stats.balance;
-        if (q('nfts')) q('nfts')!.textContent = stats.nfts;
-        if (q('ops')) q('ops')!.textContent = stats.ops;
-        if (q('lastActivity')) q('lastActivity')!.textContent = stats.lastActivity;
-      });
-    }
-
-    // Wire switch / remove buttons
-    list.querySelectorAll<HTMLElement>('[data-action]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const addr = el.dataset.addr!;
-        const action = el.dataset.action!;
-        const current = loadWallets();
-        if (action === 'switch') {
-          saveWallets(current, addr);
-        } else if (action === 'remove') {
-          const next = current.filter((w) => w.address !== addr);
-          const nextActive = activeAddress() === addr
-            ? (next.length > 0 ? next[next.length - 1].address : null)
-            : activeAddress();
-          saveWallets(next, nextActive);
-        }
-        void render();
-      });
-    });
-  }
-
-  window.addEventListener('pc:wallet-change', () => void render());
-  window.addEventListener('storage', (e) => {
-    if (e.key === KEY_WALLETS || e.key === KEY_ACTIVE_ADDR) void render();
-  });
-
-  void render();
-
-  // ─── IDENTITY + ACTIVITY BLOCK ─────────────────────────────────
-  // Reads every `pc:*` localStorage key the site has written and
-  // renders: identity card (noun, name, first-seen), current state
-  // panel (mood/listening/where), activity stats grid, and detail
-  // lists for votes + drops. No server state; if cleared, everything
-  // resets.
-  function cheapHashL(s: string): number {
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-    return h >>> 0;
-  }
-  function ls(k: string): string | null {
-    try { return localStorage.getItem(k); } catch { return null; }
-  }
-  function shortAddr(a: string): string {
-    return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
-  }
+  function ls(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
+  function shortAddr(a: string): string { return a.length > 12 ? `${a.slice(0,6)}…${a.slice(-4)}` : a; }
+  function escHtml(s: string): string { return s.replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[c]); }
+  function escAttr(s: string): string { return escHtml(s); }
+  function cheapHashL(s: string): number { let h=5381; for (let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return h>>>0; }
   function prettyDate(iso: string | null): string {
     if (!iso) return '—';
-    try {
-      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    } catch { return iso; }
+    try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return iso; }
   }
-  function countCollected(): number {
-    try {
-      const raw = ls('pc:daily:collected');
-      if (!raw) return 0;
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.length : 0;
-    } catch { return 0; }
-  }
-  function collectedList(): Array<{date: string, blockId: string, at?: string}> {
-    try {
-      const raw = ls('pc:daily:collected');
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
-    } catch { return []; }
-  }
-  function pollsVotedList(): Array<{slug: string, optionId: string}> {
-    const out: Array<{slug: string, optionId: string}> = [];
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k || !k.startsWith('pc:poll:voted:')) continue;
-        const slug = k.replace('pc:poll:voted:', '');
-        const optionId = localStorage.getItem(k) || '';
-        out.push({ slug, optionId });
-      }
-    } catch {}
-    return out;
+
+  function loadWallets(): Wallet[] { try { const r = ls(KEY_WALLETS); if (!r) return []; const a = JSON.parse(r); return Array.isArray(a) ? a : []; } catch { return []; } }
+  function activeAddress(): string | null { return ls(KEY_ACTIVE); }
+  function collectedList(): CollectedItem[] { try { const r = ls('pc:daily:collected'); if (!r) return []; const a = JSON.parse(r); return Array.isArray(a) ? a : []; } catch { return []; } }
+  function bathSaves(): Save[] { try { const r = ls('pc:bath:saves'); if (!r) return []; const a = JSON.parse(r); return Array.isArray(a) ? a : []; } catch { return []; } }
+  function pollsVotedCount(): number {
+    let n = 0;
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('pc:poll:voted:')) n++; } } catch {}
+    return n;
   }
   function currentStreak(): number {
     try {
@@ -433,8 +138,7 @@ const jsonLd = {
       const dates: Record<string, boolean> = {};
       for (const c of arr) if (c && c.date) dates[c.date] = true;
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
-      let streak = 0;
-      let cur = today;
+      let streak = 0; let cur = today;
       while (dates[cur]) {
         streak++;
         const [y, m, d] = cur.split('-').map((s: string) => parseInt(s, 10));
@@ -446,867 +150,612 @@ const jsonLd = {
     } catch { return 0; }
   }
 
-  function paintIdentity() {
-    let sessionId = ls('pc:session');
-    if (!sessionId) {
-      try {
-        sessionId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-        localStorage.setItem('pc:session', sessionId);
-      } catch { sessionId = 'anonymous-' + Math.random().toString(36).slice(2); }
+  function paintHero() {
+    let session = ls('pc:session');
+    if (!session) {
+      try { session = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)); localStorage.setItem('pc:session', session); }
+      catch { session = 'anon-' + Math.random().toString(36).slice(2); }
     }
-
-    // Noun id
     let nounId = 0;
-    const cachedNoun = ls('pc:visitor:noun');
-    if (cachedNoun) nounId = parseInt(cachedNoun, 10);
+    const cn = ls('pc:visitor:noun');
+    if (cn) nounId = parseInt(cn, 10);
     if (!(nounId >= 0 && nounId < 1200)) {
-      nounId = cheapHashL(sessionId) % 1200;
+      nounId = cheapHashL(session) % 1200;
       try { localStorage.setItem('pc:visitor:noun', String(nounId)); } catch {}
     }
-
-    // First seen
     let firstSeen = ls('pc:visitor:firstSeenAt');
-    if (!firstSeen) {
-      firstSeen = new Date().toISOString();
-      try { localStorage.setItem('pc:visitor:firstSeenAt', firstSeen); } catch {}
-    }
+    if (!firstSeen) { firstSeen = new Date().toISOString(); try { localStorage.setItem('pc:visitor:firstSeenAt', firstSeen); } catch {} }
 
     const wallets = loadWallets();
-    const active = activeAddress() ||
-      (wallets.length > 0 ? wallets[wallets.length - 1].address : null);
-
-    // Display name preference: user-set > wallet-short > agent-ua > noun-nnn
+    const active = activeAddress() || (wallets.length ? wallets[wallets.length - 1].address : null);
     const override = ls('pc:visitor:display');
     const isAgent = /gptbot|claudebot|claude-user|anthropic-ai|perplexitybot|oai-searchbot|atlas|google-extended|googlebot|bingbot/i.test(navigator.userAgent);
+
     let displayName = 'visitor';
     let kindLabel = 'human';
-    if (override && override.trim()) {
-      displayName = override.trim();
-      kindLabel = 'human · named';
-    } else if (active) {
-      displayName = shortAddr(active);
-      kindLabel = 'wallet';
-    } else if (isAgent) {
-      const agents = ['GPTBot', 'ClaudeBot', 'Claude-User', 'anthropic-ai', 'PerplexityBot', 'OAI-SearchBot', 'Atlas', 'Google-Extended', 'Googlebot', 'Bingbot'];
-      const ua = navigator.userAgent;
-      const match = agents.find((a) => ua.toLowerCase().includes(a.toLowerCase()));
-      displayName = match || 'agent';
+    if (override && override.trim()) { displayName = override.trim(); kindLabel = 'human · named'; }
+    else if (active) { displayName = shortAddr(active); kindLabel = 'wallet'; }
+    else if (isAgent) {
+      const agents = ['GPTBot','ClaudeBot','Claude-User','anthropic-ai','PerplexityBot','OAI-SearchBot','Atlas','Google-Extended','Googlebot','Bingbot'];
+      displayName = agents.find((a) => navigator.userAgent.toLowerCase().includes(a.toLowerCase())) || 'agent';
       kindLabel = 'agent';
-    } else {
-      displayName = 'noun-' + String(nounId).padStart(3, '0');
-      kindLabel = 'human · anonymous';
     }
+    else { displayName = 'noun-' + String(nounId).padStart(3, '0'); kindLabel = 'human · anonymous'; }
 
-    const img = document.getElementById('identity-noun') as HTMLImageElement;
-    const nameEl = document.getElementById('identity-name');
-    const dekEl = document.getElementById('identity-dek');
-    const hintEl = document.getElementById('identity-hint');
+    const img = document.getElementById('pf-noun-img') as HTMLImageElement | null;
     if (img) { img.src = `https://noun.pics/${nounId}.svg`; img.alt = `your noun · ${nounId}`; }
-    if (nameEl) nameEl.textContent = displayName;
-    if (dekEl) {
-      dekEl.innerHTML = `
-        Noun № <strong>${nounId}</strong> ·
-        <span class="identity__kind">${kindLabel}</span> ·
-        here since <time datetime="${firstSeen}">${prettyDate(firstSeen)}</time>
-      `;
-    }
-    if (hintEl) {
-      const notes: string[] = [];
-      if (active) notes.push(`active wallet ${shortAddr(active)}`);
-      if (!override) notes.push(`anonymous identity — noun id is deterministic from this browser's session`);
-      hintEl.textContent = notes.join(' · ');
-    }
-  }
 
-  function paintState() {
+    const tag = document.getElementById('pf-noun-tag');
+    if (tag) tag.textContent = `noun #${nounId}`;
+
+    const nameEl = document.getElementById('pf-name');
+    if (nameEl) nameEl.textContent = displayName;
+
+    const subEl = document.getElementById('pf-sub');
+    if (subEl) {
+      subEl.innerHTML = `<span class="pf-kind">${escHtml(kindLabel)}</span> · here since <time datetime="${firstSeen}">${prettyDate(firstSeen)}</time>`;
+    }
+
+    const chipsEl = document.getElementById('pf-chips');
+    if (chipsEl) {
+      const chips: string[] = [];
+      if (active) chips.push(`<li class="pf-chip pf-chip--wallet"><span>WALLET</span><b>${escHtml(shortAddr(active))}</b></li>`);
+      chips.push(`<li class="pf-chip pf-chip--noun"><span>NOUN</span><b>#${nounId}</b></li>`);
+      chips.push(`<li class="pf-chip pf-chip--since"><span>SINCE</span><b>${escHtml(prettyDate(firstSeen))}</b></li>`);
+      const sessHash = String(cheapHashL(session) % 100000).padStart(5, '0');
+      chips.push(`<li class="pf-chip pf-chip--id"><span>SESSION</span><b>${sessHash}</b></li>`);
+      chipsEl.innerHTML = chips.join('');
+    }
+
     const mood = ls('pc:visitor:mood');
     const listening = ls('pc:visitor:listening');
     const where = ls('pc:visitor:where');
-    const panel = document.getElementById('state-panel');
-    const chipsEl = document.getElementById('state-chips');
-    if (!panel || !chipsEl) return;
-    const any = mood || listening || where;
-    panel.hidden = !any;
-    if (!any) return;
-    const items: Array<{label: string, value: string, kind: string}> = [];
-    if (mood) items.push({ label: 'mood', value: mood, kind: 'mood' });
-    if (listening) items.push({ label: 'now playing', value: listening, kind: 'listening' });
-    if (where) items.push({ label: 'where', value: where, kind: 'where' });
-    chipsEl.innerHTML = items.map((i) => `
-      <li class="state-chip state-chip--${i.kind}">
-        <span class="state-chip__label">${i.label}</span>
-        <span class="state-chip__value">${nftEscHtml(i.value)}</span>
-      </li>
-    `).join('');
+    const stateEl = document.getElementById('pf-state-line');
+    if (stateEl) {
+      const parts: string[] = [];
+      if (mood) parts.push(`<span class="pf-state-pill pf-state-pill--mood">mood · ${escHtml(mood)}</span>`);
+      if (listening) parts.push(`<span class="pf-state-pill">playing · ${escHtml(listening)}</span>`);
+      if (where) parts.push(`<span class="pf-state-pill">where · ${escHtml(where)}</span>`);
+      stateEl.innerHTML = parts.join(' ');
+    }
   }
 
-  function nftEscHtml(s: string): string {
-    return s.replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    } as any)[c]);
-  }
-
-  function paintActivity() {
-    const helloCount = parseInt(ls('pc:hello:count') || '0', 10);
-    const helloLastDay = ls('pc:hello:lastDay') || '—';
-    const dropsCount = countCollected();
-    const dropsStreak = currentStreak();
-    const votesCount = pollsVotedList().length;
-    // VoterStats
-    const voterState = (() => {
-      try {
-        const raw = ls('pc:voter:state');
-        if (!raw) return null;
-        return JSON.parse(raw);
-      } catch { return null; }
-    })();
-    const level = voterState?.level ?? 1;
-    const xp = voterState?.xp ?? 0;
-    const streak = voterState?.streak ?? 0;
-    const title = voterState?.title ?? 'Novice Voter';
-
-    const grid = document.getElementById('activity-grid');
+  function paintStats() {
+    const grid = document.getElementById('pf-stats-grid');
     if (!grid) return;
-    const bathSaves = (() => { try { const r = ls('pc:bath:saves'); if (!r) return 0; const a = JSON.parse(r); return Array.isArray(a) ? a.length : 0; } catch { return 0; } })();
+    const helloCount = parseInt(ls('pc:hello:count') || '0', 10);
+    const drops = collectedList().length;
+    const streak = currentStreak();
+    const polls = pollsVotedCount();
+    const saves = bathSaves().length;
+    const voter = (() => { try { const r = ls('pc:voter:state'); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    const level = voter?.level ?? 1;
+    const xp = voter?.xp ?? 0;
+    const wallets = loadWallets().length;
+
     const stats = [
-      { label: 'HELLO', value: String(helloCount), sub: helloLastDay !== '—' ? `last earned ${helloLastDay}` : '—' },
-      { label: 'drops collected', value: String(dropsCount), sub: dropsStreak > 0 ? `${dropsStreak}-day streak` : 'no active streak' },
-      { label: 'polls voted', value: String(votesCount), sub: votesCount === 0 ? 'no votes yet' : `unique: ${votesCount}` },
-      { label: 'voter level', value: `L${level}`, sub: `${xp} XP · ${title.toLowerCase()}` },
-      { label: 'bath saves', value: String(bathSaves), sub: bathSaves > 0 ? 'spotify links saved' : 'none yet — visit /bath' },
+      { k: 'BLOCKS',  v: drops,       sub: drops ? `${streak}-day streak` : 'visit /today',  color: 'yellow' },
+      { k: 'SAVES',   v: saves,       sub: saves ? 'on rotation'           : 'visit /bath',   color: 'green'  },
+      { k: 'POLLS',   v: polls,       sub: polls ? 'votes cast'            : 'tap a poll',    color: 'red'    },
+      { k: 'HELLO',   v: helloCount,  sub: 'lifetime',                                         color: 'blue'   },
+      { k: 'LEVEL',   v: 'L' + level, sub: xp + ' xp',                                         color: 'purple' },
+      { k: 'WALLETS', v: wallets,     sub: wallets ? 'paired'              : 'none paired',   color: 'orange' },
     ];
     grid.innerHTML = stats.map((s) => `
-      <div class="stat">
-        <span class="stat__label">${s.label}</span>
-        <span class="stat__value">${s.value}</span>
-        <span class="stat__sub">${s.sub}</span>
+      <div class="pf-tile pf-tile--${s.color}">
+        <span class="pf-tile__label">${s.k}</span>
+        <span class="pf-tile__value">${s.v}</span>
+        <span class="pf-tile__sub">${escHtml(s.sub)}</span>
       </div>
     `).join('');
-
-    // Detail: votes list + drops list
-    const detail = document.getElementById('activity-detail');
-    if (!detail) return;
-    const votes = pollsVotedList();
-    const drops = collectedList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-    detail.innerHTML = `
-      <div class="detail-col">
-        <h3 class="detail__h3">polls voted <span class="detail__count">${votes.length}</span></h3>
-        ${votes.length === 0 ? '<p class="detail__empty">tap a poll on the home page</p>' :
-          `<ul class="detail__list">${votes.map((v) => `
-            <li><a href="/poll/${v.slug}"><span class="detail__slug">${v.slug}</span> <span class="detail__pick">→ ${nftEscHtml(v.optionId)}</span></a></li>
-          `).join('')}</ul>`}
-      </div>
-      <div class="detail-col">
-        <h3 class="detail__h3">drops collected <span class="detail__count">${drops.length}</span></h3>
-        ${drops.length === 0 ? '<p class="detail__empty">collect today\'s drop at <a href="/today">/today</a></p>' :
-          `<ul class="detail__list">${drops.map((d) => `
-            <li><a href="/b/${d.blockId}"><span class="detail__slug">${d.date}</span> <span class="detail__pick">№${d.blockId}</span></a></li>
-          `).join('')}</ul>`}
-      </div>
-    `;
   }
 
-  // ── COLLECTED BLOCKS visual strip ──────────────────────────────────
-  function paintBlocks() {
+  function paintPosters() {
     const list = collectedList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    const countEl = document.getElementById('blocks-count');
-    const strip = document.getElementById('blocks-strip');
-    if (countEl) countEl.textContent = String(list.length);
-    if (!strip) return;
+    const wall = document.getElementById('pf-poster-wall');
+    const count = document.getElementById('pf-poster-count');
+    if (count) count.textContent = String(list.length);
+    if (!wall) return;
     if (list.length === 0) {
-      strip.innerHTML = '<p class="blocks-empty">No blocks collected yet. Visit <a href="/today">/today</a> to collect today\'s drop.</p>';
+      wall.innerHTML = '<p class="pf-poster__empty">Nothing collected yet. Visit <a href="/today">/today</a> to collect today&apos;s drop.</p>';
       return;
     }
-    strip.innerHTML = list.slice(0, 30).map((d) => `
-      <a class="block-tile" href="/b/${nftEscHtml(d.blockId)}" title="Block №${nftEscAttr(d.blockId)}">
-        <div class="block-tile__img">
-          <img
-            src="/images/og/b/${nftEscAttr(d.blockId)}.png"
-            alt="Block №${nftEscAttr(d.blockId)}"
-            loading="lazy"
-            onerror="this.parentElement.classList.add('block-tile__img--err')"
-          />
+    wall.innerHTML = list.slice(0, 36).map((d) => `
+      <a class="pf-poster__tile" href="/b/${escAttr(d.blockId)}" title="Block №${escAttr(d.blockId)}">
+        <div class="pf-poster__img">
+          <img src="/images/og/b/${escAttr(d.blockId)}.png" alt="Block №${escAttr(d.blockId)}" loading="lazy"
+            onerror="this.parentElement.classList.add('pf-poster__img--err')" />
+          <span class="pf-poster__num">№${escHtml(d.blockId)}</span>
         </div>
-        <p class="block-tile__id mono">№${nftEscHtml(d.blockId)}</p>
-        <p class="block-tile__date">${nftEscHtml(d.date || '—')}</p>
+        <div class="pf-poster__caption">
+          <span class="pf-poster__date">${escHtml(d.date || '—')}</span>
+        </div>
       </a>
     `).join('');
   }
 
-  // ── BATH SAVES cards ────────────────────────────────────────────────
   const MOOD_DOT: Record<string, string> = {
     warm:'#F5A623', cool:'#4A9EFF', electric:'#FF00AA', earth:'#7B9E5E',
     void:'#8060C0', dawn:'#FFB4A2', neon:'#39FF14', ocean:'#00B4D8',
   };
-  function paintBathSaves() {
-    const saves: Array<{spotify_url:string;spotify_type:string;spotify_id:string;mood:string;address?:string;timestamp:string}> = [];
-    try { const r = ls('pc:bath:saves'); if (r) { const a = JSON.parse(r); if (Array.isArray(a)) saves.push(...a); } } catch {}
-    const section = document.getElementById('bath-saves-section');
-    const grid = document.getElementById('saves-grid');
-    const countEl = document.getElementById('saves-count');
-    if (!section || !grid) return;
-    if (saves.length === 0) { section.hidden = true; return; }
-    section.hidden = false;
-    if (countEl) countEl.textContent = String(saves.length);
-    grid.innerHTML = saves.slice(0, 16).map((s) => {
-      const dot = MOOD_DOT[s.mood] || '#aaa';
-      const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—';
+  function paintRotation() {
+    const saves = bathSaves();
+    const sec = document.getElementById('pf-rotation-section');
+    const grid = document.getElementById('pf-rotation-grid');
+    const cnt = document.getElementById('pf-rot-count');
+    if (!sec || !grid) return;
+    if (!saves.length) { sec.hidden = true; return; }
+    sec.hidden = false;
+    if (cnt) cnt.textContent = String(saves.length);
+    grid.innerHTML = saves.slice(0, 18).map((s) => {
+      const dot = MOOD_DOT[s.mood] || '#888';
+      const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
       const type = (s.spotify_type || '').toUpperCase();
-      const url = s.spotify_url || `https://open.spotify.com/${nftEscAttr(s.spotify_type)}/${nftEscAttr(s.spotify_id)}`;
-      const embedH = s.spotify_type === 'track' ? '80' : '152';
+      const url = s.spotify_url || `https://open.spotify.com/${escAttr(s.spotify_type)}/${escAttr(s.spotify_id)}`;
+      const eh = s.spotify_type === 'track' ? '80' : '152';
       return `
-        <div class="save-card">
-          <div class="save-card__embed">
-            <iframe
-              src="https://open.spotify.com/embed/${nftEscAttr(s.spotify_type)}/${nftEscAttr(s.spotify_id)}?utm_source=pointcast"
-              width="100%" height="${embedH}" frameborder="0"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-              loading="lazy"
-            ></iframe>
-          </div>
-          <div class="save-card__meta">
-            <span class="save-card__type">${type}</span>
-            <span class="save-card__mood-dot" style="background:${dot};box-shadow:0 0 5px ${dot}" title="${nftEscAttr(s.mood)}"></span>
-            <span class="save-card__mood-name">${nftEscHtml(s.mood)}</span>
-            <span class="save-card__date">${date}</span>
-            <a class="save-card__open" href="${nftEscAttr(url)}" target="_blank" rel="noopener">open ↗</a>
+        <div class="pf-cassette">
+          <div class="pf-cassette__stripe" style="background:${dot};box-shadow:0 0 12px ${dot}55"></div>
+          <div class="pf-cassette__body">
+            <iframe src="https://open.spotify.com/embed/${escAttr(s.spotify_type)}/${escAttr(s.spotify_id)}?utm_source=pointcast"
+              width="100%" height="${eh}" frameborder="0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+            <div class="pf-cassette__meta">
+              <span class="pf-cassette__type">${type}</span>
+              <span class="pf-cassette__mood">${escHtml(s.mood)}</span>
+              <span class="pf-cassette__date">${date}</span>
+              <a class="pf-cassette__open" href="${escAttr(url)}" target="_blank" rel="noopener">open ↗</a>
+            </div>
           </div>
         </div>
       `;
     }).join('');
   }
 
-  paintIdentity();
-  paintState();
-  paintActivity();
-  paintBlocks();
-  paintBathSaves();
-  window.addEventListener('storage', () => { paintIdentity(); paintState(); paintActivity(); paintBlocks(); paintBathSaves(); });
+  interface Stats { balance: string; nfts: string; ops: string; lastActivity: string; }
+  async function fetchStats(addr: string): Promise<Stats> {
+    try {
+      const [a, n] = await Promise.all([
+        fetch(`https://api.tzkt.io/v1/accounts/${addr}`),
+        fetch(`https://api.tzkt.io/v1/tokens/balances/count?account=${addr}&balance.gt=0`),
+      ]);
+      const acc = a.ok ? await a.json() : {};
+      const nfts = n.ok ? (await n.text()).trim() : '—';
+      return {
+        balance: ((acc.balance ?? 0) / 1_000_000).toFixed(2) + ' ꜩ',
+        nfts: String(nfts),
+        ops: String(acc.numTransactions ?? '—'),
+        lastActivity: acc.lastActivity
+          ? new Date(acc.lastActivity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+          : '—',
+      };
+    } catch { return { balance:'—', nfts:'—', ops:'—', lastActivity:'—' }; }
+  }
+
+  function paintLedger() {
+    const wallets = loadWallets();
+    const active = activeAddress();
+    const body = document.getElementById('pf-ledger-body');
+    if (!body) return;
+    if (wallets.length === 0) {
+      body.innerHTML = '<p class="pf-ledger__empty">No wallets paired yet. <a href="/">Connect via the wallet chip on the home page.</a></p>';
+      return;
+    }
+    const sorted = [...wallets].sort((a, b) => b.addedAt - a.addedAt);
+    body.innerHTML = `
+      <div class="pf-table">
+        <div class="pf-table__head">
+          <span>provider</span>
+          <span>address</span>
+          <span class="pf-table__num">balance</span>
+          <span class="pf-table__num">nfts</span>
+          <span class="pf-table__num">ops</span>
+          <span class="pf-table__num">last</span>
+          <span>added</span>
+          <span></span>
+        </div>
+        ${sorted.map((w) => {
+          const isActive = w.address === active || (!active && w === sorted[0]);
+          const added = new Date(w.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+          return `
+            <div class="pf-table__row${isActive ? ' pf-table__row--active' : ''}" data-addr="${escAttr(w.address)}">
+              <span class="pf-table__provider">
+                ${isActive ? '<span class="pf-table__dot" title="active"></span>' : '<span class="pf-table__dot pf-table__dot--off" title="paired"></span>'}
+                ${escHtml(w.provider)}
+              </span>
+              <span class="pf-table__addr"><a href="https://tzkt.io/${escAttr(w.address)}" target="_blank" rel="noopener">${escHtml(shortAddr(w.address))}</a></span>
+              <span class="pf-table__num" data-stat="balance">…</span>
+              <span class="pf-table__num" data-stat="nfts">…</span>
+              <span class="pf-table__num" data-stat="ops">…</span>
+              <span class="pf-table__num" data-stat="lastActivity">…</span>
+              <span class="pf-table__added">${added}</span>
+              <span class="pf-table__actions">
+                ${isActive ? '<span class="pf-table__pill">active</span>' : `<button class="pf-table__btn" data-action="switch" data-addr="${escAttr(w.address)}">use</button>`}
+                <a class="pf-table__btn" href="https://objkt.com/profile/${escAttr(w.address)}/owned" target="_blank" rel="noopener">objkt</a>
+              </span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    sorted.forEach((w) => {
+      const row = body.querySelector(`[data-addr="${w.address}"]`);
+      if (!row) return;
+      fetchStats(w.address).then((s) => {
+        const q = (k: string) => row.querySelector(`[data-stat="${k}"]`);
+        if (q('balance'))      (q('balance') as HTMLElement).textContent = s.balance;
+        if (q('nfts'))         (q('nfts') as HTMLElement).textContent = s.nfts;
+        if (q('ops'))          (q('ops') as HTMLElement).textContent = s.ops;
+        if (q('lastActivity')) (q('lastActivity') as HTMLElement).textContent = s.lastActivity;
+      });
+    });
+
+    body.querySelectorAll<HTMLElement>('[data-action="switch"]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const addr = b.dataset.addr!;
+        const list = loadWallets();
+        try { localStorage.setItem(KEY_WALLETS, JSON.stringify(list)); } catch {}
+        try { localStorage.setItem(KEY_ACTIVE, addr); } catch {}
+        const active = list.find((w) => w.address === addr) ?? null;
+        if (active) try { localStorage.setItem('pc:wallet', JSON.stringify(active)); } catch {}
+        window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: active }));
+        repaint();
+      });
+    });
+  }
+
+  const MIKE_WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+  const IPFS = 'https://ipfs.io/ipfs/';
+  function ipfsHttp(u: string | null | undefined): string | null {
+    if (!u) return null;
+    if (u.startsWith('ipfs://')) return IPFS + u.slice(7);
+    if (u.startsWith('http')) return u;
+    return null;
+  }
+  async function paintVault() {
+    const grid = document.getElementById('pf-vault-grid');
+    const sub = document.getElementById('pf-vault-sub');
+    const footer = document.getElementById('pf-vault-footer');
+    if (!grid || !sub || !footer) return;
+    const active = activeAddress();
+    const wallets = loadWallets();
+    const target = active || (wallets[0]?.address) || MIKE_WALLET;
+    const isOwn = !!active || wallets.length > 0;
+    sub.innerHTML = isOwn
+      ? `your wallet · <code>${escHtml(shortAddr(target))}</code> · live from tzkt`
+      : `Mike&apos;s wallet · <code>${escHtml(shortAddr(target))}</code> · connect your own to see yours`;
+    try {
+      const url = `https://api.tzkt.io/v1/tokens/balances?account=${target}&token.standard=fa2&balance.gt=0&limit=60&sort.desc=lastTime&select=token.contract.address as contract,token.tokenId as tokenId,token.metadata as metadata,token.totalSupply as supply,balance`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`tzkt ${r.status}`);
+      const raw: any[] = await r.json();
+      const tokens = raw.map((t) => {
+        const m = t.metadata || {};
+        return {
+          contract: t.contract,
+          tokenId: String(t.tokenId),
+          name: m.name || `Token #${t.tokenId}`,
+          thumb: ipfsHttp(m.thumbnailUri) || ipfsHttp(m.displayUri) || ipfsHttp(m.artifactUri) || null,
+          supply: Number(t.supply ?? 0),
+          balance: Number(t.balance ?? 0),
+        };
+      }).filter((t) => t.thumb);
+
+      if (tokens.length === 0) {
+        grid.innerHTML = '<p class="pf-vault__empty">No NFTs in this wallet yet.</p>';
+        footer.textContent = '';
+        return;
+      }
+      grid.innerHTML = tokens.slice(0, 36).map((t) => `
+        <a class="pf-nft" href="https://objkt.com/tokens/${escAttr(t.contract)}/${escAttr(t.tokenId)}" target="_blank" rel="noopener">
+          <div class="pf-nft__art"><img src="${escAttr(t.thumb!)}" alt="${escAttr(t.name)}" loading="lazy" /></div>
+          <p class="pf-nft__name">${escHtml(t.name)}</p>
+          <p class="pf-nft__meta">×${t.balance}${t.supply > 0 ? ` · ${t.supply} ed` : ''}</p>
+        </a>
+      `).join('');
+      footer.textContent = `${tokens.length} held · objkt.com links`;
+    } catch (e: any) {
+      grid.innerHTML = `<p class="pf-vault__error">Couldn&apos;t load vault: ${escHtml(e?.message || 'unknown')}.</p>`;
+      footer.textContent = '';
+    }
+  }
+
+  function repaint() {
+    paintHero();
+    paintStats();
+    paintPosters();
+    paintRotation();
+    paintLedger();
+    void paintVault();
+  }
+  repaint();
+  window.addEventListener('storage', repaint);
+  window.addEventListener('pc:wallet-change', repaint);
 </script>
 
-<style>
-  .page { max-width: 880px; margin: 0 auto; padding: 20px 20px 80px; }
-
-  .crumb {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--pc-ink-muted);
-    margin-bottom: 16px;
-  }
-  .crumb a { color: var(--pc-accent); }
-
-  /* ─── IDENTITY ─── */
-  .identity {
-    display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 24px;
-    align-items: center;
-    padding: 22px;
-    border: 1.5px solid #12110E;
-    border-left: 5px solid #F59F00;
-    border-radius: 4px;
-    background: linear-gradient(180deg, #fef5e7 0%, #faf9f5 100%);
-    margin-bottom: 22px;
-  }
-  .identity__avatar {
-    width: 140px;
-    height: 140px;
-    border-radius: 50%;
-    overflow: hidden;
-    background: #fff;
-    border: 3px solid #F59F00;
-    padding: 4px;
-  }
-  .identity__noun {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    border-radius: 50%;
-  }
-  .identity__meta { display: grid; gap: 4px; }
-  .identity__name {
-    margin: 6px 0 2px;
-    font-family: var(--pc-font-heading, var(--pc-font-serif));
-    font-size: 32px;
-    font-weight: 500;
-    color: #12110E;
-    letter-spacing: -0.01em;
-    line-height: 1.15;
-  }
-  .identity__dek {
-    margin: 0 0 4px;
-    font-family: var(--pc-font-sans, system-ui, sans-serif);
-    font-size: 14px;
-    color: #2a2925;
-    line-height: 1.5;
-  }
-  .identity__dek strong { color: #8a2432; font-weight: 700; }
-  .identity__dek time { color: var(--pc-ink); font-weight: 600; }
-  .identity__kind {
-    display: inline-block;
-    padding: 1px 8px;
-    background: #12110E;
-    color: #fef5e7;
-    font-family: var(--pc-font-mono);
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    border-radius: 8px;
-    vertical-align: 1px;
-  }
-  .identity__hint {
-    margin: 2px 0 0;
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    color: var(--pc-ink-soft);
-    text-transform: none;
+<style is:global>
+  :root {
+    --pf-paper:    #f5efe4;
+    --pf-paper-2:  #ede5d3;
+    --pf-ink:      #1f1b15;
+    --pf-ink-soft: #5f5e5a;
+    --pf-rule:     #d8cdb8;
+    --pf-yellow:   #F7C325;
+    --pf-red:      #E84D6A;
+    --pf-blue:     #4A9EFF;
+    --pf-green:    #2CC5A0;
+    --pf-purple:   #9B59B6;
+    --pf-orange:   #FF7F50;
   }
 
-  @media (max-width: 640px) {
-    .identity {
-      grid-template-columns: 1fr;
-      gap: 14px;
-      text-align: center;
-    }
-    .identity__avatar { margin: 0 auto; width: 120px; height: 120px; }
-    .identity__name { font-size: 26px; }
+  .pf {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 18px 100px;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(31,27,21,.06) 1px, transparent 0) 0 0/22px 22px,
+      var(--pf-paper);
+    color: var(--pf-ink);
+    font-family: 'Inter Variable', system-ui, sans-serif;
   }
 
-  /* ─── STATE PANEL ─── */
-  .state-panel {
-    padding: 14px 18px;
-    border: 1px dashed #534AB7;
-    border-radius: 3px;
-    background: #f6f5fc;
-    margin-bottom: 22px;
-  }
-  .state-panel .kicker { margin: 0 0 10px; }
-  .state-panel .kicker a { color: #534AB7; text-decoration: none; font-weight: 700; }
-  .state-panel .kicker a:hover { text-decoration: underline; }
-  .state-chips {
-    list-style: none;
-    margin: 0; padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .state-chip {
-    display: inline-flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px 12px;
-    border: 1px solid #d6d4cd;
-    border-radius: 3px;
-    background: #fff;
-    min-width: 140px;
-  }
-  .state-chip__label {
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--pc-ink-soft);
-    font-weight: 600;
-  }
-  .state-chip__value {
-    font-family: var(--pc-font-sans, system-ui, sans-serif);
-    font-size: 14px;
-    color: #12110E;
-    word-break: break-word;
-  }
-  .state-chip--mood .state-chip__value {
-    font-family: var(--pc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #F59F00;
-    font-weight: 700;
-  }
-
-  /* ─── ACTIVITY ─── */
-  .activity {
-    margin-bottom: 32px;
-  }
-  .activity .kicker { margin: 0 0 10px; }
-  .activity__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-  .stat {
-    padding: 12px 14px;
-    border: 1px solid #d6d4cd;
-    border-radius: 3px;
-    background: #fff;
-    display: grid;
-    gap: 2px;
-  }
-  .stat__label {
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--pc-ink-soft);
-    font-weight: 600;
-  }
-  .stat__value {
-    font-family: var(--pc-font-mono);
-    font-size: 24px;
-    color: #8a2432;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-  }
-  .stat__sub {
-    font-size: 11px;
-    color: var(--pc-ink-soft);
-    letter-spacing: 0.06em;
-  }
-
-  .activity__detail {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  @media (max-width: 640px) {
-    .activity__detail { grid-template-columns: 1fr; }
-  }
-  .detail-col {
-    padding: 12px 14px;
-    border: 1px solid var(--pc-rule, #d6d4cd);
-    border-radius: 3px;
-    background: #fafaf7;
-  }
-  .detail__h3 {
-    margin: 0 0 8px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--pc-ink-soft);
-    font-weight: 700;
+  .pf-section-head {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
-  }
-  .detail__count {
-    color: #8a2432;
-    font-size: 14px;
-    font-weight: 700;
-  }
-  .detail__list {
-    list-style: none;
-    margin: 0; padding: 0;
-    display: grid;
-    gap: 4px;
-  }
-  .detail__list a {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 4px 6px;
-    font-size: 12px;
-    text-decoration: none;
-    color: #12110E;
-    border-radius: 2px;
-  }
-  .detail__list a:hover { background: #fef5e7; }
-  .detail__slug {
-    font-family: var(--pc-font-mono);
-    color: var(--pc-ink-soft);
-    letter-spacing: 0.04em;
-  }
-  .detail__pick {
-    font-family: var(--pc-font-mono);
-    color: #534AB7;
-    font-weight: 600;
-  }
-  .detail__empty {
-    margin: 0;
-    font-size: 12px;
-    color: var(--pc-ink-muted);
-    font-style: italic;
-  }
-  .detail__empty a { color: #534AB7; }
-
-  .head__h2 {
-    font-family: var(--pc-font-sans);
-    font-size: 22px;
-    font-weight: 500;
-    margin: 0 0 8px;
-    color: var(--pc-ink);
-  }
-
-  .head { margin-bottom: 24px; }
-  .kicker {
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--pc-ink-muted); margin: 0 0 8px;
-  }
-  .head h1 {
-    font-family: var(--pc-font-sans);
-    font-size: 36px; line-height: 1.05; font-weight: 500;
-    margin: 0 0 10px; color: var(--pc-ink);
-  }
-  .dek {
-    font-family: var(--pc-font-sans);
-    font-size: 15.5px; line-height: 1.5;
-    color: var(--pc-ink-soft); margin: 0; max-width: 58ch;
-  }
-
-  .empty {
-    padding: 32px 20px;
-    border: 1px dashed var(--pc-rule);
-    border-radius: 2px;
-    text-align: center;
-    background: #fafafa;
-  }
-  .empty__title {
-    font-family: var(--pc-font-sans);
-    font-size: 18px; font-weight: 500;
-    margin: 0 0 8px;
-    color: var(--pc-ink);
-  }
-  .empty__body {
-    font-family: var(--pc-font-sans);
-    font-size: 14px; line-height: 1.5;
-    color: var(--pc-ink-soft);
-    margin: 0 auto 12px; max-width: 44ch;
-  }
-  .empty__cta {
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    margin: 0;
-  }
-  .empty__cta a { color: var(--pc-accent); }
-
-  .list {
-    display: flex;
-    flex-direction: column;
     gap: 14px;
+    flex-wrap: wrap;
+    padding: 10px 0 12px;
+    border-top: 5px solid var(--pf-yellow);
+    margin: 28px 0 16px;
   }
+  .pf-section-head--blue   { border-top-color: var(--pf-blue); }
+  .pf-section-head--green  { border-top-color: var(--pf-green); }
+  .pf-section-head--purple { border-top-color: var(--pf-purple); }
+  .pf-section-head--orange { border-top-color: var(--pf-orange); }
+  .pf-section-head--red    { border-top-color: var(--pf-red); }
 
-  .card {
-    padding: 16px 18px;
-    border: 1.5px solid var(--pc-rule);
-    border-radius: 2px;
-    background: #fff;
-  }
-  .card--active {
-    border-color: #2F8F5F;
-    box-shadow: 0 0 0 3px rgba(47,143,95,0.08);
-  }
-
-  .card__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .card__tag {
-    padding: 2px 8px;
-    border: 1px solid currentColor;
-    border-radius: 2px;
-    color: var(--pc-ink-muted);
-  }
-  .card--active .card__tag { color: #2F8F5F; }
-  .card__provider {
-    color: var(--pc-ink-muted);
-  }
-
-  .card__addr {
-    font-family: var(--pc-font-mono);
-    font-size: 13px;
-    color: var(--pc-ink);
-    margin: 0 0 12px;
-    word-break: break-all;
-  }
-
-  .card__stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 4px 18px;
-    padding: 10px 0;
-    border-top: 1px dashed var(--pc-rule);
-    border-bottom: 1px dashed var(--pc-rule);
-    margin-bottom: 12px;
-  }
-  .card__stat {
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-  }
-  .card__stat span { color: var(--pc-ink-muted); }
-  .card__stat b { display: block; font-weight: 500; color: var(--pc-ink); letter-spacing: 0; font-size: 13px; text-transform: none; }
-
-  .card__actions {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-  }
-  .card__tzkt { color: var(--pc-accent); }
-  .card__switch,
-  .card__remove {
-    padding: 5px 10px;
-    border: 1px solid var(--pc-ink);
-    background: #fff;
-    color: var(--pc-ink);
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: background-color 0.1s;
-  }
-  .card__switch:hover {
-    background: var(--pc-ink);
-    color: #fff;
-  }
-  .card__remove {
-    border-color: #A33;
-    color: #A33;
-  }
-  .card__remove:hover {
-    background: #A33;
-    color: #fff;
-  }
-
-  .agent-strip {
-    margin-top: 32px;
-    padding-top: 14px;
-    border-top: 1px dashed var(--pc-rule);
-    font-family: var(--pc-font-mono);
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-  }
-  .agent-strip__label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
-  .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
-  /* ── COLLECTION (Tezos NFTs) ────────────────────────────────────── */
-  .collection {
-    margin: 24px 0 12px;
-    padding-top: 20px;
-    border-top: 1px solid var(--pc-rule, #e5e3de);
-  }
-  .collection__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-    margin: 14px 0 10px;
-  }
-  .collection__loading,
-  .collection__empty,
-  .collection__error {
-    grid-column: 1 / -1;
-    font-size: 11.5px;
-    letter-spacing: 0.14em;
-    color: var(--pc-ink-muted, #5f5e5a);
-    padding: 14px 0;
-    text-align: center;
-    font-family: Georgia, serif;
-  }
-  .collection__loading {
-    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
-    font-weight: 700;
-    letter-spacing: 0.24em;
-    font-size: 10.5px;
-  }
-  .nft {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    text-decoration: none;
-    color: inherit;
-    background: #fffdf8;
-    border: 1px solid var(--pc-rule, #e5e3de);
-    border-radius: 3px;
-    padding: 8px 8px 10px;
-    transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
-  }
-  .nft:hover {
-    transform: translateY(-1px);
-    border-color: var(--pc-accent, #8a2432);
-    box-shadow: 0 4px 12px rgba(26, 18, 10, 0.08);
-  }
-  .nft__art {
-    aspect-ratio: 1;
-    background: #1a120a;
-    border-radius: 2px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .nft__art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    image-rendering: auto;
-  }
-  .nft__name {
-    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
-    font-size: 13.5px;
-    line-height: 1.2;
+  .pf-section-title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     margin: 0;
-    color: var(--pc-ink, #121116);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--pf-ink);
   }
-  .nft__meta {
-    font-size: 9.5px;
-    letter-spacing: 0.14em;
-    color: var(--pc-ink-muted, #5f5e5a);
+  .pf-section-sub {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--pf-ink-soft);
     margin: 0;
   }
-  .collection__footer {
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    color: var(--pc-ink-muted, #5f5e5a);
-    margin: 4px 0 0;
-    text-align: right;
-    font-weight: 700;
-  }
+  .pf-section-sub a { color: var(--pf-ink); font-weight: 700; }
 
-  /* ── COLLECTED BLOCKS strip ── */
-  .blocks-history {
-    margin-bottom: 32px;
-  }
-  .blocks-history .kicker { margin: 0 0 10px; }
-  .blocks-strip {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 10px;
-  }
-  .block-tile {
-    display: block;
-    text-decoration: none;
-    color: inherit;
-    border: 1px solid var(--pc-rule, #d6d4cd);
-    border-radius: 3px;
-    overflow: hidden;
-    background: #fff;
-    transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
-  }
-  .block-tile:hover {
-    border-color: var(--pc-accent, #185FA5);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
-  }
-  .block-tile__img {
-    width: 100%;
-    aspect-ratio: 1200 / 630;
-    overflow: hidden;
-    background: #f2f0ea;
+  .pf-hero { margin-bottom: 32px; }
+  .pf-hero__chrome {
+    background: linear-gradient(180deg, #fefaf0 0%, #f8f0dc 100%);
+    border: 2px solid var(--pf-ink);
+    box-shadow: 6px 6px 0 0 var(--pf-ink);
+    padding: 16px 20px 22px;
     position: relative;
   }
-  .block-tile__img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .block-tile__img--err {
-    background: linear-gradient(135deg, #eeeae0 0%, #ddd8cc 100%);
-  }
-  .block-tile__img--err::after {
-    content: 'no image';
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    color: #aaa;
-  }
-  .block-tile__id {
-    font-family: var(--pc-font-mono);
+  .pf-hero__kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
     font-size: 9.5px;
-    letter-spacing: 0.10em;
+    letter-spacing: 0.26em;
+    margin: 0 0 14px;
+    color: var(--pf-ink);
     font-weight: 700;
-    color: var(--pc-accent, #185FA5);
-    margin: 6px 8px 2px;
+    border-bottom: 1px dashed var(--pf-rule);
+    padding-bottom: 10px;
   }
-  .block-tile__date {
-    font-size: 10px;
-    color: var(--pc-ink-muted, #5f5e5a);
-    margin: 0 8px 6px;
-    font-family: var(--pc-font-mono);
-    letter-spacing: 0.06em;
-  }
-  .blocks-empty {
-    font-size: 13px;
-    color: var(--pc-ink-muted, #5f5e5a);
-    padding: 12px 0;
-  }
-  .blocks-empty a { color: var(--pc-accent, #185FA5); }
-
-  /* ── BATH SAVES grid ── */
-  .bath-saves-section {
-    margin-bottom: 32px;
-  }
-  .bath-saves-section .kicker { margin: 0 0 10px; }
-  .bath-saves-section .kicker a { color: var(--pc-accent, #185FA5); text-decoration: none; font-weight: 700; }
-  .saves-grid {
+  .pf-hero__inner {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
-  }
-  .save-card {
-    border: 1px solid var(--pc-rule, #d6d4cd);
-    border-radius: 4px;
-    overflow: hidden;
-    background: #fff;
-  }
-  .save-card__embed iframe {
-    display: block;
-    width: 100%;
-    border: none;
-  }
-  .save-card__meta {
-    display: flex;
+    grid-template-columns: 180px 1fr auto;
+    gap: 22px;
     align-items: center;
-    gap: 7px;
-    padding: 7px 10px;
-    border-top: 1px solid var(--pc-rule-soft, #e5e3de);
-    font-family: var(--pc-font-mono);
+  }
+  .pf-hero__avatar {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    background: var(--pf-yellow);
+    border: 3px solid var(--pf-ink);
+    box-shadow: 5px 5px 0 0 var(--pf-ink);
+    overflow: hidden;
+  }
+  .pf-hero__avatar img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .pf-hero__noun-tag {
+    position: absolute;
+    bottom: 6px; left: 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
     font-size: 9px;
-    letter-spacing: 0.12em;
-    flex-wrap: wrap;
-  }
-  .save-card__type {
+    letter-spacing: 0.16em;
+    background: var(--pf-ink);
+    color: var(--pf-paper);
+    padding: 2px 7px;
     font-weight: 700;
-    color: var(--pc-ink-soft, #38373A);
-    background: #f2f0ea;
-    padding: 2px 6px;
-    border-radius: 2px;
   }
-  .save-card__mood-dot {
+  .pf-hero__id { display: grid; gap: 8px; }
+  .pf-hero__name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.6vw, 56px);
+    line-height: 1.0;
+    margin: 0;
+    color: var(--pf-ink);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    word-break: break-word;
+  }
+  .pf-hero__sub {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--pf-ink-soft);
+    margin: 0;
+  }
+  .pf-kind {
     display: inline-block;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .save-card__mood-name {
-    color: var(--pc-ink-soft, #38373A);
-    opacity: 0.7;
-    text-transform: uppercase;
-  }
-  .save-card__date {
-    color: var(--pc-ink-muted, #5f5e5a);
-    margin-left: auto;
-  }
-  .save-card__open {
-    color: var(--pc-accent, #185FA5);
-    text-decoration: none;
+    background: var(--pf-ink);
+    color: var(--pf-paper);
+    padding: 2px 8px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 9.5px;
   }
-  .save-card__open:hover { text-decoration: underline; }
+  .pf-hero__chips { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .pf-chip {
+    display: inline-flex; flex-direction: column;
+    background: #fff;
+    border: 1.5px solid var(--pf-ink);
+    box-shadow: 2px 2px 0 var(--pf-ink);
+    padding: 4px 10px;
+    line-height: 1.2;
+  }
+  .pf-chip span {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 8px; letter-spacing: 0.18em; color: var(--pf-ink-soft); font-weight: 700;
+  }
+  .pf-chip b {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px; color: var(--pf-ink); letter-spacing: 0.04em;
+  }
+  .pf-chip--wallet { background: linear-gradient(180deg, #fffbe6 0%, #fef0bd 100%); }
+  .pf-chip--noun   { background: linear-gradient(180deg, #fef0bd 0%, #f8d878 100%); }
+  .pf-chip--since  { background: #fff; }
+  .pf-chip--id     { background: #f4f0e4; }
+
+  .pf-hero__state { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+  .pf-state-pill {
+    display: inline-block; background: #fff; border: 1px dashed var(--pf-rule);
+    padding: 3px 9px; font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.10em; color: var(--pf-ink);
+  }
+  .pf-state-pill--mood { border-color: var(--pf-red); color: var(--pf-red); text-transform: uppercase; font-weight: 700; }
+
+  .pf-hero__stamp {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 86px; height: 86px;
+    background: var(--pf-red); color: #fff;
+    border: 3px solid var(--pf-ink);
+    box-shadow: 4px 4px 0 var(--pf-ink);
+    transform: rotate(-7deg);
+    font-family: 'JetBrains Mono Variable', monospace;
+    text-align: center; line-height: 1.05; flex-shrink: 0;
+  }
+  .pf-hero__stamp-line { font-size: 10px; letter-spacing: 0.14em; font-weight: 700; opacity: 0.95; }
+  .pf-hero__stamp-line--big { font-size: 22px; letter-spacing: 0.04em; line-height: 1; margin: 2px 0; }
+
+  .pf-arcade__grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .pf-tile {
+    border: 2px solid var(--pf-ink);
+    box-shadow: 3px 3px 0 0 var(--pf-ink);
+    padding: 10px 12px 12px;
+    display: grid; gap: 4px;
+    background: #fff; position: relative; overflow: hidden;
+  }
+  .pf-tile::after {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(31,27,21,0.03) 6px 7px);
+    pointer-events: none;
+  }
+  .pf-tile__label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.20em; color: var(--pf-ink); opacity: 0.78; }
+  .pf-tile__value { font-family: 'Lora', Georgia, serif; font-size: 32px; font-weight: 700; color: var(--pf-ink); line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .pf-tile__sub { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.08em; color: var(--pf-ink); opacity: 0.68; line-height: 1.3; }
+  .pf-tile--yellow { background: var(--pf-yellow); }
+  .pf-tile--red    { background: var(--pf-red);    }
+  .pf-tile--red    .pf-tile__label, .pf-tile--red .pf-tile__value, .pf-tile--red .pf-tile__sub { color: #fff; }
+  .pf-tile--blue   { background: var(--pf-blue);   }
+  .pf-tile--blue   .pf-tile__label, .pf-tile--blue .pf-tile__value, .pf-tile--blue .pf-tile__sub { color: #fff; }
+  .pf-tile--green  { background: var(--pf-green); }
+  .pf-tile--purple { background: var(--pf-purple); }
+  .pf-tile--purple .pf-tile__label, .pf-tile--purple .pf-tile__value, .pf-tile--purple .pf-tile__sub { color: #fff; }
+  .pf-tile--orange { background: var(--pf-orange); }
+
+  .pf-poster__wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .pf-poster__tile {
+    display: block; text-decoration: none; color: inherit;
+    background: #fff;
+    border: 2px solid var(--pf-ink);
+    box-shadow: 4px 4px 0 0 var(--pf-ink);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .pf-poster__tile:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 var(--pf-ink); }
+  .pf-poster__img { position: relative; aspect-ratio: 1200 / 630; background: var(--pf-paper-2); overflow: hidden; border-bottom: 2px solid var(--pf-ink); }
+  .pf-poster__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pf-poster__img--err { background: linear-gradient(135deg, #eeeae0 0%, #ddd8cc 100%); }
+  .pf-poster__img--err::after { content: 'no image yet'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; color: #999; }
+  .pf-poster__num { position: absolute; top: 6px; left: 6px; background: var(--pf-ink); color: var(--pf-paper); padding: 2px 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.10em; font-weight: 700; }
+  .pf-poster__caption { padding: 6px 10px 8px; background: #fff; display: flex; justify-content: space-between; align-items: baseline; }
+  .pf-poster__date { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.10em; color: var(--pf-ink-soft); }
+  .pf-poster__empty { grid-column: 1 / -1; background: #fff; border: 2px dashed var(--pf-rule); padding: 20px; text-align: center; font-family: 'Lora', Georgia, serif; font-size: 14px; color: var(--pf-ink-soft); }
+  .pf-poster__empty a { color: var(--pf-blue); font-weight: 700; }
+
+  .pf-rotation__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .pf-cassette { display: flex; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); overflow: hidden; }
+  .pf-cassette__stripe { width: 8px; flex-shrink: 0; }
+  .pf-cassette__body { flex: 1; min-width: 0; }
+  .pf-cassette__body iframe { display: block; width: 100%; border: none; }
+  .pf-cassette__meta { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px dashed var(--pf-rule); font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.10em; flex-wrap: wrap; }
+  .pf-cassette__type { background: var(--pf-ink); color: var(--pf-paper); padding: 2px 6px; font-weight: 700; }
+  .pf-cassette__mood { color: var(--pf-ink-soft); text-transform: uppercase; }
+  .pf-cassette__date { color: var(--pf-ink-soft); margin-left: auto; }
+  .pf-cassette__open { color: var(--pf-blue); text-decoration: none; font-weight: 700; }
+  .pf-cassette__open:hover { text-decoration: underline; }
+
+  .pf-ledger__body { background: #fff; border: 2px solid var(--pf-ink); box-shadow: 4px 4px 0 0 var(--pf-ink); }
+  .pf-ledger__empty { padding: 18px 16px; font-family: 'Lora', Georgia, serif; font-size: 14px; color: var(--pf-ink-soft); margin: 0; text-align: center; }
+  .pf-ledger__empty a { color: var(--pf-purple); font-weight: 700; }
+  .pf-table { display: grid; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .pf-table__head, .pf-table__row { display: grid; grid-template-columns: 100px 110px 90px 60px 70px 70px 80px 1fr; align-items: center; gap: 6px; padding: 8px 12px; }
+  .pf-table__head { background: var(--pf-ink); color: var(--pf-paper); font-size: 9px; letter-spacing: 0.16em; font-weight: 700; text-transform: uppercase; }
+  .pf-table__row { border-top: 1px solid var(--pf-rule); }
+  .pf-table__row--active { background: #fff8e0; }
+  .pf-table__num { text-align: right; font-variant-numeric: tabular-nums; color: var(--pf-ink); }
+  .pf-table__head .pf-table__num { color: var(--pf-paper); text-align: right; }
+  .pf-table__provider { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+  .pf-table__dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pf-green); box-shadow: 0 0 6px var(--pf-green); }
+  .pf-table__dot--off { background: var(--pf-rule); box-shadow: none; }
+  .pf-table__addr a { color: var(--pf-blue); text-decoration: none; }
+  .pf-table__addr a:hover { text-decoration: underline; }
+  .pf-table__added { color: var(--pf-ink-soft); }
+  .pf-table__actions { display: inline-flex; gap: 5px; align-items: center; justify-content: flex-end; }
+  .pf-table__pill { background: var(--pf-green); color: var(--pf-ink); padding: 2px 8px; font-weight: 700; font-size: 9px; letter-spacing: 0.14em; }
+  .pf-table__btn { background: #fff; color: var(--pf-ink); border: 1px solid var(--pf-ink); padding: 2px 8px; font-family: inherit; font-size: 9px; letter-spacing: 0.14em; cursor: pointer; text-decoration: none; font-weight: 700; }
+  .pf-table__btn:hover { background: var(--pf-yellow); }
+
+  .pf-vault__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .pf-nft { display: block; text-decoration: none; color: inherit; background: #fff; border: 2px solid var(--pf-ink); box-shadow: 3px 3px 0 0 var(--pf-ink); transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .pf-nft:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--pf-ink); }
+  .pf-nft__art { aspect-ratio: 1; background: var(--pf-paper-2); overflow: hidden; border-bottom: 2px solid var(--pf-ink); }
+  .pf-nft__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pf-nft__name { font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.25; padding: 6px 8px 2px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pf-nft__meta { font-family: 'JetBrains Mono Variable', monospace; font-size: 9.5px; letter-spacing: 0.10em; padding: 0 8px 6px; color: var(--pf-ink-soft); margin: 0; }
+  .pf-vault__loading, .pf-vault__empty, .pf-vault__error { grid-column: 1 / -1; padding: 16px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; color: var(--pf-ink-soft); text-align: center; }
+  .pf-vault__footer { margin: 10px 0 0; text-align: right; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.14em; color: var(--pf-ink-soft); }
+
+  .pf-machine { margin-top: 36px; padding: 12px 14px; border: 1px dashed var(--pf-rule); background: rgba(255,255,255,0.5); }
+  .pf-machine__label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.20em; font-weight: 700; margin: 0 0 6px; color: var(--pf-ink-soft); }
+  .pf-machine ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .pf-machine a { color: var(--pf-ink); }
+
+  @media (max-width: 760px) {
+    .pf-arcade__grid { grid-template-columns: repeat(3, 1fr); }
+    .pf-hero__inner { grid-template-columns: 140px 1fr; gap: 16px; }
+    .pf-hero__avatar { width: 140px; height: 140px; }
+    .pf-hero__stamp { display: none; }
+    .pf-table__head, .pf-table__row { grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 10px; }
+    .pf-table__head { display: none; }
+    .pf-table__num, .pf-table__added { text-align: left; }
+    .pf-table__row { padding: 10px 12px; gap: 4px 14px; }
+    .pf-table__actions { grid-column: 1 / -1; justify-content: flex-start; margin-top: 4px; }
+  }
+  @media (max-width: 480px) {
+    .pf-arcade__grid { grid-template-columns: repeat(2, 1fr); }
+    .pf-hero__name { font-size: 30px; }
+    .pf-section-title { font-size: 22px; }
+  }
 </style>
