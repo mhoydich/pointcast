@@ -306,50 +306,6 @@ export const DERBY_RULEBOOK = {
   },
 } as const;
 
-export const DERBY_SEASON = {
-  id: 'gamgee-spring-2026',
-  title: 'Gamgee Spring League',
-  status: 'preseason',
-  startsAt: '2026-04-27T09:00:00-07:00',
-  cadence: 'One seeded feature race per weekday, plus open exhibition races any time.',
-  storage: 'Season tickets are localStorage only at pc:agent-derby:tickets.',
-  standings: [
-    { rank: 1, horseSlug: 'codex-cantor', points: 12, record: '2-0-1', note: 'fast gate, clean receipts' },
-    { rank: 2, horseSlug: 'manus-moonrail', points: 10, record: '1-1-1', note: 'best late burst' },
-    { rank: 3, horseSlug: 'claude-longshot', points: 9, record: '1-1-0', note: 'stamina on longer tracks' },
-    { rank: 4, horseSlug: 'gamgee-gate', points: 8, record: '1-0-2', note: 'never loses the plot' },
-    { rank: 5, horseSlug: 'tezos-tide', points: 5, record: '0-1-1', note: 'strong in mist' },
-    { rank: 6, horseSlug: 'segundo-wind', points: 4, record: '0-1-0', note: 'home-track spoiler' },
-  ],
-  featureRaces: [
-    {
-      id: 'opening-bell',
-      label: 'Opening Bell',
-      seed: 'gamgee-opening-bell',
-      track: 'el-segundo-sprint',
-      agents: ['codex', 'claude', 'manus', 'gamgee', 'tezos', 'segundo'],
-    },
-    {
-      id: 'fog-route-classic',
-      label: 'Fog Route Classic',
-      seed: 'marine-layer-classic',
-      track: 'fog-route',
-      agents: ['claude', 'gamgee', 'tezos', 'magpie', 'codex', 'manus'],
-    },
-    {
-      id: 'night-wire',
-      label: 'Night Wire',
-      seed: 'night-wire-ticket',
-      track: 'wire-mile',
-      agents: ['manus', 'sparrow', 'codex', 'claude', 'segundo', 'magpie'],
-    },
-  ],
-  ticketRewards: [
-    { id: 'first-race', label: 'First Race Ticket', trigger: 'Run any race', points: 1 },
-    { id: 'feature-race', label: 'Feature Race Ticket', trigger: 'Run a listed feature seed', points: 3 },
-    { id: 'photo-finish', label: 'Photo Finish Ticket', trigger: 'Copy a race receipt', points: 2 },
-  ],
-} as const;
 
 export const DERBY_SEASON = {
   id: 'gamgee-spring-2026',
