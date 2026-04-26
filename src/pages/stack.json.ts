@@ -62,7 +62,7 @@ export const GET: APIRoute = async () => {
     generatedAt: new Date().toISOString(),
     site: 'https://pointcast.xyz',
     layers: LAYERS,
-    source: 'https://github.com/MikeHoydich/pointcast',
+    source: 'https://github.com/mhoydich/pointcast',
     humanUrl: 'https://pointcast.xyz/stack',
   };
 

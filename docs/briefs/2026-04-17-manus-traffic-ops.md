@@ -11,7 +11,7 @@
 
 Mike is playing pickleball. He's asked for autonomous traffic work across SEO / GEO / LLM discoverability. CC can handle engineering lanes but the ops lanes need login sessions + a real browser. That's you.
 
-Site is live at https://pointcast.xyz (Cloudflare Pages). GitHub repo at github.com/MikeHoydich/pointcast. Mike's primary email is on file; he has access to Google, X (@mhoydich), Farcaster, objkt.
+Site is live at https://pointcast.xyz (Cloudflare Pages). GitHub repo at github.com/mhoydich/pointcast. Mike's primary email is on file; he has access to Google, X (@mhoydich), Farcaster, objkt.
 
 ---
 

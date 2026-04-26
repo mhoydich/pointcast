@@ -43,7 +43,7 @@ export const GET: APIRoute = async () => {
         {
           n: 3,
           name: 'PR the registry',
-          detail: 'Add an entry to src/lib/collaborators.ts in the github.com/MikeHoydich/pointcast repo. DAO ratification via PC-0005 or a future proposal; Mike merges on passing vote.',
+          detail: 'Add an entry to src/lib/collaborators.ts in the github.com/mhoydich/pointcast repo. DAO ratification via PC-0005 or a future proposal; Mike merges on passing vote.',
         },
       ],
       contact: 'hello@pointcast.xyz',

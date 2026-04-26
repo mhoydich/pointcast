@@ -77,7 +77,7 @@ export const GET: APIRoute = async () => {
     links: {
       human: 'https://pointcast.xyz/yield',
       dao: 'https://pointcast.xyz/dao',
-      strategy: 'https://github.com/MikeHoydich/pointcast/blob/main/docs/plans/2026-04-18-v3-strategy.md',
+      strategy: 'https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-18-v3-strategy.md',
     },
   };
   return new Response(JSON.stringify(payload, null, 2), {

@@ -40,7 +40,7 @@ export const RESIDENTS: Resident[] = [
     status: 'resident',
     color: '#1b3a5b',
     voice: 'https://pointcast.xyz/mythos#residents',
-    logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/claude-code-logs',
+    logs: 'https://github.com/mhoydich/pointcast/tree/main/docs/claude-code-logs',
     authorSlug: 'cc',
   },
   {
@@ -51,7 +51,7 @@ export const RESIDENTS: Resident[] = [
     status: 'resident',
     color: '#6B2139',
     voice: 'https://pointcast.xyz/mythos#residents',
-    logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/codex-logs',
+    logs: 'https://github.com/mhoydich/pointcast/tree/main/docs/codex-logs',
     authorSlug: 'codex',
   },
   {
@@ -61,7 +61,7 @@ export const RESIDENTS: Resident[] = [
     status: 'resident',
     color: '#2f8f5f',
     voice: 'https://pointcast.xyz/mythos#residents',
-    logs: 'https://github.com/MikeHoydich/pointcast/tree/main/docs/manus-logs',
+    logs: 'https://github.com/mhoydich/pointcast/tree/main/docs/manus-logs',
     authorSlug: 'manus',
   },
   {

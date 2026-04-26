@@ -359,7 +359,7 @@ export const GET: APIRoute = async () => {
         standard: 'custom',
         status: prizeCast ? 'live' : 'pending-compile',
         description: 'No-loss prize-linked savings. PoolTogether-flavored, Tezos-native.',
-        source: 'https://github.com/MikeHoydich/pointcast/blob/main/contracts/v2/prize_cast.py',
+        source: 'https://github.com/mhoydich/pointcast/blob/main/contracts/v2/prize_cast.py',
       },
       drumToken: {
         chain: 'tezos',
@@ -368,7 +368,7 @@ export const GET: APIRoute = async () => {
         standard: 'FA1.2',
         status: drumToken ? 'live' : 'pending-compile',
         description: 'DRUM attention coin. Signed-voucher claim flow.',
-        source: 'https://github.com/MikeHoydich/pointcast/blob/main/contracts/v2/drum_token.py',
+        source: 'https://github.com/mhoydich/pointcast/blob/main/contracts/v2/drum_token.py',
       },
       marketplace: {
         chain: 'tezos',
@@ -383,7 +383,7 @@ export const GET: APIRoute = async () => {
       treatment: 'Returns stripped HTML: no <style>, no <link rel=stylesheet>, no preload/preconnect/icon/manifest, no inline <script> (JSON-LD preserved), no generator meta, no inline style attrs.',
       responseHeader: 'X-Agent-Mode: stripped · ai:<vendor>',
       payloadSavings: '~12% smaller on the home feed (97,631 vs 111,170 bytes verified).',
-      source: 'https://github.com/MikeHoydich/pointcast/blob/main/functions/_middleware.ts',
+      source: 'https://github.com/mhoydich/pointcast/blob/main/functions/_middleware.ts',
     },
 
     generativeEngineOptimization: {

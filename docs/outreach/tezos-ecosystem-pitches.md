@@ -94,7 +94,7 @@ Requesting a TzKT alias for our mainnet FA2 contract:
   Alias:   Visit Nouns (PointCast)
   Type:    FA2, open-supply NFT
   Origin:  2026-04-17
-  Source:  github.com/MikeHoydich/pointcast/blob/main/contracts/visit_nouns_fa2.py
+  Source:  github.com/mhoydich/pointcast/blob/main/contracts/visit_nouns_fa2.py
 
 Collection page: https://pointcast.xyz/collection/visit-nouns
 objkt mirror: https://objkt.com/collection/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh
@@ -215,7 +215,7 @@ working reference for the Tezos dev docs. Stack:
 — Wallet compatibility matrix: Kukai / Temple / Umami / Altme,
   documented in src/lib/tezos-ecosystem.ts
 
-Repo: github.com/MikeHoydich/pointcast (MIT-flavored code, CC0
+Repo: github.com/mhoydich/pointcast (MIT-flavored code, CC0
 content). Happy to accept PRs that help us align with docs patterns,
 or to contribute a walkthrough if useful.
 

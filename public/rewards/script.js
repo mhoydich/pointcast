@@ -100,7 +100,7 @@
             tags: ["testing", "grants"],
             reward: "1,000 POINT",
             proof: "Merged GitHub PR with short changelog note.",
-            path: "https://github.com/MikeHoydich/pointcast"
+            path: "https://github.com/mhoydich/pointcast"
         }
     ];
 

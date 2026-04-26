@@ -41,10 +41,42 @@
  */
 
 interface Env {
-  PRESENCE: DurableObjectNamespace;
+  PRESENCE?: DurableObjectNamespace;
 }
 
 export const onRequest: PagesFunction<Env> = async (ctx) => {
+  const upgrade = ctx.request.headers.get('upgrade') || '';
+  if (upgrade.toLowerCase() !== 'websocket') {
+    const url = new URL(ctx.request.url);
+    return new Response(JSON.stringify({
+      endpoint: '/api/presence',
+      type: 'websocket',
+      websocket: `wss://${url.host}/api/presence?sid={uuid}&kind={human|agent|wallet}`,
+      snapshot: `https://${url.host}/api/presence/snapshot`,
+      note: 'Open this endpoint as a WebSocket. Use /api/presence/snapshot for HTTP.',
+    }, null, 2), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  }
+
+  if (!ctx.env.PRESENCE) {
+    return new Response(JSON.stringify({
+      error: 'presence-unbound',
+      note: 'Presence Durable Object binding is not configured.',
+    }, null, 2), {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
   const id = ctx.env.PRESENCE.idFromName('global');
   const stub = ctx.env.PRESENCE.get(id);
   return stub.fetch(ctx.request);
