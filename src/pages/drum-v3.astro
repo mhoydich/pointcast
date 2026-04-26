@@ -1191,6 +1191,40 @@ import DrumNav from '../components/DrumNav.astro';
     }, intervalMs);
   }
 
+  // ── Wallet auto-bind ─────────────────────────────────────────────
+  // When WalletChip fires pc:wallet-change, POST to /api/drum/identify
+  // so this session's drums can be associated with the Tezos address
+  // server-side. Soft binding — no signature required today.
+  let lastBoundAddress = '';
+  async function maybeBindWallet() {
+    let active: { address: string } | null = null;
+    try {
+      const raw = localStorage.getItem('pc:wallets');
+      const list = raw ? JSON.parse(raw) : [];
+      const a = localStorage.getItem('pc:wallet-active');
+      active = list.find((w: any) => w.address === a) || list[list.length - 1] || null;
+    } catch {}
+    if (!active || active.address === lastBoundAddress) return;
+    const timestamp = Math.floor(Date.now() / 1000);
+    try {
+      const r = await fetch('/api/drum/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          address: active.address,
+          timestamp,
+          signature: '',
+          payload: `drum:bind:${sessionId}:${timestamp}`,
+        }),
+        keepalive: true,
+      });
+      if (r.ok) lastBoundAddress = active.address;
+    } catch { /* non-fatal */ }
+  }
+  window.addEventListener('pc:wallet-change', maybeBindWallet);
+  maybeBindWallet();
+
   // Auto-load track from URL hash or query — supports share URLs like
   // /drum-v3?track=<id> or /drum-v3#track=<id>
   (function autoload() {

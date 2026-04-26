@@ -2194,10 +2194,40 @@ const DRUMS = [
     }
   }
   renderWallet();
-  window.addEventListener('pc:wallet-change', renderWallet);
+  window.addEventListener('pc:wallet-change', () => { renderWallet(); maybeBindWallet(); });
   window.addEventListener('storage', (e) => {
     if (e.key === 'pc:wallets' || e.key === 'pc:wallet-active') renderWallet();
   });
+
+  // Auto-bind the wallet to this drum session via /api/drum/identify so
+  // the leaderboard + Phase C claim can find it server-side. Idempotent
+  // — sends only when address changes. Runs in 'soft' mode (no Beacon
+  // signature today; the endpoint accepts that and stores mode='soft'),
+  // upgrade path documented in the endpoint header.
+  let lastBoundAddress = '';
+  async function maybeBindWallet() {
+    const w = loadActiveWallet();
+    if (!w || w.address === lastBoundAddress) return;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const payload = `drum:bind:${sessionId}:${timestamp}`;
+    try {
+      const r = await fetch('/api/drum/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          address: w.address,
+          timestamp,
+          signature: '', // soft bind — endpoint accepts empty signature
+          payload,
+        }),
+        keepalive: true,
+      });
+      if (r.ok) lastBoundAddress = w.address;
+    } catch { /* non-fatal — leaderboard still reads from localStorage */ }
+  }
+  // Bind on first paint if wallet was already connected from a prior session
+  maybeBindWallet();
 
   if (walletDiscBtn) {
     walletDiscBtn.addEventListener('click', () => {
