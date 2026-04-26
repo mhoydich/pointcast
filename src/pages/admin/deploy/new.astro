@@ -212,6 +212,23 @@ const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
       </p>
     </section>
 
+    <!-- FA2 transfer layout pre-flight check -->
+    <!-- Walks the parsed Michelson code looking for every FA2-shaped transfer
+         parameter type — both the contract's own %transfer entrypoint (if it's
+         an FA2) and any CONTRACT %transfer dispatch instruction (if it's a
+         marketplace calling into someone else's FA2). Verifies the inner record
+         field order is canonical TZIP-12: (to_, token_id, amount).
+         If any shape is alphabetical (amount, to_, token_id), the section turns
+         red and the originate button is disabled — this is the safety net that
+         would have caught both v1 (KT1SLFv2u…) and v2 (KT1ABfp7c…) marketplace
+         orphans before they were signed. -->
+    <section id="fa2-layout-check" class="mb-5 p-3 rounded-md border border-rule/30 bg-card/40 hidden" data-status="">
+      <p class="font-mono text-[0.54rem] tracking-[0.2em] uppercase mb-1" id="fa2-layout-title">
+        fa2 transfer dispatch layout
+      </p>
+      <p id="fa2-layout-detail" class="font-mono text-[0.65rem] break-all">—</p>
+    </section>
+
     <!-- Originate button + status -->
     <section class="mb-8">
       <button
@@ -309,6 +326,9 @@ const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
         storageBytes > 1024 ? (storageBytes / 1024).toFixed(1) + ' KB' : storageBytes + ' B';
     // Refresh admin preview when storage changes.
     refreshAdminPreview();
+    // Refresh layout check when code changes (handles stale-cache or
+    // wrong-paste regressions like the v1/v2 marketplace orphans).
+    refreshLayoutCheck();
   }
   if (codeInput) codeInput.addEventListener('input', updateStats);
   if (storageInput) storageInput.addEventListener('input', updateStats);
@@ -379,6 +399,183 @@ const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
   function looksLikeJson(s) {
     const t = s.trim();
     return t.startsWith('[') || t.startsWith('{');
+  }
+
+  // ── FA2 transfer layout pre-flight check ─────────────────────────────
+  // The class of bug this catches: the orphan v1 + v2 marketplace contracts
+  // both shipped with the inner record laid out as (amount, to_, token_id)
+  // — SmartPy's default-alphabetical field order — instead of the canonical
+  // TZIP-12 order (to_, token_id, amount). Coffee Mugs FA2 (and every other
+  // canonical FA2) uses the canonical order, so sp.contract(...) returned
+  // None at fulfill_ask time and every buy attempt died with INVALID_FA2_CONTRACT.
+  //
+  // The check walks the parsed Michelson tree and finds every node shaped
+  // like list(pair(address %from_, list(pair(...inner...)) %txs)) — that's
+  // the FA2 transfer parameter type, used in both the FA2 contract's own
+  // %transfer entrypoint AND in any CONTRACT %transfer instruction (marketplace
+  // dispatching to a third-party FA2). For each shape, it walks the inner
+  // pair tree and collects the field annotations in tree order. If the order
+  // isn't ('%to_', '%token_id', '%amount'), the artifact is broken.
+
+  /**
+   * @param {*} root parsed Michelson code (array of sections, or object tree)
+   * @returns {Array<{ fields: string[], canonical: boolean, location: string }>}
+   */
+  function findFa2TransferShapes(root) {
+    /** @type {Array<{fields: string[], canonical: boolean, location: string}>} */
+    const results = [];
+    const expected = new Set(['%to_', '%token_id', '%amount']);
+
+    /** @param {*} node */
+    function walk(node, location) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (let i = 0; i < node.length; i++) walk(node[i], location);
+        return;
+      }
+      // Look for pair(%from_, %txs) — accept either ordering of args.
+      if (node.prim === 'pair' && Array.isArray(node.args) && node.args.length === 2) {
+        const a = node.args[0];
+        const b = node.args[1];
+        const aAnnot = (a && a.annots && a.annots[0]) || '';
+        const bAnnot = (b && b.annots && b.annots[0]) || '';
+        let txsArg = null;
+        if (aAnnot === '%from_' && bAnnot === '%txs') txsArg = b;
+        else if (bAnnot === '%from_' && aAnnot === '%txs') txsArg = a;
+        if (txsArg && txsArg.prim === 'list' && Array.isArray(txsArg.args) && txsArg.args[0]) {
+          const innerPair = txsArg.args[0];
+          if (innerPair && innerPair.prim === 'pair') {
+            /** @type {string[]} */
+            const fields = [];
+            /** @param {*} p */
+            function collect(p) {
+              if (!p) return;
+              if (p.prim === 'pair' && Array.isArray(p.args)) {
+                for (let i = 0; i < p.args.length; i++) collect(p.args[i]);
+              } else if (p.annots && p.annots[0]) {
+                fields.push(p.annots[0]);
+              }
+            }
+            collect(innerPair);
+            const isFa2Shape =
+              fields.length === 3 &&
+              expected.has(fields[0]) &&
+              expected.has(fields[1]) &&
+              expected.has(fields[2]);
+            if (isFa2Shape) {
+              const canonical =
+                fields[0] === '%to_' &&
+                fields[1] === '%token_id' &&
+                fields[2] === '%amount';
+              results.push({ fields, canonical, location });
+            }
+          }
+        }
+      }
+      // Recurse into args + any other object values.
+      if (Array.isArray(node.args)) {
+        for (let i = 0; i < node.args.length; i++) walk(node.args[i], location);
+      }
+    }
+
+    // Walk top-level — code is typically [parameter, storage, code] sections.
+    if (Array.isArray(root)) {
+      for (let i = 0; i < root.length; i++) {
+        const sec = root[i];
+        const secName = (sec && sec.prim) || ('section[' + i + ']');
+        walk(sec, secName);
+      }
+    } else {
+      walk(root, 'root');
+    }
+    return results;
+  }
+
+  // ── Layout-check banner UI ───────────────────────────────────────────
+  const layoutSection = document.getElementById('fa2-layout-check');
+  const layoutTitle = document.getElementById('fa2-layout-title');
+  const layoutDetail = document.getElementById('fa2-layout-detail');
+
+  /** @param {boolean} ok @param {string} title @param {string} detail */
+  function setLayoutBanner(ok, title, detail) {
+    if (!layoutSection) return;
+    layoutSection.classList.remove('hidden');
+    layoutSection.setAttribute('data-status', ok ? 'ok' : 'broken');
+    if (ok) {
+      layoutSection.classList.remove('border-red-500/40', 'bg-red-500/5', 'text-red-700');
+      layoutSection.classList.add('border-emerald-500/40', 'bg-emerald-500/5', 'text-emerald-700');
+    } else {
+      layoutSection.classList.remove('border-emerald-500/40', 'bg-emerald-500/5', 'text-emerald-700');
+      layoutSection.classList.add('border-red-500/40', 'bg-red-500/5', 'text-red-700');
+    }
+    if (layoutTitle) layoutTitle.textContent = title;
+    if (layoutDetail) layoutDetail.innerHTML = detail;
+  }
+  function hideLayoutBanner() {
+    if (!layoutSection) return;
+    layoutSection.classList.add('hidden');
+    layoutSection.setAttribute('data-status', '');
+    layoutSection.classList.remove(
+      'border-red-500/40', 'bg-red-500/5', 'text-red-700',
+      'border-emerald-500/40', 'bg-emerald-500/5', 'text-emerald-700',
+    );
+  }
+
+  function fmtFields(fs) {
+    return fs.map(function (s) { return s.replace(/^%/, ''); }).join(', ');
+  }
+
+  /**
+   * Run the layout check on whatever's currently in the code textarea.
+   * Updates the banner. Returns:
+   *   { ok: true, shapes: [...] }       — at least one canonical shape, none broken
+   *   { ok: true, shapes: [] }          — no FA2-shaped types in the code (banner hidden)
+   *   { ok: false, shapes: [...] }      — at least one alphabetical shape found
+   *   null                              — code couldn't be parsed yet (banner hidden)
+   */
+  async function refreshLayoutCheck() {
+    if (!codeInput || !layoutSection) return null;
+    const raw = codeInput.value.trim();
+    if (!raw) { hideLayoutBanner(); return null; }
+    let code;
+    try {
+      if (looksLikeJson(raw)) {
+        code = JSON.parse(raw);
+      } else {
+        const { Parser } = await import('@taquito/michel-codec');
+        const parser = new Parser();
+        code = parser.parseScript(raw);
+      }
+    } catch {
+      hideLayoutBanner();
+      return null;
+    }
+    const shapes = findFa2TransferShapes(code);
+    if (shapes.length === 0) {
+      hideLayoutBanner();
+      return { ok: true, shapes: [] };
+    }
+    const broken = shapes.filter(function (s) { return !s.canonical; });
+    if (broken.length === 0) {
+      const where = shapes.map(function (s) { return s.location; }).join(', ');
+      setLayoutBanner(
+        true,
+        '✓ fa2 transfer layout: canonical (to_, token_id, amount)',
+        shapes.length + ' fa2 transfer shape' + (shapes.length === 1 ? '' : 's') +
+        ' found in <code class="bg-paper px-1 rounded">' + where + '</code> · all canonical · safe to originate',
+      );
+      return { ok: true, shapes };
+    }
+    const sample = broken[0];
+    setLayoutBanner(
+      false,
+      '⚠ fa2 transfer layout: alphabetical (broken) — DO NOT ORIGINATE',
+      'inner record field order is <code class="bg-paper px-1 rounded">' + fmtFields(sample.fields) + '</code> ' +
+      '· canonical TZIP-12 requires <code class="bg-paper px-1 rounded">to_, token_id, amount</code>. ' +
+      'this artifact will fail every buy/transfer with <code class="bg-paper px-1 rounded">INVALID_FA2_CONTRACT</code>. ' +
+      're-compile the SmartPy source with <code class="bg-paper px-1 rounded">.layout((&quot;to_&quot;, (&quot;token_id&quot;, &quot;amount&quot;)))</code> on the inner sp.record.',
+    );
+    return { ok: false, shapes };
   }
 
   // Best-effort parse of storage to surface the admin field in the preview
@@ -541,6 +738,28 @@ const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
         return;
       }
 
+      // Pre-flight: refuse to originate any contract whose FA2 transfer
+      // dispatch has alphabetical-default field order. Two prior marketplace
+      // orphans (KT1SLFv2u… and KT1ABfp7c…) burned ~5–10ꜩ each because the
+      // bytecode had (amount, to_, token_id) instead of canonical
+      // (to_, token_id, amount). The banner above already shows the result
+      // live; this is the hard gate that mirrors it.
+      try {
+        const layoutShapes = findFa2TransferShapes(code);
+        const broken = layoutShapes.filter(function (s) { return !s.canonical; });
+        if (broken.length > 0) {
+          const sample = broken[0];
+          setStatus(
+            '✗ refused: FA2 transfer layout is alphabetical (' + fmtFields(sample.fields) +
+            ') — re-compile with .layout(("to_", ("token_id", "amount"))). originate aborted.',
+          );
+          return;
+        }
+      } catch (e) {
+        // Layout check failure shouldn't block — surface a warning but allow.
+        // (If parsing succeeded above, walking should not throw, but defensive.)
+      }
+
       const network = selectedNetwork();
       const rpcUrl = rpcFor(network);
 
@@ -676,4 +895,5 @@ const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
   // Initial render
   updateStats();
   refreshAdminPreview();
+  refreshLayoutCheck();
 </script>

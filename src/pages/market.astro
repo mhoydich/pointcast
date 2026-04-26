@@ -44,6 +44,7 @@ const SLUG_NAMES: Record<string, string> = {
   visit_nouns: 'Visit Nouns',
   birthdays: 'Birthdays',
   drum_token: 'Drum Token',
+  window_snapshots: 'Window Snapshots',
 };
 const collections = supported
   .map((slug) => {
@@ -57,6 +58,10 @@ const collections = supported
     };
   })
   .filter((c) => c.live); // only show collections with a live KT1
+// Compact registry the in-page script reads via a data-attribute on the
+// form. Adding a new live collection in contracts.json + supportedCollections
+// is enough — the form, browse grid, and "Your tokens" panel all pick it up.
+const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name, kt1: c.kt1 }));
 ---
 
 <BaseLayout
@@ -97,13 +102,24 @@ const collections = supported
       </ul>
     </section>
 
+    <!-- Your tokens — surfaces FA2 holdings from supported collections so
+         the user can list anything they own with a one-click form pre-fill. -->
+    <section class="market__section" aria-labelledby="market-mine-title">
+      <header class="market__section-head">
+        <h2 id="market-mine-title" class="market__section-title">Your tokens</h2>
+        <p class="market__section-dek mono" id="market-mine-summary">connect a wallet to see what you can list</p>
+      </header>
+      <ul class="market__grid market__grid--mine" id="market-mine-grid" role="list" hidden></ul>
+      <p class="market__mine-empty mono" id="market-mine-empty" hidden>connected wallet holds no tokens from supported collections yet · pour a cup at <a href="/coffee">/coffee</a> or visit <a href="/visit-nouns">/visit-nouns</a> to claim one</p>
+    </section>
+
     <!-- List a token — only meaningful when a wallet is connected. -->
     <section class="market__section" aria-labelledby="market-list-title">
       <header class="market__section-head">
         <h2 id="market-list-title" class="market__section-title">List your token</h2>
         <p class="market__section-dek mono">connect a wallet that owns a PointCast NFT · pick the collection + token + price · sign once.</p>
       </header>
-      <form class="market__list-form" id="market-list-form" action="javascript:void(0)" data-marketplace-kt1={marketplaceKt1}>
+      <form class="market__list-form" id="market-list-form" action="javascript:void(0)" data-marketplace-kt1={marketplaceKt1} data-collections={JSON.stringify(collectionsRegistry)}>
         <label class="market__field">
           <span class="market__field-label mono">collection</span>
           <select name="collection" id="market-list-collection" required>
@@ -523,6 +539,33 @@ const collections = supported
   }
   .market-sale-link:hover { color: var(--color-ink); }
 
+  /* Your tokens panel — same card grid as listings, with a slightly warmer
+     border so the eye reads it as "mine, listable" rather than "for sale". */
+  .market__grid--mine .market-card {
+    border-color: rgba(184, 115, 51, 0.25);
+    background: linear-gradient(180deg, var(--color-paper, #fff) 0%, rgba(184, 115, 51, 0.04) 100%);
+  }
+  .market__grid--mine .market-card:hover {
+    border-color: var(--color-warm);
+    box-shadow: 0 8px 24px -12px rgba(184, 115, 51, 0.45);
+  }
+  .market__mine-empty {
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--color-ink-soft);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border: 1px dashed var(--color-rule, rgba(0,0,0,0.15));
+    border-radius: 12px;
+  }
+  .market__mine-empty a {
+    color: var(--color-warm);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .market__mine-empty a:hover { color: var(--color-ink); }
+
   .market__list-form {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -674,39 +717,76 @@ const collections = supported
     } catch (e) { return null; }
   }
 
-  // Per-collection image URL helpers — used to render card art without a
-  // tzkt metadata round-trip per ask. If the slug is unknown, fall back
-  // to tzkt's own image redirect at /v1/contracts/<KT1>/tokens/<id>/...
-  // (left for a follow-up). Hardcoded for now.
-  function imageUriFor(fa2Kt1, tokenId) {
-    if (fa2Kt1 === 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt') {
-      // Coffee Mugs FA2
-      const slugs = { 0: 'ceramic', 1: 'espresso', 2: 'latte', 3: 'paper', 4: 'bistro' };
-      const slug = slugs[String(tokenId)];
-      return slug ? '/images/coffee-mugs/' + slug + '.svg' : null;
-    }
-    if (fa2Kt1 === 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh') {
-      // Visit Nouns FA2
-      return 'https://noun.pics/' + tokenId + '.svg';
+  // Read the live-collections registry the Astro frontmatter wrote into a
+  // data-attribute on the list form. The registry has slug + name + kt1 for
+  // each live FA2 we know about — adding a new collection in contracts.json
+  // surfaces here automatically at next build.
+  function readCollections() {
+    const form = document.getElementById('market-list-form');
+    const raw = form && form.getAttribute('data-collections');
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch (e) { return []; }
+  }
+
+  function findCollectionByKt1(kt1) {
+    if (!kt1) return null;
+    const list = readCollections();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].kt1 === kt1) return list[i];
     }
     return null;
   }
 
+  // Per-collection conventions: image URI pattern + token-id → name lookups.
+  // Keyed by slug from contracts.json so adding a collection is one place.
+  const COLLECTION_RULES = {
+    coffee_mugs: {
+      imageFor: function (tokenId) {
+        const slugs = { 0: 'ceramic', 1: 'espresso', 2: 'latte', 3: 'paper', 4: 'bistro' };
+        const slug = slugs[String(tokenId)];
+        return slug ? '/images/coffee-mugs/' + slug + '.svg' : null;
+      },
+      nameFor: function (tokenId) {
+        const names = { 0: 'Ceramic Mug', 1: 'Espresso Cup', 2: 'Latte Glass', 3: 'Paper Cup', 4: 'Bistro Cup' };
+        return names[String(tokenId)] || ('Coffee Mug #' + tokenId);
+      },
+      maxTokenId: 4,
+    },
+    visit_nouns: {
+      imageFor: function (tokenId) { return 'https://noun.pics/' + tokenId + '.svg'; },
+      nameFor: function (tokenId) { return 'Visit Noun #' + tokenId; },
+      maxTokenId: 1199,
+    },
+    window_snapshots: {
+      imageFor: function (tokenId) {
+        const slugs = { 0: '0-galley', 1: '1-long-room', 2: '2-lamp-wall' };
+        const slug = slugs[String(tokenId)];
+        return slug ? '/images/window-snapshots/' + slug + '.jpg' : null;
+      },
+      nameFor: function (tokenId) {
+        const names = { 0: 'Galley', 1: 'Long Room', 2: 'Lamp Wall' };
+        return names[String(tokenId)] || ('Window Snapshot #' + tokenId);
+      },
+      maxTokenId: 2,
+    },
+  };
+
+  function imageUriFor(fa2Kt1, tokenId) {
+    const c = findCollectionByKt1(fa2Kt1);
+    const rules = c && COLLECTION_RULES[c.slug];
+    return rules ? rules.imageFor(tokenId) : null;
+  }
+
   function collectionNameFor(fa2Kt1) {
-    if (fa2Kt1 === 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt') return 'Coffee Mugs';
-    if (fa2Kt1 === 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh') return 'Visit Nouns';
-    return fa2Kt1.slice(0, 8) + '…' + fa2Kt1.slice(-4);
+    const c = findCollectionByKt1(fa2Kt1);
+    if (c) return c.name;
+    return fa2Kt1 ? (fa2Kt1.slice(0, 8) + '…' + fa2Kt1.slice(-4)) : '';
   }
 
   function tokenNameFor(fa2Kt1, tokenId) {
-    if (fa2Kt1 === 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt') {
-      const names = { 0: 'Ceramic Mug', 1: 'Espresso Cup', 2: 'Latte Glass', 3: 'Paper Cup', 4: 'Bistro Cup' };
-      return names[String(tokenId)] || ('Coffee Mug #' + tokenId);
-    }
-    if (fa2Kt1 === 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh') {
-      return 'Visit Noun #' + tokenId;
-    }
-    return 'Token #' + tokenId;
+    const c = findCollectionByKt1(fa2Kt1);
+    const rules = c && COLLECTION_RULES[c.slug];
+    return rules ? rules.nameFor(tokenId) : ('Token #' + tokenId);
   }
 
   function shortAddr(a) {
@@ -726,6 +806,135 @@ const collections = supported
     const lbl = document.getElementById('market-list-label');
     if (btn) btn.disabled = !enabled;
     if (lbl && label) lbl.textContent = label;
+  }
+
+  // ── Your tokens ──────────────────────────────────────────────────────
+  // Query FA2 balances for each supported live collection and surface what
+  // the connected wallet could list. One TzKT call per collection (parallel).
+  async function loadMyTokens() {
+    const grid = document.getElementById('market-mine-grid');
+    const summary = document.getElementById('market-mine-summary');
+    const empty = document.getElementById('market-mine-empty');
+    if (!grid || !summary) return;
+
+    const wallet = readWallet();
+    const colls = readCollections();
+
+    if (!wallet) {
+      grid.hidden = true;
+      grid.innerHTML = '';
+      if (empty) empty.hidden = true;
+      summary.textContent = 'connect a wallet to see what you can list';
+      return;
+    }
+    if (colls.length === 0) {
+      grid.hidden = true;
+      grid.innerHTML = '';
+      if (empty) empty.hidden = true;
+      summary.textContent = 'no live collections yet';
+      return;
+    }
+
+    summary.textContent = 'reading your FA2 balances…';
+
+    try {
+      // Parallel TzKT balance calls — one per live collection.
+      const responses = await Promise.all(
+        colls.map(function (c) {
+          const url =
+            'https://api.tzkt.io/v1/tokens/balances' +
+            '?account=' + encodeURIComponent(wallet.address) +
+            '&token.contract=' + encodeURIComponent(c.kt1) +
+            '&balance.gt=0' +
+            '&select=token.tokenId,balance' +
+            '&limit=200';
+          return fetch(url, { cache: 'no-store' })
+            .then(function (r) { if (!r.ok) throw new Error('tzkt ' + r.status); return r.json(); })
+            .then(function (rows) { return { coll: c, rows: Array.isArray(rows) ? rows : [] }; })
+            .catch(function () { return { coll: c, rows: [] }; });
+        })
+      );
+
+      // Flatten into a list of { coll, tokenId, balance } cards.
+      const cards = [];
+      for (let i = 0; i < responses.length; i++) {
+        const { coll, rows } = responses[i];
+        for (let j = 0; j < rows.length; j++) {
+          const row = rows[j];
+          // tzkt's select=token.tokenId,balance returns
+          // [{ "token.tokenId": "0", "balance": "1" }, ...]
+          const tokenIdRaw = row['token.tokenId'] !== undefined ? row['token.tokenId'] : (row.tokenId !== undefined ? row.tokenId : null);
+          if (tokenIdRaw == null) continue;
+          const tokenId = parseInt(tokenIdRaw, 10);
+          const balance = parseInt(row.balance || '0', 10) || 0;
+          if (balance <= 0) continue;
+          cards.push({ coll, tokenId, balance });
+        }
+      }
+
+      if (cards.length === 0) {
+        grid.hidden = true;
+        grid.innerHTML = '';
+        if (empty) empty.hidden = false;
+        summary.textContent = 'wallet ' + shortAddr(wallet.address) + ' · no listable tokens yet';
+        return;
+      }
+
+      if (empty) empty.hidden = true;
+      grid.hidden = false;
+      summary.textContent =
+        cards.length + ' listable token' + (cards.length === 1 ? '' : 's') +
+        ' · wallet ' + shortAddr(wallet.address);
+
+      grid.innerHTML = cards.map(function (card) {
+        const imageUri = imageUriFor(card.coll.kt1, card.tokenId);
+        const name = tokenNameFor(card.coll.kt1, card.tokenId);
+        const balanceLabel = card.balance > 1 ? ('×' + card.balance + ' held') : 'held';
+        return (
+          '<li class="market-card market-card--mine" data-fa2="' + card.coll.kt1 + '" data-token-id="' + card.tokenId + '">' +
+            '<div class="market-card__art">' +
+              (imageUri ? '<img src="' + imageUri + '" alt="' + name + '" loading="lazy" />' : '<svg viewBox="0 0 24 24"><rect width="24" height="24" fill="#eee"/></svg>') +
+            '</div>' +
+            '<div class="market-card__body">' +
+              '<p class="market-card__collection">' + card.coll.name + ' · #' + card.tokenId + '</p>' +
+              '<p class="market-card__name">' + name + '</p>' +
+              '<p class="market-card__seller">' + balanceLabel + '</p>' +
+              '<button class="market-card__buy" data-list-fa2="' + card.coll.kt1 + '" data-list-token="' + card.tokenId + '">List →</button>' +
+            '</div>' +
+          '</li>'
+        );
+      }).join('');
+
+      grid.querySelectorAll('[data-list-fa2]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          prefillListForm(btn.getAttribute('data-list-fa2'), parseInt(btn.getAttribute('data-list-token'), 10));
+        });
+      });
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      grid.hidden = true;
+      grid.innerHTML = '';
+      if (empty) empty.hidden = true;
+      summary.textContent = 'failed to read your balances: ' + msg;
+    }
+  }
+
+  function prefillListForm(fa2Kt1, tokenId) {
+    const collEl = /** @type {HTMLSelectElement|null} */ (document.getElementById('market-list-collection'));
+    const tokenEl = /** @type {HTMLInputElement|null} */ (document.getElementById('market-list-token-id'));
+    const priceEl = /** @type {HTMLInputElement|null} */ (document.getElementById('market-list-price'));
+    if (collEl) {
+      for (let i = 0; i < collEl.options.length; i++) {
+        if (collEl.options[i].value === fa2Kt1) {
+          collEl.selectedIndex = i;
+          break;
+        }
+      }
+    }
+    if (tokenEl) tokenEl.value = String(tokenId);
+    const form = document.getElementById('market-list-form');
+    if (form && form.scrollIntoView) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (priceEl) setTimeout(function () { try { priceEl.focus(); } catch (e) {} }, 600);
   }
 
   // ── Browse grid ──────────────────────────────────────────────────────
@@ -1147,11 +1356,16 @@ const collections = supported
   window.addEventListener('pc:wallet-change', function () {
     syncListButtonState();
     loadAsks();
+    loadMyTokens();
   });
 
   // Kick off the browse fetch on load + every 60s.
   loadAsks();
   setInterval(loadAsks, 60_000);
+  // Your tokens panel — initial + after wallet change. No interval since
+  // FA2 balances only change after the user takes an action that triggers
+  // a wallet event.
+  loadMyTokens();
   // Recent sales feed alongside browse polling
   loadRecentSales();
   setInterval(loadRecentSales, 60_000);

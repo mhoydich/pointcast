@@ -39,32 +39,42 @@
     "symbol": "DRUM"
   },
   "marketplace": {
-    "mainnet": "KT1ABfp7cMEgPBEzLTR7tDut64mHgQfCYN5c",
+    "mainnet": "KT1DoUowvD6a5TJnYMXwtR9YsjiqBKkzptc5",
     "shadownet": "",
     "symbol": "PCMARKET",
     "platformFeeBps": 250,
     "platformFeeReceiver": "tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw",
     "royaltyReceiver": "tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw",
-    "supportedCollections": ["coffee_mugs", "visit_nouns"],
+    "supportedCollections": ["coffee_mugs", "visit_nouns", "window_snapshots"],
     "_mainnet_notes": {
-      "originatedAt": "2026-04-26T20:23:34Z",
+      "originatedAt": "2026-04-26T21:48:00Z",
       "originator": "tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw",
       "administrator": "tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw",
-      "opHash": "ooESkgyRCVD8vZXkir6wVpkzU9Mi1L4rH1dQzDzNUNpAEvAr7XC",
-      "tzkt": "https://tzkt.io/ooESkgyRCVD8vZXkir6wVpkzU9Mi1L4rH1dQzDzNUNpAEvAr7XC",
-      "note": "Re-originated 2026-04-26 PM after v1 (KT1SLFv2u…) hit INVALID_FA2_CONTRACT on its first buy — TZIP-12 transfer record layout was SmartPy default-alphabetical, not canonical. PR #124 patched mock_fa2 + regenerated artifacts; v2 dispatch matches Coffee Mugs FA2 exactly. Storage initialised: platform_fee_bps=250 (2.5%), platform_fee_receiver + royalty_receiver = mainwallet, paused=false, next_ask_id=0, asks=empty bigmap (806744)."
+      "tzkt": "https://tzkt.io/KT1DoUowvD6a5TJnYMXwtR9YsjiqBKkzptc5",
+      "note": "Third-time-charm origination on 2026-04-26 PM. v1 (KT1SLFv2u…) and v2 (KT1ABfp7c…) both shipped with the FA2 transfer dispatch laid out alphabetically — (amount, to_, token_id) — instead of canonical TZIP-12 (to_, token_id, amount). Coffee Mugs FA2 uses canonical, so sp.contract returned None at fulfill_ask and every buy attempt died with INVALID_FA2_CONTRACT. v3 was originated through the new pre-sign FA2-layout safety check on /admin/deploy/new (PR #135 / commit f71225b) which walks the parsed Michelson, refuses to enable Sign if the inner record is alphabetical, and showed a green ✓ canonical banner this time. On-chain bytecode verified post-origination: inner record field order = (to_, token_id, amount) ✓ canonical. Storage initialised: platform_fee_bps=250 (2.5%), both receivers = mainwallet, paused=false, next_ask_id=0, asks=empty bigmap (806745)."
     },
-    "_orphan_notes": {
-      "address": "KT1SLFv2uWkcd4STXKCsj7fmasi36MAksuhZ",
-      "originatedAt": "2026-04-26T18:54:13Z",
-      "opHash": "oo93nLHhKH5G8Bo3fu9oq4SwctakvSdcUVSdEivJpGToz4vT6Ko",
-      "reason": "FA2 transfer record layout was SmartPy default-alphabetical (amount, to_, token_id) instead of TZIP-12 canonical (to_, token_id, amount). Coffee Mugs FA2 uses canonical, so the sp.contract dispatcher returned None and fulfill_ask reverted with INVALID_FA2_CONTRACT on every attempt. Two orphan asks landed before discovery (ask 0: Mike's Ceramic Mug at 0.5ꜩ; ask 1: external seller's Espresso Cup at 0.5ꜩ). Both unfulfillable. Mike can cancel ask 0 from his wallet; ask 1 is stuck until its seller cancels. Do not list, do not redeploy frontend against."
-    },
+    "_orphans": [
+      {
+        "version": "v2",
+        "address": "KT1ABfp7cMEgPBEzLTR7tDut64mHgQfCYN5c",
+        "originatedAt": "2026-04-26T20:23:34Z",
+        "opHash": "ooESkgyRCVD8vZXkir6wVpkzU9Mi1L4rH1dQzDzNUNpAEvAr7XC",
+        "reason": "FA2 transfer dispatch field order on-chain was alphabetical (amount, (to_, token_id)) instead of the canonical (to_, (token_id, amount)) that the SmartPy source declared via .layout(...) and the staged artifact contained. Most likely cause: a stale Cloudflare-cached pre-#124 artifact reached /admin/deploy/new at sign time, or a manually pasted older version slipped through. Either way fulfill_ask reverted with INVALID_FA2_CONTRACT against any canonical FA2 (Coffee Mugs, Visit Nouns, all of objkt's catalogue). Replaced by v3 KT1DoUowvD6… 2026-04-26 PM with the pre-sign safety check now blocking this exact regression. Do not list, do not redeploy frontend against."
+      },
+      {
+        "version": "v1",
+        "address": "KT1SLFv2uWkcd4STXKCsj7fmasi36MAksuhZ",
+        "originatedAt": "2026-04-26T18:54:13Z",
+        "opHash": "oo93nLHhKH5G8Bo3fu9oq4SwctakvSdcUVSdEivJpGToz4vT6Ko",
+        "reason": "First marketplace origination — same INVALID_FA2_CONTRACT class as v2, same alphabetical-default field order in the FA2 transfer dispatch. Two orphan asks landed before discovery (ask 0: Mike's Ceramic Mug at 0.5ꜩ; ask 1: external seller's Espresso Cup at 0.5ꜩ). Both unfulfillable. Mike can cancel ask 0 from his wallet; ask 1 is stuck until its seller cancels. Do not list, do not redeploy frontend against."
+      }
+    ],
     "_notes": {
       "contract": "contracts/v2/marketplace.py",
       "runbook": "docs/plans/2026-04-26-marketplace-deploy-runbook.md",
       "purpose": "PointCast-native multi-collection FA2 marketplace. Per-ask fa2_contract means one originated KT1 handles every PointCast collection (Coffee Mugs, Visit Nouns, future Birthdays + Drum + Window Snapshots). Sellers approve marketplace as FA2 operator, then list_ask. Buyers fulfill_ask with amount = listing price; contract dispatches FA2 transfer + splits payment into seller / 2.5% platform fee / per-listing royalty.",
-      "shape": "asks bigmap: { ask_id: nat → { seller, fa2_contract, token_id, amount_mutez, royalty_bps } }"
+      "shape": "asks bigmap: { ask_id: nat → { seller, fa2_contract, token_id, amount_mutez, royalty_bps } }",
+      "safety": "Pre-sign layout check on /admin/deploy/new walks the parsed Michelson for any list(pair(%from_, list(pair(...inner...)) %txs)) shape and refuses to enable Sign if the inner record is alphabetical (amount, to_, token_id) instead of canonical (to_, token_id, amount). Catches both the FA2 contract's own %transfer parameter type AND any CONTRACT %transfer dispatch in a marketplace. Verified live 2026-04-26 PM."
     }
   },
   "prize_cast": {
@@ -120,6 +130,30 @@
       "runbook": "docs/plans/2026-04-25-coffee-mugs-deploy-runbook.md",
       "brief": "docs/briefs/2026-04-25-mike-coffee-mugs-fa2.md",
       "purpose": "Five rarity-tiered mug NFTs claimable from /coffee. Public free mint (gas-only), edition caps enforced on-chain, cup-count eligibility gated client-side. Token names registered via register_tokens() admin op post-origination."
+    }
+  },
+  "window_snapshots": {
+    "mainnet": "",
+    "shadownet": "",
+    "symbol": "PCWIN",
+    "mintEntrypoint": "mint_snapshot",
+    "metadata_base_uri": "https://pointcast.xyz/api/tezos-metadata/window-snapshots",
+    "royalty_bps": 750,
+    "edition_caps": {
+      "0": 100,
+      "1": 100,
+      "2": 100
+    },
+    "tokens": {
+      "0": "Galley",
+      "1": "Long Room",
+      "2": "Lamp Wall"
+    },
+    "_notes": {
+      "contract": "contracts/v2/window_snapshots_fa2.py",
+      "purpose": "Free open-edition FA2 — three painted interiors as token_ids 0..2, edition cap 100 each. First drop in the Window Snapshots collection foreshadowed in the 2026-04-26 marketplace press release. Public mint, gas-only, mirrors Coffee Mugs deploy path. Empty KT1 keeps the /market 'list your token' option in the dropdown filtered to live collections only.",
+      "artwork": "public/images/window-snapshots/{0-galley,1-long-room,2-lamp-wall}.jpg",
+      "deployPath": "/admin/deploy/new (Publisher with auto-admin-patch — same path Coffee Mugs took)"
     }
   },
   "birthdays": {
