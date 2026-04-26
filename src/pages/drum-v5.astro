@@ -1,0 +1,1063 @@
+---
+/**
+ * /drum-v5 — Loop Studio.
+ *
+ * Build a 4-track 16-step beat. Pick any of the 12 orchestra
+ * instruments per track. Share by URL — the loop is base64-encoded
+ * into the hash, so a paste loads the exact pattern. The room hears
+ * your loop while it's playing (broadcasts via /api/sounds), so
+ * "press play together" works across devices.
+ *
+ * Differentiates from:
+ *   - /drum-v4   — fixed genre presets; v5 lets you build your own
+ *   - /drum-apr26 — single-track 8-pad; v5 is multi-track 12-instrument
+ *   - /drum-v2/v3 — performance, not composition
+ *
+ * Recording: hold REC, tap any instrument, the taps quantize onto the
+ * active track at the current playhead. Stop REC, edit individual
+ * cells. Save → URL with hash like #l=eyJicG0iOjEy....
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+// 12 instrument options (same as v4 orchestra) — picker dropdown.
+const INSTRUMENTS = [
+  { key: 'kick',    label: 'Kick',     accent: '#ef4444' },
+  { key: 'snare',   label: 'Snare',    accent: '#f59e0b' },
+  { key: 'hihat',   label: 'Hi-Hat',   accent: '#facc15' },
+  { key: 'openhat', label: 'Open Hat', accent: '#84cc16' },
+  { key: 'clap',    label: 'Clap',     accent: '#22c55e' },
+  { key: 'tom',     label: 'Tom',      accent: '#10b981' },
+  { key: 'bass',    label: 'Bass',     accent: '#0ea5e9' },
+  { key: 'lead',    label: 'Lead',     accent: '#3b82f6' },
+  { key: 'pad',     label: 'Pad',      accent: '#8b5cf6' },
+  { key: 'bell',    label: 'Bell',     accent: '#a855f7' },
+  { key: 'shaker',  label: 'Shaker',   accent: '#ec4899' },
+  { key: 'cymbal',  label: 'Cymbal',   accent: '#f43f5e' },
+] as const;
+
+// 4 default tracks pre-populated so the page has motion right away.
+const DEFAULT_TRACKS = [
+  { inst: 'kick',  steps: '1000100010001000' },
+  { inst: 'snare', steps: '0000100000001000' },
+  { inst: 'hihat', steps: '1010101010101010' },
+  { inst: 'bass',  steps: '1000000010000000' },
+] as const;
+---
+
+<DrumLayout
+  title="Drum Room v5 · Loop Studio"
+  description="Build your own drum loop, share it as a URL. Four tracks, sixteen steps, twelve instruments, infinite combinations. Multiplayer."
+  image="/images/og-drum.png"
+>
+
+<div class="v5-root">
+
+  <DrumNav current="v5" />
+
+  <header class="v5-hero">
+    <p class="v5-hero-eyebrow">v5 · loop studio · share</p>
+    <h1 class="v5-hero-title">build a loop, share a url</h1>
+    <p class="v5-hero-dek">
+      four tracks. sixteen steps. twelve instruments. tap a cell to toggle.
+      hit play. paste a friend's loop URL and you'll hear the same beat.
+    </p>
+  </header>
+
+  <!-- ══ TRANSPORT ══ -->
+  <section class="v5-transport" aria-label="Transport controls">
+    <div class="v5-transport-group">
+      <button id="v5-play-btn" class="v5-btn v5-btn-primary" aria-pressed="false">
+        <span class="v5-btn-icon" id="v5-play-icon">▶</span>
+        <span id="v5-play-label">Play</span>
+      </button>
+      <button id="v5-rec-btn" class="v5-btn v5-btn-rec" aria-pressed="false">
+        <span class="v5-btn-icon">●</span>
+        <span>Record</span>
+      </button>
+      <button id="v5-clear-btn" class="v5-btn v5-btn-ghost">Clear</button>
+    </div>
+    <div class="v5-transport-bpm">
+      <label for="v5-bpm-slider" class="v5-bpm-label">BPM</label>
+      <input
+        type="range"
+        id="v5-bpm-slider"
+        class="v5-bpm-slider"
+        min="60"
+        max="180"
+        value="100"
+        step="1"
+      />
+      <span class="v5-bpm-val" id="v5-bpm-val">100</span>
+    </div>
+    <div class="v5-transport-share">
+      <button id="v5-share-btn" class="v5-btn v5-btn-share">↗ Share loop</button>
+      <button id="v5-randomize-btn" class="v5-btn v5-btn-ghost" title="Generate a random pattern">🎲 Randomize</button>
+    </div>
+  </section>
+
+  <!-- ══ TRACKS — 4 rows ══ -->
+  <section class="v5-tracks" id="v5-tracks" aria-label="Tracks"></section>
+
+  <!-- ══ TICKER ══ -->
+  <div class="v5-ticker" id="v5-ticker" aria-hidden="true">
+    {Array.from({ length: 16 }).map((_, i) => (
+      <span class={`v5-tick${i % 4 === 0 ? ' v5-tick--beat' : ''}`} data-step={i}></span>
+    ))}
+  </div>
+
+  <!-- ══ STATUS BAR ══ -->
+  <div class="v5-status" id="v5-status" aria-live="polite">
+    <span class="v5-status-mode" id="v5-status-mode">stopped · 100 bpm</span>
+    <span class="v5-status-jammers"><span id="v5-jammers">1</span> live · <span id="v5-active-tracks">4</span> tracks</span>
+  </div>
+
+  <!-- ══ ACTIVITY FEED ══ -->
+  <section class="v5-feed-wrap">
+    <div class="v5-feed-head">
+      <span class="v5-feed-title">Live Activity</span>
+      <span class="v5-feed-rate" id="v5-rate">—/min</span>
+    </div>
+    <ul id="v5-feed" class="v5-feed">
+      <li class="v5-feed-empty">tap a cell or hit play to start the loop…</li>
+    </ul>
+  </section>
+
+  <!-- ══ TOAST ══ -->
+  <div id="v5-toast" class="v5-toast" hidden aria-live="assertive">
+    <div class="v5-toast-label" id="v5-toast-label">saved</div>
+    <div class="v5-toast-title" id="v5-toast-title">—</div>
+  </div>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="v5-footer">
+    <span>⌐◨-◨ PointCast · Drum Room · v5 loop studio</span>
+    <span>Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026</span>
+  </footer>
+
+</div>
+
+<script type="application/json" id="v5-default-tracks" set:html={JSON.stringify(DEFAULT_TRACKS)} />
+<script type="application/json" id="v5-instruments" set:html={JSON.stringify(INSTRUMENTS)} />
+
+</DrumLayout>
+
+<style is:global>
+/* ════════════════════════════════════════════════════════════
+   /drum-v5 — Loop Studio. Global so dynamic track rows + cells
+   pick up styles. v5-* prefixed.
+   ════════════════════════════════════════════════════════════ */
+
+.v5-root {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 16px 60px;
+  font-family: var(--pc-font-mono);
+}
+
+/* ── Hero ─────────────────────────────────────────── */
+.v5-hero {
+  padding: 14px 0 18px;
+  border-bottom: 1.5px solid var(--pc-rule);
+  margin-bottom: 16px;
+}
+.v5-hero-eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #ec4899;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.v5-hero-title {
+  font-family: var(--pc-font-sans);
+  font-size: clamp(1.6rem, 4.5vw, 2.5rem);
+  font-weight: 500;
+  color: var(--pc-ink);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.v5-hero-dek {
+  font-family: var(--pc-font-sans);
+  font-size: 13px;
+  color: var(--pc-ink-soft);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 60ch;
+}
+
+/* ── Transport ────────────────────────────────────── */
+.v5-transport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 2px solid var(--pc-ink);
+  border-radius: 10px;
+  background: #fafaf9;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.v5-transport::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ec4899, #f43f5e, #f59e0b, #facc15, #22c55e, #0ea5e9, #8b5cf6);
+}
+.v5-transport-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.v5-transport-bpm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+}
+.v5-transport-share { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.v5-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--pc-ink);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--pc-ink);
+  font-family: var(--pc-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms, transform 80ms, color 120ms;
+}
+.v5-btn:hover { background: var(--pc-rule-soft); }
+.v5-btn:active { transform: scale(0.96); }
+.v5-btn-icon { font-size: 11px; line-height: 1; }
+.v5-btn-primary {
+  background: var(--pc-ink);
+  color: #fff;
+}
+.v5-btn-primary:hover { background: #ec4899; border-color: #ec4899; }
+.v5-btn-primary[aria-pressed="true"] { background: #ec4899; border-color: #ec4899; }
+.v5-btn-rec[aria-pressed="true"] {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+  animation: v5-rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes v5-rec-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+.v5-btn-ghost { background: transparent; }
+.v5-btn-share {
+  background: #ec4899;
+  border-color: #ec4899;
+  color: #fff;
+}
+.v5-btn-share:hover { background: #db2777; border-color: #db2777; }
+
+.v5-bpm-label {
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pc-ink-muted);
+}
+.v5-bpm-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--pc-rule);
+  border-radius: 2px;
+  outline: none;
+}
+.v5-bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--pc-ink);
+  cursor: grab;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.v5-bpm-slider::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--pc-ink);
+  cursor: grab;
+  border: 2px solid #fff;
+}
+.v5-bpm-val {
+  font-family: var(--pc-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pc-ink);
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tracks ───────────────────────────────────────── */
+.v5-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.v5-track {
+  display: grid;
+  grid-template-columns: 130px 1fr 28px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1.5px solid var(--pc-rule);
+  border-radius: 6px;
+  background: #fafaf9;
+}
+.v5-track-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.v5-track-pick select {
+  font-family: var(--pc-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  border: 1.5px solid var(--pc-rule);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--pc-ink);
+  cursor: pointer;
+}
+.v5-track-pick select:focus { border-color: var(--accent, #ec4899); outline: none; }
+.v5-track-meta {
+  font-size: 7px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pc-ink-muted);
+}
+.v5-cells {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+}
+.v5-cell {
+  aspect-ratio: 1;
+  border: 1px solid var(--pc-rule);
+  background: #fff;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 80ms, border-color 80ms, transform 60ms;
+  padding: 0;
+  min-width: 0;
+}
+.v5-cell.beat { border-color: var(--pc-rule); background: #f5f4f0; }
+.v5-cell:hover { transform: scale(1.08); }
+.v5-cell.on {
+  background: var(--accent, #ec4899);
+  border-color: var(--accent, #ec4899);
+}
+.v5-cell.lit {
+  outline: 2px solid var(--pc-ink);
+  outline-offset: 1px;
+}
+.v5-cell.firing {
+  transform: scale(1.18);
+  box-shadow: 0 0 10px var(--accent, #ec4899);
+}
+.v5-track-mute {
+  width: 28px; height: 28px;
+  border: 1.5px solid var(--pc-rule);
+  border-radius: 4px;
+  background: #fff;
+  font-family: var(--pc-font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--pc-ink);
+}
+.v5-track-mute.muted {
+  background: var(--pc-rule-soft);
+  color: var(--pc-ink-muted);
+  text-decoration: line-through;
+}
+
+@media (max-width: 640px) {
+  .v5-track { grid-template-columns: 100px 1fr; gap: 6px; }
+  .v5-track-mute { display: none; }
+  .v5-track-pick select { font-size: 10px; padding: 3px 6px; }
+  .v5-cells { gap: 2px; }
+  .v5-cell { border-radius: 1px; }
+}
+
+/* ── Ticker ───────────────────────────────────────── */
+.v5-ticker {
+  display: grid;
+  grid-template-columns: 130px 1fr 28px;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 10px;
+}
+.v5-ticker::before, .v5-ticker::after { content: ''; }
+.v5-ticker { padding: 0; }
+.v5-ticker-bar {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+}
+.v5-tick {
+  height: 4px;
+  background: var(--pc-rule-soft);
+  border-radius: 1px;
+}
+.v5-tick--beat { background: var(--pc-rule); }
+.v5-tick.lit { background: #ec4899; box-shadow: 0 0 6px rgba(236,72,153,0.6); }
+
+/* Adjusted ticker layout — match track grid columns */
+.v5-ticker {
+  display: grid;
+  grid-template-columns: 130px 1fr 28px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 10px;
+  margin-bottom: 12px;
+}
+.v5-ticker > .v5-tick:first-child { grid-column: 2; }
+/* simpler: drop into the middle column with subgrid-style */
+.v5-ticker { grid-template-columns: 130px repeat(16, 1fr) 28px; gap: 3px; }
+.v5-ticker::before { content: ''; grid-column: 1; }
+.v5-tick { grid-column: span 1; }
+@media (max-width: 640px) {
+  .v5-ticker { grid-template-columns: 100px repeat(16, 1fr); gap: 2px; }
+  .v5-ticker::before { grid-column: 1; }
+}
+
+/* ── Status ───────────────────────────────────────── */
+.v5-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pc-ink-muted);
+  padding: 6px 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.v5-status-mode { color: var(--pc-ink-soft); font-weight: 700; }
+.v5-status-jammers { font-variant-numeric: tabular-nums; }
+
+/* ── Activity feed ────────────────────────────────── */
+.v5-feed-wrap {
+  border: 1.5px solid var(--pc-rule);
+  border-radius: 6px;
+  background: #fafaf9;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.v5-feed-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--pc-rule-soft);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pc-ink-muted);
+}
+.v5-feed-title { font-weight: 700; color: var(--pc-ink-soft); }
+.v5-feed-rate { font-variant-numeric: tabular-nums; }
+.v5-feed {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px;
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.v5-feed-empty {
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pc-ink-muted);
+}
+.v5-feed-item {
+  font-size: 9px;
+  color: var(--pc-ink-soft);
+  display: flex;
+  gap: 6px;
+  animation: v5-feed-slide 200ms ease-out;
+}
+.v5-feed-item .you { color: #ec4899; font-weight: 700; }
+.v5-feed-item .remote { color: #8b5cf6; }
+@keyframes v5-feed-slide {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Toast ────────────────────────────────────────── */
+.v5-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: var(--pc-ink);
+  color: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  pointer-events: none;
+  animation: v5-toast-in 280ms ease-out;
+  max-width: min(420px, 90vw);
+}
+@keyframes v5-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.v5-toast-label {
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #ec4899;
+  margin-bottom: 3px;
+}
+.v5-toast-title {
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* ── Footer ───────────────────────────────────────── */
+.v5-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-top: 1.5px solid var(--pc-rule);
+  padding-top: 16px;
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pc-ink-muted);
+}
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-v5 client — Loop Studio.
+  //
+  // State is a Loop object: { bpm, tracks: [{ inst, steps[16], muted }] }
+  // Loops are persisted to URL hash as base64-encoded JSON, and broadcast
+  // to other players in the room via /api/sounds (one event per fired
+  // step). Polling at 350ms picks up remote loops the same way.
+  // ══════════════════════════════════════════════════════════════════
+
+  type InstKey = 'kick'|'snare'|'hihat'|'openhat'|'clap'|'tom'|'bass'|'lead'|'pad'|'bell'|'shaker'|'cymbal';
+  interface Track { inst: InstKey; steps: number[]; muted: boolean; }
+  interface Loop { bpm: number; tracks: Track[]; }
+
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // ── Audio (reused from v4 orchestra recipes) ────────────────────
+  let audioCtx: AudioContext | null = null;
+  function getCtx(): AudioContext | null {
+    if (audioCtx) return audioCtx;
+    try {
+      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!Ctx) return null;
+      audioCtx = new Ctx({ latencyHint: 'interactive' });
+    } catch { audioCtx = null; }
+    return audioCtx;
+  }
+  ['pointerdown','keydown','touchstart','scroll'].forEach(e =>
+    document.addEventListener(e as any, () => { const c = getCtx(); if (c?.state === 'suspended') c.resume().catch(() => {}); }, { once: true, passive: true, capture: true }));
+
+  function noiseBuf(ctx: AudioContext, ms: number) {
+    const sz = Math.floor(ctx.sampleRate * ms / 1000);
+    const buf = ctx.createBuffer(1, sz, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < sz; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / sz);
+    return buf;
+  }
+  function envG(ctx: AudioContext, attack: number, decay: number, peak: number) {
+    const g = ctx.createGain();
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
+    return g;
+  }
+
+  function play(inst: InstKey) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    if (inst === 'kick') {
+      const out = envG(ctx, 0.002, 0.32, 0.85); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+      o.connect(out); o.start(t); o.stop(t + 0.4);
+    } else if (inst === 'snare') {
+      const out = envG(ctx, 0.001, 0.18, 0.7); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+      const og = ctx.createGain(); og.gain.value = 0.5;
+      o.connect(og); og.connect(out); o.start(t); o.stop(t + 0.2);
+      const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, 180);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1500;
+      n.connect(hp); hp.connect(out); n.start(t);
+    } else if (inst === 'hihat' || inst === 'openhat') {
+      const decay = inst === 'openhat' ? 0.32 : 0.06;
+      const out = envG(ctx, 0.001, decay, 0.4); out.connect(ctx.destination);
+      const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, decay * 1000);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
+      n.connect(hp); hp.connect(out); n.start(t);
+    } else if (inst === 'clap') {
+      [0, 0.012, 0.024].forEach((delay) => {
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t + delay);
+        g.gain.linearRampToValueAtTime(0.5, t + delay + 0.001);
+        g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.13);
+        g.connect(ctx.destination);
+        const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, 130);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1200; bp.Q.value = 1.2;
+        n.connect(bp); bp.connect(g); n.start(t + delay);
+      });
+    } else if (inst === 'tom') {
+      const out = envG(ctx, 0.003, 0.4, 0.7); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.25);
+      o.connect(out); o.start(t); o.stop(t + 0.5);
+    } else if (inst === 'bass') {
+      const out = envG(ctx, 0.005, 0.45, 0.6); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(65.41, t); o.connect(out); o.start(t); o.stop(t + 0.55);
+      const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.setValueAtTime(32.7, t);
+      const g2 = ctx.createGain(); g2.gain.value = 0.5;
+      o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + 0.55);
+    } else if (inst === 'lead') {
+      const out = envG(ctx, 0.008, 0.35, 0.45); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'square';
+      o.frequency.setValueAtTime(261.63, t); o.connect(out); o.start(t); o.stop(t + 0.45);
+    } else if (inst === 'pad') {
+      const out = envG(ctx, 0.05, 1.4, 0.32); out.connect(ctx.destination);
+      [0, 4, 7].forEach((semi) => {
+        const f = 130.81 * Math.pow(2, semi / 12);
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(f, t);
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+        const og = ctx.createGain(); og.gain.value = 0.4;
+        o.connect(lp); lp.connect(og); og.connect(out);
+        o.start(t); o.stop(t + 1.5);
+      });
+    } else if (inst === 'bell') {
+      const out = envG(ctx, 0.005, 1.4, 0.5); out.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(523.25, t); o.connect(out); o.start(t); o.stop(t + 1.5);
+      const o2 = ctx.createOscillator(); o2.type = 'sine';
+      o2.frequency.setValueAtTime(523.25 * 2.76, t);
+      const g2 = ctx.createGain(); g2.gain.value = 0.22;
+      o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + 0.9);
+    } else if (inst === 'shaker') {
+      const out = envG(ctx, 0.005, 0.16, 0.4); out.connect(ctx.destination);
+      const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, 160);
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 8000; bp.Q.value = 0.7;
+      n.connect(bp); bp.connect(out); n.start(t);
+    } else if (inst === 'cymbal') {
+      const out = envG(ctx, 0.005, 0.9, 0.5); out.connect(ctx.destination);
+      const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx, 900);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4000;
+      n.connect(hp); hp.connect(out); n.start(t);
+    }
+  }
+
+  // ── Instrument data (load from server-injected JSON) ────────────
+  const INSTRUMENTS = JSON.parse(document.getElementById('v5-instruments')?.textContent || '[]');
+  const INST_BY_KEY = Object.fromEntries(INSTRUMENTS.map((i: any) => [i.key, i]));
+  const DEFAULT_TRACKS = JSON.parse(document.getElementById('v5-default-tracks')?.textContent || '[]');
+
+  // ── Loop state ──
+  function emptySteps(): number[] { return Array(16).fill(0); }
+  function defaultLoop(): Loop {
+    return {
+      bpm: 100,
+      tracks: DEFAULT_TRACKS.map((t: any) => ({
+        inst: t.inst as InstKey,
+        steps: t.steps.split('').map((c: string) => c === '1' ? 1 : 0),
+        muted: false,
+      })),
+    };
+  }
+
+  // Try URL hash first: #l=<base64>
+  function loadFromHash(): Loop | null {
+    try {
+      const m = window.location.hash.match(/#l=([A-Za-z0-9_\-]+)/);
+      if (!m) return null;
+      const json = decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))));
+      const parsed = JSON.parse(json);
+      if (!parsed || typeof parsed.bpm !== 'number' || !Array.isArray(parsed.tracks)) return null;
+      return parsed as Loop;
+    } catch { return null; }
+  }
+
+  function encodeLoop(loop: Loop): string {
+    const json = JSON.stringify(loop);
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  let loop: Loop = loadFromHash() ?? defaultLoop();
+
+  // ── Render tracks ──
+  const tracksEl = document.getElementById('v5-tracks');
+  function renderTracks() {
+    if (!tracksEl) return;
+    tracksEl.innerHTML = loop.tracks.map((t, idx) => {
+      const accent = INST_BY_KEY[t.inst]?.accent || '#ec4899';
+      return `
+        <div class="v5-track" data-track="${idx}" style="--accent:${accent}">
+          <div class="v5-track-pick">
+            <select data-track-pick="${idx}" aria-label="Track ${idx + 1} instrument">
+              ${INSTRUMENTS.map((i: any) => `
+                <option value="${i.key}"${i.key === t.inst ? ' selected' : ''}>${i.label}</option>
+              `).join('')}
+            </select>
+            <span class="v5-track-meta">track ${idx + 1}</span>
+          </div>
+          <div class="v5-cells">
+            ${t.steps.map((s, i) => `
+              <button
+                class="v5-cell${s ? ' on' : ''}${i % 4 === 0 ? ' beat' : ''}"
+                data-cell="${idx}:${i}"
+                aria-label="Track ${idx + 1} step ${i + 1}"
+                aria-pressed="${s ? 'true' : 'false'}"
+              ></button>
+            `).join('')}
+          </div>
+          <button class="v5-track-mute${t.muted ? ' muted' : ''}" data-mute="${idx}" title="Mute track ${idx + 1}">M</button>
+        </div>
+      `;
+    }).join('');
+
+    // Wire cell clicks
+    tracksEl.querySelectorAll<HTMLElement>('.v5-cell').forEach((el) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const [t, s] = (el.dataset.cell || '').split(':').map(Number);
+        if (Number.isNaN(t) || Number.isNaN(s)) return;
+        loop.tracks[t].steps[s] = loop.tracks[t].steps[s] ? 0 : 1;
+        el.classList.toggle('on');
+        el.setAttribute('aria-pressed', String(!!loop.tracks[t].steps[s]));
+        if (loop.tracks[t].steps[s]) {
+          play(loop.tracks[t].inst);
+          logFeed(`you · ${INST_BY_KEY[loop.tracks[t].inst]?.label} step ${s + 1}`, 'you');
+        }
+      });
+    });
+    // Wire instrument pick
+    tracksEl.querySelectorAll<HTMLSelectElement>('select[data-track-pick]').forEach((el) => {
+      el.addEventListener('change', () => {
+        const idx = Number(el.dataset.trackPick);
+        loop.tracks[idx].inst = el.value as InstKey;
+        renderTracks();
+        play(loop.tracks[idx].inst);
+      });
+    });
+    // Wire mute toggles
+    tracksEl.querySelectorAll<HTMLElement>('[data-mute]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const idx = Number(el.dataset.mute);
+        loop.tracks[idx].muted = !loop.tracks[idx].muted;
+        el.classList.toggle('muted', loop.tracks[idx].muted);
+      });
+    });
+  }
+  renderTracks();
+
+  // ── Transport ──
+  const playBtn      = document.getElementById('v5-play-btn') as HTMLButtonElement | null;
+  const playIcon     = document.getElementById('v5-play-icon');
+  const playLabel    = document.getElementById('v5-play-label');
+  const recBtn       = document.getElementById('v5-rec-btn') as HTMLButtonElement | null;
+  const clearBtn     = document.getElementById('v5-clear-btn') as HTMLButtonElement | null;
+  const bpmSlider    = document.getElementById('v5-bpm-slider') as HTMLInputElement | null;
+  const bpmVal       = document.getElementById('v5-bpm-val');
+  const shareBtn     = document.getElementById('v5-share-btn') as HTMLButtonElement | null;
+  const randomBtn    = document.getElementById('v5-randomize-btn') as HTMLButtonElement | null;
+  const statusMode   = document.getElementById('v5-status-mode');
+  const activeTracks = document.getElementById('v5-active-tracks');
+  const tickerEls    = Array.from(document.querySelectorAll<HTMLElement>('.v5-tick'));
+  const tracksEl2    = tracksEl;
+
+  let isPlaying = false;
+  let isRecording = false;
+  let stepIdx = 0;
+  let stepTimer: number | null = null;
+
+  function paintStatus() {
+    if (statusMode) {
+      statusMode.textContent = isPlaying
+        ? `playing · ${loop.bpm} bpm${isRecording ? ' · recording' : ''}`
+        : isRecording
+          ? `recording · ${loop.bpm} bpm`
+          : `stopped · ${loop.bpm} bpm`;
+    }
+    if (activeTracks) activeTracks.textContent = String(loop.tracks.filter(t => !t.muted && t.steps.some(s => s)).length);
+  }
+  paintStatus();
+
+  if (bpmSlider) {
+    bpmSlider.value = String(loop.bpm);
+    if (bpmVal) bpmVal.textContent = String(loop.bpm);
+    bpmSlider.addEventListener('input', () => {
+      loop.bpm = Number(bpmSlider.value);
+      if (bpmVal) bpmVal.textContent = String(loop.bpm);
+      paintStatus();
+      if (isPlaying) {
+        // Restart timer at the new tempo
+        stopSeq();
+        startSeq();
+      }
+    });
+  }
+
+  function tick() {
+    // Light ticker
+    tickerEls.forEach((el, i) => el.classList.toggle('lit', i === stepIdx));
+    // Highlight active step on each track + fire instruments
+    loop.tracks.forEach((track, ti) => {
+      const cell = tracksEl2?.querySelector<HTMLElement>(`.v5-cell[data-cell="${ti}:${stepIdx}"]`);
+      if (cell) {
+        // Lit indicator for ALL cells at the current step
+        tracksEl2?.querySelectorAll<HTMLElement>(`.v5-cell[data-cell^="${ti}:"]`).forEach((c) => c.classList.remove('lit'));
+        cell.classList.add('lit');
+        if (track.steps[stepIdx] && !track.muted) {
+          cell.classList.add('firing');
+          setTimeout(() => cell.classList.remove('firing'), 150);
+          play(track.inst);
+          // Broadcast on beat-1 of each bar + every fired step (lightweight)
+          fetch('/api/sounds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'orchestra', inst: track.inst, sessionId, auto: 1 }),
+            keepalive: true,
+          }).catch(() => {});
+        }
+      }
+    });
+    if (stepIdx === 0) logFeed(`you · loop bar`, 'you');
+    stepIdx = (stepIdx + 1) % 16;
+  }
+
+  function startSeq() {
+    if (isPlaying) return;
+    isPlaying = true;
+    if (playBtn) {
+      playBtn.setAttribute('aria-pressed', 'true');
+      if (playIcon) playIcon.textContent = '■';
+      if (playLabel) playLabel.textContent = 'Stop';
+    }
+    paintStatus();
+    stepIdx = 0;
+    if (stepTimer) clearInterval(stepTimer);
+    const stepMs = (60_000 / loop.bpm) / 4;
+    tick();
+    stepTimer = window.setInterval(tick, stepMs);
+  }
+  function stopSeq() {
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+    isPlaying = false;
+    if (playBtn) {
+      playBtn.setAttribute('aria-pressed', 'false');
+      if (playIcon) playIcon.textContent = '▶';
+      if (playLabel) playLabel.textContent = 'Play';
+    }
+    tickerEls.forEach((el) => el.classList.remove('lit'));
+    tracksEl2?.querySelectorAll<HTMLElement>('.v5-cell').forEach((c) => c.classList.remove('lit'));
+    paintStatus();
+  }
+
+  playBtn?.addEventListener('click', () => isPlaying ? stopSeq() : startSeq());
+  recBtn?.addEventListener('click', () => {
+    isRecording = !isRecording;
+    recBtn.setAttribute('aria-pressed', String(isRecording));
+    if (isRecording && !isPlaying) startSeq();
+    paintStatus();
+  });
+  clearBtn?.addEventListener('click', () => {
+    if (!confirm('Clear all tracks?')) return;
+    loop.tracks.forEach((t) => { t.steps = emptySteps(); });
+    renderTracks();
+    paintStatus();
+  });
+  randomBtn?.addEventListener('click', () => {
+    loop.tracks.forEach((t) => {
+      // Random density per instrument: drums denser, melodic sparser
+      const isMelodic = t.inst === 'lead' || t.inst === 'bass' || t.inst === 'pad' || t.inst === 'bell';
+      const density = isMelodic ? 0.18 : 0.4;
+      t.steps = Array.from({ length: 16 }, () => Math.random() < density ? 1 : 0);
+    });
+    renderTracks();
+    showToast('randomized', 'a fresh pattern · play to hear it');
+  });
+
+  // Recording — when active, manual cell taps quantize to current step
+  // (already handled because we toggle on click; recording mode is more
+  // about KEYBOARD shortcuts taps below)
+
+  // Keyboard shortcuts: 1-9, 0, q, w pick the matching instrument and
+  // toggle the current step on whichever track has that instrument; if
+  // no track has it, the active step on track 1 is set to that inst.
+  const KEYS: Record<string, InstKey> = {
+    '1': 'kick', '2': 'snare', '3': 'hihat', '4': 'openhat',
+    '5': 'clap', '6': 'tom', '7': 'bass', '8': 'lead',
+    '9': 'pad', '0': 'bell', 'q': 'shaker', 'w': 'cymbal',
+  };
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT' || target?.isContentEditable) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      isPlaying ? stopSeq() : startSeq();
+      return;
+    }
+    const inst = KEYS[e.key.toLowerCase()];
+    if (!inst) return;
+    e.preventDefault();
+    play(inst);
+    if (isRecording && isPlaying) {
+      // Find the first track playing this instrument; if none, replace track 1
+      let trackIdx = loop.tracks.findIndex(t => t.inst === inst);
+      if (trackIdx === -1) {
+        loop.tracks[0].inst = inst;
+        trackIdx = 0;
+      }
+      // Quantize to nearest step (current playhead is "next to fire", so we
+      // light up the previous one which is what the listener just heard)
+      const targetStep = (stepIdx - 1 + 16) % 16;
+      loop.tracks[trackIdx].steps[targetStep] = 1;
+      renderTracks();
+      logFeed(`rec · ${INST_BY_KEY[inst]?.label} → step ${targetStep + 1}`, 'you');
+    } else {
+      logFeed(`you · ${INST_BY_KEY[inst]?.label}`, 'you');
+    }
+  });
+
+  // ── Share ──
+  shareBtn?.addEventListener('click', async () => {
+    const encoded = encodeLoop(loop);
+    const url = `${window.location.origin}${window.location.pathname}#l=${encoded}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('copied!', `${url.length}-char URL · paste anywhere to share`);
+      window.history.replaceState(null, '', `#l=${encoded}`);
+    } catch {
+      showToast('share', url);
+    }
+  });
+
+  // ── Toast ──
+  let toastTimer: number | null = null;
+  const toastEl = document.getElementById('v5-toast');
+  const toastLabel = document.getElementById('v5-toast-label');
+  const toastTitle = document.getElementById('v5-toast-title');
+  function showToast(label: string, title: string) {
+    if (!toastEl) return;
+    if (toastLabel) toastLabel.textContent = label;
+    if (toastTitle) toastTitle.textContent = title;
+    toastEl.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => { toastEl.hidden = true; }, 3200);
+  }
+
+  // ── Activity feed ──
+  const feedEl = document.getElementById('v5-feed');
+  const rateEl = document.getElementById('v5-rate');
+  const TS: number[] = [];
+  function logFeed(msg: string, kind: 'you' | 'remote') {
+    if (!feedEl) return;
+    const empty = feedEl.querySelector('.v5-feed-empty');
+    if (empty) empty.remove();
+    const li = document.createElement('li');
+    li.className = 'v5-feed-item';
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    li.innerHTML = `<span>${time}</span><span class="${kind}">${msg}</span>`;
+    feedEl.prepend(li);
+    const items = feedEl.querySelectorAll('li');
+    if (items.length > 30) items[items.length - 1].remove();
+    const now = Date.now();
+    TS.push(now);
+    while (TS[0] && TS[0] < now - 60_000) TS.shift();
+    if (rateEl) rateEl.textContent = `${TS.length}/min`;
+  }
+
+  // ── Remote orchestra events ──
+  let lastSoundT = Date.now();
+  let ownPid = '';
+  (async () => {
+    try {
+      const buf = new TextEncoder().encode(sessionId);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      ownPid = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0,10);
+    } catch {}
+  })();
+  const remoteActive = new Map<string, number>();
+  const jammersEl = document.getElementById('v5-jammers');
+  function renderJammers() {
+    const now = Date.now();
+    for (const [pid, t] of remoteActive) if (now - t > 10_000) remoteActive.delete(pid);
+    const self = isPlaying || (TS[TS.length - 1] && now - TS[TS.length - 1] < 10_000) ? 1 : 0;
+    if (jammersEl) jammersEl.textContent = String(remoteActive.size + self);
+  }
+  setInterval(renderJammers, 2000);
+
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) {
+        if (ev.pid === ownPid) continue;
+        if (ev.type !== 'orchestra' && ev.type !== 'drum') continue;
+        if (ev.pid) remoteActive.set(ev.pid, Date.now());
+        const inst = (ev.inst || ev.type) as InstKey;
+        if (INST_BY_KEY[inst]) {
+          play(inst);
+          logFeed(`⌐◨-◨ ${INST_BY_KEY[inst]?.label}`, 'remote');
+        }
+      }
+      renderJammers();
+    } catch {}
+  }
+  setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 350);
+</script>
+
+</DrumLayout>
