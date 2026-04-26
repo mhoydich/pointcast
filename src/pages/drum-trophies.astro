@@ -1,0 +1,691 @@
+---
+/**
+ * /drum-trophies — visualize what you've collected, mint trophies on Tezos.
+ *
+ * Reads localStorage state across all drum surfaces (v1 count, v4
+ * orchestra collection, v6 choir voices, v5 loop sharing, mint receipts)
+ * and shows a trophy grid. Each trophy is a specific Nouns seed (0–1199)
+ * that the user can claim on-chain via the existing Visit Nouns FA2
+ * contract (free mint, gas only ~0.003 ꜩ).
+ *
+ * Wallet-aware: if connected, queries TzKT for which trophy noun ids
+ * the wallet already owns. Owned ones show "✓ on-chain" with a tzkt link.
+ *
+ * Per Mike 2026-04-26: "try some collectibles on tezos, visualize collected"
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import MintButton from '../components/MintButton.astro';
+import contracts from '../data/contracts.json';
+
+const VISIT_NOUNS = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
+
+// Trophies — each is a specific Nouns seed reserved as a "drum badge".
+// Earning a trophy is a localStorage check. Minting it claims the
+// matching Noun from the open Visit Nouns FA2 (any seed 0–1199 mintable
+// while supply lasts; one-of-one-per-claimer for that seed).
+//
+// IDs picked to be visually distinctive and not collide with existing
+// drum-page noun avatars (e.g. drum-v4 already uses #1, #50, #100, etc.,
+// so trophies use higher / character-y nouns).
+const TROPHIES = [
+  {
+    id: 'first-tap',
+    title: 'First Tap',
+    nounId: 666,
+    eyebrow: 'novice',
+    desc: 'Tap a drum on any /drum* page',
+    surface: '/drum',
+    threshold: 1,
+    progressKey: 'pc:drumLocalCount',
+    progressType: 'count',
+  },
+  {
+    id: 'true-drummer',
+    title: 'True Drummer',
+    nounId: 700,
+    eyebrow: '100 drums',
+    desc: 'Tap 100+ drums total across all surfaces',
+    surface: '/drum-v2',
+    threshold: 100,
+    progressKey: 'pc:drumLocalCount',
+    progressType: 'count',
+  },
+  {
+    id: 'master-drummer',
+    title: 'Master Drummer',
+    nounId: 777,
+    eyebrow: '1,000 drums',
+    desc: 'Tap 1,000+ drums total across all surfaces',
+    surface: '/drum-v2',
+    threshold: 1000,
+    progressKey: 'pc:drumLocalCount',
+    progressType: 'count',
+  },
+  {
+    id: 'orchestra-master',
+    title: 'Orchestra Master',
+    nounId: 808,
+    eyebrow: 'all 12 instruments',
+    desc: 'Tap every instrument on /drum-v4',
+    surface: '/drum-v4',
+    threshold: 12,
+    progressKey: 'pc:drum-v4:collected',
+    progressType: 'set',
+  },
+  {
+    id: 'choir-master',
+    title: 'Choir Master',
+    nounId: 888,
+    eyebrow: 'all 12 voices',
+    desc: 'Sing every voice on /drum-v6',
+    surface: '/drum-v6',
+    threshold: 12,
+    progressKey: 'pc:drum-v6:sung',
+    progressType: 'set',
+  },
+  {
+    id: 'loop-creator',
+    title: 'Loop Creator',
+    nounId: 909,
+    eyebrow: 'shared a loop',
+    desc: 'Build and share a loop URL on /drum-v5',
+    surface: '/drum-v5',
+    threshold: 1,
+    progressKey: 'pc:drum-v5:shared-count',
+    progressType: 'count',
+  },
+  {
+    id: 'spotify-jam',
+    title: 'Spotify Jam',
+    nounId: 420,
+    eyebrow: 'set the room track',
+    desc: 'Set a track for the room on /drum-v3',
+    surface: '/drum-v3',
+    threshold: 1,
+    progressKey: 'pc:drum-v3:track-count',
+    progressType: 'count',
+  },
+  {
+    id: 'grand-master',
+    title: 'Grand Master',
+    nounId: 999,
+    eyebrow: 'all trophies',
+    desc: 'Earn every other drum trophy',
+    surface: '/drum-trophies',
+    threshold: 7,
+    progressKey: '_meta',
+    progressType: 'meta',
+  },
+] as const;
+---
+
+<DrumLayout
+  title="Drum Trophies"
+  description="On-chain collectibles for the PointCast drum hub. Earn trophies across the seven drum surfaces, mint them as Visit Nouns FA2 NFTs on Tezos."
+  image="/images/og-drum.png"
+>
+
+<div class="dt-root">
+
+  <DrumNav current="v1" />
+
+  <header class="dt-hero">
+    <p class="dt-hero-eyebrow">trophies · on-chain · tezos</p>
+    <h1 class="dt-hero-title">your drum collection</h1>
+    <p class="dt-hero-dek">
+      eight trophies across the seven drum rooms. earn them by playing.
+      claim each as a Nouns FA2 NFT on Tezos — free, gas only
+      (~0.003 ꜩ). connect your wallet to see what you've already minted
+      and to claim what you've earned.
+    </p>
+  </header>
+
+  <!-- ══ HUD ══ -->
+  <div class="dt-hud">
+    <div class="dt-hud-card">
+      <div class="dt-hud-label">Earned</div>
+      <div class="dt-hud-val"><span id="dt-earned">0</span> / 8</div>
+      <div class="dt-hud-sub">localStorage state</div>
+    </div>
+    <div class="dt-hud-card">
+      <div class="dt-hud-label">Minted</div>
+      <div class="dt-hud-val"><span id="dt-minted">—</span></div>
+      <div class="dt-hud-sub">on-chain · TzKT</div>
+    </div>
+    <div class="dt-hud-card">
+      <div class="dt-hud-label">Total Drums</div>
+      <div class="dt-hud-val" id="dt-total-drums">0</div>
+      <div class="dt-hud-sub">across all surfaces</div>
+    </div>
+    <div class="dt-hud-card">
+      <div class="dt-hud-label">Wallet</div>
+      <div class="dt-hud-val dt-hud-wallet" id="dt-wallet-state">not connected</div>
+      <div class="dt-hud-sub" id="dt-wallet-sub">click connect in the header</div>
+    </div>
+  </div>
+
+  <!-- ══ TROPHIES GRID ══ -->
+  <section class="dt-grid">
+    {TROPHIES.map((t) => (
+      <article class="dt-card" data-trophy={t.id} data-noun={String(t.nounId)} data-threshold={String(t.threshold)} data-progress-key={t.progressKey} data-progress-type={t.progressType}>
+        <div class="dt-card-noun">
+          <img
+            src={`https://noun.pics/${t.nounId}.svg`}
+            alt={t.title}
+            width="120"
+            height="120"
+            loading="lazy"
+            style="image-rendering: pixelated;"
+          />
+          <div class="dt-card-state" data-state-pill>locked</div>
+        </div>
+        <div class="dt-card-text">
+          <p class="dt-card-eyebrow">{t.eyebrow}</p>
+          <h2 class="dt-card-title">{t.title}</h2>
+          <p class="dt-card-desc">{t.desc}</p>
+          <div class="dt-card-progress">
+            <div class="dt-card-progress-bar">
+              <div class="dt-card-progress-fill" data-fill style="width: 0%"></div>
+            </div>
+            <div class="dt-card-progress-text" data-progress-text>0 / {t.threshold}</div>
+          </div>
+          <div class="dt-card-meta">
+            <a class="dt-card-surface" href={t.surface}>play {t.surface} →</a>
+            <a class="dt-card-tzkt" href={`https://noun.pics/${t.nounId}.svg`} target="_blank" rel="noopener">noun #{t.nounId} ↗</a>
+          </div>
+          <div class="dt-card-mint" data-mint-slot>
+            {VISIT_NOUNS && (
+              <MintButton
+                contract={VISIT_NOUNS}
+                tokenId={t.nounId}
+                priceMutez={0}
+                kind="mint"
+                label={`Claim trophy · noun #${t.nounId}`}
+              />
+            )}
+            {!VISIT_NOUNS && (
+              <p class="dt-card-soon">contract not wired — coming soon</p>
+            )}
+          </div>
+        </div>
+      </article>
+    ))}
+  </section>
+
+  <!-- ══ ON-CHAIN VIEWER ══ -->
+  <section class="dt-onchain">
+    <div class="dt-onchain-head">
+      <h2 class="dt-onchain-title">your wallet's PointCast Visit Nouns</h2>
+      <a href="/collection/visit-nouns" class="dt-onchain-link">full collection →</a>
+    </div>
+    <div id="dt-onchain-grid" class="dt-onchain-grid">
+      <p class="dt-onchain-empty">connect a wallet to see your on-chain Visit Nouns</p>
+    </div>
+  </section>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="dt-footer">
+    <span>⌐◨-◨ PointCast · Drum Trophies</span>
+    <span>Visit Nouns FA2 · {VISIT_NOUNS || 'pending mainnet origination'}</span>
+    <span>Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026</span>
+  </footer>
+
+</div>
+
+<style is:global>
+  /* /drum-trophies — pages-wide, dt-* prefixed. */
+
+  .dt-root {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    font-family: var(--pc-font-mono);
+  }
+
+  /* Hero */
+  .dt-hero {
+    padding: 14px 0 18px;
+    border-bottom: 1.5px solid var(--pc-rule);
+    margin-bottom: 16px;
+  }
+  .dt-hero-eyebrow {
+    font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: #f59e0b; margin-bottom: 6px; font-weight: 600;
+  }
+  .dt-hero-title {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(1.6rem, 4.5vw, 2.5rem);
+    font-weight: 500; color: var(--pc-ink);
+    margin: 0 0 6px; letter-spacing: -0.01em; line-height: 1.05;
+  }
+  .dt-hero-dek {
+    font-family: var(--pc-font-sans);
+    font-size: 13px; color: var(--pc-ink-soft);
+    line-height: 1.5; margin: 0; max-width: 64ch;
+  }
+
+  /* HUD */
+  .dt-hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 540px) { .dt-hud { grid-template-columns: repeat(2, 1fr); } }
+  .dt-hud-card {
+    padding: 10px 12px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 6px;
+    background: #fafaf9;
+  }
+  .dt-hud-label {
+    font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin-bottom: 4px;
+  }
+  .dt-hud-val {
+    font-size: 1.4rem; font-weight: 700; line-height: 1;
+    color: var(--pc-ink); font-variant-numeric: tabular-nums; margin-bottom: 4px;
+  }
+  .dt-hud-sub {
+    font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .dt-hud-wallet { font-size: 0.95rem; word-break: break-all; }
+
+  /* Trophy grid */
+  .dt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 30px;
+  }
+  @media (max-width: 720px) { .dt-grid { grid-template-columns: 1fr; } }
+
+  .dt-card {
+    display: grid;
+    grid-template-columns: 132px 1fr;
+    gap: 14px;
+    padding: 14px;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 10px;
+    background: #fafaf9;
+    transition: border-color 200ms, background 200ms, transform 80ms;
+    position: relative;
+  }
+  .dt-card.earned {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, #fef3c7 0%, #fafaf9 100%);
+  }
+  .dt-card.minted {
+    border-color: #10b981;
+    background: linear-gradient(135deg, rgba(16,185,129,0.10) 0%, #fafaf9 100%);
+  }
+  .dt-card-noun {
+    position: relative;
+    width: 132px;
+    height: 132px;
+    border: 2px solid var(--pc-ink);
+    border-radius: 6px;
+    background: #fff;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .dt-card-noun img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: grayscale(1);
+    opacity: 0.4;
+    transition: filter 250ms, opacity 250ms;
+  }
+  .dt-card.earned .dt-card-noun img,
+  .dt-card.minted .dt-card-noun img {
+    filter: grayscale(0); opacity: 1;
+  }
+  .dt-card-state {
+    position: absolute;
+    bottom: 4px; left: 4px;
+    font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--pc-rule);
+    color: var(--pc-ink-muted);
+  }
+  .dt-card.earned .dt-card-state {
+    background: #f59e0b; color: #fff;
+  }
+  .dt-card.minted .dt-card-state {
+    background: #10b981; color: #fff;
+  }
+
+  .dt-card-text { display: flex; flex-direction: column; min-width: 0; }
+  .dt-card-eyebrow {
+    font-size: 8px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: #f59e0b; font-weight: 600; margin: 0 0 4px;
+  }
+  .dt-card.minted .dt-card-eyebrow { color: #10b981; }
+  .dt-card-title {
+    font-family: var(--pc-font-sans);
+    font-size: 17px; font-weight: 500; color: var(--pc-ink);
+    margin: 0 0 4px; line-height: 1.15;
+  }
+  .dt-card-desc {
+    font-family: var(--pc-font-sans);
+    font-size: 12px; color: var(--pc-ink-soft);
+    line-height: 1.5; margin: 0 0 8px;
+  }
+  .dt-card-progress { margin-bottom: 8px; }
+  .dt-card-progress-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--pc-rule-soft);
+    overflow: hidden;
+    margin-bottom: 3px;
+  }
+  .dt-card-progress-fill {
+    height: 100%;
+    background: var(--pc-rule);
+    transition: width 280ms ease, background 200ms;
+  }
+  .dt-card.earned .dt-card-progress-fill { background: #f59e0b; }
+  .dt-card.minted .dt-card-progress-fill { background: #10b981; }
+  .dt-card-progress-text {
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .dt-card-meta {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .dt-card-surface { color: var(--pc-accent); text-decoration: none; }
+  .dt-card-surface:hover { text-decoration: underline; }
+  .dt-card-tzkt { color: var(--pc-ink-muted); text-decoration: none; }
+  .dt-card-tzkt:hover { color: var(--pc-ink); }
+  .dt-card-mint { margin-top: auto; }
+  .dt-card-soon {
+    font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    font-style: italic;
+  }
+  .dt-card .mint-wrap { display: inline-block; }
+  .dt-card .mint-btn {
+    padding: 7px 14px;
+    border: 1.5px solid var(--pc-ink);
+    background: var(--pc-ink);
+    color: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 600;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .dt-card .mint-btn:hover { background: #f59e0b; border-color: #f59e0b; }
+  .dt-card .mint-btn:disabled { opacity: 0.4; cursor: not-allowed; background: var(--pc-rule); border-color: var(--pc-rule); }
+  .dt-card.earned .mint-btn { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+  .dt-card.earned .mint-btn:hover { background: var(--pc-ink); border-color: var(--pc-ink); }
+  .dt-card .mint-status {
+    font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 6px 0 0;
+  }
+  .dt-card .mint-status a { color: var(--pc-accent); }
+  /* Hide mint button when locked (not earned yet) */
+  .dt-card:not(.earned):not(.minted) .dt-card-mint { display: none; }
+
+  /* On-chain viewer */
+  .dt-onchain {
+    border-top: 1.5px solid var(--pc-rule);
+    padding-top: 22px;
+    margin-bottom: 30px;
+  }
+  .dt-onchain-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
+  }
+  .dt-onchain-title {
+    font-family: var(--pc-font-sans); font-size: 16px; font-weight: 500;
+    color: var(--pc-ink); margin: 0;
+  }
+  .dt-onchain-link {
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--pc-accent); text-decoration: none;
+  }
+  .dt-onchain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    min-height: 48px;
+  }
+  .dt-onchain-empty {
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted); grid-column: 1/-1; margin: 0;
+  }
+  .dt-onchain-tile {
+    aspect-ratio: 1;
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+    position: relative;
+  }
+  .dt-onchain-tile.is-trophy {
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16,185,129,0.2);
+  }
+  .dt-onchain-tile img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    display: block;
+  }
+  .dt-onchain-tile-id {
+    position: absolute;
+    bottom: 2px; left: 2px; right: 2px;
+    font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink); background: rgba(255,255,255,0.85);
+    padding: 1px 4px; border-radius: 2px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Footer */
+  .dt-footer {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    border-top: 1.5px solid var(--pc-rule);
+    padding-top: 16px;
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-trophies client.
+  //
+  // Reads localStorage state, computes earned trophies, paints UI.
+  // Wallet-aware: if connected, queries TzKT for owned Visit Nouns and
+  // marks any matching trophy noun ids as "minted".
+  // ══════════════════════════════════════════════════════════════════
+
+  type Trophy = {
+    id: string; nounId: number; threshold: number;
+    progressKey: string; progressType: string;
+  };
+
+  function loadCount(key: string): number {
+    try { return Number(localStorage.getItem(key)) || 0; } catch { return 0; }
+  }
+  function loadSet(key: string): string[] {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+  function loadActiveWallet(): { address: string } | null {
+    try {
+      const raw = localStorage.getItem('pc:wallets');
+      const list = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(list) || list.length === 0) return null;
+      const a = localStorage.getItem('pc:wallet-active');
+      return list.find((w: any) => w.address === a) || list[list.length - 1] || null;
+    } catch { return null; }
+  }
+  function shortAddr(a: string): string {
+    return a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+  }
+
+  function progressFor(trophy: Trophy, allEarnedExceptThis: number): { current: number; earned: boolean } {
+    if (trophy.progressType === 'count') {
+      const v = loadCount(trophy.progressKey);
+      return { current: Math.min(v, trophy.threshold), earned: v >= trophy.threshold };
+    }
+    if (trophy.progressType === 'set') {
+      const v = loadSet(trophy.progressKey);
+      return { current: Math.min(v.length, trophy.threshold), earned: v.length >= trophy.threshold };
+    }
+    if (trophy.progressType === 'meta') {
+      // grand-master — earned when every other trophy is earned
+      return { current: allEarnedExceptThis, earned: allEarnedExceptThis >= trophy.threshold };
+    }
+    return { current: 0, earned: false };
+  }
+
+  function paintTrophy(card: HTMLElement, current: number, threshold: number, earned: boolean, minted: boolean) {
+    card.classList.toggle('earned', earned && !minted);
+    card.classList.toggle('minted', minted);
+    const pill = card.querySelector<HTMLElement>('[data-state-pill]');
+    if (pill) pill.textContent = minted ? '✓ on-chain' : earned ? '✓ earned' : 'locked';
+    const fill = card.querySelector<HTMLElement>('[data-fill]');
+    if (fill) fill.style.width = `${Math.min(100, (current / threshold) * 100)}%`;
+    const text = card.querySelector<HTMLElement>('[data-progress-text]');
+    if (text) text.textContent = `${current.toLocaleString()} / ${threshold.toLocaleString()}`;
+  }
+
+  function paintAll(mintedNounIds: Set<number>) {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.dt-card'));
+    const trophies: Array<{ card: HTMLElement; t: Trophy }> = cards.map((card) => ({
+      card,
+      t: {
+        id: card.dataset.trophy || '',
+        nounId: Number(card.dataset.noun),
+        threshold: Number(card.dataset.threshold),
+        progressKey: card.dataset.progressKey || '',
+        progressType: card.dataset.progressType || 'count',
+      },
+    }));
+
+    // First pass — compute earned for non-meta trophies
+    const earnedNonMeta: boolean[] = trophies.map(({ t }) => {
+      if (t.progressType === 'meta') return false;
+      const { earned } = progressFor(t, 0);
+      return earned;
+    });
+    const earnedCount = earnedNonMeta.filter(Boolean).length;
+
+    // Second pass — render all (meta now knows the count)
+    let earnedTotal = 0;
+    let mintedTotal = 0;
+    trophies.forEach(({ card, t }, i) => {
+      const minted = mintedNounIds.has(t.nounId);
+      const { current, earned } = progressFor(t, earnedCount);
+      if (earned) earnedTotal++;
+      if (minted) mintedTotal++;
+      paintTrophy(card, current, t.threshold, earned, minted);
+    });
+
+    const earnedEl = document.getElementById('dt-earned');
+    if (earnedEl) earnedEl.textContent = String(earnedTotal);
+    const mintedEl = document.getElementById('dt-minted');
+    if (mintedEl) mintedEl.textContent = mintedTotal > 0 ? `${mintedTotal} / 8` : '0 / 8';
+    const totalEl = document.getElementById('dt-total-drums');
+    if (totalEl) totalEl.textContent = loadCount('pc:drumLocalCount').toLocaleString();
+  }
+
+  // ── Wallet + TzKT integration ──
+  const VISIT_NOUNS_KT1 = (window as any).__visit_nouns ||
+    document.querySelector<HTMLMetaElement>('meta[name="pc-visit-nouns-contract"]')?.content ||
+    'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh';
+
+  async function fetchOwnedNouns(addr: string): Promise<number[]> {
+    try {
+      // Pull all Visit Nouns balances for this account
+      const r = await fetch(
+        `https://api.tzkt.io/v1/tokens/balances?account=${addr}&token.contract=${VISIT_NOUNS_KT1}&balance.gt=0&limit=200`
+      );
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data)
+        ? data.map((b: any) => Number(b.token?.tokenId)).filter((n: number) => Number.isFinite(n))
+        : [];
+    } catch { return []; }
+  }
+
+  function paintOnchain(ownedIds: number[]) {
+    const grid = document.getElementById('dt-onchain-grid');
+    if (!grid) return;
+    if (ownedIds.length === 0) {
+      grid.innerHTML = '<p class="dt-onchain-empty">no PointCast Visit Nouns yet — earn a trophy and claim it below</p>';
+      return;
+    }
+    const trophyNounIds = new Set<number>(
+      Array.from(document.querySelectorAll<HTMLElement>('.dt-card')).map((c) => Number(c.dataset.noun))
+    );
+    grid.innerHTML = ownedIds.map((id) => `
+      <a class="dt-onchain-tile ${trophyNounIds.has(id) ? 'is-trophy' : ''}" href="https://tzkt.io/${VISIT_NOUNS_KT1}/tokens/${id}" target="_blank" rel="noopener" title="Noun #${id}${trophyNounIds.has(id) ? ' · trophy ✓' : ''}">
+        <img src="https://noun.pics/${id}.svg" alt="Noun #${id}" loading="lazy" />
+        <span class="dt-onchain-tile-id">#${id}</span>
+      </a>
+    `).join('');
+  }
+
+  async function refreshWallet() {
+    const w = loadActiveWallet();
+    const stateEl = document.getElementById('dt-wallet-state');
+    const subEl = document.getElementById('dt-wallet-sub');
+    if (!w) {
+      if (stateEl) stateEl.textContent = 'not connected';
+      if (subEl) subEl.textContent = 'click connect in the header';
+      paintAll(new Set());
+      paintOnchain([]);
+      return;
+    }
+    if (stateEl) stateEl.textContent = shortAddr(w.address);
+    if (subEl) subEl.textContent = 'fetching on-chain…';
+    const owned = await fetchOwnedNouns(w.address);
+    if (subEl) subEl.textContent = `${owned.length} Visit Noun${owned.length === 1 ? '' : 's'} owned`;
+    paintAll(new Set(owned));
+    paintOnchain(owned);
+  }
+
+  // ── Initial paint + wallet sync ──
+  paintAll(new Set());
+  refreshWallet();
+  window.addEventListener('pc:wallet-change', refreshWallet);
+  window.addEventListener('pc:mint-receipt', () => {
+    // After a fresh mint, give TzKT a moment to index then refresh.
+    setTimeout(refreshWallet, 8000);
+  });
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pc:wallets' || e.key === 'pc:wallet-active' || (e.key && e.key.startsWith('pc:drum'))) {
+      paintAll(new Set());
+      refreshWallet();
+    }
+  });
+  // Also refresh when the page regains focus (user came back from a drum surface)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') paintAll(new Set());
+  });
+</script>
+
+</DrumLayout>
