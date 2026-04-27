@@ -4,9 +4,10 @@
   const STORAGE_KEY = "sitting-with-gandalf-log";
   const SETTINGS_KEY = "sitting-with-gandalf-settings";
   const NOUNS_COLLECTION_KEY = "sitting-with-gandalf-nouns-collection";
+  const KEEPSAKE_COLLECTION_KEY = "sitting-with-gandalf-keepsake-collection";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v5";
-  const SETTINGS_RELEASE = "v5-enjoy";
+  const SETTINGS_RELEASE = "v5-keepsakes";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
   const renderStyles = {
     storybook: {
@@ -177,6 +178,153 @@
       ]
     }
   };
+
+  const keepsakeRelics = [
+    {
+      id: "ember-coin",
+      name: "Ember Coin",
+      family: "warmth",
+      rarity: "Common",
+      mark: "EC",
+      bg: "#3a241a",
+      tone: "#f0b45b",
+      shadow: "#7b4025",
+      cue: "Hold one warm thought without squeezing it.",
+      line: "A small heat in the pocket can make the whole road less stern."
+    },
+    {
+      id: "moss-pin",
+      name: "Moss Pin",
+      family: "rest",
+      rarity: "Common",
+      mark: "MP",
+      bg: "#263827",
+      tone: "#9fbc68",
+      shadow: "#405f35",
+      cue: "Let the softest green thing do nothing correctly.",
+      line: "Some comfort works because it does not announce itself."
+    },
+    {
+      id: "rain-bead",
+      name: "Rain Bead",
+      family: "listening",
+      rarity: "Common",
+      mark: "RB",
+      bg: "#24333c",
+      tone: "#a7d3de",
+      shadow: "#3f6370",
+      cue: "Count three quiet sounds before adding a thought.",
+      line: "Rain is old practice at arriving one drop at a time."
+    },
+    {
+      id: "pipe-match",
+      name: "Pipe Match",
+      family: "pause",
+      rarity: "Common",
+      mark: "PM",
+      bg: "#33291f",
+      tone: "#ef9e54",
+      shadow: "#71472e",
+      cue: "Touch the pause before the next draw.",
+      line: "The match is brief, but it remembers how to begin."
+    },
+    {
+      id: "road-button",
+      name: "Road Button",
+      family: "wander",
+      rarity: "Uncommon",
+      mark: "RO",
+      bg: "#3a3328",
+      tone: "#d0bd7a",
+      shadow: "#725f37",
+      cue: "Choose the next step, then stop negotiating with the horizon.",
+      line: "A button stays useful because it holds one small thing together."
+    },
+    {
+      id: "moon-thread",
+      name: "Moon Thread",
+      family: "ease",
+      rarity: "Uncommon",
+      mark: "MT",
+      bg: "#252a3c",
+      tone: "#d7d9ff",
+      shadow: "#4f5578",
+      cue: "Let one silver line lead you back to the chair.",
+      line: "The moon does not hurry, and somehow it is never late."
+    },
+    {
+      id: "map-corner",
+      name: "Map Corner",
+      family: "direction",
+      rarity: "Uncommon",
+      mark: "MC",
+      bg: "#3d3424",
+      tone: "#dfc586",
+      shadow: "#80673b",
+      cue: "Fold the big plan until only the next inch remains.",
+      line: "A torn corner may still know where north is."
+    },
+    {
+      id: "lantern-wick",
+      name: "Lantern Wick",
+      family: "clarity",
+      rarity: "Uncommon",
+      mark: "LW",
+      bg: "#392b1e",
+      tone: "#ffd27a",
+      shadow: "#8e5c2e",
+      cue: "Make the thought smaller until it can be lit.",
+      line: "A wick does not blaze by arguing. It receives the flame."
+    },
+    {
+      id: "tea-token",
+      name: "Tea Token",
+      family: "steep",
+      rarity: "Rare",
+      mark: "TT",
+      bg: "#273a38",
+      tone: "#c5e7c8",
+      shadow: "#4d7269",
+      cue: "Wait one breath longer than the answer demands.",
+      line: "The steeping is part of the flavor."
+    },
+    {
+      id: "star-salt",
+      name: "Star Salt",
+      family: "wonder",
+      rarity: "Rare",
+      mark: "SS",
+      bg: "#24243b",
+      tone: "#f4e6a6",
+      shadow: "#676097",
+      cue: "Add a pinch of wonder and stop measuring the whole sky.",
+      line: "Even a tiny sparkle can season the dark."
+    },
+    {
+      id: "quiet-key",
+      name: "Quiet Key",
+      family: "release",
+      rarity: "Rare",
+      mark: "QK",
+      bg: "#2c3029",
+      tone: "#d6d2ad",
+      shadow: "#5c6456",
+      cue: "Unlock nothing. Just feel the door become less important.",
+      line: "Not every key is for opening; some are for remembering you can leave."
+    },
+    {
+      id: "garden-note",
+      name: "Garden Note",
+      family: "kindness",
+      rarity: "Rare",
+      mark: "GN",
+      bg: "#273822",
+      tone: "#bddd7d",
+      shadow: "#587144",
+      cue: "Write the gentlest version of the thought in your head.",
+      line: "A note kept kindly changes the way the day reads it back."
+    }
+  ];
 
   const nounsGandalfs = [
     {
@@ -1001,6 +1149,9 @@
   const initialNounsGandalf = savedRelease && nounsGandalfs.some((card) => card.id === savedSettings.nounsActive)
     ? savedSettings.nounsActive
     : nounsGandalfs[0].id;
+  const initialKeepsake = savedRelease && keepsakeRelics.some((relic) => relic.id === savedSettings.keepsakeActive)
+    ? savedSettings.keepsakeActive
+    : keepsakeForCardId(initialNounsGandalf, savedRelease && rituals[savedSettings.ritual] ? savedSettings.ritual : "enjoy").id;
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -1014,6 +1165,8 @@
     ritual: savedRelease && rituals[savedSettings.ritual] ? savedSettings.ritual : "enjoy",
     nounsActive: initialNounsGandalf,
     nounsCollection: loadNounsCollection(),
+    keepsakeActive: initialKeepsake,
+    keepsakeCollection: loadKeepsakeCollection(),
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -1060,9 +1213,17 @@
     nounsCollected: document.getElementById("nounsCollected"),
     nounsCount: document.getElementById("nounsCount"),
     nounsGrid: document.getElementById("nounsGrid"),
+    keepsakeBadge: document.getElementById("keepsakeBadge"),
+    keepsakeName: document.getElementById("keepsakeName"),
+    keepsakeMeta: document.getElementById("keepsakeMeta"),
+    keepsakeCue: document.getElementById("keepsakeCue"),
+    keepsakeCount: document.getElementById("keepsakeCount"),
+    keepsakeGrid: document.getElementById("keepsakeGrid"),
     pullGandalfButton: document.getElementById("pullGandalfButton"),
     collectGandalfButton: document.getElementById("collectGandalfButton"),
     meditateGandalfButton: document.getElementById("meditateGandalfButton"),
+    pullKeepsakeButton: document.getElementById("pullKeepsakeButton"),
+    keepKeepsakeButton: document.getElementById("keepKeepsakeButton"),
     startButton: document.getElementById("startButton"),
     pauseButton: document.getElementById("pauseButton"),
     resetButton: document.getElementById("resetButton"),
@@ -1149,6 +1310,17 @@
     }
   }
 
+  function loadKeepsakeCollection() {
+    try {
+      const raw = localStorage.getItem(KEEPSAKE_COLLECTION_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const validIds = new Set(keepsakeRelics.map((relic) => relic.id));
+      return new Set(Array.isArray(parsed) ? parsed.filter((id) => validIds.has(id)) : []);
+    } catch (error) {
+      return new Set();
+    }
+  }
+
   function saveLog() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.log.slice(0, 12)));
   }
@@ -1166,6 +1338,7 @@
         renderStyle: state.renderStyle,
         ritual: state.ritual,
         nounsActive: state.nounsActive,
+        keepsakeActive: state.keepsakeActive,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -1174,6 +1347,10 @@
 
   function saveNounsCollection() {
     localStorage.setItem(NOUNS_COLLECTION_KEY, JSON.stringify(Array.from(state.nounsCollection)));
+  }
+
+  function saveKeepsakeCollection() {
+    localStorage.setItem(KEEPSAKE_COLLECTION_KEY, JSON.stringify(Array.from(state.keepsakeCollection)));
   }
 
   function activeCompanion() {
@@ -1198,6 +1375,23 @@
 
   function activeNounsGandalf() {
     return nounsGandalfs.find((card) => card.id === state.nounsActive) || nounsGandalfs[0];
+  }
+
+  function activeKeepsake() {
+    return keepsakeRelics.find((relic) => relic.id === state.keepsakeActive) || keepsakeRelics[0];
+  }
+
+  function keepsakeSeed(seed) {
+    return Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  }
+
+  function keepsakeForCardId(cardId, ritual = "enjoy") {
+    const index = keepsakeSeed(`${cardId}-${ritual}`) % keepsakeRelics.length;
+    return keepsakeRelics[index] || keepsakeRelics[0];
+  }
+
+  function suggestedKeepsakeForCard(card = activeNounsGandalf(), ritual = state.ritual) {
+    return keepsakeForCardId(card.id, ritual);
   }
 
   function isNatureVersion(version = state.version) {
@@ -1240,7 +1434,7 @@
 
   function presenceScore() {
     const totalMinutes = state.log.reduce((sum, entry) => sum + entry.minutes, 0);
-    return state.nounsCollection.size * 7 + state.log.length * 5 + Math.floor(totalMinutes / 3) + state.rings;
+    return state.nounsCollection.size * 7 + state.keepsakeCollection.size * 5 + state.log.length * 5 + Math.floor(totalMinutes / 3) + state.rings;
   }
 
   function presenceRank(score) {
@@ -1320,6 +1514,7 @@
     dom.collectGandalfButton.disabled = collected;
     dom.meditateGandalfButton.textContent = ritual.startLabel;
     dom.nounsCount.textContent = `${state.nounsCollection.size} / ${nounsGandalfs.length} kept`;
+    updateKeepsakePanel();
   }
 
   function renderNounsCollection() {
@@ -1356,6 +1551,118 @@
     updateNounsPanel();
   }
 
+  function applyKeepsakeStyle(element, relic) {
+    if (!element) {
+      return;
+    }
+
+    element.style.setProperty("--relic-bg", relic.bg);
+    element.style.setProperty("--relic-tone", relic.tone);
+    element.style.setProperty("--relic-shadow", relic.shadow);
+  }
+
+  function updateKeepsakePanel() {
+    if (!dom.keepsakeGrid) {
+      return;
+    }
+
+    const relic = activeKeepsake();
+    const collected = state.keepsakeCollection.has(relic.id);
+
+    applyKeepsakeStyle(dom.keepsakeBadge, relic);
+    applyKeepsakeStyle(dom.keepsakeBadge.parentElement, relic);
+    dom.body.dataset.keepsake = relic.id;
+    dom.keepsakeBadge.textContent = relic.mark;
+    dom.keepsakeName.textContent = relic.name;
+    dom.keepsakeMeta.textContent = `${relic.rarity} · ${relic.family}`;
+    dom.keepsakeCue.textContent = relic.cue;
+    dom.keepsakeCount.textContent = `${state.keepsakeCollection.size} / ${keepsakeRelics.length} keepsakes`;
+    dom.keepKeepsakeButton.textContent = collected ? "Kept" : "Keep keepsake";
+    dom.keepKeepsakeButton.disabled = collected;
+  }
+
+  function renderKeepsakeCollection() {
+    if (!dom.keepsakeGrid) {
+      return;
+    }
+
+    dom.keepsakeGrid.replaceChildren();
+    keepsakeRelics.forEach((relic) => {
+      const button = document.createElement("button");
+      const mark = document.createElement("span");
+      const name = document.createElement("strong");
+      const status = document.createElement("small");
+      const collected = state.keepsakeCollection.has(relic.id);
+
+      button.type = "button";
+      button.className = "keepsake-card";
+      button.classList.toggle("is-active", relic.id === state.keepsakeActive);
+      button.classList.toggle("is-collected", collected);
+      button.dataset.keepsakeId = relic.id;
+      button.setAttribute("aria-pressed", String(relic.id === state.keepsakeActive));
+      button.setAttribute("aria-label", `${relic.name}, ${collected ? "kept" : "not kept"}`);
+      applyKeepsakeStyle(button, relic);
+
+      mark.className = "keepsake-mark";
+      mark.textContent = relic.mark;
+      name.textContent = relic.name.replace(" ", "\n");
+      status.textContent = collected ? "kept" : relic.family;
+
+      button.append(mark, name, status);
+      button.addEventListener("click", () => setKeepsake(relic.id));
+      dom.keepsakeGrid.append(button);
+    });
+
+    updateKeepsakePanel();
+  }
+
+  function setKeepsake(id, options) {
+    const settings = options || {};
+    const relic = keepsakeRelics.find((item) => item.id === id) || keepsakeRelics[0];
+
+    state.keepsakeActive = relic.id;
+    renderKeepsakeCollection();
+
+    if (settings.announce !== false && isCollectibleVersion()) {
+      dom.wizardLine.textContent = relic.line;
+      setGuide("Keepsake chosen", relic.name, relic.cue);
+      spawnParticles(5);
+    }
+
+    saveSettings();
+  }
+
+  function pullKeepsake() {
+    const uncollected = keepsakeRelics.filter((relic) => !state.keepsakeCollection.has(relic.id));
+    const pool = uncollected.length > 0 ? uncollected : keepsakeRelics;
+    const current = activeKeepsake();
+    const choices = pool.length > 1 ? pool.filter((relic) => relic.id !== current.id) : pool;
+    const relic = choices[Math.floor(Math.random() * choices.length)];
+
+    setKeepsake(relic.id, { announce: false });
+    dom.wizardLine.textContent = relic.line;
+    setGuide("Found keepsake", relic.name, `${relic.cue} Pair it with ${activeNounsGandalf().name}.`);
+    spawnParticles(8);
+  }
+
+  function collectKeepsake(id, options) {
+    const relic = keepsakeRelics.find((item) => item.id === id) || activeKeepsake();
+    const wasCollected = state.keepsakeCollection.has(relic.id);
+    const settings = options || {};
+
+    state.keepsakeCollection.add(relic.id);
+    saveKeepsakeCollection();
+    renderKeepsakeCollection();
+    updateStats();
+
+    if (!settings.quiet) {
+      dom.wizardLine.textContent = wasCollected ? `${relic.name} is already in the pouch.` : relic.line;
+      setGuide(wasCollected ? "Already kept" : "Keepsake kept", relic.name, relic.cue);
+      spawnParticles(wasCollected ? 4 : 12);
+    }
+    updateRitualPanel();
+  }
+
   function setGuide(step, title, text) {
     dom.guideStep.textContent = step;
     dom.guideTitle.textContent = title;
@@ -1369,9 +1676,10 @@
 
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
+      const relic = activeKeepsake();
       const view = activeView();
       const ritual = activeRitual();
-      setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} ${view.idle}`);
+      setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} ${relic.name}: ${relic.cue} ${view.idle}`);
       return;
     }
 
@@ -1394,22 +1702,23 @@
 
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
+      const relic = activeKeepsake();
       const ritual = activeRitual();
       const lowerLabel = label.toLowerCase();
       const copyByRitual = {
         enjoy: {
           Inhale: `Breathe in for ${countdown}. Notice one pleasant detail near ${card.name}.`,
-          Hold: `Rest for ${countdown}. Nothing needs to become useful.`,
+          Hold: `Rest for ${countdown}. Let ${relic.name} be enough to hold.`,
           Exhale: `Breathe out for ${countdown}. Let the good part stay simple.`
         },
         meditate: {
           Inhale: `Breathe in for ${countdown}. ${card.breath.split(".")[0]}.`,
-          Hold: `Hold for ${countdown}. Let ${card.name} keep the cue for you.`,
+          Hold: `Hold for ${countdown}. Let ${card.name} and ${relic.name} keep the cue for you.`,
           Exhale: `Breathe out for ${countdown}. ${card.cue}`
         },
         smoke: {
           Inhale: `Draw gently for ${countdown}. Keep it easy and ceremonial.`,
-          Hold: `Hold for ${countdown}. Let ${card.name} mind the room.`,
+          Hold: `Hold for ${countdown}. Let ${relic.name} mind the room.`,
           Exhale: `Exhale for ${countdown}. Let the smoke carry ${card.noun.toLowerCase()}-sized worry away.`
         },
         beer: {
@@ -1456,8 +1765,9 @@
   function chooseLine() {
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
+      const relic = activeKeepsake();
       const intention = activeIntention();
-      const pool = [card.line, card.mantra, card.cue, card.breath].concat(activeRitual().lines, activeView().lines, intention.lines, activeRenderStyle().lines);
+      const pool = [card.line, card.mantra, card.cue, card.breath, relic.line, relic.cue].concat(activeRitual().lines, activeView().lines, intention.lines, activeRenderStyle().lines);
       const next = pool[Math.floor(Math.random() * pool.length)];
       dom.wizardLine.textContent = next;
       return;
@@ -1510,11 +1820,12 @@
     dom.phaseName.textContent = active.name;
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
+      const relic = activeKeepsake();
       const ritual = activeRitual();
       const hints = {
         Settle: `${ritual.phaseHints.Settle} ${card.mantra}`,
         Drift: `${ritual.phaseHints.Drift} ${card.cue}`,
-        Return: `${ritual.phaseHints.Return} Bring back ${card.noun.toLowerCase()}-sized calm.`
+        Return: `${ritual.phaseHints.Return} Bring back ${card.noun.toLowerCase()}-sized calm and ${relic.name}.`
       };
       dom.phaseHint.textContent = hints[active.name] || card.mantra;
     } else if (isNatureVersion()) {
@@ -1534,6 +1845,7 @@
       dom.wisdomCount.textContent = String(score);
     }
     updateRitualPanel();
+    updateKeepsakePanel();
   }
 
   function renderLog() {
@@ -1556,6 +1868,7 @@
       const right = document.createElement("span");
       const mode = entry.mode ? ` / ${entry.mode}` : "";
       const companion = entry.companion ? ` / ${entry.companion.replace(" Gandalf", "")}` : "";
+      const keepsake = entry.keepsake ? ` / ${entry.keepsake}` : "";
       const visual = entry.visual ? ` / ${entry.visual}` : "";
       const intention = entry.intention ? ` / ${entry.intention}` : "";
       const ritual = entry.ritual ? ` / ${entry.ritual}` : "";
@@ -1565,7 +1878,7 @@
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${ritual}${mode}${companion}${visual}${intention}${style}`;
+      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${ritual}${mode}${companion}${keepsake}${visual}${intention}${style}`;
       right.textContent = entry.date;
       note.textContent = entry.note || "A quiet bowl, kept well.";
 
@@ -1637,8 +1950,9 @@
     updateTimer();
     if (isCollectibleVersion()) {
       collectNounsGandalf(state.nounsActive, { quiet: true });
+      collectKeepsake(state.keepsakeActive, { quiet: true });
       dom.wizardLine.textContent = activeRitual().complete;
-      setGuide("Complete", `${activeRitual().title} · ${activeNounsGandalf().name}`, "The cue is in your pouch. Let the rest stay here.");
+      setGuide("Complete", `${activeRitual().title} · ${activeNounsGandalf().name}`, `The cue and ${activeKeepsake().name} are in your pouch. Let the rest stay here.`);
     } else if (isNatureVersion()) {
       dom.wizardLine.textContent = "There. The room feels less crowded now.";
       setGuide("Complete", activeView().name, "Carry one color, one sound, and one easier breath back with you.");
@@ -1702,6 +2016,7 @@
       setNounsGandalf(state.nounsActive, { announce: false });
       setRitual(state.ritual, { quiet: true });
       renderNounsCollection();
+      renderKeepsakeCollection();
       updateGuideIdle("V5 ready");
       chooseLine();
     } else if (isNatureVersion(next)) {
@@ -1727,6 +2042,7 @@
 
     state.nounsActive = next;
     dom.body.dataset.collectible = next;
+    state.keepsakeActive = suggestedKeepsakeForCard(card).id;
 
     if (settings.syncWorld !== false) {
       setVisual(card.visual, { syncMode: false });
@@ -1737,10 +2053,11 @@
     }
 
     renderNounsCollection();
+    renderKeepsakeCollection();
 
     if (settings.announce !== false && isCollectibleVersion()) {
       dom.wizardLine.textContent = card.line;
-      setGuide("Card chosen", `${activeRitual().title} · ${card.name}`, `${card.mantra} ${card.trait}.`);
+      setGuide("Card chosen", `${activeRitual().title} · ${card.name}`, `${card.mantra} ${activeKeepsake().name} is on the table.`);
       spawnParticles(6);
     }
 
@@ -1751,15 +2068,24 @@
     const card = nounsGandalfs.find((item) => item.id === id) || activeNounsGandalf();
     const wasCollected = state.nounsCollection.has(card.id);
     const settings = options || {};
+    const relic = suggestedKeepsakeForCard(card);
 
     state.nounsCollection.add(card.id);
     saveNounsCollection();
+    if (!wasCollected) {
+      state.keepsakeActive = relic.id;
+    }
     renderNounsCollection();
+    renderKeepsakeCollection();
     updateStats();
 
     if (!settings.quiet) {
       dom.wizardLine.textContent = wasCollected ? `${card.name} is already in your keepsake pouch.` : card.cue;
-      setGuide(wasCollected ? "Already kept" : "Cue kept", `${activeRitual().title} · ${card.name}`, card.breath);
+      setGuide(
+        wasCollected ? "Already kept" : "Cue kept",
+        `${activeRitual().title} · ${card.name}`,
+        wasCollected ? card.breath : `${card.breath} A keepsake is waiting: ${relic.name}.`
+      );
       spawnParticles(wasCollected ? 4 : 12);
     }
     updateRitualPanel();
@@ -1774,7 +2100,7 @@
 
     setNounsGandalf(card.id, { announce: false });
     dom.wizardLine.textContent = card.line;
-    setGuide("Pulled", `${activeRitual().title} · ${card.name}`, `${card.mantra} ${card.cue}`);
+    setGuide("Pulled", `${activeRitual().title} · ${card.name}`, `${card.mantra} ${card.cue} Keepsake: ${activeKeepsake().name}.`);
     spawnParticles(10);
   }
 
@@ -1784,7 +2110,7 @@
       setDuration(5);
     }
     await startSession();
-    setGuide(`${activeRitual().title} started`, activeNounsGandalf().name, activeNounsGandalf().breath);
+    setGuide(`${activeRitual().title} started`, activeNounsGandalf().name, `${activeNounsGandalf().breath} Keep ${activeKeepsake().name} nearby.`);
   }
 
   function setRitual(ritual, options) {
@@ -1809,6 +2135,7 @@
       dom.smokeSlider.value = String(Math.round(state.smoke * 100));
       updateAudioLevels();
       updateBlendOptions();
+      setKeepsake(suggestedKeepsakeForCard(activeNounsGandalf(), next).id, { announce: false });
       updateNounsPanel();
       updateGuideIdle(settings.quiet ? "V5 ready" : "Ritual set");
       if (!settings.quiet) {
@@ -1985,6 +2312,7 @@
       version: state.version,
       ritual: isCollectibleVersion() ? activeRitual().title : "",
       companion: state.version === "v2" ? activeCompanion().name : isCollectibleVersion() ? activeNounsGandalf().name : "",
+      keepsake: isCollectibleVersion() ? activeKeepsake().name : "",
       visual: isNatureVersion() ? activeView().name : "",
       intention: isNatureVersion() ? activeIntention().title : "",
       style: isNatureVersion() ? activeRenderStyle().name : "",
@@ -2469,6 +2797,8 @@
   dom.pullGandalfButton.addEventListener("click", pullNounsGandalf);
   dom.collectGandalfButton.addEventListener("click", () => collectNounsGandalf(state.nounsActive));
   dom.meditateGandalfButton.addEventListener("click", () => beginNounsMeditation());
+  dom.pullKeepsakeButton.addEventListener("click", pullKeepsake);
+  dom.keepKeepsakeButton.addEventListener("click", () => collectKeepsake(state.keepsakeActive));
   dom.startButton.addEventListener("click", startSession);
   dom.pauseButton.addEventListener("click", pauseSession);
   dom.resetButton.addEventListener("click", resetSession);
@@ -2496,6 +2826,7 @@
   resizeCanvas();
   renderLog();
   renderNounsCollection();
+  renderKeepsakeCollection();
   setRenderStyle(state.renderStyle);
   setVersion(state.version);
   setRitual(state.ritual, { quiet: true });
