@@ -6,7 +6,7 @@ Open `index.html` in a browser. The page has no build step and references only l
 
 ## Versions
 
-The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The selected version is saved locally after the V5 release is seen once.
+The app defaults to V6, with a V1/V2/V3/V4/V5/V6 toggle in the masthead. The selected version is saved locally after the V6 release is seen once.
 
 ### V1
 
@@ -68,10 +68,11 @@ The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The select
 
 ## V6 Notes
 
-- Audio mixer: separate Fire, Weather, Road, Bells, and Drone levels instead of one master ambience slider.
-- Companion memory: remember preferred Gandalf, nature view, room, duration, and last note without making the UI busier.
-- Visual focus table: closer nature crops and a calmer timer-only view for longer sits.
-- Collection rituals: daily card, gentle streaks, and exportable keepsake sheet.
+- Rebuilds the default from first principles as one clear Gandalf sit: choose how you are sitting, receive a Gandalf, pair a keepsake, begin, sharpen one resource, and keep one thing.
+- Adds a V6-only council panel that collapses the V5 deck, keepsakes, resource sharpener, image prompt deck, and Myth listen-along into a single flow.
+- Keeps the V5 spell table and all previous releases available from the version switch.
+- Sets V6 as the default local-settings release without losing existing Gandalf, keepsake, resource, spellbook, or log data.
+- Keeps the cozy pixel nature room, ambience, timer, intention cues, notes, and local tally.
 
 ## Assets
 

@@ -8,9 +8,9 @@
   const RESOURCE_LEVELS_KEY = "sitting-with-gandalf-resource-levels";
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
-  const RELEASE_VERSION = "v5";
-  const SETTINGS_RELEASE = "v5-image-series";
-  const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
+  const RELEASE_VERSION = "v6";
+  const SETTINGS_RELEASE = "v6-first-principles";
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -1388,7 +1388,7 @@
   const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
-    : initialVersion === "v4" || initialVersion === "v5"
+    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6"
       ? "pixel"
       : "storybook";
   const initialNounsGandalf = savedRelease && nounsGandalfs.some((card) => card.id === savedSettings.nounsActive)
@@ -1462,6 +1462,16 @@
     ritualText: document.getElementById("ritualText"),
     wisdomBar: document.getElementById("wisdomBar"),
     wisdomRank: document.getElementById("wisdomRank"),
+    v6NounAvatar: document.getElementById("v6NounAvatar"),
+    v6Progress: document.getElementById("v6Progress"),
+    v6RitualLine: document.getElementById("v6RitualLine"),
+    v6SitTitle: document.getElementById("v6SitTitle"),
+    v6SitText: document.getElementById("v6SitText"),
+    v6GandalfName: document.getElementById("v6GandalfName"),
+    v6GandalfCue: document.getElementById("v6GandalfCue"),
+    v6KeepsakeName: document.getElementById("v6KeepsakeName"),
+    v6ResourceName: document.getElementById("v6ResourceName"),
+    v6ImageTitle: document.getElementById("v6ImageTitle"),
     nounsAvatar: document.getElementById("nounsAvatar"),
     nounsName: document.getElementById("nounsName"),
     nounsMeta: document.getElementById("nounsMeta"),
@@ -1497,6 +1507,13 @@
     artSeriesGrid: document.getElementById("artSeriesGrid"),
     copyArtPromptButton: document.getElementById("copyArtPromptButton"),
     nextArtPromptButton: document.getElementById("nextArtPromptButton"),
+    v6PullButton: document.getElementById("v6PullButton"),
+    v6PairButton: document.getElementById("v6PairButton"),
+    v6BeginButton: document.getElementById("v6BeginButton"),
+    v6SharpenButton: document.getElementById("v6SharpenButton"),
+    v6KeepButton: document.getElementById("v6KeepButton"),
+    v6ImageButton: document.getElementById("v6ImageButton"),
+    v6MythButton: document.getElementById("v6MythButton"),
     pullGandalfButton: document.getElementById("pullGandalfButton"),
     collectGandalfButton: document.getElementById("collectGandalfButton"),
     meditateGandalfButton: document.getElementById("meditateGandalfButton"),
@@ -1728,11 +1745,11 @@
   }
 
   function isNatureVersion(version = state.version) {
-    return version === "v3" || version === "v4" || version === "v5";
+    return version === "v3" || version === "v4" || version === "v5" || version === "v6";
   }
 
   function isCollectibleVersion(version = state.version) {
-    return version === "v5";
+    return version === "v5" || version === "v6";
   }
 
   function applyNounStyle(element, card) {
@@ -1795,6 +1812,32 @@
     return "Just arrived";
   }
 
+  function updateV6Panel() {
+    if (!dom.v6SitTitle) {
+      return;
+    }
+
+    const card = activeNounsGandalf();
+    const relic = activeKeepsake();
+    const resource = activeResource();
+    const ritual = activeRitual();
+    const art = activeArtPrompt();
+    const score = presenceScore();
+    const keptLabel = `${state.nounsCollection.size}/${nounsGandalfs.length} Gandalfs`;
+    const spellLabel = state.activeSpell || `${resource.name} is ready to sharpen.`;
+
+    renderNounAvatar(dom.v6NounAvatar, card, false);
+    dom.v6Progress.textContent = `${keptLabel} · ${score} presence`;
+    dom.v6RitualLine.textContent = `${ritual.title} · ${ritual.short}`;
+    dom.v6SitTitle.textContent = `${card.name} is sitting with ${ritual.title.toLowerCase()}.`;
+    dom.v6SitText.textContent = `${ritual.guide} ${card.mantra} Keep ${relic.name} nearby. ${spellLabel}`;
+    dom.v6GandalfName.textContent = card.name;
+    dom.v6GandalfCue.textContent = card.cue;
+    dom.v6KeepsakeName.textContent = relic.name;
+    dom.v6ResourceName.textContent = `${resource.name} ${state.resourceLevels[resource.id] || 0}`;
+    dom.v6ImageTitle.textContent = art.title;
+  }
+
   function updateRitualPanel() {
     const ritual = activeRitual();
     const score = presenceScore();
@@ -1813,6 +1856,7 @@
       dom.wisdomBar.style.width = `${Math.max(0, Math.min(100, progress))}%`;
       dom.wisdomRank.textContent = `${score} presence · ${presenceRank(score)}`;
     }
+    updateV6Panel();
   }
 
   function replaceBlendOptions(options) {
@@ -2084,6 +2128,7 @@
     dom.spellSigil.textContent = `${resource.mark}`;
     dom.spellPhrase.textContent = state.activeSpell || `${card.name} pairs with ${relic.name}. ${resource.promise}.`;
     renderSpellBook();
+    updateV6Panel();
   }
 
   function setResource(id, options) {
@@ -2216,6 +2261,7 @@
       button.addEventListener("click", () => setArtPrompt(item.id));
       dom.artSeriesGrid.append(button);
     });
+    updateV6Panel();
   }
 
   function setArtPrompt(id, options) {
@@ -2289,6 +2335,10 @@
       const view = activeView();
       const ritual = activeRitual();
       const art = activeArtPrompt();
+      if (state.version === "v6") {
+        setGuide(step || "Gandalf sit", `${ritual.title} · ${card.name}`, `Receive the card, begin the sit, keep one thing. ${card.mantra} ${relic.name} pairs with ${resource.name}.`);
+        return;
+      }
       setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} Pair with ${relic.name}; sharpen ${resource.name}. Image: ${art.title}. ${view.idle}`);
       return;
     }
@@ -2602,6 +2652,11 @@
     dom.roomStep.textContent = isCollectibleVersion(next) ? "4" : dom.roomStep.textContent;
     dom.ambienceStep.textContent = isCollectibleVersion(next) ? "5" : dom.ambienceStep.textContent;
     dom.settleStep.textContent = isCollectibleVersion(next) ? "6" : "4";
+    if (next === "v6") {
+      dom.roomStep.textContent = "R";
+      dom.ambienceStep.textContent = "A";
+      dom.settleStep.textContent = "B";
+    }
     dom.ritualSummary.textContent = isCollectibleVersion(next) ? activeRitual().summary : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
     dom.blendLabel.textContent = isCollectibleVersion(next) ? activeRitual().blendLabel : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
     dom.smokeLabel.textContent = isNatureVersion(next) ? "Atmosphere" : "Smoke";
@@ -2632,7 +2687,8 @@
       renderNounsCollection();
       renderKeepsakeCollection();
       renderArtSeries();
-      updateGuideIdle("V5 ready");
+      updateV6Panel();
+      updateGuideIdle(next === "v6" ? "V6 ready" : "V5 ready");
       chooseLine();
     } else if (isNatureVersion(next)) {
       if (next === "v4" && state.renderStyle !== "pixel") {
@@ -2755,7 +2811,7 @@
       setKeepsake(suggestedKeepsakeForCard(activeNounsGandalf(), next).id, { announce: false });
       state.activeSpell = "";
       updateNounsPanel();
-      updateGuideIdle(settings.quiet ? "V5 ready" : "Ritual set");
+      updateGuideIdle(settings.quiet ? (state.version === "v6" ? "V6 ready" : "V5 ready") : "Ritual set");
       if (!settings.quiet) {
         dom.wizardLine.textContent = activeRitual().lines[0];
         spawnParticles(next === "smoke" ? 8 : 5);
@@ -3377,8 +3433,8 @@
   }
 
   function setMythMode() {
-    if (state.version !== "v5") {
-      setVersion("v5");
+    if (!isCollectibleVersion()) {
+      setVersion(RELEASE_VERSION);
     }
 
     setVisual("lake", { syncMode: false });
@@ -3399,7 +3455,93 @@
 
     dom.wizardLine.textContent = "Put Myth on low, let the stars hold the edges, and build from wonder.";
     setGuide("Listen along", "Myth · Beach House", `${activeNounsGandalf().name} pairs with ${activeKeepsake().name}; Wonder is sharpened for this sit.`);
+    updateV6Panel();
     spawnParticles(14);
+  }
+
+  function resourceForRitual() {
+    const map = {
+      enjoy: "ease",
+      meditate: "focus",
+      smoke: "patience",
+      beer: "warmth",
+      study: "wonder"
+    };
+
+    return map[state.ritual] || "focus";
+  }
+
+  function v6ReceiveGandalf() {
+    if (state.version !== "v6") {
+      setVersion("v6");
+    }
+    pullNounsGandalf();
+    updateV6Panel();
+  }
+
+  function v6PairKeepsake() {
+    if (state.version !== "v6") {
+      setVersion("v6");
+    }
+
+    const suggested = suggestedKeepsakeForCard(activeNounsGandalf(), state.ritual);
+    if (state.keepsakeActive === suggested.id) {
+      pullKeepsake();
+    } else {
+      setKeepsake(suggested.id, { announce: false });
+      dom.wizardLine.textContent = suggested.line;
+      setGuide("Keepsake paired", suggested.name, `${suggested.cue} Pair it with ${activeNounsGandalf().name}.`);
+      spawnParticles(8);
+    }
+    updateV6Panel();
+  }
+
+  async function v6BeginSit() {
+    if (state.version !== "v6") {
+      setVersion("v6");
+    }
+    collectNounsGandalf(state.nounsActive, { quiet: true });
+    await startSession();
+    updateV6Panel();
+  }
+
+  function v6SharpenNow() {
+    if (state.version !== "v6") {
+      setVersion("v6");
+    }
+
+    setResource(resourceForRitual(), { announce: false });
+    sharpenResource({ quiet: true });
+    const spell = buildSpell({ quiet: true });
+    dom.wizardLine.textContent = spell;
+    setGuide("Resource sharpened", `${activeResource().name} · ${activeNounsGandalf().name}`, `${activeKeepsake().name} holds it. Keep the spell if it feels useful.`);
+    updateV6Panel();
+    spawnParticles(10);
+  }
+
+  function v6KeepMoment() {
+    if (state.version !== "v6") {
+      setVersion("v6");
+    }
+
+    collectNounsGandalf(state.nounsActive, { quiet: true });
+    collectKeepsake(state.keepsakeActive, { quiet: true });
+    if (!state.activeSpell) {
+      buildSpell({ quiet: true });
+    }
+    keepSpell({ quiet: true });
+    dom.wizardLine.textContent = "Kept. One card, one keepsake, one small spell for later.";
+    setGuide("Moment kept", activeNounsGandalf().name, `${activeKeepsake().name} and ${activeResource().name} are in the pouch. Nothing else is required.`);
+    updateV6Panel();
+    spawnParticles(14);
+  }
+
+  function v6NextVisual() {
+    if (state.version !== "v6") {
+      setVersion("v6");
+    }
+    nextArtPrompt();
+    updateV6Panel();
   }
 
   function toggleLantern(force) {
@@ -3454,6 +3596,13 @@
   dom.keepSpellButton.addEventListener("click", () => keepSpell());
   dom.copyArtPromptButton.addEventListener("click", () => copyArtPrompt());
   dom.nextArtPromptButton.addEventListener("click", nextArtPrompt);
+  dom.v6PullButton.addEventListener("click", v6ReceiveGandalf);
+  dom.v6PairButton.addEventListener("click", v6PairKeepsake);
+  dom.v6BeginButton.addEventListener("click", () => v6BeginSit());
+  dom.v6SharpenButton.addEventListener("click", v6SharpenNow);
+  dom.v6KeepButton.addEventListener("click", v6KeepMoment);
+  dom.v6ImageButton.addEventListener("click", v6NextVisual);
+  dom.v6MythButton.addEventListener("click", setMythMode);
   dom.startButton.addEventListener("click", startSession);
   dom.pauseButton.addEventListener("click", pauseSession);
   dom.resetButton.addEventListener("click", resetSession);
@@ -3491,7 +3640,7 @@
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
-  updateGuideIdle(isCollectibleVersion() ? "V5 ready" : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
+  updateGuideIdle(isCollectibleVersion() ? (state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();
