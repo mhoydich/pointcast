@@ -48,6 +48,33 @@ const siteBase = Astro.site || new URL('https://pointcast.xyz');
 const canonicalURL = new URL(Astro.url.pathname, siteBase);
 const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
 const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} — PointCast`;
+const miniappLaunchUrl = new URL(Astro.url.pathname, siteBase).href;
+const miniappImageUrl = new URL('/images/drum-og.png', siteBase).href;
+const miniappSplashUrl = new URL('/images/drum-splash.png', siteBase).href;
+const miniappEmbed = {
+  version: '1',
+  imageUrl: miniappImageUrl,
+  button: {
+    title: 'Play drums',
+    action: {
+      type: 'launch_miniapp',
+      url: miniappLaunchUrl,
+      name: 'Noun Drum Rack',
+      splashImageUrl: miniappSplashUrl,
+      splashBackgroundColor: '#ffffff',
+    },
+  },
+};
+const legacyFrameEmbed = {
+  ...miniappEmbed,
+  button: {
+    ...miniappEmbed.button,
+    action: {
+      ...miniappEmbed.button.action,
+      type: 'launch_frame',
+    },
+  },
+};
 
 // Default Schema.org JSON-LD for drum surfaces. Marks each /drum* page as
 // a WebApplication / MusicComposition hybrid so AI agents and rich-result
@@ -123,6 +150,8 @@ const defaultJsonLd = jsonLd ?? {
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:site" content="@mhoydich" />
+    <meta name="fc:miniapp" content={JSON.stringify(miniappEmbed)} />
+    <meta name="fc:frame" content={JSON.stringify(legacyFrameEmbed)} />
 
     <script type="application/ld+json" is:inline set:html={JSON.stringify(defaultJsonLd)} />
 
@@ -148,6 +177,24 @@ const defaultJsonLd = jsonLd ?? {
     </main>
 
     <NounsCursor />
+    <script>
+      import { sdk } from '@farcaster/miniapp-sdk';
+
+      async function markMiniAppReady() {
+        try {
+          await sdk.actions.ready();
+          document.documentElement.dataset.farcasterMiniapp = 'ready';
+        } catch {
+          document.documentElement.dataset.farcasterMiniapp = 'unavailable';
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', markMiniAppReady, { once: true });
+      } else {
+        markMiniAppReady();
+      }
+    </script>
   </body>
 </html>
 

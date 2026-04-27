@@ -1,28 +1,34 @@
 export async function onRequest(context: EventContext<Env, any, any>) {
   // Serve the domain-level Mini App manifest required by Farcaster clients.
-  // This is a static response, so it has no environment dependencies.
+  // Add POINTCAST_FARCASTER_ACCOUNT_ASSOCIATION in Cloudflare Pages once
+  // Farcaster Developer Tools generates the signed object for pointcast.xyz.
+  let accountAssociation: unknown = null;
+  const rawAccountAssociation = (context.env as any).POINTCAST_FARCASTER_ACCOUNT_ASSOCIATION;
+  if (typeof rawAccountAssociation === "string" && rawAccountAssociation.trim()) {
+    try {
+      accountAssociation = JSON.parse(rawAccountAssociation);
+    } catch {
+      accountAssociation = null;
+    }
+  }
+
   const manifest = {
-    accountAssociation: {
-      // You must replace these values with a signature generated via Warpcast Developer Tools
-      // https://farcaster.xyz/~/developers/mini-apps/manifest
-      header: "eyJmaWQiOjE2NTU5NSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDBmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTYifQ",
-      payload: "eyJkb21haW4iOiJwb2ludGNhc3QueHl6In0",
-      signature: "MHgwZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMWI"
-    },
+    ...(accountAssociation ? { accountAssociation } : {}),
     miniapp: {
       version: "1",
       name: "Noun Drum Rack",
-      iconUrl: "https://pointcast.xyz/drum-icon.png", // Must be 1024x1024px PNG, no alpha
-      splashImageUrl: "https://pointcast.xyz/drum-splash.png", // Must be 200x200px
+      iconUrl: "https://pointcast.xyz/images/drum-icon.png",
+      splashImageUrl: "https://pointcast.xyz/images/drum-splash.png",
       splashBackgroundColor: "#ffffff",
       homeUrl: "https://pointcast.xyz/drum",
       subtitle: "A collaborative drum rack",
       description: "Play drums with the Farcaster community and track your hits in real-time.",
       primaryCategory: "entertainment",
       tags: ["music", "drums", "social", "nouns"],
+      heroImageUrl: "https://pointcast.xyz/images/drum-og.png",
       ogTitle: "Noun Drum Rack",
       ogDescription: "Play drums with the Farcaster community and track your hits in real-time.",
-      ogImageUrl: "https://pointcast.xyz/drum-og.png"
+      ogImageUrl: "https://pointcast.xyz/images/drum-og.png"
     }
   };
 
