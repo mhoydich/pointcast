@@ -6,6 +6,7 @@
   const NOUNS_COLLECTION_KEY = "sitting-with-gandalf-nouns-collection";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v5";
+  const SETTINGS_RELEASE = "v5-enjoy";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
   const renderStyles = {
     storybook: {
@@ -990,7 +991,7 @@
   ];
 
   const savedSettings = loadSettings();
-  const savedRelease = savedSettings.release === RELEASE_VERSION;
+  const savedRelease = savedSettings.release === SETTINGS_RELEASE;
   const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
@@ -1156,7 +1157,7 @@
     localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        release: RELEASE_VERSION,
+        release: SETTINGS_RELEASE,
         version: state.version,
         mode: state.mode,
         companion: state.companion,
