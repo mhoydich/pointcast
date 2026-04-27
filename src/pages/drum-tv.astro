@@ -1,0 +1,908 @@
+---
+/**
+ * /drum-tv — The Big Screen.
+ *
+ * Per Mike: "make a next version i can share with tv, to view there"
+ *
+ * Cast-friendly view of the entire drum hub. Open this URL in Safari →
+ * AirPlay to TV (or Chromecast / mirror display) → set it down → enjoy.
+ *
+ * Designed for 6-10 foot viewing distance:
+ *   - No chrome, no nav, no controls (clean cast surface)
+ *   - Giant pixel-art Nouns visible from across the room
+ *   - High-contrast text + big numbers
+ *   - 16:9 / responsive 4:3
+ *
+ * Two modes layered on the same view:
+ *   1. AMBIENT — when no one's playing, the TV runs an auto-cycle of
+ *      patterns from each drum surface (orchestra → choir → lounge →
+ *      symphony) with smooth scene transitions. Looks alive on its own.
+ *   2. REACTIVE — when remote players tap on /drum* surfaces, their
+ *      Nouns spotlight on the TV with full-screen flashes, particle
+ *      bursts, and a "NOW PLAYING" indicator. The TV becomes the
+ *      audience view of the whole hub.
+ *
+ * Phone viewer scans the QR code → lands on /drum-v9 (or any surface)
+ * and starts driving the TV in real time via the same /api/sounds
+ * (or DO WebSocket) infrastructure.
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+
+// Curated cast of Nouns that rotate on the big screen. Mix from all the
+// drum surfaces so the TV feels like a cross-section of the hub.
+const CAST = [
+  { id:  42, label: 'Drum',     surface: 'classic'   },
+  { id: 101, label: 'High',     surface: 'collab'    },
+  { id: 200, label: 'Bass',     surface: 'spotify'   },
+  { id: 300, label: 'Lead',     surface: 'orchestra' },
+  { id: 400, label: 'Pad',      surface: 'orchestra' },
+  { id: 500, label: 'Bell',     surface: 'symphony'  },
+  { id: 555, label: 'Shaker',   surface: 'orchestra' },
+  { id: 666, label: 'First',    surface: 'trophies'  },
+  { id: 777, label: 'Master',   surface: 'trophies'  },
+  { id: 808, label: 'Big',      surface: 'big'       },
+  { id: 888, label: 'Choir',    surface: 'choir'     },
+  { id: 999, label: 'Cymbal',   surface: 'symphony'  },
+  { id:  77, label: 'Songbird', surface: 'lounge'    },
+  { id: 144, label: 'Forever',  surface: 'lounge'    },
+  { id: 211, label: 'Going',    surface: 'lounge'    },
+  { id: 278, label: 'Sil.',     surface: 'lounge'    },
+] as const;
+
+const SCENES = [
+  { id: 'parade',    label: 'The Parade',    sub: 'every noun, in turn',          duration: 28000 },
+  { id: 'spotlight', label: 'The Spotlight', sub: 'one noun · giant',             duration: 24000 },
+  { id: 'mosaic',    label: 'The Mosaic',    sub: 'all nouns · all at once',      duration: 22000 },
+  { id: 'beach',     label: 'The Beach',     sub: 'sunset · smooth jazz',         duration: 30000 },
+  { id: 'starfield', label: 'The Starfield', sub: 'particles · drifting nouns',   duration: 26000 },
+] as const;
+---
+
+<DrumLayout
+  title="Drum Room · TV Cast"
+  description="Full-screen cast view of the PointCast drum hub. Open on your TV via AirPlay or Chromecast — the room plays itself, lights up when anyone in the world is drumming. QR code on screen lets your phone drive."
+  image="/images/og-drum.png"
+>
+
+<div class="tv-root" id="tv-root">
+
+  <!-- Cinematic top bar -->
+  <header class="tv-top">
+    <div class="tv-top-left">
+      <span class="tv-onair" id="tv-onair">● ON AIR</span>
+      <span class="tv-wordmark">POINTCAST</span>
+      <span class="tv-tagline">drum room · cast mode</span>
+    </div>
+    <div class="tv-top-right">
+      <span class="tv-clock" id="tv-clock">—</span>
+    </div>
+  </header>
+
+  <!-- The big stage -->
+  <main class="tv-stage" id="tv-stage" data-scene="parade">
+
+    <!-- Parade scene — big noun strip auto-scrolling -->
+    <section class="tv-scene tv-parade" data-scene="parade">
+      <div class="tv-parade-track" id="tv-parade-track">
+        {[...CAST, ...CAST].map((c) => (
+          <div class="tv-parade-cell">
+            <img src={`https://noun.pics/${c.id}.svg`} alt="" loading="lazy" style="image-rendering: pixelated;" />
+            <div class="tv-parade-label">{c.label}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Spotlight scene — one giant noun rotates -->
+    <section class="tv-scene tv-spotlight" data-scene="spotlight">
+      <div class="tv-spotlight-frame">
+        <img id="tv-spotlight-img" src={`https://noun.pics/${CAST[0].id}.svg`} alt="" />
+      </div>
+      <div class="tv-spotlight-label" id="tv-spotlight-label">
+        <span class="tv-spotlight-name">{CAST[0].label}</span>
+        <span class="tv-spotlight-sub">noun #{CAST[0].id} · {CAST[0].surface}</span>
+      </div>
+    </section>
+
+    <!-- Mosaic scene — all nouns at once -->
+    <section class="tv-scene tv-mosaic" data-scene="mosaic">
+      <div class="tv-mosaic-grid" id="tv-mosaic-grid">
+        {CAST.map((c) => (
+          <div class="tv-mosaic-cell" data-noun={String(c.id)}>
+            <img src={`https://noun.pics/${c.id}.svg`} alt="" loading="lazy" style="image-rendering: pixelated;" />
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Beach scene — smooth jazz vibe with sunset gradient -->
+    <section class="tv-scene tv-beach" data-scene="beach">
+      <div class="tv-beach-sun" aria-hidden="true"></div>
+      <div class="tv-beach-grid" aria-hidden="true"></div>
+      <div class="tv-beach-content">
+        <p class="tv-beach-eyebrow">⌐◨-◨ THE LOUNGE · v9</p>
+        <h2 class="tv-beach-title">an evening with the saxophone</h2>
+        <p class="tv-beach-dek"><em>for kenny — thank you for the soundtrack of every late drive home</em></p>
+        <div class="tv-beach-saxes">
+          <img src="https://noun.pics/77.svg" alt="" />
+          <img src="https://noun.pics/144.svg" alt="" />
+          <img src="https://noun.pics/211.svg" alt="" />
+          <img src="https://noun.pics/278.svg" alt="" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Starfield scene — particles drift -->
+    <section class="tv-scene tv-starfield" data-scene="starfield">
+      <div class="tv-starfield-canvas" id="tv-starfield-canvas"></div>
+    </section>
+
+    <!-- Reactive layer — full-screen ripples that fire when remote players play -->
+    <div class="tv-ripples" id="tv-ripples" aria-hidden="true"></div>
+
+    <!-- Spotlight noun that pops on each remote tap -->
+    <div class="tv-spotlight-popup" id="tv-spotlight-popup" aria-hidden="true">
+      <img id="tv-spotlight-popup-img" src="" alt="" />
+      <div id="tv-spotlight-popup-label" class="tv-spotlight-popup-label"></div>
+    </div>
+  </main>
+
+  <!-- Bottom info bar -->
+  <footer class="tv-bottom">
+    <div class="tv-bottom-left">
+      <div class="tv-bottom-stat">
+        <span class="tv-bottom-stat-label">In the room</span>
+        <span class="tv-bottom-stat-val" id="tv-jammers">1</span>
+      </div>
+      <div class="tv-bottom-stat">
+        <span class="tv-bottom-stat-label">Now showing</span>
+        <span class="tv-bottom-stat-val" id="tv-scene-name">The Parade</span>
+        <span class="tv-bottom-stat-sub" id="tv-scene-sub">every noun, in turn</span>
+      </div>
+      <div class="tv-bottom-stat">
+        <span class="tv-bottom-stat-label">Stream</span>
+        <span class="tv-bottom-stat-val" id="tv-stream">connecting…</span>
+      </div>
+    </div>
+    <div class="tv-bottom-right">
+      <div class="tv-qr">
+        <div class="tv-qr-img-wrap">
+          <!-- Use external QR generator — no QR lib needed in build -->
+          <img
+            id="tv-qr-img"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https%3A%2F%2Fpointcast.xyz%2Fdrum"
+            alt="scan to play"
+            width="120"
+            height="120"
+          />
+        </div>
+        <div class="tv-qr-text">
+          <span class="tv-qr-label">scan to play</span>
+          <span class="tv-qr-url">pointcast.xyz/drum</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Live ticker tape — recent activity from every drum surface -->
+  <div class="tv-ticker" aria-live="polite" aria-atomic="false">
+    <div class="tv-ticker-track" id="tv-ticker-track">
+      <span class="tv-ticker-item">⌐◨-◨ ready · waiting for the room…</span>
+    </div>
+  </div>
+
+</div>
+
+<style is:global>
+  /* ════════════════════════════════════════════════════════════════
+     /drum-tv — full-screen cast surface. The body fills the screen,
+     no scrolling, no nav, no chrome. tv-* prefixed.
+     ════════════════════════════════════════════════════════════════ */
+
+  body.drum-body:has(.tv-root) {
+    background: #0a0612 !important;
+    color: #fff;
+    margin: 0;
+    overflow: hidden;
+    height: 100vh;
+  }
+  body.drum-body:has(.tv-root) .drum-header { display: none !important; }
+  body.drum-body:has(.tv-root) main { padding: 0; }
+  body.drum-body:has(.tv-root) #nouns-cursor { display: none; }
+
+  .tv-root {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 56px 1fr 130px;
+    background:
+      radial-gradient(ellipse at top, rgba(217,70,239,0.12) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom, rgba(14,165,233,0.10) 0%, transparent 50%),
+      #0a0612;
+    color: #fff;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', monospace);
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  /* ── Top bar ───────────────────────────────────────── */
+  .tv-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 100%);
+    backdrop-filter: blur(10px);
+  }
+  .tv-top-left, .tv-top-right { display: flex; align-items: center; gap: 18px; }
+  .tv-onair {
+    background: #ef4444;
+    color: #fff;
+    padding: 5px 14px;
+    border-radius: 3px;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    font-weight: 700;
+    box-shadow: 0 0 14px rgba(239,68,68,0.6);
+    animation: tv-onair-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes tv-onair-pulse {
+    0%, 100% { box-shadow: 0 0 14px rgba(239,68,68,0.5); }
+    50%      { box-shadow: 0 0 30px rgba(239,68,68,0.9); }
+  }
+  .tv-wordmark {
+    font-size: 18px;
+    letter-spacing: 0.32em;
+    font-weight: 600;
+    color: #fff;
+  }
+  .tv-tagline {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+  }
+  .tv-clock {
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.85);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Stage ─────────────────────────────────────────── */
+  .tv-stage {
+    position: relative;
+    overflow: hidden;
+  }
+  .tv-scene {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1200ms ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tv-stage[data-scene="parade"]    .tv-scene[data-scene="parade"],
+  .tv-stage[data-scene="spotlight"] .tv-scene[data-scene="spotlight"],
+  .tv-stage[data-scene="mosaic"]    .tv-scene[data-scene="mosaic"],
+  .tv-stage[data-scene="beach"]     .tv-scene[data-scene="beach"],
+  .tv-stage[data-scene="starfield"] .tv-scene[data-scene="starfield"] {
+    opacity: 1;
+  }
+
+  /* Parade — auto-scrolling strip */
+  .tv-parade { width: 100%; }
+  .tv-parade-track {
+    display: flex;
+    gap: 36px;
+    animation: tv-parade-scroll 60s linear infinite;
+    align-items: center;
+  }
+  @keyframes tv-parade-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .tv-parade-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .tv-parade-cell img {
+    width: 220px;
+    height: 220px;
+    image-rendering: pixelated;
+    border: 4px solid rgba(255,255,255,0.18);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px;
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.4));
+  }
+  .tv-parade-label {
+    font-size: 14px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+  }
+
+  /* Spotlight — one giant noun */
+  .tv-spotlight {
+    flex-direction: column;
+    gap: 32px;
+  }
+  .tv-spotlight-frame {
+    width: 480px;
+    height: 480px;
+    border: 5px solid #fff;
+    border-radius: 16px;
+    background: #fff;
+    padding: 18px;
+    box-shadow: 0 0 60px rgba(217,70,239,0.4), 0 0 100px rgba(14,165,233,0.3);
+    animation: tv-spotlight-rotate 16s ease-in-out infinite;
+  }
+  @keyframes tv-spotlight-rotate {
+    0%, 100% { transform: rotate(-2deg) scale(1); }
+    50%      { transform: rotate(2deg) scale(1.04); }
+  }
+  .tv-spotlight-frame img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+    transition: opacity 800ms ease;
+  }
+  .tv-spotlight-label {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tv-spotlight-name {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 56px;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(217,70,239,0.5);
+  }
+  .tv-spotlight-sub {
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+  }
+
+  /* Mosaic — all nouns grid */
+  .tv-mosaic {
+    padding: 32px;
+  }
+  .tv-mosaic-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 1400px;
+    max-height: 100%;
+  }
+  .tv-mosaic-cell {
+    aspect-ratio: 1;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    background: #fff;
+    padding: 6px;
+    overflow: hidden;
+    transition: border-color 200ms, box-shadow 200ms, transform 200ms;
+  }
+  .tv-mosaic-cell.firing {
+    border-color: #d946ef;
+    box-shadow: 0 0 30px rgba(217,70,239,0.7);
+    transform: scale(1.05);
+  }
+  .tv-mosaic-cell img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    display: block;
+  }
+
+  /* Beach — sunset / smooth jazz scene */
+  .tv-beach {
+    background: linear-gradient(180deg, #ff9e6d 0%, #d97757 35%, #6b4f7a 75%, #2b1f3a 100%);
+  }
+  .tv-beach-sun {
+    position: absolute;
+    bottom: 30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fffacc 0%, #ff9e6d 50%, transparent 80%);
+    filter: blur(2px);
+    box-shadow: 0 0 120px rgba(255,158,109,0.7);
+  }
+  .tv-beach-grid {
+    position: absolute;
+    inset: 50% 0 0 0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px);
+    background-size: 60px 30px;
+    transform: perspective(400px) rotateX(60deg);
+    transform-origin: top center;
+  }
+  .tv-beach-content {
+    position: relative;
+    text-align: center;
+    z-index: 2;
+    padding: 32px;
+  }
+  .tv-beach-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: rgba(255,255,255,0.85);
+    margin: 0 0 16px;
+    font-weight: 700;
+  }
+  .tv-beach-title {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 64px;
+    color: #fff;
+    margin: 0 0 16px;
+    text-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .tv-beach-dek {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-size: 18px;
+    color: rgba(255,255,255,0.85);
+    margin: 0 0 32px;
+  }
+  .tv-beach-saxes {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+  }
+  .tv-beach-saxes img {
+    width: 130px;
+    height: 130px;
+    image-rendering: pixelated;
+    border: 3px solid rgba(255,255,255,0.6);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.85);
+    padding: 8px;
+    filter: drop-shadow(0 12px 28px rgba(0,0,0,0.4));
+  }
+
+  /* Starfield — particles + drifting nouns */
+  .tv-starfield-canvas {
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(2px 2px at 20% 30%, #fff, transparent),
+      radial-gradient(2px 2px at 60% 70%, #fff, transparent),
+      radial-gradient(1px 1px at 40% 50%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(2px 2px at 30% 80%, rgba(217,70,239,0.7), transparent),
+      radial-gradient(1px 1px at 70% 40%, rgba(14,165,233,0.7), transparent),
+      radial-gradient(2px 2px at 90% 90%, #fff, transparent);
+    background-size: 800px 800px;
+    animation: tv-starfield-drift 80s linear infinite;
+  }
+  @keyframes tv-starfield-drift {
+    from { background-position: 0 0; }
+    to   { background-position: 800px 800px; }
+  }
+
+  /* Reactive layer */
+  .tv-ripples {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+  @keyframes tv-ripple {
+    0%   { opacity: 0.9; transform: translate(-50%, -50%) scale(0.5); }
+    100% { opacity: 0;   transform: translate(-50%, -50%) scale(8); }
+  }
+  .tv-spotlight-popup {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.4);
+    z-index: 12;
+    opacity: 0;
+    transition: opacity 200ms, transform 200ms;
+    pointer-events: none;
+    text-align: center;
+  }
+  .tv-spotlight-popup.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .tv-spotlight-popup img {
+    width: 200px; height: 200px;
+    image-rendering: pixelated;
+    border: 4px solid #d946ef;
+    border-radius: 14px;
+    background: #fff;
+    padding: 10px;
+    box-shadow: 0 0 80px rgba(217,70,239,0.6);
+  }
+  .tv-spotlight-popup-label {
+    margin-top: 14px;
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 28px;
+    color: #fff;
+    text-shadow: 0 0 16px rgba(0,0,0,0.6);
+  }
+
+  /* ── Bottom bar ────────────────────────────────────── */
+  .tv-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 28px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, transparent 100%);
+    backdrop-filter: blur(10px);
+  }
+  .tv-bottom-left {
+    display: flex;
+    align-items: center;
+    gap: 36px;
+  }
+  .tv-bottom-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tv-bottom-stat-label {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+  }
+  .tv-bottom-stat-val {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 24px;
+    color: #fff;
+  }
+  .tv-bottom-stat-sub {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.4);
+  }
+  .tv-qr {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .tv-qr-img-wrap {
+    background: #fff;
+    padding: 6px;
+    border-radius: 6px;
+  }
+  .tv-qr-img-wrap img {
+    width: 80px; height: 80px;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .tv-qr-text { display: flex; flex-direction: column; gap: 4px; }
+  .tv-qr-label {
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    font-weight: 700;
+  }
+  .tv-qr-url {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 18px;
+    color: #d946ef;
+  }
+
+  /* ── Ticker tape ───────────────────────────────────── */
+  .tv-ticker {
+    position: absolute;
+    bottom: 130px;
+    left: 0; right: 0;
+    height: 40px;
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.7) 100%);
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .tv-ticker-track {
+    display: flex;
+    gap: 60px;
+    height: 100%;
+    align-items: center;
+    padding-left: 100%;
+    white-space: nowrap;
+    animation: tv-ticker-scroll 40s linear infinite;
+  }
+  @keyframes tv-ticker-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-100%); }
+  }
+  .tv-ticker-item {
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.85);
+    flex-shrink: 0;
+  }
+  .tv-ticker-item .accent { color: #d946ef; }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-tv client. Auto-cycles scenes, listens to every drum
+  // surface's events via /api/sounds (or DO WebSocket when available),
+  // visualizes them on the big screen.
+  // ══════════════════════════════════════════════════════════════════
+
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // ── Clock ──
+  function updateClock() {
+    const el = document.getElementById('tv-clock');
+    if (!el) return;
+    const d = new Date();
+    el.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  updateClock();
+  setInterval(updateClock, 30_000);
+
+  // ── Scene cycling ──
+  type SceneId = 'parade' | 'spotlight' | 'mosaic' | 'beach' | 'starfield';
+  const SCENES: Array<{ id: SceneId; label: string; sub: string; durMs: number }> = [
+    { id: 'parade',    label: 'The Parade',    sub: 'every noun, in turn',        durMs: 28000 },
+    { id: 'spotlight', label: 'The Spotlight', sub: 'one noun · giant',           durMs: 24000 },
+    { id: 'mosaic',    label: 'The Mosaic',    sub: 'all nouns · all at once',    durMs: 22000 },
+    { id: 'beach',     label: 'The Beach',     sub: 'sunset · smooth jazz',       durMs: 30000 },
+    { id: 'starfield', label: 'The Starfield', sub: 'particles · drifting nouns', durMs: 26000 },
+  ];
+
+  const stageEl = document.getElementById('tv-stage');
+  const sceneNameEl = document.getElementById('tv-scene-name');
+  const sceneSubEl = document.getElementById('tv-scene-sub');
+  let sceneIdx = 0;
+
+  function setScene(idx: number) {
+    sceneIdx = idx % SCENES.length;
+    const s = SCENES[sceneIdx];
+    if (stageEl) stageEl.dataset.scene = s.id;
+    if (sceneNameEl) sceneNameEl.textContent = s.label;
+    if (sceneSubEl) sceneSubEl.textContent = s.sub;
+  }
+  setScene(0);
+  function advanceScene() {
+    setScene(sceneIdx + 1);
+    setTimeout(advanceScene, SCENES[sceneIdx].durMs);
+  }
+  setTimeout(advanceScene, SCENES[0].durMs);
+
+  // ── Spotlight scene rotation — cycles through Nouns
+  const SPOTLIGHT_NOUNS = [42, 101, 200, 300, 400, 500, 555, 666, 777, 808, 888, 999, 77, 144, 211, 278];
+  const SPOTLIGHT_LABELS = ['Drum', 'High', 'Bass', 'Lead', 'Pad', 'Bell', 'Shaker', 'First', 'Master', 'Big', 'Choir', 'Cymbal', 'Songbird', 'Forever', 'Going', 'Silhouette'];
+  const SPOTLIGHT_SURFACES = ['classic', 'collab', 'spotify', 'orchestra', 'orchestra', 'symphony', 'orchestra', 'trophies', 'trophies', 'big', 'choir', 'symphony', 'lounge', 'lounge', 'lounge', 'lounge'];
+  let spotlightIdx = 0;
+  const spotlightImg = document.getElementById('tv-spotlight-img') as HTMLImageElement | null;
+  const spotlightName = document.querySelector<HTMLElement>('.tv-spotlight-name');
+  const spotlightSub = document.querySelector<HTMLElement>('.tv-spotlight-sub');
+  function rotateSpotlight() {
+    spotlightIdx = (spotlightIdx + 1) % SPOTLIGHT_NOUNS.length;
+    const id = SPOTLIGHT_NOUNS[spotlightIdx];
+    if (spotlightImg) {
+      spotlightImg.style.opacity = '0';
+      setTimeout(() => {
+        spotlightImg.src = `https://noun.pics/${id}.svg`;
+        spotlightImg.style.opacity = '1';
+      }, 350);
+    }
+    if (spotlightName) spotlightName.textContent = SPOTLIGHT_LABELS[spotlightIdx];
+    if (spotlightSub) spotlightSub.textContent = `noun #${id} · ${SPOTLIGHT_SURFACES[spotlightIdx]}`;
+  }
+  setInterval(rotateSpotlight, 3000);
+
+  // ── Reactive layer ── full-screen ripples + spotlight popup on remote events ──
+  const ripplesEl = document.getElementById('tv-ripples');
+  const popupEl = document.getElementById('tv-spotlight-popup');
+  const popupImg = document.getElementById('tv-spotlight-popup-img') as HTMLImageElement | null;
+  const popupLabel = document.getElementById('tv-spotlight-popup-label');
+
+  const REMOTE_NOUNS: Record<string, number> = {
+    // Map event kinds → a representative noun id for the popup
+    drum: 42, orchestra: 200, choir: 888, lounge: 77, symphony: 88,
+  };
+
+  function flashRipple(color = '#d946ef') {
+    if (!ripplesEl) return;
+    const r = document.createElement('div');
+    r.style.cssText = `
+      position: absolute;
+      left: ${20 + Math.random() * 60}%;
+      top: ${20 + Math.random() * 60}%;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, ${color}55 0%, ${color}22 30%, transparent 70%);
+      transform: translate(-50%, -50%) scale(0.5);
+      animation: tv-ripple 1800ms ease-out forwards;
+      pointer-events: none;
+    `;
+    ripplesEl.appendChild(r);
+    setTimeout(() => r.remove(), 1900);
+  }
+
+  let popupTimer: number | null = null;
+  function flashSpotlight(nounId: number, label: string) {
+    if (!popupEl || !popupImg || !popupLabel) return;
+    popupImg.src = `https://noun.pics/${nounId}.svg`;
+    popupLabel.textContent = label;
+    popupEl.classList.add('show');
+    if (popupTimer) clearTimeout(popupTimer);
+    popupTimer = window.setTimeout(() => popupEl.classList.remove('show'), 1300);
+  }
+
+  function flashMosaic(nounId: number) {
+    const cell = document.querySelector<HTMLElement>(`.tv-mosaic-cell[data-noun="${nounId}"]`);
+    if (!cell) return;
+    cell.classList.add('firing');
+    setTimeout(() => cell.classList.remove('firing'), 600);
+  }
+
+  // ── Ticker tape ──
+  const tickerTrack = document.getElementById('tv-ticker-track');
+  function pushTicker(html: string) {
+    if (!tickerTrack) return;
+    const item = document.createElement('span');
+    item.className = 'tv-ticker-item';
+    item.innerHTML = html;
+    tickerTrack.appendChild(item);
+    // Keep the track from growing forever
+    while (tickerTrack.children.length > 40) {
+      tickerTrack.removeChild(tickerTrack.firstChild!);
+    }
+  }
+
+  // ── Stream — WebSocket-first, polling fallback ──
+  let streamMode: 'connecting' | 'ws' | 'poll' = 'connecting';
+  let ws: WebSocket | null = null;
+  let lastSoundT = Date.now();
+  const streamEl = document.getElementById('tv-stream');
+  function setStream(mode: typeof streamMode) {
+    streamMode = mode;
+    if (streamEl) streamEl.textContent = mode === 'ws' ? 'live · ws' : mode === 'poll' ? 'live · 150ms' : 'connecting…';
+  }
+  setStream('connecting');
+
+  function dispatchIncoming(ev: any) {
+    if (!ev || typeof ev !== 'object') return;
+    // Map event types → visual treatment
+    const t = ev.type;
+    let nounId = 42, label = 'tap';
+    if (t === 'drum')      { nounId = 42;  label = 'drum'; }
+    else if (t === 'orchestra') {
+      // v4/v5/v7 share this type
+      const inst = (ev.inst || ev.cellKey || ev.cat || '').toString();
+      label = inst || 'orchestra';
+      nounId = REMOTE_NOUNS.orchestra;
+    }
+    else if (t === 'choir' || t === 'choir-chord') {
+      nounId = REMOTE_NOUNS.choir;
+      label = ev.voice || ev.chord || 'choir';
+    }
+    else if (t === 'lounge') {
+      nounId = REMOTE_NOUNS.lounge;
+      label = ev.voice || 'sax';
+    }
+    else if (t === 'symphony') {
+      nounId = REMOTE_NOUNS.symphony;
+      label = ev.seatKey || ev.family || 'symphony';
+    }
+    else { return; }
+
+    flashRipple();
+    flashSpotlight(nounId, String(label));
+    flashMosaic(nounId);
+    pushTicker(`<span class="accent">⌐◨-◨</span> ${String(label).toUpperCase()} · ${t}`);
+  }
+
+  function connectWS() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/drum/room?sid=${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(url);
+      ws.addEventListener('open', () => setStream('ws'));
+      ws.addEventListener('message', (msg) => {
+        try { dispatchIncoming(JSON.parse(msg.data)); } catch {}
+      });
+      ws.addEventListener('close', () => {
+        if (streamMode === 'connecting') fallbackToPoll();
+        else if (streamMode === 'ws') setTimeout(connectWS, 2000);
+      });
+      ws.addEventListener('error', () => {
+        if (streamMode === 'connecting') fallbackToPoll();
+      });
+    } catch { fallbackToPoll(); }
+  }
+  function fallbackToPoll() {
+    setStream('poll');
+    setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 150);
+  }
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) dispatchIncoming(ev);
+    } catch {}
+  }
+  connectWS();
+  setTimeout(() => { if (streamMode === 'connecting') fallbackToPoll(); }, 1500);
+
+  // ── Jammers count ──
+  const jammersEl = document.getElementById('tv-jammers');
+  async function refreshPresence() {
+    try {
+      const r = await fetch('/api/visit');
+      if (!r.ok) return;
+      const data = await r.json();
+      const present = Array.isArray(data.present) ? data.present : [];
+      const humans = present.filter((p: any) => p.type === 'human').length;
+      if (jammersEl) jammersEl.textContent = String(Math.max(humans, 1));
+    } catch {}
+  }
+  refreshPresence();
+  setInterval(refreshPresence, 8000);
+
+  // ── Ambient activity even when nobody's playing ──
+  // Every 6-12s, pulse a random noun so the screen feels alive.
+  function ambientPulse() {
+    const ids = SPOTLIGHT_NOUNS;
+    const id = ids[Math.floor(Math.random() * ids.length)];
+    const idx = ids.indexOf(id);
+    const label = SPOTLIGHT_LABELS[idx];
+    flashRipple('rgba(217,70,239,0.5)');
+    flashMosaic(id);
+    pushTicker(`<span class="accent">○</span> ambient · ${label.toLowerCase()}`);
+    setTimeout(ambientPulse, 6000 + Math.random() * 6000);
+  }
+  setTimeout(ambientPulse, 5000);
+
+  // Try to keep the TV awake — mouse / activity ping
+  // (browsers can't fully prevent sleep but a periodic interaction helps)
+  setInterval(() => {
+    const div = document.getElementById('tv-stage');
+    if (div) div.scrollTop = 0;
+  }, 60_000);
+</script>
+
+</DrumLayout>
