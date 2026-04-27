@@ -262,6 +262,22 @@ export const GET: APIRoute = async () => {
           privacy: 'Broadcasts never include raw session ids. Agent entries omit mood/listening/where.',
         },
         weather: 'https://pointcast.xyz/api/weather?station={slug}',
+        mcp: 'https://pointcast.xyz/api/mcp',
+      },
+      mcp: {
+        endpoint: 'https://pointcast.xyz/api/mcp',
+        transport: 'http',
+        protocol: 'json-rpc-2.0',
+        protocolVersion: '2024-11-05',
+        server: { name: 'pointcast-drum', version: '0.1.0' },
+        docs: 'https://pointcast.xyz/docs/mcp/pointcast-drum',
+        tools: [
+          'drum_list_rooms', 'drum_who_is_here', 'drum_top_drummers',
+          'drum_now_playing', 'drum_global_count',
+          'drum_tap', 'drum_play_instrument', 'drum_sing_voice', 'drum_set_track',
+        ],
+        resources: ['drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema'],
+        note: 'Stateless MCP server wrapping the drum hub. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page.',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
