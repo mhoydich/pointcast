@@ -1,0 +1,348 @@
+---
+/**
+ * /snapshots — Window Snapshots triptych preview + (eventual) mint surface.
+ *
+ * Three painted interiors as token_ids 0..2 (Galley · Long Room · Lamp Wall),
+ * 100 editions each, free mint, 7.5% royalty. Until contracts.json's
+ * window_snapshots.mainnet is populated, the page renders a preview-only
+ * surface with mint buttons disabled and an "originating soon" label. Once
+ * the KT1 lands, the same page becomes the live mint without a code change.
+ *
+ * Companion mintable: /coffee. Same FA2 deploy path, same wallet flow.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
+
+const ws = ((contracts as any).window_snapshots ?? {}) as Record<string, any>;
+const wsKt1 = ((ws.mainnet ?? '') as string).trim();
+const wsLive = wsKt1.startsWith('KT1');
+
+const TOKENS = [
+  {
+    id: 0,
+    slug: 'galley',
+    name: 'Galley',
+    file: '/images/window-snapshots/0-galley.jpg',
+    note: 'A small kitchen, painted at the hour the marine layer thins.',
+    edition: 100,
+  },
+  {
+    id: 1,
+    slug: 'long-room',
+    name: 'Long Room',
+    file: '/images/window-snapshots/1-long-room.jpg',
+    note: 'A long room with light pulled in slow from the west.',
+    edition: 100,
+  },
+  {
+    id: 2,
+    slug: 'lamp-wall',
+    name: 'Lamp Wall',
+    file: '/images/window-snapshots/2-lamp-wall.jpg',
+    note: 'A wall of lamps, all on, none of them too bright.',
+    edition: 100,
+  },
+];
+
+const title = '/snapshots — Window Snapshots · three painted interiors';
+const description =
+  'Three painted-interior FA2 NFTs from PointCast. Free mint, 100 editions each. Galley · Long Room · Lamp Wall.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/snapshots',
+  name: 'Window Snapshots',
+  description,
+  url: 'https://pointcast.xyz/snapshots',
+  hasPart: TOKENS.map((t) => ({
+    '@type': 'VisualArtwork',
+    name: t.name,
+    image: 'https://pointcast.xyz' + t.file,
+    description: t.note,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="ws" id="ws-main">
+
+    <header class="ws__head">
+      <p class="ws__kicker">ROOM · SPN · WINDOW SNAPSHOTS · EL SEGUNDO</p>
+      <h1 class="ws__title"><em>Three windows. Three rooms. Three editions of one hundred.</em></h1>
+      <p class="ws__dek">
+        Painted interiors of small rooms with light coming from somewhere
+        out of frame. Free mint when the contract is live. Until then,
+        a preview — same page, just with the mint button asleep.
+      </p>
+      <p class="ws__status mono" data-state={wsLive ? 'live' : 'pending'}>
+        <span class="ws__status-dot" aria-hidden="true"></span>
+        {wsLive
+          ? <>contract live · <code>{wsKt1.slice(0, 12)}…{wsKt1.slice(-6)}</code> · free mint, gas only</>
+          : <>contract not yet originated · preview only · check back after the SmartPy IDE drive</>
+        }
+      </p>
+    </header>
+
+    <section class="ws__triptych" aria-label="Three paintings">
+      {TOKENS.map((t) => (
+        <article class="ws__panel" data-token-id={t.id} data-slug={t.slug}>
+          <div class="ws__art">
+            <img src={t.file} alt={`${t.name} — Window Snapshot #${t.id}`} loading="lazy" />
+            <span class="ws__art-tag mono">№{t.id} · {t.edition} ED</span>
+          </div>
+          <div class="ws__caption">
+            <h2 class="ws__name">{t.name}</h2>
+            <p class="ws__note">{t.note}</p>
+            <button
+              type="button"
+              class="ws__claim mono"
+              data-token-id={t.id}
+              data-slug={t.slug}
+              disabled={!wsLive}
+              aria-label={`${wsLive ? 'Mint' : 'Mint (soon)'} — ${t.name}`}
+            >
+              {wsLive ? 'MINT · 0 ꜩ' : 'ORIGINATING SOON'}
+            </button>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="ws__texture">
+      <p>
+        Window Snapshots is the second mintable on PointCast after Coffee
+        Mugs. Same FA2 contract pattern — multi-token, on-chain edition
+        caps, public free mint gated only by gas. Royalties on secondary
+        sales route through the marketplace at 7.5%.
+      </p>
+      <p>
+        Three paintings now. The collection stays small. If a fourth window
+        opens, it'll get its own page and announcement.
+      </p>
+    </section>
+
+    <nav class="ws__links" aria-label="Other rooms">
+      <a class="ws__link" href="/coffee">
+        <span class="ws__link-label mono">/COFFEE</span>
+        <span class="ws__link-desc">five mugs · pour to unlock</span>
+      </a>
+      <a class="ws__link" href="/visit-nouns">
+        <span class="ws__link-label mono">/VISIT-NOUNS</span>
+        <span class="ws__link-desc">noun-by-noun · one per visit</span>
+      </a>
+      <a class="ws__link" href="/market">
+        <span class="ws__link-label mono">/MARKET</span>
+        <span class="ws__link-desc">trade every PointCast FA2</span>
+      </a>
+      <a class="ws__link" href="/">
+        <span class="ws__link-label mono">/</span>
+        <span class="ws__link-desc">back to the broadcast</span>
+      </a>
+    </nav>
+
+    <footer class="ws__foot mono">
+      <span>on air · el segundo · fm 96.1 · cc0</span>
+      <span id="ws-clock">—</span>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    function tick() {
+      var el = document.getElementById('ws-clock');
+      if (!el) return;
+      var n = new Date();
+      el.textContent = String(n.getHours()).padStart(2, '0') + ':' +
+        String(n.getMinutes()).padStart(2, '0') + ' PT';
+    }
+    tick();
+    setInterval(tick, 60 * 1000);
+
+    // The mint button is rendered enabled/disabled at build time based on
+    // contracts.window_snapshots.mainnet. When live, this script will
+    // dynamically import Taquito + Beacon and call mint_snapshot(token_id).
+    document.querySelectorAll('.ws__claim:not([disabled])').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var tokenId = parseInt(btn.getAttribute('data-token-id') || '0', 10);
+        var origLabel = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'AWAITING KUKAI…';
+        try {
+          var taquito = await import('@taquito/taquito');
+          var beacon = await import('@taquito/beacon-wallet');
+          var tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+          var bw = new beacon.BeaconWallet({ name: 'PointCast Snapshots', network: { type: 'mainnet' } });
+          tezos.setWalletProvider(bw);
+          var active = await bw.client.getActiveAccount();
+          if (!active) await bw.client.requestPermissions();
+          var kt1 = btn.closest('[data-ws-kt1]') ? btn.closest('[data-ws-kt1]').getAttribute('data-ws-kt1') : null;
+          // KT1 read from contracts.json at build time, baked into a data attr
+          // via window.__pcWsKt1 (set below). Server-side render path.
+          kt1 = kt1 || (window.__pcWsKt1 || '');
+          if (!kt1) throw new Error('contract not yet originated');
+          var contract = await tezos.wallet.at(kt1);
+          var op = await contract.methodsObject.mint_snapshot(tokenId).send();
+          btn.textContent = 'BROADCAST · ' + (op.opHash || '').slice(0, 8) + '…';
+          await op.confirmation();
+          btn.textContent = 'MINTED ✓';
+        } catch (err) {
+          var msg = (err && err.message) ? err.message : String(err);
+          btn.textContent = /reject|cancel|abort/i.test(msg) ? 'CANCELLED' : 'ERROR · TRY AGAIN';
+          setTimeout(function () { btn.disabled = false; btn.textContent = origLabel; }, 2400);
+        }
+      });
+    });
+  })();
+</script>
+
+<script is:inline define:vars={{ wsKt1 }}>
+  // Frontmatter-baked contract address. Empty string until originated.
+  window.__pcWsKt1 = wsKt1 || '';
+</script>
+
+<style>
+  .ws {
+    min-height: calc(100vh - 60px);
+    padding: 48px 20px 60px;
+    background: linear-gradient(180deg, #f8f1e3 0%, #e8d8b8 100%);
+    color: #1a1408;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .ws__head { max-width: 720px; margin: 0 auto 32px; text-align: center; }
+  .ws__kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.26em; font-weight: 700;
+    margin: 0 0 14px; opacity: 0.65;
+  }
+  .ws__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(26px, 4.2vw, 38px);
+    line-height: 1.12; margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .ws__title em { font-style: italic; }
+  .ws__dek {
+    font-family: Georgia, serif;
+    font-size: 15px; line-height: 1.55;
+    margin: 0 auto 14px; max-width: 560px;
+    opacity: 0.86;
+  }
+  .ws__status {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 12px;
+    border: 1.5px solid #1a1408;
+    background: #fff;
+    box-shadow: 2px 2px 0 #1a1408;
+    font-size: 9px; letter-spacing: 0.20em; font-weight: 700;
+  }
+  .ws__status[data-state="pending"] { background: #fef0bd; color: #6a4d10; }
+  .ws__status[data-state="live"] { background: #d8f5e8; color: #0a4830; }
+  .ws__status-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #c4821a; box-shadow: 0 0 6px #c4821a;
+  }
+  .ws__status[data-state="live"] .ws__status-dot {
+    background: #2CC5A0; box-shadow: 0 0 6px #2CC5A0;
+  }
+  .ws__status code { font-size: 10px; opacity: 0.85; }
+
+  /* Triptych */
+  .ws__triptych {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    max-width: 1080px;
+    margin: 0 auto 36px;
+  }
+  .ws__panel {
+    background: #fff;
+    border: 2px solid #1a1408;
+    box-shadow: 5px 5px 0 #1a1408;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .ws__panel:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 #1a1408; }
+  .ws__art {
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #ddd;
+    border-bottom: 2px solid #1a1408;
+    position: relative;
+  }
+  .ws__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ws__art-tag {
+    position: absolute; top: 8px; left: 8px;
+    background: #1a1408; color: #f8f1e3;
+    padding: 2px 8px; font-size: 9.5px; letter-spacing: 0.12em; font-weight: 700;
+  }
+  .ws__caption { padding: 14px 14px 16px; }
+  .ws__name {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 22px; font-weight: 500;
+    margin: 0 0 6px; letter-spacing: -0.01em;
+  }
+  .ws__note {
+    font-family: Georgia, serif;
+    font-size: 13.5px; line-height: 1.45;
+    margin: 0 0 12px; opacity: 0.82;
+  }
+  .ws__claim {
+    width: 100%; padding: 9px 12px;
+    background: #1a1408; color: #f8f1e3;
+    border: 2px solid #1a1408;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.20em; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .ws__claim:not(:disabled):hover { background: #c4821a; color: #1a1408; border-color: #1a1408; }
+  .ws__claim:disabled {
+    background: #d8cdb8; color: #6a5d40; cursor: not-allowed;
+    border-color: #b8ad95;
+  }
+
+  /* Texture */
+  .ws__texture {
+    max-width: 640px; margin: 0 auto 32px;
+    font-family: Georgia, serif;
+    font-size: 15px; line-height: 1.62;
+  }
+  .ws__texture p { margin: 0 0 12px; opacity: 0.88; }
+  .ws__texture p:last-child { margin: 0; }
+
+  /* Links */
+  .ws__links {
+    max-width: 720px; margin: 0 auto 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px;
+  }
+  .ws__link {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 9px 12px;
+    background: rgba(255, 248, 228, 0.6);
+    border: 1.5px solid rgba(26, 20, 8, 0.18);
+    text-decoration: none; color: inherit;
+    transition: background 0.18s ease, transform 0.12s ease;
+  }
+  .ws__link:hover { background: rgba(255, 220, 120, 0.4); transform: translateY(-1px); }
+  .ws__link-label { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; }
+  .ws__link-desc { font-size: 11.5px; font-family: Georgia, serif; opacity: 0.75; line-height: 1.35; }
+
+  /* Footer */
+  .ws__foot {
+    max-width: 720px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.18em;
+    padding-top: 14px; border-top: 1px dashed rgba(26, 20, 8, 0.22);
+    opacity: 0.72;
+  }
+
+  @media (max-width: 720px) {
+    .ws__triptych { grid-template-columns: 1fr; gap: 14px; }
+    .ws { padding: 32px 14px 48px; }
+  }
+</style>
