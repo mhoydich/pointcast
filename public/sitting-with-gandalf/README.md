@@ -52,14 +52,17 @@ The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The select
 - Defaults to the collectible Nouns Gandalf deck, now shaped as a V5 collect-v2 ritual loop.
 - Adds 30 tiny Gandalf companion cards, each with a noun, visual mood, room, intention, mantra, breath cue, and original wizard line.
 - Adds 12 pocket keepsakes that pair with pulled cards, sit completions, and the presence tally.
+- Adds a Gandalf resource sharpener with Focus, Patience, Warmth, Wonder, Courage, and Ease.
+- Adds a tiny spell-building game: pair the active Gandalf with a keepsake, sharpen a resource, build a spell, and keep it in a local spellbook.
 - Adds five V5 rituals: Enjoy, Meditate, Pipe, Beer, and Study.
-- Makes the first action clearer: choose a sit, pull a Gandalf, find a keepsake, keep what feels good, then begin a 5-minute sit.
-- Reframes the local tally as a presence score and rank derived from kept cards, keepsakes, saved sits, minutes, and cues.
-- Bumps the local settings release so returning V5 visitors land on the new keepsake pass once without losing their kept card collection.
+- Makes the first action clearer: choose a sit, pull a Gandalf, pair a keepsake, sharpen a resource, build a spell, then begin a 5-minute sit.
+- Reframes the local tally as a presence score and rank derived from kept cards, keepsakes, sharpened resources, kept spells, saved sits, minutes, and cues.
+- Bumps the local settings release so returning V5 visitors land on the new spell-building pass once without losing their kept card or keepsake collection.
 - Keeps V1, V2, V3, and V4 available from the version toggle.
 - Stores the local collection in `localStorage` under `sitting-with-gandalf-nouns-collection`.
 - Stores the pocket keepsakes in `localStorage` under `sitting-with-gandalf-keepsake-collection`.
-- Logs V5 notes with the active ritual, card, keepsake, view, intention, and pixel style.
+- Stores sharpened resources and kept spells under `sitting-with-gandalf-resource-levels` and `sitting-with-gandalf-spellbook`.
+- Logs V5 notes with the active ritual, card, keepsake, resource, spell, view, intention, and pixel style.
 
 ## V6 Notes
 

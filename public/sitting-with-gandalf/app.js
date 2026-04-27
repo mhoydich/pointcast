@@ -5,9 +5,11 @@
   const SETTINGS_KEY = "sitting-with-gandalf-settings";
   const NOUNS_COLLECTION_KEY = "sitting-with-gandalf-nouns-collection";
   const KEEPSAKE_COLLECTION_KEY = "sitting-with-gandalf-keepsake-collection";
+  const RESOURCE_LEVELS_KEY = "sitting-with-gandalf-resource-levels";
+  const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v5";
-  const SETTINGS_RELEASE = "v5-keepsakes";
+  const SETTINGS_RELEASE = "v5-spells";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
   const renderStyles = {
     storybook: {
@@ -35,7 +37,7 @@
       startLabel: "Begin enjoying",
       runningLabel: "being here",
       idleLabel: "enjoyment",
-      summary: "Presence, keepsakes, tally",
+      summary: "Presence, spells, tally",
       warmth: 0.7,
       smoke: 0.48,
       guide: "No lesson to extract. Sit where you are and let the room be pleasant.",
@@ -65,7 +67,7 @@
       startLabel: "Begin 5-min sit",
       runningLabel: "card sit",
       idleLabel: "meditation sit",
-      summary: "Ritual, collection, tally",
+      summary: "Ritual, spells, tally",
       warmth: 0.58,
       smoke: 0.44,
       guide: "Sit with the card, breathe with the room, and let one cue become gentle.",
@@ -95,7 +97,7 @@
       startLabel: "Begin pipe pause",
       runningLabel: "pipe pause",
       idleLabel: "slow smoke",
-      summary: "Pipe leaf, cards, tally",
+      summary: "Pipe leaf, spells, tally",
       warmth: 0.64,
       smoke: 0.82,
       guide: "Draw slowly, watch the ring leave, and let the card turn one worry into weather.",
@@ -125,7 +127,7 @@
       startLabel: "Begin beer sit",
       runningLabel: "beer sit",
       idleLabel: "warm beer",
-      summary: "Tavern pour, cards, tally",
+      summary: "Tavern pour, spells, tally",
       warmth: 0.72,
       smoke: 0.52,
       guide: "Set the glass down, take the room in slowly, and let good company make the thought kinder.",
@@ -155,7 +157,7 @@
       startLabel: "Begin study sit",
       runningLabel: "study sit",
       idleLabel: "small study",
-      summary: "Study charm, cards, tally",
+      summary: "Study charm, spells, tally",
       warmth: 0.54,
       smoke: 0.38,
       guide: "Pull a card, read its cue like a footnote, and leave with one cleaner thought.",
@@ -323,6 +325,81 @@
       shadow: "#587144",
       cue: "Write the gentlest version of the thought in your head.",
       line: "A note kept kindly changes the way the day reads it back."
+    }
+  ];
+
+  const spellResources = [
+    {
+      id: "focus",
+      name: "Focus",
+      short: "single flame",
+      mark: "FO",
+      tone: "#f2c56b",
+      bg: "#3a2d1e",
+      prompt: "Choose one thing and make the rest quieter.",
+      action: "narrow",
+      promise: "the next thing becomes small enough to begin",
+      words: ["clear", "steady", "one"]
+    },
+    {
+      id: "patience",
+      name: "Patience",
+      short: "slow road",
+      mark: "PA",
+      tone: "#9fbc68",
+      bg: "#263827",
+      prompt: "Let the answer arrive without being dragged by the sleeve.",
+      action: "soften",
+      promise: "the waiting stops feeling like waste",
+      words: ["wait", "root", "green"]
+    },
+    {
+      id: "warmth",
+      name: "Warmth",
+      short: "kept ember",
+      mark: "WA",
+      tone: "#ef9e54",
+      bg: "#3a241a",
+      prompt: "Make the room friendlier before making the plan sharper.",
+      action: "warm",
+      promise: "the room remembers you are allowed to enjoy it",
+      words: ["ember", "near", "kind"]
+    },
+    {
+      id: "wonder",
+      name: "Wonder",
+      short: "wide sky",
+      mark: "WO",
+      tone: "#d7d9ff",
+      bg: "#252a3c",
+      prompt: "Leave one corner of the thought unexplained on purpose.",
+      action: "widen",
+      promise: "the world gets larger than the problem",
+      words: ["star", "wide", "ask"]
+    },
+    {
+      id: "courage",
+      name: "Courage",
+      short: "small yes",
+      mark: "CO",
+      tone: "#d0bd7a",
+      bg: "#3d3424",
+      prompt: "Take the next honest step without asking it to be the whole road.",
+      action: "steady",
+      promise: "the first step stops needing a speech",
+      words: ["step", "lamp", "true"]
+    },
+    {
+      id: "ease",
+      name: "Ease",
+      short: "loose hand",
+      mark: "EA",
+      tone: "#a7d3de",
+      bg: "#24333c",
+      prompt: "Remove one unnecessary grip from the minute.",
+      action: "loosen",
+      promise: "the breath has somewhere pleasant to land",
+      words: ["loose", "rain", "room"]
     }
   ];
 
@@ -1152,6 +1229,9 @@
   const initialKeepsake = savedRelease && keepsakeRelics.some((relic) => relic.id === savedSettings.keepsakeActive)
     ? savedSettings.keepsakeActive
     : keepsakeForCardId(initialNounsGandalf, savedRelease && rituals[savedSettings.ritual] ? savedSettings.ritual : "enjoy").id;
+  const initialResource = savedRelease && spellResources.some((resource) => resource.id === savedSettings.resourceActive)
+    ? savedSettings.resourceActive
+    : "focus";
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -1167,6 +1247,10 @@
     nounsCollection: loadNounsCollection(),
     keepsakeActive: initialKeepsake,
     keepsakeCollection: loadKeepsakeCollection(),
+    resourceActive: initialResource,
+    resourceLevels: loadResourceLevels(),
+    spellBook: loadSpellBook(),
+    activeSpell: "",
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -1218,7 +1302,20 @@
     keepsakeMeta: document.getElementById("keepsakeMeta"),
     keepsakeCue: document.getElementById("keepsakeCue"),
     keepsakeCount: document.getElementById("keepsakeCount"),
+    keepsakePair: document.getElementById("keepsakePair"),
     keepsakeGrid: document.getElementById("keepsakeGrid"),
+    resourceButtons: Array.from(document.querySelectorAll(".resource-button")),
+    resourceName: document.getElementById("resourceName"),
+    resourceText: document.getElementById("resourceText"),
+    resourceBar: document.getElementById("resourceBar"),
+    resourceScore: document.getElementById("resourceScore"),
+    spellSigil: document.getElementById("spellSigil"),
+    spellPhrase: document.getElementById("spellPhrase"),
+    spellCount: document.getElementById("spellCount"),
+    spellList: document.getElementById("spellList"),
+    sharpenResourceButton: document.getElementById("sharpenResourceButton"),
+    buildSpellButton: document.getElementById("buildSpellButton"),
+    keepSpellButton: document.getElementById("keepSpellButton"),
     pullGandalfButton: document.getElementById("pullGandalfButton"),
     collectGandalfButton: document.getElementById("collectGandalfButton"),
     meditateGandalfButton: document.getElementById("meditateGandalfButton"),
@@ -1321,6 +1418,38 @@
     }
   }
 
+  function loadResourceLevels() {
+    try {
+      const raw = localStorage.getItem(RESOURCE_LEVELS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return spellResources.reduce((levels, resource) => {
+        const value = Number(parsed[resource.id] || 0);
+        levels[resource.id] = Number.isFinite(value) ? Math.max(0, Math.min(99, Math.floor(value))) : 0;
+        return levels;
+      }, {});
+    } catch (error) {
+      return spellResources.reduce((levels, resource) => {
+        levels[resource.id] = 0;
+        return levels;
+      }, {});
+    }
+  }
+
+  function loadSpellBook() {
+    try {
+      const raw = localStorage.getItem(SPELLBOOK_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed
+        .filter((spell) => spell && typeof spell.phrase === "string" && typeof spell.resource === "string")
+        .slice(0, 8);
+    } catch (error) {
+      return [];
+    }
+  }
+
   function saveLog() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.log.slice(0, 12)));
   }
@@ -1339,6 +1468,7 @@
         ritual: state.ritual,
         nounsActive: state.nounsActive,
         keepsakeActive: state.keepsakeActive,
+        resourceActive: state.resourceActive,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -1351,6 +1481,14 @@
 
   function saveKeepsakeCollection() {
     localStorage.setItem(KEEPSAKE_COLLECTION_KEY, JSON.stringify(Array.from(state.keepsakeCollection)));
+  }
+
+  function saveResourceLevels() {
+    localStorage.setItem(RESOURCE_LEVELS_KEY, JSON.stringify(state.resourceLevels));
+  }
+
+  function saveSpellBook() {
+    localStorage.setItem(SPELLBOOK_KEY, JSON.stringify(state.spellBook.slice(0, 8)));
   }
 
   function activeCompanion() {
@@ -1379,6 +1517,14 @@
 
   function activeKeepsake() {
     return keepsakeRelics.find((relic) => relic.id === state.keepsakeActive) || keepsakeRelics[0];
+  }
+
+  function activeResource() {
+    return spellResources.find((resource) => resource.id === state.resourceActive) || spellResources[0];
+  }
+
+  function resourceSharpnessScore() {
+    return spellResources.reduce((sum, resource) => sum + (state.resourceLevels[resource.id] || 0), 0);
   }
 
   function keepsakeSeed(seed) {
@@ -1434,7 +1580,13 @@
 
   function presenceScore() {
     const totalMinutes = state.log.reduce((sum, entry) => sum + entry.minutes, 0);
-    return state.nounsCollection.size * 7 + state.keepsakeCollection.size * 5 + state.log.length * 5 + Math.floor(totalMinutes / 3) + state.rings;
+    return state.nounsCollection.size * 7
+      + state.keepsakeCollection.size * 5
+      + resourceSharpnessScore() * 2
+      + state.spellBook.length * 4
+      + state.log.length * 5
+      + Math.floor(totalMinutes / 3)
+      + state.rings;
   }
 
   function presenceRank(score) {
@@ -1568,6 +1720,7 @@
 
     const relic = activeKeepsake();
     const collected = state.keepsakeCollection.has(relic.id);
+    const card = activeNounsGandalf();
 
     applyKeepsakeStyle(dom.keepsakeBadge, relic);
     applyKeepsakeStyle(dom.keepsakeBadge.parentElement, relic);
@@ -1577,8 +1730,10 @@
     dom.keepsakeMeta.textContent = `${relic.rarity} · ${relic.family}`;
     dom.keepsakeCue.textContent = relic.cue;
     dom.keepsakeCount.textContent = `${state.keepsakeCollection.size} / ${keepsakeRelics.length} keepsakes`;
+    dom.keepsakePair.textContent = `Pair with ${card.name}`;
     dom.keepKeepsakeButton.textContent = collected ? "Kept" : "Keep keepsake";
     dom.keepKeepsakeButton.disabled = collected;
+    updateSpellPanel();
   }
 
   function renderKeepsakeCollection() {
@@ -1621,6 +1776,7 @@
     const relic = keepsakeRelics.find((item) => item.id === id) || keepsakeRelics[0];
 
     state.keepsakeActive = relic.id;
+    state.activeSpell = "";
     renderKeepsakeCollection();
 
     if (settings.announce !== false && isCollectibleVersion()) {
@@ -1663,6 +1819,170 @@
     updateRitualPanel();
   }
 
+  function applyResourceStyle(element, resource) {
+    if (!element) {
+      return;
+    }
+
+    element.style.setProperty("--resource-bg", resource.bg);
+    element.style.setProperty("--resource-tone", resource.tone);
+  }
+
+  function composeSpell(resource = activeResource(), card = activeNounsGandalf(), relic = activeKeepsake()) {
+    const seed = keepsakeSeed(`${card.id}-${relic.id}-${resource.id}-${state.spellBook.length}`);
+    const word = resource.words[seed % resource.words.length];
+    const forms = [
+      `${card.noun} ${word}: ${resource.action} the ${relic.family}.`,
+      `${resource.name} of ${card.noun}, held by ${relic.name}.`,
+      `${relic.mark} ${resource.mark}: ${resource.promise}.`,
+      `${card.noun} and ${relic.family}; ${word} enough for now.`
+    ];
+
+    return forms[seed % forms.length];
+  }
+
+  function renderSpellBook() {
+    if (!dom.spellList) {
+      return;
+    }
+
+    dom.spellList.replaceChildren();
+
+    if (state.spellBook.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "empty";
+      empty.textContent = "No spells kept yet.";
+      dom.spellList.append(empty);
+      return;
+    }
+
+    state.spellBook.slice(0, 4).forEach((spell) => {
+      const item = document.createElement("li");
+      const phrase = document.createElement("strong");
+      const meta = document.createElement("small");
+
+      phrase.textContent = spell.phrase;
+      meta.textContent = `${spell.resource} / ${spell.card.replace(" Gandalf", "")} / ${spell.keepsake}`;
+      item.append(phrase, meta);
+      dom.spellList.append(item);
+    });
+  }
+
+  function updateSpellPanel() {
+    if (!dom.resourceName) {
+      return;
+    }
+
+    const resource = activeResource();
+    const card = activeNounsGandalf();
+    const relic = activeKeepsake();
+    const level = state.resourceLevels[resource.id] || 0;
+    const progress = Math.min(100, level * 12.5);
+
+    applyResourceStyle(dom.spellSigil, resource);
+    applyResourceStyle(dom.spellSigil.parentElement, resource);
+    applyResourceStyle(dom.spellSigil.closest(".spell-table"), resource);
+    dom.resourceButtons.forEach((button) => {
+      const option = spellResources.find((item) => item.id === button.dataset.resource);
+      if (option) {
+        applyResourceStyle(button, option);
+      }
+      button.classList.toggle("active", button.dataset.resource === resource.id);
+    });
+    dom.resourceName.textContent = resource.name;
+    dom.resourceText.textContent = resource.prompt;
+    dom.resourceBar.style.width = `${progress}%`;
+    dom.resourceScore.textContent = `${level} sharpened`;
+    dom.spellCount.textContent = `${state.spellBook.length} spells`;
+    dom.spellSigil.textContent = `${resource.mark}`;
+    dom.spellPhrase.textContent = state.activeSpell || `${card.name} pairs with ${relic.name}. ${resource.promise}.`;
+    renderSpellBook();
+  }
+
+  function setResource(id, options) {
+    const settings = options || {};
+    const resource = spellResources.find((item) => item.id === id) || spellResources[0];
+
+    state.resourceActive = resource.id;
+    state.activeSpell = "";
+    updateSpellPanel();
+
+    if (settings.announce !== false && isCollectibleVersion()) {
+      dom.wizardLine.textContent = resource.prompt;
+      setGuide("Resource", `${resource.name} · ${activeNounsGandalf().name}`, `${resource.promise}. Pair with ${activeKeepsake().name}.`);
+      spawnParticles(4);
+    }
+
+    saveSettings();
+  }
+
+  function sharpenResource(options) {
+    const settings = options || {};
+    const resource = activeResource();
+    const nextLevel = Math.min(99, (state.resourceLevels[resource.id] || 0) + 1);
+
+    state.resourceLevels[resource.id] = nextLevel;
+    saveResourceLevels();
+    updateStats();
+
+    if (!settings.quiet) {
+      dom.wizardLine.textContent = `${resource.name} sharpened: ${resource.prompt}`;
+      setGuide("Sharpened", `${resource.name} ${nextLevel}`, `${activeNounsGandalf().name} pairs with ${activeKeepsake().name}. ${resource.promise}.`);
+      spawnParticles(8);
+    }
+  }
+
+  function buildSpell(options) {
+    const settings = options || {};
+    const resource = activeResource();
+    const spell = composeSpell(resource);
+
+    state.activeSpell = spell;
+    updateSpellPanel();
+
+    if (!settings.quiet) {
+      dom.wizardLine.textContent = spell;
+      setGuide("Spell built", `${resource.name} · ${activeNounsGandalf().name}`, `${activeKeepsake().name} holds the edge. Keep it if it feels useful.`);
+      spawnParticles(10);
+    }
+
+    return spell;
+  }
+
+  function keepSpell(options) {
+    const settings = options || {};
+    const resource = activeResource();
+    const card = activeNounsGandalf();
+    const relic = activeKeepsake();
+    const phrase = state.activeSpell || buildSpell({ quiet: true });
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+
+    state.spellBook.unshift({
+      phrase,
+      resource: resource.name,
+      card: card.name,
+      keepsake: relic.name,
+      date: formatter.format(new Date())
+    });
+    state.spellBook = state.spellBook.slice(0, 8);
+    state.resourceLevels[resource.id] = Math.min(99, (state.resourceLevels[resource.id] || 0) + 1);
+    saveResourceLevels();
+    saveSpellBook();
+    renderSpellBook();
+    updateStats();
+
+    if (!settings.quiet) {
+      dom.wizardLine.textContent = phrase;
+      setGuide("Spell kept", `${resource.name} spell`, `${card.name} + ${relic.name}. ${resource.promise}.`);
+      spawnParticles(14);
+    }
+  }
+
   function setGuide(step, title, text) {
     dom.guideStep.textContent = step;
     dom.guideTitle.textContent = title;
@@ -1677,9 +1997,10 @@
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
       const relic = activeKeepsake();
+      const resource = activeResource();
       const view = activeView();
       const ritual = activeRitual();
-      setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} ${relic.name}: ${relic.cue} ${view.idle}`);
+      setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} Pair with ${relic.name}; sharpen ${resource.name}. ${view.idle}`);
       return;
     }
 
@@ -1766,8 +2087,9 @@
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
       const relic = activeKeepsake();
+      const resource = activeResource();
       const intention = activeIntention();
-      const pool = [card.line, card.mantra, card.cue, card.breath, relic.line, relic.cue].concat(activeRitual().lines, activeView().lines, intention.lines, activeRenderStyle().lines);
+      const pool = [card.line, card.mantra, card.cue, card.breath, relic.line, relic.cue, resource.prompt, resource.promise, state.activeSpell].filter(Boolean).concat(activeRitual().lines, activeView().lines, intention.lines, activeRenderStyle().lines);
       const next = pool[Math.floor(Math.random() * pool.length)];
       dom.wizardLine.textContent = next;
       return;
@@ -1869,6 +2191,7 @@
       const mode = entry.mode ? ` / ${entry.mode}` : "";
       const companion = entry.companion ? ` / ${entry.companion.replace(" Gandalf", "")}` : "";
       const keepsake = entry.keepsake ? ` / ${entry.keepsake}` : "";
+      const resource = entry.resource ? ` / ${entry.resource}` : "";
       const visual = entry.visual ? ` / ${entry.visual}` : "";
       const intention = entry.intention ? ` / ${entry.intention}` : "";
       const ritual = entry.ritual ? ` / ${entry.ritual}` : "";
@@ -1878,9 +2201,9 @@
       meta.className = "log-meta";
       note.className = "log-note";
 
-      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${ritual}${mode}${companion}${keepsake}${visual}${intention}${style}`;
+      left.textContent = `${version}${entry.minutes} min / ${entry.blend}${ritual}${mode}${companion}${keepsake}${resource}${visual}${intention}${style}`;
       right.textContent = entry.date;
-      note.textContent = entry.note || "A quiet bowl, kept well.";
+      note.textContent = entry.note || entry.spell || "A quiet bowl, kept well.";
 
       meta.append(left, right);
       item.append(meta, note);
@@ -1951,8 +2274,9 @@
     if (isCollectibleVersion()) {
       collectNounsGandalf(state.nounsActive, { quiet: true });
       collectKeepsake(state.keepsakeActive, { quiet: true });
+      sharpenResource({ quiet: true });
       dom.wizardLine.textContent = activeRitual().complete;
-      setGuide("Complete", `${activeRitual().title} · ${activeNounsGandalf().name}`, `The cue and ${activeKeepsake().name} are in your pouch. Let the rest stay here.`);
+      setGuide("Complete", `${activeRitual().title} · ${activeNounsGandalf().name}`, `The cue, ${activeKeepsake().name}, and ${activeResource().name} are sharper now. Let the rest stay here.`);
     } else if (isNatureVersion()) {
       dom.wizardLine.textContent = "There. The room feels less crowded now.";
       setGuide("Complete", activeView().name, "Carry one color, one sound, and one easier breath back with you.");
@@ -2043,6 +2367,7 @@
     state.nounsActive = next;
     dom.body.dataset.collectible = next;
     state.keepsakeActive = suggestedKeepsakeForCard(card).id;
+    state.activeSpell = "";
 
     if (settings.syncWorld !== false) {
       setVisual(card.visual, { syncMode: false });
@@ -2074,6 +2399,7 @@
     saveNounsCollection();
     if (!wasCollected) {
       state.keepsakeActive = relic.id;
+      state.activeSpell = "";
     }
     renderNounsCollection();
     renderKeepsakeCollection();
@@ -2136,6 +2462,7 @@
       updateAudioLevels();
       updateBlendOptions();
       setKeepsake(suggestedKeepsakeForCard(activeNounsGandalf(), next).id, { announce: false });
+      state.activeSpell = "";
       updateNounsPanel();
       updateGuideIdle(settings.quiet ? "V5 ready" : "Ritual set");
       if (!settings.quiet) {
@@ -2313,6 +2640,8 @@
       ritual: isCollectibleVersion() ? activeRitual().title : "",
       companion: state.version === "v2" ? activeCompanion().name : isCollectibleVersion() ? activeNounsGandalf().name : "",
       keepsake: isCollectibleVersion() ? activeKeepsake().name : "",
+      resource: isCollectibleVersion() ? activeResource().name : "",
+      spell: isCollectibleVersion() ? state.activeSpell : "",
       visual: isNatureVersion() ? activeView().name : "",
       intention: isNatureVersion() ? activeIntention().title : "",
       style: isNatureVersion() ? activeRenderStyle().name : "",
@@ -2794,11 +3123,18 @@
     button.addEventListener("click", () => setRitual(button.dataset.ritual));
   });
 
+  dom.resourceButtons.forEach((button) => {
+    button.addEventListener("click", () => setResource(button.dataset.resource));
+  });
+
   dom.pullGandalfButton.addEventListener("click", pullNounsGandalf);
   dom.collectGandalfButton.addEventListener("click", () => collectNounsGandalf(state.nounsActive));
   dom.meditateGandalfButton.addEventListener("click", () => beginNounsMeditation());
   dom.pullKeepsakeButton.addEventListener("click", pullKeepsake);
   dom.keepKeepsakeButton.addEventListener("click", () => collectKeepsake(state.keepsakeActive));
+  dom.sharpenResourceButton.addEventListener("click", () => sharpenResource());
+  dom.buildSpellButton.addEventListener("click", () => buildSpell());
+  dom.keepSpellButton.addEventListener("click", () => keepSpell());
   dom.startButton.addEventListener("click", startSession);
   dom.pauseButton.addEventListener("click", pauseSession);
   dom.resetButton.addEventListener("click", resetSession);
@@ -2827,6 +3163,7 @@
   renderLog();
   renderNounsCollection();
   renderKeepsakeCollection();
+  updateSpellPanel();
   setRenderStyle(state.renderStyle);
   setVersion(state.version);
   setRitual(state.ritual, { quiet: true });
