@@ -3,7 +3,7 @@ title: "Remote Internship: Build PointCast, Build Your Own Node"
 description: "A remote internship for curious builders who want to help expand PointCast while learning to run their own node across culture, sustainability, art, science, sport, life, communication, and AI collaboration."
 date: 2026-04-27
 type: article
-tags: [internship, remote, pointcast, nodes, ai, culture, sustainability, art, science, sport, communication]
+tags: [internship, remote, pointcast, nodes, ai, nouns, spotify, culture, sustainability, art, science, sport, communication]
 ---
 
 PointCast is looking for a remote intern who wants to learn by building in public.
@@ -11,6 +11,8 @@ PointCast is looking for a remote intern who wants to learn by building in publi
 The work is simple to describe and wide open in practice: help build out PointCast, then build your own node inside it.
 
 A node can be a beat you care about, a small publication, a research desk, a local guide, a collector shelf, a sport tracker, a sustainability watch, a culture map, a gallery, a listening room, a field journal, or something stranger and more useful than any of those. The point is not to become a content machine. The point is to learn how to notice, structure, publish, connect, and keep going.
+
+PointCast also has a Nouns spine. Interns will learn why the little square avatars matter here: CC0 visual language, deterministic identity, Visit Nouns on Tezos, collectible blocks, gallery seeds, multiplayer cursor rooms, and the idea that a public internet object can be playful without being throwaway.
 
 ## What You Will Build
 
@@ -37,6 +39,8 @@ You will explore sport: practice, rules, gear, tactics, recovery, competition, p
 You will explore life: routines, family, food, work, attention, travel, friendship, local knowledge, and the ordinary moments that become valuable when someone records them well.
 
 You will explore communication: writing clearly, publishing steadily, building trust, making useful links, creating surfaces that humans and AI systems can both read.
+
+You will explore listening: playlists, soundtracks, Spotify trails, mood, rhythm, and the way music can become a node instead of background noise. Mike's Spotify profile is now part of the source map: [open it here](https://open.spotify.com/user/f350x1uuj8fu431fnch8bclwv?si=236d53f7c6f94bfe).
 
 You will explore expansion: how to grow a network without losing the original feeling, how one node can become many, and how a small project can invite other people in without becoming generic.
 
@@ -80,6 +84,7 @@ Send a short note to Mike with:
 - What you are curious about.
 - One node you might want to build.
 - One PointCast surface you explored and what you noticed.
+- One Noun, playlist, place, or tiny internet object that says something about your taste.
 - A link to anything you have made, written, collected, photographed, mapped, coded, researched, or organized.
 
 Remote is fine. Curiosity is required. Taste can be trained. Shipping is the practice.

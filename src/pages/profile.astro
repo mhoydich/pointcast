@@ -22,6 +22,7 @@ import {
 } from '../lib/share-kit';
 
 const SITE_URL = 'https://pointcast.xyz';
+const MIKE_SPOTIFY_PROFILE_URL = 'https://open.spotify.com/user/f350x1uuj8fu431fnch8bclwv?si=236d53f7c6f94bfe';
 const absolute = (path: string) => new URL(path, SITE_URL).href;
 const isUrl = (value: unknown): value is string => typeof value === 'string' && /^https?:\/\//.test(value);
 const local = (path: string) => path.startsWith('http') ? path : absolute(path);
@@ -88,6 +89,7 @@ for (const packet of SHARE_CAMPAIGN_PACKETS) {
   addUrl(packet.title, local(packet.targetPath), '/share campaign', 'campaign');
   for (const proof of packet.proofLinks) addUrl(`${packet.title} proof`, local(proof), '/share proof', 'campaign-proof');
 }
+addUrl("Mike's Spotify profile", MIKE_SPOTIFY_PROFILE_URL, '/profile curated profile link', 'spotify-profile');
 
 const urlMap = new Map<string, UrlRow>();
 for (const row of urlRows) if (!urlMap.has(row.url)) urlMap.set(row.url, row);
@@ -140,7 +142,7 @@ const collectibleLanes = [
 
 const surfaceLanes = [
   { label: 'Shared URLs', value: `${sourcedUrls.length}`, note: 'External, media, drop, mesh, product, and share-kit URLs.', href: '/share', noun: 889 },
-  { label: 'Spotify / listen', value: `${spotifyBlocks.length}`, note: 'LISTEN blocks and Spotify embeds discovered from block media + external URLs.', href: spotifyBlocks[0] ? `/b/${spotifyBlocks[0].data.id}` : '/blocks.json', noun: spotifyBlocks[0]?.data.noun ?? 222 },
+  { label: 'Spotify / listen', value: `${spotifyBlocks.length + 1}`, note: "LISTEN blocks plus Mike's Spotify profile as a personal soundtrack source.", href: MIKE_SPOTIFY_PROFILE_URL, noun: spotifyBlocks[0]?.data.noun ?? 222 },
   { label: 'Polls / voting', value: `${polls.length}`, note: 'Schelling-point polls with local vote memory and KV-backed tally endpoints.', href: '/polls', noun: 272 },
   { label: 'Drops', value: `${drops.length}`, note: 'Paste-a-URL inbox archive: Spotify, products, places, articles, and generic links.', href: '/drop', noun: 91 },
   { label: 'Companions', value: `${companionBlocks.length}`, note: 'Blocks with linked polls, clocks, YeePlayer titles, externals, or sibling blocks.', href: '/blocks.json', noun: 1111 },
@@ -149,6 +151,14 @@ const surfaceLanes = [
 
 const recentEditionBlocks = editionBlocks.slice(0, 6);
 const recentUrls = sourcedUrls.slice(0, 72);
+const nounSpotlights = [
+  { id: 137, label: 'Visit Nouns starter', href: '/collection/visit-nouns' },
+  { id: 375, label: 'Internship node seed', href: '/b/0375' },
+  { id: 888, label: 'Family archive anchor', href: '/b/0366' },
+  { id: 1111, label: 'Companion surface cue', href: '/blocks.json' },
+  { id: 420, label: 'Proto-mint archaeology', href: '/b/0245' },
+  { id: 808, label: 'Broadcast rhythm', href: '/drum' },
+];
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -157,6 +167,7 @@ const jsonLd = {
   name: 'PointCast profile v3',
   description: 'Sourced PointCast profile: collectible audit, shared URLs, Spotify/listen links, polls, drops, products, and wallet-local memory.',
   url: 'https://pointcast.xyz/profile',
+  sameAs: [MIKE_SPOTIFY_PROFILE_URL],
 };
 ---
 
@@ -182,10 +193,14 @@ const jsonLd = {
         <p class="v3-hero__dek">
           This profile audits what PointCast already knows at build time:
           block editions, Tezos collections, market inventory, Zen Cats, ETH
-          legacy tokens, Spotify/listen embeds, polls, products, drops, mesh
-          nodes, and share-kit URLs. Older browser-local profile views stay one
-          tap away.
+          legacy tokens, Nouns, Mike's Spotify profile, Spotify/listen embeds,
+          polls, products, drops, mesh nodes, and share-kit URLs. Older
+          browser-local profile views stay one tap away.
         </p>
+        <div class="profile-actions" aria-label="Profile links">
+          <a href={MIKE_SPOTIFY_PROFILE_URL} target="_blank" rel="noopener">Open Mike on Spotify</a>
+          <a href="/collection/visit-nouns">Visit Nouns collection</a>
+        </div>
         <div class="noun-rail" aria-label="Recent PointCast nouns">
           {recentNounBlocks.slice(0, 10).map((block) => (
             <a href={`/b/${block.data.id}`} title={`${block.data.title} · Noun ${block.data.noun}`}>
@@ -251,6 +266,7 @@ const jsonLd = {
             <h3>Interaction surfaces</h3>
             <ul>
               <li><a href="/polls">Voting</a> · {polls.length} poll definitions</li>
+              <li><a href={MIKE_SPOTIFY_PROFILE_URL} target="_blank" rel="noopener">Mike's Spotify profile</a> · personal listening graph for music-led nodes</li>
               <li><a href="/drop">Drop inbox</a> · {drops.length} archived dropped URLs</li>
               <li><a href="/products">Products</a> · {products.length} Good Feels/product entries</li>
               <li><a href="/mesh">Mesh</a> · {mesh.length} nodes and feeds</li>
@@ -264,9 +280,18 @@ const jsonLd = {
         <div class="source-panel__head">
           <div>
             <p class="kicker">NOUN TRAIL</p>
-            <h2>{nounBlocks.length} blocks currently carry sourced Noun IDs.</h2>
+            <h2>{nounBlocks.length} blocks carry sourced Noun IDs, with a few anchors worth keeping close.</h2>
           </div>
           <a href="/collection/visit-nouns">Visit Nouns</a>
+        </div>
+        <div class="spotlight-grid" aria-label="PointCast noun anchors">
+          {nounSpotlights.map((noun) => (
+            <a href={noun.href}>
+              <img src={`https://noun.pics/${noun.id}.svg`} alt={`Noun ${noun.id}`} loading="lazy" />
+              <span>noun {noun.id}</span>
+              <strong>{noun.label}</strong>
+            </a>
+          ))}
         </div>
         <div class="noun-grid">
           {recentNounBlocks.map((block) => (
@@ -864,6 +889,36 @@ const jsonLd = {
     line-height: 1.55;
   }
 
+  .profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .profile-actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 8px 11px;
+    border: 1.5px solid #12110E;
+    border-radius: 2px;
+    background: #12110E;
+    color: #fff7e8;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .profile-actions a:nth-child(2) {
+    background: #fff;
+    color: #12110E;
+  }
+
   .noun-rail {
     display: grid;
     grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -1103,6 +1158,47 @@ const jsonLd = {
     gap: 10px;
   }
 
+  .spotlight-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .spotlight-grid a {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px;
+    border: 1.5px solid #12110E;
+    border-radius: 2px;
+    background: #fffaf0;
+    color: #12110E;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .spotlight-grid img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    image-rendering: pixelated;
+  }
+
+  .spotlight-grid span {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8a2432;
+  }
+
+  .spotlight-grid strong {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
   .noun-grid a {
     display: grid;
     grid-template-rows: auto auto 1fr auto;
@@ -1169,6 +1265,10 @@ const jsonLd = {
     .noun-grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+
+    .spotlight-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 440px) {
@@ -1177,6 +1277,10 @@ const jsonLd = {
     }
 
     .noun-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .spotlight-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
