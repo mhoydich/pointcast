@@ -142,12 +142,38 @@ const SCENES = [
     <!-- Reactive layer — full-screen ripples that fire when remote players play -->
     <div class="tv-ripples" id="tv-ripples" aria-hidden="true"></div>
 
+    <!-- The Crowd scene — gallery view of every visitor in the room.
+         Populated by JS from /api/visit's `present` array. Each tile is
+         a Noun avatar derived from the visitor's session, with a live
+         "tapping" pulse when their pid fires an event. Per Mike: 'we
+         can see everyone'. ══ -->
+    <section class="tv-scene tv-crowd" data-scene="crowd">
+      <div class="tv-crowd-head">
+        <span class="tv-crowd-eyebrow">The Crowd</span>
+        <span class="tv-crowd-count"><span id="tv-crowd-count-n">0</span> here right now</span>
+      </div>
+      <div class="tv-crowd-grid" id="tv-crowd-grid"></div>
+      <div class="tv-crowd-empty" id="tv-crowd-empty">
+        <span>waiting for the room to fill…</span>
+      </div>
+    </section>
+
     <!-- Spotlight noun that pops on each remote tap -->
     <div class="tv-spotlight-popup" id="tv-spotlight-popup" aria-hidden="true">
       <img id="tv-spotlight-popup-img" src="" alt="" />
       <div id="tv-spotlight-popup-label" class="tv-spotlight-popup-label"></div>
     </div>
   </main>
+
+  <!-- AUDIENCE STRIP — always-visible roster of every active visitor.
+       Independent of the cycling scenes; sits between the stage and
+       the bottom info bar so Mike (or anyone watching) always sees
+       who's in the room without waiting for The Crowd scene to come
+       around. Populated by JS from /api/visit. ══ -->
+  <aside class="tv-audience" aria-label="Live audience">
+    <span class="tv-audience-label">⌐◨-◨ in the room</span>
+    <div class="tv-audience-strip" id="tv-audience-strip"></div>
+  </aside>
 
   <!-- Bottom info bar -->
   <footer class="tv-bottom">
@@ -218,7 +244,8 @@ const SCENES = [
     width: 100vw;
     height: 100vh;
     display: grid;
-    grid-template-rows: 56px 1fr 130px;
+    /* top bar · stage · audience strip · bottom bar */
+    grid-template-rows: 56px 1fr 92px 130px;
     background:
       radial-gradient(ellipse at top, rgba(217,70,239,0.12) 0%, transparent 50%),
       radial-gradient(ellipse at bottom, rgba(14,165,233,0.10) 0%, transparent 50%),
@@ -545,6 +572,163 @@ const SCENES = [
     text-shadow: 0 0 16px rgba(0,0,0,0.6);
   }
 
+  /* ── The Crowd scene — full-screen gallery of everyone ──── */
+  .tv-crowd {
+    flex-direction: column;
+    padding: 32px 48px 24px;
+    gap: 18px;
+  }
+  .tv-crowd-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 1400px;
+  }
+  .tv-crowd-eyebrow {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 48px;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(217,70,239,0.5);
+  }
+  .tv-crowd-count {
+    font-size: 14px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+  }
+  .tv-crowd-count #tv-crowd-count-n {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 22px;
+    color: #d946ef;
+    margin-right: 4px;
+  }
+  .tv-crowd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 14px;
+    width: 100%;
+    max-width: 1400px;
+    overflow-y: auto;
+    align-content: start;
+    flex: 1;
+  }
+  .tv-crowd-grid::-webkit-scrollbar { width: 0; }
+  .tv-crowd-empty {
+    color: rgba(255,255,255,0.4);
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 40px 0;
+  }
+  .tv-crowd-empty[hidden] { display: none !important; }
+
+  /* ── Audience strip — always-visible row of present visitors ──── */
+  .tv-audience {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 28px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.4) 100%);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+  .tv-audience-label {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tv-audience-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1;
+    align-items: center;
+    height: 100%;
+    padding: 4px 0;
+    /* Hide scrollbar but keep scrollable */
+    scrollbar-width: none;
+  }
+  .tv-audience-strip::-webkit-scrollbar { display: none; }
+
+  /* Audience tile — single visitor's noun avatar + live indicator */
+  .tv-audience-tile,
+  .tv-crowd-tile {
+    position: relative;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.18);
+    border-radius: 8px;
+    background: #fff;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 200ms, box-shadow 200ms, transform 200ms, opacity 200ms;
+  }
+  .tv-audience-tile {
+    width: 56px;
+    height: 56px;
+  }
+  .tv-crowd-tile {
+    aspect-ratio: 1;
+    width: 100%;
+  }
+  .tv-audience-tile img,
+  .tv-crowd-tile img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+  }
+  .tv-audience-tile .tv-tile-dot,
+  .tv-crowd-tile .tv-tile-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 2px #fff, 0 0 8px rgba(34,197,94,0.7);
+  }
+  .tv-audience-tile.tapping,
+  .tv-crowd-tile.tapping {
+    border-color: #d946ef;
+    box-shadow: 0 0 0 3px rgba(217,70,239,0.25), 0 0 20px rgba(217,70,239,0.6);
+    transform: scale(1.12);
+  }
+  .tv-audience-tile.joining,
+  .tv-crowd-tile.joining {
+    animation: tv-tile-join 600ms ease-out;
+  }
+  @keyframes tv-tile-join {
+    0%   { transform: scale(0.4); opacity: 0; box-shadow: 0 0 0 0 rgba(34,197,94,0.7); }
+    60%  { transform: scale(1.18); opacity: 1; box-shadow: 0 0 0 16px rgba(34,197,94,0); }
+    100% { transform: scale(1); opacity: 1; box-shadow: none; }
+  }
+  .tv-audience-tile.leaving,
+  .tv-crowd-tile.leaving {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  .tv-crowd-tile-name {
+    position: absolute;
+    bottom: -22px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+  }
+
   /* ── Bottom bar ────────────────────────────────────── */
   .tv-bottom {
     display: flex;
@@ -678,8 +862,9 @@ const SCENES = [
   setInterval(updateClock, 30_000);
 
   // ── Scene cycling ──
-  type SceneId = 'parade' | 'spotlight' | 'mosaic' | 'beach' | 'starfield';
+  type SceneId = 'parade' | 'spotlight' | 'mosaic' | 'beach' | 'starfield' | 'crowd';
   const SCENES: Array<{ id: SceneId; label: string; sub: string; durMs: number }> = [
+    { id: 'crowd',     label: 'The Crowd',     sub: 'everyone here, right now',   durMs: 30000 },
     { id: 'parade',    label: 'The Parade',    sub: 'every noun, in turn',        durMs: 28000 },
     { id: 'spotlight', label: 'The Spotlight', sub: 'one noun · giant',           durMs: 24000 },
     { id: 'mosaic',    label: 'The Mosaic',    sub: 'all nouns · all at once',    durMs: 22000 },
@@ -831,6 +1016,8 @@ const SCENES = [
     flashSpotlight(nounId, String(label));
     flashMosaic(nounId);
     pushTicker(`<span class="accent">⌐◨-◨</span> ${String(label).toUpperCase()} · ${t}`);
+    // Highlight the source visitor's tile in the audience strip + crowd
+    if (typeof ev.pid === 'string') pulseAudience(ev.pid);
   }
 
   function connectWS() {
@@ -868,16 +1055,115 @@ const SCENES = [
   connectWS();
   setTimeout(() => { if (streamMode === 'connecting') fallbackToPoll(); }, 1500);
 
-  // ── Jammers count ──
+  // ══════════════════════════════════════════════════════════════════
+  // AUDIENCE — track every present visitor by pid, render a strip and
+  // The Crowd scene gallery from /api/visit. Tiles pop in on join, fade
+  // out on leave. When a remote event fires with a matching pid, the
+  // tile pulses magenta — Mike asked for "we can see everyone".
+  // ══════════════════════════════════════════════════════════════════
+  type Visitor = { pid: string; nounId: number; type: string; t?: number };
+  const audienceMap = new Map<string, Visitor>();
+  const tapTimes = new Map<string, number>();
+
+  const audienceStripEl = document.getElementById('tv-audience-strip');
+  const crowdGridEl = document.getElementById('tv-crowd-grid');
+  const crowdEmptyEl = document.getElementById('tv-crowd-empty');
+  const crowdCountEl = document.getElementById('tv-crowd-count-n');
   const jammersEl = document.getElementById('tv-jammers');
+
+  function tileHtml(pid: string, nounId: number, kind: 'strip' | 'grid'): string {
+    const cls = kind === 'strip' ? 'tv-audience-tile' : 'tv-crowd-tile';
+    const dot = '<span class="tv-tile-dot" aria-hidden="true"></span>';
+    const name = kind === 'grid'
+      ? `<span class="tv-crowd-tile-name">noun #${nounId}</span>`
+      : '';
+    return `<div class="${cls} joining" data-pid="${pid}" data-noun="${nounId}" title="noun #${nounId} · ${pid.slice(0, 6)}">
+      <img src="https://noun.pics/${nounId}.svg" alt="" loading="lazy" style="image-rendering: pixelated;" />
+      ${dot}
+      ${name}
+    </div>`;
+  }
+
+  function paintAudience() {
+    const visitors = Array.from(audienceMap.values());
+    const count = visitors.length;
+    if (jammersEl) jammersEl.textContent = String(Math.max(count, 1));
+    if (crowdCountEl) crowdCountEl.textContent = String(count);
+    if (crowdEmptyEl) crowdEmptyEl.hidden = count > 0;
+
+    // Strip — diff render so existing tiles keep their animation state
+    if (audienceStripEl) {
+      const existing = new Map<string, HTMLElement>();
+      audienceStripEl.querySelectorAll<HTMLElement>('[data-pid]').forEach((el) => {
+        existing.set(el.dataset.pid || '', el);
+      });
+      const seen = new Set<string>();
+      visitors.forEach((v) => {
+        seen.add(v.pid);
+        if (!existing.has(v.pid)) {
+          // Append new tile with join animation
+          audienceStripEl.insertAdjacentHTML('beforeend', tileHtml(v.pid, v.nounId, 'strip'));
+        }
+      });
+      // Remove tiles for visitors no longer present
+      existing.forEach((el, pid) => {
+        if (!seen.has(pid)) {
+          el.classList.add('leaving');
+          setTimeout(() => el.remove(), 260);
+        }
+      });
+    }
+    // Grid — render in The Crowd scene the same way
+    if (crowdGridEl) {
+      const existing = new Map<string, HTMLElement>();
+      crowdGridEl.querySelectorAll<HTMLElement>('[data-pid]').forEach((el) => {
+        existing.set(el.dataset.pid || '', el);
+      });
+      const seen = new Set<string>();
+      visitors.forEach((v) => {
+        seen.add(v.pid);
+        if (!existing.has(v.pid)) {
+          crowdGridEl.insertAdjacentHTML('beforeend', tileHtml(v.pid, v.nounId, 'grid'));
+        }
+      });
+      existing.forEach((el, pid) => {
+        if (!seen.has(pid)) {
+          el.classList.add('leaving');
+          setTimeout(() => el.remove(), 260);
+        }
+      });
+    }
+  }
+
+  // Highlight a visitor's tiles when their pid fires an event.
+  function pulseAudience(pid: string) {
+    if (!pid) return;
+    [audienceStripEl, crowdGridEl].forEach((root) => {
+      if (!root) return;
+      const el = root.querySelector<HTMLElement>(`[data-pid="${pid}"]`);
+      if (!el) return;
+      el.classList.remove('tapping');
+      // Force reflow so the animation restarts cleanly
+      void el.offsetWidth;
+      el.classList.add('tapping');
+      setTimeout(() => el.classList.remove('tapping'), 600);
+    });
+  }
+
   async function refreshPresence() {
     try {
       const r = await fetch('/api/visit');
       if (!r.ok) return;
       const data = await r.json();
       const present = Array.isArray(data.present) ? data.present : [];
-      const humans = present.filter((p: any) => p.type === 'human').length;
-      if (jammersEl) jammersEl.textContent = String(Math.max(humans, 1));
+      const humans: Visitor[] = present.filter((p: any) => p.type === 'human' && p.pid);
+      // Update the map — keep existing entries, drop missing ones
+      const seen = new Set(humans.map((p) => p.pid));
+      for (const v of humans) audienceMap.set(v.pid, v);
+      for (const pid of [...audienceMap.keys()]) {
+        if (!seen.has(pid)) audienceMap.delete(pid);
+      }
+      paintAudience();
     } catch {}
   }
   refreshPresence();
