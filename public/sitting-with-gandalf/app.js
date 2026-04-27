@@ -9,7 +9,7 @@
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v5";
-  const SETTINGS_RELEASE = "v5-myth";
+  const SETTINGS_RELEASE = "v5-image-series";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
   const renderStyles = {
     storybook: {
@@ -400,6 +400,174 @@
       action: "loosen",
       promise: "the breath has somewhere pleasant to land",
       words: ["loose", "rain", "room"]
+    }
+  ];
+
+  const imageSeries = [
+    {
+      id: "mondrian-road-map",
+      number: "01",
+      title: "Mondrian Road Map",
+      style: "geometric coast",
+      tags: "mondrian / socal / ocean",
+      cue: "Make the coast into a spell grid.",
+      prompt: "Create an original Gandalf-adjacent image generation study: a kind grey-robed wandering wizard companion with broad hat, seen as an abstract Southern California coast map made from crisp primary-color rectangles, black grid lines, ocean blue blocks, forest green blocks, and small ember-gold path markers. The composition should feel like a meditative art poster, balanced, sharp, gallery-ready, with no copied painting and no exact character likeness.",
+      palette: "primary red, yellow, blue, black, parchment, ocean blue, forest green",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no copied Mondrian painting, no logos, no readable text, no watermark."
+    },
+    {
+      id: "warhol-pipe-multiples",
+      number: "02",
+      title: "Pop Pipe Multiples",
+      style: "screenprint panels",
+      tags: "warhol / pop / color",
+      cue: "Let one wizard become many moods.",
+      prompt: "Create a 1960s pop-art screenprint-inspired image generation study: four repeated panels of an original grey-robed wizard companion, each with a different colorway for fire, rain, forest, and ocean. Use bold ink halftone texture, high-contrast flat colors, playful registration offsets, and a calm meditative expression. The subject should be original, not a recognizable film character or actor.",
+      palette: "tomato red, cyan, acid yellow, violet, moss green, cream",
+      avoid: "No exact Warhol copy, no celebrity portrait, no exact Gandalf film likeness, no actor likeness, no brand marks, no text."
+    },
+    {
+      id: "hoydich-socal-broadcast",
+      number: "03",
+      title: "Hoydich Broadcast Coast",
+      style: "socal broadcast",
+      tags: "hoydich / pointcast / el segundo",
+      cue: "Turn the sit into a coastal signal.",
+      prompt: "Create an original Hoydich / PointCast-flavored Southern California visual: a grey-robed wandering wizard companion sitting near an El Segundo-style coastal overlook, ocean haze, palm-shadow geometry, subtle terminal-green signal dots, small local-broadcast UI glyphs, warm human-made weirdness, and a relaxed evening mood. Make it feel personal, handmade, meditative, and coastal, without using logos or readable interface text.",
+      palette: "marine layer blue, concrete tan, palm green, terminal green, sunset brass",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no real logo, no readable UI text, no watermark."
+    },
+    {
+      id: "forest-buddha-head",
+      number: "04",
+      title: "Forest Buddha Head",
+      style: "moss meditation",
+      tags: "forest / buddha / stillness",
+      cue: "Sit beside old stone and listen.",
+      prompt: "Create a respectful meditative fantasy image: an original grey-robed wandering wizard companion seated at a distance from a weathered moss-covered Buddha head in a quiet forest. The mood is still, reverent, and gentle; morning fog, damp ferns, soft green light, and no theatrical magic. The wizard is a companion to silence, not the center of worship.",
+      palette: "moss green, fog silver, wet stone, dark bark, candle amber",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no religious parody, no horror, no logos, no text."
+    },
+    {
+      id: "ocean-waves-blockprint",
+      number: "05",
+      title: "Ocean Waves Blockprint",
+      style: "waves blockprint",
+      tags: "ocean / waves / print",
+      cue: "Let the waves carve the spell.",
+      prompt: "Create a hand-carved blockprint image generation study: an original wise grey-robed wizard companion in profile, tiny against large rhythmic ocean waves, with bold carved linework, imperfect ink edges, sea foam patterns, and a Southern California horizon. The waves should feel musical and meditative, not copied from a famous print.",
+      palette: "indigo, cream, seafoam, black ink, sun-faded ochre",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no copied Great Wave composition, no logos, no text, no watermark."
+    },
+    {
+      id: "oil-tanker-twilight",
+      number: "06",
+      title: "Oil Tanker Twilight",
+      style: "industrial ocean",
+      tags: "tanker / harbor / dusk",
+      cue: "Find calm near the horizon machinery.",
+      prompt: "Create a cinematic but quiet Southern California harbor image: an original grey-robed wizard companion sitting on a bluff, a distant oil tanker on the twilight ocean, low marine layer, tiny amber harbor lights, and a meditative industrial calm. The composition should make the tanker feel like a slow moving thought on the horizon.",
+      palette: "petroleum black, rust red, dusk violet, ocean steel, brass lights",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no corporate logos, no disaster scene, no text."
+    },
+    {
+      id: "airplane-marine-layer",
+      number: "07",
+      title: "Airplane Over Marine Layer",
+      style: "airport sky",
+      tags: "airplane / lax / clouds",
+      cue: "Watch the thought pass overhead.",
+      prompt: "Create a serene Southern California aviation image: an original grey-robed wizard companion standing near coastal grasses while a commercial airplane passes high through a peach-blue marine layer sky. Make it feel like LAX-adjacent calm, ocean nearby, soft wind, and a moment of looking up before returning to breath.",
+      palette: "peach cloud, sky blue, sage grass, runway grey, warm cream",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no airline logos, no readable numbers, no text."
+    },
+    {
+      id: "pixel-campfire",
+      number: "08",
+      title: "Pixel Campfire",
+      style: "16-bit sit",
+      tags: "pixel / campfire / game",
+      cue: "Make the quiet playable.",
+      prompt: "Create a cozy pixel-art image generation study: an original tiny grey wizard companion by a campfire between forest and ocean, 16-bit texture, readable silhouette, gentle animated-game feeling, moonlit waves in the distance, warm pixels, and a small meditative UI-like border with no actual text.",
+      palette: "ember orange, moss green, midnight blue, moon silver, pixel cream",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no game franchise look, no logos, no readable text."
+    },
+    {
+      id: "monet-paris-rain",
+      number: "09",
+      title: "Paris Rain Impression",
+      style: "monet / paris",
+      tags: "paris / france / rain",
+      cue: "Let Paris blur the hard edge.",
+      prompt: "Create a French impressionist image generation study inspired by Paris rain: an original grey-robed wandering wizard companion seated near a cafe window, soft umbrellas outside, wet boulevard reflections, a small glass of red wine on the table, shimmering brushwork, and gentle atmospheric light. The image should feel like a memory rather than a literal portrait.",
+      palette: "rain grey, wine red, lamp gold, wet stone blue, cream",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no copied Monet painting, no readable signage, no logos."
+    },
+    {
+      id: "red-wine-atlas",
+      number: "10",
+      title: "Red Wine Atlas",
+      style: "french table",
+      tags: "france / red wine / map",
+      cue: "Let the map become a table.",
+      prompt: "Create a warm tabletop image generation study: an original grey-robed wizard companion reflected faintly in a glass of red wine, an old map of France, Paris marked only by a small abstract dot, candlelight, forest sprig, ocean-shell keepsake, and painterly shadows. Make it intimate, meditative, and quiet.",
+      palette: "deep burgundy, candle amber, parchment, olive green, ink black",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no readable map labels, no wine branding, no logos, no text."
+    },
+    {
+      id: "forest-ocean-portal",
+      number: "11",
+      title: "Forest Ocean Portal",
+      style: "california threshold",
+      tags: "forest / ocean / portal",
+      cue: "Stand where green becomes blue.",
+      prompt: "Create a magical-real but understated Southern California image: an original grey-robed wizard companion on a trail where coastal forest opens to a blue ocean view. Use subtle portal-like light made from natural fog and sun, not fantasy effects. The mood is restorative, meditative, and clear.",
+      palette: "eucalyptus green, ocean blue, fog white, trail brown, sun brass",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no glowing sci-fi portal, no logos, no text."
+    },
+    {
+      id: "buddha-waves-tanker",
+      number: "12",
+      title: "Buddha Waves Tanker",
+      style: "surreal calm",
+      tags: "buddha / waves / tanker",
+      cue: "Hold the strange things together gently.",
+      prompt: "Create a surreal meditative collage image: a mossy stone Buddha head, blockprint ocean waves, a distant oil tanker, and an original grey-robed wandering wizard companion seated quietly in the foreground. The elements should feel harmonized, not chaotic: Southern California industrial coast meets forest stillness.",
+      palette: "moss, indigo ink, rust, cream, muted gold",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no religious parody, no copied famous print, no logos, no text."
+    },
+    {
+      id: "airplane-over-paris",
+      number: "13",
+      title: "Airplane Over Paris",
+      style: "travel memory",
+      tags: "airplane / paris / france",
+      cue: "Let distance become a soft shape.",
+      prompt: "Create a dreamlike travel-memory image generation study: an original grey-robed wizard companion seen from behind at a Paris window, a plane crossing a pale evening sky, rooftops and chimneys below, a forest postcard on the table, and a small glass of red wine catching the last light. Meditative, elegant, not touristy.",
+      palette: "Paris grey, wine red, pale gold, slate roof, cream",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no airline logos, no readable signs, no text."
+    },
+    {
+      id: "mondrian-tanker-pixel",
+      number: "14",
+      title: "Tanker Pixel Grid",
+      style: "pixel geometry",
+      tags: "mondrian / tanker / pixel",
+      cue: "Square the horizon into calm.",
+      prompt: "Create a pixel-geometric image generation study: an original grey-robed wizard companion as a small calm sprite, an oil tanker simplified into blocky rectangles on an ocean horizon, primary-color grid structure, SoCal sunset haze, and a quiet game-title-screen feeling without any text.",
+      palette: "primary red, yellow, blue, black, ocean slate, sunset peach",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no copied artwork, no logos, no readable text."
+    },
+    {
+      id: "monet-forest-wine",
+      number: "15",
+      title: "Forest Wine Impression",
+      style: "impressionist forest",
+      tags: "monet / forest / red wine",
+      cue: "Paint the pause before the sip.",
+      prompt: "Create an impressionist forest image generation study: an original grey-robed wizard companion resting near a forest stream, a small glass of red wine on a flat stone, ocean light somehow filtering through trees, loose brushwork, soft color vibration, and a deeply pleasant late-afternoon mood.",
+      palette: "leaf green, stream blue, wine red, dappled gold, soft violet",
+      avoid: "No exact Gandalf film likeness, no actor likeness, no copied Monet painting, no logos, no text, no watermark."
     }
   ];
 
@@ -1232,6 +1400,9 @@
   const initialResource = savedRelease && spellResources.some((resource) => resource.id === savedSettings.resourceActive)
     ? savedSettings.resourceActive
     : "focus";
+  const initialArtPrompt = savedRelease && imageSeries.some((prompt) => prompt.id === savedSettings.artActive)
+    ? savedSettings.artActive
+    : imageSeries[0].id;
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -1251,6 +1422,7 @@
     resourceLevels: loadResourceLevels(),
     spellBook: loadSpellBook(),
     activeSpell: "",
+    artActive: initialArtPrompt,
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -1316,6 +1488,15 @@
     sharpenResourceButton: document.getElementById("sharpenResourceButton"),
     buildSpellButton: document.getElementById("buildSpellButton"),
     keepSpellButton: document.getElementById("keepSpellButton"),
+    artSeriesNumber: document.getElementById("artSeriesNumber"),
+    artSeriesStyle: document.getElementById("artSeriesStyle"),
+    artSeriesTags: document.getElementById("artSeriesTags"),
+    artSeriesTitle: document.getElementById("artSeriesTitle"),
+    artSeriesPrompt: document.getElementById("artSeriesPrompt"),
+    artSeriesAvoid: document.getElementById("artSeriesAvoid"),
+    artSeriesGrid: document.getElementById("artSeriesGrid"),
+    copyArtPromptButton: document.getElementById("copyArtPromptButton"),
+    nextArtPromptButton: document.getElementById("nextArtPromptButton"),
     pullGandalfButton: document.getElementById("pullGandalfButton"),
     collectGandalfButton: document.getElementById("collectGandalfButton"),
     meditateGandalfButton: document.getElementById("meditateGandalfButton"),
@@ -1470,6 +1651,7 @@
         nounsActive: state.nounsActive,
         keepsakeActive: state.keepsakeActive,
         resourceActive: state.resourceActive,
+        artActive: state.artActive,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -1522,6 +1704,10 @@
 
   function activeResource() {
     return spellResources.find((resource) => resource.id === state.resourceActive) || spellResources[0];
+  }
+
+  function activeArtPrompt() {
+    return imageSeries.find((prompt) => prompt.id === state.artActive) || imageSeries[0];
   }
 
   function resourceSharpnessScore() {
@@ -1985,6 +2171,106 @@
     }
   }
 
+  function formatArtPrompt(art = activeArtPrompt()) {
+    return [
+      "Use case: stylized-concept",
+      "Asset type: Gandalf-adjacent image generation series",
+      `Series: ${art.number} / ${art.title}`,
+      `Primary request: ${art.prompt}`,
+      "Subject: original kind grey-robed wandering wizard companion with broad hat; Gandalf-adjacent mood without copying a film character, costume, or actor.",
+      `Style references: ${art.tags}`,
+      `Palette: ${art.palette}`,
+      `Mood cue: ${art.cue}`,
+      `Avoid: ${art.avoid}`
+    ].join("\n");
+  }
+
+  function renderArtSeries() {
+    if (!dom.artSeriesGrid) {
+      return;
+    }
+
+    const art = activeArtPrompt();
+    dom.artSeriesNumber.textContent = art.number;
+    dom.artSeriesStyle.textContent = art.style;
+    dom.artSeriesTags.textContent = art.tags;
+    dom.artSeriesTitle.textContent = art.title;
+    dom.artSeriesPrompt.textContent = art.prompt;
+    dom.artSeriesAvoid.textContent = art.avoid;
+    dom.artSeriesGrid.replaceChildren();
+
+    imageSeries.forEach((item) => {
+      const button = document.createElement("button");
+      const number = document.createElement("span");
+      const title = document.createElement("strong");
+      const tags = document.createElement("small");
+
+      button.className = "art-prompt-button";
+      button.type = "button";
+      button.dataset.art = item.id;
+      button.classList.toggle("active", item.id === art.id);
+      number.textContent = item.number;
+      title.textContent = item.title;
+      tags.textContent = item.style;
+      button.append(number, title, tags);
+      button.addEventListener("click", () => setArtPrompt(item.id));
+      dom.artSeriesGrid.append(button);
+    });
+  }
+
+  function setArtPrompt(id, options) {
+    const settings = options || {};
+    const next = imageSeries.some((item) => item.id === id) ? id : imageSeries[0].id;
+    const art = imageSeries.find((item) => item.id === next) || imageSeries[0];
+
+    state.artActive = art.id;
+    renderArtSeries();
+    saveSettings();
+
+    if (settings.announce !== false && isCollectibleVersion()) {
+      dom.wizardLine.textContent = art.cue;
+      setGuide("Image series", art.title, `${art.style}. ${art.cue}`);
+      spawnParticles(5);
+    }
+  }
+
+  function nextArtPrompt() {
+    const index = imageSeries.findIndex((item) => item.id === state.artActive);
+    const next = imageSeries[(index + 1 + imageSeries.length) % imageSeries.length];
+    setArtPrompt(next.id);
+  }
+
+  async function copyArtPrompt() {
+    const art = activeArtPrompt();
+    const prompt = formatArtPrompt(art);
+    let copied = false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(prompt);
+        copied = true;
+      } catch (error) {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      const field = document.createElement("textarea");
+      field.value = prompt;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.left = "-9999px";
+      document.body.append(field);
+      field.select();
+      copied = document.execCommand("copy");
+      field.remove();
+    }
+
+    dom.wizardLine.textContent = copied ? `${art.title} prompt copied.` : `${art.title} prompt is ready.`;
+    setGuide(copied ? "Prompt copied" : "Prompt ready", art.title, `${art.cue} ${art.avoid}`);
+    spawnParticles(copied ? 8 : 4);
+  }
+
   function setGuide(step, title, text) {
     dom.guideStep.textContent = step;
     dom.guideTitle.textContent = title;
@@ -2002,7 +2288,8 @@
       const resource = activeResource();
       const view = activeView();
       const ritual = activeRitual();
-      setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} Pair with ${relic.name}; sharpen ${resource.name}. ${view.idle}`);
+      const art = activeArtPrompt();
+      setGuide(step || "Deck cue", `${ritual.title} · ${card.name}`, `${ritual.guide} ${card.mantra} Pair with ${relic.name}; sharpen ${resource.name}. Image: ${art.title}. ${view.idle}`);
       return;
     }
 
@@ -2090,8 +2377,9 @@
       const card = activeNounsGandalf();
       const relic = activeKeepsake();
       const resource = activeResource();
+      const art = activeArtPrompt();
       const intention = activeIntention();
-      const pool = [card.line, card.mantra, card.cue, card.breath, relic.line, relic.cue, resource.prompt, resource.promise, state.activeSpell].filter(Boolean).concat(activeRitual().lines, activeView().lines, intention.lines, activeRenderStyle().lines);
+      const pool = [card.line, card.mantra, card.cue, card.breath, relic.line, relic.cue, resource.prompt, resource.promise, art.cue, state.activeSpell].filter(Boolean).concat(activeRitual().lines, activeView().lines, intention.lines, activeRenderStyle().lines);
       const next = pool[Math.floor(Math.random() * pool.length)];
       dom.wizardLine.textContent = next;
       return;
@@ -2311,9 +2599,9 @@
 
     dom.roomStep.textContent = next === "v1" ? "1" : "2";
     dom.ambienceStep.textContent = next === "v1" ? "2" : "3";
-    dom.roomStep.textContent = isCollectibleVersion(next) ? "3" : dom.roomStep.textContent;
-    dom.ambienceStep.textContent = isCollectibleVersion(next) ? "4" : dom.ambienceStep.textContent;
-    dom.settleStep.textContent = isCollectibleVersion(next) ? "5" : "4";
+    dom.roomStep.textContent = isCollectibleVersion(next) ? "4" : dom.roomStep.textContent;
+    dom.ambienceStep.textContent = isCollectibleVersion(next) ? "5" : dom.ambienceStep.textContent;
+    dom.settleStep.textContent = isCollectibleVersion(next) ? "6" : "4";
     dom.ritualSummary.textContent = isCollectibleVersion(next) ? activeRitual().summary : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
     dom.blendLabel.textContent = isCollectibleVersion(next) ? activeRitual().blendLabel : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
     dom.smokeLabel.textContent = isNatureVersion(next) ? "Atmosphere" : "Smoke";
@@ -2343,6 +2631,7 @@
       setRitual(state.ritual, { quiet: true });
       renderNounsCollection();
       renderKeepsakeCollection();
+      renderArtSeries();
       updateGuideIdle("V5 ready");
       chooseLine();
     } else if (isNatureVersion(next)) {
@@ -3163,6 +3452,8 @@
   dom.sharpenResourceButton.addEventListener("click", () => sharpenResource());
   dom.buildSpellButton.addEventListener("click", () => buildSpell());
   dom.keepSpellButton.addEventListener("click", () => keepSpell());
+  dom.copyArtPromptButton.addEventListener("click", () => copyArtPrompt());
+  dom.nextArtPromptButton.addEventListener("click", nextArtPrompt);
   dom.startButton.addEventListener("click", startSession);
   dom.pauseButton.addEventListener("click", pauseSession);
   dom.resetButton.addEventListener("click", resetSession);
@@ -3192,6 +3483,7 @@
   renderLog();
   renderNounsCollection();
   renderKeepsakeCollection();
+  renderArtSeries();
   updateSpellPanel();
   setRenderStyle(state.renderStyle);
   setVersion(state.version);

@@ -55,10 +55,11 @@ The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The select
 - Adds a Gandalf resource sharpener with Focus, Patience, Warmth, Wonder, Courage, and Ease.
 - Adds a tiny spell-building game: pair the active Gandalf with a keepsake, sharpen a resource, build a spell, and keep it in a local spellbook.
 - Adds a V5 listen-along card for "Myth" by Beach House with a direct Spotify link and a Myth mode that tunes the room to Moon lake, Stars, Wander, and Wonder.
+- Adds a Gandalf-adjacent image generation series: 15 prompt cards spanning Mondrian-like geometry, pop screenprint, Hoydich / Southern California broadcast texture, forest, ocean, Buddha head, wave blockprint, oil tanker, airplane, pixel art, Monet-like Paris rain, France, and red wine.
 - Adds five V5 rituals: Enjoy, Meditate, Pipe, Beer, and Study.
-- Makes the first action clearer: choose a sit, pull a Gandalf, pair a keepsake, sharpen a resource, build a spell, then begin a 5-minute sit.
+- Makes the first action clearer: choose a sit, pull a Gandalf, pair a keepsake, sharpen a resource, build a spell, optionally copy an image prompt, then begin a 5-minute sit.
 - Reframes the local tally as a presence score and rank derived from kept cards, keepsakes, sharpened resources, kept spells, saved sits, minutes, and cues.
-- Bumps the local settings release so returning V5 visitors land on the new Myth/spell-building pass once without losing their kept card or keepsake collection.
+- Bumps the local settings release so returning V5 visitors land on the new image-series Myth/spell-building pass once without losing their kept card or keepsake collection.
 - Keeps V1, V2, V3, and V4 available from the version toggle.
 - Stores the local collection in `localStorage` under `sitting-with-gandalf-nouns-collection`.
 - Stores the pocket keepsakes in `localStorage` under `sitting-with-gandalf-keepsake-collection`.
