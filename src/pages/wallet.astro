@@ -331,6 +331,23 @@ const collections = supportedSlugs
   :global(.token__meta) { color: var(--muted); font-size: 9px; margin: 0; overflow-wrap: anywhere; }
   :global(.token__name) { margin: 0; font-weight: 850; line-height: 1; font-size: clamp(24px, 3vw, 34px); letter-spacing: 0; }
   :global(.token__line) { margin: 0; color: #332f2b; line-height: 1.25; }
+  :global(.token__market) {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--muted);
+    padding: 7px 8px;
+    font-size: 9px;
+  }
+  :global(.token__market[data-listed="true"]) {
+    border-color: color-mix(in srgb, var(--card-accent) 55%, var(--ink));
+    color: var(--ink);
+    font-weight: 800;
+  }
   :global(.token__actions) { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
   :global(.token__actions a) {
     color: var(--ink);
@@ -371,6 +388,7 @@ const collections = supportedSlugs
   const collectionByKt1 = new Map(COLLECTIONS.map((c) => [String(c.kt1).toLowerCase(), c]));
   let activeFilter = 'all';
   let loadedTokens = [];
+  let marketAsks = new Map();
 
   const $ = (id) => document.getElementById(id);
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -413,6 +431,17 @@ const collections = supportedSlugs
 
   function routeSlug(slug) {
     return String(slug || '').replaceAll('_', '-');
+  }
+
+  function tokenKey(contract, tokenId) {
+    return `${String(contract || '').toLowerCase()}::${String(tokenId)}`;
+  }
+
+  function marketHint(token) {
+    const ask = marketAsks.get(tokenKey(token.contract, token.tokenId));
+    if (!ask) return { listed: false, text: 'not listed · ready to list' };
+    const price = (Number(ask.amount_mutez || 0) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 6 });
+    return { listed: true, text: `listed · ${price} tez` };
   }
 
   function setUrlAddress(addr) {
@@ -458,6 +487,7 @@ const collections = supportedSlugs
       const tzkt = `https://tzkt.io/${token.contract}/tokens/${token.tokenId}`;
       const market = `/market?collection=${encodeURIComponent(token.contract)}&token_id=${encodeURIComponent(token.tokenId)}`;
       const detail = `/token/${routeSlug(token.slug)}/${encodeURIComponent(token.tokenId)}`;
+      const hint = marketHint(token);
       return `
         <article class="token" data-lane="${esc(token.slug)}">
           <div class="token__cap mono">
@@ -471,6 +501,7 @@ const collections = supportedSlugs
             <p class="token__meta mono">${esc(token.collectionName)} · #${esc(token.tokenId)}</p>
             <h3 class="token__name">${esc(name)}</h3>
             <p class="token__line">Collected on Tezos and ready for the PointCast market shelf.</p>
+            <p class="token__market mono" data-listed="${hint.listed ? 'true' : 'false'}"><span>market</span><span>${esc(hint.text)}</span></p>
             <div class="token__actions mono">
               <a href="${detail}">detail</a>
               <a href="${market}">market</a>
@@ -481,6 +512,30 @@ const collections = supportedSlugs
         </article>
       `;
     }).join('');
+  }
+
+  async function refreshMarketHints() {
+    marketAsks = new Map();
+    if (!MARKETPLACE || !MARKETPLACE.startsWith('KT1')) return;
+    try {
+      const storageRes = await fetch(`https://api.tzkt.io/v1/contracts/${encodeURIComponent(MARKETPLACE)}/storage`, { cache: 'no-store' });
+      if (!storageRes.ok) return;
+      const storage = await storageRes.json();
+      const ptr = typeof storage?.asks === 'number' ? storage.asks : null;
+      if (ptr == null) return;
+      const keyRes = await fetch(`https://api.tzkt.io/v1/bigmaps/${ptr}/keys?limit=100&select=value&active=true&sort.desc=id`, { cache: 'no-store' });
+      if (!keyRes.ok) return;
+      const rows = await keyRes.json();
+      if (!Array.isArray(rows)) return;
+      rows.forEach((row) => {
+        const ask = row?.value || {};
+        if (ask.fa2_contract != null && ask.token_id != null) {
+          marketAsks.set(tokenKey(ask.fa2_contract, ask.token_id), ask);
+        }
+      });
+    } catch (err) {
+      console.warn('market hints failed', err);
+    }
   }
 
   async function loadWallet(addr) {
@@ -517,6 +572,7 @@ const collections = supportedSlugs
       $('wallet-status').textContent = 'live from TzKT';
       $('wallet-total').textContent = `${total} token${total === 1 ? '' : 's'}`;
       activeFilter = 'all';
+      await refreshMarketHints();
       renderTokens();
     } catch (err) {
       console.error(err);

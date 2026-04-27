@@ -212,6 +212,11 @@ const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast det
         <p class="kicker mono">Held now</p>
         <div id="holders" class="holders mono" aria-live="polite">loading holders from TzKT...</div>
       </article>
+
+      <article class="panel live-panel">
+        <p class="kicker mono">Listed now</p>
+        <div id="listing" class="listing mono" aria-live="polite">checking PointCast market...</div>
+      </article>
     </section>
 
     <section class="share panel" aria-labelledby="share-title">
@@ -328,7 +333,7 @@ const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast det
   .actions a.primary, .copy-button { background: var(--ink); color: #fff; }
   .details {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 18px;
     margin-top: 18px;
   }
@@ -355,6 +360,34 @@ const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast det
     text-decoration: none;
   }
   .holder span:first-child { overflow-wrap: anywhere; }
+  .listing {
+    display: grid;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .listing-card {
+    display: grid;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid var(--rule);
+    padding: 10px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .listing-card strong {
+    font-size: 24px;
+    line-height: 0.95;
+    letter-spacing: 0;
+  }
+  .listing-card span {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .listing-card a {
+    color: var(--blue);
+    text-decoration: none;
+  }
   .share {
     margin-top: 18px;
     display: grid;
@@ -388,9 +421,15 @@ const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast det
   const root = document.querySelector('.token-page');
   const contract = root?.getAttribute('data-contract') || '';
   const tokenId = root?.getAttribute('data-token-id') || '';
+  const marketplace = root?.getAttribute('data-marketplace') || '';
   const holders = document.getElementById('holders');
+  const listing = document.getElementById('listing');
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const short = (addr) => addr && addr.length > 13 ? `${addr.slice(0, 7)}...${addr.slice(-5)}` : addr || '';
+  const xtz = (mutez) => {
+    const value = Number(mutez || 0) / 1_000_000;
+    return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  };
 
   async function loadHolders() {
     if (!holders || !contract || tokenId === '') return;
@@ -414,6 +453,42 @@ const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast det
     }
   }
 
+  async function loadListing() {
+    if (!listing || !marketplace || !marketplace.startsWith('KT1')) {
+      if (listing) listing.textContent = 'marketplace contract is pending';
+      return;
+    }
+    try {
+      const storageRes = await fetch(`https://api.tzkt.io/v1/contracts/${encodeURIComponent(marketplace)}/storage`, { cache: 'no-store' });
+      if (!storageRes.ok) throw new Error(`TzKT storage ${storageRes.status}`);
+      const storage = await storageRes.json();
+      const ptr = typeof storage?.asks === 'number' ? storage.asks : null;
+      if (ptr == null) throw new Error('market asks bigmap missing');
+      const keyRes = await fetch(`https://api.tzkt.io/v1/bigmaps/${ptr}/keys?limit=100&select=key,value&active=true&sort.desc=id`, { cache: 'no-store' });
+      if (!keyRes.ok) throw new Error(`TzKT asks ${keyRes.status}`);
+      const rows = await keyRes.json();
+      const match = Array.isArray(rows)
+        ? rows.find((row) => String(row?.value?.fa2_contract || '').toLowerCase() === contract.toLowerCase() && String(row?.value?.token_id) === String(tokenId))
+        : null;
+      if (!match) {
+        listing.innerHTML = `<span>not listed on PointCast right now</span><a href="/market?collection=${encodeURIComponent(contract)}&token_id=${encodeURIComponent(tokenId)}">open listing lane</a>`;
+        return;
+      }
+      const value = match.value || {};
+      listing.innerHTML = `
+        <div class="listing-card">
+          <span>ask #${esc(match.key)} · seller ${esc(short(value.seller || ''))}</span>
+          <strong>${esc(xtz(value.amount_mutez))} tez</strong>
+          <span>${esc(Number(value.royalty_bps || 0) / 100)}% royalty on sale</span>
+          <a href="/market?collection=${encodeURIComponent(contract)}&token_id=${encodeURIComponent(tokenId)}">Buy or manage on PointCast market</a>
+        </div>
+      `;
+    } catch (err) {
+      console.error(err);
+      listing.textContent = 'market lookup is resting; open the market lane';
+    }
+  }
+
   document.getElementById('copy-link')?.addEventListener('click', () => {
     const url = location.href;
     navigator.clipboard?.writeText(url).catch(() => {});
@@ -422,4 +497,5 @@ const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast det
   });
 
   loadHolders();
+  loadListing();
 </script>
