@@ -51,9 +51,9 @@ The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The select
 
 - Defaults to the collectible Nouns Gandalf deck, now shaped as a V5 collect-v2 ritual loop.
 - Adds 30 tiny Gandalf companion cards, each with a noun, visual mood, room, intention, mantra, breath cue, and original wizard line.
-- Adds four V5 rituals: Meditate, Pipe, Beer, and Study.
-- Makes the first action clearer: choose a ritual, pull a Gandalf, collect the cue, then begin a 5-minute sit.
-- Adds a local wisdom score and rank derived from collected cards, saved sits, minutes, and cues.
+- Adds five V5 rituals: Enjoy, Meditate, Pipe, Beer, and Study.
+- Makes the first action clearer: choose a sit, pull a Gandalf, keep the cue, then begin a 5-minute sit.
+- Reframes the local tally as a presence score and rank derived from kept cards, saved sits, minutes, and cues.
 - Keeps V1, V2, V3, and V4 available from the version toggle.
 - Stores the local collection in `localStorage` under `sitting-with-gandalf-nouns-collection`.
 - Logs V5 notes with the active ritual, card, view, intention, and pixel style.

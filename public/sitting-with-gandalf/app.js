@@ -25,6 +25,36 @@
   };
 
   const rituals = {
+    enjoy: {
+      title: "Enjoy",
+      short: "be here",
+      blendLabel: "Moment flavor",
+      blendOptions: ["Warm chair", "First sip", "Firelight on wood", "Rain on glass"],
+      startLabel: "Begin enjoying",
+      runningLabel: "being here",
+      idleLabel: "enjoyment",
+      summary: "Presence, keepsakes, tally",
+      warmth: 0.7,
+      smoke: 0.48,
+      guide: "No lesson to extract. Sit where you are and let the room be pleasant.",
+      complete: "Good. Nothing was improved; it was simply enjoyed.",
+      phaseHints: {
+        Settle: "Arrive in the pleasant part.",
+        Drift: "Stay with what feels good before naming it.",
+        Return: "Bring back the ease, not a lesson."
+      },
+      cues: {
+        look: "Look for the smallest pleasant thing and let it be enough.",
+        listen: "Let the room sound like company, not instruction.",
+        breathe: "Breathe as if this minute is allowed to be nice.",
+        release: "Leave one task outside the circle of light."
+      },
+      lines: [
+        "Enjoyment is not a reward after presence; it is one way into it.",
+        "There is no errand inside this minute.",
+        "Let the good part be simple. It will not mind."
+      ]
+    },
     meditate: {
       title: "Meditate",
       short: "steady mind",
@@ -36,8 +66,8 @@
       summary: "Ritual, collection, tally",
       warmth: 0.58,
       smoke: 0.44,
-      guide: "Sit with the card, breathe with the room, and let one cue become useful.",
-      complete: "You did not chase wisdom. You made a place where it could sit down.",
+      guide: "Sit with the card, breathe with the room, and let one cue become gentle.",
+      complete: "You did not chase clarity. You made a place where it could sit down.",
       phaseHints: {
         Settle: "Let the cue choose the first breath.",
         Drift: "Stay near the image. Nothing needs solving yet.",
@@ -51,7 +81,7 @@
       },
       lines: [
         "Attention is a hearth: tend it gently and it warms the room.",
-        "A thought that can wait has already become wiser.",
+        "A thought that can wait has already become kinder.",
         "Do not wrestle the mind. Offer it a chair."
       ]
     },
@@ -111,13 +141,13 @@
       },
       lines: [
         "A good pint is best when it slows the story down.",
-        "No wisdom improves by being rushed across a table.",
+        "No good moment improves by being rushed across a table.",
         "Warmth is useful when it remembers to stay gentle."
       ]
     },
     study: {
       title: "Study",
-      short: "get smarter",
+      short: "quiet lesson",
       blendLabel: "Desk charm",
       blendOptions: ["Margin candle", "Old map dust", "Library rain", "Quiet question"],
       startLabel: "Begin study sit",
@@ -203,7 +233,7 @@
       mantra: "Let the moment steep before you answer.",
       cue: "Wait three breaths before improving anything.",
       breath: "Inhale steam. Exhale the need to be finished.",
-      line: "Some wisdom only arrives after the water stops shouting."
+      line: "Some quiet only arrives after the water stops shouting."
     },
     {
       id: "map",
@@ -980,7 +1010,7 @@
     visual: natureViews[savedSettings.visual] ? savedSettings.visual : "glade",
     intention: intentions[savedSettings.intention] ? savedSettings.intention : "rest",
     renderStyle: initialRenderStyle,
-    ritual: savedRelease && rituals[savedSettings.ritual] ? savedSettings.ritual : "meditate",
+    ritual: savedRelease && rituals[savedSettings.ritual] ? savedSettings.ritual : "enjoy",
     nounsActive: initialNounsGandalf,
     nounsCollection: loadNounsCollection(),
     rings: 0,
@@ -1207,33 +1237,33 @@
     target.append(mark);
   }
 
-  function wisdomScore() {
+  function presenceScore() {
     const totalMinutes = state.log.reduce((sum, entry) => sum + entry.minutes, 0);
     return state.nounsCollection.size * 7 + state.log.length * 5 + Math.floor(totalMinutes / 3) + state.rings;
   }
 
-  function wisdomRank(score) {
+  function presenceRank(score) {
     if (score >= 220) {
-      return "Grey scholar";
+      return "Deeply here";
     }
     if (score >= 140) {
-      return "Firelit thinker";
+      return "Warmly present";
     }
     if (score >= 82) {
-      return "Map reader";
+      return "Settled in";
     }
     if (score >= 38) {
-      return "Pipe student";
+      return "Enjoying the room";
     }
     if (score >= 12) {
-      return "Quiet apprentice";
+      return "Arriving";
     }
-    return "New student";
+    return "Just arrived";
   }
 
   function updateRitualPanel() {
     const ritual = activeRitual();
-    const score = wisdomScore();
+    const score = presenceScore();
     const nextBreak = score >= 220 ? 220 : score >= 140 ? 220 : score >= 82 ? 140 : score >= 38 ? 82 : score >= 12 ? 38 : 12;
     const previousBreak = score >= 220 ? 220 : score >= 140 ? 140 : score >= 82 ? 82 : score >= 38 ? 38 : score >= 12 ? 12 : 0;
     const progress = nextBreak === previousBreak ? 100 : ((score - previousBreak) / (nextBreak - previousBreak)) * 100;
@@ -1247,7 +1277,7 @@
       dom.ritualName.textContent = `${ritual.title} · ${ritual.short}`;
       dom.ritualText.textContent = ritual.guide;
       dom.wisdomBar.style.width = `${Math.max(0, Math.min(100, progress))}%`;
-      dom.wisdomRank.textContent = `${score} wisdom · ${wisdomRank(score)}`;
+      dom.wisdomRank.textContent = `${score} presence · ${presenceRank(score)}`;
     }
   }
 
@@ -1284,11 +1314,11 @@
     dom.nounsName.textContent = card.name;
     dom.nounsMeta.textContent = `${card.rarity} · ${ritual.title} · ${natureViews[card.visual].name} · ${intentions[card.intention].title}`;
     dom.nounsMantra.textContent = card.mantra;
-    dom.nounsCollected.textContent = collected ? "collected" : "new cue";
-    dom.collectGandalfButton.textContent = collected ? "Collected" : "Collect cue";
+    dom.nounsCollected.textContent = collected ? "kept" : "waiting";
+    dom.collectGandalfButton.textContent = collected ? "Kept" : "Keep cue";
     dom.collectGandalfButton.disabled = collected;
     dom.meditateGandalfButton.textContent = ritual.startLabel;
-    dom.nounsCount.textContent = `${state.nounsCollection.size} / ${nounsGandalfs.length} collected`;
+    dom.nounsCount.textContent = `${state.nounsCollection.size} / ${nounsGandalfs.length} kept`;
   }
 
   function renderNounsCollection() {
@@ -1310,7 +1340,7 @@
       button.classList.toggle("is-collected", collected);
       button.dataset.nounsId = card.id;
       button.setAttribute("aria-pressed", String(card.id === state.nounsActive));
-      button.setAttribute("aria-label", `${card.name}, ${collected ? "collected" : "not collected"}`);
+      button.setAttribute("aria-label", `${card.name}, ${collected ? "kept" : "not kept"}`);
       applyNounStyle(button, card);
 
       renderNounAvatar(avatar, card, true);
@@ -1366,6 +1396,11 @@
       const ritual = activeRitual();
       const lowerLabel = label.toLowerCase();
       const copyByRitual = {
+        enjoy: {
+          Inhale: `Breathe in for ${countdown}. Notice one pleasant detail near ${card.name}.`,
+          Hold: `Rest for ${countdown}. Nothing needs to become useful.`,
+          Exhale: `Breathe out for ${countdown}. Let the good part stay simple.`
+        },
         meditate: {
           Inhale: `Breathe in for ${countdown}. ${card.breath.split(".")[0]}.`,
           Hold: `Hold for ${countdown}. Let ${card.name} keep the cue for you.`,
@@ -1387,7 +1422,7 @@
           Exhale: `File one thought for ${countdown}. ${card.cue}`
         }
       };
-      const copy = copyByRitual[state.ritual] || copyByRitual.meditate;
+      const copy = copyByRitual[state.ritual] || copyByRitual.enjoy;
 
       setGuide(`Now: ${lowerLabel}`, `${ritual.title} · ${card.name}`, copy[label] || card.mantra);
       return;
@@ -1490,7 +1525,7 @@
 
   function updateStats() {
     const totalMinutes = state.log.reduce((sum, entry) => sum + entry.minutes, 0);
-    const score = wisdomScore();
+    const score = presenceScore();
     dom.ringCount.textContent = String(isCollectibleVersion() ? state.nounsCollection.size : state.rings);
     dom.sessionCount.textContent = String(state.log.length);
     dom.totalMinutes.textContent = String(totalMinutes);
@@ -1602,7 +1637,7 @@
     if (isCollectibleVersion()) {
       collectNounsGandalf(state.nounsActive, { quiet: true });
       dom.wizardLine.textContent = activeRitual().complete;
-      setGuide("Complete", `${activeRitual().title} · ${activeNounsGandalf().name}`, "The cue is in your collection. Carry it lightly.");
+      setGuide("Complete", `${activeRitual().title} · ${activeNounsGandalf().name}`, "The cue is in your pouch. Let the rest stay here.");
     } else if (isNatureVersion()) {
       dom.wizardLine.textContent = "There. The room feels less crowded now.";
       setGuide("Complete", activeView().name, "Carry one color, one sound, and one easier breath back with you.");
@@ -1666,7 +1701,7 @@
       setNounsGandalf(state.nounsActive, { announce: false });
       setRitual(state.ritual, { quiet: true });
       renderNounsCollection();
-      updateGuideIdle("Collect v2 ready");
+      updateGuideIdle("V5 ready");
       chooseLine();
     } else if (isNatureVersion(next)) {
       if (next === "v4" && state.renderStyle !== "pixel") {
@@ -1723,7 +1758,7 @@
 
     if (!settings.quiet) {
       dom.wizardLine.textContent = wasCollected ? `${card.name} is already in your keepsake pouch.` : card.cue;
-      setGuide(wasCollected ? "Already kept" : "Cue collected", `${activeRitual().title} · ${card.name}`, card.breath);
+      setGuide(wasCollected ? "Already kept" : "Cue kept", `${activeRitual().title} · ${card.name}`, card.breath);
       spawnParticles(wasCollected ? 4 : 12);
     }
     updateRitualPanel();
@@ -1774,7 +1809,7 @@
       updateAudioLevels();
       updateBlendOptions();
       updateNounsPanel();
-      updateGuideIdle(settings.quiet ? "Collect v2 ready" : "Ritual set");
+      updateGuideIdle(settings.quiet ? "V5 ready" : "Ritual set");
       if (!settings.quiet) {
         dom.wizardLine.textContent = activeRitual().lines[0];
         spawnParticles(next === "smoke" ? 8 : 5);
@@ -1932,6 +1967,7 @@
 
   function sealEntry() {
     const minutes = Math.round(state.duration / 60);
+    const presence = presenceScore();
     const formatter = new Intl.DateTimeFormat(undefined, {
       month: "short",
       day: "numeric",
@@ -1951,7 +1987,8 @@
       visual: isNatureVersion() ? activeView().name : "",
       intention: isNatureVersion() ? activeIntention().title : "",
       style: isNatureVersion() ? activeRenderStyle().name : "",
-      wisdom: wisdomScore(),
+      presence,
+      wisdom: presence,
       note: dom.noteInput.value.trim()
     });
 
