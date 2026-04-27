@@ -1,0 +1,443 @@
+---
+/**
+ * /minted — what your connected wallet holds in PointCast collections.
+ *
+ * Per-wallet live view of holdings in coffee_mugs, visit_nouns,
+ * window_snapshots. Distinct from /profile (visitor identity + global
+ * audit) and /collection (Mike's full Tezos wallet). This is the
+ * "what have I claimed via PointCast surfaces" page.
+ *
+ * Reads pc:wallet-active from localStorage. If empty, falls back to
+ * Mike's mainwallet so the page always has something to show. Each
+ * collection lane links to its surface (/coffee, /visit-nouns,
+ * /snapshots).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
+
+interface CollectionDef {
+  slug: string;
+  name: string;
+  href: string;
+  kt1: string;
+  symbol: string;
+  imageFor: (tokenId: number) => string | null;
+  nameFor: (tokenId: number) => string;
+}
+
+const c = contracts as Record<string, any>;
+const COFFEE_KT1 = (c.coffee_mugs?.mainnet ?? '').trim();
+const VN_KT1 = (c.visit_nouns?.mainnet ?? '').trim();
+const WS_KT1 = (c.window_snapshots?.mainnet ?? '').trim();
+
+const COFFEE_SLUGS: Record<number, string> = { 0: 'ceramic', 1: 'espresso', 2: 'latte', 3: 'paper', 4: 'bistro' };
+const COFFEE_NAMES: Record<number, string> = {
+  0: 'Ceramic Mug', 1: 'Espresso Cup', 2: 'Latte Glass', 3: 'Paper Cup', 4: 'Bistro Cup',
+};
+
+const WS_SLUGS: Record<number, string> = { 0: '0-galley', 1: '1-long-room', 2: '2-lamp-wall' };
+const WS_NAMES: Record<number, string> = { 0: 'Galley', 1: 'Long Room', 2: 'Lamp Wall' };
+
+const COLLECTIONS: CollectionDef[] = [];
+if (COFFEE_KT1.startsWith('KT1')) {
+  COLLECTIONS.push({
+    slug: 'coffee_mugs', name: 'Coffee Mugs', href: '/coffee',
+    kt1: COFFEE_KT1, symbol: 'PCMUG',
+    imageFor: (id) => COFFEE_SLUGS[id] ? `/images/coffee-mugs/${COFFEE_SLUGS[id]}.svg` : null,
+    nameFor: (id) => COFFEE_NAMES[id] ?? `Coffee Mug #${id}`,
+  });
+}
+if (VN_KT1.startsWith('KT1')) {
+  COLLECTIONS.push({
+    slug: 'visit_nouns', name: 'Visit Nouns', href: '/visit-nouns',
+    kt1: VN_KT1, symbol: 'PCVN',
+    imageFor: (id) => `https://noun.pics/${id}.svg`,
+    nameFor: (id) => `Visit Noun #${id}`,
+  });
+}
+if (WS_KT1.startsWith('KT1')) {
+  COLLECTIONS.push({
+    slug: 'window_snapshots', name: 'Window Snapshots', href: '/snapshots',
+    kt1: WS_KT1, symbol: 'PCWIN',
+    imageFor: (id) => WS_SLUGS[id] ? `/images/window-snapshots/${WS_SLUGS[id]}.jpg` : null,
+    nameFor: (id) => WS_NAMES[id] ?? `Window Snapshot #${id}`,
+  });
+}
+
+// Pending lanes (for empty-state surfaces — show but mark "originating soon")
+const PENDING_LANES = [
+  { slug: 'window_snapshots', name: 'Window Snapshots', href: '/snapshots', kt1: WS_KT1 },
+  { slug: 'birthdays', name: 'Birthdays', href: '/cake', kt1: ((c.birthdays?.mainnet ?? '') as string).trim() },
+  { slug: 'drum_token', name: 'Drum Token', href: '/drum', kt1: ((c.drum_token?.mainnet ?? '') as string).trim() },
+  { slug: 'zen_cats', name: 'Zen Cats', href: '/zen-cats', kt1: ((c.zen_cats?.mainnet ?? '') as string).trim() },
+].filter((l) => !l.kt1.startsWith('KT1'));
+
+const title = '/minted — what you hold on PointCast';
+const description =
+  'Per-wallet live view of your holdings across PointCast Tezos collections — Coffee Mugs, Visit Nouns, Window Snapshots, and more.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="minted" id="minted-main" data-collections={JSON.stringify(COLLECTIONS.map((coll) => ({
+    slug: coll.slug, name: coll.name, href: coll.href, kt1: coll.kt1, symbol: coll.symbol
+  })))}>
+
+    <header class="minted__head">
+      <p class="minted__kicker">PROFILE · MINTED · POINTCAST · EL SEGUNDO</p>
+      <h1 class="minted__title">What you hold on PointCast.</h1>
+      <p class="minted__dek">
+        Live from tzkt — every PointCast FA2 token in your connected wallet,
+        grouped by collection. If no wallet is connected, you'll see Mike's
+        as a sample.
+      </p>
+      <p class="minted__owner mono" id="minted-owner">checking wallet…</p>
+    </header>
+
+    <section class="minted__lanes" id="minted-lanes" aria-live="polite">
+      <p class="minted__loading mono">LOADING HOLDINGS…</p>
+    </section>
+
+    {PENDING_LANES.length > 0 && (
+      <section class="minted__pending">
+        <p class="minted__sub-kicker mono">ORIGINATING SOON · {PENDING_LANES.length} collection{PENDING_LANES.length === 1 ? '' : 's'}</p>
+        <ul class="minted__pending-list">
+          {PENDING_LANES.map((p) => (
+            <li class="minted__pending-row">
+              <a href={p.href}>
+                <span class="minted__pending-name">{p.name}</span>
+                <span class="minted__pending-status mono">contract not yet originated · preview at <code>{p.href}</code></span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <nav class="minted__links" aria-label="Other surfaces">
+      <a class="minted__link" href="/coffee"><span class="minted__link-label mono">/COFFEE</span><span class="minted__link-desc">five mugs · pour to unlock</span></a>
+      <a class="minted__link" href="/visit-nouns"><span class="minted__link-label mono">/VISIT-NOUNS</span><span class="minted__link-desc">noun-by-noun · one per visit</span></a>
+      <a class="minted__link" href="/snapshots"><span class="minted__link-label mono">/SNAPSHOTS</span><span class="minted__link-desc">three painted interiors</span></a>
+      <a class="minted__link" href="/market"><span class="minted__link-label mono">/MARKET</span><span class="minted__link-desc">trade every PointCast FA2</span></a>
+    </nav>
+
+    <footer class="minted__foot mono">
+      <span>on air · el segundo · live · cc0</span>
+      <span id="minted-clock">—</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+  var MIKE_FALLBACK = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+
+  function readActiveAddress() {
+    try { return localStorage.getItem('pc:wallet-active'); } catch (e) { return null; }
+  }
+  function readCollections() {
+    var main = document.getElementById('minted-main');
+    var raw = main && main.getAttribute('data-collections');
+    if (!raw) return [];
+    try { return JSON.parse(raw) || []; } catch (e) { return []; }
+  }
+  function shortAddr(a) { return (a && a.length > 12) ? (a.slice(0, 6) + '…' + a.slice(-4)) : (a || ''); }
+  function escHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); }
+  function escAttr(s) { return escHtml(s); }
+  function imageFor(slug, tokenId) {
+    if (slug === 'coffee_mugs') {
+      var s = ['ceramic','espresso','latte','paper','bistro'][parseInt(tokenId, 10)];
+      return s ? '/images/coffee-mugs/' + s + '.svg' : null;
+    }
+    if (slug === 'visit_nouns') return 'https://noun.pics/' + parseInt(tokenId, 10) + '.svg';
+    if (slug === 'window_snapshots') {
+      var w = ['0-galley','1-long-room','2-lamp-wall'][parseInt(tokenId, 10)];
+      return w ? '/images/window-snapshots/' + w + '.jpg' : null;
+    }
+    return null;
+  }
+  function nameFor(slug, tokenId) {
+    if (slug === 'coffee_mugs') return ['Ceramic Mug','Espresso Cup','Latte Glass','Paper Cup','Bistro Cup'][parseInt(tokenId, 10)] || ('Coffee #' + tokenId);
+    if (slug === 'visit_nouns') return 'Visit Noun #' + tokenId;
+    if (slug === 'window_snapshots') return ['Galley','Long Room','Lamp Wall'][parseInt(tokenId, 10)] || ('Snapshot #' + tokenId);
+    return slug + ' #' + tokenId;
+  }
+
+  async function loadHoldings(addr, isOwn) {
+    var lanes = document.getElementById('minted-lanes');
+    var ownerEl = document.getElementById('minted-owner');
+    if (!lanes) return;
+    var collections = readCollections();
+    if (collections.length === 0) {
+      lanes.innerHTML = '<p class="minted__empty mono">no live PointCast collections yet · check back after origination</p>';
+      if (ownerEl) ownerEl.textContent = '—';
+      return;
+    }
+    if (ownerEl) {
+      ownerEl.innerHTML = isOwn
+        ? 'your wallet · <code>' + escHtml(shortAddr(addr)) + '</code>'
+        : 'sample · Mike\'s wallet · <code>' + escHtml(shortAddr(addr)) + '</code> · connect yours via the wallet chip';
+    }
+
+    var results = await Promise.all(collections.map(function (coll) {
+      var url = 'https://api.tzkt.io/v1/tokens/balances' +
+        '?account=' + encodeURIComponent(addr) +
+        '&token.contract=' + encodeURIComponent(coll.kt1) +
+        '&balance.gt=0' +
+        '&select=token.tokenId,balance' +
+        '&limit=200';
+      return fetch(url, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (rows) { return { coll: coll, rows: Array.isArray(rows) ? rows : [] }; })
+        .catch(function () { return { coll: coll, rows: [] }; });
+    }));
+
+    var html = '';
+    var totalHeld = 0;
+    results.forEach(function (res) {
+      var coll = res.coll;
+      var rows = res.rows;
+      var heldCount = 0;
+      rows.forEach(function (r) { heldCount += parseInt(r.balance || '0', 10) || 0; });
+      totalHeld += heldCount;
+      var lane = '<section class="minted-lane" data-slug="' + escAttr(coll.slug) + '">' +
+        '<header class="minted-lane__head">' +
+          '<a class="minted-lane__name" href="' + escAttr(coll.href) + '">' + escHtml(coll.name) + '</a>' +
+          '<span class="minted-lane__kt1 mono">' + escHtml(shortAddr(coll.kt1)) + '</span>' +
+          '<span class="minted-lane__count mono">' + heldCount + ' held</span>' +
+        '</header>';
+      if (rows.length === 0) {
+        lane += '<p class="minted-lane__empty mono">none yet · ' +
+          (coll.slug === 'coffee_mugs' ? 'pour at <a href="/coffee">/coffee</a>' :
+           coll.slug === 'visit_nouns' ? 'claim at <a href="/visit-nouns">/visit-nouns</a>' :
+           coll.slug === 'window_snapshots' ? 'mint at <a href="/snapshots">/snapshots</a>' :
+           'see <a href="' + escAttr(coll.href) + '">' + escAttr(coll.href) + '</a>') +
+          '</p>';
+      } else {
+        lane += '<div class="minted-lane__grid">';
+        rows.forEach(function (r) {
+          var tokenIdRaw = r['token.tokenId'] !== undefined ? r['token.tokenId'] : r.tokenId;
+          var tokenId = parseInt(tokenIdRaw, 10);
+          var balance = parseInt(r.balance || '0', 10) || 0;
+          if (!Number.isFinite(tokenId) || balance <= 0) return;
+          var img = imageFor(coll.slug, tokenId);
+          var nm = nameFor(coll.slug, tokenId);
+          lane += '<a class="minted-card" href="https://objkt.com/tokens/' + escAttr(coll.kt1) + '/' + tokenId + '" target="_blank" rel="noopener">' +
+            '<div class="minted-card__art">' +
+              (img ? '<img src="' + escAttr(img) + '" alt="' + escAttr(nm) + '" loading="lazy" />' : '<div class="minted-card__placeholder">№' + tokenId + '</div>') +
+              '<span class="minted-card__balance mono">×' + balance + '</span>' +
+            '</div>' +
+            '<p class="minted-card__name">' + escHtml(nm) + '</p>' +
+            '<p class="minted-card__meta mono">№' + tokenId + ' · objkt ↗</p>' +
+          '</a>';
+        });
+        lane += '</div>';
+      }
+      lane += '</section>';
+      html += lane;
+    });
+
+    lanes.innerHTML = html || '<p class="minted__empty mono">no PointCast tokens held yet</p>';
+  }
+
+  function tick() {
+    var el = document.getElementById('minted-clock');
+    if (!el) return;
+    var n = new Date();
+    el.textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') + ' PT';
+  }
+
+  function repaint() {
+    var addr = readActiveAddress();
+    if (addr) loadHoldings(addr, true);
+    else loadHoldings(MIKE_FALLBACK, false);
+  }
+
+  repaint();
+  tick();
+  setInterval(tick, 60 * 1000);
+  window.addEventListener('storage', function (e) { if (e.key === 'pc:wallet-active') repaint(); });
+  window.addEventListener('pc:wallet-change', repaint);
+})();
+</script>
+
+<style is:global>
+  .minted {
+    max-width: 980px; margin: 0 auto; padding: 36px 18px 80px;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(31,27,21,.06) 1px, transparent 0) 0 0/22px 22px,
+      #f5efe4;
+    color: #1f1b15;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    min-height: calc(100vh - 60px);
+  }
+
+  .minted__head { margin-bottom: 28px; }
+  .minted__kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.26em; font-weight: 700;
+    margin: 0 0 14px; opacity: 0.65;
+  }
+  .minted__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 44px);
+    font-weight: 600; line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+  }
+  .minted__dek {
+    font-family: Georgia, serif;
+    font-size: 15px; line-height: 1.55;
+    margin: 0 0 10px; max-width: 600px;
+    opacity: 0.85;
+  }
+  .minted__owner {
+    font-size: 11px; letter-spacing: 0.10em;
+    color: #5f5e5a;
+    margin: 0;
+  }
+  .minted__owner code {
+    font-size: 11px; background: rgba(31,27,21,0.06);
+    padding: 2px 6px; border-radius: 2px;
+  }
+
+  .minted__lanes { display: flex; flex-direction: column; gap: 18px; margin-bottom: 32px; }
+  .minted__loading, .minted__empty {
+    padding: 28px 14px; text-align: center;
+    font-size: 11px; letter-spacing: 0.18em;
+    color: #5f5e5a;
+    border: 2px dashed #d8cdb8;
+    background: #fff;
+  }
+
+  .minted-lane {
+    background: #fff;
+    border: 2px solid #1f1b15;
+    box-shadow: 4px 4px 0 0 #1f1b15;
+    padding: 16px 18px 18px;
+  }
+  .minted-lane__head {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    border-bottom: 1px dashed #d8cdb8;
+    padding-bottom: 10px; margin-bottom: 14px;
+  }
+  .minted-lane__name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 22px; font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #1f1b15;
+    text-decoration: none;
+  }
+  .minted-lane__name:hover { text-decoration: underline; }
+  .minted-lane__kt1 {
+    font-size: 10px; letter-spacing: 0.06em; color: #5f5e5a;
+    background: #f5efe4; padding: 2px 7px; border-radius: 2px;
+  }
+  .minted-lane__count {
+    margin-left: auto;
+    font-size: 11px; letter-spacing: 0.16em; font-weight: 700;
+    background: #1f1b15; color: #f5efe4;
+    padding: 3px 9px;
+  }
+  .minted-lane__empty {
+    font-size: 13px; color: #5f5e5a; margin: 0;
+    font-family: Georgia, serif;
+  }
+  .minted-lane__empty a { color: #185FA5; font-weight: 700; }
+
+  .minted-lane__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .minted-card {
+    display: block; text-decoration: none; color: inherit;
+    background: #fff;
+    border: 2px solid #1f1b15;
+    box-shadow: 3px 3px 0 0 #1f1b15;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .minted-card:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 #1f1b15; }
+  .minted-card__art {
+    aspect-ratio: 1; background: #ede5d3;
+    border-bottom: 2px solid #1f1b15;
+    overflow: hidden; position: relative;
+  }
+  .minted-card__art img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
+  .minted-card__placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 16px; color: #5f5e5a; font-weight: 700;
+  }
+  .minted-card__balance {
+    position: absolute; top: 6px; left: 6px;
+    background: #1f1b15; color: #f5efe4;
+    padding: 1px 7px;
+    font-size: 9.5px; letter-spacing: 0.10em; font-weight: 700;
+  }
+  .minted-card__name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 12.5px; line-height: 1.25;
+    padding: 6px 8px 0; margin: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .minted-card__meta {
+    font-size: 9.5px; letter-spacing: 0.10em;
+    padding: 0 8px 7px; margin: 2px 0 0;
+    color: #5f5e5a;
+  }
+
+  .minted__pending { margin-bottom: 28px; }
+  .minted__sub-kicker {
+    font-size: 9px; letter-spacing: 0.22em; font-weight: 700;
+    color: #5f5e5a; margin: 0 0 10px;
+  }
+  .minted__pending-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .minted__pending-row a {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 8px 12px;
+    background: rgba(255, 248, 228, 0.6);
+    border: 1px dashed #d8cdb8;
+    text-decoration: none; color: inherit;
+  }
+  .minted__pending-row a:hover { background: rgba(255, 220, 120, 0.4); }
+  .minted__pending-name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 14px; font-weight: 600;
+  }
+  .minted__pending-status {
+    font-size: 10px; letter-spacing: 0.06em; color: #5f5e5a;
+    margin-left: auto;
+  }
+
+  .minted__links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px; margin: 0 0 24px;
+  }
+  .minted__link {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 11px;
+    background: #fff;
+    border: 1.5px solid #d8cdb8;
+    border-radius: 2px; text-decoration: none; color: inherit;
+    transition: background 0.18s ease, transform 0.12s ease;
+  }
+  .minted__link:hover { background: #fef0bd; transform: translateY(-1px); }
+  .minted__link-label { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; }
+  .minted__link-desc { font-size: 11.5px; font-family: Georgia, serif; opacity: 0.75; line-height: 1.3; }
+
+  .minted__foot {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.18em;
+    padding-top: 14px; border-top: 1px dashed #d8cdb8;
+    opacity: 0.62;
+  }
+
+  @media (max-width: 600px) {
+    .minted { padding: 24px 12px 60px; }
+    .minted-lane { padding: 12px 14px 14px; }
+    .minted-lane__grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  }
+</style>
