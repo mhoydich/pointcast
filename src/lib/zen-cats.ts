@@ -14,6 +14,13 @@ export const ZEN_CATS_STORAGE_KEYS = {
   ritualPrefix: 'pc:zen-cats:rituals:',
 } as const;
 
+export const ZEN_CAT_CAPITAL_STORAGE_KEYS = {
+  profile: 'pc:zen-cats:capital-profile',
+  referrals: 'pc:zen-cats:capital-referrals',
+  inboundReferral: 'pc:zen-cats:capital-inbound-referral',
+  journeyCollection: 'pc:zen-cats:journey',
+} as const;
+
 export interface ZenCatPalette {
   ground: string;
   paper: string;
@@ -39,6 +46,42 @@ export interface ZenCatRitual {
   label: string;
   detail: string;
   points: number;
+}
+
+export interface ZenCatCapitalStage {
+  id: string;
+  rung: string;
+  label: string;
+  trigger: string;
+  unlock: string;
+  capitalAction: string;
+  bitcoinStep: string;
+  points: number;
+}
+
+export interface ZenCatReferralMilestone {
+  count: number;
+  label: string;
+  unlock: string;
+}
+
+export interface ZenCatJourneyCollectible {
+  id: string;
+  number: number;
+  title: string;
+  stageId: string;
+  motif: string;
+  lesson: string;
+  medium: string;
+  rarity: string;
+  pointsRequired: number;
+  palette: {
+    ground: string;
+    accent: string;
+    secondary: string;
+    ink: string;
+  };
+  prompt: string;
 }
 
 export interface DailyZenCat {
@@ -72,6 +115,197 @@ export const ZEN_CAT_RITUALS: readonly ZenCatRitual[] = [
     label: 'Offer Tea',
     detail: 'Leave a cup beside the cushion before minting.',
     points: 1,
+  },
+] as const;
+
+export const ZEN_CAT_CAPITAL_PATHWAY: readonly ZenCatCapitalStage[] = [
+  {
+    id: 'seed',
+    rung: '01',
+    label: 'Seed Signal',
+    trigger: 'Complete the daily ritual and collect one cat.',
+    unlock: 'Local referral code and capital map.',
+    capitalAction: 'Turn attention into a trackable habit before money enters the loop.',
+    bitcoinStep: 'Learn wallet basics and private-key risk. No allocation yet.',
+    points: 1,
+  },
+  {
+    id: 'circle',
+    rung: '02',
+    label: 'Trust Circle',
+    trigger: 'Invite one real collector into the garden.',
+    unlock: 'Single-level referral ledger and friend-pass drops.',
+    capitalAction: 'Build audience value through real product use, not recruitment payments.',
+    bitcoinStep: 'Study volatility, custody, taxes, and loss scenarios.',
+    points: 8,
+  },
+  {
+    id: 'studio',
+    rung: '03',
+    label: 'Mint Studio',
+    trigger: 'Reach three direct collectors and one stamped passport.',
+    unlock: 'Tezos mint priority, creator receipts, and edition planning.',
+    capitalAction: 'Convert art, curation, and sales into earned surplus.',
+    bitcoinStep: 'Draft a non-custodial treasury policy before buying anything.',
+    points: 18,
+  },
+  {
+    id: 'market',
+    rung: '04',
+    label: 'Capital Rail',
+    trigger: 'Reach eight direct collectors or a verified marketplace sale.',
+    unlock: 'Affiliate disclosure kit and creator split ledger.',
+    capitalAction: 'Route real earnings into runway, production, reserves, and taxes.',
+    bitcoinStep: 'Simulate a reserve split. No yield, leverage, pooling, or custody.',
+    points: 38,
+  },
+  {
+    id: 'bitcoin',
+    rung: '05',
+    label: 'Sats Reserve',
+    trigger: 'Reach twenty-one direct collectors and pass the safety checklist.',
+    unlock: 'Bitcoin readiness checklist and self-custody handoff.',
+    capitalAction: 'Only earned surplus moves, only by the user, after independent review.',
+    bitcoinStep: 'Move to a personal Bitcoin wallet or regulated product when ready.',
+    points: 88,
+  },
+] as const;
+
+export const ZEN_CAT_REFERRAL_MILESTONES: readonly ZenCatReferralMilestone[] = [
+  {
+    count: 1,
+    label: 'First Signal',
+    unlock: 'Invite link becomes part of the passport story.',
+  },
+  {
+    count: 3,
+    label: 'Studio Circle',
+    unlock: 'Mint-priority candidate once PCCAT is live.',
+  },
+  {
+    count: 8,
+    label: 'Market Lane',
+    unlock: 'Eligible for one-level affiliate disclosure review.',
+  },
+  {
+    count: 21,
+    label: 'Treasury Circle',
+    unlock: 'Bitcoin readiness checklist opens for earned surplus planning.',
+  },
+] as const;
+
+const journeyPrompt = (
+  title: string,
+  motif: string,
+  lesson: string,
+  palette: string,
+) =>
+  `Zen Cats Journey Print collectible, sophisticated textile and gouache art-card style, quiet luxury, engraved cat fur lines, subtle Bitcoin and Tezos geometry as abstract motifs only, no logo, no text, no financial promise. Title concept: ${title}. Motif: ${motif}. Lesson: ${lesson}. Palette: ${palette}.`;
+
+export const ZEN_CAT_JOURNEY_SERIES: readonly ZenCatJourneyCollectible[] = [
+  {
+    id: 'journey-001',
+    number: 1,
+    title: 'Seed Signal',
+    stageId: 'seed',
+    motif: 'one cream cat beside a small sprouting coin-shaped moon',
+    lesson: 'attention becomes the first asset',
+    medium: 'linen-gouache print',
+    rarity: 'pathway',
+    pointsRequired: 1,
+    palette: { ground: '#f3efe2', accent: '#2d8a59', secondary: '#d6b14a', ink: '#17251d' },
+    prompt: journeyPrompt('Seed Signal', 'one cream cat beside a small sprouting coin-shaped moon', 'attention becomes the first asset', 'warm ivory, garden green, muted gold, ink'),
+  },
+  {
+    id: 'journey-002',
+    number: 2,
+    title: 'Invite Lantern',
+    stageId: 'circle',
+    motif: 'two cats sharing a lantern across a tiled garden path',
+    lesson: 'trust grows by direct invitation',
+    medium: 'woven travel card',
+    rarity: 'pathway',
+    pointsRequired: 8,
+    palette: { ground: '#203f4b', accent: '#e08b76', secondary: '#9fd1c2', ink: '#071116' },
+    prompt: journeyPrompt('Invite Lantern', 'two cats sharing a lantern across a tiled garden path', 'trust grows by direct invitation', 'deep blue, coral lantern, sea-glass mint, ink'),
+  },
+  {
+    id: 'journey-003',
+    number: 3,
+    title: 'Passport Atelier',
+    stageId: 'studio',
+    motif: 'cat passport stamps drifting around a calm studio table',
+    lesson: 'collectible culture needs provenance',
+    medium: 'passport etching',
+    rarity: 'studio',
+    pointsRequired: 14,
+    palette: { ground: '#6f8492', accent: '#d8a09b', secondary: '#fff1c6', ink: '#17202b' },
+    prompt: journeyPrompt('Passport Atelier', 'cat passport stamps drifting around a calm studio table', 'collectible culture needs provenance', 'silver blue, blush coral, pale parchment, ink'),
+  },
+  {
+    id: 'journey-004',
+    number: 4,
+    title: 'Tezos Receipt Garden',
+    stageId: 'studio',
+    motif: 'a cat guarding clean receipt ribbons and abstract chain links',
+    lesson: 'mint only what can be explained clearly',
+    medium: 'receipt-print gouache',
+    rarity: 'studio',
+    pointsRequired: 18,
+    palette: { ground: '#244d45', accent: '#b9d8a2', secondary: '#d87b63', ink: '#0e1714' },
+    prompt: journeyPrompt('Tezos Receipt Garden', 'a cat guarding clean receipt ribbons and abstract chain links', 'mint only what can be explained clearly', 'moss teal, pale green, coral seal, ink'),
+  },
+  {
+    id: 'journey-005',
+    number: 5,
+    title: 'Market Tide',
+    stageId: 'market',
+    motif: 'cats on a quiet harbor ledge with small ledger waves',
+    lesson: 'sales create surplus, not certainty',
+    medium: 'harbor ledger print',
+    rarity: 'market',
+    pointsRequired: 28,
+    palette: { ground: '#26485c', accent: '#e4b15f', secondary: '#a6c8d8', ink: '#0d1820' },
+    prompt: journeyPrompt('Market Tide', 'cats on a quiet harbor ledge with small ledger waves', 'sales create surplus, not certainty', 'harbor blue, amber, pale tide, ink'),
+  },
+  {
+    id: 'journey-006',
+    number: 6,
+    title: 'Runway Reserve',
+    stageId: 'market',
+    motif: 'a cat arranging three bowls for studio, tax, and reserve',
+    lesson: 'capital gets calmer when named',
+    medium: 'allocation still life',
+    rarity: 'market',
+    pointsRequired: 38,
+    palette: { ground: '#f2eadb', accent: '#185fa5', secondary: '#c45b4a', ink: '#1b1710' },
+    prompt: journeyPrompt('Runway Reserve', 'a cat arranging three bowls for studio, tax, and reserve', 'capital gets calmer when named', 'parchment, pointcast blue, coral red, ink'),
+  },
+  {
+    id: 'journey-007',
+    number: 7,
+    title: 'Cold Key Window',
+    stageId: 'bitcoin',
+    motif: 'a white cat at a night window with a key-shaped constellation',
+    lesson: 'self-custody starts with humility',
+    medium: 'night-window textile',
+    rarity: 'reserve',
+    pointsRequired: 64,
+    palette: { ground: '#16283a', accent: '#d6b14a', secondary: '#9cc6d4', ink: '#05090d' },
+    prompt: journeyPrompt('Cold Key Window', 'a white cat at a night window with a key-shaped constellation', 'self-custody starts with humility', 'night blue, muted gold, glacier blue, black ink'),
+  },
+  {
+    id: 'journey-008',
+    number: 8,
+    title: 'Sats Dawn',
+    stageId: 'bitcoin',
+    motif: 'a calm cat watching sunrise over abstract circular reserve marks',
+    lesson: 'Bitcoin is an endpoint for earned surplus, never a promise',
+    medium: 'dawn reserve print',
+    rarity: 'reserve',
+    pointsRequired: 88,
+    palette: { ground: '#f4d7bd', accent: '#f7931a', secondary: '#496f7e', ink: '#24170d' },
+    prompt: journeyPrompt('Sats Dawn', 'a calm cat watching sunrise over abstract circular reserve marks', 'Bitcoin is an endpoint for earned surplus, never a promise', 'dawn peach, bitcoin orange as color, slate blue, ink'),
   },
 ] as const;
 
@@ -322,6 +556,24 @@ export function buildZenCatsManifest(now: Date = new Date()) {
       storageKey: ZEN_CATS_STORAGE_KEYS.worldCollection,
       stylePrompt: ZEN_CAT_WORLD_STYLE_PROMPT,
       collectibles: ZEN_CAT_WORLD_COLLECTIBLES,
+    },
+    capitalPathway: {
+      title: 'Garden to Bitcoin',
+      storageKeys: ZEN_CAT_CAPITAL_STORAGE_KEYS,
+      stages: ZEN_CAT_CAPITAL_PATHWAY,
+      referralMilestones: ZEN_CAT_REFERRAL_MILESTONES,
+      journeySeries: {
+        title: 'Journey Prints',
+        count: ZEN_CAT_JOURNEY_SERIES.length,
+        storageKey: ZEN_CAT_CAPITAL_STORAGE_KEYS.journeyCollection,
+        collectibles: ZEN_CAT_JOURNEY_SERIES,
+      },
+      guardrails: [
+        'No guaranteed returns or investment advice.',
+        'No pay-to-join rewards, pooling, custody, leverage, or multi-level payout tree.',
+        'Referral rewards stay tied to disclosed, genuine product activity.',
+        'Bitcoin is an optional self-custody endpoint for earned surplus after independent review.',
+      ],
     },
     tezos: {
       standard: 'FA2 / TZIP-21',
