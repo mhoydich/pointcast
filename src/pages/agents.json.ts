@@ -75,7 +75,10 @@ export const GET: APIRoute = async () => {
         canonical: 'https://pointcast.xyz/agents.json',
         wellKnownAgents: 'https://pointcast.xyz/.well-known/agents.json',
         wellKnownAi: 'https://pointcast.xyz/.well-known/ai.json',
+        wellKnownPointCastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
+        protocol: 'https://pointcast.xyz/protocol',
+        protocolJson: 'https://pointcast.xyz/protocol.json',
         llms: 'https://pointcast.xyz/llms.txt',
         llmsFull: 'https://pointcast.xyz/llms-full.txt',
         robots: 'https://pointcast.xyz/robots.txt',
@@ -87,6 +90,7 @@ export const GET: APIRoute = async () => {
         home: 'https://pointcast.xyz/',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         manifesto: 'https://pointcast.xyz/manifesto',
+        protocol: 'https://pointcast.xyz/protocol',
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',
         nounsCola: 'https://pointcast.xyz/nouns-cola',
@@ -168,6 +172,8 @@ export const GET: APIRoute = async () => {
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
+        protocol: 'https://pointcast.xyz/protocol.json',
+        pointcastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         blocks: 'https://pointcast.xyz/blocks.json',
         archive: 'https://pointcast.xyz/archive.json',
         editions: 'https://pointcast.xyz/editions.json',
@@ -403,6 +409,17 @@ export const GET: APIRoute = async () => {
       responseHeader: 'X-Agent-Mode: stripped · ai:<vendor>',
       payloadSavings: '~12% smaller on the home feed (97,631 vs 111,170 bytes verified).',
       source: 'https://github.com/mhoydich/pointcast/blob/main/functions/_middleware.ts',
+    },
+
+    peerMessagingProtocol: {
+      name: 'PointCast Peer Message Protocol',
+      version: 'pcp-1.0',
+      status: 'v1 published',
+      summary: 'Signed Block packets, replaceable relays, local-first logs, and first-class human plus agent peers for 2026 and 2027.',
+      human: 'https://pointcast.xyz/protocol',
+      manifest: 'https://pointcast.xyz/protocol.json',
+      wellKnown: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
+      announcementBlock: 'https://pointcast.xyz/b/0378',
     },
 
     generativeEngineOptimization: {

@@ -36,6 +36,8 @@ export const DISCOVERY_LINKS: DiscoveryLink[] = [
   { rel: 'author', href: '/about' },
   { rel: 'help', href: '/for-agents' },
   { rel: 'alternate', type: 'application/json', href: '/agents.json', title: 'PointCast agent discovery manifest' },
+  { rel: 'alternate', type: 'application/json', href: '/protocol.json', title: 'PointCast Peer Message Protocol' },
+  { rel: 'alternate', type: 'application/json', href: '/.well-known/pointcast-peer.json', title: 'PointCast peer discovery' },
   { rel: 'alternate', type: 'application/json', href: '/play.json', title: 'PointCast play layer manifest' },
   { rel: 'alternate', type: 'application/json', href: '/zen-cats.json', title: 'PointCast Zen Cat manifest' },
   { rel: 'alternate', type: 'text/plain', href: '/llms.txt', title: 'PointCast LLM summary' },
