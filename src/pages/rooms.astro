@@ -1,0 +1,699 @@
+---
+/**
+ * /rooms — the rooms hub (v0).
+ *
+ * The connective-tissue page for the audit:
+ *   "rooms that know each other exist"
+ *
+ * Pixel-iso town view of every ambient room (Bath, Drum, Anytime,
+ * Coffee, Zen Cats, Taproom, Window, Cake, Drawing Room) with
+ * persistent mood + wallet chips in the masthead, a YOU.PROFILE
+ * running-total card, a 4-tile collection peek, and a recent
+ * Block Ledger strip.
+ *
+ * Aesthetic per /Users/michaelhoydich/.claude/projects/-Users-michaelhoydich/memory/feedback_pointcast_aesthetic.md:
+ *   geocities + sim city, late-90s web chrome, saturated, NOT clean AI product.
+ *
+ * Data is hard-coded for v0 — the rooms list is curated, presence/now-playing
+ * fields will get wired to real signals in v1 (DRUM_ROOM DO, /api/presence
+ * already exposes a count; per-room presence + per-room mood propagation
+ * are the v1 follow-ups called out in the audit).
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PresenceBar from '../components/PresenceBar.astro';
+import WalletChip from '../components/WalletChip.astro';
+import MoodChip from '../components/MoodChip.astro';
+import { getCollection } from 'astro:content';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
+  .slice(0, 5);
+
+type Room = {
+  href: string;
+  exe: string;
+  name: string;
+  label: string;
+  meta: string;
+  now: string;
+  presence: string;
+  cold?: boolean;
+  variant: string;
+};
+
+const rooms: Room[] = [
+  {
+    href: '/bath',
+    exe: 'BATH.EXE',
+    label: 'BATH',
+    name: 'The Bath',
+    meta: '8 palettes · web-audio drone · spotify sync',
+    now: '▶ palette: SUNSET · drone D-flat',
+    presence: '3 here',
+    variant: 'bath',
+  },
+  {
+    href: '/drum-v8',
+    exe: 'DRUM.EXE — v8',
+    label: 'SYMPHONY',
+    name: 'The Drum Room',
+    meta: 'orchestra · trophies on-chain · loop studio',
+    now: '▶ 42-piece orchestra · BPM 96',
+    presence: '12 here',
+    variant: 'drum',
+  },
+  {
+    href: '/anytime',
+    exe: 'ANYTIME.EXE',
+    label: 'LISTEN',
+    name: 'Anytime',
+    meta: 'listening room · one track · come and go',
+    now: '▶ Harrison · "All Things Must Pass"',
+    presence: '2 here',
+    variant: 'anytime',
+  },
+  {
+    href: '/coffee',
+    exe: 'COFFEE.EXE',
+    label: 'CAFE',
+    name: 'Coffee Mugs',
+    meta: '5 tiers · cup-count gated · live mint',
+    now: 'cup count: you have 3 · tier 2 unlocked',
+    presence: '1 here',
+    variant: 'coffee',
+  },
+  {
+    href: '/zen-cats',
+    exe: 'ZEN.EXE',
+    label: 'ZEN',
+    name: 'Zen Cats',
+    meta: 'genesis + world · daily ritual',
+    now: 'cat 002 awaits a ritual',
+    presence: '0 here',
+    cold: true,
+    variant: 'zen',
+  },
+  {
+    href: '/taproom',
+    exe: 'TAPROOM.EXE',
+    label: 'TAPROOM',
+    name: 'Taproom',
+    meta: 'slow chatter · neon corner',
+    now: 'last visit: 11h ago',
+    presence: 'quiet',
+    cold: true,
+    variant: 'taproom',
+  },
+  {
+    href: '/window',
+    exe: 'WINDOW.EXE',
+    label: 'WINDOW',
+    name: 'Window Snapshots',
+    meta: 'painted rooms · pending mint',
+    now: '3 painted interiors · not yet originated',
+    presence: 'staged',
+    cold: true,
+    variant: 'window',
+  },
+  {
+    href: '/cake',
+    exe: 'CAKE.EXE',
+    label: 'CAKE',
+    name: 'Cake',
+    meta: 'birthdays · soon',
+    now: 'scaffolded · awaiting first slice',
+    presence: 'birthdays',
+    cold: true,
+    variant: 'cake',
+  },
+  {
+    href: '#',
+    exe: 'DRAWING.EXE',
+    label: 'DRAWING',
+    name: 'Drawing Room',
+    meta: 'collab canvas · coming soon',
+    now: 'in review · not merged',
+    presence: 'PR open',
+    cold: true,
+    variant: 'drawing',
+  },
+];
+---
+
+<BaseLayout
+  title="Rooms"
+  description="PointCast rooms hub — a small internet town. Pick a door."
+  hideNav={true}
+>
+  <div class="mood-ribbon" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <a href="/" class="logo" aria-label="PointCast home">POINTCAST<span class="dot">.</span>XYZ</a>
+    <div class="marquee" aria-label="status">
+      <span>● drum-v8 SYMPHONY playing across the mesh · today's noun is on the auction block · marketplace v3 first sale closed · bath palette: SUNSET · zen cat 002 awaits a ritual · mood follows you between rooms ·</span>
+    </div>
+    <div class="ambient">
+      <PresenceBar />
+      <MoodChip />
+      <WalletChip />
+    </div>
+  </header>
+
+  <main class="stage">
+    <section>
+      <h1 class="hub-title">Rooms</h1>
+      <p class="hub-sub">A small internet town — pick a door</p>
+
+      <div class="town">
+        {rooms.map((r) => (
+          <a href={r.href} class={`room`}>
+            <div class="win">
+              <div class="win-title">
+                <span>{r.exe}</span>
+                <span class="dots"><span>_</span><span>×</span></span>
+              </div>
+              <div class="win-body">
+                <div class={`iso room-${r.variant}`}>
+                  <span class="iso-label">{r.label}</span>
+                  <span class={`iso-live${r.cold ? ' cold' : ''}`}>{r.presence}</span>
+                  <div class="bldg"></div>
+                  <div class="iso-now">{r.now}</div>
+                </div>
+                <p class="room-name">{r.name}</p>
+                <p class="room-meta">{r.meta}</p>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <aside class="rail">
+      <div class="win you">
+        <div class="win-title you-title">
+          <span>YOU.PROFILE</span>
+          <span class="dots"><span>?</span><span>×</span></span>
+        </div>
+        <div class="win-body">
+          <h3>Your running total</h3>
+          <div class="row"><span>blocks touched</span><span class="v" id="rh-blocks">—</span></div>
+          <div class="row"><span>rooms visited</span><span class="v" id="rh-rooms">—</span></div>
+          <div class="row"><span>bath saves</span><span class="v" id="rh-bath">—</span></div>
+          <div class="row"><span>drum sessions</span><span class="v" id="rh-drum">—</span></div>
+          <div class="row"><span>cup count</span><span class="v" id="rh-cups">—</span></div>
+          <div class="row"><span>mood streak</span><span class="v" id="rh-mood">—</span></div>
+
+          <h3>Collection</h3>
+          <div class="collection-strip">
+            <div class="col-tile mug" data-label="mugs"></div>
+            <div class="col-tile noun" data-label="nouns"></div>
+            <div class="col-tile trophy" data-label="trophies"></div>
+            <div class="col-tile snap" data-label="snaps"></div>
+          </div>
+          <div class="profile-cta">
+            <a href="/profile" class="open-profile">OPEN PROFILE →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="win ledger">
+        <div class="win-title ledger-title">
+          <span>BLOCK LEDGER — last 5</span>
+          <span class="dots"><span>↻</span><span>×</span></span>
+        </div>
+        <ol>
+          {blocks.map((b) => (
+            <li>
+              <a href={`/b/${b.data.id}`}>
+                <span class="id">№{b.data.id}</span>
+                <span class="t">{b.data.title}</span>
+                <span class="ch">{b.data.channel}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div class="win">
+        <div class="win-title now-title">
+          <span>NOW PLAYING — across the mesh</span>
+          <span class="dots"><span>♪</span><span>×</span></span>
+        </div>
+        <div class="win-body now-list">
+          <div>BATH ▸ drone D♭ · sunset palette</div>
+          <div>DRUM ▸ symphony · BPM 96</div>
+          <div>ANYTIME ▸ All Things Must Pass</div>
+          <div class="now-foot">— mood follows you between rooms —</div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="rooms-foot">
+    pointcast.xyz · /rooms · v0 · pixel-iso town
+  </footer>
+</BaseLayout>
+
+<script>
+  // YOU.PROFILE running totals: pulled from localStorage where they
+  // already accumulate (bath saves, mood streak, etc.) and from
+  // window globals where present. Best-effort; missing values stay '—'.
+  const set = (id: string, v: string | number) => {
+    const el = document.getElementById(id);
+    if (el && v !== undefined && v !== null && v !== '') el.textContent = String(v);
+  };
+
+  try {
+    const blocksTouched = JSON.parse(localStorage.getItem('pc:blocks-touched') || '[]');
+    if (Array.isArray(blocksTouched)) set('rh-blocks', blocksTouched.length);
+  } catch {}
+
+  try {
+    const visited = JSON.parse(localStorage.getItem('pc:rooms-visited') || '[]');
+    if (Array.isArray(visited)) set('rh-rooms', `${visited.length} / 9`);
+  } catch {}
+
+  try {
+    const baths = JSON.parse(localStorage.getItem('pc:bath-saves') || '[]');
+    if (Array.isArray(baths)) set('rh-bath', baths.length);
+  } catch {}
+
+  try {
+    const drumSessions = JSON.parse(localStorage.getItem('pc:drum-sessions') || '[]');
+    if (Array.isArray(drumSessions)) set('rh-drum', `${drumSessions.length} on-chain`);
+  } catch {}
+
+  try {
+    const cups = parseInt(localStorage.getItem('pc:cup-count') || '0', 10);
+    if (!Number.isNaN(cups)) set('rh-cups', `${cups} ☕`);
+  } catch {}
+
+  try {
+    const moodStreak = parseInt(localStorage.getItem('pc:mood-streak') || '0', 10);
+    if (!Number.isNaN(moodStreak) && moodStreak > 0) set('rh-mood', `${moodStreak} days`);
+  } catch {}
+
+  // Track that this visitor has been to /rooms (for cross-room visited count).
+  try {
+    const visited = JSON.parse(localStorage.getItem('pc:rooms-visited') || '[]');
+    if (Array.isArray(visited) && !visited.includes('/rooms')) {
+      visited.push('/rooms');
+      localStorage.setItem('pc:rooms-visited', JSON.stringify(visited));
+    }
+  } catch {}
+
+  // When a room tile is clicked, record the visit so the "rooms visited"
+  // count climbs as the visitor explores.
+  document.querySelectorAll<HTMLAnchorElement>('a.room').forEach((a) => {
+    a.addEventListener('click', () => {
+      try {
+        const visited = JSON.parse(localStorage.getItem('pc:rooms-visited') || '[]');
+        const href = a.getAttribute('href') || '';
+        if (href && href !== '#' && Array.isArray(visited) && !visited.includes(href)) {
+          visited.push(href);
+          localStorage.setItem('pc:rooms-visited', JSON.stringify(visited));
+        }
+      } catch {}
+    });
+  });
+</script>
+
+<style>
+  /* ============ palette: saturated, late-90s, sim city ============ */
+  :root {
+    --rh-bg: #0d1f3c;
+    --rh-paper: #f4ecd8;
+    --rh-ink: #16131c;
+    --rh-hot: #ff2e63;
+    --rh-punch: #ff7f11;
+    --rh-acid: #c8ff00;
+    --rh-sky: #2bd9fe;
+    --rh-grape: #6b3fa0;
+    --rh-warn: #ffd60a;
+    --rh-chrome-1: #d4d0c8;
+    --rh-chrome-2: #808080;
+    --rh-chrome-3: #f0f0f0;
+    --rh-chrome-shadow: #404040;
+    --rh-frame-blue: #1a3a8a;
+  }
+
+  body {
+    background:
+      repeating-linear-gradient(0deg, transparent 0 22px, rgba(255,255,255,.03) 22px 23px),
+      repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,255,255,.03) 22px 23px),
+      radial-gradient(circle at 20% 10%, #2a4ea6 0%, #0d1f3c 55%, #07142b 100%);
+    color: var(--rh-paper);
+    min-height: 100vh;
+    image-rendering: pixelated;
+  }
+
+  .mood-ribbon {
+    background: linear-gradient(90deg, var(--rh-hot), var(--rh-punch), var(--rh-warn), var(--rh-acid), var(--rh-sky), var(--rh-grape), var(--rh-hot));
+    background-size: 300% 100%;
+    animation: rh-shift 18s linear infinite;
+    height: 8px;
+    border-bottom: 2px solid #000;
+  }
+  @keyframes rh-shift { to { background-position: 300% 0; } }
+
+  /* ============ chrome window frame ============ */
+  .win {
+    background: var(--rh-chrome-1);
+    border-top: 2px solid var(--rh-chrome-3);
+    border-left: 2px solid var(--rh-chrome-3);
+    border-right: 2px solid var(--rh-chrome-shadow);
+    border-bottom: 2px solid var(--rh-chrome-shadow);
+    box-shadow: 3px 3px 0 #000;
+    color: var(--rh-ink);
+  }
+  .win-title {
+    background: linear-gradient(90deg, var(--rh-frame-blue), #4a7adf);
+    color: #fff;
+    font-family: 'Press Start 2P', 'Departure Mono', ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: .04em;
+    padding: 5px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .win-title .dots { display: inline-flex; gap: 3px; }
+  .win-title .dots span {
+    width: 12px; height: 12px;
+    background: var(--rh-chrome-1);
+    border-top: 1px solid var(--rh-chrome-3);
+    border-left: 1px solid var(--rh-chrome-3);
+    border-right: 1px solid var(--rh-chrome-shadow);
+    border-bottom: 1px solid var(--rh-chrome-shadow);
+    color: #000;
+    font-size: 8px;
+    text-align: center;
+    line-height: 11px;
+  }
+  .win-body { padding: 10px 12px; }
+  .you-title    { background: linear-gradient(90deg,#7a1f7a,#c54bb8) !important; }
+  .ledger-title { background: linear-gradient(90deg,#0a5a3a,#2ecc40) !important; }
+  .now-title    { background: linear-gradient(90deg,#a8330a,#ff7f11) !important; }
+
+  /* ============ masthead ============ */
+  .masthead {
+    position: sticky; top: 0; z-index: 50;
+    background: #0d1f3c;
+    border-bottom: 3px solid #000;
+    padding: 8px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+  }
+  .logo {
+    font-family: 'Press Start 2P', 'Departure Mono', ui-monospace, monospace;
+    font-size: 18px;
+    color: var(--rh-hot);
+    text-shadow: 2px 0 var(--rh-punch), 4px 0 var(--rh-warn), 0 2px #000;
+    letter-spacing: .04em;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .logo .dot { color: var(--rh-acid); }
+  .marquee {
+    overflow: hidden;
+    border: 2px inset var(--rh-chrome-2);
+    background: #000;
+    color: var(--rh-acid);
+    font-family: 'JetBrains Mono', 'Departure Mono', ui-monospace, monospace;
+    font-size: 14px;
+    padding: 4px 6px;
+    height: 28px;
+    line-height: 20px;
+  }
+  .marquee span { display: inline-block; padding-left: 100%; animation: rh-scroll 38s linear infinite; }
+  @keyframes rh-scroll { to { transform: translateX(-100%); } }
+  .ambient { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* ============ stage ============ */
+  .stage {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 14px;
+  }
+  @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
+
+  .hub-title {
+    font-family: 'Gloock', 'Times New Roman', serif;
+    font-size: 32px;
+    color: var(--rh-paper);
+    margin: 0 0 6px;
+    letter-spacing: -.01em;
+  }
+  .hub-sub {
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--rh-sky);
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    margin: 0 0 12px;
+  }
+
+  /* ============ rooms grid ============ */
+  .town {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 720px) { .town { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .town { grid-template-columns: 1fr; } }
+
+  .room {
+    text-decoration: none;
+    color: var(--rh-ink);
+    transition: transform .12s ease;
+    display: block;
+  }
+  .room:hover { transform: translate(-2px, -2px); }
+  .room:hover .win { box-shadow: 5px 5px 0 #000; }
+  .room:active { transform: translate(0, 0); }
+  .room .win-body { padding: 6px; }
+
+  .iso {
+    height: 130px;
+    display: grid;
+    place-items: center;
+    background:
+      repeating-linear-gradient(45deg, #000 0 1px, transparent 1px 12px),
+      repeating-linear-gradient(-45deg, #000 0 1px, transparent 1px 12px),
+      linear-gradient(180deg,
+        var(--room-sky, #87ceeb) 0%, var(--room-sky, #87ceeb) 60%,
+        var(--room-ground, #5a8b3f) 60%, var(--room-ground, #5a8b3f) 100%);
+    border: 2px solid #000;
+    margin-bottom: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .iso .bldg {
+    width: 70px; height: 80px;
+    background: var(--room-bldg, var(--rh-hot));
+    border: 2px solid #000;
+    position: relative;
+    box-shadow: 4px 4px 0 #000, inset -8px -8px 0 rgba(0,0,0,.25);
+    transform: skewY(-8deg);
+  }
+  .iso .bldg::before {
+    content: "";
+    position: absolute;
+    top: 12px; left: 10px; right: 10px;
+    height: 14px;
+    background: rgba(255,255,255,.5);
+    border: 1px solid #000;
+  }
+  .iso .bldg::after {
+    content: "";
+    position: absolute;
+    bottom: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 18px; height: 26px;
+    background: #2a1810;
+    border: 1px solid #000;
+  }
+  .iso-label {
+    position: absolute;
+    top: 6px; left: 6px;
+    font-family: 'JetBrains Mono', 'Departure Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: #000;
+    background: rgba(255,255,0,.85);
+    padding: 1px 5px;
+    border: 1px solid #000;
+  }
+  .iso-live {
+    position: absolute;
+    top: 6px; right: 6px;
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    background: #000;
+    color: var(--rh-acid);
+    padding: 2px 5px;
+    border: 1px solid var(--rh-acid);
+    text-transform: uppercase;
+  }
+  .iso-live.cold { color: var(--rh-chrome-2); border-color: var(--rh-chrome-2); }
+  .iso-now {
+    position: absolute;
+    bottom: 6px; left: 6px; right: 6px;
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    background: rgba(0,0,0,.7);
+    color: var(--rh-paper);
+    padding: 3px 6px;
+    border: 1px solid #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .room-name {
+    font-family: 'Gloock', 'Times New Roman', serif;
+    font-size: 17px;
+    color: var(--rh-ink);
+    margin: 0;
+  }
+  .room-meta {
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--rh-chrome-shadow);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-top: 2px;
+  }
+
+  /* room palette variants */
+  .room-bath    { --room-sky:#9dd9ff; --room-ground:#1864ab; --room-bldg:#ff5cad; }
+  .room-drum    { --room-sky:#3a1c5a; --room-ground:#7e2dca; --room-bldg:#ffd60a; }
+  .room-anytime { --room-sky:#ff9b50; --room-ground:#5a2c0e; --room-bldg:#fff7d4; }
+  .room-coffee  { --room-sky:#ffe2a8; --room-ground:#3a2010; --room-bldg:#7b3f00; }
+  .room-zen     { --room-sky:#cef5d4; --room-ground:#2c5e2e; --room-bldg:#fff; }
+  .room-taproom { --room-sky:#1a1230; --room-ground:#3a1c5a; --room-bldg:#c8ff00; }
+  .room-window  { --room-sky:#7fbcd0; --room-ground:#243a4a; --room-bldg:#e3c290; }
+  .room-cake    { --room-sky:#ffd9ec; --room-ground:#5e1d3a; --room-bldg:#ffffff; }
+  .room-drawing { --room-sky:#deb887; --room-ground:#4a3520; --room-bldg:#a82828; }
+
+  /* ============ rail ============ */
+  .rail { display: flex; flex-direction: column; gap: 12px; }
+
+  .you h3 {
+    font-family: 'Press Start 2P', 'Departure Mono', ui-monospace, monospace;
+    font-size: 10px;
+    margin: 0 0 8px;
+    color: var(--rh-hot);
+    letter-spacing: .04em;
+  }
+  .you h3 + h3 { margin-top: 12px; }
+  .you .row {
+    display: flex; justify-content: space-between;
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    border-bottom: 1px dashed var(--rh-chrome-2);
+    padding: 4px 0;
+  }
+  .you .row .v { font-weight: 700; }
+
+  .collection-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .col-tile {
+    aspect-ratio: 1;
+    background: repeating-linear-gradient(45deg, var(--tile-a, var(--rh-hot)) 0 6px, var(--tile-b, var(--rh-punch)) 6px 12px);
+    border: 2px solid #000;
+    position: relative;
+    overflow: hidden;
+  }
+  .col-tile::after {
+    content: attr(data-label);
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,.7);
+    color: var(--rh-acid);
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    text-align: center;
+    line-height: 14px;
+    text-transform: uppercase;
+  }
+  .col-tile.mug { --tile-a:#7b3f00; --tile-b:#c98a4b; }
+  .col-tile.noun { --tile-a:#d62828; --tile-b:#000; }
+  .col-tile.trophy { --tile-a:#ffd60a; --tile-b:#ff7f11; }
+  .col-tile.snap { --tile-a:#7fbcd0; --tile-b:#243a4a; }
+
+  .profile-cta { margin-top: 10px; text-align: center; }
+  .open-profile {
+    display: inline-block;
+    padding: 5px 9px;
+    background: var(--rh-chrome-1);
+    color: var(--rh-ink);
+    border-top: 2px solid var(--rh-chrome-3);
+    border-left: 2px solid var(--rh-chrome-3);
+    border-right: 2px solid var(--rh-chrome-shadow);
+    border-bottom: 2px solid var(--rh-chrome-shadow);
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    text-decoration: none;
+    letter-spacing: .04em;
+  }
+
+  /* ============ ledger ============ */
+  .ledger { background: var(--rh-paper); color: var(--rh-ink); }
+  .ledger ol { list-style: none; margin: 0; padding: 0; }
+  .ledger li {
+    border-bottom: 1px solid var(--rh-chrome-1);
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+  }
+  .ledger li:last-child { border-bottom: 0; }
+  .ledger li a {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 10px;
+    color: var(--rh-ink);
+    text-decoration: none;
+  }
+  .ledger li a:hover { background: rgba(0,0,0,.05); }
+  .ledger .id {
+    font-family: 'Press Start 2P', 'Departure Mono', ui-monospace, monospace;
+    font-size: 9px;
+    color: var(--rh-hot);
+  }
+  .ledger .ch {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--rh-chrome-shadow);
+  }
+
+  /* ============ now playing ============ */
+  .now-list {
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .now-foot { margin-top: 6px; color: var(--rh-chrome-shadow); }
+
+  /* ============ footer ============ */
+  .rooms-foot {
+    text-align: center;
+    padding: 20px 10px;
+    font-family: 'Departure Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--rh-chrome-2);
+    text-transform: uppercase;
+    letter-spacing: .14em;
+  }
+</style>
