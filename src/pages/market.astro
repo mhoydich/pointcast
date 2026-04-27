@@ -43,6 +43,14 @@ const legacyMarketplaceKt1s = ((((contracts as any).marketplace?._legacy_marketp
   .filter((s) => typeof s === 'string' && (s as string).trim().startsWith('KT1')) as string[])
   .map((s) => s.trim());
 
+// Marketplace contract version. v3 = current (no per-ask royalty_receiver),
+// v4+ = list_ask takes a royalty_receiver param. The royalty-receiver UI on
+// the list-token form is hidden until version >= 4. Bumping marketplace.version
+// in contracts.json (paired with a v4 KT1 in `mainnet`) flips the UI on.
+const marketplaceVersion = Number((contracts as any).marketplace?.version ?? 3);
+const marketplaceV4Plus = marketplaceVersion >= 4;
+const defaultRoyaltyReceiver = ((contracts as any).marketplace?.royaltyReceiver ?? '').trim();
+
 const supported = ((contracts as any).marketplace?.supportedCollections ?? []) as string[];
 // Each supported collection becomes a select option in the list form +
 // a filter chip on the browse grid. We pull KT1 + display name for each.
@@ -129,7 +137,16 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
         <h2 id="market-list-title" class="market__section-title">List your token</h2>
         <p class="market__section-dek mono">connect a wallet that owns a PointCast NFT · pick the collection + token + price · sign once.</p>
       </header>
-      <form class="market__list-form" id="market-list-form" action="javascript:void(0)" data-marketplace-kt1={marketplaceKt1} data-legacy-marketplace={JSON.stringify(legacyMarketplaceKt1s)} data-collections={JSON.stringify(collectionsRegistry)}>
+      <form
+        class="market__list-form"
+        id="market-list-form"
+        action="javascript:void(0)"
+        data-marketplace-kt1={marketplaceKt1}
+        data-marketplace-version={String(marketplaceVersion)}
+        data-default-royalty-receiver={defaultRoyaltyReceiver}
+        data-legacy-marketplace={JSON.stringify(legacyMarketplaceKt1s)}
+        data-collections={JSON.stringify(collectionsRegistry)}
+      >
         <label class="market__field">
           <span class="market__field-label mono">collection</span>
           <select name="collection" id="market-list-collection" required>
@@ -154,6 +171,23 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
           <span class="market__field-label mono">royalty (bps · 750 = 7.5%)</span>
           <input type="number" name="royalty_bps" id="market-list-royalty" min="0" max="10000" value="750" required />
         </label>
+        {marketplaceV4Plus && (
+          <label class="market__field market__field--royalty-recv">
+            <span class="market__field-label mono">royalty receiver</span>
+            <input
+              type="text"
+              name="royalty_receiver"
+              id="market-list-royalty-receiver"
+              pattern="^tz[123][A-Za-z0-9]{33}$"
+              placeholder={defaultRoyaltyReceiver || 'tz1… or tz2…'}
+              value={defaultRoyaltyReceiver}
+              spellcheck={false}
+              autocomplete="off"
+              required
+            />
+            <span class="market__field-hint mono">defaults to the original creator for known PointCast collections · override to send royalties anywhere</span>
+          </label>
+        )}
         <div class="market__list-actions">
           <button type="submit" id="market-list-btn" class="market__btn mono" disabled>
             <span id="market-list-label">awaiting marketplace contract</span>
@@ -614,6 +648,14 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
     border: 1px solid var(--color-rule, rgba(0,0,0,0.08));
   }
   .market__field { display: flex; flex-direction: column; gap: 4px; }
+  .market__field--royalty-recv { grid-column: 1 / -1; }
+  .market__field-hint {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-muted, #5f5e5a);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
   .market__field-label {
     font-size: 9px;
     letter-spacing: 0.18em;
@@ -744,6 +786,17 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
   function readMarketplaceKt1() {
     const form = document.getElementById('market-list-form');
     return (form && form.getAttribute('data-marketplace-kt1')) || '';
+  }
+
+  function readMarketplaceVersion() {
+    const form = document.getElementById('market-list-form');
+    const raw = form && form.getAttribute('data-marketplace-version');
+    const n = parseInt(raw || '3', 10);
+    return Number.isFinite(n) && n > 0 ? n : 3;
+  }
+  function readDefaultRoyaltyReceiver() {
+    const form = document.getElementById('market-list-form');
+    return (form && form.getAttribute('data-default-royalty-receiver')) || '';
   }
 
   // Legacy marketplace KT1s (e.g. v3 once v4 ships). Empty by default.
@@ -1352,6 +1405,7 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
     const tokenEl = document.getElementById('market-list-token-id');
     const priceEl = document.getElementById('market-list-price');
     const royaltyEl = document.getElementById('market-list-royalty');
+    const royaltyRecvEl = document.getElementById('market-list-royalty-receiver');
     const status = document.getElementById('market-list-status');
     const fa2Kt1 = collEl && collEl.value;
     const tokenId = parseInt(tokenEl && tokenEl.value, 10);
@@ -1365,6 +1419,20 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
     if (royaltyBps < 0 || royaltyBps > 10000) {
       if (status) status.textContent = 'royalty must be 0-10000 bps';
       return;
+    }
+
+    // v4+: include royalty_receiver in the list_ask call. Defaults to the
+    // configured royaltyReceiver from contracts.json (the original creator
+    // for known PointCast collections), overrideable via the form input.
+    const mpVersion = readMarketplaceVersion();
+    const wantsRoyaltyReceiver = mpVersion >= 4;
+    let royaltyReceiver = '';
+    if (wantsRoyaltyReceiver) {
+      royaltyReceiver = (royaltyRecvEl && royaltyRecvEl.value || readDefaultRoyaltyReceiver() || wallet.address).trim();
+      if (!/^tz[123][A-Za-z0-9]{33}$/.test(royaltyReceiver)) {
+        if (status) status.textContent = 'royalty receiver must be a valid tz1/tz2/tz3 address';
+        return;
+      }
     }
     const priceMutez = Math.floor(priceXtz * 1_000_000);
 
@@ -1396,14 +1464,15 @@ const collectionsRegistry = collections.map((c) => ({ slug: c.slug, name: c.name
         { add_operator: { owner: wallet.address, operator: kt1, token_id: tokenId } },
       ];
 
+      // v3 list_ask shape: (fa2_contract, token_id, amount_mutez, royalty_bps)
+      // v4 adds: royalty_receiver — sellers pick where royalties go per ask.
+      const listAskParams = wantsRoyaltyReceiver
+        ? { fa2_contract: fa2Kt1, token_id: tokenId, amount_mutez: priceMutez, royalty_bps: royaltyBps, royalty_receiver: royaltyReceiver }
+        : { fa2_contract: fa2Kt1, token_id: tokenId, amount_mutez: priceMutez, royalty_bps: royaltyBps };
+
       const batch = tezos.wallet.batch()
         .withContractCall(fa2.methodsObject.update_operators(updateOpsParams))
-        .withContractCall(market.methodsObject.list_ask({
-          fa2_contract: fa2Kt1,
-          token_id: tokenId,
-          amount_mutez: priceMutez,
-          royalty_bps: royaltyBps,
-        }));
+        .withContractCall(market.methodsObject.list_ask(listAskParams));
       const op = await batch.send();
       if (status) status.textContent = 'broadcast ' + (op.opHash || '').slice(0, 10) + '… · confirming';
       await op.confirmation();
