@@ -13,6 +13,7 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import BlockLayout from '../../layouts/BlockLayout.astro';
 import BlockCard from '../../components/BlockCard.astro';
+import { MOOD_SOUNDTRACKS, resolveMoodTemplate } from '../../lib/moods-soundtracks';
 
 export async function getStaticPaths() {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -54,9 +55,11 @@ interface Props {
 }
 const { slug, blocks, gallery } = Astro.props;
 
-const prettyMood = slug.replace(/-/g, ' ');
+const template = resolveMoodTemplate(slug);
+const soundtrack = MOOD_SOUNDTRACKS[template.soundtrack];
+const prettyMood = template.label;
 const title = `mood · ${prettyMood}`;
-const description = `Every block and gallery entry on PointCast tagged with the "${prettyMood}" mood — a tonal cross-cut of the feed.`;
+const description = `${template.dek} Every block and gallery entry on PointCast tagged with the "${slug}" mood.`;
 
 const totalCount = blocks.length + gallery.length;
 
@@ -102,12 +105,31 @@ const jsonLd = {
       <h1 class="title">mood · <em>{prettyMood}</em></h1>
       <p class="count mono">{totalCount} ITEM{totalCount === 1 ? '' : 'S'} · {blocks.length} BLOCK{blocks.length === 1 ? '' : 'S'}{gallery.length > 0 ? ` · ${gallery.length} GALLERY` : ''}</p>
       <p class="lede">
-        A tonal cross-cut of PointCast. Every entry below carries the
-        same mood tag — not a channel, not a type, but a register.
-        Moods are editorial: added by cc when a block's emotional or
-        atmospheric fingerprint is worth naming.
+        {template.dek}
       </p>
     </header>
+
+    <section
+      class="mood-template"
+      aria-label={`${prettyMood} mood template`}
+      style={`--mood-accent:${template.accent};--mood-wash:${template.wash};--mood-ink:${template.ink}`}
+    >
+      <div>
+        <p class="mood-template__kicker mono">TEMPLATE · {slug}</p>
+        <h2 class="mood-template__title">{template.register}</h2>
+        <p class="mood-template__dek">{template.agentUse}</p>
+      </div>
+      <div class="mood-template__meta">
+        <p class="mood-template__label mono">SOUNDTRACK</p>
+        <p class="mood-template__value">{soundtrack.label}</p>
+        <p class="mood-template__note">{soundtrack.description}</p>
+      </div>
+      <ul class="mood-template__prompts" aria-label="Agent prompts">
+        {template.prompts.map((prompt) => (
+          <li>{prompt}</li>
+        ))}
+      </ul>
+    </section>
 
     {blocks.length > 0 && (
       <section class="section" aria-label={`Blocks tagged ${slug}`}>
@@ -203,6 +225,66 @@ const jsonLd = {
     color: #2a2925;
   }
 
+  .mood-template {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.52fr);
+    gap: 16px 20px;
+    margin: 0 0 24px;
+    padding: 16px;
+    border: 1px solid color-mix(in srgb, var(--mood-accent, #8a2432) 32%, #d6d4cd);
+    border-left: 6px solid var(--mood-accent, #8a2432);
+    background:
+      linear-gradient(90deg, var(--mood-wash, #fef5e7), transparent 58%),
+      #fafaf7;
+    color: var(--mood-ink, #12110E);
+  }
+  .mood-template__kicker,
+  .mood-template__label {
+    margin: 0 0 6px;
+    color: var(--mood-accent, #8a2432);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .mood-template__title {
+    margin: 0;
+    font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 1.1;
+  }
+  .mood-template__dek,
+  .mood-template__note {
+    margin: 8px 0 0;
+    color: #38373A;
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  .mood-template__value {
+    margin: 0;
+    color: var(--mood-ink, #12110E);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .mood-template__prompts {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .mood-template__prompts li {
+    padding: 5px 8px;
+    border: 1px solid color-mix(in srgb, var(--mood-accent, #8a2432) 26%, #d6d4cd);
+    background: rgba(255, 255, 255, 0.48);
+    color: #38373A;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
   .section { margin: 28px 0; }
   .section__kicker {
     margin: 0 0 12px;
@@ -220,6 +302,10 @@ const jsonLd = {
     gap: 8px;
   }
   @media (max-width: 639px) {
+    .mood-template {
+      grid-template-columns: 1fr;
+    }
+
     .grid {
       grid-template-columns: 1fr;
       gap: 16px;
@@ -292,4 +378,3 @@ const jsonLd = {
 
   .mono { font-family: var(--pc-font-mono); }
 </style>
-

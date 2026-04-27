@@ -12,6 +12,7 @@
  */
 import type { APIRoute } from 'astro';
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { resolveMoodTemplate } from '../lib/moods-soundtracks';
 
 export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -30,6 +31,7 @@ export const GET: APIRoute = async () => {
     total: number;
     freshest: string | null;
     sampleBlockIds: string[];
+    template: ReturnType<typeof resolveMoodTemplate>;
     url: string;
     jsonUrl: string;
   };
@@ -47,6 +49,7 @@ export const GET: APIRoute = async () => {
         total: 0,
         freshest: null,
         sampleBlockIds: [],
+        template: resolveMoodTemplate(slug),
         url: `https://pointcast.xyz/mood/${slug}`,
         jsonUrl: `https://pointcast.xyz/mood/${slug}.json`,
       };

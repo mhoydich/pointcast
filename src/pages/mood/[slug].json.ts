@@ -6,6 +6,7 @@
  */
 import type { APIRoute, GetStaticPaths } from 'astro';
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { resolveMoodTemplate } from '../../lib/moods-soundtracks';
 
 export const getStaticPaths: GetStaticPaths = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -46,11 +47,13 @@ type Props = {
 
 export const GET: APIRoute<Props> = async ({ props }) => {
   const { slug, blocks, gallery } = props;
+  const template = resolveMoodTemplate(slug);
 
   const payload = {
     $schema: 'https://pointcast.xyz/mood/{slug}.json',
     mood: slug,
-    prettyMood: slug.replace(/-/g, ' '),
+    prettyMood: template.label,
+    template,
     home: `https://pointcast.xyz/mood/${slug}`,
     generatedAt: new Date().toISOString(),
     counts: {

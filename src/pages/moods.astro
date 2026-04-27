@@ -12,6 +12,7 @@
  */
 import { getCollection, type CollectionEntry } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
+import { resolveMoodTemplate } from '../lib/moods-soundtracks';
 
 const blocks = await getCollection('blocks', ({ data }) => !data.draft);
 
@@ -24,6 +25,7 @@ try {
 
 type MoodRow = {
   slug: string;
+  template: ReturnType<typeof resolveMoodTemplate>;
   blocks: number;
   gallery: number;
   total: number;
@@ -37,7 +39,7 @@ const rowsByMood = new Map<string, MoodRow>();
 function ensure(slug: string): MoodRow {
   let r = rowsByMood.get(slug);
   if (!r) {
-    r = { slug, blocks: 0, gallery: 0, total: 0, freshest: 0, sampleBlocks: [] };
+    r = { slug, template: resolveMoodTemplate(slug), blocks: 0, gallery: 0, total: 0, freshest: 0, sampleBlocks: [] };
     rowsByMood.set(slug, r);
   }
   return r;
@@ -85,7 +87,8 @@ const jsonLd = {
   hasPart: rows.map((r) => ({
     '@type': 'CollectionPage',
     '@id': `https://pointcast.xyz/mood/${r.slug}`,
-    name: r.slug.replace(/-/g, ' '),
+    name: r.template.label,
+    description: r.template.dek,
     url: `https://pointcast.xyz/mood/${r.slug}`,
   })),
 };
@@ -125,9 +128,14 @@ const jsonLd = {
       <ul class="rows">
         {rows.map((row) => (
           <li class="row">
-            <a class="row__link" href={`/mood/${row.slug}`} aria-label={`${row.slug} — ${row.total} entries`}>
+            <a
+              class="row__link"
+              href={`/mood/${row.slug}`}
+              aria-label={`${row.template.label} — ${row.total} entries`}
+              style={`--mood-accent:${row.template.accent};--mood-wash:${row.template.wash};--mood-ink:${row.template.ink}`}
+            >
               <div class="row__head">
-                <span class="row__slug">{row.slug.replace(/-/g, ' ')}</span>
+                <span class="row__slug">{row.template.label}</span>
                 <span class="row__count mono" aria-label={`${row.total} entries`}>
                   {row.total}
                   <span class="row__count-sub">
@@ -135,6 +143,8 @@ const jsonLd = {
                   </span>
                 </span>
               </div>
+              <p class="row__dek">{row.template.dek}</p>
+              <p class="row__register mono">{row.template.register}</p>
               {row.sampleBlocks.length > 0 && (
                 <ul class="row__samples">
                   {row.sampleBlocks.map((b) => (
@@ -222,14 +232,19 @@ const jsonLd = {
     display: block;
     padding: 14px 16px;
     border: 1px solid #d6d4cd;
+    border-left: 5px solid var(--mood-accent, #8a2432);
     border-radius: 3px;
-    background: #fafaf7;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--mood-wash, #fef5e7) 72%, transparent), transparent 48%),
+      #fafaf7;
     position: relative;
     transition: background-color 0.12s, border-color 0.12s;
   }
   .row__link:hover {
-    background: #fef5e7;
-    border-color: #8a2432;
+    background:
+      linear-gradient(90deg, var(--mood-wash, #fef5e7), transparent 62%),
+      #fff;
+    border-color: var(--mood-accent, #8a2432);
     text-decoration: none;
   }
 
@@ -247,10 +262,23 @@ const jsonLd = {
     letter-spacing: -0.005em;
     text-transform: none;
   }
+  .row__dek {
+    max-width: 66ch;
+    margin: 6px 76px 0 0;
+    color: #38373A;
+    font-size: 13px;
+    line-height: 1.42;
+  }
+  .row__register {
+    margin: 7px 76px 0 0;
+    color: var(--mood-accent, #8a2432);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+  }
   .row__count {
     font-size: 14px;
     font-weight: 700;
-    color: #8a2432;
+    color: var(--mood-accent, #8a2432);
     letter-spacing: 0.08em;
     display: flex;
     align-items: baseline;
@@ -265,7 +293,7 @@ const jsonLd = {
 
   .row__samples {
     list-style: none;
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     padding: 0;
     display: grid;
     gap: 2px;
@@ -280,7 +308,7 @@ const jsonLd = {
     position: absolute;
     right: 14px;
     bottom: 12px;
-    color: #8a2432;
+    color: var(--mood-accent, #8a2432);
     font-weight: 700;
     font-family: var(--pc-font-mono);
     opacity: 0;

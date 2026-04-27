@@ -8,24 +8,25 @@
  */
 import { getCollection } from 'astro:content';
 import BlockLayout from '../../layouts/BlockLayout.astro';
+import { resolveMoodTemplate } from '../../lib/moods-soundtracks';
 
 const [blocks, products] = await Promise.all([
   getCollection('blocks', ({ data }) => !data.draft),
   getCollection('products', ({ data }) => !data.draft),
 ]);
 
-type Row = { mood: string; blocks: number; products: number };
+type Row = { mood: string; template: ReturnType<typeof resolveMoodTemplate>; blocks: number; products: number };
 const rowMap = new Map<string, Row>();
 
 blocks.forEach((b) => {
   if (!b.data.mood) return;
-  const row = rowMap.get(b.data.mood) ?? { mood: b.data.mood, blocks: 0, products: 0 };
+  const row = rowMap.get(b.data.mood) ?? { mood: b.data.mood, template: resolveMoodTemplate(b.data.mood), blocks: 0, products: 0 };
   row.blocks += 1;
   rowMap.set(b.data.mood, row);
 });
 products.forEach((p) => {
   (p.data.pairsWithMood ?? []).forEach((m) => {
-    const row = rowMap.get(m) ?? { mood: m, blocks: 0, products: 0 };
+    const row = rowMap.get(m) ?? { mood: m, template: resolveMoodTemplate(m), blocks: 0, products: 0 };
     row.products += 1;
     rowMap.set(m, row);
   });
@@ -62,9 +63,10 @@ const description = `${rows.length} moods indexed. ${withProducts} have at least
     <ul class="list">
       {rows.map((r) => (
         <li>
-          <a class="row" href={`/pairings/${r.mood}`}>
-            <span class="row__mood">{r.mood.replace(/-/g, ' ')}</span>
+          <a class="row" href={`/pairings/${r.mood}`} style={`--mood-accent:${r.template.accent};--mood-wash:${r.template.wash}`}>
+            <span class="row__mood">{r.template.label}</span>
             <span class="row__slug mono">/{r.mood}</span>
+            <span class="row__dek mono">{r.template.register}</span>
             <span class="row__counts mono">
               <span class="count count--blocks">{r.blocks} BLOCK{r.blocks === 1 ? '' : 'S'}</span>
               <span class="count count--products" data-has={r.products > 0 ? 'true' : 'false'}>{r.products} PROD{r.products === 1 ? '' : 'S'}</span>
@@ -99,20 +101,24 @@ const description = `${rows.length} moods indexed. ${withProducts} have at least
     .list { list-style: none; padding: 0; margin: 0 0 28px; display: grid; gap: 4px; }
     .row {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto minmax(120px, 0.5fr) auto;
       gap: 12px;
       align-items: baseline;
       padding: 10px 14px;
-      background: #fff;
+      background:
+        linear-gradient(90deg, color-mix(in srgb, var(--mood-wash, #fbf9ff) 62%, transparent), transparent 46%),
+        #fff;
       border: 1px solid #d6d4cd;
+      border-left: 5px solid var(--mood-accent, #5F3DC4);
       border-radius: 2px;
       color: #12110E;
       text-decoration: none;
       transition: background 0.12s, border-color 0.12s;
     }
-    .row:hover { background: #fbf9ff; border-color: #5F3DC4; }
+    .row:hover { background: var(--mood-wash, #fbf9ff); border-color: var(--mood-accent, #5F3DC4); }
     .row__mood { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: 16px; font-weight: 600; text-transform: lowercase; }
     .row__slug { font-size: 10px; color: #8a8878; }
+    .row__dek { font-size: 9px; color: var(--mood-accent, #5F3DC4); letter-spacing: 0.1em; }
     .row__counts { display: flex; gap: 10px; font-size: 9.5px; }
     .count { padding: 2px 6px; border-radius: 2px; font-weight: 700; }
     .count--blocks { background: #f5f0ff; color: #5F3DC4; }
@@ -122,6 +128,7 @@ const description = `${rows.length} moods indexed. ${withProducts} have at least
     @media (max-width: 540px) {
       .row { grid-template-columns: 1fr auto; grid-template-rows: auto auto; row-gap: 2px; }
       .row__slug { grid-column: 1 / 2; grid-row: 2; }
+      .row__dek { display: none; }
       .row__counts { grid-column: 2; grid-row: 1 / 3; flex-direction: column; align-items: flex-end; }
     }
 
