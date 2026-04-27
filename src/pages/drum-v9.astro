@@ -1,0 +1,985 @@
+---
+/**
+ * /drum-v9 — The Lounge.
+ *
+ * Per Mike: "try a kenny g version, make fun, nostalgic, collaborative,
+ * appreciative, something kenny, a genius in his craft, would
+ * appreciate and enjoy"
+ *
+ * A smooth jazz lounge for Kenny G. Eight saxophone "voices" — two
+ * sopranos, two altos, two tenors, two baritones — each tuned to a
+ * note in a Cmaj9 jazz voicing so any combination of held notes
+ * always sounds harmonically valid. Hold to sustain (the circular-
+ * breathing nod — Kenny holds the world record at 45+ minutes). A
+ * soft Rhodes piano + walking electric bass + brushed hi-hat plays
+ * a four-bar smooth jazz turnaround in F major while you blow.
+ *
+ * Track titles are Kenny G hits: Songbird, Forever in Love, Going
+ * Home, Silhouette, By the Time, The Moment, Loving You, Sentimental.
+ *
+ * Visual: warm sunset gradient (peach → magenta → twilight blue), 80s
+ * grid pattern in the background, "ON AIR" indicator that pulses with
+ * the beat. Smooth jazz radio station energy.
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+// 8 saxophone voices, each tuned to one note in a Cmaj9 chord stack.
+// Kenny-G-style vertical voicing — sopranos sit on top, baritones
+// hold down the root. Track names are real Kenny G hits.
+const VOICES = [
+  // Sopranos (high, soaring) — top of the chord
+  { key: 'sop-1', label: 'Songbird',          nounId:  77, sax: 'soprano',  semitone: 60, accent: '#fbbf24', tagline: '1986 · sopr.' },
+  { key: 'sop-2', label: 'Forever in Love',   nounId: 144, sax: 'soprano',  semitone: 64, accent: '#fb923c', tagline: '1992 · sopr.' },
+
+  // Altos (sweet, lyrical) — mid-range melody
+  { key: 'alt-1', label: 'Going Home',        nounId: 211, sax: 'alto',     semitone: 55, accent: '#f97316', tagline: '1989 · alto' },
+  { key: 'alt-2', label: 'Silhouette',        nounId: 278, sax: 'alto',     semitone: 59, accent: '#ea580c', tagline: '1988 · alto' },
+
+  // Tenors (warm, romantic) — chord body
+  { key: 'ten-1', label: 'By the Time',       nounId: 345, sax: 'tenor',    semitone: 48, accent: '#dc2626', tagline: '1997 · tenor' },
+  { key: 'ten-2', label: 'The Moment',        nounId: 412, sax: 'tenor',    semitone: 52, accent: '#b91c1c', tagline: '1996 · tenor' },
+
+  // Baritones (deep, anchoring) — chord roots
+  { key: 'bar-1', label: 'Loving You',        nounId: 479, sax: 'baritone', semitone: 41, accent: '#a21caf', tagline: '1986 · bari' },
+  { key: 'bar-2', label: 'Sentimental',       nounId: 546, sax: 'baritone', semitone: 36, accent: '#7e22ce', tagline: '1992 · bari' },
+] as const;
+---
+
+<DrumLayout
+  title="Drum Room v9 · The Lounge"
+  description="Eight saxophones in a smooth jazz lounge. Hold a Noun to sustain — a nod to Kenny G's circular-breathing world record. Rhodes + walking bass + brushes back you up while the sun sets."
+  image="/images/og-drum.png"
+>
+
+<div class="v9-root">
+
+  <DrumNav current="v9" />
+
+  <header class="v9-hero">
+    <div class="v9-hero-line">
+      <p class="v9-hero-eyebrow">v9 · the lounge · smooth jazz</p>
+      <span class="v9-onair" id="v9-onair">● ON AIR</span>
+    </div>
+    <h1 class="v9-hero-title">an evening with the saxophone</h1>
+    <p class="v9-hero-dek">
+      eight horns. one chord. infinite possibility. <em>hold</em> a noun
+      and it sings forever — circular breathing, the Kenny way. tap
+      multiple at once and you've made a jazz chord. press the lights
+      and the rhythm section joins you. enjoy the night.
+    </p>
+  </header>
+
+  <!-- ══ HUD ══ -->
+  <div class="v9-hud">
+    <div class="v9-hud-card">
+      <div class="v9-hud-label">Holding</div>
+      <div class="v9-hud-val" id="v9-holding">silence</div>
+      <div class="v9-hud-sub">press + hold a noun to sustain</div>
+    </div>
+    <div class="v9-hud-card v9-hud-mode" id="v9-mode-card">
+      <div class="v9-hud-label">Backing</div>
+      <div class="v9-hud-val" id="v9-mode-label">off</div>
+      <div class="v9-hud-sub" id="v9-mode-sub">rhodes · bass · brushes</div>
+    </div>
+    <div class="v9-hud-card v9-hud-jammers">
+      <div class="v9-hud-label">In the Lounge</div>
+      <div class="v9-hud-val" id="v9-jammers">1</div>
+      <div class="v9-hud-sub">live · jam together</div>
+    </div>
+    <div class="v9-hud-card">
+      <div class="v9-hud-label">Vibe</div>
+      <div class="v9-hud-val" id="v9-vibe">F maj 9</div>
+      <div class="v9-hud-sub">key · ii–V–I cycling</div>
+    </div>
+  </div>
+
+  <!-- ══ BACKING TRACK CONTROLS ══ -->
+  <section class="v9-backing">
+    <button id="v9-backing-btn" class="v9-backing-btn" aria-pressed="false">
+      <span id="v9-backing-icon">🎹</span>
+      <span id="v9-backing-label">Press · light the candles</span>
+    </button>
+    <div class="v9-tempo">
+      <input type="range" id="v9-tempo" min="72" max="120" value="96" step="1" />
+      <span class="v9-tempo-val"><span id="v9-tempo-num">96</span> bpm</span>
+    </div>
+    <div class="v9-backing-meta">
+      <span class="v9-backing-bar">▮▮▮▮ · <span id="v9-bar-pos">—</span></span>
+      <span class="v9-backing-chord" id="v9-current-chord">—</span>
+    </div>
+  </section>
+
+  <!-- ══ THE BAND ══ -->
+  <section class="v9-stage" aria-label="The band">
+    <div class="v9-stage-grid">
+      {VOICES.map((v) => (
+        <button
+          type="button"
+          class="v9-voice"
+          data-voice={v.key}
+          data-noun={String(v.nounId)}
+          data-sax={v.sax}
+          data-semitone={String(v.semitone)}
+          aria-label={`${v.label} — ${v.sax} sax, hold to sustain`}
+          style={`--accent: ${v.accent}`}
+        >
+          <div class="v9-voice-card">
+            <img
+              class="v9-voice-img"
+              src={`https://noun.pics/${v.nounId}.svg`}
+              alt={v.label}
+              width="128"
+              height="128"
+              loading="lazy"
+              style="image-rendering: pixelated;"
+            />
+            <div class="v9-voice-sax-pill">{v.sax.toUpperCase()}</div>
+          </div>
+          <div class="v9-voice-name">{v.label}</div>
+          <div class="v9-voice-tagline">{v.tagline}</div>
+          <div class="v9-voice-vu" aria-hidden="true">
+            <span class="v9-voice-vu-bar"></span>
+          </div>
+        </button>
+      ))}
+    </div>
+  </section>
+
+  <!-- ══ APPRECIATION FOOTER ══ -->
+  <section class="v9-appreciation">
+    <p class="v9-appreciation-line">
+      <span class="v9-appreciation-glyph">⌐◨-◨</span>
+      <em>for Kenneth Bruce Gorelick — born June 5, 1956 · Seattle</em>
+      <span class="v9-appreciation-dot">·</span>
+      <span>set a Guinness World Record holding an E-flat for 45m 47s</span>
+      <span class="v9-appreciation-dot">·</span>
+      <span>thank you for the soundtrack of every late drive home</span>
+    </p>
+  </section>
+
+  <footer class="v9-footer">
+    <span>⌐◨-◨ PointCast · Drum Room · v9 the lounge</span>
+    <span>Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026</span>
+  </footer>
+
+</div>
+
+<style is:global>
+  /* ════════════════════════════════════════════════════════════════
+     /drum-v9 — The Lounge. Sunset gradient, 80s grid, smooth jazz feel.
+     ════════════════════════════════════════════════════════════════ */
+
+  body.drum-body:has(.v9-root) {
+    background:
+      linear-gradient(180deg, #ffe4cc 0%, #ffcfa0 25%, #f7a48e 50%, #c4708e 75%, #5d4275 100%) !important;
+    color: #fff;
+  }
+
+  .v9-root {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    font-family: var(--pc-font-mono);
+    color: #2b1a3a;
+    position: relative;
+  }
+  .v9-root::before {
+    /* 80s grid pattern fading toward the horizon */
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.55) 100%);
+  }
+  .v9-root > * { position: relative; z-index: 1; }
+
+  /* Hero */
+  .v9-hero {
+    padding: 14px 0 18px;
+    margin-bottom: 16px;
+  }
+  .v9-hero-line {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .v9-hero-eyebrow {
+    font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
+    color: #5d2a4d; margin: 0; font-weight: 700;
+  }
+  .v9-onair {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.3em;
+    color: #fff;
+    background: #c41e3a;
+    padding: 4px 12px;
+    border-radius: 3px;
+    box-shadow: 0 0 18px rgba(196,30,58,0.45);
+    animation: v9-onair-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes v9-onair-pulse {
+    0%, 100% { box-shadow: 0 0 18px rgba(196,30,58,0.45); }
+    50%      { box-shadow: 0 0 26px rgba(196,30,58,0.85); }
+  }
+  .v9-hero-title {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 400;
+    color: #2b1a3a;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+  .v9-hero-dek {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-size: 16px;
+    font-style: italic;
+    color: #4a2d4d;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 60ch;
+  }
+  .v9-hero-dek em {
+    font-weight: 700;
+    color: #c41e3a;
+    font-style: italic;
+  }
+
+  /* HUD */
+  .v9-hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 540px) { .v9-hud { grid-template-columns: repeat(2, 1fr); } }
+  .v9-hud-card {
+    padding: 12px 14px;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(10px);
+    color: #2b1a3a;
+  }
+  .v9-hud-label {
+    font-size: 8px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: #5d2a4d; margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .v9-hud-val {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-size: 1.3rem; font-weight: 600; line-height: 1;
+    color: #2b1a3a; margin-bottom: 4px;
+    font-style: italic;
+  }
+  .v9-hud-sub {
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #5d2a4d;
+  }
+  .v9-hud-mode.is-on .v9-hud-val { color: #c41e3a; }
+  .v9-hud-jammers .v9-hud-val { color: #16a34a; }
+
+  /* Backing controls */
+  .v9-backing {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,213,179,0.5) 100%);
+    backdrop-filter: blur(10px);
+    margin-bottom: 22px;
+  }
+  .v9-backing-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 18px;
+    border: 1.5px solid #2b1a3a;
+    border-radius: 999px;
+    background: #2b1a3a;
+    color: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .v9-backing-btn:hover { background: #c41e3a; border-color: #c41e3a; }
+  .v9-backing-btn[aria-pressed="true"] { background: #c41e3a; border-color: #c41e3a; }
+  .v9-tempo {
+    display: flex; align-items: center; gap: 8px;
+    flex: 1; min-width: 200px;
+  }
+  .v9-tempo input {
+    flex: 1;
+    accent-color: #c41e3a;
+  }
+  .v9-tempo-val {
+    font-family: var(--pc-font-mono);
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #2b1a3a; font-weight: 700; min-width: 60px;
+  }
+  .v9-backing-meta {
+    display: flex; align-items: baseline; gap: 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #5d2a4d;
+  }
+  .v9-backing-bar { font-variant-numeric: tabular-nums; }
+  .v9-backing-chord {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: #c41e3a;
+    font-weight: 700;
+  }
+
+  /* Stage */
+  .v9-stage { margin-bottom: 24px; }
+  .v9-stage-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 720px) { .v9-stage-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .v9-voice {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 80ms ease;
+  }
+  .v9-voice:active { transform: scale(0.96); }
+  .v9-voice-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    border: 3px solid var(--accent, #c41e3a);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,228,204,0.7) 100%);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: box-shadow 200ms ease, transform 200ms ease;
+    box-shadow: 0 8px 24px rgba(45,20,55,0.18);
+  }
+  .v9-voice-img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+  }
+  .v9-voice-sax-pill {
+    position: absolute;
+    top: 6px; right: 6px;
+    font-family: var(--pc-font-mono);
+    font-size: 8px; letter-spacing: 0.18em;
+    background: var(--accent, #c41e3a);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+
+  /* When sustained — the held / "blowing" state */
+  .v9-voice.holding .v9-voice-card {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent),
+                0 0 30px color-mix(in srgb, var(--accent) 65%, transparent),
+                0 8px 24px rgba(45,20,55,0.25);
+    transform: scale(1.04);
+    animation: v9-blow 1.2s ease-in-out infinite;
+  }
+  @keyframes v9-blow {
+    0%, 100% { transform: scale(1.04); }
+    50%      { transform: scale(1.07); }
+  }
+  .v9-voice.remote-holding .v9-voice-card {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent),
+                0 8px 18px rgba(45,20,55,0.18);
+  }
+
+  .v9-voice-name {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 16px;
+    color: #2b1a3a;
+    text-align: center;
+    line-height: 1.2;
+    font-weight: 600;
+  }
+  .v9-voice-tagline {
+    font-family: var(--pc-font-mono);
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #5d2a4d;
+  }
+
+  /* Tiny VU meter under each voice */
+  .v9-voice-vu {
+    width: 60%; height: 3px;
+    background: rgba(45,20,55,0.15);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .v9-voice-vu-bar {
+    display: block; height: 100%; width: 0%;
+    background: var(--accent, #c41e3a);
+    transition: width 80ms linear;
+  }
+  .v9-voice.holding .v9-voice-vu-bar { width: 90%; animation: v9-vu 0.6s ease-in-out infinite alternate; }
+  @keyframes v9-vu {
+    from { width: 70%; }
+    to   { width: 95%; }
+  }
+
+  /* Appreciation */
+  .v9-appreciation {
+    text-align: center;
+    padding: 18px 16px;
+    margin-bottom: 24px;
+    border-top: 1.5px solid rgba(255,255,255,0.3);
+    border-bottom: 1.5px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.25);
+    backdrop-filter: blur(8px);
+    border-radius: 6px;
+  }
+  .v9-appreciation-line {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-size: 13px;
+    color: #2b1a3a;
+    margin: 0;
+    line-height: 1.7;
+  }
+  .v9-appreciation-line em { color: #c41e3a; font-weight: 700; }
+  .v9-appreciation-glyph { font-family: var(--pc-font-mono); margin-right: 6px; }
+  .v9-appreciation-dot { color: #5d2a4d; margin: 0 8px; opacity: 0.6; }
+
+  /* Footer */
+  .v9-footer {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    border-top: 1.5px solid rgba(255,255,255,0.3);
+    padding-top: 16px;
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #5d2a4d;
+  }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-v9 — Smooth jazz lounge. Hold-to-sustain saxophones over a
+  // 4-bar smooth jazz turnaround in F major.
+  // ══════════════════════════════════════════════════════════════════
+
+  type SaxType = 'soprano' | 'alto' | 'tenor' | 'baritone';
+  type VoiceMeta = { key: string; nounId: number; sax: SaxType; semitone: number };
+
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  let audioCtx: AudioContext | null = null;
+  function getCtx(): AudioContext | null {
+    if (audioCtx) return audioCtx;
+    try {
+      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!Ctx) return null;
+      audioCtx = new Ctx({ latencyHint: 'interactive' });
+    } catch { audioCtx = null; }
+    return audioCtx;
+  }
+  ['pointerdown','keydown','touchstart','scroll'].forEach(e =>
+    document.addEventListener(e as any, () => { const c = getCtx(); if (c?.state === 'suspended') c.resume().catch(() => {}); }, { once: true, passive: true, capture: true }));
+
+  // ── Saxophone synth ──
+  // C2 = 65.41 Hz reference. semitone offsets from C2 give the pitch.
+  function semiToHz(semitone: number): number {
+    return 65.41 * Math.pow(2, semitone / 12);
+  }
+
+  interface SaxVoice {
+    osc1: OscillatorNode;
+    osc2: OscillatorNode;
+    gain: GainNode;
+    lfo: OscillatorNode;
+    lfoGain: GainNode;
+    formant: BiquadFilterNode;
+  }
+
+  // Per-sax-type formant frequencies (the resonant body of the horn).
+  // Soprano sits high and bright; baritone is dark and warm.
+  const SAX_FORMANT: Record<SaxType, { freq: number; q: number }> = {
+    soprano:  { freq: 1400, q: 3.5 },
+    alto:     { freq: 1100, q: 3.0 },
+    tenor:    { freq:  900, q: 2.6 },
+    baritone: { freq:  650, q: 2.2 },
+  };
+
+  function startSax(voice: VoiceMeta, gainScale = 1): SaxVoice | null {
+    const ctx = getCtx(); if (!ctx) return null;
+    const t = ctx.currentTime;
+    const target = semiToHz(voice.semitone);
+    const formant = SAX_FORMANT[voice.sax];
+
+    // Master gain — soft attack so notes "bloom"
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(0.12 * gainScale, t + 0.10);
+    out.connect(ctx.destination);
+
+    // Bend up to pitch (~80ms) — the sax embouchure shape
+    const o1 = ctx.createOscillator();
+    o1.type = 'sawtooth';
+    o1.frequency.setValueAtTime(target * 0.93, t);
+    o1.frequency.linearRampToValueAtTime(target, t + 0.08);
+
+    // Second osc detuned ~6 cents for the "alive" sax body chorus
+    const o2 = ctx.createOscillator();
+    o2.type = 'sawtooth';
+    o2.frequency.setValueAtTime(target * 0.93 * 1.0035, t);
+    o2.frequency.linearRampToValueAtTime(target * 1.0035, t + 0.08);
+
+    // Vibrato — Kenny G's signature 5–6 Hz with ~12 cents depth
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.5;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = target * 0.0072; // ~12 cents
+    lfo.connect(lfoGain);
+    lfoGain.connect(o1.frequency);
+    lfoGain.connect(o2.frequency);
+
+    // Formant filter — the body of the horn
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = formant.freq;
+    bp.Q.value = formant.q;
+
+    // Subtle high-pass to clean the rumble
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 80;
+
+    o1.connect(bp);
+    o2.connect(bp);
+    bp.connect(hp);
+    hp.connect(out);
+
+    // Subtle breath noise underneath
+    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1);
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuf;
+    noise.loop = true;
+    const noiseBp = ctx.createBiquadFilter();
+    noiseBp.type = 'bandpass';
+    noiseBp.frequency.value = formant.freq * 1.2;
+    noiseBp.Q.value = 0.6;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.025 * gainScale;
+    noise.connect(noiseBp);
+    noiseBp.connect(noiseGain);
+    noiseGain.connect(out);
+
+    o1.start(t);
+    o2.start(t);
+    lfo.start(t);
+    noise.start(t);
+
+    return { osc1: o1, osc2: o2, gain: out, lfo, lfoGain, formant: bp };
+  }
+
+  function stopSax(v: SaxVoice) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    v.gain.gain.cancelScheduledValues(t);
+    v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+    v.gain.gain.linearRampToValueAtTime(0, t + 0.25);
+    v.osc1.stop(t + 0.30);
+    v.osc2.stop(t + 0.30);
+    v.lfo.stop(t + 0.30);
+  }
+
+  // ── Voice elements + state ──
+  const voiceEls = Array.from(document.querySelectorAll<HTMLElement>('.v9-voice'));
+  const VOICES: Record<string, VoiceMeta> = {};
+  voiceEls.forEach((el) => {
+    const k = el.dataset.voice as string;
+    VOICES[k] = {
+      key: k,
+      nounId: Number(el.dataset.noun),
+      sax: el.dataset.sax as SaxType,
+      semitone: Number(el.dataset.semitone),
+    };
+  });
+
+  const ACTIVE = new Map<string, SaxVoice>();
+
+  function startVoice(key: string, gainScale = 1) {
+    const meta = VOICES[key];
+    if (!meta) return;
+    if (ACTIVE.has(key)) stopVoice(key);
+    const v = startSax(meta, gainScale);
+    if (v) ACTIVE.set(key, v);
+    const el = document.querySelector<HTMLElement>(`.v9-voice[data-voice="${key}"]`);
+    if (el) el.classList.add('holding');
+    paintHolding();
+  }
+  function stopVoice(key: string) {
+    const v = ACTIVE.get(key);
+    if (!v) return;
+    stopSax(v);
+    ACTIVE.delete(key);
+    const el = document.querySelector<HTMLElement>(`.v9-voice[data-voice="${key}"]`);
+    if (el) el.classList.remove('holding');
+    paintHolding();
+  }
+  function pulseVoice(key: string, durMs = 1100) {
+    startVoice(key, 0.7);
+    const el = document.querySelector<HTMLElement>(`.v9-voice[data-voice="${key}"]`);
+    if (el) { el.classList.remove('holding'); el.classList.add('remote-holding'); }
+    setTimeout(() => {
+      stopVoice(key);
+      if (el) el.classList.remove('remote-holding');
+    }, durMs);
+  }
+
+  const holdingEl = document.getElementById('v9-holding');
+  function paintHolding() {
+    if (!holdingEl) return;
+    if (ACTIVE.size === 0) {
+      holdingEl.textContent = 'silence';
+    } else {
+      const labels = Array.from(ACTIVE.keys()).map((k) => {
+        const meta = VOICES[k];
+        return meta ? meta.sax[0].toUpperCase() : '';
+      }).join(' · ');
+      holdingEl.textContent = `${ACTIVE.size} voice${ACTIVE.size === 1 ? '' : 's'} · ${labels}`;
+    }
+  }
+
+  // ── Pointer hold/release handlers ──
+  voiceEls.forEach((el) => {
+    const key = el.dataset.voice as string;
+    if (!key) return;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      el.setPointerCapture?.(e.pointerId);
+      startVoice(key);
+      try { navigator.vibrate?.(8); } catch {}
+      // Broadcast hold start
+      broadcast({ type: 'lounge', voice: key, action: 'start', sessionId });
+    });
+    const release = () => {
+      if (!ACTIVE.has(key)) return;
+      stopVoice(key);
+      broadcast({ type: 'lounge', voice: key, action: 'stop', sessionId });
+    };
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+    el.addEventListener('pointerleave', release);
+  });
+
+  // Keyboard shortcuts: 1-8 for the 8 voices (hold key = sustain)
+  const KEY_MAP: Record<string, string> = {};
+  voiceEls.forEach((el, i) => { KEY_MAP[String(i + 1)] = el.dataset.voice as string; });
+  const heldKeys = new Set<string>();
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') { e.preventDefault(); toggleBacking(); return; }
+    if (e.code === 'Escape' && ACTIVE.size > 0) {
+      for (const k of [...ACTIVE.keys()]) stopVoice(k);
+      heldKeys.clear();
+      return;
+    }
+    const k = KEY_MAP[e.key];
+    if (k && !heldKeys.has(e.key)) {
+      e.preventDefault();
+      heldKeys.add(e.key);
+      startVoice(k);
+      broadcast({ type: 'lounge', voice: k, action: 'start', sessionId });
+    }
+  });
+  document.addEventListener('keyup', (e) => {
+    const k = KEY_MAP[e.key];
+    if (k && heldKeys.has(e.key)) {
+      heldKeys.delete(e.key);
+      stopVoice(k);
+      broadcast({ type: 'lounge', voice: k, action: 'stop', sessionId });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // BACKING TRACK — 4-bar smooth jazz turnaround in F major
+  //   bar 1: F maj 9
+  //   bar 2: D min 9
+  //   bar 3: G min 7
+  //   bar 4: C 13   →   loops back to F maj 9
+  // Each bar: walking bass on every beat, Rhodes piano comping the
+  // chord on beats 1 & 3, brushed hi-hat on every beat with accent on 2/4.
+  // ══════════════════════════════════════════════════════════════════
+  type ChordName = 'Fmaj9' | 'Dm9' | 'Gm7' | 'C13';
+  // Chord notes as semitone offsets from C2 (so 0 = C2, 12 = C3, etc.)
+  const CHORDS: Record<ChordName, { root: number; piano: number[]; bassWalk: number[] }> = {
+    Fmaj9: { root: 17, piano: [29, 33, 36, 40], bassWalk: [17, 21, 24, 19] }, // F2, A2, C3, E3, G3
+    Dm9:   { root: 14, piano: [26, 29, 33, 36], bassWalk: [14, 17, 21, 19] }, // D2 root walk
+    Gm7:   { root: 19, piano: [31, 34, 38, 41], bassWalk: [19, 22, 26, 24] }, // G2 root walk
+    C13:   { root: 12, piano: [28, 31, 34, 38], bassWalk: [12, 16, 19, 22] }, // C2 root walk
+  };
+  const PROGRESSION: ChordName[] = ['Fmaj9', 'Dm9', 'Gm7', 'C13'];
+
+  let backingOn = false;
+  let backingTimer: number | null = null;
+  let bpm = 96;
+  let bar = 0;
+  let beat = 0;
+
+  function playRhodes(semitone: number, gain: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const f = semiToHz(semitone);
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(gain, t + 0.005);
+    out.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+    out.connect(ctx.destination);
+    // Sine + soft bell-like FM via a triangle modulator at 2x for the Rhodes "tine"
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = f * 2;
+    const g2 = ctx.createGain(); g2.gain.value = 0.15;
+    o2.connect(g2); g2.connect(out);
+    o.connect(out);
+    o.start(t); o.stop(t + 1.5);
+    o2.start(t); o2.stop(t + 0.6);
+  }
+
+  function playBass(semitone: number, gain: number) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const f = semiToHz(semitone);
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(gain, t + 0.005);
+    out.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    out.connect(ctx.destination);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(f * 0.5, t);
+    o.frequency.linearRampToValueAtTime(f, t + 0.04);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 800;
+    o.connect(lp); lp.connect(out);
+    o.start(t); o.stop(t + 0.45);
+  }
+
+  function playBrush(gain: number, accent: boolean) {
+    const ctx = getCtx(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(gain, t + 0.005);
+    out.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    out.connect(ctx.destination);
+    const sz = Math.floor(ctx.sampleRate * 0.12);
+    const buf = ctx.createBuffer(1, sz, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < sz; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / sz);
+    const n = ctx.createBufferSource(); n.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = accent ? 5500 : 7500;
+    bp.Q.value = 1.5;
+    n.connect(bp); bp.connect(out);
+    n.start(t);
+  }
+
+  const barPosEl = document.getElementById('v9-bar-pos');
+  const chordEl = document.getElementById('v9-current-chord');
+
+  function tickBacking() {
+    const chord = PROGRESSION[bar % PROGRESSION.length];
+    const meta = CHORDS[chord];
+    // Beat 1: piano comp + bass + brush accent
+    if (beat === 0) {
+      // Voice the piano chord
+      meta.piano.forEach((semi, i) => playRhodes(semi, 0.06 + i * 0.005));
+      playBass(meta.bassWalk[0], 0.18);
+      playBrush(0.10, true);
+      if (chordEl) chordEl.textContent = chord;
+    } else if (beat === 1) {
+      playBass(meta.bassWalk[1], 0.16);
+      playBrush(0.07, false);
+    } else if (beat === 2) {
+      // Beat 3: piano comp again (lighter)
+      meta.piano.forEach((semi, i) => playRhodes(semi, 0.04 + i * 0.003));
+      playBass(meta.bassWalk[2], 0.16);
+      playBrush(0.10, true);
+    } else {
+      playBass(meta.bassWalk[3], 0.14);
+      playBrush(0.07, false);
+    }
+    if (barPosEl) barPosEl.textContent = `bar ${bar + 1} · beat ${beat + 1}`;
+    beat++;
+    if (beat >= 4) { beat = 0; bar++; }
+    if (bar >= 4) bar = 0;
+  }
+
+  const backingBtn = document.getElementById('v9-backing-btn') as HTMLButtonElement | null;
+  const backingIcon = document.getElementById('v9-backing-icon');
+  const backingLabel = document.getElementById('v9-backing-label');
+  const modeLabel = document.getElementById('v9-mode-label');
+  const modeCard = document.getElementById('v9-mode-card');
+  const tempoSlider = document.getElementById('v9-tempo') as HTMLInputElement | null;
+  const tempoNumEl = document.getElementById('v9-tempo-num');
+
+  function toggleBacking() { backingOn ? stopBacking() : startBacking(); }
+  function startBacking() {
+    if (backingOn) return;
+    backingOn = true;
+    bar = 0; beat = 0;
+    if (backingBtn) backingBtn.setAttribute('aria-pressed', 'true');
+    if (backingIcon) backingIcon.textContent = '🔥';
+    if (backingLabel) backingLabel.textContent = 'Stop · the band breaks';
+    if (modeLabel) modeLabel.textContent = 'on';
+    if (modeCard) modeCard.classList.add('is-on');
+    const beatMs = 60_000 / bpm;
+    tickBacking();
+    if (backingTimer) clearInterval(backingTimer);
+    backingTimer = window.setInterval(tickBacking, beatMs);
+  }
+  function stopBacking() {
+    if (backingTimer) { clearInterval(backingTimer); backingTimer = null; }
+    backingOn = false;
+    if (backingBtn) backingBtn.setAttribute('aria-pressed', 'false');
+    if (backingIcon) backingIcon.textContent = '🎹';
+    if (backingLabel) backingLabel.textContent = 'Press · light the candles';
+    if (modeLabel) modeLabel.textContent = 'off';
+    if (modeCard) modeCard.classList.remove('is-on');
+    if (chordEl) chordEl.textContent = '—';
+    if (barPosEl) barPosEl.textContent = '—';
+  }
+  backingBtn?.addEventListener('click', toggleBacking);
+
+  if (tempoSlider) {
+    tempoSlider.addEventListener('input', () => {
+      bpm = Number(tempoSlider.value);
+      if (tempoNumEl) tempoNumEl.textContent = String(bpm);
+      if (backingOn) { stopBacking(); startBacking(); }
+    });
+  }
+
+  // ══ Real-time: WebSocket-first, polling fallback ══
+  type EventPayload = { type: 'lounge'; voice: string; action: 'start' | 'stop'; sessionId: string };
+  let streamMode: 'connecting' | 'ws' | 'poll' = 'connecting';
+  let ws: WebSocket | null = null;
+  let lastSoundT = Date.now();
+  let ownPid = '';
+  (async () => {
+    try {
+      const buf = new TextEncoder().encode(sessionId);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      ownPid = Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+    } catch {}
+  })();
+
+  function dispatchEvent(ev: any) {
+    if (ev.pid === ownPid) return;
+    if (ev.type !== 'lounge' || !ev.voice) return;
+    const meta = VOICES[ev.voice];
+    if (!meta) return;
+    if (ev.action === 'start') {
+      // Brief sustained pulse from a remote player so the room feels alive
+      pulseVoice(ev.voice, 1500);
+    }
+    if (ev.pid) remoteActive.set(ev.pid, Date.now());
+  }
+
+  function connectWS() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/drum/room?sid=${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(url);
+      ws.addEventListener('open', () => { streamMode = 'ws'; });
+      ws.addEventListener('message', (msg) => {
+        try { dispatchEvent(JSON.parse(msg.data)); } catch {}
+      });
+      ws.addEventListener('close', () => {
+        if (streamMode === 'connecting') fallbackToPoll();
+        else if (streamMode === 'ws') setTimeout(connectWS, 2000);
+      });
+      ws.addEventListener('error', () => {
+        if (streamMode === 'connecting') fallbackToPoll();
+      });
+    } catch { fallbackToPoll(); }
+  }
+  function fallbackToPoll() {
+    streamMode = 'poll';
+    setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 150);
+  }
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) dispatchEvent(ev);
+    } catch {}
+  }
+  function broadcast(ev: EventPayload) {
+    if (streamMode === 'ws' && ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify(ev)); return; } catch {}
+    }
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ev),
+      keepalive: true,
+    }).catch(() => {});
+  }
+  connectWS();
+  setTimeout(() => { if (streamMode === 'connecting') fallbackToPoll(); }, 1500);
+
+  // Jammers
+  const remoteActive = new Map<string, number>();
+  const jammersEl = document.getElementById('v9-jammers');
+  function renderJammers() {
+    const now = Date.now();
+    for (const [pid, t] of remoteActive) if (now - t > 12_000) remoteActive.delete(pid);
+    if (jammersEl) jammersEl.textContent = String(remoteActive.size + 1);
+  }
+  setInterval(renderJammers, 2000);
+
+  // First-time startup hint: pulse the saxes briefly to invite a tap
+  setTimeout(() => {
+    const first = voiceEls[0];
+    if (first) {
+      first.classList.add('remote-holding');
+      setTimeout(() => first.classList.remove('remote-holding'), 1200);
+    }
+  }, 1500);
+</script>
+
+</DrumLayout>
