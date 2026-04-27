@@ -67,6 +67,8 @@ const clientData = {
     gem: item.gem,
     mood: item.mood,
     rarity: item.rarity,
+    palette: item.palette,
+    prompt: item.prompt,
   })),
 };
 
@@ -364,6 +366,10 @@ const jsonLd = {
             data-world-country={item.country}
             data-world-gem={item.gem}
             data-world-landmark={item.landmark}
+            data-world-mood={item.mood}
+            data-world-rarity={item.rarity}
+            tabindex="0"
+            aria-label={`Open passport detail for ${item.title}`}
             style={`--world-ground:${item.palette.ground};--world-accent:${item.palette.accent};--world-ink:${item.palette.ink};`}
           >
             <span class="world-grid__number">{String(item.number).padStart(2, '0')}</span>
@@ -374,10 +380,61 @@ const jsonLd = {
               <div><dt>Gem</dt><dd>{item.gem}</dd></div>
               <div><dt>Cat</dt><dd>{item.cat}</dd></div>
             </dl>
-            <button type="button" data-world-id={item.id}>Stamp passport</button>
+            <div class="world-grid__actions">
+              <button type="button" data-world-open={item.id}>Open card</button>
+              <button type="button" data-world-id={item.id}>Stamp passport</button>
+            </div>
           </li>
         ))}
       </ol>
+      <dialog class="passport-drawer" data-world-drawer aria-labelledby="passport-drawer-title">
+        <div class="passport-drawer__shell">
+          <div class="passport-drawer__art" data-world-drawer-art>
+            <span class="passport-drawer__number" data-drawer-number>00</span>
+            <svg viewBox="0 0 420 360" aria-hidden="true">
+              <path class="drawer-landmark" d="M44 250c42-36 80-70 118-102 38 31 76 65 118 102M86 250V126h152v124M122 126c8-42 22-64 40-64s32 22 40 64M276 250c10-72 36-116 76-132 22 38 22 82 0 132" />
+              <path class="drawer-cat-body" d="M126 263c0-58 44-98 100-98s100 40 100 98v22c0 32-34 52-100 52s-100-20-100-52z" />
+              <path class="drawer-cat-ear" d="M156 177l-8-60 52 42" />
+              <path class="drawer-cat-ear" d="M296 177l8-60-52 42" />
+              <path class="drawer-cat-face" d="M194 234c10 8 22 8 32 0M248 234c10 8 22 8 32 0M240 254l-12 12h24zM219 282c12 12 28 12 42 0" />
+              <path class="drawer-whisker" d="M188 263c-42-17-76-15-108 4M190 280c-43 4-76 18-102 40M288 263c42-17 76-15 108 4M286 280c43 4 76 18 102 40" />
+            </svg>
+            <div class="passport-stamp-mark" data-drawer-stamp-mark>
+              <span data-drawer-stamp-code>OPEN</span>
+              <strong>STAMPED</strong>
+              <small data-drawer-stamp-date>UNVISITED</small>
+            </div>
+          </div>
+          <div class="passport-drawer__body">
+            <button class="passport-drawer__close" type="button" data-world-drawer-close aria-label="Close passport detail">Close</button>
+            <p class="kicker" data-drawer-kicker>WORLD ATELIER PASSPORT</p>
+            <h3 id="passport-drawer-title" data-drawer-title>Passport cat</h3>
+            <p class="passport-drawer__place" data-drawer-place>City, country</p>
+            <dl class="passport-drawer__facts">
+              <div><dt>Landmark</dt><dd data-drawer-landmark></dd></div>
+              <div><dt>Gem</dt><dd data-drawer-gem></dd></div>
+              <div><dt>Cat</dt><dd data-drawer-cat></dd></div>
+              <div><dt>Mood</dt><dd data-drawer-mood></dd></div>
+              <div><dt>Rarity</dt><dd data-drawer-rarity></dd></div>
+              <div><dt>Status</dt><dd data-drawer-status></dd></div>
+            </dl>
+            <p class="passport-drawer__note" data-drawer-note></p>
+            <div class="passport-drawer__tezos">
+              <span>Tezos slot</span>
+              <strong data-drawer-tezos>{mintLive ? 'Ready after PCCAT mint action' : 'Reserved for PCCAT FA2'}</strong>
+            </div>
+            <div class="passport-drawer__actions">
+              <button type="button" data-world-drawer-stamp>Stamp passport</button>
+              <button type="button" data-world-drawer-locate>Find in grid</button>
+            </div>
+          </div>
+        </div>
+      </dialog>
+      <div class="stamp-toast" data-stamp-toast hidden>
+        <span>Passport stamped</span>
+        <strong data-stamp-toast-title></strong>
+        <small data-stamp-toast-code></small>
+      </div>
     </section>
 
     <section class="agent-note" aria-labelledby="agent-note-title">
@@ -413,6 +470,7 @@ const jsonLd = {
       const ritualButtons = Array.from(root.querySelectorAll('[data-ritual-id]'));
       const genesisButtons = Array.from(root.querySelectorAll('[data-genesis-id]'));
       const worldButtons = Array.from(root.querySelectorAll('[data-world-id]'));
+      const worldOpenButtons = Array.from(root.querySelectorAll('[data-world-open]'));
       const worldCards = Array.from(root.querySelectorAll('[data-world-card]'));
       const worldFocusButtons = Array.from(root.querySelectorAll('[data-world-focus]'));
       const gemFocusButtons = Array.from(root.querySelectorAll('[data-gem-focus]'));
@@ -434,8 +492,18 @@ const jsonLd = {
       const worldGemFilter = root.querySelector('[data-world-gem]');
       const worldVisible = root.querySelector('[data-world-visible]');
       const worldRandom = root.querySelector('[data-world-random]');
+      const worldDrawer = root.querySelector('[data-world-drawer]');
+      const drawerArt = root.querySelector('[data-world-drawer-art]');
+      const drawerClose = root.querySelector('[data-world-drawer-close]');
+      const drawerStamp = root.querySelector('[data-world-drawer-stamp]');
+      const drawerLocate = root.querySelector('[data-world-drawer-locate]');
+      const stampToast = root.querySelector('[data-stamp-toast]');
+      const stampToastTitle = root.querySelector('[data-stamp-toast-title]');
+      const stampToastCode = root.querySelector('[data-stamp-toast-code]');
       const mintStatus = root.querySelector('[data-mint-status]');
       const shelves = Array.from(root.querySelectorAll('[data-shelf-date]'));
+      let activeWorldId = DATA.world?.[0]?.id || null;
+      let stampToastTimer;
       const questStatuses = {
         ritual: root.querySelector('[data-quest-status="ritual"]'),
         daily: root.querySelector('[data-quest-status="daily"]'),
@@ -502,6 +570,124 @@ const jsonLd = {
         writeJson(key, current);
       }
 
+      function worldById(id) {
+        return DATA.world.find((item) => item.id === id);
+      }
+
+      function worldStampEntry(id) {
+        return worldCollection().find((item) => item.id === id);
+      }
+
+      function stampCode(item) {
+        const city = String(item?.city || 'cat').replace(/[^a-z0-9]/gi, '').slice(0, 3).toUpperCase() || 'CAT';
+        return `${city}-${String(item?.number || 0).padStart(3, '0')}`;
+      }
+
+      function stampDate(value) {
+        if (!value) return 'UNVISITED';
+        return String(value).slice(0, 10);
+      }
+
+      function stampNote(item) {
+        const gem = String(item.gem || 'gemstone');
+        const gemName = gem.charAt(0).toUpperCase() + gem.slice(1);
+        return `${item.cat} keeps ${item.mood} watch near ${item.landmark}. ${gemName} sets the color story.`;
+      }
+
+      function setText(selector, value) {
+        const node = root.querySelector(selector);
+        if (node) node.textContent = value;
+      }
+
+      function syncWorldDrawer(animate = false) {
+        if (!activeWorldId || !worldDrawer) return;
+        const item = worldById(activeWorldId);
+        if (!item) return;
+        const entry = worldStampEntry(item.id);
+        const stamped = !!entry;
+        const code = entry?.stampCode || stampCode(item);
+
+        if (drawerArt && item.palette) {
+          drawerArt.style.setProperty('--world-ground', item.palette.ground);
+          drawerArt.style.setProperty('--world-accent', item.palette.accent);
+          drawerArt.style.setProperty('--world-ink', item.palette.ink);
+        }
+
+        setText('[data-drawer-number]', String(item.number).padStart(2, '0'));
+        setText('[data-drawer-kicker]', `${code} · WORLD ATELIER PASSPORT`);
+        setText('[data-drawer-title]', item.title);
+        setText('[data-drawer-place]', `${item.city}, ${item.country}`);
+        setText('[data-drawer-landmark]', item.landmark);
+        setText('[data-drawer-gem]', item.gem);
+        setText('[data-drawer-cat]', item.cat);
+        setText('[data-drawer-mood]', item.mood);
+        setText('[data-drawer-rarity]', item.rarity);
+        setText('[data-drawer-status]', stamped ? `Stamped ${stampDate(entry.stampedAt)}` : 'Unvisited');
+        setText('[data-drawer-note]', stampNote(item));
+        setText('[data-drawer-stamp-code]', code);
+        setText('[data-drawer-stamp-date]', stampDate(entry?.stampedAt));
+
+        worldDrawer.classList.toggle('is-stamped', stamped);
+        if (drawerStamp) {
+          drawerStamp.disabled = stamped;
+          drawerStamp.textContent = stamped ? 'Stamped' : 'Stamp passport';
+        }
+
+        if (animate) {
+          worldDrawer.classList.remove('is-stamping');
+          void worldDrawer.offsetWidth;
+          worldDrawer.classList.add('is-stamping');
+          window.setTimeout(() => worldDrawer.classList.remove('is-stamping'), 760);
+        }
+      }
+
+      function openWorldDetail(id, options = {}) {
+        const item = worldById(id);
+        if (!item || !worldDrawer) return;
+        activeWorldId = id;
+        syncWorldDrawer(!!options.animate);
+        if (typeof worldDrawer.showModal === 'function') {
+          if (!worldDrawer.open) worldDrawer.showModal();
+        } else {
+          worldDrawer.removeAttribute('hidden');
+        }
+      }
+
+      function closeWorldDetail() {
+        if (!worldDrawer) return;
+        if (typeof worldDrawer.close === 'function' && worldDrawer.open) {
+          worldDrawer.close();
+        } else {
+          worldDrawer.setAttribute('hidden', '');
+        }
+      }
+
+      function showStampMoment(item, stampedAt) {
+        const card = root.querySelector(`[data-world-card="${item.id}"]`);
+        card?.classList.remove('is-just-stamped');
+        if (card) {
+          void card.offsetWidth;
+          card.classList.add('is-just-stamped');
+          window.setTimeout(() => card.classList.remove('is-just-stamped'), 900);
+        }
+
+        if (stampToast && stampToastTitle && stampToastCode) {
+          stampToast.hidden = false;
+          stampToastTitle.textContent = item.title;
+          stampToastCode.textContent = `${stampCode(item)} · ${stampDate(stampedAt)}`;
+          stampToast.classList.remove('is-visible');
+          void stampToast.offsetWidth;
+          stampToast.classList.add('is-visible');
+          window.clearTimeout(stampToastTimer);
+          stampToastTimer = window.setTimeout(() => {
+            stampToast.classList.remove('is-visible');
+            stampToast.hidden = true;
+          }, 2200);
+        }
+
+        openWorldDetail(item.id, { animate: true });
+      }
+
       function collectToday() {
         const items = collection().filter((item) => item.date !== DATA.today.date);
         const state = ritualState();
@@ -538,8 +724,13 @@ const jsonLd = {
       }
 
       function collectWorld(id) {
-        const collectible = DATA.world.find((item) => item.id === id);
+        const collectible = worldById(id);
         if (!collectible) return;
+        if (worldStampEntry(id)) {
+          openWorldDetail(id);
+          return;
+        }
+        const stampedAt = new Date().toISOString();
         const items = worldCollection().filter((item) => item.id !== id);
         items.unshift({
           id: collectible.id,
@@ -552,12 +743,14 @@ const jsonLd = {
           gem: collectible.gem,
           mood: collectible.mood,
           rarity: collectible.rarity,
+          stampCode: stampCode(collectible),
           source: 'world-atelier',
-          stampedAt: new Date().toISOString(),
+          stampedAt,
         });
         writeJson(worldKey, items.slice(0, 128));
         passportStamp();
         render();
+        showStampMoment(collectible, stampedAt);
       }
 
       function normalize(value) {
@@ -698,6 +891,7 @@ const jsonLd = {
           button.disabled = isCollected;
           card?.classList.toggle('is-stamped', isCollected);
         });
+        syncWorldDrawer();
         applyWorldFilters();
       }
 
@@ -727,6 +921,28 @@ const jsonLd = {
         });
       });
 
+      worldOpenButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = button.getAttribute('data-world-open');
+          if (id) openWorldDetail(id);
+        });
+      });
+
+      worldCards.forEach((card) => {
+        card.addEventListener('click', (event) => {
+          if (event.target?.closest?.('button, a, input, select, textarea')) return;
+          const id = card.getAttribute('data-world-card');
+          if (id) openWorldDetail(id);
+        });
+        card.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          if (event.target !== card) return;
+          event.preventDefault();
+          const id = card.getAttribute('data-world-card');
+          if (id) openWorldDetail(id);
+        });
+      });
+
       worldFocusButtons.forEach((button) => {
         button.addEventListener('click', () => {
           const id = button.getAttribute('data-world-focus');
@@ -746,6 +962,18 @@ const jsonLd = {
       worldSearch?.addEventListener('input', applyWorldFilters);
       worldGemFilter?.addEventListener('change', applyWorldFilters);
       worldRandom?.addEventListener('click', focusUnvisitedWorld);
+      drawerClose?.addEventListener('click', closeWorldDetail);
+      drawerStamp?.addEventListener('click', () => {
+        if (activeWorldId) collectWorld(activeWorldId);
+      });
+      drawerLocate?.addEventListener('click', () => {
+        if (!activeWorldId) return;
+        closeWorldDetail();
+        focusWorld(activeWorldId);
+      });
+      worldDrawer?.addEventListener('click', (event) => {
+        if (event.target === worldDrawer) closeWorldDetail();
+      });
 
       mintButton?.addEventListener('click', async () => {
         if (!DATA.contract.live || !isCollectedToday()) return;
@@ -1427,6 +1655,7 @@ const jsonLd = {
   }
 
   .world-grid li {
+    position: relative;
     display: grid;
     gap: 7px;
     min-height: 250px;
@@ -1437,14 +1666,41 @@ const jsonLd = {
       linear-gradient(135deg, color-mix(in oklab, var(--world-accent) 18%, transparent), transparent 52%),
       var(--world-ground);
     color: #fffef8;
+    cursor: zoom-in;
+    overflow: hidden;
   }
 
   .world-grid li[hidden] {
     display: none;
   }
 
+  .world-grid li:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--world-accent) 76%, #fff);
+    outline-offset: 2px;
+  }
+
   .world-grid li.is-stamped {
     box-shadow: inset 0 0 0 3px var(--world-accent);
+  }
+
+  .world-grid li.is-just-stamped::after {
+    content: "STAMPED";
+    position: absolute;
+    right: 12px;
+    bottom: 54px;
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 96px;
+    border: 2px solid color-mix(in oklab, var(--world-accent) 76%, #fff);
+    border-radius: 999px;
+    color: color-mix(in oklab, var(--world-accent) 76%, #fff);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 800;
+    transform: rotate(-10deg);
+    animation: stamp-pop 720ms cubic-bezier(0.2, 0.92, 0.22, 1);
+    pointer-events: none;
   }
 
   .world-grid h3,
@@ -1465,6 +1721,13 @@ const jsonLd = {
     line-height: 1.25;
   }
 
+  .world-grid__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    align-self: end;
+  }
+
   .world-grid button {
     align-self: end;
     min-height: 38px;
@@ -1475,9 +1738,345 @@ const jsonLd = {
     text-transform: uppercase;
   }
 
+  .world-grid button[data-world-open] {
+    background: color-mix(in oklab, var(--world-ink) 74%, var(--world-ground));
+    color: #fffef8;
+  }
+
   .world-grid button:disabled {
     cursor: default;
     opacity: 0.72;
+  }
+
+  .passport-drawer {
+    width: min(980px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    margin: auto;
+    padding: 0;
+    border: 1.5px solid var(--pc-ink);
+    background: #fffef8;
+    color: var(--pc-ink);
+    overflow: auto;
+  }
+
+  .passport-drawer::backdrop {
+    background: rgba(16, 20, 24, 0.62);
+  }
+
+  .passport-drawer[open] {
+    animation: drawer-rise 180ms ease-out;
+  }
+
+  .passport-drawer__shell {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1fr);
+    min-height: min(720px, calc(100vh - 36px));
+  }
+
+  .passport-drawer__art {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 480px;
+    overflow: hidden;
+    background:
+      repeating-linear-gradient(90deg, rgba(255, 254, 248, 0.14), rgba(255, 254, 248, 0.14) 1px, transparent 1px, transparent 18px),
+      radial-gradient(circle at 20% 12%, color-mix(in oklab, var(--world-accent) 42%, transparent), transparent 28%),
+      linear-gradient(150deg, color-mix(in oklab, var(--world-ground) 82%, #fff), var(--world-ground));
+    color: #fffef8;
+  }
+
+  .passport-drawer__art::before {
+    content: "";
+    position: absolute;
+    inset: 18px;
+    border: 1px solid rgba(255, 254, 248, 0.42);
+    pointer-events: none;
+  }
+
+  .passport-drawer__number {
+    position: absolute;
+    left: 24px;
+    top: 22px;
+    color: color-mix(in oklab, var(--world-accent) 72%, #fff);
+    font-family: var(--pc-font-mono);
+    font-size: 42px;
+    line-height: 1;
+  }
+
+  .passport-drawer__art svg {
+    position: relative;
+    z-index: 1;
+    width: min(92%, 460px);
+    height: auto;
+    filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.18));
+  }
+
+  .drawer-landmark,
+  .drawer-cat-body,
+  .drawer-cat-ear,
+  .drawer-cat-face,
+  .drawer-whisker {
+    fill: none;
+    stroke: color-mix(in oklab, #fffef8 86%, var(--world-accent));
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .drawer-landmark {
+    stroke-width: 5;
+    opacity: 0.46;
+  }
+
+  .drawer-cat-body,
+  .drawer-cat-ear {
+    fill: color-mix(in oklab, var(--world-accent) 42%, #fffef8);
+    stroke: var(--world-ink);
+    stroke-width: 7;
+  }
+
+  .drawer-cat-face {
+    stroke: var(--world-ink);
+    stroke-width: 6;
+  }
+
+  .drawer-whisker {
+    stroke: color-mix(in oklab, #fffef8 80%, var(--world-accent));
+    stroke-width: 4;
+  }
+
+  .passport-stamp-mark {
+    position: absolute;
+    right: 28px;
+    bottom: 28px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 142px;
+    height: 142px;
+    border: 3px double var(--world-ink);
+    border-radius: 999px;
+    background: color-mix(in oklab, #fffef8 70%, transparent);
+    color: var(--world-ink);
+    font-family: var(--pc-font-mono);
+    text-align: center;
+    text-transform: uppercase;
+    transform: rotate(-9deg) scale(0.92);
+    opacity: 0.2;
+  }
+
+  .passport-stamp-mark span,
+  .passport-stamp-mark small {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+
+  .passport-stamp-mark strong {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .passport-drawer.is-stamped .passport-stamp-mark {
+    opacity: 0.86;
+  }
+
+  .passport-drawer.is-stamping .passport-stamp-mark {
+    animation: stamp-drop 680ms cubic-bezier(0.18, 0.9, 0.22, 1);
+  }
+
+  .passport-drawer__body {
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: 24px;
+  }
+
+  .passport-drawer__close {
+    justify-self: end;
+    min-height: 34px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .passport-drawer h3 {
+    margin: 0;
+    font-size: clamp(32px, 5vw, 58px);
+    line-height: 0.96;
+    letter-spacing: 0;
+  }
+
+  .passport-drawer__place,
+  .passport-drawer__note {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .passport-drawer__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+  }
+
+  .passport-drawer__facts div,
+  .passport-drawer__tezos {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--pc-rule);
+    background: #fbf8ee;
+  }
+
+  .passport-drawer__facts dt,
+  .passport-drawer__tezos span {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .passport-drawer__facts dd {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.28;
+  }
+
+  .passport-drawer__tezos {
+    display: grid;
+    gap: 4px;
+  }
+
+  .passport-drawer__tezos strong {
+    font-size: 16px;
+  }
+
+  .passport-drawer__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .passport-drawer__actions button {
+    min-height: 46px;
+    border: 1.5px solid var(--pc-ink);
+    background: #fffef8;
+    color: var(--pc-ink);
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .passport-drawer__actions button:first-child {
+    background: var(--pc-ink);
+    color: #fffef8;
+  }
+
+  .passport-drawer__actions button:disabled {
+    cursor: default;
+    opacity: 0.62;
+  }
+
+  .stamp-toast {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 20;
+    display: grid;
+    gap: 4px;
+    min-width: min(320px, calc(100vw - 36px));
+    padding: 14px;
+    border: 1.5px solid var(--pc-ink);
+    background: #fffef8;
+    box-shadow: 0 18px 48px rgba(16, 20, 24, 0.22);
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
+  }
+
+  .stamp-toast.is-visible {
+    animation: toast-in 2200ms ease both;
+  }
+
+  .stamp-toast span,
+  .stamp-toast small {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .stamp-toast strong {
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  @keyframes drawer-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes stamp-drop {
+    0% {
+      opacity: 0;
+      transform: rotate(-9deg) scale(1.7);
+    }
+    48% {
+      opacity: 0.95;
+      transform: rotate(-9deg) scale(0.86);
+    }
+    68% {
+      transform: rotate(-9deg) scale(1.02);
+    }
+    100% {
+      opacity: 0.86;
+      transform: rotate(-9deg) scale(0.92);
+    }
+  }
+
+  @keyframes stamp-pop {
+    0% {
+      opacity: 0;
+      transform: rotate(-10deg) scale(1.8);
+    }
+    42% {
+      opacity: 1;
+      transform: rotate(-10deg) scale(0.88);
+    }
+    100% {
+      opacity: 0;
+      transform: rotate(-10deg) scale(1.08);
+    }
+  }
+
+  @keyframes toast-in {
+    0% {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    12%,
+    82% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(12px);
+    }
   }
 
   .agent-note pre {
@@ -1496,6 +2095,7 @@ const jsonLd = {
     .cat-hero,
     .mint-console,
     .passport-desk,
+    .passport-drawer__shell,
     .world-tools {
       grid-template-columns: 1fr;
     }
@@ -1528,10 +2128,28 @@ const jsonLd = {
     .cat-facts,
     .garden-dashboard,
     .quest-list,
+    .passport-drawer__facts,
+    .passport-drawer__actions,
     .genesis-grid,
     .world-grid,
     .cat-shelf {
       grid-template-columns: 1fr;
+    }
+
+    .passport-drawer {
+      width: calc(100vw - 20px);
+      max-height: calc(100vh - 20px);
+    }
+
+    .passport-drawer__art {
+      min-height: 360px;
+    }
+
+    .passport-stamp-mark {
+      width: 116px;
+      height: 116px;
+      right: 18px;
+      bottom: 18px;
     }
   }
 </style>
