@@ -1,0 +1,931 @@
+---
+/**
+ * /drum-tv-v2 — The Venue.
+ *
+ * Per Mike: "fun try a v2"
+ *
+ * Cinematic concert-venue cast view. Where /drum-tv was a screensaver
+ * with audience awareness, /drum-tv-v2 is an actual venue:
+ *
+ *   • TOP STAGE (60% of screen) — a giant spotlit Noun representing
+ *     the most recently active visitor. They're the "performer". As
+ *     soon as someone else taps, the camera pans to them.
+ *   • TIERED CROWD (40%) — concert-style audience grid in three depth
+ *     tiers. Front-row visitors render larger; back-row smaller. Each
+ *     visitor has a fixed seat assigned by their pid hash so they
+ *     stay in place across polls.
+ *   • TAP BEAMS — when a crowd member fires an event, a light beam
+ *     animates from their seat up to the stage. Like cheers shooting
+ *     toward the performer.
+ *   • STAGE LIGHTS — six animated colored spotlights wash across the
+ *     stage on a loop. Color cycles with the active "venue" preset.
+ *   • OVATION MOMENT — when 5+ events fire within 2s, the screen
+ *     bursts confetti and the venue-lights pulse.
+ *
+ * Four venue presets cycle every 45s:
+ *   The Stadium · gold + magenta lights, neon palette
+ *   The Theater · warm tungsten + spotlight, classical palette
+ *   The Lounge  · sunset + dim, smooth jazz palette
+ *   Underground · black + UV + neon green, club palette
+ *
+ * Real-time over WebSocket (DrumRoom DO) with /api/sounds 150ms
+ * polling fallback. Uses the same /api/visit roster as drum-tv v1.
+ *
+ * Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
+ */
+import DrumLayout from '../layouts/DrumLayout.astro';
+---
+
+<DrumLayout
+  title="Drum Room · TV v2 · The Venue"
+  description="Cinematic concert-venue cast view. Spotlight stage on the active performer, tiered crowd of every visitor, animated stage lights, four venue presets cycling. Cast to your TV."
+  image="/images/og-drum.png"
+>
+
+<div class="vv-root" id="vv-root" data-venue="stadium">
+
+  <!-- ── Stage lights (animated radial gradients) ── -->
+  <div class="vv-lights" aria-hidden="true">
+    <span class="vv-light vv-light-1"></span>
+    <span class="vv-light vv-light-2"></span>
+    <span class="vv-light vv-light-3"></span>
+    <span class="vv-light vv-light-4"></span>
+    <span class="vv-light vv-light-5"></span>
+    <span class="vv-light vv-light-6"></span>
+  </div>
+
+  <!-- ── Top chrome bar ── -->
+  <header class="vv-top">
+    <div class="vv-top-left">
+      <span class="vv-onair" id="vv-onair">● LIVE</span>
+      <span class="vv-wordmark">POINTCAST</span>
+      <span class="vv-tagline">drum room · the venue · v2</span>
+    </div>
+    <div class="vv-top-right">
+      <span class="vv-venue-name" id="vv-venue-name">The Stadium</span>
+      <span class="vv-clock" id="vv-clock">—</span>
+    </div>
+  </header>
+
+  <!-- ══ STAGE — the performer ══ -->
+  <main class="vv-stage" id="vv-stage">
+    <!-- Stage curtain -->
+    <div class="vv-curtain" aria-hidden="true"></div>
+
+    <!-- Spotlight + performer -->
+    <div class="vv-spotlight" id="vv-spotlight">
+      <div class="vv-spotlight-cone" aria-hidden="true"></div>
+      <div class="vv-performer" id="vv-performer">
+        <div class="vv-performer-frame">
+          <img id="vv-performer-img" src="https://noun.pics/42.svg" alt="" width="320" height="320" style="image-rendering: pixelated;" />
+        </div>
+        <div class="vv-performer-meta">
+          <span class="vv-performer-eyebrow">Now performing</span>
+          <span class="vv-performer-name" id="vv-performer-name">waiting for the room</span>
+          <span class="vv-performer-sub" id="vv-performer-sub">tap any /drum surface to take the stage</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tap beams layer (animated lights from crowd → stage) -->
+    <div class="vv-beams" id="vv-beams" aria-hidden="true"></div>
+
+    <!-- Confetti for ovation moments -->
+    <div class="vv-confetti" id="vv-confetti" aria-hidden="true"></div>
+  </main>
+
+  <!-- ══ CROWD — tiered audience ══ -->
+  <section class="vv-crowd" id="vv-crowd">
+    <div class="vv-crowd-bg" aria-hidden="true"></div>
+    <div class="vv-crowd-tiers" id="vv-crowd-tiers">
+      <!-- Three tiers populated by JS. Front tier is largest, back smallest. -->
+      <div class="vv-tier vv-tier-front" id="vv-tier-front" data-tier="front"></div>
+      <div class="vv-tier vv-tier-mid"   id="vv-tier-mid"   data-tier="mid"></div>
+      <div class="vv-tier vv-tier-back"  id="vv-tier-back"  data-tier="back"></div>
+    </div>
+    <div class="vv-crowd-empty" id="vv-crowd-empty">
+      <span>the doors just opened · nobody here yet</span>
+    </div>
+  </section>
+
+  <!-- ══ FOOTER — venue stats + QR ══ -->
+  <footer class="vv-bottom">
+    <div class="vv-bottom-left">
+      <div class="vv-stat">
+        <span class="vv-stat-label">Capacity</span>
+        <span class="vv-stat-val"><span id="vv-cap">0</span></span>
+        <span class="vv-stat-sub" id="vv-cap-sub">in attendance</span>
+      </div>
+      <div class="vv-stat">
+        <span class="vv-stat-label">Energy</span>
+        <span class="vv-stat-val" id="vv-energy">—</span>
+        <span class="vv-stat-sub" id="vv-energy-sub">taps per minute</span>
+      </div>
+      <div class="vv-stat">
+        <span class="vv-stat-label">Stream</span>
+        <span class="vv-stat-val" id="vv-stream">connecting…</span>
+        <span class="vv-stat-sub" id="vv-stream-sub">resolving transport</span>
+      </div>
+    </div>
+    <div class="vv-bottom-right">
+      <div class="vv-qr">
+        <div class="vv-qr-img-wrap">
+          <img
+            src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https%3A%2F%2Fpointcast.xyz%2Fdrum"
+            alt="scan to play"
+            width="100"
+            height="100"
+          />
+        </div>
+        <div class="vv-qr-text">
+          <span class="vv-qr-label">scan to take the stage</span>
+          <span class="vv-qr-url">pointcast.xyz/drum</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<style is:global>
+  /* ════════════════════════════════════════════════════════════════
+     /drum-tv-v2 — The Venue. vv-* prefixed.
+     ════════════════════════════════════════════════════════════════ */
+
+  body.drum-body:has(.vv-root) {
+    background: #050308 !important;
+    color: #fff;
+    margin: 0;
+    overflow: hidden;
+    height: 100vh;
+  }
+  body.drum-body:has(.vv-root) .drum-header { display: none !important; }
+  body.drum-body:has(.vv-root) main { padding: 0; }
+  body.drum-body:has(.vv-root) #nouns-cursor { display: none; }
+
+  .vv-root {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 56px 1fr 38% 130px;
+    background: #050308;
+    color: #fff;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', monospace);
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  /* ── Venue palettes ──────────────────────────────────── */
+  .vv-root[data-venue="stadium"] {
+    --venue-glow-1: #ec4899;
+    --venue-glow-2: #f59e0b;
+    --venue-glow-3: #8b5cf6;
+    --venue-glow-4: #06b6d4;
+    --venue-stage: linear-gradient(180deg, #1a0a2a 0%, #2d1547 50%, #050308 100%);
+    --venue-crowd: linear-gradient(180deg, #050308 0%, #0d0820 100%);
+    --venue-curtain: linear-gradient(180deg, #4c1d95 0%, transparent 100%);
+  }
+  .vv-root[data-venue="theater"] {
+    --venue-glow-1: #fbbf24;
+    --venue-glow-2: #f59e0b;
+    --venue-glow-3: #fde68a;
+    --venue-glow-4: #f97316;
+    --venue-stage: linear-gradient(180deg, #1c0f04 0%, #3d1f08 50%, #050308 100%);
+    --venue-crowd: linear-gradient(180deg, #0a0604 0%, #1a0e08 100%);
+    --venue-curtain: linear-gradient(180deg, #7f1d1d 0%, transparent 100%);
+  }
+  .vv-root[data-venue="lounge"] {
+    --venue-glow-1: #fb923c;
+    --venue-glow-2: #f472b6;
+    --venue-glow-3: #c084fc;
+    --venue-glow-4: #fbbf24;
+    --venue-stage: linear-gradient(180deg, #2d1d3a 0%, #4a2d5a 30%, #d97757 70%, #ffe4cc 100%);
+    --venue-crowd: linear-gradient(180deg, #1e0f25 0%, #050308 100%);
+    --venue-curtain: linear-gradient(180deg, transparent 0%, transparent 100%);
+  }
+  .vv-root[data-venue="underground"] {
+    --venue-glow-1: #22c55e;
+    --venue-glow-2: #06b6d4;
+    --venue-glow-3: #a855f7;
+    --venue-glow-4: #ef4444;
+    --venue-stage: linear-gradient(180deg, #000 0%, #0a0a0a 50%, #050308 100%);
+    --venue-crowd: linear-gradient(180deg, #050308 0%, #0a0a0a 100%);
+    --venue-curtain: linear-gradient(180deg, #064e3b 0%, transparent 100%);
+  }
+
+  /* ── Stage lights (full-screen animated radial gradients) ── */
+  .vv-lights {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .vv-light {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.55;
+    mix-blend-mode: screen;
+  }
+  .vv-light-1 { background: var(--venue-glow-1, #ec4899); top: -200px; left: 10%;  animation: vv-light-1 18s ease-in-out infinite; }
+  .vv-light-2 { background: var(--venue-glow-2, #f59e0b); top: -150px; left: 60%;  animation: vv-light-2 22s ease-in-out infinite; }
+  .vv-light-3 { background: var(--venue-glow-3, #8b5cf6); top: 20%;    right: -200px; animation: vv-light-3 16s ease-in-out infinite; }
+  .vv-light-4 { background: var(--venue-glow-4, #06b6d4); top: 30%;    left: -250px;  animation: vv-light-4 20s ease-in-out infinite; }
+  .vv-light-5 { background: var(--venue-glow-1, #ec4899); bottom: -300px; left: 30%; animation: vv-light-5 24s ease-in-out infinite; }
+  .vv-light-6 { background: var(--venue-glow-3, #8b5cf6); bottom: -250px; right: 25%; animation: vv-light-6 19s ease-in-out infinite; }
+  @keyframes vv-light-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(120px, 80px) scale(1.2); } }
+  @keyframes vv-light-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-80px, 60px) scale(1.15); } }
+  @keyframes vv-light-3 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-100px, 100px) scale(1.25); } }
+  @keyframes vv-light-4 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(150px, -50px) scale(1.1); } }
+  @keyframes vv-light-5 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(60px, -80px) scale(1.3); } }
+  @keyframes vv-light-6 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-90px, -60px) scale(1.18); } }
+
+  /* ── Top chrome ── */
+  .vv-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+    z-index: 5;
+  }
+  .vv-top-left, .vv-top-right { display: flex; align-items: center; gap: 18px; }
+  .vv-onair {
+    background: #ef4444;
+    color: #fff;
+    padding: 5px 14px;
+    border-radius: 3px;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    font-weight: 700;
+    box-shadow: 0 0 14px rgba(239,68,68,0.6);
+    animation: vv-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes vv-pulse {
+    0%, 100% { box-shadow: 0 0 14px rgba(239,68,68,0.5); }
+    50%      { box-shadow: 0 0 30px rgba(239,68,68,0.95); }
+  }
+  .vv-wordmark {
+    font-size: 18px;
+    letter-spacing: 0.32em;
+    font-weight: 600;
+  }
+  .vv-tagline {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+  }
+  .vv-venue-name {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 18px;
+    color: #fff;
+  }
+  .vv-clock {
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.85);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Stage ── */
+  .vv-stage {
+    position: relative;
+    background: var(--venue-stage, linear-gradient(180deg, #1a0a2a 0%, #050308 100%));
+    overflow: hidden;
+    z-index: 2;
+  }
+  .vv-curtain {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 80px;
+    background: var(--venue-curtain, linear-gradient(180deg, #4c1d95 0%, transparent 100%));
+    opacity: 0.6;
+  }
+  .vv-spotlight {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .vv-spotlight-cone {
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 620px;
+    height: 620px;
+    background: radial-gradient(ellipse 50% 80% at 50% 30%, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.08) 30%, transparent 70%);
+    pointer-events: none;
+  }
+  .vv-performer {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    transition: transform 600ms ease;
+    animation: vv-performer-breathe 3.6s ease-in-out infinite;
+  }
+  @keyframes vv-performer-breathe {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-6px) scale(1.02); }
+  }
+  .vv-performer.changing {
+    animation: vv-performer-change 800ms ease;
+  }
+  @keyframes vv-performer-change {
+    0%   { transform: scale(0.7); filter: blur(8px); opacity: 0.4; }
+    100% { transform: scale(1);   filter: blur(0);   opacity: 1;   }
+  }
+  .vv-performer-frame {
+    width: 320px;
+    height: 320px;
+    border: 5px solid #fff;
+    border-radius: 18px;
+    background: #fff;
+    padding: 16px;
+    box-shadow:
+      0 0 60px rgba(255,255,255,0.4),
+      0 0 100px var(--venue-glow-1, rgba(217,70,239,0.5)),
+      0 0 160px var(--venue-glow-3, rgba(139,92,246,0.3));
+  }
+  .vv-performer-frame img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+    transition: opacity 400ms;
+  }
+  .vv-performer-meta {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .vv-performer-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    font-weight: 700;
+  }
+  .vv-performer-name {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 56px;
+    color: #fff;
+    text-shadow: 0 0 24px var(--venue-glow-1, rgba(217,70,239,0.5));
+  }
+  .vv-performer-sub {
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* Tap beams */
+  .vv-beams {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 3;
+  }
+  .vv-beam {
+    position: absolute;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(0deg, var(--beam-color, #ec4899) 0%, transparent 100%);
+    transform-origin: bottom center;
+    animation: vv-beam-rise 700ms ease-out forwards;
+    pointer-events: none;
+    box-shadow: 0 0 16px var(--beam-color, #ec4899);
+  }
+  @keyframes vv-beam-rise {
+    0%   { height: 0; opacity: 1; }
+    50%  { height: 100%; opacity: 1; }
+    100% { height: 100%; opacity: 0; }
+  }
+
+  /* Confetti for ovation moments */
+  .vv-confetti {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 4;
+  }
+  @keyframes vv-confetti-fall {
+    0%   { transform: translate(0, -50px) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--cx), 100vh) rotate(var(--rot)); opacity: 0; }
+  }
+
+  /* ── Crowd ── */
+  .vv-crowd {
+    position: relative;
+    background: var(--venue-crowd, linear-gradient(180deg, #050308 0%, #0d0820 100%));
+    border-top: 1px solid rgba(255,255,255,0.05);
+    overflow: hidden;
+    z-index: 2;
+  }
+  .vv-crowd-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(2px 2px at 10% 20%, rgba(255,255,255,0.5), transparent),
+      radial-gradient(1px 1px at 30% 50%, rgba(255,255,255,0.3), transparent),
+      radial-gradient(2px 2px at 70% 30%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1px 1px at 90% 70%, rgba(255,255,255,0.3), transparent);
+    background-size: 200px 200px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .vv-crowd-tiers {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 14px 28px 10px;
+    gap: 10px;
+    z-index: 2;
+  }
+  .vv-tier {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    align-items: flex-end;
+  }
+  .vv-tier-front { gap: 8px; }
+  .vv-tier-mid   { gap: 5px; opacity: 0.85; }
+  .vv-tier-back  { gap: 4px; opacity: 0.65; }
+
+  .vv-seat {
+    position: relative;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.95);
+    padding: 3px;
+    transition: border-color 200ms, box-shadow 200ms, transform 240ms, opacity 200ms;
+    cursor: default;
+  }
+  .vv-tier-front .vv-seat { width: 60px; height: 60px; }
+  .vv-tier-mid   .vv-seat { width: 44px; height: 44px; }
+  .vv-tier-back  .vv-seat { width: 32px; height: 32px; filter: blur(0.3px); }
+  .vv-seat img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+    display: block;
+  }
+  .vv-seat-dot {
+    position: absolute;
+    top: -3px; right: -3px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 2px #050308, 0 0 8px rgba(34,197,94,0.7);
+  }
+  .vv-seat.cheering {
+    border-color: var(--venue-glow-1, #ec4899);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--venue-glow-1) 30%, transparent),
+                0 0 22px color-mix(in srgb, var(--venue-glow-1) 70%, transparent);
+    transform: scale(1.18) translateY(-4px);
+  }
+  .vv-seat.joining { animation: vv-seat-join 700ms ease-out; }
+  @keyframes vv-seat-join {
+    0%   { transform: scale(0.4) translateY(20px); opacity: 0; }
+    60%  { transform: scale(1.18) translateY(-6px); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .vv-seat.leaving { opacity: 0; transform: scale(0.5); }
+
+  .vv-crowd-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.35);
+    font-size: 14px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .vv-crowd-empty[hidden] { display: none !important; }
+
+  /* ── Bottom chrome ── */
+  .vv-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 32px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(10px);
+    z-index: 5;
+  }
+  .vv-bottom-left {
+    display: flex;
+    align-items: center;
+    gap: 36px;
+  }
+  .vv-stat { display: flex; flex-direction: column; gap: 2px; }
+  .vv-stat-label {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+  }
+  .vv-stat-val {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 24px;
+    color: #fff;
+  }
+  .vv-stat-sub {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.4);
+  }
+  .vv-qr {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .vv-qr-img-wrap {
+    background: #fff;
+    padding: 6px;
+    border-radius: 6px;
+  }
+  .vv-qr-img-wrap img {
+    width: 80px; height: 80px;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .vv-qr-text { display: flex; flex-direction: column; gap: 4px; }
+  .vv-qr-label {
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    font-weight: 700;
+  }
+  .vv-qr-url {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--venue-glow-1, #ec4899);
+  }
+</style>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════
+  // /drum-tv-v2 client. Cinematic venue: stage + tiered crowd.
+  // ══════════════════════════════════════════════════════════════════
+
+  const SESSION_KEY = 'pc:reactSessionId';
+  function getSessionId(): string {
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = (crypto as any).randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+  const sessionId = getSessionId();
+
+  // Clock
+  function updateClock() {
+    const el = document.getElementById('vv-clock');
+    if (!el) return;
+    const d = new Date();
+    el.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  updateClock();
+  setInterval(updateClock, 30_000);
+
+  // ── Venue cycling ──
+  const VENUES = [
+    { id: 'stadium',     label: 'The Stadium' },
+    { id: 'theater',     label: 'The Theater' },
+    { id: 'lounge',      label: 'The Lounge'  },
+    { id: 'underground', label: 'Underground' },
+  ];
+  const rootEl = document.getElementById('vv-root');
+  const venueNameEl = document.getElementById('vv-venue-name');
+  let venueIdx = 0;
+  function setVenue(idx: number) {
+    venueIdx = idx % VENUES.length;
+    const v = VENUES[venueIdx];
+    if (rootEl) rootEl.dataset.venue = v.id;
+    if (venueNameEl) venueNameEl.textContent = v.label;
+  }
+  setVenue(0);
+  setInterval(() => setVenue(venueIdx + 1), 45_000);
+
+  // ── Audience map (pid → visitor) ──
+  type Visitor = { pid: string; nounId: number; tier: 'front' | 'mid' | 'back' };
+  const audience = new Map<string, Visitor>();
+
+  function tierForPid(pid: string): 'front' | 'mid' | 'back' {
+    // Hash the pid → 0/1/2. Ensures same visitor always sits in same tier.
+    let h = 0;
+    for (let i = 0; i < pid.length; i++) h = ((h << 5) - h) + pid.charCodeAt(i);
+    const m = Math.abs(h) % 6;
+    if (m < 2) return 'front'; // ~33% front
+    if (m < 4) return 'mid';   // ~33% mid
+    return 'back';             // ~33% back
+  }
+
+  const tierFront = document.getElementById('vv-tier-front');
+  const tierMid   = document.getElementById('vv-tier-mid');
+  const tierBack  = document.getElementById('vv-tier-back');
+  const emptyEl   = document.getElementById('vv-crowd-empty');
+  const capEl     = document.getElementById('vv-cap');
+  const capSubEl  = document.getElementById('vv-cap-sub');
+
+  function paintCrowd() {
+    const visitors = Array.from(audience.values());
+    const count = visitors.length;
+    if (capEl) capEl.textContent = String(count);
+    if (capSubEl) capSubEl.textContent = count >= 20 ? 'standing room only' : count >= 5 ? 'crowd is forming' : 'in attendance';
+    if (emptyEl) emptyEl.hidden = count > 0;
+
+    // Diff render per tier so existing seats keep animation state
+    (['front', 'mid', 'back'] as const).forEach((tier) => {
+      const root = tier === 'front' ? tierFront : tier === 'mid' ? tierMid : tierBack;
+      if (!root) return;
+      const existing = new Map<string, HTMLElement>();
+      root.querySelectorAll<HTMLElement>('[data-pid]').forEach((el) => existing.set(el.dataset.pid || '', el));
+      const seen = new Set<string>();
+      visitors.filter((v) => v.tier === tier).forEach((v) => {
+        seen.add(v.pid);
+        if (!existing.has(v.pid)) {
+          const div = document.createElement('div');
+          div.className = 'vv-seat joining';
+          div.dataset.pid = v.pid;
+          div.dataset.noun = String(v.nounId);
+          div.innerHTML = `
+            <img src="https://noun.pics/${v.nounId}.svg" alt="" loading="lazy" />
+            <span class="vv-seat-dot" aria-hidden="true"></span>
+          `;
+          root.appendChild(div);
+          setTimeout(() => div.classList.remove('joining'), 720);
+        }
+      });
+      existing.forEach((el, pid) => {
+        if (!seen.has(pid)) {
+          el.classList.add('leaving');
+          setTimeout(() => el.remove(), 240);
+        }
+      });
+    });
+  }
+
+  // Make a visitor cheer (their tile pulses + a beam shoots toward stage)
+  function cheer(pid: string) {
+    if (!pid) return;
+    const seat = document.querySelector<HTMLElement>(`.vv-seat[data-pid="${pid}"]`);
+    if (!seat) return;
+    seat.classList.remove('cheering');
+    void seat.offsetWidth; // restart animation
+    seat.classList.add('cheering');
+    setTimeout(() => seat.classList.remove('cheering'), 800);
+    // Beam from seat → stage
+    fireBeam(seat);
+  }
+
+  function fireBeam(seatEl: HTMLElement) {
+    const beams = document.getElementById('vv-beams');
+    if (!beams) return;
+    const beamRect = beams.getBoundingClientRect();
+    const seatRect = seatEl.getBoundingClientRect();
+    // Position the beam at the seat's x-center, rising from the bottom of the stage area
+    const x = seatRect.left + seatRect.width / 2 - beamRect.left;
+    if (x < 0 || x > beamRect.width) return; // off-screen
+    const beam = document.createElement('div');
+    const colors = ['#ec4899', '#f59e0b', '#8b5cf6', '#06b6d4', '#22c55e'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    beam.className = 'vv-beam';
+    beam.style.left = `${x - 2}px`;
+    beam.style.setProperty('--beam-color', color);
+    beams.appendChild(beam);
+    setTimeout(() => beam.remove(), 800);
+  }
+
+  // ── Performer rotation ──
+  const performerImg = document.getElementById('vv-performer-img') as HTMLImageElement | null;
+  const performerName = document.getElementById('vv-performer-name');
+  const performerSub = document.getElementById('vv-performer-sub');
+  const performerEl = document.getElementById('vv-performer');
+  let lastPerformerPid = '';
+
+  function takeStage(pid: string, nounId: number, surface: string, label: string) {
+    if (pid === lastPerformerPid && Date.now() - lastTakeStageT < 800) return; // debounce
+    lastTakeStageT = Date.now();
+    lastPerformerPid = pid;
+    if (performerImg) {
+      performerImg.style.opacity = '0';
+      setTimeout(() => {
+        performerImg.src = `https://noun.pics/${nounId}.svg`;
+        performerImg.style.opacity = '1';
+      }, 200);
+    }
+    if (performerName) performerName.textContent = label;
+    if (performerSub) performerSub.textContent = `noun #${nounId} · ${surface}`;
+    if (performerEl) {
+      performerEl.classList.remove('changing');
+      void performerEl.offsetWidth;
+      performerEl.classList.add('changing');
+    }
+  }
+  let lastTakeStageT = 0;
+
+  // ── /api/visit polling for crowd roster ──
+  async function refreshPresence() {
+    try {
+      const r = await fetch('/api/visit');
+      if (!r.ok) return;
+      const data = await r.json();
+      const present = Array.isArray(data.present) ? data.present : [];
+      const humans: Array<{ pid: string; nounId: number }> = present
+        .filter((p: any) => p.type === 'human' && p.pid)
+        .map((p: any) => ({ pid: p.pid, nounId: Number(p.nounId) || 42 }));
+      const seen = new Set(humans.map((h) => h.pid));
+      for (const h of humans) {
+        if (!audience.has(h.pid)) {
+          audience.set(h.pid, { pid: h.pid, nounId: h.nounId, tier: tierForPid(h.pid) });
+        }
+      }
+      for (const pid of [...audience.keys()]) if (!seen.has(pid)) audience.delete(pid);
+      paintCrowd();
+    } catch {}
+  }
+  refreshPresence();
+  setInterval(refreshPresence, 8000);
+
+  // ── Real-time stream ──
+  type IncomingEvent = { type: string; pid?: string; sessionId?: string; [k: string]: any };
+  let streamMode: 'connecting' | 'ws' | 'poll' = 'connecting';
+  let ws: WebSocket | null = null;
+  let lastSoundT = Date.now();
+  const streamEl = document.getElementById('vv-stream');
+  const streamSubEl = document.getElementById('vv-stream-sub');
+  function setStream(mode: typeof streamMode, sub: string) {
+    streamMode = mode;
+    if (streamEl) streamEl.textContent = mode === 'ws' ? 'live · ws' : mode === 'poll' ? 'live · 150ms' : 'connecting…';
+    if (streamSubEl) streamSubEl.textContent = sub;
+  }
+  setStream('connecting', 'resolving transport');
+
+  // Energy meter (taps per minute)
+  const tapTimes: number[] = [];
+  const energyEl = document.getElementById('vv-energy');
+  function recordTap() {
+    const now = Date.now();
+    tapTimes.push(now);
+    while (tapTimes[0] && tapTimes[0] < now - 60_000) tapTimes.shift();
+    if (energyEl) energyEl.textContent = String(tapTimes.length);
+  }
+
+  // Ovation when 5+ events in 2 seconds
+  function checkOvation() {
+    const now = Date.now();
+    const recent = tapTimes.filter((t) => now - t < 2000);
+    if (recent.length >= 5) ovate();
+  }
+  let lastOvationT = 0;
+  function ovate() {
+    if (Date.now() - lastOvationT < 6000) return;
+    lastOvationT = Date.now();
+    const layer = document.getElementById('vv-confetti');
+    if (!layer) return;
+    const colors = ['#ec4899', '#f59e0b', '#8b5cf6', '#06b6d4', '#22c55e', '#fbbf24'];
+    for (let i = 0; i < 60; i++) {
+      const span = document.createElement('span');
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      span.style.cssText = `
+        position: absolute;
+        left: ${Math.random() * 100}%;
+        top: -50px;
+        width: 8px;
+        height: 14px;
+        background: ${color};
+        --cx: ${(Math.random() - 0.5) * 200}px;
+        --rot: ${(Math.random() - 0.5) * 720}deg;
+        animation: vv-confetti-fall ${2200 + Math.random() * 1500}ms ease-in forwards;
+        animation-delay: ${Math.random() * 800}ms;
+        pointer-events: none;
+      `;
+      layer.appendChild(span);
+      setTimeout(() => span.remove(), 4500);
+    }
+  }
+
+  function dispatchIncoming(ev: IncomingEvent) {
+    if (!ev || typeof ev !== 'object') return;
+    const t = ev.type;
+    let nounId = 42, label = 'tap', surface = 'stage';
+    if (t === 'drum')         { nounId = 42;  label = 'Drumming';   surface = 'classic'; }
+    else if (t === 'orchestra'){ nounId = 200; label = String(ev.inst || ev.cellKey || 'Orchestra'); surface = 'orchestra'; }
+    else if (t === 'choir' || t === 'choir-chord') { nounId = 888; label = String(ev.voice || ev.chord || 'Choir'); surface = 'choir'; }
+    else if (t === 'lounge')   { nounId = 77;  label = String(ev.voice || 'Saxophone'); surface = 'lounge'; }
+    else if (t === 'symphony') { nounId = 88;  label = String(ev.seatKey || ev.family || 'Symphony'); surface = 'symphony'; }
+    else { return; }
+
+    // Capitalize the label
+    label = label.charAt(0).toUpperCase() + label.slice(1).replace(/-/g, ' ');
+
+    // If this visitor isn't in our roster yet (presence may lag), add them
+    if (ev.pid && !audience.has(ev.pid)) {
+      audience.set(ev.pid, { pid: ev.pid, nounId, tier: tierForPid(ev.pid) });
+      paintCrowd();
+    }
+
+    if (ev.pid) cheer(ev.pid);
+    if (ev.pid) takeStage(ev.pid, nounId, surface, label);
+    recordTap();
+    checkOvation();
+  }
+
+  function connectWS() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/drum/room?sid=${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(url);
+      ws.addEventListener('open', () => setStream('ws', '~30–60ms p50'));
+      ws.addEventListener('message', (msg) => {
+        try { dispatchIncoming(JSON.parse(msg.data)); } catch {}
+      });
+      ws.addEventListener('close', () => {
+        if (streamMode === 'connecting') fallbackToPoll('ws unavailable · 150ms poll');
+        else if (streamMode === 'ws') setTimeout(connectWS, 2000);
+      });
+      ws.addEventListener('error', () => {
+        if (streamMode === 'connecting') fallbackToPoll('ws error · 150ms poll');
+      });
+    } catch { fallbackToPoll('ws not supported · 150ms poll'); }
+  }
+  function fallbackToPoll(reason: string) {
+    setStream('poll', reason);
+    setInterval(() => { if (document.visibilityState === 'visible') pollSounds(); }, 150);
+  }
+  async function pollSounds() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastSoundT}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data.now === 'number') lastSoundT = data.now;
+      const events = Array.isArray(data.events) ? data.events : [];
+      for (const ev of events) dispatchIncoming(ev);
+    } catch {}
+  }
+  connectWS();
+  setTimeout(() => { if (streamMode === 'connecting') fallbackToPoll('ws timeout · 150ms poll'); }, 1500);
+
+  // Energy decay animation — even without events the meter ticks down
+  setInterval(() => {
+    const now = Date.now();
+    while (tapTimes[0] && tapTimes[0] < now - 60_000) tapTimes.shift();
+    if (energyEl) energyEl.textContent = String(tapTimes.length);
+  }, 2000);
+
+  // Idle: rotate the spotlight through curated nouns when no one's playing
+  const IDLE_PERFORMERS = [
+    { id: 42,  name: 'The House Drum',     surface: 'classic'  },
+    { id: 888, name: 'The Choir',          surface: 'choir'    },
+    { id: 77,  name: 'Songbird',           surface: 'lounge'   },
+    { id: 200, name: 'The Bass',           surface: 'orchestra'},
+    { id: 808, name: 'The Big',            surface: 'big'      },
+    { id: 88,  name: 'The Symphony',       surface: 'symphony' },
+  ];
+  let idleIdx = 0;
+  setInterval(() => {
+    if (Date.now() - lastTakeStageT < 8000) return;
+    const p = IDLE_PERFORMERS[idleIdx % IDLE_PERFORMERS.length];
+    idleIdx++;
+    takeStage('idle', p.id, p.surface, p.name);
+  }, 5000);
+</script>
+
+</DrumLayout>
