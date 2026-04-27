@@ -9,7 +9,7 @@
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v5";
-  const SETTINGS_RELEASE = "v5-spells";
+  const SETTINGS_RELEASE = "v5-myth";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5"]);
   const renderStyles = {
     storybook: {
@@ -1329,6 +1329,7 @@
     exhaleButton: document.getElementById("exhaleButton"),
     wisdomButton: document.getElementById("wisdomButton"),
     soundButton: document.getElementById("soundButton"),
+    mythModeButton: document.getElementById("mythModeButton"),
     lanternButton: document.getElementById("lanternButton"),
     lanternExitButton: document.getElementById("lanternExitButton"),
     hushButton: document.getElementById("hushButton"),
@@ -1923,6 +1924,7 @@
 
     state.resourceLevels[resource.id] = nextLevel;
     saveResourceLevels();
+    updateSpellPanel();
     updateStats();
 
     if (!settings.quiet) {
@@ -3085,6 +3087,32 @@
     }
   }
 
+  function setMythMode() {
+    if (state.version !== "v5") {
+      setVersion("v5");
+    }
+
+    setVisual("lake", { syncMode: false });
+    setMode("stars");
+    setIntention("wander");
+    setResource("wonder", { announce: false });
+    sharpenResource({ quiet: true });
+
+    state.warmth = 0.5;
+    state.smoke = 0.48;
+    dom.warmthSlider.value = String(Math.round(state.warmth * 100));
+    dom.smokeSlider.value = String(Math.round(state.smoke * 100));
+    state.activeSpell = composeSpell(activeResource());
+    updateSpellPanel();
+    updateStats();
+    updateAudioLevels();
+    saveSettings();
+
+    dom.wizardLine.textContent = "Put Myth on low, let the stars hold the edges, and build from wonder.";
+    setGuide("Listen along", "Myth · Beach House", `${activeNounsGandalf().name} pairs with ${activeKeepsake().name}; Wonder is sharpened for this sit.`);
+    spawnParticles(14);
+  }
+
   function toggleLantern(force) {
     state.lantern = typeof force === "boolean" ? force : !state.lantern;
     dom.body.classList.toggle("lantern-mode", state.lantern);
@@ -3142,6 +3170,7 @@
   dom.exhaleButton.addEventListener("click", () => addSmoke({ count: 7, power: 1.2, spread: 72, countTowardSession: true }));
   dom.wisdomButton.addEventListener("click", chooseLine);
   dom.soundButton.addEventListener("click", () => setSound(!state.soundOn));
+  dom.mythModeButton.addEventListener("click", setMythMode);
   dom.hushButton.addEventListener("click", hush);
   dom.lanternButton.addEventListener("click", () => toggleLantern());
   dom.lanternExitButton.addEventListener("click", () => toggleLantern(false));

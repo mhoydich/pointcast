@@ -1,6 +1,6 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
+A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, an optional "Myth" listen-along, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
@@ -54,10 +54,11 @@ The app defaults to V5, with a V1/V2/V3/V4/V5 toggle in the masthead. The select
 - Adds 12 pocket keepsakes that pair with pulled cards, sit completions, and the presence tally.
 - Adds a Gandalf resource sharpener with Focus, Patience, Warmth, Wonder, Courage, and Ease.
 - Adds a tiny spell-building game: pair the active Gandalf with a keepsake, sharpen a resource, build a spell, and keep it in a local spellbook.
+- Adds a V5 listen-along card for "Myth" by Beach House with a direct Spotify link and a Myth mode that tunes the room to Moon lake, Stars, Wander, and Wonder.
 - Adds five V5 rituals: Enjoy, Meditate, Pipe, Beer, and Study.
 - Makes the first action clearer: choose a sit, pull a Gandalf, pair a keepsake, sharpen a resource, build a spell, then begin a 5-minute sit.
 - Reframes the local tally as a presence score and rank derived from kept cards, keepsakes, sharpened resources, kept spells, saved sits, minutes, and cues.
-- Bumps the local settings release so returning V5 visitors land on the new spell-building pass once without losing their kept card or keepsake collection.
+- Bumps the local settings release so returning V5 visitors land on the new Myth/spell-building pass once without losing their kept card or keepsake collection.
 - Keeps V1, V2, V3, and V4 available from the version toggle.
 - Stores the local collection in `localStorage` under `sitting-with-gandalf-nouns-collection`.
 - Stores the pocket keepsakes in `localStorage` under `sitting-with-gandalf-keepsake-collection`.
