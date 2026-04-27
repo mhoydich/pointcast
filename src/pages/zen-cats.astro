@@ -18,6 +18,17 @@ const today = todayZenCat();
 const recent = recentZenCats(9);
 const genesisCollectibles = ZEN_CAT_GENESIS_COLLECTIBLES;
 const worldCollectibles = ZEN_CAT_WORLD_COLLECTIBLES;
+const worldGemOptions = Array.from(new Set(worldCollectibles.map((item) => item.gem))).sort((a, b) =>
+  a.localeCompare(b),
+);
+const worldGemLedger = worldGemOptions.map((gem) => ({
+  gem,
+  count: worldCollectibles.filter((item) => item.gem === gem).length,
+}));
+const spotlightWorld = Array.from({ length: 4 }, (_, index) => {
+  const cursor = (today.seed + index * 7) % worldCollectibles.length;
+  return worldCollectibles[cursor];
+});
 const cat = today.cat;
 const palette = cat.palette;
 const zenCatsMainnet = ((contracts as any).zen_cats?.mainnet ?? '').trim();
@@ -44,6 +55,18 @@ const clientData = {
     gem: item.gem,
     rarity: item.rarity,
     imageUrl: item.imageUrl,
+  })),
+  world: worldCollectibles.map((item) => ({
+    id: item.id,
+    number: item.number,
+    title: item.title,
+    city: item.city,
+    country: item.country,
+    landmark: item.landmark,
+    cat: item.cat,
+    gem: item.gem,
+    mood: item.mood,
+    rarity: item.rarity,
   })),
 };
 
@@ -135,6 +158,31 @@ const jsonLd = {
       </aside>
     </header>
 
+    <section class="garden-dashboard" aria-label="Zen Cat collection progress">
+      <article>
+        <p class="kicker">TODAY</p>
+        <strong data-dashboard-total>0</strong>
+        <span>cats, stamps, and cards held locally</span>
+      </article>
+      <article>
+        <p class="kicker">GENESIS</p>
+        <strong><span data-dashboard-genesis>0</span> / {genesisCollectibles.length}</strong>
+        <span>founding art cards on the shelf</span>
+        <meter min="0" max={genesisCollectibles.length} value="0" data-genesis-meter></meter>
+      </article>
+      <article>
+        <p class="kicker">PASSPORT</p>
+        <strong><span data-dashboard-world>0</span> / {worldCollectibles.length}</strong>
+        <span>World Atelier places stamped</span>
+        <meter min="0" max={worldCollectibles.length} value="0" data-world-meter></meter>
+      </article>
+      <article>
+        <p class="kicker">NEXT</p>
+        <strong data-dashboard-next>ritual</strong>
+        <span data-dashboard-next-detail>Start with the daily care ritual.</span>
+      </article>
+    </section>
+
     <section class="ritual-panel" aria-labelledby="ritual-title">
       <div class="panel-head">
         <p class="kicker">DAILY RITUAL</p>
@@ -167,6 +215,38 @@ const jsonLd = {
       </p>
     </section>
 
+    <section class="quest-panel" aria-labelledby="quest-title">
+      <div class="panel-head">
+        <p class="kicker">TODAY'S GARDEN QUEST</p>
+        <h2 id="quest-title">Make the day feel owned.</h2>
+        <p>
+          A small local quest chain ties the daily cat, Genesis shelf, and World passport together.
+        </p>
+      </div>
+      <ol class="quest-list">
+        <li data-quest-step="ritual">
+          <span>01</span>
+          <strong>Complete the care ritual</strong>
+          <small data-quest-status="ritual">Waiting for three calm actions.</small>
+        </li>
+        <li data-quest-step="daily">
+          <span>02</span>
+          <strong>Collect today's cat</strong>
+          <small data-quest-status="daily">Ready after the ritual.</small>
+        </li>
+        <li data-quest-step="genesis">
+          <span>03</span>
+          <strong>Add a Genesis card</strong>
+          <small data-quest-status="genesis">Choose one founding collectible.</small>
+        </li>
+        <li data-quest-step="world">
+          <span>04</span>
+          <strong>Stamp a World Atelier place</strong>
+          <small data-quest-status="world">Pick a city or gem below.</small>
+        </li>
+      </ol>
+    </section>
+
     <section class="shelf-panel" aria-labelledby="shelf-title">
       <div class="panel-head">
         <p class="kicker">COLLECTION SHELF</p>
@@ -174,6 +254,7 @@ const jsonLd = {
         <p>
           <span data-collection-count>0</span> daily cats and
           <span data-genesis-count>0</span> Genesis cats collected in this browser.
+          Passport stamps: <span data-world-count>0</span>.
         </p>
       </div>
       <ol class="cat-shelf">
@@ -232,9 +313,59 @@ const jsonLd = {
           a landmark cue, a gemstone color story, and a quiet high-end mood.
         </p>
       </div>
+      <div class="passport-desk">
+        <div class="passport-desk__copy">
+          <p class="kicker">PASSPORT DESK</p>
+          <h3>Four places are calling today.</h3>
+          <ol>
+            {spotlightWorld.map((item) => (
+              <li>
+                <button type="button" data-world-focus={item.id}>
+                  <strong>{item.title}</strong>
+                  <span>{item.city}, {item.country} · {item.gem}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div class="gem-ledger" aria-label="World Atelier gem ledger">
+          <p class="kicker">GEM LEDGER</p>
+          <div>
+            {worldGemLedger.map((item) => (
+              <button type="button" data-gem-focus={item.gem}>
+                <span>{item.gem}</span>
+                <strong>{item.count}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div class="world-tools" aria-label="World Atelier filters">
+        <label>
+          <span>Search</span>
+          <input type="search" data-world-search placeholder="city, gem, landmark" />
+        </label>
+        <label>
+          <span>Gem</span>
+          <select data-world-gem>
+            <option value="">All gems</option>
+            {worldGemOptions.map((gem) => <option value={gem}>{gem}</option>)}
+          </select>
+        </label>
+        <button type="button" data-world-random>Unvisited</button>
+        <p data-world-visible>Showing {worldCollectibles.length} passport cats.</p>
+      </div>
       <ol class="world-grid">
         {worldCollectibles.map((item) => (
-          <li style={`--world-ground:${item.palette.ground};--world-accent:${item.palette.accent};--world-ink:${item.palette.ink};`}>
+          <li
+            data-world-card={item.id}
+            data-world-title={item.title}
+            data-world-city={item.city}
+            data-world-country={item.country}
+            data-world-gem={item.gem}
+            data-world-landmark={item.landmark}
+            style={`--world-ground:${item.palette.ground};--world-accent:${item.palette.accent};--world-ink:${item.palette.ink};`}
+          >
             <span class="world-grid__number">{String(item.number).padStart(2, '0')}</span>
             <h3>{item.title}</h3>
             <p>{item.city}, {item.country}</p>
@@ -243,6 +374,7 @@ const jsonLd = {
               <div><dt>Gem</dt><dd>{item.gem}</dd></div>
               <div><dt>Cat</dt><dd>{item.cat}</dd></div>
             </dl>
+            <button type="button" data-world-id={item.id}>Stamp passport</button>
           </li>
         ))}
       </ol>
@@ -258,7 +390,7 @@ const jsonLd = {
       <pre>{JSON.stringify({
         today: manifest.today,
         genesis: { count: manifest.genesis.count, storageKey: manifest.genesis.storageKey },
-        worldAtelier: { count: manifest.worldAtelier.count },
+        worldAtelier: { count: manifest.worldAtelier.count, storageKey: manifest.worldAtelier.storageKey },
         tezos: manifest.tezos,
       }, null, 2)}</pre>
     </section>
@@ -276,17 +408,46 @@ const jsonLd = {
       const DATA = JSON.parse(dataEl.textContent || '{}');
       const collectionKey = DATA.storageKeys.collection;
       const genesisKey = DATA.storageKeys.genesisCollection;
+      const worldKey = DATA.storageKeys.worldCollection;
       const ritualKey = DATA.storageKeys.ritualPrefix + DATA.today.date;
       const ritualButtons = Array.from(root.querySelectorAll('[data-ritual-id]'));
       const genesisButtons = Array.from(root.querySelectorAll('[data-genesis-id]'));
+      const worldButtons = Array.from(root.querySelectorAll('[data-world-id]'));
+      const worldCards = Array.from(root.querySelectorAll('[data-world-card]'));
+      const worldFocusButtons = Array.from(root.querySelectorAll('[data-world-focus]'));
+      const gemFocusButtons = Array.from(root.querySelectorAll('[data-gem-focus]'));
       const collectButton = root.querySelector('[data-collect-cat]');
       const mintButton = root.querySelector('[data-mint-cat]');
       const ritualStatus = root.querySelector('[data-ritual-status]');
       const collectionStatus = root.querySelector('[data-collection-status]');
       const collectionCount = root.querySelector('[data-collection-count]');
       const genesisCount = root.querySelector('[data-genesis-count]');
+      const worldCount = root.querySelector('[data-world-count]');
+      const dashboardTotal = root.querySelector('[data-dashboard-total]');
+      const dashboardGenesis = root.querySelector('[data-dashboard-genesis]');
+      const dashboardWorld = root.querySelector('[data-dashboard-world]');
+      const dashboardNext = root.querySelector('[data-dashboard-next]');
+      const dashboardNextDetail = root.querySelector('[data-dashboard-next-detail]');
+      const genesisMeter = root.querySelector('[data-genesis-meter]');
+      const worldMeter = root.querySelector('[data-world-meter]');
+      const worldSearch = root.querySelector('[data-world-search]');
+      const worldGemFilter = root.querySelector('[data-world-gem]');
+      const worldVisible = root.querySelector('[data-world-visible]');
+      const worldRandom = root.querySelector('[data-world-random]');
       const mintStatus = root.querySelector('[data-mint-status]');
       const shelves = Array.from(root.querySelectorAll('[data-shelf-date]'));
+      const questStatuses = {
+        ritual: root.querySelector('[data-quest-status="ritual"]'),
+        daily: root.querySelector('[data-quest-status="daily"]'),
+        genesis: root.querySelector('[data-quest-status="genesis"]'),
+        world: root.querySelector('[data-quest-status="world"]'),
+      };
+      const questSteps = {
+        ritual: root.querySelector('[data-quest-step="ritual"]'),
+        daily: root.querySelector('[data-quest-step="daily"]'),
+        genesis: root.querySelector('[data-quest-step="genesis"]'),
+        world: root.querySelector('[data-quest-step="world"]'),
+      };
 
       function readJson(key, fallback) {
         try {
@@ -312,6 +473,11 @@ const jsonLd = {
 
       function genesisCollection() {
         const items = readJson(genesisKey, []);
+        return Array.isArray(items) ? items : [];
+      }
+
+      function worldCollection() {
+        const items = readJson(worldKey, []);
         return Array.isArray(items) ? items : [];
       }
 
@@ -371,6 +537,77 @@ const jsonLd = {
         render();
       }
 
+      function collectWorld(id) {
+        const collectible = DATA.world.find((item) => item.id === id);
+        if (!collectible) return;
+        const items = worldCollection().filter((item) => item.id !== id);
+        items.unshift({
+          id: collectible.id,
+          number: collectible.number,
+          title: collectible.title,
+          city: collectible.city,
+          country: collectible.country,
+          landmark: collectible.landmark,
+          cat: collectible.cat,
+          gem: collectible.gem,
+          mood: collectible.mood,
+          rarity: collectible.rarity,
+          source: 'world-atelier',
+          stampedAt: new Date().toISOString(),
+        });
+        writeJson(worldKey, items.slice(0, 128));
+        passportStamp();
+        render();
+      }
+
+      function normalize(value) {
+        return String(value || '').trim().toLowerCase();
+      }
+
+      function applyWorldFilters() {
+        const query = normalize(worldSearch?.value);
+        const gem = normalize(worldGemFilter?.value);
+        let visible = 0;
+
+        worldCards.forEach((card) => {
+          const haystack = [
+            card.getAttribute('data-world-title'),
+            card.getAttribute('data-world-city'),
+            card.getAttribute('data-world-country'),
+            card.getAttribute('data-world-gem'),
+            card.getAttribute('data-world-landmark'),
+          ].map(normalize).join(' ');
+          const cardGem = normalize(card.getAttribute('data-world-gem'));
+          const matchesQuery = !query || haystack.includes(query);
+          const matchesGem = !gem || cardGem === gem;
+          const show = matchesQuery && matchesGem;
+          card.hidden = !show;
+          if (show) visible += 1;
+        });
+
+        if (worldVisible) {
+          const suffix = gem ? ` · ${worldGemFilter.value}` : '';
+          worldVisible.textContent = `Showing ${visible} of ${DATA.world.length} passport cats${suffix}.`;
+        }
+      }
+
+      function focusWorld(id) {
+        const collectible = DATA.world.find((item) => item.id === id);
+        if (!collectible) return;
+        if (worldSearch) worldSearch.value = collectible.title;
+        if (worldGemFilter) worldGemFilter.value = '';
+        applyWorldFilters();
+        root.querySelector(`[data-world-card="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      function focusUnvisitedWorld() {
+        const stamped = new Set(worldCollection().map((item) => item.id));
+        const candidates = DATA.world.filter((item) => !stamped.has(item.id));
+        const pool = candidates.length ? candidates : DATA.world;
+        const next = pool[Math.floor(Math.random() * pool.length)];
+        if (next) focusWorld(next.id);
+      }
+
       function render() {
         const state = ritualState();
         const done = DATA.rituals.filter((ritual) => state[ritual.id]).length;
@@ -378,7 +615,9 @@ const jsonLd = {
         const collected = isCollectedToday();
         const items = collection();
         const genesisItems = genesisCollection();
+        const worldItems = worldCollection();
         const genesisIds = new Set(genesisItems.map((item) => item.id));
+        const worldIds = new Set(worldItems.map((item) => item.id));
 
         ritualButtons.forEach((button) => {
           const id = button.getAttribute('data-ritual-id');
@@ -399,6 +638,38 @@ const jsonLd = {
         }
         if (collectionCount) collectionCount.textContent = String(items.length);
         if (genesisCount) genesisCount.textContent = String(genesisItems.length);
+        if (worldCount) worldCount.textContent = String(worldItems.length);
+        if (dashboardTotal) dashboardTotal.textContent = String(items.length + genesisItems.length + worldItems.length);
+        if (dashboardGenesis) dashboardGenesis.textContent = String(genesisItems.length);
+        if (dashboardWorld) dashboardWorld.textContent = String(worldItems.length);
+        if (genesisMeter) genesisMeter.setAttribute('value', String(genesisItems.length));
+        if (worldMeter) worldMeter.setAttribute('value', String(worldItems.length));
+        if (dashboardNext && dashboardNextDetail) {
+          if (!complete) {
+            dashboardNext.textContent = 'ritual';
+            dashboardNextDetail.textContent = 'Complete the three care actions.';
+          } else if (!collected) {
+            dashboardNext.textContent = 'daily cat';
+            dashboardNextDetail.textContent = `${DATA.today.cat.name} is ready for the shelf.`;
+          } else if (!genesisItems.length) {
+            dashboardNext.textContent = 'genesis';
+            dashboardNextDetail.textContent = 'Add one founding art card.';
+          } else if (!worldItems.length) {
+            dashboardNext.textContent = 'passport';
+            dashboardNextDetail.textContent = 'Stamp one World Atelier city.';
+          } else {
+            dashboardNext.textContent = 'polish';
+            dashboardNextDetail.textContent = 'Keep collecting gems and places.';
+          }
+        }
+        if (questStatuses.ritual) questStatuses.ritual.textContent = complete ? 'Complete.' : `${done} of ${DATA.rituals.length} actions done.`;
+        if (questStatuses.daily) questStatuses.daily.textContent = collected ? `${DATA.today.cat.name} collected.` : complete ? 'Ready to collect.' : 'Waiting on care ritual.';
+        if (questStatuses.genesis) questStatuses.genesis.textContent = genesisItems.length ? `${genesisItems.length} Genesis cards held.` : 'Choose one founding collectible.';
+        if (questStatuses.world) questStatuses.world.textContent = worldItems.length ? `${worldItems.length} places stamped.` : 'Pick a city or gem below.';
+        questSteps.ritual?.classList.toggle('is-complete', complete);
+        questSteps.daily?.classList.toggle('is-complete', collected);
+        questSteps.genesis?.classList.toggle('is-complete', genesisItems.length > 0);
+        questSteps.world?.classList.toggle('is-complete', worldItems.length > 0);
         if (collectButton) {
           collectButton.disabled = !complete || collected;
           collectButton.textContent = collected ? 'Collected' : 'Collect locally';
@@ -419,6 +690,15 @@ const jsonLd = {
           button.disabled = isCollected;
           card?.classList.toggle('is-collected', isCollected);
         });
+        worldButtons.forEach((button) => {
+          const id = button.getAttribute('data-world-id');
+          const isCollected = worldIds.has(id);
+          const card = id ? root.querySelector(`[data-world-card="${id}"]`) : null;
+          button.textContent = isCollected ? 'Stamped' : 'Stamp passport';
+          button.disabled = isCollected;
+          card?.classList.toggle('is-stamped', isCollected);
+        });
+        applyWorldFilters();
       }
 
       ritualButtons.forEach((button) => {
@@ -439,6 +719,33 @@ const jsonLd = {
           if (id) collectGenesis(id);
         });
       });
+
+      worldButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = button.getAttribute('data-world-id');
+          if (id) collectWorld(id);
+        });
+      });
+
+      worldFocusButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = button.getAttribute('data-world-focus');
+          if (id) focusWorld(id);
+        });
+      });
+
+      gemFocusButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          if (worldSearch) worldSearch.value = '';
+          if (worldGemFilter) worldGemFilter.value = button.getAttribute('data-gem-focus') || '';
+          applyWorldFilters();
+          root.querySelector('[data-world-card]:not([hidden])')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+
+      worldSearch?.addEventListener('input', applyWorldFilters);
+      worldGemFilter?.addEventListener('change', applyWorldFilters);
+      worldRandom?.addEventListener('click', focusUnvisitedWorld);
 
       mintButton?.addEventListener('click', async () => {
         if (!DATA.contract.live || !isCollectedToday()) return;
@@ -505,7 +812,9 @@ const jsonLd = {
 
   .cat-hero__copy,
   .cat-card,
+  .garden-dashboard,
   .ritual-panel,
+  .quest-panel,
   .shelf-panel,
   .genesis-panel,
   .world-panel,
@@ -625,7 +934,46 @@ const jsonLd = {
     font-size: 14px;
   }
 
+  .garden-dashboard {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    background: var(--pc-ink);
+  }
+
+  .garden-dashboard article {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    min-width: 0;
+    min-height: 154px;
+    padding: 16px;
+    background: #fffef8;
+  }
+
+  .garden-dashboard strong {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+
+  .garden-dashboard span {
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .garden-dashboard meter {
+    width: 100%;
+    height: 10px;
+    margin-top: 4px;
+  }
+
   .ritual-panel,
+  .quest-panel,
   .shelf-panel,
   .genesis-panel,
   .world-panel,
@@ -684,6 +1032,48 @@ const jsonLd = {
   .ritual-button.is-done {
     background: #e8f4e9;
     box-shadow: inset 0 0 0 2px #2d8a59;
+  }
+
+  .quest-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .quest-list li {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    min-height: 142px;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fbf8ee;
+  }
+
+  .quest-list li.is-complete {
+    background: #e8f4e9;
+    box-shadow: inset 0 0 0 2px #2d8a59;
+  }
+
+  .quest-list span {
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+  }
+
+  .quest-list strong {
+    font-size: 18px;
+    line-height: 1.14;
+    letter-spacing: 0;
+  }
+
+  .quest-list small {
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   .mint-console {
@@ -910,6 +1300,123 @@ const jsonLd = {
     opacity: 0.72;
   }
 
+  .passport-desk {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(260px, 0.7fr);
+    gap: 10px;
+  }
+
+  .passport-desk__copy,
+  .gem-ledger {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #f8fbff;
+  }
+
+  .passport-desk h3 {
+    margin: 0 0 10px;
+    font-size: 24px;
+    line-height: 1.05;
+    letter-spacing: 0;
+  }
+
+  .passport-desk ol,
+  .gem-ledger div {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .passport-desk button,
+  .gem-ledger button,
+  .world-tools button,
+  .world-grid button {
+    min-width: 0;
+    border: 1px solid var(--pc-ink);
+    background: #fffef8;
+    color: var(--pc-ink);
+    cursor: pointer;
+  }
+
+  .passport-desk button {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    padding: 10px;
+    text-align: left;
+  }
+
+  .passport-desk button span {
+    color: var(--pc-ink-soft);
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .gem-ledger div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gem-ledger button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 38px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .gem-ledger button span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .world-tools {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.6fr) auto minmax(220px, 0.8fr);
+    gap: 8px;
+    align-items: end;
+  }
+
+  .world-tools label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .world-tools input,
+  .world-tools select {
+    min-height: 42px;
+    min-width: 0;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font: inherit;
+    text-transform: none;
+  }
+
+  .world-tools button {
+    min-height: 42px;
+    padding: 0 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .world-tools p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
   .world-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -932,6 +1439,14 @@ const jsonLd = {
     color: #fffef8;
   }
 
+  .world-grid li[hidden] {
+    display: none;
+  }
+
+  .world-grid li.is-stamped {
+    box-shadow: inset 0 0 0 3px var(--world-accent);
+  }
+
   .world-grid h3,
   .world-grid p {
     margin: 0;
@@ -950,6 +1465,21 @@ const jsonLd = {
     line-height: 1.25;
   }
 
+  .world-grid button {
+    align-self: end;
+    min-height: 38px;
+    border-color: color-mix(in oklab, var(--world-accent) 72%, #fff);
+    color: var(--world-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .world-grid button:disabled {
+    cursor: default;
+    opacity: 0.72;
+  }
+
   .agent-note pre {
     max-height: 320px;
     margin: 0;
@@ -964,8 +1494,15 @@ const jsonLd = {
 
   @media (max-width: 1080px) {
     .cat-hero,
-    .mint-console {
+    .mint-console,
+    .passport-desk,
+    .world-tools {
       grid-template-columns: 1fr;
+    }
+
+    .garden-dashboard,
+    .quest-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .genesis-grid,
@@ -989,6 +1526,8 @@ const jsonLd = {
 
     .ritual-grid,
     .cat-facts,
+    .garden-dashboard,
+    .quest-list,
     .genesis-grid,
     .world-grid,
     .cat-shelf {

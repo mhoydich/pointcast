@@ -10,6 +10,7 @@ export const ZEN_CATS_SYMBOL = 'PCCAT';
 export const ZEN_CATS_STORAGE_KEYS = {
   collection: 'pc:zen-cats:collection',
   genesisCollection: 'pc:zen-cats:genesis',
+  worldCollection: 'pc:zen-cats:world',
   ritualPrefix: 'pc:zen-cats:rituals:',
 } as const;
 
@@ -318,6 +319,7 @@ export function buildZenCatsManifest(now: Date = new Date()) {
     worldAtelier: {
       title: 'World Atelier',
       count: ZEN_CAT_WORLD_COLLECTIBLES.length,
+      storageKey: ZEN_CATS_STORAGE_KEYS.worldCollection,
       stylePrompt: ZEN_CAT_WORLD_STYLE_PROMPT,
       collectibles: ZEN_CAT_WORLD_COLLECTIBLES,
     },
