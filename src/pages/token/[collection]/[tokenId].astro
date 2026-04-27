@@ -1,0 +1,425 @@
+---
+/**
+ * /token/[collection]/[tokenId] — shareable PointCast collectible detail.
+ *
+ * Static detail pages for the live PointCast FA2 collections. The page gives
+ * each token a PointCast-native permalink, then hydrates holder data from
+ * TzKT in the browser so shared links still feel alive after deploy.
+ */
+
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import WalletConnect from '../../../components/WalletConnect.astro';
+import contracts from '../../../data/contracts.json';
+
+type TokenPage = {
+  routeSlug: string;
+  slug: string;
+  collectionName: string;
+  symbol: string;
+  contract: string;
+  tokenId: string;
+  name: string;
+  art: string;
+  royaltyBps: number;
+  edition: string;
+  source: string;
+};
+
+const mugArt = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+
+function coffeeToken(id: string): TokenPage | null {
+  const coffee = (contracts as any).coffee_mugs;
+  const contract = String(coffee?.mainnet ?? '');
+  const name = coffee?.tokens?.[id];
+  if (!contract.startsWith('KT1') || !name) return null;
+  return {
+    routeSlug: 'coffee-mugs',
+    slug: 'coffee_mugs',
+    collectionName: 'Coffee Mugs',
+    symbol: String(coffee.symbol ?? 'PCMUG'),
+    contract,
+    tokenId: id,
+    name,
+    art: `/images/coffee-mugs/${mugArt[Number(id)] || 'ceramic'}.svg`,
+    royaltyBps: Number(coffee.royalty_bps ?? 750),
+    edition: `${coffee.edition_caps?.[id] ?? 'open'} edition cap`,
+    source: 'PointCast Coffee Mugs FA2',
+  };
+}
+
+function visitToken(id: string): TokenPage | null {
+  const visit = (contracts as any).visit_nouns;
+  const contract = String(visit?.mainnet ?? '');
+  if (!contract.startsWith('KT1')) return null;
+  return {
+    routeSlug: 'visit-nouns',
+    slug: 'visit_nouns',
+    collectionName: 'Visit Nouns',
+    symbol: String(visit.symbol ?? 'PCVN'),
+    contract,
+    tokenId: id,
+    name: `Visit Noun #${id}`,
+    art: `https://noun.pics/${id}.svg`,
+    royaltyBps: 2000,
+    edition: '1/1 Noun seed',
+    source: 'CC0 Noun art via noun.pics',
+  };
+}
+
+async function visitTokenIds(): Promise<string[]> {
+  const contract = String((contracts as any).visit_nouns?.mainnet ?? '');
+  const ids = new Set(['88', '557']);
+  if (!contract.startsWith('KT1')) return [...ids];
+  try {
+    const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${contract}&limit=200&sort=firstTime`);
+    if (r.ok) {
+      const rows = await r.json();
+      rows.forEach((row: any) => {
+        if (row?.tokenId !== undefined) ids.add(String(row.tokenId));
+      });
+    }
+  } catch {
+    // Keep the hand-picked known tokens if TzKT is unavailable at build time.
+  }
+  return [...ids].sort((a, b) => Number(a) - Number(b));
+}
+
+export async function getStaticPaths() {
+  const mugNames = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+  const coffee = (contracts as any).coffee_mugs;
+  const coffeeContract = String(coffee?.mainnet ?? '');
+  const coffeePages = Object.keys(coffee?.tokens ?? {}).map((id) => ({
+    routeSlug: 'coffee-mugs',
+    slug: 'coffee_mugs',
+    collectionName: 'Coffee Mugs',
+    symbol: String(coffee?.symbol ?? 'PCMUG'),
+    contract: coffeeContract,
+    tokenId: id,
+    name: coffee?.tokens?.[id],
+    art: `/images/coffee-mugs/${mugNames[Number(id)] || 'ceramic'}.svg`,
+    royaltyBps: Number(coffee?.royalty_bps ?? 750),
+    edition: `${coffee?.edition_caps?.[id] ?? 'open'} edition cap`,
+    source: 'PointCast Coffee Mugs FA2',
+  })).filter((token) => token.contract.startsWith('KT1') && token.name) as TokenPage[];
+
+  const visit = (contracts as any).visit_nouns;
+  const visitContract = String(visit?.mainnet ?? '');
+  const visitIds = new Set(['88', '557']);
+  if (visitContract.startsWith('KT1')) {
+    try {
+      const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${visitContract}&limit=200&sort=firstTime`);
+      if (r.ok) {
+        const rows = await r.json();
+        rows.forEach((row: any) => {
+          if (row?.tokenId !== undefined) visitIds.add(String(row.tokenId));
+        });
+      }
+    } catch {
+      // Keep the hand-picked known tokens if TzKT is unavailable at build time.
+    }
+  }
+  const visitPages = [...visitIds].sort((a, b) => Number(a) - Number(b)).map((id) => ({
+    routeSlug: 'visit-nouns',
+    slug: 'visit_nouns',
+    collectionName: 'Visit Nouns',
+    symbol: String(visit?.symbol ?? 'PCVN'),
+    contract: visitContract,
+    tokenId: id,
+    name: `Visit Noun #${id}`,
+    art: `https://noun.pics/${id}.svg`,
+    royaltyBps: 2000,
+    edition: '1/1 Noun seed',
+    source: 'CC0 Noun art via noun.pics',
+  })).filter((token) => token.contract.startsWith('KT1')) as TokenPage[];
+
+  const pages = [...coffeePages, ...visitPages];
+  return pages.map((token) => ({
+    params: { collection: token.routeSlug, tokenId: token.tokenId },
+    props: { token },
+  }));
+}
+
+const { token } = Astro.props as { token: TokenPage };
+const marketplace = String((contracts as any).marketplace?.mainnet ?? '');
+const platformFeeBps = Number((contracts as any).marketplace?.platformFeeBps ?? 250);
+const objkt = `https://objkt.com/tokens/${token.contract}/${token.tokenId}`;
+const tzkt = `https://tzkt.io/${token.contract}/tokens/${token.tokenId}`;
+const market = `/market?collection=${encodeURIComponent(token.contract)}&token_id=${encodeURIComponent(token.tokenId)}`;
+const wallet = `/wallet/?address=tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw`;
+const desc = `${token.name} from ${token.collectionName} on Tezos. PointCast detail page with holders, market links, objkt, and TzKT provenance.`;
+---
+
+<BaseLayout title={`${token.name} · PointCast token`} description={desc} image={token.art}>
+  <main
+    class="token-page"
+    data-contract={token.contract}
+    data-token-id={token.tokenId}
+    data-marketplace={marketplace}
+  >
+    <header class="topbar">
+      <a class="brand" href="/">PointCast</a>
+      <nav class="nav mono" aria-label="Token">
+        <a href="/wallet">Wallet</a>
+        <a href="/marketplace">Marketplace</a>
+        <a href="/market">Live asks</a>
+      </nav>
+      <WalletConnect />
+    </header>
+
+    <section class="hero" aria-labelledby="token-title">
+      <figure class="art-frame">
+        <img src={token.art} alt={token.name} loading="eager" />
+      </figure>
+      <div class="copy">
+        <p class="kicker mono">{token.symbol} · Tezos · PointCast collectible</p>
+        <h1 id="token-title">{token.name}</h1>
+        <p class="dek">
+          A PointCast-native token page for sharing, collecting, listing, and checking provenance.
+          The contract data stays Tezos-native; the presentation gets a shelf, a frame, and a little room to breathe.
+        </p>
+        <div class="actions mono">
+          <a class="primary" href={market}>Market lane</a>
+          <a href={wallet}>Wallet shelf</a>
+          <a href={objkt} target="_blank" rel="noopener">objkt</a>
+          <a href={tzkt} target="_blank" rel="noopener">TzKT</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="details" aria-label="Token details">
+      <article class="panel">
+        <p class="kicker mono">Provenance</p>
+        <dl class="facts">
+          <div><dt>Collection</dt><dd>{token.collectionName}</dd></div>
+          <div><dt>Token id</dt><dd>#{token.tokenId}</dd></div>
+          <div><dt>Contract</dt><dd><a href={`https://tzkt.io/${token.contract}`} target="_blank" rel="noopener">{token.contract}</a></dd></div>
+          <div><dt>Edition</dt><dd>{token.edition}</dd></div>
+          <div><dt>Source</dt><dd>{token.source}</dd></div>
+        </dl>
+      </article>
+
+      <article class="panel">
+        <p class="kicker mono">Market terms</p>
+        <dl class="facts">
+          <div><dt>Platform</dt><dd>{platformFeeBps / 100}% to PointCast</dd></div>
+          <div><dt>Royalty</dt><dd>{token.royaltyBps / 100}% creator/originator lane</dd></div>
+          <div><dt>Marketplace</dt><dd>{marketplace.startsWith('KT1') ? marketplace : 'pending contract'}</dd></div>
+          <div><dt>Trade path</dt><dd><a href={market}>Open PointCast listing form</a></dd></div>
+        </dl>
+      </article>
+
+      <article class="panel live-panel">
+        <p class="kicker mono">Held now</p>
+        <div id="holders" class="holders mono" aria-live="polite">loading holders from TzKT...</div>
+      </article>
+    </section>
+
+    <section class="share panel" aria-labelledby="share-title">
+      <div>
+        <p class="kicker mono">Share card</p>
+        <h2 id="share-title">Send the PointCast page, keep the chain links close.</h2>
+      </div>
+      <button class="copy-button mono" type="button" id="copy-link">Copy token link</button>
+      <output class="share-output mono" id="share-output">link copies here</output>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .token-page {
+    --ink: #171717;
+    --paper: #f4efe5;
+    --muted: #686158;
+    --rule: rgba(23, 23, 23, 0.16);
+    --blue: #245d9b;
+    --green: #3f785d;
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 14px 18px 96px;
+    background:
+      linear-gradient(90deg, rgba(23,23,23,0.035) 1px, transparent 1px),
+      linear-gradient(180deg, #fbf8f0, var(--paper));
+    background-size: 34px 34px, auto;
+  }
+  .mono {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .topbar, .hero, .details, .share { max-width: 1180px; margin-inline: auto; }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .brand {
+    color: var(--ink);
+    font: 800 15px/1 var(--font-mono, monospace);
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .nav { margin-left: auto; display: flex; gap: 12px; flex-wrap: wrap; font-size: 10px; }
+  .nav a { color: var(--blue); text-decoration: none; }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.42fr) minmax(0, 1fr);
+    gap: 18px;
+    padding: 32px 0 18px;
+  }
+  .art-frame, .copy, .panel {
+    border: 2px solid var(--ink);
+    background: rgba(255, 253, 248, 0.95);
+    box-shadow: 8px 8px 0 rgba(23,23,23,0.09);
+  }
+  .art-frame {
+    margin: 0;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: clamp(16px, 4vw, 38px);
+    background:
+      radial-gradient(circle at 18% 18%, rgba(255,255,255,0.95) 0 9%, transparent 9.5%),
+      linear-gradient(135deg, rgba(35,95,158,0.16), rgba(63,120,93,0.14) 48%, #e8dfcf);
+  }
+  .art-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border: 2px solid rgba(23,23,23,0.58);
+    background: #fffdf8;
+    box-shadow: 9px 9px 0 rgba(23,23,23,0.16);
+  }
+  .copy {
+    min-height: 420px;
+    display: grid;
+    align-content: end;
+    padding: clamp(22px, 5vw, 54px);
+    background:
+      linear-gradient(135deg, rgba(35,95,158,0.12), transparent 42%),
+      radial-gradient(circle at 86% 18%, rgba(63,120,93,0.2) 0 11%, transparent 11.5%),
+      #fffdf8;
+  }
+  .kicker { margin: 0 0 12px; color: var(--muted); font-size: 10px; }
+  h1 { margin: 0; font-size: clamp(52px, 11vw, 126px); line-height: 0.88; letter-spacing: 0; }
+  h2 { margin: 0; font-size: clamp(28px, 4vw, 48px); line-height: 0.96; letter-spacing: 0; }
+  .dek { max-width: 760px; margin: 18px 0 0; color: #332f2b; font-size: clamp(16px, 2vw, 21px); line-height: 1.36; }
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 22px;
+    font-size: 10px;
+  }
+  .actions a, .copy-button {
+    border: 2px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    padding: 0 12px;
+  }
+  .actions a.primary, .copy-button { background: var(--ink); color: #fff; }
+  .details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 18px;
+  }
+  .panel { padding: 18px; min-width: 0; }
+  .facts { display: grid; gap: 10px; margin: 0; }
+  .facts div {
+    display: grid;
+    gap: 3px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .facts dt { color: var(--muted); font: 700 10px/1 var(--font-mono, monospace); letter-spacing: 0.12em; text-transform: uppercase; }
+  .facts dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; line-height: 1.25; }
+  .facts a { color: var(--blue); }
+  .holders { display: grid; gap: 8px; color: var(--muted); font-size: 10px; }
+  .holder {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--rule);
+    padding: 10px;
+    text-decoration: none;
+  }
+  .holder span:first-child { overflow-wrap: anywhere; }
+  .share {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(220px, 0.4fr);
+    gap: 12px;
+    align-items: end;
+  }
+  .share-output {
+    min-height: 42px;
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--muted);
+    padding: 11px 10px;
+    overflow-wrap: anywhere;
+    font-size: 10px;
+  }
+  @media (max-width: 920px) {
+    .topbar { flex-wrap: wrap; align-items: start; }
+    .nav { order: 3; width: 100%; margin-left: 0; }
+    .hero, .details, .share { grid-template-columns: 1fr; }
+    .copy { min-height: auto; }
+    .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .actions { grid-template-columns: 1fr; }
+    h1 { font-size: clamp(46px, 17vw, 78px); }
+  }
+</style>
+
+<script>
+  const root = document.querySelector('.token-page');
+  const contract = root?.getAttribute('data-contract') || '';
+  const tokenId = root?.getAttribute('data-token-id') || '';
+  const holders = document.getElementById('holders');
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const short = (addr) => addr && addr.length > 13 ? `${addr.slice(0, 7)}...${addr.slice(-5)}` : addr || '';
+
+  async function loadHolders() {
+    if (!holders || !contract || tokenId === '') return;
+    try {
+      const url = `https://api.tzkt.io/v1/tokens/balances?token.contract=${encodeURIComponent(contract)}&token.tokenId=${encodeURIComponent(tokenId)}&balance.gt=0&limit=12&sort.desc=balance`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`TzKT ${r.status}`);
+      const rows = await r.json();
+      if (!rows.length) {
+        holders.textContent = 'no live holders found yet';
+        return;
+      }
+      holders.innerHTML = rows.map((row) => {
+        const address = row?.account?.address || '';
+        const balance = row?.balance || '0';
+        return `<a class="holder" href="/wallet/?address=${encodeURIComponent(address)}"><span>${esc(short(address))}</span><span>balance ${esc(balance)}</span></a>`;
+      }).join('');
+    } catch (err) {
+      console.error(err);
+      holders.textContent = 'holder lookup is resting; try TzKT directly';
+    }
+  }
+
+  document.getElementById('copy-link')?.addEventListener('click', () => {
+    const url = location.href;
+    navigator.clipboard?.writeText(url).catch(() => {});
+    const out = document.getElementById('share-output');
+    if (out) out.textContent = url;
+  });
+
+  loadHolders();
+</script>
