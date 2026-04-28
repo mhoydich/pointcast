@@ -74,6 +74,8 @@ const el = {
   teamBName: document.querySelector("#teamBName"),
   servePill: document.querySelector("#servePill"),
   court: document.querySelector("#court"),
+  targetPreview: document.querySelector("#targetPreview"),
+  courtCallout: document.querySelector("#courtCallout"),
   courtToast: document.querySelector("#courtToast"),
   shotTrace: document.querySelector("#shotTrace"),
   bounceMarker: document.querySelector("#bounceMarker"),
@@ -127,6 +129,7 @@ function resetGame() {
 
 function render() {
   updatePlayerPositions();
+  updateCourtPhase();
   el.teamAName.textContent = teamNames[0];
   el.teamBName.textContent = teamNames[1];
   el.scoreA.textContent = state.score[0];
@@ -177,6 +180,20 @@ function render() {
   });
 
   renderLeague();
+}
+
+function updateCourtPhase() {
+  el.court.classList.remove("zone-serve-top", "zone-serve-bottom", "zone-rally-top", "zone-rally-bottom", "zone-kitchen");
+  if (state.gameOver) return;
+  if (state.lastShot === "dink" || state.lastShot === "drop") {
+    el.court.classList.add("zone-kitchen");
+    return;
+  }
+  if (state.rallyCount === 0 || state.rallyCount === 1) {
+    el.court.classList.add(state.servingTeam === 0 ? "zone-serve-top" : "zone-serve-bottom");
+    return;
+  }
+  el.court.classList.add(state.rallyTeam === 0 ? "zone-rally-top" : "zone-rally-bottom");
 }
 
 function updatePlayerPositions() {
@@ -330,7 +347,17 @@ function copyForTurn() {
 
 function shotHint(shot) {
   const data = shots[shot];
-  return `${data.label}: ${Math.round(data.control * 100)} control, ${Math.round(data.power * 100)} pressure`;
+  return `${data.label}: ${Math.round(data.control * 100)} control, ${Math.round(data.power * 100)} pressure. ${shotTacticalHint(shot)}`;
+}
+
+function shotTacticalHint(shot) {
+  if (!state.lastShot) return shot === "drive" ? "Clean cross-court serve." : "Risky serve choice.";
+  if (state.rallyCount === 2 && shot === "drop") return "Best third-shot reset.";
+  if (state.lastShot === "lob" && shot === "smash") return "Attack the lob.";
+  if ((state.lastShot === "dink" || state.lastShot === "drop") && shot === "dink") return "Stay patient at the kitchen.";
+  if (shot === "lob") return "Push them off the kitchen.";
+  if (shot === "smash") return "High reward, high miss risk.";
+  return "Balanced rally pressure.";
 }
 
 async function playShot(shotName, options = {}) {
@@ -1051,6 +1078,47 @@ function winnerLanding(from, shotName) {
   return { x: from.slot === 0 ? 73 : 27, y: from.team === 0 ? 20 : 80 };
 }
 
+function previewLanding(shotName) {
+  const actorIndex = state.activePlayer;
+  const actor = players[actorIndex];
+  const nextTeam = 1 - state.rallyTeam;
+  const nextPlayer = pickPreviewReceiver(shotName, actorIndex, nextTeam);
+  return shotLanding(actorIndex, nextPlayer, shotName, "rally");
+}
+
+function pickPreviewReceiver(shotName, actorIndex, nextTeam) {
+  if (!state.lastShot && state.rallyCount === 0) {
+    return playerIndexForSlot(nextTeam, servingSide() === "right" ? 0 : 1);
+  }
+  if (shotName === "dink" || shotName === "drop") {
+    return closestPlayerTo(nextTeam, Number(players[actorIndex].x.replace("%", "")), nextTeam === 0 ? 62 : 38);
+  }
+  if (shotName === "lob") {
+    return playerIndexForSlot(nextTeam, players[actorIndex].slot);
+  }
+  const sameLane = playerIndexForSlot(nextTeam, players[actorIndex].slot);
+  return sameLane >= 0 ? sameLane : firstPlayerForTeam(nextTeam);
+}
+
+function showTargetPreview(shotName) {
+  if (state.gameOver || state.busy || isComputerTurn() || state.leagueWatching) return;
+  const landing = previewLanding(shotName);
+  const color = shotName === "smash" ? "#fff07a" : shotName === "lob" ? "#c8fffb" : shotName === "drop" || shotName === "dink" ? "#d7ff3f" : "#ffed66";
+  el.targetPreview.style.setProperty("--x", `${landing.x}%`);
+  el.targetPreview.style.setProperty("--y", `${landing.y}%`);
+  el.targetPreview.style.setProperty("--color", color);
+  el.targetPreview.classList.add("show");
+  el.courtCallout.textContent = shotTacticalHint(shotName);
+  el.courtCallout.style.setProperty("--x", `${landing.x}%`);
+  el.courtCallout.style.setProperty("--y", `${landing.y}%`);
+  el.courtCallout.classList.add("show");
+}
+
+function hideTargetPreview() {
+  el.targetPreview.classList.remove("show");
+  el.courtCallout.classList.remove("show");
+}
+
 function shotApex(from, landing, shotName, result) {
   if (result === "fault" && shotName === "smash") return { y: 50 };
   if (shotName === "lob") return { y: from.team === 0 ? 8 : 92 };
@@ -1196,7 +1264,24 @@ function addLog(message) {
 
 el.controls.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-shot]");
-  if (button) playShot(button.dataset.shot);
+  if (button) {
+    hideTargetPreview();
+    playShot(button.dataset.shot);
+  }
+});
+el.controls.addEventListener("pointerover", (event) => {
+  const button = event.target.closest("button[data-shot]");
+  if (button) showTargetPreview(button.dataset.shot);
+});
+el.controls.addEventListener("pointerout", (event) => {
+  if (!event.relatedTarget || !el.controls.contains(event.relatedTarget)) hideTargetPreview();
+});
+el.controls.addEventListener("focusin", (event) => {
+  const button = event.target.closest("button[data-shot]");
+  if (button) showTargetPreview(button.dataset.shot);
+});
+el.controls.addEventListener("focusout", () => {
+  hideTargetPreview();
 });
 
 el.newGameButton.addEventListener("click", resetGame);
