@@ -353,6 +353,12 @@ const features = [
     body: 'v0.37 ships items 1, 2, and 4 of the v0.36 HUD shortlist (docs/plans/2026-04-28-sparrow-hud.md). (1) The wordmark sub-line drops the hard-coded "pointcast reader · v0.x" label and now reads {lane} · v{SPARROW_VERSION} — lane comes from src/lib/sparrow-lane.ts which maps Astro.url.pathname to one of six lanes (reading, federation, session, artifact, capability, meta), each with its own tint via [data-sp-lane="…"] selectors. (2) A moss federation-pulse dot sits inside the wordmark, dim by default; it pulses for 800ms whenever the v0.30 ambient watcher\'s onEvent receives a friend\'s kind-20078 presence event (the watcher dispatches sparrow:fed-pulse, the dot listens — cheap to fire even on surfaces where no one\'s listening). (3) A density toggle button persists "comfortable" / "compact" under sparrow:density and writes <html data-density>; surfaces opt in via [data-density="compact"] selectors. Layout-level baseline tightens HUD chrome for free. SW_VERSION → sparrow-v0.37.0; SPARROW_VERSION exported from sparrow-lane so the sub-line and the lane lib never drift.',
     kbd: 'src/lib/sparrow-lane.ts · SparrowLayout.astro',
   },
+  {
+    kicker: 'tv · federation channel',
+    title: '/sparrow/tv/friends — what your follows are reading, on a wall',
+    body: 'v0.38 adds the federation channel to TV mode. /sparrow/tv/friends is the same ten-foot ambient chrome as /sparrow/tv (slide rotation, channel-tinted radial wash, surface-detect, here-strip, vmin-scaled type), but the slide pool is hydrated from friends\' kind-30078 sparrow-public-saved-v1 events instead of the broadcast itself. Pipeline: server pre-renders 12 fallback slides + a 60-block lookup map (id → title/dek/channel/type/mood/timestamp); client opens a WS REQ across the relay pool with { kinds:[30078], authors:<friends>, \'#d\':[\'sparrow-public-saved-v1\'] }, collects newest-per-author, flattens saved IDs into a time-sorted slide list with friend-attribution chips ("✦ saved by Alice"), and replaces the fallback in place. Federation strip below the slides shows avatars of follows currently feeding the rotation + signer count. Empty state when no friends configured: a calm CTA pointing at /sparrow/friends. Privacy default: avatars hidden until sparrow:tv-private-ok="1" — count-only mode shows "N signers" without revealing who.',
+    kbd: '/sparrow/tv/friends',
+  },
 ];
 
 const roadmap = [
@@ -900,27 +906,31 @@ const roadmap = [
   },
   {
     v: 'v0.38',
-    status: 'next',
-    when: 'planned',
-    title: 'TV mode · Phase 2 — friends rotation + saved opt-in',
+    status: 'shipped',
+    when: '2026-04-28',
+    title: 'TV mode · Phase 2 — federation channel',
     items: [
-      '/sparrow/tv/friends — federation-channel ambient broadcast; rotate freshest saved-by-friends events from the kind-30078 corpus',
-      '/sparrow/tv/saved — personal-channel ambient broadcast; opt-in only via sparrow:tv-saved-ok',
-      '/sparrow/tv/remote — phone-as-remote handshake (QR pair → state-only WebSocket back to the TV)',
-      'TV-mode entry tile on the /sparrow dashboard for users on a desktop browser to point a Chromecast/AirPlay session at',
+      '/sparrow/tv/friends — federation-channel TV; same ten-foot ambient chrome as /sparrow/tv (slide rotation + channel-tinted wash + surface-detect + here-strip + vmin-scaled type)',
+      'Slide pool hydrated from friends\' kind-30078 sparrow-public-saved-v1 events: WS REQ across the relay pool with { kinds:[30078], authors:<friends>, \'#d\':[\'sparrow-public-saved-v1\'] }, newest-per-author, flatten saved IDs',
+      'Server pre-renders 12 fallback slides + a 60-block lookup map so the surface never looks broken before the WS catches up',
+      'Friend-attribution chip on each slide — moss outline + avatar + "saved by Alice" — hydrated from sparrow:profiles cache (display_name → name → 8-char hex)',
+      'Federation strip (.sptv-fed-strip) replaces the rosette: avatars of follows currently feeding the rotation + total signer count',
+      'Empty state when no friends configured: a calm CTA pointing at /sparrow/friends; "all channels" fallback link to /sparrow/tv',
+      'Privacy default: avatars hidden until sparrow:tv-private-ok="1"; count-only mode shows "N signers" without revealing who',
+      '/sparrow/tv + /sparrow/tv/friends added to SHELL_URLS for offline-first ambient broadcast',
     ],
   },
   {
     v: 'v0.39',
-    status: 'queued',
+    status: 'next',
     when: 'planned',
-    title: 'Aggregation re-add + native profile lookup',
+    title: 'TV Phase 2 finish + worker aggregation re-add',
     items: [
-      'Re-land workers/sparrow-digest/src/aggregate.ts (pure-function port of /sparrow/signals Panels 1 + 3)',
+      '/sparrow/tv/saved — personal-channel TV; opt-in only via sparrow:tv-saved-ok (kitchen TVs don\'t leak personal lists by default)',
+      '/sparrow/tv/remote — phone-as-remote handshake (QR pair → state-only WebSocket back to the TV; controls limited to step / lock channel / unlock / wake)',
+      'Re-land workers/sparrow-digest/src/aggregate.ts (pure-function port of /sparrow/signals Panels 1 + 3) with HTML table rendering',
       'Block-lookup prefetch from /blocks.json at cron start · cf.cacheTtl:300 · one fetch per tick, shared across subscribers',
-      'HTML table rendering (count badge · № id · title · channel chip) + progress-bar channel distribution + plain-text mirrors',
-      'Native Sparrow.app gains NIP-01 kind-0 profile lookup so aliases auto-populate',
-      '/sparrow/digest preview page so subscribers can see the email they\'ll get before confirming frequency',
+      'Native Sparrow.app gains NIP-01 kind-0 profile lookup so aliases auto-populate without going through the web',
     ],
   },
   {
@@ -1000,7 +1010,7 @@ const stats = {
 
   <section class="sp-about-section">
     <header class="sp-reel-head">
-      <span class="sp-kicker">✦ v0.37 · what's in the build</span>
+      <span class="sp-kicker">✦ v0.38 · what's in the build</span>
     </header>
     <ul class="sp-about-features">
       {features.map((f) => (
