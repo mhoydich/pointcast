@@ -1,9 +1,10 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
+import { POINTCAST_CONNECTORS } from '../lib/pointcast-connectors';
 
 const title = 'Apps';
-const description = 'Satellite PointCast apps collected in one place: MoodyGold and Offbalance.';
+const description = 'PointCast apps collected in one place: addable AI-client connectors, satellite rooms, local tools, collectible consoles, and small mintable worlds.';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -18,11 +19,22 @@ const jsonLd = {
     description: app.description,
     url: `https://pointcast.xyz/${app.slug}`,
     sameAs: [app.url, app.repo],
-  })),
+    applicationCategory: app.kind === 'satellite' ? 'CreativeWork' : 'WebApplication',
+  })).concat(POINTCAST_CONNECTORS.map((connector) => ({
+    '@type': 'SoftwareApplication',
+    name: connector.name,
+    description: connector.description,
+    url: connector.endpoint,
+    applicationCategory: 'DeveloperApplication',
+  }))),
 };
+
+const alternates = [
+  { type: 'application/json', href: '/apps.json', title: 'PointCast apps and connectors' },
+];
 ---
 
-<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+<BlockLayout title={title} description={description} jsonLd={jsonLd} alternates={alternates}>
   <main class="page">
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a>
@@ -31,23 +43,45 @@ const jsonLd = {
     </nav>
 
     <header class="head">
-      <p class="kicker">Apps · PointCast satellite rooms</p>
-      <h1>View the rooms from here.</h1>
+      <p class="kicker">Apps · connectors · client shelf</p>
+      <h1>Open the rooms from here.</h1>
       <p class="dek">
-        MoodyGold and Offbalance still deploy as small standalone apps. PointCast
-        now gives them stable front doors, embedded views, and an index.
+        Addable connector links come first. Then the client gets the app
+        shelf: satellite apps, internal tools, collectible consoles, and
+        small local ledgers with stable front doors inside PointCast.
       </p>
     </header>
+
+    <section class="connector-band" aria-label="Addable connectors">
+      <div class="connector-band__head">
+        <p class="kicker">Add to client</p>
+        <h2>Connector links people can paste.</h2>
+        <a href="/connectors">All connector links</a>
+      </div>
+      <div class="connector-grid">
+        {POINTCAST_CONNECTORS.map((connector) => (
+          <article class="connector">
+            <p class="connector__kicker">{connector.status} · priority {connector.priority}</p>
+            <h3>{connector.name}</h3>
+            <p>{connector.clientUse}</p>
+            <label class="copyline">
+              <span>MCP URL</span>
+              <input readonly value={connector.endpoint} />
+            </label>
+          </article>
+        ))}
+      </div>
+    </section>
 
     <section class="grid" aria-label="PointCast apps">
       {POINTCAST_APPS.map((app) => (
         <article class="app">
-          <p class="app__kicker">{app.channel} · {app.kicker}</p>
+          <p class="app__kicker">{app.channel} · {app.kind === 'satellite' ? 'SATELLITE' : 'POINTCAST'} · {app.kicker}</p>
           <h2>{app.name}</h2>
           <p>{app.description}</p>
           <div class="app__actions">
-            <a href={`/${app.slug}`}>Open on PointCast</a>
-            <a href={app.url} target="_blank" rel="noopener">Open direct</a>
+            <a href={app.path}>Open on PointCast</a>
+            <a href={app.url} target="_blank" rel="noopener">{app.kind === 'satellite' ? 'Open direct' : 'Canonical'}</a>
           </div>
         </article>
       ))}
@@ -78,6 +112,66 @@ const jsonLd = {
   .kicker { margin: 0 0 10px; font-size: 10px; color: #8A2432; }
   h1 { margin: 0; font-size: clamp(42px, 8vw, 88px); line-height: 0.95; font-weight: 500; }
   .dek { max-width: 760px; margin: 14px 0 0; font-size: 18px; line-height: 1.5; color: var(--pc-ink-soft); }
+  .connector-band {
+    margin-bottom: 18px;
+    padding: 14px;
+    border: 1px solid #12110e;
+    background: #fffaf0;
+    box-shadow: 4px 4px 0 #12110e;
+  }
+  .connector-band__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    border-bottom: 1px solid rgba(18, 17, 14, 0.16);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+  .connector-band__head h2 { margin: 0; font-size: 28px; line-height: 1; font-weight: 500; }
+  .connector-band__head a {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8A2432;
+  }
+  .connector-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .connector {
+    min-width: 0;
+    border: 1px solid rgba(18, 17, 14, 0.14);
+    background: #fff;
+    padding: 12px;
+  }
+  .connector__kicker {
+    margin: 0 0 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #185FA5;
+  }
+  .connector h3 { margin: 0; font-size: 22px; line-height: 1; }
+  .connector p { line-height: 1.5; color: var(--pc-ink-soft); }
+  .copyline { display: grid; gap: 6px; min-width: 0; }
+  .copyline span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .copyline input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    padding: 9px 10px;
+    font: 12px/1.2 var(--pc-font-mono);
+    color: var(--pc-ink);
+  }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .app {
     border: 1px solid var(--pc-rule-soft);
@@ -99,6 +193,7 @@ const jsonLd = {
   }
   .app__actions a:hover { background: var(--pc-ink); color: #fff; text-decoration: none; }
   @media (max-width: 760px) {
+    .connector-grid,
     .grid { grid-template-columns: 1fr; }
     .dek { font-size: 16px; }
   }

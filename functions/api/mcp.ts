@@ -2,14 +2,16 @@
  * /api/mcp — Model Context Protocol server for PointCast.
  *
  * v0.1.0 (per Mike: "lets mcp drum")  — drum-hub-only, 9 tools.
- * v0.2.0 (per Mike: "1 and 4 and 6")  — whole-site coverage:
- *                                       9 drum tools + 15 site tools = 24,
- *                                       9 resources total.
+ * v0.2.0 (per Mike: "1 and 4 and 6")  — whole-site coverage.
+ * v0.3.0 (per Mike: "links people can add is the priority and then need
+ *                                       apps in the client") — connector
+ *                                       links + app catalog tools.
  *
- * Any MCP-aware agent (Claude Desktop, Cursor, Claude Code, ChatGPT
- * custom GPT, etc.) can connect over JSON-RPC 2.0 / HTTP and operate
- * the entire PointCast surface — drum hub, presence, blocks, channels,
- * mintables, weather, town map, contracts. Spec:
+ * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
+ * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
+ * 2.0 / HTTP and operate the entire PointCast surface — connector links,
+ * app shelf, drum hub, presence, blocks, channels, mintables, weather,
+ * town map, contracts. Spec:
  * https://modelcontextprotocol.io
  *
  * Transport: stateless POST JSON-RPC 2.0. SSE streaming optional later.
@@ -25,7 +27,7 @@
  *   drum_sing_voice       ({voice})    fire a v6 choir voice
  *   drum_set_track        ({trackId})  set the v3 room Spotify track
  *
- * Whole-site tools (v0.2.0)
+ * Whole-site tools
  *   town_map              (no input)   12-building iso town map
  *   surfaces_list         (no input)   every URL grouped by category
  *   presence_snapshot     (no input)   who is here right now
@@ -41,6 +43,8 @@
  *   contracts_status      (no input)   live Tezos contract addresses
  *   channels_list         (no input)   9 channels with codes/slugs
  *   agents_manifest       (no input)   full /agents.json
+ *   connector_links       (no input)   addable MCP links for AI clients
+ *   apps_list             (no input)   PointCast app shelf for clients
  *
  * Resources
  *   drum://rooms          markdown list of all drum surfaces
@@ -52,6 +56,8 @@
  *   pointcast://feed      latest 20 blocks (JSON Feed 1.1)
  *   pointcast://contracts live Tezos contracts
  *   pointcast://channels  9 PointCast channels
+ *   pointcast://connectors addable MCP connector links
+ *   pointcast://apps      PointCast app shelf
  *
  * Discovery
  *   GET /api/mcp returns an HTML discovery page with config snippets.
@@ -63,23 +69,50 @@
 
 import type { Env } from './visit';
 
-const MCP_PROTOCOL_VERSION = '2024-11-05';
-const SERVER_NAME = 'pointcast-drum';
-const SERVER_VERSION = '0.2.0';
+const MCP_PROTOCOL_VERSION = '2025-06-18';
+const SERVER_NAME = 'pointcast';
+const SERVER_VERSION = '0.3.0';
+const V2_SERVER_NAME = 'pointcast-v2';
+const V2_SERVER_VERSION = '2.0.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Session-Id',
+  'Access-Control-Allow-Headers': 'Accept, Authorization, Content-Type, Last-Event-ID, Mcp-Session-Id, MCP-Protocol-Version',
+  'Access-Control-Expose-Headers': 'Mcp-Session-Id, MCP-Protocol-Version',
 };
 
 const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
+const WRITE_TOOL_NAMES = new Set([
+  'drum_tap',
+  'drum_play_instrument',
+  'drum_sing_voice',
+  'drum_set_track',
+]);
+
+function toolTitle(name: string): string {
+  return name
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function toolAnnotations(name: string) {
+  const isWrite = WRITE_TOOL_NAMES.has(name);
+  return {
+    title: toolTitle(name),
+    readOnlyHint: !isWrite,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  };
+}
 
 // ── Tool catalogue ────────────────────────────────────────────────────
 // Each tool has a name, description, and JSON-Schema input shape.
 // Tools that take no arguments use `{ type: 'object', properties: {} }`.
-const TOOLS = [
+const TOOL_DEFINITIONS = [
   {
     name: 'drum_list_rooms',
     description:
@@ -179,7 +212,7 @@ const TOOLS = [
     },
   },
 
-  // ── Whole-site tools (v0.2.0) ──────────────────────────────────────
+  // ── Whole-site tools ───────────────────────────────────────────────
   // Drum is a room. PointCast is the whole town. These tools open the
   // rest of the building list.
   {
@@ -292,7 +325,22 @@ const TOOLS = [
     description: 'Full /agents.json — the consolidated manifest of every machine-readable surface.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'connector_links',
+    description: 'List addable MCP connector links. Use this when a user asks what URL to paste into a custom connector client.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'apps_list',
+    description: 'List PointCast apps for the client shelf: internal tools, satellite rooms, collectible consoles, and connector apps.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
 ] as const;
+
+const TOOLS = TOOL_DEFINITIONS.map((tool) => ({
+  ...tool,
+  annotations: toolAnnotations(tool.name),
+}));
 
 // ── Resources ────────────────────────────────────────────────────────
 const RESOURCES = [
@@ -321,7 +369,7 @@ const RESOURCES = [
     mimeType: 'application/json',
   },
 
-  // ── Whole-site resources (v0.2.0) ──────────────────────────────────
+  // ── Whole-site resources ───────────────────────────────────────────
   {
     uri: 'pointcast://map',
     name: 'Town Map',
@@ -352,6 +400,18 @@ const RESOURCES = [
     description: 'Every PointCast channel — code, slug, name, purpose.',
     mimeType: 'application/json',
   },
+  {
+    uri: 'pointcast://connectors',
+    name: 'Connector Links',
+    description: 'Addable MCP links for AI clients. Mirror of /connectors.json.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'pointcast://apps',
+    name: 'Apps',
+    description: 'PointCast app shelf. Mirror of /apps.json.',
+    mimeType: 'application/json',
+  },
 ] as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -368,6 +428,13 @@ function rpcError(id: number | string | null, code: number, message: string): Re
 function originBase(req: Request): string {
   const u = new URL(req.url);
   return `${u.protocol}//${u.host}`;
+}
+function serverInfoFor(req: Request): { name: string; version: string } {
+  const path = new URL(req.url).pathname;
+  if (path.endsWith('/api/mcp-v2')) {
+    return { name: V2_SERVER_NAME, version: V2_SERVER_VERSION };
+  }
+  return { name: SERVER_NAME, version: SERVER_VERSION };
 }
 async function callJson(url: string, init?: RequestInit): Promise<any> {
   const r = await fetch(url, init);
@@ -495,7 +562,7 @@ async function dispatchTool(
         `✓ set the room track to spotify:track:${trackId}. open https://pointcast.xyz/drum-v3 to drum along.`,
       );
     }
-    // ── Whole-site tool dispatch (v0.2.0) ────────────────────────────
+    // ── Whole-site tool dispatch ─────────────────────────────────────
     case 'town_map': {
       const data = await callJson(`${base}/town.json`);
       return {
@@ -691,6 +758,39 @@ async function dispatchTool(
         ],
       };
     }
+    case 'connector_links': {
+      const data = await callJson(`${base}/connectors.json`);
+      const connectors = Array.isArray(data?.connectors) ? data.connectors : [];
+      const summary = connectors.length === 0
+        ? 'no connector links published yet'
+        : 'addable connector links:\n' +
+          connectors
+            .map((c: any) => `  · ${c.name} (${c.status}) — ${c.endpoint}`)
+            .join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'apps_list': {
+      const data = await callJson(`${base}/apps.json`);
+      const apps = Array.isArray(data?.apps) ? data.apps : [];
+      const connectors = Array.isArray(data?.connectors) ? data.connectors : [];
+      const summary = [
+        `${apps.length} PointCast apps, ${connectors.length} connector apps for AI clients:`,
+        '',
+        ...connectors.map((c: any) => `  · connector · ${c.name} — ${c.endpoint}`),
+        ...apps.map((a: any) => `  · ${a.kind || 'app'} · ${a.name} — ${a.canonicalUrl || a.url}`),
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
@@ -713,7 +813,7 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
     return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(EVENT_SCHEMA, null, 2) }] };
   }
 
-  // ── Whole-site resources (v0.2.0) ────────────────────────────────
+  // ── Whole-site resources ─────────────────────────────────────────
   if (uri === 'pointcast://map') {
     const data = await callJson(`${base}/town.json`);
     return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
@@ -733,6 +833,14 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
   if (uri === 'pointcast://channels') {
     const data = await callJson(`${base}/agents.json`);
     return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data?.channels ?? [], null, 2) }] };
+  }
+  if (uri === 'pointcast://connectors') {
+    const data = await callJson(`${base}/connectors.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'pointcast://apps') {
+    const data = await callJson(`${base}/apps.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
   }
 
   throw new Error(`unknown resource: ${uri}`);
@@ -786,10 +894,10 @@ const DISCOVERY_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PointCast Drum · MCP Server</title>
+<title>PointCast · MCP Connector</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font-family: 'JetBrains Mono', ui-monospace, monospace; max-width: 760px; margin: 40px auto; padding: 0 24px; color: #12110E; }
+  body { font-family: 'JetBrains Mono', ui-monospace, monospace; max-width: 840px; margin: 40px auto; padding: 0 24px; color: #12110E; }
   h1 { font-family: 'Times New Roman', serif; font-style: italic; font-size: 2.4rem; margin: 0 0 8px; }
   p.eyebrow { font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: #c26a4a; margin: 0 0 24px; font-weight: 600; }
   pre { background: #f5f4f0; padding: 16px; border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
@@ -800,16 +908,19 @@ const DISCOVERY_HTML = `<!doctype html>
 </style>
 </head>
 <body>
-<p class="eyebrow">⌐◨-◨ POINTCAST · DRUM · MCP SERVER</p>
-<h1>let an AI agent drum with you</h1>
-<p>This endpoint is a <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a> server that wraps the PointCast drum hub. Any MCP-aware client (Claude Desktop, Cursor, Claude Code, ChatGPT plugins) can connect and call tools to tap drums, play instruments, sing voices, set Spotify tracks, and read room state.</p>
+<p class="eyebrow">⌐◨-◨ POINTCAST · MCP CONNECTOR</p>
+<h1>add PointCast to your AI client</h1>
+<p>This endpoint is a <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a> connector for the whole PointCast town. Paste the URL below into an AI client that supports custom connectors. The client can read blocks, search the archive, list apps, inspect connector links, see presence, and lightly participate in rooms like /drum.</p>
 
 <h2>Connect</h2>
+
+<p><strong>Custom connector URL</strong> — paste this into Claude, ChatGPT-style app clients, Cursor, or any MCP-aware client that accepts a remote connector URL:</p>
+<pre>https://pointcast.xyz/api/mcp</pre>
 
 <p><strong>Claude Desktop</strong> — add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>:</p>
 <pre>{
   "mcpServers": {
-    "pointcast-drum": {
+    "pointcast": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://pointcast.xyz/api/mcp"]
     }
@@ -819,14 +930,22 @@ const DISCOVERY_HTML = `<!doctype html>
 <p><strong>Cursor</strong> — add to <code>~/.cursor/mcp.json</code> (or project's <code>.cursor/mcp.json</code>):</p>
 <pre>{
   "mcpServers": {
-    "pointcast-drum": {
+    "pointcast": {
       "url": "https://pointcast.xyz/api/mcp"
     }
   }
 }</pre>
 
 <p><strong>Claude Code</strong>:</p>
-<pre>claude mcp add --transport http pointcast-drum https://pointcast.xyz/api/mcp</pre>
+<pre>claude mcp add --transport http pointcast https://pointcast.xyz/api/mcp</pre>
+
+<p>More install links: <a href="/connectors">/connectors</a>. App shelf: <a href="/apps">/apps</a>.</p>
+
+<h2>Tools — client links + apps</h2>
+<ul>
+  <li><code>connector_links</code> — addable MCP URLs for AI clients</li>
+  <li><code>apps_list</code> — PointCast app shelf for the client</li>
+</ul>
 
 <h2>Tools — drum hub</h2>
 <ul>
@@ -841,7 +960,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum_set_track</code> — set the v3 room Spotify track</li>
 </ul>
 
-<h2>Tools — whole site (v0.2.0)</h2>
+<h2>Tools — whole site</h2>
 <ul>
   <li><code>town_map</code> — iso town map · 12 buildings = 12 surfaces</li>
   <li><code>surfaces_list</code> — every PointCast URL grouped by category</li>
@@ -858,12 +977,15 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>contracts_status</code> — live Tezos contracts</li>
   <li><code>channels_list</code> — 9 channels</li>
   <li><code>agents_manifest</code> — full /agents.json</li>
+  <li><code>connector_links</code> — addable connector links</li>
+  <li><code>apps_list</code> — client app shelf</li>
 </ul>
 
 <h2>Resources</h2>
 <ul>
   <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
   <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
+  <li><code>pointcast://connectors</code> · <code>pointcast://apps</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">
@@ -901,9 +1023,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
           tools: { listChanged: false },
           resources: { listChanged: false, subscribe: false },
         },
-        serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+        serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast drum hub. Tap drums, play instruments, sing voices, set Spotify tracks, read room state. Tools broadcast to every connected human visitor in real time, so use sparingly. Read-only tools (list_rooms, who_is_here, top_drummers, now_playing, global_count) are safe to call freely.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {

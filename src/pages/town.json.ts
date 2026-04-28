@@ -18,7 +18,7 @@ const TOWN = [
   { gx: 2, gy: 1, name: 'Café',             href: '/coffee',       glyph: '☕', category: 'commerce', note: 'coffee · mintable mugs FA2' },
   { gx: 3, gy: 1, name: 'Gallery',          href: '/gallery',      glyph: '◇', category: 'play',     note: 'gallery · curated visual blocks' },
 
-  { gx: 0, gy: 2, name: 'Agent Gate',       href: '/api/mcp',      glyph: '◉', category: 'agent',    note: 'mcp · agent door · JSON-RPC 2.0' },
+  { gx: 0, gy: 2, name: 'Agent Gate',       href: '/connectors',   glyph: '◉', category: 'agent',    note: 'connectors · add PointCast to an AI client' },
   { gx: 1, gy: 2, name: 'Workbench',        href: '/workbench',    glyph: '⚒', category: 'civic',    note: 'workbench · what is being built' },
   { gx: 2, gy: 2, name: 'Garden',           href: '/garden-yield', glyph: '🌱', category: 'nature',   note: 'garden · native planting kits' },
   { gx: 3, gy: 2, name: 'Boardwalk',        href: '/walk',         glyph: '〰', category: 'nature',   note: 'walk · daily ritual loop' },
@@ -39,8 +39,9 @@ export const GET: APIRoute = async () => {
     })),
     presenceSource: 'https://pointcast.xyz/api/presence/snapshot',
     soundsSource:   'https://pointcast.xyz/api/sounds',
-    agentDoor:      'https://pointcast.xyz/api/mcp',
-    note: 'For an agent: poll presenceSource every 4s for visitors, soundsSource every 1.5s for drum events, fetch /agents.json for the full surface map.',
+    agentDoor:      'https://pointcast.xyz/connectors',
+    mcpEndpoint:    'https://pointcast.xyz/api/mcp',
+    note: 'For an agent: fetch /connectors.json for addable client links, poll presenceSource every 4s for visitors, soundsSource every 1.5s for drum events, fetch /agents.json for the full surface map.',
   };
   return new Response(JSON.stringify(payload, null, 2), {
     status: 200,

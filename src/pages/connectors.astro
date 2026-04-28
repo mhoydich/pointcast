@@ -1,0 +1,260 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { POINTCAST_CONNECTORS } from '../lib/pointcast-connectors';
+
+const title = 'Connectors';
+const description =
+  'Addable MCP links for PointCast and related apps. Copy a connector URL into an AI client and let the client enter the town.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/connectors',
+  name: 'PointCast Connectors',
+  description,
+  url: 'https://pointcast.xyz/connectors',
+  hasPart: POINTCAST_CONNECTORS.map((connector) => ({
+    '@type': 'SoftwareApplication',
+    name: connector.name,
+    description: connector.description,
+    url: connector.endpoint,
+    applicationCategory: 'DeveloperApplication',
+  })),
+};
+
+const alternates = [
+  { type: 'application/json', href: '/connectors.json', title: 'PointCast connector links' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} alternates={alternates}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/apps">apps</a>
+      <span aria-hidden="true">/</span>
+      <span>connectors</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">Connector links · add these to the client</p>
+      <h1>Paste the town into your AI app.</h1>
+      <p class="dek">
+        The first job is simple: give people links they can add. Once the
+        connector is installed, PointCast becomes the place the client can
+        read, search, navigate, and lightly participate in.
+      </p>
+    </header>
+
+    <section class="quick" aria-label="Priority connector">
+      <div>
+        <p class="quick__label">Priority link</p>
+        <h2>{POINTCAST_CONNECTORS[0].name}</h2>
+      </div>
+      <label class="copyline">
+        <span>Connector URL</span>
+        <input readonly value={POINTCAST_CONNECTORS[0].endpoint} />
+      </label>
+      <button type="button" class="copybtn" data-copy={POINTCAST_CONNECTORS[0].endpoint}>
+        Copy URL
+      </button>
+    </section>
+
+    <section class="connectors" aria-label="Connector links">
+      {POINTCAST_CONNECTORS.map((connector) => (
+        <article class="connector">
+          <div class="connector__top">
+            <p class="connector__meta">{connector.status} · {connector.category} · priority {connector.priority}</p>
+            <h2>{connector.name}</h2>
+            <p>{connector.description}</p>
+          </div>
+
+          <label class="copyline copyline--card">
+            <span>MCP endpoint</span>
+            <input readonly value={connector.endpoint} />
+          </label>
+
+          <div class="connector__actions">
+            <button type="button" class="copybtn copybtn--small" data-copy={connector.endpoint}>
+              Copy URL
+            </button>
+            <a href={connector.endpoint}>Open discovery</a>
+          </div>
+
+          <div class="client-list">
+            {connector.clients.map((client) => (
+              <section class="client">
+                <h3>{client.name}</h3>
+                <p>{client.label}</p>
+                <small>{client.note}</small>
+              </section>
+            ))}
+          </div>
+
+          <p class="tool-label">Client-visible tools</p>
+          <ul class="tools">
+            {connector.tools.slice(0, 9).map((tool) => <li>{tool}</li>)}
+          </ul>
+        </article>
+      ))}
+    </section>
+
+    <aside class="machine">
+      <p>Machine-readable</p>
+      <a href="/connectors.json">/connectors.json</a>
+      <a href="/apps.json">/apps.json</a>
+      {POINTCAST_CONNECTORS.map((connector) => (
+        <a href={connector.endpoint.replace('https://pointcast.xyz', '')}>
+          {connector.endpoint.replace('https://pointcast.xyz', '')}
+        </a>
+      ))}
+    </aside>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var value = btn.getAttribute('data-copy') || '';
+      try {
+        await navigator.clipboard.writeText(value);
+        var old = btn.textContent;
+        btn.textContent = 'Copied';
+        window.setTimeout(function () { btn.textContent = old || 'Copy URL'; }, 1200);
+      } catch {
+        window.prompt('Copy connector URL', value);
+      }
+    });
+  });
+</script>
+
+<style>
+  .page { max-width: 1080px; margin: 0 auto; padding: 22px 18px 86px; }
+  .crumb, .kicker, .quick__label, .connector__meta, .copyline span, .tool-label, .machine {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-size: 10px;
+    color: var(--pc-ink-muted);
+  }
+  .crumb a { color: #8A2432; }
+  .head {
+    border-top: 1.5px solid var(--pc-ink);
+    border-bottom: 1px solid var(--pc-rule-soft);
+    padding: 24px 0 26px;
+    margin-bottom: 18px;
+  }
+  .kicker { margin: 0 0 10px; font-size: 10px; color: #8A2432; }
+  h1 { margin: 0; font-size: clamp(40px, 7.5vw, 84px); line-height: 0.95; font-weight: 500; }
+  .dek { max-width: 760px; margin: 14px 0 0; font-size: 18px; line-height: 1.5; color: var(--pc-ink-soft); }
+
+  .quick {
+    display: grid;
+    grid-template-columns: minmax(170px, 0.7fr) minmax(260px, 1.6fr) auto;
+    gap: 12px;
+    align-items: end;
+    padding: 14px;
+    border: 1px solid #12110e;
+    background: #fffaf0;
+    box-shadow: 4px 4px 0 #12110e;
+    margin-bottom: 16px;
+  }
+  .quick__label { margin: 0 0 6px; font-size: 10px; color: #185FA5; }
+  .quick h2 { margin: 0; font-size: 28px; line-height: 1; font-weight: 500; }
+
+  .copyline { display: grid; gap: 6px; min-width: 0; }
+  .copyline span { font-size: 10px; color: var(--pc-ink-muted); }
+  .copyline input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    padding: 10px 12px;
+    font: 13px/1.2 var(--pc-font-mono);
+    color: var(--pc-ink);
+  }
+  .copybtn, .connector__actions a {
+    min-height: 40px;
+    border: 1px solid var(--pc-ink);
+    background: var(--pc-ink);
+    color: #fff;
+    padding: 10px 13px;
+    font: 11px/1 var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .copybtn:hover, .connector__actions a:hover { background: #185FA5; color: #fff; text-decoration: none; }
+
+  .connectors {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .connector {
+    display: grid;
+    align-content: start;
+    gap: 13px;
+    border: 1px solid var(--pc-rule-soft);
+    background: #fff;
+    padding: 16px;
+  }
+  .connector__meta { margin: 0 0 8px; font-size: 10px; color: #6B2139; }
+  .connector h2 { margin: 0; font-size: 30px; line-height: 1; font-weight: 500; }
+  .connector p { line-height: 1.5; color: var(--pc-ink-soft); }
+  .connector__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .copybtn--small { min-height: 34px; padding: 8px 10px; }
+  .connector__actions a { display: inline-grid; place-items: center; min-height: 34px; padding: 8px 10px; }
+
+  .client-list { display: grid; gap: 8px; }
+  .client {
+    border-left: 3px solid #d8a338;
+    background: #fbf7ea;
+    padding: 10px;
+  }
+  .client h3 { margin: 0 0 4px; font-size: 16px; }
+  .client p { margin: 0; font-size: 14px; }
+  .client small { display: block; margin-top: 4px; color: var(--pc-ink-muted); line-height: 1.4; }
+
+  .tool-label { margin: 0; font-size: 10px; color: var(--pc-ink-muted); }
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: -4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .tools li {
+    border: 1px solid rgba(18, 17, 14, 0.18);
+    padding: 5px 7px;
+    font: 11px/1 var(--pc-font-mono);
+    background: #f8f7f2;
+  }
+  .machine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--pc-rule-soft);
+    font-size: 10px;
+  }
+  .machine p { margin: 0; color: var(--pc-ink-muted); }
+  .machine a { color: #8A2432; }
+
+  @media (max-width: 820px) {
+    .quick { grid-template-columns: 1fr; }
+    .connectors { grid-template-columns: 1fr; }
+    .dek { font-size: 16px; }
+  }
+</style>
