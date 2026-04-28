@@ -38,8 +38,8 @@ export const GET: APIRoute = async () => {
     applicationCategory: 'CommunicationApplication',
     operatingSystem: 'Any (web)',
     license: 'MIT',
-    version: '0.36',
-    protocol_version: '0.36',
+    version: '0.37',
+    protocol_version: '0.37',
     sibling_of: 'https://pointcast.xyz/magpie',
 
     // Routes Sparrow surfaces itself. /sparrow is the dashboard; ch/
@@ -1009,6 +1009,20 @@ export const GET: APIRoute = async () => {
         hover: 'mouseover / focusin on [data-sp-block-id] a[href^=\'/sparrow/b/\'] injects <link rel="prefetch"> — works with the SW runtime cache so J/K and click feel instant.',
         idle: 'on /sparrow/b/<id>, requestIdleCallback prefetches prev + next block readers with a 2s timeout fallback.',
       },
+      hud_lane_indicator: {
+        purpose: 'v0.37 — wordmark sub-line shows which "lane" of the agentic web this surface belongs to (reading / federation / session / artifact / capability / meta) instead of a hard-coded label.',
+        source: '/lib/sparrow-lane.ts · laneFor(pathname) → { lane, label }; SparrowLayout renders {label} · v{SPARROW_VERSION}.',
+        styling: '[data-sp-lane="<lane>"] selector tints the sub-line per lane (federation → moss, artifact → ember, session → lilac, etc).',
+      },
+      hud_federation_pulse: {
+        purpose: 'v0.37 — moss dot inside the wordmark blinks when a friend\'s kind-20078 ambient presence event lands. Ambient watcher (v0.30) dispatches a CustomEvent; the dot listens.',
+        event: 'sparrow:fed-pulse · detail { pubkey, at }',
+        css: '.sp-fed-dot ↔ .sp-fed-dot.is-pulse · 800ms class toggle.',
+      },
+      hud_density_toggle: {
+        purpose: 'v0.37 — per-device toggle between "comfortable" (default) and "compact" HUD chrome. Persists under sparrow:density; writes <html data-density>; surfaces opt in via [data-density="compact"] selectors.',
+        baseline: 'SparrowLayout itself tightens HUD padding, wordmark size, sub-line size, action gaps in compact mode for free.',
+      },
     },
 
     // Keyboard contract — clients that mirror this get muscle memory
@@ -1114,7 +1128,8 @@ export const GET: APIRoute = async () => {
       'v0.33': 'Native ambient pickup + digest cron scaffold + unsubscribe. (1) Sparrow.app gains NostrRelayClient.swift (URLSessionWebSocketTask · ws:// REQ/EVENT/EOSE) + FriendsService.swift (reads friends from SparrowServer\'s sparrow.readerState UserDefaults, opens kind-20078 presence + kind-30078 saved subscriptions across damus/primal/nos.lol, tracks freshness over 90s window, decays every 20s). MenuBarController.setFriendsPresence(count, aliases) adds a "✦ N here · alias1, alias2, +K" menu item above the separator, hidden when zero. (2) workers/sparrow-digest/ scaffold: wrangler.toml (weekly cron Mon 08:00 UTC, shared SPARROW_DIGEST_KV binding, MailChannels transport via DKIM+DMARC lockdown), src/index.ts (listAllSubscriptions + isDue frequency gate + placeholder HTML email + /dry-run test route), README (deploy recipe + MailChannels DNS requirements + what\'s deferred to v0.34). (3) DELETE /api/sparrow/digest-subscribe shipped with two modes: x-unsub-intent: local-clear for web-initiated clears (no auth, same-user trust), x-unsub-token for email-footer links (501 in v0.33; signing lands with the cron worker).',
       'v0.34': 'HMAC unsubscribe tokens live. workers/sparrow-digest/src/signing.ts — Web Crypto HMAC-SHA256, 30-day TTL, shape `<email>.<expires_at>.<hex-hmac>`, constant-time compare, buildUnsubUrl helper for the cron email footer. DELETE /api/sparrow/digest-subscribe now verifies the token against SPARROW_DIGEST_SIGNING_KEY (400 on malformed/bad-hmac, 410 on expired, 200 on verify + KV delete). Token arrives via either x-unsub-token header OR ?unsub_token query param so email-footer clicks work from any browser. Worker renderDigestEmail wires the signed URL into the email body/text. Signing key must be bound to both the Pages Function AND the cron worker with the same value; rotating invalidates outstanding tokens. Cron dispatch + signals aggregation + native NIP-01 profile lookup still pending.',
       'v0.35': 'Cron worker gains a Nostr client + retry-with-jitter + live friends-saved summary. workers/sparrow-digest/src/nostr.ts ports NostrRelayClient.swift to TypeScript (Web WebSocket + JSON frames, no deps). collectFromRelay + collectAcrossRelays + newestPerAuthorByDTag helpers · 6s timeout per relay · 500-event safety cap. workers/sparrow-digest/src/send.ts extracts MailChannels transport with retry (3 attempts max, 800ms/1600ms/3200ms exponential-jitter backoff), 5xx/429/408 retriable, 401/403/422 fail-fast without touching last_sent_at so ops sees them + next cron retries. renderDigestEmail now fetches each subscriber\'s kind-3 contact list + their friends\' kind-30078 public saved events, surfacing "N of M followed signers published public saved lists · K total saved-block references" in the email body (text + HTML). Subscribers without npub get the existing short prompt.',
-      'v0.36': 'Dead-letter bucket + ops endpoints. workers/sparrow-digest/src/deadletter.ts carries KV-backed failure counter (`fail:<email>`, 60-day TTL) + dead-letter record (`dl:<email>`, 1-year TTL). Threshold: 3 consecutive retriable failures OR any non-retriable failure (401/403/422) → dead-letter immediately. scheduled() skips dead-lettered subs every tick, clears the counter on success. Two new fetch routes, bearer-token gated via SPARROW_OPS_TOKEN: GET /ops/dead-letter lists every dead-letter record newest-first; POST /ops/release?email=<addr> clears both dl: and fail: entries (sub row untouched) so the next cron tick retries. Missing token → 503 ops-not-configured. Full signals aggregation (co-saves + channel distribution) from prior v0.35/v0.36 work got rolled back during branch churn — re-lands in v0.37. (current)',
+      'v0.36': 'Dead-letter bucket + ops endpoints. workers/sparrow-digest/src/deadletter.ts carries KV-backed failure counter (`fail:<email>`, 60-day TTL) + dead-letter record (`dl:<email>`, 1-year TTL). Threshold: 3 consecutive retriable failures OR any non-retriable failure (401/403/422) → dead-letter immediately. scheduled() skips dead-lettered subs every tick, clears the counter on success. Two new fetch routes, bearer-token gated via SPARROW_OPS_TOKEN: GET /ops/dead-letter lists every dead-letter record newest-first; POST /ops/release?email=<addr> clears both dl: and fail: entries (sub row untouched) so the next cron tick retries. Missing token → 503 ops-not-configured. Full signals aggregation (co-saves + channel distribution) from prior v0.35/v0.36 work got rolled back during branch churn — re-lands in a later sprint.',
+      'v0.37': 'HUD layout pass · ship-this-week items 1, 2, 4 from the v0.36 hud plan (docs/plans/2026-04-28-sparrow-hud.md). (1) Lane indicator. New src/lib/sparrow-lane.ts maps Astro.url.pathname → lane (reading / federation / session / artifact / capability / meta) with a short label; SparrowLayout\'s sub-line drops the hard-coded "pointcast reader · v0.x" string and renders {laneInfo.label} · v{SPARROW_VERSION} with a per-lane tint via [data-sp-lane="…"] selectors. (2) Federation pulse dot. The wordmark gains a moss <span class="sp-fed-dot"> that sits dim by default and pulses for 800ms whenever the v0.30 ambient watcher\'s onEvent receives a friend\'s kind-20078 presence event — the watcher dispatches a CustomEvent("sparrow:fed-pulse"), the dot listens. Cheap to dispatch even on surfaces where no one\'s listening. (3) Density toggle. New compact button next to the theme toggle persists "comfortable" / "compact" under sparrow:density and writes the choice to <html data-density>; surfaces opt in via [data-density="compact"] selectors. Layout-level baseline tightens HUD chrome (smaller wordmark, tighter gap, smaller pills) for free. SW_VERSION → sparrow-v0.37.0; SPARROW_VERSION = "0.37" exported from sparrow-lane so the sub-line and the lane lib never drift. (current)',
       'v1.0': 'Full offline archive (300+ blocks) in IndexedDB. Cross-client read state via Nostr addressable events. /sparrow/llms.txt for machine readers. Federated reading lists.',
     },
 

@@ -22,6 +22,7 @@
  */
 import { getCollection } from 'astro:content';
 import { CHANNEL_LIST } from '../lib/channels';
+import { laneFor, SPARROW_VERSION } from '../lib/sparrow-lane';
 import { ClientRouter } from 'astro:transitions';
 
 interface Props {
@@ -43,6 +44,11 @@ const {
 } = Astro.props;
 
 const fullTitle = title === 'Sparrow' ? 'Sparrow · PointCast reader' : `${title} · Sparrow`;
+
+// HUD lane lookup — pathname → which "lane" of the agentic web this surface
+// belongs to. Renders in the wordmark sub-line (replaces the hard-coded
+// "pointcast reader · v0.x" label). v0.37 (HUD layout pass).
+const laneInfo = laneFor(Astro.url.pathname);
 
 // Palette data — shared across every Sparrow page so ⌘K works anywhere.
 const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
@@ -123,8 +129,19 @@ const paletteData = {
           <a href="/sparrow" class="sp-wordmark-link">
             <span class="sp-glyph" aria-hidden="true">✦</span>
             <span class="sp-name">Sparrow</span>
+            {/* v0.37 — federation pulse: blinks moss when a friend's
+                kind-20078 ambient presence event lands on the local
+                relay set. Stays dim otherwise. */}
+            <span
+              class="sp-fed-dot"
+              data-sp-fed-dot
+              aria-hidden="true"
+              title="federation pulse — blinks when a friend appears"
+            ></span>
           </a>
-          <span class="sp-sub">pointcast reader · v0.36</span>
+          <span class="sp-sub" data-sp-lane={laneInfo.lane}>
+            {laneInfo.label} · v{SPARROW_VERSION}
+          </span>
         </div>
         <div class="sp-hud-actions">
           <span class="sp-offline-pill" data-sp-offline-pill hidden aria-live="polite">
@@ -150,6 +167,19 @@ const paletteData = {
             <span class="sp-saved-n" data-sp-saved-n>0</span>
           </a>
           <kbd class="sp-kbd" data-sp-palette-open>⌘K</kbd>
+          {/* v0.37 — density toggle: comfortable (default) ↔ compact.
+              Per-device pref, persisted under sparrow:density. Sets
+              [data-density] on <html> so any sparrow surface can opt
+              into a denser layout via [data-density="compact"] selectors. */}
+          <button
+            class="sp-density-toggle"
+            type="button"
+            data-sp-density-toggle
+            aria-label="toggle density"
+            title="density · comfortable / compact"
+          >
+            <span class="sp-density-icon" aria-hidden="true"></span>
+          </button>
           <button class="sp-theme-toggle" type="button" data-sp-theme-toggle aria-label="toggle theme">
             <span class="sp-theme-dot"></span>
           </button>
@@ -304,6 +334,39 @@ const paletteData = {
           localStorage.setItem(KEY_THEME, next);
         };
         document.querySelector('[data-sp-theme-toggle]')?.addEventListener('click', toggleTheme);
+
+        // ─── v0.37 · DENSITY TOGGLE ─────────────────────────────────
+        // Per-device preference. Default "comfortable"; users on
+        // smaller laptops and the eventual /sparrow/tv "remote pane"
+        // can pick "compact" for tighter chrome.
+        const KEY_DENSITY = 'sparrow:density';
+        const savedDensity = localStorage.getItem(KEY_DENSITY);
+        if (savedDensity === 'compact' || savedDensity === 'comfortable') {
+          htmlEl.dataset.density = savedDensity;
+        } else {
+          htmlEl.dataset.density = 'comfortable';
+        }
+        const toggleDensity = () => {
+          const next = htmlEl.dataset.density === 'compact' ? 'comfortable' : 'compact';
+          htmlEl.dataset.density = next;
+          localStorage.setItem(KEY_DENSITY, next);
+        };
+        document.querySelector('[data-sp-density-toggle]')?.addEventListener('click', toggleDensity);
+
+        // ─── v0.37 · FEDERATION PULSE DOT ───────────────────────────
+        // The wordmark's moss dot pulses for ~800ms whenever the v0.30
+        // ambient watcher receives a kind-20078 presence event. The
+        // watcher dispatches `sparrow:fed-pulse` from inside its
+        // onEvent handler — we just listen and toggle a class.
+        const fedDot = document.querySelector('[data-sp-fed-dot]');
+        if (fedDot) {
+          let fedTimer = null;
+          window.addEventListener('sparrow:fed-pulse', () => {
+            fedDot.classList.add('is-pulse');
+            if (fedTimer) clearTimeout(fedTimer);
+            fedTimer = setTimeout(() => fedDot.classList.remove('is-pulse'), 800);
+          });
+        }
 
         // ─── READING LIST ───────────────────────────────────────────
         const readSaved = () => {
@@ -2145,6 +2208,13 @@ const paletteData = {
             if (!live.some((f) => f.pubkey === ev.pubkey && !f.muted)) return;
             lastSeen.set(ev.pubkey, Date.now());
             paintAmbient();
+            // v0.37 · pulse the wordmark federation dot. Cheap to
+            // dispatch even if the listener isn't bound on this surface.
+            try {
+              window.dispatchEvent(new CustomEvent('sparrow:fed-pulse', {
+                detail: { pubkey: ev.pubkey, at: Date.now() },
+              }));
+            } catch {}
           }
 
           function paintAmbient() {
@@ -2436,6 +2506,72 @@ const paletteData = {
       .sp-glyph { font-family: var(--sp-display); font-size: 22px; color: var(--sp-ember); }
       .sp-name { font-family: var(--sp-display); font-size: 26px; color: var(--sp-bone); letter-spacing: -0.01em; }
       .sp-sub { font-family: var(--sp-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sp-mute); }
+      /* v0.37 — lane indicator: tint the sub-line by lane so the wordmark
+         answers "what is this surface for?" without a hard-coded label. */
+      .sp-sub[data-sp-lane='reading']    { color: color-mix(in oklch, var(--sp-bone) 70%, var(--sp-ember) 30%); }
+      .sp-sub[data-sp-lane='federation'] { color: var(--sp-moss); }
+      .sp-sub[data-sp-lane='session']    { color: color-mix(in oklch, var(--sp-bone) 60%, var(--sp-lilac, #b39ddb) 40%); }
+      .sp-sub[data-sp-lane='artifact']   { color: var(--sp-ember); }
+      .sp-sub[data-sp-lane='capability'] { color: color-mix(in oklch, var(--sp-bone) 60%, var(--sp-oxblood) 40%); }
+      .sp-sub[data-sp-lane='meta']       { color: var(--sp-mute); }
+      /* v0.37 — federation pulse dot. Sits inside the wordmark link, dim
+         by default; the JS toggles .is-pulse for ~800ms on each kind-20078
+         presence event from the v0.30 ambient watcher. */
+      .sp-fed-dot {
+        display: inline-block;
+        width: 7px; height: 7px;
+        margin-left: 6px;
+        border-radius: 50%;
+        background: var(--sp-moss);
+        opacity: 0.32;
+        transform: scale(1);
+        transition: opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+      }
+      .sp-fed-dot.is-pulse {
+        opacity: 1;
+        transform: scale(1.45);
+        box-shadow: 0 0 12px color-mix(in oklch, var(--sp-moss) 70%, transparent);
+      }
+      /* v0.37 — density toggle. Two stacked bars (comfortable) collapse
+         into a single bar (compact) via the [data-density] attribute on
+         <html>. The button itself reuses the theme-toggle ring shape. */
+      .sp-density-toggle {
+        width: 26px; height: 26px; border-radius: 3px;
+        border: 1px solid var(--sp-rule); background: transparent;
+        cursor: pointer; display: grid; place-items: center;
+        transition: border-color 140ms ease;
+      }
+      .sp-density-toggle:hover { border-color: var(--sp-ember); }
+      .sp-density-icon {
+        position: relative;
+        width: 12px; height: 10px;
+        display: block;
+      }
+      .sp-density-icon::before,
+      .sp-density-icon::after {
+        content: '';
+        position: absolute; left: 0; right: 0;
+        height: 2px;
+        background: var(--sp-bone);
+        border-radius: 1px;
+        transition: top 160ms ease, opacity 160ms ease;
+      }
+      .sp-density-icon::before { top: 1px; }
+      .sp-density-icon::after  { top: 7px; }
+      html[data-density='compact'] .sp-density-icon::before { top: 4px; }
+      html[data-density='compact'] .sp-density-icon::after  { top: 4px; opacity: 0; }
+      /* v0.37 — global compact density: tighten HUD chrome. Surfaces opt
+         in by reading the [data-density] attribute themselves; this is
+         the layout-level baseline. */
+      html[data-density='compact'] .sp-hud { padding: 14px 24px; gap: 18px; }
+      html[data-density='compact'] .sp-name { font-size: 22px; }
+      html[data-density='compact'] .sp-glyph { font-size: 18px; }
+      html[data-density='compact'] .sp-sub { font-size: 9px; letter-spacing: 0.16em; }
+      html[data-density='compact'] .sp-hud-actions { gap: 8px; }
+      html[data-density='compact'] .sp-saved-count,
+      html[data-density='compact'] .sp-hud-actions .sp-kbd { padding: 3px 6px; font-size: 10px; }
+      html[data-density='compact'] .sp-theme-toggle,
+      html[data-density='compact'] .sp-density-toggle { width: 22px; height: 22px; }
       .sp-hud-actions { justify-self: end; display: flex; align-items: center; gap: 12px; }
       .sp-saved-count {
         display: inline-flex; align-items: center; gap: 5px;
