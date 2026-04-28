@@ -1,0 +1,108 @@
+---
+/**
+ * SitTile — live "/sit · N sitting now" ribbon on the home feed.
+ *
+ * Server renders hidden. JS opens a WS to /api/sit (or HTTP fallback to
+ * /api/sit/presence) and reveals the tile only when N > 0. If the WS
+ * never opens, the tile stays hidden — the home feed shouldn't carry a
+ * dead pill. The /sit page itself runs standalone with a local fallback;
+ * the home tile is intentionally stricter.
+ */
+---
+
+<a class="sit-tile mono" id="sit-tile" href="/sit" hidden aria-label="sit room — multiplayer presence">
+  <span class="sit-tile__dot" aria-hidden="true"></span>
+  <span class="sit-tile__path">/sit</span>
+  <span class="sit-tile__sep" aria-hidden="true">·</span>
+  <span class="sit-tile__count"><span data-role="sitting">0</span> sitting now</span>
+</a>
+
+<script is:inline>
+  (function () {
+    var tile = document.getElementById('sit-tile');
+    if (!tile) return;
+    var sitEl = tile.querySelector('[data-role="sitting"]');
+
+    function show(n) {
+      if (!sitEl) return;
+      sitEl.textContent = String(n);
+      tile.removeAttribute('hidden');
+    }
+
+    // Skip in environments where /api/sit will never exist (file://, naked
+    // localhost without Functions). Same gate PresenceBar uses — keeps
+    // local dev quiet.
+    var host = window.location.host;
+    var hasFunctions = host.endsWith('pointcast.xyz') || host.endsWith('.pages.dev');
+    if (!hasFunctions) return;
+
+    var ws = null;
+    var connectTimer = window.setTimeout(function () {
+      try { ws && ws.close(); } catch {}
+      // HTTP fallback
+      fetch('/api/sit/presence', { credentials: 'omit' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j) return;
+          var n = Number(j.sitting || j.count || 0);
+          if (n > 0) show(n);
+        })
+        .catch(function () {});
+    }, 4000);
+
+    try {
+      var proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      ws = new WebSocket(proto + host + '/api/sit');
+    } catch { return; }
+
+    ws.addEventListener('open', function () {
+      clearTimeout(connectTimer);
+    });
+    ws.addEventListener('message', function (evt) {
+      try {
+        var msg = JSON.parse(evt.data);
+        if (msg && msg.type === 'presence' && Number(msg.sitting) > 0) {
+          show(Number(msg.sitting));
+        }
+      } catch {}
+    });
+    ws.addEventListener('error', function () { clearTimeout(connectTimer); });
+  })();
+</script>
+
+<style>
+  .sit-tile {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    margin-bottom: 10px;
+    border: 1px solid #534AB7; /* ESC purple */
+    border-radius: 2px;
+    background: color-mix(in srgb, #534AB7 6%, #fff);
+    color: #2d2773;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: lowercase;
+    text-decoration: none;
+    width: fit-content;
+  }
+  .sit-tile:hover {
+    background: color-mix(in srgb, #534AB7 12%, #fff);
+    text-decoration: none;
+  }
+  .sit-tile__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #534AB7;
+    animation: sit-tile-pulse 2.4s ease-in-out infinite;
+  }
+  .sit-tile__path { font-weight: 500; }
+  .sit-tile__sep { opacity: 0.45; }
+  @keyframes sit-tile-pulse {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(1.18); }
+  }
+</style>

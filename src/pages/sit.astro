@@ -1,0 +1,551 @@
+---
+/**
+ * /sit — an ambient TV-first sitting room.
+ *
+ * Multiplayer presence — strangers sitting together at the same time.
+ * No login. No mint. Zero friction. Three surfaces (TV, desktop, mobile)
+ * sharing one composition: a Pacific horizon facing west from El Segundo,
+ * a slow breath ring, a single quiet counter. No clock. No controls
+ * visible at TV size.
+ *
+ * Surface detection runs client-side: data-surface = "tv" when
+ * width >= 1920 AND no touch, OR UA matches tv|appletv|googletv.
+ * Mobile = touch + width < 768. Everything else = desktop.
+ *
+ * Backend contract (Codex's lane — see /handshake.md and the brief):
+ *   - wss://pointcast.xyz/api/sit
+ *   - server → client: { type: "presence", sitting: N, total_minutes: M }
+ *   - client → server: { type: "join" } on open, { type: "leave" } on close
+ *   - HTTP fallback: GET /api/sit/presence → { sitting, total_minutes }
+ *
+ * If the WS isn't up yet, the page degrades to a local-only counter:
+ * you count as 1 sitter and your minutes accumulate in localStorage.
+ * The page never blocks on the network. The room is the room.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import Horizon from '../components/sit/Horizon.astro';
+import BreathRing from '../components/sit/BreathRing.astro';
+import Counter from '../components/sit/Counter.astro';
+
+const title = 'sit';
+const description = 'an ambient sitting room. strangers sitting together at the same time. no login, no mint, no clock. a pacific horizon, a slow breath, a single quiet counter.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/sit',
+  name: 'PointCast · sit',
+  description,
+  url: 'https://pointcast.xyz/sit',
+  applicationCategory: 'HealthApplication',
+  operatingSystem: 'Web',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  featureList: [
+    'Multiplayer presence — strangers sitting together',
+    'TV-first ambient layout (1920+)',
+    'Pacific horizon facing west from El Segundo',
+    'Slow breath ring (4-2-6-2 cycle)',
+    'Time-of-day color wash',
+    'Optional Web Vibration haptic breath cue on mobile',
+    'No login, no mint, zero friction',
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og/og-home-v2.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/sit.json', title: 'sit room (JSON)' }]}
+>
+  <main class="sit" id="sit-root" data-surface="desktop" data-tod="midday">
+    <div class="sit__horizon">
+      <Horizon />
+    </div>
+
+    <div class="sit__center">
+      <div class="sit__ring" aria-hidden="true">
+        <BreathRing />
+      </div>
+      <Counter />
+    </div>
+
+    <!-- mobile-only join affordance. TV + desktop hide this; on mobile,
+         tap once to "count me in" — starts the haptic breath cue and
+         sends a join over the WS (or just starts the local timer). -->
+    <button class="sit__join mono" id="sit-join" type="button" aria-pressed="false">
+      <span class="sit__join-dot" aria-hidden="true"></span>
+      <span class="sit__join-label">count me in</span>
+    </button>
+
+    <!-- desktop-only controls revealed on hover. Stays out of the way at
+         TV size — TV is pure ambient. -->
+    <nav class="sit__controls mono" aria-label="Room controls">
+      <a href="/" class="sit__ctrl">home</a>
+      <span aria-hidden="true">·</span>
+      <a href="/meditate" class="sit__ctrl">meditate</a>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="sit__ctrl sit__ctrl--btn" id="sit-haptic-toggle" data-on="false">haptic off</button>
+    </nav>
+  </main>
+
+  <script is:inline>
+    (function () {
+      var root = document.getElementById('sit-root');
+      var joinBtn = document.getElementById('sit-join');
+      var hapticToggle = document.getElementById('sit-haptic-toggle');
+      var counter = document.getElementById('sit-counter');
+      if (!root || !counter) return;
+
+      // ────────────────────────────────────────────────────────────────
+      // Surface detection. TV when width ≥ 1920 AND no touch, OR UA hint.
+      // Mobile when touch AND width < 768. Else desktop.
+      // ────────────────────────────────────────────────────────────────
+      function detectSurface() {
+        var w = window.innerWidth;
+        var ua = navigator.userAgent || '';
+        var hasTouch = 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+        var isTvUa = /(?:^|\s)tv|appletv|googletv|smart-tv|smarttv|crkey/i.test(ua);
+        if ((w >= 1920 && !hasTouch) || isTvUa) return 'tv';
+        if (hasTouch && w < 768) return 'mobile';
+        return 'desktop';
+      }
+      function applySurface() {
+        root.setAttribute('data-surface', detectSurface());
+      }
+      applySurface();
+      window.addEventListener('resize', applySurface);
+
+      // ────────────────────────────────────────────────────────────────
+      // Time-of-day color wash. Buckets shared with PresenceBar so the
+      // whole site flexes the same way through the day. Updated every
+      // 5 min — the site's mood, not its clock.
+      // ────────────────────────────────────────────────────────────────
+      function timeOfDay() {
+        var h = new Date().getHours();
+        if (h < 6)  return 'small-hours';
+        if (h < 10) return 'morning';
+        if (h < 15) return 'midday';
+        if (h < 18) return 'golden';
+        if (h < 21) return 'blue-hour';
+        return 'evening';
+      }
+      function applyTod() { root.setAttribute('data-tod', timeOfDay()); }
+      applyTod();
+      setInterval(applyTod, 5 * 60 * 1000);
+
+      // ────────────────────────────────────────────────────────────────
+      // Counter rendering. Server printed em-dashes; we swap the digits.
+      // ────────────────────────────────────────────────────────────────
+      var sitEl = counter.querySelector('[data-role="sitting"]');
+      var minEl = counter.querySelector('[data-role="minutes"]');
+      function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+      function paint(sitting, minutes) {
+        if (sitEl) sitEl.textContent = fmt(sitting);
+        if (minEl) minEl.textContent = fmt(minutes);
+        counter.setAttribute('data-state', 'live');
+      }
+
+      // ────────────────────────────────────────────────────────────────
+      // Local minute-tally fallback. When the WS isn't there yet, the
+      // page still works: you count as 1 sitter and your minutes
+      // accumulate locally. Persisted across visits in localStorage so
+      // the room has memory of its early days. When the WS arrives,
+      // server numbers replace these and we stop the local timer.
+      // ────────────────────────────────────────────────────────────────
+      var LS_TOTAL = 'pc:sit:total_min';
+      var LS_LAST_TICK = 'pc:sit:last_tick';
+      var localTotal = parseInt(localStorage.getItem(LS_TOTAL) || '0', 10) || 0;
+      var localTimer = null;
+      var serverConnected = false;
+      var sessionStart = Date.now();
+
+      function startLocalTally() {
+        if (localTimer) return;
+        // Tick every 60s. The page may have been open longer than the
+        // session start (refresh, backgrounded), so this is intentionally
+        // simple: +1 minute per minute of foreground time, no catch-up.
+        localTimer = window.setInterval(function () {
+          if (serverConnected) return;
+          if (document.visibilityState !== 'visible') return;
+          localTotal += 1;
+          try { localStorage.setItem(LS_TOTAL, String(localTotal)); } catch {}
+          try { localStorage.setItem(LS_LAST_TICK, String(Date.now())); } catch {}
+          paint(1, localTotal);
+        }, 60_000);
+      }
+      function stopLocalTally() {
+        if (localTimer) { clearInterval(localTimer); localTimer = null; }
+      }
+
+      // First paint: assume one (you), local minutes if any.
+      paint(1, localTotal);
+      startLocalTally();
+
+      // ────────────────────────────────────────────────────────────────
+      // WS connect — best-effort. If it doesn't open in 4s, give up
+      // quietly and try the HTTP fallback. If that also fails, stay on
+      // the local tally. The room is the room either way.
+      // ────────────────────────────────────────────────────────────────
+      var ws = null;
+      var wsConnectTimer = null;
+      function tryHttpFallback() {
+        fetch('/api/sit/presence', { credentials: 'omit' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (!j) return;
+            var s = Number(j.sitting || j.count || 0);
+            var m = Number(j.total_minutes || j.totalMinutes || 0);
+            if (s > 0) paint(s, m || localTotal);
+          })
+          .catch(function () { /* keep local */ });
+      }
+
+      try {
+        var proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        ws = new WebSocket(proto + window.location.host + '/api/sit');
+      } catch (e) { ws = null; }
+
+      if (ws) {
+        wsConnectTimer = window.setTimeout(function () {
+          if (!serverConnected) {
+            try { ws && ws.close(); } catch {}
+            tryHttpFallback();
+          }
+        }, 4000);
+
+        ws.addEventListener('open', function () {
+          serverConnected = true;
+          stopLocalTally();
+          if (wsConnectTimer) clearTimeout(wsConnectTimer);
+          try { ws.send(JSON.stringify({ type: 'join' })); } catch {}
+        });
+        ws.addEventListener('message', function (evt) {
+          try {
+            var msg = JSON.parse(evt.data);
+            if (msg && msg.type === 'presence') {
+              paint(msg.sitting, msg.total_minutes);
+            }
+          } catch {}
+        });
+        ws.addEventListener('close', function () {
+          serverConnected = false;
+          startLocalTally();
+        });
+        ws.addEventListener('error', function () {
+          serverConnected = false;
+          if (wsConnectTimer) clearTimeout(wsConnectTimer);
+          tryHttpFallback();
+        });
+        window.addEventListener('beforeunload', function () {
+          try {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'leave' }));
+            }
+          } catch {}
+        });
+      } else {
+        tryHttpFallback();
+      }
+
+      // ────────────────────────────────────────────────────────────────
+      // Mobile join + optional Web Vibration haptic breath cue.
+      // The 14s breath cycle is 4s in, 2s hold, 6s out, 2s rest. Pulse
+      // a short vibration at the start of the inhale and a softer one
+      // at the start of the exhale. User opts in (privacy + battery).
+      // ────────────────────────────────────────────────────────────────
+      var hapticOn = false;
+      var hapticTimer = null;
+      function startHaptic() {
+        if (!('vibrate' in navigator) || hapticTimer) return;
+        // Inhale at 0s, exhale at 6s, repeat every 14s.
+        function pulseIn()  { try { navigator.vibrate(40); } catch {} }
+        function pulseOut() { try { navigator.vibrate(20); } catch {} }
+        pulseIn();
+        setTimeout(pulseOut, 6000);
+        hapticTimer = window.setInterval(function () {
+          pulseIn();
+          setTimeout(pulseOut, 6000);
+        }, 14000);
+      }
+      function stopHaptic() {
+        if (hapticTimer) { clearInterval(hapticTimer); hapticTimer = null; }
+        try { navigator.vibrate(0); } catch {}
+      }
+      function setHaptic(on) {
+        hapticOn = !!on;
+        if (hapticToggle) {
+          hapticToggle.setAttribute('data-on', String(hapticOn));
+          hapticToggle.textContent = hapticOn ? 'haptic on' : 'haptic off';
+        }
+        if (hapticOn) startHaptic(); else stopHaptic();
+      }
+
+      if (joinBtn) {
+        joinBtn.addEventListener('click', function () {
+          var pressed = joinBtn.getAttribute('aria-pressed') === 'true';
+          joinBtn.setAttribute('aria-pressed', String(!pressed));
+          joinBtn.querySelector('.sit__join-label').textContent = pressed ? 'count me in' : 'sitting';
+          if (!pressed) {
+            // First tap also tries to enable haptic by default on mobile.
+            if ('vibrate' in navigator && !hapticOn) setHaptic(true);
+          } else {
+            setHaptic(false);
+          }
+        });
+      }
+      if (hapticToggle) {
+        hapticToggle.addEventListener('click', function () { setHaptic(!hapticOn); });
+      }
+    })();
+  </script>
+</BlockLayout>
+
+<style is:global>
+  /* ──────────────────────────────────────────────────────────────────
+     /sit lives full-bleed. The parent BlockLayout's masthead, footer,
+     and visit log stay rendered (it's still a PointCast page) but the
+     room itself fills the viewport below the masthead. No marketing
+     copy, no hero, no chrome. The page should feel like a breath.
+     ────────────────────────────────────────────────────────────────── */
+  body:has(.sit) {
+    background: var(--sit-bg, #0e1626);
+  }
+</style>
+
+<style>
+  .sit {
+    /* Time-of-day palette. Defaults are midday — JS overrides via
+       data-tod. All washes are quiet (low chroma) so the breath ring
+       and counter remain the reading. */
+    --sit-bg: #cdd9e4;
+    --sit-sky-top: #cfdde6;
+    --sit-sky-bottom: #f1ecdf;
+    --sit-water-top: #93a8b3;
+    --sit-water-bottom: #6c8290;
+    --sit-horizon-line: rgba(20, 30, 40, 0.55);
+    --sit-sun: #f6efd6;
+    --sit-ring: rgba(20, 30, 40, 0.65);
+    --sit-ink: rgba(20, 30, 40, 0.80);
+    --sit-ink-strong: rgba(20, 30, 40, 0.95);
+
+    position: relative;
+    min-height: calc(100svh - 88px); /* leave the masthead visible */
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--sit-bg);
+    color: var(--sit-ink);
+  }
+
+  /* ────────── Time-of-day washes ────────── */
+  .sit[data-tod='small-hours'] {
+    --sit-bg: #0a1224;
+    --sit-sky-top: #060c1a;
+    --sit-sky-bottom: #1a2742;
+    --sit-water-top: #0c1322;
+    --sit-water-bottom: #050a14;
+    --sit-horizon-line: rgba(220, 230, 245, 0.20);
+    --sit-sun: #1c2a48;
+    --sit-ring: rgba(220, 230, 245, 0.55);
+    --sit-ink: rgba(220, 230, 245, 0.78);
+    --sit-ink-strong: rgba(240, 245, 255, 0.95);
+  }
+  .sit[data-tod='morning'] {
+    --sit-bg: #d6dde2;
+    --sit-sky-top: #d8e2e8;
+    --sit-sky-bottom: #efe6d4;
+    --sit-water-top: #8aa1ad;
+    --sit-water-bottom: #5d7785;
+    --sit-horizon-line: rgba(20, 30, 40, 0.55);
+    --sit-sun: #f4e8c6;
+    --sit-ring: rgba(20, 30, 40, 0.65);
+    --sit-ink: rgba(20, 30, 40, 0.82);
+    --sit-ink-strong: rgba(20, 30, 40, 0.95);
+  }
+  .sit[data-tod='midday'] {
+    --sit-bg: #cdd9e4;
+    --sit-sky-top: #cfdde6;
+    --sit-sky-bottom: #f1ecdf;
+    --sit-water-top: #93a8b3;
+    --sit-water-bottom: #6c8290;
+    --sit-horizon-line: rgba(20, 30, 40, 0.55);
+    --sit-sun: #f6efd6;
+    --sit-ring: rgba(20, 30, 40, 0.65);
+    --sit-ink: rgba(20, 30, 40, 0.80);
+    --sit-ink-strong: rgba(20, 30, 40, 0.95);
+  }
+  .sit[data-tod='golden'] {
+    --sit-bg: #e8c79a;
+    --sit-sky-top: #f0c9a0;
+    --sit-sky-bottom: #efb37a;
+    --sit-water-top: #a07b62;
+    --sit-water-bottom: #5e4838;
+    --sit-horizon-line: rgba(40, 25, 18, 0.55);
+    --sit-sun: #fdebc1;
+    --sit-ring: rgba(40, 25, 18, 0.70);
+    --sit-ink: rgba(40, 25, 18, 0.85);
+    --sit-ink-strong: rgba(40, 25, 18, 0.95);
+  }
+  .sit[data-tod='blue-hour'] {
+    --sit-bg: #2c3a58;
+    --sit-sky-top: #2e3d5e;
+    --sit-sky-bottom: #4a5274;
+    --sit-water-top: #1c2540;
+    --sit-water-bottom: #0e1428;
+    --sit-horizon-line: rgba(220, 225, 240, 0.30);
+    --sit-sun: #5e607a;
+    --sit-ring: rgba(220, 225, 240, 0.65);
+    --sit-ink: rgba(220, 225, 240, 0.82);
+    --sit-ink-strong: rgba(240, 245, 255, 0.95);
+  }
+  .sit[data-tod='evening'] {
+    --sit-bg: #131c30;
+    --sit-sky-top: #0e1626;
+    --sit-sky-bottom: #25304a;
+    --sit-water-top: #131b30;
+    --sit-water-bottom: #08101e;
+    --sit-horizon-line: rgba(220, 225, 240, 0.25);
+    --sit-sun: #2a3354;
+    --sit-ring: rgba(220, 225, 240, 0.60);
+    --sit-ink: rgba(220, 225, 240, 0.80);
+    --sit-ink-strong: rgba(240, 245, 255, 0.95);
+  }
+
+  /* ────────── Composition ────────── */
+  .sit__horizon {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .sit__center {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    min-height: calc(100svh - 88px);
+    display: grid;
+    grid-template-rows: 1fr auto;
+    align-items: center;
+    justify-items: center;
+    padding: 6vh 4vw 8vh;
+    gap: 4vh;
+  }
+
+  .sit__ring {
+    width: clamp(220px, 36vmin, 520px);
+    height: clamp(220px, 36vmin, 520px);
+    align-self: center;
+    justify-self: center;
+  }
+
+  /* ────────── Mobile join button ────────── */
+  .sit__join {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    background: color-mix(in srgb, var(--sit-bg) 70%, transparent);
+    border: 1px solid var(--sit-ring);
+    border-radius: 999px;
+    color: var(--sit-ink-strong);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: lowercase;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .sit__join-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--sit-ink-strong);
+    opacity: 0.7;
+  }
+  .sit__join[aria-pressed='true'] .sit__join-dot {
+    animation: sit-join-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes sit-join-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.4); }
+  }
+  .sit[data-surface='mobile'] .sit__join { display: inline-flex; }
+
+  /* ────────── Desktop hover controls ────────── */
+  .sit__controls {
+    position: absolute;
+    bottom: 14px;
+    right: 18px;
+    z-index: 3;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    color: var(--sit-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: lowercase;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .sit[data-surface='desktop'] .sit__controls { display: inline-flex; }
+  .sit:hover .sit__controls,
+  .sit__controls:focus-within { opacity: 0.9; }
+
+  .sit__ctrl {
+    color: inherit;
+    text-decoration: none;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+  .sit__ctrl:hover { color: var(--sit-ink-strong); text-decoration: none; }
+
+  /* ────────── TV mode — pure ambient. No controls. Counter floats
+       in the lower-left, ring centered, horizon fills. ────────── */
+  .sit[data-surface='tv'] .sit__controls,
+  .sit[data-surface='tv'] .sit__join { display: none !important; }
+
+  .sit[data-surface='tv'] .sit__center {
+    padding: 8vh 6vw 10vh;
+  }
+
+  .sit[data-surface='tv'] .sit__ring {
+    width: clamp(520px, 52vmin, 920px);
+    height: clamp(520px, 52vmin, 920px);
+  }
+
+  .sit[data-surface='tv'] #sit-counter {
+    align-self: end;
+    justify-self: start;
+  }
+
+  /* ────────── Mobile sizing ────────── */
+  .sit[data-surface='mobile'] .sit__ring {
+    width: clamp(180px, 60vmin, 320px);
+    height: clamp(180px, 60vmin, 320px);
+  }
+  .sit[data-surface='mobile'] .sit__center {
+    padding: 4vh 4vw 14vh;
+  }
+
+  /* Reduce visual chrome from the parent layout — the room wants the
+     viewport. Only the masthead remains because that's how visitors
+     navigate back. */
+  @media (max-width: 560px) {
+    .sit__controls { display: none !important; }
+  }
+</style>
