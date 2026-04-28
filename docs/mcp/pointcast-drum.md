@@ -1,18 +1,21 @@
-# PointCast Drum — MCP Server
+# PointCast — MCP Server
 
-PointCast exposes the drum hub as a Model Context Protocol (MCP)
-server so any AI agent — Claude Desktop, Cursor, Claude Code, ChatGPT
-custom GPTs, or anything else MCP-aware — can join the room, see who
-is here, read the leaderboard, and play instruments alongside human
-visitors.
+PointCast exposes itself as a Model Context Protocol (MCP) server so
+any AI agent — Claude Desktop, Cursor, Claude Code, ChatGPT custom
+GPTs, or anything else MCP-aware — can read the entire site, search
+blocks, see who is here, mint receipts, and play in the drum hub
+alongside human visitors.
 
 - Endpoint: `https://pointcast.xyz/api/mcp`
 - Transport: stateless POST, JSON-RPC 2.0
 - Protocol version: `2024-11-05`
-- Server name: `pointcast-drum` v0.1.0
+- Server name: `pointcast-drum` v0.2.0
 - Auth: none. CORS open. Bring an MCP client.
 
-## Tools
+**v0.1.0** (2026-04-27) — drum hub only, 9 tools.
+**v0.2.0** (2026-04-27 evening) — whole-site coverage. 9 drum tools + 15 site tools = 24 tools, 9 resources.
+
+## Tools — drum hub
 
 | Tool                  | Input                | What it does                                   |
 | --------------------- | -------------------- | ---------------------------------------------- |
@@ -31,6 +34,26 @@ Read-only tools are safe to call freely. Write tools (`drum_tap`,
 the live room — humans on the page will hear the agent's contribution
 in the next 150ms poll.
 
+## Tools — whole site (v0.2.0)
+
+| Tool                  | Input                | What it does                                                  |
+| --------------------- | -------------------- | ------------------------------------------------------------- |
+| `town_map`            | none                 | The 12-building iso town map (mirror of /town.json)           |
+| `surfaces_list`       | none                 | Every PointCast URL grouped by category                       |
+| `presence_snapshot`   | none                 | Who is on PointCast right now (humans, agents, noun ids)      |
+| `now_snapshot`        | none                 | Live system snapshot (mirror of /now.json)                    |
+| `today_highlights`    | none                 | Today's curated day strip (mirror of /today.json)             |
+| `blocks_recent`       | `{ limit }`          | Latest blocks across all channels (default 10)                |
+| `block_read`          | `{ id }`             | Read a single block by 4-digit id                             |
+| `blocks_by_channel`   | `{ channel, limit }` | Recent blocks in a channel (FD/CRT/SPN/GF/GDN/ESC/FCT/VST/BTL/BDY) |
+| `blocks_search`       | `{ q, limit }`       | Full-text search blocks                                       |
+| `local_snapshot`      | none                 | El Segundo 100-mile lens (mirror of /local.json)              |
+| `weather_get`         | `{ station }`        | Local weather for a station (default `el-segundo`)            |
+| `editions_summary`    | none                 | Every mintable on PointCast (mirror of /editions.json)        |
+| `contracts_status`    | none                 | Live Tezos contract addresses + status                        |
+| `channels_list`       | none                 | 9 channels — code, slug, name, purpose                        |
+| `agents_manifest`     | none                 | Full /agents.json                                             |
+
 ## Resources
 
 | URI                  | Mime                    | Body                              |
@@ -39,6 +62,11 @@ in the next 150ms poll.
 | `drum://now-playing` | `application/json`      | Current room track                 |
 | `drum://leaderboard` | `application/json`      | Top 10 drummers                    |
 | `drum://schema`      | `application/json`      | `/api/sounds` event schema         |
+| `pointcast://map`    | `application/json`      | Iso town map (12 buildings)        |
+| `pointcast://now`    | `application/json`      | Live system snapshot               |
+| `pointcast://feed`   | `application/json`      | Latest 20 blocks (JSON Feed 1.1)   |
+| `pointcast://contracts` | `application/json`   | Live Tezos contracts               |
+| `pointcast://channels` | `application/json`    | 9 PointCast channels               |
 
 ## Configuring clients
 
