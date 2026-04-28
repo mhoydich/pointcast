@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.1.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, a small site pet, Zen Cats, and Nouns Wood Chop.';
+  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, a small site pet, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -73,6 +73,13 @@ export const PLAY_SURFACES = [
     title: 'Zen Cat Garden',
     route: '/zen-cats',
     summary: 'A daily calm cat collection game with local care and a Tezos-ready PCCAT mint path.',
+  },
+  {
+    id: 'morning-ocean',
+    code: 'SEA',
+    title: 'Morning Ocean',
+    route: '/morning-ocean',
+    summary: 'A 24-piece maritime NFT series with individual PNG artifacts and Tezos-ready PCOCEAN metadata.',
   },
   {
     id: 'nouns-wood-chop',
@@ -148,6 +155,15 @@ export const PASSPORT_STAMPS = [
     action: 'Care',
     points: 3,
     description: 'Complete the daily cat ritual.',
+  },
+  {
+    id: 'morning-ocean',
+    label: 'Ocean Card',
+    category: 'collect',
+    route: '/morning-ocean',
+    action: 'Shelf',
+    points: 3,
+    description: 'Place a Morning Ocean piece on the local shelf.',
   },
   {
     id: 'nouns-wood-chop',

@@ -1,0 +1,771 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
+import {
+  MORNING_OCEAN_COVER_IMAGE,
+  MORNING_OCEAN_STORAGE_KEYS,
+  MORNING_OCEAN_SYMBOL,
+  buildMorningOceanManifest,
+} from '../lib/morning-ocean';
+
+const manifest = buildMorningOceanManifest();
+const tokens = manifest.tokens;
+const config = (contracts as any).morning_ocean ?? {};
+const mainnetAddress = String(config.mainnet ?? '').trim();
+const mintLive = mainnetAddress.startsWith('KT1');
+const metadataBase =
+  String(config.metadataBaseUrl ?? config.metadata_base_uri ?? manifest.tezos.metadataBase).trim();
+const totalEditions = tokens.reduce((sum, token) => sum + token.editionSize, 0);
+const rarityCounts = ['common', 'uncommon', 'rare', 'epic', 'mythic'].map((rarity) => ({
+  rarity,
+  count: tokens.filter((token) => token.rarity === rarity).length,
+}));
+
+const clientData = {
+  tokens: tokens.map((token) => ({
+    tokenId: token.tokenId,
+    title: token.title,
+    rarity: token.rarity,
+    metadataUrl: token.metadataUrl,
+  })),
+  storageKeys: MORNING_OCEAN_STORAGE_KEYS,
+  contract: {
+    network: 'mainnet',
+    address: mainnetAddress,
+    live: mintLive,
+    metadataBase,
+    mintEntrypoint: config.mintEntrypoint ?? manifest.tezos.mintEntrypoint,
+  },
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWorkSeries',
+  '@id': 'https://pointcast.xyz/morning-ocean#series',
+  name: 'Morning Ocean',
+  description: manifest.description,
+  url: 'https://pointcast.xyz/morning-ocean',
+  image: manifest.coverImage,
+  creator: {
+    '@type': 'Person',
+    name: 'Mike Hoydich',
+  },
+  numberOfItems: tokens.length,
+  hasPart: tokens.map((token) => ({
+    '@type': 'VisualArtwork',
+    name: token.title,
+    image: token.imageUrl,
+    identifier: `${MORNING_OCEAN_SYMBOL}-${token.tokenId}`,
+    url: `https://pointcast.xyz/morning-ocean#token-${token.tokenId}`,
+  })),
+};
+---
+
+<BlockLayout
+  title="Morning Ocean"
+  description="A 24-piece PointCast collectible NFT series: morning water, boats on the horizon, soft sun, planets, tankers, sailboats, and quiet luxury."
+  image={MORNING_OCEAN_COVER_IMAGE}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/morning-ocean.json', title: 'Morning Ocean manifest' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/morning-ocean/series-contact-sheet.png',
+    buttons: [
+      { label: 'Open Series', action: 'link', target: 'https://pointcast.xyz/morning-ocean' },
+      { label: 'Manifest', action: 'link', target: 'https://pointcast.xyz/morning-ocean.json' },
+      { label: 'First Token', action: 'link', target: 'https://pointcast.xyz/api/morning-ocean-metadata/1.json' },
+    ],
+  }}
+>
+  <main class="morning-ocean" data-morning-ocean>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/play">play</a>
+      <span aria-hidden="true">/</span>
+      <span>morning-ocean</span>
+    </nav>
+
+    <header class="ocean-hero">
+      <figure class="ocean-hero__art">
+        <img
+          src={MORNING_OCEAN_COVER_IMAGE}
+          alt="Morning Ocean collector sheet with twenty-four maritime artworks"
+          width="1536"
+          height="1024"
+          loading="eager"
+          decoding="async"
+        />
+      </figure>
+      <div class="ocean-hero__copy">
+        <p class="kicker">{MORNING_OCEAN_SYMBOL} · 24 art cards · Tezos-ready</p>
+        <h1>Morning Ocean</h1>
+        <p>
+          A calm maritime series for the PointCast shelf: oil tankers, sailboats, ferries,
+          crescent moons, sun disks, harbor fog, and enough open water to make the day slower.
+        </p>
+        <div class="hero-actions" aria-label="Morning Ocean routes">
+          <a href="/morning-ocean.json">JSON</a>
+          <a href={`${metadataBase}/1.json`}>Metadata</a>
+          <a href={MORNING_OCEAN_COVER_IMAGE}>Collector sheet</a>
+          <a href="/zen-cats">Zen Cats</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="ocean-stats" aria-label="Series status">
+      <article>
+        <span>Tokens</span>
+        <strong>{tokens.length}</strong>
+      </article>
+      <article>
+        <span>Total editions</span>
+        <strong>{totalEditions}</strong>
+      </article>
+      <article>
+        <span>Mint</span>
+        <strong>{mintLive ? 'live' : 'ready'}</strong>
+      </article>
+      <article>
+        <span>Royalties</span>
+        <strong>{Number(config.royalty_bps ?? 750) / 100}%</strong>
+      </article>
+    </section>
+
+    <section class="mint-panel" aria-labelledby="mint-panel-title">
+      <div>
+        <p class="kicker">NFT SERIES</p>
+        <h2 id="mint-panel-title">Artifacts, metadata, and the FA2 path are staged.</h2>
+        <p>
+          Each token has its own PNG artifact and TZIP-21 JSON. The Tezos button turns live
+          after the dedicated PCOCEAN contract is originated and its KT1 is added to the registry.
+        </p>
+      </div>
+      <dl>
+        <div><dt>Contract</dt><dd>{mintLive ? mainnetAddress : 'pending PCOCEAN KT1'}</dd></div>
+        <div><dt>Entrypoint</dt><dd>{config.mintEntrypoint ?? manifest.tezos.mintEntrypoint}</dd></div>
+        <div><dt>Metadata base</dt><dd><a href={`${metadataBase}/1.json`}>{metadataBase}</a></dd></div>
+      </dl>
+    </section>
+
+    <section class="collection-tools" aria-label="Collection tools">
+      <div>
+        <p class="kicker">LOCAL SHELF</p>
+        <strong><span data-ocean-count>0</span> / {tokens.length}</strong>
+        <span data-ocean-status>Pick a first piece.</span>
+      </div>
+      <nav class="rarity-filter" aria-label="Filter by rarity">
+        <button type="button" data-rarity-filter="all" aria-pressed="true">All</button>
+        {rarityCounts.map(({ rarity, count }) => (
+          <button type="button" data-rarity-filter={rarity} aria-pressed="false">
+            {rarity} <span>{count}</span>
+          </button>
+        ))}
+      </nav>
+    </section>
+
+    <section class="token-grid" aria-label="Morning Ocean tokens">
+      {tokens.map((token, index) => (
+        <article class={`token-card token-card--${token.rarity}`} id={`token-${token.tokenId}`} data-token-card data-rarity={token.rarity}>
+          <a class="token-card__image" href={token.localImageUrl} aria-label={`Open ${token.title} artwork`}>
+            <img
+              src={token.localImageUrl}
+              alt={`${token.title}: ${token.vessel} under ${token.celestial}`}
+              width="1024"
+              height="1024"
+              loading={index < 4 ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+          </a>
+          <div class="token-card__body">
+            <div class="token-card__topline">
+              <span>No. {String(token.tokenId).padStart(2, '0')}</span>
+              <span>{token.rarity}</span>
+            </div>
+            <h2>{token.title}</h2>
+            <p>{token.mood}</p>
+            <dl>
+              <div><dt>Vessel</dt><dd>{token.vessel}</dd></div>
+              <div><dt>Sky</dt><dd>{token.celestial}</dd></div>
+              <div><dt>Edition</dt><dd>{token.editionSize}</dd></div>
+            </dl>
+            <div class="token-actions">
+              <button type="button" data-collect-ocean={token.tokenId}>Collect locally</button>
+              <a href={token.metadataUrl}>Metadata</a>
+              <button type="button" data-mint-ocean={token.tokenId} disabled>
+                {mintLive ? 'Mint on Tezos' : 'Mint pending'}
+              </button>
+            </div>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="agent-note" aria-labelledby="agent-note-title">
+      <p class="kicker">AGENT HOOK</p>
+      <h2 id="agent-note-title">The series is machine-readable.</h2>
+      <p>
+        Agents can read <a href="/morning-ocean.json">/morning-ocean.json</a> for the full token list,
+        storage keys, contract status, metadata base, and mint readiness.
+      </p>
+      <pre>{JSON.stringify({
+        count: manifest.count,
+        tezos: manifest.tezos,
+        firstToken: tokens[0],
+      }, null, 2)}</pre>
+    </section>
+  </main>
+
+  <script type="application/json" id="morning-ocean-data" set:html={JSON.stringify(clientData)}></script>
+
+  <script>
+    import { mintMorningOcean } from '../lib/mint';
+
+    const root = document.querySelector('[data-morning-ocean]');
+    const dataEl = document.getElementById('morning-ocean-data');
+
+    if (root && dataEl) {
+      const DATA = JSON.parse(dataEl.textContent || '{}');
+      const collectionKey = DATA.storageKeys.collection;
+      const collectButtons = Array.from(root.querySelectorAll('[data-collect-ocean]'));
+      const mintButtons = Array.from(root.querySelectorAll('[data-mint-ocean]'));
+      const filterButtons = Array.from(root.querySelectorAll('[data-rarity-filter]'));
+      const tokenCards = Array.from(root.querySelectorAll('[data-token-card]'));
+      const countEl = root.querySelector('[data-ocean-count]');
+      const statusEl = root.querySelector('[data-ocean-status]');
+
+      const readCollection = () => {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(collectionKey) || '[]');
+          return Array.isArray(parsed) ? parsed.map((item) => Number(item)).filter(Number.isFinite) : [];
+        } catch {
+          return [];
+        }
+      };
+
+      const writeCollection = (ids) => {
+        localStorage.setItem(collectionKey, JSON.stringify(Array.from(new Set(ids)).sort((a, b) => a - b)));
+      };
+
+      const isCollected = (tokenId) => readCollection().includes(tokenId);
+
+      const render = () => {
+        const collected = readCollection();
+        if (countEl) countEl.textContent = String(collected.length);
+        if (statusEl) {
+          statusEl.textContent = collected.length
+            ? `Shelf holds ${collected.length} Morning Ocean piece${collected.length === 1 ? '' : 's'}.`
+            : 'Pick a first piece.';
+        }
+
+        collectButtons.forEach((button) => {
+          const tokenId = Number(button.getAttribute('data-collect-ocean'));
+          const held = collected.includes(tokenId);
+          button.textContent = held ? 'On shelf' : 'Collect locally';
+          button.setAttribute('aria-pressed', held ? 'true' : 'false');
+        });
+
+        mintButtons.forEach((button) => {
+          const tokenId = Number(button.getAttribute('data-mint-ocean'));
+          const held = collected.includes(tokenId);
+          button.disabled = !DATA.contract.live || !held;
+          if (!DATA.contract.live) button.textContent = 'Mint pending';
+          else button.textContent = held ? 'Mint on Tezos' : 'Collect first';
+        });
+      };
+
+      collectButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const tokenId = Number(button.getAttribute('data-collect-ocean'));
+          if (!Number.isFinite(tokenId)) return;
+          const current = readCollection();
+          if (current.includes(tokenId)) {
+            writeCollection(current.filter((item) => item !== tokenId));
+          } else {
+            writeCollection([...current, tokenId]);
+          }
+          render();
+        });
+      });
+
+      filterButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const rarity = button.getAttribute('data-rarity-filter') || 'all';
+          filterButtons.forEach((item) => item.setAttribute('aria-pressed', item === button ? 'true' : 'false'));
+          tokenCards.forEach((card) => {
+            const match = rarity === 'all' || card.getAttribute('data-rarity') === rarity;
+            card.toggleAttribute('hidden', !match);
+          });
+        });
+      });
+
+      mintButtons.forEach((button) => {
+        button.addEventListener('click', async () => {
+          const tokenId = Number(button.getAttribute('data-mint-ocean'));
+          if (!DATA.contract.live || !isCollected(tokenId)) return;
+          try {
+            button.disabled = true;
+            button.textContent = 'Opening wallet...';
+            const result = await mintMorningOcean(tokenId, 'mainnet', {
+              source: 'morning-ocean',
+              capturedAt: new Date().toISOString(),
+            });
+            button.textContent = result.ok ? 'Mint submitted' : `Mint unavailable`;
+          } catch {
+            button.textContent = 'Mint unavailable';
+          } finally {
+            render();
+          }
+        });
+      });
+
+      render();
+    }
+  </script>
+</BlockLayout>
+
+<style>
+  .morning-ocean {
+    --paper: #f6f0e4;
+    --shell: #fbf8ef;
+    --ink: #17242b;
+    --muted: #66727a;
+    --rule: rgba(23, 36, 43, 0.16);
+    --blue: #385f72;
+    --water: #6c8790;
+    --coral: #d67655;
+    --gold: #d8ad62;
+    --green: #506d58;
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 18px 18px 88px;
+    background:
+      linear-gradient(90deg, rgba(23, 36, 43, 0.035) 1px, transparent 1px),
+      linear-gradient(180deg, #fcfaf4 0%, var(--paper) 48%, #e8dcc9 100%);
+    background-size: 36px 36px, auto;
+  }
+
+  .crumb,
+  .kicker,
+  .hero-actions,
+  .ocean-stats span,
+  .mint-panel dt,
+  .collection-tools,
+  .token-card__topline,
+  .token-actions,
+  .agent-note pre {
+    font-family: var(--pc-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  }
+
+  .crumb {
+    max-width: 1280px;
+    margin: 0 auto 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .crumb a,
+  .mint-panel a,
+  .agent-note a {
+    color: var(--blue);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+
+  .ocean-hero,
+  .ocean-stats,
+  .mint-panel,
+  .collection-tools,
+  .token-grid,
+  .agent-note {
+    max-width: 1280px;
+    margin-inline: auto;
+  }
+
+  .ocean-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.24fr) minmax(320px, 0.76fr);
+    align-items: end;
+    gap: clamp(20px, 4vw, 46px);
+    padding: 10px 0 26px;
+  }
+
+  .ocean-hero__art {
+    margin: 0;
+  }
+
+  .ocean-hero__art img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid rgba(23, 36, 43, 0.18);
+    box-shadow: 0 18px 55px rgba(23, 36, 43, 0.18);
+  }
+
+  .ocean-hero__copy {
+    padding-bottom: 8px;
+  }
+
+  .kicker {
+    margin: 0 0 10px;
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    color: var(--coral);
+  }
+
+  .ocean-hero h1 {
+    margin: 0;
+    font-family: var(--pc-font-serif, Georgia, serif);
+    font-size: clamp(58px, 8vw, 118px);
+    font-weight: 500;
+    line-height: 0.9;
+    letter-spacing: 0;
+  }
+
+  .ocean-hero p:not(.kicker) {
+    margin: 18px 0 0;
+    max-width: 35rem;
+    font-size: clamp(17px, 2vw, 23px);
+    line-height: 1.38;
+    color: #2b3f48;
+  }
+
+  .hero-actions,
+  .token-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .hero-actions {
+    margin-top: 22px;
+  }
+
+  .hero-actions a,
+  .token-actions a,
+  .token-actions button,
+  .rarity-filter button {
+    border: 1px solid var(--rule);
+    background: rgba(255, 255, 255, 0.54);
+    color: var(--ink);
+    text-decoration: none;
+    min-height: 38px;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .hero-actions a:hover,
+  .token-actions a:hover,
+  .token-actions button:not(:disabled):hover,
+  .rarity-filter button[aria-pressed='true'] {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--shell);
+  }
+
+  .ocean-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 2px solid var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .ocean-stats article {
+    padding: 16px;
+    border-right: 1px solid var(--rule);
+  }
+
+  .ocean-stats article:last-child {
+    border-right: 0;
+  }
+
+  .ocean-stats span {
+    display: block;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .ocean-stats strong {
+    font-family: var(--pc-font-serif, Georgia, serif);
+    font-size: 34px;
+    font-weight: 500;
+  }
+
+  .mint-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 22px;
+    margin-top: 28px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .mint-panel h2,
+  .agent-note h2 {
+    margin: 0;
+    font-family: var(--pc-font-serif, Georgia, serif);
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .mint-panel p,
+  .agent-note p {
+    max-width: 54rem;
+    color: #364950;
+    line-height: 1.55;
+  }
+
+  .mint-panel dl {
+    margin: 0;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+  }
+
+  .mint-panel div {
+    min-width: 0;
+  }
+
+  .mint-panel dt {
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .mint-panel dd {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  .collection-tools {
+    margin-top: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .collection-tools strong {
+    display: block;
+    font-size: 26px;
+    letter-spacing: 0;
+  }
+
+  .collection-tools span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .rarity-filter {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .rarity-filter button span {
+    display: inline;
+    margin-left: 4px;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  .token-grid {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+  }
+
+  .token-card {
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(23, 36, 43, 0.16);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .token-card[hidden] {
+    display: none;
+  }
+
+  .token-card__image {
+    display: block;
+    background: var(--shell);
+    aspect-ratio: 1;
+    overflow: hidden;
+  }
+
+  .token-card__image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 240ms ease;
+  }
+
+  .token-card:hover .token-card__image img {
+    transform: scale(1.018);
+  }
+
+  .token-card__body {
+    padding: 14px;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .token-card__topline {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .token-card h2 {
+    margin: 0;
+    font-family: var(--pc-font-serif, Georgia, serif);
+    font-size: 28px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .token-card p {
+    margin: 0;
+    color: #405158;
+    line-height: 1.45;
+  }
+
+  .token-card dl {
+    margin: 0;
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .token-card dl div {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .token-card dt {
+    color: var(--muted);
+  }
+
+  .token-card dd {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .token-actions {
+    margin-top: auto;
+  }
+
+  .token-actions button:disabled {
+    cursor: not-allowed;
+    color: rgba(23, 36, 43, 0.45);
+    background: rgba(255, 255, 255, 0.26);
+  }
+
+  .token-card--epic {
+    border-color: rgba(216, 173, 98, 0.56);
+  }
+
+  .token-card--mythic {
+    border-color: rgba(23, 36, 43, 0.5);
+    background: rgba(236, 220, 191, 0.58);
+  }
+
+  .agent-note {
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 2px solid var(--ink);
+  }
+
+  .agent-note pre {
+    margin: 18px 0 0;
+    max-height: 360px;
+    overflow: auto;
+    padding: 16px;
+    background: #17242b;
+    color: #f6f0e4;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  @media (max-width: 920px) {
+    .ocean-hero,
+    .mint-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .ocean-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ocean-stats article:nth-child(2) {
+      border-right: 0;
+    }
+
+    .collection-tools {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .rarity-filter {
+      justify-content: flex-start;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .morning-ocean {
+      padding-inline: 12px;
+    }
+
+    .ocean-hero h1 {
+      font-size: 56px;
+    }
+
+    .ocean-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .ocean-stats article {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .ocean-stats article:last-child {
+      border-bottom: 0;
+    }
+
+    .token-card dl div {
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
+  }
+</style>
