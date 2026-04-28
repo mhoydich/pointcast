@@ -1,0 +1,821 @@
+---
+/**
+ * /town — pixel-art isometric map of PointCast.
+ *
+ * Per Mike 2026-04-27: "1 and 4 and 6" of a fun-things menu where #1 was
+ * /town as an iso pixel-art map. Per memory: "PointCast aesthetic:
+ * geocities + sim city, pixel-art iso town, late-90s web chrome,
+ * saturated colors; avoid Sparrow's polished stack on PointCast surfaces."
+ *
+ * v0.1 ships:
+ *   · 12 iso buildings, each tied to a real PointCast surface
+ *   · Click a building → navigate to that surface
+ *   · Live visitors as Noun-head sprites that random-walk between buildings
+ *     (poll /api/presence/snapshot every 3s)
+ *   · Drum Hall pulses to live drum activity (poll /api/sounds every 1.5s)
+ *   · Day / dusk / night sky based on PT local time
+ *   · Geocities chrome: marquee header, dashed borders, hard drop shadows,
+ *     CRT scanline overlay, "Under Construction · v0.1" banner
+ *
+ * Render strategy: single inline SVG, viewBox 0 0 960 720, building geometry
+ * generated from a TOWN array. Each building is an iso prism (top + left
+ * face + right face) plus a door, a sign, and an optional rooftop ornament.
+ * Sprites are 18px Noun-head <image>s positioned by JS on a road grid.
+ *
+ * No external assets. No canvas. SVG so it's crisp at any size, and so the
+ * page works in agent-mode (stripped HTML) — agents see the building list
+ * + all the URLs.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+// ──────────────────────────────────────────────────────────────────────────
+// Iso geometry
+// ──────────────────────────────────────────────────────────────────────────
+
+// Tile diamond size (pixels in SVG units).
+const TILE_W = 96;
+const TILE_H = 48;
+// Map origin (top-left of grid in SVG space).
+const ORIGIN_X = 480;
+const ORIGIN_Y = 120;
+
+function isoX(gx: number, gy: number) {
+  return ORIGIN_X + (gx - gy) * (TILE_W / 2);
+}
+function isoY(gx: number, gy: number) {
+  return ORIGIN_Y + (gx + gy) * (TILE_H / 2);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Town registry — every building is one PointCast surface.
+// ──────────────────────────────────────────────────────────────────────────
+type Building = {
+  gx: number;
+  gy: number;
+  height: number;          // iso "z" extrusion in pixels
+  width?: number;          // multiplier on TILE_W footprint
+  depth?: number;          // multiplier on TILE_H footprint
+  href: string;
+  name: string;
+  glyph: string;           // 1-2 char icon on the sign
+  roof: string;            // top color
+  side: string;            // dark face
+  face: string;            // light face
+  door: string;            // door color
+  ornament?: 'antenna' | 'lamp' | 'dome' | 'awning' | 'gear' | 'flag' | 'pier' | 'plot' | 'spire' | 'sign';
+  ornamentColor?: string;
+  category: 'civic' | 'play' | 'agent' | 'commerce' | 'nature';
+};
+
+const TOWN: Building[] = [
+  // Row 1 — back, far buildings (low gy)
+  {
+    gx: 0, gy: 0, height: 110, href: '/beacon', name: 'Lighthouse', glyph: '☼',
+    roof: '#fff7c2', side: '#9a6100', face: '#ffd400', door: '#1a1a1a',
+    ornament: 'lamp', ornamentColor: '#ffd400', category: 'civic',
+  },
+  {
+    gx: 1, gy: 0, height: 130, href: '/tv', name: 'Broadcast Tower', glyph: '📡',
+    roof: '#cfd6dc', side: '#3b3b3b', face: '#7f7f7f', door: '#1a1a1a',
+    ornament: 'antenna', ornamentColor: '#ff5c23', category: 'civic',
+  },
+  {
+    gx: 2, gy: 0, height: 90, href: '/archive', name: 'Library', glyph: '📚',
+    roof: '#5b3a1a', side: '#7d4d1f', face: '#c98744', door: '#2a1a08',
+    ornament: 'flag', ornamentColor: '#185fa5', category: 'civic',
+  },
+  {
+    gx: 3, gy: 0, height: 60, href: '/wire', name: 'Mailbox', glyph: '✉',
+    roof: '#185fa5', side: '#0c356b', face: '#3a82c8', door: '#fff',
+    ornament: 'sign', ornamentColor: '#ffd400', category: 'civic',
+  },
+
+  // Row 2 — middle row
+  {
+    gx: 0, gy: 1, height: 100, href: '/residents', name: 'Town Hall', glyph: '⌂',
+    roof: '#a83b2a', side: '#7a2718', face: '#d6745f', door: '#2c1108',
+    ornament: 'dome', ornamentColor: '#ffd400', category: 'civic',
+  },
+  {
+    gx: 1, gy: 1, height: 95, href: '/drum', name: 'Drum Hall', glyph: '♪',
+    roof: '#ff5c23', side: '#a83207', face: '#ffa371', door: '#1a1a1a',
+    ornament: 'spire', ornamentColor: '#ffd400', category: 'play',
+  },
+  {
+    gx: 2, gy: 1, height: 70, href: '/coffee', name: 'Café', glyph: '☕',
+    roof: '#7a4a25', side: '#3a2110', face: '#c1845a', door: '#1f1106',
+    ornament: 'awning', ornamentColor: '#a83b2a', category: 'commerce',
+  },
+  {
+    gx: 3, gy: 1, height: 75, href: '/gallery', name: 'Gallery', glyph: '◇',
+    roof: '#f7f3e6', side: '#a89878', face: '#fffaf0', door: '#222',
+    ornament: 'sign', ornamentColor: '#185fa5', category: 'play',
+  },
+
+  // Row 3 — front row
+  {
+    gx: 0, gy: 2, height: 80, href: '/api/mcp', name: 'Agent Gate', glyph: '◉',
+    roof: '#1a1a1a', side: '#000', face: '#3a3a3a', door: '#ffd400',
+    ornament: 'gear', ornamentColor: '#ffd400', category: 'agent',
+  },
+  {
+    gx: 1, gy: 2, height: 85, href: '/workbench', name: 'Workbench', glyph: '⚒',
+    roof: '#3b6e3b', side: '#1d3a1d', face: '#5e9e5e', door: '#2a1a08',
+    ornament: 'sign', ornamentColor: '#fff', category: 'civic',
+  },
+  {
+    gx: 2, gy: 2, height: 36, href: '/garden-yield', name: 'Garden', glyph: '🌱',
+    roof: '#3b6e3b', side: '#274d27', face: '#6fb56f', door: '#2c1f10',
+    ornament: 'plot', ornamentColor: '#a83b2a', category: 'nature',
+  },
+  {
+    gx: 3, gy: 2, height: 32, href: '/walk', name: 'Boardwalk', glyph: '〰',
+    roof: '#caa672', side: '#735428', face: '#e8c896', door: '#3a2110',
+    ornament: 'pier', ornamentColor: '#185fa5', category: 'nature',
+  },
+];
+
+// Background SVG dimensions
+const SVG_W = 1200;
+const SVG_H = 760;
+
+// JSON-LD: agents-readable site map
+const buildingIndex = TOWN.map((b) => ({
+  name: b.name,
+  url: `https://pointcast.xyz${b.href}`,
+  category: b.category,
+  glyph: b.glyph,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/town',
+  name: 'PointCast · /town',
+  description: 'A pixel-art isometric map of PointCast — every building is a real surface, every visitor is a Noun sprite walking between them.',
+  url: 'https://pointcast.xyz/town',
+  hasPart: buildingIndex.map((b) => ({
+    '@type': 'WebPage',
+    '@id': b.url,
+    name: b.name,
+    url: b.url,
+  })),
+};
+
+const alternates = [
+  { type: 'application/json', href: '/town.json', title: 'Town map (JSON)' },
+];
+
+// Sky color buckets — used as data-bucket on the page so JS can switch.
+const skies = {
+  dawn:  ['#ffe8b3', '#ffc69a', '#fda58a'],
+  day:   ['#bfe6ff', '#94d4ff', '#5fbafd'],
+  dusk:  ['#ffb070', '#e96a59', '#7a3d80'],
+  night: ['#0c1d3a', '#0a1228', '#050810'],
+};
+---
+
+<BlockLayout
+  title="/town — PointCast as a small internet town"
+  description="A pixel-art isometric map of PointCast. Every building is a real surface; every visitor is a Noun sprite walking between them. Click a building to enter."
+  jsonLd={jsonLd}
+  alternates={alternates}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/og-home-v2.png',
+    buttons: [
+      { label: 'Open /drum', action: 'link', target: 'https://pointcast.xyz/drum' },
+      { label: 'Open /api/mcp', action: 'link', target: 'https://pointcast.xyz/api/mcp' },
+      { label: '/agents.json', action: 'link', target: 'https://pointcast.xyz/agents.json' },
+    ],
+  }}
+>
+  <main class="town-page" data-sky="day">
+    <div class="town-frame">
+      <header class="town-marquee">
+        <span class="town-marquee__pulse" aria-hidden="true"></span>
+        <span class="town-marquee__text">
+          ★ POINTCAST · <strong>/town</strong> · v0.1 — every building is a real surface · every visitor is a Noun sprite · click a building to enter ★
+          live presence: <span id="town-presence-count" data-count="—">—</span> visiting · drum activity:
+          <span id="town-drum-pulse" data-pulse="0">·</span>
+        </span>
+      </header>
+
+      <div class="town-stage" role="presentation">
+        <svg
+          class="town-svg"
+          viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+          xmlns="http://www.w3.org/2000/svg"
+          shape-rendering="crispEdges"
+          aria-label="PointCast town map"
+          role="img"
+        >
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#bfe6ff" id="sky-stop-0" />
+              <stop offset="50%" stop-color="#94d4ff" id="sky-stop-1" />
+              <stop offset="100%" stop-color="#5fbafd" id="sky-stop-2" />
+            </linearGradient>
+
+            <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#3a82c8" />
+              <stop offset="100%" stop-color="#0c356b" />
+            </linearGradient>
+
+            <pattern id="grass" x="0" y="0" width="48" height="24" patternUnits="userSpaceOnUse">
+              <rect width="48" height="24" fill="#7fb86e" />
+              <rect x="2" y="6" width="2" height="2" fill="#5e9e5e" />
+              <rect x="14" y="14" width="2" height="2" fill="#5e9e5e" />
+              <rect x="28" y="3" width="2" height="2" fill="#5e9e5e" />
+              <rect x="36" y="18" width="2" height="2" fill="#5e9e5e" />
+            </pattern>
+
+            <pattern id="road" x="0" y="0" width="16" height="8" patternUnits="userSpaceOnUse">
+              <rect width="16" height="8" fill="#a89878" />
+              <rect x="6" y="3" width="4" height="1" fill="#fffaf0" />
+            </pattern>
+
+            <filter id="hardShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="3" dy="3" stdDeviation="0" flood-color="#12110e" flood-opacity="0.85" />
+            </filter>
+          </defs>
+
+          <!-- Sky -->
+          <rect x="0" y="0" width={SVG_W} height={SVG_H * 0.45} fill="url(#sky)" />
+
+          <!-- Distant sun / moon -->
+          <circle id="town-sun" cx={SVG_W * 0.78} cy={SVG_H * 0.12} r="34" fill="#ffd400" />
+
+          <!-- Cloud blobs -->
+          <g class="town-clouds" fill="#ffffff" opacity="0.85">
+            <ellipse cx="180" cy="80" rx="56" ry="14" />
+            <ellipse cx="420" cy="50" rx="38" ry="10" />
+            <ellipse cx="700" cy="100" rx="64" ry="14" />
+            <ellipse cx="980" cy="60" rx="42" ry="11" />
+          </g>
+
+          <!-- Ground (iso ground polygon spanning the 4×3 grid + margin) -->
+          {(() => {
+            const a = { x: isoX(-1, -1), y: isoY(-1, -1) };
+            const b = { x: isoX(4, -1),  y: isoY(4, -1) };
+            const c = { x: isoX(4, 3),   y: isoY(4, 3) };
+            const d = { x: isoX(-1, 3),  y: isoY(-1, 3) };
+            const points = `${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y} ${d.x},${d.y}`;
+            return <polygon points={points} fill="url(#grass)" stroke="#3a5a2c" stroke-width="1.5" />;
+          })()}
+
+          <!-- Tile grid lines for sim-city texture -->
+          {Array.from({ length: 5 }).map((_, gx) => (
+            <line
+              x1={isoX(gx - 1, -1)} y1={isoY(gx - 1, -1)}
+              x2={isoX(gx - 1, 3)}  y2={isoY(gx - 1, 3)}
+              stroke="#5e9e5e" stroke-width="0.5" stroke-dasharray="2 4"
+            />
+          ))}
+          {Array.from({ length: 5 }).map((_, gy) => (
+            <line
+              x1={isoX(-1, gy - 1)} y1={isoY(-1, gy - 1)}
+              x2={isoX(4, gy - 1)}  y2={isoY(4, gy - 1)}
+              stroke="#5e9e5e" stroke-width="0.5" stroke-dasharray="2 4"
+            />
+          ))}
+
+          <!-- Roads — central north-south + east-west connecting all rows -->
+          {(() => {
+            // E-W road through y=1.5 (between rows 2 and 3)
+            const y = 1.55;
+            const a = { x: isoX(-1, y), y: isoY(-1, y) };
+            const b = { x: isoX(4, y),  y: isoY(4, y) };
+            return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#a89878" stroke-width="14" stroke-linecap="round" />;
+          })()}
+          {(() => {
+            // N-S road through x=1.5 (between cols 1 and 2)
+            const x = 1.55;
+            const a = { x: isoX(x, -1), y: isoY(x, -1) };
+            const b = { x: isoX(x, 3),  y: isoY(x, 3) };
+            return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#a89878" stroke-width="14" stroke-linecap="round" />;
+          })()}
+
+          <!-- Buildings — sorted back-to-front by gx+gy so iso depth works -->
+          {[...TOWN].sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy)).map((b, i) => {
+            const cx = isoX(b.gx, b.gy);
+            const cy = isoY(b.gx, b.gy);
+            const halfW = (b.width ?? 0.78) * (TILE_W / 2);
+            const halfH = (b.depth ?? 0.78) * (TILE_H / 2);
+            // Top diamond corners (at roof level)
+            const t = { x: cx, y: cy - b.height };
+            const tL = { x: cx - halfW, y: cy - b.height + halfH };
+            const tF = { x: cx, y: cy - b.height + halfH * 2 };
+            const tR = { x: cx + halfW, y: cy - b.height + halfH };
+            // Bottom diamond corners (at ground)
+            const bL = { x: cx - halfW, y: cy + halfH };
+            const bF = { x: cx, y: cy + halfH * 2 };
+            const bR = { x: cx + halfW, y: cy + halfH };
+
+            const roofPath = `M${t.x},${t.y} L${tR.x},${tR.y} L${tF.x},${tF.y} L${tL.x},${tL.y} Z`;
+            const leftPath = `M${tL.x},${tL.y} L${tF.x},${tF.y} L${bF.x},${bF.y} L${bL.x},${bL.y} Z`;
+            const rightPath = `M${tF.x},${tF.y} L${tR.x},${tR.y} L${bR.x},${bR.y} L${bF.x},${bF.y} Z`;
+            // Door on the front (right face, near bottom front edge)
+            const doorW = 14;
+            const doorH = Math.min(28, b.height * 0.35);
+            const doorCx = (tF.x + tR.x + bF.x + bR.x) / 4;
+            const doorCy = bR.y - doorH / 2 - 4;
+            const doorY1 = doorCy + doorH / 2;
+            const doorY0 = doorCy - doorH / 2;
+            const doorX0 = doorCx - doorW / 2;
+            const doorX1 = doorCx + doorW / 2;
+
+            // Ornaments on top
+            const top = { cx: cx, cy: cy - b.height };
+
+            return (
+              <a href={b.href} class="town-building" data-name={b.name} data-href={b.href}>
+                <title>{b.name} → {b.href}</title>
+                {/* Building shadow on ground */}
+                <ellipse cx={cx + 4} cy={bF.y - 2} rx={halfW * 0.95} ry={halfH * 0.7} fill="#12110e" opacity="0.18" />
+                {/* Faces */}
+                <path d={leftPath} fill={b.side} stroke="#12110e" stroke-width="1.5" />
+                <path d={rightPath} fill={b.face} stroke="#12110e" stroke-width="1.5" />
+                <path d={roofPath} fill={b.roof} stroke="#12110e" stroke-width="1.5" />
+
+                {/* Window on left face */}
+                <rect
+                  x={tL.x + 6} y={tL.y + (bL.y - tL.y) * 0.25}
+                  width="12" height="10"
+                  fill="#cfe9ff" stroke="#12110e" stroke-width="1"
+                />
+                {/* Window cross */}
+                <line
+                  x1={tL.x + 12} y1={tL.y + (bL.y - tL.y) * 0.25}
+                  x2={tL.x + 12} y2={tL.y + (bL.y - tL.y) * 0.25 + 10}
+                  stroke="#12110e" stroke-width="0.8"
+                />
+
+                {/* Door on right face */}
+                {b.height > 40 && (
+                  <rect x={doorX0} y={doorY0} width={doorW} height={doorH}
+                    fill={b.door} stroke="#12110e" stroke-width="1" rx="1" />
+                )}
+
+                {/* Sign / glyph badge above the door */}
+                {b.height > 40 && (
+                  <g>
+                    <rect
+                      x={doorCx - 18} y={doorY0 - 18}
+                      width="36" height="14"
+                      fill="#fffaf0" stroke="#12110e" stroke-width="1"
+                    />
+                    <text
+                      x={doorCx} y={doorY0 - 7}
+                      text-anchor="middle" font-size="11" font-family="JetBrains Mono, ui-monospace, monospace"
+                      fill="#12110e" font-weight="700"
+                    >
+                      {b.glyph}
+                    </text>
+                  </g>
+                )}
+
+                {/* Ornament */}
+                {b.ornament === 'antenna' && (
+                  <g>
+                    <line x1={top.cx} y1={top.cy} x2={top.cx} y2={top.cy - 56}
+                      stroke="#3a3a3a" stroke-width="2" />
+                    <circle cx={top.cx} cy={top.cy - 56} r="4" fill={b.ornamentColor || '#ff5c23'}>
+                      <animate attributeName="r" values="3;6;3" dur="1.4s" repeatCount="indefinite" />
+                    </circle>
+                  </g>
+                )}
+                {b.ornament === 'lamp' && (
+                  <g>
+                    <rect x={top.cx - 10} y={top.cy - 22} width="20" height="14"
+                      fill="#1a1a1a" stroke="#12110e" stroke-width="1" />
+                    <circle cx={top.cx} cy={top.cy - 15} r="6" fill={b.ornamentColor || '#ffd400'}>
+                      <animate attributeName="opacity" values="0.6;1;0.6" dur="2.2s" repeatCount="indefinite" />
+                    </circle>
+                  </g>
+                )}
+                {b.ornament === 'dome' && (
+                  <g>
+                    <ellipse cx={top.cx} cy={top.cy - 4} rx="14" ry="9"
+                      fill={b.ornamentColor || '#ffd400'} stroke="#12110e" stroke-width="1.5" />
+                    <line x1={top.cx} y1={top.cy - 13} x2={top.cx} y2={top.cy - 28}
+                      stroke="#12110e" stroke-width="1.4" />
+                    <circle cx={top.cx} cy={top.cy - 30} r="2.5" fill="#12110e" />
+                  </g>
+                )}
+                {b.ornament === 'awning' && (
+                  <g>
+                    <path d={`M${tF.x - halfW * 0.7},${tF.y} L${tF.x + halfW * 0.7},${tF.y} L${tF.x + halfW * 0.5},${tF.y + 8} L${tF.x - halfW * 0.5},${tF.y + 8} Z`}
+                      fill={b.ornamentColor || '#a83b2a'} stroke="#12110e" stroke-width="1" />
+                  </g>
+                )}
+                {b.ornament === 'gear' && (
+                  <g>
+                    <circle cx={top.cx} cy={top.cy - 8} r="11" fill="#1a1a1a" stroke="#12110e" stroke-width="1.5" />
+                    <circle cx={top.cx} cy={top.cy - 8} r="4" fill={b.ornamentColor || '#ffd400'} />
+                    {Array.from({ length: 8 }).map((_, k) => {
+                      const ang = (k / 8) * Math.PI * 2;
+                      const x1 = top.cx + Math.cos(ang) * 11;
+                      const y1 = top.cy - 8 + Math.sin(ang) * 11;
+                      const x2 = top.cx + Math.cos(ang) * 14;
+                      const y2 = top.cy - 8 + Math.sin(ang) * 14;
+                      return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#1a1a1a" stroke-width="2" />;
+                    })}
+                  </g>
+                )}
+                {b.ornament === 'flag' && (
+                  <g>
+                    <line x1={top.cx} y1={top.cy} x2={top.cx} y2={top.cy - 24}
+                      stroke="#12110e" stroke-width="1.5" />
+                    <polygon points={`${top.cx},${top.cy - 24} ${top.cx + 14},${top.cy - 20} ${top.cx},${top.cy - 16}`}
+                      fill={b.ornamentColor || '#185fa5'} stroke="#12110e" stroke-width="1" />
+                  </g>
+                )}
+                {b.ornament === 'sign' && (
+                  <g>
+                    <rect x={top.cx - 14} y={top.cy - 20} width="28" height="10"
+                      fill={b.ornamentColor || '#185fa5'} stroke="#12110e" stroke-width="1" />
+                  </g>
+                )}
+                {b.ornament === 'spire' && (
+                  <g>
+                    <polygon
+                      points={`${top.cx - 8},${top.cy} ${top.cx + 8},${top.cy} ${top.cx},${top.cy - 30}`}
+                      fill={b.ornamentColor || '#ffd400'} stroke="#12110e" stroke-width="1.5"
+                    />
+                  </g>
+                )}
+                {b.ornament === 'pier' && (
+                  <g>
+                    <rect x={cx - 4} y={bR.y - 6} width="80" height="6"
+                      fill="#735428" stroke="#12110e" stroke-width="1" />
+                  </g>
+                )}
+                {b.ornament === 'plot' && (
+                  <g>
+                    {Array.from({ length: 5 }).map((_, k) => (
+                      <g>
+                        <rect x={tL.x + 6 + k * 9} y={tL.y - 4} width="2" height="6" fill="#3a5a2c" />
+                        <circle cx={tL.x + 7 + k * 9} cy={tL.y - 6} r="2.5" fill={b.ornamentColor || '#a83b2a'} />
+                      </g>
+                    ))}
+                  </g>
+                )}
+
+                {/* Name label below building */}
+                <g class="town-building__label">
+                  <rect
+                    x={cx - 44} y={bF.y + 4}
+                    width="88" height="14"
+                    fill="#fffaf0" stroke="#12110e" stroke-width="1.2"
+                  />
+                  <text
+                    x={cx} y={bF.y + 14}
+                    text-anchor="middle"
+                    font-size="9" font-family="JetBrains Mono, ui-monospace, monospace"
+                    font-weight="700" fill="#12110e"
+                    letter-spacing="0.04em"
+                  >
+                    {b.name.toUpperCase()}
+                  </text>
+                </g>
+              </a>
+            );
+          })}
+
+          <!-- Drum Hall pulse ring (separate g so JS can drive it) -->
+          <g id="drum-pulse" pointer-events="none">
+            <circle
+              cx={isoX(1, 1)} cy={isoY(1, 1)} r="0"
+              fill="none" stroke="#ff5c23" stroke-width="2"
+              opacity="0.85"
+            />
+          </g>
+
+          <!-- Visitor sprites get inserted here by JS -->
+          <g id="town-sprites" pointer-events="none"></g>
+        </svg>
+      </div>
+
+      <footer class="town-foot">
+        <p class="town-foot__line">
+          <strong>about /town · </strong>
+          The town is the website. Click a building to enter the room it stands for. Visitors are little Noun sprites — that's <em>you</em> and everyone else here right now. The drum hall pulses when somebody is playing.
+        </p>
+        <ul class="town-foot__list" role="list">
+          {TOWN.map((b) => (
+            <li><a href={b.href}><span aria-hidden="true">{b.glyph}</span> {b.name} <code>{b.href}</code></a></li>
+          ))}
+        </ul>
+        <p class="town-foot__credit">
+          v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · Tezos · El Segundo · <a href="/agents.json">/agents.json</a>
+        </p>
+      </footer>
+    </div>
+  </main>
+
+  <script type="module" is:inline define:vars={{ TOWN, isoOrigin: { x: ORIGIN_X, y: ORIGIN_Y, tw: TILE_W, th: TILE_H } }}>
+    // ──────────────────────────────────────────────────────────
+    // Visitor sprites — random walk between buildings
+    // ──────────────────────────────────────────────────────────
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const sprites = document.getElementById('town-sprites');
+    const presenceCount = document.getElementById('town-presence-count');
+    const drumPulse = document.getElementById('town-drum-pulse');
+    const drumRing = document.querySelector('#drum-pulse circle');
+
+    function isoX(gx, gy) { return isoOrigin.x + (gx - gy) * (isoOrigin.tw / 2); }
+    function isoY(gx, gy) { return isoOrigin.y + (gx + gy) * (isoOrigin.th / 2); }
+
+    // Pick a random ground position (not necessarily inside a building)
+    function randomTownPoint() {
+      const gx = Math.random() * 4 - 0.5;
+      const gy = Math.random() * 3 - 0.5;
+      return { x: isoX(gx, gy), y: isoY(gx, gy) + 8 };
+    }
+
+    // Each visitor → a Noun sprite + a destination + a position
+    const visitorSprites = new Map(); // nounId -> {el, x, y, tx, ty}
+
+    function ensureSprite(nounId, kind) {
+      if (visitorSprites.has(nounId)) return visitorSprites.get(nounId);
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', `town-sprite town-sprite--${kind}`);
+      g.setAttribute('data-noun', String(nounId));
+
+      const img = document.createElementNS(SVG_NS, 'image');
+      img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `https://noun.pics/${nounId}.svg`);
+      img.setAttribute('href', `https://noun.pics/${nounId}.svg`);
+      img.setAttribute('width', '20');
+      img.setAttribute('height', '20');
+      img.setAttribute('x', '-10');
+      img.setAttribute('y', '-22');
+      g.appendChild(img);
+
+      // Tiny shadow under sprite
+      const s = document.createElementNS(SVG_NS, 'ellipse');
+      s.setAttribute('rx', '6'); s.setAttribute('ry', '2.5');
+      s.setAttribute('fill', '#12110e'); s.setAttribute('opacity', '0.3');
+      s.setAttribute('cx', '0'); s.setAttribute('cy', '0');
+      g.insertBefore(s, img);
+
+      // Kind badge for agents
+      if (kind === 'agent') {
+        const badge = document.createElementNS(SVG_NS, 'circle');
+        badge.setAttribute('r', '3'); badge.setAttribute('fill', '#ffd400');
+        badge.setAttribute('stroke', '#12110e'); badge.setAttribute('stroke-width', '0.8');
+        badge.setAttribute('cx', '8'); badge.setAttribute('cy', '-22');
+        g.appendChild(badge);
+      }
+
+      const start = randomTownPoint();
+      const target = randomTownPoint();
+      const state = { el: g, x: start.x, y: start.y, tx: target.x, ty: target.y, kind };
+      visitorSprites.set(nounId, state);
+      sprites.appendChild(g);
+      g.setAttribute('transform', `translate(${state.x},${state.y})`);
+      return state;
+    }
+
+    function tickSprites() {
+      const speed = 0.5;
+      visitorSprites.forEach((s) => {
+        const dx = s.tx - s.x;
+        const dy = s.ty - s.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 1.2) {
+          const nxt = randomTownPoint();
+          s.tx = nxt.x; s.ty = nxt.y;
+        } else {
+          s.x += (dx / d) * speed;
+          s.y += (dy / d) * speed;
+        }
+        s.el.setAttribute('transform', `translate(${s.x.toFixed(1)},${s.y.toFixed(1)})`);
+      });
+      requestAnimationFrame(tickSprites);
+    }
+    requestAnimationFrame(tickSprites);
+
+    async function pollPresence() {
+      try {
+        const r = await fetch('/api/presence/snapshot', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const sessions = data.sessions || [];
+        const live = new Set();
+        for (const s of sessions) {
+          if (typeof s.nounId !== 'number') continue;
+          ensureSprite(s.nounId, s.kind || 'human');
+          live.add(s.nounId);
+        }
+        // remove sprites no longer present
+        for (const [id, st] of visitorSprites.entries()) {
+          if (!live.has(id)) { st.el.remove(); visitorSprites.delete(id); }
+        }
+        const total = (data.humans ?? 0) + (data.agents ?? 0);
+        if (presenceCount) {
+          presenceCount.textContent = String(total);
+          presenceCount.dataset.count = String(total);
+        }
+      } catch {}
+    }
+    pollPresence();
+    setInterval(pollPresence, 4000);
+
+    // ──────────────────────────────────────────────────────────
+    // Drum activity pulse — Drum Hall ring grows on /api/sounds events
+    // ──────────────────────────────────────────────────────────
+    let lastSoundsTs = 0;
+    let lastEventCount = 0;
+    async function pollSounds() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastSoundsTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = data.events || [];
+        if (events.length) {
+          lastSoundsTs = events[events.length - 1].ts || Date.now();
+          lastEventCount += events.length;
+          if (drumRing) {
+            drumRing.setAttribute('r', '0');
+            drumRing.setAttribute('opacity', '0.85');
+            const start = performance.now();
+            const grow = (now) => {
+              const t = (now - start) / 800;
+              if (t > 1) { drumRing.setAttribute('r', '0'); drumRing.setAttribute('opacity', '0'); return; }
+              drumRing.setAttribute('r', String(60 * t));
+              drumRing.setAttribute('opacity', String(0.85 * (1 - t)));
+              requestAnimationFrame(grow);
+            };
+            requestAnimationFrame(grow);
+          }
+          if (drumPulse) {
+            drumPulse.textContent = '♪'.repeat(Math.min(events.length, 6));
+            drumPulse.dataset.pulse = String(events.length);
+            setTimeout(() => { drumPulse.textContent = '·'; drumPulse.dataset.pulse = '0'; }, 600);
+          }
+        }
+      } catch {}
+    }
+    pollSounds();
+    setInterval(pollSounds, 1500);
+
+    // ──────────────────────────────────────────────────────────
+    // Sky color by PT local hour
+    // ──────────────────────────────────────────────────────────
+    const skyStops = [
+      document.getElementById('sky-stop-0'),
+      document.getElementById('sky-stop-1'),
+      document.getElementById('sky-stop-2'),
+    ];
+    const sun = document.getElementById('town-sun');
+    const skies = {
+      dawn:  ['#ffe8b3', '#ffc69a', '#fda58a'],
+      day:   ['#bfe6ff', '#94d4ff', '#5fbafd'],
+      dusk:  ['#ffb070', '#e96a59', '#7a3d80'],
+      night: ['#0c1d3a', '#0a1228', '#050810'],
+    };
+    function pickSky() {
+      const ptStr = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour12: false });
+      const h = Number(ptStr.match(/(\d{1,2}):/)?.[1] ?? new Date().getHours());
+      if (h >= 5 && h < 8) return ['dawn', '#ffd400'];
+      if (h >= 8 && h < 17) return ['day', '#ffd400'];
+      if (h >= 17 && h < 20) return ['dusk', '#ffb070'];
+      return ['night', '#fffaf0'];
+    }
+    function applySky() {
+      const [bucket, sunColor] = pickSky();
+      const colors = skies[bucket];
+      if (skyStops[0] && colors) skyStops.forEach((s, i) => s && s.setAttribute('stop-color', colors[i]));
+      if (sun) sun.setAttribute('fill', sunColor);
+      document.querySelector('.town-page')?.setAttribute('data-sky', bucket);
+    }
+    applySky();
+    setInterval(applySky, 60000);
+  </script>
+
+  <style>
+    .town-page {
+      --town-paper: #fffaf0;
+      --town-ink: #12110e;
+      --town-grass: #7fb86e;
+      --town-pop: #ff5c23;
+      --town-yellow: #ffd400;
+
+      padding: 24px 12px 60px;
+      background: var(--town-paper);
+      color: var(--town-ink);
+      font-family: system-ui, sans-serif;
+    }
+
+    .town-page[data-sky='dusk'] { background: linear-gradient(180deg, #ffd9a8, var(--town-paper) 60%); }
+    .town-page[data-sky='night'] { background: linear-gradient(180deg, #1a2740, var(--town-paper) 60%); }
+    .town-page[data-sky='dawn'] { background: linear-gradient(180deg, #ffe8d0, var(--town-paper) 60%); }
+
+    .town-frame {
+      max-width: 1280px;
+      margin: 0 auto;
+      border: 2px solid var(--town-ink);
+      box-shadow: 6px 6px 0 0 var(--town-ink);
+      background: var(--town-paper);
+      overflow: hidden;
+    }
+
+    .town-marquee {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--town-ink);
+      color: var(--town-paper);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      border-bottom: 2px solid var(--town-ink);
+    }
+
+    .town-marquee strong { color: var(--town-yellow); font-weight: 700; }
+    .town-marquee em { color: #ffa371; font-style: normal; }
+    .town-marquee #town-presence-count { color: var(--town-yellow); font-weight: 700; }
+    .town-marquee #town-drum-pulse { color: var(--town-pop); font-weight: 700; min-width: 1.2em; display: inline-block; }
+
+    .town-marquee__pulse {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--town-pop);
+      box-shadow: 0 0 0 0 var(--town-pop);
+      animation: town-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes town-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 35, 0.7); }
+      50%      { box-shadow: 0 0 0 8px rgba(255, 92, 35, 0); }
+    }
+
+    .town-stage {
+      position: relative;
+      background: var(--town-paper);
+      border-bottom: 2px solid var(--town-ink);
+    }
+
+    /* CRT scanline overlay for late-90s vibe */
+    .town-stage::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(180deg, rgba(18,17,14,0.05) 0 1px, transparent 1px 3px);
+      pointer-events: none;
+      mix-blend-mode: multiply;
+    }
+
+    .town-svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      image-rendering: pixelated;
+      cursor: default;
+    }
+
+    .town-building { cursor: pointer; }
+    .town-building:hover .town-building__label rect { fill: var(--town-yellow); }
+    .town-building:hover path { filter: brightness(1.05); }
+
+    .town-foot {
+      padding: 16px;
+      background: var(--town-paper);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--town-ink);
+    }
+
+    .town-foot__line {
+      margin: 0 0 12px;
+      font-size: 13px;
+      line-height: 1.55;
+      max-width: 70ch;
+    }
+
+    .town-foot__list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 4px 18px;
+      list-style: none;
+      padding: 0;
+      margin: 0 0 16px;
+      font-size: 11px;
+    }
+    .town-foot__list a {
+      color: var(--town-ink);
+      text-decoration: none;
+    }
+    .town-foot__list a:hover { color: #185fa5; text-decoration: underline; }
+    .town-foot__list code { color: #185fa5; }
+
+    .town-foot__credit {
+      margin: 0;
+      padding-top: 10px;
+      border-top: 1px dashed var(--town-ink);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #5f5e5a;
+    }
+    .town-foot__credit a { color: #185fa5; }
+  </style>
+</BlockLayout>
