@@ -1,4 +1,5 @@
-const teamNames = ["Gold Nouns", "Sky Nouns"];
+let teamNames = ["Gold Nouns", "Sky Nouns"];
+const exhibitionTeamNames = ["Gold Nouns", "Sky Nouns"];
 const players = [
   { name: "Noun 17", team: 0, x: "31%", y: "72%", avatar: "assets/noun-0.svg" },
   { name: "Noun 28", team: 0, x: "68%", y: "78%", avatar: "assets/noun-1.svg" },
@@ -22,6 +23,16 @@ const difficultySettings = {
   normal: { label: "Normal", control: 0, finish: 0, risk: 1 },
   hard: { label: "Hard", control: 0.08, finish: 0.1, risk: 1.14 },
 };
+const leagueTeams = [
+  { name: "Gold Nouns", rating: 83 },
+  { name: "Sky Nouns", rating: 79 },
+  { name: "Laser Nouns", rating: 86 },
+  { name: "Garden Nouns", rating: 74 },
+  { name: "Arcade Nouns", rating: 81 },
+  { name: "Beach Nouns", rating: 77 },
+  { name: "Moon Nouns", rating: 84 },
+  { name: "Coffee Nouns", rating: 72 },
+];
 
 const state = {
   score: [0, 0],
@@ -37,6 +48,8 @@ const state = {
   difficulty: "normal",
   momentum: 0,
   cpuTimer: null,
+  leagueWatching: false,
+  league: null,
 };
 
 const el = {
@@ -52,6 +65,11 @@ const el = {
   controls: document.querySelector("#controls"),
   modeSwitch: document.querySelector("#modeSwitch"),
   difficultySwitch: document.querySelector("#difficultySwitch"),
+  standings: document.querySelector("#standings"),
+  leagueToday: document.querySelector("#leagueToday"),
+  mintCard: document.querySelector("#mintCard"),
+  watchLeagueButton: document.querySelector("#watchLeagueButton"),
+  mintCardButton: document.querySelector("#mintCardButton"),
   log: document.querySelector("#log"),
   ball: document.querySelector("#ball"),
   newGameButton: document.querySelector("#newGameButton"),
@@ -61,6 +79,8 @@ const el = {
 
 function resetGame() {
   clearCpuTimer();
+  state.leagueWatching = false;
+  teamNames = exhibitionTeamNames.slice();
   state.score = [0, 0];
   state.servingTeam = 0;
   state.serverSlot = 1;
@@ -102,7 +122,7 @@ function render() {
   const bestShot = recommendedShot();
   [...el.controls.querySelectorAll("button")].forEach((button) => {
     const shot = button.dataset.shot;
-    button.disabled = state.gameOver || state.busy || isComputerTurn();
+    button.disabled = state.gameOver || state.busy || isComputerTurn() || state.leagueWatching;
     button.title = shotHint(shot);
     button.classList.toggle("recommended", shot === bestShot && !isComputerTurn() && !state.gameOver);
     const odds = button.querySelector(".shot-odds");
@@ -120,6 +140,8 @@ function render() {
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
+
+  renderLeague();
 }
 
 function copyForTurn() {
@@ -248,6 +270,272 @@ function resolvePoint(winningTeam, reason) {
   state.rallyCount = 0;
   render();
   scheduleComputerTurn();
+}
+
+function buildLeague() {
+  const today = new Date();
+  const dayKey = localDayKey(today);
+  const dayIndex = daysSince("2026-04-27", dayKey);
+  const standings = leagueTeams.map((team) => ({
+    ...team,
+    played: 0,
+    wins: 0,
+    losses: 0,
+    pointsFor: 0,
+    pointsAgainst: 0,
+    streak: 0,
+  }));
+  const matchesByDay = [];
+
+  for (let day = 0; day <= Math.max(dayIndex, 0); day += 1) {
+    const matches = dailyPairings(day).map(([home, away], slot) => {
+      const match = simulateLeagueMatch(day, slot, leagueTeams[home], leagueTeams[away]);
+      applyLeagueMatch(standings, home, away, match);
+      return {
+        ...match,
+        id: `${dateFromStart(day)}-${slot}`,
+        day,
+        home,
+        away,
+        homeName: leagueTeams[home].name,
+        awayName: leagueTeams[away].name,
+      };
+    });
+    matchesByDay.push(matches);
+  }
+
+  standings.sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    const diffA = a.pointsFor - a.pointsAgainst;
+    const diffB = b.pointsFor - b.pointsAgainst;
+    return diffB - diffA || b.rating - a.rating;
+  });
+
+  return {
+    dayKey,
+    dayIndex: Math.max(dayIndex, 0),
+    standings,
+    todayMatches: matchesByDay[Math.max(dayIndex, 0)] || [],
+  };
+}
+
+function dailyPairings(day) {
+  const order = [0, 1, 2, 3, 4, 5, 6, 7];
+  const shift = day % order.length;
+  const rotated = order.slice(shift).concat(order.slice(0, shift));
+  if (day % 2 === 1) rotated.reverse();
+  return [
+    [rotated[0], rotated[7]],
+    [rotated[1], rotated[6]],
+    [rotated[2], rotated[5]],
+    [rotated[3], rotated[4]],
+  ];
+}
+
+function simulateLeagueMatch(day, slot, home, away) {
+  const rng = seededRandom(hashString(`${day}:${slot}:${home.name}:${away.name}`));
+  const edge = (home.rating - away.rating) / 55;
+  const homeScore = 7 + Math.floor(rng() * 5);
+  let awayScore = Math.max(2, Math.min(10, Math.round(homeScore - 2 - edge * 3 + rng() * 5)));
+  let h = homeScore;
+  let a = awayScore;
+  if (a >= h) {
+    h = a + 2;
+  }
+  if (rng() + edge < 0.35) {
+    const oldH = h;
+    h = Math.max(2, a - 2);
+    a = oldH;
+  }
+  const winner = h > a ? home.name : away.name;
+  return { homeScore: h, awayScore: a, winner };
+}
+
+function applyLeagueMatch(standings, homeIndex, awayIndex, match) {
+  const home = standings[homeIndex];
+  const away = standings[awayIndex];
+  home.played += 1;
+  away.played += 1;
+  home.pointsFor += match.homeScore;
+  home.pointsAgainst += match.awayScore;
+  away.pointsFor += match.awayScore;
+  away.pointsAgainst += match.homeScore;
+  if (match.homeScore > match.awayScore) {
+    home.wins += 1;
+    away.losses += 1;
+    home.streak = Math.max(1, home.streak + 1);
+    away.streak = Math.min(-1, away.streak - 1);
+  } else {
+    away.wins += 1;
+    home.losses += 1;
+    away.streak = Math.max(1, away.streak + 1);
+    home.streak = Math.min(-1, home.streak - 1);
+  }
+}
+
+function renderLeague() {
+  if (!state.league) state.league = buildLeague();
+  const feature = state.league.todayMatches[0];
+  el.standings.innerHTML = state.league.standings.map((team, index) => `
+    <div class="standing-row">
+      <span>${index + 1}. ${team.name}</span>
+      <strong>${team.wins}-${team.losses}</strong>
+      <small>${team.pointsFor - team.pointsAgainst >= 0 ? "+" : ""}${team.pointsFor - team.pointsAgainst}</small>
+    </div>
+  `).join("");
+  el.leagueToday.innerHTML = state.league.todayMatches.map((match, index) => `
+    <button class="league-match ${index === 0 ? "featured" : ""}" data-match="${index}">
+      <span>${match.homeName}</span>
+      <strong>${match.homeScore}-${match.awayScore}</strong>
+      <span>${match.awayName}</span>
+    </button>
+  `).join("");
+  const minted = getMintedCards();
+  const alreadyMinted = feature && minted.some((card) => card.id === feature.id);
+  el.mintCard.innerHTML = feature ? `
+    <p>${feature.homeName} vs ${feature.awayName}</p>
+    <strong>${feature.homeScore}-${feature.awayScore}</strong>
+    <small>${alreadyMinted ? "Minted in local collection" : "Mint today's match card"}</small>
+    <small>${minted.length} card${minted.length === 1 ? "" : "s"} collected</small>
+  ` : "<p>League is warming up.</p>";
+  el.mintCardButton.disabled = !feature || alreadyMinted;
+  el.watchLeagueButton.disabled = state.busy || state.leagueWatching || !feature;
+}
+
+async function watchLeagueMatch(matchIndex = 0) {
+  if (state.busy || state.leagueWatching || !state.league?.todayMatches[matchIndex]) return;
+  clearCpuTimer();
+  const match = state.league.todayMatches[matchIndex];
+  state.leagueWatching = true;
+  state.busy = true;
+  state.gameOver = false;
+  state.rallyCount = 0;
+  state.lastShot = null;
+  teamNames = [match.homeName, match.awayName];
+  state.score = [0, 0];
+  state.rallyTeam = 0;
+  state.activePlayer = 0;
+  el.log.innerHTML = "";
+  addLog(`Broadcast: ${match.homeName} vs ${match.awayName}.`);
+  render();
+
+  const homePoints = match.homeScore;
+  const awayPoints = match.awayScore;
+  const points = buildReplayPoints(homePoints, awayPoints, match);
+  for (const point of points) {
+    state.rallyTeam = point.team;
+    state.activePlayer = pickTeammate(point.team);
+    render();
+    const shotName = point.shot;
+    flashPlayer(state.activePlayer, shotName);
+    await animateShot(state.activePlayer, pickTeammate(1 - point.team), shotName, point.final ? "winner" : "rally");
+    if (point.final) {
+      state.score[point.team] += 1;
+      flashScore(point.team);
+      showToast("Point!");
+      addLog(`${teamNames[point.team]} win a ${shotName}.`);
+      await wait(260);
+    }
+  }
+
+  state.score = [match.homeScore, match.awayScore];
+  state.leagueWatching = false;
+  state.busy = false;
+  state.gameOver = true;
+  state.rallyTeam = match.homeScore > match.awayScore ? 0 : 1;
+  state.activePlayer = firstPlayerForTeam(state.rallyTeam);
+  addLog(`${teamNames[state.rallyTeam]} take the daily match ${state.score[0]}-${state.score[1]}.`);
+  render();
+}
+
+function buildReplayPoints(homeScore, awayScore, match) {
+  const rng = seededRandom(hashString(`replay:${match.id}`));
+  const points = [];
+  let h = 0;
+  let a = 0;
+  const highlights = Math.min(9, homeScore + awayScore);
+  while (points.filter((point) => point.final).length < highlights) {
+    const team = h >= homeScore ? 1 : a >= awayScore ? 0 : rng() > 0.5 ? 0 : 1;
+    if (team === 0) h += 1;
+    else a += 1;
+    const rallyLength = 2 + Math.floor(rng() * 4);
+    for (let i = 0; i < rallyLength; i += 1) {
+      points.push({
+        team: i % 2 === 0 ? team : 1 - team,
+        shot: ["dink", "drive", "drop", "lob", "smash"][Math.floor(rng() * 5)],
+        final: i === rallyLength - 1,
+      });
+    }
+  }
+  return points;
+}
+
+function mintTodayCard() {
+  const feature = state.league?.todayMatches[0];
+  if (!feature) return;
+  const minted = getMintedCards();
+  if (minted.some((card) => card.id === feature.id)) return;
+  minted.push({
+    id: feature.id,
+    date: state.league.dayKey,
+    home: feature.homeName,
+    away: feature.awayName,
+    score: `${feature.homeScore}-${feature.awayScore}`,
+    mintedAt: new Date().toISOString(),
+  });
+  localStorage.setItem("noun-pickleball-mints", JSON.stringify(minted));
+  showToast("Minted!");
+  addLog(`Minted local card: ${feature.homeName} ${feature.homeScore}-${feature.awayScore} ${feature.awayName}.`);
+  renderLeague();
+}
+
+function getMintedCards() {
+  try {
+    return JSON.parse(localStorage.getItem("noun-pickleball-mints") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function localDayKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysSince(start, current) {
+  const startDate = new Date(`${start}T00:00:00`);
+  const currentDate = new Date(`${current}T00:00:00`);
+  return Math.floor((currentDate - startDate) / 86400000);
+}
+
+function dateFromStart(day) {
+  const date = new Date("2026-04-27T00:00:00");
+  date.setDate(date.getDate() + day);
+  return localDayKey(date);
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededRandom(seed) {
+  let value = seed || 1;
+  return () => {
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function isComputerTurn() {
@@ -428,6 +716,12 @@ el.controls.addEventListener("click", (event) => {
 });
 
 el.newGameButton.addEventListener("click", resetGame);
+el.watchLeagueButton.addEventListener("click", () => watchLeagueMatch(0));
+el.mintCardButton.addEventListener("click", mintTodayCard);
+el.leagueToday.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-match]");
+  if (button) watchLeagueMatch(Number(button.dataset.match));
+});
 el.modeSwitch.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-mode]");
   if (!button || button.dataset.mode === state.mode) return;
