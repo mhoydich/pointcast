@@ -62,6 +62,9 @@ const description =
     <!-- BOUNCE scene: DVD-logo classic, palette-tinted -->
     <svg class="tide__scene tide__scene--bounce" id="tide-bounce" aria-hidden="true" preserveAspectRatio="none"></svg>
 
+    <!-- PIPES scene: after-dark maze of growing pipes -->
+    <canvas class="tide__scene tide__scene--pipes" id="tide-pipes" aria-hidden="true"></canvas>
+
     <!-- Tap-ripple container -->
     <div class="tide__ripples" id="tide-ripples" aria-hidden="true"></div>
 
@@ -92,6 +95,7 @@ const description =
             <button class="tide__pill" data-mode="starfield" type="button">STARFIELD</button>
             <button class="tide__pill" data-mode="mystify" type="button">MYSTIFY</button>
             <button class="tide__pill" data-mode="bounce" type="button">BOUNCE</button>
+            <button class="tide__pill" data-mode="pipes" type="button">PIPES</button>
           </div>
         </div>
 
@@ -109,6 +113,7 @@ const description =
             <button class="tide__pill tide__pill--active" data-soundscape="drift" type="button">DRIFT</button>
             <button class="tide__pill" data-soundscape="chimes" type="button">CHIMES</button>
             <button class="tide__pill" data-soundscape="bubbles" type="button">BUBBLES</button>
+            <button class="tide__pill" data-soundscape="granular" type="button">GRANULAR</button>
           </div>
         </div>
 
@@ -172,11 +177,69 @@ const description =
     { id:'nighttide', name:'NIGHTTIDE', sky:'#3A0E5C', water:'#0E1845', foam:'#FF1493', orb:'#FF69B4', wave1:'#3D1276', wave2:'#1F1054', wave3:'#0A0830', tone:{root:73.4,  color:'deep'},   dark:true  },
   ];
 
-  var MODES = ['waves', 'starfield', 'mystify', 'bounce'];
-  var SOUNDSCAPES = ['drift', 'chimes', 'bubbles'];
+  var MODES = ['waves', 'starfield', 'mystify', 'bounce', 'pipes'];
+  var SOUNDSCAPES = ['drift', 'chimes', 'bubbles', 'granular'];
 
   function clockPaletteId(){var h=new Date().getHours();if(h<5)return'abyss';if(h<8)return'daybreak';if(h<11)return'crystal';if(h<14)return'lagoon';if(h<17)return'kelp';if(h<20)return'coral';if(h<22)return'storm';return'nighttide';}
   function indexOfId(id){for(var i=0;i<PALETTES.length;i++)if(PALETTES[i].id===id)return i;return -1;}
+
+  /* Custom palette generator — pick a base hue, derive 7 swatches around it.
+     Stored at pc:tide:custom (single slot) and slotted into PALETTES as id=custom. */
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    var k = function (n) { return (n + h / 30) % 12; };
+    var a = s * Math.min(l, 1 - l);
+    var f = function (n) {
+      var c = l - a * Math.max(-1, Math.min(Math.min(k(n) - 3, 9 - k(n)), 1));
+      return Math.round(c * 255).toString(16).padStart(2, '0');
+    };
+    return '#' + f(0) + f(8) + f(4);
+  }
+  function generateCustomPalette() {
+    var h = Math.floor(Math.random() * 360);
+    var dark = Math.random() < 0.45;
+    var L = dark
+      ? { sky: 22, water: 14, foam: 62, orb: 70, w1: 18, w2: 12, w3: 7 }
+      : { sky: 78, water: 58, foam: 88, orb: 80, w1: 50, w2: 38, w3: 26 };
+    var sat = dark ? 55 : 60;
+    var hueShift = function (delta) { return (h + delta + 360) % 360; };
+    var roots = [110, 138.6, 164.8, 196, 220, 246.9];
+    var p = {
+      id: 'custom', name: 'CUSTOM',
+      sky:   hslToHex(h, sat, L.sky),
+      water: hslToHex(hueShift(8), sat - 5, L.water),
+      foam:  hslToHex(hueShift(-15), sat + 10, L.foam),
+      orb:   hslToHex(hueShift(35), sat, L.orb),
+      wave1: hslToHex(hueShift(4), sat - 5, L.w1),
+      wave2: hslToHex(hueShift(-3), sat - 10, L.w2),
+      wave3: hslToHex(hueShift(-8), sat - 15, L.w3),
+      tone:  { root: roots[Math.floor(Math.random() * roots.length)], color: dark ? 'deep' : 'mid' },
+      dark:  dark,
+    };
+    return p;
+  }
+  function loadCustomPalette() {
+    try {
+      var raw = localStorage.getItem('pc:tide:custom');
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.id === 'custom') return parsed;
+    } catch (e) {}
+    return null;
+  }
+  function captureCustomPalette() {
+    var p = generateCustomPalette();
+    try { localStorage.setItem('pc:tide:custom', JSON.stringify(p)); } catch (e) {}
+    var existingIdx = indexOfId('custom');
+    if (existingIdx >= 0) PALETTES[existingIdx] = p;
+    else PALETTES.push(p);
+    applyPalette(indexOfId('custom'));
+    var note = document.getElementById('tide-save-note');
+    if (note) {
+      note.textContent = 'captured · custom palette · press C again for a new one';
+      setTimeout(function () { note.textContent = 'capture palette + scene + duration'; }, 2400);
+    }
+  }
 
   /* ─── WAVES scene: path morph between keyframes ─────────────── */
   var WAVE_PATHS = {
@@ -399,6 +462,93 @@ const description =
     svg.innerHTML = out;
   }
 
+  /* ─── PIPES scene: After-Dark maze of growing pipes ──────── */
+  var pipesCtx = null, pipesGrid = null, pipesPipes = [], pipesCols = 0, pipesRows = 0, pipesCell = 22;
+  var pipesSegments = 0, PIPES_MAX_SEGMENTS = 1400;
+  function initPipes() {
+    var c = document.getElementById('tide-pipes');
+    if (!c) return;
+    pipesCtx = c.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var W = window.innerWidth, H = window.innerHeight;
+    c.width = W * dpr; c.height = H * dpr;
+    c.style.width = W + 'px'; c.style.height = H + 'px';
+    pipesCtx.scale(dpr, dpr);
+    pipesCell = Math.max(16, Math.min(28, Math.round(Math.min(W, H) / 32)));
+    pipesCols = Math.floor(W / pipesCell);
+    pipesRows = Math.floor(H / pipesCell);
+    pipesGrid = new Uint8Array(pipesCols * pipesRows);
+    pipesPipes = [];
+    pipesSegments = 0;
+    var p = PALETTES[idx];
+    pipesCtx.fillStyle = p.dark ? '#04060a' : 'rgba(8,10,14,0.92)';
+    pipesCtx.fillRect(0, 0, W, H);
+    for (var i = 0; i < 4; i++) spawnPipe();
+  }
+  function spawnPipe() {
+    if (!pipesGrid) return;
+    var p = PALETTES[idx];
+    var swatch = [p.foam, p.orb, p.wave1, p.wave2];
+    pipesPipes.push({
+      x: Math.floor(Math.random() * pipesCols),
+      y: Math.floor(Math.random() * pipesRows),
+      d: Math.floor(Math.random() * 4), // 0=N 1=E 2=S 3=W
+      color: swatch[Math.floor(Math.random() * swatch.length)],
+      alive: true,
+    });
+  }
+  function drawPipes() {
+    if (!pipesCtx) initPipes();
+    if (motionPaused) return;
+    var ctx = pipesCtx;
+    var p = PALETTES[idx];
+    for (var i = 0; i < pipesPipes.length; i++) {
+      var pipe = pipesPipes[i];
+      if (!pipe.alive) continue;
+      // 12% turn chance
+      if (Math.random() < 0.12) {
+        pipe.d = (pipe.d + (Math.random() < 0.5 ? 1 : 3)) % 4;
+      }
+      var nx = pipe.x, ny = pipe.y;
+      if (pipe.d === 0) ny--; else if (pipe.d === 1) nx++; else if (pipe.d === 2) ny++; else nx--;
+      if (nx < 0 || ny < 0 || nx >= pipesCols || ny >= pipesRows || pipesGrid[ny * pipesCols + nx]) {
+        pipe.alive = false;
+        continue;
+      }
+      pipesGrid[ny * pipesCols + nx] = 1;
+      // draw segment
+      var cell = pipesCell;
+      var x0 = pipe.x * cell + cell / 2;
+      var y0 = pipe.y * cell + cell / 2;
+      var x1 = nx * cell + cell / 2;
+      var y1 = ny * cell + cell / 2;
+      ctx.strokeStyle = pipe.color;
+      ctx.lineWidth = Math.max(3, cell * 0.32);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      // small joint dot
+      ctx.fillStyle = pipe.color;
+      ctx.beginPath();
+      ctx.arc(x1, y1, Math.max(2, cell * 0.18), 0, Math.PI * 2);
+      ctx.fill();
+      pipe.x = nx; pipe.y = ny;
+      pipesSegments++;
+    }
+    // remove dead, respawn to keep at least 4
+    pipesPipes = pipesPipes.filter(function (pp) { return pp.alive; });
+    while (pipesPipes.length < 4 && pipesSegments < PIPES_MAX_SEGMENTS) spawnPipe();
+    // restart when grid is full enough
+    if (pipesSegments >= PIPES_MAX_SEGMENTS) {
+      ctx.fillStyle = p.dark ? 'rgba(4,6,10,0.06)' : 'rgba(8,10,14,0.05)';
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      // After a fade pass, full reset
+      if (Math.random() < 0.012) initPipes();
+    }
+  }
+
   /* ─── master raf loop drives whichever scene is active ───── */
   var rafActive = null;
   function startRafLoop() {
@@ -422,6 +572,8 @@ const description =
         drawMystify();
       } else if (mode === 'bounce') {
         drawBounce();
+      } else if (mode === 'pipes') {
+        drawPipes();
       }
       rafActive = requestAnimationFrame(frame);
     }
@@ -438,6 +590,7 @@ const description =
     audioNodes = [];
     if (chimeTimer) { clearTimeout(chimeTimer); chimeTimer = null; }
     if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
+    if (granularTimer) { clearTimeout(granularTimer); granularTimer = null; }
   }
 
   function startSoundscape(sId) {
@@ -446,6 +599,7 @@ const description =
     if (sId === 'drift') startDrift();
     else if (sId === 'chimes') startChimes();
     else if (sId === 'bubbles') startBubbles();
+    else if (sId === 'granular') startGranular();
   }
 
   /* DRIFT — filtered brown-noise + LFO + sine pad on root+fifth */
@@ -557,6 +711,47 @@ const description =
       bubbleTimer = setTimeout(fireOne, nextMs);
     }
     fireOne();
+  }
+
+  /* GRANULAR — overlapping short sine grains around palette root, slowly drifting */
+  var granularTimer = null;
+  function startGranular() {
+    var ctx = audioCtx, p = PALETTES[idx];
+    // quiet pad bed for body
+    var bed = ctx.createOscillator(); bed.type = 'sine'; bed.frequency.value = p.tone.root * 0.5;
+    var bedG = ctx.createGain(); bedG.gain.value = 0.025;
+    bed.connect(bedG); bedG.connect(master);
+    bed.start();
+    audioNodes.push(bed, bedG);
+
+    // drift LFO for the grain center pitch
+    var t0 = ctx.currentTime;
+    var detuneCents = [-7, -5, -3, 0, 3, 5, 7, 12];
+
+    function fireGrain() {
+      if (!audioOn || soundscape !== 'granular' || !audioCtx) return;
+      var now = audioCtx.currentTime;
+      // grain center: palette root, with slow LFO drift via Math.sin on real time
+      var driftHz = (Math.sin((now - t0) * 0.07) * 6); // ±6 Hz over ~90s cycle
+      var dc = detuneCents[Math.floor(Math.random() * detuneCents.length)];
+      var f = (p.tone.root + driftHz) * Math.pow(2, dc / 1200);
+      // grain length 60-180ms
+      var dur = 0.06 + Math.random() * 0.12;
+      var osc = ctx.createOscillator();
+      osc.type = Math.random() < 0.7 ? 'sine' : 'triangle';
+      osc.frequency.value = f * (Math.random() < 0.18 ? 2 : 1); // sometimes octave-up shimmer
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.10, now + dur * 0.25);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(g); g.connect(master);
+      osc.start(now); osc.stop(now + dur + 0.02);
+      audioNodes.push(osc, g);
+      // fire next: ~80-180ms gap so grains overlap
+      var nextMs = 80 + Math.random() * 140;
+      granularTimer = setTimeout(fireGrain, nextMs);
+    }
+    fireGrain();
   }
 
   function setSoundscape(sId) {
@@ -696,6 +891,7 @@ const description =
     if (m === 'starfield' && (!sfCtx || !sfParticles.length)) initStarfield();
     if (m === 'mystify' && !myLines.length) initMystify();
     if (m === 'bounce' && !bounceState) initBounce();
+    if (m === 'pipes' && !pipesCtx) initPipes();
     try { localStorage.setItem('pc:tide:mode', m); } catch (e) {}
   }
 
@@ -760,6 +956,10 @@ const description =
   }
 
   /* ─── boot ────────────────────────────────────────────────── */
+  // restore custom palette if present (slotted as id=custom in PALETTES)
+  var savedCustom = loadCustomPalette();
+  if (savedCustom) PALETTES.push(savedCustom);
+
   var hashParsed = parseHash() || {};
   var initial = (hashParsed.palette != null && hashParsed.palette >= 0)
     ? hashParsed.palette
@@ -790,6 +990,7 @@ const description =
   if (mode === 'starfield') initStarfield();
   if (mode === 'mystify') initMystify();
   if (mode === 'bounce') initBounce();
+  if (mode === 'pipes') initPipes();
 
   startRafLoop();
   tickClock();
@@ -809,6 +1010,10 @@ const description =
     else if (ev.key === 'm' || ev.key === 'M') {
       var ci = MODES.indexOf(mode);
       setMode(MODES[(ci + 1) % MODES.length]);
+    }
+    else if (ev.key === 'c' || ev.key === 'C') {
+      // capture a fresh custom palette and jump to it
+      captureCustomPalette();
     }
   });
   var holdTimer = null;
@@ -911,15 +1116,23 @@ const description =
   .tide[data-mode="waves"]     .tide__scene--starfield,
   .tide[data-mode="waves"]     .tide__scene--mystify,
   .tide[data-mode="waves"]     .tide__scene--bounce,
+  .tide[data-mode="waves"]     .tide__scene--pipes,
   .tide[data-mode="starfield"] .tide__scene--waves,
   .tide[data-mode="starfield"] .tide__scene--mystify,
   .tide[data-mode="starfield"] .tide__scene--bounce,
+  .tide[data-mode="starfield"] .tide__scene--pipes,
   .tide[data-mode="mystify"]   .tide__scene--waves,
   .tide[data-mode="mystify"]   .tide__scene--starfield,
   .tide[data-mode="mystify"]   .tide__scene--bounce,
+  .tide[data-mode="mystify"]   .tide__scene--pipes,
   .tide[data-mode="bounce"]    .tide__scene--waves,
   .tide[data-mode="bounce"]    .tide__scene--starfield,
-  .tide[data-mode="bounce"]    .tide__scene--mystify { display: none; }
+  .tide[data-mode="bounce"]    .tide__scene--mystify,
+  .tide[data-mode="bounce"]    .tide__scene--pipes,
+  .tide[data-mode="pipes"]     .tide__scene--waves,
+  .tide[data-mode="pipes"]     .tide__scene--starfield,
+  .tide[data-mode="pipes"]     .tide__scene--mystify,
+  .tide[data-mode="pipes"]     .tide__scene--bounce { display: none; }
 
   /* WAVES scene */
   .tide__scene--waves { z-index: 1; }
@@ -1022,6 +1235,10 @@ const description =
     background:
       radial-gradient(ellipse at 50% 50%, color-mix(in oklab, var(--wave-3) 70%, #000 30%) 0%, color-mix(in oklab, var(--wave-3) 30%, #000 70%) 100%);
   }
+
+  /* PIPES scene — solid dark base; canvas handles its own backing */
+  .tide__scene--pipes { z-index: 1; width: 100vw; height: 100vh; }
+  .tide[data-mode="pipes"] { background: #04060a; }
 
   /* Ripples / grain (always visible) */
   .tide__ripples { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
