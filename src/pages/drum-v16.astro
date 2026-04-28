@@ -1,0 +1,195 @@
+---
+/**
+ * /drum-v16 — TR-808 · audio batch 3/5 · 2026-04-28 PT.
+ *
+ * Classic drum-machine pads with knob-twiddly sound design. Eight pads:
+ * BD (kick), SD (snare), LT, MT, HT (toms), CH (closed hat), OH (open
+ * hat), CY (cymbal). Each pad has its own knob row controlling tuning,
+ * tone, and decay. Every hit broadcasts type=tr808.
+ *
+ * Aesthetic: orange-and-black 808 panel, white knob caps, classic pad
+ * grid, red ring around the active pad on hit.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v16 — TR-808 (drum machine)';
+const description = 'Eight 808 drum pads with tuning + tone + decay knobs. Web Audio synthesis. Multiplayer drum-hub variant.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-v16', name: 'PointCast Drum · v16 · TR-808', url: 'https://pointcast.xyz/drum-v16', description };
+
+const PADS = [
+  { id: 'bd', label: 'BD', name: 'Kick',   color: '#ff5c23', kbd: '1', tune: 60,   tone: 50, decay: 65 },
+  { id: 'sd', label: 'SD', name: 'Snare',  color: '#ffd400', kbd: '2', tune: 200,  tone: 50, decay: 30 },
+  { id: 'lt', label: 'LT', name: 'L-Tom',  color: '#fff7c2', kbd: '3', tune: 90,   tone: 50, decay: 50 },
+  { id: 'mt', label: 'MT', name: 'M-Tom',  color: '#fff7c2', kbd: '4', tune: 140,  tone: 50, decay: 45 },
+  { id: 'ht', label: 'HT', name: 'H-Tom',  color: '#fff7c2', kbd: '5', tune: 220,  tone: 50, decay: 40 },
+  { id: 'ch', label: 'CH', name: 'C-Hat',  color: '#94d4ff', kbd: '6', tune: 6000, tone: 50, decay: 8 },
+  { id: 'oh', label: 'OH', name: 'O-Hat',  color: '#94d4ff', kbd: '7', tune: 6000, tone: 50, decay: 35 },
+  { id: 'cy', label: 'CY', name: 'Cymbal', color: '#cfd6dc', kbd: '8', tune: 4500, tone: 50, decay: 70 },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="tr" id="tr-main">
+    <DrumNav current="v15" />
+    <header class="tr__head">
+      <p class="tr__kicker">DRUM HUB · V16 · TR-808 · DRUM MACHINE · MULTIPLAYER</p>
+      <h1 class="tr__title"><em>Eight pads. Twelve knobs each.</em></h1>
+      <p class="tr__dek">Eight classic 808-style pads with their own tuning, tone, and decay knobs. Twiddle, then tap. Each hit broadcasts to the room.</p>
+    </header>
+
+    <section class="tr__panel">
+      <p class="tr__brand mono">⌐◨-◨ POINTCAST · DRUMS-808</p>
+      <div class="tr__pads">
+        {PADS.map((p) => (
+          <div class="tr__voice" data-id={p.id} style={`--tr-color: ${p.color}`}>
+            <div class="tr__knobs">
+              <div class="tr__knob"><span class="tr__knob-label mono">tune</span><input class="tr-tune" type="range" min="20" max="8000" value={p.tune} /></div>
+              <div class="tr__knob"><span class="tr__knob-label mono">tone</span><input class="tr-tone" type="range" min="0" max="100" value={p.tone} /></div>
+              <div class="tr__knob"><span class="tr__knob-label mono">decay</span><input class="tr-decay" type="range" min="2" max="100" value={p.decay} /></div>
+            </div>
+            <button type="button" class="tr__pad" data-id={p.id} data-kbd={p.kbd} aria-label={`Pad ${p.name}`}>
+              <span class="tr__pad-label mono">{p.label}</span>
+              <span class="tr__pad-name mono">{p.name}</span>
+              <span class="tr__pad-kbd mono">{p.kbd}</span>
+            </button>
+          </div>
+        ))}
+      </div>
+      <p class="tr__broadcast mono" id="tr-broadcast">— ready —</p>
+    </section>
+
+    <footer class="tr__foot">
+      <p>Each strike fires <code>type=tr808</code> to <code>/api/sounds</code> with the pad id and current knob settings.</p>
+      <p class="tr__credit mono">v0.1 · 2026-04-28 · drum sprint v16 · audio batch 3/5</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null, master = null, lpf = null;
+    function ensure() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = 0.7;
+      lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 12000; lpf.Q.value = 0.7;
+      master.connect(lpf); lpf.connect(ctx.destination);
+    }
+
+    function read(voice) {
+      return {
+        tune: Number(voice.querySelector('.tr-tune').value || 0),
+        tone: Number(voice.querySelector('.tr-tone').value || 50) / 100,
+        decay: Number(voice.querySelector('.tr-decay').value || 30) / 100,
+      };
+    }
+    function noiseBurst(seconds, decayShape) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, decayShape);
+      return buf;
+    }
+    function envelope(t, peak, attack, decay) {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + attack);
+      g.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
+      return g;
+    }
+    function play(id, voice) {
+      ensure();
+      const t = ctx.currentTime;
+      const p = read(voice);
+      switch (id) {
+        case 'bd': {
+          const o = ctx.createOscillator(); o.type = 'sine';
+          o.frequency.setValueAtTime(p.tune * 2.4, t);
+          o.frequency.exponentialRampToValueAtTime(Math.max(20, p.tune * 0.5), t + 0.18);
+          const g = envelope(t, 0.6, 0.005, 0.18 + p.decay * 0.4);
+          o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.6);
+          break;
+        }
+        case 'sd': {
+          // Tone + noise
+          const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = p.tune;
+          const og = envelope(t, 0.25 * (1 - p.tone), 0.002, 0.06);
+          o.connect(og); og.connect(master); o.start(t); o.stop(t + 0.2);
+          const n = ctx.createBufferSource(); n.buffer = noiseBurst(0.35, 2);
+          const nf = ctx.createBiquadFilter(); nf.type = 'highpass'; nf.frequency.value = 1500 + p.tone * 4000;
+          const ng = envelope(t, 0.4, 0.003, 0.12 + p.decay * 0.2);
+          n.connect(nf); nf.connect(ng); ng.connect(master); n.start(t);
+          break;
+        }
+        case 'lt': case 'mt': case 'ht': {
+          const o = ctx.createOscillator(); o.type = 'sine';
+          o.frequency.setValueAtTime(p.tune * 1.8, t);
+          o.frequency.exponentialRampToValueAtTime(Math.max(40, p.tune * 0.7), t + 0.12 + p.decay * 0.2);
+          const g = envelope(t, 0.42, 0.005, 0.18 + p.decay * 0.4);
+          o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.7);
+          break;
+        }
+        case 'ch': case 'oh': {
+          const dec = id === 'ch' ? 0.04 + p.decay * 0.12 : 0.18 + p.decay * 0.4;
+          const n = ctx.createBufferSource(); n.buffer = noiseBurst(dec + 0.05, 4);
+          const f1 = ctx.createBiquadFilter(); f1.type = 'highpass'; f1.frequency.value = Math.max(2500, p.tune * 0.6);
+          const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = p.tune; f2.Q.value = 0.6 + p.tone * 4;
+          const g = envelope(t, 0.3, 0.001, dec);
+          n.connect(f1); f1.connect(f2); f2.connect(g); g.connect(master); n.start(t);
+          break;
+        }
+        case 'cy': {
+          const dec = 0.5 + p.decay * 0.8;
+          const n = ctx.createBufferSource(); n.buffer = noiseBurst(dec + 0.1, 3);
+          const f1 = ctx.createBiquadFilter(); f1.type = 'highpass'; f1.frequency.value = Math.max(4000, p.tune * 0.6);
+          const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = p.tune; f2.Q.value = 1.2 + p.tone * 3;
+          const g = envelope(t, 0.35, 0.002, dec);
+          n.connect(f1); f1.connect(f2); f2.connect(g); g.connect(master); n.start(t);
+          break;
+        }
+      }
+    }
+    function sess() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; } catch { return 'tr-' + Math.random().toString(36).slice(2,10); } }
+    function broadcast(id) { try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'tr808', sessionId: sess(), pad: id }) }); const el = document.getElementById('tr-broadcast'); if (el) el.textContent = `playing · ${id.toUpperCase()}`; } catch {} }
+    document.querySelectorAll('.tr__voice').forEach((voice) => {
+      const btn = voice.querySelector('.tr__pad');
+      const id = btn.getAttribute('data-id') || '';
+      function go() { play(id, voice); btn.classList.remove('tr__pad--hit'); void btn.offsetWidth; btn.classList.add('tr__pad--hit'); broadcast(id); }
+      btn.addEventListener('mousedown', go);
+      btn.addEventListener('touchstart', (e) => { go(); e.preventDefault(); }, { passive: false });
+      const kbd = (btn.getAttribute('data-kbd') || '').toLowerCase();
+      window.addEventListener('keydown', (e) => { if (!e.repeat && e.key.toLowerCase() === kbd) go(); });
+    });
+  })();
+</script>
+
+<style>
+  .tr { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #0c0820 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+  .tr__head { max-width: 1080px; margin: 0 auto 16px; padding: 0 6px; }
+  .tr__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ff5c23; }
+  .tr__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .tr__title em { font-style: italic; }
+  .tr__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+  .tr__panel { max-width: 1080px; margin: 0 auto; background: linear-gradient(180deg, #2a1228 0%, #050310 100%); border: 4px solid #ff5c23; padding: 18px; box-shadow: 6px 6px 0 0 #050310; }
+  .tr__brand { margin: 0 0 14px; font-size: 12px; letter-spacing: 0.32em; color: #ffd400; }
+  .tr__pads { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  @media (max-width: 800px) { .tr__pads { grid-template-columns: repeat(4, 1fr); } }
+  .tr__voice { display: flex; flex-direction: column; gap: 8px; }
+  .tr__knobs { display: flex; flex-direction: column; gap: 6px; }
+  .tr__knob { display: flex; flex-direction: column; gap: 2px; }
+  .tr__knob-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.16em; color: #ffd400; text-transform: uppercase; }
+  .tr__knob input[type='range'] { width: 100%; accent-color: var(--tr-color, #ffd400); }
+  .tr__pad { background: var(--tr-color, #ff5c23); color: #050310; border: 2px solid #050310; box-shadow: 3px 3px 0 0 #050310; padding: 12px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: transform 60ms; }
+  .tr__pad:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #050310; }
+  .tr__pad--hit { animation: tr-hit 0.16s ease-out; }
+  @keyframes tr-hit { 0% { transform: scale(1); } 40% { transform: scale(0.92); filter: brightness(1.5); box-shadow: 0 0 18px var(--tr-color); } 100% { transform: scale(1); } }
+  .tr__pad-label { font-family: 'Bungee', Impact, sans-serif; font-size: 24px; letter-spacing: 0.04em; }
+  .tr__pad-name { font-size: 9px; letter-spacing: 0.16em; color: #050310; }
+  .tr__pad-kbd { font-size: 9px; padding: 1px 4px; background: #050310; color: var(--tr-color); border: 1px solid #050310; border-radius: 2px; }
+  .tr__broadcast { margin: 14px 0 0; padding-top: 10px; border-top: 1px dashed #5f5e5a; font-size: 10px; letter-spacing: 0.12em; color: #ff5c23; min-height: 14px; }
+  .tr__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+  .tr__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ff5c23; color: #ff5c23; }
+  .tr__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff5c23; }
+</style>
