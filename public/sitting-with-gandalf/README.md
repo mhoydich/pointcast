@@ -1,12 +1,12 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, an optional "Myth" listen-along, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
+A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, Wizard Nouns collectibles, an optional "Myth" listen-along, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
 ## Versions
 
-The app defaults to V6, with a V1/V2/V3/V4/V5/V6 toggle in the masthead. The selected version is saved locally after the V6 release is seen once.
+The app defaults to V7, with a V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The selected version is saved locally after the V7 release is seen once.
 
 ### V1
 
@@ -73,6 +73,15 @@ The app defaults to V6, with a V1/V2/V3/V4/V5/V6 toggle in the masthead. The sel
 - Keeps the V5 spell table and all previous releases available from the version switch.
 - Sets V6 as the default local-settings release without losing existing Gandalf, keepsake, resource, spellbook, or log data.
 - Keeps the cozy pixel nature room, ambience, timer, intention cues, notes, and local tally.
+
+## V7 Notes
+
+- Makes Wizard Nouns the default release while keeping V1-V6 available from the version switch.
+- Adds a Wizard Nouns framework with deterministic element slots for Hat, Beard, Staff, Robe, Relic, and Realm.
+- Adds visible trait chips, a six-slot element panel, and a compact 30-card collection grid inside the V7 flow.
+- Upgrades the tiny wizard avatar system with aura, relic orb, staff glow, robe trim, beard tone, and rune marks derived from the framework.
+- Adds a clearer V7 loop: forge a wizard, pair a relic, sharpen a resource, build a spell, sit five minutes, and keep the set.
+- Bumps the local settings release to V7 without clearing existing cards, keepsakes, resources, spellbook, or log data.
 
 ## Assets
 
