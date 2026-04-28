@@ -1,0 +1,537 @@
+---
+/**
+ * /drum-tv-roulette — NOUN ROULETTE · TV game · sprint 3/3
+ * 2026-04-28 PT.
+ *
+ * Cast to a TV. A wheel of every present visitor (their Noun avatar
+ * around a circle) spins every 30 seconds. The pointer lands on one
+ * Noun — that visitor is the LEADER for the next round. Their drum-bus
+ * events get a starburst around the wheel; their Noun glows huge in
+ * the center. Then the wheel re-spins.
+ *
+ * All visitor clients agree on who's the leader because the selection
+ * is deterministic from `Math.floor(Date.now() / ROUND_MS) ^
+ * shared-pid-string` — same seed, same answer, no server state.
+ *
+ * Visual: large circular wheel, 8-32 Noun heads arranged radially
+ * around the center, big arrow pointer at top, gold "LEADER" badge
+ * over the chosen Noun, sparkles on bus events tagged with the
+ * leader's pid.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-tv-roulette — NOUN ROULETTE · TV game';
+const description =
+  'Wheel of every present Noun. Spins every 30 seconds, lands on a leader, the leader\'s events get a starburst. Cast to a TV. Multiplayer drum-hub TV game.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-tv-roulette',
+  name: 'PointCast Drum · TV · Roulette',
+  url: 'https://pointcast.xyz/drum-tv-roulette',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="rl" id="rl-main">
+    <DrumNav current="tv-roulette" />
+
+    <header class="rl__head">
+      <p class="rl__kicker">DRUM HUB · TV GAME · NOUN ROULETTE · 30s ROUNDS</p>
+      <h1 class="rl__title"><em>NOUN ROULETTE.</em></h1>
+      <p class="rl__dek">
+        Wheel of every present Noun. Spins every 30 seconds, lands on someone, that Noun leads the room until the next spin. Their drum-bus events get a starburst — the room celebrates them.
+      </p>
+      <p class="rl__hint mono">F · fullscreen · M · hide chrome</p>
+    </header>
+
+    <section class="rl__stage">
+      <div class="rl__hud mono">
+        <span>visitors: <strong id="rl-visitors">—</strong></span>
+        <span>spin in: <strong id="rl-clock">—</strong></span>
+        <span>round: <strong id="rl-round">—</strong></span>
+      </div>
+
+      <div class="rl__pointer" aria-hidden="true">▼</div>
+
+      <div class="rl__wheel-box">
+        <div class="rl__wheel" id="rl-wheel"></div>
+        <div class="rl__center">
+          <img class="rl__center-noun" id="rl-leader-noun" alt="" />
+          <p class="rl__center-name mono" id="rl-leader-name">— spinning —</p>
+          <p class="rl__center-eyebrow mono">★ LEADER ★</p>
+        </div>
+        <div class="rl__sparkle-host" id="rl-sparkle-host" aria-hidden="true"></div>
+      </div>
+
+      <div class="rl__roster" id="rl-roster" role="list">
+        <p class="rl__empty mono" id="rl-empty">— waiting for visitors —</p>
+      </div>
+    </section>
+
+    <footer class="rl__foot">
+      <p class="mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · TV game · sprint 3/3</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const ROUND_MS = 30 * 1000;
+
+    const visitorsEl = document.getElementById('rl-visitors');
+    const clockEl    = document.getElementById('rl-clock');
+    const roundEl    = document.getElementById('rl-round');
+    const wheelEl    = document.getElementById('rl-wheel');
+    const leaderNoun = document.getElementById('rl-leader-noun');
+    const leaderName = document.getElementById('rl-leader-name');
+    const rosterEl   = document.getElementById('rl-roster');
+    const emptyEl    = document.getElementById('rl-empty');
+    const sparkleHost= document.getElementById('rl-sparkle-host');
+
+    let present = []; // [{pid, nounId}]
+    let lastTs = 0;
+    let lastRound = -1;
+    let leaderPid = null;
+    let leaderNounId = null;
+    let lastSpinAngle = 0;
+
+    function hash32(str) {
+      let h = 5381;
+      for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) & 0x7fffffff;
+      return h;
+    }
+
+    function pickLeader(round) {
+      if (present.length === 0) return null;
+      // Combine all pids into one big string so the seed depends on who's there
+      const seedStr = present.map((p) => p.pid).sort().join('|') + ':r' + round;
+      const idx = hash32(seedStr) % present.length;
+      return present[idx];
+    }
+
+    function paintWheel() {
+      wheelEl.innerHTML = '';
+      const n = present.length;
+      if (n === 0) { emptyEl.style.display = ''; return; }
+      emptyEl.style.display = 'none';
+      // Outer ring of Noun heads
+      const r = 42; // % from center
+      present.forEach((p, i) => {
+        const a = (i / n) * 360 - 90; // start at top
+        const x = 50 + r * Math.cos((a * Math.PI) / 180);
+        const y = 50 + r * Math.sin((a * Math.PI) / 180);
+        const slot = document.createElement('div');
+        slot.className = 'rl__slot';
+        slot.style.left = `${x}%`;
+        slot.style.top  = `${y}%`;
+        slot.dataset.pid = p.pid;
+        slot.innerHTML = `
+          <img src="https://noun.pics/${p.nounId}.svg" alt="" loading="lazy" />
+          <span class="rl__slot-noun mono">#${p.nounId}</span>
+        `;
+        wheelEl.appendChild(slot);
+      });
+    }
+
+    function paintRoster() {
+      rosterEl.innerHTML = '';
+      if (present.length === 0) {
+        rosterEl.innerHTML = '<p class="rl__empty mono">— waiting for visitors —</p>';
+        return;
+      }
+      present.forEach((p) => {
+        const li = document.createElement('div');
+        li.className = 'rl__roster-row' + (p.pid === leaderPid ? ' rl__roster-row--leader' : '');
+        li.innerHTML = `
+          <img src="https://noun.pics/${p.nounId}.svg" alt="" width="22" height="22" loading="lazy" />
+          <span class="rl__roster-name mono">noun #${p.nounId}</span>
+          <span class="rl__roster-tag mono">${p.pid === leaderPid ? '★ LEADER' : ''}</span>
+        `;
+        rosterEl.appendChild(li);
+      });
+    }
+
+    function setLeader(pid, nounId) {
+      leaderPid = pid;
+      leaderNounId = nounId;
+      if (nounId != null) {
+        leaderNoun.src = `https://noun.pics/${nounId}.svg`;
+        leaderName.textContent = `noun #${nounId}`;
+      } else {
+        leaderNoun.removeAttribute('src');
+        leaderName.textContent = '— no one yet —';
+      }
+      // Highlight the slot in the wheel
+      wheelEl.querySelectorAll('.rl__slot').forEach((s) => {
+        s.classList.toggle('rl__slot--leader', s.dataset.pid === pid);
+      });
+      paintRoster();
+    }
+
+    function spinWheel(targetIdx, total) {
+      // Compute target angle so the pointer (at top, -90deg) lands on the chosen slot
+      const targetA = (targetIdx / total) * 360;
+      // Spin at least 4 full turns + offset
+      const newAngle = lastSpinAngle - lastSpinAngle % 360 + 360 * 4 - targetA;
+      lastSpinAngle = newAngle;
+      wheelEl.style.transition = 'transform 2.6s cubic-bezier(0.18, 1.04, 0.6, 1)';
+      wheelEl.style.transform = `rotate(${newAngle}deg)`;
+    }
+
+    function tick() {
+      const now = Date.now();
+      const round = Math.floor(now / ROUND_MS);
+      const intoRound = now - round * ROUND_MS;
+      const remain = ROUND_MS - intoRound;
+      clockEl.textContent = `${Math.ceil(remain / 1000)}s`;
+      roundEl.textContent = String(round % 10000);
+      visitorsEl.textContent = String(present.length);
+
+      if (round !== lastRound) {
+        lastRound = round;
+        const leader = pickLeader(round);
+        if (leader) {
+          const idx = present.findIndex((p) => p.pid === leader.pid);
+          if (idx >= 0) spinWheel(idx, present.length);
+          // Set leader after spin animation completes
+          setTimeout(() => setLeader(leader.pid, leader.nounId), 2700);
+        } else {
+          setLeader(null, null);
+        }
+      }
+    }
+
+    async function pollVisit() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const list = (Array.isArray(data.present) ? data.present : []).filter((p) => p.pid && typeof p.nounId === 'number');
+        // Cap at 24 to keep wheel readable
+        present = list.slice(0, 24).map((p) => ({ pid: p.pid, nounId: p.nounId }));
+        paintWheel();
+        // Re-paint leader highlight + roster
+        if (leaderPid) {
+          const stillThere = present.find((p) => p.pid === leaderPid);
+          if (!stillThere) setLeader(null, null);
+        }
+        paintRoster();
+      } catch {}
+    }
+
+    function spawnSparkle() {
+      const s = document.createElement('span');
+      s.className = 'rl__sparkle';
+      s.textContent = ['✦','✧','★','✸','♪','♫'][Math.floor(Math.random() * 6)];
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * 80;
+      s.style.setProperty('--rl-x', `${Math.cos(ang) * dist}px`);
+      s.style.setProperty('--rl-y', `${Math.sin(ang) * dist}px`);
+      s.style.color = ['#ffd400','#ff5c23','#5fbafd','#fffaf0'][Math.floor(Math.random() * 4)];
+      sparkleHost.appendChild(s);
+      setTimeout(() => s.remove(), 1100);
+    }
+
+    async function pollSounds() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (!events.length) return;
+        lastTs = events[events.length - 1].t || Date.now();
+        for (const e of events) {
+          if (!leaderPid) continue;
+          if (e.pid === leaderPid) {
+            // Leader fired — burst sparkles
+            for (let i = 0; i < 6; i++) setTimeout(spawnSparkle, i * 60);
+          }
+        }
+      } catch {}
+    }
+
+    setInterval(tick, 200);
+    setInterval(pollVisit, 4000);
+    setInterval(pollSounds, 1200);
+    pollVisit(); pollSounds(); tick();
+
+    // Hotkeys
+    let overlayOn = true;
+    function applyOverlay() { document.documentElement.classList.toggle('rl-no-overlay', !overlayOn); }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
+      if (e.key === 'm' || e.key === 'M') { overlayOn = !overlayOn; applyOverlay(); }
+    });
+  })();
+</script>
+
+<style>
+  :global(.rl-no-overlay) .rl__head,
+  :global(.rl-no-overlay) :global(.drum-nav),
+  :global(.rl-no-overlay) .rl__foot,
+  :global(.rl-no-overlay) .rl__roster { display: none; }
+
+  .rl {
+    min-height: 100vh;
+    padding: 8px 8px 24px;
+    background:
+      radial-gradient(ellipse at 50% 50%, rgba(255, 138, 74, 0.18), transparent 60%),
+      linear-gradient(180deg, #1a0e26 0%, #050310 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .rl__head {
+    max-width: 1480px;
+    margin: 0 auto 12px;
+    padding: 0 6px;
+  }
+  .rl__kicker {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .rl__title {
+    margin: 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: clamp(40px, 6vw, 72px);
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: #ffd400;
+    text-shadow: 4px 4px 0 #ff5c23;
+  }
+  .rl__title em { font-style: italic; }
+  .rl__dek { margin: 0; font-size: 13px; line-height: 1.55; max-width: 60ch; color: #cfc6df; }
+  .rl__hint { font-size: 10px; letter-spacing: 0.18em; color: #ff8a4a; }
+
+  .rl__stage {
+    position: relative;
+    max-width: 1480px;
+    margin: 0 auto;
+    background: #0c0820;
+    border: 4px solid #ffd400;
+    box-shadow: 0 0 60px rgba(255, 212, 0, 0.18) inset, 6px 6px 0 0 #050310;
+    padding: 18px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .rl__stage { grid-template-columns: 1fr; } }
+
+  .rl__hud {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: #050310;
+    border: 1.5px solid #ffd400;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: #cfc6df;
+  }
+  .rl__hud strong { color: #ffd400; }
+
+  .rl__pointer {
+    position: absolute;
+    top: 60px;
+    left: calc(50% - 140px);
+    transform: translateX(-50%);
+    color: #ff5c23;
+    font-size: 36px;
+    text-shadow: 0 0 12px rgba(255, 92, 35, 0.6);
+    z-index: 5;
+    pointer-events: none;
+  }
+  @media (max-width: 900px) { .rl__pointer { left: 50%; } }
+
+  .rl__wheel-box {
+    position: relative;
+    aspect-ratio: 1;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .rl__wheel {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(255, 92, 35, 0.18) 0%, transparent 60%),
+      conic-gradient(from -90deg,
+        #ff5c23 0deg 30deg,
+        #ffd400 30deg 60deg,
+        #5fbafd 60deg 90deg,
+        #fffaf0 90deg 120deg,
+        #ff5c23 120deg 150deg,
+        #ffd400 150deg 180deg,
+        #5fbafd 180deg 210deg,
+        #fffaf0 210deg 240deg,
+        #ff5c23 240deg 270deg,
+        #ffd400 270deg 300deg,
+        #5fbafd 300deg 330deg,
+        #fffaf0 330deg 360deg);
+    border: 4px solid #050310;
+    border-radius: 50%;
+    box-shadow: 0 0 30px rgba(255, 138, 74, 0.4) inset, 6px 6px 0 0 #050310;
+    transform: rotate(0deg);
+    transform-origin: 50% 50%;
+  }
+
+  .rl__slot {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    z-index: 2;
+    pointer-events: none;
+    text-align: center;
+  }
+  .rl__slot img {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    border: 2px solid #050310;
+    background: #fffaf0;
+    display: block;
+  }
+  .rl__slot--leader img {
+    border-color: #ffd400;
+    box-shadow: 0 0 18px #ffd400, 0 0 30px rgba(255, 212, 0, 0.45);
+    animation: rl-leader 0.8s ease-in-out infinite alternate;
+  }
+  @keyframes rl-leader {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.12); }
+  }
+  .rl__slot-noun {
+    display: block;
+    font-size: 9px;
+    margin-top: 2px;
+    color: #050310;
+    background: #fffaf0;
+    padding: 1px 4px;
+    border: 1px solid #050310;
+  }
+
+  .rl__center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    background: #050310;
+    border: 3px solid #ffd400;
+    border-radius: 50%;
+    width: 38%;
+    height: 38%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-shadow: 0 0 30px rgba(255, 212, 0, 0.4);
+  }
+  .rl__center-noun {
+    width: 56%;
+    height: 56%;
+    image-rendering: pixelated;
+    border: 2px solid #ffd400;
+    background: #fffaf0;
+  }
+  .rl__center-name {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: clamp(11px, 1.4vw, 18px);
+    color: #fffaf0;
+  }
+  .rl__center-eyebrow {
+    margin: 0;
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    color: #ffd400;
+    text-transform: uppercase;
+  }
+
+  .rl__sparkle-host {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 6;
+  }
+  .rl__sparkle {
+    position: absolute;
+    top: 0; left: 0;
+    font-size: 28px;
+    line-height: 1;
+    text-shadow: 0 0 8px currentColor;
+    animation: rl-spark 1s ease-out forwards;
+  }
+  @keyframes rl-spark {
+    0%   { transform: translate(0, 0) scale(0.6); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translate(var(--rl-x, 0), var(--rl-y, 0)) scale(1.4); opacity: 0; }
+  }
+
+  .rl__roster {
+    background: rgba(18, 17, 14, 0.6);
+    border: 2px solid #ff8a4a;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 720px;
+    overflow-y: auto;
+  }
+  .rl__roster-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    font-size: 11px;
+  }
+  .rl__roster-row img { image-rendering: pixelated; border: 1px solid #050310; }
+  .rl__roster-row--leader {
+    border-color: #ffd400;
+    background: rgba(255, 212, 0, 0.08);
+  }
+  .rl__roster-name { font-size: 11px; }
+  .rl__roster-tag {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #ffd400;
+    text-align: right;
+  }
+  .rl__empty {
+    padding: 12px;
+    text-align: center;
+    color: #5f5e5a;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+  }
+
+  .rl__foot {
+    max-width: 1480px;
+    margin: 12px auto 0;
+    padding: 8px 6px 0;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 10px;
+    color: #5f5e5a;
+    letter-spacing: 0.16em;
+    grid-column: 1 / -1;
+  }
+</style>
