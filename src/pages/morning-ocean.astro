@@ -10,6 +10,7 @@ import {
 
 const manifest = buildMorningOceanManifest();
 const tokens = manifest.tokens;
+const heroTokens = [tokens[0], tokens[1], tokens[5], tokens[7], tokens[16], tokens[19]].filter(Boolean);
 const config = (contracts as any).morning_ocean ?? {};
 const mainnetAddress = String(config.mainnet ?? '').trim();
 const mintLive = mainnetAddress.startsWith('KT1');
@@ -86,15 +87,26 @@ const jsonLd = {
     </nav>
 
     <header class="ocean-hero">
-      <figure class="ocean-hero__art">
-        <img
-          src={MORNING_OCEAN_COVER_IMAGE}
-          alt="Morning Ocean collector sheet with twenty-four maritime artworks"
-          width="1536"
-          height="1024"
-          loading="eager"
-          decoding="async"
-        />
+      <figure class="ocean-hero__art" aria-label="Morning Ocean preview mosaic">
+        <div class="ocean-hero__mosaic">
+          {heroTokens.map((token, index) => (
+            <a
+              class={`ocean-hero__tile ocean-hero__tile--${index}`}
+              href={`#token-${token.tokenId}`}
+              aria-label={`Open ${token.title} in the Morning Ocean collection`}
+            >
+              <img
+                src={token.localImageUrl}
+                alt={`${token.title}: ${token.vessel} under ${token.celestial}`}
+                width="1024"
+                height="1024"
+                loading={index < 2 ? 'eager' : 'lazy'}
+                decoding="async"
+              />
+              <span>No. {String(token.tokenId).padStart(2, '0')}</span>
+            </a>
+          ))}
+        </div>
       </figure>
       <div class="ocean-hero__copy">
         <p class="kicker">{MORNING_OCEAN_SYMBOL} · 24 art cards · Tezos-ready</p>
@@ -218,8 +230,6 @@ const jsonLd = {
   <script type="application/json" id="morning-ocean-data" set:html={JSON.stringify(clientData)}></script>
 
   <script>
-    import { mintMorningOcean } from '../lib/mint';
-
     const root = document.querySelector('[data-morning-ocean]');
     const dataEl = document.getElementById('morning-ocean-data');
 
@@ -305,6 +315,7 @@ const jsonLd = {
           try {
             button.disabled = true;
             button.textContent = 'Opening wallet...';
+            const { mintMorningOcean } = await import('../lib/mint');
             const result = await mintMorningOcean(tokenId, 'mainnet', {
               source: 'morning-ocean',
               capturedAt: new Date().toISOString(),
@@ -396,14 +407,66 @@ const jsonLd = {
 
   .ocean-hero__art {
     margin: 0;
+    min-width: 0;
   }
 
-  .ocean-hero__art img {
+  .ocean-hero__mosaic {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 8px;
+    aspect-ratio: 4 / 3;
+    padding: 8px;
+    border: 1px solid rgba(23, 36, 43, 0.18);
+    background: rgba(251, 248, 239, 0.86);
+    box-shadow: 0 18px 55px rgba(23, 36, 43, 0.18);
+    overflow: hidden;
+  }
+
+  .ocean-hero__tile {
+    position: relative;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--shell);
+    color: var(--shell);
+    text-decoration: none;
+  }
+
+  .ocean-hero__tile--0 {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+
+  .ocean-hero__tile--1,
+  .ocean-hero__tile--4,
+  .ocean-hero__tile--5 {
+    grid-column: span 2;
+  }
+
+  .ocean-hero__tile img {
     display: block;
     width: 100%;
-    height: auto;
-    border: 1px solid rgba(23, 36, 43, 0.18);
-    box-shadow: 0 18px 55px rgba(23, 36, 43, 0.18);
+    height: 100%;
+    object-fit: cover;
+    transition: transform 280ms ease;
+  }
+
+  .ocean-hero__tile:hover img {
+    transform: scale(1.025);
+  }
+
+  .ocean-hero__tile span {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    padding: 5px 7px;
+    background: rgba(23, 36, 43, 0.72);
+    color: var(--shell);
+    font-family: var(--pc-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 9px;
+    letter-spacing: 0;
+    text-transform: uppercase;
   }
 
   .ocean-hero__copy {

@@ -17,6 +17,7 @@ export default defineConfig({
       nodePolyfills({
         include: ['buffer', 'process', 'util', 'stream', 'events', 'crypto'],
         globals: { Buffer: true, global: true, process: true },
+        protocolImports: false,
       }),
       tailwindcss(),
     ],
