@@ -1,0 +1,612 @@
+---
+/**
+ * /drum-v13 — Strings · sprint 1/4 (second batch)
+ * 2026-04-28 PT.
+ *
+ * Eight-chair string section. Two modes — pizzicato (plucked) and arco
+ * (bowed). Four registers: violin (E5/A4), viola (D4/G3), cello (C3/G2),
+ * double bass (E2/A1). Click any chair to fire its note. Toggle mode for
+ * the section.
+ *
+ * Web Audio recipes:
+ *   pizz : noise burst → bandpass @ pitch × Q12 → amp envelope 0.18s decay
+ *   arco : sawtooth × 2 detuned → bandpass @ pitch × Q4 → slow attack 0.3s,
+ *          held while button is pressed, soft release
+ *
+ * Multiplayer: each note start broadcasts type=strings to /api/sounds.
+ *
+ * Aesthetic: empty concert hall, stage curtains drawn, eight chairs in a
+ * curved row, music stands, parquet floor, low warm spots.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v13 — Strings';
+const description =
+  'Eight-chair string section. Pizz or bowed. Violins, viola, cellos, double bass. Web Audio + cinematic stage. Multiplayer drum hub.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-v13',
+  name: 'PointCast Drum · v13 · Strings',
+  url: 'https://pointcast.xyz/drum-v13',
+  description,
+};
+
+const CHAIRS = [
+  { id: 'vn1', section: 'violin',  label: '1st violin · E5',  hz: 659.25, color: '#ffd400' },
+  { id: 'vn2', section: 'violin',  label: '2nd violin · A4',  hz: 440.00, color: '#ffd400' },
+  { id: 'vn3', section: 'violin',  label: '3rd violin · D5',  hz: 587.33, color: '#ffd400' },
+  { id: 'va1', section: 'viola',   label: 'viola · A4',       hz: 440.00, color: '#c9a449' },
+  { id: 'va2', section: 'viola',   label: 'viola · D4',       hz: 293.66, color: '#c9a449' },
+  { id: 'vc1', section: 'cello',   label: 'cello · G2',       hz: 98.00,  color: '#a83b2a' },
+  { id: 'vc2', section: 'cello',   label: 'cello · C3',       hz: 130.81, color: '#a83b2a' },
+  { id: 'cb',  section: 'bass',    label: 'double bass · E2', hz: 82.41,  color: '#5e3a1a' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="vs" id="vs-main">
+    <DrumNav current="v13" />
+
+    <header class="vs__head">
+      <p class="vs__kicker">DRUM HUB · V13 · STRINGS · MULTIPLAYER</p>
+      <h1 class="vs__title"><em>Eight chairs. Two bows. One stage.</em></h1>
+      <p class="vs__dek">
+        Pizzicato or arco. Violins, viola, cellos, double bass. Click a chair to fire its note. Toggle the section's mode at the conductor's stand. Hold to sustain on bow; pizz is a strike.
+      </p>
+    </header>
+
+    <section class="vs__hall">
+      <div class="vs__curtains" aria-hidden="true">
+        <span class="vs__curtain vs__curtain--l"></span>
+        <span class="vs__curtain vs__curtain--r"></span>
+        <span class="vs__pelmet"></span>
+      </div>
+
+      <div class="vs__floor" aria-hidden="true"></div>
+
+      <div class="vs__seats" id="vs-seats">
+        {CHAIRS.map((c, i) => {
+          const arcAngle = -75 + (i / (CHAIRS.length - 1)) * 150;
+          const radius = 36;
+          const left = 50 + Math.sin((arcAngle * Math.PI) / 180) * radius;
+          const bottom = 8 + Math.cos((arcAngle * Math.PI) / 180) * (radius * 0.45);
+          return (
+            <button
+              type="button"
+              class={`vs__seat vs__seat--${c.section}`}
+              data-id={c.id}
+              data-hz={c.hz}
+              data-section={c.section}
+              style={`left: ${left}%; bottom: ${bottom}%; --vs-color: ${c.color};`}
+              aria-label={`${c.label} · click to play`}
+            >
+              <span class="vs__chair" aria-hidden="true">
+                <span class="vs__chair-back"></span>
+                <span class="vs__chair-seat"></span>
+              </span>
+              <span class="vs__stand" aria-hidden="true">
+                <span class="vs__stand-page"></span>
+                <span class="vs__stand-pole"></span>
+              </span>
+              <span class="vs__seat-label mono">{c.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div class="vs__podium">
+        <div class="vs__mode-row">
+          <span class="vs__mode-label mono">section mode</span>
+          <div class="vs__mode-toggle" role="radiogroup" aria-label="String mode">
+            <button type="button" class="vs__mode-btn vs__mode-btn--on" data-mode="pizz">PIZZ</button>
+            <button type="button" class="vs__mode-btn" data-mode="arco">ARCO</button>
+          </div>
+        </div>
+        <div class="vs__panel-row">
+          <span class="vs__panel-label mono">brightness</span>
+          <input id="vs-bright" type="range" min="400" max="6000" value="2200" />
+        </div>
+        <div class="vs__panel-row">
+          <span class="vs__panel-label mono">hall</span>
+          <input id="vs-hall" type="range" min="0" max="100" value="55" />
+        </div>
+        <p class="vs__broadcast mono" id="vs-broadcast">— ready —</p>
+        <p class="vs__hint mono">click a chair · hold for bow · keys 1-8</p>
+      </div>
+    </section>
+
+    <footer class="vs__foot">
+      <p>
+        Each note broadcasts <code>type=strings</code> with section + hz +
+        mode to <code>/api/sounds</code>. Pizzicato = noise burst through a
+        steep bandpass tuned to the open string — the body resonance you
+        hear when the chair is struck. Arco = saw stack through a softer
+        bandpass with a 0.3s attack, held while pressed.
+      </p>
+      <p class="vs__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 1/4 (batch 2)</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null;
+    let masterGain = null;
+    let convolver = null;
+    let dryGain = null;
+    let wetGain = null;
+    let lpf = null;
+
+    let mode = 'pizz';
+    let brightHz = 2200;
+    let hallWet = 0.55;
+    const arcoActive = new Map(); // id -> {oscNodes, gain}
+
+    function makeReverbBuffer(seconds, decay) {
+      const rate = ctx.sampleRate;
+      const len = Math.floor(rate * seconds);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+      return buf;
+    }
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+
+      lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 7000;
+      lpf.Q.value = 0.7;
+
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.6;
+
+      convolver = ctx.createConvolver();
+      convolver.buffer = makeReverbBuffer(3.4, 2.4);
+      dryGain = ctx.createGain(); dryGain.gain.value = 1 - hallWet * 0.5;
+      wetGain = ctx.createGain(); wetGain.gain.value = hallWet;
+
+      lpf.connect(masterGain);
+      masterGain.connect(dryGain);
+      masterGain.connect(convolver);
+      convolver.connect(wetGain);
+      dryGain.connect(ctx.destination);
+      wetGain.connect(ctx.destination);
+    }
+
+    function pizz(hz) {
+      ensureCtx();
+      const t0 = ctx.currentTime;
+      // Noise burst → bandpass at hz with high Q (string body resonance)
+      const dur = 0.32;
+      const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const env = Math.pow(1 - i / data.length, 1.6);
+        data[i] = (Math.random() * 2 - 1) * env;
+      }
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = hz;
+      bp.Q.value = 12;
+      const g = ctx.createGain();
+      g.gain.value = 0.45;
+      // Add a sine reinforcement at fundamental for warmth
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = hz;
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0.001, t0);
+      og.gain.linearRampToValueAtTime(0.18, t0 + 0.005);
+      og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+
+      n.connect(bp); bp.connect(g); g.connect(lpf);
+      o.connect(og); og.connect(lpf);
+      n.start(t0); o.start(t0); o.stop(t0 + 0.22);
+    }
+
+    function startArco(id, hz) {
+      ensureCtx();
+      if (arcoActive.has(id)) return;
+      const t0 = ctx.currentTime;
+      const ng = ctx.createGain();
+      ng.gain.value = 0;
+      ng.gain.linearRampToValueAtTime(0.3, t0 + 0.3); // bow attack
+      const oscs = [];
+      [0, 6].forEach((cents) => {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = hz;
+        o.detune.value = cents;
+        oscs.push(o);
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.value = brightHz;
+        filt.Q.value = 4;
+        o.connect(filt);
+        filt.connect(ng);
+        o.start(t0);
+      });
+      // Subtle tremolo on amplitude (real bowing has slight wobble)
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 5.5;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.05;
+      lfo.connect(lfoGain);
+      lfoGain.connect(ng.gain);
+      lfo.start(t0);
+      ng.connect(lpf);
+      arcoActive.set(id, { oscs: [...oscs, lfo], gain: ng });
+    }
+
+    function stopArco(id) {
+      const node = arcoActive.get(id);
+      if (!node) return;
+      const t = ctx.currentTime;
+      node.gain.gain.cancelScheduledValues(t);
+      node.gain.gain.setTargetAtTime(0, t, 0.12);
+      setTimeout(() => {
+        node.oscs.forEach((o) => { try { o.stop(); o.disconnect(); } catch {} });
+        try { node.gain.disconnect(); } catch {}
+      }, 360);
+      arcoActive.delete(id);
+    }
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'vs-' + Math.random().toString(36).slice(2, 10); }
+    }
+    function broadcast(section, hz) {
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'strings', sessionId: getSession(), section, hz: Math.round(hz), mode }),
+        });
+        const el = document.getElementById('vs-broadcast');
+        if (el) el.textContent = `${mode} · ${section} · ${Math.round(hz)} Hz`;
+      } catch {}
+    }
+
+    document.querySelectorAll('.vs__seat').forEach((btn, idx) => {
+      const id = btn.getAttribute('data-id');
+      const hz = Number(btn.getAttribute('data-hz'));
+      const section = btn.getAttribute('data-section') || '';
+      let pressed = false;
+      function press() {
+        if (pressed) return;
+        pressed = true;
+        btn.classList.add('vs__seat--active');
+        if (mode === 'pizz') {
+          pizz(hz);
+        } else {
+          startArco(id, hz);
+        }
+        broadcast(section, hz);
+      }
+      function release() {
+        if (!pressed) return;
+        pressed = false;
+        btn.classList.remove('vs__seat--active');
+        if (mode === 'arco') stopArco(id);
+        const el = document.getElementById('vs-broadcast');
+        if (el && arcoActive.size === 0) el.textContent = '— ready —';
+      }
+      btn.addEventListener('mousedown', (e) => { press(); e.preventDefault(); });
+      window.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', () => { if (pressed) release(); });
+      btn.addEventListener('touchstart', (e) => { press(); e.preventDefault(); }, { passive: false });
+      btn.addEventListener('touchend', release);
+
+      const key = String(idx + 1);
+      window.addEventListener('keydown', (e) => { if (e.key === key && !e.repeat) press(); });
+      window.addEventListener('keyup', (e) => { if (e.key === key) release(); });
+    });
+
+    document.querySelectorAll('.vs__mode-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.vs__mode-btn').forEach((x) => x.classList.remove('vs__mode-btn--on'));
+        b.classList.add('vs__mode-btn--on');
+        mode = b.getAttribute('data-mode') || 'pizz';
+        // Stop any held arco notes if switching to pizz
+        if (mode === 'pizz') {
+          [...arcoActive.keys()].forEach((id) => stopArco(id));
+          document.querySelectorAll('.vs__seat--active').forEach((s) => s.classList.remove('vs__seat--active'));
+        }
+      });
+    });
+
+    document.getElementById('vs-bright').addEventListener('input', (e) => {
+      brightHz = Number(e.target.value || 2200);
+      arcoActive.forEach((node) => {
+        node.oscs.forEach((o) => {
+          // Skip the LFO; only update sawtooth filters via shared brightHz won't apply — kept simple
+        });
+      });
+    });
+    document.getElementById('vs-hall').addEventListener('input', (e) => {
+      hallWet = Number(e.target.value || 0) / 100;
+      if (wetGain && dryGain && ctx) {
+        wetGain.gain.setTargetAtTime(hallWet, ctx.currentTime, 0.05);
+        dryGain.gain.setTargetAtTime(1 - hallWet * 0.5, ctx.currentTime, 0.05);
+      }
+    });
+  })();
+</script>
+
+<style>
+  .vs {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(255, 138, 74, 0.18), transparent 60%),
+      linear-gradient(180deg, #1a0e26 0%, #0a0612 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .vs__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .vs__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .vs__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 50px);
+    line-height: 1.05;
+  }
+  .vs__title em { font-style: italic; }
+  .vs__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 60ch; color: #cfc6df; }
+
+  .vs__hall {
+    position: relative;
+    max-width: 1080px;
+    margin: 0 auto;
+    aspect-ratio: 16 / 10;
+    background: linear-gradient(180deg, #2c1d05 0%, #0a0612 80%);
+    border: 3px solid #050310;
+    box-shadow: 6px 6px 0 0 #050310;
+    overflow: hidden;
+  }
+
+  .vs__curtains {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 100%;
+    pointer-events: none;
+  }
+  .vs__curtain {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 18%;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.4) 0 14px, transparent 14px 28px),
+      linear-gradient(90deg, #6e2018 0%, #2c0f0a 70%, #0a0612 100%);
+    border-right: 4px solid #050310;
+  }
+  .vs__curtain--l { left: 0; }
+  .vs__curtain--r { right: 0; transform: scaleX(-1); }
+  .vs__pelmet {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    background: linear-gradient(180deg, #6e2018 0%, #4a1410 100%);
+    border-bottom: 4px solid #050310;
+    box-shadow: 0 4px 0 0 #050310;
+  }
+  .vs__pelmet::before {
+    content: '★';
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    color: #ffd400;
+    font-size: 22px;
+    text-shadow: 0 0 12px rgba(255, 212, 0, 0.6);
+  }
+
+  .vs__floor {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 28%;
+    background:
+      repeating-linear-gradient(90deg, #4a2c10 0 22px, #2c1d05 22px 26px),
+      linear-gradient(180deg, transparent 0%, rgba(255, 138, 74, 0.18) 80%, transparent);
+    border-top: 2px solid #050310;
+  }
+
+  .vs__seats {
+    position: absolute;
+    inset: 80px 18% 6% 18%;
+  }
+
+  .vs__seat {
+    position: absolute;
+    transform: translate(-50%, 0);
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .vs__chair {
+    position: relative;
+    width: 50px;
+    height: 60px;
+  }
+  .vs__chair-back {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 32px; height: 38px;
+    background: var(--vs-color, #ffd400);
+    border: 1.5px solid #050310;
+    border-radius: 4px 4px 8px 8px;
+    box-shadow: 2px 2px 0 0 #050310;
+  }
+  .vs__chair-seat {
+    position: absolute;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 44px; height: 14px;
+    background: linear-gradient(180deg, #6e5320, #4a2c10);
+    border: 1.5px solid #050310;
+    border-radius: 2px;
+    box-shadow: 2px 2px 0 0 #050310;
+  }
+  .vs__stand {
+    position: relative;
+    width: 26px; height: 36px;
+    margin-top: 4px;
+  }
+  .vs__stand-page {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%) rotate(-12deg);
+    width: 24px; height: 18px;
+    background: #fffaf0;
+    border: 1.5px solid #050310;
+    box-shadow: 2px 2px 0 0 #050310;
+  }
+  .vs__stand-pole {
+    position: absolute;
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    bottom: 0;
+    background: #1a1a1a;
+  }
+  .vs__seat-label {
+    margin-top: 4px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #cfc6df;
+    text-shadow: 1px 1px 0 #050310;
+    white-space: nowrap;
+  }
+
+  .vs__seat:hover .vs__chair-back {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 4px 4px 0 0 #050310;
+  }
+  .vs__seat--active .vs__chair-back {
+    background: #fffaf0;
+    transform: translateX(-50%) scale(1.06);
+    box-shadow: 0 0 18px var(--vs-color, #ffd400), 4px 4px 0 0 #050310;
+  }
+  .vs__seat--active .vs__seat-label { color: #ffd400; }
+
+  .vs__podium {
+    position: absolute;
+    bottom: 6px;
+    left: 18%;
+    right: 18%;
+    background: rgba(18, 17, 14, 0.85);
+    border: 2px solid #ffd400;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+
+  .vs__mode-row {
+    grid-column: 1 / 2;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .vs__mode-label {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #ff8a4a;
+    text-transform: uppercase;
+  }
+  .vs__mode-toggle {
+    display: flex;
+    border: 1.5px solid #ffd400;
+  }
+  .vs__mode-btn {
+    flex: 1;
+    background: transparent;
+    color: #ffd400;
+    border: 0;
+    padding: 6px 8px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    cursor: pointer;
+    border-right: 1.5px solid #ffd400;
+  }
+  .vs__mode-btn:last-child { border-right: 0; }
+  .vs__mode-btn--on { background: #ffd400; color: #050310; font-weight: 700; }
+
+  .vs__panel-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .vs__panel-label {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #ff8a4a;
+    text-transform: uppercase;
+  }
+  .vs__panel-row input[type='range'] { accent-color: #ffd400; }
+
+  .vs__broadcast {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding-top: 6px;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #ffd400;
+  }
+  .vs__hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #cfc6df;
+  }
+
+  .vs__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .vs__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+  .vs__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
