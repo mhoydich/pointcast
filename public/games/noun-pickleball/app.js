@@ -1,10 +1,10 @@
 let teamNames = ["Gold Nouns", "Sky Nouns"];
 const exhibitionTeamNames = ["Gold Nouns", "Sky Nouns"];
 const players = [
-  { name: "Noun 17", team: 0, x: "31%", y: "72%", avatar: "assets/noun-0.svg" },
-  { name: "Noun 28", team: 0, x: "68%", y: "78%", avatar: "assets/noun-1.svg" },
-  { name: "Noun 4", team: 1, x: "32%", y: "24%", avatar: "assets/noun-2.svg" },
-  { name: "Noun 21", team: 1, x: "69%", y: "29%", avatar: "assets/noun-3.svg" },
+  { name: "Noun 17", team: 0, slot: 0, x: "32%", y: "78%", avatar: "assets/noun-0.svg" },
+  { name: "Noun 28", team: 0, slot: 1, x: "68%", y: "70%", avatar: "assets/noun-1.svg" },
+  { name: "Noun 4", team: 1, slot: 0, x: "32%", y: "30%", avatar: "assets/noun-2.svg" },
+  { name: "Noun 21", team: 1, slot: 1, x: "68%", y: "22%", avatar: "assets/noun-3.svg" },
 ];
 
 const shots = {
@@ -75,8 +75,12 @@ const el = {
   servePill: document.querySelector("#servePill"),
   court: document.querySelector("#court"),
   courtToast: document.querySelector("#courtToast"),
+  shotTrace: document.querySelector("#shotTrace"),
+  bounceMarker: document.querySelector("#bounceMarker"),
+  ballShadow: document.querySelector("#ballShadow"),
   turnTitle: document.querySelector("#turnTitle"),
   turnCopy: document.querySelector("#turnCopy"),
+  rallyStrip: document.querySelector("#rallyStrip"),
   controls: document.querySelector("#controls"),
   modeSwitch: document.querySelector("#modeSwitch"),
   difficultySwitch: document.querySelector("#difficultySwitch"),
@@ -119,6 +123,7 @@ function resetGame() {
 }
 
 function render() {
+  updatePlayerPositions();
   el.teamAName.textContent = teamNames[0];
   el.teamBName.textContent = teamNames[1];
   el.scoreA.textContent = state.score[0];
@@ -127,18 +132,24 @@ function render() {
 
   el.playerEls.forEach((node, index) => {
     node.innerHTML = `<img src="${players[index].avatar}" alt="${players[index].name}" />`;
+    node.style.setProperty("--x", players[index].x);
+    node.style.setProperty("--y", players[index].y);
     node.classList.toggle("active", index === state.activePlayer && !state.gameOver);
   });
 
   const active = players[state.activePlayer];
   el.ball.style.setProperty("--x", active.x);
   el.ball.style.setProperty("--y", active.y);
+  el.ballShadow.style.setProperty("--x", active.x);
+  el.ballShadow.style.setProperty("--y", active.y);
+  el.ballShadow.style.setProperty("--scale", "1");
 
   const teamName = teamNames[state.rallyTeam];
   el.turnTitle.textContent = state.gameOver ? `${teamName} win` : `${active.name} for the ${teamName}`;
   el.turnCopy.textContent = state.gameOver
     ? "Start a new match when you want another one."
     : copyForTurn();
+  renderRallyStrip();
 
   const bestShot = recommendedShot();
   [...el.controls.querySelectorAll("button")].forEach((button) => {
@@ -165,13 +176,152 @@ function render() {
   renderLeague();
 }
 
+function updatePlayerPositions() {
+  const formation = currentFormation();
+  players.forEach((player, index) => {
+    const spot = formation[index] || baseSpot(player.team, player.slot);
+    player.x = `${spot.x}%`;
+    player.y = `${spot.y}%`;
+  });
+}
+
+function currentFormation() {
+  if (state.leagueWatching) return kitchenFormation();
+  if (state.gameOver) return celebrationFormation(state.rallyTeam);
+  if (state.rallyCount === 0 && !state.lastShot) return serveFormation();
+  if (state.rallyCount === 1) return returnFormation();
+  if (state.rallyCount === 2) return thirdShotFormation();
+  if (state.lastShot === "dink" || state.lastShot === "drop") return kitchenFormation();
+  if (state.lastShot === "lob") return lobRecoveryFormation();
+  return neutralRallyFormation();
+}
+
+function serveFormation() {
+  const serveRight = servingSide() === "right";
+  const serverX = serveRight ? 70 : 30;
+  const partnerX = serveRight ? 30 : 70;
+  const returnX = serveRight ? 30 : 70;
+  const returnPartnerX = serveRight ? 70 : 30;
+  const servingBottom = state.servingTeam === 0;
+  const spots = {};
+  const server = serverPlayer();
+  const serverPartner = partnerOf(server);
+  const receiverTeam = 1 - state.servingTeam;
+  const receiver = playerIndexForSlot(receiverTeam, serveRight ? 0 : 1);
+  const receiverPartner = partnerOf(receiver);
+
+  spots[server] = { x: serverX, y: servingBottom ? 78 : 22 };
+  spots[serverPartner] = { x: partnerX, y: servingBottom ? 66 : 34 };
+  spots[receiver] = { x: returnX, y: servingBottom ? 18 : 82 };
+  spots[receiverPartner] = { x: returnPartnerX, y: servingBottom ? 36 : 64 };
+  return spots;
+}
+
+function returnFormation() {
+  const spots = serveFormation();
+  const returningBottom = state.rallyTeam === 0;
+  players.forEach((player, index) => {
+    if (player.team === state.rallyTeam) {
+      spots[index] = { x: player.slot === 0 ? 31 : 69, y: returningBottom ? 61 : 39 };
+    } else {
+      spots[index] = { x: player.slot === 0 ? 31 : 69, y: returningBottom ? 76 : 24 };
+    }
+  });
+  return spots;
+}
+
+function thirdShotFormation() {
+  const bottomHasBall = state.rallyTeam === 0;
+  const spots = {};
+  players.forEach((player, index) => {
+    if (player.team === state.rallyTeam) {
+      spots[index] = { x: player.slot === 0 ? 30 : 70, y: bottomHasBall ? 76 : 24 };
+    } else {
+      spots[index] = { x: player.slot === 0 ? 31 : 69, y: bottomHasBall ? 39 : 61 };
+    }
+  });
+  return spots;
+}
+
+function kitchenFormation() {
+  const spots = {};
+  players.forEach((player, index) => {
+    const bottom = player.team === 0;
+    const shade = index === state.activePlayer ? (bottom ? -2 : 2) : 0;
+    spots[index] = { x: player.slot === 0 ? 32 : 68, y: bottom ? 62 + shade : 38 + shade };
+  });
+  return spots;
+}
+
+function lobRecoveryFormation() {
+  const spots = {};
+  players.forEach((player, index) => {
+    const retreating = player.team === state.rallyTeam;
+    const bottom = player.team === 0;
+    const baseY = retreating ? (bottom ? 76 : 24) : (bottom ? 58 : 42);
+    spots[index] = { x: player.slot === 0 ? 30 : 70, y: baseY };
+  });
+  return spots;
+}
+
+function neutralRallyFormation() {
+  const spots = {};
+  players.forEach((player, index) => {
+    const bottom = player.team === 0;
+    const hasBall = player.team === state.rallyTeam;
+    spots[index] = {
+      x: player.slot === 0 ? 30 : 70,
+      y: bottom ? (hasBall ? 70 : 58) : (hasBall ? 30 : 42),
+    };
+  });
+  return spots;
+}
+
+function celebrationFormation(winningTeam) {
+  const spots = {};
+  players.forEach((player, index) => {
+    const bottom = player.team === 0;
+    const winner = player.team === winningTeam;
+    spots[index] = {
+      x: player.slot === 0 ? 38 : 62,
+      y: winner ? (bottom ? 66 : 34) : (bottom ? 78 : 22),
+    };
+  });
+  return spots;
+}
+
+function renderRallyStrip() {
+  const phase = rallyPhaseLabel();
+  const serving = `${teamNames[state.servingTeam]} serve`;
+  const server = `S${state.serverSlot + 1}`;
+  const side = servingSide();
+  el.rallyStrip.innerHTML = [
+    `<span class="hot">${phase}</span>`,
+    `<span>${serving}</span>`,
+    `<span>${server}</span>`,
+    `<span>${side} box</span>`,
+  ].join("");
+}
+
+function rallyPhaseLabel() {
+  if (state.gameOver) return "match";
+  if (state.rallyCount === 0) return "serve";
+  if (state.rallyCount === 1) return "return bounce";
+  if (state.rallyCount === 2) return "third shot";
+  if (state.lastShot === "dink" || state.lastShot === "drop") return "kitchen";
+  if (state.lastShot === "lob") return "reset";
+  return "rally";
+}
+
 function copyForTurn() {
   if (isComputerTurn()) {
     return state.busy ? "Sky Nouns are lining up the return." : "Sky Nouns are up. The computer will choose.";
   }
   if (!state.lastShot) {
-    return `Serve from the ${state.serverSlot === 0 ? "first" : "second"} server. Flow: ${flowLabel()}.`;
+    return `Serve cross-court from the ${servingSide()} box. Flow: ${flowLabel()}.`;
   }
+  if (state.rallyCount === 1) return `Return must bounce before the serving side can attack. Flow: ${flowLabel()}.`;
+  if (state.rallyCount === 2) return `Third shot time: drop resets the point, drive applies pressure. Flow: ${flowLabel()}.`;
   return `${teamNames[1 - state.rallyTeam]} just hit a ${shots[state.lastShot].label.toLowerCase()}. Flow: ${flowLabel()}.`;
 }
 
@@ -192,7 +342,7 @@ async function playShot(shotName, options = {}) {
   const makeChance = getMakeChance(shotName, actor.team);
   const roll = Math.random();
   const nextTeam = 1 - state.rallyTeam;
-  const nextPlayer = pickTeammate(nextTeam);
+  const nextPlayer = pickReceiverForShot(shotName, actorIndex, nextTeam);
 
   state.rallyCount += 1;
   addLog(`${actor.name} hits a ${shot.label.toLowerCase()}.`);
@@ -231,14 +381,43 @@ function getMakeChance(shotName, actorTeam = state.rallyTeam) {
   const rallyBonus = Math.min(state.rallyCount * 0.025, 0.18);
   const flowBonus = actorTeam === USER_TEAM ? state.momentum * 0.03 : -state.momentum * 0.015;
   const cpuBonus = actorTeam === CPU_TEAM ? difficultySettings[state.difficulty].control : 0;
-  return clamp(shot.control - pressure * 0.22 + counterBonus - rallyBonus + flowBonus + cpuBonus, 0.18, 0.96);
+  const phaseBonus = phaseMakeBonus(shotName);
+  return clamp(shot.control - pressure * 0.22 + counterBonus - rallyBonus + flowBonus + cpuBonus + phaseBonus, 0.18, 0.96);
 }
 
 function getWinnerChance(shotName, actorTeam = state.rallyTeam) {
   const shot = shots[shotName];
   const flowBonus = actorTeam === USER_TEAM ? state.momentum * 0.045 : -state.momentum * 0.02;
   const cpuBonus = actorTeam === CPU_TEAM ? difficultySettings[state.difficulty].finish : 0;
-  return clamp(shot.power * 0.28 + state.rallyCount * 0.035 + flowBonus + cpuBonus, 0.04, 0.62);
+  const phaseBonus = phaseWinnerBonus(shotName);
+  return clamp(shot.power * 0.28 + state.rallyCount * 0.035 + flowBonus + cpuBonus + phaseBonus, 0.04, 0.62);
+}
+
+function phaseMakeBonus(shotName) {
+  if (!state.lastShot && state.rallyCount === 0) {
+    return shotName === "drive" ? 0.11 : shotName === "lob" || shotName === "smash" ? -0.24 : -0.08;
+  }
+  if (state.rallyCount === 1) {
+    return shotName === "drive" || shotName === "lob" ? 0.07 : shotName === "dink" ? -0.18 : 0;
+  }
+  if (state.rallyCount === 2) {
+    return shotName === "drop" ? 0.13 : shotName === "smash" ? -0.16 : 0;
+  }
+  if (state.lastShot === "dink" || state.lastShot === "drop") {
+    return shotName === "dink" ? 0.08 : shotName === "smash" ? -0.12 : 0;
+  }
+  if (state.lastShot === "lob") {
+    return shotName === "smash" ? 0.11 : 0;
+  }
+  return 0;
+}
+
+function phaseWinnerBonus(shotName) {
+  if (state.rallyCount < 3 && shotName === "smash") return -0.18;
+  if (state.lastShot === "lob" && shotName === "smash") return 0.16;
+  if ((state.lastShot === "dink" || state.lastShot === "drop") && shotName === "dink") return -0.1;
+  if (state.rallyCount === 2 && shotName === "drop") return -0.06;
+  return 0;
 }
 
 function recommendedShot() {
@@ -716,9 +895,11 @@ function showToast(message) {
 function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   const from = players[fromIndex];
   const to = players[toIndex];
+  const landing = shotLanding(fromIndex, toIndex, shotName, result);
+  const apex = shotApex(from, landing, shotName, result);
   const midpoint = {
-    x: `${(parseFloat(from.x) + parseFloat(to.x)) / 2}%`,
-    y: arcY(from, to, shotName, result),
+    x: `${(parseFloat(from.x) + landing.x) / 2}%`,
+    y: `${apex.y}%`,
   };
   const baseDuration = shotName === "smash" ? 310 : shotName === "lob" ? 620 : shotName === "dink" ? 430 : 500;
   const duration = baseDuration * speed;
@@ -727,15 +908,29 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
 
   el.ball.style.setProperty("--x", from.x);
   el.ball.style.setProperty("--y", from.y);
+  el.ballShadow.style.setProperty("--x", from.x);
+  el.ballShadow.style.setProperty("--y", from.y);
+  el.ballShadow.style.setProperty("--scale", "1");
+  showShotTrace(from, landing);
   el.ball.classList.add("in-flight", `shot-${shotName}`);
   if (shotName === "smash") {
     el.court.classList.add("impact");
   }
 
+  const shadowAnimation = el.ballShadow.animate([
+    { left: from.x, top: from.y, transform: "translate(-50%, -18%) scale(1)", opacity: 0.66, offset: 0 },
+    { left: midpoint.x, top: `${Math.min(88, Math.max(12, landing.y + (from.team === 0 ? 10 : -10)))}%`, transform: "translate(-50%, -18%) scale(0.66)", opacity: 0.28, offset: 0.52 },
+    { left: `${landing.x}%`, top: `${landing.y}%`, transform: "translate(-50%, -18%) scale(1.08)", opacity: 0.72, offset: 1 },
+  ], {
+    duration,
+    easing: "cubic-bezier(.2,.75,.22,1)",
+    fill: "forwards",
+  });
+
   const animation = el.ball.animate([
     { left: from.x, top: from.y, transform: "translate(-50%, -50%) scale(1) rotate(0deg)", offset: 0 },
     { left: midpoint.x, top: midpoint.y, transform: `translate(-50%, -50%) scale(${scale})${spin}`, offset: 0.52 },
-    { left: landingX(to, result), top: landingY(to, result), transform: "translate(-50%, -50%) scale(1) rotate(540deg)", offset: 1 },
+    { left: `${landing.x}%`, top: `${landing.y}%`, transform: "translate(-50%, -50%) scale(1) rotate(540deg)", offset: 1 },
   ], {
     duration,
     easing: "cubic-bezier(.2,.75,.22,1)",
@@ -743,38 +938,128 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   });
 
   return animation.finished.finally(() => {
-    el.ball.style.setProperty("--x", landingX(to, result));
-    el.ball.style.setProperty("--y", landingY(to, result));
+    showBounce(landing);
+    el.ball.style.setProperty("--x", `${landing.x}%`);
+    el.ball.style.setProperty("--y", `${landing.y}%`);
+    el.ballShadow.style.setProperty("--x", `${landing.x}%`);
+    el.ballShadow.style.setProperty("--y", `${landing.y}%`);
+    el.ballShadow.style.setProperty("--scale", "1");
     el.ball.classList.remove("in-flight", `shot-${shotName}`);
     el.court.classList.remove("impact");
     animation.cancel();
+    shadowAnimation.cancel();
   });
 }
 
-function arcY(from, to, shotName, result) {
-  if (result === "fault" && shotName === "smash") return "50%";
-  if (shotName === "lob") return from.team === 0 ? "9%" : "91%";
-  if (shotName === "drop" || shotName === "dink") return from.team === 0 ? "47%" : "53%";
-  return from.team === 0 ? "36%" : "64%";
+function shotLanding(fromIndex, toIndex, shotName, result) {
+  const from = players[fromIndex];
+  const to = players[toIndex];
+  if (result === "fault") return faultLanding(from, shotName);
+  if (result === "winner") return winnerLanding(from, shotName);
+  if (!state.lastShot && state.rallyCount === 1) return serveLanding();
+  if (shotName === "dink") return { x: to.slot === 0 ? 35 : 65, y: to.team === 0 ? 58 : 42 };
+  if (shotName === "drop") return { x: to.slot === 0 ? 31 : 69, y: to.team === 0 ? 60 : 40 };
+  if (shotName === "lob") return { x: to.slot === 0 ? 28 : 72, y: to.team === 0 ? 80 : 20 };
+  if (shotName === "smash") return { x: to.slot === 0 ? 27 : 73, y: to.team === 0 ? 76 : 24 };
+  return { x: Number(to.x.replace("%", "")), y: to.team === 0 ? 72 : 28 };
 }
 
-function landingX(player, result) {
-  if (result === "fault") {
-    return player.team === 0 ? "10%" : "90%";
-  }
-  return player.x;
+function serveLanding() {
+  const servingBottom = state.servingTeam === 0;
+  const right = servingSide() === "right";
+  return {
+    x: right ? 31 : 69,
+    y: servingBottom ? 24 : 76,
+  };
 }
 
-function landingY(player, result) {
-  if (result === "fault") {
-    return player.team === 0 ? "88%" : "12%";
-  }
-  return player.y;
+function faultLanding(from, shotName) {
+  if (shotName === "smash") return { x: 50, y: from.team === 0 ? 49 : 51 };
+  if (state.rallyCount === 0) return { x: servingSide() === "right" ? 72 : 28, y: from.team === 0 ? 23 : 77 };
+  return { x: from.slot === 0 ? 13 : 87, y: from.team === 0 ? 15 : 85 };
+}
+
+function winnerLanding(from, shotName) {
+  if (shotName === "dink" || shotName === "drop") return { x: from.slot === 0 ? 34 : 66, y: from.team === 0 ? 43 : 57 };
+  if (shotName === "lob") return { x: from.slot === 0 ? 72 : 28, y: from.team === 0 ? 14 : 86 };
+  return { x: from.slot === 0 ? 73 : 27, y: from.team === 0 ? 20 : 80 };
+}
+
+function shotApex(from, landing, shotName, result) {
+  if (result === "fault" && shotName === "smash") return { y: 50 };
+  if (shotName === "lob") return { y: from.team === 0 ? 8 : 92 };
+  if (shotName === "drop" || shotName === "dink") return { y: from.team === 0 ? 48 : 52 };
+  return { y: (Number(from.y.replace("%", "")) + landing.y) / 2 + (from.team === 0 ? -9 : 9) };
+}
+
+function showShotTrace(from, landing) {
+  const courtBox = el.court.getBoundingClientRect();
+  const x1 = Number(from.x.replace("%", ""));
+  const y1 = Number(from.y.replace("%", ""));
+  const dx = (landing.x - x1) * courtBox.width / 100;
+  const dy = (landing.y - y1) * courtBox.height / 100;
+  el.shotTrace.style.setProperty("--x1", from.x);
+  el.shotTrace.style.setProperty("--y1", from.y);
+  el.shotTrace.style.setProperty("--trace-length", `${Math.hypot(dx, dy)}px`);
+  el.shotTrace.style.setProperty("--trace-angle", `${Math.atan2(dy, dx)}rad`);
+  el.shotTrace.classList.remove("live");
+  void el.shotTrace.offsetWidth;
+  el.shotTrace.classList.add("live");
+}
+
+function showBounce(landing) {
+  el.bounceMarker.style.setProperty("--x", `${landing.x}%`);
+  el.bounceMarker.style.setProperty("--y", `${landing.y}%`);
+  el.bounceMarker.classList.remove("show");
+  void el.bounceMarker.offsetWidth;
+  el.bounceMarker.classList.add("show");
+  window.setTimeout(() => el.bounceMarker.classList.remove("show"), 620);
 }
 
 function pickTeammate(team) {
   const options = players.map((player, index) => ({ player, index })).filter(({ player }) => player.team === team);
   return options[Math.floor(Math.random() * options.length)].index;
+}
+
+function pickReceiverForShot(shotName, actorIndex, nextTeam) {
+  if (state.rallyCount === 0) {
+    return playerIndexForSlot(nextTeam, servingSide() === "right" ? 0 : 1);
+  }
+  if (shotName === "dink" || shotName === "drop") {
+    return closestPlayerTo(nextTeam, Number(players[actorIndex].x.replace("%", "")), nextTeam === 0 ? 62 : 38);
+  }
+  if (shotName === "lob") {
+    return playerIndexForSlot(nextTeam, players[actorIndex].slot);
+  }
+  return pickTeammate(nextTeam);
+}
+
+function closestPlayerTo(team, x, y) {
+  return players
+    .map((player, index) => ({ player, index }))
+    .filter(({ player }) => player.team === team)
+    .sort((a, b) => distanceTo(a.player, x, y) - distanceTo(b.player, x, y))[0].index;
+}
+
+function distanceTo(player, x, y) {
+  const px = Number(player.x.replace("%", ""));
+  const py = Number(player.y.replace("%", ""));
+  return Math.hypot(px - x, py - y);
+}
+
+function partnerOf(index) {
+  return players.findIndex((player, playerIndex) => player.team === players[index].team && playerIndex !== index);
+}
+
+function playerIndexForSlot(team, slot) {
+  return players.findIndex((player) => player.team === team && player.slot === slot);
+}
+
+function baseSpot(team, slot) {
+  return {
+    x: slot === 0 ? 32 : 68,
+    y: team === 0 ? 74 : 26,
+  };
 }
 
 function firstPlayerForTeam(team) {
@@ -784,6 +1069,10 @@ function firstPlayerForTeam(team) {
 function serverPlayer() {
   const teamPlayers = players.map((player, index) => ({ player, index })).filter(({ player }) => player.team === state.servingTeam);
   return teamPlayers[state.serverSlot].index;
+}
+
+function servingSide() {
+  return state.score[state.servingTeam] % 2 === 0 ? "right" : "left";
 }
 
 function hasWon(team) {
