@@ -71,6 +71,36 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add keyboard shortcuts for TV operation: Space pause/resume, N next match, Q quick sim, D sim day, R reset league.
 - Keep TV mode client-only for this sprint. There is no paired remote, backend sync, or second-screen control channel yet.
 
+## V7 Savvy Review Additions
+
+- Make the TV cast easier for 20+ reviewers to judge quickly from across the room.
+- Add three watch-party story cards: Market Pulse, MVP Watch, and Comeback Line.
+- Flash the field on big plays, takedowns, and finals so important moments read visually even without reading the log.
+- Keep the normal league controls intact for adults or operators.
+
+## V8 Amplifier League Additions
+
+- Add a second scheduled battle type: Amplifier Rift.
+- Rotate Amplifier Rift into regular-season slates and use it for Nouns Bowl playoff matches.
+- Give Rift Nouns elemental affinities: Spark, Tide, Bloom, and Shade.
+- Draw amplifier zones directly on the field and boost Nouns when their affinity matches the zone they occupy.
+- Add amplifier lane control and element overload moves to the move feed, TV Market Pulse, scout stats, and match log.
+
+## V9 Poster Series Additions
+
+- Add a 20-piece Nouns Nation Battler poster wall at `/nouns-nation-battler-posters`.
+- Build posters from the actual generated battler Nouns SVGs instead of unrelated artwork.
+- Vary poster composition, type treatment, gang pairings, and match themes across all 20 pieces.
+- Link the poster wall from the normal battler controls and the public battler page.
+
+## V10 Crown Rush Additions
+
+- Add a third battle type: Crown Rush.
+- Rotate Crown Rush into the regular season and use it for the Nouns Bowl final.
+- Draw a contested crown zone at center field.
+- Let one Noun hold the crown at a time, gaining haste, guard, special charge, and extra attack pressure.
+- Add crown takeover and crown pressure pulse events to the move feed, TV state, stat strip, and match log.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -88,5 +118,9 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Clicking a numbered Noun updates the scout card without pausing the match.
 - `/nouns-nation-battler-tv` loads the no-chrome cast route and the normal route remains unchanged.
 - TV keyboard shortcuts work without exposing the operator controls on screen.
+- TV mode shows Market Pulse, MVP Watch, and Comeback Line cards that update while the match runs.
+- Amplifier Rift matches display a visibly different field with element zones and amplifier move events.
+- Poster series route displays 20 varied type-heavy posters using actual Nouns battler sprites.
+- Crown Rush matches display a visibly different field with a center crown, crowned Noun state, and crown pressure events.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.

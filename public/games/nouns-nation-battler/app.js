@@ -11,6 +11,37 @@ const LEAGUE_KEY = "pc:nouns-nation-league-v4";
 const LEAGUE_DAYS = 14;
 const DAILY_SLOTS = 4;
 
+const battleTypes = [
+  {
+    id: "open",
+    name: "Open Field Clash",
+    fieldClass: "open-field",
+    weather: ["clear", "dust"],
+    log: "Open field rules: center control charges specials.",
+  },
+  {
+    id: "rift",
+    name: "Amplifier Rift",
+    fieldClass: "rift-field",
+    weather: ["spark", "dust"],
+    log: "Amplifier Rift rules: element lanes boost matched Nouns and overload specials.",
+  },
+  {
+    id: "crown",
+    name: "Crown Rush",
+    fieldClass: "crown-field",
+    weather: ["clear", "royal"],
+    log: "Crown Rush rules: control the center crown to earn haste, guard, and pressure damage.",
+  },
+];
+
+const elements = [
+  { id: "spark", name: "Spark", color: "#f5c84b", boost: "crit" },
+  { id: "tide", name: "Tide", color: "#4aa3ff", boost: "heal" },
+  { id: "bloom", name: "Bloom", color: "#55cc6d", boost: "guard" },
+  { id: "shade", name: "Shade", color: "#5f5bff", boost: "special" },
+];
+
 const gangPool = [
   {
     name: "Tomato Noggles",
@@ -147,6 +178,9 @@ const el = {
   tvMatchState: document.querySelector("#tvMatchState"),
   tvRightGang: document.querySelector("#tvRightGang"),
   tvRightAlive: document.querySelector("#tvRightAlive"),
+  tvBigPlay: document.querySelector("#tvBigPlay"),
+  tvStarNoun: document.querySelector("#tvStarNoun"),
+  tvComeback: document.querySelector("#tvComeback"),
   tvPath: document.querySelector("#tvPath"),
   tvCastHint: document.querySelector("#tvCastHint"),
 };
@@ -163,6 +197,10 @@ const state = {
   specialClock: 0,
   centerClock: 0,
   weather: "clear",
+  battleType: battleTypes[0],
+  ampClock: 0,
+  crownClock: 0,
+  crownHolderId: "",
   autoNext: true,
   nextTimer: null,
   rootingFor: localStorage.getItem("pc:nouns-nation-root") || "",
@@ -170,6 +208,7 @@ const state = {
   league: loadLeague(),
   selectedUnitId: "",
   moveHistory: [],
+  reviewMoment: "Opening charge",
 };
 
 if (!state.league) {
@@ -274,6 +313,26 @@ function currentFixtureLabel() {
   return `${gangPool[fixture[0]].name} vs ${gangPool[fixture[1]].name}`;
 }
 
+function currentBattleType() {
+  const forced = params.get("battle") || params.get("type");
+  const forcedType = battleTypes.find((type) => type.id === forced);
+  if (forcedType) return forcedType;
+  const league = state.league;
+  if (league.phase === "playoffs") return league.playoffSlot === 2 ? battleTypes[2] : battleTypes[1];
+  const index = (league.day * DAILY_SLOTS + league.slot) % 6;
+  if (index === 2 || index === 4) return battleTypes[1];
+  if (index === 5) return battleTypes[2];
+  return battleTypes[0];
+}
+
+function elementForUnit(unit) {
+  return elements[(unit.index + unit.team * 2) % elements.length];
+}
+
+function weatherClass() {
+  return state.weather === "dust" ? "dust" : state.weather === "spark" ? "spark-field" : state.weather === "royal" ? "royal-field" : "";
+}
+
 function gangRecord(name) {
   if (!state.season[name]) {
     state.season[name] = { wins: 0, losses: 0, takedowns: 0, rootedWins: 0 };
@@ -330,10 +389,12 @@ function createUnit(team, index, bounds) {
     guard: 0,
     haste: 0,
     stunned: 0,
+    amplified: 0,
     special: rand(70, 160),
+    element: null,
     minted: false,
     targetId: null,
-    stats: { hits: 0, damage: 0, heals: 0, kos: 0, deaths: 0, specials: 0 },
+    stats: { hits: 0, damage: 0, heals: 0, kos: 0, deaths: 0, specials: 0, amps: 0 },
     node: null,
     hpNode: null,
     down: false,
@@ -347,6 +408,7 @@ function createNode(unit) {
   node.title = unitTitle(unit);
   node.dataset.unitId = unit.id;
   node.style.outlineColor = gangs[unit.team].color;
+  node.style.setProperty("--element", unit.element?.color || gangs[unit.team].accent);
   node.innerHTML = `
     <div class="hp"><i></i></div>
     <b class="jersey">${unit.number}</b>
@@ -364,13 +426,14 @@ function createNode(unit) {
 
 function unitTitle(unit) {
   const s = unit.stats;
-  return `#${unit.number} ${unit.name} (${unit.role.name}) — ${gangs[unit.team].name}. HP ${Math.max(0, Math.round(unit.hp))}/${unit.maxHp}. ${s.kos} KO, ${s.damage} damage, ${s.heals} healed.`;
+  const element = unit.element ? ` ${unit.element.name} affinity.` : "";
+  return `#${unit.number} ${unit.name} (${unit.role.name}) — ${gangs[unit.team].name}. HP ${Math.max(0, Math.round(unit.hp))}/${unit.maxHp}.${element} ${s.kos} KO, ${s.damage} damage, ${s.heals} healed.`;
 }
 
 function resetMatch() {
   clearTimeout(state.nextTimer);
   state.units.forEach((unit) => unit.node?.remove());
-  document.querySelectorAll(".hit-pop, .spark").forEach((node) => node.remove());
+  document.querySelectorAll(".hit-pop, .spark, .amp-zone, .crown-zone").forEach((node) => node.remove());
   state.units = [];
   state.effects = [];
   state.running = true;
@@ -378,7 +441,11 @@ function resetMatch() {
   state.tick = 0;
   state.specialClock = 260;
   state.centerClock = 120;
-  state.weather = Math.random() > 0.58 ? "dust" : "clear";
+  state.ampClock = 170;
+  state.crownClock = 92;
+  state.crownHolderId = "";
+  state.battleType = currentBattleType();
+  state.weather = state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
   state.moveHistory = [];
   state.selectedUnitId = "";
   if (isTvMode) {
@@ -391,7 +458,9 @@ function resetMatch() {
   gangs = fixture ? [gangPool[fixture[0]], gangPool[fixture[1]]] : [gangPool[0], gangPool[1]];
   document.documentElement.style.setProperty("--left-gang", gangs[0].color);
   document.documentElement.style.setProperty("--right-gang", gangs[1].color);
-  el.weather.className = `weather ${state.weather === "dust" ? "dust" : ""}`;
+  el.field.classList.remove(...battleTypes.map((type) => type.fieldClass));
+  el.field.classList.add(state.battleType.fieldClass);
+  el.weather.className = `weather ${weatherClass()}`;
   el.pauseButton.textContent = "Pause";
   el.leftGang.textContent = gangs[0].name;
   el.rightGang.textContent = gangs[1].name;
@@ -403,27 +472,32 @@ function resetMatch() {
   el.battleLog.innerHTML = "";
 
   const bounds = fieldBounds();
+  renderAmplifierZones(bounds);
+  renderCrownZone(bounds);
   for (let team = 0; team < 2; team += 1) {
     for (let index = 0; index < 30; index += 1) {
       const unit = createUnit(team, index, bounds);
+      unit.element = state.battleType.id === "rift" ? elementForUnit(unit) : null;
       createNode(unit);
       state.units.push(unit);
     }
   }
 
   addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, 30 strong on each side.`);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V6", state.league.phase === "playoffs" ? "win or go home" : "league slate armed");
+  addLog(state.battleType.log);
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V10", `${state.battleType.name} armed`);
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
 }
 
 function matchTitle() {
+  const typeName = state.battleType?.name || "Open Field Clash";
   if (state.league.phase === "regular") {
-    return `Day ${state.league.day + 1} Clash ${state.league.slot + 1}`;
+    return `Day ${state.league.day + 1} ${typeName}`;
   }
   if (state.league.phase === "playoffs") {
-    return state.league.playoffSlot < 2 ? `Nouns Bowl Semifinal ${state.league.playoffSlot + 1}` : "Nouns Bowl Final";
+    return state.league.playoffSlot < 2 ? `Nouns Bowl ${typeName} Semi ${state.league.playoffSlot + 1}` : `Nouns Bowl ${typeName}`;
   }
   return `${state.league.champion} champions`;
 }
@@ -494,20 +568,145 @@ function centerPressure(bounds) {
   );
 }
 
+function amplifierZones(bounds) {
+  if (state.battleType.id !== "rift") return [];
+  return elements.map((element, index) => ({
+    ...element,
+    x: bounds.width * (0.31 + (index % 2) * 0.38),
+    y: bounds.height * (0.34 + Math.floor(index / 2) * 0.34),
+    radius: Math.min(bounds.width, bounds.height) * 0.115,
+  }));
+}
+
+function renderAmplifierZones(bounds) {
+  if (state.battleType.id !== "rift") return;
+  amplifierZones(bounds).forEach((zone) => {
+    const node = document.createElement("div");
+    node.className = `amp-zone amp-${zone.id}`;
+    node.style.left = `${zone.x}px`;
+    node.style.top = `${zone.y}px`;
+    node.style.width = `${zone.radius * 2}px`;
+    node.style.height = `${zone.radius * 2}px`;
+    node.style.setProperty("--amp", zone.color);
+    node.innerHTML = `<span>${zone.name}</span>`;
+    el.field.append(node);
+  });
+}
+
+function unitZone(unit, bounds) {
+  return amplifierZones(bounds).find((zone) => distance(unit, zone) < zone.radius) || null;
+}
+
+function matchedAmplifier(unit, bounds) {
+  const zone = unit.element ? unitZone(unit, bounds) : null;
+  return zone && zone.id === unit.element.id ? zone : null;
+}
+
+function crownZone(bounds) {
+  if (state.battleType.id !== "crown") return null;
+  return {
+    x: bounds.width / 2,
+    y: bounds.height / 2,
+    radius: Math.min(bounds.width, bounds.height) * 0.15,
+  };
+}
+
+function renderCrownZone(bounds) {
+  const zone = crownZone(bounds);
+  if (!zone) return;
+  const node = document.createElement("div");
+  node.className = "crown-zone";
+  node.style.left = `${zone.x}px`;
+  node.style.top = `${zone.y}px`;
+  node.style.width = `${zone.radius * 2}px`;
+  node.style.height = `${zone.radius * 2}px`;
+  node.innerHTML = "<span>Crown</span>";
+  el.field.append(node);
+}
+
+function crownHolder() {
+  return state.units.find((unit) => unit.id === state.crownHolderId && !unit.down) || null;
+}
+
+function updateCrownControl(bounds) {
+  const zone = crownZone(bounds);
+  if (!zone) return;
+  const candidates = aliveUnits()
+    .filter((unit) => distance(unit, zone) < zone.radius)
+    .sort((a, b) => (b.morale * b.hp + b.stats.kos * 18) - (a.morale * a.hp + a.stats.kos * 18));
+  if (!candidates.length) return;
+  const holder = candidates[0];
+  if (state.crownHolderId !== holder.id) {
+    state.crownHolderId = holder.id;
+    holder.stats.amps += 1;
+    holder.morale = Math.min(1.58, holder.morale + 0.18);
+    holder.guard = Math.max(holder.guard, 130);
+    holder.haste = Math.max(holder.haste, 120);
+    recordMove(gangs[holder.team].short, `#${holder.number} ${holder.name} takes the crown`);
+    pop(holder.x, holder.y - 34, "crown", gangs[holder.team].accent);
+    flashField("crown-burst");
+  }
+}
+
+function crownRushPulse(bounds) {
+  const holder = crownHolder();
+  if (!holder) {
+    updateCrownControl(bounds);
+    return;
+  }
+  holder.guard = Math.max(holder.guard, 80);
+  holder.haste = Math.max(holder.haste, 70);
+  holder.morale = Math.min(1.62, holder.morale + 0.05);
+  const enemies = nearbyUnits(holder, 1 - holder.team, 98).slice(0, 5);
+  enemies.forEach((enemy) => {
+    dealDamage(holder, enemy, 5);
+    spark(enemy.x, enemy.y);
+    if (enemy.hp <= 0) downUnit(enemy, holder, distance(holder, enemy));
+  });
+  recordMove(gangs[holder.team].short, "crown pressure pulse");
+}
+
 function stepUnit(unit, dt, bounds) {
   if (unit.down) return;
   unit.guard = Math.max(0, unit.guard - dt);
   unit.haste = Math.max(0, unit.haste - dt);
   unit.stunned = Math.max(0, unit.stunned - dt);
+  unit.amplified = Math.max(0, unit.amplified - dt);
   unit.special = Math.max(0, unit.special - dt);
   if (unit.stunned > 0) return;
   unit.cooldown = Math.max(0, unit.cooldown - dt);
+
+  const amp = matchedAmplifier(unit, bounds);
+  if (amp) {
+    unit.amplified = Math.max(unit.amplified, 24);
+    unit.special = Math.max(0, unit.special - 0.64 * dt);
+    unit.morale = Math.min(1.48, unit.morale + 0.002 * dt);
+    if (amp.boost === "guard") unit.guard = Math.max(unit.guard, 24);
+  }
+  if (state.battleType.id === "crown") {
+    const holder = crownHolder();
+    const zone = crownZone(bounds);
+    if (holder?.id === unit.id) {
+      unit.haste = Math.max(unit.haste, 20);
+      unit.guard = Math.max(unit.guard, 20);
+      unit.special = Math.max(0, unit.special - 0.38 * dt);
+    } else if (zone) {
+      const dToCrown = distance(unit, zone);
+      if (dToCrown > zone.radius * 0.72 && dToCrown < bounds.width * 0.42) {
+        const dxCrown = (zone.x - unit.x) / Math.max(1, dToCrown);
+        const dyCrown = (zone.y - unit.y) / Math.max(1, dToCrown);
+        unit.vx += dxCrown * 0.05 * dt;
+        unit.vy += dyCrown * 0.05 * dt;
+      }
+    }
+  }
 
   if (unit.role.name === "healer") {
     const friend = weakestFriend(unit);
     if (friend && unit.cooldown === 0) {
       const before = friend.hp;
       friend.hp = Math.min(friend.maxHp, friend.hp + 15);
+      if (unit.element?.boost === "heal" && unit.amplified > 0) friend.hp = Math.min(friend.maxHp, friend.hp + 6);
       unit.stats.heals += Math.round(friend.hp - before);
       unit.cooldown = unit.role.cadence;
       pop(friend.x, friend.y - 18, "+15", "#55cc6d");
@@ -543,6 +742,26 @@ function stepUnit(unit, dt, bounds) {
 }
 
 function maybeUseAdvancedMove(unit, target, d, bounds) {
+  const amp = matchedAmplifier(unit, bounds);
+  if (amp && d < 170 && Math.random() > 0.72) {
+    const enemies = nearbyUnits(target, 1 - unit.team, amp.boost === "special" ? 76 : 58).slice(0, 4);
+    enemies.forEach((enemy) => {
+      dealDamage(unit, enemy, amp.boost === "crit" ? 12 : 8);
+      enemy.stunned = Math.max(enemy.stunned, amp.boost === "special" ? 20 : 10);
+      spark(enemy.x, enemy.y);
+      if (enemy.hp <= 0) downUnit(enemy, unit, distance(unit, enemy));
+    });
+    unit.cooldown = Math.max(18, unit.role.cadence - 14);
+    unit.special = rand(240, 360);
+    unit.stats.specials += 1;
+    unit.stats.amps += 1;
+    unit.amplified = 80;
+    recordMove(gangs[unit.team].short, `${unit.element.name} amplifier overload`);
+    pop(unit.x, unit.y - 32, "amp", unit.element.color);
+    flashField("amp-burst");
+    return true;
+  }
+
   if (unit.role.name === "runner" && d > 70 && d < 180) {
     const dx = (target.x - unit.x) / Math.max(1, d);
     const dy = (target.y - unit.y) / Math.max(1, d);
@@ -628,9 +847,12 @@ function maybeUseAdvancedMove(unit, target, d, bounds) {
 }
 
 function attack(unit, target, d) {
-  const crit = Math.random() > 0.91;
+  const ampCrit = unit.element?.boost === "crit" && unit.amplified > 0;
+  const crit = Math.random() > (ampCrit ? 0.84 : 0.91);
   const roleBoost = unit.role.name === "captain" && aliveUnits(unit.team).length < 14 ? 1.35 : 1;
-  const damage = Math.round((unit.role.damage + rand(-3, 4)) * unit.morale * roleBoost * (crit ? 1.8 : 1));
+  const ampBoost = unit.amplified > 0 ? 1.18 : 1;
+  const crownBoost = state.battleType.id === "crown" && state.crownHolderId === unit.id ? 1.28 : 1;
+  const damage = Math.round((unit.role.damage + rand(-3, 4)) * unit.morale * roleBoost * ampBoost * crownBoost * (crit ? 1.8 : 1));
   const guarded = target.guard > 0 ? 0.64 : 1;
   const dealt = dealDamage(unit, target, Math.max(1, Math.round(damage * guarded)));
   unit.stats.hits += 1;
@@ -668,6 +890,8 @@ function downUnit(target, attacker, d) {
   saveSeason();
   const verb = d > 70 ? "snipes" : attacker.role.name === "bonker" ? "bonks" : "drops";
   addLog(`${gangs[attacker.team].name}: ${attacker.name} ${verb} ${target.name}.`);
+  state.reviewMoment = `#${attacker.number} ${attacker.name} clears one`;
+  flashField("ko-burst");
   showToast(`${gangs[attacker.team].short} score a takedown`);
   checkFinish();
 }
@@ -686,11 +910,15 @@ function gangCall() {
   showToast(`${gangs[team].name} surge`);
   el.weather.className = "weather confetti";
   setTimeout(() => {
-    el.weather.className = `weather ${state.weather === "dust" ? "dust" : ""}`;
+    el.weather.className = `weather ${weatherClass()}`;
   }, 900);
 }
 
 function centerControl(bounds) {
+  if (state.battleType.id === "rift") {
+    amplifierSurge(bounds);
+    return;
+  }
   const [leftPressure, rightPressure] = centerPressure(bounds);
   if (leftPressure === rightPressure || leftPressure + rightPressure < 4) return;
   const team = leftPressure > rightPressure ? 0 : 1;
@@ -700,6 +928,25 @@ function centerControl(bounds) {
   });
   recordMove(gangs[team].short, "center field control");
   addOccasionalLog(`${gangs[team].name} control the center and charge their specials.`);
+}
+
+function amplifierSurge(bounds) {
+  const zones = amplifierZones(bounds);
+  if (!zones.length) return;
+  const pressure = [0, 1].map((team) => zones.reduce((total, zone) => (
+    total + aliveUnits(team).filter((unit) => unit.element?.id === zone.id && distance(unit, zone) < zone.radius).length
+  ), 0));
+  if (pressure[0] === pressure[1] && pressure[0] === 0) return;
+  const team = pressure[0] >= pressure[1] ? 0 : 1;
+  aliveUnits(team).forEach((unit) => {
+    if (!matchedAmplifier(unit, bounds)) return;
+    unit.special = Math.max(0, unit.special - 34);
+    unit.haste = Math.max(unit.haste, 32);
+    unit.amplified = Math.max(unit.amplified, 70);
+    unit.stats.amps += 1;
+  });
+  recordMove(gangs[team].short, "amplifier lane control");
+  addOccasionalLog(`${gangs[team].name} tune the rift lanes and speed up their specials.`);
 }
 
 function checkFinish() {
@@ -722,6 +969,8 @@ function checkFinish() {
     el.matchTitle.textContent = state.league.phase === "champion" ? `${gangs[winner].name} win the Nouns Bowl` : `${gangs[winner].name} win`;
     addLog(`${gangs[winner].name} hold the open field with ${aliveUnits(winner).length} still standing.`);
     matchStars.forEach((line) => addLog(line));
+    state.reviewMoment = `${gangs[winner].short} win the field`;
+    flashField("final-burst", 1500);
     showToast(state.autoNext ? `${gangs[winner].name} win. Next match soon.` : `${gangs[winner].name} win the match`);
     if (state.autoNext) {
       state.nextTimer = setTimeout(resetMatch, 3200);
@@ -886,6 +1135,8 @@ function update(time = 0) {
     state.tick += dt;
     state.specialClock -= dt;
     state.centerClock -= dt;
+    state.ampClock -= dt;
+    state.crownClock -= dt;
     if (state.specialClock <= 0) {
       state.specialClock = rand(260, 430);
       gangCall();
@@ -893,6 +1144,17 @@ function update(time = 0) {
     if (state.centerClock <= 0) {
       state.centerClock = rand(130, 210);
       centerControl(bounds);
+    }
+    if (state.battleType.id === "rift" && state.ampClock <= 0) {
+      state.ampClock = rand(170, 260);
+      amplifierSurge(bounds);
+    }
+    if (state.battleType.id === "crown") {
+      updateCrownControl(bounds);
+      if (state.crownClock <= 0) {
+        state.crownClock = rand(92, 150);
+        crownRushPulse(bounds);
+      }
     }
     state.units.forEach((unit) => stepUnit(unit, dt, bounds));
     separateUnits(bounds);
@@ -938,6 +1200,8 @@ function render() {
     unit.node.classList.toggle("guarded", unit.guard > 0 && !unit.down);
     unit.node.classList.toggle("hasted", unit.haste > 0 && !unit.down);
     unit.node.classList.toggle("stunned", unit.stunned > 0 && !unit.down);
+    unit.node.classList.toggle("amplified", unit.amplified > 0 && !unit.down);
+    unit.node.classList.toggle("crowned", state.crownHolderId === unit.id && !unit.down);
     unit.node.classList.toggle("selected", state.selectedUnitId === unit.id);
   }
 
@@ -951,7 +1215,7 @@ function render() {
     <div class="stat"><span>Damage leader</span><strong>${unitStatLine(damageLeader, "damage")}</strong></div>
     <div class="stat"><span>KO leader</span><strong>${unitStatLine(koLeader, "kos")}</strong></div>
     <div class="stat"><span>Heal leader</span><strong>${unitStatLine(healLeader, "heals")}</strong></div>
-    <div class="stat"><span>Hot noun</span><strong>${unitStatLine(liveLeader, "live")}</strong></div>
+    <div class="stat"><span>${fieldStatLabel()}</span><strong>${fieldStatLine(liveLeader)}</strong></div>
   `;
   el.moveFeed.innerHTML = state.moveHistory
     .slice(0, 4)
@@ -982,9 +1246,39 @@ function renderTv(left, right) {
     const leader = left === right ? "Drawn field" : left > right ? `${gangs[0].short} win` : `${gangs[1].short} win`;
     el.tvMatchState.textContent = `${leader} · final ${left}-${right}`;
   } else {
-    el.tvMatchState.textContent = `${left + right} Nouns live · ${state.weather === "dust" ? "dust field" : "open field"}`;
+    const fieldName = state.battleType.id === "rift" ? "amplifier rift" : state.battleType.id === "crown" ? crownTvLine() : state.weather === "dust" ? "dust field" : "open field";
+    el.tvMatchState.textContent = `${left + right} Nouns live · ${fieldName}`;
   }
+  el.tvBigPlay.textContent = reviewPulseLine();
+  el.tvStarNoun.textContent = reviewMvpLine();
+  el.tvComeback.textContent = reviewComebackLine(left, right);
   el.tvPath.textContent = tvPathLine();
+}
+
+function reviewPulseLine() {
+  const latest = state.moveHistory[0];
+  if (!latest) return state.reviewMoment;
+  return `${latest.tag}: ${latest.text}`;
+}
+
+function reviewMvpLine() {
+  const star = statLeader("damage", (unit) => unit.stats.damage + unit.stats.kos * 28 + unit.stats.heals * 0.25);
+  if (!star) return "First hero loading";
+  const score = star.stats.kos > 0 ? `${star.stats.kos} KO` : `${star.stats.damage} damage`;
+  return `#${star.number} ${gangs[star.team].short} ${star.name} · ${score}`;
+}
+
+function reviewComebackLine(left, right) {
+  const diff = Math.abs(left - right);
+  if (state.finished) {
+    const winner = left >= right ? gangs[0].short : gangs[1].short;
+    return `${winner} survived with ${Math.max(left, right)} standing`;
+  }
+  if (diff <= 3) return "Live coin flip";
+  const leader = left > right ? gangs[0].short : gangs[1].short;
+  const chaser = left > right ? gangs[1].short : gangs[0].short;
+  if (diff >= 12) return `${leader} in control`;
+  return `${chaser} needs a swing`;
 }
 
 function tvLeagueLine() {
@@ -1029,6 +1323,32 @@ function unitStatLine(unit, key) {
   if (!unit) return "none";
   const value = key === "live" ? `${Math.max(0, Math.round(unit.hp))} hp` : `${unit.stats[key]} ${key === "kos" ? "KO" : key}`;
   return `#${unit.number} ${gangs[unit.team].short} ${unit.name} · ${value}`;
+}
+
+function amplifierStatLine() {
+  const active = aliveUnits().filter((unit) => unit.amplified > 0).length;
+  const leader = statLeader("amps");
+  return leader?.stats.amps ? `${active} boosted · #${leader.number} ${gangs[leader.team].short} ${leader.element?.name || "Amp"}` : `${active} boosted`;
+}
+
+function fieldStatLabel() {
+  if (state.battleType.id === "rift") return "Amp field";
+  if (state.battleType.id === "crown") return "Crown";
+  return "Hot noun";
+}
+
+function fieldStatLine(liveLeader) {
+  if (state.battleType.id === "rift") return amplifierStatLine();
+  if (state.battleType.id === "crown") {
+    const holder = crownHolder();
+    return holder ? `#${holder.number} ${gangs[holder.team].short} ${holder.name}` : "center crown open";
+  }
+  return unitStatLine(liveLeader, "live");
+}
+
+function crownTvLine() {
+  const holder = crownHolder();
+  return holder ? `crown: ${gangs[holder.team].short} #${holder.number}` : "crown rush";
 }
 
 function renderLeague() {
@@ -1119,9 +1439,9 @@ function renderScout() {
     <img alt="${selected.name}" src="${selected.asset}" />
     <div>
       <b>${gangs[selected.team].name}</b>
-      <span>${selected.role.name} / ${selected.role.move}</span>
+      <span>${selected.role.name} / ${selected.role.move}${selected.element ? ` / ${selected.element.name}` : ""}</span>
       <span>${hp}/${selected.maxHp} HP · ${selected.down ? "down" : "active"}</span>
-      <span>${s.kos} KO · ${s.damage} dmg · ${s.heals} heal · ${s.specials} specials</span>
+      <span>${s.kos} KO · ${s.damage} dmg · ${s.heals} heal · ${s.specials} specials · ${s.amps} amps</span>
     </div>
   `;
   const performers = [...state.units]
@@ -1139,6 +1459,8 @@ function renderScout() {
 function recordMove(tag, text) {
   state.moveHistory.unshift({ tag, text });
   state.moveHistory = state.moveHistory.slice(0, 9);
+  state.reviewMoment = `${tag}: ${text}`;
+  flashField("big-play");
   showToast(`${tag}: ${text}`);
 }
 
@@ -1160,6 +1482,12 @@ function showToast(text) {
   el.toast.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => el.toast.classList.remove("show"), 1000);
+}
+
+function flashField(className, duration = 700) {
+  el.field.classList.add(className);
+  clearTimeout(flashField[className]);
+  flashField[className] = setTimeout(() => el.field.classList.remove(className), duration);
 }
 
 function pop(x, y, text, color) {
