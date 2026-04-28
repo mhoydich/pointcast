@@ -277,15 +277,25 @@ export const GET: APIRoute = async () => {
         transport: 'http',
         protocol: 'json-rpc-2.0',
         protocolVersion: '2024-11-05',
-        server: { name: 'pointcast-drum', version: '0.1.0' },
+        server: { name: 'pointcast-drum', version: '0.2.0' },
         docs: 'https://pointcast.xyz/docs/mcp/pointcast-drum',
         tools: [
+          // drum hub (v0.1.0)
           'drum_list_rooms', 'drum_who_is_here', 'drum_top_drummers',
           'drum_now_playing', 'drum_global_count',
           'drum_tap', 'drum_play_instrument', 'drum_sing_voice', 'drum_set_track',
+          // whole site (v0.2.0)
+          'town_map', 'surfaces_list', 'presence_snapshot', 'now_snapshot',
+          'today_highlights', 'blocks_recent', 'block_read', 'blocks_by_channel',
+          'blocks_search', 'local_snapshot', 'weather_get', 'editions_summary',
+          'contracts_status', 'channels_list', 'agents_manifest',
         ],
-        resources: ['drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema'],
-        note: 'Stateless MCP server wrapping the drum hub. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page.',
+        resources: [
+          'drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema',
+          'pointcast://map', 'pointcast://now', 'pointcast://feed',
+          'pointcast://contracts', 'pointcast://channels',
+        ],
+        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. v0.2.0 covers drum hub + town map + presence + blocks + channels + contracts + weather + editions.',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
