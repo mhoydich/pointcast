@@ -1,0 +1,441 @@
+---
+/**
+ * /pace — the movement room. A walking companion.
+ *
+ * Pattern: /meditate (still) + /bath (color) + /pace (movement). Sets a
+ * walking pace via three preset BPMs (slow / medium / brisk), plays an
+ * optional Web Audio metronome (woodblock click + LFO drift), tracks
+ * elapsed time, and reads DeviceMotionEvent for an opt-in step counter
+ * (graceful no-op if unavailable).
+ *
+ * No backend, no saves. localStorage-only for the last-used pace.
+ * Companion to /meditate, /bath, /room, /anytime.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/pace — the movement room · PointCast';
+const description =
+  'A walking companion. Pick a pace — slow, medium, brisk — start a metronome, count your steps. /pace is the third member of the room set: still, color, movement.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="pace" id="pace-main" data-pace="medium">
+
+    <header class="pace__head">
+      <p class="pace__kicker">ROOM · PACE · EL SEGUNDO</p>
+      <h1 class="pace__title">Step out. Find your pace.</h1>
+      <p class="pace__dek">
+        A walking companion. Three paces, one metronome, an opt-in step counter.
+        For a walk that wants a tempo without wanting a playlist.
+      </p>
+    </header>
+
+    <!-- Pace selector — three panels -->
+    <nav class="pace__paces" aria-label="Walking pace">
+      <button class="pace__panel" data-pace="slow" aria-pressed="false">
+        <span class="pace__bpm">60</span>
+        <span class="pace__bpm-label">BPM</span>
+        <span class="pace__name">SLOW</span>
+        <span class="pace__sub">a stroll · the marine layer · noticing</span>
+      </button>
+      <button class="pace__panel" data-pace="medium" aria-pressed="true">
+        <span class="pace__bpm">90</span>
+        <span class="pace__bpm-label">BPM</span>
+        <span class="pace__name">MEDIUM</span>
+        <span class="pace__sub">errand pace · clear-headed · steady</span>
+      </button>
+      <button class="pace__panel" data-pace="brisk" aria-pressed="false">
+        <span class="pace__bpm">120</span>
+        <span class="pace__bpm-label">BPM</span>
+        <span class="pace__name">BRISK</span>
+        <span class="pace__sub">somewhere to be · the body opens · warmer</span>
+      </button>
+    </nav>
+
+    <!-- Walk state: timer + metronome toggle + step counter -->
+    <section class="pace__state">
+      <div class="pace__cell pace__cell--time">
+        <span class="pace__cell-label">ELAPSED</span>
+        <span class="pace__cell-value" id="pace-elapsed">00:00</span>
+        <button class="pace__cell-btn" id="pace-timer-btn" type="button">START</button>
+      </div>
+      <div class="pace__cell pace__cell--click">
+        <span class="pace__cell-label">METRONOME</span>
+        <span class="pace__cell-value" id="pace-bpm-display">90 BPM</span>
+        <button class="pace__cell-btn" id="pace-click-btn" type="button" data-on="0">SOUND OFF</button>
+      </div>
+      <div class="pace__cell pace__cell--steps">
+        <span class="pace__cell-label">STEPS</span>
+        <span class="pace__cell-value" id="pace-steps">0</span>
+        <button class="pace__cell-btn" id="pace-steps-btn" type="button" data-state="off">ENABLE</button>
+      </div>
+    </section>
+
+    <p class="pace__note" id="pace-note">
+      tap a pace · start the timer · turn the click on if it helps · move
+    </p>
+
+    <nav class="pace__links" aria-label="Other rooms">
+      <a class="pace__link" href="/meditate"><span class="pace__link-label">/MEDITATE</span><span class="pace__link-desc">the still room · breathing</span></a>
+      <a class="pace__link" href="/bath"><span class="pace__link-label">/BATH</span><span class="pace__link-desc">the color room · 8 moods</span></a>
+      <a class="pace__link" href="/room"><span class="pace__link-label">/ROOM</span><span class="pace__link-desc">the mix room · 10 tracks</span></a>
+      <a class="pace__link" href="/anytime"><span class="pace__link-label">/ANYTIME</span><span class="pace__link-desc">the single-song room</span></a>
+      <a class="pace__link" href="/"><span class="pace__link-label">/</span><span class="pace__link-desc">back to the broadcast</span></a>
+    </nav>
+
+    <footer class="pace__foot">
+      <span>on air · el segundo · cc0 · no saves · just pace</span>
+      <span id="pace-clock">—</span>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  var PACE_BPM = { slow: 60, medium: 90, brisk: 120 };
+  var PACE_NOTES = {
+    slow:   'a stroll · let the surroundings happen · the marine layer counts',
+    medium: 'errand pace · the body falls into a rhythm · clear-headed walking',
+    brisk:  'somewhere to be · breath deepens · the day opens up around you',
+  };
+  var TICK_FREQ = { slow: 660, medium: 740, brisk: 820 };
+
+  var current = (function () {
+    try { return localStorage.getItem('pc:pace:last') || 'medium'; } catch (e) { return 'medium'; }
+  })();
+  var audioCtx = null;
+  var metronomeOn = false;
+  var metronomeTimer = null;
+  var lastTickAt = 0;
+  var timerOn = false;
+  var startedAt = 0;
+  var elapsedAcc = 0;
+  var stepsOn = false;
+  var stepCount = 0;
+  var lastAccelMag = null;
+
+  function setPace(p) {
+    if (!PACE_BPM[p]) p = 'medium';
+    current = p;
+    try { localStorage.setItem('pc:pace:last', p); } catch (e) {}
+    var main = document.getElementById('pace-main');
+    if (main) main.dataset.pace = p;
+    document.querySelectorAll('.pace__panel').forEach(function (b) {
+      var on = b.dataset.pace === p;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.classList.toggle('pace__panel--active', on);
+    });
+    var bpmDisp = document.getElementById('pace-bpm-display');
+    if (bpmDisp) bpmDisp.textContent = PACE_BPM[p] + ' BPM';
+    var note = document.getElementById('pace-note');
+    if (note) note.textContent = PACE_NOTES[p] || '';
+    if (metronomeOn) restartMetronome();
+  }
+
+  function tick() {
+    if (!audioCtx || !metronomeOn) return;
+    var now = audioCtx.currentTime;
+    var freq = TICK_FREQ[current] || 740;
+    var osc = audioCtx.createOscillator();
+    var g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.06);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.18, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + 0.1);
+  }
+
+  function startMetronome() {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!audioCtx) audioCtx = new AC();
+    metronomeOn = true;
+    var bpm = PACE_BPM[current] || 90;
+    var intervalMs = 60_000 / bpm;
+    if (metronomeTimer) clearInterval(metronomeTimer);
+    tick();
+    metronomeTimer = setInterval(tick, intervalMs);
+    var btn = document.getElementById('pace-click-btn');
+    if (btn) { btn.textContent = 'SOUND ON'; btn.setAttribute('data-on', '1'); }
+  }
+  function stopMetronome() {
+    metronomeOn = false;
+    if (metronomeTimer) { clearInterval(metronomeTimer); metronomeTimer = null; }
+    var btn = document.getElementById('pace-click-btn');
+    if (btn) { btn.textContent = 'SOUND OFF'; btn.setAttribute('data-on', '0'); }
+  }
+  function restartMetronome() { stopMetronome(); startMetronome(); }
+  function toggleMetronome() { metronomeOn ? stopMetronome() : startMetronome(); }
+
+  function fmtElapsed(ms) {
+    var s = Math.floor(ms / 1000);
+    var mm = String(Math.floor(s / 60)).padStart(2, '0');
+    var ss = String(s % 60).padStart(2, '0');
+    return mm + ':' + ss;
+  }
+
+  function tickElapsed() {
+    if (!timerOn) return;
+    var now = Date.now();
+    var ms = elapsedAcc + (now - startedAt);
+    var el = document.getElementById('pace-elapsed');
+    if (el) el.textContent = fmtElapsed(ms);
+  }
+
+  function startTimer() {
+    timerOn = true;
+    startedAt = Date.now();
+    var btn = document.getElementById('pace-timer-btn');
+    if (btn) btn.textContent = 'PAUSE';
+    if (window._paceTimerInterval) clearInterval(window._paceTimerInterval);
+    window._paceTimerInterval = setInterval(tickElapsed, 250);
+  }
+  function pauseTimer() {
+    timerOn = false;
+    elapsedAcc += Date.now() - startedAt;
+    if (window._paceTimerInterval) { clearInterval(window._paceTimerInterval); window._paceTimerInterval = null; }
+    var btn = document.getElementById('pace-timer-btn');
+    if (btn) btn.textContent = 'RESUME';
+  }
+  function toggleTimer() { timerOn ? pauseTimer() : startTimer(); }
+
+  function handleMotion(ev) {
+    if (!stepsOn) return;
+    var a = ev.accelerationIncludingGravity || ev.acceleration;
+    if (!a) return;
+    var mag = Math.sqrt((a.x || 0) * (a.x || 0) + (a.y || 0) * (a.y || 0) + (a.z || 0) * (a.z || 0));
+    if (lastAccelMag === null) { lastAccelMag = mag; return; }
+    var delta = mag - lastAccelMag;
+    if (delta > 4) {
+      stepCount++;
+      var el = document.getElementById('pace-steps');
+      if (el) el.textContent = String(stepCount);
+    }
+    lastAccelMag = mag;
+  }
+
+  async function enableSteps() {
+    if (typeof DeviceMotionEvent === 'undefined') {
+      var btn = document.getElementById('pace-steps-btn');
+      if (btn) { btn.textContent = 'NOT SUPPORTED'; btn.disabled = true; }
+      return;
+    }
+    try {
+      // iOS 13+ requires explicit permission grant.
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        var perm = await DeviceMotionEvent.requestPermission();
+        if (perm !== 'granted') {
+          var btn2 = document.getElementById('pace-steps-btn');
+          if (btn2) btn2.textContent = 'PERMISSION DENIED';
+          return;
+        }
+      }
+      window.addEventListener('devicemotion', handleMotion);
+      stepsOn = true;
+      var bn = document.getElementById('pace-steps-btn');
+      if (bn) { bn.textContent = 'COUNTING'; bn.setAttribute('data-state', 'on'); }
+    } catch (e) {
+      var bx = document.getElementById('pace-steps-btn');
+      if (bx) bx.textContent = 'ERROR';
+    }
+  }
+
+  function tickClock() {
+    var el = document.getElementById('pace-clock');
+    if (!el) return;
+    var n = new Date();
+    el.textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') + ' PT';
+  }
+
+  // Wire it up
+  document.querySelectorAll('.pace__panel').forEach(function (b) {
+    b.addEventListener('click', function () { setPace(b.dataset.pace); });
+  });
+  var tBtn = document.getElementById('pace-timer-btn');
+  if (tBtn) tBtn.addEventListener('click', toggleTimer);
+  var cBtn = document.getElementById('pace-click-btn');
+  if (cBtn) cBtn.addEventListener('click', toggleMetronome);
+  var sBtn = document.getElementById('pace-steps-btn');
+  if (sBtn) sBtn.addEventListener('click', enableSteps);
+
+  setPace(current);
+  tickClock();
+  setInterval(tickClock, 60_000);
+})();
+</script>
+
+<style is:global>
+  .pace {
+    --bg-slow:   #e8d8b8;
+    --bg-medium: #f0e2bc;
+    --bg-brisk:  #f7d599;
+    --ink:       #1a1408;
+    --ink-soft:  #5f5e5a;
+    --rule:      #d8cdb8;
+    --warm:      #c4821a;
+    --accent:    #185FA5;
+
+    min-height: calc(100vh - 60px);
+    padding: 40px 20px 60px;
+    background: var(--bg-medium);
+    color: var(--ink);
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    transition: background 1.4s ease;
+  }
+  .pace[data-pace="slow"]   { background: var(--bg-slow); }
+  .pace[data-pace="medium"] { background: var(--bg-medium); }
+  .pace[data-pace="brisk"]  { background: var(--bg-brisk); }
+
+  .pace__head {
+    max-width: 720px;
+    margin: 0 auto 28px;
+    text-align: center;
+  }
+  .pace__kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.26em; font-weight: 700;
+    margin: 0 0 14px; opacity: 0.62;
+  }
+  .pace__title {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 42px);
+    line-height: 1.08; margin: 0 0 12px;
+    letter-spacing: -0.01em;
+    font-style: italic;
+  }
+  .pace__dek {
+    font-family: Georgia, serif;
+    font-size: 15px; line-height: 1.5;
+    margin: 0 auto; max-width: 520px;
+    opacity: 0.86;
+  }
+
+  /* Pace panels — 3 large tiles */
+  .pace__paces {
+    max-width: 880px; margin: 0 auto 22px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .pace__panel {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 22px 14px 18px;
+    background: #fff;
+    border: 2px solid var(--ink);
+    box-shadow: 4px 4px 0 0 var(--ink);
+    cursor: pointer;
+    color: inherit;
+    font-family: 'JetBrains Mono Variable', monospace;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pace__panel:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 var(--ink); }
+  .pace__panel--active, .pace__panel[aria-pressed="true"] {
+    background: var(--warm);
+    color: #fff;
+  }
+  .pace__bpm {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 48px; font-weight: 600; line-height: 1; letter-spacing: -0.02em;
+  }
+  .pace__bpm-label { font-size: 9px; letter-spacing: 0.20em; opacity: 0.7; margin-bottom: 8px; }
+  .pace__name { font-size: 12px; letter-spacing: 0.18em; font-weight: 700; }
+  .pace__sub {
+    font-family: Georgia, serif;
+    font-size: 12px; line-height: 1.35;
+    opacity: 0.78; text-align: center;
+    margin-top: 4px;
+    font-weight: normal;
+    letter-spacing: 0;
+  }
+  .pace__panel--active .pace__sub { opacity: 0.92; }
+
+  /* State row — 3 cells */
+  .pace__state {
+    max-width: 880px; margin: 0 auto 18px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .pace__cell {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1.5px solid var(--ink);
+    box-shadow: 3px 3px 0 0 var(--ink);
+    font-family: 'JetBrains Mono Variable', monospace;
+  }
+  .pace__cell-label { font-size: 9px; letter-spacing: 0.18em; font-weight: 700; opacity: 0.6; }
+  .pace__cell-value {
+    font-family: 'DM Serif Display', 'Lora', Georgia, serif;
+    font-size: 28px; font-weight: 600; letter-spacing: -0.01em; line-height: 1;
+    margin: 4px 0 8px;
+  }
+  .pace__cell-btn {
+    background: var(--ink); color: #f5efe4;
+    border: none;
+    padding: 6px 10px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px; letter-spacing: 0.18em; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .pace__cell-btn:hover { background: var(--warm); }
+  .pace__cell-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pace__cell-btn[data-on="1"] { background: var(--warm); }
+  .pace__cell-btn[data-state="on"] { background: var(--warm); }
+
+  /* Note */
+  .pace__note {
+    max-width: 720px; margin: 0 auto 22px;
+    font-family: Georgia, serif;
+    font-size: 14px; line-height: 1.5;
+    text-align: center;
+    opacity: 0.8;
+    font-style: italic;
+  }
+
+  /* Links */
+  .pace__links {
+    max-width: 880px; margin: 0 auto 22px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px;
+  }
+  .pace__link {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 9px 12px;
+    background: rgba(255, 248, 228, 0.55);
+    border: 1.5px solid rgba(26, 20, 8, 0.18);
+    text-decoration: none; color: inherit;
+    transition: background 0.18s ease, transform 0.12s ease;
+  }
+  .pace__link:hover { background: rgba(255, 220, 120, 0.4); transform: translateY(-1px); }
+  .pace__link-label {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.16em; font-weight: 700;
+  }
+  .pace__link-desc { font-size: 11.5px; font-family: Georgia, serif; opacity: 0.78; line-height: 1.35; }
+
+  /* Footer */
+  .pace__foot {
+    max-width: 880px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.18em;
+    padding-top: 14px; border-top: 1px dashed rgba(26, 20, 8, 0.22);
+    opacity: 0.7;
+  }
+
+  @media (max-width: 720px) {
+    .pace__paces { grid-template-columns: 1fr; gap: 10px; }
+    .pace__state { grid-template-columns: 1fr; gap: 8px; }
+    .pace__bpm { font-size: 38px; }
+    .pace__cell-value { font-size: 24px; }
+  }
+</style>
