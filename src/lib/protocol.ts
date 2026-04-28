@@ -1,7 +1,71 @@
-export const PROTOCOL_VERSION = 'pcp-1.0';
+export const PROTOCOL_VERSION = 'pcp-1.0.1';
+export const PROTOCOL_PACKET_VERSION = 'pcp-1.0';
+export const PROTOCOL_PACKET_MEDIA_TYPE = 'pcp-1.0/block-packet+json';
 export const PROTOCOL_NAME = 'PointCast Peer Message Protocol';
 export const PROTOCOL_SHORT_NAME = 'PCP/1';
-export const PROTOCOL_UPDATED_AT = '2026-04-27T06:20:00Z';
+export const PROTOCOL_UPDATED_AT = '2026-04-28T05:40:00Z';
+
+export const PROTOCOL_STORAGE_KEYS = {
+  profile: 'pcp:v1:peer-profile',
+  inbox: 'pcp:v1:inbox',
+  outbox: 'pcp:v1:outbox',
+  receipts: 'pcp:v1:receipts',
+  trustedPeers: 'pcp:v1:trusted-peers',
+};
+
+export const PROTOCOL_RECEIPT_TYPES = [
+  'created',
+  'imported',
+  'delivered',
+  'read',
+  'accepted',
+  'rejected',
+  'superseded',
+];
+
+export const PROTOCOL_CANONICAL_JSON_RULES = [
+  'UTF-8 JSON with object keys sorted lexicographically at every depth.',
+  'Undefined values are omitted; null values are preserved.',
+  'Packet id material excludes id and signature.',
+  'Signature material includes id and excludes signature.',
+  'Packet ids are pc1:<base32(sha256(canonical unsigned packet))> in v1.1 browser clients.',
+];
+
+export const PROTOCOL_VALIDATION_RULES = [
+  'version must be pcp-1.0 for Block Packets.',
+  'from must be peer:ed25519:<base64url raw public key>.',
+  'to must be an array of peer ids, empty only for local drafts or public broadcast.',
+  'channel and type must match the PointCast Block primitives.',
+  'body must be 1-4000 characters before any public Block conversion.',
+  'permissions.visibility must be local, public, or private.',
+  'signature.alg must be Ed25519 for signed v1 packets.',
+];
+
+export const PROTOCOL_COMPATIBILITY_NOTES = [
+  'Nostr bridges should wrap the original PCP packet in a NIP-01/NIP-78 event and add a bridge receipt.',
+  'Farcaster Frames and Mini Apps should link to the packet or Block permalink instead of rewriting authorship.',
+  'Tezos wallet proofs can be attached as refs/proofs; they do not replace the peer key signature.',
+  'ActivityPub bridges should preserve the original packet id in attachment metadata.',
+];
+
+export const PROTOCOL_AGENT_RECEIPTS = [
+  {
+    type: 'accepted',
+    use: 'An agent has accepted a task packet and is beginning work.',
+  },
+  {
+    type: 'superseded',
+    use: 'A later task packet or result packet replaces an earlier one.',
+  },
+  {
+    type: 'rejected',
+    use: 'An agent declines work, usually with a reason and citation refs.',
+  },
+  {
+    type: 'delivered',
+    use: 'A result packet or citation bundle reached the intended peer or public Block surface.',
+  },
+];
 
 export const PROTOCOL_PRINCIPLES = [
   {
@@ -43,7 +107,7 @@ export const PROTOCOL_LAYERS = [
     summary: 'A signed Block Packet that can render as a message, note, receipt, invite, presence ping, or file pointer.',
     must: [
       'Packets include version, id, from, createdAt, channel, type, body, refs, permissions, and signature.',
-      'Packet ids are content-derived: pc1:<base32(blake3(canonical-json))>.',
+      'Packet ids are content-derived: pc1:<base32(sha256(canonical-json))>.',
       'Large media lives outside the packet as content-addressed attachments.',
     ],
   },
@@ -80,7 +144,7 @@ export const PROTOCOL_LAYERS = [
 ];
 
 export const PROTOCOL_PACKET_EXAMPLE = {
-  version: PROTOCOL_VERSION,
+  version: PROTOCOL_PACKET_VERSION,
   id: 'pc1:b7q6x5examplepacketid',
   from: 'peer:ed25519:z6MkPointCastExample',
   to: ['peer:ed25519:z6MkFriendExample'],
@@ -143,6 +207,8 @@ export const PROTOCOL_DISCOVERY = {
   route: 'https://pointcast.xyz/protocol',
   json: 'https://pointcast.xyz/protocol.json',
   wellKnown: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
+  client: 'https://pointcast.xyz/messages',
+  relay: 'https://pointcast.xyz/api/pcp/relay',
   block: 'https://pointcast.xyz/b/0378',
   github: 'https://github.com/mhoydich/pointcast',
 };
@@ -153,15 +219,47 @@ export function buildProtocolManifest() {
     name: PROTOCOL_NAME,
     shortName: PROTOCOL_SHORT_NAME,
     version: PROTOCOL_VERSION,
-    status: 'v1 published',
+    packetVersion: PROTOCOL_PACKET_VERSION,
+    packetMediaType: PROTOCOL_PACKET_MEDIA_TYPE,
+    status: 'v1.0.1 hardening + v1.1 local client',
     updatedAt: PROTOCOL_UPDATED_AT,
     origin: 'https://pointcast.xyz',
     purpose:
       'A peer-to-peer messaging protocol for 2026 and 2027: signed Block packets, replaceable relays, local-first logs, and first-class human plus agent peers.',
     discovery: PROTOCOL_DISCOVERY,
+    client: {
+      human: PROTOCOL_DISCOVERY.client,
+      storageKeys: PROTOCOL_STORAGE_KEYS,
+      capabilities: [
+        'Generate a browser-local Ed25519 peer identity.',
+        'Compose and sign Block Packets locally.',
+        'Store inbox, outbox, receipts, and trusted peers in localStorage.',
+        'Export and import packets as JSONL.',
+        'Copy a selected packet into a PointCast Block draft.',
+      ],
+      warning: 'The browser client is a protocol proof, not a secure production messenger. Private-key material is browser-local and exportable for transparency.',
+    },
+    packetSchema: {
+      mediaType: PROTOCOL_PACKET_MEDIA_TYPE,
+      canonicalJsonRules: PROTOCOL_CANONICAL_JSON_RULES,
+      validationRules: PROTOCOL_VALIDATION_RULES,
+      receiptTypes: PROTOCOL_RECEIPT_TYPES,
+    },
+    relayPrototype: {
+      endpoint: PROTOCOL_DISCOVERY.relay,
+      status: 'prototype endpoint; requires PC_PCP_RELAY_KV before storing',
+      plaintextPolicy: 'Rejects packets containing plaintext body/message/text fields. Relay accepts encrypted envelopes only.',
+      lookup: 'GET ?recipient=<peer-id>&topic=<topic> returns encrypted packets for that recipient/topic when KV is bound.',
+    },
+    agentUse: {
+      peerIdentity: 'Agents use peer:ed25519 ids and must mark their profile kind as agent.',
+      receipts: PROTOCOL_AGENT_RECEIPTS,
+      citationRule: 'Agent result packets should cite source packets in refs[] and preserve original packet ids.',
+    },
     principles: PROTOCOL_PRINCIPLES,
     layers: PROTOCOL_LAYERS,
     packetExample: PROTOCOL_PACKET_EXAMPLE,
+    compatibilityNotes: PROTOCOL_COMPATIBILITY_NOTES,
     roadmap: PROTOCOL_ROADMAP,
     compatibility: {
       currentPointCastSurfaces: [

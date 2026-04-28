@@ -91,6 +91,7 @@ export const GET: APIRoute = async () => {
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         manifesto: 'https://pointcast.xyz/manifesto',
         protocol: 'https://pointcast.xyz/protocol',
+        messages: 'https://pointcast.xyz/messages',
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',
         nounsCola: 'https://pointcast.xyz/nouns-cola',
@@ -215,6 +216,7 @@ export const GET: APIRoute = async () => {
       api: {
         ping: 'https://pointcast.xyz/api/ping',
         publish: 'https://pointcast.xyz/api/publish',
+        pcpRelay: 'https://pointcast.xyz/api/pcp/relay',
         indexnow: 'https://pointcast.xyz/api/indexnow',
         queue: 'https://pointcast.xyz/api/queue',
         drop: 'https://pointcast.xyz/api/drop',
@@ -425,13 +427,24 @@ export const GET: APIRoute = async () => {
 
     peerMessagingProtocol: {
       name: 'PointCast Peer Message Protocol',
-      version: 'pcp-1.0',
-      status: 'v1 published',
+      version: 'pcp-1.0.1',
+      packetMediaType: 'pcp-1.0/block-packet+json',
+      status: 'v1.0.1 hardening + v1.1 local client',
       summary: 'Signed Block packets, replaceable relays, local-first logs, and first-class human plus agent peers for 2026 and 2027.',
       human: 'https://pointcast.xyz/protocol',
+      client: 'https://pointcast.xyz/messages',
       manifest: 'https://pointcast.xyz/protocol.json',
       wellKnown: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
+      relay: 'https://pointcast.xyz/api/pcp/relay',
       announcementBlock: 'https://pointcast.xyz/b/0378',
+      storageKeys: {
+        profile: 'pcp:v1:peer-profile',
+        inbox: 'pcp:v1:inbox',
+        outbox: 'pcp:v1:outbox',
+        receipts: 'pcp:v1:receipts',
+        trustedPeers: 'pcp:v1:trusted-peers',
+      },
+      agentUse: 'Agents identify with peer:ed25519 ids and emit accepted/rejected/delivered/superseded receipts with refs[] citations.',
     },
 
     generativeEngineOptimization: {

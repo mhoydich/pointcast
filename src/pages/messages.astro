@@ -1,0 +1,879 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description =
+  'Local-first PointCast Peer Message Protocol client: create a peer identity, sign Block Packets, export/import JSONL, and draft public Blocks.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  '@id': 'https://pointcast.xyz/messages',
+  name: 'PointCast Messages',
+  applicationCategory: 'CommunicationApplication',
+  operatingSystem: 'Web',
+  description,
+  url: 'https://pointcast.xyz/messages',
+};
+---
+
+<BlockLayout
+  title="Messages"
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/protocol.json', title: 'PointCast Peer Message Protocol' },
+    { type: 'application/json', href: '/.well-known/pointcast-peer.json', title: 'PointCast peer discovery' },
+  ]}
+>
+  <div class="messages-page" data-pcp-app>
+    <header class="app-head">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span>/</span>
+        <a href="/protocol">protocol</a>
+        <span>/</span>
+        <strong>messages</strong>
+      </nav>
+      <div class="app-title">
+        <p class="kicker">PCP/1 CLIENT · LOCAL-FIRST</p>
+        <h1>Messages</h1>
+        <p>
+          Create a local peer, sign a Block Packet, keep it in your browser,
+          export/import JSONL, and copy any packet into a public Block draft.
+        </p>
+      </div>
+      <div class="status-line" data-status>Loading local peer state.</div>
+    </header>
+
+    <section class="workspace" aria-label="PointCast peer message workspace">
+      <section class="panel identity-panel" aria-labelledby="identity-title">
+        <div class="panel-head">
+          <p class="kicker">IDENTITY</p>
+          <h2 id="identity-title">Local peer</h2>
+        </div>
+        <label>
+          <span>Name</span>
+          <input data-display-name value="PointCast peer" autocomplete="nickname" />
+        </label>
+        <label>
+          <span>Kind</span>
+          <select data-peer-kind>
+            <option value="human">human</option>
+            <option value="agent">agent</option>
+          </select>
+        </label>
+        <div class="peer-id-box">
+          <span>Peer id</span>
+          <code data-peer-id>none yet</code>
+        </div>
+        <div class="button-row">
+          <button type="button" data-create-peer>Create / rotate key</button>
+          <button type="button" data-copy-peer>Copy peer id</button>
+        </div>
+        <p class="fine-print">
+          Prototype note: the private key is exportable and stays in this browser's localStorage.
+          Do not use it for secrets yet.
+        </p>
+      </section>
+
+      <section class="panel compose-panel" aria-labelledby="compose-title">
+        <div class="panel-head">
+          <p class="kicker">COMPOSE</p>
+          <h2 id="compose-title">Sign a Block Packet</h2>
+        </div>
+        <label>
+          <span>To peer id</span>
+          <input data-to-peer placeholder="peer:ed25519:..." autocomplete="off" />
+        </label>
+        <label>
+          <span>Topic</span>
+          <input data-topic value="pcp/pointcast/messages" autocomplete="off" />
+        </label>
+        <div class="compose-grid">
+          <label>
+            <span>Visibility</span>
+            <select data-visibility>
+              <option value="local">local proof</option>
+              <option value="public">public broadcast</option>
+              <option value="private">private intent</option>
+            </select>
+          </label>
+          <label>
+            <span>Agent readable</span>
+            <select data-agent-readable>
+              <option value="true">yes</option>
+              <option value="false">no</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          <span>Message</span>
+          <textarea data-body rows="7" maxlength="4000" placeholder="meet me on the block layer"></textarea>
+        </label>
+        <div class="button-row">
+          <button type="button" data-sign-store>Sign + store</button>
+          <button type="button" data-clear-compose>Clear</button>
+        </div>
+      </section>
+
+      <section class="panel log-panel" aria-labelledby="log-title">
+        <div class="panel-head">
+          <p class="kicker">THREAD</p>
+          <h2 id="log-title">Local log</h2>
+        </div>
+        <div class="log-tabs" role="tablist" aria-label="Message filters">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="outbox" aria-pressed="false">Outbox</button>
+          <button type="button" data-filter="inbox" aria-pressed="false">Inbox</button>
+        </div>
+        <ol class="packet-list" data-packet-list></ol>
+      </section>
+
+      <section class="panel exchange-panel" aria-labelledby="exchange-title">
+        <div class="panel-head">
+          <p class="kicker">JSONL</p>
+          <h2 id="exchange-title">Export / import</h2>
+        </div>
+        <textarea data-jsonl rows="11" spellcheck="false" placeholder="Exported packets appear here. Paste JSONL here to import."></textarea>
+        <div class="button-row">
+          <button type="button" data-export-jsonl>Export log</button>
+          <button type="button" data-import-jsonl>Import JSONL</button>
+          <button type="button" data-clear-log>Clear local log</button>
+        </div>
+      </section>
+
+      <section class="panel block-panel" aria-labelledby="block-title">
+        <div class="panel-head">
+          <p class="kicker">PUBLIC BLOCK DRAFT</p>
+          <h2 id="block-title">Selected packet</h2>
+        </div>
+        <textarea data-block-draft rows="12" spellcheck="false" placeholder="Select a packet to generate Block copy."></textarea>
+        <div class="button-row">
+          <button type="button" data-copy-block>Copy Block draft</button>
+          <a href="/publish">Open /publish</a>
+        </div>
+      </section>
+
+      <section class="panel receipts-panel" aria-labelledby="receipts-title">
+        <div class="panel-head">
+          <p class="kicker">RECEIPTS</p>
+          <h2 id="receipts-title">Local receipts</h2>
+        </div>
+        <ol class="receipt-list" data-receipt-list></ol>
+      </section>
+    </section>
+
+    <aside class="relay-note" aria-label="Relay status">
+      <strong>Relay status</strong>
+      <p>
+        The relay endpoint exists at <code>/api/pcp/relay</code>, but this client
+        does not send plaintext to it. Relay delivery starts only with encrypted
+        envelopes.
+      </p>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script>
+  import {
+    PROTOCOL_STORAGE_KEYS,
+    buildPacketDraft,
+    generatePeerIdentity,
+    parsePacketsJsonl,
+    serializePacketsJsonl,
+    shortPeerId,
+    signPacket,
+    validatePacket,
+    verifyPacketSignature,
+  } from '../lib/protocol-packet.js';
+
+  const $ = (selector) => document.querySelector(selector);
+  const els = {
+    status: $('[data-status]'),
+    displayName: $('[data-display-name]'),
+    peerKind: $('[data-peer-kind]'),
+    peerId: $('[data-peer-id]'),
+    createPeer: $('[data-create-peer]'),
+    copyPeer: $('[data-copy-peer]'),
+    toPeer: $('[data-to-peer]'),
+    topic: $('[data-topic]'),
+    visibility: $('[data-visibility]'),
+    agentReadable: $('[data-agent-readable]'),
+    body: $('[data-body]'),
+    signStore: $('[data-sign-store]'),
+    clearCompose: $('[data-clear-compose]'),
+    packetList: $('[data-packet-list]'),
+    receiptList: $('[data-receipt-list]'),
+    jsonl: $('[data-jsonl]'),
+    exportJsonl: $('[data-export-jsonl]'),
+    importJsonl: $('[data-import-jsonl]'),
+    clearLog: $('[data-clear-log]'),
+    blockDraft: $('[data-block-draft]'),
+    copyBlock: $('[data-copy-block]'),
+    filters: Array.from(document.querySelectorAll('[data-filter]')),
+  };
+
+  let activeFilter = 'all';
+  let selectedPacketId = null;
+
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writeJson(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function profile() {
+    return readJson(PROTOCOL_STORAGE_KEYS.profile, null);
+  }
+
+  function packets(key) {
+    const value = readJson(key, []);
+    return Array.isArray(value) ? value : [];
+  }
+
+  function outbox() {
+    return packets(PROTOCOL_STORAGE_KEYS.outbox);
+  }
+
+  function inbox() {
+    return packets(PROTOCOL_STORAGE_KEYS.inbox);
+  }
+
+  function receipts() {
+    return packets(PROTOCOL_STORAGE_KEYS.receipts);
+  }
+
+  function setStatus(message, tone = 'neutral') {
+    if (!els.status) return;
+    els.status.textContent = message;
+    els.status.dataset.tone = tone;
+  }
+
+  function upsertPacket(key, packet) {
+    const items = packets(key).filter((item) => item.id !== packet.id);
+    items.unshift(packet);
+    writeJson(key, items.slice(0, 200));
+  }
+
+  function addReceipt(type, packetId, note) {
+    const next = {
+      type,
+      packetId,
+      note,
+      at: new Date().toISOString(),
+    };
+    writeJson(PROTOCOL_STORAGE_KEYS.receipts, [next, ...receipts()].slice(0, 200));
+  }
+
+  async function createPeer() {
+    const displayName = els.displayName?.value?.trim() || 'PointCast peer';
+    const kind = els.peerKind?.value || 'human';
+    try {
+      const next = await generatePeerIdentity({ displayName, kind });
+      writeJson(PROTOCOL_STORAGE_KEYS.profile, next);
+      setStatus('Local Ed25519 peer created.', 'ok');
+      render();
+    } catch (err) {
+      setStatus(`WebCrypto Ed25519 unavailable: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  async function copyText(value, success) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(success, 'ok');
+    } catch {
+      setStatus(value, 'neutral');
+    }
+  }
+
+  async function signAndStore() {
+    const p = profile();
+    if (!p?.peerId || !p?.privateKey) {
+      setStatus('Create a local peer first.', 'bad');
+      return;
+    }
+
+    const body = els.body?.value?.trim() || '';
+    if (!body) {
+      setStatus('Write a message first.', 'bad');
+      return;
+    }
+
+    const to = els.toPeer?.value?.trim();
+    const draft = buildPacketDraft({
+      from: p.peerId,
+      to: to ? [to] : [],
+      body,
+      visibility: els.visibility?.value || 'local',
+      agentReadable: els.agentReadable?.value !== 'false',
+      topic: els.topic?.value?.trim() || 'pcp/pointcast/messages',
+    });
+
+    try {
+      const signed = await signPacket(draft, p.privateKey);
+      const verified = await verifyPacketSignature(signed);
+      if (!verified.ok) {
+        setStatus(`Packet signed but failed verification: ${verified.errors.join('; ')}`, 'bad');
+        return;
+      }
+      upsertPacket(PROTOCOL_STORAGE_KEYS.outbox, signed);
+      selectedPacketId = signed.id;
+      addReceipt('created', signed.id, 'Signed and stored in local outbox.');
+      els.body.value = '';
+      setStatus(`Signed ${shortPeerId(signed.id)}.`, 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Signing failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  function mergedPackets() {
+    const tagged = [
+      ...outbox().map((packet) => ({ box: 'outbox', packet })),
+      ...inbox().map((packet) => ({ box: 'inbox', packet })),
+    ];
+    return tagged
+      .filter((item) => activeFilter === 'all' || item.box === activeFilter)
+      .sort((a, b) => Date.parse(b.packet.createdAt || 0) - Date.parse(a.packet.createdAt || 0));
+  }
+
+  function selectedPacket() {
+    return [...outbox(), ...inbox()].find((packet) => packet.id === selectedPacketId) || null;
+  }
+
+  function blockDraftFor(packet) {
+    if (!packet) return '';
+    const date = new Date(packet.createdAt).toISOString();
+    return [
+      'Title: PCP packet ' + packet.id.slice(0, 16),
+      'Channel: FD',
+      'Type: NOTE',
+      'Dek: Signed PointCast Peer Message Protocol packet from ' + shortPeerId(packet.from) + '.',
+      '',
+      packet.body,
+      '',
+      '---',
+      'Protocol: https://pointcast.xyz/protocol',
+      'Packet id: ' + packet.id,
+      'From: ' + packet.from,
+      'To: ' + (packet.to?.join(', ') || 'public/local'),
+      'Created: ' + date,
+      'Visibility: ' + packet.permissions.visibility,
+      'Topic: ' + packet.transport.topic,
+    ].join('\n');
+  }
+
+  function renderPackets() {
+    const items = mergedPackets();
+    if (!els.packetList) return;
+    els.packetList.innerHTML = '';
+
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'No packets yet. Create one or import JSONL.';
+      els.packetList.append(empty);
+      return;
+    }
+
+    for (const item of items) {
+      const packet = item.packet;
+      const li = document.createElement('li');
+      li.className = 'packet-item';
+      if (packet.id === selectedPacketId) li.classList.add('is-selected');
+
+      const validation = validatePacket(packet, { requireSignature: true });
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'packet-item__head';
+      const box = document.createElement('span');
+      box.textContent = item.box;
+      const id = document.createElement('strong');
+      id.textContent = shortPeerId(packet.id);
+      const validity = document.createElement('em');
+      validity.textContent = validation.ok ? 'valid shape' : 'invalid shape';
+      head.append(box, id, validity);
+      head.addEventListener('click', () => {
+        selectedPacketId = packet.id;
+        render();
+      });
+
+      const body = document.createElement('p');
+      body.textContent = packet.body;
+
+      const meta = document.createElement('p');
+      meta.className = 'packet-item__meta';
+      meta.textContent = `${new Date(packet.createdAt).toLocaleString()} · ${shortPeerId(packet.from)} · ${packet.transport.topic}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'packet-actions';
+      const copyJson = document.createElement('button');
+      copyJson.type = 'button';
+      copyJson.textContent = 'Copy JSON';
+      copyJson.addEventListener('click', () => copyText(JSON.stringify(packet, null, 2), 'Packet JSON copied.'));
+      const copyBlock = document.createElement('button');
+      copyBlock.type = 'button';
+      copyBlock.textContent = 'Block copy';
+      copyBlock.addEventListener('click', () => {
+        selectedPacketId = packet.id;
+        render();
+        copyText(blockDraftFor(packet), 'Block draft copied.');
+      });
+      actions.append(copyJson, copyBlock);
+
+      li.append(head, body, meta, actions);
+      els.packetList.append(li);
+    }
+  }
+
+  function renderReceipts() {
+    if (!els.receiptList) return;
+    els.receiptList.innerHTML = '';
+    const items = receipts();
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'Receipts appear as packets are created or imported.';
+      els.receiptList.append(empty);
+      return;
+    }
+    for (const receipt of items.slice(0, 12)) {
+      const li = document.createElement('li');
+      const type = document.createElement('strong');
+      type.textContent = receipt.type;
+      const id = document.createElement('span');
+      id.textContent = shortPeerId(receipt.packetId);
+      const note = document.createElement('em');
+      note.textContent = receipt.note || '';
+      li.append(type, id, note);
+      els.receiptList.append(li);
+    }
+  }
+
+  function render() {
+    const p = profile();
+    if (p) {
+      if (els.displayName) els.displayName.value = p.displayName || 'PointCast peer';
+      if (els.peerKind) els.peerKind.value = p.kind || 'human';
+      if (els.peerId) els.peerId.textContent = p.peerId;
+    } else if (els.peerId) {
+      els.peerId.textContent = 'none yet';
+    }
+
+    els.filters.forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.filter === activeFilter));
+    });
+
+    renderPackets();
+    renderReceipts();
+    if (els.blockDraft) els.blockDraft.value = blockDraftFor(selectedPacket());
+  }
+
+  function exportJsonl() {
+    const all = [...outbox(), ...inbox()];
+    if (els.jsonl) els.jsonl.value = serializePacketsJsonl(all);
+    setStatus(`Exported ${all.length} packet${all.length === 1 ? '' : 's'} as JSONL.`, 'ok');
+  }
+
+  function importJsonl() {
+    const p = profile();
+    try {
+      const imported = parsePacketsJsonl(els.jsonl?.value || '');
+      let accepted = 0;
+      for (const packet of imported) {
+        const validation = validatePacket(packet, { requireSignature: true });
+        if (!validation.ok) continue;
+        const key = packet.from === p?.peerId ? PROTOCOL_STORAGE_KEYS.outbox : PROTOCOL_STORAGE_KEYS.inbox;
+        upsertPacket(key, packet);
+        addReceipt('imported', packet.id, `Imported into ${key === PROTOCOL_STORAGE_KEYS.outbox ? 'outbox' : 'inbox'}.`);
+        accepted += 1;
+      }
+      setStatus(`Imported ${accepted} valid packet${accepted === 1 ? '' : 's'}.`, accepted ? 'ok' : 'bad');
+      render();
+    } catch (err) {
+      setStatus(`Import failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  function clearLocalLog() {
+    localStorage.removeItem(PROTOCOL_STORAGE_KEYS.inbox);
+    localStorage.removeItem(PROTOCOL_STORAGE_KEYS.outbox);
+    localStorage.removeItem(PROTOCOL_STORAGE_KEYS.receipts);
+    selectedPacketId = null;
+    setStatus('Local packet log cleared. Peer identity kept.', 'ok');
+    render();
+  }
+
+  els.createPeer?.addEventListener('click', createPeer);
+  els.copyPeer?.addEventListener('click', () => {
+    const p = profile();
+    if (p?.peerId) copyText(p.peerId, 'Peer id copied.');
+  });
+  els.signStore?.addEventListener('click', signAndStore);
+  els.clearCompose?.addEventListener('click', () => {
+    if (els.body) els.body.value = '';
+    setStatus('Compose cleared.');
+  });
+  els.exportJsonl?.addEventListener('click', exportJsonl);
+  els.importJsonl?.addEventListener('click', importJsonl);
+  els.clearLog?.addEventListener('click', clearLocalLog);
+  els.copyBlock?.addEventListener('click', () => {
+    const draft = els.blockDraft?.value || '';
+    if (draft) copyText(draft, 'Block draft copied.');
+  });
+  els.filters.forEach((button) => {
+    button.addEventListener('click', () => {
+      activeFilter = button.dataset.filter || 'all';
+      render();
+    });
+  });
+
+  if (!profile()) {
+    setStatus('Create a local peer to start signing packets.');
+  } else {
+    setStatus('Local peer loaded.', 'ok');
+  }
+  render();
+</script>
+
+<style>
+  .messages-page {
+    width: min(1180px, calc(100vw - 32px));
+    margin: 0 auto;
+    padding: 28px 0 96px;
+    color: var(--pc-ink);
+  }
+
+  .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .breadcrumb a,
+  .breadcrumb strong {
+    color: var(--pc-ink);
+  }
+
+  .app-head {
+    display: grid;
+    gap: 18px;
+    border-top: 2px solid var(--pc-ink);
+    padding-top: 28px;
+    margin-bottom: 18px;
+  }
+
+  .app-title {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(280px, 0.45fr);
+    gap: 24px;
+    align-items: end;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  h1,
+  h2 {
+    margin: 0;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  h1 {
+    font-size: clamp(54px, 9vw, 118px);
+    line-height: 0.9;
+  }
+
+  h2 {
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  .app-title p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 18px;
+    line-height: 1.42;
+  }
+
+  .status-line {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--pc-rule);
+    padding: 0 12px;
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .status-line[data-tone="ok"] {
+    border-color: #0f6e56;
+    color: #074638;
+    background: #e7f4ef;
+  }
+
+  .status-line[data-tone="bad"] {
+    border-color: #8a2432;
+    color: #551620;
+    background: #fbeaee;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1fr) minmax(320px, 0.88fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .panel,
+  .relay-note {
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    padding: 14px;
+    background: #fff;
+  }
+
+  .compose-panel,
+  .log-panel {
+    grid-row: span 2;
+  }
+
+  .panel-head {
+    margin-bottom: 14px;
+  }
+
+  label {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 10px;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    padding: 9px 10px;
+    font: 14px/1.35 var(--pc-font-sans);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  textarea {
+    resize: vertical;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .compose-grid,
+  .button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .button-row {
+    margin-top: 10px;
+  }
+
+  button,
+  .button-row a {
+    min-height: 40px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .button-row button:first-child,
+  .log-tabs button[aria-pressed="true"] {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .peer-id-box {
+    display: grid;
+    gap: 5px;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 10px;
+  }
+
+  .peer-id-box span {
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  code {
+    overflow-wrap: anywhere;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .fine-print,
+  .relay-note p {
+    margin: 10px 0 0;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+    line-height: 1.42;
+  }
+
+  .log-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .packet-list,
+  .receipt-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .packet-item,
+  .receipt-list li,
+  .empty {
+    min-width: 0;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 10px;
+  }
+
+  .packet-item.is-selected {
+    border-color: var(--pc-accent);
+    box-shadow: inset 3px 0 0 var(--pc-accent);
+  }
+
+  .packet-item__head {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    min-height: 32px;
+    border: 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    justify-content: start;
+    padding: 0 0 8px;
+    text-align: left;
+  }
+
+  .packet-item__head span,
+  .packet-item__head em,
+  .packet-item__meta,
+  .receipt-list span,
+  .receipt-list em {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-style: normal;
+  }
+
+  .packet-item__head strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .packet-item p {
+    margin: 8px 0;
+    overflow-wrap: anywhere;
+    line-height: 1.42;
+  }
+
+  .packet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .packet-actions button {
+    min-height: 30px;
+    font-size: 10px;
+  }
+
+  .receipt-list li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+
+  .receipt-list em {
+    grid-column: 1 / -1;
+  }
+
+  .relay-note {
+    margin-top: 12px;
+    background: #eef4fa;
+  }
+
+  .relay-note strong {
+    font-size: 18px;
+  }
+
+  @media (max-width: 1080px) {
+    .workspace,
+    .app-title {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .compose-panel,
+    .log-panel {
+      grid-row: auto;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .messages-page {
+      width: min(100% - 24px, 1180px);
+    }
+
+    .workspace,
+    .app-title,
+    .compose-grid,
+    .button-row {
+      grid-template-columns: 1fr;
+    }
+
+    h1 {
+      font-size: 52px;
+    }
+  }
+</style>
