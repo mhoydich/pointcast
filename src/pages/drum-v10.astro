@@ -1,0 +1,603 @@
+---
+/**
+ * /drum-v10 — The Theremin · sprint 1/9 of Mike's three-hour drum sprint
+ * 2026-04-27 PT.
+ *
+ * Mouse-driven Web Audio theremin: X = pitch (log scale 110-1480Hz),
+ * Y = volume (0-0.5). Sine oscillator into bandpass filter into
+ * convolver-reverb. Smooth glissando — exponential rampToValueAtTime
+ * gives the seasick "ooooweeooo" of a real theremin.
+ *
+ * Multiplayer: every visitor's note start broadcasts to the room as a
+ * type=theremin event on /api/sounds, so others on /drum-tv-* surfaces
+ * see the activity flash. No streaming audio — just the start/stop
+ * signal.
+ *
+ * Aesthetic: 1920s noir radio room. Dark felt-purple, neon orange dial,
+ * warm vignette, brass nameplate.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v10 — the Theremin';
+const description =
+  'A mouse-driven theremin in the drum hub. X is pitch, Y is volume. Glide between notes the way Clara Rockmore did in 1934. Multiplayer — your note shows up on the drum tv.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-v10',
+  name: 'PointCast Drum · v10 · Theremin',
+  url: 'https://pointcast.xyz/drum-v10',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="th" id="th-main">
+    <DrumNav current="v10" />
+
+    <header class="th__head">
+      <p class="th__kicker">DRUM HUB · V10 · WEB AUDIO · MULTIPLAYER</p>
+      <h1 class="th__title"><em>The Theremin.</em></h1>
+      <p class="th__dek">
+        Move your cursor across the dial. Left is low, right is high. Top is loud, bottom is quiet. No buttons. No keys. Hands off the instrument — Léon Theremin would approve.
+      </p>
+      <p class="th__brass">L · THEREMIN · 1920 · MODEL VAR.10 · POINTCAST</p>
+    </header>
+
+    <section class="th__stage" aria-label="Theremin dial">
+      <div class="th__dial" id="th-dial" tabindex="0" aria-label="Theremin dial. Move pointer to play.">
+        <div class="th__dial-grid"></div>
+        <div class="th__dial-axes">
+          <span class="th__axis th__axis--x">← LOW · PITCH · HIGH →</span>
+          <span class="th__axis th__axis--y">VOLUME ↑</span>
+        </div>
+        <div class="th__crosshair" id="th-crosshair" aria-hidden="true">
+          <span class="th__cross-x"></span>
+          <span class="th__cross-y"></span>
+          <span class="th__cross-dot"></span>
+        </div>
+        <div class="th__notebox" id="th-notebox" aria-live="polite">
+          <span class="th__note-pitch" id="th-pitch">—</span>
+          <span class="th__note-vol" id="th-vol">silent</span>
+        </div>
+        <div class="th__hint">click & drag · or press space to hold</div>
+      </div>
+
+      <aside class="th__panel">
+        <div class="th__panel-row">
+          <span class="th__panel-label">tone</span>
+          <div class="th__seg" role="radiogroup" aria-label="Tone">
+            <button type="button" class="th__seg-btn th__seg-btn--on" data-tone="sine">sine</button>
+            <button type="button" class="th__seg-btn" data-tone="triangle">triangle</button>
+            <button type="button" class="th__seg-btn" data-tone="sawtooth">saw</button>
+          </div>
+        </div>
+        <div class="th__panel-row">
+          <span class="th__panel-label">vibrato</span>
+          <input id="th-vibrato" type="range" min="0" max="20" value="6" />
+        </div>
+        <div class="th__panel-row">
+          <span class="th__panel-label">reverb</span>
+          <input id="th-reverb" type="range" min="0" max="100" value="40" />
+        </div>
+        <div class="th__panel-row">
+          <span class="th__panel-label">filter</span>
+          <input id="th-filter" type="range" min="200" max="6000" value="2400" />
+        </div>
+        <p class="th__broadcast" id="th-broadcast">broadcast: ·</p>
+      </aside>
+    </section>
+
+    <footer class="th__foot">
+      <p>
+        Theremin v10 sits in the same drum bus as v1-v9 — your gestures fire
+        <code>type=theremin</code> events to <code>/api/sounds</code>, so anyone watching
+        <a href="/drum-tv">/drum-tv</a> or <a href="/drum-tv-v2">/drum-tv-v2</a>
+        sees a marker when you start playing.
+      </p>
+      <p class="th__credit">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · drum sprint 1/9</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null;
+    let osc = null;
+    let oscGain = null;
+    let lpf = null;
+    let masterGain = null;
+    let convolver = null;
+    let dryGain = null;
+    let wetGain = null;
+    let lfo = null;
+    let lfoGain = null;
+    let active = false;
+    let currentTone = 'sine';
+    let vibratoHz = 6;
+    let reverbWet = 0.4;
+    let filterHz = 2400;
+    let lastBroadcast = 0;
+
+    const dial = document.getElementById('th-dial');
+    const cross = document.getElementById('th-crosshair');
+    const crossX = cross.querySelector('.th__cross-x');
+    const crossY = cross.querySelector('.th__cross-y');
+    const crossDot = cross.querySelector('.th__cross-dot');
+    const pitchEl = document.getElementById('th-pitch');
+    const volEl = document.getElementById('th-vol');
+    const broadcastEl = document.getElementById('th-broadcast');
+    const noteBox = document.getElementById('th-notebox');
+
+    document.querySelectorAll('.th__seg-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.th__seg-btn').forEach((x) => x.classList.remove('th__seg-btn--on'));
+        b.classList.add('th__seg-btn--on');
+        currentTone = b.getAttribute('data-tone') || 'sine';
+        if (osc) try { osc.type = currentTone; } catch {}
+      });
+    });
+
+    document.getElementById('th-vibrato').addEventListener('input', (e) => {
+      vibratoHz = Number(e.target.value || 0);
+      if (lfo) try { lfo.frequency.setValueAtTime(vibratoHz, ctx.currentTime); } catch {}
+    });
+    document.getElementById('th-reverb').addEventListener('input', (e) => {
+      reverbWet = Number(e.target.value || 0) / 100;
+      if (wetGain && dryGain) {
+        wetGain.gain.setTargetAtTime(reverbWet, ctx.currentTime, 0.05);
+        dryGain.gain.setTargetAtTime(1 - reverbWet * 0.6, ctx.currentTime, 0.05);
+      }
+    });
+    document.getElementById('th-filter').addEventListener('input', (e) => {
+      filterHz = Number(e.target.value || 2400);
+      if (lpf) try { lpf.frequency.setTargetAtTime(filterHz, ctx.currentTime, 0.05); } catch {}
+    });
+
+    function makeReverbBuffer(seconds, decay) {
+      const rate = ctx.sampleRate;
+      const len = rate * seconds;
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+        }
+      }
+      return buf;
+    }
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+
+      lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = filterHz;
+      lpf.Q.value = 1;
+
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0;
+
+      // Reverb path
+      convolver = ctx.createConvolver();
+      convolver.buffer = makeReverbBuffer(2.4, 2.4);
+      dryGain = ctx.createGain();
+      dryGain.gain.value = 1 - reverbWet * 0.6;
+      wetGain = ctx.createGain();
+      wetGain.gain.value = reverbWet;
+
+      lpf.connect(masterGain);
+      masterGain.connect(dryGain);
+      masterGain.connect(convolver);
+      convolver.connect(wetGain);
+      dryGain.connect(ctx.destination);
+      wetGain.connect(ctx.destination);
+
+      // LFO for vibrato → modulates oscillator frequency
+      lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = vibratoHz;
+      lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0; // depth set when oscillator exists
+      lfo.connect(lfoGain);
+      lfo.start();
+    }
+
+    function startNote() {
+      ensureCtx();
+      if (osc) return;
+      try {
+        osc = ctx.createOscillator();
+        osc.type = currentTone;
+        osc.frequency.value = 440;
+        oscGain = ctx.createGain();
+        oscGain.gain.value = 1;
+        osc.connect(oscGain);
+        oscGain.connect(lpf);
+        // Connect vibrato LFO to detune (cents)
+        lfoGain.gain.value = 28;
+        lfoGain.connect(osc.detune);
+        osc.start();
+        masterGain.gain.cancelScheduledValues(ctx.currentTime);
+        masterGain.gain.setTargetAtTime(0.001, ctx.currentTime, 0.01);
+        active = true;
+        broadcastStart();
+      } catch (e) {
+        console.warn('theremin start failed', e);
+      }
+    }
+
+    function stopNote() {
+      if (!ctx || !osc) return;
+      try {
+        masterGain.gain.cancelScheduledValues(ctx.currentTime);
+        masterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+        const o = osc;
+        const g = oscGain;
+        setTimeout(() => {
+          try { o.stop(); o.disconnect(); g.disconnect(); } catch {}
+        }, 250);
+        osc = null;
+        oscGain = null;
+        active = false;
+      } catch (e) {
+        console.warn('theremin stop failed', e);
+      }
+    }
+
+    function setPosition(xRatio, yRatio) {
+      // Pitch: log scale 110Hz (A2) to 1480Hz (F#6)
+      const minHz = 110, maxHz = 1480;
+      const hz = minHz * Math.pow(maxHz / minHz, Math.max(0, Math.min(1, xRatio)));
+      // Volume: 0..0.5 (with floor)
+      const vol = Math.max(0, Math.min(1, 1 - yRatio)) * 0.5;
+      if (osc) {
+        try {
+          osc.frequency.cancelScheduledValues(ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(hz, ctx.currentTime + 0.04);
+          masterGain.gain.cancelScheduledValues(ctx.currentTime);
+          masterGain.gain.setTargetAtTime(vol, ctx.currentTime, 0.04);
+        } catch {}
+      }
+      pitchEl.textContent = `${Math.round(hz)} Hz · ${pitchToNote(hz)}`;
+      volEl.textContent = vol < 0.005 ? 'silent' : `${Math.round(vol * 200)}%`;
+
+      // Crosshair
+      crossX.style.left = `${xRatio * 100}%`;
+      crossY.style.top = `${yRatio * 100}%`;
+      crossDot.style.left = `${xRatio * 100}%`;
+      crossDot.style.top = `${yRatio * 100}%`;
+      noteBox.style.left = `${Math.min(80, xRatio * 100 + 2)}%`;
+      noteBox.style.top = `${Math.max(0, yRatio * 100 - 22)}%`;
+
+      // Throttled broadcast (every 600ms while playing)
+      if (active && Date.now() - lastBroadcast > 600) {
+        lastBroadcast = Date.now();
+        broadcastNote(hz, vol);
+      }
+    }
+
+    function pitchToNote(hz) {
+      const a4 = 440;
+      const n = Math.round(12 * Math.log2(hz / a4)) + 69;
+      const names = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+      const name = names[((n % 12) + 12) % 12];
+      const octave = Math.floor(n / 12) - 1;
+      return `${name}${octave}`;
+    }
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'th-' + Math.random().toString(36).slice(2, 10); }
+    }
+
+    function broadcastStart() {
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'theremin', sessionId: getSession(), event: 'start' }),
+        });
+        broadcastEl.textContent = 'broadcast: start →';
+      } catch {}
+    }
+
+    function broadcastNote(hz, vol) {
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'theremin', sessionId: getSession(), hz: Math.round(hz), vol: Math.round(vol * 100) }),
+        });
+        broadcastEl.textContent = `broadcast: ${pitchToNote(hz)} · ${Math.round(vol * 200)}%`;
+      } catch {}
+    }
+
+    // Pointer interaction
+    let dragging = false;
+    function onPointerDown(e) {
+      dragging = true;
+      startNote();
+      onPointerMove(e);
+      e.preventDefault();
+    }
+    function onPointerMove(e) {
+      const rect = dial.getBoundingClientRect();
+      const x = ('clientX' in e ? e.clientX : (e.touches && e.touches[0].clientX) || 0) - rect.left;
+      const y = ('clientY' in e ? e.clientY : (e.touches && e.touches[0].clientY) || 0) - rect.top;
+      setPosition(x / rect.width, y / rect.height);
+    }
+    function onPointerUp() {
+      dragging = false;
+      stopNote();
+    }
+
+    dial.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', (e) => { if (dragging) onPointerMove(e); });
+    window.addEventListener('mouseup', onPointerUp);
+
+    dial.addEventListener('touchstart', onPointerDown, { passive: false });
+    window.addEventListener('touchmove', (e) => { if (dragging) onPointerMove(e); }, { passive: true });
+    window.addEventListener('touchend', onPointerUp);
+
+    // Spacebar to hold while pointer is over the dial
+    let spaceHeld = false;
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !spaceHeld) {
+        spaceHeld = true;
+        startNote();
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') { spaceHeld = false; stopNote(); }
+    });
+  })();
+</script>
+
+<style>
+  .th {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at center, rgba(255, 220, 100, 0.05), transparent 60%),
+      linear-gradient(180deg, #1a1228 0%, #0c0820 60%, #050310 100%);
+    color: #fffaf0;
+    padding: 16px 16px 60px;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .th__head {
+    max-width: 920px;
+    margin: 0 auto 18px;
+    padding: 0 8px;
+  }
+
+  .th__kicker {
+    margin: 0 0 10px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+
+  .th__title {
+    margin: 0 0 8px;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: clamp(36px, 5vw, 64px);
+    line-height: 1.05;
+    color: #ffd400;
+  }
+
+  .th__title em { font-style: italic; }
+
+  .th__dek {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 60ch;
+    color: #cfc6df;
+  }
+
+  .th__brass {
+    display: inline-block;
+    margin: 0;
+    padding: 4px 12px;
+    background: linear-gradient(180deg, #c9a449, #6e5320);
+    color: #1a1228;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    border: 1px solid #2c1d05;
+    box-shadow: 2px 2px 0 0 #050310;
+  }
+
+  .th__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 18px;
+  }
+
+  @media (max-width: 800px) {
+    .th__stage { grid-template-columns: 1fr; }
+  }
+
+  .th__dial {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    border: 2px solid #ffd400;
+    background:
+      radial-gradient(ellipse at 30% 70%, rgba(255, 138, 74, 0.18), transparent 60%),
+      radial-gradient(ellipse at 70% 30%, rgba(95, 186, 253, 0.10), transparent 60%),
+      #0c0820;
+    box-shadow: 6px 6px 0 0 #050310, 0 0 60px rgba(255, 138, 74, 0.12) inset;
+    cursor: crosshair;
+    user-select: none;
+    overflow: hidden;
+  }
+  .th__dial:focus { outline: 2px dashed #ff8a4a; outline-offset: 4px; }
+
+  .th__dial-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(0deg, rgba(255, 220, 100, 0.10) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 220, 100, 0.10) 1px, transparent 1px);
+    background-size: calc(100% / 12) calc(100% / 8);
+  }
+
+  .th__dial-axes {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .th__axis {
+    position: absolute;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #ff8a4a;
+    opacity: 0.7;
+  }
+  .th__axis--x { left: 50%; bottom: 8px; transform: translateX(-50%); }
+  .th__axis--y { left: 8px; top: 50%; transform: translateY(-50%) rotate(-90deg); transform-origin: 0 0; }
+
+  .th__crosshair {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .th__cross-x {
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: #ff8a4a; opacity: 0.7;
+    box-shadow: 0 0 10px rgba(255, 138, 74, 0.6);
+  }
+  .th__cross-y {
+    position: absolute; left: 0; right: 0; height: 1px;
+    background: #ff8a4a; opacity: 0.7;
+    box-shadow: 0 0 10px rgba(255, 138, 74, 0.6);
+  }
+  .th__cross-dot {
+    position: absolute;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #ffd400;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 18px #ffd400, 0 0 4px #fff;
+  }
+
+  .th__notebox {
+    position: absolute;
+    transform: translate(-50%, 0);
+    background: #fffaf0;
+    color: #12110e;
+    border: 1.5px solid #1a1228;
+    box-shadow: 2px 2px 0 0 #1a1228;
+    padding: 4px 10px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    white-space: nowrap;
+  }
+  .th__note-pitch { font-weight: 700; color: #b8431a; }
+  .th__note-vol { color: #5f5e5a; font-size: 9px; }
+
+  .th__hint {
+    position: absolute;
+    bottom: 10px; right: 12px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #cfc6df;
+    opacity: 0.6;
+    text-transform: uppercase;
+  }
+
+  .th__panel {
+    background: #0c0820;
+    border: 2px solid #ffd400;
+    padding: 14px;
+    box-shadow: 6px 6px 0 0 #050310;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    color: #fffaf0;
+  }
+  .th__panel-row { display: flex; flex-direction: column; gap: 6px; }
+  .th__panel-label {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #ff8a4a;
+    text-transform: uppercase;
+  }
+  .th__panel input[type='range'] {
+    width: 100%;
+    accent-color: #ffd400;
+  }
+
+  .th__seg {
+    display: flex;
+    border: 1.5px solid #ffd400;
+    overflow: hidden;
+  }
+  .th__seg-btn {
+    flex: 1;
+    padding: 6px 0;
+    background: transparent;
+    color: #fffaf0;
+    border: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-right: 1.5px solid #ffd400;
+  }
+  .th__seg-btn:last-child { border-right: 0; }
+  .th__seg-btn--on { background: #ffd400; color: #1a1228; font-weight: 700; }
+
+  .th__broadcast {
+    margin: 4px 0 0;
+    padding-top: 8px;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 10px;
+    color: #ff8a4a;
+    letter-spacing: 0.12em;
+    min-height: 14px;
+  }
+
+  .th__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 8px 0;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .th__foot a { color: #ffd400; }
+  .th__foot code { background: #0c0820; padding: 1px 6px; border: 1px solid #5f5e5a; color: #ffd400; }
+  .th__credit {
+    margin: 8px 0 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
