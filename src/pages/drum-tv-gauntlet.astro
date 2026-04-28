@@ -1,0 +1,643 @@
+---
+/**
+ * /drum-tv-gauntlet — NOUN GAUNTLET · TV game · sprint 2/3
+ * 2026-04-28 PT.
+ *
+ * 60-second tap-off. Cast to a TV. Each present Noun gets a vertical
+ * race track. Their Noun head climbs the track based on tap rate. At
+ * 0:00, podium reveals top 3 with confetti.
+ *
+ * Mechanics:
+ *   · Round runs every 75 seconds (60s race + 15s rest+podium).
+ *   · Round id = floor(Date.now() / ROUND_MS) so all clients sync.
+ *   · Tap = any /api/sounds event from that pid (drum / organ / kettle
+ *     / etc.) — counts on every visitor's screen.
+ *   · Score = events fired during the active 60s window.
+ *   · Track height = lerp(0..1, score / max(scores)) — Noun head rises
+ *     in real time as events stream in.
+ *   · TV mode (F = fullscreen, M = hide chrome).
+ *
+ * Visual: race-track aesthetic. Vertical tracks side-by-side, neon
+ * green start line at bottom, finish ribbon at top, big BUNGEE
+ * countdown clock at the top, podium at the end.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-tv-gauntlet — NOUN GAUNTLET · TV game';
+const description =
+  '60-second Noun tap-race for the TV. Every present visitor gets a track; their Noun head climbs as they fire events. Top 3 take the podium when the clock hits zero.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-tv-gauntlet',
+  name: 'PointCast Drum · TV · Gauntlet',
+  url: 'https://pointcast.xyz/drum-tv-gauntlet',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="gn" id="gn-main">
+    <DrumNav current="tv-gauntlet" />
+
+    <header class="gn__head">
+      <p class="gn__kicker">DRUM HUB · TV GAME · NOUN GAUNTLET · 60s TAP-OFF</p>
+      <h1 class="gn__title"><em>NOUN GAUNTLET.</em></h1>
+      <p class="gn__dek">
+        Cast to a TV. Sixty seconds. Every Noun in the room climbs their lane every time they fire a drum-bus event. Top three at the bell take the podium. New round every 75 seconds.
+      </p>
+      <p class="gn__hint mono">F · fullscreen · M · hide chrome</p>
+    </header>
+
+    <section class="gn__arena">
+      <div class="gn__hud">
+        <div class="gn__clock-box">
+          <p class="gn__clock-eyebrow mono">round in</p>
+          <p class="gn__clock" id="gn-clock">—</p>
+          <p class="gn__round mono">round <strong id="gn-round">—</strong></p>
+        </div>
+        <div class="gn__strip mono">
+          <span>visitors: <strong id="gn-visitors">—</strong></span>
+          <span>events: <strong id="gn-events">0</strong></span>
+          <span>state: <strong id="gn-state">—</strong></span>
+        </div>
+      </div>
+
+      <div class="gn__finish" aria-hidden="true">
+        <span class="gn__finish-text mono">★ FINISH ★</span>
+      </div>
+
+      <div class="gn__tracks" id="gn-tracks">
+        <p class="gn__empty mono" id="gn-empty">— waiting for visitors —</p>
+      </div>
+
+      <div class="gn__start" aria-hidden="true">
+        <span class="gn__start-text mono">START</span>
+      </div>
+
+      <div class="gn__podium" id="gn-podium" hidden>
+        <p class="gn__podium-eyebrow mono">★ NOUN GAUNTLET · WINNERS ★</p>
+        <div class="gn__podium-row">
+          <div class="gn__podium-step gn__podium-step--2" id="gn-step-2">
+            <span class="gn__podium-place mono">2</span>
+            <img class="gn__podium-noun" alt="" />
+            <span class="gn__podium-name mono">—</span>
+            <span class="gn__podium-score mono">— taps</span>
+          </div>
+          <div class="gn__podium-step gn__podium-step--1" id="gn-step-1">
+            <span class="gn__podium-place mono">1</span>
+            <img class="gn__podium-noun" alt="" />
+            <span class="gn__podium-name mono">—</span>
+            <span class="gn__podium-score mono">— taps</span>
+          </div>
+          <div class="gn__podium-step gn__podium-step--3" id="gn-step-3">
+            <span class="gn__podium-place mono">3</span>
+            <img class="gn__podium-noun" alt="" />
+            <span class="gn__podium-name mono">—</span>
+            <span class="gn__podium-score mono">— taps</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="gn__foot">
+      <p class="mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · TV game · sprint 2/3</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const ROUND_MS = 75 * 1000;
+    const RACE_MS  = 60 * 1000;
+    const TICK_MS  = 200;
+
+    const clockEl  = document.getElementById('gn-clock');
+    const roundEl  = document.getElementById('gn-round');
+    const visEl    = document.getElementById('gn-visitors');
+    const evtEl    = document.getElementById('gn-events');
+    const stateEl  = document.getElementById('gn-state');
+    const tracksEl = document.getElementById('gn-tracks');
+    const emptyEl  = document.getElementById('gn-empty');
+    const podium   = document.getElementById('gn-podium');
+
+    let lastTs = 0;
+    let presentNouns = new Map(); // pid -> nounId
+    let scores = new Map();       // pid -> score for current round
+    let lastRound = -1;
+    let totalEvents = 0;
+    let podiumLockedAt = 0;
+    const tracks = new Map();     // pid -> {el, fillEl, headEl, labelEl, scoreEl}
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function fmtMS(ms) {
+      const s = Math.max(0, Math.floor(ms / 1000));
+      return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+    }
+
+    function ensureTrack(pid, nounId) {
+      if (tracks.has(pid)) return tracks.get(pid);
+      const lane = document.createElement('div');
+      lane.className = 'gn__lane';
+      lane.dataset.pid = pid;
+      lane.innerHTML = `
+        <div class="gn__lane-fill"></div>
+        <div class="gn__lane-head">
+          <img src="https://noun.pics/${nounId}.svg" alt="" loading="lazy" />
+        </div>
+        <span class="gn__lane-label mono">noun #${nounId}</span>
+        <span class="gn__lane-score mono">0</span>
+      `;
+      tracksEl.appendChild(lane);
+      const ref = {
+        el: lane,
+        fillEl: lane.querySelector('.gn__lane-fill'),
+        headEl: lane.querySelector('.gn__lane-head'),
+        labelEl: lane.querySelector('.gn__lane-label'),
+        scoreEl: lane.querySelector('.gn__lane-score'),
+        nounId,
+      };
+      tracks.set(pid, ref);
+      return ref;
+    }
+
+    function removeTrack(pid) {
+      const t = tracks.get(pid);
+      if (!t) return;
+      t.el.remove();
+      tracks.delete(pid);
+    }
+
+    function paintPositions() {
+      const max = Math.max(1, ...[...scores.values()]);
+      tracks.forEach((t, pid) => {
+        const score = scores.get(pid) || 0;
+        const pct = (score / max) * 100;
+        t.fillEl.style.height = `${pct}%`;
+        t.headEl.style.bottom = `calc(${pct}% - 32px)`;
+        t.scoreEl.textContent = String(score);
+        t.labelEl.textContent = `noun #${t.nounId}`;
+        // Animate winner
+        const lead = score > 0 && score === max;
+        t.el.classList.toggle('gn__lane--leading', lead);
+      });
+    }
+
+    function showPodium() {
+      podium.hidden = false;
+      const ranked = [...scores.entries()]
+        .map(([pid, score]) => ({ pid, score, nounId: presentNouns.get(pid) }))
+        .filter((r) => typeof r.nounId === 'number')
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+      [1, 2, 3].forEach((place) => {
+        const r = ranked[place - 1];
+        const step = document.getElementById(`gn-step-${place}`);
+        if (!r) {
+          step.style.visibility = 'hidden';
+          return;
+        }
+        step.style.visibility = 'visible';
+        step.querySelector('.gn__podium-noun').src = `https://noun.pics/${r.nounId}.svg`;
+        step.querySelector('.gn__podium-name').textContent = `noun #${r.nounId}`;
+        step.querySelector('.gn__podium-score').textContent = `${r.score} tap${r.score === 1 ? '' : 's'}`;
+      });
+      // confetti burst
+      for (let i = 0; i < 80; i++) {
+        const c = document.createElement('span');
+        c.className = 'gn__confetti';
+        c.style.left = `${Math.random() * 100}%`;
+        c.style.background = ['#ff5c23','#ffd400','#5fbafd','#3b6e3b','#fffaf0'][i % 5];
+        c.style.animationDelay = `${(Math.random() * 0.5).toFixed(2)}s`;
+        c.style.animationDuration = `${(2.4 + Math.random() * 1.6).toFixed(2)}s`;
+        podium.appendChild(c);
+      }
+      setTimeout(() => podium.querySelectorAll('.gn__confetti').forEach((c) => c.remove()), 5000);
+    }
+
+    function hidePodium() { podium.hidden = true; }
+
+    function tick() {
+      const now = Date.now();
+      const round = Math.floor(now / ROUND_MS);
+      const intoRound = now - round * ROUND_MS;
+      const isRacing = intoRound < RACE_MS;
+      if (round !== lastRound) {
+        lastRound = round;
+        scores = new Map();
+        roundEl.textContent = String(round % 10000);
+        hidePodium();
+        paintPositions();
+      }
+      const remain = isRacing ? (RACE_MS - intoRound) : (ROUND_MS - intoRound);
+      clockEl.textContent = fmtMS(remain);
+      stateEl.textContent = isRacing ? 'RACING' : 'PODIUM';
+      visEl.textContent = String(presentNouns.size);
+      evtEl.textContent = String(totalEvents);
+
+      if (!isRacing && podium.hidden && podiumLockedAt !== round) {
+        podiumLockedAt = round;
+        showPodium();
+      } else if (isRacing && !podium.hidden) {
+        hidePodium();
+      }
+      paintPositions();
+    }
+
+    async function pollVisit() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const present = (Array.isArray(data.present) ? data.present : []).filter((p) => p.pid && typeof p.nounId === 'number');
+        presentNouns = new Map();
+        present.forEach((p) => {
+          presentNouns.set(p.pid, p.nounId);
+          ensureTrack(p.pid, p.nounId);
+        });
+        // Trim absent
+        [...tracks.keys()].forEach((pid) => { if (!presentNouns.has(pid)) removeTrack(pid); });
+        emptyEl.style.display = tracks.size === 0 ? '' : 'none';
+      } catch {}
+    }
+
+    async function pollSounds() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (!events.length) return;
+        lastTs = events[events.length - 1].t || Date.now();
+        const now = Date.now();
+        const round = Math.floor(now / ROUND_MS);
+        const intoRound = now - round * ROUND_MS;
+        const isRacing = intoRound < RACE_MS;
+        if (!isRacing) return;
+        for (const e of events) {
+          if (!e.pid) continue;
+          totalEvents += 1;
+          // Only count if pid is present (auto-add otherwise via visit poll)
+          const cur = scores.get(e.pid) || 0;
+          scores.set(e.pid, cur + 1);
+        }
+      } catch {}
+    }
+
+    setInterval(tick, TICK_MS);
+    setInterval(pollVisit, 5000);
+    setInterval(pollSounds, 1200);
+    pollVisit(); pollSounds(); tick();
+
+    // Hotkeys
+    let overlayOn = true;
+    function applyOverlay() { document.documentElement.classList.toggle('gn-no-overlay', !overlayOn); }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
+      if (e.key === 'm' || e.key === 'M') { overlayOn = !overlayOn; applyOverlay(); }
+    });
+  })();
+</script>
+
+<style>
+  :global(.gn-no-overlay) .gn__head,
+  :global(.gn-no-overlay) :global(.drum-nav),
+  :global(.gn-no-overlay) .gn__foot { display: none; }
+
+  .gn {
+    min-height: 100vh;
+    padding: 8px 8px 24px;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255, 92, 35, 0.18), transparent 60%),
+      linear-gradient(180deg, #050310 0%, #0c0820 60%, #050310 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .gn__head {
+    max-width: 1480px;
+    margin: 0 auto 12px;
+    padding: 0 6px;
+  }
+  .gn__kicker {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+  .gn__title {
+    margin: 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: clamp(40px, 6vw, 72px);
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: #ff5c23;
+    text-shadow: 4px 4px 0 #ffd400;
+  }
+  .gn__title em { font-style: italic; }
+  .gn__dek { margin: 0; font-size: 13px; line-height: 1.55; max-width: 56ch; color: #cfc6df; }
+  .gn__hint { font-size: 10px; letter-spacing: 0.18em; color: #ffd400; }
+
+  .gn__arena {
+    position: relative;
+    max-width: 1480px;
+    margin: 0 auto;
+    background: #0c0820;
+    border: 4px solid #ff5c23;
+    box-shadow: 0 0 60px rgba(255, 92, 35, 0.25) inset, 6px 6px 0 0 #050310;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .gn__hud {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 14px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .gn__clock-box {
+    background: #050310;
+    border: 3px solid #ffd400;
+    padding: 10px 14px;
+    text-align: center;
+    box-shadow: 4px 4px 0 0 #050310;
+  }
+  .gn__clock-eyebrow {
+    margin: 0 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    color: #ff8a4a;
+  }
+  .gn__clock {
+    margin: 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: 56px;
+    line-height: 1;
+    color: #ffd400;
+    text-shadow: 0 0 18px rgba(255, 212, 0, 0.6);
+  }
+  .gn__round {
+    margin: 4px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #5f5e5a;
+  }
+  .gn__round strong { color: #ffd400; }
+
+  .gn__strip {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    background: #050310;
+    border: 1.5px solid #ffd400;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: #cfc6df;
+  }
+  .gn__strip strong { color: #ffd400; }
+
+  .gn__finish {
+    position: relative;
+    height: 28px;
+    background:
+      repeating-linear-gradient(90deg, #ffd400 0 12px, #050310 12px 24px);
+    border: 2px solid #050310;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gn__finish-text {
+    position: absolute;
+    background: #ff5c23;
+    padding: 4px 10px;
+    border: 2px solid #050310;
+    color: #fffaf0;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+  }
+
+  .gn__tracks {
+    display: flex;
+    gap: 6px;
+    height: 64vh;
+    align-items: stretch;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 60px, rgba(255, 138, 74, 0.05) 60px 62px),
+      linear-gradient(180deg, rgba(255, 92, 35, 0.05), transparent 30%, transparent 70%, rgba(95, 186, 253, 0.05));
+    padding: 10px;
+    border: 2px solid #050310;
+  }
+  .gn__empty {
+    width: 100%;
+    text-align: center;
+    align-self: center;
+    color: #5f5e5a;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+  }
+
+  .gn__lane {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    background: #050310;
+    border: 1.5px solid #5f5e5a;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .gn__lane--leading {
+    border-color: #ffd400;
+    box-shadow: 0 0 14px rgba(255, 212, 0, 0.4) inset;
+  }
+  .gn__lane-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 0%;
+    background: linear-gradient(180deg, #ff5c23 0%, #ffd400 50%, #94d4ff 100%);
+    transition: height 220ms ease-out;
+    opacity: 0.55;
+  }
+  .gn__lane-head {
+    position: absolute;
+    bottom: -32px;
+    width: 56px;
+    height: 56px;
+    transition: bottom 220ms ease-out;
+    z-index: 2;
+  }
+  .gn__lane-head img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    border: 2px solid #050310;
+    background: #fffaf0;
+  }
+  .gn__lane--leading .gn__lane-head img {
+    border-color: #ffd400;
+    box-shadow: 0 0 14px #ffd400;
+  }
+  .gn__lane-label {
+    position: relative;
+    margin-bottom: 4px;
+    background: #050310;
+    color: #ffd400;
+    padding: 2px 6px;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    z-index: 3;
+  }
+  .gn__lane-score {
+    position: absolute;
+    top: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: #ff5c23;
+    color: #fffaf0;
+    padding: 2px 8px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    z-index: 3;
+    border: 1px solid #050310;
+    font-weight: 700;
+  }
+
+  .gn__start {
+    position: relative;
+    height: 28px;
+    background:
+      repeating-linear-gradient(90deg, #3b6e3b 0 12px, #050310 12px 24px);
+    border: 2px solid #050310;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gn__start-text {
+    position: absolute;
+    background: #3b6e3b;
+    padding: 4px 10px;
+    border: 2px solid #050310;
+    color: #fffaf0;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+  }
+
+  .gn__podium {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 3, 16, 0.92);
+    backdrop-filter: blur(6px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    overflow: hidden;
+  }
+  .gn__podium-eyebrow {
+    margin: 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: clamp(32px, 5vw, 64px);
+    color: #ffd400;
+    letter-spacing: 0.16em;
+    text-shadow: 4px 4px 0 #ff5c23;
+    animation: gn-pop 0.6s ease-out;
+  }
+  @keyframes gn-pop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    70%  { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .gn__podium-row {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr 1fr;
+    gap: 18px;
+    align-items: end;
+    width: min(840px, 92%);
+  }
+  .gn__podium-step {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #fffaf0;
+    color: #050310;
+    border: 4px solid #050310;
+    padding: 14px 12px 24px;
+    box-shadow: 6px 6px 0 0 #ff5c23;
+  }
+  .gn__podium-step--1 { background: #ffd400; padding-top: 18px; padding-bottom: 32px; }
+  .gn__podium-step--2 { background: #cfc6df; }
+  .gn__podium-step--3 { background: #c9a449; }
+  .gn__podium-place {
+    position: absolute;
+    top: -22px; left: 50%;
+    transform: translateX(-50%);
+    background: #050310;
+    color: #ffd400;
+    border: 3px solid #ffd400;
+    width: 44px; height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: 22px;
+  }
+  .gn__podium-noun {
+    width: clamp(80px, 10vw, 140px);
+    height: clamp(80px, 10vw, 140px);
+    image-rendering: pixelated;
+    border: 3px solid #050310;
+    background: #fffaf0;
+    margin: 8px 0;
+  }
+  .gn__podium-name {
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: clamp(16px, 2vw, 22px);
+    margin: 4px 0;
+    color: #050310;
+  }
+  .gn__podium-score {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: #5f5e5a;
+  }
+
+  .gn__confetti {
+    position: absolute;
+    top: -20px;
+    width: 10px;
+    height: 14px;
+    animation: gn-fall linear forwards;
+    pointer-events: none;
+  }
+  @keyframes gn-fall {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(540deg); opacity: 0; }
+  }
+
+  .gn__foot {
+    max-width: 1480px;
+    margin: 12px auto 0;
+    padding: 8px 6px 0;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 10px;
+    color: #5f5e5a;
+    letter-spacing: 0.16em;
+  }
+</style>
