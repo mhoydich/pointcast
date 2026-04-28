@@ -1,4 +1,4 @@
-# Tag Signal
+# Tag Signal v2
 
 An embeddable browser tag game for other websites.
 
@@ -29,23 +29,26 @@ Copy `embed.js`, `tag-game.js`, and `styles.css` to a public folder on the targe
 ></script>
 ```
 
-`data-endpoint` is optional. When present, every impression, start, tag, and finish event is posted as JSON with `navigator.sendBeacon` when available.
+`data-endpoint` is optional. When present, every impression, start, signal pickup, tag, and finish event is posted as JSON with `navigator.sendBeacon` when available.
 
 ## Event Shape
 
 ```json
 {
+  "version": "2.0.0",
   "type": "finish",
   "campaign": "spring-drop",
   "site": "homepage",
   "path": "/",
   "at": "2026-04-28T12:00:00.000Z",
-  "score": 7,
-  "best": 9
+  "score": 17,
+  "best": 22,
+  "signals": 4,
+  "heat": [{ "cell": 20, "count": 144 }]
 }
 ```
 
-The game also stores the last 100 events in `localStorage` under `tag-game-events-v1` and emits:
+The game also stores the last 150 events in `localStorage` under `tag-signal-events-v2`, keeps an 8x6 heat grid under `tag-signal-heat-v2`, and emits:
 
 ```js
 window.addEventListener('tag-game:event', (event) => {

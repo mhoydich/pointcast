@@ -1,7 +1,10 @@
 (function () {
-  const STORAGE_KEY = 'tag-game-events-v1';
+  const VERSION = '2.0.0';
+  const STORAGE_KEY = 'tag-signal-events-v2';
+  const BEST_KEY = 'tag-signal-best-v2';
+  const HEAT_KEY = 'tag-signal-heat-v2';
   const DEFAULTS = {
-    duration: 30,
+    duration: 35,
     campaign: 'default',
     site: location.hostname || 'local',
     endpoint: '',
@@ -13,22 +16,26 @@
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const nowIso = () => new Date().toISOString();
 
-  function readEvents() {
+  function readJson(key, fallback) {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
     } catch {
-      return [];
+      return fallback;
     }
   }
 
-  function writeEvents(events) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events.slice(-100)));
+  function writeJson(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function readEvents() {
+    return readJson(STORAGE_KEY, []);
   }
 
   function saveEvent(event) {
     const events = readEvents();
     events.push(event);
-    writeEvents(events);
+    writeJson(STORAGE_KEY, events.slice(-150));
     window.dispatchEvent(new CustomEvent('tag-game:event', { detail: event }));
   }
 
@@ -47,14 +54,21 @@
     }).catch(() => {});
   }
 
-  function createPlayer(x, y, color) {
+  function createRunner(x, y, color, radius = 18) {
     return {
       x,
       y,
-      radius: 18,
-      vx: 0,
-      vy: 0,
-      color
+      radius,
+      color,
+      pulse: 0
+    };
+  }
+
+  function createHeat() {
+    return {
+      cols: 8,
+      rows: 6,
+      cells: Array.from({ length: 48 }, () => 0)
     };
   }
 
@@ -67,15 +81,22 @@
       this.animation = null;
       this.running = false;
       this.score = 0;
-      this.best = Number(localStorage.getItem('tag-game-best') || 0);
+      this.combo = 1;
+      this.signals = 0;
+      this.best = Number(localStorage.getItem(BEST_KEY) || 0);
       this.lastTick = 0;
       this.remaining = this.options.duration;
       this.tagCooldown = 0;
-      this.player = createPlayer(140, 300, '#2f6fed');
-      this.target = createPlayer(640, 300, '#e94f37');
+      this.comboWindow = 0;
+      this.shake = 0;
+      this.heat = readJson(HEAT_KEY, createHeat());
+      this.player = createRunner(130, 300, '#2f6fed');
+      this.target = createRunner(650, 300, '#e94f37');
+      this.signal = createRunner(420, 300, '#ffc857', 13);
       this.decoys = [
-        createPlayer(390, 170, '#ffc857'),
-        createPlayer(390, 430, '#0f9f8f')
+        createRunner(390, 150, '#0f9f8f', 16),
+        createRunner(390, 450, '#8a4df5', 16),
+        createRunner(610, 150, '#ff8a3d', 16)
       ];
       this.mount();
       this.bind();
@@ -88,30 +109,34 @@
       this.root.classList.add('tag-game');
       this.root.innerHTML = `
         <div class="tag-game__topbar">
-          <div class="tag-game__stat"><span class="tag-game__label">Tags</span><span class="tag-game__value" data-score>0</span></div>
+          <div class="tag-game__stat"><span class="tag-game__label">Score</span><span class="tag-game__value" data-score>0</span></div>
+          <div class="tag-game__stat"><span class="tag-game__label">Combo</span><span class="tag-game__value" data-combo>x1</span></div>
           <div class="tag-game__stat"><span class="tag-game__label">Clock</span><span class="tag-game__value" data-time>${this.options.duration}s</span></div>
           <div class="tag-game__stat"><span class="tag-game__label">Best</span><span class="tag-game__value" data-best>${this.best}</span></div>
         </div>
         <div class="tag-game__stage-wrap">
-          <canvas width="${this.options.width}" height="${this.options.height}" aria-label="Tag Signal game board"></canvas>
+          <canvas width="${this.options.width}" height="${this.options.height}" aria-label="Tag Signal v2 game board"></canvas>
           <div class="tag-game__overlay" data-overlay>
             <div class="tag-game__overlay-panel">
-              <h3 data-overlay-title>Tag Signal</h3>
-              <p data-overlay-copy>Tag the red runner before time expires. Move with arrow keys, WASD, or drag/tap.</p>
+              <p class="tag-game__version">Tag Signal v2</p>
+              <h3 data-overlay-title>Catch the signal</h3>
+              <p data-overlay-copy>Tag the red runner. Grab gold signals to extend combo and leave a heat trail for the site owner.</p>
               <button class="tag-game__start" type="button" data-start>Start</button>
             </div>
           </div>
         </div>
         <div class="tag-game__footer">
-          <span>Arrow keys, WASD, click, or touch</span>
-          <span>Campaign: ${this.escape(this.options.campaign)}</span>
+          <span>Keys, click, or touch</span>
+          <span data-tracking>Events: ${this.eventCount()} · Campaign: ${this.escape(this.options.campaign)}</span>
         </div>
       `;
       this.canvas = this.root.querySelector('canvas');
       this.ctx = this.canvas.getContext('2d');
       this.scoreEl = this.root.querySelector('[data-score]');
+      this.comboEl = this.root.querySelector('[data-combo]');
       this.timeEl = this.root.querySelector('[data-time]');
       this.bestEl = this.root.querySelector('[data-best]');
+      this.trackingEl = this.root.querySelector('[data-tracking]');
       this.overlay = this.root.querySelector('[data-overlay]');
       this.overlayTitle = this.root.querySelector('[data-overlay-title]');
       this.overlayCopy = this.root.querySelector('[data-overlay-copy]');
@@ -146,11 +171,9 @@
 
     setPointer(event) {
       const rect = this.canvas.getBoundingClientRect();
-      const scaleX = this.options.width / rect.width;
-      const scaleY = this.options.height / rect.height;
       this.pointer = {
-        x: (event.clientX - rect.left) * scaleX,
-        y: (event.clientY - rect.top) * scaleY
+        x: (event.clientX - rect.left) * (this.options.width / rect.width),
+        y: (event.clientY - rect.top) * (this.options.height / rect.height)
       };
       event.preventDefault();
     }
@@ -165,11 +188,16 @@
     start() {
       this.running = true;
       this.score = 0;
+      this.combo = 1;
+      this.signals = 0;
       this.remaining = this.options.duration;
-      this.player.x = 140;
+      this.tagCooldown = 0;
+      this.comboWindow = 0;
+      this.player.x = 130;
       this.player.y = 300;
-      this.target.x = 640;
+      this.target.x = 650;
       this.target.y = 300;
+      this.placeSignal();
       this.lastTick = performance.now();
       this.overlay.hidden = true;
       this.track('start');
@@ -192,6 +220,57 @@
     }
 
     update(delta, seconds) {
+      const move = this.readMove();
+      const speed = this.pointer ? 325 : 275;
+      this.player.x = clamp(this.player.x + move.x * speed * delta, 24, this.options.width - 24);
+      this.player.y = clamp(this.player.y + move.y * speed * delta, 24, this.options.height - 24);
+      this.recordHeat(this.player);
+
+      this.moveRunner(this.target, this.player, delta, 218 + this.score * 2, seconds);
+      this.decoys.forEach((decoy, index) => {
+        decoy.x = 400 + Math.cos(seconds * (0.85 + index * 0.23) + index * 2.4) * (180 + index * 18);
+        decoy.y = 300 + Math.sin(seconds * (1.08 + index * 0.18) + index) * (125 + index * 18);
+      });
+
+      this.comboWindow = Math.max(0, this.comboWindow - delta);
+      this.shake = Math.max(0, this.shake - delta * 10);
+      if (this.comboWindow <= 0) this.combo = Math.max(1, this.combo - delta * 0.55);
+
+      if (distance(this.player, this.signal) < this.player.radius + this.signal.radius) {
+        this.signals += 1;
+        this.combo = Math.min(9, Math.ceil(this.combo) + 1);
+        this.comboWindow = 4.5;
+        this.remaining = Math.min(this.options.duration, this.remaining + 2.5);
+        this.placeSignal();
+        this.track('signal', {
+          score: this.score,
+          combo: Math.ceil(this.combo),
+          signals: this.signals,
+          remaining: Math.ceil(this.remaining),
+          heat: this.topHeatCells()
+        });
+      }
+
+      this.tagCooldown = Math.max(0, this.tagCooldown - delta);
+      if (this.tagCooldown <= 0 && distance(this.player, this.target) < this.player.radius + this.target.radius) {
+        const comboScore = Math.ceil(this.combo);
+        this.score += comboScore;
+        this.combo = Math.min(9, comboScore + 0.5);
+        this.comboWindow = 3.25;
+        this.tagCooldown = 0.42;
+        this.shake = 1;
+        this.target.x = 90 + Math.random() * (this.options.width - 180);
+        this.target.y = 90 + Math.random() * (this.options.height - 180);
+        this.track('tag', {
+          score: this.score,
+          combo: comboScore,
+          remaining: Math.ceil(this.remaining),
+          heat: this.topHeatCells()
+        });
+      }
+    }
+
+    readMove() {
       const move = { x: 0, y: 0 };
       if (this.keys.has('arrowleft') || this.keys.has('a')) move.x -= 1;
       if (this.keys.has('arrowright') || this.keys.has('d')) move.x += 1;
@@ -207,24 +286,7 @@
       }
 
       const len = Math.max(1, Math.hypot(move.x, move.y));
-      const speed = this.pointer ? 310 : 260;
-      this.player.x = clamp(this.player.x + (move.x / len) * speed * delta, 24, this.options.width - 24);
-      this.player.y = clamp(this.player.y + (move.y / len) * speed * delta, 24, this.options.height - 24);
-
-      this.moveRunner(this.target, this.player, delta, 220, seconds);
-      this.decoys.forEach((decoy, index) => {
-        decoy.x = 400 + Math.cos(seconds * (0.9 + index * 0.3) + index * 2.4) * 210;
-        decoy.y = 300 + Math.sin(seconds * (1.2 + index * 0.2) + index) * 150;
-      });
-
-      this.tagCooldown = Math.max(0, this.tagCooldown - delta);
-      if (this.tagCooldown <= 0 && distance(this.player, this.target) < this.player.radius + this.target.radius) {
-        this.score += 1;
-        this.tagCooldown = 0.45;
-        this.target.x = 90 + Math.random() * (this.options.width - 180);
-        this.target.y = 90 + Math.random() * (this.options.height - 180);
-        this.track('tag', { score: this.score, remaining: Math.ceil(this.remaining) });
-      }
+      return { x: move.x / len, y: move.y / len };
     }
 
     moveRunner(runner, chaser, delta, speed, seconds) {
@@ -233,25 +295,80 @@
       const len = Math.max(1, Math.hypot(dx, dy));
       dx /= len;
       dy /= len;
-      runner.x += (dx * speed + Math.cos(seconds * 3.1) * 42) * delta;
-      runner.y += (dy * speed + Math.sin(seconds * 2.7) * 42) * delta;
+      runner.x += (dx * speed + Math.cos(seconds * 3.1) * 54) * delta;
+      runner.y += (dy * speed + Math.sin(seconds * 2.7) * 54) * delta;
+      runner.x = clamp(runner.x, 36, this.options.width - 36);
+      runner.y = clamp(runner.y, 36, this.options.height - 36);
+    }
 
-      if (runner.x < 36 || runner.x > this.options.width - 36) runner.x = clamp(runner.x, 36, this.options.width - 36);
-      if (runner.y < 36 || runner.y > this.options.height - 36) runner.y = clamp(runner.y, 36, this.options.height - 36);
+    placeSignal() {
+      this.signal.x = 70 + Math.random() * (this.options.width - 140);
+      this.signal.y = 70 + Math.random() * (this.options.height - 140);
+      this.signal.pulse = 1;
+    }
+
+    recordHeat(point) {
+      const col = clamp(Math.floor(point.x / (this.options.width / this.heat.cols)), 0, this.heat.cols - 1);
+      const row = clamp(Math.floor(point.y / (this.options.height / this.heat.rows)), 0, this.heat.rows - 1);
+      this.heat.cells[row * this.heat.cols + col] += 1;
+      if (Math.random() < 0.04) writeJson(HEAT_KEY, this.heat);
+    }
+
+    topHeatCells() {
+      return this.heat.cells
+        .map((count, index) => ({ cell: index, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+    }
+
+    eventCount() {
+      return readEvents().length;
     }
 
     renderHud() {
       this.scoreEl.textContent = this.score;
+      this.comboEl.textContent = `x${Math.ceil(this.combo)}`;
       this.timeEl.textContent = `${Math.ceil(this.remaining)}s`;
       this.bestEl.textContent = this.best;
+      this.trackingEl.textContent = `Events: ${this.eventCount()} · Campaign: ${this.options.campaign}`;
     }
 
     draw() {
       const ctx = this.ctx;
-      ctx.clearRect(0, 0, this.options.width, this.options.height);
+      const shakeX = this.shake ? (Math.random() - 0.5) * this.shake * 8 : 0;
+      const shakeY = this.shake ? (Math.random() - 0.5) * this.shake * 8 : 0;
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      ctx.clearRect(-12, -12, this.options.width + 24, this.options.height + 24);
       ctx.fillStyle = '#e7f7f1';
-      ctx.fillRect(0, 0, this.options.width, this.options.height);
+      ctx.fillRect(-12, -12, this.options.width + 24, this.options.height + 24);
+      this.drawHeat();
+      this.drawGrid();
+      this.drawZone(120, 100, '#ffc857');
+      this.drawZone(620, 440, '#2f6fed');
+      this.decoys.forEach((decoy) => this.drawRunner(decoy, 'decoy'));
+      this.drawSignal();
+      this.drawRunner(this.target, 'target');
+      this.drawRunner(this.player, 'player');
+      ctx.restore();
+    }
 
+    drawHeat() {
+      const ctx = this.ctx;
+      const cellW = this.options.width / this.heat.cols;
+      const cellH = this.options.height / this.heat.rows;
+      const max = Math.max(1, ...this.heat.cells);
+      this.heat.cells.forEach((count, index) => {
+        if (!count) return;
+        const col = index % this.heat.cols;
+        const row = Math.floor(index / this.heat.cols);
+        ctx.fillStyle = `rgba(255, 200, 87, ${Math.min(0.28, count / max * 0.28)})`;
+        ctx.fillRect(col * cellW, row * cellH, cellW, cellH);
+      });
+    }
+
+    drawGrid() {
+      const ctx = this.ctx;
       ctx.strokeStyle = 'rgba(22,24,29,0.12)';
       ctx.lineWidth = 2;
       for (let x = 40; x < this.options.width; x += 80) {
@@ -266,12 +383,6 @@
         ctx.lineTo(this.options.width, y);
         ctx.stroke();
       }
-
-      this.drawZone(120, 100, '#ffc857');
-      this.drawZone(620, 440, '#2f6fed');
-      this.decoys.forEach((decoy) => this.drawRunner(decoy, 'decoy'));
-      this.drawRunner(this.target, 'target');
-      this.drawRunner(this.player, 'player');
     }
 
     drawZone(x, y, color) {
@@ -284,6 +395,30 @@
       ctx.strokeStyle = '#16181d';
       ctx.lineWidth = 3;
       ctx.strokeRect(x - 58, y - 34, 116, 68);
+    }
+
+    drawSignal() {
+      const ctx = this.ctx;
+      const pulse = 1 + Math.sin(performance.now() / 170) * 0.08;
+      ctx.save();
+      ctx.translate(this.signal.x, this.signal.y);
+      ctx.rotate(performance.now() / 650);
+      ctx.fillStyle = '#ffc857';
+      ctx.strokeStyle = '#16181d';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i += 1) {
+        const angle = (Math.PI * 2 * i) / 8;
+        const radius = (i % 2 ? 10 : 18) * pulse;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
 
     drawRunner(runner, type) {
@@ -320,19 +455,26 @@
     finish() {
       this.running = false;
       cancelAnimationFrame(this.animation);
+      writeJson(HEAT_KEY, this.heat);
       const previousBest = this.best;
       this.best = Math.max(this.best, this.score);
-      localStorage.setItem('tag-game-best', String(this.best));
+      localStorage.setItem(BEST_KEY, String(this.best));
       this.renderHud();
-      this.overlayTitle.textContent = this.score > previousBest ? 'New best' : 'Round over';
-      this.overlayCopy.textContent = `You tagged ${this.score} runner${this.score === 1 ? '' : 's'}.`;
+      this.overlayTitle.textContent = this.score > previousBest ? 'New best signal' : 'Round captured';
+      this.overlayCopy.textContent = `Score ${this.score}. Signals ${this.signals}. Top heat cells: ${this.topHeatCells().map((cell) => cell.cell).join(', ')}.`;
       this.startButton.textContent = 'Play again';
       this.overlay.hidden = false;
-      this.track('finish', { score: this.score, best: this.best });
+      this.track('finish', {
+        score: this.score,
+        best: this.best,
+        signals: this.signals,
+        heat: this.topHeatCells()
+      });
     }
 
     track(type, detail = {}) {
       const event = {
+        version: VERSION,
         type,
         campaign: this.options.campaign,
         site: this.options.site,
@@ -347,12 +489,17 @@
   }
 
   window.TagGame = {
+    version: VERSION,
     create(root, options) {
       return new TagGame(root, options);
     },
     getEvents: readEvents,
+    getHeat() {
+      return readJson(HEAT_KEY, createHeat());
+    },
     clearEvents() {
-      writeEvents([]);
+      writeJson(STORAGE_KEY, []);
+      writeJson(HEAT_KEY, createHeat());
       window.dispatchEvent(new CustomEvent('tag-game:event', { detail: null }));
     }
   };
