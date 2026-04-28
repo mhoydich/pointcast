@@ -1,0 +1,628 @@
+---
+/**
+ * /drum-tv-bingo — DRUM BINGO · TV game · nouns-drum
+ * 2026-04-28 PT.
+ *
+ * Cast this URL to a TV. Every visitor in /api/visit gets a 5x5 bingo
+ * card auto-rendered with their Noun head as the avatar at the top.
+ * The cells are 24 event types from the drum bus (drum, organ, choir,
+ * kettle stoke, theremin, milestone, etc.) plus a free-space center.
+ * As events fire on /api/sounds, every matching cell across every
+ * visible card auto-marks. First card to BINGO (5-in-a-row, column,
+ * or diagonal) wins the round.
+ *
+ * Card contents are deterministic per session: hash(pid + 'bingo')
+ * shuffles the event pool and picks the first 24 entries. So a given
+ * Noun always sees the same card across reloads, and the TV always
+ * shows the same arrangement for that player.
+ *
+ * Visual: huge title at top, one card per visitor in a 4-column grid,
+ * Noun head sticking out of each card. WINNER banner overlays the TV
+ * when first card hits BINGO. Stays for 8s, then a new round resets
+ * marks (cards stay assigned).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-tv-bingo — DRUM BINGO · TV game';
+const description =
+  'TV game for the drum hub. Every visitor gets a 5x5 bingo card pre-filled with drum-event types. The bus marks your cells as the room plays. First to BINGO wins. Cast to a TV.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-tv-bingo',
+  name: 'PointCast Drum · TV · Bingo',
+  url: 'https://pointcast.xyz/drum-tv-bingo',
+  description,
+};
+
+// 24 cell types. The center will always be FREE.
+const CELLS = [
+  { key: 'drum',       label: 'DRUM',       color: '#ff5c23' },
+  { key: 'orchestra',  label: 'ORCH',       color: '#ffd400' },
+  { key: 'choir',      label: 'CHOIR',      color: '#5fbafd' },
+  { key: 'lounge',     label: 'LOUNGE',     color: '#b8431a' },
+  { key: 'theremin',   label: 'THEREMIN',   color: '#ff8a4a' },
+  { key: 'symphony',   label: 'SYMPHONY',   color: '#d6745f' },
+  { key: 'bells',      label: 'BELLS',      color: '#fff7c2' },
+  { key: 'organ',      label: 'ORGAN',      color: '#c9a449' },
+  { key: 'strings',    label: 'STRINGS',    color: '#e8c896' },
+  { key: 'daily',      label: 'DAILY',      color: '#94d4ff' },
+  { key: 'kettle',     label: 'KETTLE',     color: '#5fbafd' },
+  { key: 'potato',     label: 'POTATO',     color: '#fffaf0' },
+  { key: 'milestone',  label: '★ MILESTONE',color: '#ffd400' },
+  { key: 'jam',        label: 'JAM',        color: '#a83b2a' },
+  { key: 'confessional',label: 'SOFT',      color: '#ff8a4a' },
+  // Drum-flavored extras (these match seed/inst/voice details when present)
+  { key: 'drum-combo3',label: 'COMBO 3+',   color: '#ff5c23' },
+  { key: 'choir-low',  label: 'BASS VOICE', color: '#185fa5' },
+  { key: 'orch-kick',  label: 'KICK',       color: '#a83b2a' },
+  { key: 'organ-pedal',label: 'PEDAL POINT',color: '#c9a449' },
+  { key: 'bells-c',    label: 'C BELL',     color: '#fff7c2' },
+  { key: 'theremin-hi',label: 'GLISS UP',   color: '#ff8a4a' },
+  { key: 'kettle-boil',label: '🫖 BOIL',    color: '#5fbafd' },
+  { key: 'jam-amp',    label: 'AMPLIFY',    color: '#ffd400' },
+  { key: 'agent',      label: 'AGENT TAP',  color: '#1a1a1a' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="bg" id="bg-main">
+    <DrumNav current="tv-bingo" />
+
+    <header class="bg__head">
+      <p class="bg__kicker">DRUM HUB · TV GAME · BINGO · LIVE</p>
+      <h1 class="bg__title"><em>DRUM BINGO.</em></h1>
+      <p class="bg__dek">
+        Cast this to a TV. Every visitor gets a 5×5 bingo card with their Noun on top. The bus marks your cells as the room plays. First card to BINGO wins the round.
+      </p>
+      <p class="bg__hint mono">F · fullscreen · M · hide chrome · 1·2·3 · palettes</p>
+    </header>
+
+    <section class="bg__board" data-palette="black">
+      <div class="bg__board-strip" id="bg-strip">
+        <span class="bg__board-stat mono">visitors: <strong id="bg-visitors">—</strong></span>
+        <span class="bg__board-stat mono">last call: <strong id="bg-lastcall">—</strong></span>
+        <span class="bg__board-stat mono">round: <strong id="bg-round">1</strong></span>
+        <span class="bg__board-stat mono">winners: <strong id="bg-winner-count">0</strong></span>
+      </div>
+
+      <div class="bg__cards" id="bg-cards">
+        <p class="bg__empty mono" id="bg-empty">— waiting for visitors —</p>
+      </div>
+
+      <div class="bg__winner" id="bg-winner" hidden>
+        <p class="bg__winner-eyebrow mono">★ BINGO ★</p>
+        <p class="bg__winner-name" id="bg-winner-name">—</p>
+        <img class="bg__winner-noun" id="bg-winner-noun" alt="" width="240" height="240" />
+        <p class="bg__winner-line mono" id="bg-winner-line">5 in a row · row 3</p>
+      </div>
+    </section>
+
+    <footer class="bg__foot">
+      <p class="mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · TV game · sprint 1/3</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    // Cells pool injected via window.__bgCells from frontmatter define:vars below.
+    const POOL = window.__bgCells || [];
+
+    const visitorsEl = document.getElementById('bg-visitors');
+    const lastCallEl = document.getElementById('bg-lastcall');
+    const roundEl = document.getElementById('bg-round');
+    const winnerCountEl = document.getElementById('bg-winner-count');
+    const cardsEl = document.getElementById('bg-cards');
+    const emptyEl = document.getElementById('bg-empty');
+    const winnerOverlay = document.getElementById('bg-winner');
+    const winnerName = document.getElementById('bg-winner-name');
+    const winnerNoun = document.getElementById('bg-winner-noun');
+    const winnerLine = document.getElementById('bg-winner-line');
+
+    // Hash → seeded shuffle
+    function hash32(str) {
+      let h = 5381;
+      for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) & 0x7fffffff;
+      return h;
+    }
+    function seededShuffle(arr, seed) {
+      const a = [...arr];
+      let s = seed;
+      for (let i = a.length - 1; i > 0; i--) {
+        s = (s * 1664525 + 1013904223) & 0x7fffffff;
+        const j = s % (i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildCard(pid) {
+      const seed = hash32(pid + 'bingo:r' + roundIdx);
+      const shuffled = seededShuffle(POOL, seed);
+      const cells = shuffled.slice(0, 24);
+      // Insert FREE at center (index 12)
+      cells.splice(12, 0, { key: 'free', label: 'ON AIR', color: '#ffd400', free: true });
+      return cells;
+    }
+
+    let roundIdx = 1;
+    let lastTs = 0;
+    let cards = new Map(); // pid -> {cells: [], marked: Set<idx>, nounId, hasBingo: false}
+    let calledKeys = new Set(['free']);
+    let bingoOrder = [];
+
+    function eventToKey(e) {
+      // Map an /api/sounds event to one of our card cell keys
+      const t = e.type || '';
+      const keys = [];
+      if (t === 'drum') {
+        keys.push('drum');
+        if ((e.seed || 1) >= 3) keys.push('drum-combo3');
+      } else if (t === 'orchestra') {
+        keys.push('orchestra');
+        if ((e.inst || '').toLowerCase().includes('kick')) keys.push('orch-kick');
+      } else if (t === 'choir') {
+        keys.push('choir');
+        const v = (e.voice || '').toLowerCase();
+        if (v.includes('bass') || v.includes('low') || v.includes('tenor-c')) keys.push('choir-low');
+      } else if (t === 'lounge') keys.push('lounge');
+      else if (t === 'theremin') {
+        keys.push('theremin');
+        if ((e.hz || 0) > 700) keys.push('theremin-hi');
+      } else if (t === 'symphony') keys.push('symphony');
+      else if (t === 'bells') {
+        keys.push('bells');
+        if ((e.bellId || '').endsWith('c') || Math.abs((e.hz || 0) - 261.63) < 6 || Math.abs((e.hz || 0) - 523.25) < 6 || Math.abs((e.hz || 0) - 1047) < 6) {
+          keys.push('bells-c');
+        }
+      } else if (t === 'organ') {
+        keys.push('organ');
+        if ((e.note || '').match(/[CDEFGAB][0-9]/) && (e.note || '').endsWith('2')) keys.push('organ-pedal');
+        // Treat any organ note with stop=pedal-on context as pedal-point (we don't have that flag, so leave above heuristic)
+      } else if (t === 'strings') keys.push('strings');
+      else if (t === 'daily') keys.push('daily');
+      else if (t === 'kettle') {
+        keys.push('kettle');
+        if (e.action === 'boil' || e.action === 'whistle') keys.push('kettle-boil');
+      } else if (t === 'potato') keys.push('potato');
+      else if (t === 'milestone') keys.push('milestone');
+      else if (t === 'jam') {
+        keys.push('jam');
+        if (e.action === 'amplify') keys.push('jam-amp');
+      } else if (t === 'confessional') keys.push('confessional');
+
+      // pid-prefixed sessionId of mcp- means "agent tap"
+      if ((e.pid || '').length === 10 && (e.sessionId || '').startsWith('mcp-')) keys.push('agent');
+
+      return keys;
+    }
+
+    function makeCardEl(pid, nounId) {
+      const card = document.createElement('article');
+      card.className = 'bg__card';
+      card.dataset.pid = pid;
+      card.innerHTML = `
+        <header class="bg__card-head">
+          <img class="bg__card-noun" src="https://noun.pics/${nounId}.svg" alt="" width="56" height="56" loading="lazy" />
+          <div class="bg__card-meta">
+            <p class="bg__card-name">noun #${nounId}</p>
+            <p class="bg__card-pid mono">pid ${pid.slice(0, 8)}</p>
+          </div>
+          <span class="bg__card-bingo" data-state="off">—</span>
+        </header>
+        <div class="bg__card-grid"></div>
+      `;
+      const grid = card.querySelector('.bg__card-grid');
+      const cells = buildCard(pid);
+      cells.forEach((c, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'bg__cell' + (c.free ? ' bg__cell--free' : '') + (calledKeys.has(c.key) ? ' bg__cell--marked' : '');
+        cell.dataset.key = c.key;
+        cell.style.setProperty('--bg-cell-color', c.color);
+        cell.textContent = c.label;
+        grid.appendChild(cell);
+      });
+      cards.set(pid, { el: card, cells, nounId, hasBingo: false });
+      return card;
+    }
+
+    function checkBingo(state) {
+      const cells = state.cells;
+      const marks = cells.map((c) => calledKeys.has(c.key));
+      // Rows
+      for (let r = 0; r < 5; r++) {
+        if (marks.slice(r * 5, r * 5 + 5).every(Boolean)) return { kind: 'row', idx: r };
+      }
+      for (let c = 0; c < 5; c++) {
+        if ([0,1,2,3,4].every((r) => marks[r * 5 + c])) return { kind: 'col', idx: c };
+      }
+      if ([0,6,12,18,24].every((i) => marks[i])) return { kind: 'diag', idx: 0 };
+      if ([4,8,12,16,20].every((i) => marks[i])) return { kind: 'diag', idx: 1 };
+      return null;
+    }
+
+    function recomputeMarks() {
+      cards.forEach((state) => {
+        const cellsEls = state.el.querySelectorAll('.bg__cell');
+        state.cells.forEach((c, i) => {
+          if (calledKeys.has(c.key)) cellsEls[i].classList.add('bg__cell--marked');
+          else cellsEls[i].classList.remove('bg__cell--marked');
+        });
+        const result = checkBingo(state);
+        const banner = state.el.querySelector('.bg__card-bingo');
+        if (result && !state.hasBingo) {
+          state.hasBingo = true;
+          banner.dataset.state = 'on';
+          banner.textContent = 'BINGO ✓';
+          state.el.classList.add('bg__card--won');
+          announceWinner(state, result);
+        } else if (result) {
+          banner.textContent = 'BINGO ✓';
+        }
+      });
+      winnerCountEl.textContent = String([...cards.values()].filter((s) => s.hasBingo).length);
+    }
+
+    function announceWinner(state, result) {
+      bingoOrder.push(state.nounId);
+      winnerName.textContent = `noun #${state.nounId}`;
+      winnerNoun.src = `https://noun.pics/${state.nounId}.svg`;
+      const kind = result.kind === 'row' ? `5 in a row · row ${result.idx + 1}`
+                : result.kind === 'col' ? `5 in a column · col ${result.idx + 1}`
+                : `diagonal · ${result.idx === 0 ? '↘' : '↙'}`;
+      winnerLine.textContent = kind;
+      winnerOverlay.hidden = false;
+      setTimeout(() => { winnerOverlay.hidden = true; }, 8000);
+    }
+
+    function newRound() {
+      roundIdx += 1;
+      roundEl.textContent = String(roundIdx);
+      calledKeys = new Set(['free']);
+      bingoOrder = [];
+      // Rebuild every card with new seed (so each round has different layouts)
+      cards.forEach((state, pid) => {
+        const newCells = buildCard(pid);
+        state.cells = newCells;
+        state.hasBingo = false;
+        const grid = state.el.querySelector('.bg__card-grid');
+        grid.innerHTML = '';
+        newCells.forEach((c) => {
+          const cell = document.createElement('div');
+          cell.className = 'bg__cell' + (c.free ? ' bg__cell--free' : '');
+          cell.dataset.key = c.key;
+          cell.style.setProperty('--bg-cell-color', c.color);
+          cell.textContent = c.label;
+          grid.appendChild(cell);
+        });
+        const banner = state.el.querySelector('.bg__card-bingo');
+        banner.dataset.state = 'off';
+        banner.textContent = '—';
+        state.el.classList.remove('bg__card--won');
+      });
+      winnerCountEl.textContent = '0';
+    }
+
+    let restartTimer = null;
+
+    async function pollVisit() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const present = (Array.isArray(data.present) ? data.present : []).filter((p) => typeof p.nounId === 'number' && p.pid);
+        // Add cards for new visitors
+        present.forEach((p) => {
+          if (!cards.has(p.pid)) {
+            cardsEl.appendChild(makeCardEl(p.pid, p.nounId));
+          }
+        });
+        // Remove cards for visitors that left
+        const presentSet = new Set(present.map((p) => p.pid));
+        cards.forEach((state, pid) => {
+          if (!presentSet.has(pid)) {
+            state.el.remove();
+            cards.delete(pid);
+          }
+        });
+        visitorsEl.textContent = String(cards.size);
+        emptyEl.style.display = cards.size === 0 ? '' : 'none';
+        recomputeMarks();
+      } catch {}
+    }
+
+    async function pollSounds() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) {
+          lastTs = events[events.length - 1].t || Date.now();
+          let lastCall = '';
+          for (const e of events) {
+            const keys = eventToKey(e);
+            keys.forEach((k) => calledKeys.add(k));
+            if (keys.length) lastCall = keys[0].toUpperCase();
+          }
+          if (lastCall) lastCallEl.textContent = lastCall;
+          recomputeMarks();
+          // Auto-restart after first BINGO + 12s
+          const bingoSeen = [...cards.values()].some((s) => s.hasBingo);
+          if (bingoSeen && !restartTimer) {
+            restartTimer = setTimeout(() => {
+              newRound();
+              restartTimer = null;
+            }, 12000);
+          }
+        }
+      } catch {}
+    }
+
+    pollVisit();
+    pollSounds();
+    setInterval(pollVisit, 5000);
+    setInterval(pollSounds, 1500);
+
+    // Hotkeys
+    let overlayOn = true;
+    function applyOverlay() {
+      document.documentElement.classList.toggle('bg-no-overlay', !overlayOn);
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
+      if (e.key === 'm' || e.key === 'M') { overlayOn = !overlayOn; applyOverlay(); }
+      if (e.key === '1') document.querySelector('.bg__board').dataset.palette = 'black';
+      if (e.key === '2') document.querySelector('.bg__board').dataset.palette = 'paper';
+      if (e.key === '3') document.querySelector('.bg__board').dataset.palette = 'sunset';
+    });
+  })();
+</script>
+
+<script is:inline define:vars={{ CELLS }}>
+  // Frontmatter-baked cell pool — passed into the player script via window.
+  window.__bgCells = CELLS;
+</script>
+
+<style>
+  :global(.bg-no-overlay) .bg__head,
+  :global(.bg-no-overlay) :global(.drum-nav),
+  :global(.bg-no-overlay) .bg__foot { display: none; }
+
+  .bg {
+    min-height: 100vh;
+    padding: 8px 8px 24px;
+    background: #050310;
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .bg__head {
+    max-width: 1480px;
+    margin: 0 auto 12px;
+    padding: 0 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+  }
+  .bg__kicker {
+    grid-column: 1 / -1;
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .bg__title { margin: 0; font-family: 'Bungee', Impact, sans-serif; font-size: clamp(40px, 6vw, 72px); line-height: 1; letter-spacing: 0.02em; color: #ffd400; text-shadow: 4px 4px 0 #ff5c23; }
+  .bg__title em { font-style: italic; }
+  .bg__dek { margin: 0; font-size: 13px; line-height: 1.55; max-width: 56ch; color: #cfc6df; }
+  .bg__hint { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.18em; color: #ff8a4a; }
+
+  .bg__board {
+    position: relative;
+    max-width: 1480px;
+    margin: 0 auto;
+    background: #0c0820;
+    border: 4px solid #ffd400;
+    box-shadow: 0 0 60px rgba(255, 212, 0, 0.18) inset, 6px 6px 0 0 #050310;
+    padding: 12px;
+    overflow: hidden;
+  }
+  .bg__board[data-palette='paper']  { background: #fffaf0; color: #12110e; border-color: #12110e; }
+  .bg__board[data-palette='sunset'] { background: #2a1228; }
+
+  .bg__board-strip {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    margin: 0 0 10px;
+    background: #050310;
+    border: 1.5px solid #ffd400;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: #cfc6df;
+  }
+  .bg__board[data-palette='paper'] .bg__board-strip { background: #fffaf0; color: #12110e; border-color: #12110e; }
+  .bg__board-stat strong { color: #ffd400; font-weight: 700; }
+
+  .bg__cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 10px;
+    min-height: 200px;
+    align-items: start;
+  }
+  .bg__empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 0;
+    color: #5f5e5a;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+  }
+
+  .bg__card {
+    background: #050310;
+    border: 2px solid #ffd400;
+    box-shadow: 3px 3px 0 0 #050310;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 200ms, box-shadow 200ms;
+  }
+  .bg__board[data-palette='paper'] .bg__card { background: #fffaf0; color: #12110e; border-color: #12110e; box-shadow: 3px 3px 0 0 #12110e; }
+  .bg__card--won {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 0 #ff5c23, 0 0 30px rgba(255, 212, 0, 0.6);
+    animation: bg-pulse 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes bg-pulse {
+    0%   { box-shadow: 6px 6px 0 0 #ff5c23, 0 0 30px rgba(255, 212, 0, 0.4); }
+    100% { box-shadow: 6px 6px 0 0 #ff5c23, 0 0 50px rgba(255, 212, 0, 0.85); }
+  }
+
+  .bg__card-head {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 4px;
+  }
+  .bg__card-noun {
+    image-rendering: pixelated;
+    border: 1.5px solid #ffd400;
+    background: #fffaf0;
+  }
+  .bg__board[data-palette='paper'] .bg__card-noun { border-color: #12110e; }
+  .bg__card-meta { min-width: 0; }
+  .bg__card-name {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 16px;
+    line-height: 1.1;
+  }
+  .bg__card-pid {
+    margin: 2px 0 0;
+    font-size: 10px;
+    color: #5f5e5a;
+    letter-spacing: 0.16em;
+  }
+  .bg__card-bingo {
+    padding: 4px 8px;
+    background: #2c1d05;
+    color: #5f5e5a;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    border: 1.5px solid #5f5e5a;
+  }
+  .bg__card-bingo[data-state='on'] {
+    background: #ff5c23;
+    color: #fffaf0;
+    border-color: #ff5c23;
+    animation: bg-flash 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes bg-flash { 0% { opacity: 1; } 100% { opacity: 0.7; } }
+
+  .bg__card-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+  }
+  .bg__cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fffaf0;
+    color: #12110e;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    border: 1px solid #5f5e5a;
+    padding: 2px;
+    transition: background 200ms, color 200ms;
+  }
+  .bg__cell--free {
+    background: #ffd400;
+    color: #12110e;
+    font-weight: 700;
+    border-color: #12110e;
+  }
+  .bg__cell--marked {
+    background: var(--bg-cell-color, #ff5c23);
+    color: #050310;
+    border-color: #050310;
+    font-weight: 700;
+    box-shadow: inset 0 0 0 2px #050310;
+  }
+
+  .bg__winner {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 3, 16, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 50;
+    backdrop-filter: blur(6px);
+  }
+  .bg__winner-eyebrow {
+    margin: 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: clamp(32px, 5vw, 72px);
+    color: #ffd400;
+    letter-spacing: 0.16em;
+    text-shadow: 6px 6px 0 #ff5c23;
+    animation: bg-pop 0.5s ease-out;
+  }
+  @keyframes bg-pop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    70%  { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .bg__winner-name {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: clamp(28px, 4vw, 56px);
+    color: #fffaf0;
+  }
+  .bg__winner-noun {
+    image-rendering: pixelated;
+    border: 4px solid #ffd400;
+    box-shadow: 6px 6px 0 0 #ff5c23;
+    background: #fffaf0;
+  }
+  .bg__winner-line {
+    margin: 0;
+    font-size: 14px;
+    letter-spacing: 0.22em;
+    color: #ff8a4a;
+  }
+
+  .bg__foot {
+    max-width: 1480px;
+    margin: 12px auto 0;
+    padding: 8px 6px 0;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 10px;
+    color: #5f5e5a;
+    letter-spacing: 0.16em;
+  }
+</style>
