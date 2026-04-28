@@ -18,6 +18,13 @@ const STAMPS = [
   { id: 'woodlot-keeper', label: 'Woodlot Keeper', threshold: 8, note: 'Protect the loop.' },
 ];
 
+const ORDERS = [
+  { id: 'warm-up', label: 'Warm-up chops', metric: 'totalChops', target: 10, reward: '+8 wood', note: 'Make ten clean chops and settle into rhythm.' },
+  { id: 'first-bank', label: 'Bank the commons', metric: 'bundles', target: 1, reward: '+1 seed', note: 'Turn twelve wood into a local receipt.' },
+  { id: 'plant-care', label: 'Plant care', metric: 'plants', target: 2, reward: '+6 energy', note: 'Put seeds back into the woodlot.' },
+  { id: 'crew-check', label: 'Meet the crew', metric: 'helperVisits', target: 3, reward: '+12 wood', note: 'Try three Noun helpers and learn their roles.' },
+];
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -25,7 +32,7 @@ const jsonLd = {
       '@type': 'VideoGame',
       '@id': 'https://pointcast.xyz/nouns-wood-chop#game',
       name: 'Nouns Wood Chop Commons',
-      description: 'A browser-playable pixel collect loop where visitors chop trees, collect wood, bank bundles, plant seeds, and unlock local Nouns stamps.',
+      description: 'A browser-playable pixel collect loop where visitors choose Noun helpers, chop trees, complete orders, trigger helper moves, bank bundles, plant seeds, and unlock local Nouns stamps.',
       url: 'https://pointcast.xyz/nouns-wood-chop',
       image: 'https://pointcast.xyz/images/nouns-wood-chop/pixel-woodlot.svg',
       gamePlatform: 'Web browser',
@@ -62,7 +69,7 @@ const jsonLd = {
   }}
 >
   <div class="wood-page" data-wood-game>
-    <script type="application/json" id="wood-game-data" set:html={JSON.stringify({ trees: TREES, stamps: STAMPS })}></script>
+    <script type="application/json" id="wood-game-data" set:html={JSON.stringify({ trees: TREES, stamps: STAMPS, orders: ORDERS })}></script>
 
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a>
@@ -77,7 +84,7 @@ const jsonLd = {
         <p class="kicker">Nouns / pixel collect loop</p>
         <h1 id="wood-title">Wood Chop Commons</h1>
         <p>
-          Pick a Noun helper, chop the tree, catch rhythm bonuses, bank bundles, plant seeds, and unlock local Nouns stamps. Spacebar works too.
+          Pick a Noun helper, chop the tree, fill orders, fire helper moves, bank bundles, plant seeds, and unlock local Nouns stamps. Spacebar works too.
         </p>
       </div>
       <div class="hud" aria-label="Wood Chop status">
@@ -86,6 +93,7 @@ const jsonLd = {
         <div><span>SEEDS</span><strong data-seeds>0</strong></div>
         <div><span>ENERGY</span><strong data-energy>0</strong></div>
         <div><span>STREAK</span><strong data-streak>0</strong></div>
+        <div><span>ORDERS</span><strong data-orders-done>0/4</strong></div>
       </div>
     </section>
 
@@ -140,8 +148,15 @@ const jsonLd = {
           <strong data-burst-text>0 / 8</strong>
         </div>
 
+        <div class="command-charge" aria-label="Helper move charge">
+          <span>Helper move</span>
+          <div><i data-command-bar></i></div>
+          <strong data-command-text>0 / 6</strong>
+        </div>
+
         <div class="controls" aria-label="Wood Chop controls">
           <button type="button" class="btn btn--primary" data-action="chop">Chop</button>
+          <button type="button" class="btn" data-action="command">Helper move</button>
           <button type="button" class="btn" data-action="bank">Bank bundle</button>
           <button type="button" class="btn" data-action="plant">Plant seed</button>
           <button type="button" class="btn" data-action="rest">Rest</button>
@@ -162,6 +177,26 @@ const jsonLd = {
           <span class="mono">HELPER</span>
           <strong data-helper-name>Cypress Noun 313</strong>
           <p><span data-helper-skill>Rhythm chop</span> · <span data-helper-effect>+1 wood on every fourth streak</span></p>
+        </div>
+
+        <div class="orders-panel" aria-label="Woodlot orders">
+          <div class="orders-panel__head">
+            <span class="mono">ORDERS</span>
+            <strong data-orders-summary>0 / 4 done</strong>
+          </div>
+          <div class="order-stack">
+            {ORDERS.map((order) => (
+              <article class="order" data-order-id={order.id} data-order-metric={order.metric} data-order-target={order.target}>
+                <div>
+                  <span>{order.reward}</span>
+                  <strong>{order.label}</strong>
+                  <p>{order.note}</p>
+                </div>
+                <div class="order__progress" aria-hidden="true"><i data-order-bar></i></div>
+                <small><span data-order-progress>0</span> / {order.target}</small>
+              </article>
+            ))}
+          </div>
         </div>
 
         <div class="bundle-rule">
@@ -202,11 +237,13 @@ const jsonLd = {
       var DATA = JSON.parse(dataEl.textContent || '{}');
       var TREES = DATA.trees || [];
       var STAMPS = DATA.stamps || [];
+      var ORDERS = DATA.orders || [];
       var STATE_KEY = 'pc:nouns-wood-chop:v1';
       var PASSPORT_KEY = 'pc:passport:stamps';
       var MAX_ENERGY = 12;
       var BUNDLE_SIZE = 12;
       var BURST_TARGET = 8;
+      var COMMAND_TARGET = 6;
       var pulseTimers = {};
 
       var els = {
@@ -221,6 +258,10 @@ const jsonLd = {
         healthText: root.querySelector('[data-health-text]'),
         burstBar: root.querySelector('[data-burst-bar]'),
         burstText: root.querySelector('[data-burst-text]'),
+        commandBar: root.querySelector('[data-command-bar]'),
+        commandText: root.querySelector('[data-command-text]'),
+        ordersDone: root.querySelector('[data-orders-done]'),
+        ordersSummary: root.querySelector('[data-orders-summary]'),
         receipts: root.querySelector('[data-receipts]'),
         scene: root.querySelector('.pixel-scene'),
         dropLayer: root.querySelector('[data-drop-layer]'),
@@ -257,6 +298,11 @@ const jsonLd = {
           lastChop: 0,
           helperIndex: 0,
           burst: 0,
+          command: 0,
+          totalChops: 0,
+          plants: 0,
+          helperVisits: [],
+          ordersClaimed: [],
           receipts: [],
           unlocked: [],
         };
@@ -265,9 +311,14 @@ const jsonLd = {
       var state = Object.assign(blankState(), readJson(STATE_KEY, {}));
       state.receipts = Array.isArray(state.receipts) ? state.receipts : [];
       state.unlocked = Array.isArray(state.unlocked) ? state.unlocked : [];
+      state.helperVisits = Array.isArray(state.helperVisits) ? state.helperVisits : [];
+      state.ordersClaimed = Array.isArray(state.ordersClaimed) ? state.ordersClaimed : [];
       state.treeIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.treeIndex) || 0));
       state.helperIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.helperIndex) || 0));
       state.burst = Math.max(0, Math.min(BURST_TARGET, Number(state.burst) || 0));
+      state.command = Math.max(0, Math.min(COMMAND_TARGET, Number(state.command) || 0));
+      state.totalChops = Math.max(0, Number(state.totalChops) || 0);
+      state.plants = Math.max(0, Number(state.plants) || 0);
       if (!state.health || state.health < 1) state.health = currentTree().health;
 
       function currentTree() {
@@ -276,6 +327,12 @@ const jsonLd = {
 
       function currentHelper() {
         return TREES[state.helperIndex] || TREES[0] || currentTree();
+      }
+
+      function markHelper(index) {
+        var helper = TREES[index] || TREES[0];
+        if (!helper || !helper.id || state.helperVisits.indexOf(helper.id) !== -1) return;
+        state.helperVisits.push(helper.id);
       }
 
       function setStatus(message) {
@@ -314,6 +371,53 @@ const jsonLd = {
             receipt('Unlocked stamp: ' + stamp.label + '.');
           }
         });
+      }
+
+      function metricValue(metric) {
+        if (metric === 'totalChops') return state.totalChops;
+        if (metric === 'bundles') return state.bundles;
+        if (metric === 'plants') return state.plants;
+        if (metric === 'helperVisits') return state.helperVisits.length;
+        if (metric === 'felled') return state.felled;
+        return 0;
+      }
+
+      function applyOrderReward(order) {
+        if (order.id === 'warm-up') {
+          state.wood += 8;
+          return '+8 wood';
+        }
+        if (order.id === 'first-bank') {
+          state.seeds += 1;
+          return '+1 seed';
+        }
+        if (order.id === 'plant-care') {
+          state.energy = Math.min(MAX_ENERGY, state.energy + 6);
+          return '+6 energy';
+        }
+        if (order.id === 'crew-check') {
+          state.wood += 12;
+          return '+12 wood';
+        }
+        return order.reward || 'reward';
+      }
+
+      function claimOrders() {
+        var claimed = [];
+        ORDERS.forEach(function (order) {
+          if (state.ordersClaimed.indexOf(order.id) !== -1) return;
+          if (metricValue(order.metric) < order.target) return;
+          state.ordersClaimed.push(order.id);
+          var reward = applyOrderReward(order);
+          claimed.push(order.label);
+          receipt('Order complete: ' + order.label + ' (' + reward + ').');
+        });
+        if (claimed.length) {
+          pulseScene('is-ordering', 560);
+          dropText('ORDER DONE', 'bundle');
+          setStatus('Order complete: ' + claimed[claimed.length - 1] + '. Reward added.');
+        }
+        return claimed.length;
       }
 
       function nextTree() {
@@ -379,6 +483,8 @@ const jsonLd = {
         state.lastChop = now;
         state.energy -= 1;
         state.burst = Math.min(BURST_TARGET, state.burst + 1);
+        state.command = Math.min(COMMAND_TARGET, state.command + 1);
+        state.totalChops += 1;
 
         var rhythmBonus = Math.min(3, Math.floor(state.streak / 5));
         var gain = 1 + Math.floor(Math.random() * 2) + rhythmBonus;
@@ -410,6 +516,7 @@ const jsonLd = {
           fellTree();
         }
 
+        claimOrders();
         save();
         render();
       }
@@ -428,6 +535,48 @@ const jsonLd = {
         setStatus('Tree down. New tree planted in the commons.');
       }
 
+      function useCommand() {
+        if (state.command < COMMAND_TARGET) {
+          setStatus('Helper move needs ' + (COMMAND_TARGET - state.command) + ' more chop' + (COMMAND_TARGET - state.command === 1 ? '' : 's') + '.');
+          render();
+          return;
+        }
+
+        state.command = 0;
+        var helper = currentHelper();
+        var label = helper.skill || 'Helper move';
+
+        if (helper.id === 'cypress') {
+          state.wood += 6;
+          state.burst = Math.min(BURST_TARGET, state.burst + 2);
+          label = 'Rhythm Riff';
+          dropText('RHYTHM RIFF +6', 'burst');
+        } else if (helper.id === 'pine') {
+          state.wood += 10;
+          state.health -= 2;
+          label = 'Double Crit';
+          dropText('DOUBLE CRIT +10', 'crit');
+        } else if (helper.id === 'palm') {
+          state.seeds += 2;
+          state.energy = Math.min(MAX_ENERGY, state.energy + 3);
+          label = 'Seed Rain';
+          dropText('SEED RAIN +2', 'seed');
+        } else if (helper.id === 'oak') {
+          state.wood += 8;
+          state.energy = Math.min(MAX_ENERGY, state.energy + 3);
+          label = 'Commons Haul';
+          dropText('COMMONS HAUL +8', 'bundle');
+        }
+
+        receipt('Used ' + label + ' with ' + helper.label + '.');
+        pulseScene('is-commanding', 620);
+        setStatus(label + ' landed.');
+        if (state.health <= 0) fellTree();
+        claimOrders();
+        save();
+        render();
+      }
+
       function bankBundle() {
         if (state.wood < BUNDLE_SIZE) {
           setStatus('Need ' + (BUNDLE_SIZE - state.wood) + ' more wood to bank a bundle.');
@@ -444,6 +593,7 @@ const jsonLd = {
         if (state.bundles === 1) stampPassport();
         updateUnlocked();
         setStatus('Bundle banked. Receipt saved locally.');
+        claimOrders();
         save();
         render();
       }
@@ -457,11 +607,13 @@ const jsonLd = {
 
         state.seeds -= 1;
         nextTree();
+        state.plants += 1;
         state.energy = Math.min(MAX_ENERGY, state.energy + 4);
         receipt('Planted a seed for ' + currentTree().label + '.');
         pulseScene('is-planting', 480);
         dropText('PLANTED', 'seed');
         setStatus('Seed planted. Energy recovered.');
+        claimOrders();
         save();
         render();
       }
@@ -484,7 +636,9 @@ const jsonLd = {
       function chooseHelper(index) {
         if (!Number.isInteger(index) || index < 0 || index >= TREES.length) return;
         state.helperIndex = index;
+        markHelper(index);
         setStatus(TREES[index].label + ' is helping.');
+        claimOrders();
         save();
         render();
       }
@@ -494,16 +648,21 @@ const jsonLd = {
         var helper = currentHelper();
         var healthPct = Math.max(0, Math.min(100, (state.health / tree.health) * 100));
         var burstPct = Math.max(0, Math.min(100, (state.burst / BURST_TARGET) * 100));
+        var commandPct = Math.max(0, Math.min(100, (state.command / COMMAND_TARGET) * 100));
+        var ordersDone = state.ordersClaimed.length;
         root.dataset.tree = tree.id;
         root.dataset.activeHelper = helper.id;
         root.style.setProperty('--health', healthPct + '%');
         root.style.setProperty('--burst', burstPct + '%');
+        root.style.setProperty('--command', commandPct + '%');
 
         if (els.wood) els.wood.textContent = String(state.wood);
         if (els.bundles) els.bundles.textContent = String(state.bundles);
         if (els.seeds) els.seeds.textContent = String(state.seeds);
         if (els.energy) els.energy.textContent = String(state.energy) + '/' + MAX_ENERGY;
         if (els.streak) els.streak.textContent = String(state.streak);
+        if (els.ordersDone) els.ordersDone.textContent = ordersDone + '/' + ORDERS.length;
+        if (els.ordersSummary) els.ordersSummary.textContent = ordersDone + ' / ' + ORDERS.length + ' done';
         if (els.treeName) els.treeName.textContent = tree.label;
         if (els.helperName) els.helperName.textContent = helper.label;
         if (els.helperSkill) els.helperSkill.textContent = helper.skill || 'Helper';
@@ -512,6 +671,8 @@ const jsonLd = {
         if (els.healthText) els.healthText.textContent = Math.max(0, state.health) + ' / ' + tree.health;
         if (els.burstBar) els.burstBar.style.width = burstPct + '%';
         if (els.burstText) els.burstText.textContent = state.burst + ' / ' + BURST_TARGET;
+        if (els.commandBar) els.commandBar.style.width = commandPct + '%';
+        if (els.commandText) els.commandText.textContent = state.command + ' / ' + COMMAND_TARGET;
 
         root.querySelectorAll('[data-helper]').forEach(function (button) {
           var index = Number(button.getAttribute('data-helper'));
@@ -532,11 +693,30 @@ const jsonLd = {
           el.classList.toggle('is-unlocked', done);
         });
 
+        root.querySelectorAll('[data-order-id]').forEach(function (el) {
+          var id = el.getAttribute('data-order-id');
+          var metric = el.getAttribute('data-order-metric') || '';
+          var target = Number(el.getAttribute('data-order-target')) || 1;
+          var value = metricValue(metric);
+          var complete = value >= target;
+          var claimed = state.ordersClaimed.indexOf(id) !== -1;
+          var pct = Math.max(0, Math.min(100, (value / target) * 100));
+          var progress = el.querySelector('[data-order-progress]');
+          var bar = el.querySelector('[data-order-bar]');
+          el.classList.toggle('is-complete', complete);
+          el.classList.toggle('is-claimed', claimed);
+          if (progress) progress.textContent = String(Math.min(value, target));
+          if (bar) bar.style.width = pct + '%';
+        });
+
         root.querySelectorAll('[data-action="bank"]').forEach(function (button) {
           button.disabled = state.wood < BUNDLE_SIZE;
         });
         root.querySelectorAll('[data-action="plant"]').forEach(function (button) {
           button.disabled = state.seeds <= 0;
+        });
+        root.querySelectorAll('[data-action="command"]').forEach(function (button) {
+          button.disabled = state.command < COMMAND_TARGET;
         });
         root.querySelectorAll('[data-action="chop"]').forEach(function (button) {
           button.disabled = state.energy <= 0;
@@ -564,6 +744,7 @@ const jsonLd = {
         if (!button) return;
         var action = button.getAttribute('data-action');
         if (action === 'chop') chop();
+        if (action === 'command') useCommand();
         if (action === 'bank') bankBundle();
         if (action === 'plant') plantSeed();
         if (action === 'rest') rest();
@@ -584,7 +765,9 @@ const jsonLd = {
         chop();
       });
 
+      markHelper(state.helperIndex);
       updateUnlocked();
+      claimOrders();
       render();
     })();
   </script>
@@ -664,7 +847,7 @@ const jsonLd = {
 
   .hud {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -1114,6 +1297,18 @@ const jsonLd = {
     animation: log-bank 520ms steps(4, end);
   }
 
+  .pixel-scene.is-commanding .helper.is-active {
+    animation: helper-command 600ms steps(5, end);
+  }
+
+  .pixel-scene.is-commanding .burst-ring {
+    animation: burst-ring 600ms steps(5, end);
+  }
+
+  .pixel-scene.is-ordering .log {
+    animation: order-pop 560ms steps(5, end);
+  }
+
   @keyframes helper-idle {
     0%, 100% { transform: translateY(0) scale(0.92); }
     50% { transform: translateY(-4px) scale(0.92); }
@@ -1135,6 +1330,13 @@ const jsonLd = {
     35% { transform: translateY(-34px) scale(1.18); }
     70% { transform: translateY(-12px) scale(1.08); }
     100% { transform: translateY(0) scale(0.96); }
+  }
+
+  @keyframes helper-command {
+    0% { transform: translateY(-10px) scale(1.12); }
+    28% { transform: translateY(-34px) translateX(-12px) scale(1.22); }
+    58% { transform: translateY(-22px) translateX(18px) scale(1.2); }
+    100% { transform: translateY(-10px) translateX(0) scale(1.12); }
   }
 
   @keyframes burst-ring {
@@ -1161,6 +1363,12 @@ const jsonLd = {
     100% { transform: translateY(-42px); opacity: 0; }
   }
 
+  @keyframes order-pop {
+    0% { transform: translateY(0) scale(1); }
+    45% { transform: translateY(-18px) scale(1.08); }
+    100% { transform: translateY(0) scale(1); }
+  }
+
   @keyframes drop-float {
     0% { opacity: 0; transform: translateY(10px) scale(0.84); }
     18% { opacity: 1; transform: translateY(0) scale(1); }
@@ -1174,7 +1382,8 @@ const jsonLd = {
   }
 
   .health,
-  .burst-charge {
+  .burst-charge,
+  .command-charge {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 10px;
@@ -1190,15 +1399,21 @@ const jsonLd = {
     margin-top: 7px;
   }
 
+  .command-charge {
+    margin-top: 7px;
+  }
+
   .health div,
-  .burst-charge div {
+  .burst-charge div,
+  .command-charge div {
     height: 16px;
     border: 1px solid #12110e;
     background: #fff;
   }
 
   .health i,
-  .burst-charge i {
+  .burst-charge i,
+  .command-charge i {
     display: block;
     height: 100%;
     transition: width 160ms steps(4, end);
@@ -1214,9 +1429,14 @@ const jsonLd = {
     background: linear-gradient(90deg, #ff6b4a, #ffd55c, #e7f4ef);
   }
 
+  .command-charge i {
+    width: var(--command, 0%);
+    background: linear-gradient(90deg, #5bb8ff, #ffd55c, #ff8c6a);
+  }
+
   .controls {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     margin-top: 12px;
   }
@@ -1299,18 +1519,22 @@ const jsonLd = {
   .helper-readout,
   .bundle-rule,
   .receipts,
+  .orders-panel,
+  .order,
   .stamp {
     border: 1px solid rgba(18, 17, 14, 0.7);
     background: rgba(255, 255, 255, 0.78);
   }
 
   .helper-readout,
-  .bundle-rule {
+  .bundle-rule,
+  .orders-panel {
     padding: 12px;
   }
 
   .helper-readout .mono,
-  .bundle-rule span {
+  .bundle-rule span,
+  .orders-panel__head span {
     display: block;
     color: #0f6e56;
     font-size: 10px;
@@ -1330,6 +1554,96 @@ const jsonLd = {
     color: #38373a;
     font-size: 13px;
     line-height: 1.4;
+  }
+
+  .orders-panel {
+    display: grid;
+    gap: 9px;
+  }
+
+  .orders-panel__head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .orders-panel__head strong {
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .order-stack {
+    display: grid;
+    gap: 6px;
+  }
+
+  .order {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px;
+    opacity: 0.76;
+    transition: opacity 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .order.is-complete,
+  .order.is-claimed {
+    opacity: 1;
+  }
+
+  .order.is-claimed {
+    background: #fff9e4;
+    box-shadow: inset 0 0 0 4px rgba(255, 213, 92, 0.2);
+  }
+
+  .order span {
+    display: inline-block;
+    color: #0f6e56;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .order strong {
+    display: block;
+    margin-top: 4px;
+    color: #12110e;
+    font-size: 15px;
+    line-height: 1.1;
+  }
+
+  .order p {
+    margin: 6px 0 0;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .order small {
+    color: #38373a;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .order__progress {
+    height: 10px;
+    border: 1px solid #12110e;
+    background: #fff;
+  }
+
+  .order__progress i {
+    display: block;
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #0f6e56, #ffd55c);
+    transition: width 180ms steps(4, end);
   }
 
   .stamp-stack {
