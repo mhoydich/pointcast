@@ -1632,7 +1632,15 @@
 
   const savedSettings = loadSettings();
   const savedRelease = savedSettings.release === SETTINGS_RELEASE;
-  const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
+  const requestedVersion = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const explicitVersion = params.get("version") || params.get("v");
+    if (versions.has(explicitVersion)) {
+      return explicitVersion;
+    }
+    return params.has("v8") ? RELEASE_VERSION : "";
+  })();
+  const initialVersion = requestedVersion || RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
     : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7"
