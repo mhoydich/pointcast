@@ -9,7 +9,7 @@
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v7";
-  const SETTINGS_RELEASE = "v7-wizard-nouns";
+  const SETTINGS_RELEASE = "v7-noun-wizard-features";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
   const renderStyles = {
     storybook: {
@@ -482,6 +482,35 @@
         { id: "paris-rain", name: "Paris Rain", mark: "PR", tone: "#f1d7a1", bg: "#302a31", clue: "soft city evening" }
       ]
     }
+  ];
+
+  const nounWizardHeads = [
+    { id: "moss-head", name: "Moss Head", mark: "MH", tone: "#9fbc68", shadow: "#48643d", clue: "green square calm" },
+    { id: "ember-head", name: "Ember Head", mark: "EH", tone: "#ef9e54", shadow: "#7a3e26", clue: "warm block focus" },
+    { id: "rain-head", name: "Rain Head", mark: "RH", tone: "#9bd7e0", shadow: "#386670", clue: "cool pixel listening" },
+    { id: "moon-head", name: "Moon Head", mark: "MO", tone: "#d7d9ff", shadow: "#6d73a2", clue: "soft reflected thought" },
+    { id: "road-head", name: "Road Head", mark: "RD", tone: "#dfc586", shadow: "#7c6337", clue: "next-inch resolve" },
+    { id: "wine-head", name: "Wine Head", mark: "WH", tone: "#d58a91", shadow: "#693843", clue: "evening pleasure" },
+    { id: "coast-head", name: "Coast Head", mark: "CH", tone: "#8fc3bf", shadow: "#33615f", clue: "marine layer ease" },
+    { id: "cream-head", name: "Cream Head", mark: "CR", tone: "#f4ead6", shadow: "#8b7a5e", clue: "quiet parchment mind" }
+  ];
+
+  const nounWizardNoggles = [
+    { id: "classic-red-blue", name: "Classic Red / Blue", mark: "RB", left: "#f25d5d", right: "#70a8ff", frame: "#0a0b0c", clue: "dao-table clarity" },
+    { id: "moss-gold", name: "Moss Gold", mark: "MG", left: "#b9d37d", right: "#f0c96a", frame: "#11150e", clue: "soft green signal" },
+    { id: "ember-cyan", name: "Ember Cyan", mark: "EC", left: "#ef9e54", right: "#8fc3bf", frame: "#101010", clue: "warm idea, cool hand" },
+    { id: "wine-moon", name: "Wine Moon", mark: "WM", left: "#d58a91", right: "#d7d9ff", frame: "#151018", clue: "pleasure with wonder" },
+    { id: "rain-cream", name: "Rain Cream", mark: "RC", left: "#a7d3de", right: "#f4ead6", frame: "#0e1518", clue: "weather made gentle" },
+    { id: "pixel-brass", name: "Pixel Brass", mark: "PB", left: "#f0c96a", right: "#ffd27a", frame: "#16140c", clue: "tiny bright decision" }
+  ];
+
+  const nounWizardAccessories = [
+    { id: "pipe", name: "Pipe", mark: "PI", tone: "#8b6037", bg: "#2b2119", clue: "slow rings, no hurry" },
+    { id: "beer", name: "Tavern Pint", mark: "TP", tone: "#e3a85f", bg: "#3a2818", clue: "ordinary joy kept near" },
+    { id: "book", name: "Small Book", mark: "BK", tone: "#b9c7e8", bg: "#222b42", clue: "one page wiser" },
+    { id: "leaf", name: "Shire Leaf", mark: "LF", tone: "#9fbc68", bg: "#263827", clue: "green pause" },
+    { id: "wand", name: "Signal Wand", mark: "WD", tone: "#f0c96a", bg: "#2f2a22", clue: "one bright instruction" },
+    { id: "shell", name: "Coast Shell", mark: "SH", tone: "#f4ead6", bg: "#2d3443", clue: "sea hush in pocket" }
   ];
 
   const imageSeries = [
@@ -1484,6 +1513,12 @@
   const initialArtPrompt = savedRelease && imageSeries.some((prompt) => prompt.id === savedSettings.artActive)
     ? savedSettings.artActive
     : imageSeries[0].id;
+  const initialNoggleShift = savedRelease && Number.isFinite(Number(savedSettings.noggleShift))
+    ? Math.abs(Math.floor(Number(savedSettings.noggleShift))) % nounWizardNoggles.length
+    : 0;
+  const initialCouncilOffset = savedRelease && Number.isFinite(Number(savedSettings.councilOffset))
+    ? Math.abs(Math.floor(Number(savedSettings.councilOffset))) % nounsGandalfs.length
+    : 0;
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -1504,6 +1539,8 @@
     spellBook: loadSpellBook(),
     activeSpell: "",
     artActive: initialArtPrompt,
+    noggleShift: initialNoggleShift,
+    councilOffset: initialCouncilOffset,
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -1551,11 +1588,18 @@
     v7TraitPills: document.getElementById("v7TraitPills"),
     v7FrameworkTitle: document.getElementById("v7FrameworkTitle"),
     v7ElementGrid: document.getElementById("v7ElementGrid"),
+    v7NounBuildTitle: document.getElementById("v7NounBuildTitle"),
+    v7NounFeatureGrid: document.getElementById("v7NounFeatureGrid"),
+    v7CouncilTitle: document.getElementById("v7CouncilTitle"),
+    v7CouncilGrid: document.getElementById("v7CouncilGrid"),
     v7CollectionGrid: document.getElementById("v7CollectionGrid"),
     v7ForgeHint: document.getElementById("v7ForgeHint"),
     v7RelicName: document.getElementById("v7RelicName"),
     v7ResourceName: document.getElementById("v7ResourceName"),
     v7SpellLine: document.getElementById("v7SpellLine"),
+    v7NogglesName: document.getElementById("v7NogglesName"),
+    v7CouncilHint: document.getElementById("v7CouncilHint"),
+    v7SigilLine: document.getElementById("v7SigilLine"),
     v7CueLine: document.getElementById("v7CueLine"),
     v7ImageTitle: document.getElementById("v7ImageTitle"),
     v6NounAvatar: document.getElementById("v6NounAvatar"),
@@ -1614,6 +1658,9 @@
     v7PairButton: document.getElementById("v7PairButton"),
     v7SharpenButton: document.getElementById("v7SharpenButton"),
     v7SpellButton: document.getElementById("v7SpellButton"),
+    v7NogglesButton: document.getElementById("v7NogglesButton"),
+    v7CouncilButton: document.getElementById("v7CouncilButton"),
+    v7SigilButton: document.getElementById("v7SigilButton"),
     v7BeginButton: document.getElementById("v7BeginButton"),
     v7KeepButton: document.getElementById("v7KeepButton"),
     v7ImageButton: document.getElementById("v7ImageButton"),
@@ -1773,6 +1820,8 @@
         keepsakeActive: state.keepsakeActive,
         resourceActive: state.resourceActive,
         artActive: state.artActive,
+        noggleShift: state.noggleShift,
+        councilOffset: state.councilOffset,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -1867,6 +1916,17 @@
     return `${hat.name}, ${staff.name}, ${realm.name}`;
   }
 
+  function nounWizardTraitsForCard(card = activeNounsGandalf(), ritual = state.ritual, shift = state.noggleShift) {
+    const seed = keepsakeSeed(`${card.id}-${card.noun}-${card.rarity}-${card.mode}-${ritual}`);
+    const safeShift = Number.isFinite(Number(shift)) ? Math.floor(Number(shift)) : 0;
+
+    return {
+      head: nounWizardHeads[seed % nounWizardHeads.length] || nounWizardHeads[0],
+      noggles: nounWizardNoggles[(seed + safeShift + nounWizardNoggles.length) % nounWizardNoggles.length] || nounWizardNoggles[0],
+      accessory: nounWizardAccessories[(seed + safeShift * 2 + nounWizardAccessories.length) % nounWizardAccessories.length] || nounWizardAccessories[0]
+    };
+  }
+
   function isNatureVersion(version = state.version) {
     return version === "v3" || version === "v4" || version === "v5" || version === "v6" || version === "v7";
   }
@@ -1883,7 +1943,7 @@
     element.style.setProperty("--spark", card.spark);
   }
 
-  function applyWizardNounStyle(element, card, elements = wizardElementsForCard(card)) {
+  function applyWizardNounStyle(element, card, elements = wizardElementsForCard(card), traits = nounWizardTraitsForCard(card)) {
     const hat = wizardElement(elements, "hat");
     const beard = wizardElement(elements, "beard");
     const staff = wizardElement(elements, "staff");
@@ -1891,6 +1951,13 @@
     const relic = wizardElement(elements, "relic");
     const realm = wizardElement(elements, "realm");
 
+    element.style.setProperty("--noun-head", traits.head.tone);
+    element.style.setProperty("--noun-head-shadow", traits.head.shadow);
+    element.style.setProperty("--noun-glasses-left", traits.noggles.left);
+    element.style.setProperty("--noun-glasses-right", traits.noggles.right);
+    element.style.setProperty("--noun-glasses-frame", traits.noggles.frame);
+    element.style.setProperty("--noun-accessory", traits.accessory.tone);
+    element.style.setProperty("--noun-accessory-bg", traits.accessory.bg);
     element.style.setProperty("--wizard-hat", hat.tone);
     element.style.setProperty("--wizard-beard", beard.tone);
     element.style.setProperty("--wizard-staff", staff.tone);
@@ -1900,6 +1967,9 @@
     element.style.setProperty("--wizard-aura", realm.tone);
     element.dataset.realm = realm.id;
     element.dataset.relic = relic.id;
+    element.dataset.head = traits.head.id;
+    element.dataset.noggles = traits.noggles.id;
+    element.dataset.accessory = traits.accessory.id;
   }
 
   function renderNounAvatar(target, card, isSmall) {
@@ -1908,16 +1978,20 @@
     }
 
     const elements = wizardElementsForCard(card);
+    const traits = nounWizardTraitsForCard(card);
     const relic = wizardElement(elements, "relic");
     target.replaceChildren();
     target.className = isSmall ? "noun-avatar noun-avatar-small" : "noun-avatar";
     target.title = card.name;
     applyNounStyle(target, card);
-    applyWizardNounStyle(target, card, elements);
+    applyWizardNounStyle(target, card, elements, traits);
 
-    ["noun-aura", "noun-robe", "noun-staff", "noun-hat", "noun-face", "noun-beard", "noun-glasses", "noun-orb", "noun-rune"].forEach((className) => {
+    ["noun-aura", "noun-robe", "noun-staff", "noun-head", "noun-beard", "noun-hat", "noun-noggles", "noun-mouth", "noun-accessory", "noun-orb", "noun-rune"].forEach((className) => {
       const part = document.createElement("span");
       part.className = className;
+      if (className === "noun-accessory") {
+        part.textContent = traits.accessory.mark;
+      }
       if (className === "noun-rune") {
         part.textContent = relic.mark;
       }
@@ -1972,6 +2046,73 @@
     });
   }
 
+  function renderNounFeatureGrid(target, traits, elements) {
+    if (!target) {
+      return;
+    }
+
+    const staff = wizardElement(elements, "staff");
+    const relic = wizardElement(elements, "relic");
+    const features = [
+      { label: "Head", item: traits.head, detail: traits.head.clue },
+      { label: "Noggles", item: traits.noggles, detail: traits.noggles.clue },
+      { label: "Accessory", item: traits.accessory, detail: traits.accessory.clue },
+      { label: "Wand", item: staff, detail: `casts through ${relic.name}` }
+    ];
+
+    target.replaceChildren();
+    features.forEach((feature) => {
+      const card = document.createElement("div");
+      const mark = document.createElement("span");
+      const copy = document.createElement("div");
+      const label = document.createElement("small");
+      const name = document.createElement("strong");
+      const clue = document.createElement("p");
+
+      card.className = "noun-feature-card";
+      card.style.setProperty("--feature-tone", feature.item.tone || feature.item.left);
+      card.style.setProperty("--feature-bg", feature.item.bg || feature.item.frame || "#111");
+      mark.textContent = feature.item.mark;
+      label.textContent = feature.label;
+      name.textContent = feature.item.name;
+      clue.textContent = feature.detail;
+      copy.append(label, name, clue);
+      card.append(mark, copy);
+      target.append(card);
+    });
+  }
+
+  function renderNounCouncil(target) {
+    if (!target) {
+      return;
+    }
+
+    const activeIndex = Math.max(0, nounsGandalfs.findIndex((card) => card.id === state.nounsActive));
+    const offset = state.councilOffset % nounsGandalfs.length;
+    const cards = [0, 1, 2].map((step) => nounsGandalfs[(activeIndex + offset + step) % nounsGandalfs.length]);
+
+    target.replaceChildren();
+    cards.forEach((card, index) => {
+      const button = document.createElement("button");
+      const avatar = document.createElement("span");
+      const copy = document.createElement("span");
+      const name = document.createElement("strong");
+      const trait = document.createElement("small");
+
+      button.type = "button";
+      button.className = "noun-council-button";
+      button.classList.toggle("is-active", card.id === state.nounsActive);
+      button.setAttribute("aria-label", `${index + 1}: ${card.name}, ${card.trait}`);
+      renderNounAvatar(avatar, card, true);
+      name.textContent = card.noun;
+      trait.textContent = card.rarity;
+      copy.append(name, trait);
+      button.append(avatar, copy);
+      button.addEventListener("click", () => setNounsGandalf(card.id));
+      target.append(button);
+    });
+  }
+
   function renderWizardCollectionGrid(target) {
     if (!target) {
       return;
@@ -1994,7 +2135,7 @@
       button.setAttribute("aria-pressed", String(card.id === state.nounsActive));
       button.setAttribute("aria-label", `${card.name}, ${collected ? "kept" : "not kept"}, ${wizardElementPhrase(elements)}`);
       applyNounStyle(button, card);
-      applyWizardNounStyle(button, card, elements);
+      applyWizardNounStyle(button, card, elements, nounWizardTraitsForCard(card));
 
       renderNounAvatar(avatar, card, true);
       name.textContent = card.noun;
@@ -2016,23 +2157,32 @@
     const ritual = activeRitual();
     const art = activeArtPrompt();
     const elements = wizardElementsForCard(card, state.ritual);
+    const traits = nounWizardTraitsForCard(card, state.ritual);
     const score = presenceScore();
     const keptLabel = `${state.nounsCollection.size}/${nounsGandalfs.length} kept`;
     const spellLabel = state.activeSpell || `${resource.name} can become a spell.`;
+    const nounSigil = `${traits.head.mark}-${traits.noggles.mark}-${wizardElement(elements, "staff").mark}`;
 
     renderNounAvatar(dom.v7NounAvatar, card, false);
     renderWizardTraitPills(dom.v7TraitPills, elements);
     renderWizardElementGrid(dom.v7ElementGrid, elements);
+    renderNounFeatureGrid(dom.v7NounFeatureGrid, traits, elements);
+    renderNounCouncil(dom.v7CouncilGrid);
     renderWizardCollectionGrid(dom.v7CollectionGrid);
     dom.v7Progress.textContent = `${keptLabel} · ${score} presence`;
     dom.v7RitualLine.textContent = `${ritual.title} · ${ritual.short}`;
     dom.v7WizardTitle.textContent = `${card.name}: ${wizardElementPhrase(elements)}`;
-    dom.v7WizardText.textContent = `${card.trait}; ${ritual.guide} Pair ${relic.name}, sharpen ${resource.name}, then sit with: ${card.mantra}`;
+    dom.v7WizardText.textContent = `${traits.head.name} with ${traits.noggles.name} noggles; ${card.trait}. ${ritual.guide} Pair ${relic.name}, sharpen ${resource.name}, then sit with: ${card.mantra}`;
     dom.v7FrameworkTitle.textContent = elements.map((element) => element.label).join(" + ");
+    dom.v7NounBuildTitle.textContent = `${traits.head.name} + ${traits.noggles.name} + ${traits.accessory.name}`;
+    dom.v7CouncilTitle.textContent = `${card.noun} council · ${presenceRank(score)}`;
     dom.v7ForgeHint.textContent = `${card.rarity} · ${natureViews[card.visual].name}`;
     dom.v7RelicName.textContent = relic.name;
     dom.v7ResourceName.textContent = `${resource.name} ${state.resourceLevels[resource.id] || 0}`;
     dom.v7SpellLine.textContent = spellLabel;
+    dom.v7NogglesName.textContent = traits.noggles.name;
+    dom.v7CouncilHint.textContent = `council ${Math.floor((state.councilOffset % nounsGandalfs.length) / 3) + 1}`;
+    dom.v7SigilLine.textContent = nounSigil;
     dom.v7CueLine.textContent = card.cue;
     dom.v7ImageTitle.textContent = art.title;
   }
@@ -3780,6 +3930,75 @@
     spawnParticles(12);
   }
 
+  function v7RollNoggles() {
+    ensureV7Version();
+
+    state.noggleShift = (state.noggleShift + 1) % nounWizardNoggles.length;
+    const traits = nounWizardTraitsForCard();
+    saveSettings();
+    dom.wizardLine.textContent = `${traits.noggles.name} noggles clicked into place.`;
+    setGuide("Noggles rolled", `${activeNounsGandalf().name} · ${traits.noggles.name}`, `${traits.noggles.clue}. Noun first, wizard second, present always.`);
+    updateV7Panel();
+    spawnParticles(10);
+  }
+
+  function v7SummonCouncil() {
+    ensureV7Version();
+
+    state.councilOffset = (state.councilOffset + 3) % nounsGandalfs.length;
+    saveSettings();
+    dom.wizardLine.textContent = "Three noun wizards gathered at the table.";
+    setGuide("Council summoned", activeNounsGandalf().name, "Pick one council card, or simply let the three small squares make the room friendlier.");
+    updateV7Panel();
+    spawnParticles(12);
+  }
+
+  function composeNounWizardSpell() {
+    const card = activeNounsGandalf();
+    const relic = activeKeepsake();
+    const resource = activeResource();
+    const elements = wizardElementsForCard(card, state.ritual);
+    const traits = nounWizardTraitsForCard(card, state.ritual);
+    const staff = wizardElement(elements, "staff");
+    const realm = wizardElement(elements, "realm");
+    const word = resource.words[keepsakeSeed(`${traits.head.id}-${traits.noggles.id}-${staff.id}`) % resource.words.length];
+
+    return `${traits.noggles.mark} ${card.noun} noun spell: ${word} through ${staff.name}; held by ${relic.name} in ${realm.name}.`;
+  }
+
+  function v7CastNounSpell() {
+    ensureV7Version();
+
+    const resource = activeResource();
+    const card = activeNounsGandalf();
+    const relic = activeKeepsake();
+    const traits = nounWizardTraitsForCard(card, state.ritual);
+    const phrase = composeNounWizardSpell();
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+
+    state.activeSpell = phrase;
+    state.spellBook.unshift({
+      phrase,
+      resource: resource.name,
+      card: card.name,
+      keepsake: `${relic.name} + ${traits.noggles.name}`,
+      date: formatter.format(new Date())
+    });
+    state.spellBook = state.spellBook.slice(0, 8);
+    state.resourceLevels[resource.id] = Math.min(99, (state.resourceLevels[resource.id] || 0) + 1);
+    saveResourceLevels();
+    saveSpellBook();
+    updateSpellPanel();
+    dom.wizardLine.textContent = phrase;
+    setGuide("Noun spell cast", `${traits.head.name} · ${traits.noggles.name}`, `${resource.promise}. The spellbook kept it.`);
+    spawnParticles(16);
+  }
+
   async function v7BeginSit() {
     ensureV7Version();
     if (state.duration !== 5 * 60) {
@@ -3940,6 +4159,9 @@
   dom.v7PairButton.addEventListener("click", v7PairRelic);
   dom.v7SharpenButton.addEventListener("click", v7SharpenResource);
   dom.v7SpellButton.addEventListener("click", v7BuildSpell);
+  dom.v7NogglesButton.addEventListener("click", v7RollNoggles);
+  dom.v7CouncilButton.addEventListener("click", v7SummonCouncil);
+  dom.v7SigilButton.addEventListener("click", v7CastNounSpell);
   dom.v7BeginButton.addEventListener("click", () => v7BeginSit());
   dom.v7KeepButton.addEventListener("click", v7KeepSet);
   dom.v7ImageButton.addEventListener("click", v7NextVisual);
