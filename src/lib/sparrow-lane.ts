@@ -74,4 +74,4 @@ export function laneFor(pathname: string): LaneInfo {
  * HUD sub-line can render `{lane} · v{n}` without drifting from
  * sparrow.json. Bumped each sprint by hand.
  */
-export const SPARROW_VERSION = '0.38';
+export const SPARROW_VERSION = '0.39';
