@@ -1,0 +1,573 @@
+---
+/**
+ * /drum-v11 — Bells & Wind Chimes · sprint 5/9
+ *
+ * Twelve bells hung from a temple beam. Click one and it rings.
+ * Each bell is a Web Audio additive synth — fundamental + 5
+ * harmonic partials with carefully tuned ratios (2.756, 5.404,
+ * 8.933, 13.34, 18.64) approximating a real bell's inharmonic
+ * spectrum. Long exponential decay. Slight detune drift on each
+ * strike. Lowpass filter that opens during attack and closes
+ * through the decay.
+ *
+ * Wind: a "wind" toggle gently agitates a few random bells per
+ * second, like chimes catching breeze. Visitors sharing the room
+ * hear each other's strikes via /api/sounds (type=bells).
+ *
+ * Aesthetic: temple courtyard at dusk. Indigo gradient sky, warm
+ * lantern glow, brass + gold bells with rope lines, small Japanese
+ * wood texture on the beam.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v11 — Bells & Wind Chimes';
+const description =
+  'Twelve bells on a temple beam. Click to ring. Toggle the wind. Real bell harmonics in Web Audio. Pentatonic + diatonic blend so any combo sounds right.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-v11',
+  name: 'PointCast Drum · v11 · Bells',
+  url: 'https://pointcast.xyz/drum-v11',
+  description,
+};
+
+// Twelve bells — pentatonic anchor (C/D/E/G/A) plus a few extras for
+// shimmer. Sorted left → right by ascending pitch.
+const BELLS = [
+  { id: 'b1',  hz: 261.6, label: 'C4',  rope: 'short' },
+  { id: 'b2',  hz: 293.7, label: 'D4',  rope: 'mid' },
+  { id: 'b3',  hz: 329.6, label: 'E4',  rope: 'long' },
+  { id: 'b4',  hz: 392.0, label: 'G4',  rope: 'short' },
+  { id: 'b5',  hz: 440.0, label: 'A4',  rope: 'long' },
+  { id: 'b6',  hz: 523.3, label: 'C5',  rope: 'mid' },
+  { id: 'b7',  hz: 587.3, label: 'D5',  rope: 'short' },
+  { id: 'b8',  hz: 659.3, label: 'E5',  rope: 'long' },
+  { id: 'b9',  hz: 783.9, label: 'G5',  rope: 'mid' },
+  { id: 'b10', hz: 880.0, label: 'A5',  rope: 'short' },
+  { id: 'b11', hz: 1047,  label: 'C6',  rope: 'mid' },
+  { id: 'b12', hz: 1175,  label: 'D6',  rope: 'long' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="be" id="be-main">
+    <DrumNav current="v11" />
+
+    <header class="be__head">
+      <p class="be__kicker">DRUM HUB · V11 · BELLS · WIND CHIMES</p>
+      <h1 class="be__title"><em>Twelve bells. One beam. A little wind.</em></h1>
+      <p class="be__dek">
+        Click a bell. Hold the wind toggle. Watch the lanterns. Every bell rings with real inharmonic partials — fundamental, 2.76×, 5.40×, 8.93×, 13.3×, 18.6× — so it sounds like a bell, not a sine.
+      </p>
+    </header>
+
+    <section class="be__stage" aria-label="Bell rack">
+      <div class="be__sky">
+        <div class="be__moon" aria-hidden="true">○</div>
+        <div class="be__star be__star--1"></div>
+        <div class="be__star be__star--2"></div>
+        <div class="be__star be__star--3"></div>
+        <div class="be__star be__star--4"></div>
+        <div class="be__star be__star--5"></div>
+        <div class="be__lantern be__lantern--l" aria-hidden="true">
+          <span class="be__lantern-bulb"></span>
+        </div>
+        <div class="be__lantern be__lantern--r" aria-hidden="true">
+          <span class="be__lantern-bulb"></span>
+        </div>
+      </div>
+
+      <div class="be__beam">
+        <div class="be__beam-line" aria-hidden="true"></div>
+        <div class="be__rack">
+          {BELLS.map((b, i) => (
+            <button
+              type="button"
+              class={`be__bell be__bell--${b.rope} be__bell--idx-${i}`}
+              data-id={b.id}
+              data-hz={b.hz}
+              aria-label={`Bell ${b.label} (${b.hz} hertz)`}
+            >
+              <span class="be__bell-rope" aria-hidden="true"></span>
+              <span class="be__bell-body">
+                <span class="be__bell-shine" aria-hidden="true"></span>
+                <span class="be__bell-clapper" aria-hidden="true"></span>
+              </span>
+              <span class="be__bell-label mono">{b.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <aside class="be__panel">
+        <div class="be__panel-row">
+          <button type="button" class="be__wind" id="be-wind" aria-pressed="false">wind · off</button>
+        </div>
+        <div class="be__panel-row">
+          <span class="be__panel-label">decay</span>
+          <input id="be-decay" type="range" min="20" max="100" value="70" />
+        </div>
+        <div class="be__panel-row">
+          <span class="be__panel-label">brightness</span>
+          <input id="be-bright" type="range" min="500" max="6000" value="2400" />
+        </div>
+        <div class="be__panel-row">
+          <span class="be__panel-label">drift</span>
+          <input id="be-drift" type="range" min="0" max="50" value="14" />
+        </div>
+        <p class="be__broadcast" id="be-broadcast">broadcast: ·</p>
+        <p class="be__hint mono">click bells · or press 1-9, 0, q, w</p>
+      </aside>
+    </section>
+
+    <footer class="be__foot">
+      <p>
+        Each bell strike fires a <code>type=bells</code> event to <code>/api/sounds</code>
+        with the bell id and hertz, so visitors on <a href="/drum-tv">/drum-tv</a> see
+        each chime flash. The wind toggle plays softly; it does not broadcast every drift.
+      </p>
+      <p class="be__credit mono">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · drum sprint 5/9</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null;
+    let masterGain = null;
+    let lpf = null;
+    let convolver = null;
+    let dryGain = null;
+    let wetGain = null;
+
+    let decayMul = 0.7;
+    let brightHz = 2400;
+    let driftCents = 14;
+    let windOn = false;
+    let windInterval = null;
+
+    // Inharmonic bell partials (rough Eindhoven church bell ratios)
+    const PARTIALS = [
+      { mul: 0.5,    g: 0.4,  decayK: 1.0 },   // hum
+      { mul: 1.0,    g: 1.0,  decayK: 1.0 },   // fundamental
+      { mul: 2.756,  g: 0.36, decayK: 0.9 },   // tierce
+      { mul: 5.404,  g: 0.18, decayK: 0.7 },   // nominal
+      { mul: 8.933,  g: 0.10, decayK: 0.55 },  // upper
+      { mul: 13.34,  g: 0.06, decayK: 0.4 },
+      { mul: 18.64,  g: 0.03, decayK: 0.3 },
+    ];
+
+    function makeReverbBuffer(sec, decay) {
+      const rate = ctx.sampleRate;
+      const len = rate * sec;
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+        }
+      }
+      return buf;
+    }
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+
+      lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = brightHz;
+      lpf.Q.value = 0.7;
+
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.85;
+
+      convolver = ctx.createConvolver();
+      convolver.buffer = makeReverbBuffer(3.5, 2.6);
+      dryGain = ctx.createGain();
+      dryGain.gain.value = 0.55;
+      wetGain = ctx.createGain();
+      wetGain.gain.value = 0.6;
+
+      lpf.connect(masterGain);
+      masterGain.connect(dryGain);
+      masterGain.connect(convolver);
+      convolver.connect(wetGain);
+      dryGain.connect(ctx.destination);
+      wetGain.connect(ctx.destination);
+    }
+
+    function ringBell(hz, opts) {
+      ensureCtx();
+      const t0 = ctx.currentTime;
+      const baseDecay = 4.5 * decayMul;
+      const drift = (Math.random() * 2 - 1) * (driftCents / 100); // semitones
+      const driftMul = Math.pow(2, drift / 12);
+
+      PARTIALS.forEach((p) => {
+        const f = hz * p.mul * driftMul;
+        if (f < 30 || f > 16000) return;
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        const g = ctx.createGain();
+        const decaySec = baseDecay * p.decayK + (Math.random() * 0.3);
+        const peak = p.g * 0.18 * (opts && typeof opts.amp === 'number' ? opts.amp : 1);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.linearRampToValueAtTime(peak, t0 + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + decaySec);
+        osc.connect(g);
+        g.connect(lpf);
+        osc.start(t0);
+        osc.stop(t0 + decaySec + 0.05);
+      });
+
+      // Filter sweep: opens fast, closes slow
+      lpf.frequency.cancelScheduledValues(t0);
+      lpf.frequency.setValueAtTime(brightHz * 1.6, t0);
+      lpf.frequency.exponentialRampToValueAtTime(Math.max(200, brightHz * 0.5), t0 + 1.6 * decayMul);
+    }
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'be-' + Math.random().toString(36).slice(2, 10); }
+    }
+
+    function broadcast(hz, id) {
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'bells', sessionId: getSession(), hz: Math.round(hz), bellId: id }),
+        });
+        const el = document.getElementById('be-broadcast');
+        if (el) el.textContent = `broadcast: ${id} · ${Math.round(hz)} Hz`;
+      } catch {}
+    }
+
+    document.querySelectorAll('.be__bell').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const hz = Number(btn.getAttribute('data-hz') || 0);
+        const id = btn.getAttribute('data-id') || '';
+        ringBell(hz, { amp: 1 });
+        // Visual swing
+        btn.classList.remove('be__bell--swing');
+        void btn.offsetWidth;
+        btn.classList.add('be__bell--swing');
+        broadcast(hz, id);
+      });
+    });
+
+    // Keyboard
+    const keys = ['1','2','3','4','5','6','7','8','9','0','q','w'];
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const idx = keys.indexOf(e.key.toLowerCase());
+      if (idx >= 0) {
+        const btn = document.querySelector(`.be__bell--idx-${idx}`);
+        if (btn) btn.click();
+      }
+    });
+
+    // Sliders
+    document.getElementById('be-decay').addEventListener('input', (e) => { decayMul = Number(e.target.value) / 100; });
+    document.getElementById('be-bright').addEventListener('input', (e) => { brightHz = Number(e.target.value); });
+    document.getElementById('be-drift').addEventListener('input', (e) => { driftCents = Number(e.target.value); });
+
+    // Wind
+    const windBtn = document.getElementById('be-wind');
+    windBtn.addEventListener('click', () => {
+      windOn = !windOn;
+      windBtn.classList.toggle('be__wind--on', windOn);
+      windBtn.setAttribute('aria-pressed', String(windOn));
+      windBtn.textContent = windOn ? 'wind · on' : 'wind · off';
+      if (windOn) {
+        windInterval = setInterval(() => {
+          // Pick 1-2 bells, ring softly
+          const bells = document.querySelectorAll('.be__bell');
+          if (!bells.length) return;
+          const count = Math.random() < 0.7 ? 1 : 2;
+          for (let i = 0; i < count; i++) {
+            const b = bells[Math.floor(Math.random() * bells.length)];
+            const hz = Number(b.getAttribute('data-hz') || 0);
+            ringBell(hz, { amp: 0.35 + Math.random() * 0.25 });
+            b.classList.remove('be__bell--swing-soft');
+            void b.offsetWidth;
+            b.classList.add('be__bell--swing-soft');
+          }
+        }, 1100 + Math.random() * 1400);
+      } else if (windInterval) {
+        clearInterval(windInterval);
+        windInterval = null;
+      }
+    });
+  })();
+</script>
+
+<style>
+  .be {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 50% 80%, rgba(255, 138, 74, 0.18), transparent 60%),
+      linear-gradient(180deg, #1a1240 0%, #2a1255 35%, #4a2562 70%, #7a3d80 100%);
+    color: #fffaf0;
+    padding: 12px 12px 60px;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .be__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .be__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .be__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 52px);
+    line-height: 1.05;
+  }
+  .be__title em { font-style: italic; }
+  .be__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+  .be__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 16px;
+  }
+  @media (max-width: 800px) { .be__stage { grid-template-columns: 1fr; } }
+
+  .be__sky {
+    grid-column: 1 / -1;
+    position: relative;
+    height: 90px;
+    background: linear-gradient(180deg, #1a1240, transparent);
+    overflow: hidden;
+  }
+  .be__moon {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 38px;
+    color: #ffe6a8;
+    text-shadow: 0 0 20px #ffd400, 0 0 36px rgba(255, 212, 0, 0.5);
+  }
+  .be__star { position: absolute; width: 3px; height: 3px; background: #fffaf0; box-shadow: 0 0 6px #fffaf0; }
+  .be__star--1 { top: 10px; left: 12%; }
+  .be__star--2 { top: 30px; left: 22%; }
+  .be__star--3 { top: 18px; right: 18%; }
+  .be__star--4 { top: 44px; right: 32%; }
+  .be__star--5 { top: 56px; left: 65%; }
+
+  .be__lantern {
+    position: absolute;
+    top: 10px;
+    width: 26px; height: 38px;
+    background: #a83b2a;
+    border: 2px solid #12110e;
+    border-radius: 4px;
+  }
+  .be__lantern--l { left: 8%; }
+  .be__lantern--r { right: 8%; }
+  .be__lantern-bulb {
+    position: absolute;
+    inset: 4px;
+    border-radius: 2px;
+    background: radial-gradient(ellipse at center, #ffd400, #ff8a4a);
+    box-shadow: 0 0 18px #ffd400, 0 0 30px rgba(255, 138, 74, 0.5);
+    animation: be-flicker 2.6s ease-in-out infinite;
+  }
+  @keyframes be-flicker {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.78; }
+  }
+
+  .be__beam {
+    position: relative;
+    background: linear-gradient(180deg, transparent 0, transparent 18px, #4a2c10 18px, #6b4020 30px, #4a2c10 36px, transparent 36px);
+    padding: 24px 12px 36px;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    background-color: rgba(18, 17, 14, 0.4);
+  }
+  .be__beam-line {
+    position: absolute;
+    top: 28px; left: 0; right: 0;
+    height: 4px;
+    background: #6b4020;
+    border-top: 1px solid #4a2c10;
+    border-bottom: 1px solid #4a2c10;
+  }
+  .be__rack {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 4px;
+    align-items: start;
+    padding-top: 8px;
+  }
+  @media (max-width: 800px) { .be__rack { grid-template-columns: repeat(6, 1fr); } }
+
+  .be__bell {
+    position: relative;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: inherit;
+  }
+  .be__bell-rope {
+    width: 2px;
+    background: linear-gradient(180deg, #5a3a1a, #2a1f0d);
+    border-radius: 1px;
+  }
+  .be__bell--short .be__bell-rope { height: 22px; }
+  .be__bell--mid .be__bell-rope { height: 36px; }
+  .be__bell--long .be__bell-rope { height: 52px; }
+
+  .be__bell-body {
+    position: relative;
+    width: 48px;
+    height: 56px;
+    border-radius: 50% 50% 30% 30% / 60% 60% 40% 40%;
+    background: linear-gradient(180deg, #ffe28a, #c79023 60%, #6e5320);
+    border: 1.5px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e, 0 0 18px rgba(255, 212, 0, 0.18) inset;
+    transform-origin: top center;
+    transition: transform 80ms;
+  }
+  .be__bell:hover .be__bell-body { transform: scale(1.04); }
+  .be__bell--swing .be__bell-body {
+    animation: be-swing 0.7s ease-out;
+  }
+  .be__bell--swing-soft .be__bell-body {
+    animation: be-swing-soft 1.4s ease-out;
+  }
+  @keyframes be-swing {
+    0%   { transform: rotate(0deg); }
+    20%  { transform: rotate(-14deg); }
+    40%  { transform: rotate(10deg); }
+    60%  { transform: rotate(-6deg); }
+    80%  { transform: rotate(4deg); }
+    100% { transform: rotate(0deg); }
+  }
+  @keyframes be-swing-soft {
+    0%   { transform: rotate(0deg); }
+    35%  { transform: rotate(-5deg); }
+    70%  { transform: rotate(3deg); }
+    100% { transform: rotate(0deg); }
+  }
+
+  .be__bell-shine {
+    position: absolute;
+    top: 6px; left: 12px;
+    width: 12px; height: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.55), transparent);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .be__bell-clapper {
+    position: absolute;
+    bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    width: 4px; height: 8px;
+    background: #2a1f0d;
+    border-radius: 2px;
+  }
+  .be__bell-label {
+    margin-top: 4px;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: #ffd400;
+    text-shadow: 1px 1px 0 #050310;
+  }
+
+  .be__panel {
+    background: rgba(18, 17, 14, 0.55);
+    border: 2px solid #ffd400;
+    padding: 14px;
+    box-shadow: 6px 6px 0 0 #050310;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .be__panel-row { display: flex; flex-direction: column; gap: 4px; }
+  .be__panel-label {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #ff8a4a;
+    text-transform: uppercase;
+  }
+  .be__panel input[type='range'] { width: 100%; accent-color: #ffd400; }
+
+  .be__wind {
+    background: #050310;
+    color: #ffd400;
+    border: 1.5px solid #ffd400;
+    padding: 8px 16px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 0 #ffd400;
+  }
+  .be__wind--on {
+    background: #ffd400;
+    color: #050310;
+    box-shadow: 2px 2px 0 0 #ff8a4a;
+  }
+
+  .be__broadcast {
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px dashed #5f5e5a;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    color: #ff8a4a;
+    letter-spacing: 0.12em;
+    min-height: 14px;
+  }
+  .be__hint {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #cfc6df;
+  }
+
+  .be__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .be__foot a { color: #ffd400; }
+  .be__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+  .be__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
