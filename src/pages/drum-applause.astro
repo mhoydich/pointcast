@@ -1,0 +1,269 @@
+---
+/**
+ * /drum-applause — clap meter · comms 2 · 2026-04-28 PT.
+ *
+ * One giant CLAP button. Hit it. Hit it again. The meter rises on
+ * every visitor's screen as everyone in the room claps in real time.
+ * Resets every 60 seconds; peaks captured to a 12-round history bar.
+ *
+ * Round = floor(Date.now() / 60000) — synced across clients without
+ * server state. Each client tallies type=applause events that fall
+ * within the current round window.
+ *
+ * Aesthetic: bright theatre stage. Velvet curtains, marquee lights
+ * around the meter, golden floor. Confetti at peak.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-applause — clap meter';
+const description = 'Hit the CLAP button. The room hits it too. The meter rises in real time on every screen. Resets every 60 seconds.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-applause', name: 'PointCast Drum · Applause', url: 'https://pointcast.xyz/drum-applause', description };
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="ap" id="ap-main">
+    <DrumNav current="confessional" />
+
+    <header class="ap__head">
+      <p class="ap__kicker">DRUM HUB · COMMS 2 · APPLAUSE METER · LIVE · MULTIPLAYER</p>
+      <h1 class="ap__title"><em>The room claps together.</em></h1>
+      <p class="ap__dek">Hit the CLAP button. Watch the meter rise on every screen. Resets every 60 seconds. Peaks logged to the round history below.</p>
+    </header>
+
+    <section class="ap__stage">
+      <div class="ap__curtain ap__curtain--l" aria-hidden="true"></div>
+      <div class="ap__curtain ap__curtain--r" aria-hidden="true"></div>
+
+      <div class="ap__meter">
+        <div class="ap__meter-shell">
+          <div class="ap__meter-fill" id="ap-meter-fill"></div>
+          <div class="ap__meter-peak" id="ap-meter-peak"></div>
+          <div class="ap__meter-marks" aria-hidden="true">
+            {Array.from({ length: 11 }).map((_, i) => (
+              <span class="ap__meter-mark" style={`bottom: ${i * 10}%`}>{i * 10}</span>
+            ))}
+          </div>
+        </div>
+        <p class="ap__meter-label mono">DECIBEL · ROOM</p>
+      </div>
+
+      <button type="button" class="ap__clap" id="ap-clap" aria-label="Clap">
+        <span class="ap__clap-glyph">👏</span>
+        <span class="ap__clap-text mono">CLAP</span>
+        <span class="ap__clap-kbd mono">SPACE</span>
+      </button>
+
+      <div class="ap__hud mono">
+        <span>round <strong id="ap-round">—</strong></span>
+        <span>resets in <strong id="ap-clock">—</strong></span>
+        <span>this round <strong id="ap-claps">0</strong></span>
+        <span>peak <strong id="ap-peak">0</strong></span>
+      </div>
+
+      <div class="ap__history" aria-label="Recent rounds">
+        <p class="ap__history-label mono">last 12 rounds</p>
+        <div class="ap__history-bars" id="ap-history-bars"></div>
+      </div>
+
+      <div class="ap__confetti" id="ap-confetti" aria-hidden="true"></div>
+    </section>
+
+    <footer class="ap__foot">
+      <p>Each clap fires <code>type=applause</code> to <code>/api/sounds</code>. Round id is <code>floor(Date.now() / 60000)</code> so every client agrees on which round a clap belongs to. Rate-limited to 8/sec per pid client-side to keep the bar from blowing up.</p>
+      <p class="ap__credit mono">v0.1 · 2026-04-28 · drum sprint · comms 2</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  const ROUND_MS = 60 * 1000;
+  const RATE_LIMIT_MS = 125; // 8/sec
+  const fillEl = document.getElementById('ap-meter-fill');
+  const peakEl = document.getElementById('ap-meter-peak');
+  const roundEl = document.getElementById('ap-round');
+  const clockEl = document.getElementById('ap-clock');
+  const clapsEl = document.getElementById('ap-claps');
+  const peakLabelEl = document.getElementById('ap-peak');
+  const historyEl = document.getElementById('ap-history-bars');
+  const confettiEl = document.getElementById('ap-confetti');
+  const clap = document.getElementById('ap-clap');
+
+  function getSession() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; } catch { return 'ap-' + Math.random().toString(36).slice(2,10); } }
+  const sid = getSession();
+
+  let lastClapAt = 0;
+  let lastTs = Date.now() - 5000;
+  // Per-round counts: Map<roundId, count>
+  const counts = new Map();
+  // Track peaks across last 12 rounds (sorted desc by round id)
+  const history = []; // [{round, peak}]
+
+  function currentRound() { return Math.floor(Date.now() / ROUND_MS); }
+
+  function updateMeter() {
+    const round = currentRound();
+    const remain = ROUND_MS - (Date.now() - round * ROUND_MS);
+    clockEl.textContent = `${Math.ceil(remain / 1000)}s`;
+    roundEl.textContent = String(round % 100000);
+
+    const c = counts.get(round) || 0;
+    const peak = Math.max(c, ...Array.from(counts.entries()).filter(([r]) => r === round).map(([, v]) => v));
+    // Map to 0-100% — scale: 50 claps fills the bar
+    const pct = Math.max(0, Math.min(100, (c / 50) * 100));
+    fillEl.style.height = `${pct.toFixed(2)}%`;
+    const peakPct = Math.max(0, Math.min(100, (peak / 50) * 100));
+    peakEl.style.bottom = `${peakPct.toFixed(2)}%`;
+    clapsEl.textContent = String(c);
+    peakLabelEl.textContent = String(peak);
+
+    // Confetti at 100%
+    if (pct >= 99 && !fillEl.dataset.burst) {
+      fillEl.dataset.burst = '1';
+      burst();
+    }
+    if (pct < 99) fillEl.dataset.burst = '';
+  }
+
+  function burst() {
+    for (let i = 0; i < 60; i++) {
+      const c = document.createElement('span');
+      c.className = 'ap__confetti-bit';
+      c.style.left = `${Math.random() * 100}%`;
+      c.style.background = ['#ff5c23','#ffd400','#5fbafd','#3b6e3b','#fffaf0'][i % 5];
+      c.style.animationDelay = `${(Math.random() * 0.4).toFixed(2)}s`;
+      c.style.animationDuration = `${(2.2 + Math.random() * 1.4).toFixed(2)}s`;
+      confettiEl.appendChild(c);
+    }
+    setTimeout(() => confettiEl.querySelectorAll('.ap__confetti-bit').forEach((c) => c.remove()), 4000);
+  }
+
+  function rollHistory(round) {
+    // Capture peak of the round and add to history if not already there
+    const peak = counts.get(round) || 0;
+    const existing = history.find((h) => h.round === round);
+    if (existing) existing.peak = Math.max(existing.peak, peak);
+    else history.unshift({ round, peak });
+    if (history.length > 12) history.length = 12;
+    paintHistory();
+  }
+  function paintHistory() {
+    historyEl.innerHTML = '';
+    const max = Math.max(10, ...history.map((h) => h.peak));
+    history.forEach((h, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'ap__history-bar';
+      const pct = (h.peak / max) * 100;
+      bar.style.height = `${pct}%`;
+      bar.title = `round ${h.round} · peak ${h.peak}`;
+      historyEl.appendChild(bar);
+    });
+  }
+
+  let activeRound = currentRound();
+  function tick() {
+    const round = currentRound();
+    if (round !== activeRound) {
+      rollHistory(activeRound);
+      counts.delete(activeRound);
+      activeRound = round;
+    }
+    updateMeter();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  function fireClap() {
+    const now = Date.now();
+    if (now - lastClapAt < RATE_LIMIT_MS) return;
+    lastClapAt = now;
+    const round = currentRound();
+    counts.set(round, (counts.get(round) || 0) + 1);
+    clap.classList.remove('ap__clap--hit');
+    void clap.offsetWidth;
+    clap.classList.add('ap__clap--hit');
+    try {
+      fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'applause', sessionId: sid, round }) });
+    } catch {}
+  }
+
+  clap.addEventListener('mousedown', (e) => { fireClap(); e.preventDefault(); });
+  clap.addEventListener('touchstart', (e) => { fireClap(); e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', (e) => { if (!e.repeat && e.code === 'Space') { fireClap(); e.preventDefault(); } });
+
+  async function poll() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json();
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (!events.length) return;
+      lastTs = events[events.length - 1].t || Date.now();
+      for (const e of events) {
+        if (e.type !== 'applause') continue;
+        const round = (typeof e.round === 'number') ? e.round : Math.floor((e.t || Date.now()) / ROUND_MS);
+        // Don't double-count our own claps (pid hashing makes pid match what server returns)
+        // We just optimistically incremented locally; if this event is from us, skip.
+        // Heuristic: skip if event timestamp is within 500ms of our last fire AND the round matches.
+        // Simpler: just trust the server count — but we want optimistic feel.
+        // Compromise: count all events not from our own session id by checking pid against ours (pid is server-side hash; we don't know our pid → just always count, accept slight double-count for self).
+        // Actually safest: skip if event.pid is the same hash as ours derived locally. Since we don't have that hash,
+        // we count every event except those that match our last-fired timestamp window.
+        if (Math.abs((e.t || 0) - lastClapAt) < 500) continue;
+        counts.set(round, (counts.get(round) || 0) + 1);
+      }
+    } catch {}
+  }
+  setInterval(poll, 1000);
+  poll();
+})();
+</script>
+
+<style>
+.ap { min-height: 100vh; padding: 12px 12px 60px; background: radial-gradient(ellipse at 50% 80%, rgba(255, 138, 74, 0.18), transparent 60%), linear-gradient(180deg, #1a0a26 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+.ap__head { max-width: 980px; margin: 0 auto 16px; padding: 0 6px; }
+.ap__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ff8a4a; }
+.ap__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+.ap__title em { font-style: italic; }
+.ap__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+.ap__stage { position: relative; max-width: 1080px; margin: 0 auto; min-height: 70vh; background: radial-gradient(ellipse at 50% 100%, rgba(255, 212, 0, 0.14), transparent 60%), linear-gradient(180deg, #2a0e26 0%, #050310 100%); border: 4px solid #ffd400; box-shadow: 6px 6px 0 0 #050310; padding: 24px; overflow: hidden; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: center; }
+@media (max-width: 800px) { .ap__stage { grid-template-columns: 1fr; } }
+
+.ap__curtain { position: absolute; top: 0; bottom: 0; width: 60px; background: repeating-linear-gradient(90deg, #4a0e2c 0 18px, #2a0e1a 18px 22px); border: 2px solid #050310; pointer-events: none; }
+.ap__curtain--l { left: 0; }
+.ap__curtain--r { right: 0; }
+
+.ap__meter { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ap__meter-shell { position: relative; width: 90px; height: 380px; background: #050310; border: 3px solid #ffd400; box-shadow: inset 0 0 30px rgba(255, 212, 0, 0.3), 4px 4px 0 0 #050310; overflow: hidden; }
+.ap__meter-fill { position: absolute; bottom: 0; left: 0; right: 0; height: 0%; background: linear-gradient(180deg, #ff5c23 0%, #ffd400 50%, #3b6e3b 100%); transition: height 100ms ease-out; box-shadow: 0 0 20px #ffd400 inset; }
+.ap__meter-peak { position: absolute; left: -4px; right: -4px; bottom: 0%; height: 4px; background: #fffaf0; box-shadow: 0 0 12px #fffaf0; transition: bottom 200ms ease-out; pointer-events: none; }
+.ap__meter-marks { position: absolute; inset: 0; pointer-events: none; }
+.ap__meter-mark { position: absolute; left: 100%; padding-left: 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; color: #ffd400; transform: translateY(50%); }
+.ap__meter-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.18em; color: #ffd400; }
+
+.ap__clap { background: transparent; border: 0; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 12px; color: inherit; justify-self: center; }
+.ap__clap-glyph { display: inline-block; font-size: clamp(120px, 18vw, 220px); line-height: 1; transform: rotate(-4deg); transition: transform 80ms; filter: drop-shadow(6px 6px 0 #050310); }
+.ap__clap:hover .ap__clap-glyph { transform: rotate(-2deg) scale(1.04); }
+.ap__clap--hit .ap__clap-glyph { animation: ap-clap 0.18s ease-out; }
+@keyframes ap-clap { 0% { transform: rotate(-4deg) scale(1); } 40% { transform: rotate(8deg) scale(1.16); filter: drop-shadow(0 0 24px #ffd400) brightness(1.4); } 100% { transform: rotate(-4deg) scale(1); } }
+.ap__clap-text { font-family: 'Bungee', Impact, sans-serif; font-size: clamp(36px, 5vw, 56px); letter-spacing: 0.06em; color: #ffd400; -webkit-text-stroke: 3px #050310; text-shadow: 4px 4px 0 #ff5c23; }
+.ap__clap-kbd { padding: 4px 10px; background: #050310; color: #ffd400; border: 1.5px solid #ffd400; font-size: 11px; letter-spacing: 0.18em; }
+
+.ap__hud { grid-column: 1 / -1; display: flex; gap: 22px; flex-wrap: wrap; padding: 10px 14px; background: #050310; border: 1.5px solid #ffd400; font-size: 12px; letter-spacing: 0.18em; color: #cfc6df; }
+.ap__hud strong { color: #ffd400; }
+
+.ap__history { grid-column: 1 / -1; padding: 12px; background: rgba(0,0,0,0.4); border: 1.5px solid #ff8a4a; }
+.ap__history-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.18em; color: #ff8a4a; margin: 0 0 8px; }
+.ap__history-bars { display: flex; gap: 4px; align-items: end; height: 80px; }
+.ap__history-bar { flex: 1; background: linear-gradient(180deg, #ff5c23, #ffd400); border: 1px solid #050310; min-height: 2px; transition: height 240ms; }
+
+.ap__confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ap__confetti-bit { position: absolute; top: -20px; width: 10px; height: 14px; animation: ap-fall linear forwards; }
+@keyframes ap-fall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(540deg); opacity: 0; } }
+
+.ap__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+.ap__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+.ap__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff8a4a; }
+</style>
