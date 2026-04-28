@@ -1,0 +1,312 @@
+---
+/**
+ * DrumCrewStrip — six mintable Visit Nouns, one per drum room.
+ *
+ * Per Mike 2026-04-27: "have a look at the homepage, try to add some
+ * nouns blocks for collecting." The drum hub now has nine surfaces +
+ * an MCP server. This strip turns that into a collectible set: one
+ * Noun seed per room, all mintable through the live Visit Nouns FA2
+ * (KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh) at gas-only.
+ *
+ * The seeds are deliberately staggered across the 0-1199 space and do
+ * not overlap with NounsPortraitStrip (313, 523, 742, 1042, 1189) or
+ * the 10 starter mints already on mainnet. Each card links straight to
+ * the room it represents, so collecting feels like clicking through
+ * the hub and pinning a souvenir from each visit.
+ *
+ * Aesthetic per memory note: geocities + sim city, late-90s web
+ * chrome, saturated color washes, not the polished Sparrow stack.
+ */
+import MintButton from './MintButton.astro';
+import contracts from '../data/contracts.json';
+
+interface Props {
+  context?: 'home' | 'page';
+}
+
+const { context = 'home' } = Astro.props;
+const KT1 = (contracts as any).visit_nouns?.mainnet ?? '';
+const priceMutez = Number((contracts as any).visit_nouns?.mintPriceMutez ?? 0);
+
+const crew = [
+  { id: 88,   room: 'classic',    surface: '/drum',         tag: 'CH.VST · v1', note: 'one tap, one heart, no skill required' },
+  { id: 247,  room: 'collab',     surface: '/drum-v2',      tag: 'CH.VST · v2', note: 'pentatonic voice + leaderboard' },
+  { id: 365,  room: 'orchestra',  surface: '/drum-v4',      tag: 'CH.VST · v4', note: 'twelve nouns playing twelve instruments' },
+  { id: 612,  room: 'choir',      surface: '/drum-v6',      tag: 'CH.VST · v6', note: 'twelve voices, four chord progressions' },
+  { id: 808,  room: 'lounge',     surface: '/drum-v9',      tag: 'CH.VST · v9', note: 'eight saxophones, one Cmaj9 voicing' },
+  { id: 999,  room: 'mcp',        surface: '/api/mcp',      tag: 'CH.VST · agents', note: 'agents enter through this door' },
+];
+
+const trophyHref = '/drum-trophies';
+const collectionHref = '/collection/visit-nouns';
+---
+
+<section class:list={['drum-crew', `drum-crew--${context}`]} id="drum-crew" aria-labelledby="drum-crew-title">
+  <div class="drum-crew__head">
+    <p class="drum-crew__kicker">Drum Crew · Visit Nouns FA2 · Tezos mainnet</p>
+    <div class="drum-crew__title">
+      <h2 id="drum-crew-title">Six Nouns, one per drum room.</h2>
+      <p>
+        The drum hub has nine playable surfaces plus an <a href="/api/mcp">MCP server for agents</a>. This is the collectible set — one Noun seed per room, all gas-only on the live Visit Nouns FA2. Click a card to visit the room it stands for. Mint to keep the souvenir.
+      </p>
+    </div>
+    <div class="drum-crew__links">
+      <a class="drum-crew__pill" href={trophyHref}>Trophies →</a>
+      <a class="drum-crew__pill" href={collectionHref}>Collection →</a>
+    </div>
+  </div>
+
+  <ul class="drum-crew__grid" role="list">
+    {crew.map((c) => (
+      <li class="crew-card">
+        <div class="crew-card__chrome">
+          <span class="crew-card__tag">{c.tag}</span>
+          <span class="crew-card__room">{c.room}</span>
+        </div>
+        <a class="crew-card__art" href={c.surface} aria-label={`Visit the ${c.room} room`}>
+          <img
+            src={`https://noun.pics/${c.id}.svg`}
+            alt={`Noun ${c.id} — ${c.room} room avatar`}
+            width="220"
+            height="220"
+            loading={context === 'home' ? 'lazy' : 'lazy'}
+          />
+          <span class="crew-card__id">№ {c.id}</span>
+        </a>
+        <div class="crew-card__body">
+          <p class="crew-card__note">{c.note}</p>
+          <p class="crew-card__visit"><a href={c.surface}>Visit {c.surface}</a></p>
+        </div>
+        <div class="crew-card__actions">
+          <MintButton
+            contract={KT1}
+            tokenId={c.id}
+            priceMutez={priceMutez}
+            kind="mint"
+            label={priceMutez > 0 ? `Mint · ${(priceMutez / 1_000_000).toFixed(2)} ꜩ` : 'Mint · free'}
+          />
+          <a class="crew-card__objkt" href={`https://objkt.com/tokens/${KT1}/${c.id}`} target="_blank" rel="noopener">objkt ↗</a>
+        </div>
+      </li>
+    ))}
+  </ul>
+
+  <p class="drum-crew__foot">
+    Each mint is one transfer on the Visit Nouns FA2 — gas only, public mint, no allowlist. The Drum Crew cap is open: any seed can keep going past the first six if a sibling room ships. <a href="/drum">/drum</a> is the hub. <a href="/api/mcp">/api/mcp</a> is the agent door.
+  </p>
+</section>
+
+<style>
+  .drum-crew {
+    margin: 18px 0 24px;
+    padding: 18px;
+    border: 1.5px solid var(--pc-ink, #12110e);
+    background:
+      repeating-linear-gradient(135deg, rgba(255, 92, 35, 0.04) 0 9px, transparent 9px 22px),
+      linear-gradient(180deg, rgba(255, 220, 100, 0.18), transparent 60%),
+      var(--pc-card, #f8f3e8);
+    box-shadow: 4px 4px 0 0 var(--pc-ink, #12110e);
+  }
+
+  .drum-crew--page {
+    margin-top: 18px;
+  }
+
+  .drum-crew__head {
+    display: grid;
+    grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--pc-ink, #12110e);
+  }
+
+  .drum-crew__kicker {
+    margin: 0;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+
+  .drum-crew__title h2 {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    font-size: clamp(22px, 2.6vw, 36px);
+    line-height: 1.05;
+    font-weight: 520;
+    color: var(--pc-ink, #12110e);
+  }
+
+  .drum-crew__title p {
+    margin: 0;
+    max-width: 66ch;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--pc-ink-soft, #5f5e5a);
+  }
+
+  .drum-crew__title a { color: #b8431a; }
+
+  .drum-crew__links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+  }
+
+  .drum-crew__pill {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink, #12110e);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--pc-ink, #12110e);
+    background: #fff;
+    box-shadow: 2px 2px 0 0 var(--pc-ink, #12110e);
+  }
+
+  .drum-crew__pill:hover {
+    background: #ffd400;
+  }
+
+  .drum-crew__grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    padding: 14px 0 4px;
+    margin: 0;
+    list-style: none;
+  }
+
+  @media (max-width: 1024px) {
+    .drum-crew__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 600px) {
+    .drum-crew__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .drum-crew__head { grid-template-columns: 1fr; }
+    .drum-crew__links { flex-direction: row; align-items: flex-start; }
+  }
+
+  .crew-card {
+    display: grid;
+    grid-template-rows: auto auto auto auto;
+    background: #fffaf0;
+    border: 1.5px solid var(--pc-ink, #12110e);
+    box-shadow: 3px 3px 0 0 var(--pc-ink, #12110e);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+
+  .crew-card:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 0 var(--pc-ink, #12110e);
+  }
+
+  .crew-card__chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background: #12110e;
+    color: #fffaf0;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .crew-card__room {
+    color: #ffd400;
+  }
+
+  .crew-card__art {
+    position: relative;
+    display: block;
+    aspect-ratio: 1;
+    background: #f2f2f2;
+    border-bottom: 1px solid var(--pc-rule, #d6d4cd);
+    overflow: hidden;
+    text-decoration: none;
+  }
+
+  .crew-card__art img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+    transition: transform 160ms ease;
+  }
+
+  .crew-card:hover .crew-card__art img { transform: scale(1.05); }
+
+  .crew-card__id {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #fffaf0;
+    background: rgba(18, 17, 14, 0.78);
+    padding: 2px 6px;
+  }
+
+  .crew-card__body {
+    padding: 10px 10px 6px;
+  }
+
+  .crew-card__note {
+    margin: 0 0 6px;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--pc-ink, #12110e);
+  }
+
+  .crew-card__visit {
+    margin: 0;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .crew-card__visit a { color: #185fa5; text-decoration: none; }
+  .crew-card__visit a:hover { text-decoration: underline; }
+
+  .crew-card__actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px 10px;
+    gap: 8px;
+    border-top: 1px dashed var(--pc-rule, #d6d4cd);
+  }
+
+  .crew-card__objkt {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft, #5f5e5a);
+    text-decoration: none;
+  }
+
+  .crew-card__objkt:hover { color: #185fa5; text-decoration: underline; }
+
+  .drum-crew__foot {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--pc-ink, #12110e);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft, #5f5e5a);
+  }
+
+  .drum-crew__foot a { color: #185fa5; }
+</style>
