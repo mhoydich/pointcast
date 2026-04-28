@@ -59,6 +59,9 @@ const description =
     <!-- MYSTIFY scene: SVG polylines with bouncing points -->
     <svg class="tide__scene tide__scene--mystify" id="tide-mystify" aria-hidden="true" preserveAspectRatio="none"></svg>
 
+    <!-- BOUNCE scene: DVD-logo classic, palette-tinted -->
+    <svg class="tide__scene tide__scene--bounce" id="tide-bounce" aria-hidden="true" preserveAspectRatio="none"></svg>
+
     <!-- Tap-ripple container -->
     <div class="tide__ripples" id="tide-ripples" aria-hidden="true"></div>
 
@@ -88,6 +91,7 @@ const description =
             <button class="tide__pill tide__pill--active" data-mode="waves" type="button">WAVES</button>
             <button class="tide__pill" data-mode="starfield" type="button">STARFIELD</button>
             <button class="tide__pill" data-mode="mystify" type="button">MYSTIFY</button>
+            <button class="tide__pill" data-mode="bounce" type="button">BOUNCE</button>
           </div>
         </div>
 
@@ -168,7 +172,7 @@ const description =
     { id:'nighttide', name:'NIGHTTIDE', sky:'#3A0E5C', water:'#0E1845', foam:'#FF1493', orb:'#FF69B4', wave1:'#3D1276', wave2:'#1F1054', wave3:'#0A0830', tone:{root:73.4,  color:'deep'},   dark:true  },
   ];
 
-  var MODES = ['waves', 'starfield', 'mystify'];
+  var MODES = ['waves', 'starfield', 'mystify', 'bounce'];
   var SOUNDSCAPES = ['drift', 'chimes', 'bubbles'];
 
   function clockPaletteId(){var h=new Date().getHours();if(h<5)return'abyss';if(h<8)return'daybreak';if(h<11)return'crystal';if(h<14)return'lagoon';if(h<17)return'kelp';if(h<20)return'coral';if(h<22)return'storm';return'nighttide';}
@@ -332,6 +336,69 @@ const description =
     svg.innerHTML = out;
   }
 
+  /* ─── BOUNCE scene: DVD-logo classic ─────────────────────── */
+  var bounceState = null; // { x, y, vx, vy, w, h, colorIdx, hits, cornerFlashUntil }
+  function initBounce() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var bw = Math.max(140, Math.min(260, w * 0.18));
+    var bh = Math.round(bw * 0.42);
+    bounceState = {
+      x: Math.random() * (w - bw),
+      y: Math.random() * (h - bh),
+      vx: (Math.random() < 0.5 ? -1 : 1) * 1.6,
+      vy: (Math.random() < 0.5 ? -1 : 1) * 1.4,
+      w: bw, h: bh,
+      colorIdx: 0,
+      hits: 0,
+      cornerFlashUntil: 0,
+    };
+  }
+  function drawBounce() {
+    var svg = document.getElementById('tide-bounce');
+    if (!svg) return;
+    var W = window.innerWidth, H = window.innerHeight;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    if (!bounceState) initBounce();
+    var s = bounceState;
+    var p = PALETTES[idx];
+    var swatch = [p.foam, p.orb, p.wave1, p.wave2, p.wave3];
+
+    if (!motionPaused) {
+      s.x += s.vx; s.y += s.vy;
+      var hitH = false, hitV = false;
+      if (s.x <= 0)        { s.x = 0;            s.vx *= -1; hitH = true; }
+      if (s.x + s.w >= W)  { s.x = W - s.w;      s.vx *= -1; hitH = true; }
+      if (s.y <= 0)        { s.y = 0;            s.vy *= -1; hitV = true; }
+      if (s.y + s.h >= H)  { s.y = H - s.h;      s.vy *= -1; hitV = true; }
+      if (hitH || hitV) {
+        s.hits++;
+        s.colorIdx = (s.colorIdx + 1) % swatch.length;
+      }
+      if (hitH && hitV) {
+        s.cornerFlashUntil = performance.now() + 600;
+      }
+    }
+
+    var color = swatch[s.colorIdx];
+    var now = performance.now();
+    var flashing = now < s.cornerFlashUntil;
+    var flashAlpha = flashing ? (1 - (s.cornerFlashUntil - now) / 600) : 0;
+
+    var out = '';
+    if (flashing) {
+      out += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="' + p.foam + '" fill-opacity="' + (0.18 * (1 - flashAlpha)).toFixed(3) + '" />';
+    }
+    var bx = s.x, by = s.y, bw = s.w, bh = s.h;
+    out += '<rect x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw + '" height="' + bh + '" rx="6" fill="' + color + '" opacity="0.92" />';
+    // Wordmark
+    var fs = Math.max(18, Math.round(bh * 0.42));
+    var tx = (bx + bw / 2).toFixed(1);
+    var ty = (by + bh / 2 + fs * 0.36).toFixed(1);
+    var labelColor = p.dark ? '#0b0d12' : '#0c0e12';
+    out += '<text x="' + tx + '" y="' + ty + '" text-anchor="middle" fill="' + labelColor + '" font-family="JetBrains Mono Variable, JetBrains Mono, monospace" font-weight="700" font-size="' + fs + '" letter-spacing="' + (fs * 0.18).toFixed(1) + '" opacity="0.85">TIDE</text>';
+    svg.innerHTML = out;
+  }
+
   /* ─── master raf loop drives whichever scene is active ───── */
   var rafActive = null;
   function startRafLoop() {
@@ -353,6 +420,8 @@ const description =
         drawStarfield();
       } else if (mode === 'mystify') {
         drawMystify();
+      } else if (mode === 'bounce') {
+        drawBounce();
       }
       rafActive = requestAnimationFrame(frame);
     }
@@ -626,6 +695,7 @@ const description =
     // Lazy-init scene state
     if (m === 'starfield' && (!sfCtx || !sfParticles.length)) initStarfield();
     if (m === 'mystify' && !myLines.length) initMystify();
+    if (m === 'bounce' && !bounceState) initBounce();
     try { localStorage.setItem('pc:tide:mode', m); } catch (e) {}
   }
 
@@ -719,6 +789,7 @@ const description =
   // init scene state for non-default modes if needed
   if (mode === 'starfield') initStarfield();
   if (mode === 'mystify') initMystify();
+  if (mode === 'bounce') initBounce();
 
   startRafLoop();
   tickClock();
@@ -746,6 +817,24 @@ const description =
     holdTimer = setTimeout(function () { setUI(true); }, 1500);
   });
   document.addEventListener('pointerup', function () { if (holdTimer) clearTimeout(holdTimer); });
+
+  /* tab-blur auto-mute: pause audio when tab hidden, restore when visible.
+     Uses a quiet master ramp so we don't kill the AudioContext (which would
+     require user-gesture to resume). Does not flip the user's audio toggle. */
+  var preBlurAudioOn = false;
+  document.addEventListener('visibilitychange', function () {
+    if (!audioCtx) return;
+    if (document.hidden) {
+      preBlurAudioOn = audioOn;
+      if (audioOn && master) {
+        master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.25);
+      }
+    } else {
+      if (preBlurAudioOn && audioOn && master) {
+        master.gain.setTargetAtTime(audioVolume, audioCtx.currentTime, 0.6);
+      }
+    }
+  });
 
   window.addEventListener('hashchange', function () {
     var hp = parseHash();
@@ -821,10 +910,16 @@ const description =
   .tide__scene { position: absolute; inset: 0; pointer-events: none; }
   .tide[data-mode="waves"]     .tide__scene--starfield,
   .tide[data-mode="waves"]     .tide__scene--mystify,
+  .tide[data-mode="waves"]     .tide__scene--bounce,
   .tide[data-mode="starfield"] .tide__scene--waves,
   .tide[data-mode="starfield"] .tide__scene--mystify,
+  .tide[data-mode="starfield"] .tide__scene--bounce,
   .tide[data-mode="mystify"]   .tide__scene--waves,
-  .tide[data-mode="mystify"]   .tide__scene--starfield { display: none; }
+  .tide[data-mode="mystify"]   .tide__scene--starfield,
+  .tide[data-mode="mystify"]   .tide__scene--bounce,
+  .tide[data-mode="bounce"]    .tide__scene--waves,
+  .tide[data-mode="bounce"]    .tide__scene--starfield,
+  .tide[data-mode="bounce"]    .tide__scene--mystify { display: none; }
 
   /* WAVES scene */
   .tide__scene--waves { z-index: 1; }
@@ -912,6 +1007,20 @@ const description =
   .tide[data-mode="mystify"] {
     background:
       radial-gradient(ellipse at 50% 50%, color-mix(in oklab, var(--sky) 60%, var(--water)) 0%, var(--wave-3) 100%);
+  }
+
+  /* BOUNCE scene — flat dark backdrop so the logo reads, like an old screensaver */
+  .tide__scene--bounce {
+    z-index: 1;
+    width: 100vw; height: 100vh;
+  }
+  .tide[data-mode="bounce"] {
+    background:
+      radial-gradient(ellipse at 50% 50%, color-mix(in oklab, var(--wave-3) 75%, #000 25%) 0%, #04060a 100%);
+  }
+  .tide[data-mode="bounce"][data-dark="0"] {
+    background:
+      radial-gradient(ellipse at 50% 50%, color-mix(in oklab, var(--wave-3) 70%, #000 30%) 0%, color-mix(in oklab, var(--wave-3) 30%, #000 70%) 100%);
   }
 
   /* Ripples / grain (always visible) */
