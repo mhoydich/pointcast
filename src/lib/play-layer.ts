@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.1.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, a small site pet, and Zen Cats.';
+  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, a small site pet, Zen Cats, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -75,6 +75,13 @@ export const PLAY_SURFACES = [
     summary: 'A daily calm cat collection game with local care and a Tezos-ready PCCAT mint path.',
   },
   {
+    id: 'nouns-wood-chop',
+    code: 'WOOD',
+    title: 'Nouns Wood Chop',
+    route: '/nouns-wood-chop',
+    summary: 'A pixel collect loop where visitors chop trees, bank wood bundles, plant seeds, and unlock local Nouns stamps.',
+  },
+  {
     id: 'derby-season',
     code: 'LIGA',
     title: 'Agent Derby Season',
@@ -141,6 +148,15 @@ export const PASSPORT_STAMPS = [
     action: 'Care',
     points: 3,
     description: 'Complete the daily cat ritual.',
+  },
+  {
+    id: 'nouns-wood-chop',
+    label: 'Wood Chop',
+    category: 'collect',
+    route: '/nouns-wood-chop',
+    action: 'Bundle',
+    points: 3,
+    description: 'Bank the first Nouns wood bundle.',
   },
   {
     id: 'radio-tune',

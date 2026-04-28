@@ -1,0 +1,1123 @@
+---
+/**
+ * /nouns-wood-chop - playable Nouns pixel wood chop collect loop.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const TREES = [
+  { id: 'cypress', label: 'Cypress Noun 313', noun: 313, health: 14, bonus: 3 },
+  { id: 'pine', label: 'Blue Pine Noun 523', noun: 523, health: 18, bonus: 4 },
+  { id: 'palm', label: 'Beach Palm Noun 742', noun: 742, health: 22, bonus: 5 },
+  { id: 'oak', label: 'Commons Oak Noun 1042', noun: 1042, health: 26, bonus: 6 },
+];
+
+const STAMPS = [
+  { id: 'first-bundle', label: 'First Bundle', threshold: 1, note: 'Bank one bundle.' },
+  { id: 'commons-carpenter', label: 'Commons Carpenter', threshold: 3, note: 'Show up three times.' },
+  { id: 'noggles-forester', label: 'Noggles Forester', threshold: 5, note: 'Turn rhythm into supply.' },
+  { id: 'woodlot-keeper', label: 'Woodlot Keeper', threshold: 8, note: 'Protect the loop.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': 'https://pointcast.xyz/nouns-wood-chop#game',
+      name: 'Nouns Wood Chop Commons',
+      description: 'A browser-playable pixel collect loop where visitors chop trees, collect wood, bank bundles, plant seeds, and unlock local Nouns stamps.',
+      url: 'https://pointcast.xyz/nouns-wood-chop',
+      image: 'https://pointcast.xyz/images/nouns-wood-chop/pixel-woodlot.svg',
+      gamePlatform: 'Web browser',
+      genre: 'Clicker collection',
+      inLanguage: 'en-US',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': 'https://pointcast.xyz/nouns-wood-chop#breadcrumb',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Play', item: 'https://pointcast.xyz/play' },
+        { '@type': 'ListItem', position: 3, name: 'Nouns Wood Chop', item: 'https://pointcast.xyz/nouns-wood-chop' },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Nouns Wood Chop"
+  description="A playable pixel Nouns collect loop: chop a tree, collect wood, bank bundles, plant seeds, unlock local stamps."
+  image="/images/nouns-wood-chop/pixel-woodlot.svg"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/nouns-wood-chop.json', title: 'Nouns Wood Chop game manifest (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/nouns-wood-chop/pixel-woodlot.svg',
+    buttons: [
+      { label: 'Play Wood Chop', action: 'link', target: 'https://pointcast.xyz/nouns-wood-chop' },
+      { label: 'Game JSON', action: 'link', target: 'https://pointcast.xyz/nouns-wood-chop.json' },
+      { label: 'Block 0383', action: 'link', target: 'https://pointcast.xyz/b/0383' },
+      { label: 'Home feed', action: 'link', target: 'https://pointcast.xyz/' },
+    ],
+  }}
+>
+  <div class="wood-page" data-wood-game>
+    <script type="application/json" id="wood-game-data" set:html={JSON.stringify({ trees: TREES, stamps: STAMPS })}></script>
+
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/play">Play</a>
+      <span aria-hidden="true">/</span>
+      <span>Wood Chop</span>
+    </nav>
+
+    <section class="wood-hero" aria-labelledby="wood-title">
+      <div class="wood-hero__copy">
+        <p class="kicker">Nouns / pixel collect loop</p>
+        <h1 id="wood-title">Wood Chop Commons</h1>
+        <p>
+          Chop the tree, collect wood, bank bundles, plant seeds, and unlock local Nouns stamps. Spacebar works too.
+        </p>
+      </div>
+      <div class="hud" aria-label="Wood Chop status">
+        <div><span>WOOD</span><strong data-wood>0</strong></div>
+        <div><span>BUNDLES</span><strong data-bundles>0</strong></div>
+        <div><span>SEEDS</span><strong data-seeds>0</strong></div>
+        <div><span>ENERGY</span><strong data-energy>0</strong></div>
+        <div><span>STREAK</span><strong data-streak>0</strong></div>
+      </div>
+    </section>
+
+    <section class="wood-layout" aria-label="Playable Nouns wood chop">
+      <section class="forest-panel" aria-labelledby="forest-title">
+        <div class="board-top">
+          <div>
+            <p class="mono">ACTIVE TREE</p>
+            <h2 id="forest-title" data-tree-name>Cypress Noun 313</h2>
+          </div>
+          <strong data-status aria-live="polite">Ready. Chop to collect.</strong>
+        </div>
+
+        <button type="button" class="pixel-scene" data-action="chop" aria-label="Chop the active pixel tree">
+          <span class="pixel-scene__sky"></span>
+          <span class="pixel-scene__sun"></span>
+          <span class="pixel-scene__cloud pixel-scene__cloud--one"></span>
+          <span class="pixel-scene__cloud pixel-scene__cloud--two"></span>
+          <span class="pixel-scene__ground"></span>
+          <span class="tree tree--back"></span>
+          <span class="tree tree--main">
+            <span class="tree__crown tree__crown--top"></span>
+            <span class="tree__crown tree__crown--left"></span>
+            <span class="tree__crown tree__crown--right"></span>
+            <span class="tree__trunk"></span>
+            <span class="tree__noggles"><i></i><i></i></span>
+          </span>
+          <span class="axe" aria-hidden="true"></span>
+          <span class="log log--one"></span>
+          <span class="log log--two"></span>
+          <span class="impact" aria-hidden="true"></span>
+        </button>
+
+        <div class="health" aria-label="Tree health">
+          <span>Tree health</span>
+          <div><i data-health-bar></i></div>
+          <strong data-health-text>14 / 14</strong>
+        </div>
+
+        <div class="controls" aria-label="Wood Chop controls">
+          <button type="button" class="btn btn--primary" data-action="chop">Chop</button>
+          <button type="button" class="btn" data-action="bank">Bank bundle</button>
+          <button type="button" class="btn" data-action="plant">Plant seed</button>
+          <button type="button" class="btn" data-action="rest">Rest</button>
+        </div>
+      </section>
+
+      <aside class="side-panel" aria-label="Nouns Wood Chop rewards and receipts">
+        <div class="noun-row" aria-label="Noun tree crew">
+          {TREES.map((tree) => (
+            <a href={`https://noun.pics/${tree.noun}.svg`} target="_blank" rel="noopener" class="noun-card">
+              <img src={`https://noun.pics/${tree.noun}.svg`} alt={`Noun ${tree.noun}`} width="54" height="54" loading="lazy" onerror="this.style.visibility='hidden'" />
+              <span>N{tree.noun}</span>
+            </a>
+          ))}
+        </div>
+
+        <div class="bundle-rule">
+          <span class="mono">RULE</span>
+          <strong>12 wood = 1 bundle</strong>
+          <p>Bank a bundle to earn a receipt. First bundle stamps the PointCast passport locally.</p>
+        </div>
+
+        <div class="stamp-stack" aria-label="Stamp milestones">
+          {STAMPS.map((stamp) => (
+            <article class="stamp" data-stamp-id={stamp.id} data-stamp-threshold={stamp.threshold}>
+              <span>{stamp.threshold} bundle{stamp.threshold === 1 ? '' : 's'}</span>
+              <strong>{stamp.label}</strong>
+              <p>{stamp.note}</p>
+            </article>
+          ))}
+        </div>
+
+        <div class="receipts" aria-label="Local receipts">
+          <div class="receipts__head">
+            <span class="mono">RECEIPTS</span>
+            <button type="button" data-action="reset">Reset</button>
+          </div>
+          <ol data-receipts>
+            <li>No receipts yet.</li>
+          </ol>
+        </div>
+      </aside>
+    </section>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var root = document.querySelector('[data-wood-game]');
+      var dataEl = document.getElementById('wood-game-data');
+      if (!root || !dataEl) return;
+
+      var DATA = JSON.parse(dataEl.textContent || '{}');
+      var TREES = DATA.trees || [];
+      var STAMPS = DATA.stamps || [];
+      var STATE_KEY = 'pc:nouns-wood-chop:v1';
+      var PASSPORT_KEY = 'pc:passport:stamps';
+      var MAX_ENERGY = 12;
+      var BUNDLE_SIZE = 12;
+
+      var els = {
+        wood: root.querySelector('[data-wood]'),
+        bundles: root.querySelector('[data-bundles]'),
+        seeds: root.querySelector('[data-seeds]'),
+        energy: root.querySelector('[data-energy]'),
+        streak: root.querySelector('[data-streak]'),
+        status: root.querySelector('[data-status]'),
+        treeName: root.querySelector('[data-tree-name]'),
+        healthBar: root.querySelector('[data-health-bar]'),
+        healthText: root.querySelector('[data-health-text]'),
+        receipts: root.querySelector('[data-receipts]'),
+        scene: root.querySelector('.pixel-scene'),
+      };
+
+      function readJson(key, fallback) {
+        try {
+          var raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          var parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? parsed : fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      function writeJson(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+      }
+
+      function blankState() {
+        return {
+          wood: 0,
+          bundles: 0,
+          seeds: 2,
+          energy: MAX_ENERGY,
+          treeIndex: 0,
+          health: TREES[0] ? TREES[0].health : 14,
+          streak: 0,
+          felled: 0,
+          lastChop: 0,
+          receipts: [],
+          unlocked: [],
+        };
+      }
+
+      var state = Object.assign(blankState(), readJson(STATE_KEY, {}));
+      state.receipts = Array.isArray(state.receipts) ? state.receipts : [];
+      state.unlocked = Array.isArray(state.unlocked) ? state.unlocked : [];
+      state.treeIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.treeIndex) || 0));
+      if (!state.health || state.health < 1) state.health = currentTree().health;
+
+      function currentTree() {
+        return TREES[state.treeIndex] || TREES[0] || { id: 'tree', label: 'Pixel Tree', health: 14, bonus: 3 };
+      }
+
+      function setStatus(message) {
+        if (els.status) els.status.textContent = message;
+      }
+
+      function receipt(text) {
+        state.receipts.unshift({
+          id: 'wood-' + Date.now().toString(36),
+          at: new Date().toISOString(),
+          text: text,
+        });
+        state.receipts = state.receipts.slice(0, 6);
+      }
+
+      function save() {
+        writeJson(STATE_KEY, state);
+      }
+
+      function stampPassport() {
+        var stamps = readJson(PASSPORT_KEY, {});
+        if (!stamps['nouns-wood-chop']) {
+          stamps['nouns-wood-chop'] = {
+            id: 'nouns-wood-chop',
+            at: new Date().toISOString(),
+            via: 'nouns-wood-chop',
+          };
+          writeJson(PASSPORT_KEY, stamps);
+        }
+      }
+
+      function updateUnlocked() {
+        STAMPS.forEach(function (stamp) {
+          if (state.bundles >= stamp.threshold && state.unlocked.indexOf(stamp.id) === -1) {
+            state.unlocked.push(stamp.id);
+            receipt('Unlocked stamp: ' + stamp.label + '.');
+          }
+        });
+      }
+
+      function nextTree() {
+        state.treeIndex = (state.treeIndex + 1) % TREES.length;
+        state.health = currentTree().health;
+      }
+
+      function chop() {
+        if (state.energy <= 0) {
+          setStatus('Energy is empty. Rest or bank a bundle.');
+          render();
+          return;
+        }
+
+        var now = Date.now();
+        state.streak = now - state.lastChop < 1400 ? state.streak + 1 : 1;
+        state.lastChop = now;
+        state.energy -= 1;
+
+        var rhythmBonus = Math.min(3, Math.floor(state.streak / 5));
+        var gain = 1 + Math.floor(Math.random() * 2) + rhythmBonus;
+        state.wood += gain;
+        state.health -= 1;
+
+        if (Math.random() < 0.12) {
+          state.seeds += 1;
+          setStatus('Good chop: +' + gain + ' wood, +1 seed.');
+        } else {
+          setStatus('Good chop: +' + gain + ' wood.');
+        }
+
+        if (els.scene) {
+          els.scene.classList.remove('is-chopping');
+          void els.scene.offsetWidth;
+          els.scene.classList.add('is-chopping');
+        }
+
+        if (state.health <= 0) {
+          fellTree();
+        }
+
+        save();
+        render();
+      }
+
+      function fellTree() {
+        var tree = currentTree();
+        var drop = tree.bonus + Math.floor(Math.random() * 3);
+        state.felled += 1;
+        state.wood += drop;
+        state.seeds += 1;
+        state.energy = Math.min(MAX_ENERGY, state.energy + 3);
+        receipt('Felled ' + tree.label + ': +' + drop + ' wood and +1 seed.');
+        nextTree();
+        setStatus('Tree down. New tree planted in the commons.');
+      }
+
+      function bankBundle() {
+        if (state.wood < BUNDLE_SIZE) {
+          setStatus('Need ' + (BUNDLE_SIZE - state.wood) + ' more wood to bank a bundle.');
+          render();
+          return;
+        }
+
+        state.wood -= BUNDLE_SIZE;
+        state.bundles += 1;
+        state.energy = Math.min(MAX_ENERGY, state.energy + 2);
+        receipt('Banked bundle ' + state.bundles + '.');
+        if (state.bundles === 1) stampPassport();
+        updateUnlocked();
+        setStatus('Bundle banked. Receipt saved locally.');
+        save();
+        render();
+      }
+
+      function plantSeed() {
+        if (state.seeds <= 0) {
+          setStatus('No seeds yet. Fell a tree or keep chopping.');
+          render();
+          return;
+        }
+
+        state.seeds -= 1;
+        nextTree();
+        state.energy = Math.min(MAX_ENERGY, state.energy + 4);
+        receipt('Planted a seed for ' + currentTree().label + '.');
+        setStatus('Seed planted. Energy recovered.');
+        save();
+        render();
+      }
+
+      function rest() {
+        state.energy = MAX_ENERGY;
+        state.streak = 0;
+        setStatus('Rested. Back to full energy.');
+        save();
+        render();
+      }
+
+      function reset() {
+        state = blankState();
+        localStorage.removeItem(STATE_KEY);
+        setStatus('Fresh woodlot ready.');
+        render();
+      }
+
+      function render() {
+        var tree = currentTree();
+        var healthPct = Math.max(0, Math.min(100, (state.health / tree.health) * 100));
+        root.dataset.tree = tree.id;
+        root.style.setProperty('--health', healthPct + '%');
+
+        if (els.wood) els.wood.textContent = String(state.wood);
+        if (els.bundles) els.bundles.textContent = String(state.bundles);
+        if (els.seeds) els.seeds.textContent = String(state.seeds);
+        if (els.energy) els.energy.textContent = String(state.energy) + '/' + MAX_ENERGY;
+        if (els.streak) els.streak.textContent = String(state.streak);
+        if (els.treeName) els.treeName.textContent = tree.label;
+        if (els.healthBar) els.healthBar.style.width = healthPct + '%';
+        if (els.healthText) els.healthText.textContent = Math.max(0, state.health) + ' / ' + tree.health;
+
+        root.querySelectorAll('[data-stamp-id]').forEach(function (el) {
+          var id = el.getAttribute('data-stamp-id');
+          var threshold = Number(el.getAttribute('data-stamp-threshold')) || 0;
+          var done = state.bundles >= threshold || state.unlocked.indexOf(id) !== -1;
+          el.classList.toggle('is-unlocked', done);
+        });
+
+        root.querySelectorAll('[data-action="bank"]').forEach(function (button) {
+          button.disabled = state.wood < BUNDLE_SIZE;
+        });
+        root.querySelectorAll('[data-action="plant"]').forEach(function (button) {
+          button.disabled = state.seeds <= 0;
+        });
+        root.querySelectorAll('[data-action="chop"]').forEach(function (button) {
+          button.disabled = state.energy <= 0;
+        });
+
+        if (els.receipts) {
+          els.receipts.textContent = '';
+          if (!state.receipts.length) {
+            var empty = document.createElement('li');
+            empty.textContent = 'No receipts yet.';
+            els.receipts.append(empty);
+          } else {
+            state.receipts.forEach(function (item) {
+              var li = document.createElement('li');
+              var at = new Date(item.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              li.textContent = at + ' - ' + item.text;
+              els.receipts.append(li);
+            });
+          }
+        }
+      }
+
+      root.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-action]');
+        if (!button) return;
+        var action = button.getAttribute('data-action');
+        if (action === 'chop') chop();
+        if (action === 'bank') bankBundle();
+        if (action === 'plant') plantSeed();
+        if (action === 'rest') rest();
+        if (action === 'reset') reset();
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.code !== 'Space') return;
+        var tag = document.activeElement && document.activeElement.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        event.preventDefault();
+        chop();
+      });
+
+      updateUnlocked();
+      render();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .wood-page {
+    min-height: 100vh;
+    padding: 18px;
+    color: #12110e;
+    background:
+      linear-gradient(180deg, rgba(190, 232, 255, 0.92), rgba(255, 249, 228, 0.78) 44%, rgba(231, 244, 239, 0.92)),
+      #fbfff8;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: min(1320px, 100%);
+    margin: 0 auto 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .crumb a,
+  .crumb span {
+    color: #21463a;
+  }
+
+  .wood-hero,
+  .wood-layout {
+    width: min(1320px, 100%);
+    margin: 0 auto;
+  }
+
+  .wood-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 0.74fr);
+    gap: 16px;
+    align-items: end;
+    margin-bottom: 16px;
+  }
+
+  .kicker,
+  .mono {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #0f6e56;
+    font-size: 12px;
+  }
+
+  h1 {
+    max-width: 760px;
+    margin: 0;
+    color: #12110e;
+    font-size: clamp(3rem, 9vw, 6.8rem);
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .wood-hero__copy p:last-child {
+    max-width: 660px;
+    margin: 14px 0 0;
+    color: #21463a;
+    font-size: 1.04rem;
+    line-height: 1.48;
+  }
+
+  .hud {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .hud div,
+  .forest-panel,
+  .side-panel {
+    border: 2px solid #12110e;
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: 0 16px 44px rgba(21, 78, 58, 0.14);
+  }
+
+  .hud div {
+    min-width: 0;
+    min-height: 74px;
+    padding: 10px;
+  }
+
+  .hud span {
+    display: block;
+    color: #0f6e56;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  .hud strong {
+    display: block;
+    margin-top: 8px;
+    overflow-wrap: anywhere;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 1.24rem;
+    line-height: 1;
+  }
+
+  .wood-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.42fr);
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .forest-panel,
+  .side-panel {
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .board-top {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .board-top p {
+    margin: 0 0 4px;
+    color: #0f6e56;
+    font-size: 10px;
+  }
+
+  .board-top h2 {
+    margin: 0;
+    color: #12110e;
+    font-size: clamp(1.4rem, 3vw, 2.2rem);
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .board-top strong {
+    max-width: 320px;
+    padding: 9px 10px;
+    border: 1px solid rgba(18, 17, 14, 0.7);
+    background: #fff9e4;
+    color: #44381f;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    line-height: 1.3;
+    text-align: right;
+  }
+
+  .pixel-scene {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-height: clamp(360px, 58vh, 620px);
+    overflow: hidden;
+    padding: 0;
+    border: 2px solid #12110e;
+    background: #bfe8ff;
+    cursor: pointer;
+    image-rendering: pixelated;
+  }
+
+  .pixel-scene:focus-visible {
+    outline: 4px solid #ffd55c;
+    outline-offset: 3px;
+  }
+
+  .pixel-scene:disabled {
+    cursor: not-allowed;
+    filter: saturate(0.78);
+  }
+
+  .pixel-scene__sky,
+  .pixel-scene__sun,
+  .pixel-scene__cloud,
+  .pixel-scene__ground,
+  .tree,
+  .tree__crown,
+  .tree__trunk,
+  .tree__noggles,
+  .tree__noggles i,
+  .axe,
+  .log,
+  .impact {
+    position: absolute;
+    display: block;
+  }
+
+  .pixel-scene__sky {
+    inset: 0 0 32%;
+    background:
+      linear-gradient(180deg, #bfe8ff, #eaf8ff 74%),
+      #bfe8ff;
+  }
+
+  .pixel-scene__sun {
+    top: 32px;
+    left: 34px;
+    width: 58px;
+    height: 58px;
+    background: #ffd55c;
+    box-shadow: 0 0 0 12px rgba(255, 213, 92, 0.24);
+  }
+
+  .pixel-scene__cloud {
+    height: 26px;
+    background: #fff;
+    box-shadow: 32px -18px 0 #fff, 74px 0 0 #fff, 104px -10px 0 #fff;
+  }
+
+  .pixel-scene__cloud--one {
+    top: 74px;
+    right: 18%;
+    width: 78px;
+  }
+
+  .pixel-scene__cloud--two {
+    top: 158px;
+    left: 18%;
+    width: 62px;
+    opacity: 0.72;
+  }
+
+  .pixel-scene__ground {
+    inset: 68% 0 0;
+    background:
+      linear-gradient(180deg, #1e6a53 0 28px, transparent 28px),
+      repeating-linear-gradient(90deg, rgba(18, 17, 14, 0.08) 0 16px, transparent 16px 44px),
+      #75b967;
+  }
+
+  .tree--back {
+    right: 12%;
+    bottom: 19%;
+    width: 80px;
+    height: 170px;
+    opacity: 0.72;
+    background:
+      linear-gradient(#246d4c 0 74px, transparent 74px),
+      linear-gradient(90deg, transparent 33px, #7b4a28 33px 50px, transparent 50px);
+  }
+
+  .tree--main {
+    left: 50%;
+    bottom: 15%;
+    width: 230px;
+    height: 330px;
+    transform: translateX(-54%);
+    transition: transform 140ms steps(2, end);
+  }
+
+  .tree__crown--top {
+    top: 0;
+    left: 68px;
+    width: 94px;
+    height: 74px;
+    background: #3e966b;
+  }
+
+  .tree__crown--left {
+    top: 56px;
+    left: 12px;
+    width: 146px;
+    height: 104px;
+    background: #2d7e58;
+  }
+
+  .tree__crown--right {
+    top: 76px;
+    right: 0;
+    width: 148px;
+    height: 98px;
+    background: #236b4a;
+  }
+
+  [data-tree="pine"] .tree__crown--top,
+  [data-tree="pine"] .tree__crown--left,
+  [data-tree="pine"] .tree__crown--right {
+    background: #2e6f87;
+  }
+
+  [data-tree="palm"] .tree__crown--top,
+  [data-tree="palm"] .tree__crown--left,
+  [data-tree="palm"] .tree__crown--right {
+    background: #3d9d67;
+  }
+
+  [data-tree="oak"] .tree__crown--top,
+  [data-tree="oak"] .tree__crown--left,
+  [data-tree="oak"] .tree__crown--right {
+    background: #4a7f36;
+  }
+
+  .tree__trunk {
+    left: 88px;
+    bottom: 0;
+    width: 54px;
+    height: 190px;
+    background:
+      linear-gradient(90deg, transparent 10px, rgba(255, 255, 255, 0.16) 10px 18px, transparent 18px),
+      #8d5a32;
+  }
+
+  .tree__noggles {
+    top: 110px;
+    left: 55px;
+    width: 118px;
+    height: 38px;
+    background: #161616;
+  }
+
+  .tree__noggles i {
+    top: 9px;
+    width: 38px;
+    height: 22px;
+    background: #fff3a3;
+  }
+
+  .tree__noggles i:first-child { left: 10px; }
+  .tree__noggles i:last-child { right: 10px; }
+
+  .axe {
+    right: 24%;
+    bottom: 19%;
+    width: 26px;
+    height: 150px;
+    background: #7b4a28;
+    transform: rotate(28deg);
+    transform-origin: bottom center;
+    transition: transform 140ms steps(2, end);
+  }
+
+  .axe::before {
+    content: '';
+    position: absolute;
+    top: -24px;
+    left: -28px;
+    width: 70px;
+    height: 50px;
+    border: 6px solid #242424;
+    background: #e7eef4;
+  }
+
+  .log {
+    bottom: 12%;
+    width: 88px;
+    height: 28px;
+    border: 5px solid #744323;
+    background: #bd8450;
+  }
+
+  .log--one { left: 16%; }
+  .log--two { right: 14%; }
+
+  .impact {
+    left: calc(50% + 68px);
+    bottom: 38%;
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    background: #ffd55c;
+    box-shadow:
+      24px -16px 0 #ffd55c,
+      36px 18px 0 #ffd55c,
+      -18px 18px 0 #ffd55c;
+  }
+
+  .pixel-scene.is-chopping .tree--main {
+    transform: translateX(-54%) translateX(-8px);
+  }
+
+  .pixel-scene.is-chopping .axe {
+    transform: rotate(-18deg);
+  }
+
+  .pixel-scene.is-chopping .impact {
+    animation: impact-pop 220ms steps(2, end);
+  }
+
+  @keyframes impact-pop {
+    0% { opacity: 0; transform: scale(0.8); }
+    30% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.4); }
+  }
+
+  .health {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .health div {
+    height: 16px;
+    border: 1px solid #12110e;
+    background: #fff;
+  }
+
+  .health i {
+    display: block;
+    height: 100%;
+    width: var(--health, 100%);
+    background: linear-gradient(90deg, #0f6e56, #ffd55c);
+    transition: width 160ms steps(4, end);
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .btn {
+    min-height: 48px;
+    padding: 10px;
+    border: 2px solid #12110e;
+    border-radius: 0;
+    background: #fff;
+    color: #12110e;
+    font: inherit;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .btn--primary {
+    background: #12110e;
+    color: #fff;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    color: #7b746c;
+    border-color: #b8b1a4;
+    background: #eee8dc;
+  }
+
+  .btn:not(:disabled):hover {
+    background: #e7f4ef;
+  }
+
+  .side-panel {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
+  .noun-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .noun-card {
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px 5px;
+    border: 1px solid rgba(18, 17, 14, 0.7);
+    background: #fff;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+  }
+
+  .noun-card:hover {
+    background: #eef8ff;
+    text-decoration: none;
+  }
+
+  .noun-card img {
+    width: 54px;
+    height: 54px;
+    image-rendering: pixelated;
+  }
+
+  .bundle-rule,
+  .receipts,
+  .stamp {
+    border: 1px solid rgba(18, 17, 14, 0.7);
+    background: rgba(255, 255, 255, 0.78);
+  }
+
+  .bundle-rule {
+    padding: 12px;
+  }
+
+  .bundle-rule span {
+    display: block;
+    color: #0f6e56;
+    font-size: 10px;
+  }
+
+  .bundle-rule strong {
+    display: block;
+    margin-top: 5px;
+    color: #12110e;
+    font-size: 1.1rem;
+  }
+
+  .bundle-rule p {
+    margin: 7px 0 0;
+    color: #38373a;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .stamp-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .stamp {
+    min-width: 0;
+    min-height: 116px;
+    padding: 10px;
+    opacity: 0.56;
+    transition: opacity 180ms ease, background-color 180ms ease;
+  }
+
+  .stamp.is-unlocked {
+    opacity: 1;
+    background: #fff9e4;
+    box-shadow: inset 0 0 0 4px rgba(255, 213, 92, 0.22);
+  }
+
+  .stamp span {
+    color: #0f6e56;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .stamp strong {
+    display: block;
+    margin-top: 8px;
+    color: #12110e;
+    font-size: 15px;
+    line-height: 1.1;
+  }
+
+  .stamp p {
+    margin: 8px 0 0;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .receipts {
+    padding: 12px;
+  }
+
+  .receipts__head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .receipts__head span {
+    color: #0f6e56;
+    font-size: 10px;
+  }
+
+  .receipts__head button {
+    padding: 5px 7px;
+    border: 1px solid #12110e;
+    background: #fff;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .receipts ol {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding-left: 18px;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  @media (max-width: 1040px) {
+    .wood-hero,
+    .wood-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .wood-page {
+      padding: 12px;
+      padding-bottom: 136px;
+    }
+
+    .hud {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pixel-scene {
+      min-height: 312px;
+    }
+
+    .tree--main {
+      left: 48%;
+      transform: translateX(-54%) scale(0.82);
+      transform-origin: bottom center;
+    }
+
+    .pixel-scene.is-chopping .tree--main {
+      transform: translateX(-54%) translateX(-7px) scale(0.82);
+    }
+
+    .axe {
+      right: 15%;
+      transform: rotate(28deg) scale(0.86);
+      transform-origin: bottom center;
+    }
+
+    .pixel-scene.is-chopping .axe {
+      transform: rotate(-18deg) scale(0.86);
+    }
+
+    .controls,
+    .stamp-stack {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .noun-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 420px) {
+    .controls,
+    .stamp-stack {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
