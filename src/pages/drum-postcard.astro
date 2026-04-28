@@ -1,0 +1,501 @@
+---
+/**
+ * /drum-postcard — generate a shareable receipt of your drum hub session
+ * sprint 3/4 (batch 2)  ·  2026-04-28 PT
+ *
+ * Reads the localStorage keys that the drum surfaces write — same ones
+ * /drum-stickers and /drum-trophies use. Generates an SVG postcard that
+ * shows:
+ *
+ *   · Big serif title with your noun id and date
+ *   · 7-day visited streak
+ *   · Top 3 surfaces (by progress key magnitude)
+ *   · Total taps across surfaces
+ *   · Sticker count earned / total
+ *   · A signature line you can edit
+ *
+ * The SVG is rendered live; "Save PNG" exports a 1200×750 PNG by drawing
+ * the SVG into a canvas. "Share" uses navigator.share when available,
+ * otherwise copies a /b/0387-style intent link to clipboard.
+ *
+ * Pure local. No KV, no server, just a tiny way to print receipts.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-postcard — your drum-hub session, on a postcard';
+const description =
+  'Generate a shareable SVG/PNG receipt of your drum-hub session — top surfaces, sticker count, total taps, streak, and your signature. Print, post, save.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-postcard',
+  name: 'PointCast Drum · Postcard',
+  url: 'https://pointcast.xyz/drum-postcard',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="pc" id="pc-main">
+    <DrumNav current="postcard" />
+
+    <header class="pc__head">
+      <p class="pc__kicker">DRUM HUB · POSTCARD · LOCAL · SHAREABLE</p>
+      <h1 class="pc__title"><em>The room sends you a postcard.</em></h1>
+      <p class="pc__dek">
+        A souvenir of your drum-hub session. Reads the same localStorage keys the surfaces already write — top three rooms, total taps, sticker count, streak, your signature. Save it as a PNG, send it to a friend, pin it to a wall.
+      </p>
+    </header>
+
+    <section class="pc__stage">
+      <div class="pc__card-frame">
+        <div id="pc-card" class="pc__card-host"></div>
+      </div>
+
+      <aside class="pc__panel">
+        <div class="pc__panel-row">
+          <span class="pc__panel-label mono">message</span>
+          <input id="pc-msg" type="text" maxlength="60" placeholder="signed off · pour something" value="signed off · pour something" />
+        </div>
+        <div class="pc__panel-row">
+          <span class="pc__panel-label mono">noun id</span>
+          <input id="pc-noun" type="number" min="0" max="1199" value="385" />
+        </div>
+        <div class="pc__panel-row">
+          <span class="pc__panel-label mono">palette</span>
+          <div class="pc__palette" role="radiogroup" aria-label="Palette">
+            <button type="button" class="pc__pal pc__pal--on" data-pal="paper">paper</button>
+            <button type="button" class="pc__pal" data-pal="dusk">dusk</button>
+            <button type="button" class="pc__pal" data-pal="midnight">midnight</button>
+          </div>
+        </div>
+
+        <div class="pc__panel-divider"></div>
+
+        <button type="button" class="pc__btn pc__btn--primary" id="pc-save">Save PNG ↓</button>
+        <button type="button" class="pc__btn" id="pc-share">Share / copy link</button>
+        <button type="button" class="pc__btn pc__btn--ghost" id="pc-refresh">↺ refresh stats</button>
+
+        <div class="pc__panel-divider"></div>
+
+        <h2 class="pc__panel-h">your stats</h2>
+        <dl class="pc__stats" id="pc-stats"></dl>
+      </aside>
+    </section>
+
+    <footer class="pc__foot">
+      <p>
+        Postcard reads localStorage keys written by every drum surface
+        (<code>pc:drumLocalCount</code>, <code>pc:kettle:my-stokes</code>,
+        <code>pc:drum-v10:notes</code>, etc.) plus the sticker-binder
+        flags from <a href="/drum-stickers">/drum-stickers</a>. PNG export
+        renders the SVG to a canvas at 1200×750. Nothing leaves your
+        browser unless you save it.
+      </p>
+      <p class="pc__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 3/4 (batch 2)</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const PALETTES = {
+      paper:    { bg: '#fffaf0', fg: '#12110e', accent: '#ff5c23', soft: '#5f5e5a', card: '#fff', stamp: '#ffd400', vine: '#3b6e3b' },
+      dusk:     { bg: '#1a1228', fg: '#fffaf0', accent: '#ff8a4a', soft: '#cfc6df', card: '#0c0820', stamp: '#ffd400', vine: '#5fbafd' },
+      midnight: { bg: '#050310', fg: '#fffaf0', accent: '#5fbafd', soft: '#cfc6df', card: '#0c1d3a', stamp: '#ffd400', vine: '#94d4ff' },
+    };
+    let palette = 'paper';
+
+    // Sources: same keys the existing surfaces write
+    const SURFACES = [
+      { id: 'classic',  href: '/drum',          name: 'Classic',         key: 'pc:drumLocalCount',           kind: 'count' },
+      { id: 'collab',   href: '/drum-v2',       name: 'Collab',          key: 'pc:drum-v2:tapped',           kind: 'count' },
+      { id: 'spotify',  href: '/drum-v3',       name: 'Spotify',         key: 'pc:drum-v3:track-count',      kind: 'count' },
+      { id: 'orch',     href: '/drum-v4',       name: 'Orchestra',       key: 'pc:drum-v4:collected',        kind: 'set' },
+      { id: 'loops',    href: '/drum-v5',       name: 'Loops',           key: 'pc:drum-v5:shared-count',     kind: 'count' },
+      { id: 'choir',    href: '/drum-v6',       name: 'Choir',           key: 'pc:drum-v6:sung',             kind: 'set' },
+      { id: 'big',      href: '/drum-v7',       name: 'Big Board',       key: 'pc:drum-v7:played',           kind: 'set' },
+      { id: 'symph',    href: '/drum-v8',       name: 'Symphony',        key: 'pc:drum-v8:played',           kind: 'set' },
+      { id: 'lounge',   href: '/drum-v9',       name: 'Lounge',          key: 'pc:drum-v9:played',           kind: 'count' },
+      { id: 'theremin', href: '/drum-v10',      name: 'Theremin',        key: 'pc:drum-v10:notes',           kind: 'count' },
+      { id: 'bells',    href: '/drum-v11',      name: 'Bells',           key: 'pc:drum-v11:rung',            kind: 'set' },
+      { id: 'organ',    href: '/drum-v12',      name: 'Pipe Organ',      key: 'pc:drum-v12:notes',           kind: 'count' },
+      { id: 'strings',  href: '/drum-v13',      name: 'Strings',         key: 'pc:drum-v13:played',          kind: 'set' },
+      { id: 'apr26',    href: '/drum-apr26',    name: 'Sequencer',       key: 'pc:drum-apr26:tapped',        kind: 'count' },
+      { id: 'potato',   href: '/drum-potato',   name: 'Hot Potato',      key: 'pc:drum-potato:wins',         kind: 'count' },
+      { id: 'pulse',    href: '/drum-pulse',    name: 'Pulse',           key: 'pc:drum-pulse:milestones-seen', kind: 'count' },
+      { id: 'agents',   href: '/drum-agents',   name: 'Agents',          key: 'pc:drum-agents:visited',      kind: 'flag' },
+      { id: 'daily',    href: '/drum-daily',    name: 'Daily',           key: 'pc:drum-daily:days',          kind: 'set' },
+      { id: 'jam',      href: '/drum-jam',      name: 'Jam',             key: 'pc:drum-jam:minutes',         kind: 'count' },
+      { id: 'kettle',   href: '/kettle',        name: 'Kettle',          key: 'pc:kettle:my-stokes',         kind: 'count' },
+    ];
+
+    function readNum(key) {
+      try { const v = Number(localStorage.getItem(key) || 0); return isFinite(v) ? v : 0; } catch { return 0; }
+    }
+    function readSet(key) {
+      try { const raw = localStorage.getItem(key); if (!raw) return 0; const v = JSON.parse(raw); return Array.isArray(v) ? v.length : 0; } catch { return 0; }
+    }
+    function readFlag(key) {
+      try { const v = localStorage.getItem(key); return v && v !== '0' && v !== 'false' ? 1 : 0; } catch { return 0; }
+    }
+    function val(s) {
+      if (s.kind === 'count') return readNum(s.key);
+      if (s.kind === 'set')   return readSet(s.key);
+      return readFlag(s.key);
+    }
+
+    // Compute stats
+    function gatherStats() {
+      const surfaceVals = SURFACES.map((s) => ({ ...s, v: val(s) }));
+      const totalTaps = surfaceVals.reduce((acc, s) => acc + (s.kind === 'count' ? s.v : 0), 0);
+      const visited = surfaceVals.filter((s) => s.v > 0);
+      const top = [...surfaceVals]
+        .filter((s) => s.v > 0)
+        .sort((a, b) => b.v - a.v)
+        .slice(0, 3);
+      // Stickers: count surfaces with any progress
+      const stickers = visited.length;
+      // Streak — read pc:drum-daily:days (JSON array of date strings) to compute consecutive
+      let streak = 0;
+      try {
+        const raw = localStorage.getItem('pc:drum-daily:days');
+        const arr = Array.isArray(JSON.parse(raw || '[]')) ? JSON.parse(raw || '[]') : [];
+        // Sort descending; count consecutive UTC days back from today
+        const set = new Set(arr);
+        const d = new Date();
+        for (let i = 0; i < 60; i++) {
+          const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+          if (set.has(k)) streak += 1; else break;
+          d.setUTCDate(d.getUTCDate() - 1);
+        }
+      } catch {}
+      return { totalTaps, visited: visited.length, top, stickers, streak, totalSurfaces: SURFACES.length };
+    }
+
+    function fmtDate() {
+      const d = new Date();
+      const m = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()];
+      return `${m} ${d.getDate()}, ${d.getFullYear()}`;
+    }
+
+    function renderSVG() {
+      const p = PALETTES[palette];
+      const stats = gatherStats();
+      const noun = Math.max(0, Math.min(1199, Number(document.getElementById('pc-noun').value || 385)));
+      const msg = (document.getElementById('pc-msg').value || '').slice(0, 60);
+      const date = fmtDate();
+      const top1 = stats.top[0];
+      const top2 = stats.top[1];
+      const top3 = stats.top[2];
+      const fmt = (n) => Number(n).toLocaleString();
+
+      const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet">
+  <rect width="1200" height="750" fill="${p.card}" />
+  <rect x="20" y="20" width="1160" height="710" fill="none" stroke="${p.fg}" stroke-width="6" stroke-dasharray="14 10" />
+  <rect x="32" y="32" width="1136" height="686" fill="none" stroke="${p.fg}" stroke-width="2" />
+
+  <!-- Stamp -->
+  <g transform="translate(1010, 70)">
+    <rect width="120" height="120" fill="${p.stamp}" stroke="${p.fg}" stroke-width="3" />
+    <text x="60" y="38" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700" fill="${p.fg}">POINTCAST</text>
+    <text x="60" y="58" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="${p.fg}">DRUM HUB</text>
+    <image href="https://noun.pics/${noun}.svg" x="34" y="64" width="52" height="52" />
+    <text x="60" y="135" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="${p.fg}">№ ${noun}</text>
+  </g>
+
+  <!-- Title -->
+  <text x="60" y="140" font-family="Georgia, serif" font-size="56" fill="${p.fg}" font-style="italic">your drum hub.</text>
+  <text x="60" y="180" font-family="JetBrains Mono, monospace" font-size="14" fill="${p.accent}" letter-spacing="6">RECEIPT · ${date}</text>
+
+  <!-- Big number -->
+  <text x="60" y="290" font-family="Georgia, serif" font-size="22" fill="${p.soft}">total taps across surfaces</text>
+  <text x="60" y="380" font-family="Bungee, Impact, sans-serif" font-size="120" fill="${p.accent}" letter-spacing="6">${fmt(stats.totalTaps)}</text>
+
+  <!-- Top 3 surfaces -->
+  <text x="60" y="450" font-family="JetBrains Mono, monospace" font-size="14" fill="${p.accent}" letter-spacing="4">TOP THREE ROOMS</text>
+  ${top1 ? `
+    <text x="60" y="490" font-family="Georgia, serif" font-size="28" fill="${p.fg}">1 · ${top1.name}</text>
+    <text x="320" y="490" font-family="JetBrains Mono, monospace" font-size="22" fill="${p.accent}">${fmt(top1.v)}</text>
+  ` : ''}
+  ${top2 ? `
+    <text x="60" y="528" font-family="Georgia, serif" font-size="22" fill="${p.fg}">2 · ${top2.name}</text>
+    <text x="320" y="528" font-family="JetBrains Mono, monospace" font-size="18" fill="${p.accent}">${fmt(top2.v)}</text>
+  ` : ''}
+  ${top3 ? `
+    <text x="60" y="562" font-family="Georgia, serif" font-size="20" fill="${p.fg}">3 · ${top3.name}</text>
+    <text x="320" y="562" font-family="JetBrains Mono, monospace" font-size="16" fill="${p.accent}">${fmt(top3.v)}</text>
+  ` : ''}
+  ${stats.top.length === 0 ? `
+    <text x="60" y="490" font-family="Georgia, serif" font-size="22" fill="${p.soft}" font-style="italic">play something — your top three will show up here</text>
+  ` : ''}
+
+  <!-- Right column stats -->
+  <g transform="translate(820, 240)">
+    <rect width="220" height="72" fill="none" stroke="${p.fg}" stroke-width="2" />
+    <text x="14" y="22" font-family="JetBrains Mono, monospace" font-size="10" fill="${p.accent}" letter-spacing="3">STICKERS</text>
+    <text x="110" y="56" text-anchor="middle" font-family="Bungee, Impact, sans-serif" font-size="36" fill="${p.fg}">${stats.stickers} / ${stats.totalSurfaces}</text>
+  </g>
+  <g transform="translate(820, 320)">
+    <rect width="220" height="72" fill="none" stroke="${p.fg}" stroke-width="2" />
+    <text x="14" y="22" font-family="JetBrains Mono, monospace" font-size="10" fill="${p.accent}" letter-spacing="3">DAILY STREAK</text>
+    <text x="110" y="56" text-anchor="middle" font-family="Bungee, Impact, sans-serif" font-size="36" fill="${p.fg}">${stats.streak} day${stats.streak === 1 ? '' : 's'}</text>
+  </g>
+  <g transform="translate(820, 400)">
+    <rect width="220" height="72" fill="none" stroke="${p.fg}" stroke-width="2" />
+    <text x="14" y="22" font-family="JetBrains Mono, monospace" font-size="10" fill="${p.accent}" letter-spacing="3">SURFACES VISITED</text>
+    <text x="110" y="56" text-anchor="middle" font-family="Bungee, Impact, sans-serif" font-size="36" fill="${p.fg}">${stats.visited}</text>
+  </g>
+
+  <!-- Signature -->
+  <line x1="60" y1="650" x2="700" y2="650" stroke="${p.fg}" stroke-width="2" />
+  <text x="60" y="680" font-family="Georgia, serif" font-size="24" fill="${p.fg}" font-style="italic">${escapeXml(msg) || 'signed off · pour something'}</text>
+  <text x="60" y="708" font-family="JetBrains Mono, monospace" font-size="11" fill="${p.soft}" letter-spacing="3">— pointcast.xyz / drum-postcard · el segundo</text>
+
+  <!-- Vine flourish -->
+  <g transform="translate(840, 600)">
+    <path d="M 0 80 Q 40 10 90 60 Q 140 110 200 50 Q 250 10 300 80" fill="none" stroke="${p.vine}" stroke-width="3" />
+    <circle cx="20" cy="68" r="4" fill="${p.vine}" />
+    <circle cx="100" cy="56" r="4" fill="${p.vine}" />
+    <circle cx="180" cy="60" r="4" fill="${p.vine}" />
+    <circle cx="280" cy="68" r="4" fill="${p.vine}" />
+  </g>
+</svg>`;
+      document.getElementById('pc-card').innerHTML = svg;
+
+      // Stats panel
+      const stEl = document.getElementById('pc-stats');
+      stEl.innerHTML = `
+        <dt>total taps</dt><dd>${fmt(stats.totalTaps)}</dd>
+        <dt>surfaces visited</dt><dd>${stats.visited} / ${stats.totalSurfaces}</dd>
+        <dt>stickers</dt><dd>${stats.stickers}</dd>
+        <dt>daily streak</dt><dd>${stats.streak}d</dd>
+        ${top1 ? `<dt>top room</dt><dd>${top1.name}</dd>` : ''}
+      `;
+    }
+
+    function escapeXml(s) {
+      return String(s).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+    }
+
+    // Save PNG: render SVG into canvas
+    document.getElementById('pc-save').addEventListener('click', () => {
+      const host = document.getElementById('pc-card');
+      const svgEl = host.querySelector('svg');
+      if (!svgEl) return;
+      const xml = new XMLSerializer().serializeToString(svgEl);
+      const svgBlob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200; canvas.height = 750;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, 1200, 750);
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          const stamp = new Date().toISOString().slice(0, 10);
+          a.download = `pointcast-drum-postcard-${stamp}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }, 'image/png');
+      };
+      img.src = url;
+    });
+
+    // Share / copy
+    document.getElementById('pc-share').addEventListener('click', async () => {
+      const url = 'https://pointcast.xyz/drum-postcard';
+      const text = 'my drum hub postcard ·';
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: 'PointCast Drum Postcard', text, url });
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(url);
+          const btn = document.getElementById('pc-share');
+          const o = btn.textContent;
+          btn.textContent = 'link copied ✓';
+          setTimeout(() => { btn.textContent = o; }, 2000);
+        }
+      } catch {}
+    });
+
+    document.getElementById('pc-refresh').addEventListener('click', renderSVG);
+    document.getElementById('pc-msg').addEventListener('input', renderSVG);
+    document.getElementById('pc-noun').addEventListener('input', renderSVG);
+    document.querySelectorAll('.pc__pal').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.pc__pal').forEach((x) => x.classList.remove('pc__pal--on'));
+        b.classList.add('pc__pal--on');
+        palette = b.getAttribute('data-pal') || 'paper';
+        renderSVG();
+      });
+    });
+
+    renderSVG();
+  })();
+</script>
+
+<style>
+  .pc {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      repeating-linear-gradient(45deg, rgba(255, 138, 74, 0.04) 0 12px, transparent 12px 28px),
+      #fffaf0;
+    color: #12110e;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .pc__head { max-width: 1080px; margin: 0 auto 18px; padding: 0 6px; }
+  .pc__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .pc__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .pc__title em { font-style: italic; }
+  .pc__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 60ch; color: #5f5e5a; }
+
+  .pc__stage {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 18px;
+  }
+  @media (max-width: 800px) { .pc__stage { grid-template-columns: 1fr; } }
+
+  .pc__card-frame {
+    background: #fff;
+    border: 2px solid #12110e;
+    box-shadow: 6px 6px 0 0 #12110e;
+    padding: 12px;
+  }
+  .pc__card-host { aspect-ratio: 1200 / 750; }
+  .pc__card-host svg { display: block; width: 100%; height: 100%; }
+
+  .pc__panel {
+    background: #fff;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: max-content;
+  }
+  .pc__panel-row { display: flex; flex-direction: column; gap: 4px; }
+  .pc__panel-label {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #b8431a;
+    text-transform: uppercase;
+  }
+  .pc__panel input[type='text'],
+  .pc__panel input[type='number'] {
+    border: 1.5px solid #12110e;
+    background: #fffaf0;
+    padding: 6px 10px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 12px;
+    color: #12110e;
+  }
+  .pc__panel-divider { border-top: 1px dashed #12110e; margin: 4px 0; }
+
+  .pc__palette { display: flex; border: 1.5px solid #12110e; }
+  .pc__pal {
+    flex: 1;
+    background: transparent;
+    border: 0;
+    padding: 6px 8px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    color: #12110e;
+    border-right: 1.5px solid #12110e;
+    text-transform: uppercase;
+  }
+  .pc__pal:last-child { border-right: 0; }
+  .pc__pal--on { background: #ffd400; color: #12110e; font-weight: 700; }
+
+  .pc__btn {
+    padding: 8px 12px;
+    background: #fff;
+    color: #12110e;
+    border: 1.5px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+    cursor: pointer;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    text-align: center;
+  }
+  .pc__btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 #12110e; }
+  .pc__btn--primary { background: #ff5c23; color: #fffaf0; }
+  .pc__btn--ghost { background: #f5f4f0; color: #5f5e5a; }
+
+  .pc__panel-h {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #b8431a;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .pc__stats {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+  }
+  .pc__stats dt {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+  .pc__stats dd {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: #12110e;
+    text-align: right;
+  }
+
+  .pc__foot {
+    max-width: 1280px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #12110e;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+  .pc__foot code { background: #f5f4f0; padding: 1px 5px; font-family: 'JetBrains Mono Variable', monospace; }
+  .pc__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+</style>
