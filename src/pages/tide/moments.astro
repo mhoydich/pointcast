@@ -1,0 +1,318 @@
+---
+/**
+ * /tide/moments — saved moments viewer.
+ *
+ * Reads localStorage `pc:tide:moments` (cap 50) — captures of the
+ * palette + start time + dwell time + audio state from /tide's settings
+ * drawer "SAVE THIS MOMENT" button. Renders each as a card with the
+ * actual palette colors as a swatch strip, a re-open link, and a delete.
+ *
+ * Local-first only — no server roundtrip. Clearing browser data clears
+ * the list.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const title = '/tide/moments — what you saved from the tide';
+const description =
+  'Saved moments from /tide — palettes you held long enough to keep. Each card has a re-open link back into /tide at that palette. Local-first; clearing browser data clears the list.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="tm" id="tm-main">
+
+    <header class="tm__head">
+      <p class="tm__kicker">/TIDE · MOMENTS · EL SEGUNDO</p>
+      <h1 class="tm__title">Moments you held long enough.</h1>
+      <p class="tm__dek">
+        Each card is a palette you saved from <a href="/tide">/tide</a>. Click
+        a card to reopen the tide at that palette.
+        Cap 50, oldest gets dropped first.
+      </p>
+      <p class="tm__status mono" id="tm-status">loading…</p>
+    </header>
+
+    <section class="tm__grid" id="tm-grid"></section>
+
+    <nav class="tm__links" aria-label="Other rooms">
+      <a class="tm__link" href="/tide"><span class="tm__link-label mono">/TIDE</span><span class="tm__link-desc">eight palettes · tap anywhere</span></a>
+      <a class="tm__link" href="/bath"><span class="tm__link-label mono">/BATH</span><span class="tm__link-desc">color room · Spotify saves</span></a>
+      <a class="tm__link" href="/meditate"><span class="tm__link-label mono">/MEDITATE</span><span class="tm__link-desc">still room</span></a>
+      <a class="tm__link" href="/pace"><span class="tm__link-label mono">/PACE</span><span class="tm__link-desc">movement room</span></a>
+      <a class="tm__link" href="/"><span class="tm__link-label mono">/</span><span class="tm__link-desc">back to the broadcast</span></a>
+    </nav>
+
+    <footer class="tm__foot mono">
+      <span>tide · moments · cc0</span>
+      <span id="tm-clock">—</span>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  // Mirror of /tide PALETTES — keep in sync. (Could be fetched from
+  // /tide.json instead but synchronous render is faster.)
+  var PALETTES = {
+    daybreak:  { name:'DAYBREAK',  sky:'#FFD4C2', water:'#F4A78D', foam:'#FFE9D8', orb:'#FFB496', wave1:'#E08F73', wave2:'#C4715A', wave3:'#AA5443', dek:'pearl pink · soft peach · lavender mist' },
+    crystal:   { name:'CRYSTAL',   sky:'#BFEFEC', water:'#7FE5DC', foam:'#F4FBFA', orb:'#FFFFFF', wave1:'#5DCBC0', wave2:'#3FA89C', wave3:'#1F8579', dek:'aquamarine · soft cyan · white foam' },
+    kelp:      { name:'KELP',      sky:'#9FB28A', water:'#5C7A4E', foam:'#E0D4B8', orb:'#D9C46E', wave1:'#3F5E33', wave2:'#2A4424', wave3:'#1A2E18', dek:'sage canopy · deep green · amber kelp' },
+    coral:     { name:'CORAL',     sky:'#FFC4B0', water:'#FF8675', foam:'#FFE0D6', orb:'#FFEEC2', wave1:'#E76B5C', wave2:'#C4493D', wave3:'#9B2D24', dek:'coral pink · dusty rose · lavender' },
+    abyss:     { name:'ABYSS',     sky:'#1E2D5C', water:'#0A1F3A', foam:'#2EC4B6', orb:'#88E0D4', wave1:'#0E2548', wave2:'#06162D', wave3:'#020912', dek:'midnight indigo · abyssal navy · phosphor teal' },
+    storm:     { name:'STORM',     sky:'#5A6470', water:'#2C2E33', foam:'#FFE15D', orb:'#FFE15D', wave1:'#1E2025', wave2:'#16181C', wave3:'#0C0E12', dek:'slate · charcoal · lightning' },
+    lagoon:    { name:'LAGOON',    sky:'#A0E6DC', water:'#2EC4B6', foam:'#F5DEA8', orb:'#F5DEA8', wave1:'#26A89C', wave2:'#188076', wave3:'#0F5C55', dek:'turquoise · teal · warm sand' },
+    nighttide: { name:'NIGHTTIDE', sky:'#3A0E5C', water:'#0E1845', foam:'#FF1493', orb:'#FF69B4', wave1:'#3D1276', wave2:'#1F1054', wave3:'#0A0830', dek:'electric magenta · hot pink · deep ocean' },
+  };
+
+  function escHtml(s) { return String(s).replace(/[&<>"']/g, function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }); }
+    catch (e) { return iso; }
+  }
+  function fmtDwell(s) {
+    if (!Number.isFinite(s) || s < 0) return '—';
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    var rem = s % 60;
+    if (m < 60) return m + 'm ' + rem + 's';
+    var h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+  }
+
+  function render() {
+    var grid = document.getElementById('tm-grid');
+    var status = document.getElementById('tm-status');
+    if (!grid || !status) return;
+    var moments = [];
+    try { var raw = localStorage.getItem('pc:tide:moments'); if (raw) moments = JSON.parse(raw) || []; } catch (e) {}
+    if (!Array.isArray(moments)) moments = [];
+
+    if (moments.length === 0) {
+      grid.innerHTML = '<div class="tm__empty"><p class="tm__empty-head mono">NO MOMENTS YET</p><p class="tm__empty-body">Visit <a href="/tide">/tide</a>, settle into a palette, open the gear (top right), tap <strong>SAVE THIS MOMENT</strong>. Each save lands here.</p></div>';
+      status.textContent = '0 saved · cap 50';
+      return;
+    }
+
+    grid.innerHTML = moments.map(function (m, i) {
+      var p = PALETTES[m.palette] || PALETTES.daybreak;
+      return '' +
+        '<article class="tm-card" data-palette="' + escHtml(m.palette) + '">' +
+          '<a class="tm-card__art" href="/tide#' + escHtml(m.palette) + '" title="Reopen ' + escHtml(p.name) + ' on /tide">' +
+            '<span class="tm-card__strip" style="background:linear-gradient(180deg,' + p.sky + ' 0%,' + p.water + ' 50%,' + p.wave3 + ' 100%)"></span>' +
+            '<span class="tm-card__orb" style="background:radial-gradient(circle at 35% 35%,' + p.orb + ' 0%, transparent 70%)"></span>' +
+            '<div class="tm-card__swatches">' +
+              '<span style="background:' + p.sky + '"></span>' +
+              '<span style="background:' + p.water + '"></span>' +
+              '<span style="background:' + p.foam + '"></span>' +
+              '<span style="background:' + p.wave1 + '"></span>' +
+              '<span style="background:' + p.wave2 + '"></span>' +
+              '<span style="background:' + p.wave3 + '"></span>' +
+            '</div>' +
+          '</a>' +
+          '<div class="tm-card__meta">' +
+            '<p class="tm-card__name">' + escHtml(p.name) + '</p>' +
+            '<p class="tm-card__dek">' + escHtml(p.dek) + '</p>' +
+            '<p class="tm-card__row mono">' +
+              '<span class="tm-card__pill">SAVED ' + fmtDate(m.savedAt) + '</span>' +
+              '<span class="tm-card__pill">DWELL ' + fmtDwell(m.dwellSeconds) + '</span>' +
+              (m.audio ? '<span class="tm-card__pill tm-card__pill--audio">SOUND</span>' : '') +
+            '</p>' +
+            '<div class="tm-card__actions">' +
+              '<a class="tm-card__open mono" href="/tide#' + escHtml(m.palette) + '">REOPEN &rarr;</a>' +
+              '<button class="tm-card__del mono" data-i="' + i + '" type="button">DELETE</button>' +
+            '</div>' +
+          '</div>' +
+        '</article>';
+    }).join('');
+
+    status.textContent = moments.length + ' saved · cap 50';
+
+    grid.querySelectorAll('[data-i]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.getAttribute('data-i'), 10);
+        if (!Number.isFinite(i)) return;
+        var arr = JSON.parse(localStorage.getItem('pc:tide:moments') || '[]');
+        arr.splice(i, 1);
+        localStorage.setItem('pc:tide:moments', JSON.stringify(arr));
+        render();
+      });
+    });
+  }
+
+  function tick() {
+    var el = document.getElementById('tm-clock');
+    if (!el) return;
+    var n = new Date();
+    el.textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') + ' PT';
+  }
+
+  render();
+  tick();
+  setInterval(tick, 60_000);
+  window.addEventListener('storage', function (e) { if (e.key === 'pc:tide:moments') render(); });
+})();
+</script>
+
+<style is:global>
+  .tm {
+    max-width: 980px; margin: 0 auto; padding: 36px 18px 80px;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(31,27,21,.06) 1px, transparent 0) 0 0/22px 22px,
+      #f5efe4;
+    color: #1f1b15;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    min-height: calc(100vh - 60px);
+  }
+  .tm__head { margin-bottom: 24px; max-width: 720px; }
+  .tm__kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px; letter-spacing: 0.26em; font-weight: 700;
+    margin: 0 0 14px; opacity: 0.65;
+  }
+  .tm__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 42px);
+    font-weight: 600; line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+  }
+  .tm__dek {
+    font-family: Georgia, serif;
+    font-size: 15px; line-height: 1.55;
+    margin: 0 0 8px; max-width: 600px;
+    opacity: 0.85;
+  }
+  .tm__dek a { color: #185FA5; font-weight: 700; }
+  .tm__status { font-size: 10px; letter-spacing: 0.16em; color: #5f5e5a; }
+
+  .tm__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .tm__empty {
+    grid-column: 1 / -1;
+    padding: 24px; background: #fff;
+    border: 2px dashed #d8cdb8;
+  }
+  .tm__empty-head {
+    font-size: 10px; letter-spacing: 0.20em;
+    color: #5f5e5a; font-weight: 700;
+    margin: 0 0 10px;
+  }
+  .tm__empty-body { font-family: Georgia, serif; font-size: 14px; line-height: 1.5; margin: 0; }
+  .tm__empty-body a { color: #185FA5; font-weight: 700; }
+
+  .tm-card {
+    background: #fff;
+    border: 2px solid #1f1b15;
+    box-shadow: 4px 4px 0 0 #1f1b15;
+    overflow: hidden;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tm-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 #1f1b15; }
+
+  .tm-card__art {
+    display: block;
+    aspect-ratio: 16 / 9;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 2px solid #1f1b15;
+    text-decoration: none;
+  }
+  .tm-card__strip { position: absolute; inset: 0; }
+  .tm-card__orb {
+    position: absolute;
+    top: 12%; right: 14%;
+    width: 50%; aspect-ratio: 1;
+    border-radius: 50%;
+    filter: blur(20px);
+    opacity: 0.85;
+  }
+  .tm-card__swatches {
+    position: absolute;
+    bottom: 8px; left: 8px; right: 8px;
+    display: flex; gap: 3px;
+    height: 8px;
+  }
+  .tm-card__swatches span {
+    flex: 1;
+    border: 1px solid rgba(0,0,0,0.32);
+  }
+
+  .tm-card__meta { padding: 12px 14px 14px; }
+  .tm-card__name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 18px; font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .tm-card__dek {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px; letter-spacing: 0.16em;
+    color: #5f5e5a; margin: 0 0 10px;
+  }
+  .tm-card__row {
+    display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 10px;
+    font-size: 8.5px; letter-spacing: 0.14em; font-weight: 700;
+  }
+  .tm-card__pill {
+    background: #f5efe4;
+    padding: 2px 7px;
+    color: #5f5e5a;
+  }
+  .tm-card__pill--audio { background: #2EC4B6; color: #1f1b15; }
+  .tm-card__actions {
+    display: flex; gap: 8px; align-items: center; justify-content: space-between;
+    border-top: 1px dashed #d8cdb8;
+    padding-top: 10px;
+  }
+  .tm-card__open {
+    color: #185FA5;
+    text-decoration: none;
+    font-size: 10px; letter-spacing: 0.16em; font-weight: 700;
+  }
+  .tm-card__open:hover { text-decoration: underline; }
+  .tm-card__del {
+    background: transparent;
+    border: 1px solid #d8cdb8;
+    color: #c14040;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px; letter-spacing: 0.18em; font-weight: 700;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .tm-card__del:hover { background: #c14040; color: #fff; border-color: #c14040; }
+
+  .tm__links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px; margin: 0 0 24px;
+  }
+  .tm__link {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 11px;
+    background: #fff;
+    border: 1.5px solid #d8cdb8;
+    text-decoration: none; color: inherit;
+    transition: background 0.18s ease, transform 0.12s ease;
+  }
+  .tm__link:hover { background: #fef0bd; transform: translateY(-1px); }
+  .tm__link-label { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; }
+  .tm__link-desc { font-size: 11.5px; font-family: Georgia, serif; opacity: 0.75; line-height: 1.3; }
+
+  .tm__foot {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.18em;
+    padding-top: 14px; border-top: 1px dashed #d8cdb8; opacity: 0.62;
+  }
+
+  @media (max-width: 600px) {
+    .tm { padding: 24px 12px 60px; }
+    .tm__grid { grid-template-columns: 1fr; }
+  }
+</style>
