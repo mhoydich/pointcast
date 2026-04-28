@@ -1,0 +1,257 @@
+---
+/**
+ * /drum-buttons — board of one-shot sound buttons · 2026-04-28 PT.
+ *
+ * Eight big colorful buttons. Each button is a distinct Web Audio
+ * recipe — cowbell, woodblock, triangle, tambourine, claves, gong,
+ * applause, airhorn. Tap any to fire it. Multiplayer broadcast on
+ * type=button. Keyboard 1-8.
+ *
+ * Aesthetic: late-night TV game-show button board, bold colors,
+ * chunky 3D-ish lighting on each button.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-buttons — sound effects board';
+const description = 'Eight one-shot sound buttons — cowbell, woodblock, triangle, tambourine, claves, gong, applause, airhorn. Web Audio synthesis. Multiplayer drum-hub variant.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-buttons', name: 'PointCast Drum · Buttons', url: 'https://pointcast.xyz/drum-buttons', description };
+
+const BUTTONS = [
+  { id: 'cowbell',   label: '🐄 COWBELL',   color: '#a83b2a', kbd: '1' },
+  { id: 'woodblock', label: '🪵 WOODBLOCK', color: '#7a4a25', kbd: '2' },
+  { id: 'triangle',  label: '△ TRIANGLE',   color: '#5fbafd', kbd: '3' },
+  { id: 'tambourine',label: '🪘 TAMBOURINE',color: '#ffd400', kbd: '4' },
+  { id: 'claves',    label: '🥢 CLAVES',    color: '#caa672', kbd: '5' },
+  { id: 'gong',      label: '🎎 GONG',      color: '#d6745f', kbd: '6' },
+  { id: 'applause',  label: '👏 APPLAUSE',  color: '#3b6e3b', kbd: '7' },
+  { id: 'airhorn',   label: '📯 AIRHORN',   color: '#ff5c23', kbd: '8' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="bt" id="bt-main">
+    <DrumNav current="buttons" />
+    <header class="bt__head">
+      <p class="bt__kicker">DRUM HUB · BUTTONS · ONE-SHOT FX · MULTIPLAYER</p>
+      <h1 class="bt__title"><em>Eight buttons. Eight sounds.</em></h1>
+      <p class="bt__dek">Cowbell, woodblock, triangle, tambourine, claves, gong, applause, airhorn. Tap to fire. Each one's a different Web Audio recipe. Keyboard 1-8.</p>
+    </header>
+
+    <section class="bt__board">
+      {BUTTONS.map((b, i) => (
+        <button type="button" class={`bt__btn bt__btn--idx-${i}`} data-id={b.id} data-kbd={b.kbd} style={`--bt-color: ${b.color}`} aria-label={b.label}>
+          <span class="bt__btn-cap">
+            <span class="bt__btn-label mono">{b.label}</span>
+            <span class="bt__btn-kbd mono">{b.kbd}</span>
+          </span>
+        </button>
+      ))}
+    </section>
+
+    <p class="bt__broadcast mono" id="bt-broadcast">— ready —</p>
+
+    <footer class="bt__foot">
+      <p>Each press fires <code>type=button</code> to <code>/api/sounds</code> with the button id; visitors on <a href="/drum-tv">/drum-tv</a> + <a href="/drum-marquee">/drum-marquee</a> see the events flash.</p>
+      <p class="bt__credit mono">v0.1 · 2026-04-28 · drum sprint · audio batch follow-on</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  let ctx = null, master = null, lpf = null, conv = null, dryG = null, wetG = null;
+  function makeReverb(s, d) {
+    const rate = ctx.sampleRate, len = Math.floor(rate * s);
+    const buf = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, d);
+    }
+    return buf;
+  }
+  function ensure() {
+    if (ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 12000; lpf.Q.value = 0.7;
+    master = ctx.createGain(); master.gain.value = 0.7;
+    conv = ctx.createConvolver(); conv.buffer = makeReverb(2.0, 2.4);
+    dryG = ctx.createGain(); dryG.gain.value = 0.85;
+    wetG = ctx.createGain(); wetG.gain.value = 0.25;
+    lpf.connect(master); master.connect(dryG); master.connect(conv); conv.connect(wetG);
+    dryG.connect(ctx.destination); wetG.connect(ctx.destination);
+  }
+  function envelope(t, peak, attack, decay) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
+    return g;
+  }
+  function noiseBurst(s, decay) {
+    const buf = ctx.createBuffer(1, ctx.sampleRate * s, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, decay);
+    return buf;
+  }
+
+  function play(id) {
+    ensure();
+    const t = ctx.currentTime;
+    switch (id) {
+      case 'cowbell': {
+        // Two square oscillators at non-harmonic ratio (560Hz, 832Hz)
+        [560, 832].forEach((f, i) => {
+          const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f;
+          const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 6;
+          const g = envelope(t, [0.18, 0.12][i], 0.002, 0.45);
+          o.connect(bp); bp.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.5);
+        });
+        break;
+      }
+      case 'woodblock': {
+        // Sharp pitched click — sine pitch sweep + noise transient
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(900, t);
+        o.frequency.exponentialRampToValueAtTime(700, t + 0.04);
+        const g = envelope(t, 0.4, 0.001, 0.06);
+        o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.1);
+        const n = ctx.createBufferSource(); n.buffer = noiseBurst(0.04, 6);
+        const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 800; nf.Q.value = 8;
+        const ng = envelope(t, 0.18, 0.001, 0.04);
+        n.connect(nf); nf.connect(ng); ng.connect(lpf); n.start(t);
+        break;
+      }
+      case 'triangle': {
+        // Bell-like triangle ping
+        [4000, 4400, 5200].forEach((f, i) => {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+          const g = envelope(t, [0.16, 0.10, 0.05][i], 0.003, 1.4);
+          o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 1.5);
+        });
+        break;
+      }
+      case 'tambourine': {
+        const dec = 0.45;
+        const n = ctx.createBufferSource(); n.buffer = noiseBurst(dec, 1.5);
+        const f1 = ctx.createBiquadFilter(); f1.type = 'highpass'; f1.frequency.value = 5000;
+        const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 8000; f2.Q.value = 4;
+        const g = envelope(t, 0.4, 0.003, dec);
+        n.connect(f1); f1.connect(f2); f2.connect(g); g.connect(lpf); n.start(t);
+        // Add a metallic ping for the rim
+        const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 1200;
+        const og = envelope(t, 0.08, 0.001, 0.08);
+        o.connect(og); og.connect(lpf); o.start(t); o.stop(t + 0.1);
+        break;
+      }
+      case 'claves': {
+        // Short woodblock-y click but at different pitches & shorter decay
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 2300;
+        const g = envelope(t, 0.32, 0.001, 0.06);
+        o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.1);
+        const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 2400;
+        o2.detune.value = -8;
+        const g2 = envelope(t, 0.22, 0.001, 0.05);
+        o2.connect(g2); g2.connect(lpf); o2.start(t); o2.stop(t + 0.09);
+        break;
+      }
+      case 'gong': {
+        // Long lush gong — multi-partial inharmonic stack with long decay
+        [
+          [70,  0.35, 4.5],
+          [88,  0.22, 3.8],
+          [127, 0.18, 3.0],
+          [200, 0.12, 2.4],
+          [310, 0.08, 1.8],
+          [445, 0.05, 1.4],
+          [600, 0.03, 1.0],
+        ].forEach(([f, lvl, dec]) => {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+          o.detune.value = (Math.random() * 2 - 1) * 6;
+          const g = envelope(t, lvl, 0.012, dec);
+          o.connect(g); g.connect(lpf); o.start(t); o.stop(t + dec + 0.1);
+        });
+        // Bright shimmer transient
+        const n = ctx.createBufferSource(); n.buffer = noiseBurst(0.6, 3);
+        const nf = ctx.createBiquadFilter(); nf.type = 'highpass'; nf.frequency.value = 2000;
+        const ng = envelope(t, 0.18, 0.005, 0.6);
+        n.connect(nf); nf.connect(ng); ng.connect(lpf); n.start(t);
+        break;
+      }
+      case 'applause': {
+        // Crowd of clapping = many short noise bursts with small random
+        // pitch + timing offsets for ~1.4s
+        const dur = 1.4;
+        for (let i = 0; i < 28; i++) {
+          const offset = i * 0.045 + Math.random() * 0.04;
+          const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let j = 0; j < data.length; j++) data[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / data.length, 4);
+          const n = ctx.createBufferSource(); n.buffer = buf;
+          const f = ctx.createBiquadFilter(); f.type = 'bandpass';
+          f.frequency.value = 1500 + Math.random() * 2000; f.Q.value = 1.5 + Math.random() * 2;
+          const g = envelope(t + offset, 0.04 + Math.random() * 0.06, 0.001, 0.03);
+          n.connect(f); f.connect(g); g.connect(lpf); n.start(t + offset);
+        }
+        break;
+      }
+      case 'airhorn': {
+        // Sawtooth blast at ~440Hz, then bend slightly down
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(440, t);
+        o.frequency.exponentialRampToValueAtTime(400, t + 0.6);
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 5;
+        const g = envelope(t, 0.42, 0.01, 0.6);
+        o.connect(lp); lp.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.7);
+        // Add a 5th above for thickness
+        const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 660;
+        o2.detune.value = -8;
+        const g2 = envelope(t, 0.22, 0.01, 0.6);
+        o2.connect(lp); o2.start(t); o2.stop(t + 0.7);
+        break;
+      }
+    }
+  }
+
+  function sess() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; } catch { return 'bt-' + Math.random().toString(36).slice(2,10); } }
+  function broadcast(id) {
+    try {
+      fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'button', sessionId: sess(), button: id }) });
+      const el = document.getElementById('bt-broadcast'); if (el) el.textContent = `playing · ${id}`;
+    } catch {}
+  }
+
+  document.querySelectorAll('.bt__btn').forEach((btn) => {
+    const id = btn.getAttribute('data-id') || '';
+    function go() { play(id); btn.classList.remove('bt__btn--hit'); void btn.offsetWidth; btn.classList.add('bt__btn--hit'); broadcast(id); }
+    btn.addEventListener('mousedown', go);
+    btn.addEventListener('touchstart', (e) => { go(); e.preventDefault(); }, { passive: false });
+    const kbd = (btn.getAttribute('data-kbd') || '').toLowerCase();
+    window.addEventListener('keydown', (e) => { if (!e.repeat && e.key.toLowerCase() === kbd) go(); });
+  });
+})();
+</script>
+
+<style>
+.bt { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #1a0e26 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+.bt__head { max-width: 1080px; margin: 0 auto 16px; padding: 0 6px; }
+.bt__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+.bt__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+.bt__title em { font-style: italic; }
+.bt__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+.bt__board { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 18px; background: rgba(0,0,0,0.4); border: 4px solid #ffd400; box-shadow: 6px 6px 0 0 #050310; }
+@media (max-width: 600px) { .bt__board { grid-template-columns: repeat(2, 1fr); } }
+.bt__btn { background: transparent; border: 0; padding: 0; cursor: pointer; display: flex; align-items: stretch; justify-content: stretch; aspect-ratio: 1.4; }
+.bt__btn-cap { flex: 1; background: var(--bt-color, #ffd400); color: #050310; border: 3px solid #050310; box-shadow: 4px 4px 0 0 #050310; padding: 14px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; transition: transform 60ms; }
+.bt__btn:hover .bt__btn-cap { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #050310; filter: brightness(1.05); }
+.bt__btn--hit .bt__btn-cap { animation: bt-pop 0.16s ease-out; }
+@keyframes bt-pop { 0% { transform: scale(1); } 40% { transform: scale(0.92); filter: brightness(1.5); box-shadow: 0 0 18px var(--bt-color); } 100% { transform: scale(1); } }
+.bt__btn-label { font-family: 'Bungee', Impact, sans-serif; font-size: clamp(16px, 2.4vw, 26px); letter-spacing: 0.04em; text-align: center; line-height: 1.05; }
+.bt__btn-kbd { font-size: 11px; padding: 2px 8px; background: #050310; color: var(--bt-color); border: 1.5px solid #050310; border-radius: 3px; }
+.bt__broadcast { max-width: 1080px; margin: 12px auto 0; padding: 8px 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.16em; color: #ffd400; min-height: 14px; border-top: 1px dashed #5f5e5a; }
+.bt__foot { max-width: 1080px; margin: 12px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+.bt__foot a { color: #ffd400; }
+.bt__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+.bt__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff8a4a; }
+</style>
