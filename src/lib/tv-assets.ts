@@ -194,7 +194,7 @@ export const TV_SURFACE_NAV: TvNavLink[] = [
   },
   {
     label: 'Nouns Nation Battler',
-    href: '/nouns-nation-battler',
+    href: '/nouns-nation-battler/',
     eyebrow: 'game page',
     body: 'Battle-card page tied to the generated Nouns asset pack.',
     accent: '#8a2432',

@@ -6,7 +6,13 @@ const FIELD = {
 };
 
 const params = new URLSearchParams(window.location.search);
-const isTvMode = params.get("mode") === "tv" || params.get("view") === "tv";
+const hashParams = new URLSearchParams(window.location.hash.replace(/^#\/?/, ""));
+
+function routeParam(name) {
+  return params.get(name) || hashParams.get(name);
+}
+
+const isTvMode = routeParam("mode") === "tv" || routeParam("view") === "tv";
 const LEAGUE_KEY = "pc:nouns-nation-league-v4";
 const LEAGUE_DAYS = 14;
 const DAILY_SLOTS = 4;
@@ -429,7 +435,7 @@ function currentFixtureLabel() {
 }
 
 function currentBattleType() {
-  const forced = params.get("battle") || params.get("type");
+  const forced = routeParam("battle") || routeParam("type");
   const forcedType = battleTypes.find((type) => type.id === forced);
   if (forcedType) return forcedType;
   const league = state.league;
@@ -447,7 +453,7 @@ function matchOrdinal(league = state.league) {
 }
 
 function currentChallenge() {
-  const forced = params.get("challenge");
+  const forced = routeParam("challenge");
   const forcedChallenge = challengeDeck.find((challenge) => challenge.id === forced);
   if (forcedChallenge) return forcedChallenge;
   const fieldId = state.battleType?.id || "open";

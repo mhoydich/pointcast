@@ -39,6 +39,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // Keep older Nouns Nation Battler deep links alive. CF Pages handles the
+  // directory route reliably, while hash params stay client-side for TV modes.
+  if (isGet && url.pathname === '/games/nouns-nation-battler/index.html') {
+    const target = new URL('/games/nouns-nation-battler/', url.origin);
+    if (url.searchParams.size > 0) {
+      target.hash = url.searchParams.toString();
+    }
+    return Response.redirect(target.toString(), 302);
+  }
+  if (isGet && url.pathname === '/games/nouns-nation-battler/posters/index.html') {
+    return Response.redirect(new URL('/games/nouns-nation-battler/posters/', url.origin).toString(), 302);
+  }
+
   // Generic trailing-slash rewrite — applies to ANY path that
   //   • is a GET asking for HTML
   //   • doesn't already end in `/`
