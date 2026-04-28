@@ -1,0 +1,353 @@
+---
+/**
+ * /drum-marquee — minimal one-line cast view · sprint 2/4
+ *
+ * The drum hub already has /drum-tv, /drum-tv-v2, /drum-viz — bigger
+ * cast surfaces. /drum-marquee is the smallest one. A single horizontal
+ * row, full-width, where every /api/sounds event flies in from the right,
+ * scrolls across, and exits left. No buildings, no stages, no canvas.
+ * Just text + a colored chip per event family. AirPlay-friendly. Looks
+ * great on a small TV in the corner of a kitchen — perfect for /kettle's
+ * scoreboard energy.
+ *
+ * Multiplayer is "free" — same /api/sounds polling. New events get a
+ * fresh row spawned at the right edge with a colored prefix chip and the
+ * event details typeset in big mono. Each row drifts left at a steady
+ * speed and fades when it exits. Ten rows visible at most; older drop.
+ *
+ * Hotkeys:
+ *   F · fullscreen
+ *   M · hide title overlay
+ *   1·2·3 · palettes (white-on-black, paper, sunset)
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-marquee — one-line cast view';
+const description =
+  'Smallest possible cast view of the drum hub. One horizontal row of /api/sounds events flying right-to-left, colored by family. Plug into a TV in the corner.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-marquee',
+  name: 'PointCast Drum · Marquee',
+  url: 'https://pointcast.xyz/drum-marquee',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="mq" id="mq-main" data-palette="black">
+    <DrumNav current="marquee" />
+
+    <header class="mq__head">
+      <p class="mq__kicker">DRUM HUB · CAST · MARQUEE · LIVE</p>
+      <h1 class="mq__title"><em>One row. One direction. The drum hub flying past.</em></h1>
+      <p class="mq__dek mono">F fullscreen · M hide overlay · 1·2·3 palettes · the smallest cast view</p>
+    </header>
+
+    <div class="mq__stage">
+      <div class="mq__line" id="mq-line">
+        <!-- rows injected here -->
+        <div class="mq__row mq__row--placeholder" data-type="default">
+          <span class="mq__row-time mono">— : — : —</span>
+          <span class="mq__row-chip mono" data-type="default">IDLE</span>
+          <span class="mq__row-text">waiting for the room to play something …</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mq__legend mono">
+      <span data-type="drum">DRUM</span>
+      <span data-type="orchestra">ORCH</span>
+      <span data-type="choir">CHOIR</span>
+      <span data-type="lounge">LOUNGE</span>
+      <span data-type="theremin">THEREMIN</span>
+      <span data-type="symphony">SYMPHONY</span>
+      <span data-type="bells">BELLS</span>
+      <span data-type="organ">ORGAN</span>
+      <span data-type="daily">DAILY</span>
+      <span data-type="kettle">KETTLE</span>
+      <span data-type="potato">POTATO</span>
+      <span data-type="milestone">★ MILESTONE</span>
+    </div>
+
+    <div class="mq__counter mono" id="mq-counter">events: 0 · uptime: 0s</div>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const line = document.getElementById('mq-line');
+    const counter = document.getElementById('mq-counter');
+    const placeholder = line.querySelector('.mq__row--placeholder');
+    let lastTs = 0;
+    let totalEvents = 0;
+    const startedAt = Date.now();
+    const MAX_ROWS = 10;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function time() {
+      const d = new Date();
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function eventText(e) {
+      const t = e.type || 'event';
+      let text = '';
+      if (t === 'drum') text = `tap · combo ×${e.seed || 1}`;
+      else if (t === 'orchestra') text = `instrument · ${e.inst || '—'}`;
+      else if (t === 'choir') text = `voice · ${e.voice || '—'}`;
+      else if (t === 'lounge') text = `sax · ${e.voice || '—'}`;
+      else if (t === 'theremin') text = `glide · ${e.hz ? e.hz + 'Hz' : '—'}`;
+      else if (t === 'symphony') text = `seat · ${e.seatKey || '—'}`;
+      else if (t === 'bells') text = `bell · ${e.bellId || ''} (${e.hz}Hz)`;
+      else if (t === 'organ') text = `${e.note || '—'} · ${e.stop || 'stop'}`;
+      else if (t === 'daily') text = `daily · step ${e.step ?? '—'} @ ${e.bpm ?? '—'} BPM`;
+      else if (t === 'kettle') text = `stoke (${e.action || 'stoke'})`;
+      else if (t === 'potato') text = e.winnerNounId ? `noun ${e.winnerNounId} ★ wins` : `pass`;
+      else if (t === 'milestone') text = `milestone · ${(e.value || 0).toLocaleString()}`;
+      else text = '·';
+      const pid = (e.pid || '').slice(0, 8);
+      return { type: t, text, pid };
+    }
+
+    function spawnRow(e) {
+      if (placeholder && placeholder.parentNode) placeholder.remove();
+      const data = eventText(e);
+      const row = document.createElement('div');
+      row.className = 'mq__row';
+      row.dataset.type = data.type;
+      row.innerHTML = `
+        <span class="mq__row-time mono">${time()}</span>
+        <span class="mq__row-chip mono" data-type="${data.type}">${data.type.toUpperCase()}</span>
+        <span class="mq__row-text">${data.text}</span>
+        <span class="mq__row-pid mono">pid ${data.pid || '—'}</span>
+      `;
+      line.appendChild(row);
+      // Trim
+      const rows = line.querySelectorAll('.mq__row');
+      if (rows.length > MAX_ROWS) {
+        for (let i = 0; i < rows.length - MAX_ROWS; i++) rows[i].remove();
+      }
+    }
+
+    async function poll() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) {
+          lastTs = events[events.length - 1].t || Date.now();
+          for (const e of events) {
+            spawnRow(e);
+            totalEvents += 1;
+          }
+        }
+        counter.textContent = `events: ${totalEvents} · uptime: ${Math.floor((Date.now() - startedAt) / 1000)}s`;
+      } catch {}
+    }
+    poll();
+    setInterval(poll, 1500);
+
+    // Hotkeys
+    let overlayOn = true;
+    function applyOverlay() {
+      const d = document.documentElement;
+      d.classList.toggle('mq-no-overlay', !overlayOn);
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
+      if (e.key === 'm' || e.key === 'M') { overlayOn = !overlayOn; applyOverlay(); }
+      if (e.key === '1') document.querySelector('.mq').dataset.palette = 'black';
+      if (e.key === '2') document.querySelector('.mq').dataset.palette = 'paper';
+      if (e.key === '3') document.querySelector('.mq').dataset.palette = 'sunset';
+    });
+  })();
+</script>
+
+<style>
+  :global(.mq-no-overlay) .mq__head,
+  :global(.mq-no-overlay) .mq__legend,
+  :global(.mq-no-overlay) .mq__counter,
+  :global(.mq-no-overlay) :global(.drum-nav) { display: none; }
+
+  .mq {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background: #050310;
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .mq[data-palette='paper']  { background: #fffaf0; color: #12110e; }
+  .mq[data-palette='sunset'] { background: #2a1228; color: #fffaf0; }
+
+  .mq__head {
+    max-width: 1280px;
+    margin: 0 auto 14px;
+    padding: 0 6px;
+    transition: opacity 200ms;
+  }
+  .mq__kicker {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .mq__title {
+    margin: 0 0 4px;
+    font-family: Georgia, serif;
+    font-size: clamp(22px, 3vw, 36px);
+    line-height: 1.1;
+    color: inherit;
+  }
+  .mq__title em { font-style: italic; }
+  .mq__dek {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #ff8a4a;
+  }
+
+  .mq__stage {
+    max-width: 1480px;
+    margin: 0 auto;
+    background: #0c0820;
+    border: 2px solid #ff5c23;
+    box-shadow: 0 0 60px rgba(255, 92, 35, 0.25) inset, 6px 6px 0 0 #050310;
+    padding: 10px;
+    overflow: hidden;
+    min-height: 60vh;
+  }
+  .mq[data-palette='paper'] .mq__stage { background: #fffaf0; border-color: #12110e; box-shadow: 6px 6px 0 0 #12110e; }
+  .mq[data-palette='sunset'] .mq__stage { background: #1a0e26; border-color: #ffd400; }
+
+  .mq__line {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mq__row {
+    display: grid;
+    grid-template-columns: 88px 96px minmax(0, 1fr) 90px;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 14px;
+    background: #050310;
+    border-left: 4px solid #5f5e5a;
+    color: #fffaf0;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: clamp(13px, 1.6vw, 18px);
+    letter-spacing: 0.06em;
+    animation: mq-slide 600ms ease-out, mq-fade 16s linear forwards;
+  }
+  .mq[data-palette='paper'] .mq__row { background: #fffaf0; color: #12110e; border-color: #12110e; }
+  .mq[data-palette='sunset'] .mq__row { background: #2a1228; color: #fffaf0; }
+
+  @keyframes mq-slide {
+    0%   { transform: translateX(60vw); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes mq-fade {
+    0%, 90% { opacity: 1; }
+    100% { opacity: 0.4; }
+  }
+
+  .mq__row--placeholder { color: #5f5e5a; }
+  .mq__row--placeholder .mq__row-text { font-style: italic; color: #5f5e5a; }
+
+  .mq__row[data-type='drum']      { border-left-color: #ff5c23; }
+  .mq__row[data-type='orchestra'] { border-left-color: #ffd400; }
+  .mq__row[data-type='choir']     { border-left-color: #5fbafd; }
+  .mq__row[data-type='lounge']    { border-left-color: #b8431a; }
+  .mq__row[data-type='theremin']  { border-left-color: #ff8a4a; }
+  .mq__row[data-type='symphony']  { border-left-color: #d6745f; }
+  .mq__row[data-type='bells']     { border-left-color: #fff7c2; }
+  .mq__row[data-type='organ']     { border-left-color: #c9a449; }
+  .mq__row[data-type='daily']     { border-left-color: #94d4ff; }
+  .mq__row[data-type='kettle']    { border-left-color: #5fbafd; background: rgba(95, 186, 253, 0.08); }
+  .mq__row[data-type='potato']    { border-left-color: #fff; }
+  .mq__row[data-type='milestone'] { border-left-color: #ffd400; background: rgba(255, 212, 0, 0.08); animation: mq-slide 600ms ease-out, mq-fade 28s linear forwards; }
+
+  .mq__row-time { color: #5f5e5a; font-size: 0.72em; }
+  .mq__row-chip {
+    padding: 4px 10px;
+    background: #ffd400;
+    color: #050310;
+    font-size: 0.7em;
+    letter-spacing: 0.18em;
+    text-align: center;
+    font-weight: 700;
+  }
+  .mq__row-chip[data-type='drum']      { background: #ff5c23; color: #fffaf0; }
+  .mq__row-chip[data-type='orchestra'] { background: #ffd400; color: #050310; }
+  .mq__row-chip[data-type='choir']     { background: #5fbafd; color: #050310; }
+  .mq__row-chip[data-type='lounge']    { background: #b8431a; color: #fffaf0; }
+  .mq__row-chip[data-type='theremin']  { background: #ff8a4a; color: #050310; }
+  .mq__row-chip[data-type='symphony']  { background: #d6745f; color: #fffaf0; }
+  .mq__row-chip[data-type='bells']     { background: #fff7c2; color: #050310; }
+  .mq__row-chip[data-type='organ']     { background: #c9a449; color: #050310; }
+  .mq__row-chip[data-type='daily']     { background: #94d4ff; color: #050310; }
+  .mq__row-chip[data-type='kettle']    { background: #5fbafd; color: #050310; }
+  .mq__row-chip[data-type='potato']    { background: #fffaf0; color: #050310; }
+  .mq__row-chip[data-type='milestone'] { background: #ffd400; color: #050310; }
+  .mq__row-chip[data-type='default']   { background: #5f5e5a; color: #fffaf0; }
+
+  .mq__row-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mq__row-pid {
+    text-align: right;
+    color: #5f5e5a;
+    font-size: 0.72em;
+  }
+
+  .mq__legend {
+    max-width: 1480px;
+    margin: 12px auto 0;
+    padding: 12px 6px 0;
+    border-top: 1px dashed #5f5e5a;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #ffd400;
+  }
+  .mq__legend span {
+    padding: 2px 6px;
+    border: 1px solid currentColor;
+  }
+  .mq__legend [data-type='drum']      { color: #ff5c23; }
+  .mq__legend [data-type='orchestra'] { color: #ffd400; }
+  .mq__legend [data-type='choir']     { color: #5fbafd; }
+  .mq__legend [data-type='lounge']    { color: #b8431a; }
+  .mq__legend [data-type='theremin']  { color: #ff8a4a; }
+  .mq__legend [data-type='symphony']  { color: #d6745f; }
+  .mq__legend [data-type='bells']     { color: #fff7c2; }
+  .mq__legend [data-type='organ']     { color: #c9a449; }
+  .mq__legend [data-type='daily']     { color: #94d4ff; }
+  .mq__legend [data-type='kettle']    { color: #5fbafd; }
+  .mq__legend [data-type='potato']    { color: #fffaf0; }
+  .mq__legend [data-type='milestone'] { color: #ffd400; font-weight: 700; }
+
+  .mq__counter {
+    max-width: 1480px;
+    margin: 6px auto 0;
+    padding: 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #ff8a4a;
+  }
+</style>
