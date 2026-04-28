@@ -1,34 +1,60 @@
 /**
- * /api/mcp — Model Context Protocol server for the PointCast drum hub.
+ * /api/mcp — Model Context Protocol server for PointCast.
  *
- * Per Mike: "lets mcp drum"
+ * v0.1.0 (per Mike: "lets mcp drum")  — drum-hub-only, 9 tools.
+ * v0.2.0 (per Mike: "1 and 4 and 6")  — whole-site coverage:
+ *                                       9 drum tools + 15 site tools = 24,
+ *                                       9 resources total.
  *
- * Exposes the drum surfaces as MCP tools so any AI agent (Claude
- * Desktop, Cursor, Claude Code, ChatGPT, etc.) can call them. Spec:
+ * Any MCP-aware agent (Claude Desktop, Cursor, Claude Code, ChatGPT
+ * custom GPT, etc.) can connect over JSON-RPC 2.0 / HTTP and operate
+ * the entire PointCast surface — drum hub, presence, blocks, channels,
+ * mintables, weather, town map, contracts. Spec:
  * https://modelcontextprotocol.io
  *
  * Transport: stateless POST JSON-RPC 2.0. SSE streaming optional later.
  *
- * Tools
+ * Drum-hub tools (v0.1.0)
  *   drum_list_rooms       (no input)   list every /drum* surface
  *   drum_who_is_here      (no input)   active visitors from /api/visit
  *   drum_top_drummers     (no input)   leaderboard from /api/drum/top
  *   drum_now_playing      (no input)   current Spotify track in v3
  *   drum_global_count     (no input)   global cumulative drum count
- *
  *   drum_tap              (no input)   tap a drum on /drum (v1 classic)
  *   drum_play_instrument  ({inst})     fire a v4/v7 orchestra instrument
  *   drum_sing_voice       ({voice})    fire a v6 choir voice
  *   drum_set_track        ({trackId})  set the v3 room Spotify track
+ *
+ * Whole-site tools (v0.2.0)
+ *   town_map              (no input)   12-building iso town map
+ *   surfaces_list         (no input)   every URL grouped by category
+ *   presence_snapshot     (no input)   who is here right now
+ *   now_snapshot          (no input)   live system snapshot
+ *   today_highlights      (no input)   curated day strip
+ *   blocks_recent         ({limit})    latest blocks across channels
+ *   block_read            ({id})       read one block by 4-digit id
+ *   blocks_by_channel     ({channel})  recent blocks in a channel
+ *   blocks_search         ({q})        full-text search blocks
+ *   local_snapshot        (no input)   100-mile El Segundo lens
+ *   weather_get           ({station})  station weather
+ *   editions_summary      (no input)   mintables overview
+ *   contracts_status      (no input)   live Tezos contract addresses
+ *   channels_list         (no input)   9 channels with codes/slugs
+ *   agents_manifest       (no input)   full /agents.json
  *
  * Resources
  *   drum://rooms          markdown list of all drum surfaces
  *   drum://now-playing    current room track
  *   drum://leaderboard    top 10 drummers
  *   drum://schema         /api/sounds event schema
+ *   pointcast://map       iso town map (mirror of /town.json)
+ *   pointcast://now       /now.json
+ *   pointcast://feed      latest 20 blocks (JSON Feed 1.1)
+ *   pointcast://contracts live Tezos contracts
+ *   pointcast://channels  9 PointCast channels
  *
  * Discovery
- *   GET /api/mcp returns a small HTML page with config snippets.
+ *   GET /api/mcp returns an HTML discovery page with config snippets.
  *   POST /api/mcp speaks JSON-RPC.
  *   OPTIONS /api/mcp returns CORS headers.
  *
@@ -39,7 +65,7 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'pointcast-drum';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -152,6 +178,120 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+
+  // ── Whole-site tools (v0.2.0) ──────────────────────────────────────
+  // Drum is a room. PointCast is the whole town. These tools open the
+  // rest of the building list.
+  {
+    name: 'town_map',
+    description: 'Get the iso town map — every building (= every PointCast surface), grid position, and URL. Mirror of /town.json.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'surfaces_list',
+    description: 'List every PointCast surface — all human URLs grouped by category (content, rooms, agents, mints, play, meta).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'presence_snapshot',
+    description: 'Live presence snapshot — who is on PointCast right now. Returns counts (humans, agents) + per-session noun ids and join times.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'now_snapshot',
+    description: 'Live system snapshot — what is happening on PointCast right now. Mirror of /now.json.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'today_highlights',
+    description: 'Today\'s curated highlights from /today — editorial day-strip.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'blocks_recent',
+    description: 'Latest published blocks across all channels. Each block has id, title, dek, channel, type, timestamp.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', minimum: 1, maximum: 50, description: 'How many blocks to return (default 10).' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'block_read',
+    description: 'Read a single block by 4-digit id. Returns full body + companions + author.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', pattern: '^[0-9]{4}$', description: '4-digit block id, e.g. "0379".' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'blocks_by_channel',
+    description: 'Recent blocks in a specific channel. Channel codes: FD (Front Door), CRT (Court), SPN (Spinning), GF (Good Feels), GDN (Garden), ESC (El Segundo), FCT (Faucet), VST (Visit), BTL (Battler), BDY (Birthday).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channel: { type: 'string', description: 'Channel code OR slug (e.g. "FD" or "front-door").' },
+        limit: { type: 'number', minimum: 1, maximum: 50, description: 'Default 10.' },
+      },
+      required: ['channel'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'blocks_search',
+    description: 'Full-text search across all blocks (titles, deks, bodies). Returns top matches with id + title + matched snippet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Search query.' },
+        limit: { type: 'number', minimum: 1, maximum: 50, description: 'Default 10.' },
+      },
+      required: ['q'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'local_snapshot',
+    description: 'El Segundo 100-mile lens — institutions, stations, local blocks, nature signals. Mirror of /local.json.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'weather_get',
+    description: 'Local weather for an El Segundo-area station. Stations: el-segundo, manhattan-beach, hermosa, redondo-beach, venice, santa-monica, palos-verdes, long-beach, los-angeles, malibu, pasadena, anaheim-oc, newport-laguna, santa-barbara, north-san-diego, palm-springs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        station: { type: 'string', description: 'Station slug. Default "el-segundo".' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'editions_summary',
+    description: 'Every mintable on PointCast — live FA2s, planned, faucet daily. Mirror of /editions.json.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'contracts_status',
+    description: 'Live Tezos contract addresses + origination status (Visit Nouns, Coffee Mugs, Window Snapshots, Drum Token, Prize Cast, Marketplace, Zen Cats).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'channels_list',
+    description: 'Every PointCast channel (9 of them) — code, slug, name, purpose, color.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'agents_manifest',
+    description: 'Full /agents.json — the consolidated manifest of every machine-readable surface.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
 ] as const;
 
 // ── Resources ────────────────────────────────────────────────────────
@@ -178,6 +318,38 @@ const RESOURCES = [
     uri: 'drum://schema',
     name: 'Event Schema',
     description: 'JSON schema for /api/sounds events used across all drum surfaces.',
+    mimeType: 'application/json',
+  },
+
+  // ── Whole-site resources (v0.2.0) ──────────────────────────────────
+  {
+    uri: 'pointcast://map',
+    name: 'Town Map',
+    description: 'Iso town map (12 buildings → 12 surfaces). Mirror of /town.json.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'pointcast://now',
+    name: 'Now',
+    description: 'Live system snapshot. Mirror of /now.json.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'pointcast://feed',
+    name: 'Feed',
+    description: 'Latest 20 blocks (JSON Feed 1.1). Mirror of /feed.json.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'pointcast://contracts',
+    name: 'Contracts',
+    description: 'Live Tezos contract addresses + status.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'pointcast://channels',
+    name: 'Channels',
+    description: 'Every PointCast channel — code, slug, name, purpose.',
     mimeType: 'application/json',
   },
 ] as const;
@@ -323,6 +495,203 @@ async function dispatchTool(
         `✓ set the room track to spotify:track:${trackId}. open https://pointcast.xyz/drum-v3 to drum along.`,
       );
     }
+    // ── Whole-site tool dispatch (v0.2.0) ────────────────────────────
+    case 'town_map': {
+      const data = await callJson(`${base}/town.json`);
+      return {
+        content: [
+          { type: 'text', text: `${data?.buildings?.length ?? 0} buildings on the iso town map. Click any URL below to enter that room:\n` +
+            (data?.buildings || []).map((b: any) => `  · ${b.glyph} ${b.name} → ${b.url}`).join('\n') },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'surfaces_list': {
+      const data = await callJson(`${base}/agents.json`);
+      const human = data?.endpoints?.human || {};
+      const json = data?.endpoints?.json || {};
+      const lines = [
+        `${Object.keys(human).length} human surfaces, ${Object.keys(json).length} JSON surfaces:`,
+        '',
+        '## human',
+        ...Object.entries(human).map(([k, v]) => `  · ${k}: ${v}`),
+        '',
+        '## json',
+        ...Object.entries(json).map(([k, v]) => `  · ${k}: ${v}`),
+      ];
+      return textContent(lines.join('\n'));
+    }
+    case 'presence_snapshot': {
+      const data = await callJson(`${base}/api/presence/snapshot`);
+      const sessions = data?.sessions || [];
+      const summary = `${data?.humans ?? 0} humans, ${data?.agents ?? 0} agents on PointCast right now\n` +
+        sessions.map((s: any) =>
+          `  · noun #${s.nounId} · ${s.kind} · ${s.country || '—'}/${s.deviceClass || '—'} · joined ${s.joinedAt}`
+        ).join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'now_snapshot': {
+      const data = await callJson(`${base}/now.json`);
+      return {
+        content: [
+          { type: 'text', text: `now-snapshot — ${data?.generatedAt || 'live'}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'today_highlights': {
+      const data = await callJson(`${base}/today.json`);
+      return {
+        content: [
+          { type: 'text', text: `today on PointCast — ${data?.date || ''}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'blocks_recent': {
+      const limit = Math.max(1, Math.min(50, Number(args.limit) || 10));
+      const data = await callJson(`${base}/feed.json`);
+      const items = (data?.items || []).slice(0, limit);
+      const summary = `latest ${items.length} blocks:\n` +
+        items.map((it: any) => `  · ${it.id?.split('/').pop() || ''} · ${it.title} · ${it.date_published?.slice(0, 10)}`).join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(items, null, 2) },
+        ],
+      };
+    }
+    case 'block_read': {
+      const id = String(args.id || '');
+      if (!/^[0-9]{4}$/.test(id)) {
+        return { content: [{ type: 'text', text: 'id must be 4 digits, e.g. "0379"' }], isError: true };
+      }
+      try {
+        const data = await callJson(`${base}/b/${id}.json`);
+        return {
+          content: [
+            { type: 'text', text: `block ${id} · ${data?.title || ''} (${data?.channel}/${data?.type}) · ${data?.timestamp}` },
+            { type: 'text', text: JSON.stringify(data, null, 2) },
+          ],
+        };
+      } catch {
+        return { content: [{ type: 'text', text: `block ${id} not found` }], isError: true };
+      }
+    }
+    case 'blocks_by_channel': {
+      const channel = String(args.channel || '').toLowerCase();
+      const limit = Math.max(1, Math.min(50, Number(args.limit) || 10));
+      const slugMap: Record<string, string> = {
+        fd: 'front-door', crt: 'court', spn: 'spinning', gf: 'good-feels',
+        gdn: 'garden', esc: 'el-segundo', fct: 'faucet', vst: 'visit',
+        btl: 'battler', bdy: 'birthday',
+      };
+      const slug = slugMap[channel] || channel;
+      try {
+        const data = await callJson(`${base}/c/${slug}.json`);
+        const items = (data?.items || data?.blocks || []).slice(0, limit);
+        return {
+          content: [
+            { type: 'text', text: `${items.length} blocks in /c/${slug}:\n` +
+              items.map((it: any) => `  · ${it.id || ''} · ${it.title}`).join('\n') },
+            { type: 'text', text: JSON.stringify(items, null, 2) },
+          ],
+        };
+      } catch {
+        return { content: [{ type: 'text', text: `channel "${channel}" not found — try FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL, BDY` }], isError: true };
+      }
+    }
+    case 'blocks_search': {
+      const q = String(args.q || '').trim().toLowerCase();
+      if (!q) return { content: [{ type: 'text', text: 'q is required' }], isError: true };
+      const limit = Math.max(1, Math.min(50, Number(args.limit) || 10));
+      const data = await callJson(`${base}/blocks.json`);
+      const blocks = Array.isArray(data?.blocks) ? data.blocks : (Array.isArray(data) ? data : []);
+      const hits = blocks
+        .filter((b: any) => {
+          const hay = `${b.title || ''} ${b.dek || ''} ${b.body || ''}`.toLowerCase();
+          return hay.includes(q);
+        })
+        .slice(0, limit);
+      const summary = hits.length === 0
+        ? `no blocks match "${q}"`
+        : `${hits.length} hit${hits.length === 1 ? '' : 's'} for "${q}":\n` +
+          hits.map((b: any) => `  · ${b.id} · ${b.title}`).join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(hits.map((b: any) => ({ id: b.id, title: b.title, dek: b.dek, channel: b.channel, type: b.type })), null, 2) },
+        ],
+      };
+    }
+    case 'local_snapshot': {
+      const data = await callJson(`${base}/local.json`);
+      return {
+        content: [
+          { type: 'text', text: 'El Segundo 100-mile local lens' },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'weather_get': {
+      const station = String(args.station || 'el-segundo');
+      const data = await callJson(`${base}/api/weather?station=${encodeURIComponent(station)}`);
+      return {
+        content: [
+          { type: 'text', text: `weather · ${station}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'editions_summary': {
+      const data = await callJson(`${base}/editions.json`);
+      return {
+        content: [
+          { type: 'text', text: 'every mintable on PointCast' },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'contracts_status': {
+      const data = await callJson(`${base}/agents.json`);
+      const contracts = data?.contracts || {};
+      const summary = Object.entries(contracts)
+        .map(([key, c]: [string, any]) => `  · ${key}: ${c.address || '(pending)'} · ${c.status} · ${c.standard || '—'}`)
+        .join('\n');
+      return {
+        content: [
+          { type: 'text', text: `live Tezos contracts:\n${summary}` },
+          { type: 'text', text: JSON.stringify(contracts, null, 2) },
+        ],
+      };
+    }
+    case 'channels_list': {
+      const data = await callJson(`${base}/agents.json`);
+      const channels = data?.channels || [];
+      const summary = `${channels.length} channels:\n` +
+        channels.map((c: any) => `  · CH.${c.code} · ${c.name} (/c/${c.slug}) — ${c.purpose}`).join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(channels, null, 2) },
+        ],
+      };
+    }
+    case 'agents_manifest': {
+      const data = await callJson(`${base}/agents.json`);
+      return {
+        content: [
+          { type: 'text', text: `${data?.name} · ${data?.blocksCount} blocks since ${data?.blocksSince}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
   }
@@ -343,6 +712,29 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
   if (uri === 'drum://schema') {
     return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(EVENT_SCHEMA, null, 2) }] };
   }
+
+  // ── Whole-site resources (v0.2.0) ────────────────────────────────
+  if (uri === 'pointcast://map') {
+    const data = await callJson(`${base}/town.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'pointcast://now') {
+    const data = await callJson(`${base}/now.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'pointcast://feed') {
+    const data = await callJson(`${base}/feed.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'pointcast://contracts') {
+    const data = await callJson(`${base}/agents.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data?.contracts ?? {}, null, 2) }] };
+  }
+  if (uri === 'pointcast://channels') {
+    const data = await callJson(`${base}/agents.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data?.channels ?? [], null, 2) }] };
+  }
+
   throw new Error(`unknown resource: ${uri}`);
 }
 
@@ -436,7 +828,7 @@ const DISCOVERY_HTML = `<!doctype html>
 <p><strong>Claude Code</strong>:</p>
 <pre>claude mcp add --transport http pointcast-drum https://pointcast.xyz/api/mcp</pre>
 
-<h2>Tools</h2>
+<h2>Tools — drum hub</h2>
 <ul>
   <li><code>drum_list_rooms</code> — list every drum surface</li>
   <li><code>drum_who_is_here</code> — who's currently in the room</li>
@@ -449,12 +841,29 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum_set_track</code> — set the v3 room Spotify track</li>
 </ul>
 
+<h2>Tools — whole site (v0.2.0)</h2>
+<ul>
+  <li><code>town_map</code> — iso town map · 12 buildings = 12 surfaces</li>
+  <li><code>surfaces_list</code> — every PointCast URL grouped by category</li>
+  <li><code>presence_snapshot</code> — who is here right now</li>
+  <li><code>now_snapshot</code> — live system snapshot · /now.json</li>
+  <li><code>today_highlights</code> — curated day strip · /today.json</li>
+  <li><code>blocks_recent</code> — latest blocks across all channels</li>
+  <li><code>block_read</code> — read one block by id</li>
+  <li><code>blocks_by_channel</code> — recent blocks in a channel</li>
+  <li><code>blocks_search</code> — full-text search blocks</li>
+  <li><code>local_snapshot</code> — El Segundo 100-mile lens · /local.json</li>
+  <li><code>weather_get</code> — weather for a station</li>
+  <li><code>editions_summary</code> — every mintable</li>
+  <li><code>contracts_status</code> — live Tezos contracts</li>
+  <li><code>channels_list</code> — 9 channels</li>
+  <li><code>agents_manifest</code> — full /agents.json</li>
+</ul>
+
 <h2>Resources</h2>
 <ul>
-  <li><code>drum://rooms</code> — markdown list of all drum surfaces</li>
-  <li><code>drum://now-playing</code> — current room track JSON</li>
-  <li><code>drum://leaderboard</code> — top 10 drummers JSON</li>
-  <li><code>drum://schema</code> — /api/sounds event schema</li>
+  <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
+  <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">
