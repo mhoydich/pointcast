@@ -4,6 +4,8 @@ export const PROTOCOL_FRIEND_CARD_VERSION = 'pcp-friend-card-1';
 export const PROTOCOL_FRIEND_CARD_PREFIX = 'pcp-friend:';
 export const PROTOCOL_CHAIN_REGISTRATION_VERSION = 'pcp-chain-registration-1';
 export const PROTOCOL_CHAIN_ENVELOPE_VERSION = 'pcp-chain-envelope-1';
+export const PROTOCOL_CHAIN_HANDOFF_VERSION = 'pcp-chain-handoff-1';
+export const PROTOCOL_CHAIN_HANDOFF_PREFIX = 'pcp-chain:';
 
 export const PROTOCOL_STORAGE_KEYS = {
   profile: 'pcp:v1:peer-profile',
@@ -262,8 +264,19 @@ export async function buildChainRegistration(identity, options = {}) {
 
   return {
     ...registration,
-    id: `pcr:${await sha256Hex(canonicalJson(registration))}`,
+    id: await deriveChainRegistrationId(registration),
   };
+}
+
+export function chainRegistrationMaterial(registration) {
+  const copy = { ...(registration || {}) };
+  delete copy.id;
+  delete copy.walletProof;
+  return copy;
+}
+
+export async function deriveChainRegistrationId(registration) {
+  return `pcr:${await sha256Hex(canonicalJson(chainRegistrationMaterial(registration)))}`;
 }
 
 export function validateChainRegistration(registration) {
@@ -313,8 +326,19 @@ export async function buildChainEnvelope(packet, options = {}) {
 
   return {
     ...envelope,
-    id: `pce:${await sha256Hex(canonicalJson(envelope))}`,
+    id: await deriveChainEnvelopeId(envelope),
   };
+}
+
+export function chainEnvelopeMaterial(envelope) {
+  const copy = { ...(envelope || {}) };
+  delete copy.id;
+  delete copy.walletProof;
+  return copy;
+}
+
+export async function deriveChainEnvelopeId(envelope) {
+  return `pce:${await sha256Hex(canonicalJson(chainEnvelopeMaterial(envelope)))}`;
 }
 
 export function validateChainEnvelope(envelope) {
@@ -336,8 +360,145 @@ export function validateChainEnvelope(envelope) {
   if (envelope.registrationId && !/^pcr:[a-f0-9]{64}$/.test(envelope.registrationId)) errors.push('registrationId must match pcr:<sha256-hex>');
   if (typeof envelope.relay !== 'string' || !/^https:\/\//.test(envelope.relay)) errors.push('relay must be an https URL');
   if (!envelope.packetSignature || envelope.packetSignature.alg !== 'Ed25519' || typeof envelope.packetSignature.value !== 'string') errors.push('packetSignature must be an Ed25519 signature object');
+  if (envelope.walletProof && !isWalletProof(envelope.walletProof)) errors.push('walletProof must include type, address, payload, and signature');
   if (envelope.mode === 'private-hash' && typeof envelope.body === 'string' && envelope.body.trim()) errors.push('private-hash envelopes must not include body');
   return { ok: errors.length === 0, errors };
+}
+
+export async function verifyChainEnvelope(envelope, packet = null) {
+  const structural = validateChainEnvelope(envelope);
+  const errors = [...structural.errors];
+
+  if (envelope && typeof envelope === 'object' && !Array.isArray(envelope)) {
+    const expectedId = await deriveChainEnvelopeId(envelope);
+    if (envelope.id !== expectedId) errors.push(`envelope id mismatch: expected ${expectedId}`);
+  }
+
+  if (packet) {
+    const packetVerification = await verifyPacketSignature(packet);
+    if (!packetVerification.ok) errors.push(...packetVerification.errors.map((error) => `packet ${error}`));
+
+    const packetHash = await sha256Hex(canonicalJson(packet));
+    const bodyHash = await sha256Hex(packet.body || '');
+    if (envelope.packetId !== packet.id) errors.push('envelope packetId does not match packet id');
+    if (envelope.packetHash !== packetHash) errors.push('envelope packetHash does not match packet');
+    if (envelope.bodyHash !== bodyHash) errors.push('envelope bodyHash does not match packet body');
+    if (envelope.from !== packet.from) errors.push('envelope from does not match packet from');
+    if (canonicalJson(envelope.to || []) !== canonicalJson(packet.to || [])) errors.push('envelope recipients do not match packet recipients');
+    if (envelope.topic !== packet.transport?.topic) errors.push('envelope topic does not match packet topic');
+    if (canonicalJson(envelope.packetSignature) !== canonicalJson(packet.signature)) errors.push('envelope packetSignature does not match packet signature');
+    if (envelope.mode === 'public-body' && envelope.body !== packet.body) errors.push('public-body envelope body does not match packet body');
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+export async function buildChainHandoff({
+  packet,
+  envelope,
+  registration = null,
+  createdAt = new Date().toISOString(),
+} = {}) {
+  const handoff = {
+    version: PROTOCOL_CHAIN_HANDOFF_VERSION,
+    mediaType: PROTOCOL_CHAIN_HANDOFF_VERSION,
+    packet,
+    envelope,
+    registration,
+    createdAt,
+  };
+
+  return {
+    ...handoff,
+    id: await deriveChainHandoffId(handoff),
+  };
+}
+
+export function chainHandoffMaterial(handoff) {
+  const copy = { ...(handoff || {}) };
+  delete copy.id;
+  return copy;
+}
+
+export async function deriveChainHandoffId(handoff) {
+  return `pch:${await sha256Hex(canonicalJson(chainHandoffMaterial(handoff)))}`;
+}
+
+export function validateChainHandoff(handoff) {
+  const errors = [];
+  if (!handoff || typeof handoff !== 'object' || Array.isArray(handoff)) {
+    return { ok: false, errors: ['handoff must be an object'] };
+  }
+  if (handoff.version !== PROTOCOL_CHAIN_HANDOFF_VERSION) errors.push(`version must be ${PROTOCOL_CHAIN_HANDOFF_VERSION}`);
+  if (handoff.mediaType && handoff.mediaType !== PROTOCOL_CHAIN_HANDOFF_VERSION) errors.push(`mediaType must be ${PROTOCOL_CHAIN_HANDOFF_VERSION}`);
+  if (typeof handoff.id !== 'string' || !/^pch:[a-f0-9]{64}$/.test(handoff.id)) errors.push('id must match pch:<sha256-hex>');
+  if (typeof handoff.createdAt !== 'string' || Number.isNaN(Date.parse(handoff.createdAt))) errors.push('createdAt must be an ISO timestamp');
+
+  const packetValidation = validatePacket(handoff.packet, { requireSignature: true });
+  if (!packetValidation.ok) errors.push(...packetValidation.errors.map((error) => `packet ${error}`));
+
+  const envelopeValidation = validateChainEnvelope(handoff.envelope);
+  if (!envelopeValidation.ok) errors.push(...envelopeValidation.errors.map((error) => `envelope ${error}`));
+
+  if (handoff.registration) {
+    const registrationValidation = validateChainRegistration(handoff.registration);
+    if (!registrationValidation.ok) errors.push(...registrationValidation.errors.map((error) => `registration ${error}`));
+    if (handoff.registration.walletProof && !isWalletProof(handoff.registration.walletProof)) errors.push('registration walletProof must include type, address, payload, and signature');
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+export async function verifyChainHandoff(handoff) {
+  const structural = validateChainHandoff(handoff);
+  const errors = [...structural.errors];
+
+  if (handoff && typeof handoff === 'object' && !Array.isArray(handoff)) {
+    const expectedId = await deriveChainHandoffId(handoff);
+    if (handoff.id !== expectedId) errors.push(`handoff id mismatch: expected ${expectedId}`);
+
+    const envelopeVerification = await verifyChainEnvelope(handoff.envelope, handoff.packet);
+    if (!envelopeVerification.ok) errors.push(...envelopeVerification.errors.map((error) => `envelope ${error}`));
+
+    if (handoff.registration) {
+      const expectedRegistrationId = await deriveChainRegistrationId(handoff.registration);
+      if (handoff.registration.id !== expectedRegistrationId) errors.push(`registration id mismatch: expected ${expectedRegistrationId}`);
+      if (handoff.envelope?.registrationId && handoff.registration.id !== handoff.envelope.registrationId) errors.push('registration id does not match envelope registrationId');
+      if (handoff.registration.peerId !== handoff.envelope?.from) errors.push('registration peerId does not match envelope sender');
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+export function encodeChainHandoff(handoff) {
+  const validation = validateChainHandoff(handoff);
+  if (!validation.ok) throw new Error(validation.errors.join('; '));
+  return `${PROTOCOL_CHAIN_HANDOFF_PREFIX}${bytesToBase64url(utf8Bytes(canonicalJson(handoff)))}`;
+}
+
+export function parseChainHandoff(value) {
+  const raw = String(value || '').trim();
+  if (!raw) throw new Error('chain handoff is empty');
+  const json = raw.startsWith(PROTOCOL_CHAIN_HANDOFF_PREFIX)
+    ? new TextDecoder().decode(base64urlToBytes(raw.slice(PROTOCOL_CHAIN_HANDOFF_PREFIX.length)))
+    : raw;
+  const handoff = JSON.parse(json);
+  const validation = validateChainHandoff(handoff);
+  if (!validation.ok) throw new Error(validation.errors.join('; '));
+  return handoff;
+}
+
+export function serializeChainHandoffsJsonl(handoffs) {
+  return handoffs.map((handoff) => JSON.stringify(sortForCanonicalJson(handoff))).join('\n') + (handoffs.length ? '\n' : '');
+}
+
+export function parseChainHandoffsJsonl(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => parseChainHandoff(line));
 }
 
 export async function generatePeerIdentity({ displayName = 'PointCast peer', kind = 'human' } = {}) {
@@ -434,4 +595,16 @@ function isCanonicalBase64url(value) {
   } catch {
     return false;
   }
+}
+
+function isWalletProof(proof) {
+  return Boolean(
+    proof
+      && typeof proof === 'object'
+      && !Array.isArray(proof)
+      && typeof proof.type === 'string'
+      && typeof proof.address === 'string'
+      && typeof proof.payload === 'string'
+      && typeof proof.signature === 'string',
+  );
 }

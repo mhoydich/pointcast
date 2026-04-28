@@ -126,8 +126,12 @@ const jsonLd = {
 
       <section class="panel thread-panel" aria-labelledby="thread-title">
         <div class="panel-head">
-          <p class="kicker">OUTBOX</p>
-          <h2 id="thread-title">Chain envelopes</h2>
+          <p class="kicker">CHAIN LOG</p>
+          <h2 id="thread-title">Outbox / inbox</h2>
+        </div>
+        <div class="log-tabs" aria-label="Chain message folders">
+          <button type="button" data-chain-filter="outbox" aria-pressed="true">Outbox</button>
+          <button type="button" data-chain-filter="inbox" aria-pressed="false">Inbox</button>
         </div>
         <ol class="chain-list" data-chain-list></ol>
       </section>
@@ -135,11 +139,17 @@ const jsonLd = {
       <section class="panel envelope-panel" aria-labelledby="envelope-title">
         <div class="panel-head">
           <p class="kicker">ENVELOPE</p>
-          <h2 id="envelope-title">Payload</h2>
+          <h2 id="envelope-title">Proof + handoff</h2>
         </div>
         <textarea data-envelope rows="13" readonly spellcheck="false"></textarea>
+        <label>
+          <span>Handoff bundle</span>
+          <textarea data-handoff rows="8" spellcheck="false" placeholder="pcp-chain:... or JSONL"></textarea>
+        </label>
         <div class="button-row">
           <button type="button" data-copy-envelope>Copy envelope</button>
+          <button type="button" data-copy-handoff>Copy handoff</button>
+          <button type="button" data-import-handoff>Import handoff</button>
           <button type="button" data-copy-contract>Copy contract call</button>
         </div>
       </section>
@@ -163,17 +173,22 @@ const jsonLd = {
   import {
     PROTOCOL_STORAGE_KEYS,
     buildChainEnvelope,
+    buildChainHandoff,
     buildChainRegistration,
     buildFriendCard,
     buildPacketDraft,
     canonicalJson,
+    encodeChainHandoff,
     encodeFriendCard,
     generatePeerIdentity,
+    parseChainHandoff,
+    parseChainHandoffsJsonl,
     parseFriendCard,
     shortPeerId,
     signPacket,
     validateChainEnvelope,
     validateChainRegistration,
+    verifyChainHandoff,
     verifyPacketSignature,
   } from '../../lib/protocol-packet.js';
 
@@ -197,13 +212,19 @@ const jsonLd = {
     signPacket: $('[data-sign-packet]'),
     chainSend: $('[data-chain-send]'),
     chainList: $('[data-chain-list]'),
+    chainFilters: Array.from(document.querySelectorAll('[data-chain-filter]')),
     envelope: $('[data-envelope]'),
+    handoff: $('[data-handoff]'),
     copyEnvelope: $('[data-copy-envelope]'),
+    copyHandoff: $('[data-copy-handoff]'),
+    importHandoff: $('[data-import-handoff]'),
     copyContract: $('[data-copy-contract]'),
   };
 
   let selectedPacket = null;
   let selectedEnvelope = null;
+  let selectedHandoff = null;
+  let activeChainFilter = 'outbox';
   let friend = null;
   let demoFriendIdentity = null;
 
@@ -228,9 +249,21 @@ const jsonLd = {
     return readJson(PROTOCOL_STORAGE_KEYS.chainRegistration, null);
   }
 
-  function envelopes() {
-    const items = readJson(PROTOCOL_STORAGE_KEYS.chainOutbox, []);
+  function chainItems(key) {
+    const items = readJson(key, []);
     return Array.isArray(items) ? items : [];
+  }
+
+  function chainOutbox() {
+    return chainItems(PROTOCOL_STORAGE_KEYS.chainOutbox);
+  }
+
+  function chainInbox() {
+    return chainItems(PROTOCOL_STORAGE_KEYS.chainInbox);
+  }
+
+  function currentEnvelope() {
+    return selectedHandoff?.envelope || selectedEnvelope;
   }
 
   function setStatus(message, tone = 'neutral') {
@@ -345,6 +378,8 @@ const jsonLd = {
     const verified = await verifyPacketSignature(signed);
     if (!verified.ok) throw new Error(verified.errors.join('; '));
     selectedPacket = signed;
+    selectedEnvelope = null;
+    selectedHandoff = null;
     return signed;
   }
 
@@ -382,16 +417,26 @@ const jsonLd = {
           signature: proof.signature,
         },
       };
+      const handoff = await buildChainHandoff({
+        packet,
+        envelope: signedEnvelope,
+        registration: reg,
+      });
+      const verified = await verifyChainHandoff(handoff);
+      if (!verified.ok) throw new Error(verified.errors.join('; '));
       selectedEnvelope = signedEnvelope;
-      writeJson(PROTOCOL_STORAGE_KEYS.chainOutbox, [signedEnvelope, ...envelopes()].slice(0, 100));
-      setStatus(`Chain envelope signed: ${shortPeerId(signedEnvelope.id)}.`, 'ok');
+      selectedHandoff = handoff;
+      if (els.handoff) els.handoff.value = JSON.stringify(handoff, null, 2);
+      writeJson(PROTOCOL_STORAGE_KEYS.chainOutbox, [handoff, ...chainOutbox()].slice(0, 100));
+      activeChainFilter = 'outbox';
+      setStatus(`Chain handoff signed: ${shortPeerId(signedEnvelope.id)}.`, 'ok');
       render();
     } catch (err) {
       setStatus(`Chain send failed: ${err?.message || err}`, 'bad');
     }
   }
 
-  function contractCallSketch(envelope = selectedEnvelope) {
+  function contractCallSketch(envelope = currentEnvelope()) {
     if (!envelope) return '';
     return [
       'PCP Message Registry call (draft)',
@@ -411,30 +456,81 @@ const jsonLd = {
     ].join('\n');
   }
 
+  function parseHandoffInput(value) {
+    const text = String(value || '').trim();
+    if (!text) throw new Error('paste a pcp-chain handoff first');
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length > 1 && lines.every((line) => line.startsWith('{') || line.startsWith('pcp-chain:'))) {
+      return parseChainHandoffsJsonl(text);
+    }
+    return [parseChainHandoff(text)];
+  }
+
+  async function copySelectedHandoff() {
+    if (!selectedHandoff) {
+      setStatus('Select or sign a handoff first.', 'bad');
+      return;
+    }
+    await copyText(encodeChainHandoff(selectedHandoff), 'Handoff copied.');
+  }
+
+  async function importHandoff() {
+    try {
+      const imported = parseHandoffInput(els.handoff?.value || '');
+      const verified = [];
+      for (const handoff of imported) {
+        const check = await verifyChainHandoff(handoff);
+        if (!check.ok) throw new Error(check.errors.join('; '));
+        verified.push(handoff);
+      }
+      if (!verified.length) throw new Error('no handoffs found');
+      const existing = chainInbox();
+      const existingIds = new Set(existing.map((item) => item?.id).filter(Boolean));
+      const merged = [
+        ...verified.filter((item) => !existingIds.has(item.id)),
+        ...existing,
+      ].slice(0, 100);
+      writeJson(PROTOCOL_STORAGE_KEYS.chainInbox, merged);
+      selectedHandoff = verified[0];
+      selectedEnvelope = verified[0].envelope;
+      selectedPacket = verified[0].packet;
+      activeChainFilter = 'inbox';
+      if (els.handoff) els.handoff.value = JSON.stringify(selectedHandoff, null, 2);
+      setStatus(`Imported ${verified.length} verified handoff${verified.length === 1 ? '' : 's'}.`, 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Handoff import failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
   function renderList() {
     if (!els.chainList) return;
-    const items = envelopes();
+    const items = activeChainFilter === 'inbox' ? chainInbox() : chainOutbox();
     els.chainList.innerHTML = '';
     if (!items.length) {
       const empty = document.createElement('li');
       empty.className = 'empty';
-      empty.textContent = 'No chain envelopes yet.';
+      empty.textContent = activeChainFilter === 'inbox' ? 'No imported handoffs yet.' : 'No chain handoffs yet.';
       els.chainList.append(empty);
       return;
     }
     for (const item of items) {
+      const envelope = item?.envelope || item;
       const li = document.createElement('li');
       li.className = 'chain-item';
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'chain-item__button';
       const id = document.createElement('strong');
-      id.textContent = shortPeerId(item.id);
+      id.textContent = shortPeerId(item?.id || envelope?.id);
       const meta = document.createElement('span');
-      meta.textContent = `${item.mode} | ${shortPeerId(item.packetId)} | ${item.chain}`;
+      meta.textContent = `${envelope?.mode || 'handoff'} | ${shortPeerId(envelope?.packetId)} | ${envelope?.chain || 'chain'}`;
       button.append(id, meta);
       button.addEventListener('click', () => {
-        selectedEnvelope = item;
+        selectedHandoff = item?.envelope ? item : null;
+        selectedEnvelope = envelope;
+        selectedPacket = item?.packet || null;
+        if (els.handoff && selectedHandoff) els.handoff.value = JSON.stringify(selectedHandoff, null, 2);
         render();
       });
       li.append(button);
@@ -445,10 +541,14 @@ const jsonLd = {
   function render() {
     const peer = profile();
     const reg = registration();
+    const envelope = currentEnvelope();
     if (els.peerId) els.peerId.textContent = peer?.peerId || 'none yet';
     if (els.wallet) els.wallet.textContent = reg?.walletAddress || reg?.walletProof?.address || 'not connected';
     if (els.registrationId) els.registrationId.textContent = reg?.id || 'not registered';
     if (els.recipient) els.recipient.textContent = friend?.peerId || 'none';
+    for (const button of els.chainFilters || []) {
+      button.setAttribute('aria-pressed', button.dataset.chainFilter === activeChainFilter ? 'true' : 'false');
+    }
 
     if (peer && els.ownCard) {
       try {
@@ -459,8 +559,8 @@ const jsonLd = {
     }
 
     if (els.envelope) {
-      els.envelope.value = selectedEnvelope
-        ? JSON.stringify(selectedEnvelope, null, 2)
+      els.envelope.value = envelope
+        ? JSON.stringify(envelope, null, 2)
         : selectedPacket
           ? JSON.stringify(selectedPacket, null, 2)
           : '';
@@ -475,7 +575,15 @@ const jsonLd = {
   els.signPacket?.addEventListener('click', signPacketOnly);
   els.chainSend?.addEventListener('click', signChainEnvelope);
   els.copyEnvelope?.addEventListener('click', () => copyText(els.envelope?.value || '', 'Envelope copied.'));
+  els.copyHandoff?.addEventListener('click', copySelectedHandoff);
+  els.importHandoff?.addEventListener('click', importHandoff);
   els.copyContract?.addEventListener('click', () => copyText(contractCallSketch(), 'Contract call sketch copied.'));
+  for (const button of els.chainFilters || []) {
+    button.addEventListener('click', () => {
+      activeChainFilter = button.dataset.chainFilter || 'outbox';
+      render();
+    });
+  }
 
   setStatus(profile() ? 'Local peer loaded.' : 'Create or register a peer to start.');
   render();
@@ -649,6 +757,22 @@ const jsonLd = {
   }
 
   .button-row button:first-child {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .log-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .log-tabs button {
+    min-height: 34px;
+  }
+
+  .log-tabs button[aria-pressed="true"] {
     background: var(--pc-ink);
     color: #fff;
   }

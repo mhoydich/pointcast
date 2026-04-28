@@ -1,9 +1,9 @@
-export const PROTOCOL_VERSION = 'pcp-1.0.3';
+export const PROTOCOL_VERSION = 'pcp-1.0.4';
 export const PROTOCOL_PACKET_VERSION = 'pcp-1.0';
 export const PROTOCOL_PACKET_MEDIA_TYPE = 'pcp-1.0/block-packet+json';
 export const PROTOCOL_NAME = 'PointCast Peer Message Protocol';
 export const PROTOCOL_SHORT_NAME = 'PCP/1';
-export const PROTOCOL_UPDATED_AT = '2026-04-28T08:20:00Z';
+export const PROTOCOL_UPDATED_AT = '2026-04-28T09:10:00Z';
 
 export const PROTOCOL_STORAGE_KEYS = {
   profile: 'pcp:v1:peer-profile',
@@ -90,7 +90,7 @@ export const PROTOCOL_V2_SIMPLE_FRIENDS = {
 };
 
 export const PROTOCOL_V2_CHAIN_MESSENGER = {
-  status: 'draft demo',
+  status: 'draft demo + handoff verification',
   demo: 'https://pointcast.xyz/messages/chain',
   chain: 'tezos:mainnet',
   goal: 'Register a peer with a wallet, send signed direct packets, and anchor message proofs without putting private text on-chain.',
@@ -104,11 +104,17 @@ export const PROTOCOL_V2_CHAIN_MESSENGER = {
     onChain: ['envelope id', 'packet id', 'packet hash', 'body hash', 'recipient peer id', 'topic', 'packet signature', 'wallet proof'],
     offChain: ['private body', 'attachments', 'thread UI', 'encrypted relay payloads'],
   },
+  handoff: {
+    mediaType: 'pcp-chain-handoff-1',
+    prefix: 'pcp-chain:',
+    includes: ['signed packet', 'chain envelope', 'optional registration proof'],
+    exchange: ['copy/paste', 'JSONL', 'QR later', 'encrypted relay later'],
+  },
   friendFlow: [
     'Create a local peer and sign registration with a Tezos wallet.',
     'Exchange friend cards so each browser knows the recipient peer id.',
     'Compose a message and sign the PCP packet with the peer key.',
-    'Sign a chain envelope with the wallet; copy the registry-ready payload for a future contract call.',
+    'Sign a chain envelope with the wallet; export a pcp-chain handoff that friends can import and verify.',
   ],
   caveat: 'The demo signs and exports a registry-ready payload. It does not submit an on-chain transaction until a PCP Message Registry contract ships.',
 };

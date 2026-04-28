@@ -168,6 +168,27 @@ test('chain registrations and envelopes hash signed packets without plaintext by
   assert.equal(protocol.validateChainEnvelope(envelope).ok, true);
   assert.equal(protocol.validateChainEnvelope({ ...envelope, body: 'leak' }).ok, false);
   assert.equal(protocol.validateChainEnvelope({ ...envelope, packetSignature: null }).ok, false);
+
+  const handoff = await protocol.buildChainHandoff({
+    packet,
+    envelope,
+    registration,
+    createdAt: '2026-04-28T12:03:00.000Z',
+  });
+  assert.match(handoff.id, /^pch:[a-f0-9]{64}$/);
+  assert.equal(protocol.validateChainHandoff(handoff).ok, true);
+  assert.deepEqual(await protocol.verifyChainHandoff(handoff), { ok: true, errors: [] });
+
+  const encoded = protocol.encodeChainHandoff(handoff);
+  assert.match(encoded, /^pcp-chain:/);
+  assert.deepEqual(protocol.parseChainHandoff(encoded), handoff);
+  assert.deepEqual(protocol.parseChainHandoffsJsonl(protocol.serializeChainHandoffsJsonl([handoff])), [handoff]);
+
+  const tampered = await protocol.verifyChainHandoff({
+    ...handoff,
+    packet: { ...packet, body: 'tampered private chain message' },
+  });
+  assert.equal(tampered.ok, false);
 });
 
 test('invalid packets are rejected with useful errors', () => {
