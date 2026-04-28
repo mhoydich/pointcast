@@ -33,6 +33,34 @@ const battleTypes = [
     weather: ["clear", "royal"],
     log: "Crown Rush rules: control the center crown to earn haste, guard, and pressure damage.",
   },
+  {
+    id: "lava",
+    name: "Lava Audit",
+    fieldClass: "lava-field",
+    weather: ["heat", "dust"],
+    log: "Lava Audit rules: audit lanes burn anyone camping too long, but charge specials fast.",
+  },
+  {
+    id: "cloud",
+    name: "Cloud Court",
+    fieldClass: "cloud-field",
+    weather: ["cloud", "clear"],
+    log: "Cloud Court rules: drifting sky platforms grant haste and bend every lane.",
+  },
+  {
+    id: "trash",
+    name: "Trash Planet",
+    fieldClass: "trash-field",
+    weather: ["trash", "dust"],
+    log: "Trash Planet rules: scrap piles hide powerups, stumbles, and sudden guards.",
+  },
+  {
+    id: "fog",
+    name: "Fog Bowl",
+    fieldClass: "fog-field",
+    weather: ["fog", "clear"],
+    log: "Fog Bowl rules: ranged shots lose bite while close-range ambushes become louder.",
+  },
 ];
 
 const elements = [
@@ -181,6 +209,8 @@ const el = {
   tvBigPlay: document.querySelector("#tvBigPlay"),
   tvStarNoun: document.querySelector("#tvStarNoun"),
   tvComeback: document.querySelector("#tvComeback"),
+  tvDirectorCue: document.querySelector("#tvDirectorCue"),
+  tvReplayCue: document.querySelector("#tvReplayCue"),
   tvPath: document.querySelector("#tvPath"),
   tvCastHint: document.querySelector("#tvCastHint"),
 };
@@ -201,6 +231,13 @@ const state = {
   ampClock: 0,
   crownClock: 0,
   crownHolderId: "",
+  terrainClock: 0,
+  directorClock: 0,
+  directorMode: "wide",
+  directorTargetId: "",
+  directorCue: "Director wide",
+  replayCue: "Replay bay armed",
+  replayClock: 0,
   autoNext: true,
   nextTimer: null,
   rootingFor: localStorage.getItem("pc:nouns-nation-root") || "",
@@ -319,10 +356,9 @@ function currentBattleType() {
   if (forcedType) return forcedType;
   const league = state.league;
   if (league.phase === "playoffs") return league.playoffSlot === 2 ? battleTypes[2] : battleTypes[1];
-  const index = (league.day * DAILY_SLOTS + league.slot) % 6;
-  if (index === 2 || index === 4) return battleTypes[1];
-  if (index === 5) return battleTypes[2];
-  return battleTypes[0];
+  const rotation = ["open", "lava", "rift", "cloud", "trash", "crown", "fog", "rift", "lava", "cloud"];
+  const id = rotation[(league.day * DAILY_SLOTS + league.slot) % rotation.length];
+  return battleTypes.find((type) => type.id === id) || battleTypes[0];
 }
 
 function elementForUnit(unit) {
@@ -330,7 +366,14 @@ function elementForUnit(unit) {
 }
 
 function weatherClass() {
-  return state.weather === "dust" ? "dust" : state.weather === "spark" ? "spark-field" : state.weather === "royal" ? "royal-field" : "";
+  return state.weather === "dust" ? "dust"
+    : state.weather === "spark" ? "spark-field"
+      : state.weather === "royal" ? "royal-field"
+        : state.weather === "heat" ? "heat-field"
+          : state.weather === "cloud" ? "cloud-weather"
+            : state.weather === "trash" ? "trash-weather"
+              : state.weather === "fog" ? "fog-weather"
+                : "";
 }
 
 function gangRecord(name) {
@@ -433,7 +476,7 @@ function unitTitle(unit) {
 function resetMatch() {
   clearTimeout(state.nextTimer);
   state.units.forEach((unit) => unit.node?.remove());
-  document.querySelectorAll(".hit-pop, .spark, .amp-zone, .crown-zone").forEach((node) => node.remove());
+  document.querySelectorAll(".hit-pop, .spark, .amp-zone, .crown-zone, .terrain-zone").forEach((node) => node.remove());
   state.units = [];
   state.effects = [];
   state.running = true;
@@ -444,6 +487,13 @@ function resetMatch() {
   state.ampClock = 170;
   state.crownClock = 92;
   state.crownHolderId = "";
+  state.terrainClock = 86;
+  state.directorClock = 0;
+  state.directorMode = "wide";
+  state.directorTargetId = "";
+  state.directorCue = "Director wide";
+  state.replayCue = "Replay bay armed";
+  state.replayClock = 0;
   state.battleType = currentBattleType();
   state.weather = state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
   state.moveHistory = [];
@@ -474,6 +524,7 @@ function resetMatch() {
   const bounds = fieldBounds();
   renderAmplifierZones(bounds);
   renderCrownZone(bounds);
+  renderTerrainZones(bounds);
   for (let team = 0; team < 2; team += 1) {
     for (let index = 0; index < 30; index += 1) {
       const unit = createUnit(team, index, bounds);
@@ -485,7 +536,7 @@ function resetMatch() {
 
   addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, 30 strong on each side.`);
   addLog(state.battleType.log);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V10", `${state.battleType.name} armed`);
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V11", `${state.battleType.name} armed`);
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
@@ -624,6 +675,158 @@ function renderCrownZone(bounds) {
   el.field.append(node);
 }
 
+function terrainZones(bounds) {
+  const minSide = Math.min(bounds.width, bounds.height);
+  if (state.battleType.id === "lava") {
+    return [
+      { id: "lava-a", label: "Audit", x: bounds.width * 0.5, y: bounds.height * 0.34, width: minSide * 0.22, height: minSide * 0.18, shape: "lane" },
+      { id: "lava-b", label: "Lava", x: bounds.width * 0.5, y: bounds.height * 0.52, width: minSide * 0.28, height: minSide * 0.16, shape: "lane" },
+      { id: "lava-c", label: "Audit", x: bounds.width * 0.5, y: bounds.height * 0.7, width: minSide * 0.22, height: minSide * 0.18, shape: "lane" },
+    ];
+  }
+  if (state.battleType.id === "cloud") {
+    return [
+      { id: "cloud-a", label: "Lift", x: bounds.width * 0.36, y: bounds.height * 0.42, width: minSide * 0.24, height: minSide * 0.18, shape: "puff" },
+      { id: "cloud-b", label: "Drift", x: bounds.width * 0.64, y: bounds.height * 0.58, width: minSide * 0.24, height: minSide * 0.18, shape: "puff" },
+    ];
+  }
+  if (state.battleType.id === "trash") {
+    return [
+      { id: "trash-a", label: "Scrap", x: bounds.width * 0.28, y: bounds.height * 0.5, width: minSide * 0.18, height: minSide * 0.18, shape: "heap" },
+      { id: "trash-b", label: "Loot", x: bounds.width * 0.5, y: bounds.height * 0.36, width: minSide * 0.16, height: minSide * 0.16, shape: "heap" },
+      { id: "trash-c", label: "Junk", x: bounds.width * 0.72, y: bounds.height * 0.5, width: minSide * 0.18, height: minSide * 0.18, shape: "heap" },
+    ];
+  }
+  return [];
+}
+
+function renderTerrainZones(bounds) {
+  terrainZones(bounds).forEach((zone) => {
+    const node = document.createElement("div");
+    node.className = `terrain-zone terrain-${state.battleType.id} terrain-${zone.shape}`;
+    node.style.left = `${zone.x}px`;
+    node.style.top = `${zone.y}px`;
+    node.style.width = `${zone.width}px`;
+    node.style.height = `${zone.height}px`;
+    node.innerHTML = `<span>${zone.label}</span>`;
+    el.field.append(node);
+  });
+}
+
+function inTerrainZone(unit, zone) {
+  return Math.abs(unit.x - zone.x) < zone.width / 2 && Math.abs(unit.y - zone.y) < zone.height / 2;
+}
+
+function applyTerrainRules(unit, dt, bounds) {
+  if (state.battleType.id === "lava") {
+    const hotZone = terrainZones(bounds).find((zone) => inTerrainZone(unit, zone));
+    if (hotZone) {
+      unit.special = Math.max(0, unit.special - 0.72 * dt);
+      unit.morale = Math.min(1.5, unit.morale + 0.002 * dt);
+      if (state.tick % 24 < dt) {
+        dealDamage(terrainAttacker(unit), unit, 1);
+        pop(unit.x, unit.y - 22, "heat", "#fb7668");
+        if (unit.hp <= 0) downUnit(unit, nearestEnemy(unit) || terrainAttacker(unit), 12);
+      }
+    }
+    return;
+  }
+
+  if (state.battleType.id === "cloud") {
+    const wind = Math.sin((state.tick + unit.index * 7) / 42) * 0.05 * dt;
+    unit.vx += wind;
+    const cloudZone = terrainZones(bounds).find((zone) => inTerrainZone(unit, zone));
+    if (cloudZone) {
+      unit.haste = Math.max(unit.haste, 28);
+      unit.guard = Math.max(unit.guard, 16);
+      unit.special = Math.max(0, unit.special - 0.28 * dt);
+    }
+    return;
+  }
+
+  if (state.battleType.id === "trash") {
+    const scrapZone = terrainZones(bounds).find((zone) => inTerrainZone(unit, zone));
+    if (scrapZone) {
+      unit.special = Math.max(0, unit.special - 0.42 * dt);
+      if (Math.random() > 0.996) {
+        unit.guard = Math.max(unit.guard, 80);
+        unit.haste = Math.max(unit.haste, 44);
+        unit.stats.amps += 1;
+        pop(unit.x, unit.y - 26, "loot", gangs[unit.team].accent);
+      } else if (Math.random() > 0.997) {
+        unit.stunned = Math.max(unit.stunned, 18);
+        pop(unit.x, unit.y - 26, "trip", "#fffdf5");
+      }
+    }
+    return;
+  }
+
+  if (state.battleType.id === "fog" && unit.role.name !== "slinger") {
+    unit.guard = Math.max(unit.guard, 6);
+  }
+}
+
+function terrainPulse(bounds) {
+  if (!["lava", "cloud", "trash", "fog"].includes(state.battleType.id)) return;
+  const zones = terrainZones(bounds);
+  if (state.battleType.id === "lava") {
+    const targets = aliveUnits().filter((unit) => zones.some((zone) => inTerrainZone(unit, zone))).slice(0, 6);
+    targets.forEach((unit) => {
+      dealDamage(terrainAttacker(unit), unit, 4);
+      spark(unit.x, unit.y);
+      if (unit.hp <= 0) downUnit(unit, nearestEnemy(unit) || terrainAttacker(unit), 24);
+    });
+    if (targets.length) {
+      recordMove("FIELD", "lava audit lane burns");
+      flashField("lava-burst");
+    }
+    return;
+  }
+  if (state.battleType.id === "cloud") {
+    const pressure = [0, 1].map((team) => aliveUnits(team).filter((unit) => zones.some((zone) => inTerrainZone(unit, zone))).length);
+    const team = pressure[0] >= pressure[1] ? 0 : 1;
+    aliveUnits(team).slice(0, 10).forEach((unit) => {
+      unit.haste = Math.max(unit.haste, 60);
+      unit.special = Math.max(0, unit.special - 22);
+    });
+    recordMove(gangs[team].short, "cloud court lift");
+    flashField("cloud-burst");
+    return;
+  }
+  if (state.battleType.id === "trash") {
+    const looters = aliveUnits().filter((unit) => zones.some((zone) => inTerrainZone(unit, zone)));
+    const unit = looters[Math.floor(Math.random() * looters.length)];
+    if (unit) {
+      unit.guard = Math.max(unit.guard, 120);
+      unit.special = Math.max(0, unit.special - 60);
+      unit.stats.amps += 1;
+      recordMove(gangs[unit.team].short, `#${unit.number} ${unit.name} finds scrap tech`);
+      pop(unit.x, unit.y - 28, "scrap", gangs[unit.team].accent);
+      flashField("trash-burst");
+    }
+    return;
+  }
+  if (state.battleType.id === "fog") {
+    const team = aliveUnits(0).length <= aliveUnits(1).length ? 0 : 1;
+    aliveUnits(team).slice(0, 8).forEach((unit) => {
+      unit.guard = Math.max(unit.guard, 70);
+      unit.cooldown = Math.max(0, unit.cooldown - 10);
+    });
+    recordMove(gangs[team].short, "fog bowl ambush set");
+    flashField("fog-burst");
+  }
+}
+
+function terrainAttacker(target) {
+  return {
+    team: 1 - target.team,
+    name: "the field",
+    role: { name: "field" },
+    morale: 1,
+    stats: { kos: 0, damage: 0 },
+  };
+}
+
 function crownHolder() {
   return state.units.find((unit) => unit.id === state.crownHolderId && !unit.down) || null;
 }
@@ -683,6 +886,7 @@ function stepUnit(unit, dt, bounds) {
     unit.morale = Math.min(1.48, unit.morale + 0.002 * dt);
     if (amp.boost === "guard") unit.guard = Math.max(unit.guard, 24);
   }
+  applyTerrainRules(unit, dt, bounds);
   if (state.battleType.id === "crown") {
     const holder = crownHolder();
     const zone = crownZone(bounds);
@@ -852,7 +1056,9 @@ function attack(unit, target, d) {
   const roleBoost = unit.role.name === "captain" && aliveUnits(unit.team).length < 14 ? 1.35 : 1;
   const ampBoost = unit.amplified > 0 ? 1.18 : 1;
   const crownBoost = state.battleType.id === "crown" && state.crownHolderId === unit.id ? 1.28 : 1;
-  const damage = Math.round((unit.role.damage + rand(-3, 4)) * unit.morale * roleBoost * ampBoost * crownBoost * (crit ? 1.8 : 1));
+  const fogBoost = state.battleType.id === "fog" && unit.role.name === "bonker" && d < 42 ? 1.18 : 1;
+  const fogPenalty = state.battleType.id === "fog" && unit.role.name === "slinger" && d > 88 ? 0.74 : 1;
+  const damage = Math.round((unit.role.damage + rand(-3, 4)) * unit.morale * roleBoost * ampBoost * crownBoost * fogBoost * fogPenalty * (crit ? 1.8 : 1));
   const guarded = target.guard > 0 ? 0.64 : 1;
   const dealt = dealDamage(unit, target, Math.max(1, Math.round(damage * guarded)));
   unit.stats.hits += 1;
@@ -890,7 +1096,8 @@ function downUnit(target, attacker, d) {
   saveSeason();
   const verb = d > 70 ? "snipes" : attacker.role.name === "bonker" ? "bonks" : "drops";
   addLog(`${gangs[attacker.team].name}: ${attacker.name} ${verb} ${target.name}.`);
-  state.reviewMoment = `#${attacker.number} ${attacker.name} clears one`;
+  state.reviewMoment = `${attacker.number ? `#${attacker.number} ` : ""}${attacker.name} clears one`;
+  cueReplay(`#${attacker.number || "F"} ${attacker.name} clears ${target.name}`, attacker);
   flashField("ko-burst");
   showToast(`${gangs[attacker.team].short} score a takedown`);
   checkFinish();
@@ -1137,6 +1344,9 @@ function update(time = 0) {
     state.centerClock -= dt;
     state.ampClock -= dt;
     state.crownClock -= dt;
+    state.terrainClock -= dt;
+    state.directorClock -= dt;
+    state.replayClock = Math.max(0, state.replayClock - dt);
     if (state.specialClock <= 0) {
       state.specialClock = rand(260, 430);
       gangCall();
@@ -1156,6 +1366,11 @@ function update(time = 0) {
         crownRushPulse(bounds);
       }
     }
+    if (state.terrainClock <= 0) {
+      state.terrainClock = rand(120, 210);
+      terrainPulse(bounds);
+    }
+    updateDirector(bounds);
     state.units.forEach((unit) => stepUnit(unit, dt, bounds));
     separateUnits(bounds);
     render();
@@ -1203,6 +1418,7 @@ function render() {
     unit.node.classList.toggle("amplified", unit.amplified > 0 && !unit.down);
     unit.node.classList.toggle("crowned", state.crownHolderId === unit.id && !unit.down);
     unit.node.classList.toggle("selected", state.selectedUnitId === unit.id);
+    unit.node.classList.toggle("director-target", isTvMode && state.directorTargetId === unit.id && !unit.down);
   }
 
   const damageLeader = statLeader("damage");
@@ -1227,8 +1443,41 @@ function render() {
   renderTv(left, right);
 }
 
+function updateDirector(bounds) {
+  if (!isTvMode) return;
+  const living = aliveUnits();
+  if (!living.length) return;
+  if (state.directorClock > 0) return;
+  const [leftPressure, rightPressure] = centerPressure(bounds);
+  const star = statLeader("damage", (unit) => unit.stats.damage + unit.stats.kos * 34 + unit.stats.specials * 16 + unit.stats.heals * 0.12);
+  const close = Math.abs(aliveUnits(0).length - aliveUnits(1).length) <= 4;
+  const scrum = leftPressure + rightPressure >= 12;
+  const target = star && !star.down ? star : living[Math.floor(Math.random() * living.length)];
+  state.directorTargetId = target.id;
+  if (state.replayClock > 0) {
+    state.directorMode = "replay";
+    state.directorCue = `REPLAY ISO · #${target.number} ${gangs[target.team].short}`;
+    state.directorClock = rand(82, 128);
+    return;
+  }
+  if (scrum) {
+    state.directorMode = "scrum";
+    state.directorCue = `CAM 3 SCRUM · center ${leftPressure}-${rightPressure}`;
+  } else if (close) {
+    state.directorMode = "iso";
+    state.directorCue = `CAM 2 ISO · #${target.number} ${target.name}`;
+  } else {
+    state.directorMode = "wide";
+    const leader = aliveUnits(0).length > aliveUnits(1).length ? gangs[0].short : gangs[1].short;
+    state.directorCue = `CAM 1 WIDE · ${leader} pressure`;
+  }
+  state.directorClock = rand(120, 190);
+}
+
 function renderTv(left, right) {
   if (!isTvMode) return;
+  el.field.classList.remove("camera-wide", "camera-iso", "camera-scrum", "camera-replay");
+  el.field.classList.add(`camera-${state.directorMode}`);
   const league = state.league;
   el.tvClock.textContent = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
@@ -1246,13 +1495,39 @@ function renderTv(left, right) {
     const leader = left === right ? "Drawn field" : left > right ? `${gangs[0].short} win` : `${gangs[1].short} win`;
     el.tvMatchState.textContent = `${leader} · final ${left}-${right}`;
   } else {
-    const fieldName = state.battleType.id === "rift" ? "amplifier rift" : state.battleType.id === "crown" ? crownTvLine() : state.weather === "dust" ? "dust field" : "open field";
-    el.tvMatchState.textContent = `${left + right} Nouns live · ${fieldName}`;
+    el.tvMatchState.textContent = `${left + right} Nouns live · ${battleTvLine()}`;
   }
   el.tvBigPlay.textContent = reviewPulseLine();
   el.tvStarNoun.textContent = reviewMvpLine();
   el.tvComeback.textContent = reviewComebackLine(left, right);
+  el.tvDirectorCue.textContent = state.directorCue;
+  el.tvReplayCue.textContent = state.replayClock > 0 ? state.replayCue : directorFieldLine();
   el.tvPath.textContent = tvPathLine();
+}
+
+function cueReplay(text, unit = null) {
+  if (!isTvMode) return;
+  state.replayCue = text;
+  state.replayClock = 150;
+  if (unit) state.directorTargetId = unit.id;
+  state.directorMode = "replay";
+  state.directorCue = "REPLAY BAY";
+}
+
+function battleTvLine() {
+  if (state.battleType.id === "rift") return "amplifier rift";
+  if (state.battleType.id === "crown") return crownTvLine();
+  if (state.battleType.id === "lava") return "lava audit";
+  if (state.battleType.id === "cloud") return "cloud court";
+  if (state.battleType.id === "trash") return "trash planet";
+  if (state.battleType.id === "fog") return "fog bowl";
+  return state.weather === "dust" ? "dust field" : "open field";
+}
+
+function directorFieldLine() {
+  const target = state.units.find((unit) => unit.id === state.directorTargetId);
+  const targetLine = target ? `tracking #${target.number} ${gangs[target.team].short}` : "tracking field";
+  return `${state.battleType.name} · ${targetLine}`;
 }
 
 function reviewPulseLine() {
@@ -1334,6 +1609,10 @@ function amplifierStatLine() {
 function fieldStatLabel() {
   if (state.battleType.id === "rift") return "Amp field";
   if (state.battleType.id === "crown") return "Crown";
+  if (state.battleType.id === "lava") return "Audit heat";
+  if (state.battleType.id === "cloud") return "Cloud lift";
+  if (state.battleType.id === "trash") return "Scrap tech";
+  if (state.battleType.id === "fog") return "Fog cover";
   return "Hot noun";
 }
 
@@ -1343,6 +1622,10 @@ function fieldStatLine(liveLeader) {
     const holder = crownHolder();
     return holder ? `#${holder.number} ${gangs[holder.team].short} ${holder.name}` : "center crown open";
   }
+  if (state.battleType.id === "lava") return `${aliveUnits().filter((unit) => terrainZones(fieldBounds()).some((zone) => inTerrainZone(unit, zone))).length} in lanes`;
+  if (state.battleType.id === "cloud") return `${aliveUnits().filter((unit) => unit.haste > 0).length} lifted`;
+  if (state.battleType.id === "trash") return `${aliveUnits().filter((unit) => unit.guard > 0).length} guarded`;
+  if (state.battleType.id === "fog") return `${aliveUnits().filter((unit) => unit.guard > 0).length} concealed`;
   return unitStatLine(liveLeader, "live");
 }
 
@@ -1460,6 +1743,7 @@ function recordMove(tag, text) {
   state.moveHistory.unshift({ tag, text });
   state.moveHistory = state.moveHistory.slice(0, 9);
   state.reviewMoment = `${tag}: ${text}`;
+  cueReplay(`${tag}: ${text}`);
   flashField("big-play");
   showToast(`${tag}: ${text}`);
 }

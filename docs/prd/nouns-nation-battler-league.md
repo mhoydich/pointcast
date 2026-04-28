@@ -101,6 +101,14 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Let one Noun hold the crown at a time, gaining haste, guard, special charge, and extra attack pressure.
 - Add crown takeover and crown pressure pulse events to the move feed, TV state, stat strip, and match log.
 
+## V11 Director Fields Additions
+
+- Add Director Mode to the TV cast with camera cue text, replay bay text, and highlighted target Nouns.
+- Rotate camera logic between wide, iso, scrum, and replay views based on score pressure, center pressure, star performers, and recent big plays.
+- Add four additional scheduled battle types: Lava Audit, Cloud Court, Trash Planet, and Fog Bowl.
+- Give each new field a visible terrain skin, weather layer, field zones, stat-strip language, TV state, and periodic field events.
+- Let the new terrains alter match tactics: lava lanes burn and charge specials, cloud platforms grant lift, trash piles produce scrap tech and trips, and fog rewards close-range ambushes while dulling ranged shots.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -122,5 +130,7 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Amplifier Rift matches display a visibly different field with element zones and amplifier move events.
 - Poster series route displays 20 varied type-heavy posters using actual Nouns battler sprites.
 - Crown Rush matches display a visibly different field with a center crown, crowned Noun state, and crown pressure events.
+- TV mode shows Director Mode camera/replay cues and highlights the currently featured Noun.
+- Lava Audit, Cloud Court, Trash Planet, and Fog Bowl can be forced with `?type=lava`, `?type=cloud`, `?type=trash`, and `?type=fog`.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.
