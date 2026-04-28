@@ -9,7 +9,7 @@
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v7";
-  const SETTINGS_RELEASE = "v7-attribute-protocol";
+  const SETTINGS_RELEASE = "v7-noun-story";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
   const renderStyles = {
     storybook: {
@@ -1579,6 +1579,9 @@
   const initialCouncilOffset = savedRelease && Number.isFinite(Number(savedSettings.councilOffset))
     ? Math.abs(Math.floor(Number(savedSettings.councilOffset))) % nounsGandalfs.length
     : 0;
+  const initialStoryShift = savedRelease && Number.isFinite(Number(savedSettings.storyShift))
+    ? Math.abs(Math.floor(Number(savedSettings.storyShift))) % 3
+    : 0;
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -1601,6 +1604,7 @@
     artActive: initialArtPrompt,
     noggleShift: initialNoggleShift,
     councilOffset: initialCouncilOffset,
+    storyShift: initialStoryShift,
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -1652,6 +1656,9 @@
     v7NounFeatureGrid: document.getElementById("v7NounFeatureGrid"),
     v7CouncilTitle: document.getElementById("v7CouncilTitle"),
     v7CouncilGrid: document.getElementById("v7CouncilGrid"),
+    v7StoryTitle: document.getElementById("v7StoryTitle"),
+    v7StoryText: document.getElementById("v7StoryText"),
+    v7StoryMeta: document.getElementById("v7StoryMeta"),
     v7CollectionGrid: document.getElementById("v7CollectionGrid"),
     v7ForgeHint: document.getElementById("v7ForgeHint"),
     v7RelicName: document.getElementById("v7RelicName"),
@@ -1659,6 +1666,7 @@
     v7SpellLine: document.getElementById("v7SpellLine"),
     v7NogglesName: document.getElementById("v7NogglesName"),
     v7CouncilHint: document.getElementById("v7CouncilHint"),
+    v7StoryHint: document.getElementById("v7StoryHint"),
     v7SigilLine: document.getElementById("v7SigilLine"),
     v7CueLine: document.getElementById("v7CueLine"),
     v7ImageTitle: document.getElementById("v7ImageTitle"),
@@ -1720,6 +1728,7 @@
     v7SpellButton: document.getElementById("v7SpellButton"),
     v7NogglesButton: document.getElementById("v7NogglesButton"),
     v7CouncilButton: document.getElementById("v7CouncilButton"),
+    v7StoryButton: document.getElementById("v7StoryButton"),
     v7SigilButton: document.getElementById("v7SigilButton"),
     v7BeginButton: document.getElementById("v7BeginButton"),
     v7KeepButton: document.getElementById("v7KeepButton"),
@@ -1882,6 +1891,7 @@
         artActive: state.artActive,
         noggleShift: state.noggleShift,
         councilOffset: state.councilOffset,
+        storyShift: state.storyShift,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -2298,14 +2308,62 @@
     });
   }
 
+  function activeNounCouncilCards() {
+    const activeIndex = Math.max(0, nounsGandalfs.findIndex((card) => card.id === state.nounsActive));
+    const offset = state.councilOffset % nounsGandalfs.length;
+    return [0, 1, 2].map((step) => nounsGandalfs[(activeIndex + offset + step) % nounsGandalfs.length]);
+  }
+
+  function composeGandalfNounStory(protocol = wizardNounProtocolForCard()) {
+    const card = protocol.card;
+    const council = activeNounCouncilCards();
+    const companions = council.filter((item) => item.id !== card.id);
+    const second = companions[0] || council[1] || card;
+    const third = companions[1] || council[2] || card;
+    const staff = wizardElement(protocol.elements, "staff");
+    const realm = wizardElement(protocol.elements, "realm");
+    const storyNumber = (state.storyShift % 3) + 1;
+    const stories = [
+      {
+        title: `${protocol.traits.actual.name} and the ${card.noun} Council`,
+        body: `${card.name} found ${protocol.traits.actual.name} sitting in ${realm.name}, wearing the quiet shape of ${protocol.mix.aura.name}. Gandalf did not hurry it. He set ${protocol.relic.name} on the table, let ${second.noun} and ${third.noun} take their seats, and asked only one thing: what is small enough to begin? ${protocol.mix.lesson.name} answered through ${staff.name}: ${card.mantra}`,
+        meta: `${protocol.version} · ${protocol.sigil} · page ${storyNumber}`
+      },
+      {
+        title: `The Road Waited For ${protocol.mix.charm.name}`,
+        body: `The road had opinions, but ${card.noun} did not answer them. ${protocol.traits.actual.name} carried ${protocol.mix.charm.name}; ${second.noun} brought ${protocol.mix.offering.name}; ${third.noun} kept watch under ${protocol.mix.atmosphere.name}. Gandalf smiled at the whole little council and sharpened ${protocol.resource.name} until the room became simple. The spell was not loud. It was this: ${protocol.resource.promise}.`,
+        meta: `${protocol.mix.offering.name} · ${protocol.resource.name} · page ${storyNumber}`
+      },
+      {
+        title: `A Page From ${realm.name}`,
+        body: `By evening, ${realm.name} had become a book with no cover. On the first page stood ${protocol.traits.actual.name}; on the second, ${card.name}; on the third, ${second.noun} and ${third.noun} passing ${protocol.relic.name} between them like a tiny moon. Gandalf tapped ${staff.name} once. Nothing exploded. That was the lesson. ${protocol.mix.lesson.name}: ${protocol.mix.lesson.clue}.`,
+        meta: `${protocol.mix.atmosphere.name} · ${protocol.mix.lesson.name} · page ${storyNumber}`
+      }
+    ];
+
+    return stories[state.storyShift % stories.length];
+  }
+
+  function updateNounStory(protocol = wizardNounProtocolForCard()) {
+    if (!dom.v7StoryTitle) {
+      return;
+    }
+
+    const story = composeGandalfNounStory(protocol);
+    dom.v7StoryTitle.textContent = story.title;
+    dom.v7StoryText.textContent = story.body;
+    dom.v7StoryMeta.textContent = story.meta;
+    if (dom.v7StoryHint) {
+      dom.v7StoryHint.textContent = story.title.replace(/^The /, "").slice(0, 34);
+    }
+  }
+
   function renderNounCouncil(target) {
     if (!target) {
       return;
     }
 
-    const activeIndex = Math.max(0, nounsGandalfs.findIndex((card) => card.id === state.nounsActive));
-    const offset = state.councilOffset % nounsGandalfs.length;
-    const cards = [0, 1, 2].map((step) => nounsGandalfs[(activeIndex + offset + step) % nounsGandalfs.length]);
+    const cards = activeNounCouncilCards();
 
     target.replaceChildren();
     cards.forEach((card, index) => {
@@ -2387,6 +2445,7 @@
     renderNounFeatureGrid(dom.v7NounFeatureGrid, protocol);
     renderNounCouncil(dom.v7CouncilGrid);
     renderWizardCollectionGrid(dom.v7CollectionGrid);
+    updateNounStory(protocol);
     dom.v7Progress.textContent = `${keptLabel} · ${score} presence`;
     dom.v7RitualLine.textContent = `${ritual.title} · ${ritual.short}`;
     dom.v7WizardTitle.textContent = `${card.name}: ${wizardElementPhrase(elements)}`;
@@ -4184,6 +4243,19 @@
     spawnParticles(12);
   }
 
+  function v7TellNounStory() {
+    ensureV7Version();
+
+    state.storyShift = (state.storyShift + 1) % 3;
+    const protocol = wizardNounProtocolForCard();
+    const story = composeGandalfNounStory(protocol);
+    saveSettings();
+    dom.wizardLine.textContent = story.title;
+    setGuide("Noun story", `${activeNounsGandalf().name} · ${protocol.sigil}`, story.body);
+    updateV7Panel();
+    spawnParticles(10);
+  }
+
   function composeNounWizardSpell() {
     const card = activeNounsGandalf();
     const protocol = wizardNounProtocolForCard(card, state.ritual);
@@ -4396,6 +4468,7 @@
   dom.v7SpellButton.addEventListener("click", v7BuildSpell);
   dom.v7NogglesButton.addEventListener("click", v7RollNoggles);
   dom.v7CouncilButton.addEventListener("click", v7SummonCouncil);
+  dom.v7StoryButton.addEventListener("click", v7TellNounStory);
   dom.v7SigilButton.addEventListener("click", v7CastNounSpell);
   dom.v7BeginButton.addEventListener("click", () => v7BeginSit());
   dom.v7KeepButton.addEventListener("click", v7KeepSet);
