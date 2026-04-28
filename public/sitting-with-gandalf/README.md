@@ -1,12 +1,20 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, actual Noun-backed Wizard Nouns collectibles, a deterministic WN-7.1 creation protocol, an optional "Myth" listen-along, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
+A self-contained fantasy smoking and meditation companion for a quiet pause: timer, two V8 generated wizard scenes, cozy visual moods, ambient fire/rain/road/starlight audio, actual Noun-backed Wizard Nouns collectibles in earlier versions, a deterministic WN-7.1 creation protocol, an optional "Myth" listen-along, lantern view, phase guidance, and a small local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
 ## Versions
 
-The app defaults to V7, with a V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The selected version is saved locally after the V7 release is seen once.
+The app defaults to V8, with a V8/V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The selected version is saved locally after the V8 release is seen once.
+
+### V8
+
+- Rebuilds the default from first principles as a 10x simpler Gandalf sit.
+- Adds two generated scenes: Hearth for fire/table/pipe warmth and Forest for water/moss/sun calm.
+- Adds three feeling buttons: Cozy, Clear, and Dream. Each changes the color accent, ambience mode, haze, volume, guide copy, and moment flavor.
+- Hides the log and older control stack while V8 is active, leaving the timer, Begin, Audio, Breathe, scene, and feeling choices.
+- Keeps V1-V7 available from the version switch, including the V7 Wizard Nouns forge.
 
 ### V1
 
@@ -76,7 +84,7 @@ The app defaults to V7, with a V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The 
 
 ## V7 Notes
 
-- Makes Wizard Nouns the default release while keeping V1-V6 available from the version switch.
+- Adds Wizard Nouns while keeping V1-V6 available from the version switch.
 - Adds a Wizard Nouns framework with deterministic element slots for Hat, Beard, Staff, Robe, Relic, and Realm.
 - Adds visible trait chips, a six-slot element panel, and a compact 30-card collection grid inside the V7 flow.
 - Replaces the hand-drawn Noun-like heads with actual CC0 Noun SVG art from noun.pics, with repo-local Noun fallbacks.
@@ -95,6 +103,8 @@ The companion portrait sheet was generated with the built-in image generation to
 The V3 nature visual sheet was generated with the built-in image generation tool and copied into `assets/nature-visuals-v3.jpg`.
 
 The V4 pixel visual sheet was generated with the built-in image generation tool and copied into `assets/nature-visuals-pixel-v4.png`.
+
+The V8 Hearth and Forest scenes were generated with the built-in image generation tool and copied into `assets/wizard-v8-hearth.png` and `assets/wizard-v8-forest.png`.
 
 Backdrop prompt:
 

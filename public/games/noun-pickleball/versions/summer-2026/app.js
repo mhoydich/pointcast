@@ -17,7 +17,7 @@ const shots = {
 
 const USER_TEAM = 0;
 const CPU_TEAM = 1;
-const CPU_DELAY = 520;
+const CPU_DELAY = 720;
 const difficultySettings = {
   easy: { label: "Easy", control: -0.08, finish: -0.08, risk: 0.9 },
   normal: { label: "Normal", control: 0, finish: 0, risk: 1 },
@@ -28,22 +28,8 @@ const watchSpeeds = {
   normal: 1,
   fast: 0.42,
 };
-const viewModes = {
-  broadcast: { label: "Broadcast", depthBase: 0.92, depthGain: 0.0026 },
-  corner: { label: "Corner", depthBase: 0.82, depthGain: 0.006 },
-  coach: { label: "Coach", depthBase: 0.98, depthGain: 0.0008 },
-};
 const seasonStart = "2026-06-01";
 const seasonWeeks = 12;
-const PLAYOFF_WEEK = seasonWeeks - 1;
-const versionManifest = [
-  { slug: "classic", label: "Classic", commit: "00d71c3", date: "V1", description: "Original turn-based doubles.", path: "versions/classic/index.html" },
-  { slug: "league", label: "League", commit: "2279f9e", date: "V2", description: "First computer league.", path: "versions/league/index.html" },
-  { slug: "stadium", label: "Stadium", commit: "f3c7b28", date: "V3", description: "New court and arena.", path: "versions/stadium/index.html" },
-  { slug: "broadcast", label: "Broadcast", commit: "b50e1cc", date: "V4", description: "Shot callouts and pressure.", path: "versions/broadcast/index.html" },
-  { slug: "summer-2026", label: "Summer 2026", commit: "a219637", date: "V5", description: "Season hub and standings.", path: "versions/summer-2026/index.html" },
-  { slug: "next", label: "Next", commit: "local", date: "Now", description: "Best-feel release.", path: "" },
-];
 const achievementList = [
   { id: "first-watch", label: "First Broadcast" },
   { id: "first-mint", label: "Card Printer" },
@@ -74,9 +60,6 @@ const state = {
   busy: false,
   mode: "computer",
   difficulty: "normal",
-  selectedVersion: "next",
-  viewMode: localStorage.getItem("noun-pickleball-view") || "broadcast",
-  seasonPhase: "regular",
   momentum: 0,
   watchSpeed: "normal",
   spotlightTeam: "Gold Nouns",
@@ -85,9 +68,6 @@ const state = {
   cpuTimer: null,
   leagueWatching: false,
   seasonWatching: false,
-  watchAbort: false,
-  skipPoint: false,
-  playoffBracket: null,
   rallyHistory: [],
   advantage: 0,
   league: null,
@@ -116,18 +96,8 @@ const el = {
   turnCopy: document.querySelector("#turnCopy"),
   rallyStrip: document.querySelector("#rallyStrip"),
   controls: document.querySelector("#controls"),
-  viewSwitch: document.querySelector("#viewSwitch"),
   modeSwitch: document.querySelector("#modeSwitch"),
   difficultySwitch: document.querySelector("#difficultySwitch"),
-  versionTitle: document.querySelector("#versionTitle"),
-  versionCopy: document.querySelector("#versionCopy"),
-  versionTabs: document.querySelector("#versionTabs"),
-  vaultStage: document.querySelector("#vaultStage"),
-  vaultTitle: document.querySelector("#vaultTitle"),
-  versionFrame: document.querySelector("#versionFrame"),
-  returnNextButton: document.querySelector("#returnNextButton"),
-  shotPlanner: document.querySelector("#shotPlanner"),
-  seasonProgress: document.querySelector("#seasonProgress"),
   seasonMeta: document.querySelector("#seasonMeta"),
   seasonOverview: document.querySelector("#seasonOverview"),
   seasonTimeline: document.querySelector("#seasonTimeline"),
@@ -138,14 +108,10 @@ const el = {
   teamSpotlightSelect: document.querySelector("#teamSpotlightSelect"),
   teamSpotlight: document.querySelector("#teamSpotlight"),
   tomorrowCard: document.querySelector("#tomorrowCard"),
-  storyCard: document.querySelector("#storyCard"),
-  playoffCard: document.querySelector("#playoffCard"),
   trophyCase: document.querySelector("#trophyCase"),
   watchSpeed: document.querySelector("#watchSpeed"),
   watchLeagueButton: document.querySelector("#watchLeagueButton"),
   watchSeasonButton: document.querySelector("#watchSeasonButton"),
-  stopWatchButton: document.querySelector("#stopWatchButton"),
-  nextPointButton: document.querySelector("#nextPointButton"),
   mintCardButton: document.querySelector("#mintCardButton"),
   previewTomorrowButton: document.querySelector("#previewTomorrowButton"),
   log: document.querySelector("#log"),
@@ -159,8 +125,6 @@ function resetGame() {
   clearCpuTimer();
   state.leagueWatching = false;
   state.seasonWatching = false;
-  if (!state.seasonWatching) state.watchAbort = false;
-  state.skipPoint = false;
   teamNames = exhibitionTeamNames.slice();
   state.score = [0, 0];
   state.servingTeam = 0;
@@ -181,8 +145,6 @@ function resetGame() {
 }
 
 function render() {
-  renderVersionVault();
-  renderViewMode();
   updatePlayerPositions();
   updateCourtPhase();
   el.teamAName.textContent = teamNames[0];
@@ -195,10 +157,6 @@ function render() {
     node.innerHTML = `<img src="${players[index].avatar}" alt="${players[index].name}" />`;
     node.style.setProperty("--x", players[index].x);
     node.style.setProperty("--y", players[index].y);
-    const y = Number(players[index].y.replace("%", ""));
-    const view = viewModes[state.viewMode] || viewModes.broadcast;
-    node.style.setProperty("--depth-scale", (view.depthBase + y * view.depthGain).toFixed(3));
-    node.style.zIndex = String(10 + Math.round(y));
     node.classList.toggle("active", index === state.activePlayer && !state.gameOver);
   });
 
@@ -216,7 +174,6 @@ function render() {
     : copyForTurn();
   renderRallyStrip();
   renderRallyMap();
-  renderShotPlanner();
   updatePressureMeter();
 
   const bestShot = recommendedShot();
@@ -242,38 +199,6 @@ function render() {
   });
 
   renderLeague();
-}
-
-function renderViewMode() {
-  if (!viewModes[state.viewMode]) state.viewMode = "broadcast";
-  document.body.dataset.view = state.viewMode;
-  [...el.viewSwitch.querySelectorAll("button[data-view]")].forEach((button) => {
-    const active = button.dataset.view === state.viewMode;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
-}
-
-function renderVersionVault() {
-  const selected = versionManifest.find((version) => version.slug === state.selectedVersion) || versionManifest[versionManifest.length - 1];
-  el.versionTitle.textContent = selected.label;
-  el.versionCopy.textContent = `${selected.description} ${selected.commit === "local" ? "Current release." : `Commit ${selected.commit}.`}`;
-  el.versionTabs.innerHTML = versionManifest.map((version) => `
-    <button class="${version.slug === state.selectedVersion ? "active" : ""}" data-version="${version.slug}">
-      <span>${version.label}</span>
-      <small>${version.date}</small>
-    </button>
-  `).join("");
-  const archived = selected.slug !== "next";
-  document.body.classList.toggle("vault-open", archived);
-  el.vaultStage.classList.toggle("show", archived);
-  el.vaultTitle.textContent = `${selected.label} - ${selected.description}`;
-  if (archived && el.versionFrame.getAttribute("src") !== selected.path) {
-    el.versionFrame.setAttribute("src", selected.path);
-  }
-  if (!archived) {
-    el.versionFrame.removeAttribute("src");
-  }
 }
 
 function updateCourtPhase() {
@@ -421,35 +346,6 @@ function renderRallyStrip() {
   ].join("");
 }
 
-function renderShotPlanner() {
-  if (state.gameOver) {
-    el.shotPlanner.innerHTML = "<strong>Match point logged.</strong><span>Start a new match or jump into the league feed.</span>";
-    return;
-  }
-  const best = recommendedShot();
-  const landing = previewLanding(best);
-  const reply = shots[best].counter;
-  el.shotPlanner.innerHTML = `
-    <strong>${shots[best].label} plan</strong>
-    <span>${shotPhasePurpose(best)}</span>
-    <span>${Math.round(getMakeChance(best) * 100)}% in / ${Math.round(getWinnerChance(best) * 100)}% winner</span>
-    <span>Reply watch: ${shots[reply].label}</span>
-    <span>Target: ${Math.round(landing.x)}-${Math.round(landing.y)}</span>
-  `;
-}
-
-function shotPhasePurpose(shotName) {
-  if (!state.lastShot) return shotName === "drive" ? "Deep cross-court serve to pin the returner." : "Serve choice needs depth first.";
-  if (state.rallyCount === 1) return "Return deep, then sprint to kitchen control.";
-  if (state.rallyCount === 2 && shotName === "drop") return "Third-shot drop: reset and earn the non-volley line.";
-  if (state.rallyCount === 2) return "Third-shot pressure: attack if the return floats.";
-  if (state.lastShot === "lob" && shotName === "smash") return "Lob punished: step back, load, and put it away.";
-  if ((state.lastShot === "dink" || state.lastShot === "drop") && shotName === "dink") return "Kitchen patience: move them until a pop-up appears.";
-  if (shotName === "lob") return "Push both opponents off the kitchen line.";
-  if (shotName === "smash") return "Speed-up chance: high reward with miss risk.";
-  return "Middle pressure with partner coverage.";
-}
-
 function renderRallyMap() {
   el.rallyMap.innerHTML = state.rallyHistory.slice(-10).map((hit) => `
     <span class="${hit.team === 0 ? "team-a" : "team-b"}" title="${hit.label}">${hit.icon}</span>
@@ -524,7 +420,6 @@ async function playShot(shotName, options = {}) {
   addLog(`${actor.name} hits a ${shot.label.toLowerCase()}.`);
   flashReady(actorIndex);
   flashReady(nextPlayer);
-  flashCoverage(partnerOf(nextPlayer));
   await wait(90);
   flashPlayer(actorIndex, shotName);
 
@@ -765,25 +660,8 @@ function buildLeague() {
     weeks,
     standings,
     todayMatches: weeks[dayIndex]?.matches || [],
-    playoffBracket: buildPlayoffBracket(standings),
     champion: standings[0],
   };
-}
-
-function buildPlayoffBracket(standings) {
-  const seeds = standings.slice(0, 4);
-  if (seeds.length < 4) return null;
-  const semiA = simulatePlayoffMatch(PLAYOFF_WEEK + 1, 0, seeds[0], seeds[3]);
-  const semiB = simulatePlayoffMatch(PLAYOFF_WEEK + 1, 1, seeds[1], seeds[2]);
-  const finalistA = semiA.homeScore > semiA.awayScore ? seeds[0] : seeds[3];
-  const finalistB = semiB.homeScore > semiB.awayScore ? seeds[1] : seeds[2];
-  const final = simulatePlayoffMatch(PLAYOFF_WEEK + 2, 0, finalistA, finalistB);
-  return { seeds, semiA, semiB, final, champion: final.homeScore > final.awayScore ? finalistA : finalistB };
-}
-
-function simulatePlayoffMatch(day, slot, home, away) {
-  const result = simulateLeagueMatch(day, slot, home, away);
-  return { ...result, homeName: home.name, awayName: away.name, home, away, id: `playoff-${day}-${slot}` };
 }
 
 function dailyPairings(day) {
@@ -847,9 +725,7 @@ function renderLeague() {
   const nextWeek = Math.min(state.league.dayIndex + 1, seasonWeeks - 1);
   const tomorrowMatches = state.league.weeks[nextWeek]?.matches || [];
   const spotlight = state.league.standings.find((team) => team.name === state.spotlightTeam) || state.league.standings[0];
-  state.playoffBracket = state.league.playoffBracket;
   el.seasonMeta.textContent = `June 1 to August 23, 2026 - Week ${state.league.dayIndex + 1} of ${seasonWeeks}`;
-  el.seasonProgress.textContent = watchProgressLabel();
   el.seasonWeekLabel.textContent = `Week ${state.league.dayIndex + 1} Slate - ${state.league.dayKey}`;
   el.seasonOverview.innerHTML = leagueTeams.map((team) => `
     <div class="team-overview-card">
@@ -912,59 +788,15 @@ function renderLeague() {
   el.trophyCase.innerHTML = achievementList.map((achievement) => `
     <span class="${hasAchievement(achievement.id) ? "unlocked" : ""}">${achievement.label}</span>
   `).join("");
-  renderStoryCard();
-  renderPlayoffs();
   el.mintCardButton.disabled = !feature || alreadyMinted;
   el.watchLeagueButton.disabled = state.busy || state.leagueWatching || state.seasonWatching || !feature;
   el.watchSeasonButton.disabled = state.busy || state.leagueWatching || state.seasonWatching || !feature;
-  el.stopWatchButton.disabled = !state.leagueWatching && !state.seasonWatching;
-  el.nextPointButton.disabled = !state.leagueWatching;
   el.previewTomorrowButton.classList.toggle("active", state.tomorrowVisible);
-}
-
-function watchProgressLabel() {
-  if (state.seasonWatching) return `Broadcasting season - week ${state.seasonWeek + 1} of ${seasonWeeks}`;
-  if (state.leagueWatching) return `Watching week ${state.seasonWeek + 1} - point ${state.score[0] + state.score[1] + 1}`;
-  if (state.seasonPhase === "playoffs") return "Playoff bracket is live.";
-  return `Regular season active - ${seasonWeeks - state.seasonWeek - 1} week${seasonWeeks - state.seasonWeek - 1 === 1 ? "" : "s"} before finals.`;
-}
-
-function renderStoryCard() {
-  const week = state.league.weeks[state.seasonWeek];
-  const matches = week?.matches || [];
-  const upset = matches.find(isUpset);
-  const hot = state.league.standings[0];
-  const cold = state.league.standings[state.league.standings.length - 1];
-  const best = matches.slice().sort((a, b) => Math.abs(a.homeScore - a.awayScore) - Math.abs(b.homeScore - b.awayScore))[0];
-  el.storyCard.innerHTML = `
-    <div><strong>Hot team</strong><span>${hot.name} (${hot.wins}-${hot.losses})</span></div>
-    <div><strong>Pressure match</strong><span>${best ? `${best.homeName} ${best.homeScore}-${best.awayScore} ${best.awayName}` : "Opening draw"}</span></div>
-    <div><strong>Upset watch</strong><span>${upset ? `${upset.winner} shook the bracket` : `${cold.name} need a reset`}</span></div>
-  `;
-}
-
-function renderPlayoffs() {
-  const bracket = state.playoffBracket;
-  if (!bracket) {
-    el.playoffCard.innerHTML = "<p>Playoffs unlock after the regular season table forms.</p>";
-    return;
-  }
-  el.playoffCard.innerHTML = `
-    <div class="playoff-seeds">${bracket.seeds.map((team, index) => `<span>${index + 1}. ${team.name}</span>`).join("")}</div>
-    <div class="playoff-row"><span>${bracket.semiA.homeName}</span><strong>${bracket.semiA.homeScore}-${bracket.semiA.awayScore}</strong><span>${bracket.semiA.awayName}</span></div>
-    <div class="playoff-row"><span>${bracket.semiB.homeName}</span><strong>${bracket.semiB.homeScore}-${bracket.semiB.awayScore}</strong><span>${bracket.semiB.awayName}</span></div>
-    <button class="league-match featured" id="watchFinalButton" type="button">
-      <span>${bracket.final.homeName}</span><strong>${bracket.final.homeScore}-${bracket.final.awayScore}</strong><span>${bracket.final.awayName}</span>
-    </button>
-    <p>Champion path: ${bracket.champion.name}</p>
-  `;
 }
 
 async function watchLeagueMatch(matchIndex = 0) {
   if (state.busy || state.leagueWatching || !state.league?.todayMatches[matchIndex]) return;
   clearCpuTimer();
-  state.watchAbort = false;
-  state.skipPoint = false;
   const match = state.league.todayMatches[matchIndex];
   state.leagueWatching = true;
   unlockAchievement("first-watch");
@@ -986,7 +818,6 @@ async function watchLeagueMatch(matchIndex = 0) {
   const awayPoints = match.awayScore;
   const points = buildReplayPoints(homePoints, awayPoints, match);
   for (const point of points) {
-    if (state.watchAbort) break;
     state.rallyTeam = point.team;
     state.activePlayer = pickTeammate(point.team);
     render();
@@ -1003,7 +834,7 @@ async function watchLeagueMatch(matchIndex = 0) {
       flashScore(point.team);
       showToast("Point!");
       addLog(`${teamNames[point.team]} win a ${shotName}.`);
-      await smartWatchWait(260 * watchSpeeds[state.watchSpeed]);
+      await wait(260 * watchSpeeds[state.watchSpeed]);
       state.rallyCount = 0;
       state.lastShot = null;
       state.advantage = 0;
@@ -1013,9 +844,6 @@ async function watchLeagueMatch(matchIndex = 0) {
     }
   }
 
-  if (state.watchAbort) {
-    addLog("Broadcast stopped.");
-  }
   state.score = [match.homeScore, match.awayScore];
   state.leagueWatching = false;
   state.busy = false;
@@ -1030,95 +858,23 @@ async function watchLeagueMatch(matchIndex = 0) {
 async function watchSeason() {
   if (state.busy || state.leagueWatching || state.seasonWatching) return;
   state.seasonWatching = true;
-  state.watchAbort = false;
   clearCpuTimer();
   addLog("Summer 2026 season broadcast begins.");
   for (let week = state.seasonWeek; week < seasonWeeks; week += 1) {
-    if (state.watchAbort) break;
     state.seasonWeek = week;
     state.league = buildLeague();
     renderLeague();
     showToast(`Week ${week + 1}`);
-    await smartWatchWait(420 * watchSpeeds[state.watchSpeed]);
-    if (state.watchAbort) break;
+    await wait(420 * watchSpeeds[state.watchSpeed]);
     await watchLeagueMatch(0);
-    await smartWatchWait(360 * watchSpeeds[state.watchSpeed]);
+    await wait(360 * watchSpeeds[state.watchSpeed]);
   }
   state.seasonWatching = false;
-  if (!state.watchAbort) state.seasonWeek = seasonWeeks - 1;
+  state.seasonWeek = seasonWeeks - 1;
   state.league = buildLeague();
-  addLog(state.watchAbort ? "Season broadcast stopped." : `Summer champion: ${state.league.playoffBracket.champion.name}.`);
-  showToast(state.watchAbort ? "Stopped" : "Champions!");
+  addLog(`Summer champion: ${state.league.champion.name}.`);
+  showToast("Champions!");
   render();
-}
-
-async function watchPlayoffFinal() {
-  if (state.busy || state.leagueWatching || state.seasonWatching || !state.playoffBracket?.final) return;
-  clearCpuTimer();
-  const match = state.playoffBracket.final;
-  state.watchAbort = false;
-  state.leagueWatching = true;
-  state.busy = true;
-  state.gameOver = false;
-  state.rallyCount = 0;
-  state.lastShot = null;
-  state.rallyHistory = [];
-  state.advantage = 0;
-  state.seasonPhase = "playoffs";
-  teamNames = [match.homeName, match.awayName];
-  state.score = [0, 0];
-  state.rallyTeam = 0;
-  state.activePlayer = 0;
-  el.log.innerHTML = "";
-  addLog(`Final broadcast: ${match.homeName} vs ${match.awayName}.`);
-  render();
-  const points = buildReplayPoints(match.homeScore, match.awayScore, match);
-  for (const point of points) {
-    if (state.watchAbort) break;
-    state.rallyTeam = point.team;
-    state.activePlayer = pickTeammate(point.team);
-    render();
-    const shotName = point.shot;
-    state.rallyCount += 1;
-    recordRallyHit(point.team, shotName);
-    updateAdvantage(point.team, shotName);
-    flashPlayer(state.activePlayer, shotName);
-    await animateShot(state.activePlayer, pickTeammate(1 - point.team), shotName, point.final ? "winner" : "rally", watchSpeeds[state.watchSpeed]);
-    if (point.final) {
-      state.score[point.team] += 1;
-      flashScore(point.team);
-      showToast("Final Point!");
-      await smartWatchWait(220 * watchSpeeds[state.watchSpeed]);
-      state.rallyCount = 0;
-      state.lastShot = null;
-      state.rallyHistory = [];
-      state.advantage = 0;
-    } else {
-      state.lastShot = shotName;
-    }
-  }
-  state.score = [match.homeScore, match.awayScore];
-  state.leagueWatching = false;
-  state.busy = false;
-  state.gameOver = true;
-  state.rallyTeam = match.homeScore > match.awayScore ? 0 : 1;
-  state.activePlayer = firstPlayerForTeam(state.rallyTeam);
-  addLog(`${teamNames[state.rallyTeam]} win the Summer 2026 title.`);
-  showToast("Title!");
-  render();
-}
-
-async function smartWatchWait(ms) {
-  if (state.watchAbort) {
-    await wait(20);
-    return;
-  }
-  if (state.skipPoint) {
-    state.skipPoint = false;
-    await wait(30);
-    return;
-  }
-  await wait(ms);
 }
 
 function buildReplayPoints(homeScore, awayScore, match) {
@@ -1331,14 +1087,6 @@ function flashRecover(index) {
   void node.offsetWidth;
   node.classList.add("recover");
   window.setTimeout(() => node.classList.remove("recover"), 360);
-}
-
-function flashCoverage(index) {
-  const node = el.playerEls[index];
-  node.classList.remove("cover");
-  void node.offsetWidth;
-  node.classList.add("cover");
-  window.setTimeout(() => node.classList.remove("cover"), 420);
 }
 
 function flashScore(team) {
@@ -1700,27 +1448,9 @@ el.controls.addEventListener("focusout", () => {
   hideTargetPreview();
 });
 
-el.viewSwitch.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-view]");
-  if (!button || button.dataset.view === state.viewMode) return;
-  state.viewMode = button.dataset.view;
-  localStorage.setItem("noun-pickleball-view", state.viewMode);
-  showToast(viewModes[state.viewMode].label);
-  render();
-});
 el.newGameButton.addEventListener("click", resetGame);
 el.watchLeagueButton.addEventListener("click", () => watchLeagueMatch(0));
 el.watchSeasonButton.addEventListener("click", watchSeason);
-el.stopWatchButton.addEventListener("click", () => {
-  state.watchAbort = true;
-  state.seasonWatching = false;
-  state.skipPoint = true;
-  showToast("Stop");
-});
-el.nextPointButton.addEventListener("click", () => {
-  state.skipPoint = true;
-  showToast("Next");
-});
 el.mintCardButton.addEventListener("click", mintTodayCard);
 el.previewTomorrowButton.addEventListener("click", () => {
   state.tomorrowVisible = !state.tomorrowVisible;
@@ -1749,19 +1479,6 @@ el.watchSpeed.addEventListener("click", (event) => {
 el.leagueToday.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-match]");
   if (button) watchLeagueMatch(Number(button.dataset.match));
-});
-el.playoffCard.addEventListener("click", (event) => {
-  if (event.target.closest("#watchFinalButton")) watchPlayoffFinal();
-});
-el.versionTabs.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-version]");
-  if (!button) return;
-  state.selectedVersion = button.dataset.version;
-  renderVersionVault();
-});
-el.returnNextButton.addEventListener("click", () => {
-  state.selectedVersion = "next";
-  renderVersionVault();
 });
 el.modeSwitch.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-mode]");

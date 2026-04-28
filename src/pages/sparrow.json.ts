@@ -56,6 +56,8 @@ export const GET: APIRoute = async () => {
       friends: '/sparrow/friends',
       friends_activity: '/sparrow/friends/activity',
       signals: '/sparrow/signals',
+      tv: '/sparrow/tv',
+      tv_channel: '/sparrow/tv/ch/<slug>',
       federation_json: '/sparrow/federation.json',
       digest_subscribe_api: '/api/sparrow/digest-subscribe',
       manifest: '/sparrow.json',

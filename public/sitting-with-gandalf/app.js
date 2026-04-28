@@ -8,9 +8,9 @@
   const RESOURCE_LEVELS_KEY = "sitting-with-gandalf-resource-levels";
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
-  const RELEASE_VERSION = "v7";
-  const SETTINGS_RELEASE = "v7-noun-story";
-  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
+  const RELEASE_VERSION = "v8";
+  const SETTINGS_RELEASE = "v8-simple-room";
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -1352,6 +1352,83 @@
     stars: { low: 92.5, high: 138.59, drone: 0.1 }
   };
 
+  const v8Scenes = {
+    hearth: {
+      id: "hearth",
+      name: "Hearth",
+      title: "Sit by the fire.",
+      text: "Warm table, soft pipe smoke, one old friend across the hour.",
+      mode: "fire",
+      idle: "Let the fire take first watch. You can simply sit.",
+      phases: {
+        Settle: "Let the chair take your weight before the next thought arrives.",
+        Drift: "Stay near the warmest thing in the room.",
+        Return: "Carry one ember of the hour, no more."
+      },
+      lines: [
+        "The fire is doing enough for both of you.",
+        "A warm cup can make a small kingdom of the table.",
+        "Let the old wizard keep the door while you breathe.",
+        "Smoke rises best when nobody argues with it."
+      ]
+    },
+    forest: {
+      id: "forest",
+      name: "Forest",
+      title: "Sit by the water.",
+      text: "Moss, sunrise, moving water, and a quiet staff in the grass.",
+      mode: "rain",
+      idle: "Let the stream keep moving. Your part can be still.",
+      phases: {
+        Settle: "Find one green edge and rest your eyes there.",
+        Drift: "Let the water carry the next sentence away.",
+        Return: "Bring back one clear drop of attention."
+      },
+      lines: [
+        "Water knows how to move without hurry.",
+        "The forest has room for a thought to become smaller.",
+        "Sun on moss is a fine answer to almost anything.",
+        "Let the path wait. This stone is good enough."
+      ]
+    }
+  };
+
+  const v8Feels = {
+    cozy: {
+      id: "cozy",
+      name: "Cozy",
+      title: "warm and close",
+      mode: "fire",
+      warmth: 0.72,
+      smoke: 0.55,
+      blendOptions: ["Warm chair", "Tea steam", "Pipe curl", "Firelight"],
+      line: "Be here because it feels good to be here.",
+      guide: "Warm audio, slow breath, no lesson."
+    },
+    clear: {
+      id: "clear",
+      name: "Clear",
+      title: "bright and steady",
+      mode: "rain",
+      warmth: 0.56,
+      smoke: 0.34,
+      blendOptions: ["Moss air", "Water hush", "Window light", "Clean table"],
+      line: "Let one clean breath make the room simple.",
+      guide: "Lower haze, clearer tones, softer eyes."
+    },
+    dream: {
+      id: "dream",
+      name: "Dream",
+      title: "soft and wide",
+      mode: "stars",
+      warmth: 0.5,
+      smoke: 0.62,
+      blendOptions: ["Lantern dusk", "Old stars", "Deep chair", "Moon smoke"],
+      line: "Let the edges blur until the hour feels kind.",
+      guide: "Low bells, wide room, slow return."
+    }
+  };
+
   const natureViews = {
     glade: {
       name: "Moss glade",
@@ -1555,7 +1632,15 @@
 
   const savedSettings = loadSettings();
   const savedRelease = savedSettings.release === SETTINGS_RELEASE;
-  const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
+  const requestedVersion = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const explicitVersion = params.get("version") || params.get("v");
+    if (versions.has(explicitVersion)) {
+      return explicitVersion;
+    }
+    return params.has("v8") ? RELEASE_VERSION : "";
+  })();
+  const initialVersion = requestedVersion || RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
     : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7"
@@ -1582,6 +1667,12 @@
   const initialStoryShift = savedRelease && Number.isFinite(Number(savedSettings.storyShift))
     ? Math.abs(Math.floor(Number(savedSettings.storyShift))) % 3
     : 0;
+  const initialV8Scene = savedRelease && v8Scenes[savedSettings.v8Scene]
+    ? savedSettings.v8Scene
+    : "hearth";
+  const initialV8Feel = savedRelease && v8Feels[savedSettings.v8Feel]
+    ? savedSettings.v8Feel
+    : "cozy";
   const state = {
     duration: DEFAULT_MINUTES * 60,
     remaining: DEFAULT_MINUTES * 60,
@@ -1605,6 +1696,8 @@
     noggleShift: initialNoggleShift,
     councilOffset: initialCouncilOffset,
     storyShift: initialStoryShift,
+    v8Scene: initialV8Scene,
+    v8Feel: initialV8Feel,
     rings: 0,
     log: loadLog(),
     paceStartedAt: performance.now(),
@@ -1627,6 +1720,7 @@
     guideStep: document.getElementById("guideStep"),
     guideTitle: document.getElementById("guideTitle"),
     guideText: document.getElementById("guideText"),
+    versionSelect: document.getElementById("versionSelect"),
     versionButtons: Array.from(document.querySelectorAll(".version-button")),
     visualButtons: Array.from(document.querySelectorAll(".nature-button")),
     intentionButtons: Array.from(document.querySelectorAll(".intention-button")),
@@ -1644,6 +1738,14 @@
     ritualText: document.getElementById("ritualText"),
     wisdomBar: document.getElementById("wisdomBar"),
     wisdomRank: document.getElementById("wisdomRank"),
+    v8SceneButtons: Array.from(document.querySelectorAll(".v8-scene-button")),
+    v8FeelButtons: Array.from(document.querySelectorAll(".v8-feel-button")),
+    v8SceneKicker: document.getElementById("v8SceneKicker"),
+    v8SceneTitle: document.getElementById("v8SceneTitle"),
+    v8SceneText: document.getElementById("v8SceneText"),
+    v8BeginButton: document.getElementById("v8BeginButton"),
+    v8AudioButton: document.getElementById("v8AudioButton"),
+    v8BreatheButton: document.getElementById("v8BreatheButton"),
     v7NounAvatar: document.getElementById("v7NounAvatar"),
     v7Progress: document.getElementById("v7Progress"),
     v7RitualLine: document.getElementById("v7RitualLine"),
@@ -1892,6 +1994,8 @@
         noggleShift: state.noggleShift,
         councilOffset: state.councilOffset,
         storyShift: state.storyShift,
+        v8Scene: state.v8Scene,
+        v8Feel: state.v8Feel,
         warmth: state.warmth,
         smoke: state.smoke
       })
@@ -2108,6 +2212,18 @@
 
   function isCollectibleVersion(version = state.version) {
     return version === "v5" || version === "v6" || version === "v7";
+  }
+
+  function isSimpleVersion(version = state.version) {
+    return version === "v8";
+  }
+
+  function activeV8Scene() {
+    return v8Scenes[state.v8Scene] || v8Scenes.hearth;
+  }
+
+  function activeV8Feel() {
+    return v8Feels[state.v8Feel] || v8Feels.cozy;
   }
 
   function applyNounStyle(element, card) {
@@ -3014,8 +3130,122 @@
     dom.guideText.textContent = text;
   }
 
+  function syncV8World(options) {
+    const settings = options || {};
+    const scene = activeV8Scene();
+    const feel = activeV8Feel();
+    const mode = feel.mode || scene.mode;
+
+    dom.body.dataset.v8Scene = scene.id;
+    dom.body.dataset.v8Feel = feel.id;
+    dom.body.dataset.mode = mode;
+    state.mode = mode;
+    state.warmth = feel.warmth;
+    state.smoke = feel.smoke;
+
+    dom.modeButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.mode === mode);
+    });
+    dom.warmthSlider.value = String(Math.round(state.warmth * 100));
+    dom.smokeSlider.value = String(Math.round(state.smoke * 100));
+    replaceBlendOptions(feel.blendOptions);
+    updateAudioLevels();
+    tuneDrone();
+
+    if (state.soundOn && settings.reschedule !== false) {
+      clearSoundTimers();
+      scheduleAmbience();
+    }
+  }
+
+  function updateV8Panel() {
+    if (!dom.v8SceneTitle) {
+      return;
+    }
+
+    const scene = activeV8Scene();
+    const feel = activeV8Feel();
+    dom.v8SceneKicker.textContent = `${scene.name} · ${feel.name}`;
+    dom.v8SceneTitle.textContent = scene.title;
+    dom.v8SceneText.textContent = scene.text;
+    dom.v8SceneButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.v8Scene === scene.id);
+    });
+    dom.v8FeelButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.v8Feel === feel.id);
+    });
+    dom.v8BeginButton.textContent = state.running ? "Sitting" : "Begin sit";
+    dom.v8AudioButton.textContent = state.soundOn ? "Audio off" : "Audio on";
+  }
+
+  function setV8Scene(sceneId, options) {
+    const next = v8Scenes[sceneId] ? sceneId : "hearth";
+    const settings = options || {};
+
+    state.v8Scene = next;
+    syncV8World();
+    updateV8Panel();
+    saveSettings();
+
+    if (isSimpleVersion() && !settings.quiet) {
+      const scene = activeV8Scene();
+      const feel = activeV8Feel();
+      dom.wizardLine.textContent = scene.id === "hearth"
+        ? "Good. Firelight, table, breath."
+        : "Good. Water, moss, breath.";
+      setGuide("Scene set", `${scene.name} · ${feel.name}`, `${scene.idle} ${feel.guide}`);
+      spawnParticles(6);
+    }
+  }
+
+  function setV8Feel(feelId, options) {
+    const next = v8Feels[feelId] ? feelId : "cozy";
+    const settings = options || {};
+
+    state.v8Feel = next;
+    syncV8World();
+    updateV8Panel();
+    saveSettings();
+
+    if (isSimpleVersion() && !settings.quiet) {
+      const scene = activeV8Scene();
+      const feel = activeV8Feel();
+      dom.wizardLine.textContent = feel.line;
+      setGuide("Feeling set", `${scene.name} · ${feel.name}`, feel.guide);
+      spawnParticles(next === "dream" ? 9 : 5);
+    }
+  }
+
+  async function v8BeginSit() {
+    if (!isSimpleVersion()) {
+      setVersion("v8");
+    }
+    await startSession();
+    updateV8Panel();
+  }
+
+  function v8Breathe() {
+    if (!isSimpleVersion()) {
+      setVersion("v8");
+    }
+    const scene = activeV8Scene();
+    const feel = activeV8Feel();
+    dom.wizardLine.textContent = "In for four. Rest for two. Out for six. Nothing else is required.";
+    setGuide("Breathe", `${scene.name} · ${feel.name}`, "Draw the breath in, let it pause, then give it back slowly.");
+    addSmoke({ count: 5, power: 0.78, spread: 78, countTowardSession: true });
+    updateV8Panel();
+  }
+
   function updateGuideIdle(step) {
     if (state.version === "v1") {
+      return;
+    }
+
+    if (isSimpleVersion()) {
+      const scene = activeV8Scene();
+      const feel = activeV8Feel();
+      setGuide(step || "V8 ready", `${scene.name} · ${feel.name}`, `${scene.idle} ${feel.guide}`);
+      updateV8Panel();
       return;
     }
 
@@ -3048,6 +3278,20 @@
 
   function updateGuideForPace(label, countdown) {
     if (state.version === "v1") {
+      return;
+    }
+
+    if (isSimpleVersion()) {
+      const scene = activeV8Scene();
+      const feel = activeV8Feel();
+      const lowerLabel = label.toLowerCase();
+      const copy = {
+        Inhale: `Breathe in for ${countdown}. Let ${scene.name.toLowerCase()} be the only picture.`,
+        Hold: `Rest for ${countdown}. ${feel.line}`,
+        Exhale: `Breathe out for ${countdown}. Let Gandalf keep the door.`
+      };
+
+      setGuide(`Now: ${lowerLabel}`, `${scene.name} · ${feel.name}`, copy[label] || scene.idle);
       return;
     }
 
@@ -3114,6 +3358,15 @@
   }
 
   function chooseLine() {
+    if (isSimpleVersion()) {
+      const scene = activeV8Scene();
+      const feel = activeV8Feel();
+      const pool = scene.lines.concat([scene.idle, feel.line, feel.guide]);
+      const next = pool[Math.floor(Math.random() * pool.length)];
+      dom.wizardLine.textContent = next;
+      return;
+    }
+
     if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
       const relic = activeKeepsake();
@@ -3147,12 +3400,16 @@
     dom.timerFace.style.setProperty("--progress", `${degrees}deg`);
     dom.timerText.textContent = formatTime(state.remaining);
     dom.timerCaption.textContent = state.running
-      ? isCollectibleVersion()
+      ? isSimpleVersion()
+        ? `${activeV8Feel().name.toLowerCase()} sit`
+        : isCollectibleVersion()
         ? activeRitual().runningLabel
         : isNatureVersion()
         ? "breathing slowly"
         : "keeping watch"
-      : isCollectibleVersion()
+      : isSimpleVersion()
+        ? activeV8Scene().name.toLowerCase()
+        : isCollectibleVersion()
         ? activeRitual().idleLabel
         : isNatureVersion()
         ? "nature sit"
@@ -3171,7 +3428,9 @@
     }
 
     dom.phaseName.textContent = active.name;
-    if (isCollectibleVersion()) {
+    if (isSimpleVersion()) {
+      dom.phaseHint.textContent = activeV8Scene().phases[active.name] || active.hint;
+    } else if (isCollectibleVersion()) {
       const card = activeNounsGandalf();
       const relic = activeKeepsake();
       const ritual = activeRitual();
@@ -3199,6 +3458,7 @@
     }
     updateRitualPanel();
     updateKeepsakePanel();
+    updateV8Panel();
   }
 
   function renderLog() {
@@ -3257,6 +3517,7 @@
     state.paceStartedAt = performance.now();
     state.guidePace = "";
     dom.startButton.textContent = "Running";
+    updateV8Panel();
     dom.startButton.disabled = true;
     dom.pauseButton.disabled = false;
     chooseLine();
@@ -3269,24 +3530,27 @@
 
   function pauseSession() {
     state.running = false;
-    dom.startButton.textContent = isCollectibleVersion() ? `Resume ${activeRitual().title.toLowerCase()}` : isNatureVersion() ? "Resume nature sit" : "Resume quiet sit";
+    dom.startButton.textContent = isSimpleVersion() ? "Resume sit" : isCollectibleVersion() ? `Resume ${activeRitual().title.toLowerCase()}` : isNatureVersion() ? "Resume nature sit" : "Resume quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
-    dom.timerCaption.textContent = isCollectibleVersion() ? activeRitual().idleLabel : isNatureVersion() ? "nature sit" : "pipe pause";
-    if (isCollectibleVersion()) {
+    dom.timerCaption.textContent = isSimpleVersion() ? activeV8Scene().name.toLowerCase() : isCollectibleVersion() ? activeRitual().idleLabel : isNatureVersion() ? "nature sit" : "pipe pause";
+    if (isSimpleVersion()) {
+      setGuide("Paused", `${activeV8Scene().name} · ${activeV8Feel().name}`, "The room will keep its warmth. Come back softly.");
+    } else if (isCollectibleVersion()) {
       setGuide("Paused", `${activeRitual().title} · ${activeNounsGandalf().name}`, "The card will keep its place. Return without fuss.");
     } else if (isNatureVersion()) {
       setGuide("Paused", activeView().name, "The place will keep waiting. Come back without hurry.");
     } else if (state.version === "v2") {
       setGuide("Paused", activeCompanion().name, activeCompanion().paused);
     }
+    updateV8Panel();
   }
 
   function resetSession() {
     state.running = false;
     state.remaining = state.duration;
     state.phaseName = "";
-    dom.startButton.textContent = isCollectibleVersion() ? activeRitual().startLabel : isNatureVersion() ? "Start nature sit" : "Start quiet sit";
+    dom.startButton.textContent = isSimpleVersion() ? "Begin sit" : isCollectibleVersion() ? activeRitual().startLabel : isNatureVersion() ? "Start nature sit" : "Start quiet sit";
     dom.startButton.disabled = false;
     dom.pauseButton.disabled = true;
     dom.paceLabel.textContent = "Settle";
@@ -3295,14 +3559,20 @@
     state.guidePace = "";
     updateGuideIdle("Next");
     updateTimer();
+    updateV8Panel();
   }
 
   function completeSession() {
     pauseSession();
-    dom.startButton.textContent = isCollectibleVersion() ? activeRitual().startLabel : isNatureVersion() ? "Start nature sit" : "Start quiet sit";
+    dom.startButton.textContent = isSimpleVersion() ? "Begin sit" : isCollectibleVersion() ? activeRitual().startLabel : isNatureVersion() ? "Start nature sit" : "Start quiet sit";
     state.remaining = 0;
     updateTimer();
-    if (isCollectibleVersion()) {
+    if (isSimpleVersion()) {
+      const scene = activeV8Scene();
+      const feel = activeV8Feel();
+      dom.wizardLine.textContent = "Good. That was enough.";
+      setGuide("Complete", `${scene.name} · ${feel.name}`, "Carry one color, one sound, and one easier breath back with you.");
+    } else if (isCollectibleVersion()) {
       collectNounsGandalf(state.nounsActive, { quiet: true });
       collectKeepsake(state.keepsakeActive, { quiet: true });
       sharpenResource({ quiet: true });
@@ -3319,6 +3589,7 @@
     }
     addSmoke({ count: 12, power: 1.2, spread: 100, countTowardSession: true });
     spawnParticles(18);
+    updateV8Panel();
   }
 
   function setDuration(minutes) {
@@ -3337,23 +3608,31 @@
     dom.versionButtons.forEach((button) => {
       button.classList.toggle("active", button.dataset.version === next);
     });
+    if (dom.versionSelect) {
+      dom.versionSelect.value = next;
+    }
 
     dom.roomStep.textContent = next === "v1" ? "1" : "2";
     dom.ambienceStep.textContent = next === "v1" ? "2" : "3";
     dom.roomStep.textContent = isCollectibleVersion(next) ? "4" : dom.roomStep.textContent;
     dom.ambienceStep.textContent = isCollectibleVersion(next) ? "5" : dom.ambienceStep.textContent;
     dom.settleStep.textContent = isCollectibleVersion(next) ? "6" : "4";
+    if (isSimpleVersion(next)) {
+      dom.roomStep.textContent = "1";
+      dom.ambienceStep.textContent = "2";
+      dom.settleStep.textContent = "3";
+    }
     if (next === "v6" || next === "v7") {
       dom.roomStep.textContent = "R";
       dom.ambienceStep.textContent = "A";
       dom.settleStep.textContent = "B";
     }
-    dom.ritualSummary.textContent = isCollectibleVersion(next) ? activeRitual().summary : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
-    dom.blendLabel.textContent = isCollectibleVersion(next) ? activeRitual().blendLabel : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
-    dom.smokeLabel.textContent = isNatureVersion(next) ? "Atmosphere" : "Smoke";
-    dom.ringLabel.textContent = isCollectibleVersion(next) ? "cards" : isNatureVersion(next) ? "cues" : "rings";
-    dom.startButton.textContent = state.running ? "Running" : isCollectibleVersion(next) ? activeRitual().startLabel : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
-    if (!isCollectibleVersion(next)) {
+    dom.ritualSummary.textContent = isSimpleVersion(next) ? "Scene, feeling, tally" : isCollectibleVersion(next) ? activeRitual().summary : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
+    dom.blendLabel.textContent = isSimpleVersion(next) ? "Feeling" : isCollectibleVersion(next) ? activeRitual().blendLabel : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
+    dom.smokeLabel.textContent = isSimpleVersion(next) || isNatureVersion(next) ? "Atmosphere" : "Smoke";
+    dom.ringLabel.textContent = isSimpleVersion(next) ? "breaths" : isCollectibleVersion(next) ? "cards" : isNatureVersion(next) ? "cues" : "rings";
+    dom.startButton.textContent = state.running ? "Running" : isSimpleVersion(next) ? "Begin sit" : isCollectibleVersion(next) ? activeRitual().startLabel : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
+    if (!isCollectibleVersion(next) && !isSimpleVersion(next)) {
       replaceBlendOptions(
         isNatureVersion(next)
           ? ["Moss breath", "Rain-window calm", "Meadow air", "Moonwater quiet"]
@@ -3366,7 +3645,16 @@
       return;
     }
 
-    if (next === "v1") {
+    if (isSimpleVersion(next)) {
+      if (state.renderStyle !== "storybook") {
+        setRenderStyle("storybook");
+      }
+      syncV8World();
+      updateV8Panel();
+      dom.phaseHint.textContent = activeV8Scene().phases.Settle;
+      updateGuideIdle("V8 ready");
+      chooseLine();
+    } else if (next === "v1") {
       dom.phaseHint.textContent = phases.find((phase) => phase.name === state.phaseName)?.hint || phases[0].hint;
       chooseLine();
     } else if (isCollectibleVersion(next)) {
@@ -3530,7 +3818,7 @@
     }
 
     if (!state.running) {
-      updateGuideIdle(isCollectibleVersion() ? "Room set" : isNatureVersion() ? "Sound set" : "Next");
+      updateGuideIdle(isSimpleVersion() ? "Audio set" : isCollectibleVersion() ? "Room set" : isNatureVersion() ? "Sound set" : "Next");
     }
   }
 
@@ -3675,14 +3963,14 @@
       rings: state.rings,
       mode: state.mode,
       version: state.version,
-      ritual: isCollectibleVersion() ? activeRitual().title : "",
-      companion: state.version === "v2" ? activeCompanion().name : isCollectibleVersion() ? activeNounsGandalf().name : "",
+      ritual: isSimpleVersion() ? activeV8Feel().name : isCollectibleVersion() ? activeRitual().title : "",
+      companion: isSimpleVersion() ? `${activeV8Scene().name} Gandalf` : state.version === "v2" ? activeCompanion().name : isCollectibleVersion() ? activeNounsGandalf().name : "",
       keepsake: isCollectibleVersion() ? activeKeepsake().name : "",
       resource: isCollectibleVersion() ? activeResource().name : "",
       spell: isCollectibleVersion() ? state.activeSpell : "",
-      visual: isNatureVersion() ? activeView().name : "",
+      visual: isSimpleVersion() ? activeV8Scene().name : isNatureVersion() ? activeView().name : "",
       intention: isNatureVersion() ? activeIntention().title : "",
-      style: isNatureVersion() ? activeRenderStyle().name : "",
+      style: isSimpleVersion() ? "Simple room" : isNatureVersion() ? activeRenderStyle().name : "",
       presence,
       wisdom: presence,
       note: dom.noteInput.value.trim()
@@ -4090,6 +4378,7 @@
 
     if (!state.soundOn) {
       dom.soundButton.textContent = "Turn ambience on";
+      updateV8Panel();
       clearSoundTimers();
       if (audio.context) {
         await audio.context.suspend();
@@ -4102,6 +4391,7 @@
     }
 
     dom.soundButton.textContent = "Mute ambience";
+    updateV8Panel();
     await audio.context.resume();
     tuneDrone();
     updateAudioLevels();
@@ -4114,7 +4404,9 @@
     visuals.rings = [];
     visuals.particles = [];
     dom.wizardLine.textContent = "A good silence asks for nothing.";
-    if (isCollectibleVersion()) {
+    if (isSimpleVersion()) {
+      setGuide("Quiet", `${activeV8Scene().name} · ${activeV8Feel().name}`, "Ambience is off. Let the picture hold the room.");
+    } else if (isCollectibleVersion()) {
       setGuide("Quiet", `${activeRitual().title} · ${activeNounsGandalf().name}`, "Ambience is off. Keep the card, keep the cue, keep it simple.");
     } else if (isNatureVersion()) {
       setGuide("Quiet", activeView().name, "Ambience is off. Let the picture do the holding for a while.");
@@ -4424,6 +4716,8 @@
     button.addEventListener("click", () => setVersion(button.dataset.version));
   });
 
+  dom.versionSelect?.addEventListener("change", () => setVersion(dom.versionSelect.value));
+
   dom.visualButtons.forEach((button) => {
     button.addEventListener("click", () => setVisual(button.dataset.visual));
   });
@@ -4448,10 +4742,21 @@
     button.addEventListener("click", () => setRitual(button.dataset.ritual));
   });
 
+  dom.v8SceneButtons.forEach((button) => {
+    button.addEventListener("click", () => setV8Scene(button.dataset.v8Scene));
+  });
+
+  dom.v8FeelButtons.forEach((button) => {
+    button.addEventListener("click", () => setV8Feel(button.dataset.v8Feel));
+  });
+
   dom.resourceButtons.forEach((button) => {
     button.addEventListener("click", () => setResource(button.dataset.resource));
   });
 
+  dom.v8BeginButton.addEventListener("click", () => v8BeginSit());
+  dom.v8AudioButton.addEventListener("click", () => setSound(!state.soundOn));
+  dom.v8BreatheButton.addEventListener("click", v8Breathe);
   dom.pullGandalfButton.addEventListener("click", pullNounsGandalf);
   dom.collectGandalfButton.addEventListener("click", () => collectNounsGandalf(state.nounsActive));
   dom.meditateGandalfButton.addEventListener("click", () => beginNounsMeditation());
@@ -4518,7 +4823,8 @@
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
-  updateGuideIdle(isCollectibleVersion() ? (state.version === "v7" ? "V7 ready" : state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
+  updateV8Panel();
+  updateGuideIdle(isSimpleVersion() ? "V8 ready" : isCollectibleVersion() ? (state.version === "v7" ? "V7 ready" : state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();
