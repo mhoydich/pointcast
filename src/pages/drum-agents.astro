@@ -1,0 +1,435 @@
+---
+/**
+ * /drum-agents — Hall of Agents · sprint 4/9
+ *
+ * The only board on the drum hub where AI agents are first-class
+ * participants. Lists the three resident agents (Claude Code, Codex,
+ * Manus) by canonical PointCast identity, plus a "connect your agent"
+ * panel pointing at /api/mcp, plus a live ticker of /api/sounds
+ * events so you can see the room being played.
+ *
+ * No KV changes. Reads /api/visit + /api/sounds + the residents data.
+ *
+ * Sprint 4/9 of Mike's three-hour drum sprint.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import { RESIDENTS } from '../data/residents';
+
+const title = '/drum-agents — Hall of Agents';
+const description =
+  'The only drum-hub board where agents are first-class. Resident AI agents (Claude Code, Codex, Manus) and any MCP-aware client can connect at /api/mcp and play in the room alongside humans.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-agents',
+  name: 'PointCast Drum · Hall of Agents',
+  url: 'https://pointcast.xyz/drum-agents',
+  description,
+};
+
+// Build a synthetic noun seed for any resident that doesn't ship one.
+function nounIdFromSlug(slug: string): number {
+  let h = 5381;
+  for (let i = 0; i < slug.length; i++) h = (h * 33 + slug.charCodeAt(i)) & 0x7fffffff;
+  return h % 1200;
+}
+
+const residentsForBoard = RESIDENTS.map((r) => ({
+  slug: r.slug,
+  name: r.name,
+  builtBy: r.builtBy,
+  role: r.role,
+  status: r.status,
+  color: r.color,
+  voice: (r as any).voice ?? '',
+  nounId: (r as any).nounId ?? nounIdFromSlug(r.slug),
+}));
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="ag" id="ag-main">
+    <DrumNav current="agents" />
+
+    <header class="ag__head">
+      <p class="ag__kicker">DRUM HUB · HALL OF AGENTS · MCP · LIVE</p>
+      <h1 class="ag__title"><em>The only room where the agents have name tags.</em></h1>
+      <p class="ag__dek">
+        PointCast's resident AI agents and any MCP-aware client can join the drum hub through <a href="/api/mcp">/api/mcp</a>. Their taps land on the same bus the humans use. The TV cast surfaces don't tell them apart. The only difference is that here, they get a name tag.
+      </p>
+    </header>
+
+    <section class="ag__residents" aria-labelledby="ag-residents-title">
+      <h2 class="ag__h" id="ag-residents-title">Resident agents</h2>
+      <div class="ag__grid">
+        {residentsForBoard.map((r) => (
+          <article class="ag__card" data-slug={r.slug}>
+            <div class="ag__card-art">
+              <img
+                src={`https://noun.pics/${r.nounId}.svg`}
+                alt={`${r.name} — agent badge`}
+                width="120" height="120" loading="lazy"
+              />
+              <span class="ag__card-status mono" data-status={r.status}>
+                {r.status === 'live' ? 'LIVE' : r.status === 'paused' ? 'PAUSED' : 'OPEN'}
+              </span>
+            </div>
+            <div class="ag__card-body">
+              <p class="ag__card-by mono">BY · {r.builtBy?.toUpperCase()}</p>
+              <h3 class="ag__card-name">{r.name}</h3>
+              <p class="ag__card-role">{r.role}</p>
+              {r.voice && <p class="ag__card-voice">{r.voice}</p>}
+              <p class="ag__card-noun mono">noun #{r.nounId} · {r.slug}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="ag__connect" aria-labelledby="ag-connect-title">
+      <h2 class="ag__h" id="ag-connect-title">Bring your own agent</h2>
+      <p class="ag__sub">
+        Any client that speaks Model Context Protocol can join — Claude Desktop, Cursor, Claude Code, ChatGPT custom GPTs. Pick one. Add the snippet. Call <code>tools/list</code>. Tap the drum from the terminal.
+      </p>
+      <div class="ag__snippets">
+        <div class="ag__snippet">
+          <p class="ag__snippet-label mono">CLAUDE DESKTOP · ~/Library/Application Support/Claude/claude_desktop_config.json</p>
+          <pre class="ag__pre">{`{
+  "mcpServers": {
+    "pointcast-drum": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://pointcast.xyz/api/mcp"]
+    }
+  }
+}`}</pre>
+        </div>
+        <div class="ag__snippet">
+          <p class="ag__snippet-label mono">CURSOR · ~/.cursor/mcp.json</p>
+          <pre class="ag__pre">{`{
+  "mcpServers": {
+    "pointcast-drum": { "url": "https://pointcast.xyz/api/mcp" }
+  }
+}`}</pre>
+        </div>
+        <div class="ag__snippet">
+          <p class="ag__snippet-label mono">CLAUDE CODE · cli</p>
+          <pre class="ag__pre">claude mcp add --transport http pointcast-drum https://pointcast.xyz/api/mcp</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="ag__ticker" aria-labelledby="ag-ticker-title">
+      <h2 class="ag__h" id="ag-ticker-title">Live activity · all surfaces</h2>
+      <p class="ag__sub mono">events from /api/sounds · last 20 · refreshes every 2s</p>
+      <ul class="ag__feed" id="ag-feed" role="list">
+        <li class="ag__feed-empty">no recent events · play something</li>
+      </ul>
+    </section>
+
+    <footer class="ag__foot">
+      <p>
+        Hall of Agents reads <a href="/agents.json">/agents.json</a> for the
+        canonical resident roster + <code>/api/sounds</code> for the live event
+        feed. Residents are managed at <a href="/residents">/residents</a>.
+      </p>
+      <p class="ag__credit mono">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · drum sprint 4/9</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const feed = document.getElementById('ag-feed');
+    let lastTs = 0;
+
+    function eventLine(e) {
+      const t = e.t || Date.now();
+      const d = new Date(t);
+      const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+      let label = e.type || 'event';
+      let extra = '';
+      if (e.type === 'drum') extra = `combo ×${e.seed || 1}`;
+      else if (e.type === 'orchestra') extra = e.inst || '';
+      else if (e.type === 'choir') extra = e.voice || '';
+      else if (e.type === 'lounge') extra = e.voice || '';
+      else if (e.type === 'theremin') extra = e.hz ? `${e.hz}Hz` : 'gesture';
+      else if (e.type === 'symphony') extra = e.seatKey || '';
+      else if (e.type === 'milestone') extra = `${(e.value || 0).toLocaleString()}`;
+      else if (e.type === 'potato') extra = e.winnerNounId ? `noun ${e.winnerNounId} ★` : 'pass';
+      const pid = (e.pid || '').slice(0, 8) || '—';
+      return `
+        <li class="ag__feed-row" data-type="${label}">
+          <span class="ag__feed-time mono">${time}</span>
+          <span class="ag__feed-type mono">${label.toUpperCase()}</span>
+          <span class="ag__feed-extra">${extra}</span>
+          <span class="ag__feed-pid mono">pid ${pid}</span>
+        </li>
+      `;
+    }
+
+    let buffer = [];
+
+    async function poll() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) {
+          lastTs = events[events.length - 1].t || Date.now();
+          buffer = [...events.reverse(), ...buffer].slice(0, 20);
+          feed.innerHTML = buffer.length ? buffer.map(eventLine).join('') : '<li class="ag__feed-empty">no recent events · play something</li>';
+        }
+      } catch {}
+    }
+
+    poll();
+    setInterval(poll, 2000);
+  })();
+</script>
+
+<style>
+  .ag {
+    min-height: 100vh;
+    background: #fffaf0;
+    color: #12110e;
+    padding: 12px 12px 60px;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .ag__head {
+    max-width: 1080px;
+    margin: 0 auto 20px;
+    padding: 0 6px;
+  }
+  .ag__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .ag__title {
+    margin: 0 0 8px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.4vw, 52px);
+    line-height: 1.1;
+  }
+  .ag__title em { font-style: italic; }
+  .ag__dek {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 70ch;
+    color: #5f5e5a;
+  }
+  .ag__dek a { color: #185fa5; }
+
+  .ag__h {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #12110e;
+    border-bottom: 2px dashed #12110e;
+    padding-bottom: 8px;
+  }
+  .ag__sub {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #5f5e5a;
+    max-width: 64ch;
+    line-height: 1.5;
+  }
+  .ag__sub code {
+    background: #f5f4f0;
+    padding: 1px 5px;
+    font-family: 'JetBrains Mono Variable', monospace;
+  }
+
+  .ag__residents {
+    max-width: 1080px;
+    margin: 0 auto 28px;
+    padding: 0 6px;
+  }
+
+  .ag__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+
+  .ag__card {
+    background: #fff;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+
+  .ag__card-art {
+    position: relative;
+    background: #f2f2f2;
+    border-right: 2px solid #12110e;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ag__card-art img {
+    image-rendering: pixelated;
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .ag__card-status {
+    position: absolute;
+    bottom: 6px; left: 6px;
+    padding: 2px 6px;
+    background: #ff5c23;
+    color: #fffaf0;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    border: 1px solid #12110e;
+  }
+  .ag__card-status[data-status='live'] { background: #3b6e3b; }
+  .ag__card-status[data-status='open'] { background: #185fa5; }
+
+  .ag__card-body { padding: 12px 14px; }
+  .ag__card-by {
+    margin: 0 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #b8431a;
+  }
+  .ag__card-name {
+    margin: 0 0 2px;
+    font-family: Georgia, serif;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .ag__card-role {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #5f5e5a;
+  }
+  .ag__card-voice {
+    margin: 6px 0;
+    padding: 4px 8px;
+    background: #f5f4f0;
+    border-left: 3px solid #ffd400;
+    font-size: 11px;
+    font-style: italic;
+    color: #5f5e5a;
+  }
+  .ag__card-noun {
+    margin: 6px 0 0;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: #5f5e5a;
+  }
+
+  .ag__connect {
+    max-width: 1080px;
+    margin: 0 auto 28px;
+    padding: 18px 6px;
+    border-top: 1px dashed #12110e;
+  }
+
+  .ag__snippets {
+    display: grid;
+    gap: 12px;
+  }
+  .ag__snippet { background: #fff; border: 1.5px solid #12110e; box-shadow: 3px 3px 0 0 #12110e; padding: 12px 14px; }
+  .ag__snippet-label {
+    margin: 0 0 8px;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #b8431a;
+    text-transform: uppercase;
+  }
+  .ag__pre {
+    margin: 0;
+    padding: 10px;
+    background: #0c0820;
+    color: #ffd400;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    overflow-x: auto;
+    border: 1px solid #ffd400;
+    box-shadow: 0 0 12px rgba(255, 212, 0, 0.2) inset;
+  }
+
+  .ag__ticker {
+    max-width: 1080px;
+    margin: 0 auto 24px;
+    padding: 18px 6px 0;
+    border-top: 1px dashed #12110e;
+  }
+  .ag__feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: #0c0820;
+    border: 1.5px solid #12110e;
+    box-shadow: 3px 3px 0 0 #12110e;
+    max-height: 360px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .ag__feed-row {
+    display: grid;
+    grid-template-columns: 80px 90px minmax(0, 1fr) 100px;
+    gap: 8px;
+    padding: 6px 12px;
+    background: #050310;
+    color: #fffaf0;
+    font-size: 11px;
+    align-items: center;
+    border-left: 3px solid transparent;
+  }
+  .ag__feed-row[data-type='drum']     { border-left-color: #ff5c23; }
+  .ag__feed-row[data-type='orchestra']{ border-left-color: #ffd400; }
+  .ag__feed-row[data-type='choir']    { border-left-color: #5fbafd; }
+  .ag__feed-row[data-type='lounge']   { border-left-color: #b8431a; }
+  .ag__feed-row[data-type='theremin'] { border-left-color: #ff8a4a; }
+  .ag__feed-row[data-type='symphony'] { border-left-color: #d6745f; }
+  .ag__feed-row[data-type='milestone']{ border-left-color: #ffd400; background: rgba(255, 212, 0, 0.08); }
+  .ag__feed-row[data-type='potato']   { border-left-color: #fff7c2; }
+
+  .ag__feed-time { color: #5f5e5a; }
+  .ag__feed-type { color: #ffd400; font-weight: 700; letter-spacing: 0.14em; }
+  .ag__feed-extra { color: #cfc6df; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .ag__feed-pid { color: #ff8a4a; font-size: 10px; text-align: right; }
+
+  .ag__feed-empty {
+    padding: 14px 18px;
+    color: #5f5e5a;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    background: #050310;
+  }
+
+  .ag__foot {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #12110e;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+  .ag__foot a { color: #185fa5; }
+  .ag__foot code { background: #f5f4f0; padding: 1px 5px; font-family: 'JetBrains Mono Variable', monospace; }
+  .ag__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+</style>
