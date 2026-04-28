@@ -30,6 +30,7 @@ export const GET: APIRoute = async () => {
   const drumToken = ((contracts as any).drum_token?.mainnet ?? '').trim();
   const marketplace = ((contracts as any).marketplace?.mainnet ?? '').trim();
   const zenCats = ((contracts as any).zen_cats?.mainnet ?? '').trim();
+  const postcards = ((contracts as any).postcards?.mainnet ?? '').trim();
 
   const payload = {
     $schema: 'https://pointcast.xyz/BLOCKS.md',
@@ -136,6 +137,7 @@ export const GET: APIRoute = async () => {
         drumTv: 'https://pointcast.xyz/drum-tv',
         drumTvV2: 'https://pointcast.xyz/drum-tv-v2',
         town: 'https://pointcast.xyz/town',
+        postcards: 'https://pointcast.xyz/postcards',
         agentDerby: 'https://pointcast.xyz/agent-derby',
         battle: 'https://pointcast.xyz/battle',
         now: 'https://pointcast.xyz/now',
@@ -414,6 +416,16 @@ export const GET: APIRoute = async () => {
         network: 'mainnet',
         address: marketplace || null,
         status: marketplace ? 'live' : 'planned',
+      },
+      postcards: {
+        chain: 'tezos',
+        network: 'mainnet',
+        address: postcards || null,
+        standard: 'FA2 / TZIP-21',
+        status: postcards ? 'live' : 'pending-origination',
+        metadataBase: 'https://pointcast.xyz/api/tezos-metadata/postcards',
+        preview: 'https://pointcast.xyz/postcards',
+        description: 'PointCast Postcards — Set 1 · seven painted El Segundo scenes as FA2 NFTs (token_ids 0..6). Free open-edition mint, 100 editions each, 7.5% royalty. Awaiting origination.',
       },
     },
 
