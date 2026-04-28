@@ -1,6 +1,6 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, actual Noun-backed Wizard Nouns collectibles, an optional "Myth" listen-along, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
+A self-contained fantasy smoking and meditation companion for a quiet pause: timer, cozy visuals, ambient fire/rain/road/starlight audio, actual Noun-backed Wizard Nouns collectibles, a deterministic WN-7.1 creation protocol, an optional "Myth" listen-along, original wizardly and nature prompts, lantern view, phase guidance, and a small local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
@@ -80,8 +80,9 @@ The app defaults to V7, with a V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The 
 - Adds a Wizard Nouns framework with deterministic element slots for Hat, Beard, Staff, Robe, Relic, and Realm.
 - Adds visible trait chips, a six-slot element panel, and a compact 30-card collection grid inside the V7 flow.
 - Replaces the hand-drawn Noun-like heads with actual CC0 Noun SVG art from noun.pics, with repo-local Noun fallbacks.
-- Adds Noun Wizard feature panels for Actual Noun, Noggles, Wizard Hold, and Wand, plus a three-card Noun council.
-- Adds new V7 actions for rolling the actual Noun pairing, summoning a council, and casting a Noun spell directly into the local spellbook.
+- Adds the WN-7.1 creation protocol: Actual Noun source, six wizard slots, ritual, relic pair, sharpened resource, and deterministic Aura, Charm, Atmosphere, Offering, and Lesson attributes.
+- Adds Noun Wizard feature panels for Actual Noun, Protocol, Aura, Charm, Atmosphere, Offering, Lesson, and Resource, plus a three-card Noun council.
+- Adds new V7 actions for rolling the actual Noun pairing, summoning a council, and casting a protocol spell directly into the local spellbook with sigil and attribute recipe metadata.
 - Adds a clearer V7 loop: forge a wizard, pair a relic, sharpen a resource, build a spell, sit five minutes, and keep the set.
 - Bumps the local settings release to V7 without clearing existing cards, keepsakes, resources, spellbook, or log data.
 

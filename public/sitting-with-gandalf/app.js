@@ -9,7 +9,7 @@
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v7";
-  const SETTINGS_RELEASE = "v7-actual-nouns";
+  const SETTINGS_RELEASE = "v7-attribute-protocol";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
   const renderStyles = {
     storybook: {
@@ -511,6 +511,59 @@
     { id: "leaf", name: "Shire Leaf", mark: "LF", tone: "#9fbc68", bg: "#263827", clue: "green pause" },
     { id: "wand", name: "Signal Wand", mark: "WD", tone: "#f0c96a", bg: "#2f2a22", clue: "one bright instruction" },
     { id: "shell", name: "Coast Shell", mark: "SH", tone: "#f4ead6", bg: "#2d3443", clue: "sea hush in pocket" }
+  ];
+
+  const nounWizardProtocolVersion = "WN-7.1";
+
+  const nounWizardAuras = [
+    { id: "hearth-glow", name: "Hearth Glow", mark: "HG", tone: "#ef9e54", bg: "#3a241a", clue: "warm room around the build" },
+    { id: "moss-halo", name: "Moss Halo", mark: "MH", tone: "#9fbc68", bg: "#263827", clue: "green quiet around the head" },
+    { id: "rain-veil", name: "Rain Veil", mark: "RV", tone: "#a7d3de", bg: "#24333c", clue: "weather softened into privacy" },
+    { id: "moon-ring", name: "Moon Ring", mark: "MR", tone: "#d7d9ff", bg: "#222b42", clue: "cool light without pressure" },
+    { id: "coast-haze", name: "Coast Haze", mark: "CH", tone: "#8fc3bf", bg: "#24333c", clue: "marine layer as patience" },
+    { id: "pixel-spark", name: "Pixel Spark", mark: "PS", tone: "#f0c96a", bg: "#202520", clue: "tiny square of attention" }
+  ];
+
+  const nounWizardCharms = [
+    { id: "pocket-moon", name: "Pocket Moon", mark: "PM", tone: "#d7d9ff", bg: "#222b42", clue: "keeps wonder small enough to carry" },
+    { id: "road-button", name: "Road Button", mark: "RB", tone: "#dfc586", bg: "#3d3424", clue: "fastens the next step" },
+    { id: "study-candle", name: "Study Candle", mark: "SC", tone: "#fff0a8", bg: "#33251f", clue: "turns attention upright" },
+    { id: "rain-pebble", name: "Rain Pebble", mark: "RP", tone: "#a7d3de", bg: "#24333c", clue: "simple weight in weather" },
+    { id: "coast-shell", name: "Coast Shell", mark: "CS", tone: "#f4ead6", bg: "#2d3443", clue: "old hush from the water" },
+    { id: "ember-match", name: "Ember Match", mark: "EM", tone: "#ef9e54", bg: "#3a241a", clue: "one bright permission" },
+    { id: "garden-thread", name: "Garden Thread", mark: "GT", tone: "#bddd7d", bg: "#273822", clue: "mends the mood gently" },
+    { id: "star-token", name: "Star Token", mark: "ST", tone: "#f4e6a6", bg: "#24243b", clue: "night kept in the palm" }
+  ];
+
+  const nounWizardAtmospheres = [
+    { id: "fireplace-hour", name: "Fireplace Hour", mark: "FH", tone: "#ef9e54", bg: "#3a241a", clue: "crackle, low light, no hurry" },
+    { id: "rain-window", name: "Rain Window", mark: "RW", tone: "#a7d3de", bg: "#24333c", clue: "outside moving, inside still" },
+    { id: "road-dust", name: "Road Dust", mark: "RD", tone: "#dfc586", bg: "#3d3424", clue: "the path can wait" },
+    { id: "star-porch", name: "Star Porch", mark: "SP", tone: "#d7d9ff", bg: "#222b42", clue: "wide dark and a small lamp" },
+    { id: "marine-layer", name: "Marine Layer", mark: "ML", tone: "#8fc3bf", bg: "#24333c", clue: "coastal softness over the edges" },
+    { id: "paris-glow", name: "Paris Glow", mark: "PG", tone: "#d58a91", bg: "#302a31", clue: "wet stone, red wine, lamplight" }
+  ];
+
+  const nounWizardOfferings = [
+    { id: "pipe-leaf", name: "Pipe Leaf", mark: "PL", tone: "#9fbc68", bg: "#263827", clue: "slow draw, softer thought" },
+    { id: "red-wine", name: "Red Wine", mark: "RW", tone: "#d58a91", bg: "#3a2525", clue: "pleasure taken kindly" },
+    { id: "small-beer", name: "Small Beer", mark: "SB", tone: "#e3a85f", bg: "#3a2818", clue: "tavern warmth without spectacle" },
+    { id: "hot-tea", name: "Hot Tea", mark: "HT", tone: "#f1d7a1", bg: "#302a31", clue: "wait long enough to steep" },
+    { id: "ocean-air", name: "Ocean Air", mark: "OA", tone: "#8fc3bf", bg: "#24333c", clue: "vastness before the next word" },
+    { id: "firelight", name: "Firelight", mark: "FL", tone: "#ffd27a", bg: "#392b1e", clue: "one room made warmer" },
+    { id: "clean-page", name: "Clean Page", mark: "CP", tone: "#f4ead6", bg: "#2f2a22", clue: "a thought with room to land" },
+    { id: "quiet-bread", name: "Quiet Bread", mark: "QB", tone: "#d0bd7a", bg: "#3a2d20", clue: "humble comfort counted fully" }
+  ];
+
+  const nounWizardLessons = [
+    { id: "be-here", name: "Be Here", mark: "BH", tone: "#f0c96a", bg: "#2f2a22", clue: "attention returns to the room" },
+    { id: "begin-small", name: "Begin Small", mark: "BS", tone: "#9fbc68", bg: "#263827", clue: "seed-sized is big enough" },
+    { id: "soften-grip", name: "Soften Grip", mark: "SG", tone: "#a7d3de", bg: "#24333c", clue: "less force, more contact" },
+    { id: "look-again", name: "Look Again", mark: "LA", tone: "#d7d9ff", bg: "#222b42", clue: "wonder before verdict" },
+    { id: "enjoy-plainly", name: "Enjoy Plainly", mark: "EP", tone: "#ef9e54", bg: "#3a241a", clue: "ordinary pleasure is allowed" },
+    { id: "ask-gently", name: "Ask Gently", mark: "AG", tone: "#f4e6a6", bg: "#24243b", clue: "curiosity without pressure" },
+    { id: "wait-kindly", name: "Wait Kindly", mark: "WK", tone: "#dfc586", bg: "#3d3424", clue: "patience with a friendly face" },
+    { id: "keep-wonder", name: "Keep Wonder", mark: "KW", tone: "#b9d37d", bg: "#25313a", clue: "leave one corner unexplained" }
   ];
 
   const actualNounImageBase = "https://noun.pics";
@@ -1521,7 +1574,7 @@
     ? savedSettings.artActive
     : imageSeries[0].id;
   const initialNoggleShift = savedRelease && Number.isFinite(Number(savedSettings.noggleShift))
-    ? Math.abs(Math.floor(Number(savedSettings.noggleShift))) % nounWizardNoggles.length
+    ? Math.abs(Math.floor(Number(savedSettings.noggleShift))) % actualNounSeeds.length
     : 0;
   const initialCouncilOffset = savedRelease && Number.isFinite(Number(savedSettings.councilOffset))
     ? Math.abs(Math.floor(Number(savedSettings.councilOffset))) % nounsGandalfs.length
@@ -1895,6 +1948,11 @@
     return Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
   }
 
+  function deterministicItem(items, seed, offset = 0) {
+    const safeOffset = Number.isFinite(Number(offset)) ? Math.floor(Number(offset)) : 0;
+    return items[(keepsakeSeed(seed) + safeOffset + items.length) % items.length] || items[0];
+  }
+
   function keepsakeForCardId(cardId, ritual = "enjoy") {
     const index = keepsakeSeed(`${cardId}-${ritual}`) % keepsakeRelics.length;
     return keepsakeRelics[index] || keepsakeRelics[0];
@@ -1954,6 +2012,86 @@
     };
   }
 
+  function nounWizardMixForCard(card = activeNounsGandalf(), ritual = state.ritual, shift = state.noggleShift) {
+    const safeShift = Number.isFinite(Number(shift)) ? Math.floor(Number(shift)) : 0;
+    const seed = `${card.id}-${card.noun}-${ritual}-noun-${actualNounSeedForCard(card, shift)}`;
+
+    return {
+      aura: deterministicItem(nounWizardAuras, `${seed}-aura`, safeShift),
+      charm: deterministicItem(nounWizardCharms, `${seed}-charm`, safeShift * 2),
+      atmosphere: deterministicItem(nounWizardAtmospheres, `${seed}-atmosphere`, safeShift * 3),
+      offering: deterministicItem(nounWizardOfferings, `${seed}-offering`, safeShift * 4),
+      lesson: deterministicItem(nounWizardLessons, `${seed}-lesson`, safeShift * 5)
+    };
+  }
+
+  function protocolAttribute(traitType, item, source, detail) {
+    return {
+      trait_type: traitType,
+      value: item.name,
+      mark: item.mark,
+      tone: item.tone,
+      bg: item.bg,
+      source,
+      detail: detail || item.clue
+    };
+  }
+
+  function wizardNounProtocolForCard(card = activeNounsGandalf(), ritual = state.ritual, shift = state.noggleShift) {
+    const elements = wizardElementsForCard(card, ritual);
+    const traits = nounWizardTraitsForCard(card, ritual, shift);
+    const mix = nounWizardMixForCard(card, ritual, shift);
+    const ritualData = rituals[ritual] || rituals.enjoy;
+    const ritualItem = {
+      id: ritual,
+      name: ritualData.title,
+      mark: ritualData.title.slice(0, 2).toUpperCase(),
+      tone: "#f0c96a",
+      bg: "#2f2a22",
+      clue: ritualData.short
+    };
+    const relic = card.id === state.nounsActive ? activeKeepsake() : suggestedKeepsakeForCard(card, ritual);
+    const resourceId = card.id === state.nounsActive ? state.resourceActive : resourceForRitualId(ritual);
+    const resource = spellResources.find((item) => item.id === resourceId) || spellResources[0];
+    const protocolItem = {
+      id: nounWizardProtocolVersion.toLowerCase(),
+      name: nounWizardProtocolVersion,
+      mark: "WN",
+      tone: "#f0c96a",
+      bg: "#2f2a22",
+      clue: "actual Noun first; deterministic wizard attributes after"
+    };
+    const attributes = [
+      protocolAttribute("Protocol", protocolItem, "creation"),
+      protocolAttribute("Actual Noun", traits.actual, "noun.pics", traits.actual.clue),
+      protocolAttribute("Ritual", ritualItem, "sit"),
+      ...elements.map((element) => protocolAttribute(element.label, element.item, `wizard-${element.role}`)),
+      protocolAttribute("Aura", mix.aura, "attribute-mix"),
+      protocolAttribute("Charm", mix.charm, "attribute-mix"),
+      protocolAttribute("Atmosphere", mix.atmosphere, "attribute-mix"),
+      protocolAttribute("Offering", mix.offering, "attribute-mix"),
+      protocolAttribute("Lesson", mix.lesson, "attribute-mix"),
+      protocolAttribute("Resource", resource, "sharpener"),
+      protocolAttribute("Relic Pair", relic, "pairing")
+    ];
+    const staff = wizardElement(elements, "staff");
+    const sigil = [traits.actual.mark, staff.mark, mix.charm.mark, mix.lesson.mark, resource.mark].join("-");
+
+    return {
+      version: nounWizardProtocolVersion,
+      seed: `${card.id}:${traits.actual.id}:${ritual}:${shift}`,
+      sigil,
+      card,
+      elements,
+      traits,
+      mix,
+      ritual: ritualItem,
+      relic,
+      resource,
+      attributes
+    };
+  }
+
   function isNatureVersion(version = state.version) {
     return version === "v3" || version === "v4" || version === "v5" || version === "v6" || version === "v7";
   }
@@ -1970,7 +2108,13 @@
     element.style.setProperty("--spark", card.spark);
   }
 
-  function applyWizardNounStyle(element, card, elements = wizardElementsForCard(card), traits = nounWizardTraitsForCard(card)) {
+  function applyWizardNounStyle(
+    element,
+    card,
+    elements = wizardElementsForCard(card),
+    traits = nounWizardTraitsForCard(card),
+    mix = nounWizardMixForCard(card)
+  ) {
     const hat = wizardElement(elements, "hat");
     const beard = wizardElement(elements, "beard");
     const staff = wizardElement(elements, "staff");
@@ -1992,13 +2136,23 @@
     element.style.setProperty("--wizard-robe", robe.bg);
     element.style.setProperty("--wizard-trim", robe.tone);
     element.style.setProperty("--wizard-orb", relic.tone);
-    element.style.setProperty("--wizard-aura", realm.tone);
+    element.style.setProperty("--wizard-aura", mix.aura.tone || realm.tone);
+    element.style.setProperty("--wizard-charm", mix.charm.tone);
+    element.style.setProperty("--wizard-charm-bg", mix.charm.bg);
+    element.style.setProperty("--wizard-weather", mix.atmosphere.tone);
+    element.style.setProperty("--wizard-lesson", mix.lesson.tone);
+    element.style.setProperty("--wizard-offering", mix.offering.tone);
     element.dataset.realm = realm.id;
     element.dataset.relic = relic.id;
     element.dataset.actualNoun = traits.actual.id;
     element.dataset.head = traits.head.id;
     element.dataset.noggles = traits.noggles.id;
     element.dataset.accessory = traits.accessory.id;
+    element.dataset.aura = mix.aura.id;
+    element.dataset.charm = mix.charm.id;
+    element.dataset.atmosphere = mix.atmosphere.id;
+    element.dataset.offering = mix.offering.id;
+    element.dataset.lesson = mix.lesson.id;
   }
 
   function renderNounAvatar(target, card, isSmall) {
@@ -2006,14 +2160,15 @@
       return;
     }
 
-    const elements = wizardElementsForCard(card);
-    const traits = nounWizardTraitsForCard(card);
-    const relic = wizardElement(elements, "relic");
+    const protocol = wizardNounProtocolForCard(card);
+    const elements = protocol.elements;
+    const traits = protocol.traits;
+    const relic = protocol.relic;
     target.replaceChildren();
     target.className = isSmall ? "noun-avatar actual-noun-avatar noun-avatar-small" : "noun-avatar actual-noun-avatar";
-    target.title = `${card.name} paired with ${traits.actual.name}`;
+    target.title = `${card.name} paired with ${traits.actual.name} via ${protocol.version}`;
     applyNounStyle(target, card);
-    applyWizardNounStyle(target, card, elements, traits);
+    applyWizardNounStyle(target, card, elements, traits, protocol.mix);
 
     const image = document.createElement("img");
     image.className = "actual-noun-image";
@@ -2031,11 +2186,17 @@
     });
     target.append(image);
 
-    ["noun-aura", "noun-staff", "noun-hat", "noun-accessory", "noun-orb", "noun-rune"].forEach((className) => {
+    ["noun-aura", "noun-weather", "noun-staff", "noun-hat", "noun-accessory", "noun-charm", "noun-orb", "noun-lesson", "noun-rune"].forEach((className) => {
       const part = document.createElement("span");
       part.className = className;
       if (className === "noun-accessory") {
-        part.textContent = traits.accessory.mark;
+        part.textContent = protocol.mix.offering.mark;
+      }
+      if (className === "noun-charm") {
+        part.textContent = protocol.mix.charm.mark;
+      }
+      if (className === "noun-lesson") {
+        part.textContent = protocol.mix.lesson.mark;
       }
       if (className === "noun-rune") {
         part.textContent = relic.mark;
@@ -2049,13 +2210,21 @@
     target.append(mark);
   }
 
-  function renderWizardTraitPills(target, elements) {
+  function renderWizardTraitPills(target, protocol) {
     if (!target) {
       return;
     }
 
+    const pills = [
+      ...protocol.elements.map((element) => ({ label: element.label, item: element.item })),
+      { label: "Aura", item: protocol.mix.aura },
+      { label: "Charm", item: protocol.mix.charm },
+      { label: "Offer", item: protocol.mix.offering },
+      { label: "Lesson", item: protocol.mix.lesson }
+    ];
+
     target.replaceChildren();
-    elements.forEach((element) => {
+    pills.forEach((element) => {
       const pill = document.createElement("span");
       pill.style.setProperty("--element-tone", element.item.tone);
       pill.textContent = `${element.label}: ${element.item.name}`;
@@ -2091,18 +2260,20 @@
     });
   }
 
-  function renderNounFeatureGrid(target, traits, elements) {
+  function renderNounFeatureGrid(target, protocol) {
     if (!target) {
       return;
     }
 
-    const staff = wizardElement(elements, "staff");
-    const relic = wizardElement(elements, "relic");
     const features = [
-      { label: "Actual Noun", item: traits.actual, detail: traits.actual.clue },
-      { label: "Noggles", item: traits.noggles, detail: "kept from the real rendered Noun, with a ritual color cue" },
-      { label: "Wizard Hold", item: traits.accessory, detail: traits.accessory.clue },
-      { label: "Wand", item: staff, detail: `casts through ${relic.name}` }
+      { label: "Actual Noun", item: protocol.traits.actual, detail: protocol.traits.actual.clue },
+      { label: "Protocol", item: { mark: "WN", name: protocol.version, tone: "#f0c96a", bg: "#2f2a22" }, detail: `${protocol.attributes.length} deterministic attributes` },
+      { label: "Aura", item: protocol.mix.aura, detail: protocol.mix.aura.clue },
+      { label: "Charm", item: protocol.mix.charm, detail: protocol.mix.charm.clue },
+      { label: "Atmosphere", item: protocol.mix.atmosphere, detail: protocol.mix.atmosphere.clue },
+      { label: "Offering", item: protocol.mix.offering, detail: protocol.mix.offering.clue },
+      { label: "Lesson", item: protocol.mix.lesson, detail: protocol.mix.lesson.clue },
+      { label: "Resource", item: protocol.resource, detail: protocol.resource.promise }
     ];
 
     target.replaceChildren();
@@ -2169,7 +2340,8 @@
       const avatar = document.createElement("span");
       const name = document.createElement("strong");
       const meta = document.createElement("small");
-      const elements = wizardElementsForCard(card, state.ritual);
+      const protocol = wizardNounProtocolForCard(card, state.ritual);
+      const elements = protocol.elements;
       const collected = state.nounsCollection.has(card.id);
 
       button.type = "button";
@@ -2178,13 +2350,13 @@
       button.classList.toggle("is-collected", collected);
       button.dataset.nounsId = card.id;
       button.setAttribute("aria-pressed", String(card.id === state.nounsActive));
-      button.setAttribute("aria-label", `${card.name}, ${collected ? "kept" : "not kept"}, ${wizardElementPhrase(elements)}`);
+      button.setAttribute("aria-label", `${card.name}, ${collected ? "kept" : "not kept"}, ${protocol.traits.actual.name}, ${protocol.mix.lesson.name}`);
       applyNounStyle(button, card);
-      applyWizardNounStyle(button, card, elements, nounWizardTraitsForCard(card));
+      applyWizardNounStyle(button, card, elements, protocol.traits, protocol.mix);
 
       renderNounAvatar(avatar, card, true);
       name.textContent = card.noun;
-      meta.textContent = collected ? "kept" : wizardElement(elements, "realm").name;
+      meta.textContent = collected ? "kept" : protocol.traits.actual.name;
       button.append(avatar, name, meta);
       button.addEventListener("click", () => setNounsGandalf(card.id));
       target.append(button);
@@ -2201,25 +2373,26 @@
     const resource = activeResource();
     const ritual = activeRitual();
     const art = activeArtPrompt();
-    const elements = wizardElementsForCard(card, state.ritual);
-    const traits = nounWizardTraitsForCard(card, state.ritual);
+    const protocol = wizardNounProtocolForCard(card, state.ritual);
+    const elements = protocol.elements;
+    const traits = protocol.traits;
     const score = presenceScore();
     const keptLabel = `${state.nounsCollection.size}/${nounsGandalfs.length} kept`;
     const spellLabel = state.activeSpell || `${resource.name} can become a spell.`;
-    const nounSigil = `${traits.actual.mark}-${traits.noggles.mark}-${wizardElement(elements, "staff").mark}`;
+    const nounSigil = protocol.sigil;
 
     renderNounAvatar(dom.v7NounAvatar, card, false);
-    renderWizardTraitPills(dom.v7TraitPills, elements);
+    renderWizardTraitPills(dom.v7TraitPills, protocol);
     renderWizardElementGrid(dom.v7ElementGrid, elements);
-    renderNounFeatureGrid(dom.v7NounFeatureGrid, traits, elements);
+    renderNounFeatureGrid(dom.v7NounFeatureGrid, protocol);
     renderNounCouncil(dom.v7CouncilGrid);
     renderWizardCollectionGrid(dom.v7CollectionGrid);
     dom.v7Progress.textContent = `${keptLabel} · ${score} presence`;
     dom.v7RitualLine.textContent = `${ritual.title} · ${ritual.short}`;
     dom.v7WizardTitle.textContent = `${card.name}: ${wizardElementPhrase(elements)}`;
-    dom.v7WizardText.textContent = `${traits.actual.name} is the real Noun under the wizard layer; ${card.trait}. ${ritual.guide} Pair ${relic.name}, sharpen ${resource.name}, then sit with: ${card.mantra}`;
-    dom.v7FrameworkTitle.textContent = elements.map((element) => element.label).join(" + ");
-    dom.v7NounBuildTitle.textContent = `${traits.actual.name} + ${traits.noggles.name} + ${traits.accessory.name}`;
+    dom.v7WizardText.textContent = `${traits.actual.name} is the real Noun source. ${protocol.version} adds ${protocol.mix.aura.name}, ${protocol.mix.charm.name}, ${protocol.mix.offering.name}, and ${protocol.mix.lesson.name}; ${ritual.guide} Sit with: ${card.mantra}`;
+    dom.v7FrameworkTitle.textContent = `${protocol.version} · ${protocol.attributes.length} attributes`;
+    dom.v7NounBuildTitle.textContent = `${traits.actual.name} · ${protocol.mix.charm.name} · ${protocol.mix.lesson.name}`;
     dom.v7CouncilTitle.textContent = `${card.noun} council · ${presenceRank(score)}`;
     dom.v7ForgeHint.textContent = `${card.rarity} · ${natureViews[card.visual].name}`;
     dom.v7RelicName.textContent = relic.name;
@@ -2546,7 +2719,7 @@
       const meta = document.createElement("small");
 
       phrase.textContent = spell.phrase;
-      meta.textContent = `${spell.resource} / ${spell.card.replace(" Gandalf", "")} / ${spell.keepsake}`;
+      meta.textContent = `${spell.resource} / ${spell.card.replace(" Gandalf", "")} / ${spell.keepsake}${spell.sigil ? ` / ${spell.sigil}` : ""}`;
       item.append(phrase, meta);
       dom.spellList.append(item);
     });
@@ -2641,6 +2814,7 @@
     const resource = activeResource();
     const card = activeNounsGandalf();
     const relic = activeKeepsake();
+    const protocol = state.version === "v7" ? wizardNounProtocolForCard(card, state.ritual) : null;
     const phrase = state.activeSpell || buildSpell({ quiet: true });
     const formatter = new Intl.DateTimeFormat(undefined, {
       month: "short",
@@ -2653,7 +2827,10 @@
       phrase,
       resource: resource.name,
       card: card.name,
-      keepsake: relic.name,
+      keepsake: protocol ? `${relic.name} + ${protocol.mix.charm.name}` : relic.name,
+      protocol: protocol?.version,
+      sigil: protocol?.sigil,
+      attributes: protocol?.attributes.map((attribute) => `${attribute.trait_type}: ${attribute.value}`),
       date: formatter.format(new Date())
     });
     state.spellBook = state.spellBook.slice(0, 8);
@@ -3915,7 +4092,7 @@
     spawnParticles(14);
   }
 
-  function resourceForRitual() {
+  function resourceForRitualId(ritual = state.ritual) {
     const map = {
       enjoy: "ease",
       meditate: "focus",
@@ -3924,7 +4101,11 @@
       study: "wonder"
     };
 
-    return map[state.ritual] || "focus";
+    return map[ritual] || "focus";
+  }
+
+  function resourceForRitual() {
+    return resourceForRitualId(state.ritual);
   }
 
   function ensureV7Version() {
@@ -3968,9 +4149,12 @@
   function v7BuildSpell() {
     ensureV7Version();
 
-    const spell = buildSpell({ quiet: true });
+    const protocol = wizardNounProtocolForCard();
+    const spell = composeNounWizardSpell();
+    state.activeSpell = spell;
+    updateSpellPanel();
     dom.wizardLine.textContent = spell;
-    setGuide("Spell built", `${activeNounsGandalf().name} · ${activeKeepsake().name}`, `${activeResource().promise}. Keep it if it feels useful.`);
+    setGuide("Protocol spell built", `${activeNounsGandalf().name} · ${protocol.sigil}`, `${protocol.mix.lesson.clue}. Keep it if it feels useful.`);
     updateV7Panel();
     spawnParticles(12);
   }
@@ -3979,10 +4163,12 @@
     ensureV7Version();
 
     state.noggleShift = (state.noggleShift + 1) % actualNounSeeds.length;
-    const traits = nounWizardTraitsForCard();
+    state.activeSpell = "";
+    const protocol = wizardNounProtocolForCard();
+    const traits = protocol.traits;
     saveSettings();
-    dom.wizardLine.textContent = `${traits.actual.name} arrived with real Noun bones and ${traits.noggles.name} ritual color.`;
-    setGuide("Actual Noun rolled", `${activeNounsGandalf().name} · ${traits.actual.name}`, `${traits.actual.clue}. Noun first, wizard second, present always.`);
+    dom.wizardLine.textContent = `${traits.actual.name} arrived; ${protocol.mix.charm.name}, ${protocol.mix.offering.name}, and ${protocol.mix.lesson.name} entered the mix.`;
+    setGuide("Actual Noun rolled", `${activeNounsGandalf().name} · ${protocol.sigil}`, `${traits.actual.clue}. Noun first, protocol next, present always.`);
     updateV7Panel();
     spawnParticles(10);
   }
@@ -4000,15 +4186,14 @@
 
   function composeNounWizardSpell() {
     const card = activeNounsGandalf();
-    const relic = activeKeepsake();
-    const resource = activeResource();
-    const elements = wizardElementsForCard(card, state.ritual);
-    const traits = nounWizardTraitsForCard(card, state.ritual);
-    const staff = wizardElement(elements, "staff");
-    const realm = wizardElement(elements, "realm");
-    const word = resource.words[keepsakeSeed(`${traits.actual.id}-${traits.noggles.id}-${staff.id}`) % resource.words.length];
+    const protocol = wizardNounProtocolForCard(card, state.ritual);
+    const relic = protocol.relic;
+    const resource = protocol.resource;
+    const staff = wizardElement(protocol.elements, "staff");
+    const realm = wizardElement(protocol.elements, "realm");
+    const word = resource.words[keepsakeSeed(`${protocol.seed}-${protocol.mix.charm.id}-${protocol.mix.lesson.id}`) % resource.words.length];
 
-    return `${traits.actual.mark} ${card.noun} noun spell: ${word} through ${staff.name}; held by ${relic.name} in ${realm.name}.`;
+    return `${protocol.sigil} ${card.noun} protocol spell: ${word} through ${staff.name}; ${protocol.mix.charm.name} keeps ${protocol.mix.lesson.name.toLowerCase()} with ${relic.name} in ${realm.name}.`;
   }
 
   function v7CastNounSpell() {
@@ -4017,7 +4202,8 @@
     const resource = activeResource();
     const card = activeNounsGandalf();
     const relic = activeKeepsake();
-    const traits = nounWizardTraitsForCard(card, state.ritual);
+    const protocol = wizardNounProtocolForCard(card, state.ritual);
+    const traits = protocol.traits;
     const phrase = composeNounWizardSpell();
     const formatter = new Intl.DateTimeFormat(undefined, {
       month: "short",
@@ -4031,7 +4217,10 @@
       phrase,
       resource: resource.name,
       card: card.name,
-      keepsake: `${relic.name} + ${traits.noggles.name}`,
+      keepsake: `${relic.name} + ${protocol.mix.charm.name}`,
+      protocol: protocol.version,
+      sigil: protocol.sigil,
+      attributes: protocol.attributes.map((attribute) => `${attribute.trait_type}: ${attribute.value}`),
       date: formatter.format(new Date())
     });
     state.spellBook = state.spellBook.slice(0, 8);
@@ -4040,7 +4229,7 @@
     saveSpellBook();
     updateSpellPanel();
     dom.wizardLine.textContent = phrase;
-    setGuide("Noun spell cast", `${traits.actual.name} · ${traits.noggles.name}`, `${resource.promise}. The spellbook kept it.`);
+    setGuide("Protocol spell cast", `${traits.actual.name} · ${protocol.sigil}`, `${resource.promise}. The spellbook kept the attribute recipe.`);
     spawnParticles(16);
   }
 
@@ -4063,8 +4252,9 @@
       buildSpell({ quiet: true });
     }
     keepSpell({ quiet: true });
-    dom.wizardLine.textContent = "Wizard noun kept. Card, relic, and spell are in the pouch.";
-    setGuide("Set kept", activeNounsGandalf().name, `${wizardElementPhrase(wizardElementsForCard())}. ${activeResource().name} is sharper now.`);
+    const protocol = wizardNounProtocolForCard();
+    dom.wizardLine.textContent = `Wizard noun kept under ${protocol.version}. ${protocol.sigil} is in the pouch.`;
+    setGuide("Set kept", activeNounsGandalf().name, `${protocol.mix.charm.name}, ${protocol.mix.offering.name}, ${protocol.mix.lesson.name}. ${activeResource().name} is sharper now.`);
     updateV7Panel();
     spawnParticles(16);
   }
