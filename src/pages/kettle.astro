@@ -1,0 +1,1002 @@
+---
+/**
+ * /kettle — cozy multiplayer kettle.
+ *
+ * Per Mike 2026-04-27: "fun publish and lets do another kettle or coffee
+ * play, something fun to participate with."
+ *
+ * One kettle on the stove. Visitors stoke the flame together. Heat
+ * builds, steam rises, and at 100% the kettle WHISTLES — high-pitched
+ * Web Audio steam whistle, ~3 seconds, every visitor hears it. Then a
+ * brief celebration (steam burst, "POURED" banner), kettle resets,
+ * cycle starts again.
+ *
+ * Multiplayer mechanics — derived, not stored:
+ *   · Click sends type=kettle event to /api/sounds with action=stoke.
+ *   · Heat = clamp(0..1) of: stokes-in-last-60s / STOKES_TO_BOIL.
+ *   · The room shares /api/sounds, so every client computes the same
+ *     heat from the same shared event window. No new server state.
+ *   · Boil happens when heat hits 1.0; after that, everyone holds for
+ *     a 4s "boiling" cooldown, then resets.
+ *
+ * Counters in localStorage:
+ *   · pc:kettle:my-stokes        (your contribution counter, all-time)
+ *   · pc:kettle:boils-witnessed  (rounds you saw boil)
+ *
+ * Aesthetic: cozy 1990s El Segundo kitchen at 6 AM. Sky-blue gingham
+ * wallpaper, white tile counter with blue grout, window showing the
+ * marine layer outside, brass kettle on a blue gas flame, polaroid of
+ * a Noun on the fridge, drip coffee maker on the side. Gentle.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/kettle — stoke the flame, boil the room';
+const description =
+  'A cozy multiplayer kettle on PointCast. Everyone in the kitchen stokes together. The kettle whistles when the heat hits 100%. Each boil is one cup poured for the whole room.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/kettle',
+  name: 'PointCast · Kettle',
+  url: 'https://pointcast.xyz/kettle',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="kt" id="kt-main">
+
+    <header class="kt__head">
+      <p class="kt__kicker">EL SEGUNDO · KITCHEN · MORNING · MULTIPLAYER</p>
+      <h1 class="kt__title"><em>The kettle is on.</em></h1>
+      <p class="kt__dek">
+        Stoke the flame. Everyone in the room stokes together. When the heat hits 100%, the kettle whistles — every visitor hears the same one. Then a cup gets poured for the whole room and we start over.
+      </p>
+    </header>
+
+    <section class="kt__stage" aria-label="Kitchen">
+      <div class="kt__kitchen">
+
+        <div class="kt__wallpaper" aria-hidden="true"></div>
+        <div class="kt__counter" aria-hidden="true"></div>
+
+        <div class="kt__window" aria-hidden="true">
+          <div class="kt__window-pane">
+            <div class="kt__marine"></div>
+            <div class="kt__horizon"></div>
+            <div class="kt__sun"></div>
+          </div>
+          <div class="kt__window-bar kt__window-bar--v"></div>
+          <div class="kt__window-bar kt__window-bar--h"></div>
+          <p class="kt__window-cap">marine layer · 6:14 AM</p>
+        </div>
+
+        <div class="kt__fridge-photo" aria-hidden="true">
+          <img src="https://noun.pics/385.svg" alt="" width="40" height="40" loading="lazy" />
+          <span class="kt__fridge-pin"></span>
+        </div>
+
+        <div class="kt__coffee-maker" aria-hidden="true">
+          <div class="kt__cm-body"></div>
+          <div class="kt__cm-pot"></div>
+          <span class="kt__cm-led"></span>
+        </div>
+
+        <button
+          type="button"
+          class="kt__stove"
+          id="kt-stove"
+          aria-label="Stoke the flame"
+        >
+          <div class="kt__steam" id="kt-steam">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="kt__kettle">
+            <div class="kt__kettle-handle"></div>
+            <div class="kt__kettle-body">
+              <div class="kt__kettle-shine"></div>
+              <div class="kt__kettle-base"></div>
+              <div class="kt__kettle-spout"></div>
+              <div class="kt__kettle-cap"></div>
+            </div>
+          </div>
+          <div class="kt__flame" id="kt-flame">
+            <span class="kt__flame-core"></span>
+            <span class="kt__flame-mid"></span>
+            <span class="kt__flame-outer"></span>
+          </div>
+          <div class="kt__stove-top"></div>
+          <div class="kt__stove-knob" aria-hidden="true">
+            <span class="kt__stove-knob-tick"></span>
+          </div>
+        </button>
+
+        <div class="kt__heat" aria-live="polite">
+          <p class="kt__heat-label mono">heat</p>
+          <div class="kt__heat-bar">
+            <div class="kt__heat-fill" id="kt-heat-fill"></div>
+            <span class="kt__heat-pct mono" id="kt-heat-pct">0%</span>
+          </div>
+        </div>
+
+        <div class="kt__boil-banner" id="kt-boil" hidden>
+          <p>★ POURED ★</p>
+        </div>
+      </div>
+
+      <aside class="kt__panel">
+        <h2 class="kt__panel-h">in the kitchen</h2>
+        <ul class="kt__roster" id="kt-roster" role="list">
+          <li class="kt__panel-empty">just you</li>
+        </ul>
+        <div class="kt__panel-divider"></div>
+        <h2 class="kt__panel-h">your kettle</h2>
+        <dl class="kt__stats">
+          <dt>stokes</dt><dd id="kt-my-stokes">0</dd>
+          <dt>boils witnessed</dt><dd id="kt-witnessed">0</dd>
+          <dt>this boil</dt><dd id="kt-this-boil">0</dd>
+        </dl>
+        <div class="kt__panel-divider"></div>
+        <h2 class="kt__panel-h">global, today</h2>
+        <dl class="kt__stats">
+          <dt>cups poured</dt><dd id="kt-cups">0</dd>
+          <dt>active stokers</dt><dd id="kt-stokers">1</dd>
+          <dt>last boil</dt><dd id="kt-last-boil">—</dd>
+        </dl>
+        <p class="kt__panel-hint mono">
+          tap the stove · or press space · keep stoking till it whistles
+        </p>
+      </aside>
+    </section>
+
+    <footer class="kt__foot">
+      <p>
+        Each click sends a <code>type=kettle</code> event to
+        <code>/api/sounds</code>. Heat is computed locally from stoke
+        events in the last 60 seconds — every client agrees on the
+        kettle's state. The whistle is a Web Audio synth, ~3s. The
+        cooldown is 4s after each boil.
+      </p>
+      <p class="kt__credit mono">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · cozy room</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    const STOKES_TO_BOIL = 24;       // events in window to reach 100%
+    const HEAT_WINDOW_MS = 60 * 1000; // events count if within last 60s
+    const COOLDOWN_MS = 4500;
+    const POLL_MS = 1500;
+    const STOKE_DEBOUNCE_MS = 120;
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'kt-' + Math.random().toString(36).slice(2, 10); }
+    }
+    function getInt(k) { try { return Number(localStorage.getItem(k) || 0) | 0; } catch { return 0; } }
+    function setInt(k, v) { try { localStorage.setItem(k, String(v)); } catch {} }
+    function getDayKey() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function dayKey(prefix) { return `${prefix}:${getDayKey()}`; }
+
+    const session = getSession();
+
+    const stove = document.getElementById('kt-stove');
+    const flame = document.getElementById('kt-flame');
+    const steam = document.getElementById('kt-steam');
+    const heatFill = document.getElementById('kt-heat-fill');
+    const heatPct = document.getElementById('kt-heat-pct');
+    const boilBanner = document.getElementById('kt-boil');
+    const roster = document.getElementById('kt-roster');
+    const myStokesEl = document.getElementById('kt-my-stokes');
+    const witnessedEl = document.getElementById('kt-witnessed');
+    const thisBoilEl = document.getElementById('kt-this-boil');
+    const cupsEl = document.getElementById('kt-cups');
+    const stokersEl = document.getElementById('kt-stokers');
+    const lastBoilEl = document.getElementById('kt-last-boil');
+
+    let myStokes = getInt('pc:kettle:my-stokes');
+    let boilsWitnessed = getInt('pc:kettle:boils-witnessed');
+    let cupsToday = getInt(dayKey('pc:kettle:cups'));
+    let thisBoil = 0;
+    myStokesEl.textContent = String(myStokes);
+    witnessedEl.textContent = String(boilsWitnessed);
+    cupsEl.textContent = String(cupsToday);
+
+    let recentStokes = []; // [{t, pid}]
+    let cooldownUntil = 0;
+    let boiling = false;
+    let lastSeenTs = 0;
+    let lastStokeAt = 0;
+
+    let ctx = null;
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+    }
+
+    // Whistle synth: pair of detuned saws into bandpass + slight noise.
+    function whistle() {
+      ensureCtx();
+      const t0 = ctx.currentTime;
+      const dur = 3.0;
+
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2400;
+      bp.Q.value = 14;
+
+      const out = ctx.createGain();
+      out.gain.value = 0;
+      out.gain.setValueAtTime(0.0001, t0);
+      out.gain.linearRampToValueAtTime(0.18, t0 + 0.3);
+      out.gain.setValueAtTime(0.18, t0 + dur - 0.6);
+      out.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+      bp.connect(out);
+      out.connect(ctx.destination);
+
+      // Two saws slightly detuned for the screech beat
+      [0, 6].forEach((cents) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = 1200;
+        osc.detune.value = cents;
+        // Subtle pitch wobble like a real boiling whistle
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 6;
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 14;
+        lfo.connect(lfoGain).connect(osc.detune);
+        lfo.start(t0);
+        lfo.stop(t0 + dur);
+        osc.connect(bp);
+        osc.start(t0);
+        osc.stop(t0 + dur);
+      });
+
+      // Steam noise
+      const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+      const noiseData = noiseBuf.getChannelData(0);
+      for (let i = 0; i < noiseData.length; i++) noiseData[i] = (Math.random() * 2 - 1);
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuf;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.value = 0.05;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 4000;
+      noiseSrc.connect(hp).connect(noiseGain).connect(out);
+      noiseSrc.start(t0);
+      noiseSrc.stop(t0 + dur);
+    }
+
+    function broadcastStoke() {
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'kettle', sessionId: session, action: 'stoke' }),
+        });
+      } catch {}
+    }
+
+    function stoke() {
+      const now = Date.now();
+      if (now - lastStokeAt < STOKE_DEBOUNCE_MS) return;
+      lastStokeAt = now;
+      if (boiling) return; // can't stoke while boiling
+      // Optimistic local stoke — render heat bump even before /api/sounds returns it
+      recentStokes.push({ t: now, pid: 'me' });
+      myStokes += 1;
+      thisBoil += 1;
+      myStokesEl.textContent = String(myStokes);
+      thisBoilEl.textContent = String(thisBoil);
+      setInt('pc:kettle:my-stokes', myStokes);
+      // Tiny visual stoke-bump on flame
+      flame.classList.remove('kt__flame--bump');
+      void flame.offsetWidth;
+      flame.classList.add('kt__flame--bump');
+      broadcastStoke();
+      renderHeat();
+    }
+
+    function renderHeat() {
+      const now = Date.now();
+      // prune
+      recentStokes = recentStokes.filter((s) => now - s.t < HEAT_WINDOW_MS);
+      const heat = boiling ? 1 : Math.max(0, Math.min(1, recentStokes.length / STOKES_TO_BOIL));
+      heatFill.style.width = `${(heat * 100).toFixed(0)}%`;
+      heatPct.textContent = `${Math.round(heat * 100)}%`;
+
+      // Visual flame size by heat
+      const scale = 0.5 + heat * 0.9;
+      flame.style.transform = `translateX(-50%) scaleY(${scale}) scaleX(${0.7 + heat * 0.5})`;
+      flame.style.opacity = String(0.45 + heat * 0.55);
+      // Steam intensity
+      const steamScale = boiling ? 1 : Math.max(0.1, heat);
+      steam.style.opacity = String(steamScale);
+
+      // Heat-fill color drift cool→hot
+      heatFill.style.background = `linear-gradient(90deg, #5fbafd 0%, ${heat > 0.6 ? '#ffd400' : '#94d4ff'} ${Math.min(60, heat*100)}%, ${heat > 0.85 ? '#ff5c23' : '#ffd400'} 100%)`;
+
+      // Trigger boil
+      if (heat >= 1 && !boiling && now > cooldownUntil) {
+        boil();
+      }
+    }
+
+    function boil() {
+      boiling = true;
+      cooldownUntil = Date.now() + COOLDOWN_MS;
+      whistle();
+      cupsToday += 1;
+      boilsWitnessed += 1;
+      cupsEl.textContent = String(cupsToday);
+      witnessedEl.textContent = String(boilsWitnessed);
+      lastBoilEl.textContent = 'just now';
+      setInt(dayKey('pc:kettle:cups'), cupsToday);
+      setInt('pc:kettle:boils-witnessed', boilsWitnessed);
+
+      boilBanner.hidden = false;
+      stove.classList.add('kt__stove--boiling');
+      // Dramatic steam burst
+      steam.classList.add('kt__steam--burst');
+
+      setTimeout(() => {
+        boiling = false;
+        boilBanner.hidden = true;
+        stove.classList.remove('kt__stove--boiling');
+        steam.classList.remove('kt__steam--burst');
+        // Drain stokes for the new round
+        recentStokes = [];
+        thisBoil = 0;
+        thisBoilEl.textContent = '0';
+        renderHeat();
+      }, COOLDOWN_MS);
+    }
+
+    stove.addEventListener('click', stoke);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        stoke();
+      }
+    });
+
+    async function poll() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastSeenTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) {
+          lastSeenTs = events[events.length - 1].t || Date.now();
+          for (const ev of events) {
+            if (ev.type === 'kettle') {
+              // Don't double-count "me" — server pid is hashed sessionId, not 'me'
+              const isMine = false; // optimistic stoke already counted
+              if (!isMine) {
+                recentStokes.push({ t: ev.t || Date.now(), pid: ev.pid });
+              }
+            }
+          }
+          // Counters: unique stokers in last 30s
+          const now = Date.now();
+          const recent = recentStokes.filter((s) => now - s.t < 30000);
+          const unique = new Set(recent.map((s) => s.pid)).size;
+          stokersEl.textContent = String(Math.max(1, unique));
+          renderHeat();
+        }
+      } catch {}
+    }
+    setInterval(poll, POLL_MS);
+    poll();
+
+    // Visit roster polling
+    async function pollVisit() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const present = Array.isArray(data.present) ? data.present : [];
+        if (!present.length) {
+          roster.innerHTML = '<li class="kt__panel-empty">just you</li>';
+          return;
+        }
+        roster.innerHTML = '';
+        present.slice(0, 8).forEach((p) => {
+          if (typeof p.nounId !== 'number') return;
+          const li = document.createElement('li');
+          li.className = 'kt__roster-row';
+          li.innerHTML = `
+            <img src="https://noun.pics/${p.nounId}.svg" alt="" width="20" height="20" loading="lazy" />
+            <span class="kt__roster-name mono">noun #${p.nounId}</span>
+            <span class="kt__roster-place mono">${p.city || p.country || '—'}</span>
+          `;
+          roster.appendChild(li);
+        });
+      } catch {}
+    }
+    pollVisit();
+    setInterval(pollVisit, 8000);
+
+    // Slow heat decay even when nothing is happening (prune driver)
+    setInterval(renderHeat, 600);
+
+    // Last-boil ago text
+    setInterval(() => {
+      if (lastBoilEl.textContent === 'just now') {
+        lastBoilEl.textContent = '~1m ago';
+      } else if (/^~(\d+)m ago$/.test(lastBoilEl.textContent)) {
+        const m = Number(lastBoilEl.textContent.match(/^~(\d+)m ago$/)[1]) + 1;
+        lastBoilEl.textContent = `~${m}m ago`;
+      }
+    }, 60 * 1000);
+  })();
+</script>
+
+<style>
+  .kt {
+    min-height: 100vh;
+    padding: 14px 12px 60px;
+    background: #fffaf0;
+    color: #12110e;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; letter-spacing: 0.06em; }
+
+  .kt__head {
+    max-width: 980px;
+    margin: 0 auto 18px;
+    padding: 0 6px;
+  }
+  .kt__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .kt__title {
+    margin: 0 0 8px;
+    font-family: Georgia, serif;
+    font-size: clamp(34px, 5.4vw, 60px);
+    line-height: 1.05;
+  }
+  .kt__title em { font-style: italic; }
+  .kt__dek {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 64ch;
+    color: #5f5e5a;
+  }
+
+  .kt__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+  }
+  @media (max-width: 800px) { .kt__stage { grid-template-columns: 1fr; } }
+
+  /* Kitchen scene */
+  .kt__kitchen {
+    position: relative;
+    aspect-ratio: 16 / 11;
+    background: #fffaf0;
+    border: 2px solid #12110e;
+    box-shadow: 6px 6px 0 0 #12110e;
+    overflow: hidden;
+  }
+
+  .kt__wallpaper {
+    position: absolute;
+    inset: 0 0 36% 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(95, 186, 253, 0.18) 0 18px, transparent 18px 36px),
+      repeating-linear-gradient(90deg, rgba(95, 186, 253, 0.18) 0 18px, transparent 18px 36px),
+      #fffaf0;
+  }
+  .kt__counter {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 36%;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 28px, #94d4ff 28px 30px),
+      repeating-linear-gradient(0deg, transparent 0 28px, #94d4ff 28px 30px),
+      #fff;
+    border-top: 3px solid #12110e;
+  }
+
+  .kt__window {
+    position: absolute;
+    top: 18px;
+    left: 22px;
+    width: 24%;
+    aspect-ratio: 1;
+    border: 4px solid #12110e;
+    background: #cfe9ff;
+    box-shadow: 4px 4px 0 0 #12110e;
+  }
+  .kt__window-pane { position: absolute; inset: 0; overflow: hidden; }
+  .kt__marine {
+    position: absolute;
+    inset: 0 0 30% 0;
+    background: linear-gradient(180deg, #cfe9ff 0%, #dadfe6 100%);
+  }
+  .kt__horizon {
+    position: absolute;
+    bottom: 30%; left: 0; right: 0;
+    height: 4px;
+    background: #94a0ad;
+  }
+  .kt__sun {
+    position: absolute;
+    top: 18%; right: 14%;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #ffd400;
+    opacity: 0.7;
+    box-shadow: 0 0 16px rgba(255, 212, 0, 0.4);
+  }
+  .kt__window-bar {
+    position: absolute;
+    background: #12110e;
+  }
+  .kt__window-bar--v { top: 0; bottom: 0; left: 50%; width: 4px; transform: translateX(-50%); }
+  .kt__window-bar--h { left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); }
+  .kt__window-cap {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #5f5e5a;
+  }
+
+  .kt__fridge-photo {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    background: #fff;
+    border: 2px solid #12110e;
+    padding: 4px 4px 12px;
+    box-shadow: 3px 3px 0 0 #12110e;
+    transform: rotate(4deg);
+  }
+  .kt__fridge-photo img { display: block; image-rendering: pixelated; }
+  .kt__fridge-pin {
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px; height: 8px;
+    background: #b8431a;
+    border-radius: 50%;
+    border: 1px solid #12110e;
+  }
+
+  .kt__coffee-maker {
+    position: absolute;
+    bottom: 18%;
+    right: 22px;
+    width: 64px;
+    height: 90px;
+  }
+  .kt__cm-body {
+    position: absolute;
+    inset: 0 0 30% 0;
+    background: #2a1228;
+    border: 2px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+  }
+  .kt__cm-pot {
+    position: absolute;
+    bottom: 0; left: 12%;
+    width: 76%;
+    height: 30%;
+    background: #6b4020;
+    border: 2px solid #12110e;
+  }
+  .kt__cm-led {
+    position: absolute;
+    top: 8px; left: 8px;
+    width: 6px; height: 6px;
+    background: #ff5c23;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #ff5c23;
+    animation: kt-led 1.6s ease-in-out infinite;
+  }
+  @keyframes kt-led { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+  /* Stove + kettle */
+  .kt__stove {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 280px;
+    height: 220px;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .kt__stove-top {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    background: #2c1d05;
+    border: 3px solid #12110e;
+    border-radius: 6px 6px 0 0;
+  }
+  .kt__stove-top::before {
+    content: '';
+    position: absolute;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    width: 140px; height: 12px;
+    background: #1a1a1a;
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(255, 138, 74, 0.4) inset;
+  }
+
+  .kt__stove-knob {
+    position: absolute;
+    bottom: 28px; right: 22px;
+    width: 26px; height: 26px;
+    background: radial-gradient(circle at 30% 30%, #fffaf0, #94a0ad);
+    border: 2px solid #12110e;
+    border-radius: 50%;
+  }
+  .kt__stove-knob-tick {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -100%);
+    width: 2px; height: 8px;
+    background: #b8431a;
+  }
+
+  .kt__flame {
+    position: absolute;
+    bottom: 84px;
+    left: 50%;
+    transform-origin: bottom center;
+    transform: translateX(-50%) scaleY(0.5);
+    width: 60px; height: 70px;
+    pointer-events: none;
+    transition: transform 200ms, opacity 200ms;
+    opacity: 0.45;
+  }
+  .kt__flame-core,
+  .kt__flame-mid,
+  .kt__flame-outer {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    border-radius: 50% 50% 30% 30% / 60% 60% 40% 40%;
+  }
+  .kt__flame-outer {
+    background: radial-gradient(ellipse at 50% 100%, rgba(95, 186, 253, 0.5), transparent 70%);
+    width: 60px; height: 70px;
+  }
+  .kt__flame-mid {
+    width: 36px; height: 50px;
+    background: radial-gradient(ellipse at 50% 100%, #5fbafd, rgba(95, 186, 253, 0.3) 70%, transparent);
+    bottom: 6px;
+  }
+  .kt__flame-core {
+    width: 18px; height: 28px;
+    background: radial-gradient(ellipse at 50% 100%, #94d4ff, rgba(255, 250, 240, 0.6));
+    bottom: 14px;
+  }
+  .kt__flame--bump {
+    animation: kt-flame-bump 220ms ease-out;
+  }
+  @keyframes kt-flame-bump {
+    0% { transform: translateX(-50%) scaleY(0.95) scaleX(0.95); }
+    50% { transform: translateX(-50%) scaleY(1.18) scaleX(1.12); }
+    100% { transform: translateX(-50%) scaleY(1) scaleX(1); }
+  }
+
+  .kt__kettle {
+    position: absolute;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 130px;
+    height: 110px;
+  }
+  .kt__kettle-handle {
+    position: absolute;
+    top: -28px;
+    left: 24px; right: 24px;
+    height: 32px;
+    border: 5px solid #12110e;
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
+    background: transparent;
+  }
+  .kt__kettle-body {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #ffe28a 0%, #c9a449 50%, #6e5320 100%);
+    border: 3px solid #12110e;
+    border-radius: 0 0 60% 60% / 0 0 100% 100%;
+    box-shadow: inset 4px -8px 14px rgba(18, 17, 14, 0.35);
+  }
+  .kt__kettle-shine {
+    position: absolute;
+    top: 18px; left: 18px;
+    width: 28px;
+    height: 38px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent);
+    border-radius: 50%;
+    transform: rotate(-12deg);
+  }
+  .kt__kettle-spout {
+    position: absolute;
+    top: -2px;
+    right: -22px;
+    width: 38px;
+    height: 28px;
+    background: linear-gradient(180deg, #c9a449, #6e5320);
+    border: 3px solid #12110e;
+    border-radius: 50% 60% 30% 60% / 50% 100% 30% 100%;
+    transform: rotate(34deg);
+  }
+  .kt__kettle-cap {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px; height: 14px;
+    background: #c9a449;
+    border: 3px solid #12110e;
+    border-radius: 50% 50% 8% 8% / 100% 100% 30% 30%;
+  }
+  .kt__kettle-cap::after {
+    content: '';
+    position: absolute;
+    top: -8px; left: 50%;
+    transform: translateX(-50%);
+    width: 8px; height: 8px;
+    background: #6e5320;
+    border: 2px solid #12110e;
+    border-radius: 50%;
+  }
+  .kt__kettle-base {
+    position: absolute;
+    bottom: -8px; left: 12%; right: 12%;
+    height: 12px;
+    background: #2c1d05;
+    border: 2px solid #12110e;
+    border-radius: 0 0 50% 50%;
+  }
+
+  .kt__steam {
+    position: absolute;
+    bottom: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 100px;
+    pointer-events: none;
+    transition: opacity 220ms;
+  }
+  .kt__steam span {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    background: rgba(255, 250, 240, 0.85);
+    border-radius: 50%;
+    transform: translate(-50%, 0);
+    animation: kt-steam 2.4s ease-out infinite;
+  }
+  .kt__steam span:nth-child(1) { animation-delay: 0s;   left: 30%; }
+  .kt__steam span:nth-child(2) { animation-delay: 0.4s; left: 50%; }
+  .kt__steam span:nth-child(3) { animation-delay: 0.8s; left: 70%; }
+  .kt__steam span:nth-child(4) { animation-delay: 1.2s; left: 40%; }
+  .kt__steam span:nth-child(5) { animation-delay: 1.6s; left: 60%; }
+  @keyframes kt-steam {
+    0%   { transform: translate(-50%, 0) scale(0.6); opacity: 0; }
+    20%  { opacity: 0.85; }
+    100% { transform: translate(-50%, -100px) scale(2.2); opacity: 0; }
+  }
+  .kt__steam--burst span { animation-duration: 1.2s !important; }
+  .kt__steam--burst::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    top: -40%;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.7), transparent 70%);
+    animation: kt-burst 1.5s ease-out forwards;
+  }
+  @keyframes kt-burst {
+    0% { opacity: 0; transform: scale(0.5); }
+    50% { opacity: 1; transform: scale(1.4); }
+    100% { opacity: 0; transform: scale(2); }
+  }
+
+  .kt__heat {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    z-index: 4;
+  }
+  .kt__heat-label {
+    margin: 0 0 4px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #b8431a;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .kt__heat-bar {
+    position: relative;
+    height: 18px;
+    background: #fffaf0;
+    border: 2px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+    overflow: hidden;
+  }
+  .kt__heat-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #5fbafd, #94d4ff);
+    transition: width 240ms ease, background 240ms ease;
+  }
+  .kt__heat-pct {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #12110e;
+    font-size: 10px;
+    text-shadow: 1px 1px 0 #fffaf0;
+    pointer-events: none;
+  }
+
+  .kt__boil-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #ffd400;
+    border: 4px solid #12110e;
+    box-shadow: 8px 8px 0 0 #ff5c23;
+    padding: 16px 36px;
+    z-index: 5;
+    animation: kt-boil 0.6s ease-out;
+  }
+  .kt__boil-banner p {
+    margin: 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: clamp(36px, 6vw, 64px);
+    color: #12110e;
+    letter-spacing: 0.06em;
+  }
+  @keyframes kt-boil {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    70% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  .kt__stove--boiling .kt__flame { transform: translateX(-50%) scaleY(1.4) scaleX(1.3); opacity: 1; }
+  .kt__stove--boiling .kt__kettle {
+    animation: kt-shake 0.18s linear infinite;
+  }
+  @keyframes kt-shake {
+    0%, 100% { transform: translateX(-50%); }
+    25% { transform: translateX(-52%); }
+    75% { transform: translateX(-48%); }
+  }
+
+  /* Side panel */
+  .kt__panel {
+    background: #fffaf0;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    padding: 14px;
+  }
+  .kt__panel-h {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+    font-weight: 700;
+  }
+  .kt__panel-divider { margin: 14px 0 10px; border-top: 1px dashed #12110e; }
+
+  .kt__roster {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .kt__roster-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  .kt__roster-row img { image-rendering: pixelated; border: 1px solid #12110e; }
+  .kt__roster-name { font-size: 11px; }
+  .kt__roster-place { font-size: 9px; color: #5f5e5a; }
+  .kt__panel-empty { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; color: #5f5e5a; padding: 4px 6px; }
+
+  .kt__stats {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    margin: 0;
+    gap: 4px 8px;
+  }
+  .kt__stats dt {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+  .kt__stats dd {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 18px;
+    color: #12110e;
+    text-align: right;
+  }
+
+  .kt__panel-hint {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px dashed #12110e;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+
+  .kt__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #12110e;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+  .kt__foot code { background: #f5f4f0; padding: 1px 5px; font-family: 'JetBrains Mono Variable', monospace; }
+  .kt__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+</style>
