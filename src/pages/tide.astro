@@ -1,0 +1,356 @@
+---
+/**
+ * /tide — minimal water-led companion to /bath.
+ *
+ * First principles: the page IS the experience. No buttons by default,
+ * no Spotify input, no save flow — just color + motion. Eight palettes
+ * named after water states. Tap anywhere to cycle. Auto-drifts to the
+ * next palette every 90s if untouched.
+ *
+ * Three wave layers (SVG paths, horizontally animated for parallax),
+ * a slow-rotating sun-or-moon orb, rising bubbles. Sky gradient, water
+ * gradient, foam gradient — three depth layers per palette.
+ *
+ * prefers-reduced-motion: animations pause, palette stays static.
+ *
+ * Companion to /bath (button-y), /meditate (still), /pace (movement).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/tide — water, color, slow';
+const description =
+  'A minimal water-led color room. Eight tide palettes: daybreak, crystal, kelp, coral, abyss, storm, lagoon, nighttide. Tap anywhere.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="tide" id="tide-main" data-palette="daybreak">
+
+    <!-- Sky / sun-or-moon orb -->
+    <div class="tide__sky" aria-hidden="true">
+      <div class="tide__orb"></div>
+      <div class="tide__haze"></div>
+    </div>
+
+    <!-- Wave layers -->
+    <svg class="tide__waves" viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
+      <!-- Back wave (slowest, lightest) -->
+      <path class="tide__wave tide__wave--back" d="M 0 60 C 25 45, 50 75, 75 60 S 125 45, 150 60 S 200 75, 200 60 L 200 100 L 0 100 Z" />
+      <!-- Mid wave -->
+      <path class="tide__wave tide__wave--mid" d="M 0 70 C 30 55, 60 85, 90 70 S 150 55, 180 70 S 220 85, 200 70 L 200 100 L 0 100 Z" />
+      <!-- Front wave (fastest, most opaque) -->
+      <path class="tide__wave tide__wave--front" d="M 0 82 C 30 70, 60 96, 100 82 S 160 70, 200 82 L 200 100 L 0 100 Z" />
+    </svg>
+
+    <!-- Foam (rising bubbles) -->
+    <div class="tide__foam" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+
+    <!-- Tiniest possible UI: corner badge with palette name + counter. -->
+    <button class="tide__badge mono" id="tide-badge" type="button" aria-label="Cycle palette">
+      <span id="tide-name">DAYBREAK</span>
+      <span class="tide__sep" aria-hidden="true">·</span>
+      <span id="tide-pos">1 / 8</span>
+      <span class="tide__sep" aria-hidden="true">·</span>
+      <span class="tide__hint">tap anywhere</span>
+    </button>
+
+    <!-- Hidden but agent-readable footer -->
+    <footer class="tide__foot mono" aria-hidden="false">
+      <span>tide · el segundo · cc0</span>
+      <span id="tide-clock">—</span>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  // 8 tide palettes — each defines: name, the three depth tones (sky/water/foam),
+  // the orb color (sun-or-moon), and the wave fills.
+  var PALETTES = [
+    { id: 'daybreak',  name: 'DAYBREAK',  sky:'#FFD4C2', water:'#F4A78D', foam:'#FFE9D8', orb:'#FFB496', wave1:'#E08F73', wave2:'#C4715A', wave3:'#AA5443', label:'pearl pink · soft peach · lavender mist' },
+    { id: 'crystal',   name: 'CRYSTAL',   sky:'#BFEFEC', water:'#7FE5DC', foam:'#F4FBFA', orb:'#FFFFFF', wave1:'#5DCBC0', wave2:'#3FA89C', wave3:'#1F8579', label:'aquamarine · soft cyan · white foam' },
+    { id: 'kelp',      name: 'KELP',      sky:'#9FB28A', water:'#5C7A4E', foam:'#E0D4B8', orb:'#D9C46E', wave1:'#3F5E33', wave2:'#2A4424', wave3:'#1A2E18', label:'sage canopy · deep green · amber kelp' },
+    { id: 'coral',     name: 'CORAL',     sky:'#FFC4B0', water:'#FF8675', foam:'#FFE0D6', orb:'#FFEEC2', wave1:'#E76B5C', wave2:'#C4493D', wave3:'#9B2D24', label:'coral pink · dusty rose · lavender' },
+    { id: 'abyss',     name: 'ABYSS',     sky:'#1E2D5C', water:'#0A1F3A', foam:'#2EC4B6', orb:'#88E0D4', wave1:'#0E2548', wave2:'#06162D', wave3:'#020912', label:'midnight indigo · abyssal navy · phosphor teal' },
+    { id: 'storm',     name: 'STORM',     sky:'#5A6470', water:'#2C2E33', foam:'#FFE15D', orb:'#FFE15D', wave1:'#1E2025', wave2:'#16181C', wave3:'#0C0E12', label:'slate · charcoal · lightning' },
+    { id: 'lagoon',    name: 'LAGOON',    sky:'#A0E6DC', water:'#2EC4B6', foam:'#F5DEA8', orb:'#F5DEA8', wave1:'#26A89C', wave2:'#188076', wave3:'#0F5C55', label:'turquoise · teal · warm sand' },
+    { id: 'nighttide', name: 'NIGHTTIDE', sky:'#3A0E5C', water:'#0E1845', foam:'#FF1493', orb:'#FF69B4', wave1:'#3D1276', wave2:'#1F1054', wave3:'#0A0830', label:'electric magenta · hot pink · deep ocean' },
+  ];
+
+  function clockPalette() {
+    var h = new Date().getHours();
+    if (h < 5)  return 'abyss';
+    if (h < 8)  return 'daybreak';
+    if (h < 11) return 'crystal';
+    if (h < 14) return 'lagoon';
+    if (h < 17) return 'kelp';
+    if (h < 20) return 'coral';
+    if (h < 22) return 'storm';
+    return 'nighttide';
+  }
+
+  var idx = 0;
+  for (var i = 0; i < PALETTES.length; i++) {
+    if (PALETTES[i].id === clockPalette()) { idx = i; break; }
+  }
+
+  function applyPalette(pIdx) {
+    if (pIdx < 0) pIdx = PALETTES.length - 1;
+    if (pIdx >= PALETTES.length) pIdx = 0;
+    idx = pIdx;
+    var p = PALETTES[idx];
+    var main = document.getElementById('tide-main');
+    if (!main) return;
+    main.dataset.palette = p.id;
+    main.style.setProperty('--sky', p.sky);
+    main.style.setProperty('--water', p.water);
+    main.style.setProperty('--foam', p.foam);
+    main.style.setProperty('--orb', p.orb);
+    main.style.setProperty('--wave-1', p.wave1);
+    main.style.setProperty('--wave-2', p.wave2);
+    main.style.setProperty('--wave-3', p.wave3);
+    var nm = document.getElementById('tide-name');
+    var ps = document.getElementById('tide-pos');
+    if (nm) nm.textContent = p.name;
+    if (ps) ps.textContent = (idx + 1) + ' / ' + PALETTES.length;
+    try { localStorage.setItem('pc:tide:last', p.id); } catch (e) {}
+  }
+
+  function next() { applyPalette(idx + 1); resetAutoCycle(); }
+
+  // Auto-cycle every 90s of inactivity.
+  var autoTimer = null;
+  function resetAutoCycle() {
+    if (autoTimer) clearTimeout(autoTimer);
+    autoTimer = setTimeout(function () { applyPalette(idx + 1); resetAutoCycle(); }, 90_000);
+  }
+
+  // Tap anywhere — except the badge itself counts the same — to cycle.
+  document.addEventListener('click', function (ev) {
+    // Avoid double-counting clicks on links inside the foot.
+    var t = ev.target;
+    if (t && t.closest && (t.closest('a') || t.closest('.tide__foot'))) return;
+    next();
+  });
+
+  // Keyboard: Space / Enter / → cycles, ← goes back.
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === ' ' || ev.key === 'Enter' || ev.key === 'ArrowRight') { ev.preventDefault(); next(); }
+    else if (ev.key === 'ArrowLeft') { applyPalette(idx - 1); resetAutoCycle(); }
+  });
+
+  // Clock
+  function tick() {
+    var el = document.getElementById('tide-clock');
+    if (!el) return;
+    var n = new Date();
+    el.textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') + ' PT';
+  }
+
+  applyPalette(idx);
+  tick();
+  setInterval(tick, 60_000);
+  resetAutoCycle();
+})();
+</script>
+
+<style is:global>
+  /* Reset for the full-bleed experience. */
+  body:has(.tide) { margin: 0; overflow: hidden; background: #000; }
+
+  .tide {
+    --sky: #FFD4C2;
+    --water: #F4A78D;
+    --foam: #FFE9D8;
+    --orb: #FFB496;
+    --wave-1: #E08F73;
+    --wave-2: #C4715A;
+    --wave-3: #AA5443;
+
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh; height: 100dvh;
+    overflow: hidden;
+    cursor: pointer;
+    background: linear-gradient(180deg, var(--sky) 0%, var(--water) 100%);
+    transition: background 2.4s ease;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  /* ── sky · sun/moon orb · haze ───────────────────────────────── */
+  .tide__sky {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .tide__orb {
+    position: absolute;
+    top: 12%; right: 18%;
+    width: clamp(140px, 16vmax, 280px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--orb) 0%, transparent 70%);
+    filter: blur(30px);
+    opacity: 0.85;
+    animation: orb-drift 60s ease-in-out infinite;
+    transition: background 2.4s ease;
+  }
+  @keyframes orb-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(-3vw, 1vh) scale(1.05); }
+    66%      { transform: translate(2vw, -1.5vh) scale(0.95); }
+  }
+  .tide__haze {
+    position: absolute;
+    top: 30%; left: 0; right: 0; height: 22%;
+    background: linear-gradient(180deg, transparent 0%, var(--foam) 50%, transparent 100%);
+    opacity: 0.18;
+    transition: background 2.4s ease;
+    animation: haze-drift 38s ease-in-out infinite;
+  }
+  @keyframes haze-drift {
+    0%, 100% { transform: translateX(0); opacity: 0.18; }
+    50%      { transform: translateX(-3vw); opacity: 0.28; }
+  }
+
+  /* ── waves: full-width SVG, three layers translating horizontally ── */
+  .tide__waves {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 200%; height: 70%;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 1s ease;
+  }
+  .tide__wave { transform-origin: center; }
+  .tide__wave--back  { fill: var(--wave-1); opacity: 0.55; animation: wave-back 24s linear infinite; transition: fill 2s ease; }
+  .tide__wave--mid   { fill: var(--wave-2); opacity: 0.75; animation: wave-mid 18s linear infinite; transition: fill 2s ease; }
+  .tide__wave--front { fill: var(--wave-3); opacity: 1.0;  animation: wave-front 12s linear infinite; transition: fill 2s ease; }
+
+  @keyframes wave-back {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-25%); }
+  }
+  @keyframes wave-mid {
+    from { transform: translateX(-15%); }
+    to   { transform: translateX(-40%); }
+  }
+  @keyframes wave-front {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-30%); }
+  }
+
+  /* ── foam: rising bubbles ───────────────────────────────────── */
+  .tide__foam { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+  .tide__foam span {
+    position: absolute;
+    bottom: -10%;
+    width: clamp(4px, 1vmin, 8px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--foam);
+    opacity: 0;
+    animation: foam-rise linear infinite;
+    transition: background 2.4s ease;
+  }
+  /* 16 bubbles, varied position + duration + delay. Hand-tuned for natural feel. */
+  .tide__foam span:nth-child(1)  { left:  6%; animation-duration: 12s; animation-delay:  0s;   width: 6px; }
+  .tide__foam span:nth-child(2)  { left: 14%; animation-duration: 16s; animation-delay:  3s;   width: 5px; }
+  .tide__foam span:nth-child(3)  { left: 22%; animation-duration: 14s; animation-delay:  6s;   width: 4px; }
+  .tide__foam span:nth-child(4)  { left: 31%; animation-duration: 18s; animation-delay:  1.5s; width: 7px; }
+  .tide__foam span:nth-child(5)  { left: 39%; animation-duration: 13s; animation-delay:  4.2s; width: 5px; }
+  .tide__foam span:nth-child(6)  { left: 47%; animation-duration: 17s; animation-delay:  8s;   width: 4px; }
+  .tide__foam span:nth-child(7)  { left: 55%; animation-duration: 15s; animation-delay:  2.5s; width: 6px; }
+  .tide__foam span:nth-child(8)  { left: 63%; animation-duration: 19s; animation-delay:  5.5s; width: 5px; }
+  .tide__foam span:nth-child(9)  { left: 71%; animation-duration: 12s; animation-delay:  7s;   width: 4px; }
+  .tide__foam span:nth-child(10) { left: 79%; animation-duration: 16s; animation-delay:  3.5s; width: 6px; }
+  .tide__foam span:nth-child(11) { left: 87%; animation-duration: 14s; animation-delay:  6.5s; width: 5px; }
+  .tide__foam span:nth-child(12) { left: 94%; animation-duration: 18s; animation-delay:  0.8s; width: 7px; }
+  .tide__foam span:nth-child(13) { left: 12%; animation-duration: 11s; animation-delay:  9s;   width: 3px; }
+  .tide__foam span:nth-child(14) { left: 36%; animation-duration: 21s; animation-delay:  4.8s; width: 4px; }
+  .tide__foam span:nth-child(15) { left: 58%; animation-duration: 13s; animation-delay:  10s;  width: 5px; }
+  .tide__foam span:nth-child(16) { left: 82%; animation-duration: 20s; animation-delay:  2.2s; width: 6px; }
+
+  @keyframes foam-rise {
+    0%   { transform: translateY(0)     scale(1);   opacity: 0; }
+    10%  {                              opacity: 0.9; }
+    50%  { transform: translateY(-50vh) scale(1.1); opacity: 0.75; }
+    90%  {                              opacity: 0.4; }
+    100% { transform: translateY(-105vh) scale(0.6); opacity: 0; }
+  }
+
+  /* ── badge: minimal corner UI ─────────────────────────────── */
+  .tide__badge {
+    position: fixed;
+    top: 16px; left: 16px;
+    z-index: 10;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #fff;
+    font-family: 'JetBrains Mono Variable', 'Courier New', monospace;
+    font-size: 10px; letter-spacing: 0.20em; font-weight: 700;
+    border-radius: 1px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .tide__badge:hover {
+    background: rgba(0,0,0,0.45);
+    border-color: rgba(255,255,255,0.32);
+  }
+  .tide__sep { opacity: 0.45; }
+  .tide__hint { opacity: 0.65; font-weight: 500; letter-spacing: 0.10em; text-transform: lowercase; }
+
+  /* ── foot: small, bottom-left, agent-readable but visually quiet ── */
+  .tide__foot {
+    position: fixed;
+    bottom: 16px; left: 16px;
+    z-index: 10;
+    display: inline-flex; align-items: center; gap: 14px;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.28);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #fff;
+    font-family: 'JetBrains Mono Variable', 'Courier New', monospace;
+    font-size: 9.5px; letter-spacing: 0.18em;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0.78;
+  }
+
+  /* ── deep palette tints for the badge to stay legible on bright backs ── */
+  .tide[data-palette="daybreak"]  .tide__badge,
+  .tide[data-palette="crystal"]   .tide__badge,
+  .tide[data-palette="lagoon"]    .tide__badge,
+  .tide[data-palette="coral"]     .tide__badge,
+  .tide[data-palette="kelp"]      .tide__badge,
+  .tide[data-palette="daybreak"]  .tide__foot,
+  .tide[data-palette="crystal"]   .tide__foot,
+  .tide[data-palette="lagoon"]    .tide__foot,
+  .tide[data-palette="coral"]     .tide__foot,
+  .tide[data-palette="kelp"]      .tide__foot {
+    background: rgba(0,0,0,0.36);
+  }
+
+  /* ── reduced motion: pause everything, keep palette ── */
+  @media (prefers-reduced-motion: reduce) {
+    .tide__orb, .tide__haze, .tide__wave--back, .tide__wave--mid, .tide__wave--front, .tide__foam span {
+      animation: none !important;
+    }
+    .tide__foam span { opacity: 0.5; bottom: 30%; }
+  }
+
+  @media (max-width: 520px) {
+    .tide__badge { font-size: 9px; padding: 6px 10px; gap: 6px; }
+    .tide__foot { font-size: 8.5px; gap: 10px; }
+  }
+</style>
