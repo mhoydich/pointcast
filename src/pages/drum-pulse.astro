@@ -1,0 +1,586 @@
+---
+/**
+ * /drum-pulse — global drum heartbeat · sprint 3/9
+ *
+ * One number, very large, counting up. Every drum tap on every drum
+ * surface fires through /api/drum (which returns globalTotal). This
+ * page polls that count every 1.5s, displays it as a billboard, and
+ * fires off a celebration when a milestone is crossed:
+ *
+ *   25,000 · 30,000 · 40,000 · 50,000 · 75,000 · 100,000
+ *
+ * Each milestone = a confetti burst, a "MILESTONE" banner, and a
+ * type=milestone event broadcast to /api/sounds so the TV cast
+ * surfaces flash. Past milestones live in localStorage so refresh
+ * doesn't re-trigger.
+ *
+ * Aesthetic: Times-Square stock-ticker billboard. Black background,
+ * orange-red 7-segment digits, marquee rolling under, heartbeat
+ * pulse on every tick.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-pulse — global drum heartbeat';
+const description =
+  'Live count of every drum tap on every PointCast drum surface, ever. Milestone celebrations at 25k, 30k, 40k, 50k, 75k, 100k. The room\'s heartbeat in one number.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-pulse',
+  name: 'PointCast Drum · Pulse',
+  url: 'https://pointcast.xyz/drum-pulse',
+  description,
+};
+
+const MILESTONES = [25000, 30000, 35000, 40000, 50000, 60000, 75000, 100000, 150000, 200000, 500000, 1000000];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="pu" id="pu-main">
+    <DrumNav current="pulse" />
+
+    <header class="pu__head">
+      <p class="pu__kicker">DRUM HUB · PULSE · GLOBAL HEARTBEAT · LIVE</p>
+      <h1 class="pu__title"><em>The room has a heartbeat.</em></h1>
+      <p class="pu__dek">
+        Every drum tap on every drum surface, since the room opened. The number goes up. Milestones get a parade.
+      </p>
+    </header>
+
+    <section class="pu__stage">
+      <div class="pu__billboard" id="pu-billboard">
+        <div class="pu__bb-frame">
+          <div class="pu__bb-corner pu__bb-corner--tl"></div>
+          <div class="pu__bb-corner pu__bb-corner--tr"></div>
+          <div class="pu__bb-corner pu__bb-corner--bl"></div>
+          <div class="pu__bb-corner pu__bb-corner--br"></div>
+
+          <p class="pu__bb-eyebrow mono">★ POINTCAST · GLOBAL DRUM PULSE ★</p>
+
+          <div class="pu__bb-number" id="pu-number" data-value="0" aria-live="polite">
+            <span>0</span>
+          </div>
+
+          <p class="pu__bb-unit mono">drum taps · all-time · all surfaces</p>
+
+          <div class="pu__bb-meter" aria-hidden="true">
+            <div class="pu__bb-meter-bar" id="pu-meter-bar"></div>
+            <div class="pu__bb-meter-labels mono">
+              <span>last milestone</span>
+              <span id="pu-next-label">→ next ·</span>
+            </div>
+          </div>
+
+          <div class="pu__bb-marquee" aria-hidden="true">
+            <div class="pu__bb-marquee-track" id="pu-marquee">
+              ◆ live · 13 surfaces · v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 apr26 lounge potato · drum on ·
+            </div>
+          </div>
+        </div>
+        <div class="pu__bb-glow"></div>
+      </div>
+
+      <aside class="pu__panel">
+        <h2 class="pu__panel-h">milestones</h2>
+        <ul class="pu__milestones" id="pu-milestones" role="list">
+          {MILESTONES.map((m) => (
+            <li class="pu__ms-row" data-value={m}>
+              <span class="pu__ms-tick" aria-hidden="true">·</span>
+              <span class="pu__ms-num">{m.toLocaleString()}</span>
+              <span class="pu__ms-state mono">PENDING</span>
+            </li>
+          ))}
+        </ul>
+        <div class="pu__panel-divider"></div>
+        <div class="pu__heart" aria-hidden="true">
+          <span class="pu__heart-emoji">♥</span>
+          <span class="pu__heart-label mono">heartbeat</span>
+        </div>
+        <p class="pu__hint mono">
+          The pulse polls /api/drum every 1.5s. Milestones fire confetti + broadcast type=milestone to /api/sounds for the TV cast surfaces.
+        </p>
+      </aside>
+    </section>
+
+    <div class="pu__celebration" id="pu-celebration" hidden>
+      <div class="pu__celebration-card">
+        <p class="pu__celebration-eyebrow mono">★ MILESTONE ★</p>
+        <p class="pu__celebration-num" id="pu-celebration-num">—</p>
+        <p class="pu__celebration-text">drum taps. you and everyone before you. cheers.</p>
+      </div>
+    </div>
+
+    <footer class="pu__foot">
+      <p>
+        Drum Pulse mirrors the same counter exposed on <code>/api/drum</code> — the
+        single source of truth for every tap, every surface, every visitor since
+        the room opened. <a href="/drum">/drum</a> · <a href="/drum-tv">/drum-tv</a>
+      </p>
+      <p class="pu__credit mono">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · drum sprint 3/9</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const MILESTONES = [25000, 30000, 35000, 40000, 50000, 60000, 75000, 100000, 150000, 200000, 500000, 1000000];
+    const STORE_KEY = 'pc:drum-pulse:hit';
+
+    function getHit() {
+      try { return new Set(JSON.parse(localStorage.getItem(STORE_KEY) || '[]')); }
+      catch { return new Set(); }
+    }
+    function saveHit(set) {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify([...set])); } catch {}
+    }
+    let hit = getHit();
+
+    const numEl = document.getElementById('pu-number');
+    const nextEl = document.getElementById('pu-next-label');
+    const meterBar = document.getElementById('pu-meter-bar');
+    const heart = document.querySelector('.pu__heart-emoji');
+    const celebration = document.getElementById('pu-celebration');
+    const celebrationNum = document.getElementById('pu-celebration-num');
+
+    let displayed = 0;
+    let target = 0;
+
+    function fmt(n) {
+      return Number(n).toLocaleString();
+    }
+
+    function pickMilestonePair(value) {
+      let prev = 0;
+      for (let i = 0; i < MILESTONES.length; i++) {
+        if (MILESTONES[i] > value) return { prev, next: MILESTONES[i], idx: i };
+        prev = MILESTONES[i];
+      }
+      return { prev, next: prev * 2, idx: MILESTONES.length };
+    }
+
+    function renderMilestones(value) {
+      document.querySelectorAll('.pu__ms-row').forEach((row) => {
+        const v = Number(row.dataset.value);
+        const stateEl = row.querySelector('.pu__ms-state');
+        const tickEl = row.querySelector('.pu__ms-tick');
+        if (v <= value) {
+          row.classList.add('pu__ms-row--hit');
+          stateEl.textContent = 'HIT ✓';
+          tickEl.textContent = '★';
+        } else {
+          row.classList.remove('pu__ms-row--hit');
+          stateEl.textContent = 'PENDING';
+          tickEl.textContent = '·';
+        }
+      });
+    }
+
+    function tickDisplay() {
+      // Smoothly approach target
+      if (displayed < target) {
+        const step = Math.max(1, Math.floor((target - displayed) / 8));
+        displayed = Math.min(target, displayed + step);
+        numEl.querySelector('span').textContent = fmt(displayed);
+      }
+      requestAnimationFrame(tickDisplay);
+    }
+    requestAnimationFrame(tickDisplay);
+
+    function celebrate(value) {
+      celebrationNum.textContent = fmt(value);
+      celebration.hidden = false;
+      // Confetti
+      for (let i = 0; i < 90; i++) {
+        const c = document.createElement('span');
+        c.className = 'pu__confetti';
+        c.style.left = `${Math.random() * 100}%`;
+        c.style.background = ['#ff5c23','#ffd400','#185fa5','#3b6e3b','#a83b2a','#fffaf0'][i % 6];
+        c.style.animationDelay = `${(Math.random() * 0.6).toFixed(2)}s`;
+        c.style.animationDuration = `${(2.5 + Math.random() * 2).toFixed(2)}s`;
+        celebration.appendChild(c);
+      }
+      // Broadcast
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'milestone', value, sessionId: 'pulse' }),
+        });
+      } catch {}
+      setTimeout(() => {
+        celebration.hidden = true;
+        celebration.querySelectorAll('.pu__confetti').forEach((c) => c.remove());
+      }, 6000);
+    }
+
+    async function poll() {
+      try {
+        const r = await fetch('/api/drum?sessionId=pulse', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const value = Number(data.globalTotal || 0);
+        target = value;
+        // Heartbeat thump
+        heart.classList.remove('pu__heart-emoji--beat');
+        void heart.offsetWidth;
+        heart.classList.add('pu__heart-emoji--beat');
+
+        // Milestone check
+        for (const m of MILESTONES) {
+          if (value >= m && !hit.has(m)) {
+            hit.add(m); saveHit(hit);
+            celebrate(m);
+          }
+        }
+        const { prev, next } = pickMilestonePair(value);
+        const range = next - prev;
+        const into = value - prev;
+        const pct = Math.max(0, Math.min(100, (into / range) * 100));
+        meterBar.style.width = `${pct.toFixed(2)}%`;
+        nextEl.textContent = `→ next · ${fmt(next)}`;
+
+        renderMilestones(value);
+      } catch {}
+    }
+    poll();
+    setInterval(poll, 1500);
+  })();
+</script>
+
+<style>
+  .pu {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(255, 92, 35, 0.12), transparent 60%),
+      linear-gradient(180deg, #0a0a0a 0%, #1a1228 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .pu__head {
+    max-width: 980px;
+    margin: 0 auto 18px;
+    padding: 0 6px;
+  }
+  .pu__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+  .pu__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(32px, 5vw, 56px);
+    line-height: 1.05;
+    color: #ffd400;
+  }
+  .pu__title em { font-style: italic; }
+  .pu__dek {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 60ch;
+    color: #cfc6df;
+  }
+
+  .pu__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+  }
+  @media (max-width: 900px) { .pu__stage { grid-template-columns: 1fr; } }
+
+  .pu__billboard {
+    position: relative;
+    background: #0a0a0a;
+    border: 3px solid #ff5c23;
+    box-shadow: 0 0 60px rgba(255, 92, 35, 0.3) inset, 8px 8px 0 0 #050310;
+    padding: 28px 22px;
+    overflow: hidden;
+  }
+
+  .pu__bb-corner {
+    position: absolute;
+    width: 18px; height: 18px;
+    background: #ffd400;
+    border: 2px solid #ff5c23;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #ffd400;
+  }
+  .pu__bb-corner--tl { top: 8px; left: 8px; }
+  .pu__bb-corner--tr { top: 8px; right: 8px; }
+  .pu__bb-corner--bl { bottom: 8px; left: 8px; }
+  .pu__bb-corner--br { bottom: 8px; right: 8px; }
+
+  .pu__bb-eyebrow {
+    margin: 0 0 16px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: #ff5c23;
+  }
+
+  .pu__bb-number {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 8px 0;
+    padding: 18px 24px;
+    background: #050310;
+    border: 2px solid #ff8a4a;
+    box-shadow: 0 0 30px rgba(255, 138, 74, 0.5) inset;
+  }
+  .pu__bb-number span {
+    font-family: 'Bungee', 'Impact', system-ui, sans-serif;
+    font-size: clamp(60px, 12vw, 130px);
+    font-weight: 900;
+    line-height: 1;
+    color: #ff8a4a;
+    letter-spacing: 0.04em;
+    text-shadow:
+      0 0 20px rgba(255, 138, 74, 0.7),
+      0 0 36px rgba(255, 138, 74, 0.45),
+      4px 4px 0 #050310;
+  }
+
+  .pu__bb-unit {
+    margin: 8px 0 16px;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: #cfc6df;
+    text-transform: uppercase;
+  }
+
+  .pu__bb-meter {
+    position: relative;
+    margin: 12px 0;
+    height: 18px;
+    background: #050310;
+    border: 1.5px solid #ff8a4a;
+    overflow: hidden;
+  }
+  .pu__bb-meter-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ff5c23, #ffd400);
+    transition: width 600ms ease-out;
+    box-shadow: 0 0 12px #ffd400 inset;
+  }
+  .pu__bb-meter-labels {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #fffaf0;
+    text-shadow: 1px 1px 0 #050310;
+    pointer-events: none;
+  }
+
+  .pu__bb-marquee {
+    overflow: hidden;
+    border-top: 1.5px dashed #ff5c23;
+    padding: 8px 0 4px;
+    margin-top: 12px;
+  }
+  .pu__bb-marquee-track {
+    display: inline-block;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: #ffd400;
+    text-transform: uppercase;
+    animation: pu-marquee 18s linear infinite;
+  }
+  @keyframes pu-marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .pu__bb-glow {
+    position: absolute;
+    inset: -10%;
+    background: radial-gradient(circle, rgba(255, 92, 35, 0.18) 0%, transparent 70%);
+    z-index: -1;
+    animation: pu-glow 3s ease-in-out infinite;
+  }
+  @keyframes pu-glow {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 0.9; }
+  }
+
+  .pu__panel {
+    background: #0c0820;
+    border: 2px solid #ffd400;
+    padding: 14px;
+    box-shadow: 6px 6px 0 0 #050310;
+  }
+  .pu__panel-h {
+    margin: 0 0 10px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+  .pu__panel-divider { border-top: 1px dashed #5f5e5a; margin: 14px 0 12px; }
+
+  .pu__milestones {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .pu__ms-row {
+    display: grid;
+    grid-template-columns: 18px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border: 1px solid transparent;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+  }
+  .pu__ms-tick { color: #5f5e5a; text-align: center; }
+  .pu__ms-num { color: #cfc6df; }
+  .pu__ms-state { font-size: 9px; letter-spacing: 0.16em; color: #5f5e5a; }
+  .pu__ms-row--hit {
+    border-color: #ffd400;
+    background: rgba(255, 212, 0, 0.08);
+  }
+  .pu__ms-row--hit .pu__ms-tick { color: #ffd400; }
+  .pu__ms-row--hit .pu__ms-num { color: #fffaf0; font-weight: 700; }
+  .pu__ms-row--hit .pu__ms-state { color: #3b6e3b; font-weight: 700; }
+
+  .pu__heart {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+  }
+  .pu__heart-emoji {
+    display: inline-block;
+    font-size: 26px;
+    color: #ff5c23;
+    transition: transform 200ms;
+  }
+  .pu__heart-emoji--beat {
+    animation: pu-beat 0.5s ease-out;
+  }
+  @keyframes pu-beat {
+    0%, 100% { transform: scale(1); }
+    20% { transform: scale(1.25); }
+    40% { transform: scale(0.95); }
+    60% { transform: scale(1.1); }
+  }
+  .pu__heart-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #5f5e5a;
+    text-transform: uppercase;
+  }
+
+  .pu__hint {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #5f5e5a;
+    line-height: 1.55;
+  }
+
+  .pu__celebration {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .pu__celebration-card {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: #ffd400;
+    color: #1a1228;
+    border: 4px solid #12110e;
+    box-shadow: 12px 12px 0 0 #ff5c23;
+    padding: 24px 36px;
+    text-align: center;
+    animation: pu-pop 0.5s ease-out;
+  }
+  @keyframes pu-pop {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    70% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  .pu__celebration-eyebrow {
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    color: #b8431a;
+    font-weight: 700;
+  }
+  .pu__celebration-num {
+    margin: 6px 0;
+    font-family: 'Bungee', Impact, sans-serif;
+    font-size: clamp(56px, 9vw, 120px);
+    color: #12110e;
+    letter-spacing: 0.04em;
+  }
+  .pu__celebration-text {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: 18px;
+    color: #5f5e5a;
+  }
+
+  .pu__confetti {
+    position: absolute;
+    top: -20px;
+    width: 10px;
+    height: 14px;
+    animation: pu-fall linear forwards;
+  }
+  @keyframes pu-fall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(540deg); opacity: 0; }
+  }
+
+  .pu__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5f5e5a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .pu__foot a { color: #ffd400; }
+  .pu__foot code { background: #0c0820; padding: 1px 6px; border: 1px solid #5f5e5a; color: #ffd400; }
+  .pu__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
