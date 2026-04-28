@@ -1,0 +1,86 @@
+/**
+ * /tide.json — agent-readable manifest of the /tide room.
+ *
+ * Serves the palette catalog + interactive surface metadata so agents
+ * (LLM crawlers, indexers, Magpie/Sparrow readers) can render or
+ * describe /tide without parsing HTML.
+ */
+import type { APIRoute } from 'astro';
+
+const PALETTES = [
+  { id: 'daybreak',  name: 'DAYBREAK',  hex: { sky: '#FFD4C2', water: '#F4A78D', foam: '#FFE9D8', orb: '#FFB496', wave1: '#E08F73', wave2: '#C4715A', wave3: '#AA5443' }, dark: false, dek: 'pearl pink · soft peach · lavender mist' },
+  { id: 'crystal',   name: 'CRYSTAL',   hex: { sky: '#BFEFEC', water: '#7FE5DC', foam: '#F4FBFA', orb: '#FFFFFF', wave1: '#5DCBC0', wave2: '#3FA89C', wave3: '#1F8579' }, dark: false, dek: 'aquamarine · soft cyan · white foam' },
+  { id: 'kelp',      name: 'KELP',      hex: { sky: '#9FB28A', water: '#5C7A4E', foam: '#E0D4B8', orb: '#D9C46E', wave1: '#3F5E33', wave2: '#2A4424', wave3: '#1A2E18' }, dark: false, dek: 'sage canopy · deep green · amber kelp' },
+  { id: 'coral',     name: 'CORAL',     hex: { sky: '#FFC4B0', water: '#FF8675', foam: '#FFE0D6', orb: '#FFEEC2', wave1: '#E76B5C', wave2: '#C4493D', wave3: '#9B2D24' }, dark: false, dek: 'coral pink · dusty rose · lavender' },
+  { id: 'abyss',     name: 'ABYSS',     hex: { sky: '#1E2D5C', water: '#0A1F3A', foam: '#2EC4B6', orb: '#88E0D4', wave1: '#0E2548', wave2: '#06162D', wave3: '#020912' }, dark: true,  dek: 'midnight indigo · abyssal navy · phosphor teal' },
+  { id: 'storm',     name: 'STORM',     hex: { sky: '#5A6470', water: '#2C2E33', foam: '#FFE15D', orb: '#FFE15D', wave1: '#1E2025', wave2: '#16181C', wave3: '#0C0E12' }, dark: true,  dek: 'slate · charcoal · lightning' },
+  { id: 'lagoon',    name: 'LAGOON',    hex: { sky: '#A0E6DC', water: '#2EC4B6', foam: '#F5DEA8', orb: '#F5DEA8', wave1: '#26A89C', wave2: '#188076', wave3: '#0F5C55' }, dark: false, dek: 'turquoise · teal · warm sand' },
+  { id: 'nighttide', name: 'NIGHTTIDE', hex: { sky: '#3A0E5C', water: '#0E1845', foam: '#FF1493', orb: '#FF69B4', wave1: '#3D1276', wave2: '#1F1054', wave3: '#0A0830' }, dark: true,  dek: 'electric magenta · hot pink · deep ocean' },
+];
+
+const CLOCK_TIME_RANGES = [
+  { from: '00:00', to: '05:00', palette: 'abyss' },
+  { from: '05:00', to: '08:00', palette: 'daybreak' },
+  { from: '08:00', to: '11:00', palette: 'crystal' },
+  { from: '11:00', to: '14:00', palette: 'lagoon' },
+  { from: '14:00', to: '17:00', palette: 'kelp' },
+  { from: '17:00', to: '20:00', palette: 'coral' },
+  { from: '20:00', to: '22:00', palette: 'storm' },
+  { from: '22:00', to: '24:00', palette: 'nighttide' },
+];
+
+export const GET: APIRoute = async () => {
+  const body = {
+    surface: '/tide',
+    description: 'A minimal water-led color room. Eight palettes, three SVG wave layers with parallax, drifting sun-or-moon orb, rising foam, optional Web Audio waves. Tap to cycle.',
+    url: 'https://pointcast.xyz/tide',
+    interactions: {
+      tap: 'Tap anywhere except settings and footer to cycle to the next palette.',
+      keyboard: {
+        'Space / Enter / ArrowRight': 'next palette',
+        'ArrowLeft': 'previous palette',
+        'Escape': 'restore hidden UI',
+      },
+      hash: 'URL hash selects palette: #abyss, #daybreak, etc. Hash updates on cycle.',
+      autoCycle: 'Default 90s; configurable to 30s, 5m, or never via settings drawer.',
+      audio: 'Optional Web Audio: filtered brown-noise + LFO low-pass + tonal pad (root + fifth) per palette. Off by default.',
+      moments: 'Save the current palette + dwell time to localStorage (pc:tide:moments). Viewable at /tide/moments.',
+    },
+    palettes: PALETTES,
+    clockDefault: {
+      timezone: 'America/Los_Angeles',
+      ranges: CLOCK_TIME_RANGES,
+    },
+    storage: {
+      'pc:tide:last':     'last visited palette id',
+      'pc:tide:audio':    '"1" or "0" — audio toggle',
+      'pc:tide:volume':   'float 0..1 — audio volume',
+      'pc:tide:motion':   '"1" or "0" — animations on',
+      'pc:tide:autoMs':   'number — auto-cycle interval ms (0 = never)',
+      'pc:tide:ui':       '"1" or "0" — UI visible',
+      'pc:tide:moments':  'JSON array of saved moment objects (cap 50)',
+    },
+    companion: {
+      '/tide':           'the room',
+      '/tide.json':      'this manifest',
+      '/tide/moments':   'saved moments viewer',
+      '/bath':           'companion (button-y, Spotify, mood selector)',
+      '/meditate':       'companion (still room, breathing)',
+      '/pace':           'companion (movement room, BPM)',
+    },
+    version: 2,
+    versions: {
+      v1: 'shipped 2026-04-28 — palettes, parallax waves, orb, foam, tap-to-cycle, 90s drift',
+      v2: 'shipped 2026-04-28 — Web Audio synth, ripples, hash sync, settings drawer, aurora, wave morph, grain, moments save',
+    },
+    license: 'CC0',
+    source: 'https://github.com/mhoydich/pointcast/blob/main/src/pages/tide.astro',
+  };
+  return new Response(JSON.stringify(body, null, 2), {
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=300',
+    },
+  });
+};
