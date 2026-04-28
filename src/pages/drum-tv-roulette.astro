@@ -206,12 +206,43 @@ const jsonLd = {
       }
     }
 
+    function isHumanEntry(p) {
+      const t = (p && p.type) || '';
+      return p && p.pid && typeof p.nounId === 'number' && !t.startsWith('bot:');
+    }
+    function getSelfSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'tv-' + Math.random().toString(36).slice(2, 10); }
+    }
+    async function selfRegister() {
+      // Cast device = present visitor; idempotent (IP-throttled).
+      try {
+        let nounId = 0;
+        try {
+          const stored = localStorage.getItem('pc:nounId');
+          const n = stored ? Number(stored) : NaN;
+          nounId = Number.isFinite(n) ? n : (hash32(getSelfSession()) % 1200);
+        } catch { nounId = hash32(getSelfSession()) % 1200; }
+        try { localStorage.setItem('pc:nounId', String(nounId)); } catch {}
+        await fetch('/api/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nounId, note: 'tv-roulette' }),
+        });
+      } catch {}
+    }
+    selfRegister();
+
     async function pollVisit() {
       try {
         const r = await fetch('/api/visit', { cache: 'no-store' });
         if (!r.ok) return;
         const data = await r.json();
-        const list = (Array.isArray(data.present) ? data.present : []).filter((p) => p.pid && typeof p.nounId === 'number');
+        const list = (Array.isArray(data.present) ? data.present : []).filter(isHumanEntry);
         // Cap at 24 to keep wheel readable
         present = list.slice(0, 24).map((p) => ({ pid: p.pid, nounId: p.nounId }));
         paintWheel();

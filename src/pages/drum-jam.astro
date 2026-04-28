@@ -351,12 +351,36 @@ const jsonLd = {
       document.getElementById('jm-bpm').textContent = `${bpm} BPM`;
     });
 
+    function isHumanEntry(p) {
+      const t = (p && p.type) || '';
+      return p && typeof p.nounId === 'number' && !t.startsWith('bot:');
+    }
+    async function selfRegister() {
+      // Make this visitor present in /api/visit so jam mode actually
+      // sees a roster. Idempotent (IP-throttled server-side).
+      try {
+        let nounId = 0;
+        try {
+          const stored = localStorage.getItem('pc:nounId');
+          const n = stored ? Number(stored) : NaN;
+          nounId = Number.isFinite(n) ? n : (hash32(session) % 1200);
+        } catch { nounId = hash32(session) % 1200; }
+        try { localStorage.setItem('pc:nounId', String(nounId)); } catch {}
+        await fetch('/api/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nounId, note: 'drum-jam' }),
+        });
+      } catch {}
+    }
+    selfRegister();
+
     async function pollVisit() {
       try {
         const r = await fetch('/api/visit', { cache: 'no-store' });
         if (!r.ok) return;
         const data = await r.json();
-        const present = (Array.isArray(data.present) ? data.present : []).filter((p) => typeof p.nounId === 'number');
+        const present = (Array.isArray(data.present) ? data.present : []).filter(isHumanEntry);
         // Always include self
         const selfPid = (await sha256(session)).slice(0, 10);
         if (!present.find((p) => p.pid === selfPid)) {

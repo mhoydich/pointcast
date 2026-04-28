@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gas Stove · Digital Fireplace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background: #02060a; }
+  .scene { position: fixed; inset: 0; display: grid; place-items: center; }
+
+  /* stovetop */
+  .stove {
+    position: relative;
+    width: min(560px, 90vw);
+    height: min(420px, 70vh);
+    background:
+      linear-gradient(to bottom, #2a2a30 0 6%, #1a1a20 6% 100%);
+    border: 6px solid #050507;
+    border-radius: 6px;
+    box-shadow:
+      inset 0 0 60px rgba(0,0,0,0.5),
+      0 12px 0 #050507;
+  }
+  /* burner grate (cast iron) */
+  .grate {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle, transparent 30%, #050507 30% 32%, transparent 32%);
+  }
+  .grate::before, .grate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      conic-gradient(from 0deg,
+        #050507 0deg 8deg, transparent 8deg 60deg,
+        #050507 60deg 68deg, transparent 68deg 120deg,
+        #050507 120deg 128deg, transparent 128deg 180deg,
+        #050507 180deg 188deg, transparent 188deg 240deg,
+        #050507 240deg 248deg, transparent 248deg 300deg,
+        #050507 300deg 308deg, transparent 308deg 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 26%, black 26%);
+            mask: radial-gradient(circle, transparent 26%, black 26%);
+  }
+
+  /* burner ring */
+  .ring {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 150px; height: 150px;
+    background:
+      radial-gradient(circle,
+        #1a1a20 0 28%,
+        #050507 28% 30%,
+        #2a2a30 30% 70%,
+        #050507 70% 100%);
+    border-radius: 50%;
+  }
+  /* gas jets canvas — 12 jets equally spaced */
+  #fire {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* knob */
+  .knob {
+    position: absolute;
+    bottom: 8%; right: 10%;
+    width: 60px; height: 60px;
+    background: radial-gradient(circle, #2a2a30 0 30%, #4a4a50 30% 100%);
+    border: 3px solid #050507;
+    border-radius: 50%;
+    transform: rotate(-30deg);
+  }
+  .knob::after {
+    content: "";
+    position: absolute;
+    left: 50%; top: 6px;
+    transform: translateX(-50%);
+    width: 4px; height: 18px;
+    background: #ff4030;
+    border-radius: 2px;
+  }
+  .knob-label {
+    position: absolute;
+    bottom: 16%; right: 8%;
+    color: #ffd066;
+    font-family: 'VT323', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  /* glow */
+  .glow {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 80vw; height: 60vh;
+    background: radial-gradient(ellipse at center, rgba(80,160,255,0.3), transparent 60%);
+    filter: blur(20px);
+    pointer-events: none;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.7; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="glow"></div>
+  <div class="stove">
+    <div class="grate"></div>
+    <div class="ring"></div>
+    <canvas id="fire" width="200" height="200"></canvas>
+    <div class="knob"></div>
+    <div class="knob-label">HIGH</div>
+  </div>
+</div>
+<script type="module">
+  import { PixelFire, PALETTES } from "./lib/fire.js";
+  import { mountChrome } from "./lib/chrome.js";
+  const c = document.getElementById("fire");
+  const fire = new PixelFire(c, { palette: PALETTES.gas, scale: 4, intensity: 1 });
+  // ring source — 12 small jets around a circle
+  const cols = c.width / 4;
+  const rows = c.height / 4;
+  const cx = cols / 2, cy = rows / 2, ringR = cols * 0.28;
+  const src = new Uint8Array(cols);
+  // We use the source row, but we can also use a mask to show jets only at ring positions
+  fire.setMask((col, row) => {
+    if (row !== rows - 1) return true;
+    return false;
+  });
+  // per-jet source: 12 evenly-spaced cones along the source row mapped from circle bottom
+  for (let i = 0; i < cols; i++) {
+    // skip — we'll override differently
+    src[i] = 0;
+  }
+  // Place 12 hot zones along the bottom row evenly across width
+  for (let j = 0; j < 12; j++) {
+    const x = Math.round((j + 0.5) / 12 * cols);
+    for (let dx = -1; dx <= 1; dx++) src[x + dx] = 1;
+  }
+  fire.setSource(src);
+  fire.start();
+  mountChrome({ title: "gas stove · high", mood: "blue ring · the kettle is starting to whisper" });
+</script>
+</body>
+</html>

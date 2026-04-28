@@ -106,11 +106,17 @@ const CELLS = [
   </main>
 </BlockLayout>
 
+<script is:inline define:vars={{ CELLS }}>
+  // Bake the cell pool directly into the same script tag — earlier
+  // versions used a second `define:vars` script after this one, which
+  // ran later than the main script and left POOL empty (so cards only
+  // had the FREE center). Same-tag injection avoids the order bug.
+  window.__bgCells = CELLS;
+</script>
 <script is:inline>
   (function () {
     'use strict';
-    // Cells pool injected via window.__bgCells from frontmatter define:vars below.
-    const POOL = window.__bgCells || [];
+    const POOL = (window.__bgCells || []);
 
     const visitorsEl = document.getElementById('bg-visitors');
     const lastCallEl = document.getElementById('bg-lastcall');
@@ -309,12 +315,49 @@ const CELLS = [
 
     let restartTimer = null;
 
+    function isHumanEntry(p) {
+      // /api/visit returns mixed entries — humans + bots (type prefix
+      // `bot:`). Filter to humans only so the TV doesn't deal cards to
+      // crawler IPs.
+      const t = (p && p.type) || '';
+      return p && p.pid && typeof p.nounId === 'number' && !t.startsWith('bot:');
+    }
+
+    async function selfRegister() {
+      // Make the cast device count as a present visitor so the TV game
+      // never starts with an empty roster. Idempotent: /api/visit
+      // throttles on IP, so reloading or coming back later is fine.
+      try {
+        let nounId = 0;
+        try {
+          const stored = localStorage.getItem('pc:nounId');
+          const n = stored ? Number(stored) : NaN;
+          nounId = Number.isFinite(n) ? n : (Math.abs(hash32(getSelfSession())) % 1200);
+        } catch { nounId = Math.abs(hash32(getSelfSession())) % 1200; }
+        try { localStorage.setItem('pc:nounId', String(nounId)); } catch {}
+        await fetch('/api/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nounId, note: 'tv-bingo' }),
+        });
+      } catch {}
+    }
+    function getSelfSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'tv-' + Math.random().toString(36).slice(2, 10); }
+    }
+    selfRegister();
+
     async function pollVisit() {
       try {
         const r = await fetch('/api/visit', { cache: 'no-store' });
         if (!r.ok) return;
         const data = await r.json();
-        const present = (Array.isArray(data.present) ? data.present : []).filter((p) => typeof p.nounId === 'number' && p.pid);
+        const present = (Array.isArray(data.present) ? data.present : []).filter(isHumanEntry);
         // Add cards for new visitors
         present.forEach((p) => {
           if (!cards.has(p.pid)) {
@@ -384,11 +427,6 @@ const CELLS = [
       if (e.key === '3') document.querySelector('.bg__board').dataset.palette = 'sunset';
     });
   })();
-</script>
-
-<script is:inline define:vars={{ CELLS }}>
-  // Frontmatter-baked cell pool — passed into the player script via window.
-  window.__bgCells = CELLS;
 </script>
 
 <style>

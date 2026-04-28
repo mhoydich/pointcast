@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Hearth Picker · Digital Fireplaces by Good Feels</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Eleven embeddable pixel-art digital fireplaces. Pick one to live in. Brought to you by Good Feels.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Departure+Mono&family=VT323&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0604;
+    --bg2: #1a0e08;
+    --ink: #f5e8c8;
+    --dim: #8a7860;
+    --accent: #d86440;
+    --green: #6cf76c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Departure Mono', 'VT323', monospace;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,140,80,0.06) 1px, transparent 0);
+    background-size: 8px 8px;
+  }
+
+  header {
+    border-bottom: 4px double var(--ink);
+    padding: 18px;
+    text-align: center;
+    background:
+      linear-gradient(135deg,
+        #2a0e04 0%, #4a2410 30%, #2a0e04 60%, #1a0604 100%);
+  }
+  header h1 {
+    font-family: 'Silkscreen', monospace;
+    font-size: 24px;
+    letter-spacing: 3px;
+    text-shadow: 3px 3px 0 #000, 0 0 20px rgba(255,140,40,0.4);
+  }
+  header .sub {
+    margin-top: 6px;
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  header .sponsor {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 14px;
+    border: 2px dashed var(--accent);
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    transition: all 0.2s;
+  }
+  header .sponsor:hover {
+    background: var(--accent);
+    color: #000;
+  }
+
+  main {
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 20px 14px 80px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .tile {
+    background: var(--bg2);
+    border: 3px solid var(--ink);
+    box-shadow: 5px 5px 0 #000;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.1s;
+  }
+  .tile:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 #000; }
+
+  .preview {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: #000;
+    overflow: hidden;
+    border-bottom: 3px solid var(--ink);
+  }
+  .preview iframe {
+    width: 100%; height: 100%;
+    border: none;
+    display: block;
+    pointer-events: none;
+    transform: scale(0.65);
+    transform-origin: 0 0;
+    width: 154%;
+    height: 154%;
+  }
+  .preview .live-pip {
+    position: absolute;
+    top: 6px; left: 6px;
+    background: rgba(0,0,0,0.7);
+    color: var(--green);
+    padding: 1px 6px;
+    font-size: 9px;
+    font-family: 'Silkscreen', monospace;
+    letter-spacing: 1px;
+    z-index: 2;
+  }
+  .preview .live-pip::before {
+    content: "● ";
+    animation: blink 1.2s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.4; } }
+
+  .meta {
+    padding: 10px 12px 12px;
+  }
+  .meta .name {
+    font-family: 'Silkscreen', monospace;
+    font-size: 14px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    color: var(--ink);
+  }
+  .meta .mood {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.4;
+    margin-bottom: 8px;
+    min-height: 30px;
+  }
+  .meta .actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .meta a, .meta button {
+    flex: 1;
+    text-align: center;
+    padding: 5px 0;
+    border: 2px solid var(--ink);
+    background: var(--bg);
+    color: var(--ink);
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .meta a:hover, .meta button:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+
+  .embed-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    place-items: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .embed-modal.open { display: grid; }
+  .embed-modal .box {
+    background: var(--bg2);
+    border: 3px solid var(--ink);
+    box-shadow: 8px 8px 0 #000;
+    max-width: 600px;
+    width: 100%;
+    padding: 18px;
+  }
+  .embed-modal h3 {
+    font-family: 'Silkscreen', monospace;
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  .embed-modal pre {
+    background: #000;
+    padding: 12px;
+    border: 1px solid var(--dim);
+    overflow-x: auto;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--green);
+  }
+  .embed-modal .close {
+    margin-top: 12px;
+    padding: 6px 14px;
+    border: 2px solid var(--ink);
+    background: var(--bg);
+    color: var(--ink);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  footer {
+    border-top: 2px solid var(--dim);
+    padding: 16px;
+    text-align: center;
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 1px;
+    background: #000;
+  }
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>★ THE HEARTH PICKER ★</h1>
+  <div class="sub">thirty-four embeddable digital fireplaces · pixel-art · cc0</div>
+  <a class="sponsor" href="https://shop.getgoodfeels.com" target="_blank" rel="sponsored noopener">
+    🍃 brought to you by GOOD FEELS · shop.getgoodfeels.com
+  </a>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+</main>
+
+<div class="embed-modal" id="modal">
+  <div class="box">
+    <h3 id="modalTitle">embed code</h3>
+    <pre id="embedSnippet"></pre>
+    <button class="close" onclick="document.getElementById('modal').classList.remove('open')">close</button>
+  </div>
+</div>
+
+<footer>
+  ★ digital-fireplace-mcp · v1.0 · cc0 · doom-fire algorithm · departure mono ★ <br>
+  <a href="https://shop.getgoodfeels.com" target="_blank" rel="sponsored noopener">visit shop.getgoodfeels.com</a>
+</footer>
+
+<script>
+  const FIREPLACES = [
+    { slug: "classic-hearth",  name: "classic hearth",  mood: "stone · oak · long winter" },
+    { slug: "wood-stove",      name: "wood stove",      mood: "cast iron · vermont evening" },
+    { slug: "campfire",        name: "campfire",        mood: "open sky · pine smoke · friends close by" },
+    { slug: "joint-tray",      name: "good feels",      mood: "lazy spiral · honest smoke" },
+    { slug: "yule-log",        name: "yule log ch.03",  mood: "1970s broadcast · saturday afternoon" },
+    { slug: "crystal-cave",    name: "crystal cave",    mood: "geode glow · cool burn · forever" },
+    { slug: "space-stove",     name: "plasma reactor",  mood: "fusion-shard · steady at 88,000K" },
+    { slug: "tiki-torch",      name: "tiki torch",      mood: "warm trade winds · slack ukelele" },
+    { slug: "lava-lamp",       name: "lava lamp",       mood: "1973 · shag carpet · slow rise" },
+    { slug: "cabin-window",    name: "cabin window",    mood: "snow falling on pines · view from outside" },
+    { slug: "mystic-brazier",  name: "mystic brazier",  mood: "violet flame · binding circle" },
+    { slug: "jack-o-lantern",  name: "jack-o-lantern",  mood: "october 31 · porch light · candy bowl" },
+    { slug: "menorah",         name: "menorah · 8th",   mood: "olive oil light · slow songs · the family table" },
+    { slug: "birthday-candle", name: "birthday candle", mood: "make a wish · don't tell anyone" },
+    { slug: "sparkler",        name: "sparkler",        mood: "july 4 · driveway · do not stare directly" },
+    { slug: "new-years",       name: "new years",       mood: "champagne · skyline · 12:00:00" },
+    { slug: "bonfire-beach",   name: "beach bonfire",   mood: "low tide · driftwood · semi-circle" },
+    { slug: "forge-anvil",     name: "blacksmith forge",mood: "1450°F · hammer ringing" },
+    { slug: "sun-disc",        name: "sun disc",        mood: "the original fireplace · 4.6B years" },
+    { slug: "volcano",         name: "volcano",         mood: "tectonic boundary · obsidian beach" },
+    { slug: "aurora",          name: "aurora borealis", mood: "magnetosphere · solar wind · still water" },
+    { slug: "dragon-mouth",    name: "dragon mouth",    mood: "low growl · sulphur · stay back" },
+    { slug: "phoenix-egg",     name: "phoenix egg",     mood: "the long sleep · cracks at the edge of waking" },
+    { slug: "lightsaber",      name: "lightsaber",      mood: "kyber crystal · contained plasma" },
+    { slug: "solar-flare",     name: "solar flare",     mood: "X8.2 class · 1AU away" },
+    { slug: "welding-arc",     name: "welding arc",     mood: "6011 rod · 110A · the bead just walked itself" },
+    { slug: "gas-stove",       name: "gas stove",       mood: "blue ring · the kettle is starting to whisper" },
+    { slug: "furnace-coal",    name: "coal furnace",    mood: "boiler room · 1922 · stays warm" },
+    { slug: "tea-light",       name: "tea light",       mood: "small flame · long evening · beeswax" },
+    { slug: "match-strike",    name: "match strike",    mood: "phosphorus · pine stick · 18-second life" },
+    { slug: "cigar-ashtray",   name: "cigar · neat",    mood: "leather chair · whiskey rocks · long thought" },
+    { slug: "incense",         name: "incense",         mood: "morning altar · slow ribbons up" },
+    { slug: "bong-cherry",     name: "bong cherry",     mood: "milkglass · clean water · slow rip" },
+    { slug: "firefly-jar",     name: "firefly jar",     mood: "june field · porch screen · catch and release" },
+  ];
+
+  const grid = document.getElementById("grid");
+  const origin = location.origin;
+
+  for (const f of FIREPLACES) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.innerHTML = `
+      <div class="preview">
+        <div class="live-pip">LIVE</div>
+        <iframe src="./${f.slug}.html?nochrome=1" title="${f.name}" loading="lazy"></iframe>
+      </div>
+      <div class="meta">
+        <div class="name">${f.name}</div>
+        <div class="mood">${f.mood}</div>
+        <div class="actions">
+          <a href="./${f.slug}.html" target="_blank">open</a>
+          <button data-slug="${f.slug}" data-name="${f.name}">embed</button>
+        </div>
+      </div>`;
+    grid.appendChild(tile);
+  }
+
+  grid.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-slug]");
+    if (!btn) return;
+    const slug = btn.dataset.slug;
+    const name = btn.dataset.name;
+    document.getElementById("modalTitle").textContent = `embed: ${name}`;
+    // Embed URL must be absolute. The gallery lives at .../fireplaces/index.html,
+    // so drop the trailing index.html (or trailing slash) and append the slug.
+    const base = location.href.replace(/index\.html?$/, "").replace(/\/$/, "");
+    const url = `${base}/${slug}.html`;
+    const code = `<iframe
+  src="${url}"
+  width="800" height="500"
+  frameborder="0"
+  allow="autoplay"
+  title="${name} · digital fireplace"
+  style="border:none;"></iframe>
+
+<!-- brought to you by Good Feels · shop.getgoodfeels.com -->`;
+    document.getElementById("embedSnippet").textContent = code;
+    document.getElementById("modal").classList.add("open");
+  });
+</script>
+</body>
+</html>

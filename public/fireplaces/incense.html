@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Incense · Digital Fireplace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body {
+    background:
+      radial-gradient(ellipse at 50% 70%, #1a1430 0%, #050208 90%);
+  }
+  .scene { position: fixed; inset: 0; }
+
+  /* zen rocks ring */
+  .ring {
+    position: absolute;
+    left: 0; right: 0; bottom: 8%;
+    height: 30%;
+    pointer-events: none;
+    background:
+      repeating-radial-gradient(circle at 50% 100%,
+        transparent 0 80px,
+        rgba(120,140,160,0.08) 80px 84px,
+        transparent 84px 130px,
+        rgba(120,140,160,0.08) 130px 134px,
+        transparent 134px 180px,
+        rgba(120,140,160,0.08) 180px 184px,
+        transparent 184px);
+  }
+
+  .moon {
+    position: absolute;
+    right: 18%; top: 14%;
+    width: 60px; height: 60px;
+    background: radial-gradient(circle at 30% 30%, #f4ecd6 0 60%, #b0a484 60% 100%);
+    border-radius: 50%;
+    box-shadow: 0 0 40px rgba(255,240,200,0.4);
+  }
+
+  /* incense holder */
+  .holder {
+    position: absolute;
+    left: 50%; bottom: 16%;
+    transform: translateX(-50%);
+    width: 220px; height: 24px;
+    background:
+      linear-gradient(to bottom, #4a3018 0 30%, #2a1810 100%);
+    border: 3px solid #1a0a04;
+    border-radius: 4px 4px 50% 50% / 4px 4px 100% 100%;
+    box-shadow:
+      inset 0 4px 0 rgba(220,180,120,0.2),
+      0 4px 0 rgba(0,0,0,0.5);
+  }
+
+  /* the stick */
+  .stick {
+    position: absolute;
+    left: 50%; bottom: 22%;
+    transform: translateX(-50%);
+    width: 4px; height: 50%;
+    background: linear-gradient(to top,
+      #6a3a1a 0%, #4a2818 60%, #2a1808 100%);
+  }
+  /* the glowing tip */
+  .ember {
+    position: absolute;
+    left: 50%; top: -3px;
+    transform: translateX(-50%);
+    width: 8px; height: 8px;
+    background: radial-gradient(circle, #ffd066 0%, #ff7e2a 50%, #c8401a 100%);
+    border-radius: 50%;
+    box-shadow: 0 0 16px rgba(255,140,40,0.9), 0 0 30px rgba(255,180,80,0.5);
+    animation: emberPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes emberPulse {
+    50% { box-shadow: 0 0 22px rgba(255,180,80,1), 0 0 40px rgba(255,200,100,0.7); }
+  }
+
+  /* smoke canvas */
+  #smoke {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+
+  .glow {
+    position: absolute;
+    left: 50%; bottom: 22%;
+    transform: translate(-50%, 0);
+    width: 60vw; height: 60vh;
+    background: radial-gradient(ellipse at 50% 100%, rgba(180,140,200,0.18), transparent 60%);
+    filter: blur(20px);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="ring"></div>
+  <div class="moon"></div>
+  <div class="glow"></div>
+  <canvas id="smoke"></canvas>
+  <div class="holder"></div>
+  <div class="stick">
+    <div class="ember"></div>
+  </div>
+</div>
+<script type="module">
+  import { mountChrome } from "./lib/chrome.js";
+  // beautiful smoke spirals — Perlin-ish noise via summed sines
+  const c = document.getElementById("smoke");
+  const ctx = c.getContext("2d");
+  function size() { c.width = window.innerWidth; c.height = window.innerHeight; }
+  size(); window.addEventListener("resize", size);
+  const particles = [];
+  function tipPos() {
+    // stick is centered, height 50% of vh, holder bottom at 16% so tip is at vh*(1-0.16-0.5)
+    return { x: c.width / 2, y: c.height * (1 - 0.16 - 0.5) };
+  }
+  let t = 0;
+  function tick() {
+    t += 0.02;
+    if (Math.random() < 0.6) {
+      const p = tipPos();
+      particles.push({
+        x: p.x + (Math.random() - 0.5) * 4,
+        y: p.y,
+        vx: 0,
+        vy: -0.3,
+        life: 0,
+        max: 380 + Math.random() * 200,
+        size: 2 + Math.random() * 2,
+        seed: Math.random() * 100,
+      });
+    }
+    ctx.clearRect(0, 0, c.width, c.height);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life++;
+      // sinusoidal sway for spiral
+      const sway = Math.sin(p.seed + p.life * 0.018) * 0.6;
+      p.x += sway + p.vx;
+      p.y += p.vy;
+      p.vy -= 0.0008;
+      const a = Math.max(0, 1 - p.life / p.max);
+      const s = p.size * (1 + p.life / p.max * 5);
+      ctx.fillStyle = `rgba(180,160,200,${a * 0.16})`;
+      ctx.fillRect((p.x - s) | 0, (p.y - s) | 0, (s * 2) | 0, (s * 2) | 0);
+      if (p.life > p.max) particles.splice(i, 1);
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+  mountChrome({ title: "incense · sandalwood", mood: "morning altar · single point of orange · slow ribbons up" });
+</script>
+</body>
+</html>

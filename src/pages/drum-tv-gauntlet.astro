@@ -247,12 +247,48 @@ const jsonLd = {
       paintPositions();
     }
 
+    function isHumanEntry(p) {
+      const t = (p && p.type) || '';
+      return p && p.pid && typeof p.nounId === 'number' && !t.startsWith('bot:');
+    }
+    function getSelfSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'tv-' + Math.random().toString(36).slice(2, 10); }
+    }
+    function hashStr(str) {
+      let h = 5381;
+      for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) & 0x7fffffff;
+      return h;
+    }
+    async function selfRegister() {
+      // Cast device = present visitor. Idempotent (IP-throttled server-side).
+      try {
+        let nounId = 0;
+        try {
+          const stored = localStorage.getItem('pc:nounId');
+          const n = stored ? Number(stored) : NaN;
+          nounId = Number.isFinite(n) ? n : (hashStr(getSelfSession()) % 1200);
+        } catch { nounId = hashStr(getSelfSession()) % 1200; }
+        try { localStorage.setItem('pc:nounId', String(nounId)); } catch {}
+        await fetch('/api/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nounId, note: 'tv-gauntlet' }),
+        });
+      } catch {}
+    }
+    selfRegister();
+
     async function pollVisit() {
       try {
         const r = await fetch('/api/visit', { cache: 'no-store' });
         if (!r.ok) return;
         const data = await r.json();
-        const present = (Array.isArray(data.present) ? data.present : []).filter((p) => p.pid && typeof p.nounId === 'number');
+        const present = (Array.isArray(data.present) ? data.present : []).filter(isHumanEntry);
         presentNouns = new Map();
         present.forEach((p) => {
           presentNouns.set(p.pid, p.nounId);

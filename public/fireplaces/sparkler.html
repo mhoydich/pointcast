@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sparkler · Digital Fireplace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background: linear-gradient(180deg, #050a18 0%, #02040c 100%); }
+  .scene { position: fixed; inset: 0; }
+  .stars {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle 1px at 14% 12%, white, transparent),
+      radial-gradient(circle 1px at 32% 22%, white, transparent),
+      radial-gradient(circle 1px at 56% 14%, white, transparent),
+      radial-gradient(circle 1px at 78% 18%, white, transparent),
+      radial-gradient(circle 1px at 92% 30%, white, transparent),
+      radial-gradient(circle 1px at 8%  44%, white, transparent),
+      radial-gradient(circle 1px at 64% 32%, white, transparent);
+    opacity: 0.6;
+  }
+  /* distant fireworks */
+  .fw {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    box-shadow:
+      0 -30px 0 -1px var(--c, #ff6a3a),
+      0 30px 0 -1px var(--c, #ff6a3a),
+      30px 0 0 -1px var(--c, #ff6a3a),
+      -30px 0 0 -1px var(--c, #ff6a3a),
+      22px -22px 0 -2px var(--c, #ff6a3a),
+      -22px -22px 0 -2px var(--c, #ff6a3a),
+      22px 22px 0 -2px var(--c, #ff6a3a),
+      -22px 22px 0 -2px var(--c, #ff6a3a);
+    background: var(--c, #ff6a3a);
+    opacity: 0;
+    animation: pop 4s ease-out infinite;
+  }
+  @keyframes pop {
+    0%   { opacity: 0; transform: scale(0); }
+    10%  { opacity: 1; transform: scale(0.4); }
+    40%  { opacity: 1; transform: scale(2); }
+    100% { opacity: 0; transform: scale(3.4); }
+  }
+
+  #spark {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+
+  .stick {
+    position: absolute;
+    left: 50%; bottom: 14%;
+    transform: translateX(-50%) rotate(-6deg);
+    transform-origin: bottom center;
+    width: 6px; height: 56%;
+    background: linear-gradient(to top, #6a3a18 0 70%, #2a1408 70% 100%);
+    border-radius: 1px;
+    z-index: 1;
+  }
+  .grip {
+    position: absolute;
+    left: 50%; bottom: 12%;
+    transform: translateX(-50%);
+    width: 26px; height: 80px;
+    background: linear-gradient(to bottom, #4a2818 0 50%, #2a1408 100%);
+    border-radius: 4px;
+    z-index: 1;
+  }
+  .glow {
+    position: absolute;
+    left: 50%; top: 22%;
+    transform: translate(-50%, -50%);
+    width: 60vw; height: 60vh;
+    background: radial-gradient(ellipse at center, rgba(255,220,160,0.35), transparent 60%);
+    filter: blur(20px);
+    pointer-events: none;
+  }
+  .banner {
+    position: absolute;
+    top: 5%; left: 0; right: 0;
+    text-align: center;
+    color: #fff;
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    letter-spacing: 5px;
+    text-shadow: 0 0 14px rgba(255,140,40,0.7);
+  }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="stars"></div>
+  <div class="banner">★ INDEPENDENCE NIGHT ★</div>
+  <div class="fw" style="--c:#ff6a3a; left:18%; top:30%; animation-delay: 0s"></div>
+  <div class="fw" style="--c:#5aa0ff; left:78%; top:24%; animation-delay: 1.4s"></div>
+  <div class="fw" style="--c:#fff8d6; left:50%; top:18%; animation-delay: 2.8s"></div>
+  <div class="glow"></div>
+  <div class="grip"></div>
+  <div class="stick"></div>
+  <canvas id="spark"></canvas>
+</div>
+<script type="module">
+  import { mountChrome } from "./lib/chrome.js";
+  // Sparkler tip emits bright particles in all directions. Custom canvas — the
+  // Doom-fire algorithm doesn't suit radiating sparks.
+  const c = document.getElementById("spark");
+  const ctx = c.getContext("2d");
+  function size() { c.width = window.innerWidth; c.height = window.innerHeight; }
+  size(); window.addEventListener("resize", size);
+
+  const palette = ["#fff8d6","#ffe898","#ffc864","#ff9a3a","#fff"];
+  const particles = [];
+  let tipX = 0, tipY = 0;
+  function tip() {
+    // tracks the angle of the rotated stick: -6deg from vertical, length ~52% from grip at bottom 14%
+    const baseX = window.innerWidth / 2;
+    const baseY = window.innerHeight * 0.86;
+    const len = window.innerHeight * 0.56;
+    const angle = -6 * Math.PI / 180;
+    tipX = baseX + Math.sin(angle) * -len; // stick tilts -6 from vertical, tip is up
+    tipY = baseY - len;
+  }
+  tip(); window.addEventListener("resize", tip);
+
+  function spawn(n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = 1 + Math.random() * 4;
+      particles.push({
+        x: tipX + (Math.random() - 0.5) * 6,
+        y: tipY + (Math.random() - 0.5) * 6,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v - 0.5,
+        life: 0,
+        max: 30 + Math.random() * 30,
+        color: palette[(Math.random() * palette.length) | 0],
+      });
+    }
+  }
+  function tick() {
+    spawn(8);
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(0, 0, c.width, c.height);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life++;
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.08;  // gravity
+      p.vx *= 0.99; p.vy *= 0.99;
+      const alpha = Math.max(0, 1 - p.life / p.max);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = alpha;
+      ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 1, 2, 2);
+      if (p.life > p.max) particles.splice(i, 1);
+    }
+    ctx.globalAlpha = 1;
+    // bright core at tip
+    const grad = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, 22);
+    grad.addColorStop(0, "rgba(255,250,220,0.95)");
+    grad.addColorStop(1, "rgba(255,180,80,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, 22, 0, Math.PI * 2);
+    ctx.fill();
+    requestAnimationFrame(tick);
+  }
+  tick();
+  mountChrome({ title: "sparkler", mood: "july 4 · driveway · do not stare directly" });
+</script>
+</body>
+</html>
