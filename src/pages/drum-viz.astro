@@ -1,0 +1,374 @@
+---
+/**
+ * /drum-viz — full-screen reactive visualizer · sprint 7/9
+ *
+ * Subscribes to /api/sounds and turns every event into a visual
+ * blossom. Three layers running simultaneously on a single canvas:
+ *
+ *  1. Bass-radial — every drum/orchestra/symphony tap sends a colored
+ *     ripple from the center
+ *  2. Spectrum bars — bottom row of 24 vertical bars, each per
+ *     instrument family (drum/orchestra/choir/lounge/theremin/symphony/
+ *     bells/daily/potato/milestone/agent), height decays exponentially
+ *  3. Particle field — float random-walking glyphs (♪ ♩ ♬ ♭ ♮) that
+ *     spawn on each event, drift up, fade out
+ *
+ * Designed for AirPlay/Chromecast. Press F for fullscreen, M to mute
+ * the title overlay, 1-3 to switch palettes.
+ *
+ * Aesthetic: late-night audio-visualizer screensaver. Black background,
+ * neon spectrum, ribbon trails behind ripples, occasional "BLOSSOM"
+ * flash on milestones.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-viz — full-screen reactive visualizer';
+const description =
+  'Plug into a TV. Every drum-hub event becomes light. Ripples radiate, particles bloom, spectrum bars dance. Subscribes to /api/sounds.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-viz',
+  name: 'PointCast Drum · Visualizer',
+  url: 'https://pointcast.xyz/drum-viz',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="vz" id="vz-main">
+    <DrumNav current="viz" />
+
+    <div class="vz__overlay" id="vz-overlay">
+      <p class="vz__eyebrow mono">★ POINTCAST · DRUM-VIZ · LIVE BUS ★</p>
+      <p class="vz__hint mono">F · fullscreen · M · hide overlay · 1·2·3 · palettes</p>
+    </div>
+
+    <canvas class="vz__canvas" id="vz-canvas" aria-hidden="true"></canvas>
+
+    <div class="vz__legend mono" id="vz-legend">
+      <span data-type="drum">DRUM</span>
+      <span data-type="orchestra">ORCH</span>
+      <span data-type="choir">CHOIR</span>
+      <span data-type="lounge">LOUNGE</span>
+      <span data-type="theremin">THEREMIN</span>
+      <span data-type="symphony">SYMPHONY</span>
+      <span data-type="bells">BELLS</span>
+      <span data-type="daily">DAILY</span>
+      <span data-type="potato">POTATO</span>
+      <span data-type="milestone">★ MILESTONE</span>
+    </div>
+
+    <div class="vz__counter mono" id="vz-counter" aria-live="polite">events: 0 · uptime: 0s</div>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const canvas = document.getElementById('vz-canvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('vz-overlay');
+    const counter = document.getElementById('vz-counter');
+    const legend = document.getElementById('vz-legend');
+
+    const PALETTES = [
+      { // neon
+        bg: '#050310',
+        types: {
+          drum: '#ff5c23', orchestra: '#ffd400', choir: '#5fbafd', lounge: '#b8431a',
+          theremin: '#ff8a4a', symphony: '#d6745f', bells: '#fff7c2', daily: '#ffd400',
+          potato: '#fff', milestone: '#ffd400', default: '#cfc6df',
+        },
+      },
+      { // ocean
+        bg: '#0a1228',
+        types: {
+          drum: '#5fbafd', orchestra: '#ffd400', choir: '#fffaf0', lounge: '#94d4ff',
+          theremin: '#ff8a4a', symphony: '#cfc6df', bells: '#bfe6ff', daily: '#5fbafd',
+          potato: '#fff', milestone: '#ffd400', default: '#94d4ff',
+        },
+      },
+      { // sunset
+        bg: '#2a1228',
+        types: {
+          drum: '#ff5c23', orchestra: '#ffd400', choir: '#ffb070', lounge: '#a83b2a',
+          theremin: '#fff7c2', symphony: '#fda58a', bells: '#ffe8b3', daily: '#ffd9a8',
+          potato: '#fff', milestone: '#fff', default: '#ffd9a8',
+        },
+      },
+    ];
+
+    let palette = PALETTES[0];
+    let W = window.innerWidth, H = window.innerHeight;
+    let dpr = window.devicePixelRatio || 1;
+    function resize() {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = `${W}px`;
+      canvas.style.height = `${H}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Ripples
+    const ripples = [];
+    function spawnRipple(type) {
+      ripples.push({
+        cx: W / 2 + (Math.random() - 0.5) * 60,
+        cy: H / 2 + (Math.random() - 0.5) * 60,
+        r: 0,
+        max: 40 + Math.random() * 380,
+        life: 1,
+        color: palette.types[type] || palette.types.default,
+        thickness: type === 'milestone' ? 4 : 2,
+      });
+    }
+
+    // Spectrum bars (one per type + a few aux)
+    const TYPES = ['drum','orchestra','choir','lounge','theremin','symphony','bells','daily','potato','milestone','tap','default'];
+    const bars = {};
+    TYPES.forEach((t) => bars[t] = 0);
+    function bumpBar(type) {
+      bars[type] = Math.min(1, (bars[type] || 0) + 0.5);
+    }
+
+    // Particles (note glyphs)
+    const GLYPHS = ['♪','♩','♬','♭','♮','♯','♫'];
+    const particles = [];
+    function spawnParticles(type, count) {
+      const color = palette.types[type] || palette.types.default;
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * W,
+          y: H + 40,
+          vy: -1.2 - Math.random() * 1.6,
+          vx: (Math.random() - 0.5) * 0.6,
+          life: 1,
+          ttl: 240 + Math.random() * 240,
+          color,
+          glyph: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+          size: 14 + Math.random() * 28,
+        });
+      }
+    }
+
+    // Milestone flash overlay
+    let milestoneFlash = 0;
+
+    function frame() {
+      // Trail effect: paint bg with low alpha
+      ctx.fillStyle = palette.bg + 'CC';
+      ctx.fillRect(0, 0, W, H);
+
+      // Spectrum bars at bottom
+      const barCount = TYPES.length;
+      const slot = W / barCount;
+      for (let i = 0; i < barCount; i++) {
+        const t = TYPES[i];
+        const v = bars[t] || 0;
+        if (v < 0.001) continue;
+        const h = v * (H * 0.6);
+        const x = i * slot + 4;
+        const w = slot - 8;
+        ctx.fillStyle = palette.types[t] || palette.types.default;
+        ctx.fillRect(x, H - h, w, h);
+        // type label
+        ctx.fillStyle = palette.bg;
+        ctx.font = '9px JetBrains Mono, monospace';
+        ctx.fillText(t.toUpperCase().slice(0, 6), x + 4, H - 4);
+        bars[t] *= 0.92;
+      }
+
+      // Ripples
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const r = ripples[i];
+        r.r += 4 + r.r * 0.04;
+        r.life -= 0.012;
+        if (r.r > r.max || r.life <= 0) { ripples.splice(i, 1); continue; }
+        ctx.strokeStyle = r.color;
+        ctx.globalAlpha = Math.max(0, r.life);
+        ctx.lineWidth = r.thickness;
+        ctx.beginPath();
+        ctx.arc(r.cx, r.cy, r.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.ttl -= 1;
+        p.life = Math.max(0, p.ttl / 360);
+        if (p.ttl <= 0 || p.y < -40) { particles.splice(i, 1); continue; }
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.font = `${p.size}px Georgia, serif`;
+        ctx.fillText(p.glyph, p.x, p.y);
+        ctx.globalAlpha = 1;
+      }
+
+      // Milestone flash
+      if (milestoneFlash > 0) {
+        ctx.fillStyle = palette.types.milestone;
+        ctx.globalAlpha = milestoneFlash;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+        milestoneFlash *= 0.9;
+        if (milestoneFlash < 0.01) milestoneFlash = 0;
+      }
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // Subscribe to /api/sounds
+    let lastTs = 0;
+    let totalEvents = 0;
+    const startedAt = Date.now();
+    async function poll() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) {
+          lastTs = events[events.length - 1].t || Date.now();
+          for (const e of events) {
+            const type = e.type || 'default';
+            spawnRipple(type);
+            bumpBar(type);
+            spawnParticles(type, type === 'milestone' ? 16 : 4);
+            if (type === 'milestone') milestoneFlash = 0.7;
+            totalEvents += 1;
+          }
+          counter.textContent = `events: ${totalEvents} · uptime: ${Math.floor((Date.now() - startedAt) / 1000)}s`;
+        } else {
+          counter.textContent = `events: ${totalEvents} · uptime: ${Math.floor((Date.now() - startedAt) / 1000)}s`;
+        }
+      } catch {}
+    }
+    poll();
+    setInterval(poll, 1500);
+
+    // Demo throb when nothing is happening — small ambient bump every 8s
+    setInterval(() => {
+      if (totalEvents === 0) {
+        spawnRipple('default');
+        bumpBar('tap');
+      }
+    }, 4000);
+
+    // Hotkeys
+    let overlayOn = true;
+    function applyOverlay() {
+      overlay.style.opacity = overlayOn ? '1' : '0';
+      legend.style.opacity = overlayOn ? '0.85' : '0';
+      counter.style.opacity = overlayOn ? '0.7' : '0';
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+      }
+      if (e.key === 'm' || e.key === 'M') { overlayOn = !overlayOn; applyOverlay(); }
+      if (e.key === '1') palette = PALETTES[0];
+      if (e.key === '2') palette = PALETTES[1];
+      if (e.key === '3') palette = PALETTES[2];
+    });
+  })();
+</script>
+
+<style>
+  .vz {
+    position: relative;
+    width: 100vw;
+    min-height: 100vh;
+    background: #050310;
+    color: #fffaf0;
+    overflow: hidden;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .vz :global(.drum-nav) {
+    position: relative;
+    z-index: 10;
+    padding: 8px 12px 0;
+  }
+  .vz__canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+  .vz__overlay {
+    position: relative;
+    z-index: 5;
+    padding: 12px 16px;
+    text-align: center;
+    transition: opacity 200ms;
+  }
+  .vz__eyebrow {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: #ffd400;
+  }
+  .vz__hint {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: #ff8a4a;
+    opacity: 0.7;
+  }
+
+  .vz__legend {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    max-width: 280px;
+    justify-content: flex-end;
+    transition: opacity 200ms;
+    opacity: 0.85;
+  }
+  .vz__legend span {
+    padding: 2px 6px;
+    border: 1px solid currentColor;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+  .vz__legend [data-type='drum']      { color: #ff5c23; }
+  .vz__legend [data-type='orchestra'] { color: #ffd400; }
+  .vz__legend [data-type='choir']     { color: #5fbafd; }
+  .vz__legend [data-type='lounge']    { color: #b8431a; }
+  .vz__legend [data-type='theremin']  { color: #ff8a4a; }
+  .vz__legend [data-type='symphony']  { color: #d6745f; }
+  .vz__legend [data-type='bells']     { color: #fff7c2; }
+  .vz__legend [data-type='daily']     { color: #ffd400; }
+  .vz__legend [data-type='potato']    { color: #fffaf0; }
+  .vz__legend [data-type='milestone'] { color: #ffd400; font-weight: 700; }
+
+  .vz__counter {
+    position: fixed;
+    bottom: 12px;
+    left: 12px;
+    z-index: 5;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #ffd400;
+    opacity: 0.7;
+  }
+</style>
