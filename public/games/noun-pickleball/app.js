@@ -64,6 +64,8 @@ const state = {
   tomorrowVisible: false,
   cpuTimer: null,
   leagueWatching: false,
+  rallyHistory: [],
+  advantage: 0,
   league: null,
 };
 
@@ -74,6 +76,9 @@ const el = {
   teamBName: document.querySelector("#teamBName"),
   servePill: document.querySelector("#servePill"),
   court: document.querySelector("#court"),
+  broadcastBanner: document.querySelector("#broadcastBanner"),
+  pressureNeedle: document.querySelector("#pressureNeedle"),
+  rallyMap: document.querySelector("#rallyMap"),
   targetPreview: document.querySelector("#targetPreview"),
   courtCallout: document.querySelector("#courtCallout"),
   courtToast: document.querySelector("#courtToast"),
@@ -121,6 +126,8 @@ function resetGame() {
   state.gameOver = false;
   state.busy = false;
   state.momentum = 0;
+  state.rallyHistory = [];
+  state.advantage = 0;
   el.log.innerHTML = "";
   addLog(`Opening serve: Gold Nouns, second server. CPU: ${difficultySettings[state.difficulty].label}.`);
   render();
@@ -156,6 +163,8 @@ function render() {
     ? "Start a new match when you want another one."
     : copyForTurn();
   renderRallyStrip();
+  renderRallyMap();
+  updatePressureMeter();
 
   const bestShot = recommendedShot();
   [...el.controls.querySelectorAll("button")].forEach((button) => {
@@ -183,10 +192,14 @@ function render() {
 }
 
 function updateCourtPhase() {
-  el.court.classList.remove("zone-serve-top", "zone-serve-bottom", "zone-rally-top", "zone-rally-bottom", "zone-kitchen");
+  el.court.classList.remove("zone-serve-top", "zone-serve-bottom", "zone-rally-top", "zone-rally-bottom", "zone-kitchen", "zone-transition-top", "zone-transition-bottom");
   if (state.gameOver) return;
   if (state.lastShot === "dink" || state.lastShot === "drop") {
     el.court.classList.add("zone-kitchen");
+    return;
+  }
+  if (state.rallyCount === 2) {
+    el.court.classList.add(state.rallyTeam === 0 ? "zone-transition-bottom" : "zone-transition-top");
     return;
   }
   if (state.rallyCount === 0 || state.rallyCount === 1) {
@@ -323,6 +336,17 @@ function renderRallyStrip() {
   ].join("");
 }
 
+function renderRallyMap() {
+  el.rallyMap.innerHTML = state.rallyHistory.slice(-10).map((hit) => `
+    <span class="${hit.team === 0 ? "team-a" : "team-b"}" title="${hit.label}">${hit.icon}</span>
+  `).join("");
+}
+
+function updatePressureMeter() {
+  const pct = clamp(50 + state.advantage * 9, 8, 92);
+  el.pressureNeedle.style.setProperty("--advantage", `${pct}%`);
+}
+
 function rallyPhaseLabel() {
   if (state.gameOver) return "match";
   if (state.rallyCount === 0) return "serve";
@@ -375,6 +399,14 @@ async function playShot(shotName, options = {}) {
   const nextPlayer = pickReceiverForShot(shotName, actorIndex, nextTeam);
 
   state.rallyCount += 1;
+  if (state.rallyCount === 1) {
+    state.rallyHistory = [];
+    state.advantage = 0;
+  }
+  recordRallyHit(actor.team, shotName);
+  updateAdvantage(actor.team, shotName);
+  renderRallyMap();
+  updatePressureMeter();
   addLog(`${actor.name} hits a ${shot.label.toLowerCase()}.`);
   flashReady(actorIndex);
   flashReady(nextPlayer);
@@ -471,6 +503,74 @@ function flowLabel() {
   if (state.momentum === -1) return "shaky";
   if (state.momentum <= -2) return "ice bath";
   return "even";
+}
+
+function recordRallyHit(team, shotName) {
+  state.rallyHistory.push({
+    team,
+    icon: shotIcon(shotName),
+    label: `${teamNames[team]} ${shots[shotName].label}`,
+  });
+  while (state.rallyHistory.length > 14) {
+    state.rallyHistory.shift();
+  }
+}
+
+function shotIcon(shotName) {
+  return {
+    dink: "D",
+    drive: "->",
+    lob: "^",
+    drop: "v",
+    smash: "!",
+  }[shotName] || "?";
+}
+
+function updateAdvantage(team, shotName) {
+  const side = team === USER_TEAM ? 1 : -1;
+  const phase = state.rallyCount;
+  let swing = shots[shotName].power * 0.7;
+  if (phase === 1 && shotName === "drive") swing += 0.35;
+  if (phase === 2 && (shotName === "drive" || shotName === "lob")) swing += 0.3;
+  if (phase === 3 && shotName === "drop") swing += 0.5;
+  if ((state.lastShot === "dink" || state.lastShot === "drop") && shotName === "dink") swing += 0.18;
+  if (state.lastShot === "lob" && shotName === "smash") swing += 0.72;
+  if (shotName === "smash") swing += 0.46;
+  if (shotName === "drop" || shotName === "dink") swing -= 0.12;
+  state.advantage = clamp(state.advantage + side * swing, -4.4, 4.4);
+}
+
+function broadcastLabel(shotName, result, team) {
+  if (result === "fault") {
+    if (shotName === "smash") return "net popup";
+    if (shotName === "drop") return "missed reset";
+    return "missed deep";
+  }
+  if (result === "winner") {
+    if (shotName === "dink" || shotName === "drop") return "soft angle";
+    if (shotName === "lob") return "baseline winner";
+    if (shotName === "smash") return "putaway";
+    return "clean winner";
+  }
+  if (state.rallyCount === 1) return "deep serve";
+  if (state.rallyCount === 2) return "deep return";
+  if (state.rallyCount === 3 && shotName === "drop") return "third shot reset";
+  if ((state.lastShot === "dink" || state.lastShot === "drop") && shotName === "smash") return "speed-up";
+  if (shotName === "dink") return "kitchen dink";
+  if (shotName === "drop") return team === state.servingTeam ? "reset ball" : "soft block";
+  if (shotName === "lob") return "lob retreat";
+  if (shotName === "smash") return "attack ball";
+  return "middle pressure";
+}
+
+function showBroadcast(message, landing) {
+  el.broadcastBanner.textContent = message;
+  el.broadcastBanner.style.setProperty("--x", `${landing.x}%`);
+  el.broadcastBanner.style.setProperty("--y", `${landing.y}%`);
+  el.broadcastBanner.classList.remove("show");
+  void el.broadcastBanner.offsetWidth;
+  el.broadcastBanner.classList.add("show");
+  window.setTimeout(() => el.broadcastBanner.classList.remove("show"), 920);
 }
 
 function resolvePoint(winningTeam, reason) {
@@ -676,6 +776,8 @@ async function watchLeagueMatch(matchIndex = 0) {
   state.gameOver = false;
   state.rallyCount = 0;
   state.lastShot = null;
+  state.rallyHistory = [];
+  state.advantage = 0;
   teamNames = [match.homeName, match.awayName];
   state.score = [0, 0];
   state.rallyTeam = 0;
@@ -692,6 +794,11 @@ async function watchLeagueMatch(matchIndex = 0) {
     state.activePlayer = pickTeammate(point.team);
     render();
     const shotName = point.shot;
+    state.rallyCount += 1;
+    recordRallyHit(point.team, shotName);
+    updateAdvantage(point.team, shotName);
+    renderRallyMap();
+    updatePressureMeter();
     flashPlayer(state.activePlayer, shotName);
     await animateShot(state.activePlayer, pickTeammate(1 - point.team), shotName, point.final ? "winner" : "rally", watchSpeeds[state.watchSpeed]);
     if (point.final) {
@@ -700,6 +807,12 @@ async function watchLeagueMatch(matchIndex = 0) {
       showToast("Point!");
       addLog(`${teamNames[point.team]} win a ${shotName}.`);
       await wait(260 * watchSpeeds[state.watchSpeed]);
+      state.rallyCount = 0;
+      state.lastShot = null;
+      state.advantage = 0;
+      state.rallyHistory = [];
+    } else {
+      state.lastShot = shotName;
     }
   }
 
@@ -1009,6 +1122,7 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   return animation.finished.finally(() => {
     showBounce(landing, shotName, result);
     showLandingLabel(landing, result === "winner" ? "clean" : result === "fault" ? "miss" : shotName);
+    showBroadcast(broadcastLabel(shotName, result, from.team), landing);
     flashRecover(toIndex);
     el.ball.style.setProperty("--x", `${landing.x}%`);
     el.ball.style.setProperty("--y", `${landing.y}%`);
