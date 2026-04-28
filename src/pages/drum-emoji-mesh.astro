@@ -1,0 +1,233 @@
+---
+/**
+ * /drum-emoji-mesh — emoji storm · comms 3 · 2026-04-28 PT.
+ *
+ * Click any of 24 emoji to throw it. The emoji fires as a particle
+ * across every visitor's screen via /api/sounds type=emoji. Pure
+ * transient — no KV, no persistence, just a real-time storm of
+ * room-wide emoji.
+ *
+ * Each thrown emoji enters from a random edge, drifts on a random
+ * vector with slight gravity, rotates slowly, fades over ~5 seconds.
+ * Particles render in a fixed-position canvas overlay that doesn't
+ * block clicks on the chooser.
+ *
+ * Multiplayer is "free" — every visitor's poll picks up every other
+ * visitor's emojis, rendering them locally with the same drift logic.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-emoji-mesh — emoji storm';
+const description = 'Throw an emoji. The room sees it fly across every screen. Twenty-four emoji to choose from. Pure transient — no archive, just a real-time storm.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-emoji-mesh', name: 'PointCast Drum · Emoji Mesh', url: 'https://pointcast.xyz/drum-emoji-mesh', description };
+
+const EMOJI = [
+  '🥁','🎷','🎺','🎸','🎻','🎹','🎤','🎧',
+  '👏','🙌','🤘','✨','⭐','💫','🌟','🔥',
+  '🌊','🌅','🌴','🌻','☀️','🌙','☕','🫖',
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="em" id="em-main">
+    <DrumNav current="emoji-mesh" />
+
+    <header class="em__head">
+      <p class="em__kicker">DRUM HUB · COMMS 3 · EMOJI MESH · LIVE · MULTIPLAYER</p>
+      <h1 class="em__title"><em>Throw it. The room sees it.</em></h1>
+      <p class="em__dek">Twenty-four emoji to choose from. Click one to throw. The room throws too. Every emoji flies across every screen for about five seconds, then disappears. No archive. Pure storm.</p>
+    </header>
+
+    <section class="em__chooser">
+      <p class="em__chooser-label mono">PICK ONE</p>
+      <div class="em__grid">
+        {EMOJI.map((g) => (
+          <button type="button" class="em__btn" data-emoji={g} aria-label={`Throw ${g}`}>
+            <span class="em__btn-glyph">{g}</span>
+          </button>
+        ))}
+      </div>
+      <p class="em__hint mono" id="em-hint">click an emoji · or press 1-9, 0, q-y, a-h</p>
+    </section>
+
+    <div class="em__hud mono">
+      <span>thrown <strong id="em-thrown">0</strong></span>
+      <span>incoming <strong id="em-incoming">0</strong></span>
+      <span>flying now <strong id="em-flying">0</strong></span>
+    </div>
+
+    <canvas class="em__canvas" id="em-canvas" aria-hidden="true"></canvas>
+
+    <footer class="em__foot">
+      <p>Each throw fires <code>type=emoji</code> to <code>/api/sounds</code> with the emoji char. Particles render in a fixed-position canvas with random spawn edges, drift vectors, and rotation. ~5s fade.</p>
+      <p class="em__credit mono">v0.1 · 2026-04-28 · drum sprint · comms 3</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ EMOJI }}>
+(function () { 'use strict';
+  const canvas = document.getElementById('em-canvas');
+  const ctx = canvas.getContext('2d');
+  const hud = {
+    thrown: document.getElementById('em-thrown'),
+    incoming: document.getElementById('em-incoming'),
+    flying: document.getElementById('em-flying'),
+  };
+  let dpr = window.devicePixelRatio || 1;
+  let W = window.innerWidth, H = window.innerHeight;
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const particles = [];
+  let thrown = 0;
+  let incoming = 0;
+
+  function spawnParticle(emoji, opts) {
+    // Spawn from a random edge, drift toward center-ish
+    opts = opts || {};
+    const edge = Math.floor(Math.random() * 4);
+    let x, y, vx, vy;
+    if (edge === 0) { x = Math.random() * W; y = -40;        vx = (Math.random() - 0.5) * 1.6; vy = 1 + Math.random() * 1.4; }
+    else if (edge === 1) { x = W + 40; y = Math.random() * H; vx = -(0.6 + Math.random() * 1.4); vy = (Math.random() - 0.5) * 1.6; }
+    else if (edge === 2) { x = Math.random() * W; y = H + 40; vx = (Math.random() - 0.5) * 1.6; vy = -(0.6 + Math.random() * 1.4); }
+    else { x = -40; y = Math.random() * H;       vx = 0.6 + Math.random() * 1.4; vy = (Math.random() - 0.5) * 1.6; }
+    particles.push({
+      emoji, x, y, vx, vy,
+      rot: (Math.random() - 0.5) * 0.6,
+      rotVel: (Math.random() - 0.5) * 0.05,
+      size: 36 + Math.random() * 36,
+      ttl: 280 + Math.random() * 120,
+      life: 1,
+    });
+  }
+
+  function frame() {
+    ctx.clearRect(0, 0, W, H);
+    let alive = 0;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.012; // gentle gravity
+      p.rot += p.rotVel;
+      p.ttl -= 1;
+      p.life = Math.max(0, p.ttl / 360);
+      if (p.ttl <= 0 || p.x < -100 || p.x > W + 100 || p.y > H + 100) { particles.splice(i, 1); continue; }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.min(1, p.life * 1.4);
+      ctx.font = `${p.size}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.emoji, 0, 0);
+      ctx.restore();
+      alive += 1;
+    }
+    if (hud.flying) hud.flying.textContent = String(alive);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function getSession() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s;} catch { return 'em-' + Math.random().toString(36).slice(2,10);} }
+  const sid = getSession();
+
+  let lastThrowAt = 0;
+  function throwEmoji(emoji, fromSelf) {
+    if (fromSelf) {
+      const now = Date.now();
+      if (now - lastThrowAt < 80) return; // 12.5/sec local rate cap
+      lastThrowAt = now;
+    }
+    spawnParticle(emoji);
+    if (fromSelf) {
+      thrown += 1;
+      if (hud.thrown) hud.thrown.textContent = String(thrown);
+      try {
+        fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'emoji', sessionId: sid, emoji }) });
+      } catch {}
+    } else {
+      incoming += 1;
+      if (hud.incoming) hud.incoming.textContent = String(incoming);
+    }
+  }
+
+  // Buttons
+  document.querySelectorAll('.em__btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const g = btn.getAttribute('data-emoji') || '';
+      throwEmoji(g, true);
+      btn.classList.remove('em__btn--hit'); void btn.offsetWidth; btn.classList.add('em__btn--hit');
+      e.preventDefault();
+    });
+  });
+
+  // Keyboard map: 1-9, 0 -> emoji 0..9; q-y (8) -> 10..17; a-h (8) -> 18..23 (we have 24)
+  const KEY_MAP = '1234567890qwertyuiasdfgh'.split('');
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    const idx = KEY_MAP.indexOf(e.key.toLowerCase());
+    if (idx >= 0 && idx < EMOJI.length) {
+      const btn = document.querySelector(`.em__btn[data-emoji="${EMOJI[idx]}"]`);
+      if (btn) btn.click();
+    }
+  });
+
+  // Poll for incoming emojis from other visitors
+  let lastTs = Date.now();
+  async function poll() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json();
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (!events.length) return;
+      lastTs = events[events.length - 1].t || Date.now();
+      for (const e of events) {
+        if (e.type !== 'emoji' || !e.emoji) continue;
+        // Skip events that match our own throws within the last second
+        if (Math.abs((e.t || 0) - lastThrowAt) < 600) continue;
+        throwEmoji(e.emoji, false);
+      }
+    } catch {}
+  }
+  setInterval(poll, 1500);
+  poll();
+})();
+</script>
+
+<style>
+.em { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #1a0e26 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; position: relative; }
+.em__head { max-width: 980px; margin: 0 auto 16px; padding: 0 6px; position: relative; z-index: 2; }
+.em__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+.em__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+.em__title em { font-style: italic; }
+.em__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+.em__chooser { max-width: 980px; margin: 0 auto; background: rgba(18, 17, 14, 0.7); border: 4px solid #ffd400; box-shadow: 6px 6px 0 0 #050310; padding: 18px; position: relative; z-index: 2; }
+.em__chooser-label { font-size: 11px; letter-spacing: 0.32em; color: #ffd400; margin: 0 0 12px; }
+.em__grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+@media (max-width: 600px) { .em__grid { grid-template-columns: repeat(6, 1fr); } }
+.em__btn { background: #050310; border: 2px solid #5f5e5a; aspect-ratio: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 80ms, border-color 80ms; padding: 0; }
+.em__btn:hover { border-color: #ffd400; transform: translate(-1px, -1px); }
+.em__btn-glyph { font-size: clamp(28px, 4.5vw, 44px); line-height: 1; pointer-events: none; }
+.em__btn--hit { animation: em-hit 0.2s ease-out; }
+@keyframes em-hit { 0% { transform: scale(1); } 40% { transform: scale(0.85) rotate(-8deg); border-color: #ff5c23; box-shadow: 0 0 20px #ff5c23; } 100% { transform: scale(1); border-color: #ffd400; } }
+.em__hint { margin: 12px 0 0; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; color: #ff8a4a; }
+
+.em__hud { max-width: 980px; margin: 12px auto 0; padding: 8px 14px; background: #050310; border: 1.5px solid #ffd400; font-size: 12px; letter-spacing: 0.18em; color: #cfc6df; display: flex; gap: 22px; flex-wrap: wrap; position: relative; z-index: 2; }
+.em__hud strong { color: #ffd400; }
+
+.em__canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+
+.em__foot { max-width: 980px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; position: relative; z-index: 2; }
+.em__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+.em__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff8a4a; }
+</style>
