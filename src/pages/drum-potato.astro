@@ -1,0 +1,580 @@
+---
+/**
+ * /drum-potato — Hot Potato game · sprint 2/9 of Mike's three-hour drum sprint
+ * 2026-04-27 PT.
+ *
+ * The drum hub plays a round of Hot Potato. A virtual potato passes
+ * between everyone in the room every 800ms. Every round runs 60-120s.
+ * At a hidden moment late in the round, the bell rings — whoever holds
+ * the potato in that tick wins the round and gets celebrated on /drum-tv-*.
+ *
+ * Mechanics:
+ * - The "round" is identified by Math.floor(Date.now() / ROUND_MS).
+ * - All clients agree on the round number because they share clocks.
+ * - All clients pull /api/visit/snapshot for the present visitor list.
+ * - At each tick, the holder is selected deterministically:
+ *     holder = visitors[ seededInt(round, tick) % visitors.length ]
+ * - Within each round, one tick is the winning tick — also seeded.
+ * - When the round ends, fire a type=potato event with the winner.
+ *
+ * Multiplayer is "free" because everyone computes the same answer from
+ * the same clock + the same visitor list. /api/sounds is used only to
+ * broadcast bell + winner to the TV cast surfaces.
+ *
+ * Aesthetic: Saturday-morning cartoon · big yellow potato sprite,
+ * comic-book speech bubble, "BING!" bell, scoreboard at side.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-potato — Hot Potato · drum hub game';
+const description =
+  'A round of Hot Potato in the PointCast drum room. Every visitor plays at once. The potato passes every 800ms. The bell rings when the bell rings. Whoever holds it wins the round.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-potato',
+  name: 'PointCast Drum · Hot Potato',
+  url: 'https://pointcast.xyz/drum-potato',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="po" id="po-main">
+    <DrumNav current="potato" />
+
+    <header class="po__head">
+      <p class="po__kicker">DRUM HUB · GAME · HOT POTATO · MULTIPLAYER</p>
+      <h1 class="po__title">🥔 <em>Hot Potato.</em></h1>
+      <p class="po__dek">
+        The potato moves every 800ms. The bell rings at a hidden tick. Hold the potato then, and the room cheers your name. The round resets every minute or two — there's always another potato.
+      </p>
+    </header>
+
+    <section class="po__stage" aria-label="Hot Potato stage">
+      <div class="po__court">
+        <div class="po__round-info">
+          <span class="po__round-tag">round <strong id="po-round">—</strong></span>
+          <span class="po__round-time" id="po-time">— : —</span>
+        </div>
+
+        <div class="po__potato-wrap">
+          <div class="po__potato" id="po-potato" aria-live="polite" aria-label="Potato holder">
+            <span class="po__potato-emoji" id="po-emoji">🥔</span>
+            <div class="po__bubble" id="po-bubble">
+              <p class="po__bubble-line">it's with</p>
+              <p class="po__bubble-name" id="po-holder">…</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="po__bell" id="po-bell" aria-hidden="true">BING!</div>
+        <div class="po__winner" id="po-winner" hidden>
+          <p class="po__winner-line">round won by</p>
+          <p class="po__winner-name" id="po-winner-name">—</p>
+          <p class="po__winner-id" id="po-winner-id">—</p>
+        </div>
+      </div>
+
+      <aside class="po__panel">
+        <h2 class="po__panel-h">in the room</h2>
+        <ul class="po__roster" id="po-roster" role="list"><li class="po__empty">no visitors yet</li></ul>
+        <div class="po__panel-divider"></div>
+        <h2 class="po__panel-h">recent winners</h2>
+        <ul class="po__winners" id="po-winners" role="list"><li class="po__empty">first round in progress</li></ul>
+        <div class="po__panel-divider"></div>
+        <p class="po__hint">stay on the page · hold tight · the bell knows when to ring</p>
+      </aside>
+    </section>
+
+    <footer class="po__foot">
+      <p>
+        Hot Potato uses the same /api/visit + /api/sounds pipeline as the rest of the drum hub.
+        The "winner" of a round is computed deterministically from the round number and the
+        present visitor list — every client computes the same answer, no server state.
+      </p>
+      <p class="po__credit">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · drum sprint 2/9</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const ROUND_MS = 90 * 1000; // 90s rounds
+    const TICK_MS = 800;
+    const TICKS_PER_ROUND = Math.floor(ROUND_MS / TICK_MS);
+    // Bell can only ring in the last 30% of the round
+    const BELL_MIN_TICK = Math.floor(TICKS_PER_ROUND * 0.65);
+
+    function seededInt(seed1, seed2) {
+      // Mulberry32-style hash
+      let s = ((seed1 * 2654435761) ^ (seed2 * 1597334677)) >>> 0;
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0);
+    }
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'po-' + Math.random().toString(36).slice(2, 10); }
+    }
+    function getNounId(seed) {
+      // Stable per-session noun id 0..1199 from session string
+      let h = 0;
+      for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0x7fffffff;
+      return h % 1200;
+    }
+    const mySid = getSession();
+    const myNoun = getNounId(mySid);
+
+    let visitors = [{ pid: mySid.slice(0, 10), nounId: myNoun, label: 'you (' + myNoun + ')' }];
+    let lastRound = -1;
+    let lastTick = -1;
+    let bellTick = -1;
+    let roundWinners = [];
+
+    const el = {
+      round: document.getElementById('po-round'),
+      time: document.getElementById('po-time'),
+      emoji: document.getElementById('po-emoji'),
+      holder: document.getElementById('po-holder'),
+      bell: document.getElementById('po-bell'),
+      winner: document.getElementById('po-winner'),
+      winnerName: document.getElementById('po-winner-name'),
+      winnerId: document.getElementById('po-winner-id'),
+      roster: document.getElementById('po-roster'),
+      winners: document.getElementById('po-winners'),
+      potato: document.getElementById('po-potato'),
+    };
+
+    function renderRoster() {
+      el.roster.innerHTML = '';
+      if (visitors.length === 0) { el.roster.innerHTML = '<li class="po__empty">no visitors yet</li>'; return; }
+      visitors.forEach((v) => {
+        const li = document.createElement('li');
+        li.className = 'po__roster-row';
+        li.dataset.pid = v.pid;
+        li.innerHTML = `
+          <img src="https://noun.pics/${v.nounId}.svg" alt="" width="20" height="20" loading="lazy" />
+          <span class="po__roster-name">${v.label}</span>
+        `;
+        el.roster.appendChild(li);
+      });
+    }
+
+    function renderWinners() {
+      if (roundWinners.length === 0) { el.winners.innerHTML = '<li class="po__empty">first round in progress</li>'; return; }
+      el.winners.innerHTML = '';
+      roundWinners.slice(-6).reverse().forEach((w) => {
+        const li = document.createElement('li');
+        li.className = 'po__winners-row';
+        li.innerHTML = `
+          <img src="https://noun.pics/${w.nounId}.svg" alt="" width="18" height="18" loading="lazy" />
+          <span>noun #${w.nounId}</span>
+          <code>r${w.round}</code>
+        `;
+        el.winners.appendChild(li);
+      });
+    }
+
+    function fmt(ms) {
+      const s = Math.max(0, Math.floor(ms / 1000));
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function tick() {
+      const now = Date.now();
+      const round = Math.floor(now / ROUND_MS);
+      const intoRound = now - round * ROUND_MS;
+      const tickN = Math.floor(intoRound / TICK_MS);
+      const remain = ROUND_MS - intoRound;
+
+      if (round !== lastRound) {
+        lastRound = round;
+        lastTick = -1;
+        bellTick = BELL_MIN_TICK + (seededInt(round, 99) % (TICKS_PER_ROUND - BELL_MIN_TICK - 1));
+        el.round.textContent = round.toString();
+        el.bell.classList.remove('po__bell--ring');
+        el.winner.hidden = true;
+      }
+      el.time.textContent = fmt(remain);
+
+      if (visitors.length === 0) return;
+
+      // Holder for this tick
+      const holderIdx = seededInt(round, tickN) % visitors.length;
+      const holder = visitors[holderIdx];
+
+      if (tickN !== lastTick) {
+        lastTick = tickN;
+        el.holder.textContent = holder.label;
+        el.emoji.textContent = '🥔';
+        el.potato.dataset.holder = holder.pid;
+
+        // Highlight roster row
+        document.querySelectorAll('.po__roster-row').forEach((row) => {
+          row.classList.toggle('po__roster-row--holding', row.dataset.pid === holder.pid);
+        });
+
+        // Bell tick → winner
+        if (tickN === bellTick) {
+          el.emoji.textContent = '🔔';
+          el.bell.classList.add('po__bell--ring');
+          const winRecord = { round, nounId: holder.nounId, pid: holder.pid, t: Date.now() };
+          if (!roundWinners.find((w) => w.round === winRecord.round)) {
+            roundWinners.push(winRecord);
+            renderWinners();
+          }
+          el.winnerName.textContent = holder.label;
+          el.winnerId.textContent = `noun #${holder.nounId} · pid ${holder.pid.slice(0, 8)}`;
+          el.winner.hidden = false;
+          // Broadcast
+          try {
+            fetch('/api/sounds', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'potato', sessionId: mySid,
+                round, winnerNounId: holder.nounId, winnerPid: holder.pid,
+              }),
+            });
+          } catch {}
+          // Confetti burst
+          burst();
+        }
+      }
+    }
+
+    function burst() {
+      const burstEl = document.createElement('div');
+      burstEl.className = 'po__burst';
+      for (let i = 0; i < 24; i++) {
+        const c = document.createElement('span');
+        c.className = 'po__burst-bit';
+        c.style.setProperty('--x', `${(Math.random() - 0.5) * 200}px`);
+        c.style.setProperty('--y', `${(Math.random() - 0.5) * 200}px`);
+        c.style.background = ['#ff5c23','#ffd400','#185fa5','#3b6e3b','#a83b2a'][i % 5];
+        burstEl.appendChild(c);
+      }
+      el.potato.appendChild(burstEl);
+      setTimeout(() => burstEl.remove(), 1100);
+    }
+
+    async function pollVisit() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const present = Array.isArray(data.present) ? data.present : [];
+        const list = present
+          .filter((p) => typeof p.nounId === 'number')
+          .map((p) => ({
+            pid: p.pid || ('h-' + p.nounId),
+            nounId: p.nounId,
+            label: (p.pid && p.pid === mySid.slice(0, 10) ? 'you' : `noun #${p.nounId}`),
+          }));
+        // Always include self
+        if (!list.find((v) => v.pid === mySid.slice(0, 10))) {
+          list.unshift({ pid: mySid.slice(0, 10), nounId: myNoun, label: `you (${myNoun})` });
+        }
+        visitors = list;
+        renderRoster();
+      } catch {}
+    }
+
+    renderRoster();
+    renderWinners();
+    pollVisit();
+    setInterval(pollVisit, 5000);
+    setInterval(tick, 100); // 10Hz so the timer + tick boundary feel responsive
+    tick();
+  })();
+</script>
+
+<style>
+  .po {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      repeating-linear-gradient(135deg, rgba(255, 138, 74, 0.06) 0 8px, transparent 8px 18px),
+      linear-gradient(180deg, #fff7c2 0%, #fffaf0 60%);
+    color: #12110e;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .po__head {
+    max-width: 980px;
+    margin: 0 auto 18px;
+    padding: 0 6px;
+  }
+  .po__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .po__title {
+    margin: 0 0 8px;
+    font-family: Georgia, serif;
+    font-size: clamp(36px, 5.4vw, 64px);
+    line-height: 1.05;
+    font-weight: 400;
+  }
+  .po__title em { font-style: italic; }
+  .po__dek {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 64ch;
+    color: #5f5e5a;
+  }
+
+  .po__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+  }
+  @media (max-width: 800px) { .po__stage { grid-template-columns: 1fr; } }
+
+  .po__court {
+    position: relative;
+    min-height: 460px;
+    background: #fffaf0;
+    border: 2px solid #12110e;
+    box-shadow: 6px 6px 0 0 #12110e;
+    padding: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .po__round-info {
+    position: absolute;
+    top: 14px; left: 14px; right: 14px;
+    display: flex;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .po__round-tag strong { color: #12110e; }
+
+  .po__potato-wrap {
+    position: relative;
+    margin-top: 30px;
+  }
+  .po__potato {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .po__potato-emoji {
+    display: inline-block;
+    font-size: clamp(110px, 14vw, 180px);
+    line-height: 1;
+    transform: rotate(0deg);
+    animation: po-bounce 0.8s ease-in-out infinite;
+    text-shadow: 4px 4px 0 rgba(18, 17, 14, 0.35);
+  }
+  @keyframes po-bounce {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50%      { transform: translateY(-12px) rotate(3deg); }
+  }
+
+  .po__bubble {
+    position: relative;
+    background: #fff;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    padding: 12px 22px;
+    text-align: center;
+    min-width: 220px;
+  }
+  .po__bubble::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: -10px;
+    width: 16px; height: 16px;
+    background: #fff;
+    border: 2px solid #12110e;
+    border-bottom: 0; border-right: 0;
+    transform: translateX(-50%) rotate(45deg);
+  }
+  .po__bubble-line {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+  .po__bubble-name {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: 22px;
+    color: #b8431a;
+  }
+
+  .po__bell {
+    position: absolute;
+    top: 14px;
+    right: 50%;
+    transform: translate(50%, -120%);
+    font-family: 'Bungee', 'Impact', sans-serif;
+    font-size: 64px;
+    color: #ffd400;
+    -webkit-text-stroke: 3px #12110e;
+    transition: transform 200ms;
+    pointer-events: none;
+  }
+  .po__bell--ring {
+    transform: translate(50%, -10%) rotate(-8deg);
+    animation: po-bell-shake 0.6s ease-in-out;
+  }
+  @keyframes po-bell-shake {
+    0%   { transform: translate(50%, 100%) rotate(0deg); }
+    20%  { transform: translate(50%, -20%) rotate(-12deg); }
+    40%  { transform: translate(50%, 0%) rotate(8deg); }
+    60%  { transform: translate(50%, -10%) rotate(-6deg); }
+    80%  { transform: translate(50%, 0%) rotate(4deg); }
+    100% { transform: translate(50%, -10%) rotate(0deg); }
+  }
+
+  .po__winner {
+    position: absolute;
+    bottom: 14px; left: 18px;
+    background: #ffd400;
+    border: 2px solid #12110e;
+    box-shadow: 3px 3px 0 0 #12110e;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  }
+  .po__winner-line { margin: 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #b8431a; }
+  .po__winner-name { margin: 2px 0; font-family: Georgia, serif; font-style: italic; font-size: 22px; color: #12110e; }
+  .po__winner-id { margin: 0; font-size: 10px; color: #5f5e5a; }
+
+  .po__panel {
+    background: #fffaf0;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    padding: 14px;
+    font-family: 'Inter Variable', sans-serif;
+  }
+  .po__panel-h {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+    font-weight: 700;
+  }
+  .po__panel-divider {
+    margin: 14px 0 10px;
+    border-top: 1px dashed #12110e;
+  }
+
+  .po__roster, .po__winners {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .po__roster-row, .po__winners-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    font-size: 12px;
+  }
+  .po__roster-row img, .po__winners-row img {
+    image-rendering: pixelated;
+    border: 1px solid #12110e;
+  }
+  .po__roster-row--holding {
+    background: #ffd400;
+    border-color: #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+    transform: translate(-1px, -1px);
+  }
+  .po__roster-name { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 11px; }
+  .po__winners-row code {
+    margin-left: auto;
+    background: #f5f4f0;
+    padding: 1px 6px;
+    font-size: 10px;
+    color: #5f5e5a;
+  }
+
+  .po__empty {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    color: #5f5e5a;
+    padding: 4px 8px;
+  }
+
+  .po__hint {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+    line-height: 1.5;
+  }
+
+  .po__burst {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .po__burst-bit {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 10px; height: 10px;
+    transform: translate(-50%, -50%);
+    animation: po-burst 1s ease-out forwards;
+  }
+  @keyframes po-burst {
+    to { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.4); opacity: 0; }
+  }
+
+  .po__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #12110e;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+  .po__credit {
+    margin: 8px 0 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+</style>
