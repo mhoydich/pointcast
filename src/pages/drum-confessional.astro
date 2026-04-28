@@ -1,0 +1,432 @@
+---
+/**
+ * /drum-confessional — anonymous floating notes · sprint 4/4 (batch 2)
+ * 2026-04-28 PT.
+ *
+ * A small soft room. Leave a one-line note. The note floats up the
+ * screen as a bubble for ~30 seconds, fading. Other visitors see your
+ * note appear as a fresh bubble entering from below.
+ *
+ * Mechanics:
+ *   · Type a note (140 chars max), hit POST. The note POSTs to
+ *     /api/sounds with type=confessional and text + mood.
+ *   · Polling /api/sounds returns the same note back (and others).
+ *     Each note becomes a floating bubble: random horizontal start,
+ *     drifts up while gently swaying, fades and removes after 30s.
+ *   · Self-rate-limit (one note per 12s) to keep things gentle.
+ *
+ * Privacy: events on /api/sounds are publicly visible to anyone polling
+ * the bus, so notes are not actually anonymous to a determined observer.
+ * The page is honest about that in the footer; the framing is "low-stakes
+ * room" not "private confession."
+ *
+ * Aesthetic: dim chapel-y space, soft warm light, notes drifting up like
+ * paper lanterns or fireflies. No drum sounds. Quiet.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-confessional — leave a one-line note';
+const description =
+  'A soft room on the drum hub. Leave a one-line note; it floats up the screen for thirty seconds. Other visitors see it drift past. Low-stakes, easy to share, easy to forget.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-confessional',
+  name: 'PointCast Drum · Confessional',
+  url: 'https://pointcast.xyz/drum-confessional',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="cf" id="cf-main">
+    <DrumNav current="confessional" />
+
+    <header class="cf__head">
+      <p class="cf__kicker">DRUM HUB · CONFESSIONAL · SOFT ROOM</p>
+      <h1 class="cf__title"><em>One line. Thirty seconds. Up and out.</em></h1>
+      <p class="cf__dek">
+        Leave a small note about how today is going. Pick a mood. Press post. Your note rises across the screen for thirty seconds. Other visitors see it drift past in real time. Then it's gone.
+      </p>
+    </header>
+
+    <section class="cf__chapel" id="cf-chapel">
+      <div class="cf__floor" aria-hidden="true"></div>
+      <div class="cf__lamp cf__lamp--l" aria-hidden="true">
+        <span class="cf__lamp-bulb"></span>
+        <span class="cf__lamp-pole"></span>
+      </div>
+      <div class="cf__lamp cf__lamp--r" aria-hidden="true">
+        <span class="cf__lamp-bulb"></span>
+        <span class="cf__lamp-pole"></span>
+      </div>
+
+      <div class="cf__notes" id="cf-notes" aria-live="polite"></div>
+
+      <form class="cf__form" id="cf-form" autocomplete="off">
+        <div class="cf__moods" role="radiogroup" aria-label="Mood">
+          <button type="button" class="cf__mood cf__mood--on" data-mood="warm" data-color="#ff8a4a">warm</button>
+          <button type="button" class="cf__mood" data-mood="bright" data-color="#ffd400">bright</button>
+          <button type="button" class="cf__mood" data-mood="ocean" data-color="#5fbafd">ocean</button>
+          <button type="button" class="cf__mood" data-mood="garden" data-color="#3b6e3b">garden</button>
+          <button type="button" class="cf__mood" data-mood="fog"   data-color="#cfc6df">fog</button>
+        </div>
+        <input
+          id="cf-text"
+          class="cf__input mono"
+          type="text"
+          maxlength="140"
+          placeholder="one line · 140 chars · be gentle"
+          aria-label="Confessional message"
+        />
+        <button type="submit" class="cf__post">POST →</button>
+      </form>
+
+      <p class="cf__counter mono" id="cf-counter">— · — · in the room</p>
+    </section>
+
+    <footer class="cf__foot">
+      <p>
+        Notes go through <code>/api/sounds</code> like every other drum-hub
+        event — public bus, anyone polling can see them. The framing
+        here is "low-stakes" not "private confession." Self-rate-limit
+        of one note per 12s. Notes float for ~30s and then disappear
+        from the page; the underlying event stays in the bus history.
+      </p>
+      <p class="cf__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 4/4 (batch 2)</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const MOOD_COLORS = {
+      warm:   '#ff8a4a',
+      bright: '#ffd400',
+      ocean:  '#5fbafd',
+      garden: '#3b6e3b',
+      fog:    '#cfc6df',
+    };
+    let mood = 'warm';
+    const RATE_LIMIT_MS = 12 * 1000;
+    let lastPostAt = 0;
+    let lastTs = 0;
+    const seen = new Set();
+    const notesHost = document.getElementById('cf-notes');
+    const counter = document.getElementById('cf-counter');
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'cf-' + Math.random().toString(36).slice(2, 10); }
+    }
+    const session = getSession();
+
+    function sanitize(s) {
+      return String(s || '')
+        .replace(/[\x00-\x1f\x7f]/g, '')
+        .slice(0, 140)
+        .trim();
+    }
+
+    function spawnNote(text, color) {
+      const el = document.createElement('div');
+      el.className = 'cf__note';
+      el.style.setProperty('--note-color', color);
+      el.style.left = `${5 + Math.random() * 80}%`;
+      el.style.bottom = `-60px`;
+      const dur = 26 + Math.random() * 8;
+      el.style.animation = `cf-float ${dur}s linear forwards`;
+      // Subtle horizontal sway
+      const sway = (Math.random() - 0.5) * 8;
+      el.style.setProperty('--cf-sway', `${sway}vw`);
+      const inner = document.createElement('div');
+      inner.className = 'cf__note-inner';
+      inner.textContent = text;
+      el.appendChild(inner);
+      notesHost.appendChild(el);
+      setTimeout(() => el.remove(), (dur + 0.5) * 1000);
+    }
+
+    document.querySelectorAll('.cf__mood').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.cf__mood').forEach((x) => x.classList.remove('cf__mood--on'));
+        b.classList.add('cf__mood--on');
+        mood = b.getAttribute('data-mood') || 'warm';
+      });
+    });
+
+    document.getElementById('cf-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('cf-text');
+      const text = sanitize(input.value);
+      if (!text) return;
+      const now = Date.now();
+      if (now - lastPostAt < RATE_LIMIT_MS) {
+        const remain = Math.ceil((RATE_LIMIT_MS - (now - lastPostAt)) / 1000);
+        input.placeholder = `easy — ${remain}s left`;
+        setTimeout(() => { input.placeholder = 'one line · 140 chars · be gentle'; }, 1500);
+        return;
+      }
+      lastPostAt = now;
+      input.value = '';
+      // Optimistic spawn locally
+      spawnNote(text, MOOD_COLORS[mood] || '#ff8a4a');
+      try {
+        await fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'confessional', sessionId: session, text, mood }),
+        });
+      } catch {}
+    });
+
+    async function poll() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) lastTs = events[events.length - 1].t || Date.now();
+        let activeCount = 0;
+        for (const e of events) {
+          if (e.type !== 'confessional') continue;
+          // Dedupe by t+pid+text-fingerprint
+          const k = `${e.t}|${e.pid}|${(e.text || '').slice(0, 24)}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          const text = sanitize(e.text);
+          if (!text) continue;
+          const color = MOOD_COLORS[e.mood] || MOOD_COLORS.warm;
+          // Don't double-render our own optimistic spawn — skip if pid matches us
+          // pid is 10-char hash of session; we don't have it here, but server returns it
+          // Quick heuristic: if event is within 2s of our last optimistic post, skip
+          if (Date.now() - lastPostAt < 2500 && e.text === text && e.mood === mood) continue;
+          spawnNote(text, color);
+          activeCount += 1;
+        }
+        // Counter shows how many notes have drifted today (rough)
+        // and how many bubbles are currently floating
+        const live = document.querySelectorAll('.cf__note').length;
+        counter.textContent = `${live} floating · ${seen.size} seen this session`;
+      } catch {}
+    }
+    poll();
+    setInterval(poll, 1500);
+  })();
+</script>
+
+<style>
+  .cf {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(255, 138, 74, 0.14), transparent 60%),
+      linear-gradient(180deg, #1a0e26 0%, #0c0820 60%, #050310 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .cf__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .cf__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+  .cf__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 50px);
+    line-height: 1.05;
+  }
+  .cf__title em { font-style: italic; }
+  .cf__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 60ch; color: #cfc6df; }
+
+  .cf__chapel {
+    position: relative;
+    max-width: 1080px;
+    margin: 0 auto;
+    aspect-ratio: 16 / 11;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(255, 212, 0, 0.10), transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(95, 186, 253, 0.10), transparent 50%),
+      linear-gradient(180deg, #2c1d05 0%, #0c0820 60%, #050310 100%);
+    border: 3px solid #050310;
+    box-shadow: 6px 6px 0 0 #050310;
+    overflow: hidden;
+  }
+  .cf__floor {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 40px;
+    background:
+      repeating-linear-gradient(90deg, #4a2c10 0 28px, #2c1d05 28px 32px),
+      linear-gradient(180deg, transparent 0%, rgba(255, 138, 74, 0.18) 80%, transparent);
+  }
+
+  .cf__lamp {
+    position: absolute;
+    top: 14%;
+    width: 60px;
+    height: 70px;
+    pointer-events: none;
+  }
+  .cf__lamp--l { left: 10%; }
+  .cf__lamp--r { right: 10%; }
+  .cf__lamp-bulb {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px; height: 36px;
+    background: radial-gradient(ellipse at center, #ffd400, #ff8a4a);
+    border: 2px solid #050310;
+    border-radius: 50% 50% 30% 30% / 50% 50% 30% 30%;
+    box-shadow: 0 0 24px rgba(255, 212, 0, 0.5);
+    animation: cf-flicker 2.4s ease-in-out infinite;
+  }
+  @keyframes cf-flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.78; } }
+  .cf__lamp-pole {
+    position: absolute;
+    top: 32px; left: 50%;
+    transform: translateX(-50%);
+    width: 2px; bottom: 0;
+    background: #1a1a1a;
+  }
+
+  .cf__notes {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .cf__note {
+    position: absolute;
+    transform: translate(-50%, 0);
+    --cf-sway: 0vw;
+  }
+  .cf__note-inner {
+    background: rgba(255, 250, 240, 0.92);
+    color: #12110e;
+    border: 2px solid var(--note-color, #ff8a4a);
+    box-shadow: 0 0 18px var(--note-color, #ff8a4a),
+                3px 3px 0 0 rgba(0,0,0,0.22);
+    padding: 10px 14px;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.4;
+    max-width: 280px;
+    border-radius: 8px;
+  }
+  @keyframes cf-float {
+    0%   { transform: translate(-50%, 0) translateX(0); opacity: 0; }
+    8%   { opacity: 1; }
+    50%  { transform: translate(-50%, -50vh) translateX(var(--cf-sway)); opacity: 1; }
+    90%  { opacity: 1; }
+    100% { transform: translate(-50%, -110vh) translateX(calc(var(--cf-sway) * 1.4)); opacity: 0; }
+  }
+
+  .cf__form {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 60px;
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    gap: 8px;
+    background: rgba(18, 17, 14, 0.78);
+    border: 2px solid #ffd400;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 10px 12px;
+    align-items: center;
+  }
+  .cf__moods {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .cf__mood {
+    background: transparent;
+    border: 1.5px solid currentColor;
+    padding: 4px 9px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    cursor: pointer;
+    text-transform: uppercase;
+    color: var(--m, #fffaf0);
+  }
+  .cf__mood[data-mood='warm']   { color: #ff8a4a; }
+  .cf__mood[data-mood='bright'] { color: #ffd400; }
+  .cf__mood[data-mood='ocean']  { color: #5fbafd; }
+  .cf__mood[data-mood='garden'] { color: #3b6e3b; }
+  .cf__mood[data-mood='fog']    { color: #cfc6df; }
+  .cf__mood--on {
+    background: currentColor !important;
+  }
+  .cf__mood--on { color: var(--m); }
+  .cf__mood--on[data-mood='warm']   { color: #ff8a4a; }
+  .cf__mood--on[data-mood='bright'] { color: #ffd400; }
+  .cf__mood--on[data-mood='ocean']  { color: #5fbafd; }
+  .cf__mood--on[data-mood='garden'] { color: #3b6e3b; }
+  .cf__mood--on[data-mood='fog']    { color: #cfc6df; }
+  .cf__mood--on::before { content: '· '; color: #050310; }
+  .cf__mood--on { box-shadow: inset 0 0 0 50px currentColor; }
+  .cf__mood--on { color: #050310 !important; -webkit-text-fill-color: #050310; }
+
+  .cf__input {
+    background: #050310;
+    color: #fffaf0;
+    border: 1.5px solid #ffd400;
+    padding: 8px 12px;
+    font-size: 14px;
+    width: 100%;
+  }
+  .cf__input::placeholder { color: #5f5e5a; }
+
+  .cf__post {
+    background: #ff5c23;
+    color: #fffaf0;
+    border: 2px solid #050310;
+    padding: 8px 14px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 0 #050310;
+  }
+  .cf__post:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 #050310; }
+
+  .cf__counter {
+    position: absolute;
+    top: 14px; right: 16px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #ff8a4a;
+  }
+
+  .cf__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .cf__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+  .cf__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
