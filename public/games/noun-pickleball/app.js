@@ -28,6 +28,11 @@ const watchSpeeds = {
   normal: 1,
   fast: 0.42,
 };
+const viewModes = {
+  broadcast: { label: "Broadcast", depthBase: 0.92, depthGain: 0.0026 },
+  corner: { label: "Corner", depthBase: 0.82, depthGain: 0.006 },
+  coach: { label: "Coach", depthBase: 0.98, depthGain: 0.0008 },
+};
 const seasonStart = "2026-06-01";
 const seasonWeeks = 12;
 const PLAYOFF_WEEK = seasonWeeks - 1;
@@ -70,6 +75,7 @@ const state = {
   mode: "computer",
   difficulty: "normal",
   selectedVersion: "next",
+  viewMode: localStorage.getItem("noun-pickleball-view") || "broadcast",
   seasonPhase: "regular",
   momentum: 0,
   watchSpeed: "normal",
@@ -110,6 +116,7 @@ const el = {
   turnCopy: document.querySelector("#turnCopy"),
   rallyStrip: document.querySelector("#rallyStrip"),
   controls: document.querySelector("#controls"),
+  viewSwitch: document.querySelector("#viewSwitch"),
   modeSwitch: document.querySelector("#modeSwitch"),
   difficultySwitch: document.querySelector("#difficultySwitch"),
   versionTitle: document.querySelector("#versionTitle"),
@@ -175,6 +182,7 @@ function resetGame() {
 
 function render() {
   renderVersionVault();
+  renderViewMode();
   updatePlayerPositions();
   updateCourtPhase();
   el.teamAName.textContent = teamNames[0];
@@ -187,6 +195,10 @@ function render() {
     node.innerHTML = `<img src="${players[index].avatar}" alt="${players[index].name}" />`;
     node.style.setProperty("--x", players[index].x);
     node.style.setProperty("--y", players[index].y);
+    const y = Number(players[index].y.replace("%", ""));
+    const view = viewModes[state.viewMode] || viewModes.broadcast;
+    node.style.setProperty("--depth-scale", (view.depthBase + y * view.depthGain).toFixed(3));
+    node.style.zIndex = String(10 + Math.round(y));
     node.classList.toggle("active", index === state.activePlayer && !state.gameOver);
   });
 
@@ -230,6 +242,16 @@ function render() {
   });
 
   renderLeague();
+}
+
+function renderViewMode() {
+  if (!viewModes[state.viewMode]) state.viewMode = "broadcast";
+  document.body.dataset.view = state.viewMode;
+  [...el.viewSwitch.querySelectorAll("button[data-view]")].forEach((button) => {
+    const active = button.dataset.view === state.viewMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 }
 
 function renderVersionVault() {
@@ -1678,6 +1700,14 @@ el.controls.addEventListener("focusout", () => {
   hideTargetPreview();
 });
 
+el.viewSwitch.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-view]");
+  if (!button || button.dataset.view === state.viewMode) return;
+  state.viewMode = button.dataset.view;
+  localStorage.setItem("noun-pickleball-view", state.viewMode);
+  showToast(viewModes[state.viewMode].label);
+  render();
+});
 el.newGameButton.addEventListener("click", resetGame);
 el.watchLeagueButton.addEventListener("click", () => watchLeagueMatch(0));
 el.watchSeasonButton.addEventListener("click", watchSeason);
