@@ -33,6 +33,48 @@ const viewModes = {
   corner: { label: "Corner", depthBase: 0.82, depthGain: 0.006 },
   coach: { label: "Coach", depthBase: 0.98, depthGain: 0.0008 },
 };
+const trainerDrills = {
+  "serve-depth": {
+    label: "Deep Serve",
+    shot: "drive",
+    setup: "Serve right box. Hit deep cross-court and keep it in.",
+    cue: "Contact in front. Finish toward the opposite baseline.",
+    success: "Deep serve. That pins the returner back.",
+    miss: "Serve drifted. Aim higher over the net and add depth.",
+    target: { x: 31, y: 24 },
+    setupState: { servingTeam: 0, rallyTeam: 0, rallyCount: 0, lastShot: null },
+  },
+  "third-drop": {
+    label: "Third-Shot Drop",
+    shot: "drop",
+    setup: "After the return, drop softly into the kitchen.",
+    cue: "Loose grip. Arc it down, not through.",
+    success: "Nice reset. Now your team can move up.",
+    miss: "Too attack-minded. Soften the paddle and land it short.",
+    target: { x: 33, y: 40 },
+    setupState: { servingTeam: 0, rallyTeam: 0, rallyCount: 2, lastShot: "drive" },
+  },
+  "kitchen-dink": {
+    label: "Kitchen Dink",
+    shot: "dink",
+    setup: "At the non-volley line, move the ball cross-court.",
+    cue: "Stay low. Push with the shoulder, quiet wrist.",
+    success: "Patient dink. That creates the popup later.",
+    miss: "Dink got jumpy. Keep the paddle face calm.",
+    target: { x: 35, y: 42 },
+    setupState: { servingTeam: 0, rallyTeam: 0, rallyCount: 5, lastShot: "dink" },
+  },
+  "lob-defense": {
+    label: "Lob Defense",
+    shot: "smash",
+    setup: "Opponent lobs. Retreat, load, and punish the high ball.",
+    cue: "Turn first, then swing. Do not backpedal late.",
+    success: "Putaway footwork. You got behind the ball.",
+    miss: "Late retreat. Turn your hips before the swing.",
+    target: { x: 73, y: 24 },
+    setupState: { servingTeam: 0, rallyTeam: 0, rallyCount: 6, lastShot: "lob" },
+  },
+};
 const seasonStart = "2026-06-01";
 const seasonWeeks = 12;
 const PLAYOFF_WEEK = seasonWeeks - 1;
@@ -76,6 +118,17 @@ const state = {
   difficulty: "normal",
   selectedVersion: "next",
   viewMode: localStorage.getItem("noun-pickleball-view") || "broadcast",
+  trainerActive: false,
+  trainerDrill: localStorage.getItem("noun-pickleball-drill") || "serve-depth",
+  trainerReps: 0,
+  trainerHits: 0,
+  trainerStreak: 0,
+  trainerSetActive: false,
+  trainerSetGoal: 5,
+  trainerSetReps: 0,
+  trainerSetHits: 0,
+  trainerFeedback: "Pick a drill and turn trainer on.",
+  trainerPreviousMode: "computer",
   seasonPhase: "regular",
   momentum: 0,
   watchSpeed: "normal",
@@ -119,6 +172,13 @@ const el = {
   viewSwitch: document.querySelector("#viewSwitch"),
   modeSwitch: document.querySelector("#modeSwitch"),
   difficultySwitch: document.querySelector("#difficultySwitch"),
+  trainerTitle: document.querySelector("#trainerTitle"),
+  trainerCopy: document.querySelector("#trainerCopy"),
+  trainerToggleButton: document.querySelector("#trainerToggleButton"),
+  trainerDrillSelect: document.querySelector("#trainerDrillSelect"),
+  trainerSetButton: document.querySelector("#trainerSetButton"),
+  trainerResetButton: document.querySelector("#trainerResetButton"),
+  trainerStats: document.querySelector("#trainerStats"),
   versionTitle: document.querySelector("#versionTitle"),
   versionCopy: document.querySelector("#versionCopy"),
   versionTabs: document.querySelector("#versionTabs"),
@@ -183,6 +243,7 @@ function resetGame() {
 function render() {
   renderVersionVault();
   renderViewMode();
+  applyTrainerSetup();
   updatePlayerPositions();
   updateCourtPhase();
   el.teamAName.textContent = teamNames[0];
@@ -225,6 +286,7 @@ function render() {
     button.disabled = state.gameOver || state.busy || isComputerTurn() || state.leagueWatching;
     button.title = shotHint(shot);
     button.classList.toggle("recommended", shot === bestShot && !isComputerTurn() && !state.gameOver);
+    button.classList.toggle("trainer-shot", state.trainerActive && shot === trainerDrill().shot);
     const odds = button.querySelector(".shot-odds");
     if (odds) odds.textContent = `${Math.round(getMakeChance(shot) * 100)}% in`;
   });
@@ -241,7 +303,53 @@ function render() {
     button.setAttribute("aria-pressed", String(isActive));
   });
 
+  renderTrainer();
   renderLeague();
+}
+
+function applyTrainerSetup() {
+  if (!state.trainerActive) return;
+  const drill = trainerDrill();
+  Object.assign(state, drill.setupState);
+  state.activePlayer = firstPlayerForTeam(USER_TEAM);
+  state.gameOver = false;
+  state.mode = "pass";
+}
+
+function trainerDrill() {
+  return trainerDrills[state.trainerDrill] || trainerDrills["serve-depth"];
+}
+
+function renderTrainer() {
+  const drill = trainerDrill();
+  el.trainerDrillSelect.value = state.trainerDrill;
+  el.trainerTitle.textContent = state.trainerActive ? `${drill.label} Drill` : "Practice Mode";
+  el.trainerCopy.textContent = state.trainerActive ? `${drill.setup} ${drill.cue}` : "Turn on a drill to get target zones, feedback, and cleaner reps.";
+  el.trainerToggleButton.textContent = state.trainerActive ? "Trainer On" : "Trainer Off";
+  el.trainerToggleButton.classList.toggle("active", state.trainerActive);
+  el.trainerToggleButton.setAttribute("aria-pressed", String(state.trainerActive));
+  el.trainerSetButton.textContent = state.trainerSetActive ? `Set ${state.trainerSetReps}/${state.trainerSetGoal}` : "Start 5-Rep Set";
+  el.trainerSetButton.classList.toggle("active", state.trainerSetActive);
+  document.body.classList.toggle("trainer-live", state.trainerActive);
+  const pct = state.trainerReps ? Math.round(state.trainerHits / state.trainerReps * 100) : 0;
+  const setLabel = state.trainerSetActive ? `${state.trainerSetReps}/${state.trainerSetGoal}` : "-";
+  el.trainerStats.innerHTML = `
+    <span><strong>${state.trainerReps}</strong><small>reps</small></span>
+    <span><strong>${pct}%</strong><small>quality</small></span>
+    <span><strong>${state.trainerStreak}</strong><small>streak</small></span>
+    <span><strong>${setLabel}</strong><small>set</small></span>
+    <p>${state.trainerFeedback}</p>
+  `;
+  if (state.trainerActive) {
+    el.targetPreview.style.setProperty("--x", `${drill.target.x}%`);
+    el.targetPreview.style.setProperty("--y", `${drill.target.y}%`);
+    el.targetPreview.style.setProperty("--color", "#d7ff3f");
+    el.targetPreview.classList.add("show", "trainer-target");
+    el.courtCallout.textContent = `${drill.label}: ${shots[drill.shot].label}`;
+    el.courtCallout.style.setProperty("--x", `${drill.target.x}%`);
+    el.courtCallout.style.setProperty("--y", `${drill.target.y}%`);
+    el.courtCallout.classList.add("show");
+  }
 }
 
 function renderViewMode() {
@@ -554,6 +662,54 @@ async function playShot(shotName, options = {}) {
   scheduleComputerTurn();
 }
 
+async function playTrainerRep(shotName) {
+  if (state.busy || !state.trainerActive) return;
+  clearCpuTimer();
+  const drill = trainerDrill();
+  Object.assign(state, drill.setupState);
+  state.mode = "pass";
+  state.activePlayer = firstPlayerForTeam(USER_TEAM);
+  updatePlayerPositions();
+  render();
+
+  state.busy = true;
+  const actorIndex = state.activePlayer;
+  const receiver = pickPreviewReceiver(shotName, actorIndex, 1 - state.rallyTeam);
+  const correctShot = shotName === drill.shot;
+  const qualityChance = clamp(getMakeChance(shotName, USER_TEAM) + (correctShot ? 0.18 : -0.26), 0.08, 0.98);
+  const made = Math.random() < qualityChance;
+  recordRallyHit(USER_TEAM, shotName);
+  renderRallyMap();
+  flashReady(actorIndex);
+  flashReady(receiver);
+  await wait(80);
+  flashPlayer(actorIndex, shotName);
+  await animateShot(actorIndex, receiver, shotName, made ? "rally" : "fault");
+
+  state.trainerReps += 1;
+  if (state.trainerSetActive) state.trainerSetReps += 1;
+  if (made && correctShot) {
+    state.trainerHits += 1;
+    if (state.trainerSetActive) state.trainerSetHits += 1;
+    state.trainerStreak += 1;
+    state.trainerFeedback = `${drill.success} Streak ${state.trainerStreak}.`;
+    showToast("Good Rep");
+  } else {
+    state.trainerStreak = 0;
+    state.trainerFeedback = correctShot ? drill.miss : `Try ${shots[drill.shot].label}: ${drill.cue}`;
+    showToast(correctShot ? "Reset" : "Wrong Shot");
+  }
+  if (state.trainerSetActive && state.trainerSetReps >= state.trainerSetGoal) {
+    const setPct = Math.round(state.trainerSetHits / state.trainerSetGoal * 100);
+    state.trainerFeedback = `Set complete: ${state.trainerSetHits}/${state.trainerSetGoal} quality reps (${setPct}%). ${setPct >= 80 ? "Move up the difficulty." : "Run it again and slow the setup."}`;
+    state.trainerSetActive = false;
+    showToast("Set Done");
+  }
+  addLog(`${drill.label}: ${shots[shotName].label} rep ${made && correctShot ? "landed" : "needs work"}.`);
+  state.busy = false;
+  render();
+}
+
 function getMakeChance(shotName, actorTeam = state.rallyTeam) {
   const shot = shots[shotName];
   const pressure = state.lastShot ? shots[state.lastShot].power : 0.18;
@@ -601,6 +757,7 @@ function phaseWinnerBonus(shotName) {
 }
 
 function recommendedShot() {
+  if (state.trainerActive) return trainerDrill().shot;
   return Object.keys(shots).reduce((best, shotName) => {
     const score = getMakeChance(shotName) * 0.68 + getWinnerChance(shotName) * 0.32;
     const bestScore = getMakeChance(best) * 0.68 + getWinnerChance(best) * 0.32;
@@ -1531,7 +1688,12 @@ function showTargetPreview(shotName) {
 }
 
 function hideTargetPreview() {
+  if (state.trainerActive) {
+    renderTrainer();
+    return;
+  }
   el.targetPreview.classList.remove("show");
+  el.targetPreview.classList.remove("trainer-target");
   el.courtCallout.classList.remove("show");
 }
 
@@ -1682,7 +1844,11 @@ el.controls.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-shot]");
   if (button) {
     hideTargetPreview();
-    playShot(button.dataset.shot);
+    if (state.trainerActive) {
+      playTrainerRep(button.dataset.shot);
+    } else {
+      playShot(button.dataset.shot);
+    }
   }
 });
 el.controls.addEventListener("pointerover", (event) => {
@@ -1706,6 +1872,60 @@ el.viewSwitch.addEventListener("click", (event) => {
   state.viewMode = button.dataset.view;
   localStorage.setItem("noun-pickleball-view", state.viewMode);
   showToast(viewModes[state.viewMode].label);
+  render();
+});
+el.trainerToggleButton.addEventListener("click", () => {
+  state.trainerActive = !state.trainerActive;
+  clearCpuTimer();
+  if (state.trainerActive) {
+    state.trainerPreviousMode = state.mode;
+    state.viewMode = "coach";
+    localStorage.setItem("noun-pickleball-view", state.viewMode);
+    state.trainerFeedback = `${trainerDrill().label}: ${trainerDrill().cue}`;
+    showToast("Trainer");
+  } else {
+    state.mode = state.trainerPreviousMode || "computer";
+    hideTargetPreview();
+    showToast("Match");
+  }
+  render();
+  scheduleComputerTurn();
+});
+el.trainerDrillSelect.addEventListener("change", (event) => {
+  state.trainerDrill = event.target.value;
+  localStorage.setItem("noun-pickleball-drill", state.trainerDrill);
+  state.trainerReps = 0;
+  state.trainerHits = 0;
+  state.trainerStreak = 0;
+  state.trainerSetActive = false;
+  state.trainerSetReps = 0;
+  state.trainerSetHits = 0;
+  state.trainerFeedback = `${trainerDrill().label}: ${trainerDrill().cue}`;
+  if (state.trainerActive) showToast(trainerDrill().label);
+  render();
+});
+el.trainerSetButton.addEventListener("click", () => {
+  if (!state.trainerActive) {
+    state.trainerActive = true;
+    state.trainerPreviousMode = state.mode;
+    state.viewMode = "coach";
+    localStorage.setItem("noun-pickleball-view", state.viewMode);
+  }
+  state.trainerSetActive = true;
+  state.trainerSetReps = 0;
+  state.trainerSetHits = 0;
+  state.trainerFeedback = `Five-rep set started: ${trainerDrill().cue}`;
+  showToast("5 Reps");
+  render();
+});
+el.trainerResetButton.addEventListener("click", () => {
+  state.trainerReps = 0;
+  state.trainerHits = 0;
+  state.trainerStreak = 0;
+  state.trainerSetActive = false;
+  state.trainerSetReps = 0;
+  state.trainerSetHits = 0;
+  state.trainerFeedback = `${trainerDrill().label}: ${trainerDrill().cue}`;
   render();
 });
 el.newGameButton.addEventListener("click", resetGame);
