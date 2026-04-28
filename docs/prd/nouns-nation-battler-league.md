@@ -117,6 +117,15 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add `I` as a TV keyboard shortcut to replay the interstitial deck on demand.
 - Keep interstitials local/client-only and non-blocking so they work inside the existing cast iframe.
 
+## V13 Season Challenge Additions
+
+- Add numbered league seasons so resetting after a completed run starts the next season instead of a nameless replay.
+- Add rotating match challenges: KO Race, Mint Window, Amp Hunt, Captain Call, Field Claim, Last Stand, and Underdog Audit.
+- Let challenges score from live match events: KOs, healer output, amplifier and scrap triggers, captain rallies, center/terrain/crown control, low-survivor wins, and comeback shields.
+- Award challenge winners a visible surge, fan heat, a challenge-win stat in standings, challenge recaps, and root-card context.
+- Add a field challenge ribbon so viewers can follow the current side objective at a glance.
+- Add a TV challenge brief between the League Interstitial and Field Guide, using actual generated battler Nouns and live challenge progress.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -141,5 +150,7 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - TV mode shows Director Mode camera/replay cues and highlights the currently featured Noun.
 - Lava Audit, Cloud Court, Trash Planet, and Fog Bowl can be forced with `?type=lava`, `?type=cloud`, `?type=trash`, and `?type=fog`.
 - TV mode shows a Noun-heavy League Interstitial and Field Guide at match start, and `I` replays the overview deck.
+- Each match arms a Season Challenge and surfaces its progress in the field ribbon, stat strip, standings/rooting layer, and TV challenge interstitial.
+- Resetting a league advances to the next numbered season locally.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.

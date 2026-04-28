@@ -11,6 +11,66 @@ const LEAGUE_KEY = "pc:nouns-nation-league-v4";
 const LEAGUE_DAYS = 14;
 const DAILY_SLOTS = 4;
 
+const challengeDeck = [
+  {
+    id: "ko-race",
+    name: "KO Race",
+    target: 8,
+    metric: "kos",
+    rule: "First gang to 8 takedowns earns a morale surge and fan heat.",
+    tv: "First to 8 KOs gets the surge.",
+  },
+  {
+    id: "mint-window",
+    name: "Mint Window",
+    target: 80,
+    metric: "heals",
+    rule: "Healers charge faster. First gang to 80 healing wins the challenge.",
+    tv: "Healers matter more than usual.",
+  },
+  {
+    id: "amp-hunt",
+    name: "Amp Hunt",
+    target: 4,
+    metric: "amps",
+    fields: ["rift", "crown", "cloud", "trash"],
+    rule: "First gang to 4 amplifier, crown, cloud, or scrap triggers wins bonus heat.",
+    tv: "Watch the weird zones and powered-up Nouns.",
+  },
+  {
+    id: "captain-call",
+    name: "Captain Call",
+    target: 3,
+    metric: "captain",
+    rule: "First gang to land 3 captain rallies takes a table-wide challenge mark.",
+    tv: "Captains can swing the whole bench.",
+  },
+  {
+    id: "field-claim",
+    name: "Field Claim",
+    target: 3,
+    metric: "field",
+    rule: "First gang to claim 3 center, terrain, crown, or rift events gets the surge.",
+    tv: "Field control counts as a side quest.",
+  },
+  {
+    id: "last-stand",
+    name: "Last Stand",
+    target: 1,
+    metric: "finish",
+    rule: "Win the match with 10 or fewer Nouns standing to steal a challenge point.",
+    tv: "Low-survivor wins hit harder.",
+  },
+  {
+    id: "underdog-audit",
+    name: "Underdog Audit",
+    target: 1,
+    metric: "comeback",
+    rule: "A gang trailing by 5 or more gets guard. Erase the gap to win the challenge.",
+    tv: "Comeback shields are live.",
+  },
+];
+
 const battleTypes = [
   {
     id: "open",
@@ -198,6 +258,7 @@ const el = {
   battleLog: document.querySelector("#battleLog"),
   toast: document.querySelector("#toast"),
   weather: document.querySelector("#weather"),
+  challengeRibbon: document.querySelector("#challengeRibbon"),
   tvClock: document.querySelector("#tvClock"),
   tvLeftGang: document.querySelector("#tvLeftGang"),
   tvLeftAlive: document.querySelector("#tvLeftAlive"),
@@ -246,6 +307,9 @@ const state = {
   replayClock: 0,
   interstitialClock: 0,
   interstitialSignature: "",
+  challenge: null,
+  challengeProgress: null,
+  challengeClock: 0,
   autoNext: true,
   nextTimer: null,
   rootingFor: localStorage.getItem("pc:nouns-nation-root") || "",
@@ -284,10 +348,14 @@ function loadLeague() {
 }
 
 function normalizeLeague(league) {
+  league.seasonNumber ||= 1;
   league.recaps ||= [];
+  league.challengeRecaps ||= [];
   league.playoffs ||= [];
   for (const gang of gangPool) {
     league.table[gang.name] ||= { wins: 0, losses: 0, pf: 0, pa: 0, streak: 0, fans: 50, last: "" };
+    league.table[gang.name].challengeWins ||= 0;
+    league.table[gang.name].lastChallenge ||= "";
   }
   return league;
 }
@@ -296,10 +364,11 @@ function saveLeague() {
   localStorage.setItem(LEAGUE_KEY, JSON.stringify(state.league));
 }
 
-function createLeague() {
+function createLeague(seasonNumber = 1) {
   const schedule = buildSchedule(gangPool.length);
   return {
     version: 4,
+    seasonNumber,
     phase: "regular",
     day: 0,
     slot: 0,
@@ -308,9 +377,10 @@ function createLeague() {
     schedule,
     playoffs: [],
     recaps: [],
+    challengeRecaps: [],
     table: Object.fromEntries(gangPool.map((gang) => [
       gang.name,
-      { wins: 0, losses: 0, pf: 0, pa: 0, streak: 0, fans: 50, last: "" },
+      { wins: 0, losses: 0, pf: 0, pa: 0, streak: 0, fans: 50, challengeWins: 0, lastChallenge: "", last: "" },
     ])),
   };
 }
@@ -367,6 +437,79 @@ function currentBattleType() {
   const rotation = ["open", "lava", "rift", "cloud", "trash", "crown", "fog", "rift", "lava", "cloud"];
   const id = rotation[(league.day * DAILY_SLOTS + league.slot) % rotation.length];
   return battleTypes.find((type) => type.id === id) || battleTypes[0];
+}
+
+function matchOrdinal(league = state.league) {
+  if (!league) return 0;
+  if (league.phase === "regular") return league.day * DAILY_SLOTS + league.slot;
+  if (league.phase === "playoffs") return LEAGUE_DAYS * DAILY_SLOTS + league.playoffSlot;
+  return LEAGUE_DAYS * DAILY_SLOTS + 3;
+}
+
+function currentChallenge() {
+  const forced = params.get("challenge");
+  const forcedChallenge = challengeDeck.find((challenge) => challenge.id === forced);
+  if (forcedChallenge) return forcedChallenge;
+  const fieldId = state.battleType?.id || "open";
+  const pool = challengeDeck.filter((challenge) => !challenge.fields || challenge.fields.includes(fieldId));
+  const usable = pool.length ? pool : challengeDeck;
+  const fieldSalt = Math.max(0, battleTypes.findIndex((type) => type.id === fieldId));
+  const seasonSalt = state.league?.seasonNumber || 1;
+  return usable[(seasonSalt * 5 + matchOrdinal() * 3 + fieldSalt) % usable.length] || challengeDeck[0];
+}
+
+function armChallenge() {
+  state.challenge = currentChallenge();
+  state.challengeProgress = { scores: [0, 0], winner: "", reason: "", comebackTeam: null };
+  state.challengeClock = rand(95, 165);
+}
+
+function addChallengeRecap(text) {
+  state.league.challengeRecaps ||= [];
+  state.league.challengeRecaps.unshift(text);
+  state.league.challengeRecaps = state.league.challengeRecaps.slice(0, 5);
+}
+
+function scoreChallenge(team, amount, metric, reason = "") {
+  const challenge = state.challenge;
+  const progress = state.challengeProgress;
+  if (!challenge || !progress || progress.winner || state.league.phase === "champion") return;
+  if (challenge.metric !== metric || !Number.isFinite(team)) return;
+  progress.scores[team] = Math.min(challenge.target, progress.scores[team] + amount);
+  if (progress.scores[team] >= challenge.target) {
+    awardChallenge(team, reason);
+  }
+}
+
+function awardChallenge(team, reason = "") {
+  const challenge = state.challenge;
+  const progress = state.challengeProgress;
+  if (!challenge || !progress || progress.winner) return;
+  progress.winner = gangs[team].short;
+  progress.reason = reason;
+  progress.scores[team] = Math.max(progress.scores[team], challenge.target);
+  aliveUnits(team).forEach((unit) => {
+    unit.guard = Math.max(unit.guard, 58);
+    unit.haste = Math.max(unit.haste, 28);
+    unit.morale = Math.min(1.52, unit.morale + 0.12);
+    unit.special = Math.max(0, unit.special - 28);
+  });
+  const row = state.league.table[gangs[team].name];
+  if (row) {
+    row.challengeWins = (row.challengeWins || 0) + 1;
+    row.lastChallenge = challenge.name;
+    row.fans = Math.min(99, row.fans + (state.league.phase === "playoffs" ? 4 : 2));
+  }
+  addChallengeRecap(`S${state.league.seasonNumber}: ${gangs[team].short} won ${challenge.name}${reason ? ` (${reason})` : ""}.`);
+  addLog(`${gangs[team].name} win the ${challenge.name} challenge${reason ? `: ${reason}` : "."}`);
+  recordMove("CHAL", `${gangs[team].short} ${challenge.name}`);
+  flashField("challenge-burst", 900);
+  saveLeague();
+}
+
+function creditAmp(unit, reason) {
+  unit.stats.amps += 1;
+  scoreChallenge(unit.team, 1, "amps", reason);
 }
 
 function elementForUnit(unit) {
@@ -505,6 +648,7 @@ function resetMatch() {
   state.interstitialClock = isTvMode ? 560 : 0;
   state.interstitialSignature = "";
   state.battleType = currentBattleType();
+  armChallenge();
   state.weather = state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
   state.moveHistory = [];
   state.selectedUnitId = "";
@@ -546,7 +690,8 @@ function resetMatch() {
 
   addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, 30 strong on each side.`);
   addLog(state.battleType.log);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V12", `${state.battleType.name} armed`);
+  addLog(`Season challenge: ${state.challenge.name}. ${state.challenge.rule}`);
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V13", `${state.battleType.name} + ${state.challenge.name}`);
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
@@ -555,7 +700,7 @@ function resetMatch() {
 function matchTitle() {
   const typeName = state.battleType?.name || "Open Field Clash";
   if (state.league.phase === "regular") {
-    return `Day ${state.league.day + 1} ${typeName}`;
+    return `S${state.league.seasonNumber} Day ${state.league.day + 1} ${typeName}`;
   }
   if (state.league.phase === "playoffs") {
     return state.league.playoffSlot < 2 ? `Nouns Bowl ${typeName} Semi ${state.league.playoffSlot + 1}` : `Nouns Bowl ${typeName}`;
@@ -761,7 +906,7 @@ function applyTerrainRules(unit, dt, bounds) {
       if (Math.random() > 0.996) {
         unit.guard = Math.max(unit.guard, 80);
         unit.haste = Math.max(unit.haste, 44);
-        unit.stats.amps += 1;
+        creditAmp(unit, "scrap tech");
         pop(unit.x, unit.y - 26, "loot", gangs[unit.team].accent);
       } else if (Math.random() > 0.997) {
         unit.stunned = Math.max(unit.stunned, 18);
@@ -776,6 +921,47 @@ function applyTerrainRules(unit, dt, bounds) {
   }
 }
 
+function applyChallengeRules(unit, dt) {
+  const challenge = state.challenge;
+  if (!challenge || state.challengeProgress?.winner) return;
+  if (challenge.id === "mint-window" && unit.role.name === "healer") {
+    unit.special = Math.max(0, unit.special - 0.24 * dt);
+    unit.cooldown = Math.max(0, unit.cooldown - 0.12 * dt);
+    return;
+  }
+  if (challenge.id === "last-stand" && aliveUnits(unit.team).length <= 10) {
+    unit.guard = Math.max(unit.guard, 14);
+    unit.morale = Math.min(1.55, unit.morale + 0.002 * dt);
+    return;
+  }
+  if (challenge.id === "amp-hunt" && unit.amplified > 0) {
+    unit.haste = Math.max(unit.haste, 12);
+    unit.special = Math.max(0, unit.special - 0.14 * dt);
+  }
+}
+
+function challengePulse() {
+  const challenge = state.challenge;
+  const progress = state.challengeProgress;
+  if (!challenge || !progress || progress.winner) return;
+  if (challenge.id !== "underdog-audit") return;
+  const left = aliveUnits(0).length;
+  const right = aliveUnits(1).length;
+  const trailing = left + 5 < right ? 0 : right + 5 < left ? 1 : null;
+  if (trailing !== null) {
+    progress.comebackTeam = trailing;
+    aliveUnits(trailing).slice(0, 12).forEach((unit) => {
+      unit.guard = Math.max(unit.guard, 42);
+      unit.special = Math.max(0, unit.special - 14);
+    });
+    addOccasionalLog(`${gangs[trailing].name} get underdog audit shields.`);
+    return;
+  }
+  if (progress.comebackTeam !== null && Math.abs(left - right) <= 1) {
+    scoreChallenge(progress.comebackTeam, 1, "comeback", "erased a five-Noun gap");
+  }
+}
+
 function terrainPulse(bounds) {
   if (!["lava", "cloud", "trash", "fog"].includes(state.battleType.id)) return;
   const zones = terrainZones(bounds);
@@ -787,6 +973,9 @@ function terrainPulse(bounds) {
       if (unit.hp <= 0) downUnit(unit, nearestEnemy(unit) || terrainAttacker(unit), 24);
     });
     if (targets.length) {
+      const pressure = [0, 1].map((team) => targets.filter((unit) => unit.team === team).length);
+      const team = pressure[0] <= pressure[1] ? 0 : 1;
+      scoreChallenge(team, 1, "field", "survived lava audit");
       recordMove("FIELD", "lava audit lane burns");
       flashField("lava-burst");
     }
@@ -799,6 +988,7 @@ function terrainPulse(bounds) {
       unit.haste = Math.max(unit.haste, 60);
       unit.special = Math.max(0, unit.special - 22);
     });
+    scoreChallenge(team, 1, "field", "cloud court lift");
     recordMove(gangs[team].short, "cloud court lift");
     flashField("cloud-burst");
     return;
@@ -809,7 +999,8 @@ function terrainPulse(bounds) {
     if (unit) {
       unit.guard = Math.max(unit.guard, 120);
       unit.special = Math.max(0, unit.special - 60);
-      unit.stats.amps += 1;
+      creditAmp(unit, "scrap pulse");
+      scoreChallenge(unit.team, 1, "field", "trash planet loot");
       recordMove(gangs[unit.team].short, `#${unit.number} ${unit.name} finds scrap tech`);
       pop(unit.x, unit.y - 28, "scrap", gangs[unit.team].accent);
       flashField("trash-burst");
@@ -822,6 +1013,7 @@ function terrainPulse(bounds) {
       unit.guard = Math.max(unit.guard, 70);
       unit.cooldown = Math.max(0, unit.cooldown - 10);
     });
+    scoreChallenge(team, 1, "field", "fog bowl ambush");
     recordMove(gangs[team].short, "fog bowl ambush set");
     flashField("fog-burst");
   }
@@ -851,10 +1043,11 @@ function updateCrownControl(bounds) {
   const holder = candidates[0];
   if (state.crownHolderId !== holder.id) {
     state.crownHolderId = holder.id;
-    holder.stats.amps += 1;
+    creditAmp(holder, "crown take");
     holder.morale = Math.min(1.58, holder.morale + 0.18);
     holder.guard = Math.max(holder.guard, 130);
     holder.haste = Math.max(holder.haste, 120);
+    scoreChallenge(holder.team, 1, "field", "crown take");
     recordMove(gangs[holder.team].short, `#${holder.number} ${holder.name} takes the crown`);
     pop(holder.x, holder.y - 34, "crown", gangs[holder.team].accent);
     flashField("crown-burst");
@@ -876,6 +1069,7 @@ function crownRushPulse(bounds) {
     spark(enemy.x, enemy.y);
     if (enemy.hp <= 0) downUnit(enemy, holder, distance(holder, enemy));
   });
+  scoreChallenge(holder.team, 1, "field", "crown pressure");
   recordMove(gangs[holder.team].short, "crown pressure pulse");
 }
 
@@ -897,6 +1091,7 @@ function stepUnit(unit, dt, bounds) {
     if (amp.boost === "guard") unit.guard = Math.max(unit.guard, 24);
   }
   applyTerrainRules(unit, dt, bounds);
+  applyChallengeRules(unit, dt);
   if (state.battleType.id === "crown") {
     const holder = crownHolder();
     const zone = crownZone(bounds);
@@ -921,7 +1116,9 @@ function stepUnit(unit, dt, bounds) {
       const before = friend.hp;
       friend.hp = Math.min(friend.maxHp, friend.hp + 15);
       if (unit.element?.boost === "heal" && unit.amplified > 0) friend.hp = Math.min(friend.maxHp, friend.hp + 6);
-      unit.stats.heals += Math.round(friend.hp - before);
+      const healed = Math.round(friend.hp - before);
+      unit.stats.heals += healed;
+      scoreChallenge(unit.team, healed, "heals", `${unit.name} patched the line`);
       unit.cooldown = unit.role.cadence;
       pop(friend.x, friend.y - 18, "+15", "#55cc6d");
       addOccasionalLog(`${unit.name} patches up ${friend.name}.`);
@@ -968,7 +1165,7 @@ function maybeUseAdvancedMove(unit, target, d, bounds) {
     unit.cooldown = Math.max(18, unit.role.cadence - 14);
     unit.special = rand(240, 360);
     unit.stats.specials += 1;
-    unit.stats.amps += 1;
+    creditAmp(unit, "overload");
     unit.amplified = 80;
     recordMove(gangs[unit.team].short, `${unit.element.name} amplifier overload`);
     pop(unit.x, unit.y - 32, "amp", unit.element.color);
@@ -1032,6 +1229,7 @@ function maybeUseAdvancedMove(unit, target, d, bounds) {
     unit.cooldown = 36;
     unit.special = rand(300, 440);
     unit.stats.specials += 1;
+    scoreChallenge(unit.team, 1, "captain", `${unit.name} called quorum`);
     recordMove(gangs[unit.team].short, `${unit.name} quorum rally`);
     pop(unit.x, unit.y - 30, "rally", gangs[unit.team].accent);
     return true;
@@ -1050,6 +1248,7 @@ function maybeUseAdvancedMove(unit, target, d, bounds) {
       unit.special = rand(360, 500);
       unit.stats.specials += 1;
       unit.stats.heals += fallen.hp;
+      scoreChallenge(unit.team, fallen.hp, "heals", `${unit.name} emergency minted`);
       recordMove(gangs[unit.team].short, `${unit.name} emergency mint`);
       addLog(`${gangs[unit.team].name}: ${unit.name} mints ${fallen.name} back into the match.`);
       pop(fallen.x, fallen.y - 28, "mint", "#55cc6d");
@@ -1102,6 +1301,7 @@ function downUnit(target, attacker, d) {
   target.stats.deaths += 1;
   attacker.stats.kos += 1;
   attacker.morale = Math.min(1.35, attacker.morale + 0.08);
+  scoreChallenge(attacker.team, 1, "kos", `${attacker.name} cleared ${target.name}`);
   gangRecord(gangs[attacker.team].name).takedowns += 1;
   saveSeason();
   const verb = d > 70 ? "snipes" : attacker.role.name === "bonker" ? "bonks" : "drops";
@@ -1143,6 +1343,7 @@ function centerControl(bounds) {
     unit.special = Math.max(0, unit.special - 18);
     unit.morale = Math.min(1.44, unit.morale + 0.04);
   });
+  scoreChallenge(team, 1, "field", "center field control");
   recordMove(gangs[team].short, "center field control");
   addOccasionalLog(`${gangs[team].name} control the center and charge their specials.`);
 }
@@ -1160,8 +1361,9 @@ function amplifierSurge(bounds) {
     unit.special = Math.max(0, unit.special - 34);
     unit.haste = Math.max(unit.haste, 32);
     unit.amplified = Math.max(unit.amplified, 70);
-    unit.stats.amps += 1;
+    creditAmp(unit, "rift lane");
   });
+  scoreChallenge(team, 1, "field", "rift lane control");
   recordMove(gangs[team].short, "amplifier lane control");
   addOccasionalLog(`${gangs[team].name} tune the rift lanes and speed up their specials.`);
 }
@@ -1179,6 +1381,10 @@ function checkFinish() {
     }
     saveSeason();
     const matchStars = matchStarLines();
+    const winnerAlive = winner === 0 ? left : right;
+    if (state.challenge?.id === "last-stand" && winnerAlive <= 10) {
+      scoreChallenge(winner, 1, "finish", `${winnerAlive} Nouns survived`);
+    }
     applyLeagueResult(winner, loser, left, right);
     state.finished = true;
     state.running = false;
@@ -1301,6 +1507,8 @@ function quickSimCurrentMatch() {
   const fixture = currentFixture();
   if (!fixture) return;
   gangs = [gangPool[fixture[0]], gangPool[fixture[1]]];
+  state.battleType = currentBattleType();
+  armChallenge();
   const [winnerSide, loserSide, winnerScore, loserScore] = simulatedScore();
   gangRecord(gangs[winnerSide].name).wins += 1;
   gangRecord(gangs[loserSide].name).losses += 1;
@@ -1309,6 +1517,7 @@ function quickSimCurrentMatch() {
     gangRecord(gangs[winnerSide].name).rootedWins += 1;
   }
   saveSeason();
+  quickSimChallenge(winnerSide, loserSide, winnerScore, loserScore);
   applyLeagueResult(winnerSide, loserSide, winnerSide === 0 ? winnerScore : loserScore, winnerSide === 1 ? winnerScore : loserScore);
   addLog(`Quick sim: ${gangs[winnerSide].name} survive ${winnerScore}-${loserScore}.`);
   showToast(`Quick sim: ${gangs[winnerSide].short} win`);
@@ -1342,6 +1551,22 @@ function simulatedScore() {
   return [winnerSide, loserSide, winnerScore, loserScore];
 }
 
+function quickSimChallenge(winnerSide, loserSide, winnerScore, loserScore) {
+  const challenge = state.challenge;
+  if (!challenge) return;
+  if (challenge.id === "last-stand") {
+    if (winnerScore <= 10) scoreChallenge(winnerSide, 1, "finish", `quick sim ${winnerScore} survived`);
+    return;
+  }
+  if (challenge.id === "underdog-audit") {
+    const side = loserScore >= winnerScore - 4 ? loserSide : winnerSide;
+    scoreChallenge(side, 1, "comeback", "quick sim swing");
+    return;
+  }
+  const side = Math.random() > 0.32 ? winnerSide : loserSide;
+  scoreChallenge(side, challenge.target, challenge.metric, "quick sim");
+}
+
 function update(time = 0) {
   const elapsed = state.lastTime ? time - state.lastTime : 16;
   state.lastTime = time;
@@ -1356,6 +1581,7 @@ function update(time = 0) {
     state.crownClock -= dt;
     state.terrainClock -= dt;
     state.directorClock -= dt;
+    state.challengeClock -= dt;
     state.replayClock = Math.max(0, state.replayClock - dt);
     state.interstitialClock = Math.max(0, state.interstitialClock - dt);
     if (state.specialClock <= 0) {
@@ -1380,6 +1606,10 @@ function update(time = 0) {
     if (state.terrainClock <= 0) {
       state.terrainClock = rand(120, 210);
       terrainPulse(bounds);
+    }
+    if (state.challengeClock <= 0) {
+      state.challengeClock = rand(120, 220);
+      challengePulse();
     }
     updateDirector(bounds);
     state.units.forEach((unit) => stepUnit(unit, dt, bounds));
@@ -1414,6 +1644,10 @@ function render() {
   const right = aliveUnits(1).length;
   el.leftAlive.textContent = left;
   el.rightAlive.textContent = right;
+  if (el.challengeRibbon) {
+    el.challengeRibbon.textContent = challengeRibbonLine(left, right);
+  }
+  el.field.classList.toggle("challenge-won", Boolean(state.challengeProgress?.winner));
   const momentum = left + right === 0 ? 0 : (right - left) / 30;
   el.momentumBar.style.transform = `scaleX(${clamp(Math.abs(momentum), 0.04, 1)})`;
   el.momentumBar.style.marginLeft = momentum >= 0 ? "50%" : `${50 - Math.abs(momentum) * 50}%`;
@@ -1443,6 +1677,7 @@ function render() {
     <div class="stat"><span>KO leader</span><strong>${unitStatLine(koLeader, "kos")}</strong></div>
     <div class="stat"><span>Heal leader</span><strong>${unitStatLine(healLeader, "heals")}</strong></div>
     <div class="stat"><span>${fieldStatLabel()}</span><strong>${fieldStatLine(liveLeader)}</strong></div>
+    <div class="stat challenge-stat"><span>Season challenge</span><strong>${challengeStatLine()}</strong></div>
   `;
   el.moveFeed.innerHTML = state.moveHistory
     .slice(0, 4)
@@ -1523,9 +1758,10 @@ function renderTvInterstitial(left, right) {
   el.tvInterstitial.classList.toggle("show", active);
   if (!active) return;
   const deck = interstitialDeck(left, right);
-  const index = state.interstitialClock > 280 ? 0 : 1;
+  const index = state.interstitialClock > 380 ? 0 : state.interstitialClock > 190 ? 1 : 2;
   const card = deck[index] || deck[0];
-  el.tvInterstitial.classList.toggle("field-guide", index === 1);
+  el.tvInterstitial.classList.toggle("challenge-guide", index === 1);
+  el.tvInterstitial.classList.toggle("field-guide", index === 2);
   const signature = `${index}:${card.title}:${card.body}:${card.meta}`;
   if (state.interstitialSignature === signature) return;
   state.interstitialSignature = signature;
@@ -1552,6 +1788,12 @@ function interstitialDeck(left, right) {
       meta: `${phase} · ${standings().slice(0, 3).map((row) => `${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
     },
     {
+      kicker: "Season challenge",
+      title: state.challenge?.name || "Challenge loading",
+      body: state.challenge?.rule || "A rotating side objective is being armed for this match.",
+      meta: `${challengeProgressLine()} · ${state.challenge?.tv || "Challenge heat feeds the league table."}`,
+    },
+    {
       kicker: "Field guide",
       title: state.battleType.name,
       body: battleTypeOverview(),
@@ -1570,9 +1812,50 @@ function battleTypeOverview() {
   return "Open field rules reward center control, morale surges, healing saves, and role specials.";
 }
 
+function challengeProgressLine() {
+  const challenge = state.challenge;
+  const progress = state.challengeProgress;
+  if (!challenge || !progress) return "Challenge loading";
+  if (progress.winner) return `${progress.winner} won ${challenge.name}`;
+  if (challenge.metric === "finish") return "Finish trigger armed";
+  if (challenge.metric === "comeback") {
+    return progress.comebackTeam === null
+      ? "Waiting for a five-Noun gap"
+      : `${gangs[progress.comebackTeam].short} chasing a level score`;
+  }
+  const left = Math.floor(progress.scores[0]);
+  const right = Math.floor(progress.scores[1]);
+  return `${gangs[0].short} ${left}/${challenge.target} · ${gangs[1].short} ${right}/${challenge.target}`;
+}
+
+function challengeStatLine() {
+  const challenge = state.challenge;
+  if (!challenge) return "loading";
+  return `${challenge.name}: ${challengeProgressLine()}`;
+}
+
+function challengeRibbonLine(left, right) {
+  const season = state.league?.seasonNumber || 1;
+  const nounCount = Number.isFinite(left + right) ? `${left + right} live` : "match live";
+  return `S${season} challenge · ${challengeStatLine()} · ${nounCount}`;
+}
+
+function challengeTvLine() {
+  const challenge = state.challenge;
+  if (!challenge) return "Challenge loading";
+  return `${challenge.name}: ${challengeProgressLine()}`;
+}
+
 function interstitialNouns(index) {
   const featured = index === 0
     ? [...aliveUnits(0).slice(0, 4), ...aliveUnits(1).slice(0, 4)]
+    : index === 1
+      ? [...state.units]
+        .filter((unit) => !unit.down)
+        .sort((a, b) => (
+          challengeNounScore(b) - challengeNounScore(a)
+        ))
+        .slice(0, 8)
     : [...state.units]
       .filter((unit) => !unit.down)
       .sort((a, b) => (
@@ -1585,6 +1868,15 @@ function interstitialNouns(index) {
       <figcaption>#${unit.number} ${gangs[unit.team].short}</figcaption>
     </figure>
   `).join("");
+}
+
+function challengeNounScore(unit) {
+  const metric = state.challenge?.metric;
+  if (metric === "kos") return unit.stats.kos * 60 + unit.stats.damage;
+  if (metric === "heals") return unit.stats.heals + (unit.role.name === "healer" ? 40 : 0);
+  if (metric === "amps") return unit.stats.amps * 80 + (unit.amplified > 0 ? 35 : 0);
+  if (metric === "captain") return unit.role.name === "captain" ? unit.stats.specials * 90 + unit.stats.damage : unit.stats.damage;
+  return unit.stats.damage + unit.stats.kos * 30 + unit.stats.heals * 0.4;
 }
 
 function cueReplay(text, unit = null) {
@@ -1609,7 +1901,7 @@ function battleTvLine() {
 function directorFieldLine() {
   const target = state.units.find((unit) => unit.id === state.directorTargetId);
   const targetLine = target ? `tracking #${target.number} ${gangs[target.team].short}` : "tracking field";
-  return `${state.battleType.name} · ${targetLine}`;
+  return `${state.battleType.name} · ${targetLine} · ${challengeTvLine()}`;
 }
 
 function reviewPulseLine() {
@@ -1641,22 +1933,22 @@ function reviewComebackLine(left, right) {
 function tvLeagueLine() {
   const league = state.league;
   if (league.phase === "regular") {
-    return `Day ${league.day + 1} / ${LEAGUE_DAYS} · Slate ${league.slot + 1} of ${DAILY_SLOTS}`;
+    return `S${league.seasonNumber} · Day ${league.day + 1} / ${LEAGUE_DAYS} · Slate ${league.slot + 1} of ${DAILY_SLOTS}`;
   }
   if (league.phase === "playoffs") {
-    return league.playoffSlot < 2 ? `Nouns Bowl · Semifinal ${league.playoffSlot + 1}` : "Nouns Bowl · Final";
+    return league.playoffSlot < 2 ? `S${league.seasonNumber} Nouns Bowl · Semifinal ${league.playoffSlot + 1}` : `S${league.seasonNumber} Nouns Bowl · Final`;
   }
-  return "Nouns Bowl Champion";
+  return `S${league.seasonNumber} Nouns Bowl Champion`;
 }
 
 function tvPathLine() {
   const league = state.league;
   if (league.phase === "champion") {
     const recap = (league.recaps || [])[0];
-    return `${league.champion} are champions${recap ? ` · ${recap}` : ""}`;
+    return `${challengeTvLine()} · ${league.champion} are champions${recap ? ` · ${recap}` : ""}`;
   }
   if (league.phase === "playoffs" && league.playoffs.length) {
-    return league.playoffs
+    const path = league.playoffs
       .map((pair, index) => {
         const label = index < 2 ? `Semi ${index + 1}` : "Bowl";
         const left = gangPool[pair[0]]?.short || "?";
@@ -1665,11 +1957,13 @@ function tvPathLine() {
         return `${label}: ${left} vs ${right}${winner}`;
       })
       .join(" · ");
+    return `${challengeTvLine()} · ${path}`;
   }
-  return standings()
+  const path = standings()
     .slice(0, 4)
     .map((row, index) => `${index + 1}. ${row.gang.short} ${row.wins}-${row.losses}`)
     .join(" · ");
+  return `${challengeTvLine()} · ${path}`;
 }
 
 function statLeader(key, score = (unit) => unit.stats[key]) {
@@ -1719,10 +2013,11 @@ function crownTvLine() {
 function renderLeague() {
   const league = state.league;
   const rows = standings();
-  el.leaguePhase.textContent = league.phase === "regular" ? "Two Week League" : league.phase === "playoffs" ? "Nouns Bowl Playoffs" : "Nouns Bowl Champion";
+  el.leaguePhase.textContent = league.phase === "regular" ? `Season ${league.seasonNumber} Challenge League` : league.phase === "playoffs" ? `Season ${league.seasonNumber} Nouns Bowl` : `Season ${league.seasonNumber} Champion`;
   el.leagueDay.textContent = league.phase === "regular" ? `Day ${league.day + 1} / ${LEAGUE_DAYS}` : league.phase === "playoffs" ? `Playoff ${league.playoffSlot + 1} / 3` : state.league.champion;
   el.leagueSlate.textContent = league.phase === "regular" ? `Slate ${league.slot + 1} of ${DAILY_SLOTS}` : league.phase === "playoffs" ? (league.playoffSlot < 2 ? "Semifinal" : "Superbowl") : "Season complete";
   el.leagueMatchup.textContent = currentFixtureLabel();
+  el.resetLeagueButton.textContent = league.phase === "champion" ? "Next Season" : "Reset League";
   el.standings.innerHTML = rows.map((row, index) => {
     const diff = row.pf - row.pa;
     const rooted = state.rootingFor === row.gang.name ? " rooted" : "";
@@ -1734,7 +2029,7 @@ function renderLeague() {
         <span>${row.wins}-${row.losses}</span>
         <span>${diff >= 0 ? "+" : ""}${diff}</span>
         <span>${streak}</span>
-        <span>${row.fans} fans</span>
+        <span>${row.challengeWins || 0} ch · ${row.fans} fans</span>
       </div>
     `;
   }).join("");
@@ -1753,7 +2048,10 @@ function renderBracket(rows) {
       return `<span>${label}: <b>${left}</b> vs <b>${right}</b>${winner}</span>`;
     })
     : seeds.map((seed) => `<span>Seed ${seed}</span>`);
-  const recaps = (league.recaps || []).slice(0, 3).map((text) => `<em>${text}</em>`).join("");
+  const recaps = [
+    ...(league.challengeRecaps || []).slice(0, 2),
+    ...(league.recaps || []).slice(0, 2),
+  ].map((text) => `<em>${text}</em>`).join("");
   el.bracket.innerHTML = `
     <div class="bracket-head">
       <span>Nouns Bowl Path</span>
@@ -1780,6 +2078,7 @@ function renderRooting(left, right) {
   el.rootCards.innerHTML = gangs
     .map((gang, index) => {
       const record = gangRecord(gang.name);
+      const leagueRow = state.league.table[gang.name] || {};
       const alive = index === 0 ? left : right;
       const power = Math.round((alive / 30) * 60 + record.wins * 8 + record.takedowns * 0.4);
       return `
@@ -1787,6 +2086,7 @@ function renderRooting(left, right) {
           <b>${gang.name}</b>
           <span>${record.wins}-${record.losses} record</span>
           <span>${record.takedowns} takedowns</span>
+          <span>${leagueRow.challengeWins || 0} challenge wins</span>
           <span>${power} root power</span>
         </div>
       `;
@@ -1894,10 +2194,11 @@ el.autoNextButton.addEventListener("click", () => {
 });
 el.resetLeagueButton.addEventListener("click", () => {
   clearTimeout(state.nextTimer);
-  state.league = createLeague();
+  const nextSeason = (state.league?.seasonNumber || 1) + 1;
+  state.league = createLeague(nextSeason);
   saveLeague();
-  addLog("A fresh two-week league begins.");
-  showToast("League reset: Day 1");
+  addLog(`Season ${nextSeason} begins with a fresh challenge board.`);
+  showToast(`Season ${nextSeason}: Day 1`);
   resetMatch();
 });
 el.rootLeftButton.addEventListener("click", () => setRooting(0));
