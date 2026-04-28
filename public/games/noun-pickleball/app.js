@@ -77,7 +77,10 @@ const el = {
   courtToast: document.querySelector("#courtToast"),
   shotTrace: document.querySelector("#shotTrace"),
   bounceMarker: document.querySelector("#bounceMarker"),
+  landingLabel: document.querySelector("#landingLabel"),
+  speedLines: document.querySelector("#speedLines"),
   ballShadow: document.querySelector("#ballShadow"),
+  net: document.querySelector(".net"),
   turnTitle: document.querySelector("#turnTitle"),
   turnCopy: document.querySelector("#turnCopy"),
   rallyStrip: document.querySelector("#rallyStrip"),
@@ -346,6 +349,9 @@ async function playShot(shotName, options = {}) {
 
   state.rallyCount += 1;
   addLog(`${actor.name} hits a ${shot.label.toLowerCase()}.`);
+  flashReady(actorIndex);
+  flashReady(nextPlayer);
+  await wait(90);
   flashPlayer(actorIndex, shotName);
 
   if (roll > makeChance) {
@@ -870,10 +876,27 @@ function weightedPick(pool) {
 
 function flashPlayer(index, shotName) {
   const node = el.playerEls[index];
-  node.classList.remove("swing", "smash-swing");
+  node.classList.remove("ready", "recover", "swing", "smash-swing", "dink-swing", "lob-swing");
   void node.offsetWidth;
-  node.classList.add(shotName === "smash" ? "smash-swing" : "swing");
-  window.setTimeout(() => node.classList.remove("swing", "smash-swing"), 420);
+  const className = shotName === "smash" ? "smash-swing" : shotName === "dink" || shotName === "drop" ? "dink-swing" : shotName === "lob" ? "lob-swing" : "swing";
+  node.classList.add(className);
+  window.setTimeout(() => node.classList.remove(className), 560);
+}
+
+function flashReady(index) {
+  const node = el.playerEls[index];
+  node.classList.remove("ready");
+  void node.offsetWidth;
+  node.classList.add("ready");
+  window.setTimeout(() => node.classList.remove("ready"), 240);
+}
+
+function flashRecover(index) {
+  const node = el.playerEls[index];
+  node.classList.remove("recover");
+  void node.offsetWidth;
+  node.classList.add("recover");
+  window.setTimeout(() => node.classList.remove("recover"), 360);
 }
 
 function flashScore(team) {
@@ -897,14 +920,25 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   const to = players[toIndex];
   const landing = shotLanding(fromIndex, toIndex, shotName, result);
   const apex = shotApex(from, landing, shotName, result);
+  const tuning = shotAnimationTuning(shotName, result);
   const midpoint = {
     x: `${(parseFloat(from.x) + landing.x) / 2}%`,
     y: `${apex.y}%`,
   };
-  const baseDuration = shotName === "smash" ? 310 : shotName === "lob" ? 620 : shotName === "dink" ? 430 : 500;
+  const baseDuration = tuning.duration;
   const duration = baseDuration * speed;
-  const scale = shotName === "lob" ? 1.34 : shotName === "smash" ? 0.82 : 1.12;
-  const spin = shotName === "drop" || shotName === "dink" ? " rotate(180deg)" : " rotate(360deg)";
+  const scale = tuning.apexScale;
+  const spin = ` rotate(${tuning.spin}deg)`;
+  const fromX = Number(from.x.replace("%", ""));
+  const fromY = Number(from.y.replace("%", ""));
+  const holdPoint = {
+    x: `${fromX + (landing.x - fromX) * 0.15}%`,
+    y: `${fromY + (landing.y - fromY) * 0.15}%`,
+  };
+  const latePoint = {
+    x: `${fromX + (landing.x - fromX) * 0.78}%`,
+    y: `${fromY + (landing.y - fromY) * 0.78 + tuning.lateLift}%`,
+  };
 
   el.ball.style.setProperty("--x", from.x);
   el.ball.style.setProperty("--y", from.y);
@@ -912,14 +946,20 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   el.ballShadow.style.setProperty("--y", from.y);
   el.ballShadow.style.setProperty("--scale", "1");
   showShotTrace(from, landing);
+  showSpeedLines(from, landing, shotName);
   el.ball.classList.add("in-flight", `shot-${shotName}`);
-  if (shotName === "smash") {
+  el.court.classList.add("rally-glow");
+  window.setTimeout(() => el.court.classList.remove("rally-glow"), 520);
+  if (shotName === "smash" || result === "winner") {
     el.court.classList.add("impact");
+  }
+  if (result === "fault" && shotName === "smash") {
+    rippleNet();
   }
 
   const shadowAnimation = el.ballShadow.animate([
     { left: from.x, top: from.y, transform: "translate(-50%, -18%) scale(1)", opacity: 0.66, offset: 0 },
-    { left: midpoint.x, top: `${Math.min(88, Math.max(12, landing.y + (from.team === 0 ? 10 : -10)))}%`, transform: "translate(-50%, -18%) scale(0.66)", opacity: 0.28, offset: 0.52 },
+    { left: midpoint.x, top: `${Math.min(88, Math.max(12, landing.y + (from.team === 0 ? 10 : -10)))}%`, transform: `translate(-50%, -18%) scale(${tuning.shadowScale})`, opacity: tuning.shadowOpacity, offset: 0.52 },
     { left: `${landing.x}%`, top: `${landing.y}%`, transform: "translate(-50%, -18%) scale(1.08)", opacity: 0.72, offset: 1 },
   ], {
     duration,
@@ -928,17 +968,21 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   });
 
   const animation = el.ball.animate([
-    { left: from.x, top: from.y, transform: "translate(-50%, -50%) scale(1) rotate(0deg)", offset: 0 },
-    { left: midpoint.x, top: midpoint.y, transform: `translate(-50%, -50%) scale(${scale})${spin}`, offset: 0.52 },
-    { left: `${landing.x}%`, top: `${landing.y}%`, transform: "translate(-50%, -50%) scale(1) rotate(540deg)", offset: 1 },
+    { left: from.x, top: from.y, transform: "translate(-50%, -50%) scale(1) rotate(0deg)", filter: "brightness(1)", offset: 0 },
+    { left: holdPoint.x, top: holdPoint.y, transform: `translate(-50%, -50%) scale(${tuning.windupScale}) rotate(${tuning.spin * 0.12}deg)`, filter: "brightness(1.08)", offset: 0.16 },
+    { left: midpoint.x, top: midpoint.y, transform: `translate(-50%, -50%) scale(${scale})${spin}`, filter: "brightness(1.22)", offset: tuning.apexOffset },
+    { left: latePoint.x, top: latePoint.y, transform: `translate(-50%, -50%) scale(${tuning.lateScale}) rotate(${tuning.spin * 1.2}deg)`, filter: "brightness(1.05)", offset: 0.84 },
+    { left: `${landing.x}%`, top: `${landing.y}%`, transform: `translate(-50%, -50%) scale(${tuning.landScale}) rotate(${tuning.spin * 1.45}deg)`, filter: "brightness(1)", offset: 1 },
   ], {
     duration,
-    easing: "cubic-bezier(.2,.75,.22,1)",
+    easing: tuning.easing,
     fill: "forwards",
   });
 
   return animation.finished.finally(() => {
-    showBounce(landing);
+    showBounce(landing, shotName, result);
+    showLandingLabel(landing, result === "winner" ? "clean" : result === "fault" ? "miss" : shotName);
+    flashRecover(toIndex);
     el.ball.style.setProperty("--x", `${landing.x}%`);
     el.ball.style.setProperty("--y", `${landing.y}%`);
     el.ballShadow.style.setProperty("--x", `${landing.x}%`);
@@ -949,6 +993,28 @@ function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
     animation.cancel();
     shadowAnimation.cancel();
   });
+}
+
+function shotAnimationTuning(shotName, result) {
+  const shotTuning = {
+    dink: { duration: 560, apexScale: 1.06, windupScale: 0.92, lateScale: 0.98, landScale: 1, spin: 210, lateLift: 1, apexOffset: 0.58, shadowScale: 0.82, shadowOpacity: 0.46, easing: "cubic-bezier(.33,.7,.26,1)" },
+    drop: { duration: 600, apexScale: 1.2, windupScale: 0.96, lateScale: 0.84, landScale: 0.95, spin: 260, lateLift: 4, apexOffset: 0.48, shadowScale: 0.58, shadowOpacity: 0.26, easing: "cubic-bezier(.2,.9,.24,1)" },
+    drive: { duration: 420, apexScale: 0.92, windupScale: 0.86, lateScale: 1.08, landScale: 1, spin: 620, lateLift: 0, apexOffset: 0.44, shadowScale: 0.9, shadowOpacity: 0.58, easing: "cubic-bezier(.12,.74,.18,1)" },
+    lob: { duration: 760, apexScale: 1.52, windupScale: 0.9, lateScale: 1.18, landScale: 1, spin: 420, lateLift: 8, apexOffset: 0.5, shadowScale: 0.42, shadowOpacity: 0.18, easing: "cubic-bezier(.18,.62,.3,1)" },
+    smash: { duration: 330, apexScale: 0.72, windupScale: 1.12, lateScale: 1.22, landScale: 0.86, spin: 820, lateLift: 0, apexOffset: 0.36, shadowScale: 1.05, shadowOpacity: 0.66, easing: "cubic-bezier(.04,.82,.13,1)" },
+  };
+  const tuning = { ...shotTuning[shotName] };
+  if (result === "fault") {
+    tuning.duration += 90;
+    tuning.landScale = 0.72;
+    tuning.easing = "cubic-bezier(.18,.64,.72,.82)";
+  }
+  if (result === "winner") {
+    tuning.duration = Math.max(280, tuning.duration - 70);
+    tuning.lateScale += 0.16;
+    tuning.shadowOpacity = 0.72;
+  }
+  return tuning;
 }
 
 function shotLanding(fromIndex, toIndex, shotName, result) {
@@ -1007,13 +1073,49 @@ function showShotTrace(from, landing) {
   el.shotTrace.classList.add("live");
 }
 
-function showBounce(landing) {
+function showSpeedLines(from, landing, shotName) {
+  if (shotName === "dink" || shotName === "drop") return;
+  const x1 = Number(from.x.replace("%", ""));
+  const y1 = Number(from.y.replace("%", ""));
+  const angle = Math.atan2(landing.y - y1, landing.x - x1);
+  el.speedLines.style.setProperty("--x", `${x1 + (landing.x - x1) * 0.54}%`);
+  el.speedLines.style.setProperty("--y", `${y1 + (landing.y - y1) * 0.54}%`);
+  el.speedLines.style.setProperty("--angle", `${angle}rad`);
+  el.speedLines.classList.remove("show");
+  void el.speedLines.offsetWidth;
+  el.speedLines.classList.add("show");
+  window.setTimeout(() => el.speedLines.classList.remove("show"), 420);
+}
+
+function showBounce(landing, shotName, result) {
   el.bounceMarker.style.setProperty("--x", `${landing.x}%`);
   el.bounceMarker.style.setProperty("--y", `${landing.y}%`);
+  el.bounceMarker.style.borderColor = result === "fault" ? "#d87363" : shotName === "lob" ? "#c8fffb" : "#d7ff3f";
   el.bounceMarker.classList.remove("show");
   void el.bounceMarker.offsetWidth;
   el.bounceMarker.classList.add("show");
+  el.ball.classList.remove("squash");
+  void el.ball.offsetWidth;
+  el.ball.classList.add("squash");
+  window.setTimeout(() => el.ball.classList.remove("squash"), 210);
   window.setTimeout(() => el.bounceMarker.classList.remove("show"), 620);
+}
+
+function showLandingLabel(landing, label) {
+  el.landingLabel.textContent = label;
+  el.landingLabel.style.setProperty("--x", `${landing.x}%`);
+  el.landingLabel.style.setProperty("--y", `${landing.y}%`);
+  el.landingLabel.classList.remove("show");
+  void el.landingLabel.offsetWidth;
+  el.landingLabel.classList.add("show");
+  window.setTimeout(() => el.landingLabel.classList.remove("show"), 700);
+}
+
+function rippleNet() {
+  el.net.classList.remove("ripple");
+  void el.net.offsetWidth;
+  el.net.classList.add("ripple");
+  window.setTimeout(() => el.net.classList.remove("ripple"), 360);
 }
 
 function pickTeammate(team) {
