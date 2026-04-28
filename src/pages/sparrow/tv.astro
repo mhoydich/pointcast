@@ -1,0 +1,653 @@
+---
+/**
+ * /sparrow/tv — Sparrow TV mode (Phase 1 scaffold).
+ *
+ * Plan: docs/plans/2026-04-28-sparrow-tv-mode.md
+ *
+ * 10-foot ambient broadcast surface for Sparrow's federation reader.
+ * Composes patterns from /sit (surface-detect + time-of-day wash) and
+ * /tv (slide rotation), but Sparrow-themed (blue-hour OKLCH, channel
+ * rosette, federation strip). Self-contained chrome — no SparrowLayout
+ * (HUD + footer eat too much screen at 10 ft).
+ *
+ * v0.1 scope:
+ *   · Slide rotation over the latest 18 blocks, 12 s per slide.
+ *   · Channel-tinted color wash that follows the active slide.
+ *   · Federation avatar strip pulled from sparrow:friends +
+ *     sparrow:profiles localStorage (server-rendered empty; client
+ *     hydrates on load).
+ *   · ←/→ to step manually for desktop preview.
+ *   · `data-surface` attribute set by feature-detect, mirroring the
+ *     /sit pattern (TV when w>=1920 + no touch OR UA matches).
+ *   · `?surface=tv` query override for cast / AirPlay edge cases.
+ *
+ * NOT in v0.1 (queued for Phase 1 follow-up + Phases 2-4):
+ *   · Real WS subscription to kind-20078 presence (today: localStorage only).
+ *   · Friends-saved slide injection (Phase 2 ships /sparrow/tv/friends).
+ *   · D-pad focus model + remote pairing (Phase 3).
+ *   · Sonic Postcard audio bed (Phase 4).
+ */
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST, CHANNELS } from '../../lib/channels';
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const slides = all.slice(0, 18).map((b) => ({
+  id: b.data.id,
+  title: b.data.title,
+  dek: b.data.dek ?? '',
+  channel: b.data.channel,
+  channelName: CHANNELS[b.data.channel]?.name ?? b.data.channel,
+  type: b.data.type,
+  mood: b.data.mood ?? '',
+  timestamp: b.data.timestamp.toISOString(),
+}));
+
+const channels = CHANNEL_LIST.map((c) => ({
+  code: c.code,
+  slug: c.slug,
+  name: c.name,
+}));
+
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    month: 'short',
+    day: 'numeric',
+  });
+---
+
+<!doctype html>
+<html lang="en" data-theme="blue-hour">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sparrow TV · PointCast</title>
+    <meta name="description" content="Sparrow's federation reader, on a wall. Ambient broadcast for big screens." />
+    <link rel="canonical" href="https://pointcast.xyz/sparrow/tv" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gloock&family=Inter+Tight:wght@400;500;600;700&family=Departure+Mono&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body class="sptv-body" data-surface="desktop">
+    <main class="sptv" data-channel-active="" aria-label="Sparrow TV">
+      <header class="sptv-head">
+        <span class="sptv-glyph" aria-hidden="true">✦</span>
+        <span class="sptv-name">Sparrow</span>
+        <span class="sptv-sub">tv · live</span>
+        <span class="sptv-clock" data-sptv-clock>—:—</span>
+      </header>
+
+      <div class="sptv-progress" aria-hidden="true">
+        <div class="sptv-progress__bar" data-sptv-progress></div>
+      </div>
+
+      <ol class="sptv-stage" data-sptv-stage>
+        {slides.map((s, i) => (
+          <li
+            class={`sptv-slide${i === 0 ? ' is-active' : ''}`}
+            data-slide-idx={i}
+            data-channel={s.channel}
+            style={`--ch: var(--ch-${s.channel.toLowerCase()});`}
+            aria-hidden={i !== 0 ? 'true' : 'false'}
+          >
+            <div class="sptv-slide__inner">
+              <div class="sptv-slide__chip">
+                <span class="sptv-slide__chip-dot" aria-hidden="true"></span>
+                CH · {s.channel} · {s.channelName.toUpperCase()}
+              </div>
+              <div class="sptv-slide__meta">
+                <span>№ {s.id}</span>
+                <span>·</span>
+                <span>{s.type}</span>
+                <span>·</span>
+                <time datetime={s.timestamp}>{fmtDate(s.timestamp)}</time>
+                {s.mood && (
+                  <>
+                    <span>·</span>
+                    <span class="sptv-slide__mood">mood {s.mood}</span>
+                  </>
+                )}
+              </div>
+              <h2 class="sptv-slide__title">{s.title}</h2>
+              {s.dek && <p class="sptv-slide__dek">{s.dek}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <aside class="sptv-rosette" aria-label="channels">
+        {channels.map((c, i) => (
+          <span class="sptv-rosette__cell" data-channel={c.code} style={`--ch: var(--ch-${c.code.toLowerCase()});`}>
+            <span class="sptv-rosette__num">{i + 1}</span>
+            <span class="sptv-rosette__code">{c.code}</span>
+          </span>
+        ))}
+      </aside>
+
+      <aside class="sptv-here" data-sptv-here aria-label="friends here now" hidden>
+        <span class="sptv-here__label">✦ here now</span>
+        <ul class="sptv-here__list" data-sptv-here-list></ul>
+      </aside>
+
+      <footer class="sptv-foot">
+        <span class="sptv-foot__brand">pointcast.xyz/sparrow</span>
+        <span class="sptv-foot__sep">·</span>
+        <span class="sptv-foot__hint">←/→ to step · 1-9 to lock channel</span>
+      </footer>
+    </main>
+
+    <script is:inline>
+      (function () {
+        'use strict';
+        var doc = document;
+        var body = doc.body;
+
+        // ─── Surface detect (mirror /sit) ────────────────────────────
+        // TV when:
+        //   ?surface=tv override, OR
+        //   (w>=1920 AND no coarse pointer / no touch), OR
+        //   UA matches tv | appletv | googletv | crkey | tizen | webos.
+        // Mobile: touch + w<768. Otherwise desktop.
+        try {
+          var qs = new URLSearchParams(location.search);
+          var override = qs.get('surface');
+          var w = window.innerWidth || doc.documentElement.clientWidth || 0;
+          var ua = (navigator.userAgent || '').toLowerCase();
+          var coarse = matchMedia('(pointer: coarse)').matches;
+          var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+          var tvUA = /\b(tv|appletv|googletv|crkey|tizen|webos|hbbtv|netcast)\b/.test(ua);
+          var isTV = override === 'tv' || tvUA || (w >= 1920 && !coarse && !touch);
+          var isMobile = override === 'mobile' || (touch && w < 768);
+          body.dataset.surface = isTV ? 'tv' : isMobile ? 'mobile' : 'desktop';
+        } catch (_) { /* fall through to desktop default */ }
+
+        // ─── Clock ──────────────────────────────────────────────────
+        var clockEl = doc.querySelector('[data-sptv-clock]');
+        function tickClock() {
+          if (!clockEl) return;
+          var d = new Date();
+          var s = d.toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles',
+          });
+          clockEl.textContent = s;
+        }
+        tickClock();
+        setInterval(tickClock, 30000);
+
+        // ─── Slide rotation ─────────────────────────────────────────
+        var stage = doc.querySelector('[data-sptv-stage]');
+        if (!stage) return;
+        var slides = Array.prototype.slice.call(stage.querySelectorAll('.sptv-slide'));
+        if (!slides.length) return;
+        var idx = 0;
+        var DWELL = 12000;       // 12 s per slide
+        var dwellStart = Date.now();
+        var progress = doc.querySelector('[data-sptv-progress]');
+        var mainEl = doc.querySelector('.sptv');
+        var locked = null;
+
+        function paintActive() {
+          for (var i = 0; i < slides.length; i++) {
+            if (i === idx) {
+              slides[i].classList.add('is-active');
+              slides[i].setAttribute('aria-hidden', 'false');
+            } else if (slides[i].classList.contains('is-active')) {
+              slides[i].classList.remove('is-active');
+              slides[i].setAttribute('aria-hidden', 'true');
+            }
+          }
+          var ch = slides[idx].getAttribute('data-channel') || '';
+          if (mainEl) mainEl.setAttribute('data-channel-active', ch);
+          dwellStart = Date.now();
+          if (progress) progress.style.width = '0%';
+        }
+
+        function step(dir) {
+          if (locked !== null) {
+            // Walk only within the locked channel pool.
+            var pool = poolForChannel(locked);
+            if (!pool.length) { locked = null; }
+            else {
+              var pos = pool.indexOf(idx);
+              var next = pool[((pos + dir) + pool.length) % pool.length];
+              idx = next;
+              paintActive();
+              return;
+            }
+          }
+          idx = ((idx + dir) + slides.length) % slides.length;
+          paintActive();
+        }
+
+        function poolForChannel(code) {
+          var pool = [];
+          for (var i = 0; i < slides.length; i++) {
+            if (slides[i].getAttribute('data-channel') === code) pool.push(i);
+          }
+          return pool;
+        }
+
+        function lockChannel(code) {
+          var pool = poolForChannel(code);
+          if (!pool.length) return;
+          locked = code;
+          if (pool.indexOf(idx) === -1) idx = pool[0];
+          paintActive();
+        }
+
+        // Auto-rotate
+        setInterval(function () { step(1); }, DWELL);
+
+        // Progress bar
+        setInterval(function () {
+          if (!progress) return;
+          var pct = Math.min(100, ((Date.now() - dwellStart) / DWELL) * 100);
+          progress.style.width = pct.toFixed(1) + '%';
+        }, 200);
+
+        // ─── Keyboard / D-pad ───────────────────────────────────────
+        doc.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowRight') { step(1); e.preventDefault(); return; }
+          if (e.key === 'ArrowLeft')  { step(-1); e.preventDefault(); return; }
+          if (e.key === 'Escape') { locked = null; return; }
+          var n = parseInt(e.key, 10);
+          if (!isNaN(n) && n >= 1 && n <= 9) {
+            var rosette = doc.querySelectorAll('.sptv-rosette__cell');
+            var cell = rosette[n - 1];
+            if (cell) {
+              var code = cell.getAttribute('data-channel');
+              if (code) lockChannel(code);
+            }
+          }
+        });
+
+        // ─── "Here now" — friends from localStorage (Phase 1) ───────
+        // Real-time WS subscription is the Phase 1 follow-up. v0.1
+        // hydrates from cached friends + profiles for a static strip
+        // so the layout reads correctly even pre-WS.
+        function hydrateHere() {
+          var here = doc.querySelector('[data-sptv-here]');
+          var list = doc.querySelector('[data-sptv-here-list]');
+          if (!here || !list) return;
+          var friends = [];
+          try {
+            var raw = JSON.parse(localStorage.getItem('sparrow:friends') || '[]');
+            if (Array.isArray(raw)) {
+              friends = raw.map(function (f) {
+                if (typeof f === 'string') return { pubkey: f.toLowerCase(), alias: '', muted: false };
+                if (f && typeof f === 'object' && typeof f.pubkey === 'string') {
+                  return { pubkey: f.pubkey.toLowerCase(), alias: f.alias || '', muted: !!f.muted };
+                }
+                return null;
+              }).filter(function (f) { return f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted; });
+            }
+          } catch (_) { /* empty */ }
+          var profiles = {};
+          try {
+            var pj = JSON.parse(localStorage.getItem('sparrow:profiles') || '{}');
+            if (pj && typeof pj === 'object' && !Array.isArray(pj)) profiles = pj;
+          } catch (_) { /* empty */ }
+
+          // v0.1 scaffold: TV mode defaults to NOT showing personal
+          // friends list (privacy on shared TVs). Opt-in via
+          // sparrow:tv-private-ok = "1".
+          var allow = false;
+          try { allow = localStorage.getItem('sparrow:tv-private-ok') === '1'; } catch (_) {}
+          if (!allow || !friends.length) { here.hidden = true; return; }
+
+          here.hidden = false;
+          list.innerHTML = '';
+          friends.slice(0, 8).forEach(function (f) {
+            var li = doc.createElement('li');
+            li.className = 'sptv-here__item';
+            var prof = profiles[f.pubkey] || {};
+            var pic = (typeof prof.picture === 'string' && /^https?:\/\//i.test(prof.picture)) ? prof.picture : '';
+            if (pic) {
+              li.innerHTML = '<img src="' + pic.replace(/[<>"']/g, '') +
+                '" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display=\'none\'">';
+            } else {
+              li.innerHTML = '<span class="sptv-here__placeholder" aria-hidden="true">✦</span>';
+            }
+            list.appendChild(li);
+          });
+        }
+        hydrateHere();
+        // Re-hydrate on storage events from other tabs (sparrow:friends edits).
+        window.addEventListener('storage', function (e) {
+          if (!e.key) return;
+          if (e.key === 'sparrow:friends' || e.key === 'sparrow:profiles' || e.key === 'sparrow:tv-private-ok') {
+            hydrateHere();
+          }
+        });
+      })();
+    </script>
+
+    <style is:global>
+      :root {
+        /* Sparrow palette tokens — same as SparrowLayout's blue-hour theme. */
+        --sp-ink: oklch(14% 0.03 260);
+        --sp-blue-hour: oklch(22% 0.05 260);
+        --sp-bone: oklch(95% 0.02 75);
+        --sp-ash: oklch(72% 0.02 260);
+        --sp-mute: oklch(54% 0.02 260);
+        --sp-rule: oklch(30% 0.03 255);
+        --sp-ember: oklch(74% 0.16 72);
+        --sp-moss: oklch(70% 0.13 156);
+        --sp-oxblood: oklch(48% 0.16 25);
+        --sp-lilac: oklch(72% 0.10 305);
+        /* Channel tokens (mirroring /lib/channels). */
+        --ch-fd: oklch(72% 0.16 240);
+        --ch-crt: oklch(68% 0.14 144);
+        --ch-spn: oklch(64% 0.18 28);
+        --ch-gf: oklch(74% 0.14 348);
+        --ch-gdn: oklch(70% 0.16 168);
+        --ch-esc: oklch(58% 0.18 285);
+        --ch-fct: oklch(78% 0.16 88);
+        --ch-vst: oklch(60% 0.04 260);
+        --ch-btl: oklch(56% 0.16 25);
+        /* TV scale (vmin so 1080p / 1440p / 4K all read). */
+        --tv-pad: 5vmin;
+        --tv-h1: 7.2vmin;
+        --tv-h2: 4vmin;
+        --tv-body: 2.6vmin;
+        --tv-mono: 1.6vmin;
+      }
+
+      .sptv-body {
+        margin: 0;
+        background: var(--sp-ink);
+        color: var(--sp-bone);
+        font-family: 'Inter Tight', system-ui, sans-serif;
+        overflow: hidden;
+      }
+
+      .sptv {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        padding: var(--tv-pad);
+        box-sizing: border-box;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--ch, var(--sp-blue-hour)) 22%, transparent) 0%, transparent 60%),
+          radial-gradient(circle at 80% 80%, color-mix(in oklch, var(--ch, var(--sp-blue-hour)) 12%, transparent) 0%, transparent 70%),
+          var(--sp-ink);
+        transition: background 1200ms ease;
+      }
+      .sptv[data-channel-active="FD"]  { --ch: var(--ch-fd); }
+      .sptv[data-channel-active="CRT"] { --ch: var(--ch-crt); }
+      .sptv[data-channel-active="SPN"] { --ch: var(--ch-spn); }
+      .sptv[data-channel-active="GF"]  { --ch: var(--ch-gf); }
+      .sptv[data-channel-active="GDN"] { --ch: var(--ch-gdn); }
+      .sptv[data-channel-active="ESC"] { --ch: var(--ch-esc); }
+      .sptv[data-channel-active="FCT"] { --ch: var(--ch-fct); }
+      .sptv[data-channel-active="VST"] { --ch: var(--ch-vst); }
+      .sptv[data-channel-active="BTL"] { --ch: var(--ch-btl); }
+
+      /* ─── Head row ─────────────────────────────────────────────── */
+      .sptv-head {
+        display: flex; align-items: baseline; gap: 1.6vmin;
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: var(--tv-mono);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-ash);
+      }
+      .sptv-glyph { font-family: 'Gloock', Georgia, serif; color: var(--sp-ember); font-size: calc(var(--tv-mono) * 1.4); }
+      .sptv-name  { font-weight: 700; color: var(--sp-bone); }
+      .sptv-sub   { color: var(--sp-mute); }
+      .sptv-clock { margin-left: auto; color: var(--sp-bone); font-variant-numeric: tabular-nums; }
+
+      /* ─── Progress bar ─────────────────────────────────────────── */
+      .sptv-progress {
+        position: absolute;
+        top: calc(var(--tv-pad) + 4vmin);
+        left: var(--tv-pad);
+        right: var(--tv-pad);
+        height: 0.3vmin;
+        background: color-mix(in oklch, var(--sp-rule) 70%, transparent);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .sptv-progress__bar {
+        height: 100%;
+        width: 0%;
+        background: var(--ch, var(--sp-ember));
+        transition: width 200ms linear;
+      }
+
+      /* ─── Slide stage ──────────────────────────────────────────── */
+      .sptv-stage {
+        list-style: none;
+        padding: 0;
+        margin: 7vmin 0 0;
+        position: absolute;
+        top: calc(var(--tv-pad) + 6vmin);
+        left: var(--tv-pad);
+        right: var(--tv-pad);
+        bottom: calc(var(--tv-pad) + 14vmin);
+      }
+      .sptv-slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transform: translateY(2vmin);
+        transition: opacity 600ms ease, transform 800ms ease;
+        pointer-events: none;
+      }
+      .sptv-slide.is-active {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .sptv-slide__inner {
+        max-width: 92vw;
+      }
+      .sptv-slide__chip {
+        display: inline-flex; align-items: center; gap: 0.8vmin;
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: var(--tv-mono);
+        letter-spacing: 0.22em;
+        padding: 0.6vmin 1.2vmin;
+        border: 1px solid color-mix(in oklch, var(--ch, var(--sp-rule)) 60%, transparent);
+        border-radius: 999px;
+        background: color-mix(in oklch, var(--ch, var(--sp-rule)) 14%, transparent);
+        color: var(--ch, var(--sp-bone));
+      }
+      .sptv-slide__chip-dot {
+        width: 0.8vmin; height: 0.8vmin; border-radius: 999px;
+        background: var(--ch, var(--sp-ember));
+        box-shadow: 0 0 1.5vmin currentColor;
+      }
+      .sptv-slide__meta {
+        margin-top: 1.2vmin;
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: var(--tv-mono);
+        letter-spacing: 0.14em;
+        color: var(--sp-mute);
+        display: inline-flex; align-items: baseline; gap: 0.8vmin;
+        flex-wrap: wrap;
+      }
+      .sptv-slide__mood { color: var(--sp-ember); }
+      .sptv-slide__title {
+        margin: 1.6vmin 0 0;
+        font-family: 'Gloock', Georgia, serif;
+        font-weight: 400;
+        font-size: var(--tv-h1);
+        line-height: 1.04;
+        letter-spacing: -0.018em;
+        color: var(--sp-bone);
+        max-width: 82vw;
+      }
+      .sptv-slide__dek {
+        margin: 1.6vmin 0 0;
+        font-family: 'Inter Tight', system-ui, sans-serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: var(--tv-h2);
+        line-height: 1.32;
+        color: color-mix(in oklch, var(--sp-bone) 76%, var(--sp-ash));
+        max-width: 76vw;
+      }
+
+      /* ─── Rosette (channel preset row) ─────────────────────────── */
+      .sptv-rosette {
+        position: absolute;
+        bottom: var(--tv-pad);
+        left: var(--tv-pad);
+        right: var(--tv-pad);
+        display: grid;
+        grid-template-columns: repeat(9, 1fr);
+        gap: 1.4vmin;
+      }
+      .sptv-rosette__cell {
+        display: flex; align-items: center; justify-content: center;
+        gap: 1vmin;
+        padding: 1vmin 1.4vmin;
+        border: 1px solid color-mix(in oklch, var(--ch, var(--sp-rule)) 50%, var(--sp-rule));
+        border-radius: 0.6vmin;
+        background: color-mix(in oklch, var(--ch, var(--sp-blue-hour)) 8%, transparent);
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: var(--tv-mono);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: color-mix(in oklch, var(--sp-bone) 80%, var(--ch, var(--sp-mute)));
+      }
+      .sptv-rosette__num { color: var(--ch, var(--sp-ember)); font-weight: 700; }
+      .sptv-rosette__code { color: var(--sp-bone); font-weight: 500; }
+      .sptv[data-channel-active] .sptv-rosette__cell[data-channel] { opacity: 0.6; }
+      .sptv-rosette__cell:where([data-channel]) {
+        transition: opacity 600ms ease, background 800ms ease;
+      }
+      .sptv[data-channel-active="FD"]  .sptv-rosette__cell[data-channel="FD"],
+      .sptv[data-channel-active="CRT"] .sptv-rosette__cell[data-channel="CRT"],
+      .sptv[data-channel-active="SPN"] .sptv-rosette__cell[data-channel="SPN"],
+      .sptv[data-channel-active="GF"]  .sptv-rosette__cell[data-channel="GF"],
+      .sptv[data-channel-active="GDN"] .sptv-rosette__cell[data-channel="GDN"],
+      .sptv[data-channel-active="ESC"] .sptv-rosette__cell[data-channel="ESC"],
+      .sptv[data-channel-active="FCT"] .sptv-rosette__cell[data-channel="FCT"],
+      .sptv[data-channel-active="VST"] .sptv-rosette__cell[data-channel="VST"],
+      .sptv[data-channel-active="BTL"] .sptv-rosette__cell[data-channel="BTL"] {
+        opacity: 1;
+        background: color-mix(in oklch, var(--ch) 22%, transparent);
+        box-shadow: 0 0 2.4vmin color-mix(in oklch, var(--ch) 40%, transparent);
+      }
+
+      /* ─── Here now (federation strip) ──────────────────────────── */
+      .sptv-here {
+        position: absolute;
+        top: var(--tv-pad);
+        right: var(--tv-pad);
+        display: inline-flex; align-items: center; gap: 1.2vmin;
+        padding: 0.8vmin 1.4vmin;
+        border: 1px solid color-mix(in oklch, var(--sp-moss) 40%, var(--sp-rule));
+        border-radius: 999px;
+        background: color-mix(in oklch, var(--sp-blue-hour) 92%, var(--sp-moss));
+      }
+      .sptv-here[hidden] { display: none; }
+      .sptv-here__label {
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: var(--tv-mono);
+        letter-spacing: 0.18em;
+        color: var(--sp-moss);
+      }
+      .sptv-here__list {
+        display: inline-flex; gap: 0.5vmin; align-items: center;
+        list-style: none; padding: 0; margin: 0;
+      }
+      .sptv-here__item {
+        width: 3vmin; height: 3vmin;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid color-mix(in oklch, var(--sp-moss) 30%, var(--sp-rule));
+        background: var(--sp-ink);
+      }
+      .sptv-here__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .sptv-here__placeholder {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 100%; height: 100%;
+        color: var(--sp-moss); font-size: 1.4vmin;
+      }
+
+      /* ─── Foot ─────────────────────────────────────────────────── */
+      .sptv-foot {
+        position: absolute;
+        left: var(--tv-pad);
+        right: var(--tv-pad);
+        bottom: calc(var(--tv-pad) - 0.4vmin);
+        display: flex; align-items: baseline; gap: 1vmin;
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: calc(var(--tv-mono) * 0.85);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-mute);
+        opacity: 0.6;
+      }
+      .sptv-foot__sep { color: var(--sp-rule); }
+
+      /* ─── Surface variants ─────────────────────────────────────── */
+      /* Desktop preview: smaller, padded, centered. */
+      .sptv-body[data-surface="desktop"] {
+        background: var(--sp-ink);
+      }
+      .sptv-body[data-surface="desktop"] .sptv {
+        max-width: 1280px;
+        max-height: 720px;
+        margin: 4vh auto;
+        height: 80vh;
+        border: 1px solid var(--sp-rule);
+        border-radius: 0.6vmin;
+        --tv-h1: 5.4vmin;
+        --tv-h2: 3.2vmin;
+        --tv-body: 2.4vmin;
+        --tv-mono: 1.4vmin;
+      }
+      .sptv-body[data-surface="desktop"]::after {
+        content: 'Sparrow TV · best on a 1920+ landscape display · cast or AirPlay from this tab';
+        display: block;
+        position: fixed;
+        bottom: 1vh;
+        left: 0; right: 0;
+        text-align: center;
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--sp-mute);
+      }
+
+      /* Mobile: stack readable, no rosette. */
+      .sptv-body[data-surface="mobile"] .sptv {
+        --tv-h1: 9vmin;
+        --tv-h2: 5vmin;
+        --tv-body: 3.8vmin;
+        --tv-mono: 2.6vmin;
+      }
+      .sptv-body[data-surface="mobile"] .sptv-rosette {
+        display: none;
+      }
+
+      /* TV: maximize. */
+      .sptv-body[data-surface="tv"] .sptv {
+        height: 100vh;
+        max-height: none;
+        border: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .sptv-slide,
+        .sptv-progress__bar,
+        .sptv-rosette__cell {
+          transition: none !important;
+        }
+      }
+    </style>
+  </body>
+</html>
