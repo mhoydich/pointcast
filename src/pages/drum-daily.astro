@@ -1,0 +1,528 @@
+---
+/**
+ * /drum-daily — pattern of the day · sprint 6/9
+ *
+ * Every day at 00:00 UTC the seed rotates and a fresh 16-step pattern
+ * unlocks across 4 instruments — kick, snare, hat, bell. The pattern
+ * is fully deterministic from the date string YYYY-MM-DD, so every
+ * visitor anywhere in the world hears the same beat.
+ *
+ * Click play, the room joins in. Click any cell to deviate (your
+ * deviation is local-only). Reset goes back to the canonical day.
+ *
+ * Aesthetic: paper calendar tear-off pad. Big date number, sequencer
+ * grid styled as a daily strip, "TODAY'S BEAT" rubber stamp.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-daily — beat of the day';
+const description =
+  'A new 16-step beat every day, deterministic from the date so the whole world hears the same one. Kick, snare, hat, bell. Click play. The room joins in.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-daily',
+  name: 'PointCast Drum · Daily',
+  url: 'https://pointcast.xyz/drum-daily',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="dy" id="dy-main">
+    <DrumNav current="daily" />
+
+    <header class="dy__head">
+      <p class="dy__kicker">DRUM HUB · DAILY · DETERMINISTIC FROM TODAY'S DATE</p>
+      <h1 class="dy__title"><em>One beat a day, same one for everyone.</em></h1>
+      <p class="dy__dek">
+        Every 24 hours at 00:00 UTC the seed rotates. The new pattern unlocks across 4 instruments. Mexico City and Helsinki and El Segundo all hear the same beat at the same step. Tomorrow's beat is already determined; you just can't hear it yet.
+      </p>
+    </header>
+
+    <section class="dy__stage" aria-label="Today's beat">
+      <div class="dy__pad">
+        <div class="dy__pad-tear" aria-hidden="true"></div>
+        <div class="dy__pad-stamp">TODAY'S BEAT</div>
+        <div class="dy__pad-date">
+          <p class="dy__pad-day mono" id="dy-day">—</p>
+          <p class="dy__pad-num" id="dy-date">—</p>
+          <p class="dy__pad-month mono" id="dy-month">—</p>
+          <p class="dy__pad-bpm mono" id="dy-bpm">— BPM</p>
+        </div>
+        <p class="dy__pad-seed mono" id="dy-seed">seed: —</p>
+      </div>
+
+      <div class="dy__board">
+        <div class="dy__transport">
+          <button type="button" class="dy__btn dy__btn--play" id="dy-play">▶ play</button>
+          <button type="button" class="dy__btn" id="dy-stop">■ stop</button>
+          <button type="button" class="dy__btn dy__btn--ghost" id="dy-reset">↺ reset to canon</button>
+          <span class="dy__step" id="dy-step">step —</span>
+        </div>
+        <div class="dy__grid" id="dy-grid"></div>
+        <p class="dy__hint mono">click any cell to deviate locally · reset returns to today's canon</p>
+      </div>
+    </section>
+
+    <footer class="dy__foot">
+      <p>
+        Today's pattern is derived from <code>sha256(YYYY-MM-DD)</code> with each
+        instrument-track using a different byte slice. BPM is also seeded (88-128).
+        Tomorrow's beat is already determined; come back at 00:00 UTC.
+      </p>
+      <p class="dy__credit mono">v0.1 · 2026-04-27 · Mike Hoydich + Claude Code · El Segundo · drum sprint 6/9</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // Tracks
+    const TRACKS = [
+      { id: 'kick',  label: 'KICK',  color: '#ff5c23' },
+      { id: 'snare', label: 'SNARE', color: '#ffd400' },
+      { id: 'hat',   label: 'HAT',   color: '#5fbafd' },
+      { id: 'bell',  label: 'BELL',  color: '#fff7c2' },
+    ];
+    const STEPS = 16;
+
+    // Crude deterministic hash → bytes from a string
+    async function bytes(str) {
+      const enc = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', enc);
+      return new Uint8Array(hash);
+    }
+
+    function todayKey() {
+      // Use UTC YYYY-MM-DD as the canonical seed
+      const d = new Date();
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const dy = String(d.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${dy}`;
+    }
+
+    function patternFromBytes(b, offset, density) {
+      // 16 steps, each step on with prob `density`
+      const out = [];
+      for (let i = 0; i < STEPS; i++) {
+        const v = b[(offset + i) % b.length] / 255;
+        out.push(v < density ? 1 : 0);
+      }
+      return out;
+    }
+
+    let canonical = TRACKS.map(() => Array(STEPS).fill(0));
+    let pattern = TRACKS.map(() => Array(STEPS).fill(0));
+    let bpm = 100;
+    let stepIndex = 0;
+    let playing = false;
+    let nextTickAt = 0;
+    let timer = null;
+    let ctx = null;
+
+    const grid = document.getElementById('dy-grid');
+    const stepLabel = document.getElementById('dy-step');
+    const dyBpm = document.getElementById('dy-bpm');
+    const dySeed = document.getElementById('dy-seed');
+    const dyDay = document.getElementById('dy-day');
+    const dyDate = document.getElementById('dy-date');
+    const dyMonth = document.getElementById('dy-month');
+
+    async function init() {
+      const key = todayKey();
+      const b = await bytes(key);
+      // BPM seeded from first 2 bytes → 88..128
+      const seedBpm = ((b[0] << 8) | b[1]) % 41 + 88;
+      bpm = seedBpm;
+      dyBpm.textContent = `${bpm} BPM`;
+      dySeed.textContent = `seed: ${key} · sha256[0..3] ${[b[0],b[1],b[2],b[3]].map((v)=>v.toString(16).padStart(2,'0')).join('')}`;
+
+      const d = new Date();
+      const dayName = ['SUN','MON','TUE','WED','THU','FRI','SAT'][d.getUTCDay()];
+      const monName = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getUTCMonth()];
+      dyDay.textContent = dayName;
+      dyDate.textContent = String(d.getUTCDate());
+      dyMonth.textContent = `${monName} ${d.getUTCFullYear()}`;
+
+      // 4 tracks with different densities and offsets
+      canonical[0] = patternFromBytes(b, 4,  0.32); // kick: sparse
+      canonical[1] = patternFromBytes(b, 12, 0.22); // snare: backbeat-ish
+      canonical[2] = patternFromBytes(b, 20, 0.55); // hat: busy
+      canonical[3] = patternFromBytes(b, 28, 0.18); // bell: rare
+
+      // Force a downbeat on the kick if all empty
+      if (!canonical[0].some(Boolean)) { canonical[0][0] = 1; canonical[0][8] = 1; }
+      // Snare on 5 + 13 if mostly empty
+      if (canonical[1].filter(Boolean).length < 2) { canonical[1][4] = 1; canonical[1][12] = 1; }
+
+      pattern = canonical.map((t) => t.slice());
+      renderGrid();
+    }
+
+    function renderGrid() {
+      grid.innerHTML = '';
+      TRACKS.forEach((track, ti) => {
+        const row = document.createElement('div');
+        row.className = 'dy__row';
+        row.dataset.track = track.id;
+        row.innerHTML = `<span class="dy__row-label mono" style="color:${track.color}">${track.label}</span>`;
+        for (let s = 0; s < STEPS; s++) {
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          cell.className = 'dy__cell' + (pattern[ti][s] ? ' dy__cell--on' : '') + (s % 4 === 0 ? ' dy__cell--bar' : '');
+          cell.dataset.track = String(ti);
+          cell.dataset.step = String(s);
+          cell.style.setProperty('--cell-color', track.color);
+          cell.addEventListener('click', () => {
+            pattern[ti][s] = pattern[ti][s] ? 0 : 1;
+            cell.classList.toggle('dy__cell--on');
+          });
+          row.appendChild(cell);
+        }
+        grid.appendChild(row);
+      });
+    }
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+    }
+
+    function playKick(t) {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      const g = ctx.createGain();
+      o.frequency.setValueAtTime(140, t);
+      o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.25);
+    }
+    function playSnare(t) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1500;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      n.connect(f); f.connect(g); g.connect(ctx.destination); n.start(t);
+    }
+    function playHat(t) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.18, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      n.connect(f); f.connect(g); g.connect(ctx.destination); n.start(t);
+    }
+    function playBell(t) {
+      [880, 880 * 2.756, 880 * 5.404].forEach((hz, i) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
+        const g = ctx.createGain();
+        const peak = [0.18, 0.07, 0.03][i];
+        const dec = [1.6, 1.0, 0.6][i];
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+        o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + dec + 0.05);
+      });
+    }
+    const PLAYERS = [playKick, playSnare, playHat, playBell];
+
+    function tick() {
+      if (!playing) return;
+      const stepDur = 60 / bpm / 4; // 16ths
+      const now = ctx.currentTime;
+      const lookAhead = 0.1;
+      while (nextTickAt < now + lookAhead) {
+        for (let t = 0; t < TRACKS.length; t++) {
+          if (pattern[t][stepIndex]) {
+            try { PLAYERS[t](nextTickAt); } catch {}
+          }
+        }
+        // Visual + broadcast on this step
+        const idx = stepIndex;
+        setTimeout(() => {
+          stepLabel.textContent = `step ${idx + 1}`;
+          document.querySelectorAll('.dy__cell--col').forEach((c) => c.classList.remove('dy__cell--col'));
+          document.querySelectorAll(`.dy__cell[data-step="${idx}"]`).forEach((c) => c.classList.add('dy__cell--col'));
+          // Broadcast on each downbeat (every 4 steps) so we don't spam
+          if (idx % 4 === 0) {
+            try {
+              fetch('/api/sounds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'daily', sessionId: getSession(), step: idx, bpm }),
+              });
+            } catch {}
+          }
+        }, Math.max(0, (nextTickAt - now) * 1000));
+        nextTickAt += stepDur;
+        stepIndex = (stepIndex + 1) % STEPS;
+      }
+      timer = setTimeout(tick, 25);
+    }
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'dy-' + Math.random().toString(36).slice(2, 8); }
+    }
+
+    document.getElementById('dy-play').addEventListener('click', () => {
+      ensureCtx();
+      if (playing) return;
+      playing = true;
+      stepIndex = 0;
+      nextTickAt = ctx.currentTime + 0.05;
+      tick();
+    });
+    document.getElementById('dy-stop').addEventListener('click', () => {
+      playing = false;
+      if (timer) { clearTimeout(timer); timer = null; }
+      document.querySelectorAll('.dy__cell--col').forEach((c) => c.classList.remove('dy__cell--col'));
+      stepLabel.textContent = 'step —';
+    });
+    document.getElementById('dy-reset').addEventListener('click', () => {
+      pattern = canonical.map((t) => t.slice());
+      renderGrid();
+    });
+
+    init().catch((e) => {
+      console.warn('drum-daily init failed', e);
+      // Best-effort fallback: empty pattern
+      renderGrid();
+    });
+  })();
+</script>
+
+<style>
+  .dy {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      repeating-linear-gradient(0deg, rgba(184, 67, 26, 0.04) 0 22px, transparent 22px 24px),
+      #fff7e3;
+    color: #12110e;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .dy__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .dy__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .dy__title {
+    margin: 0 0 8px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.4vw, 50px);
+    line-height: 1.1;
+  }
+  .dy__title em { font-style: italic; }
+  .dy__dek {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 64ch;
+    color: #5f5e5a;
+  }
+
+  .dy__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 800px) { .dy__stage { grid-template-columns: 1fr; } }
+
+  /* Calendar pad */
+  .dy__pad {
+    position: relative;
+    background: #fffaf0;
+    border: 2px solid #12110e;
+    box-shadow: 6px 6px 0 0 #12110e;
+    padding: 18px 14px;
+    text-align: center;
+  }
+  .dy__pad-tear {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 14px;
+    background:
+      linear-gradient(180deg, #b8431a 0 6px, transparent 6px),
+      repeating-linear-gradient(90deg, transparent 0 10px, #fffaf0 10px 12px);
+    border-bottom: 1px dashed #5f5e5a;
+  }
+  .dy__pad-stamp {
+    position: absolute;
+    top: 22px; right: -10px;
+    transform: rotate(8deg);
+    background: transparent;
+    border: 2px solid #b8431a;
+    color: #b8431a;
+    padding: 4px 10px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .dy__pad-date {
+    margin-top: 18px;
+  }
+  .dy__pad-day {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0.32em;
+    color: #b8431a;
+  }
+  .dy__pad-num {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 88px;
+    line-height: 1;
+    color: #12110e;
+  }
+  .dy__pad-month {
+    margin: 6px 0 0;
+    font-size: 12px;
+    letter-spacing: 0.28em;
+    color: #5f5e5a;
+  }
+  .dy__pad-bpm {
+    margin: 12px 0 0;
+    padding: 4px 8px;
+    background: #ffd400;
+    border: 1px solid #12110e;
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+  }
+  .dy__pad-seed {
+    margin: 12px 0 0;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #5f5e5a;
+    word-break: break-all;
+  }
+
+  .dy__board {
+    background: #fff;
+    border: 2px solid #12110e;
+    box-shadow: 6px 6px 0 0 #12110e;
+    padding: 14px;
+  }
+  .dy__transport {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .dy__btn {
+    padding: 6px 14px;
+    background: #ffd400;
+    color: #12110e;
+    border: 1.5px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+    cursor: pointer;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .dy__btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 #12110e; }
+  .dy__btn--ghost { background: #fff; color: #5f5e5a; }
+  .dy__btn--play  { background: #3b6e3b; color: #fff; }
+  .dy__step {
+    margin-left: auto;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #5f5e5a;
+  }
+
+  .dy__grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .dy__row {
+    display: grid;
+    grid-template-columns: 60px repeat(16, 1fr);
+    gap: 3px;
+    align-items: center;
+  }
+  .dy__row-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .dy__cell {
+    aspect-ratio: 1;
+    background: #fffaf0;
+    border: 1px solid #12110e;
+    cursor: pointer;
+    padding: 0;
+    transition: background 80ms;
+  }
+  .dy__cell--bar { border-left: 2px solid #12110e; }
+  .dy__cell:hover { background: #f5f4f0; }
+  .dy__cell--on {
+    background: var(--cell-color, #ffd400);
+    box-shadow: 1px 1px 0 0 #12110e inset;
+  }
+  .dy__cell--col {
+    outline: 2px solid #b8431a;
+    outline-offset: 1px;
+  }
+
+  .dy__hint {
+    margin: 12px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #5f5e5a;
+  }
+
+  .dy__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #12110e;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+  .dy__foot code { background: #f5f4f0; padding: 1px 5px; font-family: 'JetBrains Mono Variable', monospace; }
+  .dy__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+</style>
