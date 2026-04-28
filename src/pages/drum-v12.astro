@@ -1,0 +1,685 @@
+---
+/**
+ * /drum-v12 — The Pipe Organ · sprint 1/4 of Mike's "next set of drum apps"
+ * 2026-04-28 PT.
+ *
+ * Sixteen keys (two octaves: C4..D5#) into a Web Audio organ voice —
+ * sine fundamental + harmonic stack (×1, ×2, ×3, ×4) with slight
+ * detune per partial. Three stops change the timbre:
+ *
+ *   Diapason 8' · the church-y default (full harmonic stack)
+ *   Flute 8'    · soft, low harmonics rolled off
+ *   Principal 4' · brighter, harmonics pushed up an octave
+ *
+ * Plus a Pedal toggle that adds a sustained tonic drone two octaves
+ * below the lowest pressed key. The whole organ goes through a large
+ * convolver-reverb (cathedral, 4.5s decay).
+ *
+ * Multiplayer: each note start broadcasts type=organ to /api/sounds.
+ *
+ * Aesthetic: gothic stone cathedral. Stained-glass roundel above the
+ * keyboard. Tall brass-tipped pipes. Wood-paneled console. Candlelight
+ * glow. Quiet on entry, big on press.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v12 — the Pipe Organ';
+const description =
+  'Sixteen keys, three stops, a pedal point, and a cathedral. Hold a key — the note doesn\'t end. Multiplayer organ on PointCast.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-v12',
+  name: 'PointCast Drum · v12 · Pipe Organ',
+  url: 'https://pointcast.xyz/drum-v12',
+  description,
+};
+
+// Two octaves, C4..D5# (16 keys with 7 black sprinkled).
+// We render them as a flat row so every visitor can map the QWERTY row to keys.
+const KEYS = [
+  { id: 'k01', note: 'C4',  hz: 261.63, kbd: '1', accidental: false },
+  { id: 'k02', note: 'C#4', hz: 277.18, kbd: 'q', accidental: true  },
+  { id: 'k03', note: 'D4',  hz: 293.66, kbd: '2', accidental: false },
+  { id: 'k04', note: 'D#4', hz: 311.13, kbd: 'w', accidental: true  },
+  { id: 'k05', note: 'E4',  hz: 329.63, kbd: '3', accidental: false },
+  { id: 'k06', note: 'F4',  hz: 349.23, kbd: '4', accidental: false },
+  { id: 'k07', note: 'F#4', hz: 369.99, kbd: 'r', accidental: true  },
+  { id: 'k08', note: 'G4',  hz: 392.00, kbd: '5', accidental: false },
+  { id: 'k09', note: 'G#4', hz: 415.30, kbd: 't', accidental: true  },
+  { id: 'k10', note: 'A4',  hz: 440.00, kbd: '6', accidental: false },
+  { id: 'k11', note: 'A#4', hz: 466.16, kbd: 'y', accidental: true  },
+  { id: 'k12', note: 'B4',  hz: 493.88, kbd: '7', accidental: false },
+  { id: 'k13', note: 'C5',  hz: 523.25, kbd: '8', accidental: false },
+  { id: 'k14', note: 'C#5', hz: 554.37, kbd: 'i', accidental: true  },
+  { id: 'k15', note: 'D5',  hz: 587.33, kbd: '9', accidental: false },
+  { id: 'k16', note: 'D#5', hz: 622.25, kbd: 'o', accidental: true  },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="og" id="og-main">
+    <DrumNav current="v12" />
+
+    <header class="og__head">
+      <p class="og__kicker">DRUM HUB · V12 · PIPE ORGAN · CATHEDRAL · MULTIPLAYER</p>
+      <h1 class="og__title"><em>The organ doesn't fade.</em></h1>
+      <p class="og__dek">
+        Sixteen keys. Three stops. A pedal point. The note keeps going as long as you keep holding. Tap to start; release to stop. Press the pedal and a tonic drone shows up underneath whatever you're playing.
+      </p>
+    </header>
+
+    <section class="og__hall">
+      <div class="og__rose" aria-hidden="true">
+        <svg viewBox="0 0 240 240">
+          <defs>
+            <radialGradient id="og-rose-grad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"  stop-color="#ffd400" />
+              <stop offset="40%" stop-color="#ff8a4a" />
+              <stop offset="80%" stop-color="#a83b2a" />
+              <stop offset="100%" stop-color="#2c1d05" />
+            </radialGradient>
+            <radialGradient id="og-rose-blue" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"  stop-color="#94d4ff" />
+              <stop offset="60%" stop-color="#185fa5" />
+              <stop offset="100%" stop-color="#0c1d3a" />
+            </radialGradient>
+          </defs>
+          <circle cx="120" cy="120" r="116" fill="#0c0820" stroke="#5a3a1a" stroke-width="6" />
+          <circle cx="120" cy="120" r="100" fill="url(#og-rose-blue)" />
+          {Array.from({ length: 12 }).map((_, i) => {
+            const a = (i / 12) * Math.PI * 2;
+            const x1 = 120 + Math.cos(a) * 28;
+            const y1 = 120 + Math.sin(a) * 28;
+            const x2 = 120 + Math.cos(a) * 96;
+            const y2 = 120 + Math.sin(a) * 96;
+            return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2c1d05" stroke-width="3" />;
+          })}
+          {Array.from({ length: 12 }).map((_, i) => {
+            const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+            const cx = 120 + Math.cos(a) * 64;
+            const cy = 120 + Math.sin(a) * 64;
+            return (
+              <ellipse
+                cx={cx} cy={cy}
+                rx="14" ry="22"
+                fill={i % 2 === 0 ? 'url(#og-rose-grad)' : '#fff7c2'}
+                stroke="#2c1d05" stroke-width="1.2"
+                transform={`rotate(${(a * 180) / Math.PI + 90} ${cx} ${cy})`}
+                opacity="0.85"
+              />
+            );
+          })}
+          <circle cx="120" cy="120" r="20" fill="url(#og-rose-grad)" stroke="#2c1d05" stroke-width="2" />
+          <circle cx="120" cy="120" r="6"  fill="#fffaf0" />
+        </svg>
+      </div>
+
+      <div class="og__pipes" aria-hidden="true" id="og-pipes">
+        {Array.from({ length: 21 }).map((_, i) => {
+          const center = 10;
+          const off = Math.abs(i - center);
+          const h = 100 + (10 - off) * 18;
+          return (
+            <span
+              class={`og__pipe og__pipe--${i}`}
+              style={`height: ${h}%;`}
+            ></span>
+          );
+        })}
+      </div>
+
+      <div class="og__console">
+        <div class="og__stops" role="radiogroup" aria-label="Stops">
+          <button type="button" class="og__stop og__stop--on" data-stop="diapason">
+            <span class="og__stop-knob"></span>
+            <span class="og__stop-label mono">Diapason 8'</span>
+          </button>
+          <button type="button" class="og__stop" data-stop="flute">
+            <span class="og__stop-knob"></span>
+            <span class="og__stop-label mono">Flute 8'</span>
+          </button>
+          <button type="button" class="og__stop" data-stop="principal">
+            <span class="og__stop-knob"></span>
+            <span class="og__stop-label mono">Principal 4'</span>
+          </button>
+          <button type="button" class="og__stop og__stop--toggle" data-stop="pedal" id="og-pedal">
+            <span class="og__stop-knob"></span>
+            <span class="og__stop-label mono">Pedal · off</span>
+          </button>
+          <div class="og__panel">
+            <span class="og__panel-label mono">reverb</span>
+            <input id="og-reverb" type="range" min="0" max="100" value="60" />
+          </div>
+          <div class="og__panel">
+            <span class="og__panel-label mono">tremulant</span>
+            <input id="og-trem" type="range" min="0" max="100" value="0" />
+          </div>
+        </div>
+
+        <div class="og__keyboard" id="og-keyboard">
+          {KEYS.map((k, i) => (
+            <button
+              type="button"
+              class={`og__key og__key--${k.accidental ? 'black' : 'white'} og__key--idx-${i}`}
+              data-id={k.id}
+              data-note={k.note}
+              data-hz={k.hz}
+              aria-label={`Key ${k.note} (${k.kbd})`}
+            >
+              <span class="og__key-note mono">{k.note}</span>
+              <span class="og__key-kbd mono">{k.kbd}</span>
+            </button>
+          ))}
+        </div>
+
+        <p class="og__broadcast mono" id="og-broadcast">— ready —</p>
+      </div>
+    </section>
+
+    <footer class="og__foot">
+      <p>
+        Each held key broadcasts <code>type=organ</code> to <code>/api/sounds</code> on
+        press. Stops change the harmonic recipe; the pedal point adds a tonic drone two
+        octaves below; reverb is a generated cathedral impulse (4.5s decay).
+      </p>
+      <p class="og__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 1/4</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null;
+    let masterGain = null;
+    let convolver = null;
+    let dryGain = null;
+    let wetGain = null;
+    let lpf = null;
+    let trem = null;
+    let tremGain = null;
+
+    let currentStop = 'diapason';
+    let pedalOn = false;
+    let pedalNodes = null;
+    let reverbWet = 0.6;
+    let tremDepth = 0;
+
+    const active = new Map(); // id -> {oscNodes, gainNode}
+
+    function makeReverbBuffer(seconds, decay) {
+      const rate = ctx.sampleRate;
+      const len = Math.floor(rate * seconds);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+      return buf;
+    }
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+
+      lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 6000;
+      lpf.Q.value = 0.7;
+
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.5;
+
+      convolver = ctx.createConvolver();
+      convolver.buffer = makeReverbBuffer(4.5, 2.5);
+      dryGain = ctx.createGain(); dryGain.gain.value = 1 - reverbWet * 0.5;
+      wetGain = ctx.createGain(); wetGain.gain.value = reverbWet;
+
+      lpf.connect(masterGain);
+      masterGain.connect(dryGain);
+      masterGain.connect(convolver);
+      convolver.connect(wetGain);
+      dryGain.connect(ctx.destination);
+      wetGain.connect(ctx.destination);
+
+      // Tremulant LFO modulates masterGain
+      trem = ctx.createOscillator();
+      trem.type = 'sine';
+      trem.frequency.value = 5.5;
+      tremGain = ctx.createGain();
+      tremGain.gain.value = tremDepth;
+      trem.connect(tremGain);
+      tremGain.connect(masterGain.gain);
+      trem.start();
+    }
+
+    // Stop recipes — array of [partialMul, levelDb]
+    function recipe() {
+      switch (currentStop) {
+        case 'flute':     return [[1, 0.95], [2, 0.20], [3, 0.05]];
+        case 'principal': return [[2, 0.9], [3, 0.55], [4, 0.32], [5, 0.15]];
+        case 'diapason':
+        default:          return [[1, 0.8], [2, 0.55], [3, 0.32], [4, 0.18], [5, 0.08]];
+      }
+    }
+
+    function startNote(id, hz) {
+      ensureCtx();
+      if (active.has(id)) return;
+      const t0 = ctx.currentTime;
+      const partials = recipe();
+      const oscNodes = [];
+      const noteGain = ctx.createGain();
+      noteGain.gain.value = 0;
+      noteGain.gain.setValueAtTime(0.0001, t0);
+      noteGain.gain.linearRampToValueAtTime(0.18, t0 + 0.06); // organ-like pseudo-attack
+      partials.forEach(([mul, level]) => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = hz * mul;
+        // Tiny detune per partial keeps it pipe-organ chorusy
+        o.detune.value = (Math.random() * 2 - 1) * 4;
+        const g = ctx.createGain();
+        g.gain.value = level;
+        o.connect(g);
+        g.connect(noteGain);
+        o.start(t0);
+        oscNodes.push({ osc: o, gain: g });
+      });
+      noteGain.connect(lpf);
+      active.set(id, { oscNodes, gain: noteGain });
+    }
+
+    function stopNote(id) {
+      const node = active.get(id);
+      if (!node) return;
+      const t = ctx.currentTime;
+      node.gain.gain.cancelScheduledValues(t);
+      node.gain.gain.setTargetAtTime(0, t, 0.08);
+      setTimeout(() => {
+        node.oscNodes.forEach(({ osc, gain }) => {
+          try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {}
+        });
+        try { node.gain.disconnect(); } catch {}
+      }, 280);
+      active.delete(id);
+    }
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'og-' + Math.random().toString(36).slice(2, 10); }
+    }
+    function broadcast(note, hz) {
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'organ', sessionId: getSession(), note, hz: Math.round(hz), stop: currentStop }),
+        });
+        const el = document.getElementById('og-broadcast');
+        if (el) el.textContent = `playing · ${note} · ${currentStop}`;
+      } catch {}
+    }
+
+    // Pedal note (lowest pressed key, 2 octaves below)
+    function refreshPedal() {
+      if (!pedalOn) {
+        if (pedalNodes) {
+          pedalNodes.osc.forEach((o) => { try { o.stop(); o.disconnect(); } catch {} });
+          try { pedalNodes.gain.disconnect(); } catch {}
+          pedalNodes = null;
+        }
+        return;
+      }
+      // Find lowest active note
+      let lowest = null;
+      active.forEach((_, id) => {
+        const btn = document.querySelector(`.og__key[data-id="${id}"]`);
+        if (!btn) return;
+        const hz = Number(btn.getAttribute('data-hz'));
+        if (!lowest || hz < lowest) lowest = hz;
+      });
+      if (!lowest) {
+        if (pedalNodes) {
+          pedalNodes.osc.forEach((o) => { try { o.stop(); o.disconnect(); } catch {} });
+          try { pedalNodes.gain.disconnect(); } catch {}
+          pedalNodes = null;
+        }
+        return;
+      }
+      const target = lowest / 4; // 2 octaves below
+      ensureCtx();
+      if (pedalNodes) {
+        pedalNodes.osc.forEach((o) => o.frequency.setTargetAtTime(target, ctx.currentTime, 0.08));
+        return;
+      }
+      const t0 = ctx.currentTime;
+      const ng = ctx.createGain();
+      ng.gain.value = 0;
+      ng.gain.linearRampToValueAtTime(0.22, t0 + 0.2);
+      const oscs = [];
+      [[1, 0.7], [2, 0.32], [3, 0.12]].forEach(([mul, lv]) => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = target * mul;
+        o.detune.value = (Math.random() * 2 - 1) * 6;
+        const g = ctx.createGain();
+        g.gain.value = lv;
+        o.connect(g);
+        g.connect(ng);
+        o.start(t0);
+        oscs.push(o);
+      });
+      ng.connect(lpf);
+      pedalNodes = { osc: oscs, gain: ng };
+    }
+
+    // UI: stops
+    document.querySelectorAll('.og__stop').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const stop = btn.getAttribute('data-stop');
+        if (stop === 'pedal') {
+          pedalOn = !pedalOn;
+          btn.classList.toggle('og__stop--on', pedalOn);
+          btn.querySelector('.og__stop-label').textContent = `Pedal · ${pedalOn ? 'on' : 'off'}`;
+          refreshPedal();
+          return;
+        }
+        document.querySelectorAll('.og__stop:not(.og__stop--toggle)').forEach((s) => s.classList.remove('og__stop--on'));
+        btn.classList.add('og__stop--on');
+        currentStop = stop || 'diapason';
+        // Force re-articulation of held notes
+        const held = [...active.entries()];
+        held.forEach(([id]) => {
+          const k = document.querySelector(`.og__key[data-id="${id}"]`);
+          if (!k) return;
+          const hz = Number(k.getAttribute('data-hz'));
+          stopNote(id);
+          setTimeout(() => startNote(id, hz), 40);
+        });
+      });
+    });
+
+    // Sliders
+    document.getElementById('og-reverb').addEventListener('input', (e) => {
+      reverbWet = Number(e.target.value || 0) / 100;
+      if (wetGain && dryGain) {
+        wetGain.gain.setTargetAtTime(reverbWet, ctx.currentTime, 0.05);
+        dryGain.gain.setTargetAtTime(1 - reverbWet * 0.5, ctx.currentTime, 0.05);
+      }
+    });
+    document.getElementById('og-trem').addEventListener('input', (e) => {
+      tremDepth = Number(e.target.value || 0) / 100 * 0.18;
+      if (tremGain) tremGain.gain.setTargetAtTime(tremDepth, ctx.currentTime, 0.05);
+    });
+
+    // Keys
+    document.querySelectorAll('.og__key').forEach((btn) => {
+      const id = btn.getAttribute('data-id');
+      const hz = Number(btn.getAttribute('data-hz'));
+      const note = btn.getAttribute('data-note') || '';
+      let pressed = false;
+      function press() {
+        if (pressed) return;
+        pressed = true;
+        btn.classList.add('og__key--pressed');
+        startNote(id, hz);
+        broadcast(note, hz);
+        refreshPedal();
+      }
+      function release() {
+        if (!pressed) return;
+        pressed = false;
+        btn.classList.remove('og__key--pressed');
+        stopNote(id);
+        refreshPedal();
+        const el = document.getElementById('og-broadcast');
+        if (el && active.size === 0) el.textContent = '— ready —';
+      }
+      btn.addEventListener('mousedown', (e) => { press(); e.preventDefault(); });
+      window.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', () => { if (pressed) release(); });
+      btn.addEventListener('touchstart', (e) => { press(); e.preventDefault(); }, { passive: false });
+      btn.addEventListener('touchend', release);
+
+      // Bind keyboard
+      const kbd = btn.querySelector('.og__key-kbd')?.textContent?.toLowerCase() || '';
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.key.toLowerCase() === kbd) press();
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.key.toLowerCase() === kbd) release();
+      });
+    });
+  })();
+</script>
+
+<style>
+  .og {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255, 138, 74, 0.18), transparent 60%),
+      linear-gradient(180deg, #0a0612 0%, #1a0e26 50%, #2c1d05 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .og__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .og__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .og__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(32px, 5vw, 56px);
+    line-height: 1.05;
+  }
+  .og__title em { font-style: italic; }
+  .og__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+  .og__hall {
+    max-width: 1080px;
+    margin: 0 auto;
+    position: relative;
+    background:
+      repeating-linear-gradient(0deg, rgba(74, 44, 16, 0.18) 0 22px, transparent 22px 26px),
+      linear-gradient(180deg, #1a0e26 0%, #2c1d05 100%);
+    border: 3px solid #2c1d05;
+    box-shadow: 6px 6px 0 0 #050310;
+    overflow: hidden;
+    padding: 30px 18px 18px;
+  }
+
+  .og__rose {
+    width: 220px;
+    height: 220px;
+    margin: 0 auto 14px;
+    filter: drop-shadow(0 0 30px rgba(255, 138, 74, 0.4));
+  }
+  .og__rose svg { display: block; width: 100%; height: 100%; }
+
+  .og__pipes {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+    height: 180px;
+    margin: 6px auto 18px;
+    padding-top: 8px;
+  }
+  .og__pipe {
+    width: 26px;
+    background: linear-gradient(180deg, #fffaf0 0%, #c9a449 30%, #6e5320 100%);
+    border: 1.5px solid #2c1d05;
+    border-radius: 8px 8px 2px 2px;
+    box-shadow: 2px 2px 0 0 #050310, inset 1px -2px 4px rgba(255, 250, 240, 0.3);
+    position: relative;
+  }
+  .og__pipe::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 14px;
+    background: linear-gradient(180deg, #ffd400, #c9a449);
+    border: 1.5px solid #2c1d05;
+    border-radius: 50% 50% 0 0;
+  }
+
+  .og__console {
+    background: #2c1d05;
+    border: 3px solid #050310;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 14px;
+    position: relative;
+  }
+
+  .og__stops {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 14px;
+  }
+  .og__stop {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: #fffaf0;
+  }
+  .og__stop-knob {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fffaf0, #c9a449 60%, #6e5320);
+    border: 2px solid #050310;
+    box-shadow: 2px 2px 0 0 #050310;
+    transition: transform 100ms;
+  }
+  .og__stop--on .og__stop-knob {
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 0 #050310, 0 0 12px rgba(255, 138, 74, 0.6);
+    background: radial-gradient(circle at 30% 30%, #ffd400, #ff8a4a 60%, #a83b2a);
+  }
+  .og__stop-label {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: #ffd400;
+    text-transform: uppercase;
+  }
+
+  .og__panel {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 110px;
+  }
+  .og__panel-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #ffd400;
+    text-transform: uppercase;
+  }
+  .og__panel input[type='range'] { accent-color: #ffd400; }
+
+  .og__keyboard {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 2px;
+    background: #050310;
+    border: 2px solid #050310;
+    padding: 4px;
+  }
+  .og__key {
+    aspect-ratio: 1 / 4;
+    background: linear-gradient(180deg, #fffaf0 0%, #cfc6df 95%, #94a0ad 100%);
+    border: 1.5px solid #050310;
+    border-radius: 0 0 4px 4px;
+    cursor: pointer;
+    padding: 4px 0 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    color: #2c1d05;
+    box-shadow: 0 4px 0 0 #5f5e5a, inset 0 -2px 6px rgba(0,0,0,0.18);
+    transition: transform 60ms, box-shadow 60ms;
+  }
+  .og__key--black {
+    background: linear-gradient(180deg, #2c1d05 0%, #050310 95%);
+    color: #fffaf0;
+    aspect-ratio: 1 / 5;
+    box-shadow: 0 4px 0 0 #050310, inset 0 -2px 8px rgba(0,0,0,0.6);
+  }
+  .og__key--pressed {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 0 #5f5e5a, inset 0 -2px 6px rgba(0,0,0,0.4);
+  }
+  .og__key--black.og__key--pressed {
+    box-shadow: 0 1px 0 0 #050310, inset 0 -2px 8px rgba(0,0,0,0.8);
+  }
+  .og__key-note {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+  .og__key-kbd {
+    font-size: 10px;
+    background: #ffd400;
+    color: #2c1d05;
+    padding: 1px 4px;
+    border: 1px solid #2c1d05;
+    border-radius: 2px;
+    line-height: 1;
+  }
+  .og__key--black .og__key-kbd { background: #ff8a4a; }
+
+  .og__broadcast {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #ffd400;
+  }
+
+  .og__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .og__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+  .og__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
