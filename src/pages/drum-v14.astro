@@ -1,0 +1,124 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v14 — Marimba';
+const description = 'Sixteen wooden bars in a row. Bright mallet percussion. Multiplayer drum-hub variant on PointCast.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-v14', name: 'PointCast Drum · v14 · Marimba', url: 'https://pointcast.xyz/drum-v14', description };
+
+const BARS = [
+  { id: 'm01', note: 'C4',  hz: 261.63, kbd: '1' }, { id: 'm02', note: 'C#4', hz: 277.18, kbd: 'q' },
+  { id: 'm03', note: 'D4',  hz: 293.66, kbd: '2' }, { id: 'm04', note: 'D#4', hz: 311.13, kbd: 'w' },
+  { id: 'm05', note: 'E4',  hz: 329.63, kbd: '3' }, { id: 'm06', note: 'F4',  hz: 349.23, kbd: '4' },
+  { id: 'm07', note: 'F#4', hz: 369.99, kbd: 'r' }, { id: 'm08', note: 'G4',  hz: 392.00, kbd: '5' },
+  { id: 'm09', note: 'G#4', hz: 415.30, kbd: 't' }, { id: 'm10', note: 'A4',  hz: 440.00, kbd: '6' },
+  { id: 'm11', note: 'A#4', hz: 466.16, kbd: 'y' }, { id: 'm12', note: 'B4',  hz: 493.88, kbd: '7' },
+  { id: 'm13', note: 'C5',  hz: 523.25, kbd: '8' }, { id: 'm14', note: 'C#5', hz: 554.37, kbd: 'i' },
+  { id: 'm15', note: 'D5',  hz: 587.33, kbd: '9' }, { id: 'm16', note: 'D#5', hz: 622.25, kbd: 'o' },
+];
+---
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="ma" id="ma-main">
+    <DrumNav current="v14" />
+    <header class="ma__head">
+      <p class="ma__kicker">DRUM HUB · V14 · MARIMBA · MALLET PERCUSSION · MULTIPLAYER</p>
+      <h1 class="ma__title"><em>Wooden bars, soft mallets, big room.</em></h1>
+      <p class="ma__dek">Sixteen wooden bars across two octaves. Tap a bar — the room hears it. Mallet softness changes the timbre from hard rosewood to soft yarn.</p>
+    </header>
+    <section class="ma__stage">
+      <aside class="ma__panel">
+        <div class="ma__panel-row"><span class="ma__panel-label mono">mallet</span><input id="ma-mallet" type="range" min="1" max="5" value="3" /></div>
+        <div class="ma__panel-row"><span class="ma__panel-label mono">resonance</span><input id="ma-reson" type="range" min="0" max="100" value="60" /></div>
+        <div class="ma__panel-row"><span class="ma__panel-label mono">reverb</span><input id="ma-reverb" type="range" min="0" max="100" value="35" /></div>
+        <p class="ma__broadcast mono" id="ma-broadcast">— ready —</p>
+      </aside>
+      <div class="ma__board">
+        {BARS.map((b, i) => (
+          <button type="button" class={`ma__bar ma__bar--idx-${i}`} data-id={b.id} data-note={b.note} data-hz={b.hz} data-kbd={b.kbd} aria-label={`Bar ${b.note}`}>
+            <span class="ma__bar-block"><span class="ma__bar-grain"></span></span>
+            <span class="ma__bar-tube"></span>
+            <span class="ma__bar-note mono">{b.note}</span>
+            <span class="ma__bar-kbd mono">{b.kbd}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+    <footer class="ma__foot">
+      <p>Each strike fires <code>type=marimba</code> to <code>/api/sounds</code>; visitors on <a href="/drum-tv">/drum-tv</a> + <a href="/drum-marquee">/drum-marquee</a> see the events flash.</p>
+      <p class="ma__credit mono">v0.1 · 2026-04-28 · drum sprint v14 · audio batch 1/5</p>
+    </footer>
+  </main>
+</BlockLayout>
+<script is:inline>
+(function () { 'use strict';
+  let ctx=null,master=null,lpf=null,conv=null,dryG=null,wetG=null;
+  let mallet=3,resonance=0.6,reverbWet=0.35;
+  function makeReverb(s,d){const rate=ctx.sampleRate,len=Math.floor(rate*s);const buf=ctx.createBuffer(2,len,rate);for(let ch=0;ch<2;ch++){const data=buf.getChannelData(ch);for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/len,d);}return buf;}
+  function ensure(){if(ctx)return;const AC=window.AudioContext||window.webkitAudioContext;ctx=new AC();
+    lpf=ctx.createBiquadFilter();lpf.type='lowpass';lpf.frequency.value=4500;lpf.Q.value=0.7;
+    master=ctx.createGain();master.gain.value=0.7;
+    conv=ctx.createConvolver();conv.buffer=makeReverb(2.4,2.6);
+    dryG=ctx.createGain();dryG.gain.value=1-reverbWet*0.5;wetG=ctx.createGain();wetG.gain.value=reverbWet;
+    lpf.connect(master);master.connect(dryG);master.connect(conv);conv.connect(wetG);
+    dryG.connect(ctx.destination);wetG.connect(ctx.destination);}
+  function strike(hz){ensure();const t=ctx.currentTime;const decayMul=0.6+(mallet*0.18);const decay=0.28*decayMul+(Math.random()*0.05);
+    const buf=ctx.createBuffer(1,ctx.sampleRate*0.04,ctx.sampleRate);const data=buf.getChannelData(0);
+    for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,3);
+    const n=ctx.createBufferSource();n.buffer=buf;
+    const nf=ctx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=hz*4;nf.Q.value=2;
+    const ng=ctx.createGain();ng.gain.setValueAtTime(0.001,t);ng.gain.linearRampToValueAtTime(0.18/mallet,t+0.001);ng.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+    n.connect(nf);nf.connect(ng);ng.connect(lpf);n.start(t);
+    [[1,0.7],[1.998,0.32],[4.0,0.1*resonance]].forEach(([mul,lvl])=>{
+      const o=ctx.createOscillator();o.type='sine';o.frequency.value=hz*mul;o.detune.value=(Math.random()*2-1)*4;
+      const g=ctx.createGain();const peak=lvl*0.22;
+      g.gain.setValueAtTime(0.001,t);g.gain.linearRampToValueAtTime(peak,t+0.005);g.gain.exponentialRampToValueAtTime(0.001,t+decay);
+      const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=hz*mul;bp.Q.value=8;
+      o.connect(bp);bp.connect(g);g.connect(lpf);o.start(t);o.stop(t+decay+0.05);
+    });}
+  function sess(){try{const k='pc:session';let s=localStorage.getItem(k);if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem(k,s);}return s;}catch{return 'ma-'+Math.random().toString(36).slice(2,10);}}
+  function broadcast(note,hz){try{fetch('/api/sounds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'marimba',sessionId:sess(),note,hz:Math.round(hz)})});const el=document.getElementById('ma-broadcast');if(el)el.textContent=`playing · ${note}`;}catch{}}
+  document.getElementById('ma-mallet').addEventListener('input',(e)=>{mallet=Math.max(1,Math.min(5,Number(e.target.value)||3));});
+  document.getElementById('ma-reson').addEventListener('input',(e)=>{resonance=Math.max(0,Math.min(1,Number(e.target.value)/100));});
+  document.getElementById('ma-reverb').addEventListener('input',(e)=>{reverbWet=Math.max(0,Math.min(1,Number(e.target.value)/100));if(wetG&&dryG&&ctx){wetG.gain.setTargetAtTime(reverbWet,ctx.currentTime,0.05);dryG.gain.setTargetAtTime(1-reverbWet*0.5,ctx.currentTime,0.05);}});
+  document.querySelectorAll('.ma__bar').forEach((btn)=>{const hz=Number(btn.getAttribute('data-hz')||0);const note=btn.getAttribute('data-note')||'';
+    function play(){strike(hz);btn.classList.remove('ma__bar--hit');void btn.offsetWidth;btn.classList.add('ma__bar--hit');broadcast(note,hz);}
+    btn.addEventListener('mousedown',play);btn.addEventListener('touchstart',(e)=>{play();e.preventDefault();},{passive:false});
+    const kbd=(btn.getAttribute('data-kbd')||'').toLowerCase();
+    window.addEventListener('keydown',(e)=>{if(!e.repeat&&e.key.toLowerCase()===kbd)play();});});
+})();
+</script>
+<style>
+.ma{min-height:100vh;padding:12px 12px 60px;background:radial-gradient(ellipse at 50% 100%,rgba(255,138,74,0.18),transparent 70%),linear-gradient(180deg,#2a1d10 0%,#1a0e08 100%);color:#fffaf0;font-family:'Inter Variable',system-ui,sans-serif;}
+.ma__head{max-width:1080px;margin:0 auto 16px;padding:0 6px;}
+.ma__kicker{margin:0 0 6px;font-family:'JetBrains Mono Variable',monospace;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#ffd400;}
+.ma__title{margin:0 0 6px;font-family:Georgia,serif;font-size:clamp(28px,4.6vw,50px);line-height:1.05;}
+.ma__title em{font-style:italic;}
+.ma__dek{margin:0;font-size:14px;line-height:1.55;max-width:64ch;color:#cfc6df;}
+.ma__stage{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;}
+@media(max-width:800px){.ma__stage{grid-template-columns:1fr;}}
+.ma__panel{background:rgba(18,17,14,0.5);border:2px solid #c9a449;padding:14px;box-shadow:6px 6px 0 0 #050310;display:flex;flex-direction:column;gap:12px;}
+.ma__panel-row{display:flex;flex-direction:column;gap:4px;}
+.ma__panel-label{font-size:9px;letter-spacing:0.22em;color:#ffd400;text-transform:uppercase;}
+.ma__panel input[type='range']{accent-color:#ffd400;}
+.ma__broadcast{margin:0;padding-top:8px;border-top:1px dashed #5f5e5a;font-size:10px;letter-spacing:0.12em;color:#ff8a4a;min-height:14px;}
+.ma__board{display:grid;grid-template-columns:repeat(16,1fr);gap:4px;align-items:end;padding:18px 14px;background:repeating-linear-gradient(0deg,rgba(74,44,16,0.18) 0 18px,transparent 18px 22px),linear-gradient(180deg,#4a2c10,#2c1d05);border:3px solid #2c1d05;box-shadow:4px 4px 0 0 #050310;}
+@media(max-width:800px){.ma__board{grid-template-columns:repeat(8,1fr);}}
+.ma__bar{background:transparent;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:inherit;}
+.ma__bar-block{position:relative;width:100%;background:linear-gradient(180deg,#c98744 0%,#7a4a25 50%,#4a2c10 100%);border:1.5px solid #2c1d05;border-radius:6px 6px 4px 4px;box-shadow:2px 2px 0 0 #050310;transition:transform 60ms;}
+.ma__bar:nth-child(1) .ma__bar-block,.ma__bar:nth-child(3) .ma__bar-block,.ma__bar:nth-child(5) .ma__bar-block,.ma__bar:nth-child(6) .ma__bar-block,.ma__bar:nth-child(8) .ma__bar-block,.ma__bar:nth-child(10) .ma__bar-block,.ma__bar:nth-child(12) .ma__bar-block,.ma__bar:nth-child(13) .ma__bar-block,.ma__bar:nth-child(15) .ma__bar-block{background:linear-gradient(180deg,#e8c896 0%,#a98556 50%,#6e5320 100%);}
+.ma__bar:nth-child(1) .ma__bar-block{height:220px;}.ma__bar:nth-child(2) .ma__bar-block{height:212px;}.ma__bar:nth-child(3) .ma__bar-block{height:204px;}.ma__bar:nth-child(4) .ma__bar-block{height:196px;}
+.ma__bar:nth-child(5) .ma__bar-block{height:188px;}.ma__bar:nth-child(6) .ma__bar-block{height:180px;}.ma__bar:nth-child(7) .ma__bar-block{height:172px;}.ma__bar:nth-child(8) .ma__bar-block{height:164px;}
+.ma__bar:nth-child(9) .ma__bar-block{height:156px;}.ma__bar:nth-child(10) .ma__bar-block{height:148px;}.ma__bar:nth-child(11) .ma__bar-block{height:140px;}.ma__bar:nth-child(12) .ma__bar-block{height:132px;}
+.ma__bar:nth-child(13) .ma__bar-block{height:124px;}.ma__bar:nth-child(14) .ma__bar-block{height:116px;}.ma__bar:nth-child(15) .ma__bar-block{height:108px;}.ma__bar:nth-child(16) .ma__bar-block{height:100px;}
+.ma__bar-grain{position:absolute;inset:4px;background:repeating-linear-gradient(0deg,rgba(255,250,240,0.08) 0 2px,transparent 2px 6px);pointer-events:none;border-radius:4px;}
+.ma__bar-tube{width:14px;height:30px;background:linear-gradient(180deg,#5f5e5a 0%,#2a1d10 100%);border:1.5px solid #050310;border-top:0;border-radius:0 0 50% 50%;}
+.ma__bar-note{font-size:9px;letter-spacing:0.1em;color:#ffd400;}
+.ma__bar-kbd{font-size:9px;padding:1px 4px;background:#ff8a4a;color:#050310;border:1px solid #050310;border-radius:2px;}
+.ma__bar:hover .ma__bar-block{transform:translateY(-2px);}
+.ma__bar--hit .ma__bar-block{animation:ma-strike 0.18s ease-out;}
+@keyframes ma-strike{0%{transform:translateY(0);}50%{transform:translateY(3px) scale(0.98);filter:brightness(1.4);}100%{transform:translateY(0);}}
+.ma__foot{max-width:1280px;margin:18px auto 0;padding:14px 6px 0;border-top:1px dashed #5f5e5a;font-size:12px;line-height:1.5;color:#cfc6df;}
+.ma__foot a{color:#ffd400;}
+.ma__foot code{background:#050310;padding:1px 6px;border:1px solid #c9a449;color:#ffd400;}
+.ma__credit{margin:8px 0 0;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#ff8a4a;}
+</style>

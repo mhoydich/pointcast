@@ -1,0 +1,200 @@
+---
+/**
+ * /drum-v18 — Rhodes (electric piano) · audio batch 5/5 · 2026-04-28 PT.
+ *
+ * Sixteen-key Rhodes-style electric piano. FM-ish synthesis: sine
+ * carrier modulated by a sine "tine" partial (2.001× ratio) for the
+ * Rhodes bell-bark. Tremolo (4.5Hz amp mod) optional. Mellow chorus
+ * via small detuned dual-oscillator. Press-and-hold sustain.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v18 — Rhodes (electric piano)';
+const description = 'Sixteen-key Rhodes-style electric piano with tremolo and chorus. Web Audio FM-ish synthesis. Multiplayer drum-hub variant.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-v18', name: 'PointCast Drum · v18 · Rhodes', url: 'https://pointcast.xyz/drum-v18', description };
+
+const KEYS = [
+  { id: 'r1',  note: 'C3',  hz: 130.81, kbd: '1', acc: false },
+  { id: 'r2',  note: 'D3',  hz: 146.83, kbd: '2', acc: false },
+  { id: 'r3',  note: 'E3',  hz: 164.81, kbd: '3', acc: false },
+  { id: 'r4',  note: 'F3',  hz: 174.61, kbd: '4', acc: false },
+  { id: 'r5',  note: 'G3',  hz: 196.00, kbd: '5', acc: false },
+  { id: 'r6',  note: 'A3',  hz: 220.00, kbd: '6', acc: false },
+  { id: 'r7',  note: 'B3',  hz: 246.94, kbd: '7', acc: false },
+  { id: 'r8',  note: 'C4',  hz: 261.63, kbd: '8', acc: false },
+  { id: 'r9',  note: 'D4',  hz: 293.66, kbd: '9', acc: false },
+  { id: 'r10', note: 'E4',  hz: 329.63, kbd: '0', acc: false },
+  { id: 'r11', note: 'F4',  hz: 349.23, kbd: 'q', acc: false },
+  { id: 'r12', note: 'G4',  hz: 392.00, kbd: 'w', acc: false },
+  { id: 'r13', note: 'A4',  hz: 440.00, kbd: 'e', acc: false },
+  { id: 'r14', note: 'B4',  hz: 493.88, kbd: 'r', acc: false },
+  { id: 'r15', note: 'C5',  hz: 523.25, kbd: 't', acc: false },
+  { id: 'r16', note: 'D5',  hz: 587.33, kbd: 'y', acc: false },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="rh" id="rh-main">
+    <DrumNav current="v17" />
+    <header class="rh__head">
+      <p class="rh__kicker">DRUM HUB · V18 · RHODES · ELECTRIC PIANO · MULTIPLAYER</p>
+      <h1 class="rh__title"><em>Sixteen keys, soulful.</em></h1>
+      <p class="rh__dek">Sixteen-key Rhodes-style electric piano. Press and hold for sustain. Tremolo on. Chorus warm.</p>
+    </header>
+
+    <section class="rh__cabinet">
+      <p class="rh__brand mono">⌐◨-◨ POINTCAST · MARK 1</p>
+      <div class="rh__panel">
+        <div class="rh__panel-row"><span class="rh__panel-label mono">tremolo</span><input id="rh-trem" type="range" min="0" max="100" value="35" /></div>
+        <div class="rh__panel-row"><span class="rh__panel-label mono">bark</span><input id="rh-bark" type="range" min="0" max="100" value="50" /></div>
+        <div class="rh__panel-row"><span class="rh__panel-label mono">chorus</span><input id="rh-chorus" type="range" min="0" max="100" value="40" /></div>
+        <div class="rh__panel-row"><span class="rh__panel-label mono">reverb</span><input id="rh-reverb" type="range" min="0" max="100" value="35" /></div>
+      </div>
+      <div class="rh__keyboard" id="rh-keyboard">
+        {KEYS.map((k, i) => (
+          <button type="button" class={`rh__key rh__key--idx-${i}`} data-id={k.id} data-note={k.note} data-hz={k.hz} data-kbd={k.kbd} aria-label={`Key ${k.note}`}>
+            <span class="rh__key-note mono">{k.note}</span>
+            <span class="rh__key-kbd mono">{k.kbd}</span>
+          </button>
+        ))}
+      </div>
+      <p class="rh__broadcast mono" id="rh-broadcast">— ready —</p>
+    </section>
+
+    <footer class="rh__foot">
+      <p>Each note start broadcasts <code>type=rhodes</code>. Hold a key, the room hears the sustain.</p>
+      <p class="rh__credit mono">v0.1 · 2026-04-28 · drum sprint v18 · audio batch 5/5</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null, master = null, lpf = null, conv = null, dryG = null, wetG = null;
+    let lfo = null, lfoGain = null;
+    let tremDepth = 0.18, bark = 0.5, chorus = 0.4, reverbWet = 0.35;
+    const active = new Map();
+    function makeReverb(s, d) {
+      const rate = ctx.sampleRate, len = Math.floor(rate * s);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, d);
+      }
+      return buf;
+    }
+    function ensure() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 4200; lpf.Q.value = 0.7;
+      master = ctx.createGain(); master.gain.value = 0.55;
+      conv = ctx.createConvolver(); conv.buffer = makeReverb(2.4, 2.6);
+      dryG = ctx.createGain(); dryG.gain.value = 1 - reverbWet * 0.5;
+      wetG = ctx.createGain(); wetG.gain.value = reverbWet;
+      lpf.connect(master);
+      master.connect(dryG); master.connect(conv); conv.connect(wetG);
+      dryG.connect(ctx.destination); wetG.connect(ctx.destination);
+      lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 4.5;
+      lfoGain = ctx.createGain(); lfoGain.gain.value = tremDepth;
+      lfo.connect(lfoGain); lfoGain.connect(master.gain); lfo.start();
+    }
+    function start(id, hz) {
+      ensure();
+      if (active.has(id)) return;
+      const t = ctx.currentTime;
+      const noteGain = ctx.createGain(); noteGain.gain.value = 0;
+      noteGain.gain.setValueAtTime(0.001, t);
+      noteGain.gain.linearRampToValueAtTime(0.18, t + 0.005);
+      noteGain.gain.exponentialRampToValueAtTime(0.06, t + 0.6);
+      // Carrier (sine) + tine (sine 2.001× modulated by gain envelope for "bark")
+      const oscs = [];
+      [
+        { type: 'sine', mul: 1.0, gain: 0.55, decay: 4.0 },
+        { type: 'sine', mul: 2.001, gain: 0.32 * bark, decay: 0.6 + bark * 0.6 }, // tine bark
+        { type: 'sine', mul: 4.001, gain: 0.08 * bark, decay: 0.4 + bark * 0.4 },
+      ].forEach(({ type, mul, gain, decay }) => {
+        const o = ctx.createOscillator(); o.type = type; o.frequency.value = hz * mul;
+        o.detune.value = (Math.random() * 2 - 1) * (chorus * 8);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(gain, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+        o.connect(g); g.connect(noteGain);
+        o.start(t);
+        oscs.push({ o, g, stopAt: t + decay + 0.05 });
+      });
+      // Optional second detuned carrier for chorus shimmer
+      if (chorus > 0.05) {
+        const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = hz; o2.detune.value = 6 * chorus;
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.001, t);
+        g2.gain.linearRampToValueAtTime(0.22 * chorus, t + 0.01);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+        o2.connect(g2); g2.connect(noteGain); o2.start(t);
+        oscs.push({ o: o2, g: g2, stopAt: t + 4.05 });
+      }
+      noteGain.connect(lpf);
+      active.set(id, { noteGain, oscs });
+    }
+    function stop(id) {
+      const node = active.get(id); if (!node || !ctx) return;
+      const t = ctx.currentTime;
+      node.noteGain.gain.cancelScheduledValues(t);
+      node.noteGain.gain.setTargetAtTime(0, t, 0.06);
+      setTimeout(() => {
+        node.oscs.forEach(({ o, g }) => { try { o.stop(); o.disconnect(); g.disconnect(); } catch {} });
+        try { node.noteGain.disconnect(); } catch {}
+      }, 250);
+      active.delete(id);
+    }
+    function sess() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; } catch { return 'rh-' + Math.random().toString(36).slice(2,10); } }
+    function broadcast(note, hz) { try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'rhodes', sessionId: sess(), note, hz: Math.round(hz) }) }); const el = document.getElementById('rh-broadcast'); if (el) el.textContent = `playing · ${note}`; } catch {} }
+    document.getElementById('rh-trem').addEventListener('input', (e) => { tremDepth = Number(e.target.value) / 100 * 0.3; if (lfoGain && ctx) lfoGain.gain.setTargetAtTime(tremDepth, ctx.currentTime, 0.05); });
+    document.getElementById('rh-bark').addEventListener('input', (e) => { bark = Number(e.target.value) / 100; });
+    document.getElementById('rh-chorus').addEventListener('input', (e) => { chorus = Number(e.target.value) / 100; });
+    document.getElementById('rh-reverb').addEventListener('input', (e) => { reverbWet = Number(e.target.value) / 100; if (wetG && dryG && ctx) { wetG.gain.setTargetAtTime(reverbWet, ctx.currentTime, 0.05); dryG.gain.setTargetAtTime(1 - reverbWet * 0.5, ctx.currentTime, 0.05); } });
+    document.querySelectorAll('.rh__key').forEach((btn) => {
+      const id = btn.getAttribute('data-id') || '';
+      const hz = Number(btn.getAttribute('data-hz') || 0);
+      const note = btn.getAttribute('data-note') || '';
+      let pressed = false;
+      function press() { if (pressed) return; pressed = true; btn.classList.add('rh__key--pressed'); start(id, hz); broadcast(note, hz); }
+      function release() { if (!pressed) return; pressed = false; btn.classList.remove('rh__key--pressed'); stop(id); }
+      btn.addEventListener('mousedown', (e) => { press(); e.preventDefault(); });
+      window.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', () => { if (pressed) release(); });
+      btn.addEventListener('touchstart', (e) => { press(); e.preventDefault(); }, { passive: false });
+      btn.addEventListener('touchend', release);
+      const kbd = (btn.getAttribute('data-kbd') || '').toLowerCase();
+      window.addEventListener('keydown', (e) => { if (!e.repeat && e.key.toLowerCase() === kbd) press(); });
+      window.addEventListener('keyup', (e) => { if (e.key.toLowerCase() === kbd) release(); });
+    });
+  })();
+</script>
+
+<style>
+  .rh { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #1a0e08 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+  .rh__head { max-width: 1080px; margin: 0 auto 16px; padding: 0 6px; }
+  .rh__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+  .rh__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .rh__title em { font-style: italic; }
+  .rh__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+  .rh__cabinet { max-width: 1080px; margin: 0 auto; background: linear-gradient(180deg, #2a1d10 0%, #0e0a08 100%); border: 4px solid #050310; padding: 18px; box-shadow: 8px 8px 0 0 #050310; }
+  .rh__brand { margin: 0 0 14px; font-size: 12px; letter-spacing: 0.32em; color: #c9a449; text-align: center; }
+  .rh__panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; padding: 12px; background: rgba(0,0,0,0.4); border: 2px solid #c9a449; }
+  .rh__panel-row { display: flex; flex-direction: column; gap: 4px; }
+  .rh__panel-label { font-size: 9px; letter-spacing: 0.22em; color: #c9a449; text-transform: uppercase; }
+  .rh__panel input[type='range'] { accent-color: #c9a449; }
+  .rh__keyboard { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; padding: 6px; background: #050310; border: 2px solid #050310; }
+  .rh__key { aspect-ratio: 1 / 4; background: linear-gradient(180deg, #fffaf0 0%, #cfc6df 95%, #94a0ad 100%); border: 1.5px solid #050310; border-radius: 0 0 4px 4px; cursor: pointer; padding: 4px 0 8px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; color: #2a1d10; box-shadow: 0 4px 0 0 #5f5e5a, inset 0 -2px 6px rgba(0,0,0,0.18); transition: transform 60ms; }
+  .rh__key--pressed { transform: translateY(3px); box-shadow: 0 1px 0 0 #5f5e5a, inset 0 -2px 6px rgba(0,0,0,0.4); filter: brightness(0.95); }
+  .rh__key-note { font-size: 9px; letter-spacing: 0.1em; }
+  .rh__key-kbd { font-size: 9px; padding: 1px 4px; background: #ffd400; color: #2a1d10; border: 1px solid #050310; border-radius: 2px; }
+  .rh__broadcast { margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed #5f5e5a; font-size: 10px; letter-spacing: 0.12em; color: #c9a449; min-height: 14px; }
+  .rh__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+  .rh__foot code { background: #050310; padding: 1px 6px; border: 1px solid #c9a449; color: #c9a449; }
+  .rh__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #c9a449; }
+</style>

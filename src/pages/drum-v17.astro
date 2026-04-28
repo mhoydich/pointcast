@@ -1,0 +1,195 @@
+---
+/**
+ * /drum-v17 — Harp · audio batch 4/5 · 2026-04-28 PT.
+ *
+ * Sixteen plucked strings in a vertical fan. Click a string to pluck.
+ * DRAG across multiple strings for a glissando — the harp's signature
+ * gesture. Karplus-Strong-style synthesis: short noise burst through a
+ * delay line with feedback for plucked-string sound. Long resonant
+ * tail. Multiplayer broadcasts type=harp.
+ *
+ * Aesthetic: grand harp, gilt frame, plum velvet stage.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v17 — Harp';
+const description = 'Sixteen plucked strings. Click or drag for a glissando. Web Audio Karplus-Strong synthesis. Multiplayer drum-hub variant.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-v17', name: 'PointCast Drum · v17 · Harp', url: 'https://pointcast.xyz/drum-v17', description };
+
+// Two-octave C-major scale, low to high
+const STRINGS = [
+  { id: 's1',  note: 'C3',  hz: 130.81 },
+  { id: 's2',  note: 'D3',  hz: 146.83 },
+  { id: 's3',  note: 'E3',  hz: 164.81 },
+  { id: 's4',  note: 'F3',  hz: 174.61 },
+  { id: 's5',  note: 'G3',  hz: 196.00 },
+  { id: 's6',  note: 'A3',  hz: 220.00 },
+  { id: 's7',  note: 'B3',  hz: 246.94 },
+  { id: 's8',  note: 'C4',  hz: 261.63 },
+  { id: 's9',  note: 'D4',  hz: 293.66 },
+  { id: 's10', note: 'E4',  hz: 329.63 },
+  { id: 's11', note: 'F4',  hz: 349.23 },
+  { id: 's12', note: 'G4',  hz: 392.00 },
+  { id: 's13', note: 'A4',  hz: 440.00 },
+  { id: 's14', note: 'B4',  hz: 493.88 },
+  { id: 's15', note: 'C5',  hz: 523.25 },
+  { id: 's16', note: 'D5',  hz: 587.33 },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="hp" id="hp-main">
+    <DrumNav current="v16" />
+    <header class="hp__head">
+      <p class="hp__kicker">DRUM HUB · V17 · HARP · 16 STRINGS · DRAG FOR GLISS · MULTIPLAYER</p>
+      <h1 class="hp__title"><em>Drag across the strings.</em></h1>
+      <p class="hp__dek">Sixteen plucked strings, two-octave C major. Click a string to pluck one note. Drag across the strings for a glissando.</p>
+    </header>
+
+    <section class="hp__stage">
+      <aside class="hp__panel">
+        <div class="hp__panel-row"><span class="hp__panel-label mono">brightness</span><input id="hp-bright" type="range" min="500" max="6000" value="2800" /></div>
+        <div class="hp__panel-row"><span class="hp__panel-label mono">decay</span><input id="hp-decay" type="range" min="20" max="100" value="80" /></div>
+        <div class="hp__panel-row"><span class="hp__panel-label mono">reverb</span><input id="hp-reverb" type="range" min="0" max="100" value="40" /></div>
+        <p class="hp__broadcast mono" id="hp-broadcast">— ready —</p>
+      </aside>
+      <div class="hp__board" id="hp-board">
+        <div class="hp__frame" aria-hidden="true"></div>
+        <div class="hp__strings">
+          {STRINGS.map((s, i) => (
+            <button type="button" class={`hp__string hp__string--${i}`} data-id={s.id} data-note={s.note} data-hz={s.hz} aria-label={`String ${s.note}`}>
+              <span class="hp__string-line"></span>
+              <span class="hp__string-note mono">{s.note}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <footer class="hp__foot">
+      <p>Drag across strings for a glissando. Each pluck broadcasts <code>type=harp</code> to <code>/api/sounds</code>.</p>
+      <p class="hp__credit mono">v0.1 · 2026-04-28 · drum sprint v17 · audio batch 4/5</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null, master = null, lpf = null, conv = null, dryG = null, wetG = null;
+    let brightHz = 2800, decayMul = 0.8, reverbWet = 0.4;
+    function makeReverb(s, d) {
+      const rate = ctx.sampleRate, len = Math.floor(rate * s);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, d);
+      }
+      return buf;
+    }
+    function ensure() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = brightHz; lpf.Q.value = 0.7;
+      master = ctx.createGain(); master.gain.value = 0.65;
+      conv = ctx.createConvolver(); conv.buffer = makeReverb(2.6, 2.2);
+      dryG = ctx.createGain(); dryG.gain.value = 1 - reverbWet * 0.5;
+      wetG = ctx.createGain(); wetG.gain.value = reverbWet;
+      lpf.connect(master);
+      master.connect(dryG); master.connect(conv); conv.connect(wetG);
+      dryG.connect(ctx.destination); wetG.connect(ctx.destination);
+    }
+    // Karplus-Strong-ish pluck: noise burst through a delay line w/ feedback.
+    // Approximated with a short noise burst into a bandpass at fundamental
+    // plus a sine reinforcement and harmonic reinforcement.
+    function pluck(hz) {
+      ensure();
+      const t = ctx.currentTime;
+      const decaySec = 1.6 * decayMul + (Math.random() * 0.3);
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = hz * 1.05; nf.Q.value = 8;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.001, t);
+      ng.gain.linearRampToValueAtTime(0.22, t + 0.001);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      n.connect(nf); nf.connect(ng); ng.connect(lpf); n.start(t);
+      [[1, 0.32, decaySec], [2, 0.18, decaySec * 0.7], [3, 0.08, decaySec * 0.5], [4, 0.04, decaySec * 0.4]].forEach(([mul, lvl, dec]) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz * mul;
+        o.detune.value = (Math.random() * 2 - 1) * 3;
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = hz * mul; bp.Q.value = 6;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(lvl, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+        o.connect(bp); bp.connect(g); g.connect(lpf);
+        o.start(t); o.stop(t + dec + 0.05);
+      });
+    }
+    function sess() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; } catch { return 'hp-' + Math.random().toString(36).slice(2,10); } }
+    function broadcast(note, hz) { try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'harp', sessionId: sess(), note, hz: Math.round(hz) }) }); const el = document.getElementById('hp-broadcast'); if (el) el.textContent = `playing · ${note}`; } catch {} }
+    document.getElementById('hp-bright').addEventListener('input', (e) => { brightHz = Number(e.target.value); if (lpf && ctx) lpf.frequency.setTargetAtTime(brightHz, ctx.currentTime, 0.05); });
+    document.getElementById('hp-decay').addEventListener('input', (e) => { decayMul = Number(e.target.value) / 100; });
+    document.getElementById('hp-reverb').addEventListener('input', (e) => { reverbWet = Number(e.target.value) / 100; if (wetG && dryG && ctx) { wetG.gain.setTargetAtTime(reverbWet, ctx.currentTime, 0.05); dryG.gain.setTargetAtTime(1 - reverbWet * 0.5, ctx.currentTime, 0.05); } });
+    let lastDrag = -1;
+    document.querySelectorAll('.hp__string').forEach((btn, idx) => {
+      const hz = Number(btn.getAttribute('data-hz') || 0);
+      const note = btn.getAttribute('data-note') || '';
+      function play() { pluck(hz); btn.classList.remove('hp__string--hit'); void btn.offsetWidth; btn.classList.add('hp__string--hit'); broadcast(note, hz); }
+      btn.addEventListener('mousedown', (e) => { play(); lastDrag = idx; e.preventDefault(); });
+      btn.addEventListener('mouseenter', (e) => {
+        if (e.buttons & 1 && lastDrag !== idx) { play(); lastDrag = idx; }
+      });
+    });
+    window.addEventListener('mouseup', () => { lastDrag = -1; });
+    document.getElementById('hp-board').addEventListener('touchmove', (e) => {
+      const touch = e.touches[0]; if (!touch) return;
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (target && target.classList.contains('hp__string-line')) {
+        const btn = target.closest('.hp__string');
+        if (btn) {
+          const idx = Array.from(document.querySelectorAll('.hp__string')).indexOf(btn);
+          if (idx !== lastDrag) {
+            const hz = Number(btn.getAttribute('data-hz') || 0); pluck(hz);
+            btn.classList.remove('hp__string--hit'); void btn.offsetWidth; btn.classList.add('hp__string--hit');
+            broadcast(btn.getAttribute('data-note') || '', hz);
+            lastDrag = idx;
+          }
+        }
+      }
+    }, { passive: true });
+    document.getElementById('hp-board').addEventListener('touchend', () => { lastDrag = -1; });
+  })();
+</script>
+
+<style>
+  .hp { min-height: 100vh; padding: 12px 12px 60px; background: radial-gradient(ellipse at 50% 0%, rgba(255, 138, 74, 0.18), transparent 60%), linear-gradient(180deg, #2a0e26 0%, #1a0a1a 60%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+  .hp__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .hp__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+  .hp__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .hp__title em { font-style: italic; }
+  .hp__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 60ch; color: #cfc6df; }
+  .hp__stage { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 800px) { .hp__stage { grid-template-columns: 1fr; } }
+  .hp__panel { background: rgba(18, 17, 14, 0.55); border: 2px solid #ffd400; padding: 14px; box-shadow: 6px 6px 0 0 #050310; display: flex; flex-direction: column; gap: 12px; }
+  .hp__panel-row { display: flex; flex-direction: column; gap: 4px; }
+  .hp__panel-label { font-size: 9px; letter-spacing: 0.22em; color: #ffd400; text-transform: uppercase; }
+  .hp__panel input[type='range'] { accent-color: #ffd400; }
+  .hp__broadcast { margin: 0; padding-top: 8px; border-top: 1px dashed #5f5e5a; font-size: 10px; letter-spacing: 0.12em; color: #ff8a4a; min-height: 14px; }
+  .hp__board { position: relative; padding: 30px 18px; background: linear-gradient(180deg, #4a0e2c 0%, #2a0e26 60%, #1a0a1a 100%); border: 4px solid #c9a449; box-shadow: 6px 6px 0 0 #050310; min-height: 520px; }
+  .hp__frame { position: absolute; inset: 8px; border: 2px solid #c9a449; border-radius: 8px; pointer-events: none; box-shadow: inset 0 0 30px rgba(255, 138, 74, 0.2); }
+  .hp__strings { position: relative; display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; min-height: 480px; padding: 12px 6px; }
+  .hp__string { background: transparent; border: 0; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; color: inherit; height: 100%; }
+  .hp__string-line { display: block; width: 2px; flex: 1; background: linear-gradient(180deg, #fff 0%, #ffd400 50%, #c9a449 100%); box-shadow: 0 0 6px rgba(255, 220, 100, 0.5); transition: transform 80ms; }
+  .hp__string:hover .hp__string-line { transform: scaleX(2); filter: brightness(1.4); }
+  .hp__string--hit .hp__string-line { animation: hp-vibe 0.6s ease-out; }
+  @keyframes hp-vibe { 0% { transform: translateX(0); } 25% { transform: translateX(2px); } 50% { transform: translateX(-2px); filter: brightness(1.5); } 75% { transform: translateX(1px); } 100% { transform: translateX(0); } }
+  .hp__string-note { margin-top: 4px; font-size: 9px; letter-spacing: 0.1em; color: #ffd400; }
+  .hp__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+  .hp__foot code { background: #050310; padding: 1px 6px; border: 1px solid #c9a449; color: #ffd400; }
+  .hp__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ffd400; }
+</style>

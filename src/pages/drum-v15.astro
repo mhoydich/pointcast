@@ -1,0 +1,190 @@
+---
+/**
+ * /drum-v15 — Hang Drum (handpan) · audio batch 2/5 · 2026-04-28 PT.
+ *
+ * Eight tongues arranged radially around a steel handpan. Tap a tongue
+ * to play. Web Audio synth: sine fundamental + 2.01× partial + 3.97×
+ * partial through narrow bandpass filters at each (Q=12) for the
+ * bell-meets-drum metallic resonance. Long ~2.4s decay. Calming.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-v15 — Hang Drum (handpan)';
+const description = 'Eight steel tongues on a handpan. Tap to play. Calming melodic percussion. Multiplayer drum-hub variant on PointCast.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-v15', name: 'PointCast Drum · v15 · Hang Drum', url: 'https://pointcast.xyz/drum-v15', description };
+
+// D minor pentatonic-ish layout — typical Hang scale
+const TONGUES = [
+  { id: 'h0', note: 'D3',  hz: 146.83, kbd: '1', angle:   0 },
+  { id: 'h1', note: 'A3',  hz: 220.00, kbd: '2', angle:  45 },
+  { id: 'h2', note: 'F3',  hz: 174.61, kbd: '3', angle:  90 },
+  { id: 'h3', note: 'C4',  hz: 261.63, kbd: '4', angle: 135 },
+  { id: 'h4', note: 'D4',  hz: 293.66, kbd: '5', angle: 180 },
+  { id: 'h5', note: 'A4',  hz: 440.00, kbd: '6', angle: 225 },
+  { id: 'h6', note: 'F4',  hz: 349.23, kbd: '7', angle: 270 },
+  { id: 'h7', note: 'C5',  hz: 523.25, kbd: '8', angle: 315 },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="hd" id="hd-main">
+    <DrumNav current="v14" />
+    <header class="hd__head">
+      <p class="hd__kicker">DRUM HUB · V15 · HANG · HANDPAN · CALM · MULTIPLAYER</p>
+      <h1 class="hd__title"><em>Eight tongues. Steel. Slow.</em></h1>
+      <p class="hd__dek">A handpan in D minor. Tap a tongue. Let it ring. Multiplayer — every visitor's strike shows up on the cast surfaces.</p>
+    </header>
+
+    <section class="hd__stage">
+      <div class="hd__pan">
+        <div class="hd__pan-shell" aria-hidden="true"></div>
+        <div class="hd__pan-ring" aria-hidden="true"></div>
+        <div class="hd__pan-ding" aria-hidden="true"></div>
+        {TONGUES.map((t) => (
+          <button type="button" class="hd__tongue" data-id={t.id} data-note={t.note} data-hz={t.hz} data-kbd={t.kbd}
+            style={`--hd-angle: ${t.angle}deg`} aria-label={`Tongue ${t.note}`}>
+            <span class="hd__tongue-shape"></span>
+            <span class="hd__tongue-note mono">{t.note}</span>
+            <span class="hd__tongue-kbd mono">{t.kbd}</span>
+          </button>
+        ))}
+      </div>
+
+      <aside class="hd__panel">
+        <div class="hd__panel-row"><span class="hd__panel-label mono">decay</span><input id="hd-decay" type="range" min="20" max="100" value="70" /></div>
+        <div class="hd__panel-row"><span class="hd__panel-label mono">brightness</span><input id="hd-bright" type="range" min="500" max="6000" value="2400" /></div>
+        <div class="hd__panel-row"><span class="hd__panel-label mono">reverb</span><input id="hd-reverb" type="range" min="0" max="100" value="55" /></div>
+        <p class="hd__broadcast mono" id="hd-broadcast">— ready —</p>
+      </aside>
+    </section>
+
+    <footer class="hd__foot">
+      <p>Each strike fires <code>type=hang</code> to <code>/api/sounds</code>. Tongue layout follows the classic D-minor handpan scale (D / A / F / C / D / A / F / C).</p>
+      <p class="hd__credit mono">v0.1 · 2026-04-28 · drum sprint v15 · audio batch 2/5</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let ctx = null, master = null, lpf = null, conv = null, dryG = null, wetG = null;
+    let decayMul = 0.7, brightHz = 2400, reverbWet = 0.55;
+    function makeReverb(s, d) {
+      const rate = ctx.sampleRate, len = Math.floor(rate * s);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, d);
+      }
+      return buf;
+    }
+    function ensure() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = brightHz; lpf.Q.value = 0.7;
+      master = ctx.createGain(); master.gain.value = 0.65;
+      conv = ctx.createConvolver(); conv.buffer = makeReverb(3.2, 2.4);
+      dryG = ctx.createGain(); dryG.gain.value = 1 - reverbWet * 0.5;
+      wetG = ctx.createGain(); wetG.gain.value = reverbWet;
+      lpf.connect(master); master.connect(dryG); master.connect(conv); conv.connect(wetG);
+      dryG.connect(ctx.destination); wetG.connect(ctx.destination);
+    }
+    function pluck(hz) {
+      ensure();
+      const t = ctx.currentTime;
+      const baseDecay = 2.4 * decayMul;
+      // metallic transient — short bandpass-shaped noise burst
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.06, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = hz * 5; nf.Q.value = 6;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.001, t);
+      ng.gain.linearRampToValueAtTime(0.16, t + 0.001);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      n.connect(nf); nf.connect(ng); ng.connect(lpf); n.start(t);
+      [[1, 0.4, baseDecay], [2.01, 0.18, baseDecay * 0.7], [3.97, 0.08, baseDecay * 0.5]].forEach(([mul, lvl, dec]) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz * mul;
+        o.detune.value = (Math.random() * 2 - 1) * 5;
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = hz * mul; bp.Q.value = 12;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(lvl, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+        o.connect(bp); bp.connect(g); g.connect(lpf);
+        o.start(t); o.stop(t + dec + 0.05);
+      });
+    }
+    function sess() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; } catch { return 'hd-' + Math.random().toString(36).slice(2,10); } }
+    function broadcast(note, hz) { try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'hang', sessionId: sess(), note, hz: Math.round(hz) }) }); const el = document.getElementById('hd-broadcast'); if (el) el.textContent = `playing · ${note}`; } catch {} }
+    document.getElementById('hd-decay').addEventListener('input', (e) => { decayMul = Number(e.target.value) / 100; });
+    document.getElementById('hd-bright').addEventListener('input', (e) => { brightHz = Number(e.target.value); if (lpf && ctx) lpf.frequency.setTargetAtTime(brightHz, ctx.currentTime, 0.05); });
+    document.getElementById('hd-reverb').addEventListener('input', (e) => { reverbWet = Number(e.target.value) / 100; if (wetG && dryG && ctx) { wetG.gain.setTargetAtTime(reverbWet, ctx.currentTime, 0.05); dryG.gain.setTargetAtTime(1 - reverbWet * 0.5, ctx.currentTime, 0.05); } });
+    document.querySelectorAll('.hd__tongue').forEach((btn) => {
+      const hz = Number(btn.getAttribute('data-hz') || 0);
+      const note = btn.getAttribute('data-note') || '';
+      function play() { pluck(hz); btn.classList.remove('hd__tongue--hit'); void btn.offsetWidth; btn.classList.add('hd__tongue--hit'); broadcast(note, hz); }
+      btn.addEventListener('mousedown', play);
+      btn.addEventListener('touchstart', (e) => { play(); e.preventDefault(); }, { passive: false });
+      const kbd = (btn.getAttribute('data-kbd') || '').toLowerCase();
+      window.addEventListener('keydown', (e) => { if (!e.repeat && e.key.toLowerCase() === kbd) play(); });
+    });
+  })();
+</script>
+
+<style>
+  .hd { min-height: 100vh; padding: 12px 12px 60px; background: radial-gradient(ellipse at 50% 50%, rgba(95, 186, 253, 0.15), transparent 60%), linear-gradient(180deg, #0c1d3a 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+  .hd__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .hd__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #5fbafd; }
+  .hd__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .hd__title em { font-style: italic; }
+  .hd__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+  .hd__stage { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; }
+  @media (max-width: 800px) { .hd__stage { grid-template-columns: 1fr; } }
+  .hd__pan { position: relative; aspect-ratio: 1; max-width: 540px; width: 100%; margin: 0 auto; }
+  .hd__pan-shell { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 50% 30%, #94d4ff 0%, #185fa5 30%, #0c1d3a 80%, #050310 100%); box-shadow: 0 0 60px rgba(95, 186, 253, 0.25), 8px 8px 0 0 #050310; border: 4px solid #050310; }
+  .hd__pan-ring { position: absolute; inset: 8%; border-radius: 50%; background: radial-gradient(circle at 50% 30%, transparent 30%, rgba(255, 255, 255, 0.08) 50%, transparent 70%); pointer-events: none; }
+  .hd__pan-ding { position: absolute; left: 50%; top: 50%; width: 22%; height: 22%; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle at 40% 35%, #cfd6dc 0%, #5fbafd 60%, #185fa5 100%); border: 2px solid #050310; box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 3px 3px 8px rgba(255,255,255,0.5); }
+  .hd__tongue {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 28%;
+    height: 14%;
+    transform: translate(-50%, -50%) rotate(var(--hd-angle, 0deg)) translate(34%, 0) rotate(calc(-1 * var(--hd-angle, 0deg)));
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+    z-index: 2;
+  }
+  .hd__tongue-shape {
+    position: absolute; inset: 0;
+    border-radius: 999px / 60%;
+    background: radial-gradient(circle at 35% 30%, #cfd6dc, #94d4ff 50%, #185fa5);
+    border: 2px solid #050310;
+    box-shadow: inset 0 -3px 6px rgba(0,0,0,0.4), 2px 2px 0 0 #050310;
+    transition: transform 100ms;
+  }
+  .hd__tongue:hover .hd__tongue-shape { transform: scale(1.04); filter: brightness(1.1); }
+  .hd__tongue--hit .hd__tongue-shape { animation: hd-ring 0.4s ease-out; }
+  @keyframes hd-ring { 0% { transform: scale(1); } 30% { transform: scale(1.08); filter: brightness(1.4); box-shadow: 0 0 22px #94d4ff; } 100% { transform: scale(1); } }
+  .hd__tongue-note { position: relative; z-index: 1; font-size: 10px; letter-spacing: 0.1em; color: #050310; font-weight: 700; }
+  .hd__tongue-kbd { position: relative; z-index: 1; font-size: 9px; padding: 1px 4px; background: #ffd400; color: #050310; border: 1px solid #050310; border-radius: 2px; }
+  .hd__panel { background: rgba(18, 17, 14, 0.5); border: 2px solid #5fbafd; padding: 14px; box-shadow: 6px 6px 0 0 #050310; display: flex; flex-direction: column; gap: 12px; }
+  .hd__panel-row { display: flex; flex-direction: column; gap: 4px; }
+  .hd__panel-label { font-size: 9px; letter-spacing: 0.22em; color: #5fbafd; text-transform: uppercase; }
+  .hd__panel input[type='range'] { accent-color: #5fbafd; }
+  .hd__broadcast { margin: 0; padding-top: 8px; border-top: 1px dashed #5f5e5a; font-size: 10px; letter-spacing: 0.12em; color: #5fbafd; min-height: 14px; }
+  .hd__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+  .hd__foot code { background: #050310; padding: 1px 6px; border: 1px solid #5fbafd; color: #5fbafd; }
+  .hd__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #5fbafd; }
+</style>
