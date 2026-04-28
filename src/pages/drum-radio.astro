@@ -1,0 +1,720 @@
+---
+/**
+ * /drum-radio — the drum hub's automatic radio station · sprint 4/4
+ *
+ * The drum bus already broadcasts every tap, every note, every chord.
+ * Most surfaces consume those events visually. Radio plays them back
+ * as audio, even when nobody's around. Tune in, leave the tab open —
+ * the room makes a sound.
+ *
+ * It works in two modes, picked automatically based on activity:
+ *
+ *   LIVE        · when /api/sounds is firing in real time, every event
+ *                  becomes a synth hit on the radio (kick / snare / bell /
+ *                  organ / pad depending on event family)
+ *   REBROADCAST · when nothing's been live for >12s, radio loops a
+ *                  buffered set of recent events with a slow tempo and
+ *                  ambient pad. The room never goes silent.
+ *
+ * No streaming audio. Every sound is synthesized in-browser via Web
+ * Audio — same recipes the drum surfaces use, simplified. So the radio
+ * is small, public, and works without any server-side audio.
+ *
+ * Aesthetic: late-night classic-radio receiver. Dark wood cabinet,
+ * brass dial, glowing tuning needle, vintage frequency display.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-radio — the drum hub on the air';
+const description =
+  'PointCast Drum Radio — auto-DJ that turns every /api/sounds event into a synth hit. When the room goes quiet, radio rebroadcasts the last 50 events on a soft loop. Leave the tab open. The room never goes silent.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'RadioBroadcastService',
+  '@id': 'https://pointcast.xyz/drum-radio',
+  name: 'PointCast Drum Radio',
+  url: 'https://pointcast.xyz/drum-radio',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="rd" id="rd-main">
+    <DrumNav current="radio" />
+
+    <header class="rd__head">
+      <p class="rd__kicker">DRUM HUB · RADIO · 96.1 FM · ON AIR · MULTIPLAYER</p>
+      <h1 class="rd__title"><em>The drum hub never goes silent.</em></h1>
+      <p class="rd__dek">
+        Every event from the room becomes a sound on the radio. When it's quiet, radio loops the last fifty events. Leave the tab open. Pour something. Listen.
+      </p>
+    </header>
+
+    <section class="rd__cabinet">
+      <div class="rd__brand">
+        <span class="rd__brand-logo mono">★ POINTCAST ★</span>
+        <span class="rd__brand-band mono">ALL HOURS · 96.1 FM</span>
+      </div>
+
+      <div class="rd__display">
+        <div class="rd__needle" id="rd-needle"></div>
+        <div class="rd__dial-marks" aria-hidden="true">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <span class="rd__dial-mark" style={`left: ${(i / 11) * 100}%;`}></span>
+          ))}
+        </div>
+        <p class="rd__display-band mono" id="rd-display-band">96.1 · TUNING</p>
+        <p class="rd__display-mode mono" id="rd-mode">— OFF AIR —</p>
+        <p class="rd__display-now mono" id="rd-now">press POWER to tune in</p>
+      </div>
+
+      <div class="rd__controls">
+        <button type="button" class="rd__power" id="rd-power" aria-pressed="false">
+          <span class="rd__power-led" aria-hidden="true"></span>
+          POWER
+        </button>
+        <div class="rd__knob-row">
+          <div class="rd__knob">
+            <span class="rd__knob-label mono">volume</span>
+            <input id="rd-volume" type="range" min="0" max="100" value="70" />
+          </div>
+          <div class="rd__knob">
+            <span class="rd__knob-label mono">warmth</span>
+            <input id="rd-warmth" type="range" min="200" max="6000" value="2400" />
+          </div>
+          <div class="rd__knob">
+            <span class="rd__knob-label mono">echo</span>
+            <input id="rd-echo" type="range" min="0" max="100" value="35" />
+          </div>
+        </div>
+      </div>
+
+      <div class="rd__vu" aria-hidden="true">
+        <span class="rd__vu-label mono">vu</span>
+        <div class="rd__vu-bar">
+          <div class="rd__vu-fill" id="rd-vu-fill"></div>
+        </div>
+        <span class="rd__vu-station mono" id="rd-vu-station">— · —</span>
+      </div>
+
+      <ul class="rd__feed" id="rd-feed" role="list">
+        <li class="rd__feed-empty mono">— off air —</li>
+      </ul>
+    </section>
+
+    <footer class="rd__foot">
+      <p>
+        Radio synthesizes every sound in-browser; nothing streams from a
+        server. <code>kick</code>, <code>snare</code>, <code>bell</code>,
+        <code>organ</code>, <code>pad</code> recipes light up based on the
+        type of <code>/api/sounds</code> event. After 12 seconds of silence,
+        radio rebroadcasts the last 50 events on a slow loop with an
+        ambient pad underneath.
+      </p>
+      <p class="rd__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 4/4</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    let on = false;
+    let ctx = null;
+    let masterGain = null;
+    let lpf = null;
+    let dryGain = null;
+    let wetGain = null;
+    let convolver = null;
+    let padGain = null;
+
+    let warmthHz = 2400;
+    let echoWet = 0.35;
+    let masterVol = 0.7;
+
+    let lastTs = 0;
+    let lastLiveAt = 0;
+    let buffer = []; // recent events (rebroadcast pool)
+    const BUFFER_MAX = 50;
+    const REBROADCAST_AFTER_MS = 12000;
+
+    const power = document.getElementById('rd-power');
+    const led = power.querySelector('.rd__power-led');
+    const modeEl = document.getElementById('rd-mode');
+    const nowEl = document.getElementById('rd-now');
+    const feed = document.getElementById('rd-feed');
+    const vuFill = document.getElementById('rd-vu-fill');
+    const vuStation = document.getElementById('rd-vu-station');
+    const needle = document.getElementById('rd-needle');
+    const displayBand = document.getElementById('rd-display-band');
+
+    function makeReverbBuffer(seconds, decay) {
+      const rate = ctx.sampleRate;
+      const len = Math.floor(rate * seconds);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+      return buf;
+    }
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+
+      lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = warmthHz;
+      lpf.Q.value = 0.7;
+
+      masterGain = ctx.createGain();
+      masterGain.gain.value = masterVol;
+
+      convolver = ctx.createConvolver();
+      convolver.buffer = makeReverbBuffer(2.6, 2.4);
+      dryGain = ctx.createGain(); dryGain.gain.value = 1 - echoWet * 0.5;
+      wetGain = ctx.createGain(); wetGain.gain.value = echoWet;
+
+      lpf.connect(masterGain);
+      masterGain.connect(dryGain);
+      masterGain.connect(convolver);
+      convolver.connect(wetGain);
+      dryGain.connect(ctx.destination);
+      wetGain.connect(ctx.destination);
+
+      // Soft pad — ambient drone underneath rebroadcast
+      padGain = ctx.createGain();
+      padGain.gain.value = 0; // off until rebroadcast turns it up
+      [220, 220 * 1.25, 220 * 1.5].forEach((hz, i) => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = hz;
+        o.detune.value = (Math.random() * 2 - 1) * 4;
+        const g = ctx.createGain();
+        g.gain.value = [0.18, 0.10, 0.08][i];
+        o.connect(g);
+        g.connect(padGain);
+        o.start();
+      });
+      padGain.connect(lpf);
+    }
+
+    function bumpVu(intensity) {
+      const v = Math.max(0, Math.min(1, intensity));
+      vuFill.style.width = `${(v * 100).toFixed(0)}%`;
+      setTimeout(() => { vuFill.style.width = `${Math.max(0, (v * 60))}%`; }, 220);
+    }
+
+    function tickNeedle() {
+      // Slowly drift needle by uptime — purely cosmetic
+      const t = Date.now();
+      const sweep = (Math.sin(t / 9000) + 1) / 2; // 0..1
+      const x = 8 + sweep * 84;
+      needle.style.left = `${x.toFixed(2)}%`;
+      const freq = (88 + sweep * 20).toFixed(1);
+      displayBand.textContent = `${freq} · TUNING`;
+      if (on) requestAnimationFrame(tickNeedle);
+    }
+
+    // Synth recipes — small, tuned for radio playback
+    function kick(t, amp = 1) {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      const g = ctx.createGain();
+      o.frequency.setValueAtTime(140, t);
+      o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.5 * amp, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.25);
+      bumpVu(0.7 * amp);
+    }
+    function snare(t, amp = 1) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.18, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1500;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.4 * amp, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      n.connect(f); f.connect(g); g.connect(lpf); n.start(t);
+      bumpVu(0.55 * amp);
+    }
+    function hat(t, amp = 1) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.06, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.18 * amp, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      n.connect(f); f.connect(g); g.connect(lpf); n.start(t);
+      bumpVu(0.4 * amp);
+    }
+    function bell(t, hz = 880, amp = 1) {
+      [hz, hz * 2.756, hz * 5.404].forEach((f, i) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+        const g = ctx.createGain();
+        const peak = [0.18, 0.07, 0.03][i] * amp;
+        const dec = [1.6, 1.0, 0.6][i];
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+        o.connect(g); g.connect(lpf); o.start(t); o.stop(t + dec + 0.05);
+      });
+      bumpVu(0.6 * amp);
+    }
+    function organ(t, hz = 440, amp = 1) {
+      [1, 2, 3, 4].forEach((mul, i) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz * mul;
+        o.detune.value = (Math.random() * 2 - 1) * 4;
+        const g = ctx.createGain();
+        const peak = [0.18, 0.10, 0.06, 0.03][i] * amp;
+        const dec = 1.4;
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.06);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+        o.connect(g); g.connect(lpf); o.start(t); o.stop(t + dec + 0.05);
+      });
+      bumpVu(0.5 * amp);
+    }
+    function padTone(t, hz = 220, amp = 1) {
+      [1, 1.25, 1.5].forEach((mul, i) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz * mul;
+        const g = ctx.createGain();
+        const peak = [0.10, 0.06, 0.04][i] * amp;
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.4);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 2.4);
+        o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 2.6);
+      });
+      bumpVu(0.3 * amp);
+    }
+
+    function playEvent(e, opts) {
+      if (!on) return;
+      ensureCtx();
+      const t = ctx.currentTime + (opts?.delay || 0.02);
+      const amp = opts?.amp ?? 1;
+      const type = e.type || 'default';
+      if (type === 'drum')      kick(t, amp);
+      else if (type === 'orchestra') snare(t, amp);
+      else if (type === 'choir')     organ(t, 330 * amp, amp);
+      else if (type === 'lounge')    organ(t, 440, amp * 0.8);
+      else if (type === 'theremin')  organ(t, e.hz || 440, amp * 0.7);
+      else if (type === 'symphony')  padTone(t, 220, amp * 0.6);
+      else if (type === 'bells')     bell(t, e.hz || 880, amp);
+      else if (type === 'organ')     organ(t, e.hz || 440, amp);
+      else if (type === 'daily')     hat(t, amp * 0.8);
+      else if (type === 'kettle')    hat(t, amp * 0.5);
+      else if (type === 'potato')    snare(t, amp * 0.5);
+      else if (type === 'milestone') { kick(t, amp); bell(t + 0.15, 1200, amp); padTone(t + 0.3, 330, amp); }
+      else                           hat(t, amp * 0.5);
+
+      // Render in feed
+      const li = document.createElement('li');
+      li.className = 'rd__feed-row';
+      li.dataset.type = type;
+      const d = new Date();
+      const stamp = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+      const labelExtra = e.note || e.inst || e.voice || (e.hz ? `${e.hz}Hz` : '') || '';
+      li.innerHTML = `
+        <span class="rd__feed-time mono">${stamp}</span>
+        <span class="rd__feed-tag mono">${type.toUpperCase()}</span>
+        <span class="rd__feed-extra">${labelExtra}</span>
+        <span class="rd__feed-mode mono">${opts?.mode || 'live'}</span>
+      `;
+      const empty = feed.querySelector('.rd__feed-empty');
+      if (empty) empty.remove();
+      feed.prepend(li);
+      const rows = feed.querySelectorAll('.rd__feed-row');
+      if (rows.length > 12) for (let i = 12; i < rows.length; i++) rows[i].remove();
+
+      nowEl.textContent = `now playing · ${type}${labelExtra ? ' · ' + labelExtra : ''}`;
+    }
+
+    // Polling and rebroadcast loop
+    async function poll() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (events.length) {
+          lastTs = events[events.length - 1].t || Date.now();
+          lastLiveAt = Date.now();
+          // Live mode
+          if (on) {
+            modeEl.textContent = '— LIVE —';
+            modeEl.dataset.mode = 'live';
+            // Push to buffer
+            for (const e of events) {
+              buffer.push(e);
+              if (buffer.length > BUFFER_MAX) buffer.shift();
+              playEvent(e, { mode: 'live' });
+            }
+          } else {
+            // Capture even when off so rebroadcast has material
+            for (const e of events) {
+              buffer.push(e);
+              if (buffer.length > BUFFER_MAX) buffer.shift();
+            }
+          }
+          vuStation.textContent = `${buffer.length} buffered · live`;
+        }
+      } catch {}
+    }
+
+    let rebroadcastTimer = null;
+    function rebroadcastTick() {
+      if (!on) return;
+      const idle = Date.now() - lastLiveAt;
+      if (idle < REBROADCAST_AFTER_MS) {
+        modeEl.textContent = '— LIVE —';
+        modeEl.dataset.mode = 'live';
+        if (padGain) padGain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+        return;
+      }
+      modeEl.textContent = '— REBROADCAST —';
+      modeEl.dataset.mode = 'rebroadcast';
+      if (padGain) padGain.gain.setTargetAtTime(0.18, ctx.currentTime, 0.6);
+      if (buffer.length === 0) {
+        // No history yet — synthesize ambient pad chord
+        ensureCtx();
+        padTone(ctx.currentTime, 220 + Math.random() * 80, 0.6);
+        nowEl.textContent = 'rebroadcast · ambient · awaiting first room sound';
+        return;
+      }
+      // Play one buffered event softly
+      const e = buffer[Math.floor(Math.random() * buffer.length)];
+      playEvent(e, { mode: 'rebroadcast', amp: 0.55 });
+    }
+
+    function powerOn() {
+      ensureCtx();
+      on = true;
+      power.classList.add('rd__power--on');
+      power.setAttribute('aria-pressed', 'true');
+      led.classList.add('rd__power-led--on');
+      modeEl.textContent = '— ON AIR —';
+      modeEl.dataset.mode = 'live';
+      nowEl.textContent = 'tuning the room…';
+      lastLiveAt = Date.now();
+      requestAnimationFrame(tickNeedle);
+      if (rebroadcastTimer) clearInterval(rebroadcastTimer);
+      rebroadcastTimer = setInterval(rebroadcastTick, 4500);
+    }
+    function powerOff() {
+      on = false;
+      power.classList.remove('rd__power--on');
+      power.setAttribute('aria-pressed', 'false');
+      led.classList.remove('rd__power-led--on');
+      modeEl.textContent = '— OFF AIR —';
+      nowEl.textContent = 'press POWER to tune in';
+      vuFill.style.width = '0%';
+      if (rebroadcastTimer) { clearInterval(rebroadcastTimer); rebroadcastTimer = null; }
+      if (padGain && ctx) padGain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+    }
+
+    power.addEventListener('click', () => {
+      if (on) powerOff(); else powerOn();
+    });
+
+    document.getElementById('rd-volume').addEventListener('input', (e) => {
+      masterVol = Number(e.target.value || 0) / 100;
+      if (masterGain) masterGain.gain.setTargetAtTime(masterVol, ctx.currentTime, 0.05);
+    });
+    document.getElementById('rd-warmth').addEventListener('input', (e) => {
+      warmthHz = Number(e.target.value || 2400);
+      if (lpf) lpf.frequency.setTargetAtTime(warmthHz, ctx.currentTime, 0.05);
+    });
+    document.getElementById('rd-echo').addEventListener('input', (e) => {
+      echoWet = Number(e.target.value || 0) / 100;
+      if (wetGain && dryGain) {
+        wetGain.gain.setTargetAtTime(echoWet, ctx.currentTime, 0.05);
+        dryGain.gain.setTargetAtTime(1 - echoWet * 0.5, ctx.currentTime, 0.05);
+      }
+    });
+
+    // Always poll (even off) so buffer fills for rebroadcast
+    setInterval(poll, 1500);
+    poll();
+  })();
+</script>
+
+<style>
+  .rd {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255, 138, 74, 0.18), transparent 60%),
+      linear-gradient(180deg, #1a1228 0%, #0a0612 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .rd__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .rd__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .rd__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 50px);
+    line-height: 1.05;
+  }
+  .rd__title em { font-style: italic; }
+  .rd__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+  .rd__cabinet {
+    max-width: 1080px;
+    margin: 0 auto;
+    background:
+      repeating-linear-gradient(0deg, rgba(74, 44, 16, 0.18) 0 22px, transparent 22px 26px),
+      linear-gradient(180deg, #4a2c10 0%, #2c1d05 100%);
+    border: 4px solid #050310;
+    box-shadow: 8px 8px 0 0 #050310;
+    padding: 24px;
+    position: relative;
+  }
+  .rd__brand {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+  }
+  .rd__brand-logo {
+    font-size: 14px;
+    letter-spacing: 0.32em;
+    color: #ffd400;
+    font-weight: 700;
+  }
+  .rd__brand-band {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #c9a449;
+  }
+
+  .rd__display {
+    position: relative;
+    background: #050310;
+    border: 3px solid #c9a449;
+    box-shadow: inset 0 0 30px rgba(255, 212, 0, 0.18), 4px 4px 0 0 #1a0e26;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .rd__needle {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 2px;
+    background: #ff5c23;
+    box-shadow: 0 0 12px rgba(255, 92, 35, 0.6);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .rd__dial-marks {
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 8px;
+    background: rgba(201, 164, 73, 0.18);
+    pointer-events: none;
+  }
+  .rd__dial-mark {
+    position: absolute;
+    top: 0;
+    width: 1px; height: 6px;
+    background: #c9a449;
+  }
+  .rd__display-band {
+    margin: 8px 0 4px;
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    color: #ffd400;
+    text-align: center;
+  }
+  .rd__display-mode {
+    margin: 0 0 8px;
+    font-size: 22px;
+    letter-spacing: 0.22em;
+    color: #ff8a4a;
+    text-align: center;
+    font-family: 'Bungee', Impact, sans-serif;
+    text-shadow: 0 0 12px rgba(255, 138, 74, 0.5);
+  }
+  .rd__display-mode[data-mode='rebroadcast'] { color: #94d4ff; text-shadow: 0 0 12px rgba(148, 212, 255, 0.5); }
+  .rd__display-now {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: #cfc6df;
+    text-align: center;
+  }
+
+  .rd__controls {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    margin-bottom: 16px;
+  }
+  .rd__power {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: #2c1d05;
+    color: #ffd400;
+    border: 3px solid #050310;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 16px 10px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 13px;
+    letter-spacing: 0.32em;
+    font-weight: 700;
+  }
+  .rd__power--on {
+    background: #ff5c23;
+    color: #050310;
+  }
+  .rd__power-led {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 2px solid #050310;
+    box-shadow: inset 0 0 4px rgba(255, 92, 35, 0.4);
+  }
+  .rd__power-led--on {
+    background: #fffaf0;
+    box-shadow: 0 0 12px #fffaf0, inset 0 0 4px #fff;
+  }
+
+  .rd__knob-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .rd__knob {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .rd__knob-label {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #c9a449;
+    text-transform: uppercase;
+  }
+  .rd__knob input[type='range'] { accent-color: #ffd400; }
+
+  .rd__vu {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 100px;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .rd__vu-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #ffd400;
+  }
+  .rd__vu-bar {
+    height: 14px;
+    background: #050310;
+    border: 1.5px solid #c9a449;
+    overflow: hidden;
+  }
+  .rd__vu-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b6e3b 0%, #ffd400 60%, #ff5c23 100%);
+    transition: width 80ms linear;
+  }
+  .rd__vu-station {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #c9a449;
+    text-align: right;
+  }
+
+  .rd__feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: #050310;
+    border: 1.5px solid #c9a449;
+    box-shadow: 3px 3px 0 0 #1a0e26;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .rd__feed-row {
+    display: grid;
+    grid-template-columns: 80px 90px minmax(0, 1fr) 90px;
+    gap: 8px;
+    padding: 6px 12px;
+    color: #fffaf0;
+    font-size: 11px;
+    align-items: center;
+    border-left: 3px solid transparent;
+  }
+  .rd__feed-row[data-type='drum']      { border-left-color: #ff5c23; }
+  .rd__feed-row[data-type='orchestra'] { border-left-color: #ffd400; }
+  .rd__feed-row[data-type='choir']     { border-left-color: #5fbafd; }
+  .rd__feed-row[data-type='lounge']    { border-left-color: #b8431a; }
+  .rd__feed-row[data-type='theremin']  { border-left-color: #ff8a4a; }
+  .rd__feed-row[data-type='symphony']  { border-left-color: #d6745f; }
+  .rd__feed-row[data-type='bells']     { border-left-color: #fff7c2; }
+  .rd__feed-row[data-type='organ']     { border-left-color: #c9a449; }
+  .rd__feed-row[data-type='daily']     { border-left-color: #94d4ff; }
+  .rd__feed-row[data-type='kettle']    { border-left-color: #5fbafd; }
+  .rd__feed-row[data-type='potato']    { border-left-color: #fff; }
+  .rd__feed-row[data-type='milestone'] { border-left-color: #ffd400; background: rgba(255, 212, 0, 0.08); }
+
+  .rd__feed-time { color: #5f5e5a; font-family: 'JetBrains Mono Variable', monospace; }
+  .rd__feed-tag {
+    color: #ffd400;
+    font-family: 'JetBrains Mono Variable', monospace;
+    letter-spacing: 0.16em;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .rd__feed-extra { color: #cfc6df; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; }
+  .rd__feed-mode { color: #ff8a4a; font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; text-align: right; letter-spacing: 0.16em; }
+  .rd__feed-empty {
+    padding: 12px 16px;
+    color: #5f5e5a;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+  }
+
+  .rd__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .rd__foot code { background: #050310; padding: 1px 6px; border: 1px solid #c9a449; color: #ffd400; }
+  .rd__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
