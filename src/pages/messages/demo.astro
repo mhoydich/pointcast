@@ -1,0 +1,624 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const description =
+  'PCP/2 friend messaging demo: exchange friend cards, sign direct messages, and export the thread as JSONL.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  '@id': 'https://pointcast.xyz/messages/demo',
+  name: 'PointCast Messages Friend Demo',
+  applicationCategory: 'CommunicationApplication',
+  operatingSystem: 'Web',
+  description,
+  url: 'https://pointcast.xyz/messages/demo',
+};
+---
+
+<BlockLayout
+  title="Messages Demo"
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/protocol.json', title: 'PointCast Peer Message Protocol' },
+    { type: 'application/json', href: '/.well-known/pointcast-peer.json', title: 'PointCast peer discovery' },
+  ]}
+>
+  <div class="friend-demo" data-friend-demo>
+    <header class="demo-head">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span>/</span>
+        <a href="/messages">messages</a>
+        <span>/</span>
+        <strong>demo</strong>
+      </nav>
+      <div class="title-row">
+        <div>
+          <p class="kicker">PCP/2 DRAFT · SIMPLE FRIEND MESSAGING</p>
+          <h1>Friend Demo</h1>
+        </div>
+        <p>
+          Exchange a friend card, sign a direct packet, carry the thread by JSONL today,
+          then swap in encrypted relay delivery when the relay KV is bound.
+        </p>
+      </div>
+      <div class="status-line" data-status>Ready.</div>
+    </header>
+
+    <section class="demo-grid" aria-label="Friend messaging demo">
+      <section class="panel setup-panel" aria-labelledby="setup-title">
+        <div class="panel-head">
+          <p class="kicker">SETUP</p>
+          <h2 id="setup-title">Two peers</h2>
+        </div>
+        <div class="peer-pair">
+          <article class="peer-card">
+            <span>You</span>
+            <strong data-me-name>not created</strong>
+            <code data-me-peer>peer id appears here</code>
+          </article>
+          <article class="peer-card">
+            <span>Friend</span>
+            <strong data-friend-name>not created</strong>
+            <code data-friend-peer>peer id appears here</code>
+          </article>
+        </div>
+        <div class="button-row">
+          <button type="button" data-run-demo>Run demo</button>
+          <button type="button" data-reset-demo>Reset</button>
+        </div>
+      </section>
+
+      <section class="panel cards-panel" aria-labelledby="cards-title">
+        <div class="panel-head">
+          <p class="kicker">FRIEND CARDS</p>
+          <h2 id="cards-title">Copy / paste</h2>
+        </div>
+        <label>
+          <span>Your card</span>
+          <textarea data-me-card rows="5" spellcheck="false" readonly></textarea>
+        </label>
+        <label>
+          <span>Friend card</span>
+          <textarea data-friend-card rows="5" spellcheck="false"></textarea>
+        </label>
+        <div class="button-row">
+          <button type="button" data-copy-me-card>Copy your card</button>
+          <button type="button" data-import-card>Parse friend card</button>
+        </div>
+      </section>
+
+      <section class="panel compose-panel" aria-labelledby="compose-title">
+        <div class="panel-head">
+          <p class="kicker">COMPOSE</p>
+          <h2 id="compose-title">Direct packet</h2>
+        </div>
+        <label>
+          <span>Message</span>
+          <textarea data-message rows="8" maxlength="4000">hey, this is a signed PointCast packet from my browser.</textarea>
+        </label>
+        <div class="button-row">
+          <button type="button" data-send-me>Send as you</button>
+          <button type="button" data-send-friend>Friend replies</button>
+        </div>
+      </section>
+
+      <section class="panel thread-panel" aria-labelledby="thread-title">
+        <div class="panel-head">
+          <p class="kicker">THREAD</p>
+          <h2 id="thread-title">Signed messages</h2>
+        </div>
+        <ol class="thread-list" data-thread-list></ol>
+      </section>
+
+      <section class="panel handoff-panel" aria-labelledby="handoff-title">
+        <div class="panel-head">
+          <p class="kicker">HANDOFF</p>
+          <h2 id="handoff-title">JSONL bundle</h2>
+        </div>
+        <textarea data-jsonl rows="10" spellcheck="false" readonly></textarea>
+        <div class="button-row">
+          <button type="button" data-export-jsonl>Refresh export</button>
+          <button type="button" data-copy-jsonl>Copy JSONL</button>
+        </div>
+      </section>
+
+      <section class="panel friend-steps" aria-labelledby="steps-title">
+        <div class="panel-head">
+          <p class="kicker">WHAT A FRIEND DOES</p>
+          <h2 id="steps-title">Three moves</h2>
+        </div>
+        <ol>
+          <li><strong>Open PointCast Messages.</strong><span>Create a local peer and copy the friend card.</span></li>
+          <li><strong>Exchange cards.</strong><span>Send the card by text, QR, email, AirDrop, or a public profile link.</span></li>
+          <li><strong>Sync packets.</strong><span>Today: JSONL handoff. Next: encrypted relay pickup.</span></li>
+        </ol>
+      </section>
+    </section>
+  </div>
+</BlockLayout>
+
+<script>
+  import {
+    buildFriendCard,
+    buildPacketDraft,
+    encodeFriendCard,
+    generatePeerIdentity,
+    parseFriendCard,
+    serializePacketsJsonl,
+    shortPeerId,
+    signPacket,
+    verifyPacketSignature,
+  } from '../../lib/protocol-packet.js';
+
+  const $ = (selector) => document.querySelector(selector);
+  const els = {
+    status: $('[data-status]'),
+    runDemo: $('[data-run-demo]'),
+    resetDemo: $('[data-reset-demo]'),
+    meName: $('[data-me-name]'),
+    friendName: $('[data-friend-name]'),
+    mePeer: $('[data-me-peer]'),
+    friendPeer: $('[data-friend-peer]'),
+    meCard: $('[data-me-card]'),
+    friendCard: $('[data-friend-card]'),
+    copyMeCard: $('[data-copy-me-card]'),
+    importCard: $('[data-import-card]'),
+    message: $('[data-message]'),
+    sendMe: $('[data-send-me]'),
+    sendFriend: $('[data-send-friend]'),
+    threadList: $('[data-thread-list]'),
+    jsonl: $('[data-jsonl]'),
+    exportJsonl: $('[data-export-jsonl]'),
+    copyJsonl: $('[data-copy-jsonl]'),
+  };
+
+  const state = {
+    me: null,
+    friend: null,
+    parsedFriendCard: null,
+    thread: [],
+  };
+
+  function setStatus(message, tone = 'neutral') {
+    if (!els.status) return;
+    els.status.textContent = message;
+    els.status.dataset.tone = tone;
+  }
+
+  function dmTopic() {
+    const a = state.me?.peerId?.slice(-12) || 'me';
+    const b = state.friend?.peerId?.slice(-12) || state.parsedFriendCard?.peerId?.slice(-12) || 'friend';
+    return `pcp/dm/${[a, b].sort().join('-')}`;
+  }
+
+  function cardFor(identity, label) {
+    return buildFriendCard(identity, {
+      label,
+      topic: dmTopic(),
+      relay: 'https://pointcast.xyz/api/pcp/relay',
+    });
+  }
+
+  async function copyText(value, success) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(success, 'ok');
+    } catch {
+      setStatus(value, 'neutral');
+    }
+  }
+
+  async function runDemo() {
+    try {
+      state.me = await generatePeerIdentity({ displayName: 'Mike', kind: 'human' });
+      state.friend = await generatePeerIdentity({ displayName: 'Friend', kind: 'human' });
+      state.parsedFriendCard = cardFor(state.friend, 'Friend');
+      state.thread = [];
+      setStatus('Created two browser-local peers.', 'ok');
+      render();
+    } catch (err) {
+      setStatus(`WebCrypto Ed25519 unavailable: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  function resetDemo() {
+    state.me = null;
+    state.friend = null;
+    state.parsedFriendCard = null;
+    state.thread = [];
+    if (els.meCard) els.meCard.value = '';
+    if (els.friendCard) els.friendCard.value = '';
+    if (els.jsonl) els.jsonl.value = '';
+    setStatus('Demo reset.');
+    render();
+  }
+
+  function importFriendCard() {
+    try {
+      state.parsedFriendCard = parseFriendCard(els.friendCard?.value || '');
+      if (els.friendPeer) els.friendPeer.textContent = state.parsedFriendCard.peerId;
+      if (els.friendName) els.friendName.textContent = state.parsedFriendCard.label;
+      setStatus(`Parsed ${state.parsedFriendCard.label}.`, 'ok');
+    } catch (err) {
+      setStatus(`Friend card failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  async function sendFrom(senderName) {
+    if (!state.me || !state.friend) {
+      setStatus('Run the demo first.', 'bad');
+      return;
+    }
+
+    const sender = senderName === 'friend' ? state.friend : state.me;
+    const recipient = senderName === 'friend' ? state.me : state.friend;
+    const fallback =
+      senderName === 'friend'
+        ? 'got it. replying with my own signed packet.'
+        : 'hey, this is a signed PointCast packet from my browser.';
+    const current = els.message?.value?.trim() || '';
+    const defaultMe = 'hey, this is a signed PointCast packet from my browser.';
+    const body = senderName === 'friend' && (!current || current === defaultMe) ? fallback : current || fallback;
+
+    try {
+      const draft = buildPacketDraft({
+        from: sender.peerId,
+        to: [recipient.peerId],
+        body,
+        visibility: 'private',
+        retention: '30d',
+        topic: dmTopic(),
+        refs: [
+          { rel: 'protocol', href: 'https://pointcast.xyz/protocol' },
+          { rel: 'demo', href: 'https://pointcast.xyz/messages/demo' },
+        ],
+      });
+      const packet = await signPacket(draft, sender.privateKey);
+      const verified = await verifyPacketSignature(packet);
+      state.thread.unshift({
+        packet,
+        label: senderName === 'friend' ? 'Friend' : 'You',
+        verified: verified.ok,
+      });
+      if (senderName === 'me' && els.message) {
+        els.message.value = 'got it. replying with my own signed packet.';
+      }
+      if (senderName === 'friend' && els.message) {
+        els.message.value = 'nice. that round trip is the whole thing.';
+      }
+      setStatus(`${senderName === 'friend' ? 'Friend reply' : 'Message'} signed as ${shortPeerId(packet.id)}.`, verified.ok ? 'ok' : 'bad');
+      render();
+    } catch (err) {
+      setStatus(`Send failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  function renderThread() {
+    if (!els.threadList) return;
+    els.threadList.innerHTML = '';
+    if (!state.thread.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'Run the demo, then send a packet.';
+      els.threadList.append(empty);
+      return;
+    }
+
+    for (const item of state.thread) {
+      const li = document.createElement('li');
+      li.className = 'thread-item';
+      const top = document.createElement('p');
+      top.className = 'thread-top';
+      const label = document.createElement('strong');
+      label.textContent = item.label;
+      const proof = document.createElement('span');
+      proof.textContent = item.verified ? 'verified' : 'unverified';
+      top.append(label, proof);
+
+      const body = document.createElement('p');
+      body.className = 'thread-body';
+      body.textContent = item.packet.body;
+
+      const meta = document.createElement('code');
+      meta.textContent = `${shortPeerId(item.packet.id)} -> ${shortPeerId(item.packet.to[0])}`;
+      li.append(top, body, meta);
+      els.threadList.append(li);
+    }
+  }
+
+  function renderExport() {
+    if (!els.jsonl) return;
+    els.jsonl.value = serializePacketsJsonl(state.thread.map((item) => item.packet));
+  }
+
+  function render() {
+    if (els.meName) els.meName.textContent = state.me?.displayName || 'not created';
+    if (els.friendName) els.friendName.textContent = state.parsedFriendCard?.label || state.friend?.displayName || 'not created';
+    if (els.mePeer) els.mePeer.textContent = state.me?.peerId || 'peer id appears here';
+    if (els.friendPeer) els.friendPeer.textContent = state.parsedFriendCard?.peerId || state.friend?.peerId || 'peer id appears here';
+
+    if (state.me && els.meCard) els.meCard.value = encodeFriendCard(cardFor(state.me, 'Mike'));
+    if (state.friend && els.friendCard && !els.friendCard.value) els.friendCard.value = encodeFriendCard(cardFor(state.friend, 'Friend'));
+
+    renderThread();
+    renderExport();
+  }
+
+  els.runDemo?.addEventListener('click', runDemo);
+  els.resetDemo?.addEventListener('click', resetDemo);
+  els.copyMeCard?.addEventListener('click', () => copyText(els.meCard?.value || '', 'Friend card copied.'));
+  els.importCard?.addEventListener('click', importFriendCard);
+  els.sendMe?.addEventListener('click', () => sendFrom('me'));
+  els.sendFriend?.addEventListener('click', () => sendFrom('friend'));
+  els.exportJsonl?.addEventListener('click', () => {
+    renderExport();
+    setStatus(`Exported ${state.thread.length} packet${state.thread.length === 1 ? '' : 's'}.`, 'ok');
+  });
+  els.copyJsonl?.addEventListener('click', () => copyText(els.jsonl?.value || '', 'JSONL copied.'));
+
+  render();
+</script>
+
+<style>
+  .friend-demo {
+    width: min(1180px, calc(100vw - 32px));
+    margin: 0 auto;
+    padding: 28px 0 96px;
+    color: var(--pc-ink);
+  }
+
+  .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .breadcrumb a,
+  .breadcrumb strong {
+    color: var(--pc-ink);
+  }
+
+  .demo-head {
+    display: grid;
+    gap: 18px;
+    border-top: 2px solid var(--pc-ink);
+    padding-top: 28px;
+    margin-bottom: 18px;
+  }
+
+  .title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(280px, 0.42fr);
+    gap: 24px;
+    align-items: end;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  h1,
+  h2 {
+    margin: 0;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  h1 {
+    font-size: clamp(54px, 9vw, 112px);
+    line-height: 0.9;
+  }
+
+  h2 {
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  .title-row p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 18px;
+    line-height: 1.42;
+  }
+
+  .status-line {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--pc-rule);
+    padding: 0 12px;
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .status-line[data-tone="ok"] {
+    border-color: #0f6e56;
+    color: #074638;
+    background: #e7f4ef;
+  }
+
+  .status-line[data-tone="bad"] {
+    border-color: #8a2432;
+    color: #551620;
+    background: #fbeaee;
+  }
+
+  .demo-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1fr) minmax(320px, 0.9fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .panel {
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    padding: 14px;
+    background: #fff;
+  }
+
+  .compose-panel,
+  .thread-panel {
+    grid-row: span 2;
+  }
+
+  .panel-head {
+    margin-bottom: 14px;
+  }
+
+  label {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 10px;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    padding: 9px 10px;
+    font: 12px/1.4 var(--pc-font-mono);
+    letter-spacing: 0;
+    resize: vertical;
+  }
+
+  .button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  button {
+    min-height: 40px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .button-row button:first-child {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .peer-pair,
+  .thread-list,
+  .friend-steps ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .peer-card,
+  .thread-item,
+  .empty,
+  .friend-steps li {
+    min-width: 0;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 10px;
+  }
+
+  .peer-card {
+    display: grid;
+    gap: 5px;
+  }
+
+  .peer-card span,
+  .thread-top span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  code {
+    overflow-wrap: anywhere;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .thread-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 8px;
+  }
+
+  .thread-body {
+    margin: 0 0 8px;
+    overflow-wrap: anywhere;
+    line-height: 1.42;
+  }
+
+  .friend-steps {
+    background: #eef4fa;
+  }
+
+  .friend-steps li {
+    display: grid;
+    gap: 5px;
+  }
+
+  .friend-steps span {
+    color: var(--pc-ink-soft);
+    line-height: 1.42;
+  }
+
+  @media (max-width: 1080px) {
+    .demo-grid,
+    .title-row {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .compose-panel,
+    .thread-panel {
+      grid-row: auto;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .friend-demo {
+      width: min(100% - 24px, 1180px);
+    }
+
+    .demo-grid,
+    .title-row,
+    .button-row {
+      grid-template-columns: 1fr;
+    }
+
+    h1 {
+      font-size: 52px;
+    }
+  }
+</style>

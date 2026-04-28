@@ -93,6 +93,7 @@ export const GET: APIRoute = async () => {
         manifesto: 'https://pointcast.xyz/manifesto',
         protocol: 'https://pointcast.xyz/protocol',
         messages: 'https://pointcast.xyz/messages',
+        messagesDemo: 'https://pointcast.xyz/messages/demo',
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',
         nounsCola: 'https://pointcast.xyz/nouns-cola',

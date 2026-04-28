@@ -1,9 +1,9 @@
-export const PROTOCOL_VERSION = 'pcp-1.0.1';
+export const PROTOCOL_VERSION = 'pcp-1.0.2';
 export const PROTOCOL_PACKET_VERSION = 'pcp-1.0';
 export const PROTOCOL_PACKET_MEDIA_TYPE = 'pcp-1.0/block-packet+json';
 export const PROTOCOL_NAME = 'PointCast Peer Message Protocol';
 export const PROTOCOL_SHORT_NAME = 'PCP/1';
-export const PROTOCOL_UPDATED_AT = '2026-04-28T05:40:00Z';
+export const PROTOCOL_UPDATED_AT = '2026-04-28T06:30:00Z';
 
 export const PROTOCOL_STORAGE_KEYS = {
   profile: 'pcp:v1:peer-profile',
@@ -11,6 +11,7 @@ export const PROTOCOL_STORAGE_KEYS = {
   outbox: 'pcp:v1:outbox',
   receipts: 'pcp:v1:receipts',
   trustedPeers: 'pcp:v1:trusted-peers',
+  friends: 'pcp:v2:friends',
 };
 
 export const PROTOCOL_RECEIPT_TYPES = [
@@ -66,6 +67,24 @@ export const PROTOCOL_AGENT_RECEIPTS = [
     use: 'A result packet or citation bundle reached the intended peer or public Block surface.',
   },
 ];
+
+export const PROTOCOL_V2_SIMPLE_FRIENDS = {
+  status: 'draft',
+  demo: 'https://pointcast.xyz/messages/demo',
+  goal: 'Make peer messaging feel like exchanging a contact card, then sending normal signed messages.',
+  friendCard: {
+    mediaType: 'pcp-friend-card-1',
+    fields: ['peerId', 'label', 'kind', 'relay', 'topic', 'capabilities', 'createdAt'],
+    exchange: ['copy/paste', 'QR', 'AirDrop', 'email', 'public profile link'],
+  },
+  humanFlow: [
+    'Open /messages and create a local peer.',
+    'Copy your friend card and send it to a friend out-of-band.',
+    'Paste the friend card into the client and send signed packets to that peer.',
+    'Use JSONL handoff today; use encrypted relay pickup once relay KV and body encryption are enabled.',
+  ],
+  relayRule: 'Relays only receive encrypted envelopes. Plaintext direct messages stay local or travel by explicit JSONL handoff.',
+};
 
 export const PROTOCOL_PRINCIPLES = [
   {
@@ -208,6 +227,7 @@ export const PROTOCOL_DISCOVERY = {
   json: 'https://pointcast.xyz/protocol.json',
   wellKnown: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
   client: 'https://pointcast.xyz/messages',
+  friendDemo: 'https://pointcast.xyz/messages/demo',
   relay: 'https://pointcast.xyz/api/pcp/relay',
   block: 'https://pointcast.xyz/b/0378',
   github: 'https://github.com/mhoydich/pointcast',
@@ -221,7 +241,7 @@ export function buildProtocolManifest() {
     version: PROTOCOL_VERSION,
     packetVersion: PROTOCOL_PACKET_VERSION,
     packetMediaType: PROTOCOL_PACKET_MEDIA_TYPE,
-    status: 'v1.0.1 hardening + v1.1 local client',
+    status: 'v1.0.2 hardening + v1.1 local client + v2 simple friends draft',
     updatedAt: PROTOCOL_UPDATED_AT,
     origin: 'https://pointcast.xyz',
     purpose:
@@ -229,6 +249,7 @@ export function buildProtocolManifest() {
     discovery: PROTOCOL_DISCOVERY,
     client: {
       human: PROTOCOL_DISCOVERY.client,
+      demo: PROTOCOL_DISCOVERY.friendDemo,
       storageKeys: PROTOCOL_STORAGE_KEYS,
       capabilities: [
         'Generate a browser-local Ed25519 peer identity.',
@@ -239,6 +260,7 @@ export function buildProtocolManifest() {
       ],
       warning: 'The browser client is a protocol proof, not a secure production messenger. Private-key material is browser-local and exportable for transparency.',
     },
+    v2SimpleFriends: PROTOCOL_V2_SIMPLE_FRIENDS,
     packetSchema: {
       mediaType: PROTOCOL_PACKET_MEDIA_TYPE,
       canonicalJsonRules: PROTOCOL_CANONICAL_JSON_RULES,

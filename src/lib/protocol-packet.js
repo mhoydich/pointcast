@@ -1,5 +1,7 @@
 export const PROTOCOL_PACKET_VERSION = 'pcp-1.0';
 export const PROTOCOL_PACKET_MEDIA_TYPE = 'pcp-1.0/block-packet+json';
+export const PROTOCOL_FRIEND_CARD_VERSION = 'pcp-friend-card-1';
+export const PROTOCOL_FRIEND_CARD_PREFIX = 'pcp-friend:';
 
 export const PROTOCOL_STORAGE_KEYS = {
   profile: 'pcp:v1:peer-profile',
@@ -7,6 +9,7 @@ export const PROTOCOL_STORAGE_KEYS = {
   outbox: 'pcp:v1:outbox',
   receipts: 'pcp:v1:receipts',
   trustedPeers: 'pcp:v1:trusted-peers',
+  friends: 'pcp:v2:friends',
 };
 
 export const PROTOCOL_RECEIPT_TYPES = [
@@ -178,6 +181,59 @@ export function parsePacketsJsonl(text) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+export function buildFriendCard(identity, options = {}) {
+  const {
+    label = identity?.displayName || 'PointCast friend',
+    relay = 'https://pointcast.xyz/api/pcp/relay',
+    topic = 'pcp/pointcast/friends',
+    capabilities = ['signed-packets', 'jsonl-handoff', 'encrypted-relay-ready'],
+    createdAt = new Date().toISOString(),
+  } = options;
+
+  return {
+    version: PROTOCOL_FRIEND_CARD_VERSION,
+    peerId: identity?.peerId || '',
+    label,
+    kind: identity?.kind || 'human',
+    relay,
+    topic,
+    capabilities,
+    createdAt,
+  };
+}
+
+export function validateFriendCard(card) {
+  const errors = [];
+  if (!card || typeof card !== 'object' || Array.isArray(card)) return { ok: false, errors: ['friend card must be an object'] };
+  if (card.version !== PROTOCOL_FRIEND_CARD_VERSION) errors.push(`version must be ${PROTOCOL_FRIEND_CARD_VERSION}`);
+  if (typeof card.peerId !== 'string' || !card.peerId.startsWith('peer:ed25519:')) errors.push('peerId must be peer:ed25519:<base64url-public-key>');
+  if (typeof card.label !== 'string' || card.label.length < 1 || card.label.length > 80) errors.push('label must be 1-80 characters');
+  if (!['human', 'agent', 'device'].includes(card.kind)) errors.push('kind must be human, agent, or device');
+  if (typeof card.relay !== 'string' || !/^https:\/\//.test(card.relay)) errors.push('relay must be an https URL');
+  if (typeof card.topic !== 'string' || card.topic.length < 1 || card.topic.length > 180) errors.push('topic must be 1-180 characters');
+  if (!Array.isArray(card.capabilities) || card.capabilities.some((cap) => typeof cap !== 'string')) errors.push('capabilities must be an array of strings');
+  if (typeof card.createdAt !== 'string' || Number.isNaN(Date.parse(card.createdAt))) errors.push('createdAt must be an ISO timestamp');
+  return { ok: errors.length === 0, errors };
+}
+
+export function encodeFriendCard(card) {
+  const validation = validateFriendCard(card);
+  if (!validation.ok) throw new Error(validation.errors.join('; '));
+  return `${PROTOCOL_FRIEND_CARD_PREFIX}${bytesToBase64url(utf8Bytes(canonicalJson(card)))}`;
+}
+
+export function parseFriendCard(value) {
+  const raw = String(value || '').trim();
+  if (!raw) throw new Error('friend card is empty');
+  const json = raw.startsWith(PROTOCOL_FRIEND_CARD_PREFIX)
+    ? new TextDecoder().decode(base64urlToBytes(raw.slice(PROTOCOL_FRIEND_CARD_PREFIX.length)))
+    : raw;
+  const card = JSON.parse(json);
+  const validation = validateFriendCard(card);
+  if (!validation.ok) throw new Error(validation.errors.join('; '));
+  return card;
 }
 
 export async function generatePeerIdentity({ displayName = 'PointCast peer', kind = 'human' } = {}) {

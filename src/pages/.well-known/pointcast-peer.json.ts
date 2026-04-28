@@ -15,6 +15,7 @@ export const GET: APIRoute = async () => {
         route: manifest.discovery.route,
         manifest: manifest.discovery.json,
         client: manifest.client.human,
+        friendDemo: manifest.client.demo,
         block: manifest.discovery.block,
         relay: manifest.relayPrototype.endpoint,
         peer: {

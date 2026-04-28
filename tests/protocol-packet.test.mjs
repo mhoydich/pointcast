@@ -109,6 +109,27 @@ test('JSONL export/import round-trips packets', async (t) => {
   assert.equal(parsed[0].id, packet.id);
 });
 
+test('friend cards encode, parse, and validate', async (t) => {
+  let identity;
+  try {
+    identity = await protocol.generatePeerIdentity({ displayName: 'friend peer', kind: 'human' });
+  } catch (err) {
+    t.skip(`WebCrypto Ed25519 unavailable: ${err?.message || err}`);
+    return;
+  }
+
+  const card = protocol.buildFriendCard(identity, {
+    relay: 'https://pointcast.xyz/api/pcp/relay',
+    topic: 'pcp/test/friends',
+    createdAt: '2026-04-28T12:00:00.000Z',
+  });
+  const encoded = protocol.encodeFriendCard(card);
+  assert.match(encoded, /^pcp-friend:/);
+  assert.deepEqual(protocol.parseFriendCard(encoded), card);
+  assert.deepEqual(protocol.parseFriendCard(JSON.stringify(card)), card);
+  assert.equal(protocol.validateFriendCard({ ...card, peerId: 'peer:nope' }).ok, false);
+});
+
 test('invalid packets are rejected with useful errors', () => {
   const result = protocol.validatePacket({
     version: 'nope',
