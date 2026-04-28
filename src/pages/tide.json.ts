@@ -44,13 +44,14 @@ export const GET: APIRoute = async () => {
       },
       hash: 'URL hash selects palette and optional scene: #abyss or #abyss/mystify. Hash updates on cycle.',
       autoCycle: 'Default 90s; configurable to 30s, 5m, or never via settings drawer.',
-      audio: 'Optional Web Audio. Three soundscapes: drift (filtered brown-noise + LFO + sine pad on root+fifth), chimes (random just-intoned pentatonic tones), bubbles (pitch-modulated sine pops through bandpass).',
+      audio: 'Optional Web Audio. Three soundscapes: drift (filtered brown-noise + LFO + sine pad on root+fifth), chimes (random just-intoned pentatonic tones), bubbles (pitch-modulated sine pops through bandpass). Auto-mutes when tab loses focus and restores on return without flipping the user toggle.',
       moments: 'Save the current palette + scene + soundscape + dwell time to localStorage (pc:tide:moments). Viewable at /tide/moments.',
     },
     scenes: [
       { id: 'waves',     name: 'WAVES',     description: 'Sky + parallax-morphed wave layers + foam. The default.' },
       { id: 'starfield', name: 'STARFIELD', description: 'Warp-speed canvas particles flowing toward the viewer, palette-tinted.' },
       { id: 'mystify',   name: 'MYSTIFY',   description: 'After-dark style polylines with bouncing points + history-trail fade.' },
+      { id: 'bounce',    name: 'BOUNCE',    description: 'DVD-logo-style palette-tinted wordmark bouncing across the viewport. Color cycles on each wall hit, soft flash on corner hits.' },
     ],
     soundscapes: [
       { id: 'drift',   name: 'DRIFT',   description: 'Filtered brown-noise + LFO breath + sine pad on root + fifth. Tuned per palette.' },
@@ -64,7 +65,7 @@ export const GET: APIRoute = async () => {
     },
     storage: {
       'pc:tide:last':        'last visited palette id',
-      'pc:tide:mode':        'last scene (waves|starfield|mystify)',
+      'pc:tide:mode':        'last scene (waves|starfield|mystify|bounce)',
       'pc:tide:soundscape':  'last soundscape (drift|chimes|bubbles)',
       'pc:tide:audio':       '"1" or "0" — audio toggle',
       'pc:tide:volume':      'float 0..1 — audio volume',
@@ -81,11 +82,12 @@ export const GET: APIRoute = async () => {
       '/meditate':       'companion (still room, breathing)',
       '/pace':           'companion (movement room, BPM)',
     },
-    version: 3,
+    version: 4,
     versions: {
       v1: 'shipped 2026-04-28 — palettes, parallax waves, orb, foam, tap-to-cycle, 90s drift',
       v2: 'shipped 2026-04-28 — Web Audio synth, ripples, hash sync, settings drawer, aurora, wave morph, grain, moments save',
       v3: 'shipped 2026-04-28 — three classic-screensaver scenes (WAVES/STARFIELD/MYSTIFY) + three varied soundscapes (DRIFT/CHIMES/BUBBLES). M-key cycles scene. Hash carries scene (#abyss/mystify).',
+      v4: 'shipped 2026-04-28 — BOUNCE scene (DVD-logo classic, palette-cycles on wall hits, corner-hit flash) + tab-blur auto-mute (audio fades out when tab loses focus, restores on return without flipping the user toggle).',
     },
     license: 'CC0',
     source: 'https://github.com/mhoydich/pointcast/blob/main/src/pages/tide.astro',
