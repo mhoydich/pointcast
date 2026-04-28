@@ -1,0 +1,848 @@
+---
+/**
+ * /sparrow/tv/saved — Sparrow TV mode (Phase 2 · personal channel).
+ *
+ * Plan: docs/plans/2026-04-28-sparrow-tv-mode.md
+ *
+ * Personal-channel variant of /sparrow/tv. Same ten-foot ambient
+ * chrome (slide rotation, channel-tinted radial wash, surface-detect,
+ * here-strip, vmin-scaled type), but the slide pool is hydrated from
+ * the local sparrow:saved reading list — "what am _I_ reading right
+ * now, on the kitchen wall?"
+ *
+ * Privacy first.  The personal list is private by default — a TV in
+ * a shared space (kitchen, hotel room, friend's place) shouldn't paint
+ * a stranger's reading list onto the wall just because they happened
+ * to be the last user signed in.  Opt-in:
+ *   localStorage["sparrow:tv-saved-ok"] = "1"
+ * or arrive at the URL with ?saved-ok=1 (writes the flag and strips it).
+ * Until then the surface paints the privacy gate instead of slides.
+ *
+ * Hydration model:
+ *   1. Server pre-renders 18 placeholder slides + a 60-block lookup
+ *      map (id → title / dek / channel / type / mood / timestamp) as
+ *      application/json so the client can resolve saved-IDs without
+ *      a per-block fetch.
+ *   2. Client reads sparrow:saved (array of block IDs), looks up each
+ *      against the inlined map, and rebuilds the stage with personal
+ *      slides + a "saved by you" attribution chip.
+ *   3. Empty state when sparrow:saved is empty: a calm CTA pointing
+ *      at /sparrow + "press S on any block reader to save it."
+ *
+ * Federation pulse + here-strip behave exactly like /sparrow/tv/friends.
+ *
+ * v0.39 (2026-04-28).
+ */
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST, CHANNELS, type ChannelCode } from '../../../lib/channels';
+import { buildTVSlides, fmtTVDate } from '../../../lib/sparrow-tv';
+
+const all = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+// Server fallback — 18 latest blocks. Behind the privacy gate so a
+// shared TV without opt-in shows the gate, not the latest broadcast.
+// (If the user opens the gate but hasn't saved anything, an empty
+// state CTA takes over instead.)
+const fallbackSlides = buildTVSlides(all, { limit: 18 });
+
+// Block lookup — same shape as /sparrow/tv/friends. The 60 most recent
+// blocks; older saved IDs that fall out of the window are skipped on
+// the client side (a v1.0 IndexedDB archive solves the long-tail).
+const blocksLookup = Object.fromEntries(
+  all.slice(0, 60).map((b) => [
+    b.data.id,
+    {
+      id: b.data.id,
+      title: b.data.title,
+      dek: b.data.dek ?? '',
+      channel: b.data.channel,
+      channelName: CHANNELS[b.data.channel as ChannelCode]?.name ?? b.data.channel,
+      type: b.data.type,
+      mood: b.data.mood ?? '',
+      timestamp: b.data.timestamp.toISOString(),
+    },
+  ]),
+);
+
+const channels = CHANNEL_LIST.map((c) => ({ code: c.code, slug: c.slug, name: c.name }));
+const fmtDate = fmtTVDate;
+---
+
+<!doctype html>
+<html lang="en" data-theme="blue-hour">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sparrow TV · Saved · PointCast</title>
+    <meta
+      name="description"
+      content="Your personal reading list, on a wall. Privacy-default-hidden — opt-in only."
+    />
+    <link rel="canonical" href="https://pointcast.xyz/sparrow/tv/saved" />
+    <link rel="alternate" href="/sparrow/tv" title="Sparrow TV (broadcast)" />
+    <link rel="alternate" href="/sparrow/tv/friends" title="Sparrow TV (federation)" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gloock&family=Inter+Tight:wght@400;500;600;700&family=Departure+Mono&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body class="sptv-body" data-surface="desktop" data-tv-mode="saved">
+    <main class="sptv sptv--saved" data-channel-active="" aria-label="Sparrow TV · Saved">
+      <header class="sptv-head">
+        <span class="sptv-glyph" aria-hidden="true">✦</span>
+        <span class="sptv-name">Sparrow</span>
+        <span class="sptv-sub">tv · your list</span>
+        <span class="sptv-clock" data-sptv-clock>—:—</span>
+      </header>
+
+      <div class="sptv-progress" aria-hidden="true">
+        <div class="sptv-progress__bar" data-sptv-progress></div>
+      </div>
+
+      {/* Privacy gate — default state until sparrow:tv-saved-ok="1".
+          Shown on every render until the JS reads the flag and flips
+          to whichever path applies. */}
+      <section class="sptv-empty sptv-empty--gate" data-sptv-gate aria-label="Personal-channel privacy gate">
+        <p class="sptv-empty__kicker">CH · YOUR LIST · PRIVATE BY DEFAULT</p>
+        <h2 class="sptv-empty__title">∅ This screen is private.</h2>
+        <p class="sptv-empty__dek">
+          Your reading list is local-only and stays that way unless you opt in here. A kitchen TV
+          shouldn't paint a stranger's list onto the wall just because they happened to be the
+          last user signed in.
+        </p>
+        <p class="sptv-empty__hint">
+          To show your list, set <code>sparrow:tv-saved-ok</code> to <code>1</code> in localStorage,
+          or open this URL with <code>?saved-ok=1</code> (writes the flag and strips it).
+          Switch back: open <a href="/sparrow/tv">all channels</a> or
+          <a href="/sparrow/tv/friends">federation</a>.
+        </p>
+      </section>
+
+      {/* Empty state — when the gate is open but the saved list is
+          empty. Shown only after the script flips it on. */}
+      <section class="sptv-empty sptv-empty--saved-zero" data-sptv-empty hidden aria-label="Reading list is empty">
+        <p class="sptv-empty__kicker">CH · YOUR LIST</p>
+        <h2 class="sptv-empty__title">∅ Nothing saved yet.</h2>
+        <p class="sptv-empty__dek">
+          Open a block at <a href="/sparrow">/sparrow</a> and press <kbd>S</kbd> to save it. Saved
+          blocks rotate here in newest-first order.
+        </p>
+        <p class="sptv-empty__hint">
+          You can also browse <a href="/sparrow/tv/friends">federation</a> or
+          <a href="/sparrow/tv">all channels</a> while you build a list.
+        </p>
+      </section>
+
+      {/* Personal slide stage. Hidden until gate is open + at least
+          one block is saved. */}
+      <ol
+        class="sptv-stage"
+        data-sptv-stage
+        data-sptv-stage-mode="server-fallback"
+        hidden
+      >
+        {fallbackSlides.map((s, i) => (
+          <li
+            class={`sptv-slide${i === 0 ? ' is-active' : ''}`}
+            data-slide-idx={i}
+            data-channel={s.channel}
+            data-block-id={s.id}
+            style={`--ch: var(--ch-${s.channel.toLowerCase()});`}
+            aria-hidden={i !== 0 ? 'true' : 'false'}
+          >
+            <div class="sptv-slide__inner">
+              <div class="sptv-slide__chip">
+                <span class="sptv-slide__chip-dot" aria-hidden="true"></span>
+                CH · {s.channel} · {s.channelName.toUpperCase()}
+              </div>
+              <div class="sptv-slide__friend" data-sptv-friend hidden aria-hidden="true"></div>
+              <div class="sptv-slide__meta">
+                <span>№ {s.id}</span>
+                <span>·</span>
+                <span>{s.type}</span>
+                <span>·</span>
+                <time datetime={s.timestamp}>{fmtDate(s.timestamp)}</time>
+                {s.mood && (
+                  <>
+                    <span>·</span>
+                    <span class="sptv-slide__mood">mood {s.mood}</span>
+                  </>
+                )}
+              </div>
+              <h2 class="sptv-slide__title">{s.title}</h2>
+              {s.dek && <p class="sptv-slide__dek">{s.dek}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {/* Personal slate strip — replaces the rosette. "your list · N
+          saved" + a sparkline-ish channel-distribution dot row. Always
+          visible once the gate is open. */}
+      <aside class="sptv-saved-strip" data-sptv-saved-strip aria-label="reading list summary" hidden>
+        <span class="sptv-saved-strip__label">✦ your list</span>
+        <span class="sptv-saved-strip__count" data-sptv-saved-count>—</span>
+        <ul class="sptv-saved-strip__dots" data-sptv-saved-dots>
+          {channels.map((c) => (
+            <li class="sptv-saved-strip__dot" data-channel={c.code} title={c.name}>
+              <span class="sptv-saved-strip__dot-fill" style={`--ch: var(--ch-${c.code.toLowerCase()});`}></span>
+              <span class="sptv-saved-strip__dot-label">{c.code}</span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* Here-now strip — same contract as /sparrow/tv. Privacy default
+          hidden; opt-in via sparrow:tv-private-ok or ?private-ok=1.
+          Independent of saved-ok. */}
+      <aside class="sptv-here" data-sptv-here aria-label="friends here now" hidden>
+        <span class="sptv-here__label">✦ here now</span>
+        <ul class="sptv-here__list" data-sptv-here-list></ul>
+      </aside>
+
+      <footer class="sptv-foot">
+        <span class="sptv-foot__brand">pointcast.xyz/sparrow/tv/saved</span>
+        <span class="sptv-foot__sep">·</span>
+        <span class="sptv-foot__hint">←/→ to step · open <a href="/sparrow/tv/friends">federation</a> · <a href="/sparrow/tv">all channels</a></span>
+      </footer>
+    </main>
+
+    {/* Block-lookup payload for client hydration. */}
+    <script
+      is:inline
+      type="application/json"
+      id="sptv-saved-blocks"
+      set:html={JSON.stringify(blocksLookup)}
+    />
+
+    <script is:inline>
+      (function () {
+        'use strict';
+        var doc = document;
+        var body = doc.body;
+
+        // ─── Surface detect (mirror /sparrow/tv) ────────────────────
+        try {
+          var qs = new URLSearchParams(location.search);
+          var override = qs.get('surface');
+          var w = window.innerWidth || doc.documentElement.clientWidth || 0;
+          var ua = (navigator.userAgent || '').toLowerCase();
+          var coarse = matchMedia('(pointer: coarse)').matches;
+          var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+          var tvUA = /\b(tv|appletv|googletv|crkey|tizen|webos|hbbtv|netcast)\b/.test(ua);
+          var isTV = override === 'tv' || tvUA || (w >= 1920 && !coarse && !touch);
+          var isMobile = override === 'mobile' || (touch && w < 768);
+          body.dataset.surface = isTV ? 'tv' : isMobile ? 'mobile' : 'desktop';
+        } catch (_) { /* fall through to desktop default */ }
+
+        // ?saved-ok=1 → opt-in for the personal channel (writes flag,
+        // strips param). ?private-ok=1 → opt-in for the here-strip.
+        try {
+          var qsP = new URLSearchParams(location.search);
+          var dirty = false;
+          if (qsP.get('saved-ok') === '1') {
+            localStorage.setItem('sparrow:tv-saved-ok', '1');
+            qsP.delete('saved-ok');
+            dirty = true;
+          }
+          if (qsP.get('private-ok') === '1') {
+            localStorage.setItem('sparrow:tv-private-ok', '1');
+            qsP.delete('private-ok');
+            dirty = true;
+          }
+          if (dirty) {
+            var nu = location.pathname +
+              (qsP.toString() ? '?' + qsP.toString() : '') +
+              location.hash;
+            history.replaceState(null, '', nu);
+          }
+        } catch (_) { /* empty */ }
+
+        // ─── Clock ──────────────────────────────────────────────────
+        var clockEl = doc.querySelector('[data-sptv-clock]');
+        function tickClock() {
+          if (!clockEl) return;
+          var d = new Date();
+          var s = d.toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles',
+          });
+          clockEl.textContent = s;
+        }
+        tickClock();
+        setInterval(tickClock, 30000);
+
+        // ─── Block lookup ───────────────────────────────────────────
+        var blocksLookup = {};
+        try {
+          var raw = doc.getElementById('sptv-saved-blocks');
+          if (raw && raw.textContent) blocksLookup = JSON.parse(raw.textContent) || {};
+        } catch (_) { /* empty */ }
+
+        // ─── Local helpers ──────────────────────────────────────────
+        var DEFAULT_RELAYS = [
+          'wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'
+        ];
+        var FRESH_MS = 90_000;
+        var DWELL_MS = 12_000;
+
+        function readSaved() {
+          try {
+            var raw = JSON.parse(localStorage.getItem('sparrow:saved') || '[]');
+            if (!Array.isArray(raw)) return [];
+            return raw.filter(function (id) { return typeof id === 'string'; });
+          } catch (_) { return []; }
+        }
+        function readFriends() {
+          try {
+            var raw = JSON.parse(localStorage.getItem('sparrow:friends') || '[]');
+            if (!Array.isArray(raw)) return [];
+            return raw.map(function (f) {
+              if (typeof f === 'string') return { pubkey: f.toLowerCase(), alias: '', muted: false };
+              if (f && typeof f === 'object' && typeof f.pubkey === 'string') {
+                return { pubkey: f.pubkey.toLowerCase(), alias: f.alias || '', muted: !!f.muted };
+              }
+              return null;
+            }).filter(function (f) { return f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted; });
+          } catch (_) { return []; }
+        }
+        function readProfiles() {
+          try {
+            var pj = JSON.parse(localStorage.getItem('sparrow:profiles') || '{}');
+            return (pj && typeof pj === 'object' && !Array.isArray(pj)) ? pj : {};
+          } catch (_) { return {}; }
+        }
+        function getRelays() {
+          try {
+            var r = localStorage.getItem('sparrow:nostr-relays');
+            var list = r ? JSON.parse(r) : null;
+            if (Array.isArray(list) && list.length) {
+              return list.filter(function (u) { return typeof u === 'string' && u.startsWith('ws'); });
+            }
+          } catch (_) { /* empty */ }
+          return DEFAULT_RELAYS;
+        }
+        function esc(s) {
+          return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+          });
+        }
+
+        // ─── Privacy gate / empty / personal-stage routing ───────────
+        var gateEl  = doc.querySelector('[data-sptv-gate]');
+        var emptyEl = doc.querySelector('[data-sptv-empty]');
+        var stage   = doc.querySelector('[data-sptv-stage]');
+        var savedStrip = doc.querySelector('[data-sptv-saved-strip]');
+        var savedCount = doc.querySelector('[data-sptv-saved-count]');
+        var savedDots  = doc.querySelectorAll('[data-sptv-saved-dots] [data-channel]');
+        var mainEl     = doc.querySelector('.sptv');
+        var progress   = doc.querySelector('[data-sptv-progress]');
+
+        function hideAll() {
+          if (gateEl)  gateEl.hidden = true;
+          if (emptyEl) emptyEl.hidden = true;
+          if (stage)   stage.hidden = true;
+          if (savedStrip) savedStrip.hidden = true;
+        }
+        function showGate() {
+          hideAll();
+          if (gateEl) gateEl.hidden = false;
+        }
+        function showEmpty() {
+          hideAll();
+          if (emptyEl) emptyEl.hidden = false;
+          if (savedStrip) savedStrip.hidden = false;
+        }
+        function showStage() {
+          hideAll();
+          if (stage) stage.hidden = false;
+          if (savedStrip) savedStrip.hidden = false;
+        }
+
+        // ─── Slide rotation (mirror tv.astro contract) ───────────────
+        var idx = 0;
+        var dwellStart = Date.now();
+
+        function currentSlides() {
+          if (!stage) return [];
+          return Array.prototype.slice.call(stage.querySelectorAll('.sptv-slide'));
+        }
+        function paintActive() {
+          var slides = currentSlides();
+          if (!slides.length) return;
+          if (idx >= slides.length) idx = 0;
+          for (var i = 0; i < slides.length; i++) {
+            if (i === idx) {
+              slides[i].classList.add('is-active');
+              slides[i].setAttribute('aria-hidden', 'false');
+            } else if (slides[i].classList.contains('is-active')) {
+              slides[i].classList.remove('is-active');
+              slides[i].setAttribute('aria-hidden', 'true');
+            }
+          }
+          var ch = slides[idx].getAttribute('data-channel') || '';
+          if (mainEl) mainEl.setAttribute('data-channel-active', ch);
+          dwellStart = Date.now();
+          if (progress) progress.style.width = '0%';
+        }
+        function step(dir) {
+          var slides = currentSlides();
+          if (!slides.length) return;
+          idx = ((idx + dir) + slides.length) % slides.length;
+          paintActive();
+        }
+        setInterval(function () { step(1); }, DWELL_MS);
+        setInterval(function () {
+          if (!progress) return;
+          var pct = Math.min(100, ((Date.now() - dwellStart) / DWELL_MS) * 100);
+          progress.style.width = pct.toFixed(1) + '%';
+        }, 200);
+        doc.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowRight') { step(1);  e.preventDefault(); return; }
+          if (e.key === 'ArrowLeft')  { step(-1); e.preventDefault(); return; }
+        });
+
+        // ─── Personal slide builder ──────────────────────────────────
+        function rebuildSlidesFromSaved() {
+          if (!stage) return;
+          var ids = readSaved();
+          if (!ids.length) {
+            paintSavedStrip(0, {});
+            showEmpty();
+            return;
+          }
+          // newest-first: sparrow:saved is appended in save order, so
+          // reverse to put most-recent first; also dedupe defensively.
+          var seen = Object.create(null);
+          var ordered = [];
+          for (var i = ids.length - 1; i >= 0; i--) {
+            var id = ids[i];
+            if (seen[id]) continue;
+            seen[id] = true;
+            ordered.push(id);
+          }
+          var picks = [];
+          var distribution = {}; // channel code -> count (full list, including unknown)
+          for (var p = 0; p < ordered.length; p++) {
+            var blk = blocksLookup[ordered[p]];
+            if (blk) {
+              picks.push(blk);
+              distribution[blk.channel] = (distribution[blk.channel] || 0) + 1;
+            }
+            if (picks.length >= 18) break;
+          }
+
+          paintSavedStrip(ordered.length, distribution);
+
+          if (!picks.length) {
+            // Saved IDs all fall outside the 60-block window — show
+            // empty rather than the broadcast fallback so the user knows
+            // their list is "old" rather than ambient.
+            showEmpty();
+            return;
+          }
+
+          stage.setAttribute('data-sptv-stage-mode', 'saved');
+          stage.innerHTML = '';
+          for (var n = 0; n < picks.length; n++) {
+            var b = picks[n];
+            var li = doc.createElement('li');
+            li.className = 'sptv-slide' + (n === 0 ? ' is-active' : '');
+            li.setAttribute('data-slide-idx', String(n));
+            li.setAttribute('data-channel', b.channel);
+            li.setAttribute('data-block-id', b.id);
+            li.style.setProperty('--ch', 'var(--ch-' + String(b.channel).toLowerCase() + ')');
+            li.setAttribute('aria-hidden', n === 0 ? 'false' : 'true');
+
+            var inner = doc.createElement('div');
+            inner.className = 'sptv-slide__inner';
+
+            var chip = doc.createElement('div');
+            chip.className = 'sptv-slide__chip';
+            chip.innerHTML =
+              '<span class="sptv-slide__chip-dot" aria-hidden="true"></span>' +
+              ' CH · ' + esc(b.channel) + ' · ' + esc(String(b.channelName).toUpperCase());
+            inner.appendChild(chip);
+
+            var youChip = doc.createElement('div');
+            youChip.className = 'sptv-slide__friend sptv-slide__friend--you';
+            youChip.innerHTML =
+              '<span class="sptv-slide__friend-avatar sptv-slide__friend-avatar--you" aria-hidden="true">★</span>' +
+              '<span class="sptv-slide__friend-label">saved by you</span>';
+            inner.appendChild(youChip);
+
+            var meta = doc.createElement('div');
+            meta.className = 'sptv-slide__meta';
+            var when = '';
+            try {
+              when = new Date(b.timestamp).toLocaleDateString('en-US', {
+                timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric',
+              });
+            } catch (_) { when = ''; }
+            meta.innerHTML =
+              '<span>№ ' + esc(b.id) + '</span><span>·</span>' +
+              '<span>' + esc(b.type) + '</span><span>·</span>' +
+              '<time datetime="' + esc(b.timestamp) + '">' + esc(when) + '</time>' +
+              (b.mood ? '<span>·</span><span class="sptv-slide__mood">mood ' + esc(b.mood) + '</span>' : '');
+            inner.appendChild(meta);
+
+            var h2 = doc.createElement('h2');
+            h2.className = 'sptv-slide__title';
+            h2.textContent = b.title;
+            inner.appendChild(h2);
+
+            if (b.dek) {
+              var dk = doc.createElement('p');
+              dk.className = 'sptv-slide__dek';
+              dk.textContent = b.dek;
+              inner.appendChild(dk);
+            }
+            li.appendChild(inner);
+            stage.appendChild(li);
+          }
+          idx = 0;
+          showStage();
+          paintActive();
+        }
+
+        // ─── Saved strip — count + per-channel dot fills ────────────
+        function paintSavedStrip(total, distribution) {
+          if (!savedStrip) return;
+          if (savedCount) {
+            savedCount.textContent = total
+              ? String(total) + ' saved'
+              : 'none yet';
+          }
+          // The dots are pre-rendered (one per channel); we just
+          // toggle a "has" class + the fill width.
+          var max = 0;
+          Object.keys(distribution).forEach(function (k) {
+            if (distribution[k] > max) max = distribution[k];
+          });
+          if (savedDots && savedDots.length) {
+            savedDots.forEach(function (li) {
+              var code = li.getAttribute('data-channel');
+              var n = distribution[code] || 0;
+              li.setAttribute('data-count', String(n));
+              if (n > 0) li.classList.add('has-saved');
+              else li.classList.remove('has-saved');
+              var fill = li.querySelector('.sptv-saved-strip__dot-fill');
+              if (fill && max > 0) {
+                fill.style.height = ((n / max) * 100).toFixed(0) + '%';
+              } else if (fill) {
+                fill.style.height = '0%';
+              }
+            });
+          }
+        }
+
+        // ─── Here-now strip ─────────────────────────────────────────
+        var hereSockets = [];
+        var lastSeen = Object.create(null);
+        var bootTime = Math.floor(Date.now() / 1000);
+        var hereEl = doc.querySelector('[data-sptv-here]');
+        var hereList = doc.querySelector('[data-sptv-here-list]');
+
+        function paintHere() {
+          if (!hereEl || !hereList) return;
+          var allow = false;
+          try { allow = localStorage.getItem('sparrow:tv-private-ok') === '1'; } catch (_) {}
+          if (!allow) { hereEl.hidden = true; return; }
+          var friends = readFriends();
+          if (!friends.length) { hereEl.hidden = true; return; }
+          var profiles = readProfiles();
+          var now = Date.now();
+          var ranked = friends.slice().sort(function (a, b) {
+            var sa = lastSeen[a.pubkey] || 0;
+            var sb = lastSeen[b.pubkey] || 0;
+            return sb - sa;
+          }).slice(0, 8);
+          hereEl.hidden = false;
+          hereList.innerHTML = '';
+          ranked.forEach(function (f) {
+            var li = doc.createElement('li');
+            li.className = 'sptv-here__item';
+            var seen = lastSeen[f.pubkey] || 0;
+            var fresh = (now - seen) < FRESH_MS;
+            if (fresh) li.setAttribute('data-fresh', '1');
+            var prof = profiles[f.pubkey] || {};
+            var pic = (typeof prof.picture === 'string' && /^https?:\/\//i.test(prof.picture))
+              ? prof.picture : '';
+            li.innerHTML = pic
+              ? '<img src="' + esc(pic) +
+                '" alt="" loading="lazy" referrerpolicy="no-referrer" decoding="async" onerror="this.style.display=\'none\'">'
+              : '<span class="sptv-here__placeholder" aria-hidden="true">✦</span>';
+            hereList.appendChild(li);
+          });
+        }
+        function startPresenceWatch() {
+          var allow = false;
+          try { allow = localStorage.getItem('sparrow:tv-private-ok') === '1'; } catch (_) {}
+          if (!allow) return;
+          var friends = readFriends();
+          if (!friends.length) return;
+          var authors = friends.map(function (f) { return f.pubkey; });
+          var subId = 'sptv-sv-here-' + Math.random().toString(36).slice(2, 10);
+          var filter = {
+            kinds: [20078], authors: authors,
+            '#t': ['sparrow-presence'],
+            since: bootTime - 60,
+          };
+          getRelays().forEach(function (url) {
+            try {
+              var ws = new WebSocket(url);
+              hereSockets.push(ws);
+              ws.addEventListener('open', function () {
+                try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch (_) {}
+              });
+              ws.addEventListener('message', function (msg) {
+                var frame;
+                try { frame = JSON.parse(msg.data); } catch (_) { return; }
+                if (!Array.isArray(frame)) return;
+                if (frame[0] !== 'EVENT' || frame[1] !== subId) return;
+                var ev = frame[2];
+                if (!ev || ev.kind !== 20078 || typeof ev.pubkey !== 'string') return;
+                if (typeof ev.created_at !== 'number') return;
+                var ok = Array.isArray(ev.tags) && ev.tags.some(function (t) {
+                  return Array.isArray(t) && t[0] === 't' && t[1] === 'sparrow-presence';
+                });
+                if (!ok) return;
+                var live = readFriends();
+                if (!live.some(function (f) { return f.pubkey === ev.pubkey; })) return;
+                lastSeen[ev.pubkey] = Date.now();
+                paintHere();
+              });
+            } catch (_) { /* relay failed, skip */ }
+          });
+          setInterval(paintHere, 20_000);
+        }
+
+        // ─── Boot ────────────────────────────────────────────────────
+        function boot() {
+          var ok = false;
+          try { ok = localStorage.getItem('sparrow:tv-saved-ok') === '1'; } catch (_) {}
+          if (!ok) {
+            // Don't even compute the list — privacy-default-blocked.
+            showGate();
+            return;
+          }
+          rebuildSlidesFromSaved();
+          paintHere();
+          startPresenceWatch();
+        }
+        boot();
+
+        // React to local edits (saved list / opt-in / friends).
+        window.addEventListener('storage', function (e) {
+          if (!e.key) return;
+          if (e.key === 'sparrow:tv-saved-ok') {
+            boot();   // gate state may have changed — re-route
+            return;
+          }
+          if (e.key === 'sparrow:saved') {
+            // Only re-build if the gate is open.
+            try {
+              if (localStorage.getItem('sparrow:tv-saved-ok') === '1') rebuildSlidesFromSaved();
+            } catch (_) {}
+            return;
+          }
+          if (e.key === 'sparrow:friends' ||
+              e.key === 'sparrow:profiles' ||
+              e.key === 'sparrow:tv-private-ok') {
+            paintHere();
+          }
+        });
+        window.addEventListener('beforeunload', function () {
+          hereSockets.forEach(function (ws) { try { ws.close(); } catch (_) {} });
+        });
+      })();
+    </script>
+
+    <style is:global>
+      :root {
+        --sp-ink: oklch(14% 0.03 260);
+        --sp-blue-hour: oklch(22% 0.05 260);
+        --sp-bone: oklch(95% 0.02 75);
+        --sp-ash: oklch(72% 0.02 260);
+        --sp-mute: oklch(54% 0.02 260);
+        --sp-rule: oklch(30% 0.03 255);
+        --sp-ember: oklch(74% 0.16 72);
+        --sp-moss: oklch(70% 0.13 156);
+        --sp-oxblood: oklch(48% 0.16 25);
+        --sp-lilac: oklch(72% 0.10 305);
+        --ch-fd: oklch(72% 0.16 240);
+        --ch-crt: oklch(68% 0.14 144);
+        --ch-spn: oklch(64% 0.18 28);
+        --ch-gf: oklch(74% 0.14 348);
+        --ch-gdn: oklch(70% 0.16 168);
+        --ch-esc: oklch(58% 0.18 285);
+        --ch-fct: oklch(78% 0.16 88);
+        --ch-vst: oklch(60% 0.04 260);
+        --ch-btl: oklch(56% 0.16 25);
+        --tv-pad: 5vmin;
+        --tv-h1: 7.2vmin;
+        --tv-h2: 4vmin;
+        --tv-body: 2.6vmin;
+        --tv-mono: 1.6vmin;
+      }
+
+      .sptv-body { margin: 0; background: var(--sp-ink); color: var(--sp-bone); font-family: 'Inter Tight', system-ui, sans-serif; overflow: hidden; }
+      .sptv {
+        position: relative; width: 100vw; height: 100vh; padding: var(--tv-pad);
+        box-sizing: border-box; overflow: hidden;
+        background:
+          radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--ch, var(--sp-ember)) 20%, transparent) 0%, transparent 60%),
+          radial-gradient(circle at 80% 80%, color-mix(in oklch, var(--ch, var(--sp-ember)) 10%, transparent) 0%, transparent 70%),
+          var(--sp-ink);
+        transition: background 1200ms ease;
+      }
+      .sptv[data-channel-active="FD"]  { --ch: var(--ch-fd); }
+      .sptv[data-channel-active="CRT"] { --ch: var(--ch-crt); }
+      .sptv[data-channel-active="SPN"] { --ch: var(--ch-spn); }
+      .sptv[data-channel-active="GF"]  { --ch: var(--ch-gf); }
+      .sptv[data-channel-active="GDN"] { --ch: var(--ch-gdn); }
+      .sptv[data-channel-active="ESC"] { --ch: var(--ch-esc); }
+      .sptv[data-channel-active="FCT"] { --ch: var(--ch-fct); }
+      .sptv[data-channel-active="VST"] { --ch: var(--ch-vst); }
+      .sptv[data-channel-active="BTL"] { --ch: var(--ch-btl); }
+
+      .sptv-head { display: flex; align-items: baseline; gap: 1.6vmin; font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--sp-ash); }
+      .sptv-glyph { font-family: 'Gloock', Georgia, serif; color: var(--sp-ember); font-size: calc(var(--tv-mono) * 1.4); }
+      .sptv-name  { font-weight: 700; color: var(--sp-bone); }
+      .sptv-sub   { color: var(--sp-ember); }
+      .sptv-clock { margin-left: auto; color: var(--sp-bone); font-variant-numeric: tabular-nums; }
+
+      .sptv-progress { position: absolute; top: calc(var(--tv-pad) + 4vmin); left: var(--tv-pad); right: var(--tv-pad); height: 0.3vmin; background: color-mix(in oklch, var(--sp-rule) 70%, transparent); border-radius: 999px; overflow: hidden; }
+      .sptv-progress__bar { height: 100%; width: 0%; background: var(--ch, var(--sp-ember)); transition: width 200ms linear; }
+
+      .sptv-stage { list-style: none; padding: 0; margin: 7vmin 0 0; position: absolute; top: calc(var(--tv-pad) + 6vmin); left: var(--tv-pad); right: var(--tv-pad); bottom: calc(var(--tv-pad) + 14vmin); }
+      .sptv-stage[hidden] { display: none; }
+      .sptv-slide { position: absolute; inset: 0; opacity: 0; transform: translateY(2vmin); transition: opacity 600ms ease, transform 800ms ease; pointer-events: none; }
+      .sptv-slide.is-active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+      .sptv-slide__inner { max-width: 92vw; }
+      .sptv-slide__chip { display: inline-flex; align-items: center; gap: 0.8vmin; font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.22em; padding: 0.6vmin 1.2vmin; border: 1px solid color-mix(in oklch, var(--ch, var(--sp-rule)) 60%, transparent); border-radius: 999px; background: color-mix(in oklch, var(--ch, var(--sp-rule)) 14%, transparent); color: var(--ch, var(--sp-bone)); }
+      .sptv-slide__chip-dot { width: 0.8vmin; height: 0.8vmin; border-radius: 999px; background: var(--ch, var(--sp-ember)); box-shadow: 0 0 1.5vmin currentColor; }
+
+      /* Personal "saved by you" chip — ember accent vs the moss federation chip. */
+      .sptv-slide__friend {
+        display: inline-flex; align-items: center; gap: 0.8vmin;
+        margin-top: 1.2vmin;
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: var(--tv-mono); letter-spacing: 0.16em;
+        padding: 0.5vmin 1vmin;
+        border: 1px solid color-mix(in oklch, var(--sp-ember) 40%, var(--sp-rule));
+        border-radius: 999px;
+        color: var(--sp-ember);
+        background: color-mix(in oklch, var(--sp-blue-hour) 90%, var(--sp-ember));
+      }
+      .sptv-slide__friend[hidden] { display: none; }
+      .sptv-slide__friend-avatar {
+        width: 2vmin; height: 2vmin; border-radius: 999px; overflow: hidden;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--sp-ink); font-size: 1.2vmin;
+        border: 1px solid color-mix(in oklch, var(--sp-ember) 30%, var(--sp-rule));
+      }
+      .sptv-slide__friend-avatar--you { color: var(--sp-ember); }
+      .sptv-slide__friend-label { color: color-mix(in oklch, var(--sp-bone) 70%, var(--sp-ember)); }
+
+      .sptv-slide__meta { margin-top: 1.2vmin; font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.14em; color: var(--sp-mute); display: inline-flex; align-items: baseline; gap: 0.8vmin; flex-wrap: wrap; }
+      .sptv-slide__mood { color: var(--sp-ember); }
+      .sptv-slide__title { margin: 1.6vmin 0 0; font-family: 'Gloock', Georgia, serif; font-weight: 400; font-size: var(--tv-h1); line-height: 1.04; letter-spacing: -0.018em; color: var(--sp-bone); max-width: 82vw; }
+      .sptv-slide__dek { margin: 1.6vmin 0 0; font-family: 'Inter Tight', system-ui, sans-serif; font-style: italic; font-weight: 400; font-size: var(--tv-h2); line-height: 1.32; color: color-mix(in oklch, var(--sp-bone) 76%, var(--sp-ash)); max-width: 76vw; }
+
+      .sptv-empty {
+        position: absolute; inset: calc(var(--tv-pad) + 8vmin) var(--tv-pad) calc(var(--tv-pad) + 14vmin) var(--tv-pad);
+        display: flex; flex-direction: column; justify-content: center; gap: 2vmin;
+        color: var(--sp-bone);
+      }
+      .sptv-empty[hidden] { display: none; }
+      .sptv-empty__kicker { font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.22em; color: var(--sp-ember); margin: 0; }
+      .sptv-empty--gate .sptv-empty__kicker { color: var(--sp-oxblood); }
+      .sptv-empty__title  { font-family: 'Gloock', Georgia, serif; font-weight: 400; font-size: var(--tv-h1); margin: 0; line-height: 1.04; letter-spacing: -0.018em; }
+      .sptv-empty__dek    { font-family: 'Inter Tight', system-ui, sans-serif; font-style: italic; font-size: var(--tv-h2); color: color-mix(in oklch, var(--sp-bone) 76%, var(--sp-ash)); margin: 0; max-width: 76vw; }
+      .sptv-empty__hint   { font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.18em; color: var(--sp-mute); margin: 0; }
+      .sptv-empty__dek a, .sptv-empty__hint a { color: var(--sp-ember); text-decoration: underline; text-underline-offset: 0.4vmin; }
+      .sptv-empty__hint code, .sptv-empty__hint kbd { font-family: 'Departure Mono', ui-monospace, monospace; padding: 0.1vmin 0.4vmin; border: 1px solid color-mix(in oklch, var(--sp-ember) 30%, var(--sp-rule)); border-radius: 0.3vmin; color: var(--sp-bone); }
+
+      /* Saved strip — channel distribution dots. */
+      .sptv-saved-strip {
+        position: absolute; bottom: var(--tv-pad); left: var(--tv-pad); right: var(--tv-pad);
+        display: flex; align-items: flex-end; gap: 1.4vmin;
+        padding: 1vmin 1.6vmin;
+        border: 1px solid color-mix(in oklch, var(--sp-ember) 35%, var(--sp-rule));
+        border-radius: 999px;
+        background: color-mix(in oklch, var(--sp-blue-hour) 90%, var(--sp-ember));
+      }
+      .sptv-saved-strip[hidden] { display: none; }
+      .sptv-saved-strip__label { font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--sp-ember); }
+      .sptv-saved-strip__count { font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.16em; color: var(--sp-bone); }
+      .sptv-saved-strip__dots {
+        display: inline-flex; align-items: flex-end; gap: 0.8vmin;
+        list-style: none; padding: 0; margin: 0; flex: 1;
+        height: 4vmin;
+      }
+      .sptv-saved-strip__dot {
+        position: relative;
+        flex: 1;
+        height: 100%;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+        gap: 0.4vmin;
+        opacity: 0.4;
+        transition: opacity 300ms ease;
+      }
+      .sptv-saved-strip__dot.has-saved { opacity: 1; }
+      .sptv-saved-strip__dot-fill {
+        width: 100%;
+        height: 0%;
+        background: var(--ch, var(--sp-ember));
+        border-radius: 0.4vmin;
+        transition: height 300ms ease;
+        min-height: 0.6vmin;
+      }
+      .sptv-saved-strip__dot-label {
+        font-family: 'Departure Mono', ui-monospace, monospace;
+        font-size: calc(var(--tv-mono) * 0.78);
+        letter-spacing: 0.14em;
+        color: var(--sp-mute);
+      }
+      .sptv-saved-strip__dot.has-saved .sptv-saved-strip__dot-label { color: var(--ch, var(--sp-bone)); }
+
+      .sptv-here { position: absolute; top: var(--tv-pad); right: var(--tv-pad); display: inline-flex; align-items: center; gap: 1.2vmin; padding: 0.8vmin 1.4vmin; border: 1px solid color-mix(in oklch, var(--sp-moss) 40%, var(--sp-rule)); border-radius: 999px; background: color-mix(in oklch, var(--sp-blue-hour) 92%, var(--sp-moss)); }
+      .sptv-here[hidden] { display: none; }
+      .sptv-here__label { font-family: 'Departure Mono', ui-monospace, monospace; font-size: var(--tv-mono); letter-spacing: 0.18em; color: var(--sp-moss); }
+      .sptv-here__list { display: inline-flex; gap: 0.5vmin; align-items: center; list-style: none; padding: 0; margin: 0; }
+      .sptv-here__item { width: 3vmin; height: 3vmin; border-radius: 999px; overflow: hidden; border: 1px solid color-mix(in oklch, var(--sp-moss) 30%, var(--sp-rule)); background: var(--sp-ink); opacity: 0.42; transition: opacity 600ms ease, box-shadow 600ms ease; }
+      .sptv-here__item[data-fresh="1"] { opacity: 1; box-shadow: 0 0 1.6vmin color-mix(in oklch, var(--sp-moss) 70%, transparent); border-color: var(--sp-moss); }
+      .sptv-here__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .sptv-here__placeholder { display: inline-flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--sp-moss); font-size: 1.4vmin; }
+
+      .sptv-foot { position: absolute; left: var(--tv-pad); right: var(--tv-pad); bottom: calc(var(--tv-pad) - 0.4vmin); display: flex; align-items: baseline; gap: 1vmin; font-family: 'Departure Mono', ui-monospace, monospace; font-size: calc(var(--tv-mono) * 0.85); letter-spacing: 0.18em; text-transform: uppercase; color: var(--sp-mute); opacity: 0.6; }
+      .sptv-foot__sep { color: var(--sp-rule); }
+      .sptv-foot a { color: var(--sp-ember); text-decoration: none; border-bottom: 1px solid color-mix(in oklch, var(--sp-ember) 40%, transparent); }
+
+      .sptv-body[data-surface="desktop"] { background: var(--sp-ink); }
+      .sptv-body[data-surface="desktop"] .sptv {
+        max-width: 1280px; max-height: 720px; margin: 4vh auto; height: 80vh;
+        border: 1px solid var(--sp-rule); border-radius: 0.6vmin;
+        --tv-h1: 5.4vmin; --tv-h2: 3.2vmin; --tv-body: 2.4vmin; --tv-mono: 1.4vmin;
+      }
+      .sptv-body[data-surface="desktop"]::after {
+        content: 'Sparrow TV · Saved · private-by-default · best on a 1920+ landscape display';
+        display: block; position: fixed; bottom: 1vh; left: 0; right: 0; text-align: center;
+        font-family: 'Departure Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.18em;
+        text-transform: uppercase; color: var(--sp-mute);
+      }
+      .sptv-body[data-surface="mobile"] .sptv { --tv-h1: 9vmin; --tv-h2: 5vmin; --tv-body: 3.8vmin; --tv-mono: 2.6vmin; }
+      .sptv-body[data-surface="mobile"] .sptv-saved-strip { padding: 1.6vmin; }
+      .sptv-body[data-surface="tv"] .sptv { height: 100vh; max-height: none; border: none; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .sptv-slide, .sptv-progress__bar, .sptv-saved-strip__dot-fill { transition: none !important; }
+      }
+    </style>
+  </body>
+</html>
