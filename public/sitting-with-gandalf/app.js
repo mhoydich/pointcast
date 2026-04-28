@@ -9,7 +9,7 @@
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v7";
-  const SETTINGS_RELEASE = "v7-noun-wizard-features";
+  const SETTINGS_RELEASE = "v7-actual-nouns";
   const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
   const renderStyles = {
     storybook: {
@@ -511,6 +511,13 @@
     { id: "leaf", name: "Shire Leaf", mark: "LF", tone: "#9fbc68", bg: "#263827", clue: "green pause" },
     { id: "wand", name: "Signal Wand", mark: "WD", tone: "#f0c96a", bg: "#2f2a22", clue: "one bright instruction" },
     { id: "shell", name: "Coast Shell", mark: "SH", tone: "#f4ead6", bg: "#2d3443", clue: "sea hush in pocket" }
+  ];
+
+  const actualNounImageBase = "https://noun.pics";
+  const actualNounSeeds = [
+    1, 7, 17, 28, 42, 88, 99, 137, 174, 205,
+    247, 333, 401, 420, 512, 557, 612, 696, 777, 808,
+    945, 1020, 1086, 1111, 1169, 1191, 73, 144, 256, 369
   ];
 
   const imageSeries = [
@@ -1916,11 +1923,31 @@
     return `${hat.name}, ${staff.name}, ${realm.name}`;
   }
 
+  function actualNounSeedForCard(card = activeNounsGandalf(), shift = state.noggleShift) {
+    const cardIndex = Math.max(0, nounsGandalfs.findIndex((candidate) => candidate.id === card.id));
+    const safeShift = Number.isFinite(Number(shift)) ? Math.floor(Number(shift)) : 0;
+    return actualNounSeeds[(cardIndex + safeShift + actualNounSeeds.length) % actualNounSeeds.length] || actualNounSeeds[0];
+  }
+
+  function actualNounTraitForCard(card = activeNounsGandalf(), shift = state.noggleShift) {
+    const seed = actualNounSeedForCard(card, shift);
+    return {
+      id: `noun-${seed}`,
+      name: `Noun #${seed}`,
+      mark: `N${seed}`,
+      tone: card.lens,
+      bg: card.bg,
+      clue: "actual CC0 Noun art via noun.pics",
+      image: `${actualNounImageBase}/${seed}.svg`
+    };
+  }
+
   function nounWizardTraitsForCard(card = activeNounsGandalf(), ritual = state.ritual, shift = state.noggleShift) {
     const seed = keepsakeSeed(`${card.id}-${card.noun}-${card.rarity}-${card.mode}-${ritual}`);
     const safeShift = Number.isFinite(Number(shift)) ? Math.floor(Number(shift)) : 0;
 
     return {
+      actual: actualNounTraitForCard(card, shift),
       head: nounWizardHeads[seed % nounWizardHeads.length] || nounWizardHeads[0],
       noggles: nounWizardNoggles[(seed + safeShift + nounWizardNoggles.length) % nounWizardNoggles.length] || nounWizardNoggles[0],
       accessory: nounWizardAccessories[(seed + safeShift * 2 + nounWizardAccessories.length) % nounWizardAccessories.length] || nounWizardAccessories[0]
@@ -1958,6 +1985,7 @@
     element.style.setProperty("--noun-glasses-frame", traits.noggles.frame);
     element.style.setProperty("--noun-accessory", traits.accessory.tone);
     element.style.setProperty("--noun-accessory-bg", traits.accessory.bg);
+    element.style.setProperty("--actual-noun-bg", traits.actual.bg);
     element.style.setProperty("--wizard-hat", hat.tone);
     element.style.setProperty("--wizard-beard", beard.tone);
     element.style.setProperty("--wizard-staff", staff.tone);
@@ -1967,6 +1995,7 @@
     element.style.setProperty("--wizard-aura", realm.tone);
     element.dataset.realm = realm.id;
     element.dataset.relic = relic.id;
+    element.dataset.actualNoun = traits.actual.id;
     element.dataset.head = traits.head.id;
     element.dataset.noggles = traits.noggles.id;
     element.dataset.accessory = traits.accessory.id;
@@ -1981,12 +2010,28 @@
     const traits = nounWizardTraitsForCard(card);
     const relic = wizardElement(elements, "relic");
     target.replaceChildren();
-    target.className = isSmall ? "noun-avatar noun-avatar-small" : "noun-avatar";
-    target.title = card.name;
+    target.className = isSmall ? "noun-avatar actual-noun-avatar noun-avatar-small" : "noun-avatar actual-noun-avatar";
+    target.title = `${card.name} paired with ${traits.actual.name}`;
     applyNounStyle(target, card);
     applyWizardNounStyle(target, card, elements, traits);
 
-    ["noun-aura", "noun-robe", "noun-staff", "noun-head", "noun-beard", "noun-hat", "noun-noggles", "noun-mouth", "noun-accessory", "noun-orb", "noun-rune"].forEach((className) => {
+    const image = document.createElement("img");
+    image.className = "actual-noun-image";
+    image.src = traits.actual.image;
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+    image.addEventListener("error", () => {
+      if (image.dataset.fallback === "used") {
+        return;
+      }
+      const cardIndex = Math.max(0, nounsGandalfs.findIndex((candidate) => candidate.id === card.id));
+      image.dataset.fallback = "used";
+      image.src = `/games/noun-pickleball/assets/noun-${cardIndex % 4}.svg`;
+    });
+    target.append(image);
+
+    ["noun-aura", "noun-staff", "noun-hat", "noun-accessory", "noun-orb", "noun-rune"].forEach((className) => {
       const part = document.createElement("span");
       part.className = className;
       if (className === "noun-accessory") {
@@ -2054,9 +2099,9 @@
     const staff = wizardElement(elements, "staff");
     const relic = wizardElement(elements, "relic");
     const features = [
-      { label: "Head", item: traits.head, detail: traits.head.clue },
-      { label: "Noggles", item: traits.noggles, detail: traits.noggles.clue },
-      { label: "Accessory", item: traits.accessory, detail: traits.accessory.clue },
+      { label: "Actual Noun", item: traits.actual, detail: traits.actual.clue },
+      { label: "Noggles", item: traits.noggles, detail: "kept from the real rendered Noun, with a ritual color cue" },
+      { label: "Wizard Hold", item: traits.accessory, detail: traits.accessory.clue },
       { label: "Wand", item: staff, detail: `casts through ${relic.name}` }
     ];
 
@@ -2161,7 +2206,7 @@
     const score = presenceScore();
     const keptLabel = `${state.nounsCollection.size}/${nounsGandalfs.length} kept`;
     const spellLabel = state.activeSpell || `${resource.name} can become a spell.`;
-    const nounSigil = `${traits.head.mark}-${traits.noggles.mark}-${wizardElement(elements, "staff").mark}`;
+    const nounSigil = `${traits.actual.mark}-${traits.noggles.mark}-${wizardElement(elements, "staff").mark}`;
 
     renderNounAvatar(dom.v7NounAvatar, card, false);
     renderWizardTraitPills(dom.v7TraitPills, elements);
@@ -2172,15 +2217,15 @@
     dom.v7Progress.textContent = `${keptLabel} · ${score} presence`;
     dom.v7RitualLine.textContent = `${ritual.title} · ${ritual.short}`;
     dom.v7WizardTitle.textContent = `${card.name}: ${wizardElementPhrase(elements)}`;
-    dom.v7WizardText.textContent = `${traits.head.name} with ${traits.noggles.name} noggles; ${card.trait}. ${ritual.guide} Pair ${relic.name}, sharpen ${resource.name}, then sit with: ${card.mantra}`;
+    dom.v7WizardText.textContent = `${traits.actual.name} is the real Noun under the wizard layer; ${card.trait}. ${ritual.guide} Pair ${relic.name}, sharpen ${resource.name}, then sit with: ${card.mantra}`;
     dom.v7FrameworkTitle.textContent = elements.map((element) => element.label).join(" + ");
-    dom.v7NounBuildTitle.textContent = `${traits.head.name} + ${traits.noggles.name} + ${traits.accessory.name}`;
+    dom.v7NounBuildTitle.textContent = `${traits.actual.name} + ${traits.noggles.name} + ${traits.accessory.name}`;
     dom.v7CouncilTitle.textContent = `${card.noun} council · ${presenceRank(score)}`;
     dom.v7ForgeHint.textContent = `${card.rarity} · ${natureViews[card.visual].name}`;
     dom.v7RelicName.textContent = relic.name;
     dom.v7ResourceName.textContent = `${resource.name} ${state.resourceLevels[resource.id] || 0}`;
     dom.v7SpellLine.textContent = spellLabel;
-    dom.v7NogglesName.textContent = traits.noggles.name;
+    dom.v7NogglesName.textContent = traits.actual.name;
     dom.v7CouncilHint.textContent = `council ${Math.floor((state.councilOffset % nounsGandalfs.length) / 3) + 1}`;
     dom.v7SigilLine.textContent = nounSigil;
     dom.v7CueLine.textContent = card.cue;
@@ -3933,11 +3978,11 @@
   function v7RollNoggles() {
     ensureV7Version();
 
-    state.noggleShift = (state.noggleShift + 1) % nounWizardNoggles.length;
+    state.noggleShift = (state.noggleShift + 1) % actualNounSeeds.length;
     const traits = nounWizardTraitsForCard();
     saveSettings();
-    dom.wizardLine.textContent = `${traits.noggles.name} noggles clicked into place.`;
-    setGuide("Noggles rolled", `${activeNounsGandalf().name} · ${traits.noggles.name}`, `${traits.noggles.clue}. Noun first, wizard second, present always.`);
+    dom.wizardLine.textContent = `${traits.actual.name} arrived with real Noun bones and ${traits.noggles.name} ritual color.`;
+    setGuide("Actual Noun rolled", `${activeNounsGandalf().name} · ${traits.actual.name}`, `${traits.actual.clue}. Noun first, wizard second, present always.`);
     updateV7Panel();
     spawnParticles(10);
   }
@@ -3961,9 +4006,9 @@
     const traits = nounWizardTraitsForCard(card, state.ritual);
     const staff = wizardElement(elements, "staff");
     const realm = wizardElement(elements, "realm");
-    const word = resource.words[keepsakeSeed(`${traits.head.id}-${traits.noggles.id}-${staff.id}`) % resource.words.length];
+    const word = resource.words[keepsakeSeed(`${traits.actual.id}-${traits.noggles.id}-${staff.id}`) % resource.words.length];
 
-    return `${traits.noggles.mark} ${card.noun} noun spell: ${word} through ${staff.name}; held by ${relic.name} in ${realm.name}.`;
+    return `${traits.actual.mark} ${card.noun} noun spell: ${word} through ${staff.name}; held by ${relic.name} in ${realm.name}.`;
   }
 
   function v7CastNounSpell() {
@@ -3995,7 +4040,7 @@
     saveSpellBook();
     updateSpellPanel();
     dom.wizardLine.textContent = phrase;
-    setGuide("Noun spell cast", `${traits.head.name} · ${traits.noggles.name}`, `${resource.promise}. The spellbook kept it.`);
+    setGuide("Noun spell cast", `${traits.actual.name} · ${traits.noggles.name}`, `${resource.promise}. The spellbook kept it.`);
     spawnParticles(16);
   }
 
