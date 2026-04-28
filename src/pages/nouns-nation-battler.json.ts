@@ -1,5 +1,5 @@
 /**
- * /nouns-nation-battler.json - machine-readable manifest for the 30v30 Nouns auto-battler.
+ * /nouns-nation-battler.json - machine-readable manifest for the 30v30 Nouns league auto-battler.
  */
 import type { APIRoute } from 'astro';
 
@@ -7,19 +7,28 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation Battler',
-  status: 'playable browser prototype v3',
+  status: 'playable browser prototype v6 tv cast league',
   human: 'https://pointcast.xyz/nouns-nation-battler',
   playable: 'https://pointcast.xyz/games/nouns-nation-battler/index.html',
+  tv: 'https://pointcast.xyz/nouns-nation-battler-tv',
   image: 'https://pointcast.xyz/images/og/battle.png',
-  intent: 'A watchable Nouns auto-battler where rotating gangs fight 30 vs 30 on an open field.',
+  intent: 'A watchable Nouns auto-battler where numbered Nouns players and eight rotating gangs play a two-week 30 vs 30 league into a Nouns Bowl final, with scout cards, sim controls, TV cast mode, and recaps.',
   game: {
     genre: 'auto battler',
     matchSize: '30 vs 30',
-    mode: 'fully automated watch mode',
-    controls: ['new match', 'pause/resume', 'auto-next', 'slow/live/rush speed', 'root left', 'root right'],
+    mode: 'fully automated two-week league watch mode plus fullscreen TV cast',
+    controls: ['next match', 'quick sim', 'sim day', 'pause/resume', 'auto-next', 'reset league', 'slow/live/rush speed', 'root left', 'root right', 'click Noun to scout', 'TV keyboard: space pause', 'TV keyboard: N next match', 'TV keyboard: Q quick sim', 'TV keyboard: D sim day', 'TV keyboard: R reset league'],
+    league: {
+      teams: 8,
+      regularSeasonDays: 14,
+      matchesPerDay: 4,
+      format: 'double round-robin regular season, top four playoffs, Nouns Bowl final',
+      persistence: 'localStorage only',
+    },
     unitRoles: ['runner', 'bonker', 'slinger', 'captain', 'healer'],
+    unitStats: ['visible player number', 'name', 'role', 'hp', 'hits', 'damage', 'healing', 'KOs', 'deaths', 'special moves'],
     advancedMoves: ['Breakaway dash', 'Noggles slam', 'Auction volley', 'Quorum rally', 'Emergency mint'],
-    systems: ['morale', 'cooldowns', 'healing', 'gang surges', 'status effects', 'center-field control', 'persistent local season stats', 'rooting preference'],
+    systems: ['numbered rosters', 'scout cards', 'top performer roster list', 'quick simulation', 'day simulation', 'recent league recaps', 'live match stat leaders', 'fullscreen TV cast', 'broadcast scoreboard', 'QR handoff', 'keyboard cast controls', 'two-week schedule', 'standings', 'playoff bracket', 'Nouns Bowl champion', 'fan heat', 'morale', 'cooldowns', 'healing', 'gang surges', 'status effects', 'center-field control', 'persistent local season stats', 'rooting preference'],
   },
   nounsAssets: {
     source: 'Local nouns-assets image-data plus Nouns buildSVG renderer',
@@ -46,7 +55,10 @@ const payload = {
   links: {
     human: 'https://pointcast.xyz/nouns-nation-battler',
     playable: 'https://pointcast.xyz/games/nouns-nation-battler/index.html',
+    tv: 'https://pointcast.xyz/nouns-nation-battler-tv',
+    tvDirect: 'https://pointcast.xyz/games/nouns-nation-battler/index.html?mode=tv',
     spriteManifest: 'https://pointcast.xyz/games/nouns-nation-battler/assets/manifest.json',
+    prd: 'https://github.com/mhoydich/pointcast/blob/main/docs/prd/nouns-nation-battler-league.md',
     battleChannel: 'https://pointcast.xyz/c/btl',
     pointcast: 'https://pointcast.xyz/',
   },
