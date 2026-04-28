@@ -1,0 +1,254 @@
+---
+/**
+ * /federation/preview — Phase 0 spike demo for the
+ * `xyz.pointcast.block` Lexicon mapping.
+ *
+ * Shows a small set of representative Blocks (one per shape that
+ * stresses different parts of the schema) side-by-side with their
+ * AT Protocol Lexicon record form, plus a round-trip drift report.
+ *
+ * Companion to:
+ *   - docs/rfcs/0004-pointcast-block-lexicon.md (the RFC)
+ *   - src/lib/lexicon/block-to-lexicon.ts (the converter)
+ *
+ * No PDS, no firehose, no DIDs — pure shape-mapping demo.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import {
+  blockToLexiconRecord,
+  blockAtUri,
+  roundTrip,
+  type Block,
+} from '../../lib/lexicon/block-to-lexicon';
+
+// Representative samples — different shapes that stress the converter.
+const SAMPLE_IDS = [
+  '0381',
+  '0387',
+  '0384',
+  '0371',
+];
+
+const all = await getCollection('blocks', ({ data }) => !data.draft);
+const byId = new Map(all.map((e) => [e.data.id, e.data]));
+
+function stripLongBody<T extends { body?: string }>(obj: T): T {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (typeof obj.body !== 'string') return obj;
+  if (obj.body.length <= 320) return obj;
+  return { ...obj, body: obj.body.slice(0, 280) + '… [' + obj.body.length + ' chars total]' } as T;
+}
+
+const samples = SAMPLE_IDS
+  .map((id) => byId.get(id))
+  .filter((d) => d != null)
+  .map((data) => {
+    // Astro coerces timestamp to Date; converter wants ISO string.
+    const block: Block = {
+      ...(data as unknown as Block),
+      timestamp:
+        data!.timestamp instanceof Date
+          ? data!.timestamp.toISOString()
+          : String(data!.timestamp),
+    };
+    const rt = roundTrip(block);
+    return {
+      block,
+      blockTrimmed: stripLongBody(block),
+      record: rt.record,
+      recordTrimmed: stripLongBody(rt.record),
+      lossless: rt.lossless,
+      drift: rt.drift,
+    };
+  });
+
+const exampleAtUri = blockAtUri('did:plc:pointcast-el-segundo-example', '0387');
+---
+
+<BaseLayout
+  title="/federation/preview — Block ↔ Lexicon spike"
+  description="Phase 0 spike. Shows existing PointCast Blocks rendered as xyz.pointcast.block AT Protocol Lexicon records, with a round-trip drift report. Companion to RFC 0004."
+>
+  <main class="fp">
+    <header class="fp__head">
+      <p class="fp__kicker mono">PHASE 0 SPIKE · 2026-04-28</p>
+      <h1 class="fp__title">Block ↔ Lexicon · preview</h1>
+      <p class="fp__lede">
+        A learn-by-doing test of the <code>xyz.pointcast.block</code> AT Protocol
+        Lexicon defined in <a href="https://github.com/mhoydich/pointcast/blob/main/docs/rfcs/0004-pointcast-block-lexicon.md">RFC 0004</a>.
+        Each card below renders an existing PointCast Block alongside its Lexicon
+        record form, then reports drift after a round-trip back to a Block.
+      </p>
+
+      <div class="fp__lede2 mono">
+        <span>example AT-URI:</span>
+        <code class="fp__aturi">{exampleAtUri}</code>
+      </div>
+
+      <div class="fp__legend mono">
+        <span class="fp__chip fp__chip--ok">LOSSLESS</span>
+        <span class="fp__chip fp__chip--warn">DRIFT</span>
+        <span class="fp__legend-note">drift = paths where round-trip differs from input</span>
+      </div>
+    </header>
+
+    <section class="fp__samples">
+      {samples.map((s) => (
+        <article class={`fp__card${s.lossless ? ' fp__card--ok' : ' fp__card--drift'}`}>
+          <header class="fp__card-head">
+            <p class="fp__card-id mono">{s.block.id}</p>
+            <p class="fp__card-title">{s.block.title}</p>
+            <p class="fp__card-meta mono">
+              <span>{s.block.channel}</span>
+              <span>·</span>
+              <span>{s.block.type}</span>
+              <span>·</span>
+              <span>{s.block.author ?? '—'}</span>
+              <span>·</span>
+              <span class={`fp__chip ${s.lossless ? 'fp__chip--ok' : 'fp__chip--warn'}`}>
+                {s.lossless ? 'LOSSLESS' : `DRIFT · ${s.drift.length}`}
+              </span>
+            </p>
+          </header>
+
+          <div class="fp__columns">
+            <details class="fp__col" open>
+              <summary class="fp__col-summary mono">BLOCK · src/content/blocks/{s.block.id}.json</summary>
+              <pre class="fp__pre"><code>{JSON.stringify(s.blockTrimmed, null, 2)}</code></pre>
+            </details>
+            <details class="fp__col" open>
+              <summary class="fp__col-summary mono">LEXICON · xyz.pointcast.block record</summary>
+              <pre class="fp__pre"><code>{JSON.stringify(s.recordTrimmed, null, 2)}</code></pre>
+            </details>
+          </div>
+
+          {s.drift.length > 0 && (
+            <details class="fp__drift">
+              <summary class="fp__drift-summary mono">DRIFT PATHS · {s.drift.length}</summary>
+              <ul class="fp__drift-list mono">
+                {s.drift.map((p) => <li>{p}</li>)}
+              </ul>
+            </details>
+          )}
+        </article>
+      ))}
+    </section>
+
+    <footer class="fp__foot mono">
+      <p class="fp__foot-note">
+        Pure shape-mapping. No DIDs were issued, no firehose was subscribed,
+        no PDSes were harmed. Phase 1 commit decision lands at end of Sprint 5
+        in <code>docs/notes/2026-05-02-sprint-next-direction.md</code>.
+      </p>
+      <p class="fp__foot-links">
+        <a href="https://github.com/mhoydich/pointcast/blob/main/docs/rfcs/0004-pointcast-block-lexicon.md">RFC 0004 →</a>
+        <a href="https://github.com/mhoydich/pointcast/blob/main/src/lib/lexicon/block-to-lexicon.ts">converter source →</a>
+      </p>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style is:global>
+  .fp {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    color: #1a1a1f;
+  }
+  .fp .mono { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace; }
+
+  .fp__head { margin-bottom: 36px; }
+  .fp__kicker {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    font-weight: 700;
+    color: #6a6a78;
+    margin: 0 0 8px;
+  }
+  .fp__title {
+    font-family: 'Gloock', 'Times New Roman', serif;
+    font-size: clamp(34px, 5vw, 52px);
+    margin: 0 0 14px;
+    letter-spacing: -0.01em;
+    line-height: 1.04;
+  }
+  .fp__lede { font-size: 16px; line-height: 1.55; max-width: 820px; margin: 0 0 16px; color: #2a2a32; }
+  .fp__lede2 {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 11px; letter-spacing: 0.10em;
+    color: #6a6a78;
+    margin: 0 0 18px;
+  }
+  .fp__aturi { background: #f3f3f5; border: 1px solid #e2e2e8; padding: 3px 7px; border-radius: 2px; font-size: 11px; }
+
+  .fp__legend { display: flex; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
+  .fp__legend-note { color: #6a6a78; letter-spacing: 0.04em; font-size: 11px; }
+  .fp__chip {
+    display: inline-block;
+    padding: 2px 7px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .fp__chip--ok   { color: #0d6e3c; border-color: #b7e4c7; background: #ebf7ee; }
+  .fp__chip--warn { color: #8a4400; border-color: #f6c89d; background: #fdf1e2; }
+
+  .fp__samples { display: grid; grid-template-columns: 1fr; gap: 28px; }
+  .fp__card {
+    border: 1px solid #e2e2e8;
+    border-radius: 4px;
+    padding: 18px 18px 20px;
+    background: #fff;
+  }
+  .fp__card--ok    { border-color: #d1eadb; }
+  .fp__card--drift { border-color: #f1d6b2; }
+
+  .fp__card-head { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #e2e2e8; }
+  .fp__card-id   { font-size: 10px; letter-spacing: 0.22em; font-weight: 700; color: #8a8a96; margin: 0 0 4px; }
+  .fp__card-title { font-family: 'Gloock', 'Times New Roman', serif; font-size: 22px; line-height: 1.18; margin: 0 0 8px; }
+  .fp__card-meta { font-size: 10.5px; letter-spacing: 0.10em; color: #6a6a78; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0; }
+
+  .fp__columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 800px) { .fp__columns { grid-template-columns: 1fr; } }
+
+  .fp__col-summary {
+    font-size: 10px; letter-spacing: 0.16em; font-weight: 700; color: #4a4a56;
+    cursor: pointer;
+    padding: 6px 0;
+    user-select: none;
+  }
+  .fp__col-summary::marker { color: #8a8a96; }
+
+  .fp__pre {
+    background: #fafafc;
+    border: 1px solid #ececef;
+    padding: 10px 12px;
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 1.45;
+    overflow-x: auto;
+    margin: 0;
+    max-height: 360px;
+  }
+  .fp__pre code { font-family: 'JetBrains Mono Variable', monospace; color: #1a1a1f; white-space: pre; }
+
+  .fp__drift {
+    margin-top: 14px;
+    background: #fdf1e2;
+    border: 1px solid #f6c89d;
+    padding: 8px 12px;
+    border-radius: 3px;
+  }
+  .fp__drift-summary { font-size: 10px; letter-spacing: 0.18em; font-weight: 700; color: #8a4400; cursor: pointer; }
+  .fp__drift-list { margin: 8px 0 0; padding-left: 16px; font-size: 11px; color: #6a3a00; }
+
+  .fp__foot { margin-top: 48px; padding-top: 18px; border-top: 1px solid #e2e2e8; color: #6a6a78; font-size: 11px; line-height: 1.6; }
+  .fp__foot-note { margin: 0 0 8px; }
+  .fp__foot-links { margin: 0; display: flex; gap: 18px; }
+  .fp__foot-links a { color: #1a1a1f; text-decoration: none; border-bottom: 1px solid #c0c0c8; padding-bottom: 1px; }
+  .fp__foot-links a:hover { border-color: #1a1a1f; }
+</style>
