@@ -1,0 +1,334 @@
+---
+/**
+ * /drum-stickers — collect a sticker per surface · sprint 3/4
+ *
+ * Twenty-two stickers, one per drum-hub surface. You earn a sticker by
+ * tapping at least once on that surface (the page writes a small flag
+ * to localStorage). Coming back to /drum-stickers shows your binder —
+ * earned ones in full color, unearned ones grayscale. Hover for the
+ * surface name. Click to go play.
+ *
+ * No multiplayer here, just the cozy completion. Local-first; no KV.
+ *
+ * The actual write is opt-in: when you visit /drum-stickers, a small
+ * <script> hooks every existing localStorage key the drum surfaces use
+ * (pc:drumLocalCount, pc:drum-v4:collected, etc.) and projects them to
+ * the sticker keys. So if you've already played, your binder fills in
+ * on first visit. If not, you can tap a sticker and we'll mark it
+ * "visited" without making you actually play (call it good faith).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-stickers — your drum-hub sticker binder';
+const description =
+  'Twenty-two stickers, one per drum-hub surface. Earn a sticker by tapping on the surface. Local-first binder shows earned in color, unearned grayed out.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/drum-stickers',
+  name: 'PointCast · Drum Stickers',
+  url: 'https://pointcast.xyz/drum-stickers',
+  description,
+};
+
+// Each sticker has a glyph, a surface URL, a color, and an evidence key
+// in localStorage that means "you've been here". When the evidence key
+// is non-empty/truthy, the sticker is earned.
+const STICKERS = [
+  { id: 'classic',  href: '/drum',          name: 'Classic',         glyph: '◯', color: '#ff5c23', shape: 'circle',   evidence: 'pc:drumLocalCount' },
+  { id: 'collab',   href: '/drum-v2',       name: 'Collab',          glyph: '∞', color: '#ffd400', shape: 'rounded',  evidence: 'pc:drum-v2:tapped' },
+  { id: 'spotify',  href: '/drum-v3',       name: 'Spotify',         glyph: '♫', color: '#3b6e3b', shape: 'pill',     evidence: 'pc:drum-v3:track-count' },
+  { id: 'orch',     href: '/drum-v4',       name: 'Orchestra',       glyph: '𝄞', color: '#185fa5', shape: 'square',   evidence: 'pc:drum-v4:collected' },
+  { id: 'loops',    href: '/drum-v5',       name: 'Loops',           glyph: '◇', color: '#ff8a4a', shape: 'diamond',  evidence: 'pc:drum-v5:shared-count' },
+  { id: 'choir',    href: '/drum-v6',       name: 'Choir',           glyph: '𝄢', color: '#5fbafd', shape: 'rounded',  evidence: 'pc:drum-v6:sung' },
+  { id: 'big',      href: '/drum-v7',       name: 'Big Board',       glyph: '◧', color: '#a83b2a', shape: 'square',   evidence: 'pc:drum-v7:played' },
+  { id: 'symph',    href: '/drum-v8',       name: 'Symphony',        glyph: '♪', color: '#d6745f', shape: 'rounded',  evidence: 'pc:drum-v8:played' },
+  { id: 'lounge',   href: '/drum-v9',       name: 'Lounge',          glyph: '🎷', color: '#b8431a', shape: 'pill',     evidence: 'pc:drum-v9:played' },
+  { id: 'theremin', href: '/drum-v10',      name: 'Theremin',        glyph: '∿', color: '#ff8a4a', shape: 'pill',     evidence: 'pc:drum-v10:notes' },
+  { id: 'bells',    href: '/drum-v11',      name: 'Bells',           glyph: '🔔', color: '#fff7c2', shape: 'rounded',  evidence: 'pc:drum-v11:rung' },
+  { id: 'organ',    href: '/drum-v12',      name: 'Pipe Organ',      glyph: '⛪', color: '#c9a449', shape: 'square',   evidence: 'pc:drum-v12:notes' },
+  { id: 'apr26',    href: '/drum-apr26',    name: 'Sequencer Apr26', glyph: '▦', color: '#3a3a3a', shape: 'square',   evidence: 'pc:drum-apr26:tapped' },
+  { id: 'potato',   href: '/drum-potato',   name: 'Hot Potato',      glyph: '🥔', color: '#caa672', shape: 'rounded',  evidence: 'pc:drum-potato:wins' },
+  { id: 'pulse',    href: '/drum-pulse',    name: 'Pulse',           glyph: '♥', color: '#ff5c23', shape: 'rounded',  evidence: 'pc:drum-pulse:milestones-seen' },
+  { id: 'agents',   href: '/drum-agents',   name: 'Agents',          glyph: '◉', color: '#1a1a1a', shape: 'circle',   evidence: 'pc:drum-agents:visited' },
+  { id: 'daily',    href: '/drum-daily',    name: 'Daily',           glyph: '☀', color: '#ffd400', shape: 'circle',   evidence: 'pc:drum-daily:days' },
+  { id: 'tv',       href: '/drum-tv',       name: 'TV',              glyph: '▶', color: '#185fa5', shape: 'square',   evidence: 'pc:drum-tv:visited' },
+  { id: 'tv2',      href: '/drum-tv-v2',    name: 'Venue',           glyph: '★', color: '#ffd400', shape: 'pill',     evidence: 'pc:drum-tv-v2:visited' },
+  { id: 'viz',      href: '/drum-viz',      name: 'Visualizer',      glyph: '✸', color: '#5fbafd', shape: 'circle',   evidence: 'pc:drum-viz:seconds' },
+  { id: 'marquee',  href: '/drum-marquee',  name: 'Marquee',         glyph: '═', color: '#fffaf0', shape: 'pill',     evidence: 'pc:drum-marquee:visited' },
+  { id: 'kettle',   href: '/kettle',        name: 'Kettle',          glyph: '🫖', color: '#5fbafd', shape: 'rounded',  evidence: 'pc:kettle:my-stokes' },
+  { id: 'mcp',      href: '/api/mcp',       name: 'MCP Gate',        glyph: '◊', color: '#3a3a3a', shape: 'diamond',  evidence: 'pc:drum-mcp:visited' },
+  { id: 'trophies', href: '/drum-trophies', name: 'Trophies',        glyph: '🏆', color: '#ffd400', shape: 'square',   evidence: 'pc:drum-trophies:visited' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="st" id="st-main">
+    <DrumNav current="stickers" />
+
+    <header class="st__head">
+      <p class="st__kicker">DRUM HUB · STICKER BINDER · LOCAL-FIRST · {STICKERS.length} STICKERS</p>
+      <h1 class="st__title"><em>Earn one sticker per room.</em></h1>
+      <p class="st__dek">
+        Twenty-four stickers in the binder, one per drum-hub surface. You earn a sticker by tapping (or singing, or stoking, or boiling) on that surface — your browser remembers. Earned stickers are in full color. Unearned stickers stay grayed out until you visit. No accounts, no chain, no mint — just a friendly local record of where you've been.
+      </p>
+      <p class="st__progress mono" id="st-progress">— / —</p>
+    </header>
+
+    <section class="st__binder" aria-label="Sticker binder">
+      {STICKERS.map((s) => (
+        <a
+          class={`st__sticker st__sticker--${s.shape}`}
+          href={s.href}
+          data-id={s.id}
+          data-evidence={s.evidence}
+          style={`--st-color: ${s.color};`}
+          aria-label={`${s.name} sticker — visit ${s.href}`}
+        >
+          <span class="st__sticker-art" aria-hidden="true">
+            <span class="st__sticker-shape"></span>
+            <span class="st__sticker-glyph">{s.glyph}</span>
+          </span>
+          <span class="st__sticker-meta">
+            <span class="st__sticker-name">{s.name}</span>
+            <span class="st__sticker-href mono">{s.href}</span>
+          </span>
+          <span class="st__sticker-status mono" data-status="locked">UNCOLLECTED</span>
+        </a>
+      ))}
+    </section>
+
+    <footer class="st__foot">
+      <p>
+        Stickers detect "you've been here" by reading the same localStorage
+        keys the drum surfaces already use. If you've already played, your
+        binder fills in automatically on this page load. Tap a grayed-out
+        sticker to visit the surface; come back and it'll be in color.
+      </p>
+      <p class="st__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 3/4</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    function isEarned(key) {
+      if (!key) return false;
+      try {
+        const v = localStorage.getItem(key);
+        if (v == null) return false;
+        if (v === '0' || v === '' || v === 'false' || v === '[]') return false;
+        return true;
+      } catch { return false; }
+    }
+
+    function paint() {
+      const cards = document.querySelectorAll('.st__sticker');
+      let earned = 0;
+      cards.forEach((card) => {
+        const key = card.getAttribute('data-evidence') || '';
+        const status = card.querySelector('.st__sticker-status');
+        if (isEarned(key)) {
+          card.classList.add('st__sticker--earned');
+          if (status) { status.textContent = 'COLLECTED'; status.dataset.status = 'earned'; }
+          earned += 1;
+        } else {
+          card.classList.remove('st__sticker--earned');
+          if (status) { status.textContent = 'UNCOLLECTED'; status.dataset.status = 'locked'; }
+        }
+      });
+      const prog = document.getElementById('st-progress');
+      if (prog) prog.textContent = `${earned} / ${cards.length} collected`;
+    }
+
+    // On clicking a sticker, mark a "visited" flag right away so the
+    // tile lights up the next time the user comes back, even if they
+    // didn't go all the way through to a real action on that surface.
+    document.querySelectorAll('.st__sticker').forEach((card) => {
+      card.addEventListener('click', () => {
+        const id = card.getAttribute('data-id');
+        if (!id) return;
+        // Only mark visited if there's no harder evidence already
+        const ev = card.getAttribute('data-evidence') || '';
+        if (!isEarned(ev)) {
+          try { localStorage.setItem(`pc:drum-${id}:visited`, '1'); } catch {}
+        }
+      });
+    });
+
+    paint();
+    // Poll because other tabs might play
+    setInterval(paint, 2000);
+  })();
+</script>
+
+<style>
+  .st {
+    min-height: 100vh;
+    padding: 14px 14px 60px;
+    background:
+      repeating-linear-gradient(45deg, rgba(255, 138, 74, 0.04) 0 12px, transparent 12px 26px),
+      #fffaf0;
+    color: #12110e;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .st__head { max-width: 1080px; margin: 0 auto 18px; padding: 0 6px; }
+  .st__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+  .st__title {
+    margin: 0 0 6px;
+    font-family: Georgia, serif;
+    font-size: clamp(28px, 4.6vw, 50px);
+    line-height: 1.05;
+  }
+  .st__title em { font-style: italic; }
+  .st__dek { margin: 0 0 8px; font-size: 14px; line-height: 1.55; max-width: 70ch; color: #5f5e5a; }
+  .st__progress {
+    display: inline-block;
+    margin: 4px 0 0;
+    padding: 4px 10px;
+    background: #ffd400;
+    border: 1.5px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+  }
+
+  .st__binder {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .st__sticker {
+    position: relative;
+    display: grid;
+    grid-template-columns: 70px minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      'art meta'
+      'art status';
+    gap: 8px 10px;
+    padding: 12px;
+    background: #fff;
+    border: 2px solid #12110e;
+    box-shadow: 4px 4px 0 0 #12110e;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 120ms, box-shadow 120ms;
+    /* Locked: grayscale wash */
+    filter: grayscale(0.9) opacity(0.65);
+  }
+  .st__sticker:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 0 #12110e;
+    text-decoration: none;
+    filter: grayscale(0.7) opacity(0.85);
+  }
+  .st__sticker--earned {
+    filter: none;
+  }
+  .st__sticker--earned:hover { filter: brightness(1.04); }
+
+  .st__sticker-art {
+    grid-area: art;
+    width: 70px; height: 70px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .st__sticker-shape {
+    position: absolute;
+    inset: 0;
+    background: var(--st-color, #ffd400);
+    border: 2px solid #12110e;
+    box-shadow: 2px 2px 0 0 #12110e;
+  }
+  .st__sticker--circle  .st__sticker-shape { border-radius: 50%; }
+  .st__sticker--rounded .st__sticker-shape { border-radius: 12px; }
+  .st__sticker--square  .st__sticker-shape { border-radius: 0; }
+  .st__sticker--pill    .st__sticker-shape { border-radius: 100px; }
+  .st__sticker--diamond .st__sticker-shape {
+    border-radius: 0;
+    transform: rotate(45deg) scale(0.7);
+  }
+  .st__sticker-glyph {
+    position: relative;
+    z-index: 1;
+    font-size: 30px;
+    line-height: 1;
+    font-family: Georgia, serif;
+    color: #12110e;
+    text-shadow: 1px 1px 0 #fff, -1px -1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  .st__sticker-meta {
+    grid-area: meta;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .st__sticker-name {
+    font-family: Georgia, serif;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1.15;
+  }
+  .st__sticker-href {
+    font-size: 10px;
+    color: #5f5e5a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .st__sticker-status {
+    grid-area: status;
+    align-self: end;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+  .st__sticker--earned .st__sticker-status {
+    color: #3b6e3b;
+    font-weight: 700;
+  }
+  .st__sticker--earned .st__sticker-status::before {
+    content: '★ ';
+    color: #ffd400;
+    -webkit-text-stroke: 0.5px #12110e;
+  }
+
+  .st__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #12110e;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5f5e5a;
+  }
+  .st__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+  }
+</style>
