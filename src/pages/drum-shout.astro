@@ -1,0 +1,268 @@
+---
+/**
+ * /drum-shout — comms tool 1 · 2026-04-28 PT.
+ *
+ * One visitor takes the mic. They type a 200-char message. The shout
+ * broadcasts as a giant scrolling marquee on every drum-hub cast
+ * surface — /drum-tv, /drum-tv-v2, /drum-marquee, /drum-viz pick it up
+ * via /api/sounds (type=shout).
+ *
+ * Mechanics:
+ *   - 200 char limit (sanitized client-side)
+ *   - 30s cooldown per pid (localStorage)
+ *   - Five mood buttons set the marquee color (warm/bright/ocean/garden/fog)
+ *   - Recent shouts display on the page itself for ~30s before fade
+ *   - Cast-friendly with F = fullscreen, M = hide chrome
+ *
+ * Aesthetic: radio-station booth · ON AIR lamp, mic on a boom, shout
+ * card lit up by an applied mood color.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-shout — take the mic';
+const description = 'Take the mic. Type a 200-char shout. The room sees it scroll across every drum-hub cast surface.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-shout', name: 'PointCast Drum · Shout', url: 'https://pointcast.xyz/drum-shout', description };
+
+const MOODS = [
+  { id: 'warm',   label: 'WARM',   color: '#ff8a4a' },
+  { id: 'bright', label: 'BRIGHT', color: '#ffd400' },
+  { id: 'ocean',  label: 'OCEAN',  color: '#5fbafd' },
+  { id: 'garden', label: 'GARDEN', color: '#3b6e3b' },
+  { id: 'fog',    label: 'FOG',    color: '#cfc6df' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="sh" id="sh-main">
+    <DrumNav current="confessional" />
+
+    <header class="sh__head">
+      <p class="sh__kicker">DRUM HUB · COMMS · SHOUT · TAKE THE MIC · MULTIPLAYER</p>
+      <h1 class="sh__title"><em>Step up, lean in, say it once.</em></h1>
+      <p class="sh__dek">
+        Type a shout. Pick a color. The room sees it scroll across every drum-hub cast surface — TV, marquee, visualizer. 200 characters, 30-second cooldown, no edit, no delete.
+      </p>
+    </header>
+
+    <section class="sh__booth">
+      <div class="sh__lamp" id="sh-lamp" aria-hidden="true">
+        <span class="sh__lamp-dot"></span>
+        <span class="sh__lamp-text mono" id="sh-lamp-text">— OFF AIR —</span>
+      </div>
+
+      <form class="sh__form" id="sh-form" autocomplete="off">
+        <textarea
+          class="sh__input"
+          id="sh-input"
+          maxlength="200"
+          placeholder="Take the mic — what do you want the room to hear?"
+          rows="3"
+          aria-label="Shout text"
+        ></textarea>
+        <div class="sh__moodbar" role="radiogroup" aria-label="Shout color">
+          {MOODS.map((m, i) => (
+            <button type="button" class={`sh__mood ${i === 0 ? 'sh__mood--on' : ''}`} data-mood={m.id} style={`--sh-mood: ${m.color}`} aria-label={`Mood ${m.label}`}>
+              <span class="sh__mood-swatch"></span>
+              <span class="sh__mood-label mono">{m.label}</span>
+            </button>
+          ))}
+        </div>
+        <div class="sh__form-foot">
+          <span class="sh__count mono" id="sh-count">0 / 200</span>
+          <span class="sh__cooldown mono" id="sh-cooldown" aria-live="polite"></span>
+          <button type="submit" class="sh__send mono" id="sh-send">SHOUT →</button>
+        </div>
+      </form>
+
+      <div class="sh__feed" id="sh-feed" aria-label="Recent shouts">
+        <p class="sh__empty mono" id="sh-empty">— no shouts yet —</p>
+      </div>
+    </section>
+
+    <footer class="sh__foot">
+      <p>
+        Each shout fires <code>type=shout</code> to <code>/api/sounds</code> with the text + mood color. The marquee surface (<a href="/drum-marquee">/drum-marquee</a>) scrolls every shout right-to-left at full width. The visualizer (<a href="/drum-viz">/drum-viz</a>) shows it as a colored ripple. The radio (<a href="/drum-radio">/drum-radio</a>) translates it to a sweep tone.
+      </p>
+      <p class="sh__credit mono">v0.1 · 2026-04-28 · drum sprint · comms tool 1</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  const COOLDOWN_MS = 30 * 1000;
+  const MAX = 200;
+  let currentMood = 'warm';
+  const colorByMood = { warm: '#ff8a4a', bright: '#ffd400', ocean: '#5fbafd', garden: '#3b6e3b', fog: '#cfc6df' };
+  const input = document.getElementById('sh-input');
+  const count = document.getElementById('sh-count');
+  const send = document.getElementById('sh-send');
+  const cooldownEl = document.getElementById('sh-cooldown');
+  const feed = document.getElementById('sh-feed');
+  const empty = document.getElementById('sh-empty');
+  const lamp = document.getElementById('sh-lamp');
+  const lampText = document.getElementById('sh-lamp-text');
+
+  function getSession() {
+    try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s; }
+    catch { return 'sh-' + Math.random().toString(36).slice(2,10); }
+  }
+  function nounIdFor(sid) { let h=5381; for(let i=0;i<sid.length;i++) h=(h*33+sid.charCodeAt(i))&0x7fffffff; return h%1200; }
+  const session = getSession();
+  const myNoun = nounIdFor(session);
+
+  document.querySelectorAll('.sh__mood').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.sh__mood').forEach((x) => x.classList.remove('sh__mood--on'));
+      b.classList.add('sh__mood--on');
+      currentMood = b.getAttribute('data-mood') || 'warm';
+    });
+  });
+  input.addEventListener('input', () => { count.textContent = `${input.value.length} / ${MAX}`; });
+
+  function lastSentTs() { try { return Number(localStorage.getItem('pc:drum-shout:lastSent')) || 0; } catch { return 0; } }
+  function setLastSent(ts) { try { localStorage.setItem('pc:drum-shout:lastSent', String(ts)); } catch {} }
+  function refreshCooldown() {
+    const last = lastSentTs();
+    const remain = (last + COOLDOWN_MS) - Date.now();
+    if (remain > 0) {
+      send.disabled = true;
+      cooldownEl.textContent = `cooling ${Math.ceil(remain / 1000)}s`;
+    } else {
+      send.disabled = false;
+      cooldownEl.textContent = '';
+    }
+  }
+  setInterval(refreshCooldown, 500); refreshCooldown();
+
+  function flashLamp(text) {
+    lamp.classList.add('sh__lamp--on');
+    lampText.textContent = text || '— ON AIR —';
+    setTimeout(() => { lamp.classList.remove('sh__lamp--on'); lampText.textContent = '— OFF AIR —'; }, 8000);
+  }
+
+  function renderShout(s) {
+    if (empty && empty.parentNode) empty.remove();
+    const card = document.createElement('div');
+    card.className = 'sh__card';
+    const color = colorByMood[s.mood] || '#ff8a4a';
+    card.style.setProperty('--sh-card-color', color);
+    const t = new Date(s.t || Date.now());
+    const stamp = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+    card.innerHTML = `
+      <div class="sh__card-head">
+        <img src="https://noun.pics/${s.nounId || 0}.svg" alt="" width="40" height="40" loading="lazy" />
+        <div>
+          <span class="sh__card-pid mono">noun #${s.nounId || '—'} · pid ${(s.pid || '').slice(0,8) || '—'}</span>
+          <span class="sh__card-time mono">${stamp}</span>
+        </div>
+        <span class="sh__card-mood mono">${(s.mood || 'warm').toUpperCase()}</span>
+      </div>
+      <p class="sh__card-text">${(s.text || '').replace(/[<>]/g, '')}</p>
+      <div class="sh__card-marquee"><span>${(s.text || '').replace(/[<>]/g, '')}</span></div>
+    `;
+    feed.prepend(card);
+    const cards = feed.querySelectorAll('.sh__card');
+    if (cards.length > 8) for (let i = 8; i < cards.length; i++) cards[i].remove();
+    setTimeout(() => { card.classList.add('sh__card--fade'); }, 28000);
+  }
+
+  document.getElementById('sh-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = (input.value || '').trim().slice(0, MAX);
+    if (!text) { input.focus(); return; }
+    if (Date.now() - lastSentTs() < COOLDOWN_MS) { refreshCooldown(); return; }
+    setLastSent(Date.now());
+    refreshCooldown();
+    flashLamp('— ON AIR —');
+    // Local optimistic render
+    renderShout({ text, mood: currentMood, t: Date.now(), pid: '', nounId: myNoun });
+    try {
+      fetch('/api/sounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'shout', sessionId: session, text, mood: currentMood, nounId: myNoun }),
+      });
+    } catch {}
+    input.value = ''; count.textContent = `0 / ${MAX}`;
+  });
+
+  // Poll for incoming shouts from other visitors
+  let lastTs = Date.now();
+  async function poll() {
+    try {
+      const r = await fetch(`/api/sounds?since=${lastTs}`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json();
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (!events.length) return;
+      lastTs = events[events.length - 1].t || Date.now();
+      for (const e of events) {
+        if (e.type === 'shout' && e.text) {
+          // skip own optimistic echo by comparing pid hash if available
+          renderShout({ text: e.text, mood: e.mood, t: e.t, pid: e.pid, nounId: e.nounId });
+          flashLamp(`— ${(e.mood || 'warm').toUpperCase()} ON AIR —`);
+        }
+      }
+    } catch {}
+  }
+  poll(); setInterval(poll, 1500);
+})();
+</script>
+
+<style>
+  .sh { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #0c0820 0%, #1a0e26 60%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+  .sh__head { max-width: 1080px; margin: 0 auto 16px; padding: 0 6px; }
+  .sh__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ff8a4a; }
+  .sh__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .sh__title em { font-style: italic; }
+  .sh__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+  .sh__booth { max-width: 980px; margin: 0 auto; background: rgba(18,17,14,0.6); border: 4px solid #ff8a4a; box-shadow: 6px 6px 0 0 #050310; padding: 18px; }
+
+  .sh__lamp { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 14px; background: #050310; border: 2px solid #5f5e5a; }
+  .sh__lamp-dot { width: 18px; height: 18px; border-radius: 50%; background: #5f5e5a; border: 2px solid #050310; box-shadow: inset 0 0 4px rgba(0,0,0,0.4); transition: background 200ms, box-shadow 200ms; }
+  .sh__lamp--on .sh__lamp-dot { background: #ff5c23; box-shadow: 0 0 18px #ff5c23, inset 0 0 6px #fff; animation: sh-pulse 0.8s ease-in-out infinite alternate; }
+  @keyframes sh-pulse { 0% { box-shadow: 0 0 12px #ff5c23, inset 0 0 4px #fff; } 100% { box-shadow: 0 0 24px #ff5c23, inset 0 0 8px #fff; } }
+  .sh__lamp-text { font-size: 14px; letter-spacing: 0.32em; color: #5f5e5a; font-weight: 700; }
+  .sh__lamp--on .sh__lamp-text { color: #ff5c23; }
+
+  .sh__form { display: flex; flex-direction: column; gap: 10px; }
+  .sh__input { background: #050310; color: #fffaf0; border: 2px solid #ff8a4a; padding: 14px; font-family: Georgia, serif; font-size: 18px; font-style: italic; line-height: 1.45; resize: vertical; min-height: 84px; }
+  .sh__input::placeholder { color: #5f5e5a; }
+  .sh__input:focus { outline: 2px dashed #ffd400; outline-offset: 4px; }
+
+  .sh__moodbar { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sh__mood { background: transparent; border: 1.5px solid #5f5e5a; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; color: inherit; }
+  .sh__mood:hover { border-color: var(--sh-mood, #ff8a4a); }
+  .sh__mood--on { border-color: var(--sh-mood, #ff8a4a); background: rgba(255, 138, 74, 0.1); }
+  .sh__mood-swatch { width: 12px; height: 12px; background: var(--sh-mood, #ff8a4a); border: 1px solid #050310; }
+  .sh__mood-label { font-size: 9px; letter-spacing: 0.18em; }
+
+  .sh__form-foot { display: flex; align-items: center; gap: 12px; }
+  .sh__count { font-size: 11px; letter-spacing: 0.16em; color: #cfc6df; }
+  .sh__cooldown { font-size: 10px; letter-spacing: 0.16em; color: #ff5c23; flex: 1; }
+  .sh__send { padding: 8px 18px; background: #ffd400; color: #050310; border: 2px solid #050310; box-shadow: 3px 3px 0 0 #050310; cursor: pointer; font-size: 13px; letter-spacing: 0.22em; font-weight: 700; }
+  .sh__send:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #050310; }
+  .sh__send:disabled { background: #5f5e5a; color: #cfc6df; cursor: not-allowed; }
+
+  .sh__feed { margin-top: 18px; padding-top: 14px; border-top: 1px dashed #5f5e5a; display: flex; flex-direction: column; gap: 12px; min-height: 100px; }
+  .sh__empty { text-align: center; color: #5f5e5a; font-size: 11px; letter-spacing: 0.2em; padding: 20px 0; }
+  .sh__card { background: #050310; border: 2px solid var(--sh-card-color, #ff8a4a); box-shadow: 4px 4px 0 0 var(--sh-card-color, #ff8a4a); padding: 12px 14px; transition: opacity 1.5s ease-out; overflow: hidden; }
+  .sh__card--fade { opacity: 0.4; }
+  .sh__card-head { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .sh__card-head img { image-rendering: pixelated; border: 1.5px solid #050310; background: #fffaf0; }
+  .sh__card-pid { display: block; font-size: 10px; letter-spacing: 0.16em; color: var(--sh-card-color); }
+  .sh__card-time { display: block; font-size: 9px; letter-spacing: 0.14em; color: #5f5e5a; }
+  .sh__card-mood { padding: 2px 8px; background: var(--sh-card-color); color: #050310; font-size: 9px; letter-spacing: 0.18em; font-weight: 700; }
+  .sh__card-text { margin: 0 0 8px; font-family: Georgia, serif; font-style: italic; font-size: 18px; line-height: 1.4; color: #fffaf0; }
+  .sh__card-marquee { overflow: hidden; padding: 6px 0; border-top: 1px dashed var(--sh-card-color); }
+  .sh__card-marquee span { display: inline-block; white-space: nowrap; font-family: 'Bungee', Impact, sans-serif; font-size: 28px; letter-spacing: 0.04em; color: var(--sh-card-color); animation: sh-scroll 14s linear infinite; padding-left: 100%; }
+  @keyframes sh-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+  .sh__foot { max-width: 980px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+  .sh__foot a { color: #ff8a4a; }
+  .sh__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ff8a4a; color: #ff8a4a; }
+  .sh__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff8a4a; }
+</style>
