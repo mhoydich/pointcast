@@ -1,0 +1,748 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const description =
+  'PointCast Chain Messenger: register a peer, sign messages, and create Tezos-ready chain envelopes without putting private text on-chain.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  '@id': 'https://pointcast.xyz/messages/chain',
+  name: 'PointCast Chain Messenger',
+  applicationCategory: 'CommunicationApplication',
+  operatingSystem: 'Web',
+  description,
+  url: 'https://pointcast.xyz/messages/chain',
+};
+---
+
+<BlockLayout
+  title="Chain Messenger"
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/protocol.json', title: 'PointCast Peer Message Protocol' },
+    { type: 'application/json', href: '/.well-known/pointcast-peer.json', title: 'PointCast peer discovery' },
+  ]}
+>
+  <div class="chain-page" data-chain-app>
+    <header class="chain-head">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span>/</span>
+        <a href="/messages">messages</a>
+        <span>/</span>
+        <strong>chain</strong>
+      </nav>
+      <div class="title-row">
+        <div>
+          <p class="kicker">PCP/2 DRAFT · CHAIN-ANCHORED IM</p>
+          <h1>Chain Messenger</h1>
+        </div>
+        <p>
+          Register a peer with a Tezos wallet, sign a direct packet, then build
+          a chain envelope that carries hashes and proofs instead of private text.
+        </p>
+      </div>
+      <div class="status-line" data-status>Ready.</div>
+    </header>
+
+    <section class="chain-grid" aria-label="Chain messenger workspace">
+      <section class="panel register-panel" aria-labelledby="register-title">
+        <div class="panel-head">
+          <p class="kicker">REGISTER</p>
+          <h2 id="register-title">Peer + wallet</h2>
+        </div>
+        <label>
+          <span>Name</span>
+          <input data-name value="PointCast peer" autocomplete="nickname" />
+        </label>
+        <div class="proof-box">
+          <span>Peer id</span>
+          <code data-peer-id>none yet</code>
+        </div>
+        <div class="proof-box">
+          <span>Wallet</span>
+          <code data-wallet>not connected</code>
+        </div>
+        <div class="proof-box">
+          <span>Registration</span>
+          <code data-registration-id>not registered</code>
+        </div>
+        <div class="button-row">
+          <button type="button" data-create-peer>Create peer</button>
+          <button type="button" data-register-chain>Sign registration</button>
+        </div>
+      </section>
+
+      <section class="panel friend-panel" aria-labelledby="friend-title">
+        <div class="panel-head">
+          <p class="kicker">FRIEND</p>
+          <h2 id="friend-title">Import recipient</h2>
+        </div>
+        <label>
+          <span>Your friend card</span>
+          <textarea data-own-card rows="5" readonly spellcheck="false"></textarea>
+        </label>
+        <label>
+          <span>Friend card</span>
+          <textarea data-friend-card rows="5" spellcheck="false" placeholder="pcp-friend:..."></textarea>
+        </label>
+        <div class="proof-box">
+          <span>Recipient</span>
+          <code data-recipient>none</code>
+        </div>
+        <div class="button-row">
+          <button type="button" data-demo-friend>Demo friend</button>
+          <button type="button" data-import-friend>Import card</button>
+        </div>
+      </section>
+
+      <section class="panel compose-panel" aria-labelledby="compose-title">
+        <div class="panel-head">
+          <p class="kicker">MESSAGE</p>
+          <h2 id="compose-title">Sign packet</h2>
+        </div>
+        <label>
+          <span>Topic</span>
+          <input data-topic value="pcp/chain/dm" autocomplete="off" />
+        </label>
+        <label>
+          <span>Chain mode</span>
+          <select data-mode>
+            <option value="private-hash">private: hash only on-chain</option>
+            <option value="public-body">public: include body in envelope</option>
+          </select>
+        </label>
+        <label>
+          <span>Message</span>
+          <textarea data-body rows="8" maxlength="4000">hey, this is a signed chain-anchored PointCast message.</textarea>
+        </label>
+        <div class="button-row">
+          <button type="button" data-sign-packet>Sign packet</button>
+          <button type="button" data-chain-send>Sign chain envelope</button>
+        </div>
+      </section>
+
+      <section class="panel thread-panel" aria-labelledby="thread-title">
+        <div class="panel-head">
+          <p class="kicker">OUTBOX</p>
+          <h2 id="thread-title">Chain envelopes</h2>
+        </div>
+        <ol class="chain-list" data-chain-list></ol>
+      </section>
+
+      <section class="panel envelope-panel" aria-labelledby="envelope-title">
+        <div class="panel-head">
+          <p class="kicker">ENVELOPE</p>
+          <h2 id="envelope-title">Payload</h2>
+        </div>
+        <textarea data-envelope rows="13" readonly spellcheck="false"></textarea>
+        <div class="button-row">
+          <button type="button" data-copy-envelope>Copy envelope</button>
+          <button type="button" data-copy-contract>Copy contract call</button>
+        </div>
+      </section>
+
+      <section class="panel notes-panel" aria-labelledby="notes-title">
+        <div class="panel-head">
+          <p class="kicker">WHAT GOES ON-CHAIN</p>
+          <h2 id="notes-title">Proofs, not secrets.</h2>
+        </div>
+        <ol>
+          <li><strong>Registration.</strong><span>peer id, wallet address, relay, and wallet signature.</span></li>
+          <li><strong>Message envelope.</strong><span>packet id, body hash, packet signature, topic, recipient, and wallet proof.</span></li>
+          <li><strong>Private body.</strong><span>stays local or travels encrypted by relay/file handoff. The chain sees only its hash.</span></li>
+        </ol>
+      </section>
+    </section>
+  </div>
+</BlockLayout>
+
+<script>
+  import {
+    PROTOCOL_STORAGE_KEYS,
+    buildChainEnvelope,
+    buildChainRegistration,
+    buildFriendCard,
+    buildPacketDraft,
+    canonicalJson,
+    encodeFriendCard,
+    generatePeerIdentity,
+    parseFriendCard,
+    shortPeerId,
+    signPacket,
+    validateChainEnvelope,
+    validateChainRegistration,
+    verifyPacketSignature,
+  } from '../../lib/protocol-packet.js';
+
+  const $ = (selector) => document.querySelector(selector);
+  const els = {
+    status: $('[data-status]'),
+    name: $('[data-name]'),
+    peerId: $('[data-peer-id]'),
+    wallet: $('[data-wallet]'),
+    registrationId: $('[data-registration-id]'),
+    createPeer: $('[data-create-peer]'),
+    registerChain: $('[data-register-chain]'),
+    ownCard: $('[data-own-card]'),
+    friendCard: $('[data-friend-card]'),
+    recipient: $('[data-recipient]'),
+    demoFriend: $('[data-demo-friend]'),
+    importFriend: $('[data-import-friend]'),
+    topic: $('[data-topic]'),
+    mode: $('[data-mode]'),
+    body: $('[data-body]'),
+    signPacket: $('[data-sign-packet]'),
+    chainSend: $('[data-chain-send]'),
+    chainList: $('[data-chain-list]'),
+    envelope: $('[data-envelope]'),
+    copyEnvelope: $('[data-copy-envelope]'),
+    copyContract: $('[data-copy-contract]'),
+  };
+
+  let selectedPacket = null;
+  let selectedEnvelope = null;
+  let friend = null;
+  let demoFriendIdentity = null;
+
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writeJson(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function profile() {
+    return readJson(PROTOCOL_STORAGE_KEYS.profile, null);
+  }
+
+  function registration() {
+    return readJson(PROTOCOL_STORAGE_KEYS.chainRegistration, null);
+  }
+
+  function envelopes() {
+    const items = readJson(PROTOCOL_STORAGE_KEYS.chainOutbox, []);
+    return Array.isArray(items) ? items : [];
+  }
+
+  function setStatus(message, tone = 'neutral') {
+    if (!els.status) return;
+    els.status.textContent = message;
+    els.status.dataset.tone = tone;
+  }
+
+  async function copyText(value, success) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(success, 'ok');
+    } catch {
+      setStatus(value, 'neutral');
+    }
+  }
+
+  async function ensurePeer() {
+    const existing = profile();
+    if (existing?.peerId && existing?.privateKey) return existing;
+    const displayName = els.name?.value?.trim() || 'PointCast peer';
+    const next = await generatePeerIdentity({ displayName, kind: 'human' });
+    writeJson(PROTOCOL_STORAGE_KEYS.profile, next);
+    return next;
+  }
+
+  async function createPeer() {
+    try {
+      const displayName = els.name?.value?.trim() || 'PointCast peer';
+      const next = await generatePeerIdentity({ displayName, kind: 'human' });
+      writeJson(PROTOCOL_STORAGE_KEYS.profile, next);
+      setStatus('Local peer created.', 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Peer creation failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  async function signRegistration() {
+    try {
+      const peer = await ensurePeer();
+      setStatus('Connecting Tezos wallet...');
+      const { connectKukai, getActiveAddress, signTezosPayload } = await import('../../lib/tezos');
+      let address = await getActiveAddress();
+      if (!address) address = await connectKukai();
+      const reg = await buildChainRegistration(peer, { walletAddress: address });
+      const validation = validateChainRegistration(reg);
+      if (!validation.ok) throw new Error(validation.errors.join('; '));
+      const proof = await signTezosPayload(canonicalJson(reg));
+      const signed = {
+        ...reg,
+        walletProof: {
+          type: 'tezos-sign-payload',
+          address: proof.address,
+          payload: proof.payload,
+          signature: proof.signature,
+        },
+      };
+      writeJson(PROTOCOL_STORAGE_KEYS.chainRegistration, signed);
+      setStatus(`Registered ${shortPeerId(peer.peerId)} to ${shortPeerId(address)}.`, 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Registration cancelled or failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  async function makeDemoFriend() {
+    try {
+      demoFriendIdentity = await generatePeerIdentity({ displayName: 'Demo friend', kind: 'human' });
+      const card = buildFriendCard(demoFriendIdentity, {
+        label: 'Demo friend',
+        topic: 'pcp/chain/dm',
+      });
+      if (els.friendCard) els.friendCard.value = encodeFriendCard(card);
+      friend = card;
+      setStatus('Demo friend card created.', 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Demo friend failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  function importFriend() {
+    try {
+      friend = parseFriendCard(els.friendCard?.value || '');
+      setStatus(`Imported ${friend.label}.`, 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Friend card failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  async function signCurrentPacket() {
+    const peer = await ensurePeer();
+    if (!friend?.peerId) throw new Error('import a friend first');
+    const body = els.body?.value?.trim() || '';
+    if (!body) throw new Error('write a message first');
+    const packet = buildPacketDraft({
+      from: peer.peerId,
+      to: [friend.peerId],
+      body,
+      visibility: els.mode?.value === 'public-body' ? 'public' : 'private',
+      retention: els.mode?.value === 'public-body' ? 'public' : '30d',
+      topic: els.topic?.value?.trim() || friend.topic || 'pcp/chain/dm',
+      refs: [
+        { rel: 'protocol', href: 'https://pointcast.xyz/protocol' },
+        { rel: 'chain-messenger', href: 'https://pointcast.xyz/messages/chain' },
+      ],
+    });
+    const signed = await signPacket(packet, peer.privateKey);
+    const verified = await verifyPacketSignature(signed);
+    if (!verified.ok) throw new Error(verified.errors.join('; '));
+    selectedPacket = signed;
+    return signed;
+  }
+
+  async function signPacketOnly() {
+    try {
+      const packet = await signCurrentPacket();
+      setStatus(`Packet signed: ${shortPeerId(packet.id)}.`, 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Packet signing failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  async function signChainEnvelope() {
+    try {
+      const reg = registration();
+      if (!reg?.id) throw new Error('sign chain registration first');
+      const packet = await signCurrentPacket();
+      const envelope = await buildChainEnvelope(packet, {
+        registrationId: reg.id,
+        mode: els.mode?.value || 'private-hash',
+        topic: els.topic?.value?.trim() || 'pcp/chain/dm',
+      });
+      const validation = validateChainEnvelope(envelope);
+      if (!validation.ok) throw new Error(validation.errors.join('; '));
+      setStatus('Signing chain envelope with Tezos wallet...');
+      const { signTezosPayload } = await import('../../lib/tezos');
+      const proof = await signTezosPayload(canonicalJson(envelope));
+      const signedEnvelope = {
+        ...envelope,
+        walletProof: {
+          type: 'tezos-sign-payload',
+          address: proof.address,
+          payload: proof.payload,
+          signature: proof.signature,
+        },
+      };
+      selectedEnvelope = signedEnvelope;
+      writeJson(PROTOCOL_STORAGE_KEYS.chainOutbox, [signedEnvelope, ...envelopes()].slice(0, 100));
+      setStatus(`Chain envelope signed: ${shortPeerId(signedEnvelope.id)}.`, 'ok');
+      render();
+    } catch (err) {
+      setStatus(`Chain send failed: ${err?.message || err}`, 'bad');
+    }
+  }
+
+  function contractCallSketch(envelope = selectedEnvelope) {
+    if (!envelope) return '';
+    return [
+      'PCP Message Registry call (draft)',
+      '',
+      'entrypoint: send_envelope',
+      'chain: ' + envelope.chain,
+      'amount: 0 tez',
+      'envelope_id: ' + envelope.id,
+      'packet_id: ' + envelope.packetId,
+      'recipient: ' + (envelope.to?.[0] || ''),
+      'topic: ' + envelope.topic,
+      'body_hash: ' + envelope.bodyHash,
+      'body_mode: ' + envelope.mode,
+      '',
+      'Canonical envelope JSON:',
+      canonicalJson(envelope),
+    ].join('\n');
+  }
+
+  function renderList() {
+    if (!els.chainList) return;
+    const items = envelopes();
+    els.chainList.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'No chain envelopes yet.';
+      els.chainList.append(empty);
+      return;
+    }
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.className = 'chain-item';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chain-item__button';
+      const id = document.createElement('strong');
+      id.textContent = shortPeerId(item.id);
+      const meta = document.createElement('span');
+      meta.textContent = `${item.mode} | ${shortPeerId(item.packetId)} | ${item.chain}`;
+      button.append(id, meta);
+      button.addEventListener('click', () => {
+        selectedEnvelope = item;
+        render();
+      });
+      li.append(button);
+      els.chainList.append(li);
+    }
+  }
+
+  function render() {
+    const peer = profile();
+    const reg = registration();
+    if (els.peerId) els.peerId.textContent = peer?.peerId || 'none yet';
+    if (els.wallet) els.wallet.textContent = reg?.walletAddress || reg?.walletProof?.address || 'not connected';
+    if (els.registrationId) els.registrationId.textContent = reg?.id || 'not registered';
+    if (els.recipient) els.recipient.textContent = friend?.peerId || 'none';
+
+    if (peer && els.ownCard) {
+      try {
+        els.ownCard.value = encodeFriendCard(buildFriendCard(peer, { label: peer.displayName || 'PointCast peer', topic: 'pcp/chain/dm' }));
+      } catch {
+        els.ownCard.value = '';
+      }
+    }
+
+    if (els.envelope) {
+      els.envelope.value = selectedEnvelope
+        ? JSON.stringify(selectedEnvelope, null, 2)
+        : selectedPacket
+          ? JSON.stringify(selectedPacket, null, 2)
+          : '';
+    }
+    renderList();
+  }
+
+  els.createPeer?.addEventListener('click', createPeer);
+  els.registerChain?.addEventListener('click', signRegistration);
+  els.demoFriend?.addEventListener('click', makeDemoFriend);
+  els.importFriend?.addEventListener('click', importFriend);
+  els.signPacket?.addEventListener('click', signPacketOnly);
+  els.chainSend?.addEventListener('click', signChainEnvelope);
+  els.copyEnvelope?.addEventListener('click', () => copyText(els.envelope?.value || '', 'Envelope copied.'));
+  els.copyContract?.addEventListener('click', () => copyText(contractCallSketch(), 'Contract call sketch copied.'));
+
+  setStatus(profile() ? 'Local peer loaded.' : 'Create or register a peer to start.');
+  render();
+</script>
+
+<style>
+  .chain-page {
+    width: min(1180px, calc(100vw - 32px));
+    margin: 0 auto;
+    padding: 28px 0 96px;
+    color: var(--pc-ink);
+  }
+
+  .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .breadcrumb a,
+  .breadcrumb strong {
+    color: var(--pc-ink);
+  }
+
+  .chain-head {
+    display: grid;
+    gap: 18px;
+    border-top: 2px solid var(--pc-ink);
+    padding-top: 28px;
+    margin-bottom: 18px;
+  }
+
+  .title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(280px, 0.42fr);
+    gap: 24px;
+    align-items: end;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  h1,
+  h2 {
+    margin: 0;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  h1 {
+    font-size: clamp(54px, 8vw, 110px);
+    line-height: 0.9;
+  }
+
+  h2 {
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  .title-row p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 18px;
+    line-height: 1.42;
+  }
+
+  .status-line {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--pc-rule);
+    padding: 0 12px;
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .status-line[data-tone="ok"] {
+    border-color: #0f6e56;
+    color: #074638;
+    background: #e7f4ef;
+  }
+
+  .status-line[data-tone="bad"] {
+    border-color: #8a2432;
+    color: #551620;
+    background: #fbeaee;
+  }
+
+  .chain-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1fr) minmax(320px, 0.9fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .panel {
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    padding: 14px;
+    background: #fff;
+  }
+
+  .compose-panel,
+  .thread-panel {
+    grid-row: span 2;
+  }
+
+  .panel-head {
+    margin-bottom: 14px;
+  }
+
+  label {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 10px;
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    padding: 9px 10px;
+    font: 14px/1.35 var(--pc-font-sans);
+    letter-spacing: 0;
+  }
+
+  textarea {
+    resize: vertical;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  button {
+    min-height: 40px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .button-row button:first-child {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .proof-box,
+  .chain-item,
+  .empty,
+  .notes-panel li {
+    min-width: 0;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 10px;
+  }
+
+  .proof-box {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+
+  .proof-box span {
+    color: var(--pc-accent);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  code {
+    overflow-wrap: anywhere;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+  }
+
+  .chain-list,
+  .notes-panel ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chain-item__button {
+    width: 100%;
+    min-height: 48px;
+    display: grid;
+    gap: 4px;
+    justify-items: start;
+    border: 0;
+    padding: 0;
+    text-align: left;
+  }
+
+  .chain-item__button span,
+  .notes-panel span {
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.42;
+    text-transform: none;
+  }
+
+  .notes-panel {
+    background: #eef4fa;
+  }
+
+  .notes-panel li {
+    display: grid;
+    gap: 5px;
+  }
+
+  @media (max-width: 1080px) {
+    .chain-grid,
+    .title-row {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .compose-panel,
+    .thread-panel {
+      grid-row: auto;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .chain-page {
+      width: min(100% - 24px, 1180px);
+    }
+
+    .chain-grid,
+    .title-row,
+    .button-row {
+      grid-template-columns: 1fr;
+    }
+
+    h1 {
+      font-size: 50px;
+    }
+  }
+</style>

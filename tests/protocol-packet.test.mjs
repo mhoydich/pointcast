@@ -130,6 +130,46 @@ test('friend cards encode, parse, and validate', async (t) => {
   assert.equal(protocol.validateFriendCard({ ...card, peerId: 'peer:nope' }).ok, false);
 });
 
+test('chain registrations and envelopes hash signed packets without plaintext by default', async (t) => {
+  let identity;
+  try {
+    identity = await protocol.generatePeerIdentity({ displayName: 'chain peer', kind: 'human' });
+  } catch (err) {
+    t.skip(`WebCrypto Ed25519 unavailable: ${err?.message || err}`);
+    return;
+  }
+
+  const registration = await protocol.buildChainRegistration(identity, {
+    walletAddress: 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw',
+    createdAt: '2026-04-28T12:00:00.000Z',
+  });
+  assert.match(registration.id, /^pcr:[a-f0-9]{64}$/);
+  assert.equal(protocol.validateChainRegistration(registration).ok, true);
+
+  const packet = await protocol.signPacket(
+    protocol.buildPacketDraft({
+      from: identity.peerId,
+      to: [identity.peerId],
+      body: 'private chain message',
+      visibility: 'private',
+      createdAt: '2026-04-28T12:01:00.000Z',
+    }),
+    identity.privateKey,
+  );
+
+  const envelope = await protocol.buildChainEnvelope(packet, {
+    registrationId: registration.id,
+    mode: 'private-hash',
+    createdAt: '2026-04-28T12:02:00.000Z',
+  });
+  assert.match(envelope.id, /^pce:[a-f0-9]{64}$/);
+  assert.equal(envelope.body, undefined);
+  assert.equal(envelope.packetSignature.alg, 'Ed25519');
+  assert.equal(protocol.validateChainEnvelope(envelope).ok, true);
+  assert.equal(protocol.validateChainEnvelope({ ...envelope, body: 'leak' }).ok, false);
+  assert.equal(protocol.validateChainEnvelope({ ...envelope, packetSignature: null }).ok, false);
+});
+
 test('invalid packets are rejected with useful errors', () => {
   const result = protocol.validatePacket({
     version: 'nope',

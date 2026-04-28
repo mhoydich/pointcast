@@ -1,9 +1,9 @@
-export const PROTOCOL_VERSION = 'pcp-1.0.2';
+export const PROTOCOL_VERSION = 'pcp-1.0.3';
 export const PROTOCOL_PACKET_VERSION = 'pcp-1.0';
 export const PROTOCOL_PACKET_MEDIA_TYPE = 'pcp-1.0/block-packet+json';
 export const PROTOCOL_NAME = 'PointCast Peer Message Protocol';
 export const PROTOCOL_SHORT_NAME = 'PCP/1';
-export const PROTOCOL_UPDATED_AT = '2026-04-28T06:30:00Z';
+export const PROTOCOL_UPDATED_AT = '2026-04-28T08:20:00Z';
 
 export const PROTOCOL_STORAGE_KEYS = {
   profile: 'pcp:v1:peer-profile',
@@ -12,6 +12,9 @@ export const PROTOCOL_STORAGE_KEYS = {
   receipts: 'pcp:v1:receipts',
   trustedPeers: 'pcp:v1:trusted-peers',
   friends: 'pcp:v2:friends',
+  chainRegistration: 'pcp:v2:chain-registration',
+  chainOutbox: 'pcp:v2:chain-outbox',
+  chainInbox: 'pcp:v2:chain-inbox',
 };
 
 export const PROTOCOL_RECEIPT_TYPES = [
@@ -45,7 +48,7 @@ export const PROTOCOL_VALIDATION_RULES = [
 export const PROTOCOL_COMPATIBILITY_NOTES = [
   'Nostr bridges should wrap the original PCP packet in a NIP-01/NIP-78 event and add a bridge receipt.',
   'Farcaster Frames and Mini Apps should link to the packet or Block permalink instead of rewriting authorship.',
-  'Tezos wallet proofs can be attached as refs/proofs; they do not replace the peer key signature.',
+  'Tezos wallet proofs and chain envelopes can anchor packet/body hashes; they do not replace the peer key signature or require private bodies on-chain.',
   'ActivityPub bridges should preserve the original packet id in attachment metadata.',
 ];
 
@@ -84,6 +87,30 @@ export const PROTOCOL_V2_SIMPLE_FRIENDS = {
     'Use JSONL handoff today; use encrypted relay pickup once relay KV and body encryption are enabled.',
   ],
   relayRule: 'Relays only receive encrypted envelopes. Plaintext direct messages stay local or travel by explicit JSONL handoff.',
+};
+
+export const PROTOCOL_V2_CHAIN_MESSENGER = {
+  status: 'draft demo',
+  demo: 'https://pointcast.xyz/messages/chain',
+  chain: 'tezos:mainnet',
+  goal: 'Register a peer with a wallet, send signed direct packets, and anchor message proofs without putting private text on-chain.',
+  registration: {
+    mediaType: 'pcp-chain-registration-1',
+    stores: ['peerId', 'walletAddress', 'relay', 'createdAt', 'walletProof'],
+  },
+  envelope: {
+    mediaType: 'pcp-chain-envelope-1',
+    modes: ['private-hash', 'public-body'],
+    onChain: ['envelope id', 'packet id', 'packet hash', 'body hash', 'recipient peer id', 'topic', 'packet signature', 'wallet proof'],
+    offChain: ['private body', 'attachments', 'thread UI', 'encrypted relay payloads'],
+  },
+  friendFlow: [
+    'Create a local peer and sign registration with a Tezos wallet.',
+    'Exchange friend cards so each browser knows the recipient peer id.',
+    'Compose a message and sign the PCP packet with the peer key.',
+    'Sign a chain envelope with the wallet; copy the registry-ready payload for a future contract call.',
+  ],
+  caveat: 'The demo signs and exports a registry-ready payload. It does not submit an on-chain transaction until a PCP Message Registry contract ships.',
 };
 
 export const PROTOCOL_PRINCIPLES = [
@@ -205,6 +232,7 @@ export const PROTOCOL_ROADMAP = [
     phase: 'v1.1 working client',
     ships: [
       'Browser local log with peer profile, inbox, outbox, and thread receipts.',
+      'Chain messenger demo: Tezos wallet registration and private-hash message envelopes.',
       'WebRTC data-channel direct messaging with relay fallback.',
       'QR handoff bundles for offline transfer.',
       'PointCast Blocks bridge: publish selected packets as public blocks.',
@@ -228,6 +256,7 @@ export const PROTOCOL_DISCOVERY = {
   wellKnown: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
   client: 'https://pointcast.xyz/messages',
   friendDemo: 'https://pointcast.xyz/messages/demo',
+  chainMessenger: 'https://pointcast.xyz/messages/chain',
   relay: 'https://pointcast.xyz/api/pcp/relay',
   block: 'https://pointcast.xyz/b/0378',
   github: 'https://github.com/mhoydich/pointcast',
@@ -241,7 +270,7 @@ export function buildProtocolManifest() {
     version: PROTOCOL_VERSION,
     packetVersion: PROTOCOL_PACKET_VERSION,
     packetMediaType: PROTOCOL_PACKET_MEDIA_TYPE,
-    status: 'v1.0.2 hardening + v1.1 local client + v2 simple friends draft',
+    status: 'v1.0.3 hardening + v1.1 local client + v2 friend cards + chain messenger draft',
     updatedAt: PROTOCOL_UPDATED_AT,
     origin: 'https://pointcast.xyz',
     purpose:
@@ -250,6 +279,7 @@ export function buildProtocolManifest() {
     client: {
       human: PROTOCOL_DISCOVERY.client,
       demo: PROTOCOL_DISCOVERY.friendDemo,
+      chainMessenger: PROTOCOL_DISCOVERY.chainMessenger,
       storageKeys: PROTOCOL_STORAGE_KEYS,
       capabilities: [
         'Generate a browser-local Ed25519 peer identity.',
@@ -257,10 +287,12 @@ export function buildProtocolManifest() {
         'Store inbox, outbox, receipts, and trusted peers in localStorage.',
         'Export and import packets as JSONL.',
         'Copy a selected packet into a PointCast Block draft.',
+        'Register a peer to a Tezos wallet and sign chain-ready message envelopes.',
       ],
       warning: 'The browser client is a protocol proof, not a secure production messenger. Private-key material is browser-local and exportable for transparency.',
     },
     v2SimpleFriends: PROTOCOL_V2_SIMPLE_FRIENDS,
+    v2ChainMessenger: PROTOCOL_V2_CHAIN_MESSENGER,
     packetSchema: {
       mediaType: PROTOCOL_PACKET_MEDIA_TYPE,
       canonicalJsonRules: PROTOCOL_CANONICAL_JSON_RULES,
@@ -289,6 +321,7 @@ export function buildProtocolManifest() {
         '/agents.json',
         '/for-agents',
         '/for-nodes',
+        '/messages/chain',
         '/api/presence',
         '/api/mcp',
         '/feed.json',

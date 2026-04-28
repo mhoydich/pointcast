@@ -2,6 +2,8 @@ export const PROTOCOL_PACKET_VERSION = 'pcp-1.0';
 export const PROTOCOL_PACKET_MEDIA_TYPE = 'pcp-1.0/block-packet+json';
 export const PROTOCOL_FRIEND_CARD_VERSION = 'pcp-friend-card-1';
 export const PROTOCOL_FRIEND_CARD_PREFIX = 'pcp-friend:';
+export const PROTOCOL_CHAIN_REGISTRATION_VERSION = 'pcp-chain-registration-1';
+export const PROTOCOL_CHAIN_ENVELOPE_VERSION = 'pcp-chain-envelope-1';
 
 export const PROTOCOL_STORAGE_KEYS = {
   profile: 'pcp:v1:peer-profile',
@@ -10,6 +12,9 @@ export const PROTOCOL_STORAGE_KEYS = {
   receipts: 'pcp:v1:receipts',
   trustedPeers: 'pcp:v1:trusted-peers',
   friends: 'pcp:v2:friends',
+  chainRegistration: 'pcp:v2:chain-registration',
+  chainOutbox: 'pcp:v2:chain-outbox',
+  chainInbox: 'pcp:v2:chain-inbox',
 };
 
 export const PROTOCOL_RECEIPT_TYPES = [
@@ -236,6 +241,105 @@ export function parseFriendCard(value) {
   return card;
 }
 
+export async function buildChainRegistration(identity, options = {}) {
+  const {
+    chain = 'tezos:mainnet',
+    walletAddress = '',
+    relay = 'https://pointcast.xyz/api/pcp/relay',
+    createdAt = new Date().toISOString(),
+  } = options;
+
+  const registration = {
+    version: PROTOCOL_CHAIN_REGISTRATION_VERSION,
+    chain,
+    peerId: identity?.peerId || '',
+    label: identity?.displayName || 'PointCast peer',
+    kind: identity?.kind || 'human',
+    walletAddress,
+    relay,
+    createdAt,
+  };
+
+  return {
+    ...registration,
+    id: `pcr:${await sha256Hex(canonicalJson(registration))}`,
+  };
+}
+
+export function validateChainRegistration(registration) {
+  const errors = [];
+  if (!registration || typeof registration !== 'object' || Array.isArray(registration)) {
+    return { ok: false, errors: ['registration must be an object'] };
+  }
+  if (registration.version !== PROTOCOL_CHAIN_REGISTRATION_VERSION) errors.push(`version must be ${PROTOCOL_CHAIN_REGISTRATION_VERSION}`);
+  if (typeof registration.id !== 'string' || !/^pcr:[a-f0-9]{64}$/.test(registration.id)) errors.push('id must match pcr:<sha256-hex>');
+  if (typeof registration.chain !== 'string' || registration.chain.length < 3) errors.push('chain is required');
+  if (typeof registration.peerId !== 'string' || !registration.peerId.startsWith('peer:ed25519:')) errors.push('peerId must be peer:ed25519:<base64url-public-key>');
+  if (typeof registration.label !== 'string' || registration.label.length < 1 || registration.label.length > 80) errors.push('label must be 1-80 characters');
+  if (!['human', 'agent', 'device'].includes(registration.kind)) errors.push('kind must be human, agent, or device');
+  if (typeof registration.walletAddress !== 'string' || !/^(tz1|tz2|tz3|KT1)[A-Za-z0-9]{30,40}$/.test(registration.walletAddress)) errors.push('walletAddress must be a Tezos address');
+  if (typeof registration.relay !== 'string' || !/^https:\/\//.test(registration.relay)) errors.push('relay must be an https URL');
+  if (typeof registration.createdAt !== 'string' || Number.isNaN(Date.parse(registration.createdAt))) errors.push('createdAt must be an ISO timestamp');
+  return { ok: errors.length === 0, errors };
+}
+
+export async function buildChainEnvelope(packet, options = {}) {
+  const {
+    chain = 'tezos:mainnet',
+    registrationId = '',
+    mode = 'private-hash',
+    createdAt = new Date().toISOString(),
+    relay = 'https://pointcast.xyz/api/pcp/relay',
+  } = options;
+
+  const bodyHash = await sha256Hex(packet?.body || '');
+  const packetHash = await sha256Hex(canonicalJson(packet || {}));
+  const envelope = {
+    version: PROTOCOL_CHAIN_ENVELOPE_VERSION,
+    chain,
+    mode,
+    packetId: packet?.id || '',
+    packetHash,
+    bodyHash,
+    from: packet?.from || '',
+    to: Array.isArray(packet?.to) ? packet.to : [],
+    topic: packet?.transport?.topic || 'pcp/pointcast/messages',
+    createdAt,
+    registrationId,
+    relay,
+    packetSignature: packet?.signature || null,
+    ...(mode === 'public-body' ? { body: packet?.body || '' } : {}),
+  };
+
+  return {
+    ...envelope,
+    id: `pce:${await sha256Hex(canonicalJson(envelope))}`,
+  };
+}
+
+export function validateChainEnvelope(envelope) {
+  const errors = [];
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+    return { ok: false, errors: ['envelope must be an object'] };
+  }
+  if (envelope.version !== PROTOCOL_CHAIN_ENVELOPE_VERSION) errors.push(`version must be ${PROTOCOL_CHAIN_ENVELOPE_VERSION}`);
+  if (typeof envelope.id !== 'string' || !/^pce:[a-f0-9]{64}$/.test(envelope.id)) errors.push('id must match pce:<sha256-hex>');
+  if (typeof envelope.chain !== 'string' || envelope.chain.length < 3) errors.push('chain is required');
+  if (!['private-hash', 'public-body'].includes(envelope.mode)) errors.push('mode must be private-hash or public-body');
+  if (typeof envelope.packetId !== 'string' || !/^pc1:[a-z2-7]{40,80}$/.test(envelope.packetId)) errors.push('packetId must match pc1:<base32-sha256>');
+  if (typeof envelope.packetHash !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.packetHash)) errors.push('packetHash must be sha256 hex');
+  if (typeof envelope.bodyHash !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.bodyHash)) errors.push('bodyHash must be sha256 hex');
+  if (typeof envelope.from !== 'string' || !envelope.from.startsWith('peer:ed25519:')) errors.push('from must be peer:ed25519:<base64url-public-key>');
+  if (!Array.isArray(envelope.to) || envelope.to.some((peer) => typeof peer !== 'string' || !peer.startsWith('peer:'))) errors.push('to must be an array of peer ids');
+  if (typeof envelope.topic !== 'string' || envelope.topic.length < 1 || envelope.topic.length > 180) errors.push('topic must be 1-180 characters');
+  if (typeof envelope.createdAt !== 'string' || Number.isNaN(Date.parse(envelope.createdAt))) errors.push('createdAt must be an ISO timestamp');
+  if (envelope.registrationId && !/^pcr:[a-f0-9]{64}$/.test(envelope.registrationId)) errors.push('registrationId must match pcr:<sha256-hex>');
+  if (typeof envelope.relay !== 'string' || !/^https:\/\//.test(envelope.relay)) errors.push('relay must be an https URL');
+  if (!envelope.packetSignature || envelope.packetSignature.alg !== 'Ed25519' || typeof envelope.packetSignature.value !== 'string') errors.push('packetSignature must be an Ed25519 signature object');
+  if (envelope.mode === 'private-hash' && typeof envelope.body === 'string' && envelope.body.trim()) errors.push('private-hash envelopes must not include body');
+  return { ok: errors.length === 0, errors };
+}
+
 export async function generatePeerIdentity({ displayName = 'PointCast peer', kind = 'human' } = {}) {
   const keyPair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']);
   const publicRaw = new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.publicKey));
@@ -281,6 +385,14 @@ export function utf8Bytes(value) {
 
 export async function sha256Bytes(bytes) {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+}
+
+export async function sha256Hex(value) {
+  return bytesToHex(await sha256Bytes(utf8Bytes(value)));
+}
+
+export function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export function base32(bytes) {
