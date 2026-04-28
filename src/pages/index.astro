@@ -56,7 +56,21 @@ const helloMikeBlock = helloMikeCandidate?.data.id !== firstBlock?.data.id ? hel
 const pinnedBlockIds = new Set([firstBlock?.data.id, helloMikeBlock?.data.id].filter(Boolean));
 const blocks = allBlocks.filter((block) => !pinnedBlockIds.has(block.data.id));
 const blockCount = allBlocks.length;
+const latestShips = allBlocks.slice(0, 5);
+const leadShip = latestShips[0] ?? null;
+const shipDeck = latestShips.slice(1);
 const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: live posts, internships, participation memory, Nouns experiments, and machine-readable feeds in one place.';
+
+function prettyShipTime(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short',
+  }).format(date);
+}
 
 const participationCards = [
   {
@@ -252,6 +266,52 @@ const contents = [
       <WalletChip />
       <a href="/for-agents" class="agent-link">/for-agents →</a>
     </header>
+
+    {leadShip && (
+      <section class="ship-hero" aria-label="Most recent PointCast ships">
+        <div class="ship-hero__copy">
+          <p class="ship-hero__kicker mono">LIVE SHIP ROOM · MOST RECENT FIRST</p>
+          <h2>PointCast is shipping while the page is open.</h2>
+          <p class="ship-hero__dek">
+            The front door now opens on the latest proof: cozy rooms, playable loops,
+            tide scenes, drum sprints, and agent-readable receipts landing as the work moves.
+          </p>
+          <div class="ship-hero__actions" aria-label="Primary actions">
+            <a class="ship-hero__action ship-hero__action--primary mono" href={`/b/${leadShip.data.id}`}>Open latest ship</a>
+            <a class="ship-hero__action mono" href="/status">Full ledger</a>
+            {leadShip.data.external?.url && (
+              <a class="ship-hero__action mono" href={leadShip.data.external.url}>Run it</a>
+            )}
+          </div>
+          <dl class="ship-hero__stats">
+            <div><dt>{blockCount}</dt><dd>blocks live</dd></div>
+            <div><dt>{latestShips.length}</dt><dd>fresh ships pinned</dd></div>
+            <div><dt>{prettyShipTime(leadShip.data.timestamp)}</dt><dd>latest stamp</dd></div>
+          </dl>
+        </div>
+
+        <div class="ship-hero__lead">
+          <BlockCard block={leadShip} />
+        </div>
+
+        <div class="ship-hero__rail" aria-label="Recent ships">
+          {shipDeck.map((block) => (
+            <a class="ship-tile" href={`/b/${block.data.id}`}>
+              <span class="ship-tile__meta mono">CH.{block.data.channel} · {block.data.id} · {block.data.type}</span>
+              <strong>{block.data.title}</strong>
+              <span>{block.data.dek}</span>
+            </a>
+          ))}
+        </div>
+
+        <nav class="ship-hero__shortcuts mono" aria-label="Fast paths">
+          <a href="/kettle">Kettle</a>
+          <a href="/tide">Tide</a>
+          <a href="/nouns-wood-chop">Wood Chop</a>
+          <a href="/drum">Drum Hub</a>
+        </nav>
+      </section>
+    )}
 
     <section id="monday-meditation" class="monday-meditation" aria-labelledby="monday-meditation-title">
       <div class="monday-meditation__copy">
@@ -865,6 +925,259 @@ const contents = [
 
     .agent-link {
       margin-left: auto;
+    }
+  }
+
+  .ship-hero {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.92fr) minmax(280px, 1.08fr);
+    gap: 10px;
+    margin: 14px 0 12px;
+    padding: 10px;
+    border: 1.5px solid var(--pc-ink);
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.045) 1px, transparent 1px) 0 0 / 22px 22px,
+      linear-gradient(0deg, rgba(18, 17, 14, 0.04) 1px, transparent 1px) 0 0 / 22px 22px,
+      #f7f2df;
+  }
+
+  .ship-hero__copy,
+  .ship-hero__rail,
+  .ship-hero__shortcuts {
+    border: 1px solid var(--pc-ink);
+    background: rgba(255, 255, 255, 0.74);
+  }
+
+  .ship-hero__copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 340px;
+    padding: 16px;
+  }
+
+  .ship-hero__kicker {
+    margin: 0;
+    color: #8a2432;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+  }
+
+  .ship-hero h2 {
+    max-width: 720px;
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 560;
+    line-height: 0.95;
+    letter-spacing: 0;
+  }
+
+  .ship-hero__dek {
+    max-width: 620px;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .ship-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ship-hero__action {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .ship-hero__action:hover,
+  .ship-tile:hover,
+  .ship-hero__shortcuts a:hover {
+    color: #8a2432;
+    text-decoration: none;
+  }
+
+  .ship-hero__action--primary {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  .ship-hero__action--primary:hover {
+    color: #ffe7a5;
+  }
+
+  .ship-hero__stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+  }
+
+  .ship-hero__stats div {
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--pc-rule);
+    background: #fafaf8;
+  }
+
+  .ship-hero__stats dt {
+    overflow-wrap: anywhere;
+    font-family: var(--pc-font-mono);
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  .ship-hero__stats dd {
+    margin: 3px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .ship-hero__lead {
+    min-width: 0;
+  }
+
+  .ship-hero__lead :global(.block-card) {
+    min-height: 340px;
+    height: 100%;
+  }
+
+  .ship-hero__lead :global(.block-card.span-2x1),
+  .ship-hero__lead :global(.block-card.span-2x2),
+  .ship-hero__lead :global(.block-card.span-3x2) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .ship-hero__rail {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .ship-tile {
+    display: flex;
+    min-width: 0;
+    min-height: 136px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-right: 1px solid var(--pc-rule);
+    color: var(--pc-ink);
+  }
+
+  .ship-tile:last-child {
+    border-right: 0;
+  }
+
+  .ship-tile__meta {
+    color: #8a2432;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+  }
+
+  .ship-tile strong {
+    font-size: 16px;
+    line-height: 1.12;
+    font-weight: 560;
+  }
+
+  .ship-tile span:last-child {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--pc-ink-soft);
+    font-size: 12px;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .ship-hero__shortcuts {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .ship-hero__shortcuts a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 8px;
+    border-right: 1px solid var(--pc-rule);
+    color: var(--pc-ink);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .ship-hero__shortcuts a:last-child {
+    border-right: 0;
+  }
+
+  @media (max-width: 920px) {
+    .ship-hero {
+      grid-template-columns: 1fr;
+    }
+
+    .ship-hero__copy,
+    .ship-hero__lead :global(.block-card) {
+      min-height: 0;
+    }
+
+    .ship-hero__rail {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ship-tile:nth-child(2n) {
+      border-right: 0;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .ship-hero {
+      padding: 8px;
+    }
+
+    .ship-hero__copy {
+      padding: 12px;
+    }
+
+    .ship-hero__stats,
+    .ship-hero__rail,
+    .ship-hero__shortcuts {
+      grid-template-columns: 1fr;
+    }
+
+    .ship-tile,
+    .ship-hero__shortcuts a {
+      border-right: 0;
+      border-bottom: 1px solid var(--pc-rule);
+    }
+
+    .ship-tile:last-child,
+    .ship-hero__shortcuts a:last-child {
+      border-bottom: 0;
     }
   }
 
