@@ -23,6 +23,18 @@ const difficultySettings = {
   normal: { label: "Normal", control: 0, finish: 0, risk: 1 },
   hard: { label: "Hard", control: 0.08, finish: 0.1, risk: 1.14 },
 };
+const watchSpeeds = {
+  slow: 1.35,
+  normal: 1,
+  fast: 0.42,
+};
+const achievementList = [
+  { id: "first-watch", label: "First Broadcast" },
+  { id: "first-mint", label: "Card Printer" },
+  { id: "underdog", label: "Upset Watcher" },
+  { id: "collector-3", label: "Three Card Run" },
+  { id: "speed-demon", label: "Fast Forward" },
+];
 const leagueTeams = [
   { name: "Gold Nouns", rating: 83 },
   { name: "Sky Nouns", rating: 79 },
@@ -47,6 +59,9 @@ const state = {
   mode: "computer",
   difficulty: "normal",
   momentum: 0,
+  watchSpeed: "normal",
+  spotlightTeam: "Gold Nouns",
+  tomorrowVisible: false,
   cpuTimer: null,
   leagueWatching: false,
   league: null,
@@ -68,8 +83,14 @@ const el = {
   standings: document.querySelector("#standings"),
   leagueToday: document.querySelector("#leagueToday"),
   mintCard: document.querySelector("#mintCard"),
+  teamSpotlightSelect: document.querySelector("#teamSpotlightSelect"),
+  teamSpotlight: document.querySelector("#teamSpotlight"),
+  tomorrowCard: document.querySelector("#tomorrowCard"),
+  trophyCase: document.querySelector("#trophyCase"),
+  watchSpeed: document.querySelector("#watchSpeed"),
   watchLeagueButton: document.querySelector("#watchLeagueButton"),
   mintCardButton: document.querySelector("#mintCardButton"),
+  previewTomorrowButton: document.querySelector("#previewTomorrowButton"),
   log: document.querySelector("#log"),
   ball: document.querySelector("#ball"),
   newGameButton: document.querySelector("#newGameButton"),
@@ -376,6 +397,12 @@ function applyLeagueMatch(standings, homeIndex, awayIndex, match) {
 function renderLeague() {
   if (!state.league) state.league = buildLeague();
   const feature = state.league.todayMatches[0];
+  const tomorrowMatches = dailyPairings(state.league.dayIndex + 1).map(([home, away], slot) => ({
+    ...simulateLeagueMatch(state.league.dayIndex + 1, slot, leagueTeams[home], leagueTeams[away]),
+    homeName: leagueTeams[home].name,
+    awayName: leagueTeams[away].name,
+  }));
+  const spotlight = state.league.standings.find((team) => team.name === state.spotlightTeam) || state.league.standings[0];
   el.standings.innerHTML = state.league.standings.map((team, index) => `
     <div class="standing-row">
       <span>${index + 1}. ${team.name}</span>
@@ -383,6 +410,15 @@ function renderLeague() {
       <small>${team.pointsFor - team.pointsAgainst >= 0 ? "+" : ""}${team.pointsFor - team.pointsAgainst}</small>
     </div>
   `).join("");
+  el.teamSpotlightSelect.innerHTML = leagueTeams.map((team) => `
+    <option value="${team.name}" ${team.name === state.spotlightTeam ? "selected" : ""}>${team.name}</option>
+  `).join("");
+  el.teamSpotlight.innerHTML = spotlight ? `
+    <strong>${spotlight.name}</strong>
+    <div>${spotlight.wins}-${spotlight.losses} record</div>
+    <div>${spotlight.pointsFor} scored / ${spotlight.pointsAgainst} allowed</div>
+    <div>${streakLabel(spotlight.streak)}</div>
+  ` : "";
   el.leagueToday.innerHTML = state.league.todayMatches.map((match, index) => `
     <button class="league-match ${index === 0 ? "featured" : ""}" data-match="${index}">
       <span>${match.homeName}</span>
@@ -390,6 +426,11 @@ function renderLeague() {
       <span>${match.awayName}</span>
     </button>
   `).join("");
+  [...el.watchSpeed.querySelectorAll("button")].forEach((button) => {
+    const isActive = button.dataset.speed === state.watchSpeed;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
   const minted = getMintedCards();
   const alreadyMinted = feature && minted.some((card) => card.id === feature.id);
   el.mintCard.innerHTML = feature ? `
@@ -398,8 +439,19 @@ function renderLeague() {
     <small>${alreadyMinted ? "Minted in local collection" : "Mint today's match card"}</small>
     <small>${minted.length} card${minted.length === 1 ? "" : "s"} collected</small>
   ` : "<p>League is warming up.</p>";
+  el.tomorrowCard.innerHTML = state.tomorrowVisible ? tomorrowMatches.map((match) => `
+    <div class="tomorrow-row">
+      <span>${match.homeName}</span>
+      <strong>${match.homeScore}-${match.awayScore}</strong>
+      <span>${match.awayName}</span>
+    </div>
+  `).join("") : "<p>Tap Tomorrow to peek at the next slate.</p>";
+  el.trophyCase.innerHTML = achievementList.map((achievement) => `
+    <span class="${hasAchievement(achievement.id) ? "unlocked" : ""}">${achievement.label}</span>
+  `).join("");
   el.mintCardButton.disabled = !feature || alreadyMinted;
   el.watchLeagueButton.disabled = state.busy || state.leagueWatching || !feature;
+  el.previewTomorrowButton.classList.toggle("active", state.tomorrowVisible);
 }
 
 async function watchLeagueMatch(matchIndex = 0) {
@@ -407,6 +459,7 @@ async function watchLeagueMatch(matchIndex = 0) {
   clearCpuTimer();
   const match = state.league.todayMatches[matchIndex];
   state.leagueWatching = true;
+  unlockAchievement("first-watch");
   state.busy = true;
   state.gameOver = false;
   state.rallyCount = 0;
@@ -428,13 +481,13 @@ async function watchLeagueMatch(matchIndex = 0) {
     render();
     const shotName = point.shot;
     flashPlayer(state.activePlayer, shotName);
-    await animateShot(state.activePlayer, pickTeammate(1 - point.team), shotName, point.final ? "winner" : "rally");
+    await animateShot(state.activePlayer, pickTeammate(1 - point.team), shotName, point.final ? "winner" : "rally", watchSpeeds[state.watchSpeed]);
     if (point.final) {
       state.score[point.team] += 1;
       flashScore(point.team);
       showToast("Point!");
       addLog(`${teamNames[point.team]} win a ${shotName}.`);
-      await wait(260);
+      await wait(260 * watchSpeeds[state.watchSpeed]);
     }
   }
 
@@ -445,6 +498,7 @@ async function watchLeagueMatch(matchIndex = 0) {
   state.rallyTeam = match.homeScore > match.awayScore ? 0 : 1;
   state.activePlayer = firstPlayerForTeam(state.rallyTeam);
   addLog(`${teamNames[state.rallyTeam]} take the daily match ${state.score[0]}-${state.score[1]}.`);
+  if (isUpset(match)) unlockAchievement("underdog");
   render();
 }
 
@@ -484,9 +538,47 @@ function mintTodayCard() {
     mintedAt: new Date().toISOString(),
   });
   localStorage.setItem("noun-pickleball-mints", JSON.stringify(minted));
+  unlockAchievement("first-mint");
+  if (minted.length >= 3) unlockAchievement("collector-3");
   showToast("Minted!");
   addLog(`Minted local card: ${feature.homeName} ${feature.homeScore}-${feature.awayScore} ${feature.awayName}.`);
   renderLeague();
+}
+
+function streakLabel(streak) {
+  if (streak > 1) return `${streak} match win streak`;
+  if (streak === 1) return "Won last match";
+  if (streak < -1) return `${Math.abs(streak)} match slide`;
+  if (streak === -1) return "Lost last match";
+  return "Even form";
+}
+
+function isUpset(match) {
+  const home = leagueTeams.find((team) => team.name === match.homeName);
+  const away = leagueTeams.find((team) => team.name === match.awayName);
+  if (!home || !away) return false;
+  const winnerRating = match.homeScore > match.awayScore ? home.rating : away.rating;
+  const loserRating = match.homeScore > match.awayScore ? away.rating : home.rating;
+  return winnerRating + 4 < loserRating;
+}
+
+function getAchievements() {
+  try {
+    return JSON.parse(localStorage.getItem("noun-pickleball-achievements") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function hasAchievement(id) {
+  return getAchievements().includes(id);
+}
+
+function unlockAchievement(id) {
+  const achievements = getAchievements();
+  if (achievements.includes(id)) return;
+  achievements.push(id);
+  localStorage.setItem("noun-pickleball-achievements", JSON.stringify(achievements));
 }
 
 function getMintedCards() {
@@ -621,14 +713,15 @@ function showToast(message) {
   window.setTimeout(() => el.courtToast.classList.remove("show"), 760);
 }
 
-function animateShot(fromIndex, toIndex, shotName, result) {
+function animateShot(fromIndex, toIndex, shotName, result, speed = 1) {
   const from = players[fromIndex];
   const to = players[toIndex];
   const midpoint = {
     x: `${(parseFloat(from.x) + parseFloat(to.x)) / 2}%`,
     y: arcY(from, to, shotName, result),
   };
-  const duration = shotName === "smash" ? 310 : shotName === "lob" ? 620 : shotName === "dink" ? 430 : 500;
+  const baseDuration = shotName === "smash" ? 310 : shotName === "lob" ? 620 : shotName === "dink" ? 430 : 500;
+  const duration = baseDuration * speed;
   const scale = shotName === "lob" ? 1.34 : shotName === "smash" ? 0.82 : 1.12;
   const spin = shotName === "drop" || shotName === "dink" ? " rotate(180deg)" : " rotate(360deg)";
 
@@ -718,6 +811,21 @@ el.controls.addEventListener("click", (event) => {
 el.newGameButton.addEventListener("click", resetGame);
 el.watchLeagueButton.addEventListener("click", () => watchLeagueMatch(0));
 el.mintCardButton.addEventListener("click", mintTodayCard);
+el.previewTomorrowButton.addEventListener("click", () => {
+  state.tomorrowVisible = !state.tomorrowVisible;
+  renderLeague();
+});
+el.teamSpotlightSelect.addEventListener("change", (event) => {
+  state.spotlightTeam = event.target.value;
+  renderLeague();
+});
+el.watchSpeed.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-speed]");
+  if (!button) return;
+  state.watchSpeed = button.dataset.speed;
+  if (state.watchSpeed === "fast") unlockAchievement("speed-demon");
+  renderLeague();
+});
 el.leagueToday.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-match]");
   if (button) watchLeagueMatch(Number(button.dataset.match));
