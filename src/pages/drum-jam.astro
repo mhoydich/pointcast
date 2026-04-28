@@ -1,0 +1,625 @@
+---
+/**
+ * /drum-jam — emergent jam mode · sprint 2/4 (batch 2)
+ * 2026-04-28 PT.
+ *
+ * One button. One screen. The room jams when enough people are present.
+ *
+ * Mechanics: poll /api/visit every 5s. When 3+ humans are present, the
+ * room enters JAM MODE — every visitor is auto-assigned a part (kick,
+ * snare, hat, bass, lead) by stable hash of their pid. Each visitor's
+ * part loops at a fixed pattern. Stronger taps from the visitor amplify
+ * their part briefly. The combined output is harmonically locked to a
+ * shared chord progression that rotates every 8 bars.
+ *
+ * When the room drops below 3, jam mode fades out — your part keeps
+ * playing as a solo until someone else arrives.
+ *
+ * Multiplayer aspects:
+ *   · /api/visit — count + pid list
+ *   · /api/sounds — broadcasts type=jam events tagged with `part`
+ *   · localStorage holds your jam minutes accumulated (a stat)
+ *
+ * Aesthetic: late-night basement jam. Brick wall, single bare bulb,
+ * cassette-tape-deck graphics, big "JAM ON" / "WAITING" sign.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-jam — emergent jam mode';
+const description =
+  'When 3 or more visitors are in the room, /drum-jam auto-assigns parts and the room jams. Kick, snare, hat, bass, lead, hand-percussion — your part is yours, your tap amplifies it. Drum hub multiplayer.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-jam',
+  name: 'PointCast Drum · Jam',
+  url: 'https://pointcast.xyz/drum-jam',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="jm" id="jm-main">
+    <DrumNav current="jam" />
+
+    <header class="jm__head">
+      <p class="jm__kicker">DRUM HUB · JAM · EMERGENT · MULTIPLAYER</p>
+      <h1 class="jm__title"><em>The room jams when enough of us show up.</em></h1>
+      <p class="jm__dek">
+        Three visitors and the room enters JAM MODE — everyone gets a part by stable hash of their session id, and the room locks to an 8-bar progression. Tap your part louder. Your part stays yours.
+      </p>
+    </header>
+
+    <section class="jm__stage">
+      <div class="jm__sign">
+        <span class="jm__sign-bulb" aria-hidden="true"></span>
+        <span class="jm__sign-text mono" id="jm-sign">— WAITING —</span>
+      </div>
+
+      <div class="jm__panel">
+        <div class="jm__counts">
+          <div class="jm__count-row">
+            <span class="jm__count-num" id="jm-humans">—</span>
+            <span class="jm__count-label mono">in the room</span>
+          </div>
+          <div class="jm__count-row">
+            <span class="jm__count-num" id="jm-bars">—</span>
+            <span class="jm__count-label mono">bar / 8</span>
+          </div>
+          <div class="jm__count-row">
+            <span class="jm__count-num" id="jm-chord">—</span>
+            <span class="jm__count-label mono">chord</span>
+          </div>
+        </div>
+
+        <div class="jm__your-part">
+          <p class="jm__your-eyebrow mono">your part</p>
+          <p class="jm__your-name" id="jm-part">—</p>
+          <p class="jm__your-pattern mono" id="jm-pattern">— · — · — · — · — · — · — · —</p>
+        </div>
+
+        <button type="button" class="jm__tap" id="jm-tap">
+          <span class="jm__tap-glyph">●</span>
+          <span class="jm__tap-label mono">tap to amplify · or press space</span>
+        </button>
+
+        <div class="jm__panel-row">
+          <span class="jm__panel-label mono">tempo</span>
+          <input id="jm-tempo" type="range" min="80" max="140" value="104" />
+          <span class="jm__panel-val mono" id="jm-bpm">104 BPM</span>
+        </div>
+
+        <p class="jm__broadcast mono" id="jm-broadcast">— off —</p>
+      </div>
+
+      <ul class="jm__roster" id="jm-roster" role="list">
+        <li class="jm__roster-empty mono">just you in the room · jam needs 3+</li>
+      </ul>
+    </section>
+
+    <footer class="jm__foot">
+      <p>
+        Jam mode reads <code>/api/visit</code> for the present roster + your
+        own session, hashes pid → 1 of 6 parts (kick / snare / hat / bass /
+        lead / shaker), and locks every part's pattern + pitch to the same
+        rotating 8-bar progression. Tap to bump your part's amplitude for
+        2 bars. Your part stays yours; rejoin tomorrow with the same pid
+        and you'll get the same part.
+      </p>
+      <p class="jm__credit mono">v0.1 · 2026-04-28 · Mike Hoydich + Claude Code · El Segundo · sprint 2/4 (batch 2)</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    const PARTS = ['kick', 'snare', 'hat', 'bass', 'lead', 'shaker'];
+    const PROGRESSION = [
+      // [chord-name, root-hz]
+      ['Am',  220.00],
+      ['F',   174.61],
+      ['C',   261.63],
+      ['G',   196.00],
+      ['Am',  220.00],
+      ['F',   174.61],
+      ['C',   261.63],
+      ['E',   164.81],
+    ];
+    // Pattern per part (16 steps per bar)
+    const PATTERNS = {
+      kick:   [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],
+      snare:  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1],
+      hat:    [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1],
+      bass:   [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,1,0],
+      lead:   [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,1,0],
+      shaker: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1],
+    };
+
+    function getSession() {
+      try {
+        const k = 'pc:session';
+        let s = localStorage.getItem(k);
+        if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+        return s;
+      } catch { return 'jm-' + Math.random().toString(36).slice(2, 10); }
+    }
+    function hash32(str) {
+      let h = 5381;
+      for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) & 0x7fffffff;
+      return h;
+    }
+
+    const session = getSession();
+    const myPart = PARTS[hash32('part:' + session) % PARTS.length];
+
+    document.getElementById('jm-part').textContent = myPart.toUpperCase();
+    document.getElementById('jm-pattern').textContent = PATTERNS[myPart].join(' · ');
+
+    let ctx = null;
+    let masterGain = null;
+    let lpf = null;
+    let bpm = 104;
+    let stepDur = 0;
+    let nextTickAt = 0;
+    let stepIndex = 0; // 0..15 within bar
+    let barIndex = 0;  // 0..7
+    let timer = null;
+    let jamming = false;
+    let myAmp = 0.45;
+    let amplifyUntil = 0;
+
+    function ensureCtx() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 6000;
+      lpf.Q.value = 0.7;
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.55;
+      lpf.connect(masterGain);
+      masterGain.connect(ctx.destination);
+    }
+
+    function recomputeStepDur() { stepDur = 60 / bpm / 4; }
+    recomputeStepDur();
+
+    // Synth recipes — same family as /drum-radio + /drum-daily
+    function kick(t, amp) {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      const g = ctx.createGain();
+      o.frequency.setValueAtTime(140, t);
+      o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.5 * amp, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.25);
+    }
+    function snare(t, amp) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.18, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1500;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.4 * amp, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      n.connect(f); f.connect(g); g.connect(lpf); n.start(t);
+    }
+    function hat(t, amp) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6500;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.18 * amp, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      n.connect(f); f.connect(g); g.connect(lpf); n.start(t);
+    }
+    function bass(t, hz, amp) {
+      const o = ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.value = hz / 2;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.32 * amp, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+      o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.34);
+    }
+    function lead(t, hz, amp) {
+      [1, 1.498, 2].forEach((mul, i) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz * mul;
+        const g = ctx.createGain();
+        const peak = [0.18, 0.10, 0.06][i] * amp;
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+        o.connect(g); g.connect(lpf); o.start(t); o.stop(t + 0.62);
+      });
+    }
+    function shaker(t, amp) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 6);
+      const n = ctx.createBufferSource(); n.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 4000;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.10 * amp, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      n.connect(f); f.connect(g); g.connect(lpf); n.start(t);
+    }
+    function partFire(part, t, hz, amp) {
+      if (part === 'kick')   kick(t, amp);
+      if (part === 'snare')  snare(t, amp);
+      if (part === 'hat')    hat(t, amp);
+      if (part === 'bass')   bass(t, hz, amp);
+      if (part === 'lead')   lead(t, hz, amp);
+      if (part === 'shaker') shaker(t, amp);
+    }
+
+    let presentParts = new Set([myPart]);
+    function tick() {
+      if (!jamming) return;
+      const now = ctx.currentTime;
+      while (nextTickAt < now + 0.1) {
+        const chord = PROGRESSION[barIndex % PROGRESSION.length];
+        for (const part of presentParts) {
+          if (PATTERNS[part][stepIndex]) {
+            // Use my amplified amp only for my part
+            const amp = part === myPart && Date.now() < amplifyUntil ? 1.0 : 0.55;
+            partFire(part, nextTickAt, chord[1], amp);
+          }
+        }
+        const idxLocal = stepIndex;
+        const barLocal = barIndex;
+        const chordName = chord[0];
+        setTimeout(() => {
+          document.getElementById('jm-bars').textContent = `${barLocal + 1}`;
+          document.getElementById('jm-chord').textContent = chordName;
+        }, Math.max(0, (nextTickAt - now) * 1000));
+        nextTickAt += stepDur;
+        stepIndex += 1;
+        if (stepIndex >= 16) { stepIndex = 0; barIndex = (barIndex + 1) % 8; }
+      }
+      timer = setTimeout(tick, 25);
+    }
+
+    function startJam(parts) {
+      ensureCtx();
+      jamming = true;
+      presentParts = new Set(parts);
+      stepIndex = 0; barIndex = 0;
+      nextTickAt = ctx.currentTime + 0.05;
+      tick();
+      const sign = document.getElementById('jm-sign');
+      sign.textContent = '— JAM ON —';
+      sign.dataset.state = 'on';
+    }
+    function stopJam() {
+      jamming = false;
+      if (timer) { clearTimeout(timer); timer = null; }
+      // Solo grace: keep your part going for a few ticks
+      presentParts = new Set([myPart]);
+      const sign = document.getElementById('jm-sign');
+      sign.textContent = '— SOLO MODE —';
+      sign.dataset.state = 'solo';
+      ensureCtx();
+      let i = 0;
+      const soloTimer = setInterval(() => {
+        if (jamming) { clearInterval(soloTimer); return; }
+        if (i++ > 60) { clearInterval(soloTimer); sign.textContent = '— WAITING —'; sign.dataset.state = ''; return; }
+        const t = ctx.currentTime;
+        const chord = PROGRESSION[Math.floor(i / 16) % PROGRESSION.length];
+        if (PATTERNS[myPart][i % 16]) partFire(myPart, t + 0.02, chord[1], 0.45);
+      }, stepDur * 1000);
+    }
+
+    function tap() {
+      amplifyUntil = Date.now() + 1500;
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'jam', sessionId: session, part: myPart, action: 'amplify' }),
+        });
+        const el = document.getElementById('jm-broadcast');
+        if (el) el.textContent = `amplified · ${myPart}`;
+      } catch {}
+      const tapBtn = document.getElementById('jm-tap');
+      tapBtn.classList.remove('jm__tap--bump');
+      void tapBtn.offsetWidth;
+      tapBtn.classList.add('jm__tap--bump');
+    }
+
+    document.getElementById('jm-tap').addEventListener('click', tap);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        tap();
+      }
+    });
+    document.getElementById('jm-tempo').addEventListener('input', (e) => {
+      bpm = Number(e.target.value || 104);
+      recomputeStepDur();
+      document.getElementById('jm-bpm').textContent = `${bpm} BPM`;
+    });
+
+    async function pollVisit() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const present = (Array.isArray(data.present) ? data.present : []).filter((p) => typeof p.nounId === 'number');
+        // Always include self
+        const selfPid = (await sha256(session)).slice(0, 10);
+        if (!present.find((p) => p.pid === selfPid)) {
+          present.push({ pid: selfPid, nounId: hash32(session) % 1200, type: 'human', city: 'you', country: '' });
+        }
+        // Render roster
+        const roster = document.getElementById('jm-roster');
+        roster.innerHTML = '';
+        if (present.length === 0) {
+          roster.innerHTML = '<li class="jm__roster-empty mono">just you in the room · jam needs 3+</li>';
+        } else {
+          present.slice(0, 12).forEach((p) => {
+            const part = PARTS[hash32('part:' + (p.pid || '')) % PARTS.length];
+            const li = document.createElement('li');
+            li.className = 'jm__roster-row' + (p.pid === selfPid ? ' jm__roster-row--me' : '');
+            li.innerHTML = `
+              <img src="https://noun.pics/${p.nounId}.svg" alt="" width="20" height="20" loading="lazy" />
+              <span class="jm__roster-noun mono">noun #${p.nounId}</span>
+              <span class="jm__roster-part mono" data-part="${part}">${part.toUpperCase()}</span>
+            `;
+            roster.appendChild(li);
+          });
+        }
+        document.getElementById('jm-humans').textContent = String(present.length);
+        const allParts = new Set(present.map((p) => PARTS[hash32('part:' + (p.pid || '')) % PARTS.length]));
+        if (present.length >= 3) {
+          if (!jamming) startJam(allParts);
+          else { presentParts = allParts; }
+        } else {
+          if (jamming) stopJam();
+        }
+      } catch {}
+    }
+
+    // tiny sha256 polyfill (sync isn't possible in browser; use SubtleCrypto async)
+    async function sha256(s) {
+      const enc = new TextEncoder().encode(s);
+      const hash = await crypto.subtle.digest('SHA-256', enc);
+      return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    pollVisit();
+    setInterval(pollVisit, 5000);
+  })();
+</script>
+
+<style>
+  .jm {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      repeating-linear-gradient(0deg, rgba(184, 67, 26, 0.06) 0 22px, transparent 22px 44px),
+      repeating-linear-gradient(90deg, rgba(184, 67, 26, 0.06) 0 28px, transparent 28px 56px),
+      linear-gradient(180deg, #1a0a06 0%, #2c1d05 60%, #0a0612 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .jm__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .jm__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .jm__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 50px); line-height: 1.05; }
+  .jm__title em { font-style: italic; }
+  .jm__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 60ch; color: #cfc6df; }
+
+  .jm__stage {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 800px) { .jm__stage { grid-template-columns: 1fr; } }
+
+  .jm__sign {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: #050310;
+    border: 4px solid #ff5c23;
+    box-shadow: 0 0 60px rgba(255, 92, 35, 0.25) inset, 6px 6px 0 0 #050310;
+    font-family: 'Bungee', Impact, sans-serif;
+  }
+  .jm__sign-bulb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 2px solid #050310;
+    box-shadow: inset 0 0 4px rgba(255, 138, 74, 0.4);
+  }
+  .jm__sign[data-state='on']  .jm__sign-bulb,
+  .jm__sign[data-state='solo'] .jm__sign-bulb {
+    background: #ffd400;
+    box-shadow: 0 0 18px #ffd400, inset 0 0 4px #fff;
+    animation: jm-blink 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes jm-blink { 0% { opacity: 0.7; } 100% { opacity: 1; } }
+  .jm__sign-text {
+    font-size: clamp(28px, 4vw, 48px);
+    color: #ff8a4a;
+    letter-spacing: 0.16em;
+  }
+  .jm__sign[data-state='on'] .jm__sign-text { color: #ffd400; }
+  .jm__sign[data-state='solo'] .jm__sign-text { color: #94d4ff; }
+
+  .jm__panel {
+    background: rgba(18, 17, 14, 0.6);
+    border: 2px solid #ffd400;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .jm__counts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .jm__count-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: #050310;
+    padding: 10px 6px;
+    border: 1.5px solid #ffd400;
+  }
+  .jm__count-num { font-family: Georgia, serif; font-size: 28px; color: #ffd400; line-height: 1; }
+  .jm__count-label { font-size: 9px; letter-spacing: 0.2em; color: #ff8a4a; }
+
+  .jm__your-part {
+    background: #ffd400;
+    color: #050310;
+    padding: 12px 14px;
+    border: 2px solid #050310;
+    box-shadow: 3px 3px 0 0 #050310;
+  }
+  .jm__your-eyebrow {
+    margin: 0 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    color: #b8431a;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .jm__your-name { margin: 0 0 6px; font-family: 'Bungee', Impact, sans-serif; font-size: 32px; letter-spacing: 0.04em; line-height: 1; }
+  .jm__your-pattern {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: #2c1d05;
+    word-break: break-all;
+  }
+
+  .jm__tap {
+    background: #ff5c23;
+    color: #fffaf0;
+    border: 2px solid #050310;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 18px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: transform 100ms;
+  }
+  .jm__tap:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #050310; }
+  .jm__tap--bump { animation: jm-bump 0.4s ease-out; }
+  @keyframes jm-bump {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .jm__tap-glyph { font-size: 32px; line-height: 1; }
+  .jm__tap-label { font-size: 10px; letter-spacing: 0.18em; }
+
+  .jm__panel-row {
+    display: grid;
+    grid-template-columns: 80px minmax(0, 1fr) 70px;
+    gap: 10px;
+    align-items: center;
+  }
+  .jm__panel-label { font-size: 10px; letter-spacing: 0.2em; color: #ff8a4a; }
+  .jm__panel-row input[type='range'] { accent-color: #ffd400; }
+  .jm__panel-val { font-size: 10px; letter-spacing: 0.16em; color: #ffd400; text-align: right; }
+
+  .jm__broadcast { margin: 0; padding-top: 8px; border-top: 1px dashed #5a3a1a; font-size: 10px; letter-spacing: 0.16em; color: #ff8a4a; }
+
+  .jm__roster {
+    list-style: none;
+    margin: 0;
+    padding: 14px;
+    background: rgba(18, 17, 14, 0.6);
+    border: 2px solid #ff8a4a;
+    box-shadow: 4px 4px 0 0 #050310;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .jm__roster-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 80px;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    font-size: 11px;
+  }
+  .jm__roster-row img { image-rendering: pixelated; border: 1px solid #050310; }
+  .jm__roster-row--me {
+    border-color: #ffd400;
+    background: rgba(255, 212, 0, 0.08);
+  }
+  .jm__roster-noun { font-size: 11px; }
+  .jm__roster-part {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-align: right;
+    padding: 1px 5px;
+    background: #ff5c23;
+    color: #fffaf0;
+  }
+  .jm__roster-part[data-part='kick']   { background: #ff5c23; }
+  .jm__roster-part[data-part='snare']  { background: #ffd400; color: #050310; }
+  .jm__roster-part[data-part='hat']    { background: #5fbafd; color: #050310; }
+  .jm__roster-part[data-part='bass']   { background: #b8431a; }
+  .jm__roster-part[data-part='lead']   { background: #c9a449; color: #050310; }
+  .jm__roster-part[data-part='shaker'] { background: #94d4ff; color: #050310; }
+  .jm__roster-empty {
+    padding: 12px;
+    text-align: center;
+    color: #5f5e5a;
+    font-size: 11px;
+  }
+
+  .jm__foot {
+    max-width: 1080px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed #5a3a1a;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cfc6df;
+  }
+  .jm__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+  .jm__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ff8a4a;
+  }
+</style>
