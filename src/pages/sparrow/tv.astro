@@ -28,34 +28,15 @@
  *   · Sonic Postcard audio bed (Phase 4).
  */
 import { getCollection } from 'astro:content';
-import { CHANNEL_LIST, CHANNELS } from '../../lib/channels';
+import { CHANNEL_LIST } from '../../lib/channels';
+import { buildTVSlides, fmtTVDate } from '../../lib/sparrow-tv';
 
 const all = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-const slides = all.slice(0, 18).map((b) => ({
-  id: b.data.id,
-  title: b.data.title,
-  dek: b.data.dek ?? '',
-  channel: b.data.channel,
-  channelName: CHANNELS[b.data.channel]?.name ?? b.data.channel,
-  type: b.data.type,
-  mood: b.data.mood ?? '',
-  timestamp: b.data.timestamp.toISOString(),
-}));
-
-const channels = CHANNEL_LIST.map((c) => ({
-  code: c.code,
-  slug: c.slug,
-  name: c.name,
-}));
-
-const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    month: 'short',
-    day: 'numeric',
-  });
+const slides = buildTVSlides(all, { limit: 18 });
+const channels = CHANNEL_LIST.map((c) => ({ code: c.code, slug: c.slug, name: c.name }));
+const fmtDate = fmtTVDate;
 ---
 
 <!doctype html>
@@ -268,45 +249,100 @@ const fmtDate = (iso: string) =>
           }
         });
 
-        // ─── "Here now" — friends from localStorage (Phase 1) ───────
-        // Real-time WS subscription is the Phase 1 follow-up. v0.1
-        // hydrates from cached friends + profiles for a static strip
-        // so the layout reads correctly even pre-WS.
-        function hydrateHere() {
+        // ─── "Here now" — friends + real Nostr WS presence ──────────
+        // Privacy-first: hidden until sparrow:tv-private-ok="1" so a
+        // kitchen TV doesn't leak follow lists by default. Opt-in via
+        // ?surface=tv&private-ok=1 (writes the flag) or future phone-
+        // pairing handshake (Phase 3).
+        //
+        // When opted in, we open a streaming kind-20078 REQ against
+        // the same relay pool the rest of Sparrow uses (damus / primal
+        // / nos.lol unless overridden via sparrow:nostr-relays). Mirrors
+        // the SparrowLayout v0.30 motion watcher contract verbatim:
+        //   { kinds:[20078], authors:<friends>, '#t':['sparrow-presence'],
+        //     since: <bootTime - 60s> }
+        // Tracks lastSeen Map<pubkey, epochMs>; 90s freshness window;
+        // 20s decay tick.
+
+        var DEFAULT_RELAYS = [
+          'wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'
+        ];
+        var FRESH_MS = 90_000;
+        var hereSockets = [];
+        var lastSeen = Object.create(null);
+        var bootTime = Math.floor(Date.now() / 1000);
+
+        // Apply ?private-ok=1 query as a one-click opt-in for shared
+        // TVs the operator controls. Writes the flag and strips param.
+        try {
+          var qsHere = new URLSearchParams(location.search);
+          if (qsHere.get('private-ok') === '1') {
+            localStorage.setItem('sparrow:tv-private-ok', '1');
+            qsHere.delete('private-ok');
+            var nu = location.pathname + (qsHere.toString() ? '?' + qsHere.toString() : '') + location.hash;
+            history.replaceState(null, '', nu);
+          }
+        } catch (_) { /* empty */ }
+
+        function readFriends() {
+          try {
+            var raw = JSON.parse(localStorage.getItem('sparrow:friends') || '[]');
+            if (!Array.isArray(raw)) return [];
+            return raw.map(function (f) {
+              if (typeof f === 'string') return { pubkey: f.toLowerCase(), alias: '', muted: false };
+              if (f && typeof f === 'object' && typeof f.pubkey === 'string') {
+                return { pubkey: f.pubkey.toLowerCase(), alias: f.alias || '', muted: !!f.muted };
+              }
+              return null;
+            }).filter(function (f) { return f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted; });
+          } catch (_) { return []; }
+        }
+        function readProfiles() {
+          try {
+            var pj = JSON.parse(localStorage.getItem('sparrow:profiles') || '{}');
+            return (pj && typeof pj === 'object' && !Array.isArray(pj)) ? pj : {};
+          } catch (_) { return {}; }
+        }
+        function getRelays() {
+          try {
+            var raw = localStorage.getItem('sparrow:nostr-relays');
+            var list = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(list) && list.length) {
+              return list.filter(function (u) { return typeof u === 'string' && u.startsWith('ws'); });
+            }
+          } catch (_) { /* empty */ }
+          return DEFAULT_RELAYS;
+        }
+
+        function paintHere() {
           var here = doc.querySelector('[data-sptv-here]');
           var list = doc.querySelector('[data-sptv-here-list]');
           if (!here || !list) return;
-          var friends = [];
-          try {
-            var raw = JSON.parse(localStorage.getItem('sparrow:friends') || '[]');
-            if (Array.isArray(raw)) {
-              friends = raw.map(function (f) {
-                if (typeof f === 'string') return { pubkey: f.toLowerCase(), alias: '', muted: false };
-                if (f && typeof f === 'object' && typeof f.pubkey === 'string') {
-                  return { pubkey: f.pubkey.toLowerCase(), alias: f.alias || '', muted: !!f.muted };
-                }
-                return null;
-              }).filter(function (f) { return f && /^[0-9a-f]{64}$/.test(f.pubkey) && !f.muted; });
-            }
-          } catch (_) { /* empty */ }
-          var profiles = {};
-          try {
-            var pj = JSON.parse(localStorage.getItem('sparrow:profiles') || '{}');
-            if (pj && typeof pj === 'object' && !Array.isArray(pj)) profiles = pj;
-          } catch (_) { /* empty */ }
-
-          // v0.1 scaffold: TV mode defaults to NOT showing personal
-          // friends list (privacy on shared TVs). Opt-in via
-          // sparrow:tv-private-ok = "1".
           var allow = false;
           try { allow = localStorage.getItem('sparrow:tv-private-ok') === '1'; } catch (_) {}
-          if (!allow || !friends.length) { here.hidden = true; return; }
+          if (!allow) { here.hidden = true; return; }
+
+          var friends = readFriends();
+          if (!friends.length) { here.hidden = true; return; }
+
+          var profiles = readProfiles();
+          var now = Date.now();
+          // Sort by freshness desc; fall back to friends list order so
+          // the strip still shows something pre-stream.
+          var ranked = friends.slice().sort(function (a, b) {
+            var sa = lastSeen[a.pubkey] || 0;
+            var sb = lastSeen[b.pubkey] || 0;
+            return sb - sa;
+          }).slice(0, 8);
 
           here.hidden = false;
           list.innerHTML = '';
-          friends.slice(0, 8).forEach(function (f) {
+          ranked.forEach(function (f) {
             var li = doc.createElement('li');
             li.className = 'sptv-here__item';
+            var seen = lastSeen[f.pubkey] || 0;
+            var fresh = (now - seen) < FRESH_MS;
+            if (fresh) li.setAttribute('data-fresh', '1');
             var prof = profiles[f.pubkey] || {};
             var pic = (typeof prof.picture === 'string' && /^https?:\/\//i.test(prof.picture)) ? prof.picture : '';
             if (pic) {
@@ -318,13 +354,69 @@ const fmtDate = (iso: string) =>
             list.appendChild(li);
           });
         }
-        hydrateHere();
-        // Re-hydrate on storage events from other tabs (sparrow:friends edits).
+
+        function startPresenceWatch() {
+          var allow = false;
+          try { allow = localStorage.getItem('sparrow:tv-private-ok') === '1'; } catch (_) {}
+          if (!allow) return;
+          var friends = readFriends();
+          if (!friends.length) return;
+
+          var authors = friends.map(function (f) { return f.pubkey; });
+          var subId = 'sptv-' + Math.random().toString(36).slice(2, 10);
+          var filter = {
+            kinds: [20078],
+            authors: authors,
+            '#t': ['sparrow-presence'],
+            since: bootTime - 60,
+          };
+
+          getRelays().forEach(function (url) {
+            try {
+              var ws = new WebSocket(url);
+              hereSockets.push(ws);
+              ws.addEventListener('open', function () {
+                try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch (_) {}
+              });
+              ws.addEventListener('message', function (msg) {
+                var frame;
+                try { frame = JSON.parse(msg.data); } catch (_) { return; }
+                if (!Array.isArray(frame)) return;
+                if (frame[0] !== 'EVENT' || frame[1] !== subId) return;
+                var ev = frame[2];
+                if (!ev || ev.kind !== 20078 || typeof ev.pubkey !== 'string') return;
+                if (typeof ev.created_at !== 'number') return;
+                // Defensive: relay echoes spam — confirm tag.
+                var hasTag = Array.isArray(ev.tags) && ev.tags.some(function (t) {
+                  return Array.isArray(t) && t[0] === 't' && t[1] === 'sparrow-presence';
+                });
+                if (!hasTag) return;
+                // Mute check (re-read so freshly-muted friends drop).
+                var live = readFriends();
+                if (!live.some(function (f) { return f.pubkey === ev.pubkey; })) return;
+                lastSeen[ev.pubkey] = Date.now();
+                paintHere();
+              });
+            } catch (_) { /* relay failed, skip */ }
+          });
+
+          // Decay tick — drops stale entries from the strip every 20s.
+          setInterval(paintHere, 20_000);
+        }
+
+        paintHere();
+        startPresenceWatch();
+        // React to friends-list edits in other tabs.
         window.addEventListener('storage', function (e) {
           if (!e.key) return;
-          if (e.key === 'sparrow:friends' || e.key === 'sparrow:profiles' || e.key === 'sparrow:tv-private-ok') {
-            hydrateHere();
+          if (e.key === 'sparrow:friends' ||
+              e.key === 'sparrow:profiles' ||
+              e.key === 'sparrow:tv-private-ok') {
+            paintHere();
           }
+        });
+        window.addEventListener('beforeunload', function () {
+          hereSockets.forEach(function (ws) { try { ws.close(); } catch (_) {} });
         });
       })();
     </script>
@@ -568,6 +660,13 @@ const fmtDate = (iso: string) =>
         overflow: hidden;
         border: 1px solid color-mix(in oklch, var(--sp-moss) 30%, var(--sp-rule));
         background: var(--sp-ink);
+        opacity: 0.42;
+        transition: opacity 600ms ease, box-shadow 600ms ease;
+      }
+      .sptv-here__item[data-fresh="1"] {
+        opacity: 1;
+        box-shadow: 0 0 1.6vmin color-mix(in oklch, var(--sp-moss) 70%, transparent);
+        border-color: var(--sp-moss);
       }
       .sptv-here__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .sptv-here__placeholder {
