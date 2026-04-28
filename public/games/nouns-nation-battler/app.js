@@ -213,6 +213,12 @@ const el = {
   tvReplayCue: document.querySelector("#tvReplayCue"),
   tvPath: document.querySelector("#tvPath"),
   tvCastHint: document.querySelector("#tvCastHint"),
+  tvInterstitial: document.querySelector("#tvInterstitial"),
+  tvInterstitialKicker: document.querySelector("#tvInterstitialKicker"),
+  tvInterstitialTitle: document.querySelector("#tvInterstitialTitle"),
+  tvInterstitialBody: document.querySelector("#tvInterstitialBody"),
+  tvInterstitialMeta: document.querySelector("#tvInterstitialMeta"),
+  tvInterstitialNouns: document.querySelector("#tvInterstitialNouns"),
 };
 
 const state = {
@@ -238,6 +244,8 @@ const state = {
   directorCue: "Director wide",
   replayCue: "Replay bay armed",
   replayClock: 0,
+  interstitialClock: 0,
+  interstitialSignature: "",
   autoNext: true,
   nextTimer: null,
   rootingFor: localStorage.getItem("pc:nouns-nation-root") || "",
@@ -494,6 +502,8 @@ function resetMatch() {
   state.directorCue = "Director wide";
   state.replayCue = "Replay bay armed";
   state.replayClock = 0;
+  state.interstitialClock = isTvMode ? 560 : 0;
+  state.interstitialSignature = "";
   state.battleType = currentBattleType();
   state.weather = state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
   state.moveHistory = [];
@@ -536,7 +546,7 @@ function resetMatch() {
 
   addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, 30 strong on each side.`);
   addLog(state.battleType.log);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V11", `${state.battleType.name} armed`);
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V12", `${state.battleType.name} armed`);
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
@@ -1347,6 +1357,7 @@ function update(time = 0) {
     state.terrainClock -= dt;
     state.directorClock -= dt;
     state.replayClock = Math.max(0, state.replayClock - dt);
+    state.interstitialClock = Math.max(0, state.interstitialClock - dt);
     if (state.specialClock <= 0) {
       state.specialClock = rand(260, 430);
       gangCall();
@@ -1503,6 +1514,77 @@ function renderTv(left, right) {
   el.tvDirectorCue.textContent = state.directorCue;
   el.tvReplayCue.textContent = state.replayClock > 0 ? state.replayCue : directorFieldLine();
   el.tvPath.textContent = tvPathLine();
+  renderTvInterstitial(left, right);
+}
+
+function renderTvInterstitial(left, right) {
+  if (!isTvMode || !el.tvInterstitial) return;
+  const active = state.interstitialClock > 0;
+  el.tvInterstitial.classList.toggle("show", active);
+  if (!active) return;
+  const deck = interstitialDeck(left, right);
+  const index = state.interstitialClock > 280 ? 0 : 1;
+  const card = deck[index] || deck[0];
+  el.tvInterstitial.classList.toggle("field-guide", index === 1);
+  const signature = `${index}:${card.title}:${card.body}:${card.meta}`;
+  if (state.interstitialSignature === signature) return;
+  state.interstitialSignature = signature;
+  el.tvInterstitialKicker.textContent = card.kicker;
+  el.tvInterstitialTitle.textContent = card.title;
+  el.tvInterstitialBody.textContent = card.body;
+  el.tvInterstitialMeta.textContent = card.meta;
+  el.tvInterstitialNouns.innerHTML = interstitialNouns(index);
+}
+
+function interstitialDeck(left, right) {
+  const league = state.league;
+  const phase = league.phase === "regular"
+    ? `Day ${league.day + 1} of ${LEAGUE_DAYS}, slate ${league.slot + 1}`
+    : league.phase === "playoffs" ? tvLeagueLine() : "Nouns Bowl complete";
+  const championLine = league.phase === "champion"
+    ? `${league.champion} already own the Nouns Bowl. Reset starts a fresh two-week run.`
+    : `${left + right} Nouns are live now. The table runs two weeks, then the top four enter the Nouns Bowl.`;
+  return [
+    {
+      kicker: "League interstitial",
+      title: currentFixtureLabel(),
+      body: championLine,
+      meta: `${phase} · ${standings().slice(0, 3).map((row) => `${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
+    },
+    {
+      kicker: "Field guide",
+      title: state.battleType.name,
+      body: battleTypeOverview(),
+      meta: `${gangs[0].short} ${left}/30 standing · ${gangs[1].short} ${right}/30 standing · ${fieldStatLabel()}: ${fieldStatLine(statLeader("hp", (unit) => unit.down ? -1 : unit.morale * unit.hp))}`,
+    },
+  ];
+}
+
+function battleTypeOverview() {
+  if (state.battleType.id === "rift") return "Element lanes boost matched Nouns. Spark crits, Tide heals, Bloom guards, and Shade accelerates specials.";
+  if (state.battleType.id === "crown") return "The center crown picks a holder. Crowned Nouns gain guard, haste, special charge, and pressure pulses.";
+  if (state.battleType.id === "lava") return "Audit lanes burn campers but charge specials faster. Watch the middle lanes for risky power swings.";
+  if (state.battleType.id === "cloud") return "Cloud platforms lift Nouns into haste and guard while crosswinds bend the lane shape.";
+  if (state.battleType.id === "trash") return "Scrap piles can grant sudden tech or trip a Noun at the worst possible moment.";
+  if (state.battleType.id === "fog") return "Fog dulls long shots and rewards close ambushes. Bonkers get louder when the field gets tight.";
+  return "Open field rules reward center control, morale surges, healing saves, and role specials.";
+}
+
+function interstitialNouns(index) {
+  const featured = index === 0
+    ? [...aliveUnits(0).slice(0, 4), ...aliveUnits(1).slice(0, 4)]
+    : [...state.units]
+      .filter((unit) => !unit.down)
+      .sort((a, b) => (
+        (b.stats.damage + b.stats.kos * 30 + b.stats.heals * 0.4) - (a.stats.damage + a.stats.kos * 30 + a.stats.heals * 0.4)
+      ))
+      .slice(0, 8);
+  return featured.map((unit) => `
+    <figure style="--team:${gangs[unit.team].color}">
+      <img alt="" src="${unit.asset}" />
+      <figcaption>#${unit.number} ${gangs[unit.team].short}</figcaption>
+    </figure>
+  `).join("");
 }
 
 function cueReplay(text, unit = null) {
@@ -1861,6 +1943,9 @@ window.addEventListener("keydown", (event) => {
   } else if (key === "r") {
     el.resetLeagueButton.click();
     flashTvHint("League reset");
+  } else if (key === "i") {
+    state.interstitialClock = 560;
+    flashTvHint("Interstitial replay");
   }
 });
 
@@ -1870,7 +1955,7 @@ function flashTvHint(text) {
   el.tvCastHint.classList.add("flash");
   clearTimeout(el.tvCastHint.timer);
   el.tvCastHint.timer = setTimeout(() => {
-    el.tvCastHint.textContent = "Space pause · N next · Q quick sim · D sim day · R reset";
+    el.tvCastHint.textContent = "Space pause · N next · Q quick sim · D sim day · I brief · R reset";
     el.tvCastHint.classList.remove("flash");
   }, 1200);
 }

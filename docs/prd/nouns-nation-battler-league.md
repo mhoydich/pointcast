@@ -109,6 +109,14 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Give each new field a visible terrain skin, weather layer, field zones, stat-strip language, TV state, and periodic field events.
 - Let the new terrains alter match tactics: lava lanes burn and charge specials, cloud platforms grant lift, trash piles produce scrap tech and trips, and fog rewards close-range ambushes while dulling ranged shots.
 
+## V12 TV Interstitial Additions
+
+- Add TV-only match-start interstitials that explain what the league is doing without pausing the automated match.
+- Include a League Interstitial card with matchup, phase, live Noun count, standings context, and actual generated Noun sprites.
+- Include a Field Guide card with the current battle type rules, field stat context, live survivor counts, and actual generated Noun sprites.
+- Add `I` as a TV keyboard shortcut to replay the interstitial deck on demand.
+- Keep interstitials local/client-only and non-blocking so they work inside the existing cast iframe.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -132,5 +140,6 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Crown Rush matches display a visibly different field with a center crown, crowned Noun state, and crown pressure events.
 - TV mode shows Director Mode camera/replay cues and highlights the currently featured Noun.
 - Lava Audit, Cloud Court, Trash Planet, and Fog Bowl can be forced with `?type=lava`, `?type=cloud`, `?type=trash`, and `?type=fog`.
+- TV mode shows a Noun-heavy League Interstitial and Field Guide at match start, and `I` replays the overview deck.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.
