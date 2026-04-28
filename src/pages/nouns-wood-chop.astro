@@ -5,10 +5,10 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 
 const TREES = [
-  { id: 'cypress', label: 'Cypress Noun 313', noun: 313, health: 14, bonus: 3 },
-  { id: 'pine', label: 'Blue Pine Noun 523', noun: 523, health: 18, bonus: 4 },
-  { id: 'palm', label: 'Beach Palm Noun 742', noun: 742, health: 22, bonus: 5 },
-  { id: 'oak', label: 'Commons Oak Noun 1042', noun: 1042, health: 26, bonus: 6 },
+  { id: 'cypress', label: 'Cypress Noun 313', noun: 313, health: 14, bonus: 3, skill: 'Rhythm chop', effect: '+1 wood on every fourth streak' },
+  { id: 'pine', label: 'Blue Pine Noun 523', noun: 523, health: 18, bonus: 4, skill: 'Sharp axe', effect: 'higher crit chance' },
+  { id: 'palm', label: 'Beach Palm Noun 742', noun: 742, health: 22, bonus: 5, skill: 'Seed scout', effect: 'better seed drops' },
+  { id: 'oak', label: 'Commons Oak Noun 1042', noun: 1042, health: 26, bonus: 6, skill: 'Bundle keeper', effect: '+1 energy when banking' },
 ];
 
 const STAMPS = [
@@ -77,7 +77,7 @@ const jsonLd = {
         <p class="kicker">Nouns / pixel collect loop</p>
         <h1 id="wood-title">Wood Chop Commons</h1>
         <p>
-          Chop the tree, collect wood, bank bundles, plant seeds, and unlock local Nouns stamps. Spacebar works too.
+          Pick a Noun helper, chop the tree, catch rhythm bonuses, bank bundles, plant seeds, and unlock local Nouns stamps. Spacebar works too.
         </p>
       </div>
       <div class="hud" aria-label="Wood Chop status">
@@ -106,6 +106,13 @@ const jsonLd = {
           <span class="pixel-scene__cloud pixel-scene__cloud--two"></span>
           <span class="pixel-scene__ground"></span>
           <span class="tree tree--back"></span>
+          <span class="helper-orbit" aria-hidden="true">
+            {TREES.map((tree, index) => (
+              <span class={`helper helper--${index + 1}`} data-helper-sprite={index}>
+                <img src={`https://noun.pics/${tree.noun}.svg`} alt="" width="72" height="72" loading="lazy" onerror="this.style.visibility='hidden'" />
+              </span>
+            ))}
+          </span>
           <span class="tree tree--main">
             <span class="tree__crown tree__crown--top"></span>
             <span class="tree__crown tree__crown--left"></span>
@@ -117,12 +124,20 @@ const jsonLd = {
           <span class="log log--one"></span>
           <span class="log log--two"></span>
           <span class="impact" aria-hidden="true"></span>
+          <span class="burst-ring" aria-hidden="true"></span>
+          <span class="drop-layer" data-drop-layer aria-hidden="true"></span>
         </button>
 
         <div class="health" aria-label="Tree health">
           <span>Tree health</span>
           <div><i data-health-bar></i></div>
           <strong data-health-text>14 / 14</strong>
+        </div>
+
+        <div class="burst-charge" aria-label="Noun Burst charge">
+          <span>Noun Burst</span>
+          <div><i data-burst-bar></i></div>
+          <strong data-burst-text>0 / 8</strong>
         </div>
 
         <div class="controls" aria-label="Wood Chop controls">
@@ -135,18 +150,24 @@ const jsonLd = {
 
       <aside class="side-panel" aria-label="Nouns Wood Chop rewards and receipts">
         <div class="noun-row" aria-label="Noun tree crew">
-          {TREES.map((tree) => (
-            <a href={`https://noun.pics/${tree.noun}.svg`} target="_blank" rel="noopener" class="noun-card">
+          {TREES.map((tree, index) => (
+            <button type="button" class="noun-card" data-helper={index} aria-label={`Choose ${tree.label} helper`}>
               <img src={`https://noun.pics/${tree.noun}.svg`} alt={`Noun ${tree.noun}`} width="54" height="54" loading="lazy" onerror="this.style.visibility='hidden'" />
               <span>N{tree.noun}</span>
-            </a>
+            </button>
           ))}
+        </div>
+
+        <div class="helper-readout" aria-live="polite">
+          <span class="mono">HELPER</span>
+          <strong data-helper-name>Cypress Noun 313</strong>
+          <p><span data-helper-skill>Rhythm chop</span> · <span data-helper-effect>+1 wood on every fourth streak</span></p>
         </div>
 
         <div class="bundle-rule">
           <span class="mono">RULE</span>
           <strong>12 wood = 1 bundle</strong>
-          <p>Bank a bundle to earn a receipt. First bundle stamps the PointCast passport locally.</p>
+          <p>Bank a bundle to earn a receipt. Streaks charge Noun Burst for extra wood, seed drops, and a little screen joy.</p>
         </div>
 
         <div class="stamp-stack" aria-label="Stamp milestones">
@@ -185,6 +206,8 @@ const jsonLd = {
       var PASSPORT_KEY = 'pc:passport:stamps';
       var MAX_ENERGY = 12;
       var BUNDLE_SIZE = 12;
+      var BURST_TARGET = 8;
+      var pulseTimers = {};
 
       var els = {
         wood: root.querySelector('[data-wood]'),
@@ -196,8 +219,14 @@ const jsonLd = {
         treeName: root.querySelector('[data-tree-name]'),
         healthBar: root.querySelector('[data-health-bar]'),
         healthText: root.querySelector('[data-health-text]'),
+        burstBar: root.querySelector('[data-burst-bar]'),
+        burstText: root.querySelector('[data-burst-text]'),
         receipts: root.querySelector('[data-receipts]'),
         scene: root.querySelector('.pixel-scene'),
+        dropLayer: root.querySelector('[data-drop-layer]'),
+        helperName: root.querySelector('[data-helper-name]'),
+        helperSkill: root.querySelector('[data-helper-skill]'),
+        helperEffect: root.querySelector('[data-helper-effect]'),
       };
 
       function readJson(key, fallback) {
@@ -226,6 +255,8 @@ const jsonLd = {
           streak: 0,
           felled: 0,
           lastChop: 0,
+          helperIndex: 0,
+          burst: 0,
           receipts: [],
           unlocked: [],
         };
@@ -235,10 +266,16 @@ const jsonLd = {
       state.receipts = Array.isArray(state.receipts) ? state.receipts : [];
       state.unlocked = Array.isArray(state.unlocked) ? state.unlocked : [];
       state.treeIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.treeIndex) || 0));
+      state.helperIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.helperIndex) || 0));
+      state.burst = Math.max(0, Math.min(BURST_TARGET, Number(state.burst) || 0));
       if (!state.health || state.health < 1) state.health = currentTree().health;
 
       function currentTree() {
         return TREES[state.treeIndex] || TREES[0] || { id: 'tree', label: 'Pixel Tree', health: 14, bonus: 3 };
+      }
+
+      function currentHelper() {
+        return TREES[state.helperIndex] || TREES[0] || currentTree();
       }
 
       function setStatus(message) {
@@ -284,6 +321,52 @@ const jsonLd = {
         state.health = currentTree().health;
       }
 
+      function pulseScene(className, duration) {
+        if (!els.scene) return;
+        if (pulseTimers[className]) window.clearTimeout(pulseTimers[className]);
+        els.scene.classList.remove(className);
+        void els.scene.offsetWidth;
+        els.scene.classList.add(className);
+        pulseTimers[className] = window.setTimeout(function () {
+          els.scene.classList.remove(className);
+          pulseTimers[className] = null;
+        }, duration || 520);
+      }
+
+      function dropText(text, tone) {
+        if (!els.dropLayer) return;
+        var chip = document.createElement('span');
+        chip.className = 'drop-chip drop-chip--' + (tone || 'wood');
+        chip.textContent = text;
+        chip.style.left = (44 + Math.random() * 18) + '%';
+        chip.style.top = (39 + Math.random() * 12) + '%';
+        els.dropLayer.append(chip);
+        window.setTimeout(function () { chip.remove(); }, 820);
+      }
+
+      function helperBonus(baseGain) {
+        var helper = currentHelper();
+        var bonus = 0;
+        var seed = false;
+        var crit = false;
+
+        if (helper.id === 'cypress' && state.streak > 0 && state.streak % 4 === 0) bonus += 1;
+        if (helper.id === 'pine' && Math.random() < 0.28) {
+          bonus += 2;
+          crit = true;
+        }
+        if (helper.id === 'palm' && Math.random() < 0.2) seed = true;
+        if (state.burst >= BURST_TARGET) {
+          bonus += 4;
+          seed = true;
+          state.burst = 0;
+          pulseScene('is-bursting', 540);
+          dropText('NOUN BURST +' + (baseGain + bonus), 'burst');
+        }
+
+        return { bonus: bonus, seed: seed, crit: crit };
+      }
+
       function chop() {
         if (state.energy <= 0) {
           setStatus('Energy is empty. Rest or bank a bundle.');
@@ -295,24 +378,33 @@ const jsonLd = {
         state.streak = now - state.lastChop < 1400 ? state.streak + 1 : 1;
         state.lastChop = now;
         state.energy -= 1;
+        state.burst = Math.min(BURST_TARGET, state.burst + 1);
 
         var rhythmBonus = Math.min(3, Math.floor(state.streak / 5));
         var gain = 1 + Math.floor(Math.random() * 2) + rhythmBonus;
+        var helper = helperBonus(gain);
+        gain += helper.bonus;
         state.wood += gain;
         state.health -= 1;
 
-        if (Math.random() < 0.12) {
+        if (Math.random() < 0.12 || helper.seed) {
           state.seeds += 1;
           setStatus('Good chop: +' + gain + ' wood, +1 seed.');
+          dropText('+1 seed', 'seed');
         } else {
           setStatus('Good chop: +' + gain + ' wood.');
         }
 
-        if (els.scene) {
-          els.scene.classList.remove('is-chopping');
-          void els.scene.offsetWidth;
-          els.scene.classList.add('is-chopping');
+        if (helper.crit) {
+          setStatus('Sharp axe crit: +' + gain + ' wood.');
+          dropText('CRIT +' + gain, 'crit');
+        } else if (state.streak > 1 && state.streak % 4 === 0) {
+          dropText('STREAK +' + gain, 'wood');
+        } else {
+          dropText('+' + gain + ' wood', 'wood');
         }
+
+        pulseScene('is-chopping', 260);
 
         if (state.health <= 0) {
           fellTree();
@@ -330,6 +422,8 @@ const jsonLd = {
         state.seeds += 1;
         state.energy = Math.min(MAX_ENERGY, state.energy + 3);
         receipt('Felled ' + tree.label + ': +' + drop + ' wood and +1 seed.');
+        pulseScene('is-felling', 640);
+        dropText('TREE DOWN +' + drop, 'burst');
         nextTree();
         setStatus('Tree down. New tree planted in the commons.');
       }
@@ -343,8 +437,10 @@ const jsonLd = {
 
         state.wood -= BUNDLE_SIZE;
         state.bundles += 1;
-        state.energy = Math.min(MAX_ENERGY, state.energy + 2);
+        state.energy = Math.min(MAX_ENERGY, state.energy + 2 + (currentHelper().id === 'oak' ? 1 : 0));
         receipt('Banked bundle ' + state.bundles + '.');
+        pulseScene('is-banking', 540);
+        dropText('BUNDLE #' + state.bundles, 'bundle');
         if (state.bundles === 1) stampPassport();
         updateUnlocked();
         setStatus('Bundle banked. Receipt saved locally.');
@@ -363,6 +459,8 @@ const jsonLd = {
         nextTree();
         state.energy = Math.min(MAX_ENERGY, state.energy + 4);
         receipt('Planted a seed for ' + currentTree().label + '.');
+        pulseScene('is-planting', 480);
+        dropText('PLANTED', 'seed');
         setStatus('Seed planted. Energy recovered.');
         save();
         render();
@@ -383,11 +481,23 @@ const jsonLd = {
         render();
       }
 
+      function chooseHelper(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= TREES.length) return;
+        state.helperIndex = index;
+        setStatus(TREES[index].label + ' is helping.');
+        save();
+        render();
+      }
+
       function render() {
         var tree = currentTree();
+        var helper = currentHelper();
         var healthPct = Math.max(0, Math.min(100, (state.health / tree.health) * 100));
+        var burstPct = Math.max(0, Math.min(100, (state.burst / BURST_TARGET) * 100));
         root.dataset.tree = tree.id;
+        root.dataset.activeHelper = helper.id;
         root.style.setProperty('--health', healthPct + '%');
+        root.style.setProperty('--burst', burstPct + '%');
 
         if (els.wood) els.wood.textContent = String(state.wood);
         if (els.bundles) els.bundles.textContent = String(state.bundles);
@@ -395,8 +505,25 @@ const jsonLd = {
         if (els.energy) els.energy.textContent = String(state.energy) + '/' + MAX_ENERGY;
         if (els.streak) els.streak.textContent = String(state.streak);
         if (els.treeName) els.treeName.textContent = tree.label;
+        if (els.helperName) els.helperName.textContent = helper.label;
+        if (els.helperSkill) els.helperSkill.textContent = helper.skill || 'Helper';
+        if (els.helperEffect) els.helperEffect.textContent = helper.effect || 'steady bonus';
         if (els.healthBar) els.healthBar.style.width = healthPct + '%';
         if (els.healthText) els.healthText.textContent = Math.max(0, state.health) + ' / ' + tree.health;
+        if (els.burstBar) els.burstBar.style.width = burstPct + '%';
+        if (els.burstText) els.burstText.textContent = state.burst + ' / ' + BURST_TARGET;
+
+        root.querySelectorAll('[data-helper]').forEach(function (button) {
+          var index = Number(button.getAttribute('data-helper'));
+          var active = index === state.helperIndex;
+          button.classList.toggle('is-active', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        root.querySelectorAll('[data-helper-sprite]').forEach(function (sprite) {
+          var index = Number(sprite.getAttribute('data-helper-sprite'));
+          sprite.classList.toggle('is-active', index === state.helperIndex);
+        });
 
         root.querySelectorAll('[data-stamp-id]').forEach(function (el) {
           var id = el.getAttribute('data-stamp-id');
@@ -441,6 +568,12 @@ const jsonLd = {
         if (action === 'plant') plantSeed();
         if (action === 'rest') rest();
         if (action === 'reset') reset();
+      });
+
+      root.addEventListener('click', function (event) {
+        var helperButton = event.target.closest('.noun-card[data-helper]');
+        if (!helperButton) return;
+        chooseHelper(Number(helperButton.getAttribute('data-helper')));
       });
 
       document.addEventListener('keydown', function (event) {
@@ -647,9 +780,14 @@ const jsonLd = {
   .tree__trunk,
   .tree__noggles,
   .tree__noggles i,
+  .helper-orbit,
+  .helper,
   .axe,
   .log,
-  .impact {
+  .impact,
+  .burst-ring,
+  .drop-layer,
+  .drop-chip {
     position: absolute;
     display: block;
   }
@@ -787,6 +925,62 @@ const jsonLd = {
   .tree__noggles i:first-child { left: 10px; }
   .tree__noggles i:last-child { right: 10px; }
 
+  .helper-orbit {
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .helper {
+    width: 72px;
+    height: 72px;
+    opacity: 0.62;
+    filter: drop-shadow(0 8px 0 rgba(18, 17, 14, 0.18));
+    transform: translateY(0) scale(0.92);
+    transform-origin: bottom center;
+    transition: opacity 120ms steps(2, end), transform 120ms steps(2, end), filter 120ms steps(2, end);
+    animation: helper-idle 1300ms steps(2, end) infinite;
+  }
+
+  .helper img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  .helper--1 {
+    left: 11%;
+    bottom: 25%;
+  }
+
+  .helper--2 {
+    left: 27%;
+    bottom: 16%;
+    animation-delay: -180ms;
+  }
+
+  .helper--3 {
+    right: 29%;
+    bottom: 24%;
+    animation-delay: -320ms;
+  }
+
+  .helper--4 {
+    right: 8%;
+    bottom: 17%;
+    animation-delay: -460ms;
+  }
+
+  .helper.is-active {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.12);
+    filter:
+      drop-shadow(0 9px 0 rgba(18, 17, 14, 0.2))
+      drop-shadow(0 0 10px rgba(255, 213, 92, 0.5));
+    animation: helper-active-idle 1300ms steps(2, end) infinite;
+  }
+
   .axe {
     right: 24%;
     bottom: 19%;
@@ -833,8 +1027,62 @@ const jsonLd = {
       -18px 18px 0 #ffd55c;
   }
 
+  .burst-ring {
+    left: 50%;
+    bottom: 28%;
+    z-index: 4;
+    width: 220px;
+    height: 220px;
+    border: 8px solid rgba(255, 213, 92, 0.86);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) scale(0.4);
+    box-shadow: inset 0 0 0 8px rgba(15, 110, 86, 0.28);
+  }
+
+  .drop-layer {
+    inset: 0;
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  .drop-chip {
+    z-index: 9;
+    padding: 6px 8px;
+    border: 2px solid #12110e;
+    background: #fff9e4;
+    color: #12110e;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 4px 4px 0 rgba(18, 17, 14, 0.18);
+    animation: drop-float 820ms steps(7, end) forwards;
+  }
+
+  .drop-chip--seed {
+    background: #e7f4ef;
+  }
+
+  .drop-chip--crit {
+    background: #ffe3dd;
+  }
+
+  .drop-chip--burst {
+    background: #12110e;
+    color: #fff;
+  }
+
+  .drop-chip--bundle {
+    background: #ffd55c;
+  }
+
   .pixel-scene.is-chopping .tree--main {
     transform: translateX(-54%) translateX(-8px);
+  }
+
+  .pixel-scene.is-chopping .helper.is-active {
+    animation: helper-chop 240ms steps(3, end);
   }
 
   .pixel-scene.is-chopping .axe {
@@ -845,13 +1093,88 @@ const jsonLd = {
     animation: impact-pop 220ms steps(2, end);
   }
 
+  .pixel-scene.is-bursting .helper {
+    animation: helper-burst 520ms steps(5, end);
+  }
+
+  .pixel-scene.is-bursting .burst-ring {
+    animation: burst-ring 520ms steps(5, end);
+  }
+
+  .pixel-scene.is-felling .tree--main {
+    animation: tree-fall 620ms steps(5, end);
+    transform-origin: bottom center;
+  }
+
+  .pixel-scene.is-planting .tree--main {
+    animation: tree-grow 460ms steps(4, end);
+  }
+
+  .pixel-scene.is-banking .log {
+    animation: log-bank 520ms steps(4, end);
+  }
+
+  @keyframes helper-idle {
+    0%, 100% { transform: translateY(0) scale(0.92); }
+    50% { transform: translateY(-4px) scale(0.92); }
+  }
+
+  @keyframes helper-active-idle {
+    0%, 100% { transform: translateY(-10px) scale(1.12); }
+    50% { transform: translateY(-16px) scale(1.12); }
+  }
+
+  @keyframes helper-chop {
+    0% { transform: translateY(-10px) scale(1.12) rotate(0deg); }
+    45% { transform: translateY(-20px) translateX(10px) scale(1.16) rotate(5deg); }
+    100% { transform: translateY(-8px) translateX(-4px) scale(1.08) rotate(-4deg); }
+  }
+
+  @keyframes helper-burst {
+    0% { transform: translateY(-6px) scale(0.96); }
+    35% { transform: translateY(-34px) scale(1.18); }
+    70% { transform: translateY(-12px) scale(1.08); }
+    100% { transform: translateY(0) scale(0.96); }
+  }
+
+  @keyframes burst-ring {
+    0% { opacity: 0; transform: translateX(-50%) scale(0.35); }
+    30% { opacity: 1; transform: translateX(-50%) scale(0.72); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1.25); }
+  }
+
+  @keyframes tree-fall {
+    0% { transform: translateX(-54%) rotate(0deg); }
+    70% { transform: translateX(-54%) rotate(-9deg); }
+    100% { transform: translateX(-54%) rotate(0deg); }
+  }
+
+  @keyframes tree-grow {
+    0% { transform: translateX(-54%) scaleY(0.72); opacity: 0.74; }
+    55% { transform: translateX(-54%) scaleY(1.08); opacity: 1; }
+    100% { transform: translateX(-54%) scaleY(1); opacity: 1; }
+  }
+
+  @keyframes log-bank {
+    0% { transform: translateY(0); opacity: 1; }
+    55% { transform: translateY(-28px); opacity: 1; }
+    100% { transform: translateY(-42px); opacity: 0; }
+  }
+
+  @keyframes drop-float {
+    0% { opacity: 0; transform: translateY(10px) scale(0.84); }
+    18% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-58px) scale(1); }
+  }
+
   @keyframes impact-pop {
     0% { opacity: 0; transform: scale(0.8); }
     30% { opacity: 1; transform: scale(1); }
     100% { opacity: 0; transform: scale(1.4); }
   }
 
-  .health {
+  .health,
+  .burst-charge {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 10px;
@@ -863,18 +1186,32 @@ const jsonLd = {
     text-transform: uppercase;
   }
 
-  .health div {
+  .burst-charge {
+    margin-top: 7px;
+  }
+
+  .health div,
+  .burst-charge div {
     height: 16px;
     border: 1px solid #12110e;
     background: #fff;
   }
 
-  .health i {
+  .health i,
+  .burst-charge i {
     display: block;
     height: 100%;
+    transition: width 160ms steps(4, end);
+  }
+
+  .health i {
     width: var(--health, 100%);
     background: linear-gradient(90deg, #0f6e56, #ffd55c);
-    transition: width 160ms steps(4, end);
+  }
+
+  .burst-charge i {
+    width: var(--burst, 0%);
+    background: linear-gradient(90deg, #ff6b4a, #ffd55c, #e7f4ef);
   }
 
   .controls {
@@ -936,13 +1273,21 @@ const jsonLd = {
     border: 1px solid rgba(18, 17, 14, 0.7);
     background: #fff;
     color: #12110e;
+    font: inherit;
     font-family: var(--pc-font-mono);
     font-size: 10px;
+    text-align: center;
+    cursor: pointer;
   }
 
   .noun-card:hover {
     background: #eef8ff;
     text-decoration: none;
+  }
+
+  .noun-card.is-active {
+    background: #fff9e4;
+    box-shadow: inset 0 0 0 4px rgba(255, 213, 92, 0.34);
   }
 
   .noun-card img {
@@ -951,6 +1296,7 @@ const jsonLd = {
     image-rendering: pixelated;
   }
 
+  .helper-readout,
   .bundle-rule,
   .receipts,
   .stamp {
@@ -958,16 +1304,19 @@ const jsonLd = {
     background: rgba(255, 255, 255, 0.78);
   }
 
+  .helper-readout,
   .bundle-rule {
     padding: 12px;
   }
 
+  .helper-readout .mono,
   .bundle-rule span {
     display: block;
     color: #0f6e56;
     font-size: 10px;
   }
 
+  .helper-readout strong,
   .bundle-rule strong {
     display: block;
     margin-top: 5px;
@@ -975,6 +1324,7 @@ const jsonLd = {
     font-size: 1.1rem;
   }
 
+  .helper-readout p,
   .bundle-rule p {
     margin: 7px 0 0;
     color: #38373a;
@@ -1084,6 +1434,36 @@ const jsonLd = {
       min-height: 312px;
     }
 
+    .helper {
+      width: 54px;
+      height: 54px;
+    }
+
+    .helper--1 {
+      left: 6%;
+      bottom: 30%;
+    }
+
+    .helper--2 {
+      left: 20%;
+      bottom: 14%;
+    }
+
+    .helper--3 {
+      right: 22%;
+      bottom: 27%;
+    }
+
+    .helper--4 {
+      right: 6%;
+      bottom: 14%;
+    }
+
+    .burst-ring {
+      width: 160px;
+      height: 160px;
+    }
+
     .tree--main {
       left: 48%;
       transform: translateX(-54%) scale(0.82);
@@ -1092,6 +1472,14 @@ const jsonLd = {
 
     .pixel-scene.is-chopping .tree--main {
       transform: translateX(-54%) translateX(-7px) scale(0.82);
+    }
+
+    .pixel-scene.is-felling .tree--main {
+      animation: tree-fall-mobile 620ms steps(5, end);
+    }
+
+    .pixel-scene.is-planting .tree--main {
+      animation: tree-grow-mobile 460ms steps(4, end);
     }
 
     .axe {
@@ -1112,6 +1500,18 @@ const jsonLd = {
     .noun-row {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+  }
+
+  @keyframes tree-fall-mobile {
+    0% { transform: translateX(-54%) scale(0.82) rotate(0deg); }
+    70% { transform: translateX(-54%) scale(0.82) rotate(-9deg); }
+    100% { transform: translateX(-54%) scale(0.82) rotate(0deg); }
+  }
+
+  @keyframes tree-grow-mobile {
+    0% { transform: translateX(-54%) scale(0.82) scaleY(0.72); opacity: 0.74; }
+    55% { transform: translateX(-54%) scale(0.82) scaleY(1.08); opacity: 1; }
+    100% { transform: translateX(-54%) scale(0.82) scaleY(1); opacity: 1; }
   }
 
   @media (max-width: 420px) {
