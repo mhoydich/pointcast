@@ -8,9 +8,9 @@
   const RESOURCE_LEVELS_KEY = "sitting-with-gandalf-resource-levels";
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
-  const RELEASE_VERSION = "v6";
-  const SETTINGS_RELEASE = "v6-first-principles";
-  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6"]);
+  const RELEASE_VERSION = "v7";
+  const SETTINGS_RELEASE = "v7-wizard-nouns";
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -400,6 +400,87 @@
       action: "loosen",
       promise: "the breath has somewhere pleasant to land",
       words: ["loose", "rain", "room"]
+    }
+  ];
+
+  const wizardFramework = [
+    {
+      key: "hat",
+      label: "Hat",
+      role: "signal",
+      items: [
+        { id: "moss-brim", name: "Moss Brim", mark: "MB", tone: "#9fbc68", bg: "#263827", clue: "low green patience" },
+        { id: "moon-cone", name: "Moon Cone", mark: "MC", tone: "#d7d9ff", bg: "#252a3c", clue: "cool reflected thought" },
+        { id: "ember-cap", name: "Ember Cap", mark: "EC", tone: "#ef9e54", bg: "#3a241a", clue: "warm permission" },
+        { id: "rain-hood", name: "Rain Hood", mark: "RH", tone: "#a7d3de", bg: "#24333c", clue: "sheltered listening" },
+        { id: "road-crown", name: "Road Crown", mark: "RC", tone: "#d0bd7a", bg: "#3d3424", clue: "humble direction" },
+        { id: "star-fold", name: "Star Fold", mark: "SF", tone: "#f4e6a6", bg: "#24243b", clue: "night witness" }
+      ]
+    },
+    {
+      key: "beard",
+      label: "Beard",
+      role: "temper",
+      items: [
+        { id: "silver-fork", name: "Silver Fork", mark: "SI", tone: "#d7d3bd", bg: "#3a3a32", clue: "two ways made gentle" },
+        { id: "cloud-braid", name: "Cloud Braid", mark: "CB", tone: "#eef3ff", bg: "#273346", clue: "shape-change without panic" },
+        { id: "ember-split", name: "Ember Split", mark: "ES", tone: "#ffc16f", bg: "#3a241f", clue: "warmth in the pause" },
+        { id: "rainfall-sweep", name: "Rainfall Sweep", mark: "RS", tone: "#b5edf0", bg: "#1d3840", clue: "the thought rinses itself" },
+        { id: "root-curl", name: "Root Curl", mark: "RO", tone: "#cfc08a", bg: "#2f2a22", clue: "depth before speed" },
+        { id: "tide-whisker", name: "Tide Whisker", mark: "TW", tone: "#f4ead6", bg: "#2d3443", clue: "old hush from the shore" }
+      ]
+    },
+    {
+      key: "staff",
+      label: "Staff",
+      role: "tool",
+      items: [
+        { id: "ember-staff", name: "Ember Staff", mark: "ES", tone: "#e89c43", bg: "#33251f", clue: "one brave little light" },
+        { id: "wave-staff", name: "Wave Staff", mark: "WS", tone: "#8fc3bf", bg: "#20343d", clue: "yield and continue" },
+        { id: "moon-reed", name: "Moon Reed", mark: "MR", tone: "#9bbde4", bg: "#222b42", clue: "cool air through the hand" },
+        { id: "road-crook", name: "Road Crook", mark: "RK", tone: "#dfc586", bg: "#3c3425", clue: "next inch only" },
+        { id: "signal-wand", name: "Signal Wand", mark: "SW", tone: "#b9d37d", bg: "#25313a", clue: "clear enough to begin" },
+        { id: "garden-root", name: "Garden Root", mark: "GR", tone: "#bddd7d", bg: "#273822", clue: "kindness with roots" }
+      ]
+    },
+    {
+      key: "robe",
+      label: "Robe",
+      role: "mood",
+      items: [
+        { id: "hearth-brown", name: "Hearth Brown", mark: "HB", tone: "#d0bd7a", bg: "#31291f", clue: "ordinary comfort" },
+        { id: "forest-green", name: "Forest Green", mark: "FG", tone: "#82a35e", bg: "#223f31", clue: "soft cover" },
+        { id: "rain-blue", name: "Rain Blue", mark: "RB", tone: "#9bd7e0", bg: "#20353b", clue: "weather outside" },
+        { id: "wine-velvet", name: "Wine Velvet", mark: "WV", tone: "#d58a91", bg: "#3a2525", clue: "evening pleasure" },
+        { id: "pixel-charcoal", name: "Pixel Charcoal", mark: "PC", tone: "#f0c96a", bg: "#202520", clue: "tiny bright squares" },
+        { id: "meadow-gold", name: "Meadow Gold", mark: "MG", tone: "#f1db8b", bg: "#333923", clue: "wide room" }
+      ]
+    },
+    {
+      key: "relic",
+      label: "Relic",
+      role: "hold",
+      items: [
+        { id: "ember-coin", name: "Ember Coin", mark: "EC", tone: "#f0b45b", bg: "#3a241a", clue: "carry warmth lightly" },
+        { id: "moss-pin", name: "Moss Pin", mark: "MP", tone: "#9fbc68", bg: "#263827", clue: "pin the hurry down" },
+        { id: "rain-bead", name: "Rain Bead", mark: "RB", tone: "#a7d3de", bg: "#24333c", clue: "count three drops" },
+        { id: "wine-glass", name: "Red Wine Glass", mark: "WG", tone: "#d58a91", bg: "#3a2525", clue: "pleasure without rush" },
+        { id: "coast-shell", name: "Coast Shell", mark: "CS", tone: "#f4ead6", bg: "#2d3443", clue: "vastness in the pocket" },
+        { id: "oil-lantern", name: "Oil Lantern", mark: "OL", tone: "#ffd27a", bg: "#392b1e", clue: "a thought made visible" }
+      ]
+    },
+    {
+      key: "realm",
+      label: "Realm",
+      role: "place",
+      items: [
+        { id: "moss-glade", name: "Moss Glade", mark: "MG", tone: "#9fbc68", bg: "#1f3a2d", clue: "green attention" },
+        { id: "rain-garden", name: "Rain Garden", mark: "RG", tone: "#a7d3de", bg: "#20343d", clue: "porch listening" },
+        { id: "road-meadow", name: "Road Meadow", mark: "RM", tone: "#dfc586", bg: "#3d3424", clue: "the next honest step" },
+        { id: "moon-lake", name: "Moon Lake", mark: "ML", tone: "#d7d9ff", bg: "#222b42", clue: "reflection without replay" },
+        { id: "socal-coast", name: "SoCal Coast", mark: "SC", tone: "#8fc3bf", bg: "#24333c", clue: "marine layer calm" },
+        { id: "paris-rain", name: "Paris Rain", mark: "PR", tone: "#f1d7a1", bg: "#302a31", clue: "soft city evening" }
+      ]
     }
   ];
 
@@ -1388,7 +1469,7 @@
   const initialVersion = savedRelease && versions.has(savedSettings.version) ? savedSettings.version : RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
-    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6"
+    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7"
       ? "pixel"
       : "storybook";
   const initialNounsGandalf = savedRelease && nounsGandalfs.some((card) => card.id === savedSettings.nounsActive)
@@ -1462,6 +1543,21 @@
     ritualText: document.getElementById("ritualText"),
     wisdomBar: document.getElementById("wisdomBar"),
     wisdomRank: document.getElementById("wisdomRank"),
+    v7NounAvatar: document.getElementById("v7NounAvatar"),
+    v7Progress: document.getElementById("v7Progress"),
+    v7RitualLine: document.getElementById("v7RitualLine"),
+    v7WizardTitle: document.getElementById("v7WizardTitle"),
+    v7WizardText: document.getElementById("v7WizardText"),
+    v7TraitPills: document.getElementById("v7TraitPills"),
+    v7FrameworkTitle: document.getElementById("v7FrameworkTitle"),
+    v7ElementGrid: document.getElementById("v7ElementGrid"),
+    v7CollectionGrid: document.getElementById("v7CollectionGrid"),
+    v7ForgeHint: document.getElementById("v7ForgeHint"),
+    v7RelicName: document.getElementById("v7RelicName"),
+    v7ResourceName: document.getElementById("v7ResourceName"),
+    v7SpellLine: document.getElementById("v7SpellLine"),
+    v7CueLine: document.getElementById("v7CueLine"),
+    v7ImageTitle: document.getElementById("v7ImageTitle"),
     v6NounAvatar: document.getElementById("v6NounAvatar"),
     v6Progress: document.getElementById("v6Progress"),
     v6RitualLine: document.getElementById("v6RitualLine"),
@@ -1514,6 +1610,14 @@
     v6KeepButton: document.getElementById("v6KeepButton"),
     v6ImageButton: document.getElementById("v6ImageButton"),
     v6MythButton: document.getElementById("v6MythButton"),
+    v7ForgeButton: document.getElementById("v7ForgeButton"),
+    v7PairButton: document.getElementById("v7PairButton"),
+    v7SharpenButton: document.getElementById("v7SharpenButton"),
+    v7SpellButton: document.getElementById("v7SpellButton"),
+    v7BeginButton: document.getElementById("v7BeginButton"),
+    v7KeepButton: document.getElementById("v7KeepButton"),
+    v7ImageButton: document.getElementById("v7ImageButton"),
+    v7MythButton: document.getElementById("v7MythButton"),
     pullGandalfButton: document.getElementById("pullGandalfButton"),
     collectGandalfButton: document.getElementById("collectGandalfButton"),
     meditateGandalfButton: document.getElementById("meditateGandalfButton"),
@@ -1744,12 +1848,31 @@
     return keepsakeForCardId(card.id, ritual);
   }
 
+  function wizardElementsForCard(card = activeNounsGandalf(), ritual = state.ritual) {
+    return wizardFramework.map((slot, slotIndex) => {
+      const seed = keepsakeSeed(`${card.id}-${card.noun}-${card.rarity}-${card.mode}-${ritual}-${slot.key}-${slotIndex}`);
+      const item = slot.items[seed % slot.items.length] || slot.items[0];
+      return { key: slot.key, label: slot.label, role: slot.role, item };
+    });
+  }
+
+  function wizardElement(elements, key) {
+    return elements.find((element) => element.key === key)?.item || wizardFramework.find((slot) => slot.key === key)?.items[0];
+  }
+
+  function wizardElementPhrase(elements) {
+    const hat = wizardElement(elements, "hat");
+    const staff = wizardElement(elements, "staff");
+    const realm = wizardElement(elements, "realm");
+    return `${hat.name}, ${staff.name}, ${realm.name}`;
+  }
+
   function isNatureVersion(version = state.version) {
-    return version === "v3" || version === "v4" || version === "v5" || version === "v6";
+    return version === "v3" || version === "v4" || version === "v5" || version === "v6" || version === "v7";
   }
 
   function isCollectibleVersion(version = state.version) {
-    return version === "v5" || version === "v6";
+    return version === "v5" || version === "v6" || version === "v7";
   }
 
   function applyNounStyle(element, card) {
@@ -1760,19 +1883,44 @@
     element.style.setProperty("--spark", card.spark);
   }
 
+  function applyWizardNounStyle(element, card, elements = wizardElementsForCard(card)) {
+    const hat = wizardElement(elements, "hat");
+    const beard = wizardElement(elements, "beard");
+    const staff = wizardElement(elements, "staff");
+    const robe = wizardElement(elements, "robe");
+    const relic = wizardElement(elements, "relic");
+    const realm = wizardElement(elements, "realm");
+
+    element.style.setProperty("--wizard-hat", hat.tone);
+    element.style.setProperty("--wizard-beard", beard.tone);
+    element.style.setProperty("--wizard-staff", staff.tone);
+    element.style.setProperty("--wizard-robe", robe.bg);
+    element.style.setProperty("--wizard-trim", robe.tone);
+    element.style.setProperty("--wizard-orb", relic.tone);
+    element.style.setProperty("--wizard-aura", realm.tone);
+    element.dataset.realm = realm.id;
+    element.dataset.relic = relic.id;
+  }
+
   function renderNounAvatar(target, card, isSmall) {
     if (!target) {
       return;
     }
 
+    const elements = wizardElementsForCard(card);
+    const relic = wizardElement(elements, "relic");
     target.replaceChildren();
     target.className = isSmall ? "noun-avatar noun-avatar-small" : "noun-avatar";
     target.title = card.name;
     applyNounStyle(target, card);
+    applyWizardNounStyle(target, card, elements);
 
-    ["noun-robe", "noun-staff", "noun-hat", "noun-face", "noun-beard", "noun-glasses"].forEach((className) => {
+    ["noun-aura", "noun-robe", "noun-staff", "noun-hat", "noun-face", "noun-beard", "noun-glasses", "noun-orb", "noun-rune"].forEach((className) => {
       const part = document.createElement("span");
       part.className = className;
+      if (className === "noun-rune") {
+        part.textContent = relic.mark;
+      }
       target.append(part);
     });
 
@@ -1780,6 +1928,113 @@
     mark.className = "noun-mark";
     mark.textContent = card.noun.slice(0, 2).toUpperCase();
     target.append(mark);
+  }
+
+  function renderWizardTraitPills(target, elements) {
+    if (!target) {
+      return;
+    }
+
+    target.replaceChildren();
+    elements.forEach((element) => {
+      const pill = document.createElement("span");
+      pill.style.setProperty("--element-tone", element.item.tone);
+      pill.textContent = `${element.label}: ${element.item.name}`;
+      target.append(pill);
+    });
+  }
+
+  function renderWizardElementGrid(target, elements) {
+    if (!target) {
+      return;
+    }
+
+    target.replaceChildren();
+    elements.forEach((element) => {
+      const card = document.createElement("div");
+      const mark = document.createElement("span");
+      const copy = document.createElement("div");
+      const label = document.createElement("small");
+      const name = document.createElement("strong");
+      const clue = document.createElement("p");
+
+      card.className = "wizard-element-card";
+      card.style.setProperty("--element-tone", element.item.tone);
+      card.style.setProperty("--element-bg", element.item.bg);
+      card.dataset.slot = element.key;
+      mark.textContent = element.item.mark;
+      label.textContent = `${element.label} · ${element.role}`;
+      name.textContent = element.item.name;
+      clue.textContent = element.item.clue;
+      copy.append(label, name, clue);
+      card.append(mark, copy);
+      target.append(card);
+    });
+  }
+
+  function renderWizardCollectionGrid(target) {
+    if (!target) {
+      return;
+    }
+
+    target.replaceChildren();
+    nounsGandalfs.forEach((card) => {
+      const button = document.createElement("button");
+      const avatar = document.createElement("span");
+      const name = document.createElement("strong");
+      const meta = document.createElement("small");
+      const elements = wizardElementsForCard(card, state.ritual);
+      const collected = state.nounsCollection.has(card.id);
+
+      button.type = "button";
+      button.className = "wizard-collection-card";
+      button.classList.toggle("is-active", card.id === state.nounsActive);
+      button.classList.toggle("is-collected", collected);
+      button.dataset.nounsId = card.id;
+      button.setAttribute("aria-pressed", String(card.id === state.nounsActive));
+      button.setAttribute("aria-label", `${card.name}, ${collected ? "kept" : "not kept"}, ${wizardElementPhrase(elements)}`);
+      applyNounStyle(button, card);
+      applyWizardNounStyle(button, card, elements);
+
+      renderNounAvatar(avatar, card, true);
+      name.textContent = card.noun;
+      meta.textContent = collected ? "kept" : wizardElement(elements, "realm").name;
+      button.append(avatar, name, meta);
+      button.addEventListener("click", () => setNounsGandalf(card.id));
+      target.append(button);
+    });
+  }
+
+  function updateV7Panel() {
+    if (!dom.v7WizardTitle) {
+      return;
+    }
+
+    const card = activeNounsGandalf();
+    const relic = activeKeepsake();
+    const resource = activeResource();
+    const ritual = activeRitual();
+    const art = activeArtPrompt();
+    const elements = wizardElementsForCard(card, state.ritual);
+    const score = presenceScore();
+    const keptLabel = `${state.nounsCollection.size}/${nounsGandalfs.length} kept`;
+    const spellLabel = state.activeSpell || `${resource.name} can become a spell.`;
+
+    renderNounAvatar(dom.v7NounAvatar, card, false);
+    renderWizardTraitPills(dom.v7TraitPills, elements);
+    renderWizardElementGrid(dom.v7ElementGrid, elements);
+    renderWizardCollectionGrid(dom.v7CollectionGrid);
+    dom.v7Progress.textContent = `${keptLabel} · ${score} presence`;
+    dom.v7RitualLine.textContent = `${ritual.title} · ${ritual.short}`;
+    dom.v7WizardTitle.textContent = `${card.name}: ${wizardElementPhrase(elements)}`;
+    dom.v7WizardText.textContent = `${card.trait}; ${ritual.guide} Pair ${relic.name}, sharpen ${resource.name}, then sit with: ${card.mantra}`;
+    dom.v7FrameworkTitle.textContent = elements.map((element) => element.label).join(" + ");
+    dom.v7ForgeHint.textContent = `${card.rarity} · ${natureViews[card.visual].name}`;
+    dom.v7RelicName.textContent = relic.name;
+    dom.v7ResourceName.textContent = `${resource.name} ${state.resourceLevels[resource.id] || 0}`;
+    dom.v7SpellLine.textContent = spellLabel;
+    dom.v7CueLine.textContent = card.cue;
+    dom.v7ImageTitle.textContent = art.title;
   }
 
   function presenceScore() {
@@ -1857,6 +2112,7 @@
       dom.wisdomRank.textContent = `${score} presence · ${presenceRank(score)}`;
     }
     updateV6Panel();
+    updateV7Panel();
   }
 
   function replaceBlendOptions(options) {
@@ -1898,6 +2154,7 @@
     dom.meditateGandalfButton.textContent = ritual.startLabel;
     dom.nounsCount.textContent = `${state.nounsCollection.size} / ${nounsGandalfs.length} kept`;
     updateKeepsakePanel();
+    updateV7Panel();
   }
 
   function renderNounsCollection() {
@@ -1921,6 +2178,7 @@
       button.setAttribute("aria-pressed", String(card.id === state.nounsActive));
       button.setAttribute("aria-label", `${card.name}, ${collected ? "kept" : "not kept"}`);
       applyNounStyle(button, card);
+      applyWizardNounStyle(button, card);
 
       renderNounAvatar(avatar, card, true);
       name.textContent = card.noun;
@@ -2129,6 +2387,7 @@
     dom.spellPhrase.textContent = state.activeSpell || `${card.name} pairs with ${relic.name}. ${resource.promise}.`;
     renderSpellBook();
     updateV6Panel();
+    updateV7Panel();
   }
 
   function setResource(id, options) {
@@ -2262,6 +2521,7 @@
       dom.artSeriesGrid.append(button);
     });
     updateV6Panel();
+    updateV7Panel();
   }
 
   function setArtPrompt(id, options) {
@@ -2652,7 +2912,7 @@
     dom.roomStep.textContent = isCollectibleVersion(next) ? "4" : dom.roomStep.textContent;
     dom.ambienceStep.textContent = isCollectibleVersion(next) ? "5" : dom.ambienceStep.textContent;
     dom.settleStep.textContent = isCollectibleVersion(next) ? "6" : "4";
-    if (next === "v6") {
+    if (next === "v6" || next === "v7") {
       dom.roomStep.textContent = "R";
       dom.ambienceStep.textContent = "A";
       dom.settleStep.textContent = "B";
@@ -2688,7 +2948,7 @@
       renderKeepsakeCollection();
       renderArtSeries();
       updateV6Panel();
-      updateGuideIdle(next === "v6" ? "V6 ready" : "V5 ready");
+      updateGuideIdle(next === "v7" ? "V7 ready" : next === "v6" ? "V6 ready" : "V5 ready");
       chooseLine();
     } else if (isNatureVersion(next)) {
       if (next === "v4" && state.renderStyle !== "pixel") {
@@ -2811,7 +3071,7 @@
       setKeepsake(suggestedKeepsakeForCard(activeNounsGandalf(), next).id, { announce: false });
       state.activeSpell = "";
       updateNounsPanel();
-      updateGuideIdle(settings.quiet ? (state.version === "v6" ? "V6 ready" : "V5 ready") : "Ritual set");
+      updateGuideIdle(settings.quiet ? (state.version === "v7" ? "V7 ready" : state.version === "v6" ? "V6 ready" : "V5 ready") : "Ritual set");
       if (!settings.quiet) {
         dom.wizardLine.textContent = activeRitual().lines[0];
         spawnParticles(next === "smoke" ? 8 : 5);
@@ -3456,6 +3716,7 @@
     dom.wizardLine.textContent = "Put Myth on low, let the stars hold the edges, and build from wonder.";
     setGuide("Listen along", "Myth · Beach House", `${activeNounsGandalf().name} pairs with ${activeKeepsake().name}; Wonder is sharpened for this sit.`);
     updateV6Panel();
+    updateV7Panel();
     spawnParticles(14);
   }
 
@@ -3469,6 +3730,85 @@
     };
 
     return map[state.ritual] || "focus";
+  }
+
+  function ensureV7Version() {
+    if (state.version !== "v7") {
+      setVersion("v7");
+    }
+  }
+
+  function v7ForgeWizard() {
+    ensureV7Version();
+    pullNounsGandalf();
+    updateV7Panel();
+  }
+
+  function v7PairRelic() {
+    ensureV7Version();
+
+    const suggested = suggestedKeepsakeForCard(activeNounsGandalf(), state.ritual);
+    if (state.keepsakeActive === suggested.id) {
+      pullKeepsake();
+    } else {
+      setKeepsake(suggested.id, { announce: false });
+      dom.wizardLine.textContent = suggested.line;
+      setGuide("Relic paired", suggested.name, `${suggested.cue} The build now has something to hold.`);
+      spawnParticles(8);
+    }
+    updateV7Panel();
+  }
+
+  function v7SharpenResource() {
+    ensureV7Version();
+
+    setResource(resourceForRitual(), { announce: false });
+    sharpenResource({ quiet: true });
+    dom.wizardLine.textContent = `${activeResource().name} sharpened for ${activeNounsGandalf().name}.`;
+    setGuide("Resource sharpened", `${activeResource().name} · ${wizardElementPhrase(wizardElementsForCard())}`, activeResource().promise);
+    updateV7Panel();
+    spawnParticles(10);
+  }
+
+  function v7BuildSpell() {
+    ensureV7Version();
+
+    const spell = buildSpell({ quiet: true });
+    dom.wizardLine.textContent = spell;
+    setGuide("Spell built", `${activeNounsGandalf().name} · ${activeKeepsake().name}`, `${activeResource().promise}. Keep it if it feels useful.`);
+    updateV7Panel();
+    spawnParticles(12);
+  }
+
+  async function v7BeginSit() {
+    ensureV7Version();
+    if (state.duration !== 5 * 60) {
+      setDuration(5);
+    }
+    await beginNounsMeditation();
+    setGuide(`${activeRitual().title} started`, activeNounsGandalf().name, `${activeNounsGandalf().breath} Keep the wizard noun simple.`);
+    updateV7Panel();
+  }
+
+  function v7KeepSet() {
+    ensureV7Version();
+
+    collectNounsGandalf(state.nounsActive, { quiet: true });
+    collectKeepsake(state.keepsakeActive, { quiet: true });
+    if (!state.activeSpell) {
+      buildSpell({ quiet: true });
+    }
+    keepSpell({ quiet: true });
+    dom.wizardLine.textContent = "Wizard noun kept. Card, relic, and spell are in the pouch.";
+    setGuide("Set kept", activeNounsGandalf().name, `${wizardElementPhrase(wizardElementsForCard())}. ${activeResource().name} is sharper now.`);
+    updateV7Panel();
+    spawnParticles(16);
+  }
+
+  function v7NextVisual() {
+    ensureV7Version();
+    nextArtPrompt();
+    updateV7Panel();
   }
 
   function v6ReceiveGandalf() {
@@ -3596,6 +3936,14 @@
   dom.keepSpellButton.addEventListener("click", () => keepSpell());
   dom.copyArtPromptButton.addEventListener("click", () => copyArtPrompt());
   dom.nextArtPromptButton.addEventListener("click", nextArtPrompt);
+  dom.v7ForgeButton.addEventListener("click", v7ForgeWizard);
+  dom.v7PairButton.addEventListener("click", v7PairRelic);
+  dom.v7SharpenButton.addEventListener("click", v7SharpenResource);
+  dom.v7SpellButton.addEventListener("click", v7BuildSpell);
+  dom.v7BeginButton.addEventListener("click", () => v7BeginSit());
+  dom.v7KeepButton.addEventListener("click", v7KeepSet);
+  dom.v7ImageButton.addEventListener("click", v7NextVisual);
+  dom.v7MythButton.addEventListener("click", setMythMode);
   dom.v6PullButton.addEventListener("click", v6ReceiveGandalf);
   dom.v6PairButton.addEventListener("click", v6PairKeepsake);
   dom.v6BeginButton.addEventListener("click", () => v6BeginSit());
@@ -3640,7 +3988,7 @@
   setCompanion(state.companion, { syncMode: false });
   setMode(state.mode);
   updateTimer();
-  updateGuideIdle(isCollectibleVersion() ? (state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
+  updateGuideIdle(isCollectibleVersion() ? (state.version === "v7" ? "V7 ready" : state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();
