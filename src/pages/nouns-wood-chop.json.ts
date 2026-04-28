@@ -7,10 +7,10 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Wood Chop Commons',
-  status: 'playable browser prototype v3',
+  status: 'playable browser prototype v3 with version toggle',
   human: 'https://pointcast.xyz/nouns-wood-chop',
   image: 'https://pointcast.xyz/images/nouns-wood-chop/pixel-woodlot.svg',
-  intent: 'A pixel collect loop for PointCast where visitors choose a Noun helper, chop, complete orders, charge helper moves, bank bundles, plant seeds, and unlock local Nouns-themed stamps.',
+  intent: 'A pixel collect loop for PointCast where visitors can toggle V1/V2/V3 gameplay, choose a Noun helper, chop, complete orders, charge helper moves, bank bundles, plant seeds, and unlock local Nouns-themed stamps.',
   relationshipToPointCast: {
     playLayer: 'https://pointcast.xyz/play',
     passport: 'https://pointcast.xyz/passport',
@@ -20,7 +20,13 @@ const payload = {
   game: {
     genre: 'clicker collection',
     mode: 'single-player local browser state',
+    versions: [
+      { id: 'v1', label: 'Core loop', includes: ['chop', 'bank bundles', 'plant seeds', 'local stamps'] },
+      { id: 'v2', label: 'Helpers + burst', includes: ['animated Noun helpers', 'streaks', 'crit and seed bonuses', 'Noun Burst'] },
+      { id: 'v3', label: 'Orders + moves', includes: ['order rewards', 'helper-move charge', 'richer local receipts'] },
+    ],
     mechanics: [
+      'toggle between V1 core loop, V2 helpers and burst, and V3 orders and helper moves',
       'choose one of four animated Noun helpers before chopping',
       'tap or press Space to chop the active pixel tree',
       'each chop spends one energy and adds wood',

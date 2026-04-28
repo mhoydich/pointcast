@@ -25,6 +25,12 @@ const ORDERS = [
   { id: 'crew-check', label: 'Meet the crew', metric: 'helperVisits', target: 3, reward: '+12 wood', note: 'Try three Noun helpers and learn their roles.' },
 ];
 
+const VERSIONS = [
+  { id: 'v1', label: 'V1', name: 'Core loop', note: 'Chop, bank bundles, plant seeds, and collect local stamps.' },
+  { id: 'v2', label: 'V2', name: 'Helpers + burst', note: 'Adds animated Noun helpers, streaks, seed bonuses, crits, and Noun Burst.' },
+  { id: 'v3', label: 'V3', name: 'Orders + moves', note: 'Adds order rewards, helper-move charge, and richer receipts.' },
+];
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -69,7 +75,7 @@ const jsonLd = {
   }}
 >
   <div class="wood-page" data-wood-game>
-    <script type="application/json" id="wood-game-data" set:html={JSON.stringify({ trees: TREES, stamps: STAMPS, orders: ORDERS })}></script>
+    <script type="application/json" id="wood-game-data" set:html={JSON.stringify({ trees: TREES, stamps: STAMPS, orders: ORDERS, versions: VERSIONS })}></script>
 
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a>
@@ -86,6 +92,18 @@ const jsonLd = {
         <p>
           Pick a Noun helper, chop the tree, fill orders, fire helper moves, bank bundles, plant seeds, and unlock local Nouns stamps. Spacebar works too.
         </p>
+        <div class="version-switch" aria-label="Wood Chop version selector">
+          <span class="mono">Version</span>
+          <div class="version-tabs" role="group" aria-label="Choose gameplay version">
+            {VERSIONS.map((version) => (
+              <button type="button" data-version-choice={version.id} aria-pressed={version.id === 'v3' ? 'true' : 'false'}>
+                <strong>{version.label}</strong>
+                <span>{version.name}</span>
+              </button>
+            ))}
+          </div>
+          <p data-version-note>{VERSIONS[2].note}</p>
+        </div>
       </div>
       <div class="hud" aria-label="Wood Chop status">
         <div><span>WOOD</span><strong data-wood>0</strong></div>
@@ -93,7 +111,7 @@ const jsonLd = {
         <div><span>SEEDS</span><strong data-seeds>0</strong></div>
         <div><span>ENERGY</span><strong data-energy>0</strong></div>
         <div><span>STREAK</span><strong data-streak>0</strong></div>
-        <div><span>ORDERS</span><strong data-orders-done>0/4</strong></div>
+        <div data-orders-hud><span>ORDERS</span><strong data-orders-done>0/4</strong></div>
       </div>
     </section>
 
@@ -238,6 +256,7 @@ const jsonLd = {
       var TREES = DATA.trees || [];
       var STAMPS = DATA.stamps || [];
       var ORDERS = DATA.orders || [];
+      var VERSIONS = DATA.versions || [];
       var STATE_KEY = 'pc:nouns-wood-chop:v1';
       var PASSPORT_KEY = 'pc:passport:stamps';
       var MAX_ENERGY = 12;
@@ -262,6 +281,7 @@ const jsonLd = {
         commandText: root.querySelector('[data-command-text]'),
         ordersDone: root.querySelector('[data-orders-done]'),
         ordersSummary: root.querySelector('[data-orders-summary]'),
+        versionNote: root.querySelector('[data-version-note]'),
         receipts: root.querySelector('[data-receipts]'),
         scene: root.querySelector('.pixel-scene'),
         dropLayer: root.querySelector('[data-drop-layer]'),
@@ -303,16 +323,19 @@ const jsonLd = {
           plants: 0,
           helperVisits: [],
           ordersClaimed: [],
+          version: 'v3',
           receipts: [],
           unlocked: [],
         };
       }
 
       var state = Object.assign(blankState(), readJson(STATE_KEY, {}));
+      var validVersions = VERSIONS.map(function (version) { return version.id; });
       state.receipts = Array.isArray(state.receipts) ? state.receipts : [];
       state.unlocked = Array.isArray(state.unlocked) ? state.unlocked : [];
       state.helperVisits = Array.isArray(state.helperVisits) ? state.helperVisits : [];
       state.ordersClaimed = Array.isArray(state.ordersClaimed) ? state.ordersClaimed : [];
+      state.version = validVersions.indexOf(state.version) === -1 ? 'v3' : state.version;
       state.treeIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.treeIndex) || 0));
       state.helperIndex = Math.max(0, Math.min(TREES.length - 1, Number(state.helperIndex) || 0));
       state.burst = Math.max(0, Math.min(BURST_TARGET, Number(state.burst) || 0));
@@ -327,6 +350,22 @@ const jsonLd = {
 
       function currentHelper() {
         return TREES[state.helperIndex] || TREES[0] || currentTree();
+      }
+
+      function activeVersion() {
+        return VERSIONS.find(function (version) { return version.id === state.version; }) || VERSIONS[VERSIONS.length - 1] || { id: 'v3', label: 'V3', name: 'Orders + moves', note: '' };
+      }
+
+      function hasHelpers() {
+        return state.version === 'v2' || state.version === 'v3';
+      }
+
+      function hasOrders() {
+        return state.version === 'v3';
+      }
+
+      function hasCommand() {
+        return state.version === 'v3';
       }
 
       function markHelper(index) {
@@ -403,6 +442,7 @@ const jsonLd = {
       }
 
       function claimOrders() {
+        if (!hasOrders()) return 0;
         var claimed = [];
         ORDERS.forEach(function (order) {
           if (state.ordersClaimed.indexOf(order.id) !== -1) return;
@@ -449,6 +489,8 @@ const jsonLd = {
       }
 
       function helperBonus(baseGain) {
+        if (!hasHelpers()) return { bonus: 0, seed: false, crit: false };
+
         var helper = currentHelper();
         var bonus = 0;
         var seed = false;
@@ -482,11 +524,11 @@ const jsonLd = {
         state.streak = now - state.lastChop < 1400 ? state.streak + 1 : 1;
         state.lastChop = now;
         state.energy -= 1;
-        state.burst = Math.min(BURST_TARGET, state.burst + 1);
-        state.command = Math.min(COMMAND_TARGET, state.command + 1);
+        if (hasHelpers()) state.burst = Math.min(BURST_TARGET, state.burst + 1);
+        if (hasCommand()) state.command = Math.min(COMMAND_TARGET, state.command + 1);
         state.totalChops += 1;
 
-        var rhythmBonus = Math.min(3, Math.floor(state.streak / 5));
+        var rhythmBonus = hasHelpers() ? Math.min(3, Math.floor(state.streak / 5)) : 0;
         var gain = 1 + Math.floor(Math.random() * 2) + rhythmBonus;
         var helper = helperBonus(gain);
         gain += helper.bonus;
@@ -504,7 +546,7 @@ const jsonLd = {
         if (helper.crit) {
           setStatus('Sharp axe crit: +' + gain + ' wood.');
           dropText('CRIT +' + gain, 'crit');
-        } else if (state.streak > 1 && state.streak % 4 === 0) {
+        } else if (hasHelpers() && state.streak > 1 && state.streak % 4 === 0) {
           dropText('STREAK +' + gain, 'wood');
         } else {
           dropText('+' + gain + ' wood', 'wood');
@@ -536,6 +578,12 @@ const jsonLd = {
       }
 
       function useCommand() {
+        if (!hasCommand()) {
+          setStatus('V3 enables helper moves.');
+          render();
+          return;
+        }
+
         if (state.command < COMMAND_TARGET) {
           setStatus('Helper move needs ' + (COMMAND_TARGET - state.command) + ' more chop' + (COMMAND_TARGET - state.command === 1 ? '' : 's') + '.');
           render();
@@ -586,7 +634,7 @@ const jsonLd = {
 
         state.wood -= BUNDLE_SIZE;
         state.bundles += 1;
-        state.energy = Math.min(MAX_ENERGY, state.energy + 2 + (currentHelper().id === 'oak' ? 1 : 0));
+        state.energy = Math.min(MAX_ENERGY, state.energy + 2 + (hasHelpers() && currentHelper().id === 'oak' ? 1 : 0));
         receipt('Banked bundle ' + state.bundles + '.');
         pulseScene('is-banking', 540);
         dropText('BUNDLE #' + state.bundles, 'bundle');
@@ -634,11 +682,34 @@ const jsonLd = {
       }
 
       function chooseHelper(index) {
+        if (!hasHelpers()) {
+          setStatus('V2 and V3 enable Noun helpers.');
+          render();
+          return;
+        }
         if (!Number.isInteger(index) || index < 0 || index >= TREES.length) return;
         state.helperIndex = index;
         markHelper(index);
         setStatus(TREES[index].label + ' is helping.');
         claimOrders();
+        save();
+        render();
+      }
+
+      function setVersion(version) {
+        if (validVersions.indexOf(version) === -1 || state.version === version) return;
+        state.version = version;
+        if (!hasHelpers()) {
+          state.burst = 0;
+          state.command = 0;
+        } else if (!hasCommand()) {
+          state.command = 0;
+          markHelper(state.helperIndex);
+        } else {
+          markHelper(state.helperIndex);
+          claimOrders();
+        }
+        setStatus(activeVersion().label + ' selected: ' + activeVersion().name + '.');
         save();
         render();
       }
@@ -649,9 +720,17 @@ const jsonLd = {
         var healthPct = Math.max(0, Math.min(100, (state.health / tree.health) * 100));
         var burstPct = Math.max(0, Math.min(100, (state.burst / BURST_TARGET) * 100));
         var commandPct = Math.max(0, Math.min(100, (state.command / COMMAND_TARGET) * 100));
-        var ordersDone = state.ordersClaimed.length;
+        var ordersDone = hasOrders() ? state.ordersClaimed.length : 0;
+        var version = activeVersion();
+        if (!hasHelpers()) {
+          burstPct = 0;
+          commandPct = 0;
+        } else if (!hasCommand()) {
+          commandPct = 0;
+        }
         root.dataset.tree = tree.id;
         root.dataset.activeHelper = helper.id;
+        root.dataset.version = state.version;
         root.style.setProperty('--health', healthPct + '%');
         root.style.setProperty('--burst', burstPct + '%');
         root.style.setProperty('--command', commandPct + '%');
@@ -663,6 +742,7 @@ const jsonLd = {
         if (els.streak) els.streak.textContent = String(state.streak);
         if (els.ordersDone) els.ordersDone.textContent = ordersDone + '/' + ORDERS.length;
         if (els.ordersSummary) els.ordersSummary.textContent = ordersDone + ' / ' + ORDERS.length + ' done';
+        if (els.versionNote) els.versionNote.textContent = version.note || '';
         if (els.treeName) els.treeName.textContent = tree.label;
         if (els.helperName) els.helperName.textContent = helper.label;
         if (els.helperSkill) els.helperSkill.textContent = helper.skill || 'Helper';
@@ -676,14 +756,20 @@ const jsonLd = {
 
         root.querySelectorAll('[data-helper]').forEach(function (button) {
           var index = Number(button.getAttribute('data-helper'));
-          var active = index === state.helperIndex;
+          var active = hasHelpers() && index === state.helperIndex;
           button.classList.toggle('is-active', active);
           button.setAttribute('aria-pressed', active ? 'true' : 'false');
         });
 
         root.querySelectorAll('[data-helper-sprite]').forEach(function (sprite) {
           var index = Number(sprite.getAttribute('data-helper-sprite'));
-          sprite.classList.toggle('is-active', index === state.helperIndex);
+          sprite.classList.toggle('is-active', hasHelpers() && index === state.helperIndex);
+        });
+
+        root.querySelectorAll('[data-version-choice]').forEach(function (button) {
+          var active = button.getAttribute('data-version-choice') === state.version;
+          button.classList.toggle('is-active', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
         });
 
         root.querySelectorAll('[data-stamp-id]').forEach(function (el) {
@@ -716,7 +802,7 @@ const jsonLd = {
           button.disabled = state.seeds <= 0;
         });
         root.querySelectorAll('[data-action="command"]').forEach(function (button) {
-          button.disabled = state.command < COMMAND_TARGET;
+          button.disabled = !hasCommand() || state.command < COMMAND_TARGET;
         });
         root.querySelectorAll('[data-action="chop"]').forEach(function (button) {
           button.disabled = state.energy <= 0;
@@ -752,6 +838,12 @@ const jsonLd = {
       });
 
       root.addEventListener('click', function (event) {
+        var versionButton = event.target.closest('[data-version-choice]');
+        if (!versionButton) return;
+        setVersion(versionButton.getAttribute('data-version-choice'));
+      });
+
+      root.addEventListener('click', function (event) {
         var helperButton = event.target.closest('.noun-card[data-helper]');
         if (!helperButton) return;
         chooseHelper(Number(helperButton.getAttribute('data-helper')));
@@ -765,9 +857,9 @@ const jsonLd = {
         chop();
       });
 
-      markHelper(state.helperIndex);
+      if (hasHelpers()) markHelper(state.helperIndex);
       updateUnlocked();
-      claimOrders();
+      if (hasOrders()) claimOrders();
       render();
     })();
   </script>
@@ -837,7 +929,7 @@ const jsonLd = {
     letter-spacing: 0;
   }
 
-  .wood-hero__copy p:last-child {
+  .wood-hero__copy > p:not(.kicker) {
     max-width: 660px;
     margin: 14px 0 0;
     color: #21463a;
@@ -845,10 +937,96 @@ const jsonLd = {
     line-height: 1.48;
   }
 
+  .version-switch {
+    display: grid;
+    gap: 8px;
+    max-width: 720px;
+    margin-top: 16px;
+  }
+
+  .version-switch > span {
+    color: #0f6e56;
+    font-size: 10px;
+  }
+
+  .version-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .version-tabs button {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 2px solid rgba(18, 17, 14, 0.7);
+    background: rgba(255, 255, 255, 0.74);
+    color: #12110e;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .version-tabs button.is-active {
+    border-color: #12110e;
+    background: #fff9e4;
+    box-shadow: inset 0 0 0 4px rgba(255, 213, 92, 0.24);
+  }
+
+  .version-tabs strong,
+  .version-tabs span {
+    display: block;
+  }
+
+  .version-tabs strong {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .version-tabs span {
+    margin-top: 4px;
+    color: #38373a;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .version-switch p {
+    margin: 0;
+    color: #21463a;
+    font-size: 13px;
+    line-height: 1.38;
+  }
+
   .hud {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 6px;
+  }
+
+  [data-version="v1"] .hud,
+  [data-version="v2"] .hud {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  [data-version="v1"] [data-orders-hud],
+  [data-version="v2"] [data-orders-hud],
+  [data-version="v1"] .helper-orbit,
+  [data-version="v1"] .noun-row,
+  [data-version="v1"] .helper-readout,
+  [data-version="v1"] .burst-charge,
+  [data-version="v1"] .command-charge,
+  [data-version="v1"] .orders-panel,
+  [data-version="v1"] [data-action="command"],
+  [data-version="v2"] .command-charge,
+  [data-version="v2"] .orders-panel,
+  [data-version="v2"] [data-action="command"] {
+    display: none;
+  }
+
+  [data-version="v1"] .controls,
+  [data-version="v2"] .controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .hud div,
