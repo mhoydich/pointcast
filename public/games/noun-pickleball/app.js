@@ -28,6 +28,8 @@ const watchSpeeds = {
   normal: 1,
   fast: 0.42,
 };
+const seasonStart = "2026-06-01";
+const seasonWeeks = 12;
 const achievementList = [
   { id: "first-watch", label: "First Broadcast" },
   { id: "first-mint", label: "Card Printer" },
@@ -36,14 +38,14 @@ const achievementList = [
   { id: "speed-demon", label: "Fast Forward" },
 ];
 const leagueTeams = [
-  { name: "Gold Nouns", rating: 83 },
-  { name: "Sky Nouns", rating: 79 },
-  { name: "Laser Nouns", rating: 86 },
-  { name: "Garden Nouns", rating: 74 },
-  { name: "Arcade Nouns", rating: 81 },
-  { name: "Beach Nouns", rating: 77 },
-  { name: "Moon Nouns", rating: 84 },
-  { name: "Coffee Nouns", rating: 72 },
+  { name: "Gold Nouns", rating: 83, city: "Santa Monica", style: "deep serves", arena: "Sunset Bowl" },
+  { name: "Sky Nouns", rating: 79, city: "Venice", style: "soft resets", arena: "Cloudline Court" },
+  { name: "Laser Nouns", rating: 86, city: "El Segundo", style: "speed-ups", arena: "Beam Dome" },
+  { name: "Garden Nouns", rating: 74, city: "Pasadena", style: "patient dinks", arena: "Vine Yard" },
+  { name: "Arcade Nouns", rating: 81, city: "Long Beach", style: "wild counters", arena: "Cabinet Hall" },
+  { name: "Beach Nouns", rating: 77, city: "Hermosa", style: "lobs and angles", arena: "Pier 4" },
+  { name: "Moon Nouns", rating: 84, city: "Malibu", style: "third-shot drops", arena: "Tide Crater" },
+  { name: "Coffee Nouns", rating: 72, city: "Redondo", style: "scrappy defense", arena: "Roast House" },
 ];
 
 const state = {
@@ -61,9 +63,11 @@ const state = {
   momentum: 0,
   watchSpeed: "normal",
   spotlightTeam: "Gold Nouns",
+  seasonWeek: 0,
   tomorrowVisible: false,
   cpuTimer: null,
   leagueWatching: false,
+  seasonWatching: false,
   rallyHistory: [],
   advantage: 0,
   league: null,
@@ -94,6 +98,10 @@ const el = {
   controls: document.querySelector("#controls"),
   modeSwitch: document.querySelector("#modeSwitch"),
   difficultySwitch: document.querySelector("#difficultySwitch"),
+  seasonMeta: document.querySelector("#seasonMeta"),
+  seasonOverview: document.querySelector("#seasonOverview"),
+  seasonTimeline: document.querySelector("#seasonTimeline"),
+  seasonWeekLabel: document.querySelector("#seasonWeekLabel"),
   standings: document.querySelector("#standings"),
   leagueToday: document.querySelector("#leagueToday"),
   mintCard: document.querySelector("#mintCard"),
@@ -103,6 +111,7 @@ const el = {
   trophyCase: document.querySelector("#trophyCase"),
   watchSpeed: document.querySelector("#watchSpeed"),
   watchLeagueButton: document.querySelector("#watchLeagueButton"),
+  watchSeasonButton: document.querySelector("#watchSeasonButton"),
   mintCardButton: document.querySelector("#mintCardButton"),
   previewTomorrowButton: document.querySelector("#previewTomorrowButton"),
   log: document.querySelector("#log"),
@@ -115,6 +124,7 @@ const el = {
 function resetGame() {
   clearCpuTimer();
   state.leagueWatching = false;
+  state.seasonWatching = false;
   teamNames = exhibitionTeamNames.slice();
   state.score = [0, 0];
   state.servingTeam = 0;
@@ -606,9 +616,9 @@ function resolvePoint(winningTeam, reason) {
 }
 
 function buildLeague() {
-  const today = new Date();
-  const dayKey = localDayKey(today);
-  const dayIndex = daysSince("2026-04-27", dayKey);
+  const dayKey = dateFromStart(state.seasonWeek);
+  const dayIndex = state.seasonWeek;
+  const weeks = [];
   const standings = leagueTeams.map((team) => ({
     ...team,
     played: 0,
@@ -618,23 +628,23 @@ function buildLeague() {
     pointsAgainst: 0,
     streak: 0,
   }));
-  const matchesByDay = [];
 
-  for (let day = 0; day <= Math.max(dayIndex, 0); day += 1) {
-    const matches = dailyPairings(day).map(([home, away], slot) => {
-      const match = simulateLeagueMatch(day, slot, leagueTeams[home], leagueTeams[away]);
-      applyLeagueMatch(standings, home, away, match);
+  for (let week = 0; week < seasonWeeks; week += 1) {
+    const matches = dailyPairings(week).map(([home, away], slot) => {
+      const match = simulateLeagueMatch(week, slot, leagueTeams[home], leagueTeams[away]);
+      if (week <= dayIndex) applyLeagueMatch(standings, home, away, match);
       return {
         ...match,
-        id: `${dateFromStart(day)}-${slot}`,
-        day,
+        id: `${dateFromStart(week)}-${slot}`,
+        day: week,
+        week,
         home,
         away,
         homeName: leagueTeams[home].name,
         awayName: leagueTeams[away].name,
       };
     });
-    matchesByDay.push(matches);
+    weeks.push({ week, date: dateFromStart(week), matches });
   }
 
   standings.sort((a, b) => {
@@ -646,9 +656,11 @@ function buildLeague() {
 
   return {
     dayKey,
-    dayIndex: Math.max(dayIndex, 0),
+    dayIndex,
+    weeks,
     standings,
-    todayMatches: matchesByDay[Math.max(dayIndex, 0)] || [],
+    todayMatches: weeks[dayIndex]?.matches || [],
+    champion: standings[0],
   };
 }
 
@@ -708,13 +720,28 @@ function applyLeagueMatch(standings, homeIndex, awayIndex, match) {
 
 function renderLeague() {
   if (!state.league) state.league = buildLeague();
+  state.league = buildLeague();
   const feature = state.league.todayMatches[0];
-  const tomorrowMatches = dailyPairings(state.league.dayIndex + 1).map(([home, away], slot) => ({
-    ...simulateLeagueMatch(state.league.dayIndex + 1, slot, leagueTeams[home], leagueTeams[away]),
-    homeName: leagueTeams[home].name,
-    awayName: leagueTeams[away].name,
-  }));
+  const nextWeek = Math.min(state.league.dayIndex + 1, seasonWeeks - 1);
+  const tomorrowMatches = state.league.weeks[nextWeek]?.matches || [];
   const spotlight = state.league.standings.find((team) => team.name === state.spotlightTeam) || state.league.standings[0];
+  el.seasonMeta.textContent = `June 1 to August 23, 2026 - Week ${state.league.dayIndex + 1} of ${seasonWeeks}`;
+  el.seasonWeekLabel.textContent = `Week ${state.league.dayIndex + 1} Slate - ${state.league.dayKey}`;
+  el.seasonOverview.innerHTML = leagueTeams.map((team) => `
+    <div class="team-overview-card">
+      <strong>${team.name}</strong>
+      <span>${team.city}</span>
+      <small>${team.arena}</small>
+      <em>${team.style}</em>
+      <b>${team.rating}</b>
+    </div>
+  `).join("");
+  el.seasonTimeline.innerHTML = state.league.weeks.map((week) => `
+    <button class="${week.week === state.seasonWeek ? "active" : ""}" data-week="${week.week}">
+      <span>W${week.week + 1}</span>
+      <small>${week.date.slice(5)}</small>
+    </button>
+  `).join("");
   el.standings.innerHTML = state.league.standings.map((team, index) => `
     <div class="standing-row">
       <span>${index + 1}. ${team.name}</span>
@@ -746,9 +773,9 @@ function renderLeague() {
   const minted = getMintedCards();
   const alreadyMinted = feature && minted.some((card) => card.id === feature.id);
   el.mintCard.innerHTML = feature ? `
-    <p>${feature.homeName} vs ${feature.awayName}</p>
+    <p>Week ${state.league.dayIndex + 1}: ${feature.homeName} vs ${feature.awayName}</p>
     <strong>${feature.homeScore}-${feature.awayScore}</strong>
-    <small>${alreadyMinted ? "Minted in local collection" : "Mint today's match card"}</small>
+    <small>${alreadyMinted ? "Minted in local collection" : "Mint featured match card"}</small>
     <small>${minted.length} card${minted.length === 1 ? "" : "s"} collected</small>
   ` : "<p>League is warming up.</p>";
   el.tomorrowCard.innerHTML = state.tomorrowVisible ? tomorrowMatches.map((match) => `
@@ -757,12 +784,13 @@ function renderLeague() {
       <strong>${match.homeScore}-${match.awayScore}</strong>
       <span>${match.awayName}</span>
     </div>
-  `).join("") : "<p>Tap Tomorrow to peek at the next slate.</p>";
+  `).join("") : "<p>Tap Next Week to peek at the next slate.</p>";
   el.trophyCase.innerHTML = achievementList.map((achievement) => `
     <span class="${hasAchievement(achievement.id) ? "unlocked" : ""}">${achievement.label}</span>
   `).join("");
   el.mintCardButton.disabled = !feature || alreadyMinted;
-  el.watchLeagueButton.disabled = state.busy || state.leagueWatching || !feature;
+  el.watchLeagueButton.disabled = state.busy || state.leagueWatching || state.seasonWatching || !feature;
+  el.watchSeasonButton.disabled = state.busy || state.leagueWatching || state.seasonWatching || !feature;
   el.previewTomorrowButton.classList.toggle("active", state.tomorrowVisible);
 }
 
@@ -783,7 +811,7 @@ async function watchLeagueMatch(matchIndex = 0) {
   state.rallyTeam = 0;
   state.activePlayer = 0;
   el.log.innerHTML = "";
-  addLog(`Broadcast: ${match.homeName} vs ${match.awayName}.`);
+  addLog(`Week ${state.league.dayIndex + 1} broadcast: ${match.homeName} vs ${match.awayName}.`);
   render();
 
   const homePoints = match.homeScore;
@@ -822,8 +850,30 @@ async function watchLeagueMatch(matchIndex = 0) {
   state.gameOver = true;
   state.rallyTeam = match.homeScore > match.awayScore ? 0 : 1;
   state.activePlayer = firstPlayerForTeam(state.rallyTeam);
-  addLog(`${teamNames[state.rallyTeam]} take the daily match ${state.score[0]}-${state.score[1]}.`);
+  addLog(`${teamNames[state.rallyTeam]} take the week ${state.league.dayIndex + 1} match ${state.score[0]}-${state.score[1]}.`);
   if (isUpset(match)) unlockAchievement("underdog");
+  render();
+}
+
+async function watchSeason() {
+  if (state.busy || state.leagueWatching || state.seasonWatching) return;
+  state.seasonWatching = true;
+  clearCpuTimer();
+  addLog("Summer 2026 season broadcast begins.");
+  for (let week = state.seasonWeek; week < seasonWeeks; week += 1) {
+    state.seasonWeek = week;
+    state.league = buildLeague();
+    renderLeague();
+    showToast(`Week ${week + 1}`);
+    await wait(420 * watchSpeeds[state.watchSpeed]);
+    await watchLeagueMatch(0);
+    await wait(360 * watchSpeeds[state.watchSpeed]);
+  }
+  state.seasonWatching = false;
+  state.seasonWeek = seasonWeeks - 1;
+  state.league = buildLeague();
+  addLog(`Summer champion: ${state.league.champion.name}.`);
+  showToast("Champions!");
   render();
 }
 
@@ -928,8 +978,8 @@ function daysSince(start, current) {
 }
 
 function dateFromStart(day) {
-  const date = new Date("2026-04-27T00:00:00");
-  date.setDate(date.getDate() + day);
+  const date = new Date(`${seasonStart}T00:00:00`);
+  date.setDate(date.getDate() + day * 7);
   return localDayKey(date);
 }
 
@@ -1400,9 +1450,19 @@ el.controls.addEventListener("focusout", () => {
 
 el.newGameButton.addEventListener("click", resetGame);
 el.watchLeagueButton.addEventListener("click", () => watchLeagueMatch(0));
+el.watchSeasonButton.addEventListener("click", watchSeason);
 el.mintCardButton.addEventListener("click", mintTodayCard);
 el.previewTomorrowButton.addEventListener("click", () => {
   state.tomorrowVisible = !state.tomorrowVisible;
+  renderLeague();
+});
+el.seasonTimeline.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-week]");
+  if (!button || state.busy || state.leagueWatching || state.seasonWatching) return;
+  state.seasonWeek = Number(button.dataset.week);
+  state.tomorrowVisible = false;
+  state.league = buildLeague();
+  addLog(`Jumped to week ${state.seasonWeek + 1} of Summer 2026.`);
   renderLeague();
 });
 el.teamSpotlightSelect.addEventListener("change", (event) => {
