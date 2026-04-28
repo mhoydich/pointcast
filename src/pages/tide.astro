@@ -1,22 +1,20 @@
 ---
 /**
- * /tide — minimal water-led companion to /bath. v2.
+ * /tide — minimal water-led companion to /bath. v3.
  *
- * v1: 8 palettes, three SVG wave layers translating, drifting orb, foam,
- *     tap to cycle, 90s auto-drift, prefers-reduced-motion, clock default.
+ * v1 (palettes/parallax/orb/foam/cycle) + v2 (audio/ripples/hash/drawer/
+ * aurora/wave-morph/grain/moments) plus:
  *
- * v2 adds:
- *  - Web Audio synth (filtered noise + tonal pad + LFO breath, opt-in)
- *  - Tap ripples (radial expanding circle from tap point)
- *  - URL hash sync (#abyss opens that palette; hash updates on cycle)
- *  - Title bar updates per palette ("/tide · ABYSS")
- *  - Settings drawer (sound toggle/volume, motion pause, auto-cycle pills,
- *    save-moment, hide-all-UI, links to /tide.json + /tide/moments)
- *  - Aurora overlay for dark palettes (abyss / storm / nighttide)
- *  - Wave path morphing — actual d-attribute interpolation between
- *    keyframes via requestAnimationFrame, not just translate
- *  - Subtle SVG noise grain texture
- *  - Moments save → localStorage pc:tide:moments (cap 50)
+ * v3 — classic screensaver feel + varied audio:
+ *  - SCENE switcher: WAVES (existing), STARFIELD (warp-speed particles
+ *    flowing toward the viewer, palette-tinted), MYSTIFY (after-dark
+ *    style polylines bouncing + morphing across the viewport)
+ *  - SOUNDSCAPE switcher: DRIFT (existing wave-breath), CHIMES (random
+ *    soft pentatonic tones tuned to the palette root, soft attack +
+ *    long decay), BUBBLES (pitch-modulated sine pops at random intervals)
+ *  - URL hash carries mode + palette: #abyss/mystify
+ *  - Auto-mode-cycle option in drawer (off by default)
+ *  - Each mode has its own aurora/foam/orb gating to fit the aesthetic
  *
  * Companions: /tide.json (manifest), /tide/moments (saved viewer).
  */
@@ -24,44 +22,74 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 
 const title = '/tide — water, color, slow';
 const description =
-  'Eight tide palettes — daybreak, crystal, kelp, coral, abyss, storm, lagoon, nighttide. Tap to cycle. Optional Web Audio waves. Save the moment.';
+  'Eight palettes, three scenes (WAVES, STARFIELD, MYSTIFY), three soundscapes (DRIFT, CHIMES, BUBBLES). Tap to cycle. Save the moment. Classic-screensaver companion to /bath.';
 ---
 
 <BlockLayout title={title} description={description}>
-  <main class="tide" id="tide-main" data-palette="daybreak" data-ui="visible" data-motion="on" data-dark="0">
+  <main class="tide" id="tide-main"
+        data-palette="daybreak"
+        data-mode="waves"
+        data-soundscape="drift"
+        data-ui="visible"
+        data-motion="on"
+        data-dark="0">
 
+    <!-- Aurora layer (only visible on dark palettes via CSS) -->
     <div class="tide__aurora" aria-hidden="true"></div>
 
-    <div class="tide__sky" aria-hidden="true">
-      <div class="tide__orb"></div>
-      <div class="tide__haze"></div>
+    <!-- WAVES scene: sky / orb / haze / waves / foam -->
+    <div class="tide__scene tide__scene--waves" aria-hidden="true">
+      <div class="tide__sky">
+        <div class="tide__orb"></div>
+        <div class="tide__haze"></div>
+      </div>
+      <svg class="tide__waves" viewBox="0 0 200 100" preserveAspectRatio="none">
+        <path class="tide__wave tide__wave--back" />
+        <path class="tide__wave tide__wave--mid" />
+        <path class="tide__wave tide__wave--front" />
+      </svg>
+      <div class="tide__foam">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
     </div>
 
-    <svg class="tide__waves" viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
-      <path class="tide__wave tide__wave--back" />
-      <path class="tide__wave tide__wave--mid" />
-      <path class="tide__wave tide__wave--front" />
-    </svg>
+    <!-- STARFIELD scene: canvas, particles flow toward viewer -->
+    <canvas class="tide__scene tide__scene--starfield" id="tide-starfield" aria-hidden="true"></canvas>
 
-    <div class="tide__foam" aria-hidden="true">
-      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-    </div>
+    <!-- MYSTIFY scene: SVG polylines with bouncing points -->
+    <svg class="tide__scene tide__scene--mystify" id="tide-mystify" aria-hidden="true" preserveAspectRatio="none"></svg>
 
+    <!-- Tap-ripple container -->
     <div class="tide__ripples" id="tide-ripples" aria-hidden="true"></div>
+
+    <!-- Grain texture overlay -->
     <div class="tide__grain" aria-hidden="true"></div>
 
+    <!-- Top-left badge -->
     <button class="tide__badge mono" id="tide-badge" type="button" aria-label="Cycle palette">
       <span id="tide-name">DAYBREAK</span>
       <span class="tide__sep" aria-hidden="true">·</span>
       <span id="tide-pos">1 / 8</span>
       <span class="tide__sep" aria-hidden="true">·</span>
+      <span id="tide-mode-name">WAVES</span>
+      <span class="tide__sep" aria-hidden="true">·</span>
       <span class="tide__hint">tap anywhere</span>
     </button>
 
+    <!-- Top-right settings -->
     <div class="tide__settings-wrap" id="tide-settings-wrap">
       <button class="tide__gear mono" id="tide-gear" type="button" aria-label="Open settings" aria-expanded="false">SET</button>
       <div class="tide__drawer" id="tide-drawer" role="dialog" aria-label="Tide settings" hidden>
         <p class="tide__drawer-kicker mono">SETTINGS</p>
+
+        <div class="tide__row tide__row--col">
+          <span class="tide__row-label mono">SCENE</span>
+          <div class="tide__pillgroup mono">
+            <button class="tide__pill tide__pill--active" data-mode="waves" type="button">WAVES</button>
+            <button class="tide__pill" data-mode="starfield" type="button">STARFIELD</button>
+            <button class="tide__pill" data-mode="mystify" type="button">MYSTIFY</button>
+          </div>
+        </div>
 
         <div class="tide__row">
           <span class="tide__row-label mono">SOUND</span>
@@ -70,6 +98,14 @@ const description =
         <div class="tide__row tide__row--slider" id="tide-volume-row" hidden>
           <span class="tide__row-label mono">VOL</span>
           <input class="tide__slider" id="tide-volume" type="range" min="0" max="100" value="35" />
+        </div>
+        <div class="tide__row tide__row--col" id="tide-soundscape-row" hidden>
+          <span class="tide__row-label mono">SOUNDSCAPE</span>
+          <div class="tide__pillgroup mono">
+            <button class="tide__pill tide__pill--active" data-soundscape="drift" type="button">DRIFT</button>
+            <button class="tide__pill" data-soundscape="chimes" type="button">CHIMES</button>
+            <button class="tide__pill" data-soundscape="bubbles" type="button">BUBBLES</button>
+          </div>
         </div>
 
         <div class="tide__row">
@@ -91,7 +127,7 @@ const description =
 
         <div class="tide__row tide__row--col">
           <button class="tide__row-btn tide__row-btn--wide mono" id="tide-save-btn" type="button">SAVE THIS MOMENT</button>
-          <p class="tide__row-note mono" id="tide-save-note">capture palette + start time + duration</p>
+          <p class="tide__row-note mono" id="tide-save-note">capture palette + scene + duration</p>
         </div>
 
         <div class="tide__row tide__row--col">
@@ -102,10 +138,12 @@ const description =
         <div class="tide__row tide__row--col">
           <a class="tide__row-link mono" href="/tide/moments">VIEW SAVED MOMENTS &rarr;</a>
           <a class="tide__row-link mono" href="/tide.json">/tide.json &rarr;</a>
+          <a class="tide__row-link mono" href="/bath">/BATH &rarr;</a>
         </div>
       </div>
     </div>
 
+    <!-- Footer -->
     <footer class="tide__foot mono" aria-hidden="false">
       <span>tide · el segundo · cc0</span>
       <span id="tide-clock">—</span>
@@ -118,6 +156,7 @@ const description =
 (function () {
   'use strict';
 
+  /* ─── palettes ─────────────────────────────────────────────── */
   var PALETTES = [
     { id:'daybreak',  name:'DAYBREAK',  sky:'#FFD4C2', water:'#F4A78D', foam:'#FFE9D8', orb:'#FFB496', wave1:'#E08F73', wave2:'#C4715A', wave3:'#AA5443', tone:{root:174.6, color:'warm'},   dark:false },
     { id:'crystal',   name:'CRYSTAL',   sky:'#BFEFEC', water:'#7FE5DC', foam:'#F4FBFA', orb:'#FFFFFF', wave1:'#5DCBC0', wave2:'#3FA89C', wave3:'#1F8579', tone:{root:196.0, color:'bright'}, dark:false },
@@ -129,7 +168,14 @@ const description =
     { id:'nighttide', name:'NIGHTTIDE', sky:'#3A0E5C', water:'#0E1845', foam:'#FF1493', orb:'#FF69B4', wave1:'#3D1276', wave2:'#1F1054', wave3:'#0A0830', tone:{root:73.4,  color:'deep'},   dark:true  },
   ];
 
-  var WAVES = {
+  var MODES = ['waves', 'starfield', 'mystify'];
+  var SOUNDSCAPES = ['drift', 'chimes', 'bubbles'];
+
+  function clockPaletteId(){var h=new Date().getHours();if(h<5)return'abyss';if(h<8)return'daybreak';if(h<11)return'crystal';if(h<14)return'lagoon';if(h<17)return'kelp';if(h<20)return'coral';if(h<22)return'storm';return'nighttide';}
+  function indexOfId(id){for(var i=0;i<PALETTES.length;i++)if(PALETTES[i].id===id)return i;return -1;}
+
+  /* ─── WAVES scene: path morph between keyframes ─────────────── */
+  var WAVE_PATHS = {
     back: [
       'M 0 60 C 25 45, 50 75, 75 60 S 125 45, 150 60 S 200 75, 200 60 L 200 100 L 0 100 Z',
       'M 0 64 C 30 52, 60 72, 90 60 S 150 50, 180 64 S 220 72, 200 60 L 200 100 L 0 100 Z',
@@ -146,9 +192,6 @@ const description =
       'M 0 80 C 35 72, 70 92, 105 80 S 160 72, 200 80 L 200 100 L 0 100 Z',
     ],
   };
-
-  function clockPaletteId(){var h=new Date().getHours();if(h<5)return'abyss';if(h<8)return'daybreak';if(h<11)return'crystal';if(h<14)return'lagoon';if(h<17)return'kelp';if(h<20)return'coral';if(h<22)return'storm';return'nighttide';}
-  function indexOfId(id){for(var i=0;i<PALETTES.length;i++)if(PALETTES[i].id===id)return i;return -1;}
 
   function applyWavePath(el, frames, t) {
     var n = frames.length;
@@ -170,38 +213,175 @@ const description =
     el.setAttribute('d', blended);
   }
 
-  var motionPaused = false;
-  function startWaveMorph() {
-    var back = document.querySelector('.tide__wave--back');
-    var mid = document.querySelector('.tide__wave--mid');
-    var front = document.querySelector('.tide__wave--front');
-    if (!back || !mid || !front) return;
-    var t0 = performance.now();
-    function frame(now) {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        applyWavePath(back, WAVES.back, 0);
-        applyWavePath(mid, WAVES.mid, 0);
-        applyWavePath(front, WAVES.front, 0);
-        return;
-      }
-      var dt = (now - t0) / 1000;
-      if (!motionPaused) {
-        applyWavePath(back,  WAVES.back,  (dt / 18) % 1);
-        applyWavePath(mid,   WAVES.mid,   (dt / 13) % 1);
-        applyWavePath(front, WAVES.front, (dt / 9)  % 1);
-      }
-      requestAnimationFrame(frame);
+  /* ─── STARFIELD scene: canvas particles flowing past ─────── */
+  var sfCtx = null, sfParticles = [], sfRaf = null;
+  function initStarfield() {
+    var c = document.getElementById('tide-starfield');
+    if (!c) return;
+    sfCtx = c.getContext('2d');
+    function size() {
+      var dpr = window.devicePixelRatio || 1;
+      c.width = window.innerWidth * dpr;
+      c.height = window.innerHeight * dpr;
+      c.style.width = window.innerWidth + 'px';
+      c.style.height = window.innerHeight + 'px';
+      sfCtx.scale(dpr, dpr);
     }
-    requestAnimationFrame(frame);
+    size();
+    window.addEventListener('resize', size);
+    sfParticles = [];
+    for (var i = 0; i < 220; i++) {
+      sfParticles.push({
+        x: (Math.random() - 0.5) * 2,
+        y: (Math.random() - 0.5) * 2,
+        z: Math.random() * 2 + 0.1,
+        c: Math.random(),
+      });
+    }
+  }
+  function drawStarfield() {
+    if (!sfCtx) return;
+    var p = PALETTES[idx];
+    var w = window.innerWidth, h = window.innerHeight;
+    // dark trail effect
+    sfCtx.fillStyle = (p.dark ? 'rgba(8,8,16,0.18)' : 'rgba(255,250,240,0.20)');
+    sfCtx.fillRect(0, 0, w, h);
+    var cx = w / 2, cy = h / 2;
+    for (var i = 0; i < sfParticles.length; i++) {
+      var s = sfParticles[i];
+      if (motionPaused) break;
+      s.z -= 0.006;
+      if (s.z <= 0.05) {
+        s.x = (Math.random() - 0.5) * 2;
+        s.y = (Math.random() - 0.5) * 2;
+        s.z = 1.8;
+        s.c = Math.random();
+      }
+      var sx = (s.x / s.z) * (w / 2) + cx;
+      var sy = (s.y / s.z) * (h / 2) + cy;
+      var r = (1.0 - s.z / 2) * 3.0 + 0.5;
+      // pick a color from palette based on s.c
+      var col = s.c < 0.34 ? p.foam : (s.c < 0.67 ? p.orb : p.wave1);
+      sfCtx.fillStyle = col;
+      sfCtx.globalAlpha = 1.0 - s.z * 0.4;
+      sfCtx.beginPath();
+      sfCtx.arc(sx, sy, r, 0, Math.PI * 2);
+      sfCtx.fill();
+    }
+    sfCtx.globalAlpha = 1;
   }
 
-  // Web Audio
+  /* ─── MYSTIFY scene: bouncing polylines ──────────────────── */
+  var myLines = [], myRaf = null;
+  var MY_LINE_COUNT = 4;
+  var MY_POINTS = 5;
+  var MY_HISTORY = 10;
+  function initMystify() {
+    myLines = [];
+    var w = window.innerWidth, h = window.innerHeight;
+    for (var i = 0; i < MY_LINE_COUNT; i++) {
+      var pts = [];
+      for (var j = 0; j < MY_POINTS; j++) {
+        pts.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4,
+        });
+      }
+      myLines.push({ pts: pts, history: [] });
+    }
+  }
+  function drawMystify() {
+    var svg = document.getElementById('tide-mystify');
+    if (!svg) return;
+    var w = window.innerWidth, h = window.innerHeight;
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    var p = PALETTES[idx];
+    var lineColors = [p.foam, p.orb, p.wave1, p.wave2];
+
+    if (!motionPaused) {
+      for (var i = 0; i < myLines.length; i++) {
+        var L = myLines[i];
+        // update + bounce
+        for (var j = 0; j < L.pts.length; j++) {
+          var pt = L.pts[j];
+          pt.x += pt.vx;
+          pt.y += pt.vy;
+          if (pt.x <= 0 || pt.x >= w) { pt.vx *= -1; pt.x = Math.max(0, Math.min(w, pt.x)); }
+          if (pt.y <= 0 || pt.y >= h) { pt.vy *= -1; pt.y = Math.max(0, Math.min(h, pt.y)); }
+        }
+        // append snapshot, cap history
+        L.history.push(L.pts.map(function (q) { return { x: q.x, y: q.y }; }));
+        if (L.history.length > MY_HISTORY) L.history.shift();
+      }
+    }
+
+    // render: each line drawn as a polyline per history snapshot, fading
+    var out = '';
+    for (var k = 0; k < myLines.length; k++) {
+      var Lk = myLines[k];
+      var color = lineColors[k % lineColors.length];
+      for (var hi = 0; hi < Lk.history.length; hi++) {
+        var snap = Lk.history[hi];
+        var pts = snap.map(function (q) { return q.x.toFixed(0) + ',' + q.y.toFixed(0); }).join(' ');
+        var alpha = (hi + 1) / Lk.history.length;
+        out += '<polyline points="' + pts + '" stroke="' + color + '" stroke-opacity="' + (alpha * 0.55).toFixed(2) + '" stroke-width="' + (1 + alpha * 1.5).toFixed(1) + '" fill="none" />';
+      }
+    }
+    svg.innerHTML = out;
+  }
+
+  /* ─── master raf loop drives whichever scene is active ───── */
+  var rafActive = null;
+  function startRafLoop() {
+    if (rafActive) cancelAnimationFrame(rafActive);
+    var t0 = performance.now();
+    function frame(now) {
+      var mode = (document.getElementById('tide-main') || {}).dataset?.mode || 'waves';
+      if (mode === 'waves') {
+        var back = document.querySelector('.tide__wave--back');
+        var mid = document.querySelector('.tide__wave--mid');
+        var front = document.querySelector('.tide__wave--front');
+        if (back && mid && front && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && !motionPaused) {
+          var dt = (now - t0) / 1000;
+          applyWavePath(back,  WAVE_PATHS.back,  (dt / 18) % 1);
+          applyWavePath(mid,   WAVE_PATHS.mid,   (dt / 13) % 1);
+          applyWavePath(front, WAVE_PATHS.front, (dt / 9)  % 1);
+        }
+      } else if (mode === 'starfield') {
+        drawStarfield();
+      } else if (mode === 'mystify') {
+        drawMystify();
+      }
+      rafActive = requestAnimationFrame(frame);
+    }
+    rafActive = requestAnimationFrame(frame);
+  }
+
+  /* ─── Web Audio: master + soundscape switcher ──────────── */
   var audioCtx = null, master = null, audioOn = false, audioVolume = 0.35, audioNodes = [];
-  function stopAudio(){audioNodes.forEach(function(n){try{n.stop&&n.stop();}catch(e){}try{n.disconnect&&n.disconnect();}catch(e){}});audioNodes=[];}
-  function startAudioForPalette(p) {
+  var soundscape = 'drift';
+  var chimeTimer = null, bubbleTimer = null;
+
+  function stopAudio() {
+    audioNodes.forEach(function (n) { try { n.stop && n.stop(); } catch (e) {} try { n.disconnect && n.disconnect(); } catch (e) {} });
+    audioNodes = [];
+    if (chimeTimer) { clearTimeout(chimeTimer); chimeTimer = null; }
+    if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
+  }
+
+  function startSoundscape(sId) {
     if (!audioOn || !audioCtx) return;
     stopAudio();
-    var ctx = audioCtx, sr = ctx.sampleRate;
+    if (sId === 'drift') startDrift();
+    else if (sId === 'chimes') startChimes();
+    else if (sId === 'bubbles') startBubbles();
+  }
+
+  /* DRIFT — filtered brown-noise + LFO + sine pad on root+fifth */
+  function startDrift() {
+    var ctx = audioCtx, sr = ctx.sampleRate, p = PALETTES[idx];
     var bufSize = 2 * sr;
     var buf = ctx.createBuffer(1, bufSize, sr);
     var data = buf.getChannelData(0);
@@ -212,17 +392,14 @@ const description =
       lastOut = data[i];
       data[i] *= 3.5;
     }
-    var noise = ctx.createBufferSource();
-    noise.buffer = buf; noise.loop = true;
+    var noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
     var lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = p.tone.color === 'deep' ? 480 : (p.tone.color === 'warm' ? 750 : 920);
     lp.Q.value = 0.6;
-    var hp = ctx.createBiquadFilter();
-    hp.type = 'highpass'; hp.frequency.value = 80;
+    var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 80;
     var ng = ctx.createGain(); ng.gain.value = 0.18;
-    var lfo = ctx.createOscillator();
-    lfo.type = 'sine'; lfo.frequency.value = 0.07;
+    var lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.07;
     var lfoG = ctx.createGain(); lfoG.gain.value = 220;
     lfo.connect(lfoG); lfoG.connect(lp.frequency);
     var oscA = ctx.createOscillator(); oscA.type = 'sine'; oscA.frequency.value = p.tone.root;
@@ -237,6 +414,94 @@ const description =
     noise.start(); lfo.start(); oscA.start(); oscB.start(); lfo2.start();
     audioNodes = [noise, lfo, oscA, oscB, lfo2, hp, lp, ng, lfoG, pad, lfo2G];
   }
+
+  /* CHIMES — random soft pentatonic tones tuned to palette root */
+  function startChimes() {
+    var ctx = audioCtx, p = PALETTES[idx];
+    // soft bed: very quiet sine on root for grounding
+    var bed = ctx.createOscillator(); bed.type = 'sine'; bed.frequency.value = p.tone.root * 0.5;
+    var bedG = ctx.createGain(); bedG.gain.value = 0.02;
+    bed.connect(bedG); bedG.connect(master);
+    bed.start();
+    audioNodes.push(bed, bedG);
+
+    // pentatonic intervals from root: 1, 9/8, 5/4, 3/2, 5/3, 2/1, 9/4 (octave + maj-2)
+    var ratios = [1, 9/8, 5/4, 3/2, 5/3, 2, 9/4];
+
+    function fireOne() {
+      if (!audioOn || soundscape !== 'chimes' || !audioCtx) return;
+      var now = audioCtx.currentTime;
+      var f = p.tone.root * ratios[Math.floor(Math.random() * ratios.length)];
+      // 50% chance of an octave higher (bell-like)
+      if (Math.random() < 0.4) f *= 2;
+      var osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+      // slight detune for shimmer
+      var oscB = ctx.createOscillator();
+      oscB.type = 'sine'; oscB.frequency.value = f * 1.005;
+      var gB = ctx.createGain();
+      gB.gain.setValueAtTime(0.0001, now);
+      gB.gain.exponentialRampToValueAtTime(0.07, now + 0.04);
+      gB.gain.exponentialRampToValueAtTime(0.0001, now + 2.0);
+      osc.connect(g); oscB.connect(gB); g.connect(master); gB.connect(master);
+      osc.start(now); oscB.start(now);
+      osc.stop(now + 2.4); oscB.stop(now + 2.2);
+      audioNodes.push(osc, oscB, g, gB);
+      // schedule next
+      var nextMs = 900 + Math.random() * 3200;
+      chimeTimer = setTimeout(fireOne, nextMs);
+    }
+    fireOne();
+  }
+
+  /* BUBBLES — pitch-modulated sine pops at random intervals */
+  function startBubbles() {
+    var ctx = audioCtx, p = PALETTES[idx];
+    function fireOne() {
+      if (!audioOn || soundscape !== 'bubbles' || !audioCtx) return;
+      var now = audioCtx.currentTime;
+      var lowFreq = 80 + Math.random() * 120;
+      var highFreq = lowFreq * (3 + Math.random() * 4);
+      var dur = 0.18 + Math.random() * 0.22;
+      var osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(lowFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(highFreq, now + dur);
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.22, now + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      // Light filter for the bubble character
+      var bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 600;
+      bp.Q.value = 1.4;
+      osc.connect(bp); bp.connect(g); g.connect(master);
+      osc.start(now); osc.stop(now + dur + 0.05);
+      audioNodes.push(osc, bp, g);
+      var nextMs = 350 + Math.random() * 2200;
+      bubbleTimer = setTimeout(fireOne, nextMs);
+    }
+    fireOne();
+  }
+
+  function setSoundscape(sId) {
+    if (SOUNDSCAPES.indexOf(sId) < 0) sId = 'drift';
+    soundscape = sId;
+    var main = document.getElementById('tide-main');
+    if (main) main.dataset.soundscape = sId;
+    document.querySelectorAll('.tide__pill[data-soundscape]').forEach(function (b) {
+      b.classList.toggle('tide__pill--active', b.dataset.soundscape === sId);
+    });
+    if (audioOn && audioCtx) startSoundscape(sId);
+    try { localStorage.setItem('pc:tide:soundscape', sId); } catch (e) {}
+  }
+
   function setAudio(on) {
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -244,18 +509,28 @@ const description =
     audioOn = !!on;
     var btn = document.getElementById('tide-sound-btn');
     var volRow = document.getElementById('tide-volume-row');
+    var ssRow = document.getElementById('tide-soundscape-row');
     if (btn) { btn.textContent = audioOn ? 'ON' : 'OFF'; btn.setAttribute('data-on', audioOn ? '1' : '0'); }
     if (volRow) volRow.hidden = !audioOn;
-    if (audioOn) { master.gain.setTargetAtTime(audioVolume, audioCtx.currentTime, 0.6); startAudioForPalette(PALETTES[idx]); }
-    else { master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.4); setTimeout(stopAudio, 1600); }
+    if (ssRow)  ssRow.hidden  = !audioOn;
+    if (audioOn) {
+      master.gain.setTargetAtTime(audioVolume, audioCtx.currentTime, 0.6);
+      startSoundscape(soundscape);
+    } else {
+      master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.4);
+      setTimeout(stopAudio, 1600);
+    }
     try { localStorage.setItem('pc:tide:audio', audioOn ? '1' : '0'); } catch (e) {}
   }
+
   function setVolume(v) {
     audioVolume = Math.max(0, Math.min(1, v));
     if (audioCtx && audioOn && master) master.gain.setTargetAtTime(audioVolume, audioCtx.currentTime, 0.2);
     try { localStorage.setItem('pc:tide:volume', String(audioVolume)); } catch (e) {}
   }
 
+  /* ─── motion / ripples / hide UI ──────────────────────────── */
+  var motionPaused = false;
   function setMotion(on) {
     motionPaused = !on;
     var main = document.getElementById('tide-main');
@@ -270,85 +545,9 @@ const description =
     if (!box) return;
     var d = document.createElement('div');
     d.className = 'tide__ripple';
-    d.style.left = x + 'px';
-    d.style.top = y + 'px';
+    d.style.left = x + 'px'; d.style.top = y + 'px';
     box.appendChild(d);
     setTimeout(function () { d.remove(); }, 1600);
-  }
-
-  var idx = 0;
-  var paletteEnteredAt = Date.now();
-
-  function setHash(id) {
-    if (location.hash !== '#' + id) {
-      try { history.replaceState(null, '', '#' + id); } catch (e) {}
-    }
-  }
-
-  function applyPalette(pIdx) {
-    if (pIdx < 0) pIdx = PALETTES.length - 1;
-    if (pIdx >= PALETTES.length) pIdx = 0;
-    idx = pIdx;
-    var p = PALETTES[idx];
-    var main = document.getElementById('tide-main');
-    if (!main) return;
-    main.dataset.palette = p.id;
-    main.dataset.dark = p.dark ? '1' : '0';
-    main.style.setProperty('--sky', p.sky);
-    main.style.setProperty('--water', p.water);
-    main.style.setProperty('--foam', p.foam);
-    main.style.setProperty('--orb', p.orb);
-    main.style.setProperty('--wave-1', p.wave1);
-    main.style.setProperty('--wave-2', p.wave2);
-    main.style.setProperty('--wave-3', p.wave3);
-    var nm = document.getElementById('tide-name');
-    var ps = document.getElementById('tide-pos');
-    if (nm) nm.textContent = p.name;
-    if (ps) ps.textContent = (idx + 1) + ' / ' + PALETTES.length;
-    document.title = '/tide · ' + p.name;
-    setHash(p.id);
-    paletteEnteredAt = Date.now();
-    if (audioOn) startAudioForPalette(p);
-    try { localStorage.setItem('pc:tide:last', p.id); } catch (e) {}
-  }
-
-  function next() { applyPalette(idx + 1); resetAutoCycle(); }
-  function prev() { applyPalette(idx - 1); resetAutoCycle(); }
-
-  var autoTimer = null, autoMs = 90_000;
-  function resetAutoCycle() {
-    if (autoTimer) clearTimeout(autoTimer);
-    if (autoMs === 0) return;
-    autoTimer = setTimeout(function () { applyPalette(idx + 1); resetAutoCycle(); }, autoMs);
-  }
-  function setAutoMs(ms) {
-    autoMs = ms | 0;
-    document.querySelectorAll('.tide__pill').forEach(function (b) {
-      b.classList.toggle('tide__pill--active', parseInt(b.dataset.cycle, 10) === autoMs);
-    });
-    try { localStorage.setItem('pc:tide:autoMs', String(autoMs)); } catch (e) {}
-    resetAutoCycle();
-  }
-
-  function saveMoment() {
-    var now = Date.now(), dwellMs = now - paletteEnteredAt, p = PALETTES[idx];
-    var entry = {
-      palette: p.id, name: p.name,
-      enteredAt: new Date(paletteEnteredAt).toISOString(),
-      savedAt: new Date(now).toISOString(),
-      dwellSeconds: Math.round(dwellMs / 1000),
-      audio: audioOn,
-    };
-    try {
-      var prev = JSON.parse(localStorage.getItem('pc:tide:moments') || '[]');
-      var next = [entry].concat(prev).slice(0, 50);
-      localStorage.setItem('pc:tide:moments', JSON.stringify(next));
-    } catch (e) {}
-    var note = document.getElementById('tide-save-note');
-    if (note) {
-      note.textContent = 'saved · ' + p.name + ' · ' + Math.round(dwellMs / 1000) + 's dwell';
-      setTimeout(function () { note.textContent = 'capture palette + start time + duration'; }, 2400);
-    }
   }
 
   var uiVisible = true;
@@ -370,6 +569,106 @@ const description =
     g.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
+  /* ─── palette + mode + hash ───────────────────────────────── */
+  var idx = 0;
+  var mode = 'waves';
+  var paletteEnteredAt = Date.now();
+
+  function setHash() {
+    var p = PALETTES[idx];
+    var h = '#' + p.id + (mode !== 'waves' ? '/' + mode : '');
+    if (location.hash !== h) {
+      try { history.replaceState(null, '', h); } catch (e) {}
+    }
+  }
+
+  function applyPalette(pIdx) {
+    if (pIdx < 0) pIdx = PALETTES.length - 1;
+    if (pIdx >= PALETTES.length) pIdx = 0;
+    idx = pIdx;
+    var p = PALETTES[idx];
+    var main = document.getElementById('tide-main');
+    if (!main) return;
+    main.dataset.palette = p.id;
+    main.dataset.dark = p.dark ? '1' : '0';
+    main.style.setProperty('--sky', p.sky);
+    main.style.setProperty('--water', p.water);
+    main.style.setProperty('--foam', p.foam);
+    main.style.setProperty('--orb', p.orb);
+    main.style.setProperty('--wave-1', p.wave1);
+    main.style.setProperty('--wave-2', p.wave2);
+    main.style.setProperty('--wave-3', p.wave3);
+
+    var nm = document.getElementById('tide-name');
+    var ps = document.getElementById('tide-pos');
+    if (nm) nm.textContent = p.name;
+    if (ps) ps.textContent = (idx + 1) + ' / ' + PALETTES.length;
+    document.title = '/tide · ' + p.name + (mode !== 'waves' ? ' · ' + mode.toUpperCase() : '');
+    setHash();
+    paletteEnteredAt = Date.now();
+    if (audioOn) startSoundscape(soundscape);
+    try { localStorage.setItem('pc:tide:last', p.id); } catch (e) {}
+  }
+
+  function setMode(m) {
+    if (MODES.indexOf(m) < 0) m = 'waves';
+    var prev = mode;
+    mode = m;
+    var main = document.getElementById('tide-main');
+    if (main) main.dataset.mode = m;
+    var nm = document.getElementById('tide-mode-name');
+    if (nm) nm.textContent = m.toUpperCase();
+    document.title = '/tide · ' + PALETTES[idx].name + (mode !== 'waves' ? ' · ' + mode.toUpperCase() : '');
+    document.querySelectorAll('.tide__pill[data-mode]').forEach(function (b) {
+      b.classList.toggle('tide__pill--active', b.dataset.mode === m);
+    });
+    setHash();
+    // Lazy-init scene state
+    if (m === 'starfield' && (!sfCtx || !sfParticles.length)) initStarfield();
+    if (m === 'mystify' && !myLines.length) initMystify();
+    try { localStorage.setItem('pc:tide:mode', m); } catch (e) {}
+  }
+
+  function next() { applyPalette(idx + 1); resetAutoCycle(); }
+  function prev() { applyPalette(idx - 1); resetAutoCycle(); }
+
+  var autoTimer = null, autoMs = 90_000;
+  function resetAutoCycle() {
+    if (autoTimer) clearTimeout(autoTimer);
+    if (autoMs === 0) return;
+    autoTimer = setTimeout(function () { applyPalette(idx + 1); resetAutoCycle(); }, autoMs);
+  }
+  function setAutoMs(ms) {
+    autoMs = ms | 0;
+    document.querySelectorAll('.tide__pill[data-cycle]').forEach(function (b) {
+      b.classList.toggle('tide__pill--active', parseInt(b.dataset.cycle, 10) === autoMs);
+    });
+    try { localStorage.setItem('pc:tide:autoMs', String(autoMs)); } catch (e) {}
+    resetAutoCycle();
+  }
+
+  function saveMoment() {
+    var now = Date.now(), dwellMs = now - paletteEnteredAt, p = PALETTES[idx];
+    var entry = {
+      palette: p.id, name: p.name,
+      mode: mode, soundscape: soundscape,
+      enteredAt: new Date(paletteEnteredAt).toISOString(),
+      savedAt: new Date(now).toISOString(),
+      dwellSeconds: Math.round(dwellMs / 1000),
+      audio: audioOn,
+    };
+    try {
+      var prev = JSON.parse(localStorage.getItem('pc:tide:moments') || '[]');
+      var next = [entry].concat(prev).slice(0, 50);
+      localStorage.setItem('pc:tide:moments', JSON.stringify(next));
+    } catch (e) {}
+    var note = document.getElementById('tide-save-note');
+    if (note) {
+      note.textContent = 'saved · ' + p.name + ' · ' + mode + ' · ' + Math.round(dwellMs / 1000) + 's';
+      setTimeout(function () { note.textContent = 'capture palette + scene + duration'; }, 2400);
+    }
+  }
+
   function tickClock() {
     var el = document.getElementById('tide-clock');
     if (!el) return;
@@ -377,16 +676,31 @@ const description =
     el.textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') + ' PT';
   }
 
-  // Initial palette: hash > saved > clock
-  var hash = (location.hash || '').replace('#', '');
-  var initial = indexOfId(hash);
-  if (initial < 0) {
-    var saved = (function(){ try { return localStorage.getItem('pc:tide:last'); } catch(e){ return null; } })();
-    initial = indexOfId(saved || '');
+  /* ─── parse hash → palette + mode ─────────────────────────── */
+  function parseHash() {
+    var raw = (location.hash || '').replace('#', '');
+    if (!raw) return null;
+    var parts = raw.split('/');
+    var p = parts[0], m = parts[1] || null;
+    var pIdx = indexOfId(p);
+    if (pIdx < 0 && MODES.indexOf(p) >= 0) {
+      m = p; pIdx = -1;
+    }
+    return { palette: pIdx, mode: m };
   }
-  if (initial < 0) initial = indexOfId(clockPaletteId());
-  if (initial < 0) initial = 0;
 
+  /* ─── boot ────────────────────────────────────────────────── */
+  var hashParsed = parseHash() || {};
+  var initial = (hashParsed.palette != null && hashParsed.palette >= 0)
+    ? hashParsed.palette
+    : (function () {
+        var saved = (function(){ try { return localStorage.getItem('pc:tide:last'); } catch(e){ return null; } })();
+        var i = indexOfId(saved || '');
+        if (i < 0) i = indexOfId(clockPaletteId());
+        return i < 0 ? 0 : i;
+      })();
+  var initialMode = hashParsed.mode || (function(){ try { return localStorage.getItem('pc:tide:mode') || 'waves'; } catch(e){ return 'waves'; } })();
+  var initialSoundscape = (function(){ try { return localStorage.getItem('pc:tide:soundscape') || 'drift'; } catch(e){ return 'drift'; } })();
   var savedAuto = parseInt((function(){ try { return localStorage.getItem('pc:tide:autoMs') || '90000'; } catch(e){ return '90000'; } })(), 10);
   if (!Number.isFinite(savedAuto)) savedAuto = 90_000;
   var savedVol = parseFloat((function(){ try { return localStorage.getItem('pc:tide:volume') || '0.35'; } catch(e){ return '0.35'; } })());
@@ -395,15 +709,22 @@ const description =
   var savedUi = (function(){ try { return localStorage.getItem('pc:tide:ui'); } catch(e){ return null; } })();
 
   applyPalette(initial);
+  setMode(initialMode);
+  setSoundscape(initialSoundscape);
   setAutoMs(savedAuto);
   audioVolume = savedVol;
   setMotion(savedMotion === '0' ? false : true);
   if (savedUi === '0') setUI(false);
 
-  startWaveMorph();
+  // init scene state for non-default modes if needed
+  if (mode === 'starfield') initStarfield();
+  if (mode === 'mystify') initMystify();
+
+  startRafLoop();
   tickClock();
   setInterval(tickClock, 60_000);
 
+  /* ─── interactions ───────────────────────────────────────── */
   document.addEventListener('click', function (ev) {
     var t = ev.target;
     if (t && t.closest && (t.closest('.tide__settings-wrap') || t.closest('.tide__foot') || t.closest('a'))) return;
@@ -414,8 +735,11 @@ const description =
     if (ev.key === 'Escape') { setUI(true); return; }
     if (ev.key === ' ' || ev.key === 'Enter' || ev.key === 'ArrowRight') { ev.preventDefault(); next(); }
     else if (ev.key === 'ArrowLeft') { prev(); }
+    else if (ev.key === 'm' || ev.key === 'M') {
+      var ci = MODES.indexOf(mode);
+      setMode(MODES[(ci + 1) % MODES.length]);
+    }
   });
-
   var holdTimer = null;
   document.addEventListener('pointerdown', function () {
     if (uiVisible) return;
@@ -424,11 +748,13 @@ const description =
   document.addEventListener('pointerup', function () { if (holdTimer) clearTimeout(holdTimer); });
 
   window.addEventListener('hashchange', function () {
-    var h = (location.hash || '').replace('#', '');
-    var i = indexOfId(h);
-    if (i >= 0 && i !== idx) applyPalette(i);
+    var hp = parseHash();
+    if (!hp) return;
+    if (hp.palette != null && hp.palette >= 0 && hp.palette !== idx) applyPalette(hp.palette);
+    if (hp.mode && hp.mode !== mode) setMode(hp.mode);
   });
 
+  // Settings buttons
   var gear = document.getElementById('tide-gear');
   if (gear) gear.addEventListener('click', toggleDrawer);
   var soundBtn = document.getElementById('tide-sound-btn');
@@ -440,11 +766,17 @@ const description =
     volSlider.value = String(Math.round(audioVolume * 100));
     volSlider.addEventListener('input', function () { setVolume(parseInt(volSlider.value, 10) / 100); });
   }
-  document.querySelectorAll('.tide__pill').forEach(function (b) {
+  document.querySelectorAll('.tide__pill[data-cycle]').forEach(function (b) {
     b.addEventListener('click', function () {
       var ms = parseInt(b.dataset.cycle, 10);
       if (Number.isFinite(ms)) setAutoMs(ms);
     });
+  });
+  document.querySelectorAll('.tide__pill[data-mode]').forEach(function (b) {
+    b.addEventListener('click', function () { setMode(b.dataset.mode); });
+  });
+  document.querySelectorAll('.tide__pill[data-soundscape]').forEach(function (b) {
+    b.addEventListener('click', function () { setSoundscape(b.dataset.soundscape); });
   });
   var saveBtn = document.getElementById('tide-save-btn');
   if (saveBtn) saveBtn.addEventListener('click', saveMoment);
@@ -467,25 +799,36 @@ const description =
     font-family: 'Inter Variable', system-ui, sans-serif;
   }
 
+  /* Aurora */
   .tide__aurora {
     position: absolute; inset: -10% -10% auto -10%; height: 50%;
     background:
       radial-gradient(ellipse at 30% 40%, var(--orb) 0%, transparent 60%),
       radial-gradient(ellipse at 75% 30%, var(--foam) 0%, transparent 65%);
     filter: blur(80px) saturate(1.2);
-    opacity: 0;
-    z-index: 0;
+    opacity: 0; z-index: 0;
     animation: aurora-shift 80s linear infinite;
     pointer-events: none;
     transition: opacity 2s ease;
   }
-  .tide[data-dark="1"] .tide__aurora { opacity: 0.42; }
+  .tide[data-dark="1"][data-mode="waves"] .tide__aurora { opacity: 0.42; }
   @keyframes aurora-shift {
     0%, 100% { transform: translateX(0) rotate(0deg); }
     50%      { transform: translateX(-3vw) rotate(8deg); }
   }
 
-  .tide__sky { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+  /* Scene gating */
+  .tide__scene { position: absolute; inset: 0; pointer-events: none; }
+  .tide[data-mode="waves"]     .tide__scene--starfield,
+  .tide[data-mode="waves"]     .tide__scene--mystify,
+  .tide[data-mode="starfield"] .tide__scene--waves,
+  .tide[data-mode="starfield"] .tide__scene--mystify,
+  .tide[data-mode="mystify"]   .tide__scene--waves,
+  .tide[data-mode="mystify"]   .tide__scene--starfield { display: none; }
+
+  /* WAVES scene */
+  .tide__scene--waves { z-index: 1; }
+  .tide__sky { position: absolute; inset: 0; }
   .tide__orb {
     position: absolute; top: 12%; right: 18%;
     width: clamp(140px, 16vmax, 280px);
@@ -511,21 +854,14 @@ const description =
     0%, 100% { transform: translateX(0); opacity: 0.18; }
     50%      { transform: translateX(-3vw); opacity: 0.28; }
   }
-
-  .tide__waves {
-    position: absolute; bottom: 0; left: 0;
-    width: 100%; height: 70%;
-    z-index: 2; pointer-events: none;
-  }
+  .tide__waves { position: absolute; bottom: 0; left: 0; width: 100%; height: 70%; }
   .tide__wave--back  { fill: var(--wave-1); opacity: 0.55; transition: fill 2s ease; }
   .tide__wave--mid   { fill: var(--wave-2); opacity: 0.75; transition: fill 2s ease; }
   .tide__wave--front { fill: var(--wave-3); opacity: 1.0;  transition: fill 2s ease; }
-
-  .tide__foam { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+  .tide__foam { position: absolute; inset: 0; }
   .tide__foam span {
     position: absolute; bottom: -10%;
-    width: clamp(4px, 1vmin, 8px);
-    aspect-ratio: 1; border-radius: 50%;
+    width: clamp(4px, 1vmin, 8px); aspect-ratio: 1; border-radius: 50%;
     background: var(--foam); opacity: 0;
     animation: foam-rise linear infinite;
     transition: background 2.4s ease;
@@ -560,6 +896,25 @@ const description =
     100% { transform: translateY(-105vh) scale(0.6); opacity: 0; }
   }
 
+  /* STARFIELD scene */
+  .tide__scene--starfield {
+    z-index: 1;
+    width: 100vw; height: 100vh;
+    background: linear-gradient(180deg, var(--sky) 0%, var(--water) 100%);
+  }
+  .tide[data-mode="starfield"] { background: linear-gradient(180deg, var(--sky) 0%, var(--water) 100%); }
+
+  /* MYSTIFY scene */
+  .tide__scene--mystify {
+    z-index: 1;
+    width: 100vw; height: 100vh;
+  }
+  .tide[data-mode="mystify"] {
+    background:
+      radial-gradient(ellipse at 50% 50%, color-mix(in oklab, var(--sky) 60%, var(--water)) 0%, var(--wave-3) 100%);
+  }
+
+  /* Ripples / grain (always visible) */
   .tide__ripples { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
   .tide__ripple {
     position: absolute; width: 0; height: 0;
@@ -572,7 +927,6 @@ const description =
     50%  { opacity: 0.35; border-width: 1.5px; }
     100% { width: 600px; height: 600px; opacity: 0; border-width: 0.5px; }
   }
-
   .tide__grain {
     position: absolute; inset: 0; z-index: 5; pointer-events: none;
     opacity: 0.45;
@@ -580,6 +934,7 @@ const description =
     mix-blend-mode: overlay;
   }
 
+  /* Badge / settings / drawer / foot — same as v2 */
   .tide__badge {
     position: fixed; top: 16px; left: 16px; z-index: 10;
     display: inline-flex; align-items: center; gap: 8px;
@@ -624,10 +979,7 @@ const description =
     backdrop-filter: blur(20px) saturate(1.1);
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   }
-  .tide__drawer-kicker {
-    font-size: 9px; letter-spacing: 0.24em; font-weight: 700;
-    margin: 0 0 12px; opacity: 0.6;
-  }
+  .tide__drawer-kicker { font-size: 9px; letter-spacing: 0.24em; font-weight: 700; margin: 0 0 12px; opacity: 0.6; }
   .tide__row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
   .tide__row--col { flex-direction: column; align-items: stretch; gap: 6px; }
   .tide__row-label { font-size: 9px; letter-spacing: 0.18em; font-weight: 700; flex: 1; opacity: 0.78; }
@@ -651,22 +1003,14 @@ const description =
     padding: 4px 0; opacity: 0.85;
   }
   .tide__row-link:hover { opacity: 1; text-decoration: underline; }
-  .tide__slider {
-    flex: 1; appearance: none; height: 3px;
-    background: rgba(255,255,255,0.2);
-    outline: none;
-  }
-  .tide__slider::-webkit-slider-thumb {
-    appearance: none; width: 10px; height: 10px;
-    background: #fff; border-radius: 50%; cursor: pointer;
-  }
-  .tide__pillgroup { display: flex; gap: 4px; }
+  .tide__slider { flex: 1; appearance: none; height: 3px; background: rgba(255,255,255,0.2); outline: none; }
+  .tide__slider::-webkit-slider-thumb { appearance: none; width: 10px; height: 10px; background: #fff; border-radius: 50%; cursor: pointer; }
+  .tide__pillgroup { display: flex; gap: 4px; flex-wrap: wrap; }
   .tide__pill {
-    flex: 1;
+    flex: 1; min-width: 0;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
-    color: #fff;
-    font: inherit;
+    color: #fff; font: inherit;
     font-size: 9px; letter-spacing: 0.10em; font-weight: 700;
     padding: 4px 0;
     cursor: pointer;
@@ -693,9 +1037,7 @@ const description =
 
   .tide[data-ui="hidden"] .tide__badge,
   .tide[data-ui="hidden"] .tide__settings-wrap,
-  .tide[data-ui="hidden"] .tide__foot {
-    opacity: 0; pointer-events: none;
-  }
+  .tide[data-ui="hidden"] .tide__foot { opacity: 0; pointer-events: none; }
 
   .tide[data-motion="paused"] .tide__orb,
   .tide[data-motion="paused"] .tide__haze,
