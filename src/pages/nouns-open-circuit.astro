@@ -87,12 +87,22 @@ const jsonLd = {
           <div>
             <img id="homeNoun" src={NOC_CLUBS[0].image} alt="" loading="eager" />
             <b id="homeCode">BPC</b>
+            <strong id="fixtureHomeLiveScore">0</strong>
           </div>
           <em>vs</em>
           <div>
             <img id="awayNoun" src={NOC_CLUBS[5].image} alt="" loading="eager" />
             <b id="awayCode">PHC</b>
+            <strong id="fixtureAwayLiveScore">0</strong>
           </div>
+        </div>
+        <div class="fixture-card__runner" aria-label="Visible match loop">
+          <b id="fixtureRunnerState">auto loop armed</b>
+          <span id="fixtureRunnerClock">00'</span>
+          <em id="fixtureRunnerDelta">waiting for SCOUT-01</em>
+        </div>
+        <div class="fixture-card__meter" aria-hidden="true">
+          <span id="fixtureMomentumBar"></span>
         </div>
         <p id="fixtureSeed">seed: noc-open-001</p>
       </div>
@@ -184,8 +194,9 @@ const jsonLd = {
             <small id="liveAwayMomentum">50 momentum</small>
           </div>
         </div>
-        <div class="button-row button-row--three">
+        <div class="button-row button-row--four">
           <button id="shiftButton" type="button">Run Agent Shift</button>
+          <button id="loopButton" type="button" aria-pressed="true">Pause Loop</button>
           <button id="resetMatchButton" type="button">Reset Match</button>
           <a id="matchPageButton" href={NOC_FIXTURES[0].route}>Open Match Page</a>
         </div>
@@ -241,7 +252,7 @@ const jsonLd = {
   </main>
 
   <script type="application/json" id="noc-data" set:html={JSON.stringify(clientPayload)} />
-  <script>
+  <script is:inline>
     const dataNode = document.querySelector('#noc-data');
     const data = JSON.parse(dataNode?.textContent || '{}');
     const clubs = data.clubs || [];
@@ -252,12 +263,16 @@ const jsonLd = {
     const formations = data.formations || [];
     const policies = data.targetPolicies || [];
     const storageKeys = data.storageKeys || {};
+    const AUTO_SHIFT_MS = 1450;
+    const MATCH_TURNS = 8;
+    let loopTimer = null;
     const state = {
       clubSlug: localStorage.getItem(storageKeys.club) || clubs[0]?.slug || '',
       packetNonce: 0,
       packet: null,
       receipt: null,
       liveState: null,
+      looping: true,
     };
 
     const $ = (selector) => document.querySelector(selector);
@@ -304,6 +319,7 @@ const jsonLd = {
         fixtureId: fixture.id,
         turn: 0,
         clock: 0,
+        final: false,
         home: { slug: home.slug, score: 0, momentum: 50 },
         away: { slug: away.slug, score: 0, momentum: 50 },
         log: [],
@@ -344,6 +360,7 @@ const jsonLd = {
     function applyAgentShift() {
       const fixture = fixtureForClub(selectedClub());
       const liveState = liveStateForFixture(fixture);
+      if (liveState.final) return;
       const shift = buildAgentShift(liveState);
       const side = shift.actor === liveState.home.slug ? liveState.home : liveState.away;
       const other = shift.actor === liveState.home.slug ? liveState.away : liveState.home;
@@ -356,6 +373,17 @@ const jsonLd = {
       state.liveState = liveState;
       localStorage.setItem(storageKeys.liveState, JSON.stringify(liveState));
       localStorage.setItem(storageKeys.dispatch, JSON.stringify(shift));
+      if (liveState.turn >= MATCH_TURNS) finishLiveMatch(liveState);
+    }
+
+    function finishLiveMatch(liveState) {
+      if (liveState.final) return;
+      liveState.clock = 90;
+      liveState.final = true;
+      state.liveState = liveState;
+      state.receipt = buildReceipt(state.packet || buildPacket());
+      localStorage.setItem(storageKeys.liveState, JSON.stringify(liveState));
+      renderReceipt(state.receipt);
     }
 
     function buildPacket() {
@@ -498,11 +526,25 @@ const jsonLd = {
       $('#liveAwayCode').textContent = away.code;
       $('#liveHomeScore').textContent = liveState.home.score;
       $('#liveAwayScore').textContent = liveState.away.score;
+      $('#fixtureHomeLiveScore').textContent = liveState.home.score;
+      $('#fixtureAwayLiveScore').textContent = liveState.away.score;
       $('#liveHomeMomentum').textContent = `${liveState.home.momentum} momentum`;
       $('#liveAwayMomentum').textContent = `${liveState.away.momentum} momentum`;
       $('#liveClock').textContent = `${String(liveState.clock).padStart(2, '0')}'`;
-      $('#liveStatus').textContent = `shift ${liveState.turn}`;
+      $('#fixtureRunnerClock').textContent = `${String(liveState.clock).padStart(2, '0')}'`;
+      $('#liveStatus').textContent = liveState.final ? 'final whistle' : `${state.looping ? 'loop' : 'paused'} shift ${liveState.turn}/${MATCH_TURNS}`;
       const nextProtocol = agentShiftProtocol[liveState.turn % agentShiftProtocol.length];
+      const latestEvent = liveState.log[0];
+      const latestActor = latestEvent ? clubBySlug(latestEvent.actor) : null;
+      $('#fixtureRunnerState').textContent = liveState.final
+        ? 'final receipt issued'
+        : state.looping
+          ? 'auto loop running'
+          : 'loop paused';
+      $('#fixtureRunnerDelta').textContent = latestEvent
+        ? `${latestEvent.agent} -> ${latestActor.code} +${latestEvent.delta}`
+        : `waiting for ${nextProtocol.agent}`;
+      $('#fixtureMomentumBar').style.width = `${clamp(liveState.home.momentum, 8, 92)}%`;
       $('#proposalGrid').innerHTML = `
         <div>
           <b>${nextProtocol.agent}</b>
@@ -529,7 +571,20 @@ const jsonLd = {
       localStorage.setItem(storageKeys.liveState, JSON.stringify(liveState));
     }
 
+    function renderLoopButton() {
+      const loopButton = $('#loopButton');
+      loopButton.textContent = state.looping ? 'Pause Loop' : 'Start Loop';
+      loopButton.setAttribute('aria-pressed', String(state.looping));
+    }
+
     function renderAll() {
+      const activeFixture = fixtureForClub(selectedClub());
+      if (state.packet && (state.packet.fixtureId !== activeFixture.id || state.packet.club !== state.clubSlug)) {
+        state.packet = null;
+      }
+      if (state.receipt && state.receipt.fixtureId !== activeFixture.id) {
+        state.receipt = null;
+      }
       localStorage.setItem(storageKeys.club, state.clubSlug);
       renderFixture();
       renderClub();
@@ -537,6 +592,38 @@ const jsonLd = {
       renderPacket();
       renderReceipt(state.receipt);
       renderLive();
+      renderLoopButton();
+    }
+
+    function runLoopStep() {
+      const fixture = fixtureForClub(selectedClub());
+      const liveState = liveStateForFixture(fixture);
+      if (liveState.final) {
+        state.liveState = initialLiveState(fixture);
+        state.receipt = null;
+        $('#receiptStatus').textContent = 'local preview';
+        $('#resultBanner').textContent = 'Looping next match run.';
+        renderReceipt(null);
+      } else {
+        applyAgentShift();
+      }
+      renderLive();
+    }
+
+    function startMatchLoop() {
+      if (loopTimer) return;
+      state.looping = true;
+      renderLoopButton();
+      loopTimer = window.setInterval(runLoopStep, AUTO_SHIFT_MS);
+    }
+
+    function stopMatchLoop() {
+      if (loopTimer) {
+        window.clearInterval(loopTimer);
+        loopTimer = null;
+      }
+      state.looping = false;
+      renderLoopButton();
     }
 
     clubButtons.forEach((button) => {
@@ -570,6 +657,15 @@ const jsonLd = {
       renderLive();
     });
 
+    $('#loopButton').addEventListener('click', () => {
+      if (state.looping) {
+        stopMatchLoop();
+      } else {
+        startMatchLoop();
+      }
+      renderLive();
+    });
+
     $('#resetMatchButton').addEventListener('click', () => {
       state.liveState = initialLiveState(fixtureForClub(selectedClub()));
       state.receipt = null;
@@ -592,8 +688,10 @@ const jsonLd = {
     if (state.packet?.schema !== 'pointcast-nouns-open-circuit-tactics-v2') state.packet = null;
     if (state.receipt?.schema !== 'pointcast-nouns-open-circuit-receipt-v2') state.receipt = null;
     if (!state.liveState?.fixtureId) state.liveState = null;
+    if (state.liveState && typeof state.liveState.final !== 'boolean') state.liveState.final = false;
 
     renderAll();
+    startMatchLoop();
   </script>
 </BlockLayout>
 
@@ -696,7 +794,7 @@ const jsonLd = {
     text-transform: uppercase;
   }
 
-  .fixture-card strong {
+  .fixture-card > strong {
     display: block;
     font-size: clamp(1.4rem, 3vw, 2.4rem);
     line-height: 1;
@@ -729,6 +827,68 @@ const jsonLd = {
     font-size: 1.1rem;
     font-style: normal;
     font-weight: 1000;
+  }
+
+  .fixture-card__match strong {
+    min-width: 64px;
+    border: 2px solid #15161a;
+    background: #15161a;
+    color: #fffdf5;
+    padding: 5px 8px;
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    line-height: 0.9;
+    text-align: center;
+  }
+
+  .fixture-card__runner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    border: 2px solid #15161a;
+    background: #d7ff3f;
+    padding: 8px;
+  }
+
+  .fixture-card__runner b,
+  .fixture-card__runner span,
+  .fixture-card__runner em {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 0.76rem;
+    font-style: normal;
+    font-weight: 950;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .fixture-card__runner span {
+    display: grid;
+    place-items: center;
+    min-width: 50px;
+    border: 2px solid #15161a;
+    background: #fffdf5;
+    padding: 5px;
+  }
+
+  .fixture-card__runner em {
+    text-align: right;
+  }
+
+  .fixture-card__meter {
+    height: 18px;
+    overflow: hidden;
+    border: 2px solid #15161a;
+    background: #ef7d2d;
+  }
+
+  .fixture-card__meter span {
+    display: block;
+    width: 50%;
+    height: 100%;
+    background: #185fa5;
+    transition: width 280ms ease;
   }
 
   .club-switcher {
@@ -969,6 +1129,10 @@ const jsonLd = {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .button-row--four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .button-row button,
   .button-row a {
     min-height: 40px;
@@ -985,6 +1149,10 @@ const jsonLd = {
 
   .button-row button:first-child {
     background: #d7ff3f;
+  }
+
+  #loopButton[aria-pressed='true'] {
+    background: #f5c84b;
   }
 
   pre {
@@ -1193,7 +1361,9 @@ const jsonLd = {
     dl,
     .button-row,
     .button-row--three,
+    .button-row--four,
     .live-scoreboard,
+    .fixture-card__runner,
     .proposal-grid,
     .noun-strip {
       grid-template-columns: 1fr;

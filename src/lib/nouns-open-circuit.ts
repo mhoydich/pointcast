@@ -1,4 +1,4 @@
-export const NOC_VERSION = '0.2.0';
+export const NOC_VERSION = '0.2.1';
 
 export const NOC_STORAGE_KEYS = {
   packet: 'pc:noc:last-agent-packet',
@@ -32,6 +32,7 @@ export const NOC_V2_RELEASE = {
   posture: 'playable local prototype, publishable protocol surface',
   capabilities: [
     'live agent shift simulator',
+    'auto-looping visible match runner',
     'shareable fixture receipt pages',
     'agent handoff protocol',
     'v2 tactics and receipt schemas',
