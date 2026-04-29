@@ -32,6 +32,11 @@ const el = {
   galleryTitle: document.querySelector("#galleryTitle"),
   galleryMeta: document.querySelector("#galleryMeta"),
   reportGallery: document.querySelector("#reportGallery"),
+  watchFrames: document.querySelector("#watchFrames"),
+  agentFrameTitle: document.querySelector("#agentFrameTitle"),
+  agentFrameMeta: document.querySelector("#agentFrameMeta"),
+  claudePromptPreview: document.querySelector("#claudePromptPreview"),
+  openAgentFrame: document.querySelector("#openAgentFrame"),
   deskCards: document.querySelector("#deskCards"),
   recapCards: document.querySelector("#recapCards"),
   copyRunSheet: document.querySelector("#copyRunSheet"),
@@ -44,6 +49,8 @@ const el = {
   clearGallery: document.querySelector("#clearGallery"),
   copySnapshotLink: document.querySelector("#copySnapshotLink"),
   copySnapshotJson: document.querySelector("#copySnapshotJson"),
+  copyClaudePrompt: document.querySelector("#copyClaudePrompt"),
+  copyClaudeInline: document.querySelector("#copyClaudeInline"),
   useLocalWall: document.querySelector("#useLocalWall"),
   refreshWall: document.querySelector("#refreshWall"),
   copyStatus: document.querySelector("#copyStatus"),
@@ -53,6 +60,7 @@ const el = {
 let currentRunSheet = "";
 let currentReportText = "";
 let currentSocialPost = "";
+let currentClaudePrompt = "";
 let currentCardFileName = "nouns-nation-season-report-card.png";
 let reportGallery = [];
 let currentSnapshot = null;
@@ -138,8 +146,12 @@ function hashParams() {
   return new URLSearchParams(hash);
 }
 
+function viewMode() {
+  return hashParams().get("view") || "wall";
+}
+
 function isCardView() {
-  return hashParams().get("view") === "card";
+  return viewMode() === "card";
 }
 
 function shareBaseUrl() {
@@ -164,6 +176,24 @@ function cardLink(snapshot = currentSnapshot) {
   const params = new URLSearchParams();
   params.set("snapshot", encodeSnapshot(snapshot));
   params.set("view", "card");
+  url.hash = params.toString();
+  return url.toString();
+}
+
+function viewLink(view, snapshot = currentSnapshot) {
+  const url = shareBaseUrl();
+  const params = new URLSearchParams();
+  if (snapshot?.league) params.set("snapshot", encodeSnapshot(snapshot));
+  params.set("view", view);
+  url.hash = params.toString();
+  return url.toString();
+}
+
+function localViewLink(view, snapshot = currentSnapshot) {
+  const url = new URL(window.location.href);
+  const params = new URLSearchParams();
+  if (snapshot?.league) params.set("snapshot", encodeSnapshot(snapshot));
+  params.set("view", view);
   url.hash = params.toString();
   return url.toString();
 }
@@ -264,6 +294,103 @@ function socialPostText(league, deskCards, recapCards, rows) {
     `Watch: https://pointcast.xyz/nouns-nation-battler-tv/`,
     cardLink() ? `Card: ${cardLink()}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function claudeScorebookPrompt(league, deskCards, recapCards, rows) {
+  const phase = phaseLine(league);
+  const leader = rows[0];
+  const latestRecap = recapCards[0];
+  const snapshotUrl = snapshotLink(makeSnapshot(league));
+  const fallbackRecap = latestRecap ? (latestRecap.share || fallbackRecapText(latestRecap)) : "";
+  const toolArgs = snapshotUrl
+    ? { snapshotUrl, view: "cowork" }
+    : { recapText: fallbackRecap || "No recap supplied yet.", view: "cowork" };
+  return [
+    "Use the PointCast MCP connector at https://pointcast.xyz/api/mcp-v2.",
+    "Call nouns_battler_result_tracker with:",
+    JSON.stringify(toolArgs, null, 2),
+    "",
+    "Then keep a running Nouns Nation Battler scorebook for me.",
+    `Current phase: ${phase}.`,
+    leader ? `Current leader: ${leader.name} ${recordLine(leader)} with ${leader.fans || 0} heat.` : "Current leader: pending.",
+    "Return: table leader, bubble team, latest final, best storyline, next watch link, and one recommended watch-frame link.",
+    "Keep it concise and make it feel like a live sports desk, not a software report.",
+  ].join("\n");
+}
+
+function watchFrameDefinitions(league, deskCards, recapCards, rows) {
+  const phase = phaseLine(league);
+  const leader = rows[0];
+  const latestDesk = deskCards[0];
+  const latestRecap = recapCards[0];
+  return [
+    {
+      id: "card",
+      label: "Report Card",
+      title: leader ? `${leader.name} card` : "16:9 report card",
+      body: "A single shareable card for chat, posts, and lunch-review drive-bys.",
+      detail: latestRecap?.title || latestDesk?.title || phase,
+      color: "#f5c84b",
+    },
+    {
+      id: "scoreboard",
+      label: "Scoreboard",
+      title: leader ? `${leader.name} on top` : "Big table view",
+      body: "A table-first wall for people who want records, heat, recaps, and standings at a glance.",
+      detail: `${rows.length || 0} gangs tracked`,
+      color: "#3677e0",
+    },
+    {
+      id: "story",
+      label: "Story Desk",
+      title: "Commissioner read",
+      body: "A narrative viewing frame for hosts: table hook, latest result, and what to watch next.",
+      detail: latestDesk?.meta || latestRecap?.mvp || "Host angle pending",
+      color: "#13a6a1",
+    },
+    {
+      id: "agent",
+      label: "Agent Scorebook",
+      title: "Claude/Cowork prompt",
+      body: "A clean handoff frame for agents that should track results or host a running scorebook.",
+      detail: snapshotLink() ? "Snapshot MCP-ready" : "Recap prompt ready",
+      color: "#8b5cf6",
+    },
+  ];
+}
+
+function renderWatchFrames(league, deskCards, recapCards, rows) {
+  const frames = watchFrameDefinitions(league, deskCards, recapCards, rows);
+  el.watchFrames.innerHTML = frames.map((frame) => {
+    const openLink = localViewLink(frame.id);
+    const copyLink = viewLink(frame.id);
+    const extraButton = frame.id === "agent"
+      ? `<button type="button" data-copy-text="${escapeHtml(currentClaudePrompt)}" data-copy-label="Claude prompt">Copy Prompt</button>`
+      : "";
+    return `
+      <article class="frame-card" style="--frame-color:${escapeHtml(frame.color)}">
+        <span>${escapeHtml(frame.label)}</span>
+        <strong>${escapeHtml(frame.title)}</strong>
+        <p>${escapeHtml(frame.body)}</p>
+        <em>${escapeHtml(frame.detail)}</em>
+        <div class="frame-actions">
+          <a href="${escapeHtml(openLink)}">Open</a>
+          <button type="button" data-copy-text="${escapeHtml(copyLink)}" data-copy-label="${escapeHtml(frame.label)} link">Copy Link</button>
+          ${extraButton}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderAgentScorebook(league, deskCards, recapCards, rows) {
+  const phase = phaseLine(league);
+  const leader = rows[0];
+  currentClaudePrompt = claudeScorebookPrompt(league, deskCards, recapCards, rows);
+  el.agentFrameTitle.textContent = leader ? `${leader.name} scorebook handoff` : "Claude/Cowork scorebook handoff";
+  el.agentFrameMeta.textContent = `${sourceLabel()} state · ${phase} · ${deskCards.length} desk reads · ${recapCards.length} recaps`;
+  el.claudePromptPreview.textContent = currentClaudePrompt;
+  el.openAgentFrame.href = localViewLink("agent");
 }
 
 function cardFileName(league) {
@@ -425,7 +552,7 @@ function renderShareCard(league, deskCards, recapCards, rows) {
   ctx.fillStyle = "#101217";
   ctx.font = "900 22px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText("pointcast.xyz/nouns-nation-battler-tv", 128, 862);
-  ctx.fillText(`${deskCards.length} desk reads / ${recapCards.length} recaps / V30`, 1088, 862);
+  ctx.fillText(`${deskCards.length} desk reads / ${recapCards.length} recaps / V33`, 1088, 862);
 }
 
 function currentCardDataUrl() {
@@ -608,17 +735,47 @@ function render() {
   ].join("");
   el.runSheetTitle.textContent = deskCards[0]?.title || recapCards[0]?.headline || "Latest playable angle";
   el.runSheetBody.textContent = currentRunSheet;
+  renderAgentScorebook(league, deskCards, recapCards, rows);
+  renderWatchFrames(league, deskCards, recapCards, rows);
   renderReport(league, deskCards, recapCards, rows);
   renderShareCard(league, deskCards, recapCards, rows);
   renderDeskCards(deskCards);
   renderRecapCards(recapCards);
-  applyViewMode();
+  applyViewMode(league, rows, deskCards, recapCards);
 }
 
-function applyViewMode() {
-  document.body.classList.toggle("card-view", isCardView());
-  if (isCardView()) {
+function applyViewMode(league, rows, deskCards, recapCards) {
+  const view = viewMode();
+  const frameViews = ["card", "scoreboard", "story", "agent"];
+  const leader = rows?.[0];
+  const latestDesk = deskCards?.[0];
+  const latestRecap = recapCards?.[0];
+  document.body.classList.toggle("frame-view", frameViews.includes(view));
+  document.body.classList.toggle("card-view", view === "card");
+  document.body.classList.toggle("scoreboard-view", view === "scoreboard");
+  document.body.classList.toggle("story-view", view === "story");
+  document.body.classList.toggle("agent-view", view === "agent");
+
+  if (view === "card") {
+    el.seasonLabel.textContent = `Report Card Frame · ${phaseLine(league)}`;
+    el.deskHeadline.textContent = "Snapshot card ready to share";
+    el.deskSummary.textContent = "A focused 16:9 card view for chat, posts, and agent handoff.";
     el.shareCardTitle.textContent = el.shareCardTitle.textContent.replace("ready", "shared");
+  }
+  if (view === "scoreboard") {
+    el.seasonLabel.textContent = `Scoreboard Frame · ${phaseLine(league)}`;
+    el.deskHeadline.textContent = leader ? `${leader.name} top the table` : "Scoreboard frame";
+    el.deskSummary.textContent = "Standings first, with the Commissioner Desk and Recap Studio stacked like a broadcast table read.";
+  }
+  if (view === "story") {
+    el.seasonLabel.textContent = `Story Desk Frame · ${phaseLine(league)}`;
+    el.deskHeadline.textContent = latestDesk?.title || latestRecap?.headline || "Story desk frame";
+    el.deskSummary.textContent = latestDesk?.meta || latestRecap?.mvp || "A host-friendly frame for the league angle, recent result, and next-watch hook.";
+  }
+  if (view === "agent") {
+    el.seasonLabel.textContent = `Agent Scorebook Frame · ${phaseLine(league)}`;
+    el.deskHeadline.textContent = "Hand this season to Claude";
+    el.deskSummary.textContent = "Copy the MCP prompt, paste it into Claude/Cowork, and let the agent keep the league scorebook while you watch.";
   }
 }
 
@@ -674,6 +831,8 @@ el.clearGallery.addEventListener("click", () => {
 });
 el.copySnapshotLink.addEventListener("click", () => copyText(snapshotLink(), "Snapshot link"));
 el.copySnapshotJson.addEventListener("click", () => copyText(JSON.stringify(currentSnapshot, null, 2), "Snapshot JSON"));
+el.copyClaudePrompt.addEventListener("click", () => copyText(currentClaudePrompt, "Claude prompt"));
+el.copyClaudeInline.addEventListener("click", () => copyText(currentClaudePrompt, "Claude prompt"));
 el.useLocalWall.addEventListener("click", () => {
   importedSnapshot = null;
   history.replaceState(null, "", window.location.pathname);
@@ -681,6 +840,11 @@ el.useLocalWall.addEventListener("click", () => {
   render();
 });
 el.refreshWall.addEventListener("click", () => {
+  importedSnapshot = snapshotFromHash();
+  render();
+});
+
+window.addEventListener("hashchange", () => {
   importedSnapshot = snapshotFromHash();
   render();
 });

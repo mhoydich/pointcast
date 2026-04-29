@@ -250,6 +250,31 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add a compact Watch Now rail in the normal game view with the current matchup, field, challenge progress, Bowl countdown, rooting prompt, and post-slate card handoff.
 - Copy Desk Wall snapshot and card links against the canonical PointCast desk route when generated from localhost, so shared report cards do not leak dev URLs.
 
+## V31 Agent Bench + MCP Handoff Additions
+
+- Add `/nouns-nation-battler-agents/` as the public Agent Bench for Claude, ChatGPT, Codex, Cursor, and MCP-aware visitors.
+- Add `/nouns-nation-battler-agents.json` as the machine-readable task board with scout, host, commentator, art-director, designer, fan, and QA tasks.
+- Add MCP tools `nouns_battler_manifest`, `nouns_battler_agent_tasks`, and `nouns_battler_presence`.
+- Add MCP resources `nouns-battler://agent-bench` and `nouns-battler://manifest`.
+- Use existing anonymous presence as opt-in room presence for agents: caller-generated `sid`, `kind=agent`, public Noun number, no raw session ids in broadcasts.
+- Link the Agent Bench from the public Battler page, `/agents.json`, `/for-agents`, and the Battler manifest.
+
+## V32 Results Desk MCP Additions
+
+- Add `nouns_battler_result_tracker` so Claude/Cowork can track results from Desk Wall snapshot URLs, raw snapshot JSON, or copied Recap Studio text.
+- Add `nouns_battler_cowork_brief` for scorekeeper, color-commentator, commissioner, and group-chat host modes.
+- Add `nouns-battler://results-kit` as the MCP resource for result schema, accepted inputs, and Cowork prompts.
+- Extend `/nouns-nation-battler-agents.json` with `resultTracking` so non-MCP agents can still learn how to keep the scorebook.
+- Keep result tracking local-to-client unless a user explicitly pastes or shares a snapshot/recap. No backend results ledger yet.
+
+## V33 Desk Wall Watch Frame Additions
+
+- Add Desk Wall view modes for four ways to watch the same snapshot: `view=card`, `view=scoreboard`, `view=story`, and `view=agent`.
+- Add a Watch Frames rail that creates snapshot-backed canonical links for the report card, scoreboard, story desk, and agent scorebook frames.
+- Add Copy Claude Prompt actions that package the active Desk Wall snapshot for `nouns_battler_result_tracker` and ask the agent to keep a running scorebook.
+- Add an Agent Scorebook frame that makes the MCP handoff visible and copyable for Claude/Cowork, ChatGPT, Cursor, or another MCP-aware client.
+- Extend `/nouns-nation-battler-agents.json` with `watchFrames` so visiting agents know which frame to open for scorekeeping, commentary, hosting, or sharing.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -263,6 +288,9 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Keep shared Desk Wall links canonical to the public PointCast desk route when copied from local development.
 - Continue storing root preference under `pc:nouns-nation-root`.
 - Continue storing all-time local season stats under `pc:nouns-nation-season`.
+- Do not store Agent Bench task output server-side. Visiting agents either report back to the user/client or opt into existing anonymous presence.
+- Do not store Results Desk updates server-side. MCP result tracking reads user-supplied snapshots or recap text and returns a scorebook response to the caller.
+- Watch frame links remain URL-hash snapshots and do not mutate the local Desk Wall unless the viewer explicitly chooses local state.
 
 ## Acceptance Criteria
 
@@ -287,6 +315,14 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Resetting a league advances to the next numbered season locally.
 - The Watch Guide can be opened from the controls, direct `#guide=1` links, and TV `G`.
 - The normal view includes a compact Watch Now rail that explains the current matchup before the deeper controls.
+- The public Battler page links to the Agent Bench and task JSON.
+- `/nouns-nation-battler-agents/` renders a human-readable task board and privacy stance.
+- `/nouns-nation-battler-agents.json` returns CORS-open task data for visiting agents.
+- `/api/mcp-v2` exposes Battler task, manifest, and presence tools plus Battler resources.
+- Agent presence remains opt-in and anonymous; no raw session ids or personal identifiers are broadcast.
+- `/api/mcp-v2` can turn a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text into standings, latest recaps, parsed final score, and Cowork cards.
+- The Season Desk Wall can open snapshot-backed card, scoreboard, story, and agent scorebook frames with dedicated `view=` modes.
+- The Season Desk Wall can copy a Claude/Cowork prompt that calls `nouns_battler_result_tracker` with the active snapshot.
 - The normal view shows a Season 2 scope board without blocking play.
 - The normal view includes a Watch Party Kit with live invite copy and copyable links for TV, guide, and posters.
 - Live storylines update from the current table, challenge, survivor count, and next fixture.

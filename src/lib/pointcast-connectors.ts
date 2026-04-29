@@ -30,12 +30,16 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
     owner: 'PointCast',
     category: 'town',
     description:
-      'Fresh PointCast MCP connector for AI clients: same town-wide tools, new URL, distinct server identity, and Claude-friendly annotations.',
+      'Fresh PointCast MCP connector for AI clients: same town-wide tools, Nouns Nation Battler agent tasks, result tracking, watch-frame handoffs, new URL, distinct server identity, and Claude-friendly annotations.',
     clientUse:
       'Add this when a client has cached the original PointCast connector or when you want the newest app-shelf-first MCP surface.',
     tools: [
       'connector_links',
       'apps_list',
+      'nouns_battler_agent_tasks',
+      'nouns_battler_manifest',
+      'nouns_battler_result_tracker',
+      'nouns_battler_cowork_brief',
       'town_map',
       'surfaces_list',
       'presence_snapshot',
@@ -72,7 +76,7 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
     owner: 'PointCast',
     category: 'town',
     description:
-      'The whole PointCast town as an MCP connector: blocks, rooms, presence, apps, contracts, weather, channels, and the drum hub.',
+      'The whole PointCast town as an MCP connector: blocks, rooms, presence, apps, Nouns Nation Battler tasks, result tracking, watch-frame handoffs, contracts, weather, channels, and the drum hub.',
     clientUse:
       'Stable original connector URL. Keep it installed when a client already sees the tools; use v2 for a fresh install.',
     tools: [
@@ -80,6 +84,10 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
       'surfaces_list',
       'connector_links',
       'apps_list',
+      'nouns_battler_agent_tasks',
+      'nouns_battler_manifest',
+      'nouns_battler_result_tracker',
+      'nouns_battler_cowork_brief',
       'presence_snapshot',
       'blocks_recent',
       'block_read',

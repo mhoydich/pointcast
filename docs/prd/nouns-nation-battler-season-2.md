@@ -11,6 +11,7 @@ Season 2 should make Nouns Nation Battler easier to enter and richer to follow. 
 - Reviewers who need to understand the loop in under 30 seconds.
 - Returning viewers who want a new reason to run another season.
 - People entering through a shared TV invite or poster wall.
+- Visiting AI agents asked to scout, host, QA, commentate, or invent season mutations.
 
 ## Onboarding Approach
 
@@ -98,6 +99,22 @@ The TV cast should periodically explain the table like a tiny sports desk:
 - Add an in-session Report Gallery for comparing and re-sharing multiple report cards during a slate. Shipped in V28.
 - Add shareable report-card links that open snapshot-backed cards in focused view. Shipped in V29.
 - Add league-integrity scoring coverage, canonical public card links, and a compact Watch Now rail. Shipped in V30.
+- Add an Agent Bench plus MCP handoff so Claude, ChatGPT, Codex, Cursor, and other visiting agents can receive scout, host, fan, QA, and season-design tasks. Shipped in V31.
+- Add a Results Desk MCP so Claude/Cowork can track the league from Desk Wall snapshots or copied recap text. Shipped in V32.
+- Add Desk Wall watch frames for report card, scoreboard, story desk, and agent scorebook views, plus a copyable Claude/Cowork scorebook prompt. Shipped in V33.
+
+### Agent Bench
+
+The league should be legible to visiting AI agents, not just humans:
+
+- Publish a human Agent Bench at `/nouns-nation-battler-agents/`.
+- Publish a machine task board at `/nouns-nation-battler-agents.json`.
+- Expose Battler tasks, manifest, and presence handoff through PointCast MCP.
+- Treat "people tracking" as opt-in anonymous presence only: generated session id, public Noun number, no raw session ids in broadcasts, no server-side task output storage.
+- Give agents creative jobs that help the broadcast: scout notes, desk reads, poster captions, commentary lines, QA reports, and next-season mutations.
+- Add a scorebook layer that accepts Desk Wall snapshot URLs, raw snapshot JSON, or Recap Studio text and returns standings, latest recaps, parsed finals, and next-watch prompts.
+- Support Cowork modes: scorekeeper, color commentator, commissioner, and group-chat host.
+- Expose snapshot-backed watch frames so agents can open the right view for scorekeeping, commentary, hosting, or sharing.
 
 ### Commissioner's Cup
 
@@ -155,6 +172,9 @@ Explore a mid-season knockout bracket:
 - Add ephemeral Report Gallery saves so hosts can collect up to six card/caption pairs before posting. Shipped in V28.
 - Add current-card and gallery-card share links using `view=card` snapshot URLs. Shipped in V29.
 - Add quick-sim score regression coverage, canonical copied card URLs, and a Watch Now viewer-entry rail. Shipped in V30.
+- Add Agent Bench JSON, human page, `/agents.json` discovery, and MCP Battler tools. Shipped in V31.
+- Add Results Desk MCP tools and resource for snapshot/recap-based scorekeeping. Shipped in V32.
+- Add snapshot-backed Desk Wall `view=card`, `view=scoreboard`, `view=story`, and `view=agent` modes plus a Watch Frames rail. Shipped in V33.
 
 ## Acceptance Criteria
 
@@ -178,6 +198,11 @@ Explore a mid-season knockout bracket:
 - Quick Sim recaps and league scoring preserve the same final score.
 - Copied Desk Wall card links use public PointCast URLs when generated from localhost.
 - Normal mode exposes a Watch Now rail before the deeper operator kit.
+- Agent Bench exposes opt-in anonymous presence and concrete tasks for visiting agents.
+- MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_manifest`, and `nouns_battler_presence`.
+- MCP clients can call `nouns_battler_result_tracker` with a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text and receive a scorebook brief.
+- Desk Wall watch frames can be copied as snapshot-backed links for report-card, scoreboard, story-desk, or agent-scorebook viewing.
+- The Agent Scorebook frame gives Claude/Cowork a ready prompt for `nouns_battler_result_tracker`.
 - No onboarding state is transmitted; it stays in localStorage.
 - `npm run build` succeeds.
 - The battler remains playable inside the PointCast iframe and direct static route.

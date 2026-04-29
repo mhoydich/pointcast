@@ -16,6 +16,7 @@ import { CHANNEL_LIST } from '../lib/channels';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
+import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import contracts from '../data/contracts.json';
 import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 
@@ -146,6 +147,11 @@ export const GET: APIRoute = async () => {
         pace: 'https://pointcast.xyz/pace',
         bathRecent: 'https://pointcast.xyz/bath/recent',
         agentDerby: 'https://pointcast.xyz/agent-derby',
+        nounsNationBattler: 'https://pointcast.xyz/nouns-nation-battler/',
+        nounsNationBattlerTv: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+        nounsNationBattlerDesk: 'https://pointcast.xyz/nouns-nation-battler-desk/',
+        nounsNationBattlerPosters: 'https://pointcast.xyz/nouns-nation-battler-posters/',
+        nounsNationBattlerAgents: 'https://pointcast.xyz/nouns-nation-battler-agents/',
         battle: 'https://pointcast.xyz/battle',
         now: 'https://pointcast.xyz/now',
         search: 'https://pointcast.xyz/search',
@@ -193,6 +199,8 @@ export const GET: APIRoute = async () => {
         now: 'https://pointcast.xyz/now.json',
         cast: 'https://pointcast.xyz/cast.json',
         agentDerby: 'https://pointcast.xyz/agent-derby.json',
+        nounsNationBattler: 'https://pointcast.xyz/nouns-nation-battler.json',
+        nounsNationBattlerAgents: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
         town: 'https://pointcast.xyz/town.json',
         battle: 'https://pointcast.xyz/battle.json',
         timeline: 'https://pointcast.xyz/timeline.json',
@@ -295,7 +303,7 @@ export const GET: APIRoute = async () => {
         transport: 'http',
         protocol: 'json-rpc-2.0',
         protocolVersion: '2025-06-18',
-        server: { name: 'pointcast-v2', version: '2.0.0' },
+        server: { name: 'pointcast-v2', version: '2.2.0' },
         install: {
           customConnectorUrl: 'https://pointcast.xyz/api/mcp-v2',
           originalConnectorUrl: 'https://pointcast.xyz/api/mcp',
@@ -316,14 +324,19 @@ export const GET: APIRoute = async () => {
           'contracts_status', 'channels_list', 'agents_manifest',
           // client install layer (v0.3.0)
           'connector_links', 'apps_list',
+          // Nouns Nation Battler agent bench (v0.4.0 / v2.1.0)
+          'nouns_battler_manifest', 'nouns_battler_agent_tasks', 'nouns_battler_presence',
+          // Nouns Nation Battler results desk (v0.5.0 / v2.2.0)
+          'nouns_battler_result_tracker', 'nouns_battler_cowork_brief',
         ],
         resources: [
           'drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema',
           'pointcast://map', 'pointcast://now', 'pointcast://feed',
           'pointcast://contracts', 'pointcast://channels',
           'pointcast://connectors', 'pointcast://apps',
+          'nouns-battler://agent-bench', 'nouns-battler://manifest', 'nouns-battler://results-kit',
         ],
-        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
+        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler agent tasks and Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
@@ -365,6 +378,24 @@ export const GET: APIRoute = async () => {
         })),
         version: PLAY_LAYER_VERSION,
         note: 'Local-first ritual layer: passport stamps, daily walk, quests, room weather, radio, routes, builder ghosts, civic wishes, pet care, Zen Cats, and Derby season.',
+      },
+      nounsNationBattlerAgentBench: {
+        html: 'https://pointcast.xyz/nouns-nation-battler-agents/',
+        json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
+        manifest: 'https://pointcast.xyz/nouns-nation-battler.json',
+        mcp: 'https://pointcast.xyz/api/mcp-v2',
+        presenceSnapshot: 'https://pointcast.xyz/api/presence/snapshot',
+        tools: NOUNS_BATTLER_AGENT_BENCH.mcp.tools,
+        resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
+        watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+        tasks: NOUNS_BATTLER_AGENT_BENCH.tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          role: task.role,
+          difficulty: task.difficulty,
+        })),
+        privacy: NOUNS_BATTLER_AGENT_BENCH.privacy,
+        note: 'Task board for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids.',
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',

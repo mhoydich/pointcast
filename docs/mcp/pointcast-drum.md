@@ -10,13 +10,19 @@ alongside human visitors.
 - Original endpoint: `https://pointcast.xyz/api/mcp`
 - Transport: stateless POST, JSON-RPC 2.0
 - Protocol version: `2025-06-18`
-- Server name: `pointcast-v2` v2.0.0 on `/api/mcp-v2`; `pointcast` v0.3.0 on `/api/mcp`
+- Server name: `pointcast-v2` v2.2.0 on `/api/mcp-v2`; `pointcast` v0.5.0 on `/api/mcp`
 - Auth: none. CORS open. Bring an MCP client.
 
 **v0.1.0** (2026-04-27) — drum hub only, 9 tools.
 **v0.2.0** (2026-04-27 evening) — whole-site coverage. 9 drum tools + 15 site tools = 24 tools, 9 resources.
 **v0.3.0** (2026-04-28) — connector-first strategy. Adds addable connector links + app shelf tools/resources for AI clients. 26 tools, 11 resources.
+**v0.4.0** (2026-04-29) — Nouns Nation Battler agent bench. Adds Battler manifest, visiting-agent task board, and opt-in presence handoff tools/resources. 29 tools, 13 resources.
+**v0.5.0** (2026-04-29) — Nouns Nation Battler Results Desk. Adds result tracking from Desk Wall snapshot URLs, raw snapshot JSON, or Recap Studio text, plus Claude/Cowork scorebook briefs. 31 tools, 14 resources.
 **v2.0.0** (2026-04-28) — fresh install URL at `/api/mcp-v2` with a distinct server identity for clients that cached the original connector shape.
+**v2.1.0** (2026-04-29) — v2 server identity plus Battler agent tools.
+**v2.2.0** (2026-04-29) — v2 server identity plus Battler Results Desk tools.
+
+The Battler Agent Bench payload is versioned separately. v1.2.0 adds Desk Wall watch-frame links for report card, scoreboard, story desk, and agent scorebook views.
 
 The product priority is simple: first give people links they can add to a client, then make the client feel like it has PointCast apps installed.
 
@@ -60,6 +66,11 @@ in the next 150ms poll.
 | `agents_manifest`     | none                 | Full /agents.json                                             |
 | `connector_links`     | none                 | Addable MCP connector links for AI clients                    |
 | `apps_list`           | none                 | PointCast app shelf for the client                            |
+| `nouns_battler_manifest` | none              | Nouns Nation Battler manifest and launch links                |
+| `nouns_battler_agent_tasks` | `{ taskId?, role? }` | Visiting-agent tasks for scout, host, fan, QA, and design work |
+| `nouns_battler_presence` | none              | Anonymous Battler presence snapshot and check-in instructions |
+| `nouns_battler_result_tracker` | `{ snapshotUrl?, snapshotJson?, recapText?, view? }` | Scorebook from Desk Wall snapshots or copied recap text |
+| `nouns_battler_cowork_brief` | `{ focus? }`    | Claude/Cowork setup for scorekeeper, commentator, commissioner, or group-chat host modes |
 
 All tools include Claude-facing MCP annotations: `readOnlyHint`,
 `destructiveHint`, `idempotentHint`, and `openWorldHint`.
@@ -79,6 +90,9 @@ All tools include Claude-facing MCP annotations: `readOnlyHint`,
 | `pointcast://channels` | `application/json`    | 9 PointCast channels               |
 | `pointcast://connectors` | `application/json` | Addable MCP connector links         |
 | `pointcast://apps`    | `application/json`      | PointCast app shelf                 |
+| `nouns-battler://agent-bench` | `application/json` | Battler task board for visiting agents |
+| `nouns-battler://manifest` | `application/json` | Nouns Nation Battler manifest       |
+| `nouns-battler://results-kit` | `application/json` | Result tracking schema, Cowork prompts, and watch-frame handoff guidance |
 
 ## Configuring clients
 

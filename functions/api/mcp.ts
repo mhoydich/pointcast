@@ -6,6 +6,11 @@
  * v0.3.0 (per Mike: "links people can add is the priority and then need
  *                                       apps in the client") — connector
  *                                       links + app catalog tools.
+ * v0.4.0 (per Mike: "something for the agents to do") — Nouns Nation
+ *                                       Battler agent tasks + manifest
+ *                                       handoff.
+ * v0.5.0 — Nouns Nation Battler result tracking + Claude/Cowork
+ *          scorebook briefs from Desk Wall snapshots and recap text.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -45,6 +50,12 @@
  *   agents_manifest       (no input)   full /agents.json
  *   connector_links       (no input)   addable MCP links for AI clients
  *   apps_list             (no input)   PointCast app shelf for clients
+ *   nouns_battler_manifest (no input)  Nouns Nation Battler manifest
+ *   nouns_battler_agent_tasks ({taskId?, role?}) visiting-agent tasks
+ *   nouns_battler_presence (no input)  anonymous presence instructions
+ *   nouns_battler_result_tracker ({snapshotUrl?, snapshotJson?, recapText?, view?})
+ *                                       parse/track Battler results
+ *   nouns_battler_cowork_brief ({focus?}) Claude/Cowork scorebook kit
  *
  * Resources
  *   drum://rooms          markdown list of all drum surfaces
@@ -58,6 +69,9 @@
  *   pointcast://channels  9 PointCast channels
  *   pointcast://connectors addable MCP connector links
  *   pointcast://apps      PointCast app shelf
+ *   nouns-battler://agent-bench  task board for visiting agents
+ *   nouns-battler://manifest     Battler game manifest
+ *   nouns-battler://results-kit  result tracking schema + prompts + watch frames
  *
  * Discovery
  *   GET /api/mcp returns an HTML discovery page with config snippets.
@@ -67,13 +81,18 @@
  * Per docs/mcp/pointcast-drum.md.
  */
 
+import {
+  NOUNS_BATTLER_AGENT_BENCH,
+  filterNounsBattlerAgentTasks,
+  findNounsBattlerAgentTask,
+} from '../../src/lib/nouns-battler-agent-bench';
 import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.3.0';
+const SERVER_VERSION = '0.5.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.0.0';
+const V2_SERVER_VERSION = '2.2.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -335,6 +354,78 @@ const TOOL_DEFINITIONS = [
     description: 'List PointCast apps for the client shelf: internal tools, satellite rooms, collectible consoles, and connector apps.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'nouns_battler_manifest',
+    description:
+      'Return the Nouns Nation Battler manifest: game links, TV route, desk wall, battle types, season systems, brand kits, and agent-facing links.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'nouns_battler_agent_tasks',
+    description:
+      'Return the Agent Bench task board for visiting AI agents. Optional filters: taskId for one task, role for scout/host/commentator/art-director/designer/fan/qa.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Optional task id such as scout-current-slate or desk-read.' },
+        role: {
+          type: 'string',
+          description: 'Optional role filter: scout, host, commentator, art-director, designer, fan, or qa.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'nouns_battler_presence',
+    description:
+      'Return current PointCast presence plus the privacy-safe way for an agent to check into Nouns Nation Battler as kind=agent.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'nouns_battler_result_tracker',
+    description:
+      'Track Nouns Nation Battler results from a Desk Wall snapshot URL, raw snapshot JSON, or copied Recap Studio text. Returns standings, latest recaps, parsed final score, and Claude/Cowork cards.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        snapshotUrl: {
+          type: 'string',
+          description: 'Optional /nouns-nation-battler-desk/#snapshot=... or focused report-card URL.',
+        },
+        snapshotJson: {
+          description: 'Optional raw Desk Wall snapshot JSON, either as an object or a JSON string.',
+          oneOf: [{ type: 'object' }, { type: 'string' }],
+        },
+        recapText: {
+          type: 'string',
+          description: 'Optional copied Recap Studio, Commissioner Desk, or social post text.',
+        },
+        view: {
+          type: 'string',
+          enum: ['scorebook', 'cowork', 'share'],
+          description: 'Output emphasis. scorebook is default.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'nouns_battler_cowork_brief',
+    description:
+      'Return an inventive Claude/Cowork brief for using Nouns Nation Battler as a live scorebook, color-commentary desk, commissioner room, group-chat host, or watch-frame guide.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        focus: {
+          type: 'string',
+          enum: ['scorekeeper', 'color-commentator', 'commissioner', 'group-chat-host', 'all'],
+          description: 'Which Cowork mode to emphasize. Default all.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 const TOOLS = TOOL_DEFINITIONS.map((tool) => ({
@@ -412,6 +503,24 @@ const RESOURCES = [
     description: 'PointCast app shelf. Mirror of /apps.json.',
     mimeType: 'application/json',
   },
+  {
+    uri: 'nouns-battler://agent-bench',
+    name: 'Nouns Nation Battler Agent Bench',
+    description: 'Task board and opt-in presence instructions for visiting agents.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://manifest',
+    name: 'Nouns Nation Battler Manifest',
+    description: 'Game manifest with links, league systems, battle types, and brand kits.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://results-kit',
+    name: 'Nouns Nation Battler Results Kit',
+    description: 'Result tracking schema, Cowork modes, watch-frame links, and prompts for scorebook-style agent work.',
+    mimeType: 'application/json',
+  },
 ] as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -443,6 +552,176 @@ async function callJson(url: string, init?: RequestInit): Promise<any> {
 }
 function textContent(text: string): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text', text }] };
+}
+
+function base64UrlToUtf8(value: string): string {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function snapshotTokenFromUrl(value: string): string {
+  const hash = value.includes('#') ? value.slice(value.indexOf('#') + 1) : value;
+  const params = new URLSearchParams(hash);
+  return params.get('snapshot') || '';
+}
+
+function parseJsonish(value: unknown): any | null {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeBattlerSnapshot(value: any): any | null {
+  if (!value || typeof value !== 'object') return null;
+  if (value.kind === 'nouns-nation-desk-snapshot' && value.league) return value;
+  if (value.league) return { kind: 'nouns-nation-desk-snapshot', version: value.version || 1, league: value.league };
+  if (value.table || value.recapCards || value.deskCards) {
+    return { kind: 'nouns-nation-desk-snapshot', version: 1, league: value };
+  }
+  return null;
+}
+
+function snapshotFromArgs(args: Record<string, unknown>): { source: string; snapshot: any | null; error?: string } {
+  const snapshotJson = parseJsonish(args.snapshotJson);
+  if (snapshotJson) return { source: 'snapshotJson', snapshot: normalizeBattlerSnapshot(snapshotJson) };
+
+  const snapshotUrl = String(args.snapshotUrl || '').trim();
+  if (!snapshotUrl) return { source: 'empty', snapshot: null };
+
+  const token = snapshotTokenFromUrl(snapshotUrl);
+  if (!token) return { source: 'snapshotUrl', snapshot: null, error: 'snapshotUrl does not contain a snapshot hash parameter' };
+  try {
+    return { source: 'snapshotUrl', snapshot: normalizeBattlerSnapshot(JSON.parse(base64UrlToUtf8(token))) };
+  } catch (err: any) {
+    return { source: 'snapshotUrl', snapshot: null, error: `snapshotUrl could not be decoded: ${err?.message || String(err)}` };
+  }
+}
+
+function standingsFromLeague(league: any): any[] {
+  const table = league?.table || {};
+  return Object.entries(table)
+    .map(([name, row]: [string, any]) => ({
+      name,
+      wins: Number(row?.wins || 0),
+      losses: Number(row?.losses || 0),
+      pf: Number(row?.pf || 0),
+      pa: Number(row?.pa || 0),
+      diff: Number(row?.pf || 0) - Number(row?.pa || 0),
+      fans: Number(row?.fans || 0),
+      streak: Number(row?.streak || 0),
+      last: String(row?.last || ''),
+      challengeWins: Number(row?.challengeWins || 0),
+      rivalryWins: Number(row?.rivalryWins || 0),
+    }))
+    .sort((a, b) => b.wins - a.wins || b.diff - a.diff || b.pf - a.pf || b.fans - a.fans || a.name.localeCompare(b.name));
+}
+
+function phaseFromLeague(league: any): string {
+  if (!league) return 'No season snapshot loaded';
+  const season = Number(league.seasonNumber || 1);
+  if (league.phase === 'champion') return `Season ${season} champion: ${league.champion || 'pending'}`;
+  if (league.phase === 'playoffs') {
+    return Number(league.playoffSlot || 0) < 2
+      ? `Season ${season} Nouns Bowl semifinal ${Number(league.playoffSlot || 0) + 1}`
+      : `Season ${season} Nouns Bowl final`;
+  }
+  return `Season ${season} day ${Number(league.day || 0) + 1}, slate ${Number(league.slot || 0) + 1}`;
+}
+
+function parseRecapResult(text: string): any | null {
+  const raw = text.trim().replace(/\s+/g, ' ');
+  if (!raw) return null;
+  const beat = raw.match(/(?:^|[:.]\s*)([A-Z][A-Za-z ]{1,42}|[A-Z]{2,3})\s+beat\s+([A-Z][A-Za-z ]{1,42}|[A-Z]{2,3}),?\s+(\d{1,2})\s*[-–]\s*(\d{1,2})/i);
+  const final = raw.match(/Final\s+([^.]*)/i);
+  const next = raw.match(/Next:\s*([^.]*)/i);
+  const phase = raw.includes(':') ? raw.split(':')[0].trim() : 'Copied recap';
+  if (beat) {
+    return {
+      phase,
+      winner: beat[1].trim(),
+      loser: beat[2].trim(),
+      winnerScore: Number(beat[3]),
+      loserScore: Number(beat[4]),
+      final: `${beat[1].trim()} ${beat[3]}-${beat[4]} ${beat[2].trim()}`,
+      next: next?.[1]?.trim() || '',
+      raw,
+    };
+  }
+  return {
+    phase,
+    final: final?.[1]?.trim() || '',
+    next: next?.[1]?.trim() || '',
+    raw,
+  };
+}
+
+function coworkCardsFromResult(result: any): any[] {
+  const leader = result.standings?.[0];
+  const latest = result.latestRecaps?.[0];
+  const parsed = result.parsedResult;
+  return [
+    {
+      title: 'Scorekeeper',
+      body: leader
+        ? `${leader.name} lead the table at ${leader.wins}-${leader.losses}, ${leader.diff >= 0 ? '+' : ''}${leader.diff} differential, ${leader.fans} heat.`
+        : parsed?.final
+          ? `Latest final logged: ${parsed.final}.`
+          : 'Waiting for a Desk Wall snapshot or recap text.',
+    },
+    {
+      title: 'Broadcast Hook',
+      body: latest?.headline || latest?.title || parsed?.final || result.summary,
+    },
+    {
+      title: 'Next Watch',
+      body: latest?.next || parsed?.next || 'Open the TV cast and run the next slate: https://pointcast.xyz/nouns-nation-battler-tv/',
+    },
+  ];
+}
+
+function buildBattlerResultTracker(args: Record<string, unknown>): any {
+  const view = String(args.view || 'scorebook');
+  const recapText = String(args.recapText || '').trim();
+  const parsedResult = recapText ? parseRecapResult(recapText) : null;
+  const loaded = snapshotFromArgs(args);
+  const league = loaded.snapshot?.league || null;
+  const standings = standingsFromLeague(league);
+  const latestRecaps = Array.isArray(league?.recapCards) ? league.recapCards.slice(0, 5) : [];
+  const phase = phaseFromLeague(league) || parsedResult?.phase || 'No season snapshot loaded';
+  const leader = standings[0];
+  const source = loaded.snapshot ? loaded.source : parsedResult ? 'recapText' : loaded.source;
+  const summary = leader
+    ? `${phase}. ${leader.name} lead ${leader.wins}-${leader.losses}; ${latestRecaps.length} recap card${latestRecaps.length === 1 ? '' : 's'} loaded.`
+    : parsedResult?.final
+      ? `${parsedResult.phase}: ${parsedResult.final}${parsedResult.next ? `; next ${parsedResult.next}` : ''}.`
+      : 'No result artifact supplied yet. Pass snapshotUrl, snapshotJson, or recapText.';
+  const record = {
+    source,
+    view,
+    phase,
+    summary,
+    standings,
+    latestRecaps,
+    parsedResult,
+    warning: loaded.error || undefined,
+  };
+  return {
+    ...record,
+    coworkCards: coworkCardsFromResult(record),
+    nextPrompt: NOUNS_BATTLER_AGENT_BENCH.resultTracking.sharePrompt,
+    acceptedInputs: NOUNS_BATTLER_AGENT_BENCH.resultTracking.inputs,
+  };
 }
 
 // ── Tool dispatchers ──────────────────────────────────────────────────
@@ -791,6 +1070,120 @@ async function dispatchTool(
         ],
       };
     }
+    case 'nouns_battler_manifest': {
+      const data = await callJson(`${base}/nouns-nation-battler.json`);
+      const systems = Array.isArray(data?.game?.systems) ? data.game.systems.slice(0, 10).join(', ') : 'league systems';
+      const summary = [
+        `${data?.name || 'Nouns Nation Battler'} · ${data?.status || 'live'}`,
+        `watch: ${data?.links?.tv || data?.tv || `${base}/nouns-nation-battler-tv/`}`,
+        `agent bench: ${data?.links?.agentBench || `${base}/nouns-nation-battler-agents/`}`,
+        `systems: ${systems}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'nouns_battler_agent_tasks': {
+      const taskId = String(args.taskId || '').trim();
+      const role = String(args.role || '').trim();
+      const singleTask = taskId ? findNounsBattlerAgentTask(taskId) : undefined;
+      if (taskId && !singleTask) return { content: [{ type: 'text', text: `unknown Nouns Battler task: ${taskId}` }], isError: true };
+      const tasks = singleTask ? [singleTask] : filterNounsBattlerAgentTasks(role);
+      const bench = {
+        ...NOUNS_BATTLER_AGENT_BENCH,
+        generatedAt: new Date().toISOString(),
+        tasks,
+      };
+      const summary = [
+        `${tasks.length} Nouns Nation Battler task${tasks.length === 1 ? '' : 's'}${role ? ` for role ${role}` : ''}:`,
+        ...tasks.map((task: any) => `  · ${task.id} · ${task.title} (${task.role}) — ${task.expectedOutput}`),
+        '',
+        `MCP next step: call nouns_battler_manifest, then visit ${NOUNS_BATTLER_AGENT_BENCH.entryPoints.tv}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(bench, null, 2) },
+        ],
+      };
+    }
+    case 'nouns_battler_presence': {
+      const data = await callJson(`${base}/api/presence/snapshot`);
+      const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+      const agents = sessions.filter((s: any) => s?.kind === 'agent');
+      const humans = sessions.filter((s: any) => s?.kind !== 'agent');
+      const summary = [
+        `${data?.agents ?? agents.length} agents and ${data?.humans ?? humans.length} humans on PointCast presence right now.`,
+        'For Nouns Battler, use presence as opt-in room presence, not people tracking.',
+        `Connect: ${NOUNS_BATTLER_AGENT_BENCH.presence.websocket}`,
+        `Identify: ${JSON.stringify(NOUNS_BATTLER_AGENT_BENCH.presence.identifyExample)}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                presence: data,
+                battlerPresence: NOUNS_BATTLER_AGENT_BENCH.presence,
+                privacy: NOUNS_BATTLER_AGENT_BENCH.privacy,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+    case 'nouns_battler_result_tracker': {
+      const tracked = buildBattlerResultTracker(args);
+      const lines = [
+        `Nouns Battler result tracker · ${tracked.source}`,
+        tracked.summary,
+        tracked.warning ? `warning: ${tracked.warning}` : '',
+        '',
+        ...tracked.coworkCards.map((card: any) => `  · ${card.title}: ${card.body}`),
+      ].filter(Boolean);
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify(tracked, null, 2) },
+        ],
+      };
+    }
+    case 'nouns_battler_cowork_brief': {
+      const focus = String(args.focus || 'all');
+      const modes = NOUNS_BATTLER_AGENT_BENCH.resultTracking.coworkModes
+        .filter((mode: any) => focus === 'all' || mode.id === focus);
+      if (!modes.length) {
+        return { content: [{ type: 'text', text: `unknown Cowork focus: ${focus}` }], isError: true };
+      }
+      const brief = {
+        name: 'Nouns Nation Battler Claude Cowork Results Desk',
+        endpoint: `${base}/api/mcp-v2`,
+        tools: ['nouns_battler_result_tracker', 'nouns_battler_cowork_brief', 'nouns_battler_manifest'],
+        modes,
+        resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
+        watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+        starterPrompt: NOUNS_BATTLER_AGENT_BENCH.resultTracking.sharePrompt,
+      };
+      const summary = [
+        'Claude/Cowork setup for Nouns Battler:',
+        ...modes.map((mode: any) => `  · ${mode.title}: ${mode.prompt}`),
+        '',
+        `Starter: ${brief.starterPrompt}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(brief, null, 2) },
+        ],
+      };
+    }
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
@@ -841,6 +1234,35 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
   if (uri === 'pointcast://apps') {
     const data = await callJson(`${base}/apps.json`);
     return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'nouns-battler://agent-bench') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({ ...NOUNS_BATTLER_AGENT_BENCH, generatedAt: new Date().toISOString() }, null, 2),
+        },
+      ],
+    };
+  }
+  if (uri === 'nouns-battler://manifest') {
+    const data = await callJson(`${base}/nouns-nation-battler.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'nouns-battler://results-kit') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
+            watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+          }, null, 2),
+        },
+      ],
+    };
   }
 
   throw new Error(`unknown resource: ${uri}`);
@@ -910,7 +1332,7 @@ const DISCOVERY_HTML = `<!doctype html>
 <body>
 <p class="eyebrow">⌐◨-◨ POINTCAST · MCP CONNECTOR</p>
 <h1>add PointCast to your AI client</h1>
-<p>This endpoint is a <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a> connector for the whole PointCast town. Paste the URL below into an AI client that supports custom connectors. The client can read blocks, search the archive, list apps, inspect connector links, see presence, and lightly participate in rooms like /drum.</p>
+<p>This endpoint is a <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a> connector for the whole PointCast town. Paste the URL below into an AI client that supports custom connectors. The client can read blocks, search the archive, list apps, inspect connector links, see presence, take Nouns Nation Battler assignments, track Battler results from Desk Wall snapshots or recap text, and lightly participate in rooms like /drum.</p>
 
 <h2>Connect</h2>
 
@@ -947,6 +1369,15 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>apps_list</code> — PointCast app shelf for the client</li>
 </ul>
 
+<h2>Tools — Nouns Nation Battler</h2>
+<ul>
+  <li><code>nouns_battler_agent_tasks</code> — task board for visiting agents</li>
+  <li><code>nouns_battler_manifest</code> — game, TV, Desk Wall, poster, and league manifest</li>
+  <li><code>nouns_battler_presence</code> — anonymous agent presence instructions and snapshot</li>
+  <li><code>nouns_battler_result_tracker</code> — scorebook from Desk Wall snapshots or Recap Studio text</li>
+  <li><code>nouns_battler_cowork_brief</code> — Claude/Cowork result-tracking brief</li>
+</ul>
+
 <h2>Tools — drum hub</h2>
 <ul>
   <li><code>drum_list_rooms</code> — list every drum surface</li>
@@ -979,6 +1410,11 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>agents_manifest</code> — full /agents.json</li>
   <li><code>connector_links</code> — addable connector links</li>
   <li><code>apps_list</code> — client app shelf</li>
+  <li><code>nouns_battler_agent_tasks</code> — Nouns Battler assignments</li>
+  <li><code>nouns_battler_manifest</code> — Nouns Battler manifest</li>
+  <li><code>nouns_battler_presence</code> — Battler presence handoff</li>
+  <li><code>nouns_battler_result_tracker</code> — Battler result scorebook</li>
+  <li><code>nouns_battler_cowork_brief</code> — Cowork setup for scorekeeping</li>
 </ul>
 
 <h2>Resources</h2>
@@ -986,6 +1422,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
   <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
   <li><code>pointcast://connectors</code> · <code>pointcast://apps</code></li>
+  <li><code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">
@@ -1025,7 +1462,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_agent_tasks to get a concrete visiting-agent job, nouns_battler_manifest for context, and nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
