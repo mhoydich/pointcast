@@ -155,6 +155,10 @@ const description =
     <!-- Footer -->
     <footer class="tide__foot mono" aria-hidden="false">
       <span>tide · el segundo · cc0</span>
+      <span class="tide__today-chip" id="tide-today-chip" hidden aria-label="tide of the day">
+        <span class="tide__today-dot" aria-hidden="true"></span>
+        <a href="/tide/today.json" id="tide-today-link">TIDE OF THE DAY</a>
+      </span>
       <span id="tide-clock">—</span>
     </footer>
 
@@ -990,6 +994,26 @@ const description =
   applyPalette(initial);
   setMode(initialMode);
   setSoundscape(initialSoundscape);
+
+  // Show today-of-the-day chip when defaults are active. Any explicit
+  // user action (cycle palette, switch scene/soundscape, save moment)
+  // hides it for the rest of the session.
+  function showTodayChip(on) {
+    var chip = document.getElementById('tide-today-chip');
+    if (!chip) return;
+    chip.hidden = !on;
+    if (on) {
+      var l = document.getElementById('tide-today-link');
+      if (l) l.textContent = 'TIDE OF THE DAY · ' + initialMode.toUpperCase() + ' · ' + initialSoundscape.toUpperCase();
+    }
+  }
+  if (todayDefaultsActive) {
+    showTodayChip(true);
+    // Hide on any user interaction that diverges from defaults.
+    var dismissChip = function () { showTodayChip(false); todayDefaultsActive = false; };
+    document.addEventListener('click', dismissChip, { once: true });
+    document.addEventListener('keydown', dismissChip, { once: true });
+  }
   setAutoMs(savedAuto);
   audioVolume = savedVol;
   setMotion(savedMotion === '0' ? false : true);
@@ -1369,6 +1393,27 @@ const description =
     opacity: 0.78;
     transition: opacity 0.4s ease;
   }
+  .tide__today-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 0 0 12px;
+    border-left: 1px solid rgba(255,255,255,0.18);
+  }
+  .tide__today-chip[hidden] { display: none; }
+  .tide__today-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--foam, #FFE9D8);
+    animation: today-pulse 2.4s ease-in-out infinite;
+    transition: background 1.6s ease;
+  }
+  @keyframes today-pulse {
+    0%, 100% { opacity: 0.45; transform: scale(1); }
+    50%      { opacity: 1.0;  transform: scale(1.15); }
+  }
+  .tide__today-chip a {
+    color: inherit; text-decoration: none; opacity: 0.9;
+    letter-spacing: 0.18em; font-weight: 700;
+  }
+  .tide__today-chip a:hover { opacity: 1; text-decoration: underline; }
 
   .tide[data-ui="hidden"] .tide__badge,
   .tide[data-ui="hidden"] .tide__settings-wrap,

@@ -81,10 +81,16 @@ export const GET: APIRoute = async () => {
     companion: {
       '/tide':           'the room',
       '/tide.json':      'this manifest',
+      '/tide/today.json':'today\'s defaults (palette+scene+soundscape derived from clock+date)',
       '/tide/moments':   'saved moments viewer',
       '/bath':           'companion (button-y, Spotify, mood selector)',
       '/meditate':       'companion (still room, breathing)',
       '/pace':           'companion (movement room, BPM)',
+    },
+    today: {
+      surface: '/tide/today.json',
+      description:
+        'A fresh visitor with no saved preferences and no URL hash gets palette+scene from hour-of-day and soundscape from day-of-year. Shown as a TIDE OF THE DAY chip in the footer until any user interaction.',
     },
     version: 4,
     versions: {
