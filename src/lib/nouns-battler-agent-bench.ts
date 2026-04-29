@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.5.1';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.6.0';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -1028,6 +1028,141 @@ export const NOUNS_BATTLER_WATCH_FRAMES = [
   },
 ] as const;
 
+export const NOUNS_BATTLER_SEASON_6_MISSION_PACKS = [
+  {
+    id: 'season-six-expansion-scout',
+    title: 'Build an Expansion Passport',
+    lane: 'expansion',
+    priority: 'now',
+    operator: 'SCOUT-01',
+    artifact: 'candidate nation card',
+    timebox: '12 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    prompt:
+      'Pick one credible imported nation and make it legible enough for the Season 6 combine.',
+    inputs: ['identity lock', 'roster mode', 'public home', 'rivalry seed'],
+    expectedOutput:
+      'A passport card with name, short code, colors, roster mode, home URL, steward, proof risk, and one rivalry hook.',
+    acceptanceChecks: [
+      'Includes one public URL or clearly says missing',
+      'Names the roster mode',
+      'Names one rival and one media hook',
+    ],
+    shareFormat:
+      'PASSPORT: {nation} ({code}); colors {colors}; roster {mode}; home {url}; rival {rival}; proof risk {risk}.',
+  },
+  {
+    id: 'season-six-media-rundown',
+    title: 'Cut Federation Tonight',
+    lane: 'media',
+    priority: 'now',
+    operator: 'PROD-02',
+    artifact: 'show rundown',
+    timebox: '10 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+    prompt:
+      'Turn the next slate into a desk show that a viewer can understand before kickoff.',
+    inputs: ['opening segment', 'two clips', 'sponsor slot', 'Bowl hook'],
+    expectedOutput:
+      'A five-block show rundown with cold open, rivalry read, player watch, sponsor-safe read, and closing tease.',
+    acceptanceChecks: [
+      'Mentions at least one gang and one Noun number',
+      'Has a sponsor-safe inventory slot',
+      'Ends with a next-watch CTA',
+    ],
+    shareFormat:
+      'RUNDOWN: open {line}; clip1 {clip}; clip2 {clip}; sponsor {slot}; close {bowlHook}; watch {url}.',
+  },
+  {
+    id: 'season-six-proof-audit',
+    title: 'Audit the Receipt Trail',
+    lane: 'proof',
+    priority: 'now',
+    operator: 'AUDIT-03',
+    artifact: 'proof checklist',
+    timebox: '9 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler.json',
+    prompt:
+      'Check whether a Season 6 entrant or product idea has enough public proof to enter the federation room.',
+    inputs: ['stable URL', 'steward', 'source note', 'result envelope'],
+    expectedOutput:
+      'A proof checklist with pass/fail on identity, roster, permissions, result route, and next missing receipt.',
+    acceptanceChecks: [
+      'Separates pass/fail from opinion',
+      'Names one missing receipt',
+      'Includes the URL inspected',
+    ],
+    shareFormat:
+      'PROOF: {subject}; identity {pass}; roster {pass}; permissions {pass}; result route {pass}; missing {nextReceipt}.',
+  },
+  {
+    id: 'season-six-lock-memo',
+    title: 'Write the Season Lock Memo',
+    lane: 'commissioner',
+    priority: 'soon',
+    operator: 'COMM-04',
+    artifact: 'season lock memo',
+    timebox: '14 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    prompt:
+      'Freeze the next launch block into a commissioner note that can survive handoff to another human or agent.',
+    inputs: ['launch beats', 'rivalry test night', 'media packet', 'postgame publishing lanes'],
+    expectedOutput:
+      'A memo with dates/relative beats, owner lanes, publish surfaces, risks, and the next decision.',
+    acceptanceChecks: [
+      'Names every owner lane',
+      'Includes the next decision',
+      'Includes at least one publish surface',
+    ],
+    shareFormat:
+      'LOCK MEMO: kickoff {date}; owners {lanes}; rivalry {test}; surfaces {surfaces}; next decision {decision}.',
+  },
+  {
+    id: 'season-six-builder-circuit',
+    title: 'Scout the Builder Circuit',
+    lane: 'rival',
+    priority: 'soon',
+    operator: 'SCOUT-01',
+    artifact: 'rival pressure map',
+    timebox: '11 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    prompt:
+      'Treat the rival league as useful pressure and decide what it could steal if the main league moves too slowly.',
+    inputs: ['Beach Builders', 'Protocol Club', 'Meme Union', 'Shop Class'],
+    expectedOutput:
+      'A four-team pressure map with strongest media angle, threat, and what the main league should ship first.',
+    acceptanceChecks: [
+      'Scores all four Builder Circuit teams',
+      'Names one thing each team could own',
+      'Recommends one defensive product move',
+    ],
+    shareFormat:
+      'RIVAL MAP: BB {angle}; PC {angle}; MU {angle}; SC {angle}; main league ships {move} first.',
+  },
+  {
+    id: 'season-six-rights-sheet',
+    title: 'Package the Cup Rights Sheet',
+    lane: 'rights',
+    priority: 'next',
+    operator: 'PROD-02',
+    artifact: 'Cup Rights Sheet',
+    timebox: '13 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+    prompt:
+      'Turn Season 6 into sellable and shareable media inventory without pretending a sponsor deal already exists.',
+    inputs: ['TV cast', 'ticker', 'recap cards', 'posters', 'sponsor reads'],
+    expectedOutput:
+      'A rights inventory sheet with surfaces, safe sponsor language, proof requirement, and participant-credit route.',
+    acceptanceChecks: [
+      'Uses reservation language only',
+      'Includes a proof requirement',
+      'Routes credit to human/agent contributors',
+    ],
+    shareFormat:
+      'RIGHTS SHEET: surfaces {surfaces}; sponsor-safe line {line}; proof {proof}; contributor credit {route}.',
+  },
+] as const;
+
 export const NOUNS_BATTLER_AGENT_BENCH = {
   $schema: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
   version: NOUNS_BATTLER_AGENT_BENCH_VERSION,
@@ -1045,6 +1180,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     human: 'https://pointcast.xyz/nouns-nation-battler-agents/',
     sidelineDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
     sponsorshipDesk: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+    season6SprintRoom: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    season6SprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
     json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
     battler: 'https://pointcast.xyz/nouns-nation-battler/',
     playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
@@ -1069,6 +1206,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'nouns-battler://agent-bench',
       'nouns-battler://manifest',
       'nouns-battler://results-kit',
+      'nouns-battler://season-six-sprint',
       'nouns-battler://asset-factory',
       'nouns-battler://sponsorship-desk',
     ],
@@ -1086,6 +1224,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   },
   taskLoop: [
     'Read /nouns-nation-battler-agents.json or call nouns_battler_agent_tasks.',
+    'For Season 6 launch work, read /nouns-nation-battler-sprint.json and choose one mission id.',
     'Choose exactly one task id or claimQueue id.',
     'Visit the linked Battler surface or call nouns_battler_manifest.',
     'Use the Agent Sideline Desk to create a report card, asset brief, or rewards-loop note.',
@@ -1101,6 +1240,13 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'A local-first claim/report/asset studio for assigning an Agent Noun identity, opening the right watch frame, and generating copyable outputs.',
     outputs: ['agent report card', 'TV ticker line', 'asset brief', 'sponsor slot', 'product concept', 'participant yield loop'],
   },
+  season6SprintRoom: {
+    route: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    manifest: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
+    purpose:
+      'A claimable launch room for expansion scouting, media week, rights inventory, rival-league pressure, and proof artifacts.',
+    outputs: ['candidate nation card', 'show rundown', 'proof checklist', 'season lock memo', 'rival pressure map', 'Cup Rights Sheet'],
+  },
   assetFactory: NOUNS_BATTLER_ASSET_FACTORY,
   sponsorshipDesk: {
     route: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
@@ -1113,6 +1259,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   sponsorshipMarket: NOUNS_BATTLER_SPONSORSHIP_MARKET,
   businessModel: NOUNS_BATTLER_BUSINESS_MODEL,
   participantYield: NOUNS_BATTLER_PARTICIPANT_YIELD,
+  season6MissionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
   claimQueue: NOUNS_BATTLER_AGENT_TASK_PACKS,
   tasks: NOUNS_BATTLER_AGENT_TASKS,
   prompts: NOUNS_BATTLER_AGENT_PROMPTS,
@@ -1120,6 +1267,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
 
 export type NounsBattlerAgentTask = (typeof NOUNS_BATTLER_AGENT_TASKS)[number];
 export type NounsBattlerAgentTaskPack = (typeof NOUNS_BATTLER_AGENT_TASK_PACKS)[number];
+export type NounsBattlerSeason6MissionPack = (typeof NOUNS_BATTLER_SEASON_6_MISSION_PACKS)[number];
 export type NounsBattlerAssetType = (typeof NOUNS_BATTLER_ASSET_FACTORY.assetTypes)[number];
 export type NounsBattlerSponsorPackage = (typeof NOUNS_BATTLER_SPONSORSHIP_MARKET.packages)[number];
 
@@ -1141,6 +1289,18 @@ export function filterNounsBattlerAgentTaskPacks(lane: string): NounsBattlerAgen
   const normalized = lane.trim().toLowerCase();
   if (!normalized) return [...NOUNS_BATTLER_AGENT_TASK_PACKS];
   return NOUNS_BATTLER_AGENT_TASK_PACKS.filter((task) => task.lane === normalized);
+}
+
+export function findNounsBattlerSeason6MissionPack(
+  missionId: string,
+): NounsBattlerSeason6MissionPack | undefined {
+  return NOUNS_BATTLER_SEASON_6_MISSION_PACKS.find((mission) => mission.id === missionId);
+}
+
+export function filterNounsBattlerSeason6MissionPacks(lane: string): NounsBattlerSeason6MissionPack[] {
+  const normalized = lane.trim().toLowerCase();
+  if (!normalized) return [...NOUNS_BATTLER_SEASON_6_MISSION_PACKS];
+  return NOUNS_BATTLER_SEASON_6_MISSION_PACKS.filter((mission) => mission.lane === normalized);
 }
 
 export function findNounsBattlerAssetType(assetType: string): NounsBattlerAssetType | undefined {

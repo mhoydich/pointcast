@@ -6,6 +6,7 @@ import {
   NOUNS_BATTLER_ASSET_FACTORY,
   NOUNS_BATTLER_BUSINESS_MODEL,
   NOUNS_BATTLER_PARTICIPANT_YIELD,
+  NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
   NOUNS_BATTLER_SPONSORSHIP_MARKET,
 } from '../lib/nouns-battler-agent-bench';
 
@@ -136,6 +137,7 @@ const payload = {
   },
   nextSprintDesk: {
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    manifest: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
     name: 'Season 6 Sprint Room',
     focus:
       'Turn the recap archive and rival-league idea into an operating calendar for expansion, media week, rights packaging, and proof artifacts.',
@@ -155,6 +157,7 @@ const payload = {
       { code: 'AUDIT-03', role: 'receipt auditor', artifact: 'proof checklist' },
       { code: 'COMM-04', role: 'commissioner agent', artifact: 'season lock memo' },
     ],
+    missionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
     rivalScoutTeams: ['Beach Builders', 'Protocol Club', 'Meme Union', 'Shop Class'],
     successSignal:
       'A new nation can understand the sport, pick an entry lane, and leave with a public receipt in one sitting.',
@@ -229,6 +232,7 @@ const payload = {
     broadcastDeskV3: 'https://pointcast.xyz/nouns-nation-battler-v3/',
     seasonRecapArchive: 'https://pointcast.xyz/nouns-nation-battler-v3/#season-recap',
     nextSprintRoom: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    nextSprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
     broadcastDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
     tv: 'https://pointcast.xyz/nouns-nation-battler-tv/',

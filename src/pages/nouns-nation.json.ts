@@ -31,6 +31,7 @@ const payload = {
     battleDeskV3: 'https://pointcast.xyz/nouns-nation-battler-v3/',
     seasonRecapArchive: 'https://pointcast.xyz/nouns-nation-battler-v3/#season-recap',
     nextSprintRoom: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+    nextSprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
     battleDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
     tvCast: 'https://pointcast.xyz/nouns-nation-battler-tv/',
