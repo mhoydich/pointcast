@@ -1,0 +1,280 @@
+---
+/**
+ * /drum-bulletin — community pinboard · comms 5 · 2026-04-28 PT.
+ *
+ * KV-backed (functions/api/bulletin.ts on env.VISITS). Each pin is a
+ * one-line note (140 char cap) with a mood color, an author noun, and
+ * a heart counter. Capped at 50 pins; older ones roll off the index.
+ *
+ * Visitors can: pin a note, heart any other pin, see who's hearted what.
+ * Pure persistent. Different from /drum-letters (one delivered note per
+ * visit, paragraph) and /drum-confessional (transient floating notes).
+ *
+ * Aesthetic: corkboard with thumbtacks. Pins jitter at slight random
+ * angles, varied paper colors per mood, push-pin SVG at top of each.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-bulletin — community pinboard';
+const description = 'Pin a one-line note to the PointCast bulletin board. Heart anyone\'s pin. KV-backed, 50 pins deep, 140 chars each. Six mood colors.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-bulletin', name: 'PointCast Drum · Bulletin', url: 'https://pointcast.xyz/drum-bulletin', description };
+
+const COLORS = [
+  { id: 'warm',   label: 'WARM',   hex: '#ff8a4a' },
+  { id: 'bright', label: 'BRIGHT', hex: '#ffd400' },
+  { id: 'ocean',  label: 'OCEAN',  hex: '#5fbafd' },
+  { id: 'garden', label: 'GARDEN', hex: '#8ec78a' },
+  { id: 'fog',    label: 'FOG',    hex: '#cfc6df' },
+  { id: 'rose',   label: 'ROSE',   hex: '#f5b3aa' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="bu" id="bu-main">
+    <DrumNav current="bulletin" />
+
+    <header class="bu__head">
+      <p class="bu__kicker">DRUM HUB · COMMS 5 · BULLETIN · 50 PINS · KV</p>
+      <h1 class="bu__title"><em>Pin a note. Heart somebody else's.</em></h1>
+      <p class="bu__dek">Community pinboard. One line each, 140 chars, six mood colors. Tap the heart on any pin you like. Older pins roll off the board after 50.</p>
+    </header>
+
+    <form class="bu__compose" id="bu-form" autocomplete="off">
+      <input class="bu__compose-body" id="bu-input" maxlength="140" placeholder="Pin a one-liner — what's on your mind?" />
+      <div class="bu__compose-row">
+        <span class="bu__compose-count mono" id="bu-cc">0 / 140</span>
+        <div class="bu__compose-colors" role="radiogroup" aria-label="Pin color">
+          {COLORS.map((c, i) => (
+            <button type="button" class={`bu__color ${i === 0 ? 'bu__color--on' : ''}`} data-color={c.id} style={`--bu-color: ${c.hex}`} aria-label={`Color ${c.label}`}>
+              <span class="bu__color-swatch"></span>
+            </button>
+          ))}
+        </div>
+        <span class="bu__sig mono" id="bu-sig">noun #—</span>
+        <button type="submit" class="bu__send mono" id="bu-send">PIN IT →</button>
+      </div>
+    </form>
+
+    <section class="bu__board" id="bu-board" aria-label="Pinned notes">
+      <p class="bu__empty mono" id="bu-empty">— no pins yet · be the first —</p>
+    </section>
+
+    <footer class="bu__foot">
+      <p>Pins live in <code>env.VISITS</code> KV at <code>pin:*</code> with an index at <code>pins:index</code>, capped at 50 entries. <code>POST /api/bulletin</code> writes new pins; <code>POST /api/bulletin {heart: id}</code> increments hearts.</p>
+      <p class="bu__credit mono">v0.1 · 2026-04-28 · drum sprint · comms 5</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  const COLORS = { warm: '#ff8a4a', bright: '#ffd400', ocean: '#5fbafd', garden: '#8ec78a', fog: '#cfc6df', rose: '#f5b3aa' };
+  const HEARTED_KEY = 'pc:drum-bulletin:hearted';
+  const board = document.getElementById('bu-board');
+  const empty = document.getElementById('bu-empty');
+  const input = document.getElementById('bu-input');
+  const cc = document.getElementById('bu-cc');
+  const send = document.getElementById('bu-send');
+  const sig = document.getElementById('bu-sig');
+
+  function getSession() { try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s;} catch { return 'bu-' + Math.random().toString(36).slice(2,10);} }
+  function nounIdFor(sid) { let h=5381; for(let i=0;i<sid.length;i++) h=(h*33+sid.charCodeAt(i))&0x7fffffff; return h%1200; }
+  const sid = getSession();
+  let storedNoun = 0;
+  try { const s = localStorage.getItem('pc:nounId'); storedNoun = s ? Number(s) : nounIdFor(sid); }
+  catch { storedNoun = nounIdFor(sid); }
+  if (!Number.isFinite(storedNoun) || storedNoun < 0 || storedNoun > 1199) storedNoun = nounIdFor(sid);
+  try { localStorage.setItem('pc:nounId', String(storedNoun)); } catch {}
+  sig.textContent = `noun #${storedNoun}`;
+
+  function getHearted() { try { return new Set(JSON.parse(localStorage.getItem(HEARTED_KEY) || '[]')); } catch { return new Set(); } }
+  function saveHearted(set) { try { localStorage.setItem(HEARTED_KEY, JSON.stringify([...set].slice(-500))); } catch {} }
+  let hearted = getHearted();
+
+  let currentColor = 'warm';
+  document.querySelectorAll('.bu__color').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.bu__color').forEach((x) => x.classList.remove('bu__color--on'));
+      b.classList.add('bu__color--on');
+      currentColor = b.getAttribute('data-color') || 'warm';
+    });
+  });
+  input.addEventListener('input', () => { cc.textContent = `${input.value.length} / 140`; });
+
+  function fmtTimeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  }
+
+  function renderPins(pins) {
+    if (empty && empty.parentNode) empty.remove();
+    const existing = new Set(Array.from(board.querySelectorAll('.bu__pin')).map((el) => el.dataset.id));
+    const incoming = new Set(pins.map((p) => p.id));
+    // Remove pins no longer present
+    Array.from(board.querySelectorAll('.bu__pin')).forEach((el) => { if (!incoming.has(el.dataset.id)) el.remove(); });
+    if (pins.length === 0) {
+      if (!board.querySelector('.bu__empty')) {
+        const e = document.createElement('p');
+        e.className = 'bu__empty mono';
+        e.textContent = '— no pins yet · be the first —';
+        board.appendChild(e);
+      }
+      return;
+    }
+    const empties = board.querySelectorAll('.bu__empty');
+    empties.forEach((e) => e.remove());
+    pins.forEach((p, idx) => {
+      let el = board.querySelector(`.bu__pin[data-id="${p.id}"]`);
+      if (!el) {
+        el = document.createElement('article');
+        el.className = 'bu__pin';
+        el.dataset.id = p.id;
+        const tilt = ((parseInt(p.id.slice(0, 6), 36) || 0) % 9) - 4; // -4..+4 deg
+        el.style.setProperty('--bu-tilt', `${tilt}deg`);
+        const color = COLORS[p.color] || COLORS.warm;
+        el.style.setProperty('--bu-color', color);
+        el.innerHTML = `
+          <span class="bu__pin-pin" aria-hidden="true">📍</span>
+          <div class="bu__pin-head">
+            <img src="https://noun.pics/${p.nounId || 0}.svg" alt="" width="28" height="28" loading="lazy" />
+            <span class="bu__pin-pid mono">noun #${p.nounId || '—'}</span>
+            <span class="bu__pin-time mono"></span>
+          </div>
+          <p class="bu__pin-body"></p>
+          <div class="bu__pin-foot">
+            <button type="button" class="bu__heart mono" aria-label="Heart this pin">♡ <span class="bu__heart-count">0</span></button>
+            <span class="bu__pin-color mono"></span>
+          </div>
+        `;
+        board.appendChild(el);
+      }
+      // Update mutable bits
+      el.querySelector('.bu__pin-time').textContent = fmtTimeAgo(p.t);
+      el.querySelector('.bu__pin-body').textContent = p.body || '';
+      el.querySelector('.bu__pin-color').textContent = (p.color || 'warm').toUpperCase();
+      const hc = el.querySelector('.bu__heart-count');
+      hc.textContent = String(p.hearts || 0);
+      const heartBtn = el.querySelector('.bu__heart');
+      if (hearted.has(p.id)) {
+        heartBtn.classList.add('bu__heart--on');
+        heartBtn.firstChild && (heartBtn.firstChild.nodeValue = '♥ ');
+      } else {
+        heartBtn.classList.remove('bu__heart--on');
+        heartBtn.firstChild && (heartBtn.firstChild.nodeValue = '♡ ');
+      }
+      heartBtn.onclick = async () => {
+        if (hearted.has(p.id)) return;
+        hearted.add(p.id); saveHearted(hearted);
+        heartBtn.classList.add('bu__heart--on');
+        heartBtn.firstChild && (heartBtn.firstChild.nodeValue = '♥ ');
+        const newCount = (p.hearts || 0) + 1; p.hearts = newCount; hc.textContent = String(newCount);
+        try {
+          await fetch('/api/bulletin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ heart: p.id }) });
+          // Also broadcast a light ping for cast surfaces
+          fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'heart', sessionId: sid, pinId: p.id, nounId: storedNoun }) });
+        } catch {}
+      };
+    });
+  }
+
+  async function fetchAll() {
+    try {
+      const r = await fetch('/api/bulletin', { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json();
+      renderPins(Array.isArray(data.pins) ? data.pins : []);
+    } catch {}
+  }
+  fetchAll();
+  setInterval(fetchAll, 5000);
+
+  document.getElementById('bu-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = (input.value || '').trim().slice(0, 140);
+    if (!text) { input.focus(); return; }
+    send.disabled = true; send.textContent = 'PINNING…';
+    try {
+      const r = await fetch('/api/bulletin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: text, color: currentColor, nounId: storedNoun }),
+      });
+      const data = await r.json();
+      if (data && data.ok) {
+        input.value = ''; cc.textContent = '0 / 140';
+        send.textContent = 'PINNED ✓';
+        // Optimistically render
+        if (data.pin) {
+          // Insert at top of board
+          renderPins([data.pin, ...Array.from(board.querySelectorAll('.bu__pin')).map((el) => {
+            return {
+              id: el.dataset.id,
+              t: Date.now() - 60000,
+              body: el.querySelector('.bu__pin-body').textContent,
+              color: (el.querySelector('.bu__pin-color').textContent || 'warm').toLowerCase(),
+              nounId: 0,
+              hearts: Number(el.querySelector('.bu__heart-count').textContent || 0),
+            };
+          })]);
+        }
+        try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'pin', sessionId: sid, color: currentColor, nounId: storedNoun }) }); } catch {}
+        setTimeout(() => { send.textContent = 'PIN IT →'; send.disabled = false; }, 1400);
+        setTimeout(fetchAll, 1500);
+      } else {
+        send.textContent = 'TRY AGAIN'; setTimeout(() => { send.textContent = 'PIN IT →'; send.disabled = false; }, 1600);
+      }
+    } catch {
+      send.textContent = 'OFFLINE'; setTimeout(() => { send.textContent = 'PIN IT →'; send.disabled = false; }, 1600);
+    }
+  });
+})();
+</script>
+
+<style>
+.bu { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #2a1d10 0%, #1a0e08 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+.bu__head { max-width: 1080px; margin: 0 auto 16px; padding: 0 6px; }
+.bu__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+.bu__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 48px); line-height: 1.05; }
+.bu__title em { font-style: italic; }
+.bu__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+.bu__compose { max-width: 1080px; margin: 0 auto 18px; padding: 14px; background: rgba(18, 17, 14, 0.55); border: 3px solid #ffd400; box-shadow: 6px 6px 0 0 #050310; display: flex; flex-direction: column; gap: 10px; }
+.bu__compose-body { background: #050310; color: #fffaf0; border: 2px solid #ffd400; padding: 10px 14px; font-family: Georgia, serif; font-size: 16px; }
+.bu__compose-body::placeholder { color: #5f5e5a; font-style: italic; }
+.bu__compose-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bu__compose-count { font-size: 11px; letter-spacing: 0.16em; color: #cfc6df; }
+.bu__compose-colors { display: flex; gap: 4px; }
+.bu__color { background: transparent; border: 1.5px solid #5f5e5a; padding: 4px; cursor: pointer; }
+.bu__color:hover { border-color: var(--bu-color, #ffd400); }
+.bu__color--on { border-color: var(--bu-color, #ffd400); background: rgba(255, 212, 0, 0.1); }
+.bu__color-swatch { display: block; width: 14px; height: 14px; background: var(--bu-color, #ffd400); border: 1px solid #050310; }
+.bu__sig { margin-left: auto; font-size: 11px; letter-spacing: 0.16em; color: #ffd400; }
+.bu__send { padding: 6px 14px; background: #ffd400; color: #050310; border: 2px solid #050310; box-shadow: 2px 2px 0 0 #050310; cursor: pointer; font-size: 11px; letter-spacing: 0.18em; font-weight: 700; }
+.bu__send:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 #050310; }
+.bu__send:disabled { background: #5f5e5a; color: #cfc6df; cursor: not-allowed; }
+
+.bu__board { max-width: 1280px; margin: 0 auto; background: repeating-linear-gradient(45deg, rgba(74, 44, 16, 0.18) 0 12px, transparent 12px 22px), linear-gradient(180deg, #6e5320, #4a2c10); border: 4px solid #2a1d05; box-shadow: 6px 6px 0 0 #050310; padding: 22px; min-height: 420px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px 14px; align-items: start; }
+.bu__empty { grid-column: 1 / -1; text-align: center; padding: 60px 0; color: #fffaf0; opacity: 0.6; font-size: 12px; letter-spacing: 0.2em; }
+
+.bu__pin { position: relative; background: var(--bu-color, #ff8a4a); color: #050310; border: 2px solid #050310; box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 0.4); padding: 22px 14px 14px; transform: rotate(var(--bu-tilt, 0deg)); transition: transform 120ms; }
+.bu__pin:hover { transform: rotate(0deg) translateY(-2px); box-shadow: 6px 6px 0 0 rgba(0, 0, 0, 0.5); }
+.bu__pin-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.4)); }
+.bu__pin-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.bu__pin-head img { image-rendering: pixelated; border: 1.5px solid #050310; background: #fffaf0; }
+.bu__pin-pid { font-size: 9px; letter-spacing: 0.16em; }
+.bu__pin-time { font-size: 9px; letter-spacing: 0.14em; opacity: 0.7; margin-left: auto; }
+.bu__pin-body { margin: 0 0 10px; font-family: Georgia, serif; font-size: 15px; line-height: 1.4; word-break: break-word; }
+.bu__pin-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px dashed rgba(0, 0, 0, 0.3); }
+.bu__heart { background: transparent; border: 1.5px solid #050310; color: #050310; padding: 3px 10px; cursor: pointer; font-size: 11px; letter-spacing: 0.16em; font-weight: 700; }
+.bu__heart:hover:not(.bu__heart--on) { background: #050310; color: var(--bu-color, #ff8a4a); }
+.bu__heart--on { background: #050310; color: var(--bu-color, #ff8a4a); cursor: default; }
+.bu__pin-color { font-size: 9px; letter-spacing: 0.18em; opacity: 0.6; }
+
+.bu__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+.bu__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ffd400; color: #ffd400; }
+.bu__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff8a4a; }
+</style>
