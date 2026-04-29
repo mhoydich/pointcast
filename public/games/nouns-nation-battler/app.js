@@ -481,6 +481,10 @@ const state = {
   recapSignature: "",
 };
 
+const MESSAGE_SOURCE = "pointcast:nouns-nation-battler";
+const CONTROL_SOURCE = "pointcast:battle-desk";
+let lastSnapshotAt = 0;
+
 if (!state.league) {
   state.league = createLeague();
 }
@@ -497,6 +501,135 @@ function loadSeason() {
 
 function saveSeason() {
   localStorage.setItem("pc:nouns-nation-season", JSON.stringify(state.season));
+}
+
+function topUnits(team) {
+  return aliveUnits(team)
+    .slice()
+    .sort((a, b) =>
+      (b.stats.damage + b.stats.kos * 34 + b.stats.heals * 0.12 + b.morale * b.hp) -
+      (a.stats.damage + a.stats.kos * 34 + a.stats.heals * 0.12 + a.morale * a.hp)
+    )
+    .slice(0, 4)
+    .map((unit) => ({
+      number: unit.number,
+      name: unit.name,
+      role: unit.role.name,
+      move: unit.role.move,
+      hp: Math.max(0, Math.round((unit.hp / unit.maxHp) * 100)),
+      morale: Number(unit.morale.toFixed(2)),
+      asset: unit.asset,
+      team: unit.team,
+      stats: {
+        damage: unit.stats.damage,
+        kos: unit.stats.kos,
+        heals: unit.stats.heals,
+        specials: unit.stats.specials,
+        amps: unit.stats.amps,
+      },
+    }));
+}
+
+function standingsPayload() {
+  return standings().map((row) => ({
+    name: row.gang.name,
+    short: row.gang.short,
+    color: row.gang.color,
+    accent: row.gang.accent,
+    wins: row.wins,
+    losses: row.losses,
+    pf: row.pf,
+    pa: row.pa,
+    fans: row.fans,
+    streak: row.streak,
+    challengeWins: row.challengeWins || 0,
+    rivalryWins: row.rivalryWins || 0,
+  }));
+}
+
+function battleLogPayload() {
+  return Array.from(el.battleLog.children)
+    .slice(0, 8)
+    .map((node) => node.textContent || "")
+    .filter(Boolean);
+}
+
+function buildSnapshot() {
+  const left = aliveUnits(0).length;
+  const right = aliveUnits(1).length;
+  const total = left + right;
+  return {
+    version: 2,
+    match: Math.max(1, state.match - 1),
+    running: state.running,
+    finished: state.finished,
+    speed: state.speed,
+    weather: state.weather,
+    autoNext: state.autoNext,
+    rootingFor: state.rootingFor,
+    field: {
+      id: state.battleType?.id || "open",
+      name: fieldName(),
+      boss: state.bossField ? state.bossField.name : null,
+    },
+    league: {
+      phase: state.league.phase,
+      season: state.league.seasonNumber,
+      day: state.league.day + 1,
+      days: LEAGUE_DAYS,
+      slate: state.league.slot + 1,
+      slates: DAILY_SLOTS,
+      matchup: currentFixtureLabel(),
+      line: tvLeagueLine(),
+      champion: state.league.champion || null,
+    },
+    challenge: state.challenge ? {
+      name: state.challenge.name,
+      rule: state.challenge.rule,
+      scores: state.challengeProgress?.scores || [0, 0],
+      target: state.challenge.target,
+      winner: state.challengeProgress?.winner || "",
+      line: challengeStatLine(),
+    } : null,
+    gangs: gangs.map((gang) => ({
+      name: gang.name,
+      short: gang.short,
+      color: gang.color,
+      accent: gang.accent,
+      dark: gang.dark,
+      mark: gang.mark,
+      cry: gang.cry,
+    })),
+    alive: { left, right },
+    momentum: total === 0 ? 0 : (left - right) / Math.max(1, total),
+    leaders: {
+      left: topUnits(0),
+      right: topUnits(1),
+    },
+    standings: standingsPayload(),
+    logs: battleLogPayload(),
+    review: {
+      pulse: reviewPulseLine(),
+      mvp: reviewMvpLine(),
+      comeback: reviewComebackLine(left, right),
+      director: state.directorCue,
+      replay: state.replayCue,
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function broadcastSnapshot(force = false) {
+  if (window.parent === window) return;
+  const now = performance.now();
+  if (!force && now - lastSnapshotAt < 600) return;
+  lastSnapshotAt = now;
+  const targetOrigin = window.location.origin === "null" ? "*" : window.location.origin;
+  window.parent.postMessage({
+    source: MESSAGE_SOURCE,
+    type: "snapshot",
+    payload: buildSnapshot(),
+  }, targetOrigin);
 }
 
 function loadLeague() {
@@ -1034,6 +1167,7 @@ function resetMatch() {
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
+  broadcastSnapshot(true);
 }
 
 function matchTitle() {
@@ -2493,6 +2627,7 @@ function render() {
   renderRooting(left, right);
   renderScout();
   renderTv(left, right);
+  broadcastSnapshot();
 }
 
 function renderRivalryBadge() {
@@ -3144,6 +3279,7 @@ function addLog(text) {
   while (el.battleLog.children.length > 18) {
     el.battleLog.lastElementChild.remove();
   }
+  broadcastSnapshot(true);
 }
 
 function addOccasionalLog(text) {
@@ -3183,6 +3319,43 @@ function spark(x, y) {
   setTimeout(() => node.remove(), 360);
 }
 
+function togglePause() {
+  if (state.finished) {
+    resetMatch();
+    return;
+  }
+  state.running = !state.running;
+  el.pauseButton.textContent = state.running ? "Pause" : "Resume";
+  broadcastSnapshot(true);
+}
+
+function setAutoNext(value = !state.autoNext) {
+  state.autoNext = Boolean(value);
+  el.autoNextButton.textContent = `Auto Next ${state.autoNext ? "On" : "Off"}`;
+  if (!state.autoNext) clearTimeout(state.nextTimer);
+  broadcastSnapshot(true);
+}
+
+function setSpeed(speed) {
+  const nextSpeed = Number(speed);
+  if (!Number.isFinite(nextSpeed)) return;
+  state.speed = clamp(nextSpeed, 0.5, 2);
+  el.speedGroup.querySelectorAll("button").forEach((node) => {
+    node.classList.toggle("active", Number(node.dataset.speed) === state.speed);
+  });
+  broadcastSnapshot(true);
+}
+
+function resetLeague() {
+  clearTimeout(state.nextTimer);
+  const nextSeason = (state.league?.seasonNumber || 1) + 1;
+  state.league = createLeague(nextSeason);
+  saveLeague();
+  addLog(`Season ${nextSeason} begins with a fresh challenge board.`);
+  showToast(`Season ${nextSeason}: Day 1`);
+  resetMatch();
+}
+
 el.newMatchButton.addEventListener("click", resetMatch);
 el.quickSimButton.addEventListener("click", quickSimCurrentMatch);
 el.simDayButton.addEventListener("click", simCurrentDay);
@@ -3218,26 +3391,13 @@ document.addEventListener("click", async (event) => {
   }
 });
 el.pauseButton.addEventListener("click", () => {
-  if (state.finished) {
-    resetMatch();
-    return;
-  }
-  state.running = !state.running;
-  el.pauseButton.textContent = state.running ? "Pause" : "Resume";
+  togglePause();
 });
 el.autoNextButton.addEventListener("click", () => {
-  state.autoNext = !state.autoNext;
-  el.autoNextButton.textContent = `Auto Next ${state.autoNext ? "On" : "Off"}`;
-  if (!state.autoNext) clearTimeout(state.nextTimer);
+  setAutoNext();
 });
 el.resetLeagueButton.addEventListener("click", () => {
-  clearTimeout(state.nextTimer);
-  const nextSeason = (state.league?.seasonNumber || 1) + 1;
-  state.league = createLeague(nextSeason);
-  saveLeague();
-  addLog(`Season ${nextSeason} begins with a fresh challenge board.`);
-  showToast(`Season ${nextSeason}: Day 1`);
-  resetMatch();
+  resetLeague();
 });
 el.rootLeftButton.addEventListener("click", () => setRooting(0));
 el.rootRightButton.addEventListener("click", () => setRooting(1));
@@ -3254,12 +3414,38 @@ function setRooting(team) {
   addLog(`You are rooting for ${state.rootingFor}.`);
   showToast(`Rooting for ${gangs[team].short}`);
   render();
+  broadcastSnapshot(true);
 }
 el.speedGroup.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
-  state.speed = Number(button.dataset.speed);
-  el.speedGroup.querySelectorAll("button").forEach((node) => node.classList.toggle("active", node === button));
+  setSpeed(button.dataset.speed);
+});
+
+window.addEventListener("message", (event) => {
+  if (window.location.origin !== "null" && event.origin !== window.location.origin) return;
+  const message = event.data || {};
+  if (message.source !== CONTROL_SOURCE || message.type !== "command") return;
+
+  if (message.command === "newMatch") {
+    resetMatch();
+  } else if (message.command === "quickSim") {
+    quickSimCurrentMatch();
+  } else if (message.command === "simDay") {
+    simCurrentDay();
+  } else if (message.command === "togglePause") {
+    togglePause();
+  } else if (message.command === "setAutoNext") {
+    setAutoNext(message.value);
+  } else if (message.command === "setSpeed") {
+    setSpeed(message.value);
+  } else if (message.command === "root") {
+    setRooting(Number(message.team) === 1 ? 1 : 0);
+  } else if (message.command === "resetLeague") {
+    resetLeague();
+  } else if (message.command === "snapshot") {
+    broadcastSnapshot(true);
+  }
 });
 
 window.addEventListener("keydown", (event) => {
