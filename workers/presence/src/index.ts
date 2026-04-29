@@ -107,6 +107,11 @@ interface ChatEntry {
   // client can scope the WIRE panel to "this room" vs "all"; subsequent
   // peer navigation does not retroactively re-tag this entry.
   room?: string;
+  // Phase 4 — optional cursor anchor. When present, peers render this
+  // entry as a floating bubble above the sender's cursor (also TTL'd)
+  // in addition to the WIRE log line. Coords are 0..10000 quantized
+  // viewport-normalized integers, mirroring the cursor protocol.
+  bubble?: { x: number; y: number };
 }
 
 /**
@@ -119,6 +124,25 @@ interface WaveEntry {
   fromNoun: number;
   toNoun: number;
   emoji: string; // short opaque payload — 👋 default, capped + sanitized server-side
+  at: number;
+  // Phase 4 — optional "BRING" target. When set, the wave doubles as a
+  // teleport invitation: recipient renders a one-click chip "noun X
+  // wants you on /drum →". Path is sanitized server-side same as
+  // currentPath (leading-/, no //, no query/fragment, ASCII subset).
+  targetPath?: string;
+}
+
+/**
+ * Phase 4 — broadcast vibe reaction. Lightweight, room-scoped, no
+ * recipient. Anyone in PEOPLES HERE can tap an emoji and the chip
+ * floats up the screen of every co-room peer. Acts as a feedback
+ * pulse so the people running the broadcast (Mike, agents) can see
+ * what lands. TTL 6s.
+ */
+interface VibeEntry {
+  fromNoun: number;
+  emoji: string;
+  room?: string; // sender's currentPath at send time
   at: number;
 }
 
@@ -158,12 +182,13 @@ interface BroadcastPayload {
   peers?: PeerView[]; // cursor positions of other active visitors (last 20s)
   chat?: ChatEntry[]; // room chat ring buffer (last 20 entries)
   waves?: WaveEntry[]; // directional waves emitted in the last WAVE_TTL_MS
+  vibes?: VibeEntry[]; // broadcast emoji reactions, TTL 6s
   you?: PrivateSessionView;
 }
 
 type ClientMessage =
   | {
-      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat' | 'wave';
+      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat' | 'wave' | 'vibe';
       nounId?: unknown;
       mood?: unknown;
       listening?: unknown;
@@ -177,6 +202,8 @@ type ClientMessage =
       currentPath?: unknown;
       to?: unknown;
       emoji?: unknown;
+      targetPath?: unknown;
+      bubble?: unknown;
     }
   | null
   | undefined;
@@ -197,6 +224,13 @@ const MAX_WAVE_BUFFER = 30; // cap concurrent in-flight waves
 const MAX_WAVE_EMOJI_LEN = 8; // emoji payload byte cap (multi-codepoint allowed)
 const WAVE_RATE_PER_SESSION = 4; // max 4 waves per WAVE_RATE_WINDOW_MS
 const WAVE_RATE_WINDOW_MS = 10_000;
+// Phase 4 — VIBE constants. Vibes are cheaper than waves (no `to`,
+// reaction-only), so we allow a higher rate but a tighter TTL.
+const VIBE_TTL_MS = 6_000;
+const MAX_VIBE_BUFFER = 60;
+const MAX_VIBE_EMOJI_LEN = 8;
+const VIBE_RATE_PER_SESSION = 8;
+const VIBE_RATE_WINDOW_MS = 10_000;
 const FAST_BROADCAST_MS = 100; // 10 Hz while active
 const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
 const ACTIVITY_WINDOW_MS = 3000; // fast mode window after last cursor/chat
@@ -337,6 +371,9 @@ export class PresenceRoom {
   waves: WaveEntry[] = [];
   // Per-session wave timestamps for rate limiting (sessionId → recent epochs).
   waveRate: Map<string, number[]> = new Map();
+  // Phase 4 — broadcast vibes ring buffer + per-session rate map.
+  vibes: VibeEntry[] = [];
+  vibeRate: Map<string, number[]> = new Map();
   lastActivity: number = 0;
   broadcastMode: 'idle' | 'fast' = 'idle';
 
@@ -485,6 +522,19 @@ export class PresenceRoom {
       return;
     }
 
+    // ─── Phase 4: vibe (broadcast emoji reaction) ─────────────
+    // Sender supplies `emoji`; reaches every co-room peer's screen
+    // as a floating chip. No recipient. Rate-limited per session.
+    if (type === 'vibe') {
+      const accepted = this.applyVibe(sessionId, message);
+      if (accepted) {
+        this.lastActivity = Date.now();
+        this.ensureFastMode();
+        this.broadcast();
+      }
+      return;
+    }
+
     this.applyVisitorPatch(sessionId, message);
     if (hasOwn(message, 'tag')) {
       const tag = normalizeText(message.tag, 40);
@@ -527,6 +577,20 @@ export class PresenceRoom {
     // tag this way. Falls back to undefined when the visitor hasn't
     // emitted a currentPath yet.
     if (visitor.currentPath) entry.room = visitor.currentPath;
+    // Phase 4 — optional cursor anchor. When the client supplies a
+    // valid {x, y} pair, render this entry as a floating bubble above
+    // the sender's cursor in addition to the WIRE log line.
+    if (patch.bubble && typeof patch.bubble === 'object') {
+      const b = patch.bubble as Record<string, unknown>;
+      const bx = Number(b.x);
+      const by = Number(b.y);
+      if (Number.isFinite(bx) && Number.isFinite(by)) {
+        entry.bubble = {
+          x: Math.max(0, Math.min(10000, Math.round(bx))),
+          y: Math.max(0, Math.min(10000, Math.round(by))),
+        };
+      }
+    }
     this.chatLog.push(entry);
     if (this.chatLog.length > MAX_CHAT_BUFFER) {
       this.chatLog.splice(0, this.chatLog.length - MAX_CHAT_BUFFER);
@@ -570,9 +634,48 @@ export class PresenceRoom {
       emoji,
       at: now,
     };
+    // Phase 4 — BRING. Optional targetPath piggybacks on the wave so we
+    // don't need a new message type. Sanitized server-side; if invalid,
+    // we drop the field rather than rejecting the whole wave.
+    const target = normalizeCurrentPath(patch.targetPath);
+    if (target) entry.targetPath = target;
     this.waves.push(entry);
     if (this.waves.length > MAX_WAVE_BUFFER) {
       this.waves.splice(0, this.waves.length - MAX_WAVE_BUFFER);
+    }
+    return true;
+  }
+
+  /**
+   * Phase 4 — process an incoming vibe (broadcast emoji reaction).
+   * Returns true on accept, false on rate limit / validation fail.
+   */
+  applyVibe(sessionId: string, patch: Record<string, unknown>): boolean {
+    const visitor = this.visitors.get(sessionId);
+    if (!visitor) return false;
+    if (visitor.kind === 'agent') return false;
+    let emoji = '✨';
+    if (typeof patch.emoji === 'string') {
+      const trimmed = patch.emoji.trim();
+      if (trimmed && trimmed.length <= MAX_VIBE_EMOJI_LEN) emoji = trimmed;
+    }
+    const now = Date.now();
+    const recent = (this.vibeRate.get(sessionId) ?? []).filter(
+      (t) => now - t <= VIBE_RATE_WINDOW_MS,
+    );
+    if (recent.length >= VIBE_RATE_PER_SESSION) return false;
+    recent.push(now);
+    this.vibeRate.set(sessionId, recent);
+
+    const entry: VibeEntry = {
+      fromNoun: visitor.nounId,
+      emoji,
+      at: now,
+    };
+    if (visitor.currentPath) entry.room = visitor.currentPath;
+    this.vibes.push(entry);
+    if (this.vibes.length > MAX_VIBE_BUFFER) {
+      this.vibes.splice(0, this.vibes.length - MAX_VIBE_BUFFER);
     }
     return true;
   }
@@ -732,6 +835,14 @@ export class PresenceRoom {
       const cutoff = Date.now() - WAVE_TTL_MS;
       this.waves = this.waves.filter((w) => w.at >= cutoff);
       if (this.waves.length) payload.waves = [...this.waves];
+    }
+    // Phase 4 — vibes are TTL-bounded the same way; broadcast every
+    // entry still in the window so late joiners briefly catch the tail
+    // of the room's reaction stream.
+    if (this.vibes.length) {
+      const cutoff = Date.now() - VIBE_TTL_MS;
+      this.vibes = this.vibes.filter((v) => v.at >= cutoff);
+      if (this.vibes.length) payload.vibes = [...this.vibes];
     }
 
     if (viewerSessionId) {
