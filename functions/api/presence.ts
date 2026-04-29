@@ -25,7 +25,7 @@
  *   }
  *   PublicSessionView = {
  *     nounId, kind, joinedAt,
- *     mood?, listening?, where?,
+ *     mood?, listening?, where?, currentPath?,
  *     country?, deviceClass?,
  *   }
  *   PrivateSessionView = PublicSessionView & {
