@@ -38,6 +38,15 @@
           {/* Phase 3 — peer current page. Server-rendered hidden; client
               shows + populates when the broadcast includes currentPath. */}
           <a class="here-slot__where" hidden href="" aria-label=""></a>
+          {/* Phase 3 — wave button. Floats over the avatar on hover; tap
+              friendly on touch. Click broadcasts a directional wave. */}
+          <button
+            class="here-slot__wave"
+            type="button"
+            hidden
+            aria-label="wave at this visitor"
+            data-wave-noun=""
+          >👋</button>
         </li>
       ))}
       {/* Overflow slot when >12 — replaced by "+N" number. */}
@@ -48,6 +57,12 @@
 
     <button class="here-strip__tell mono" id="here-tell-btn" type="button" aria-expanded="false" aria-controls="here-tell-panel">
       <span class="here-strip__tell-label">+ TELL</span>
+    </button>
+
+    {/* Phase 3 — open the WIRE chat panel. Toggles like TELL. */}
+    <button class="here-strip__wire mono" id="here-wire-btn" type="button" aria-expanded="false" aria-controls="here-wire-panel">
+      <span class="here-strip__wire-label">WIRE</span>
+      <span class="here-strip__wire-badge" id="here-wire-badge" hidden>·</span>
     </button>
 
     <a class="here-strip__profile mono" href="/profile" id="here-profile-link">
@@ -87,11 +102,41 @@
         <span id="here-focus-joined">joined —</span>
       </p>
       <p class="here-focus__detail" id="here-focus-detail"></p>
-      {/* Phase 3 — JOIN button. Shown when the focused peer is on a
-          different page than the viewer. One-click teleport. */}
-      <a class="here-focus__join mono" id="here-focus-join" hidden href=""></a>
+      <div class="here-focus__actions">
+        {/* Phase 3 — JOIN button. Shown when the focused peer is on a
+            different page than the viewer. One-click teleport. */}
+        <a class="here-focus__join mono" id="here-focus-join" hidden href=""></a>
+        {/* Phase 3 — WAVE button. Sends a directional 👋 to this peer. */}
+        <button class="here-focus__wave mono" id="here-focus-wave" type="button" hidden>👋 WAVE</button>
+        {/* Phase 3 — FOLLOW toggle. When ON, viewer auto-teleports
+            whenever this peer's currentPath changes. Stored locally. */}
+        <button class="here-focus__follow mono" id="here-focus-follow" type="button" hidden aria-pressed="false">FOLLOW</button>
+      </div>
     </div>
     <button class="here-focus__close mono" id="here-focus-close" type="button" aria-label="Close visitor details">×</button>
+  </div>
+
+  {/* Phase 3 — wave overlay. Ephemeral chip flashes when a wave arrives.
+      Lives outside .here-strip__row so the absolute-positioned chip can
+      stretch across the strip without breaking flex layout. */}
+  <div class="here-strip__waves" id="here-waves" aria-live="polite"></div>
+
+  {/* Phase 3 — WIRE panel. Live chat ring buffer surfaced from the DO. */}
+  <div class="here-strip__panel here-strip__panel--wire" id="here-wire-panel" hidden>
+    <p class="here-panel__eyebrow mono">WIRE · live · last 20 messages</p>
+    <ol class="here-wire__log" id="here-wire-log" role="log" aria-live="polite"></ol>
+    <form class="here-wire__form" id="here-wire-form">
+      <input
+        type="text"
+        id="here-wire-input"
+        class="here-panel__input here-wire__input"
+        placeholder="say something to the peoples · max 120 chars"
+        maxlength="120"
+        autocomplete="off"
+      />
+      <button type="submit" class="here-wire__send mono">SEND</button>
+    </form>
+    <p class="here-wire__hint mono">all visitors here see this · ephemeral · clears when nobody's here</p>
   </div>
 
   {/* TELL THE PEOPLES panel — expandable. Per Mike 2026-04-19 20:45 PT:
@@ -283,6 +328,19 @@
           whereLink.textContent = '';
         }
       }
+      // Phase 3 — show the WAVE button when this peer is a real human/wallet
+      // visitor (agents can't receive waves; the worker drops them anyway).
+      var waveBtn = slot.querySelector('.here-slot__wave');
+      if (waveBtn) {
+        var isHuman = !session.kind || session.kind === 'human' || session.kind === 'wallet';
+        if (isHuman) {
+          waveBtn.hidden = false;
+          waveBtn.setAttribute('data-wave-noun', String(nextNounId));
+          waveBtn.setAttribute('aria-label', 'wave at noun ' + nextNounId);
+        } else {
+          waveBtn.hidden = true;
+        }
+      }
     }
 
     // Defense-in-depth on the receiving side: even though the server
@@ -361,6 +419,18 @@
           joinBtn.removeAttribute('href');
         }
       }
+      // Phase 3 — show WAVE + FOLLOW buttons in the focus card. Always
+      // available for human/wallet peers; hidden for agents.
+      var waveBtnFocus = document.getElementById('here-focus-wave');
+      var followBtnFocus = document.getElementById('here-focus-follow');
+      var isHumanPeer = !session.kind || session.kind === 'human' || session.kind === 'wallet';
+      if (waveBtnFocus) waveBtnFocus.hidden = !isHumanPeer;
+      if (followBtnFocus) {
+        followBtnFocus.hidden = !isHumanPeer;
+        var isFollowing = followingNounId === Number(session.nounId);
+        followBtnFocus.setAttribute('aria-pressed', String(isFollowing));
+        followBtnFocus.textContent = isFollowing ? 'FOLLOWING ✓' : 'FOLLOW';
+      }
       focusEl.hidden = false;
       focusCurrentSlot = slot;
     }
@@ -425,6 +495,10 @@
       } else {
         if (overflow) overflow.hidden = true;
       }
+      // Phase 3 — surface chat + waves + drive auto-follow.
+      paintChat(payload && payload.chat);
+      paintWaves(payload && payload.waves);
+      maybeFollow(others);
     }
 
     function sendPresence(type, extra) {
@@ -510,6 +584,199 @@
       sessions: [{ nounId: nounId, kind: isAgent ? 'agent' : 'human', joinedAt: new Date().toISOString() }],
     });
     if (allowPresence) connectPresence();
+
+    // ── Phase 3: WAVE button on each peer slot ─────────────────
+    // Delegate so we don't need to wire one listener per slot.
+    var slotsRoot = document.getElementById('here-slots');
+    if (slotsRoot) {
+      slotsRoot.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('.here-slot__wave');
+        if (!btn) return;
+        e.stopPropagation();
+        e.preventDefault();
+        var to = Number(btn.getAttribute('data-wave-noun'));
+        if (!(to >= 0 && to < 1200)) return;
+        sendWave(to);
+        // Self-confirm — flash a tiny ✓ on the button so the sender sees it
+        // before the broadcast loop returns.
+        btn.classList.add('here-slot__wave--sent');
+        setTimeout(function () { btn.classList.remove('here-slot__wave--sent'); }, 1200);
+      });
+    }
+
+    function sendWave(toNoun) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+      try {
+        ws.send(JSON.stringify({ type: 'wave', nounId: nounId, to: toNoun, emoji: '👋' }));
+        return true;
+      } catch (e) { return false; }
+    }
+
+    // ── Phase 3: WAVE rendering (incoming) ─────────────────────
+    var wavesRoot = document.getElementById('here-waves');
+    var seenWaveAt = 0; // dedupe: monotonic timestamp of last rendered wave
+    function paintWaves(waves) {
+      if (!wavesRoot || !Array.isArray(waves) || !waves.length) return;
+      // Render only entries newer than the last we showed.
+      var fresh = [];
+      for (var i = 0; i < waves.length; i++) {
+        var w = waves[i];
+        if (!w || typeof w.at !== 'number') continue;
+        if (w.at <= seenWaveAt) continue;
+        fresh.push(w);
+      }
+      if (!fresh.length) return;
+      seenWaveAt = fresh[fresh.length - 1].at;
+      for (var j = 0; j < fresh.length; j++) {
+        renderWave(fresh[j]);
+      }
+    }
+    function renderWave(w) {
+      var atMe = Number(w.toNoun) === Number(nounId);
+      var fromMe = Number(w.fromNoun) === Number(nounId);
+      var chip = document.createElement('div');
+      chip.className = 'here-wave-chip' + (atMe ? ' here-wave-chip--at-me' : '');
+      chip.textContent = (w.emoji || '👋') + ' noun ' + w.fromNoun + ' → noun ' + w.toNoun;
+      if (atMe) chip.textContent += ' · that’s YOU';
+      else if (fromMe) chip.textContent += ' · sent';
+      wavesRoot.appendChild(chip);
+      // Auto-remove after 4s — DO TTL is 8s but the chip is the visual.
+      setTimeout(function () {
+        chip.classList.add('here-wave-chip--out');
+        setTimeout(function () { if (chip.parentNode) chip.parentNode.removeChild(chip); }, 400);
+      }, 4_000);
+    }
+
+    // ── Phase 3: WIRE chat panel (uses existing DO chat ring buffer) ──
+    var wirePanel = document.getElementById('here-wire-panel');
+    var wireBtn = document.getElementById('here-wire-btn');
+    var wireBadge = document.getElementById('here-wire-badge');
+    var wireLog = document.getElementById('here-wire-log');
+    var wireForm = document.getElementById('here-wire-form');
+    var wireInput = document.getElementById('here-wire-input');
+    var seenChatAt = 0;
+    var unreadChat = 0;
+
+    if (wireBtn && wirePanel) {
+      wireBtn.addEventListener('click', function () {
+        wirePanel.hidden = !wirePanel.hidden;
+        wireBtn.setAttribute('aria-expanded', String(!wirePanel.hidden));
+        if (!wirePanel.hidden) {
+          unreadChat = 0;
+          if (wireBadge) { wireBadge.hidden = true; wireBadge.textContent = '·'; }
+          if (wireInput) try { wireInput.focus(); } catch (e) {}
+        }
+      });
+    }
+    if (wireForm) {
+      wireForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!wireInput) return;
+        var msg = wireInput.value.trim();
+        if (!msg) return;
+        if (msg.length > 120) msg = msg.slice(0, 120);
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        try { ws.send(JSON.stringify({ type: 'chat', nounId: nounId, msg: msg, tag: 'noun-' + nounId })); } catch (e2) {}
+        wireInput.value = '';
+      });
+    }
+
+    function paintChat(chat) {
+      if (!wireLog || !Array.isArray(chat)) return;
+      // Render the full ring buffer to keep DOM in sync — ≤20 entries.
+      wireLog.innerHTML = '';
+      var newer = 0;
+      for (var i = 0; i < chat.length; i++) {
+        var c = chat[i]; if (!c || typeof c.at !== 'number') continue;
+        var li = document.createElement('li');
+        li.className = 'here-wire__entry' + (Number(c.nounId) === Number(nounId) ? ' here-wire__entry--mine' : '');
+        var who = document.createElement('span');
+        who.className = 'here-wire__who mono';
+        who.textContent = 'noun ' + c.nounId;
+        var msg = document.createElement('span');
+        msg.className = 'here-wire__msg';
+        msg.textContent = String(c.msg || '');
+        li.appendChild(who);
+        li.appendChild(msg);
+        wireLog.appendChild(li);
+        if (c.at > seenChatAt && Number(c.nounId) !== Number(nounId)) newer++;
+      }
+      // Auto-scroll the log to the most recent entry.
+      try { wireLog.scrollTop = wireLog.scrollHeight; } catch (e) {}
+      // Update unread badge when WIRE is closed.
+      if (chat.length) seenChatAt = chat[chat.length - 1].at;
+      if (newer > 0 && wirePanel && wirePanel.hidden) {
+        unreadChat += newer;
+        if (wireBadge) { wireBadge.hidden = false; wireBadge.textContent = String(unreadChat); }
+      }
+    }
+
+    // ── Phase 3: FOLLOW (auto-teleport when followed peer changes path) ──
+    var followingNounId = -1;
+    try {
+      var saved = parseInt(localStorage.getItem('pc:following') || '', 10);
+      if (saved >= 0 && saved < 1200) followingNounId = saved;
+    } catch (e) {}
+
+    function setFollowing(targetNoun) {
+      followingNounId = (targetNoun >= 0 && targetNoun < 1200) ? targetNoun : -1;
+      try {
+        if (followingNounId >= 0) localStorage.setItem('pc:following', String(followingNounId));
+        else localStorage.removeItem('pc:following');
+      } catch (e) {}
+    }
+
+    function maybeFollow(others) {
+      if (followingNounId < 0 || !Array.isArray(others)) return;
+      for (var i = 0; i < others.length; i++) {
+        var s = others[i];
+        if (!s || Number(s.nounId) !== followingNounId) continue;
+        var path = sanitizePeerPath(s.currentPath);
+        if (path && path !== window.location.pathname) {
+          // Tiny debounce — write a flag so we don't loop on race conditions.
+          var stamp = Date.now();
+          if (window.__pcLastFollowAt && stamp - window.__pcLastFollowAt < 1500) return;
+          window.__pcLastFollowAt = stamp;
+          window.location.href = path;
+          return;
+        }
+      }
+    }
+
+    // Wire FOLLOW + WAVE buttons in the focus card so they target the
+    // currently-focused peer.
+    var focusWaveBtn = document.getElementById('here-focus-wave');
+    var focusFollowBtn = document.getElementById('here-focus-follow');
+    if (focusWaveBtn) {
+      focusWaveBtn.addEventListener('click', function () {
+        if (!focusCurrentSlot) return;
+        try {
+          var s = JSON.parse(focusCurrentSlot.dataset.session || '{}');
+          if (Number(s.nounId) >= 0) sendWave(Number(s.nounId));
+          focusWaveBtn.classList.add('here-focus__wave--sent');
+          setTimeout(function () { focusWaveBtn.classList.remove('here-focus__wave--sent'); }, 1200);
+        } catch (e) {}
+      });
+    }
+    if (focusFollowBtn) {
+      focusFollowBtn.addEventListener('click', function () {
+        if (!focusCurrentSlot) return;
+        try {
+          var s = JSON.parse(focusCurrentSlot.dataset.session || '{}');
+          var n = Number(s.nounId);
+          if (!(n >= 0)) return;
+          if (followingNounId === n) {
+            setFollowing(-1);
+            focusFollowBtn.setAttribute('aria-pressed', 'false');
+            focusFollowBtn.textContent = 'FOLLOW';
+          } else {
+            setFollowing(n);
+            focusFollowBtn.setAttribute('aria-pressed', 'true');
+            focusFollowBtn.textContent = 'FOLLOWING ✓';
+          }
+        } catch (e) {}
+      });
+    }
 
     // ── TELL THE PEOPLES panel ──────────────────────────────────
     var STATE_KEYS = {
@@ -939,6 +1206,239 @@
     flex-shrink: 0;
   }
   .here-focus__close:hover { background: #f5f2ea; color: #12110E; }
+
+  /* Phase 3 — focus-card action row. Wraps JOIN + WAVE + FOLLOW. */
+  .here-focus__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+    align-items: center;
+  }
+
+  /* Phase 3 — WAVE button on each peer slot. Floats over the avatar's
+     bottom-right corner; subtle by default, brightens on hover. */
+  .here-slot__wave {
+    position: absolute;
+    right: -4px;
+    top: -4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #534AB7;
+    background: #FFF1A8;
+    color: #534AB7;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    z-index: 3;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+    transition: transform 0.12s ease, background 0.12s ease;
+  }
+  .here-slot__wave:hover {
+    background: #F59F00;
+    color: #fff;
+    border-color: #F59F00;
+    transform: scale(1.18);
+  }
+  .here-slot__wave--sent {
+    background: #2ecc40;
+    color: #fff;
+    border-color: #2ecc40;
+  }
+  .here-slot__wave[hidden] { display: none; }
+
+  /* Phase 3 — focus-card WAVE button. Same chip aesthetic as JOIN. */
+  .here-focus__wave {
+    padding: 4px 9px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: #FFF1A8;
+    color: #534AB7;
+    border: 1px solid #534AB7;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .here-focus__wave:hover {
+    background: #534AB7;
+    color: #FFF1A8;
+  }
+  .here-focus__wave--sent {
+    background: #2ecc40 !important;
+    color: #fff !important;
+    border-color: #2ecc40 !important;
+  }
+  .here-focus__wave[hidden] { display: none; }
+
+  /* Phase 3 — focus-card FOLLOW toggle. Pressed state is bolder. */
+  .here-focus__follow {
+    padding: 4px 9px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: transparent;
+    color: #534AB7;
+    border: 1px solid #534AB7;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .here-focus__follow[aria-pressed="true"] {
+    background: #534AB7;
+    color: #fff;
+  }
+  .here-focus__follow:hover {
+    background: #FFF1A8;
+    color: #534AB7;
+  }
+  .here-focus__follow[aria-pressed="true"]:hover {
+    background: #F59F00;
+    color: #fff;
+    border-color: #F59F00;
+  }
+  .here-focus__follow[hidden] { display: none; }
+
+  /* Phase 3 — wave overlay (ephemeral chip). Appears between the avatar
+     row and the state line, slides up + fades out. */
+  .here-strip__waves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0 0;
+    min-height: 0;
+  }
+  .here-strip__waves:empty { display: none; }
+  .here-wave-chip {
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    color: #534AB7;
+    background: #FFF1A8;
+    border: 1px solid rgba(83, 74, 183, 0.42);
+    padding: 3px 7px;
+    border-radius: 3px;
+    animation: here-wave-in 0.28s ease-out;
+  }
+  .here-wave-chip--at-me {
+    background: #F59F00;
+    color: #fff;
+    border-color: #F59F00;
+    box-shadow: 0 0 0 1px #F59F00 inset;
+    animation: here-wave-in 0.28s ease-out, here-wave-pulse 1.6s ease-in-out infinite;
+  }
+  .here-wave-chip--out {
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  @keyframes here-wave-in {
+    0% { opacity: 0; transform: translateY(6px) scale(0.92); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes here-wave-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px #F59F00 inset, 0 0 0 0 rgba(245, 159, 0, 0.45); }
+    50%      { box-shadow: 0 0 0 1px #F59F00 inset, 0 0 0 6px rgba(245, 159, 0, 0); }
+  }
+
+  /* Phase 3 — WIRE button + badge in the masthead. */
+  .here-strip__wire {
+    background: transparent;
+    border: 1px solid rgba(83, 74, 183, 0.42);
+    color: #534AB7;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+  }
+  .here-strip__wire:hover {
+    background: #FFF1A8;
+    border-color: #534AB7;
+  }
+  .here-strip__wire[aria-expanded="true"] {
+    background: #534AB7;
+    color: #FFF1A8;
+  }
+  .here-strip__wire-badge {
+    display: inline-block;
+    margin-left: 6px;
+    background: #F59F00;
+    color: #fff;
+    border-radius: 8px;
+    padding: 0 5px;
+    font-size: 9px;
+    line-height: 14px;
+    min-width: 14px;
+    text-align: center;
+  }
+  .here-strip__wire-badge[hidden] { display: none; }
+
+  /* Phase 3 — WIRE chat panel. */
+  .here-strip__panel--wire { padding-top: 8px; }
+  .here-wire__log {
+    list-style: none;
+    margin: 6px 0 8px;
+    padding: 8px;
+    background: #f5f2ea;
+    border: 1px solid #d6d4cd;
+    border-radius: 3px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .here-wire__log:empty::before {
+    content: 'no messages yet · be the first';
+    color: #8b8a85;
+    font-style: italic;
+  }
+  .here-wire__entry {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 8px;
+    padding: 2px 0;
+  }
+  .here-wire__entry--mine .here-wire__who { color: #F59F00; }
+  .here-wire__who {
+    color: #534AB7;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    align-self: center;
+  }
+  .here-wire__msg {
+    color: #12110E;
+    word-break: break-word;
+  }
+  .here-wire__form {
+    display: flex;
+    gap: 6px;
+  }
+  .here-wire__input { flex: 1; }
+  .here-wire__send {
+    background: #534AB7;
+    color: #FFF1A8;
+    border: 1px solid #534AB7;
+    border-radius: 3px;
+    padding: 4px 12px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .here-wire__send:hover {
+    background: #F59F00;
+    border-color: #F59F00;
+  }
+  .here-wire__hint {
+    color: #8b8a85;
+    font-size: 10px;
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
 
   /* Phase 3 — JOIN button in the focus card. Same chip aesthetic as the
      existing PROFILE link to reinforce that it's a teleport. */

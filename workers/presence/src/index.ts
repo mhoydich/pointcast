@@ -105,6 +105,19 @@ interface ChatEntry {
   sid: string; // first 8 chars of session id — stable-per-visitor grouping
 }
 
+/**
+ * Phase 3 — directional ephemeral signal between two visitors. Sender
+ * broadcasts {to, emoji}; everyone sees it (so spectators can read the
+ * social texture), but only the targeted noun's client renders the
+ * "you got waved at" affordance. TTL 8s — receive then forget.
+ */
+interface WaveEntry {
+  fromNoun: number;
+  toNoun: number;
+  emoji: string; // short opaque payload — 👋 default, capped + sanitized server-side
+  at: number;
+}
+
 interface PublicSessionView {
   nounId: number;
   kind: PresenceKind;
@@ -140,12 +153,13 @@ interface BroadcastPayload {
   sessions: PublicSessionView[];
   peers?: PeerView[]; // cursor positions of other active visitors (last 20s)
   chat?: ChatEntry[]; // room chat ring buffer (last 20 entries)
+  waves?: WaveEntry[]; // directional waves emitted in the last WAVE_TTL_MS
   you?: PrivateSessionView;
 }
 
 type ClientMessage =
   | {
-      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat';
+      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat' | 'wave';
       nounId?: unknown;
       mood?: unknown;
       listening?: unknown;
@@ -157,6 +171,8 @@ type ClientMessage =
       y?: unknown;
       msg?: unknown;
       currentPath?: unknown;
+      to?: unknown;
+      emoji?: unknown;
     }
   | null
   | undefined;
@@ -172,6 +188,11 @@ const PEER_CURSOR_TTL_MS = 20_000; // hide peers whose last cursor > 20s old
 const MAX_PEER_BROADCAST = 30; // cap broadcast peer list
 const MAX_CHAT_BUFFER = 20; // ring buffer depth
 const MAX_CHAT_MSG = 120; // char cap
+const WAVE_TTL_MS = 8_000; // waves vanish from broadcast after 8s
+const MAX_WAVE_BUFFER = 30; // cap concurrent in-flight waves
+const MAX_WAVE_EMOJI_LEN = 8; // emoji payload byte cap (multi-codepoint allowed)
+const WAVE_RATE_PER_SESSION = 4; // max 4 waves per WAVE_RATE_WINDOW_MS
+const WAVE_RATE_WINDOW_MS = 10_000;
 const FAST_BROADCAST_MS = 100; // 10 Hz while active
 const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
 const ACTIVITY_WINDOW_MS = 3000; // fast mode window after last cursor/chat
@@ -307,6 +328,11 @@ export class PresenceRoom {
   // `broadcastMode` is the current tick rate so we only reschedule when it
   // actually flips — setInterval churn is otherwise wasteful.
   chatLog: ChatEntry[] = [];
+  // Phase 3 — directional waves. Ring buffer; entries older than WAVE_TTL_MS
+  // are filtered out at broadcast time so receivers only see the live ones.
+  waves: WaveEntry[] = [];
+  // Per-session wave timestamps for rate limiting (sessionId → recent epochs).
+  waveRate: Map<string, number[]> = new Map();
   lastActivity: number = 0;
   broadcastMode: 'idle' | 'fast' = 'idle';
 
@@ -441,6 +467,20 @@ export class PresenceRoom {
       return;
     }
 
+    // ─── Phase 3: wave (directional ephemeral) ────────────────
+    // Sender supplies `to` (target nounId) and optionally `emoji`. We
+    // rate-limit, append to the wave ring buffer, and broadcast. Old
+    // waves (>WAVE_TTL_MS) are filtered at snapshot time.
+    if (type === 'wave') {
+      const accepted = this.applyWave(sessionId, message);
+      if (accepted) {
+        this.lastActivity = Date.now();
+        this.ensureFastMode();
+        this.broadcast();
+      }
+      return;
+    }
+
     this.applyVisitorPatch(sessionId, message);
     if (hasOwn(message, 'tag')) {
       const tag = normalizeText(message.tag, 40);
@@ -482,6 +522,50 @@ export class PresenceRoom {
     if (this.chatLog.length > MAX_CHAT_BUFFER) {
       this.chatLog.splice(0, this.chatLog.length - MAX_CHAT_BUFFER);
     }
+  }
+
+  /**
+   * Process an incoming wave from the given session. Returns true when the
+   * wave is accepted and queued (broadcast on next tick), false on rate
+   * limit / validation failure.
+   */
+  applyWave(sessionId: string, patch: Record<string, unknown>): boolean {
+    const visitor = this.visitors.get(sessionId);
+    if (!visitor) return false;
+    // Agents can't wave — keeps the social layer human.
+    if (visitor.kind === 'agent') return false;
+    const toNoun = normalizeNounId(patch.to, -1);
+    if (toNoun < 0) return false;
+    if (toNoun === visitor.nounId) return false; // no self-waves
+    // Emoji defaults to 👋 when missing/invalid. Keep payload tight.
+    let emoji = '👋';
+    if (typeof patch.emoji === 'string') {
+      const trimmed = patch.emoji.trim();
+      if (trimmed && trimmed.length <= MAX_WAVE_EMOJI_LEN) {
+        emoji = trimmed;
+      }
+    }
+    // Per-session rate limit. Drop waves silently when exceeded —
+    // attackers don't get a confirmation channel.
+    const now = Date.now();
+    const recent = (this.waveRate.get(sessionId) ?? []).filter(
+      (t) => now - t <= WAVE_RATE_WINDOW_MS,
+    );
+    if (recent.length >= WAVE_RATE_PER_SESSION) return false;
+    recent.push(now);
+    this.waveRate.set(sessionId, recent);
+
+    const entry: WaveEntry = {
+      fromNoun: visitor.nounId,
+      toNoun,
+      emoji,
+      at: now,
+    };
+    this.waves.push(entry);
+    if (this.waves.length > MAX_WAVE_BUFFER) {
+      this.waves.splice(0, this.waves.length - MAX_WAVE_BUFFER);
+    }
+    return true;
   }
 
   applyVisitorPatch(sessionId: string, patch: Record<string, unknown>) {
@@ -631,6 +715,15 @@ export class PresenceRoom {
     const peers = this.collectPeers(viewerSessionId);
     if (peers.length) payload.peers = peers;
     if (this.chatLog.length) payload.chat = [...this.chatLog];
+
+    // Phase 3 — only emit waves still inside the TTL. Also opportunistically
+    // prune the in-memory ring so memory doesn't grow when the room stays
+    // hot. Receivers use `at` to dedupe across re-broadcasts.
+    if (this.waves.length) {
+      const cutoff = Date.now() - WAVE_TTL_MS;
+      this.waves = this.waves.filter((w) => w.at >= cutoff);
+      if (this.waves.length) payload.waves = [...this.waves];
+    }
 
     if (viewerSessionId) {
       const you = this.visitors.get(viewerSessionId);
