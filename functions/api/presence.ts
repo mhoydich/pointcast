@@ -21,8 +21,12 @@
  *     humans: number,
  *     agents: number,
  *     sessions: Array<PublicSessionView>,  // every viewer sees this
+ *     peers?: Array<PeerView>,             // active cursors (last 20s)
+ *     chat?: Array<ChatEntry>,             // ring buffer, last 20 messages
+ *     waves?: Array<WaveEntry>,            // directional waves, TTL 8s
  *     you?: PrivateSessionView,            // only for the session-matched viewer
  *   }
+ *   WaveEntry = { fromNoun, toNoun, emoji, at }
  *   PublicSessionView = {
  *     nounId, kind, joinedAt,
  *     mood?, listening?, where?, currentPath?,
