@@ -1,0 +1,510 @@
+---
+/**
+ * /sparrow/cartridges — manage AI cartridges (v0.41).
+ *
+ * The user's AI subscriptions live here. Each cartridge is a paid
+ * relationship with a provider (Claude, GPT, Midjourney, etc.) — the
+ * keys never leave the device unencrypted (NIP-44 self-encryption when
+ * a NIP-07 signer is available, clearly-labeled fallback otherwise).
+ *
+ * v0.41 ships:
+ *   · The schema + storage layer (src/lib/sparrow-cartridges.ts)
+ *   · The Anthropic cartridge type (src/lib/cartridges/anthropic.ts)
+ *   · This management page (add / test / remove + warning surface)
+ *
+ * Out of scope for v0.41 (queued for v0.42 / v0.43):
+ *   · HUD cartridge slot in SparrowLayout
+ *   · ⌘K affordance row pulled from sparrow.manifest
+ *   · Side-panel artifact rendering
+ *   · /sparrow/b/<id> manifest emitter
+ *
+ * The page is fully self-contained: type-check happy, no edits to
+ * other files required. Visit it to install a Claude key and run a
+ * test prompt.
+ */
+import SparrowLayout from '../../layouts/SparrowLayout.astro';
+
+export const prerender = true;
+---
+
+<SparrowLayout
+  title="Cartridges"
+  description="Manage your AI cartridges — paste keys once, run prompts directly. v0.41 supports Anthropic; more providers coming."
+  canonicalPath="/sparrow/cartridges"
+>
+  <section class="sp-cart">
+    <header class="sp-cart__head">
+      <p class="sp-cart__kicker">CARTRIDGES · YOUR AI · v0.41</p>
+      <h1 class="sp-cart__title">
+        Plug in <em>your</em> AI.
+      </h1>
+      <p class="sp-cart__lede">
+        Sparrow brokers between what you read and the AIs you've subscribed to.
+        Paste a key once; the cartridge lives here, encrypted at rest, ready to fire from
+        any block reader. Your keys never leave this device unencrypted.
+      </p>
+    </header>
+
+    <div class="sp-cart__warning" data-sp-warning hidden role="alert">
+      <span class="sp-cart__warning-icon" aria-hidden="true">!</span>
+      <div class="sp-cart__warning-body">
+        <p class="sp-cart__warning-title">Your keys are stored unencrypted on this device.</p>
+        <p class="sp-cart__warning-text">
+          Install a NIP-07 signer (e.g. <a href="https://getalby.com" rel="noreferrer">Alby</a>,
+          <a href="https://github.com/fiatjaf/nos2x" rel="noreferrer">nos2x</a>) and reload —
+          new cartridges will use NIP-44 self-encryption automatically. Existing keys can be
+          re-saved by removing + re-adding the cartridge.
+        </p>
+      </div>
+    </div>
+
+    <section class="sp-cart__installed" aria-labelledby="installed-h">
+      <h2 class="sp-cart__h" id="installed-h">Installed</h2>
+      <ul class="sp-cart__list" data-sp-list>
+        <li class="sp-cart__empty" data-sp-empty>
+          <p>No cartridges installed.</p>
+          <p class="sp-cart__empty-hint">Add one below to plug an AI subscription into Sparrow.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="sp-cart__add" aria-labelledby="add-h">
+      <h2 class="sp-cart__h" id="add-h">Add a cartridge</h2>
+      <p class="sp-cart__add-hint">
+        v0.41 ships one cartridge type — <strong>Anthropic Claude</strong>. More providers
+        in v0.42+ (OpenAI, Mistral, Midjourney, Suno, Notion, Linear, …). Get a key at
+        <a href="https://console.anthropic.com" rel="noreferrer">console.anthropic.com</a>.
+      </p>
+
+      <form class="sp-cart__form" data-sp-form>
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">Provider</span>
+          <select class="sp-cart__field-input" data-sp-provider required>
+            <option value="anthropic">Anthropic · Claude</option>
+          </select>
+        </label>
+
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">
+            Cartridge handle
+            <span class="sp-cart__field-hint">(yours; lowercase, dashes ok)</span>
+          </span>
+          <input
+            type="text"
+            class="sp-cart__field-input"
+            data-sp-id
+            value="claude-personal"
+            pattern="[a-z0-9][a-z0-9-_]*"
+            required
+          />
+        </label>
+
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">Display label</span>
+          <input
+            type="text"
+            class="sp-cart__field-input"
+            data-sp-label
+            value="Claude · personal"
+            required
+          />
+        </label>
+
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">Model</span>
+          <select class="sp-cart__field-input" data-sp-model>
+            <option value="claude-sonnet-4-5-20251020" selected>claude-sonnet-4-5</option>
+            <option value="claude-opus-4-1">claude-opus-4-1</option>
+            <option value="claude-haiku-4">claude-haiku-4</option>
+          </select>
+        </label>
+
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">
+            API key
+            <span class="sp-cart__field-hint">stays on this device · NIP-44 encrypted when a signer is present</span>
+          </span>
+          <input
+            type="password"
+            class="sp-cart__field-input"
+            data-sp-key
+            placeholder="sk-ant-…"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+        </label>
+
+        <button type="submit" class="sp-cart__submit">Install cartridge</button>
+        <p class="sp-cart__form-status" data-sp-form-status></p>
+      </form>
+    </section>
+
+    <section class="sp-cart__test" aria-labelledby="test-h">
+      <h2 class="sp-cart__h" id="test-h">Test the cartridge</h2>
+      <p class="sp-cart__test-hint">
+        Pick an installed cartridge, type a prompt, and watch the streamed response. This
+        is the same pipeline that the v0.42+ ⌘K affordances will fire — verifying the
+        cartridge here means everything else just works when those land.
+      </p>
+
+      <form class="sp-cart__form" data-sp-test-form>
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">Cartridge</span>
+          <select class="sp-cart__field-input" data-sp-test-cartridge required>
+            <option value="">— pick a cartridge —</option>
+          </select>
+        </label>
+
+        <label class="sp-cart__field">
+          <span class="sp-cart__field-label">Prompt</span>
+          <textarea
+            class="sp-cart__field-input sp-cart__field-textarea"
+            data-sp-test-prompt
+            rows="4"
+            placeholder="Summarize the PointCast project in three sentences."
+            required
+          ></textarea>
+        </label>
+
+        <button type="submit" class="sp-cart__submit" data-sp-test-submit>Run prompt</button>
+        <button type="button" class="sp-cart__cancel" data-sp-test-cancel hidden>Cancel</button>
+      </form>
+
+      <pre class="sp-cart__output" data-sp-test-output hidden></pre>
+      <p class="sp-cart__test-meta" data-sp-test-meta></p>
+    </section>
+
+    <section class="sp-cart__where" aria-labelledby="where-h">
+      <h2 class="sp-cart__h" id="where-h">Where this lives</h2>
+      <p class="sp-cart__lede">
+        Cartridges + their encrypted keys are persisted under <code>sparrow:cartridges:v1</code>
+        and <code>sparrow:cartridges:keys:&lt;id&gt;</code> in this device's localStorage. The
+        full design — cartridge primitive, sparrow.manifest spec, federation rules,
+        v0.41+ roadmap — is in
+        <a href="https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-29-sparrow-cartridge-front-door.md" rel="noreferrer">docs/plans/2026-04-29-sparrow-cartridge-front-door.md</a>.
+      </p>
+    </section>
+  </section>
+
+  {/* Inline client logic — keeps everything self-contained, mirrors
+      the v0.30 ambient watcher pattern (no framework). */}
+  <script>
+    import {
+      addCartridge,
+      removeCartridge,
+      listCartridges,
+      storeKey,
+      hasUnencryptedKeys,
+      getDefaultCartridgeId,
+      setDefaultCartridge,
+    } from '../../lib/sparrow-cartridges';
+    import {
+      defaultAnthropicCartridge,
+      complete as anthropicComplete,
+    } from '../../lib/cartridges/anthropic';
+
+    type Refs = {
+      list: HTMLUListElement | null;
+      empty: HTMLLIElement | null;
+      warning: HTMLDivElement | null;
+      form: HTMLFormElement | null;
+      providerInput: HTMLSelectElement | null;
+      idInput: HTMLInputElement | null;
+      labelInput: HTMLInputElement | null;
+      modelInput: HTMLSelectElement | null;
+      keyInput: HTMLInputElement | null;
+      formStatus: HTMLParagraphElement | null;
+      testForm: HTMLFormElement | null;
+      testCartridge: HTMLSelectElement | null;
+      testPrompt: HTMLTextAreaElement | null;
+      testSubmit: HTMLButtonElement | null;
+      testCancel: HTMLButtonElement | null;
+      testOutput: HTMLPreElement | null;
+      testMeta: HTMLParagraphElement | null;
+    };
+
+    const refs: Refs = {
+      list:          document.querySelector('[data-sp-list]'),
+      empty:         document.querySelector('[data-sp-empty]'),
+      warning:       document.querySelector('[data-sp-warning]'),
+      form:          document.querySelector('[data-sp-form]'),
+      providerInput: document.querySelector('[data-sp-provider]'),
+      idInput:       document.querySelector('[data-sp-id]'),
+      labelInput:    document.querySelector('[data-sp-label]'),
+      modelInput:    document.querySelector('[data-sp-model]'),
+      keyInput:      document.querySelector('[data-sp-key]'),
+      formStatus:    document.querySelector('[data-sp-form-status]'),
+      testForm:      document.querySelector('[data-sp-test-form]'),
+      testCartridge: document.querySelector('[data-sp-test-cartridge]'),
+      testPrompt:    document.querySelector('[data-sp-test-prompt]'),
+      testSubmit:    document.querySelector('[data-sp-test-submit]'),
+      testCancel:    document.querySelector('[data-sp-test-cancel]'),
+      testOutput:    document.querySelector('[data-sp-test-output]'),
+      testMeta:      document.querySelector('[data-sp-test-meta]'),
+    };
+
+    let testAbort: AbortController | null = null;
+
+    function repaint() {
+      const cartridges = listCartridges();
+      const defaultId = getDefaultCartridgeId();
+      // Installed list
+      if (refs.list) {
+        const items = cartridges.map((c) => {
+          const isDefault = c.id === defaultId;
+          const li = document.createElement('li');
+          li.className = 'sp-cart__row';
+          li.style.setProperty('--cart-color', c.color);
+          li.innerHTML = `
+            <span class="sp-cart__row-glyph" aria-hidden="true">${escapeHTML(c.glyph)}</span>
+            <div class="sp-cart__row-body">
+              <p class="sp-cart__row-label">${escapeHTML(c.label)}</p>
+              <p class="sp-cart__row-meta">
+                <span>${escapeHTML(c.provider)}</span>
+                <span>·</span>
+                <span>${escapeHTML(c.model)}</span>
+                <span>·</span>
+                <span>${c.capabilities.length} capabilities</span>
+                ${isDefault ? '<span>·</span><span class="sp-cart__row-default">default</span>' : ''}
+              </p>
+            </div>
+            <div class="sp-cart__row-actions">
+              ${
+                isDefault
+                  ? ''
+                  : `<button type="button" class="sp-cart__row-action" data-sp-default="${escapeHTML(c.id)}">Make default</button>`
+              }
+              <button type="button" class="sp-cart__row-action sp-cart__row-action--danger" data-sp-remove="${escapeHTML(c.id)}">Remove</button>
+            </div>
+          `;
+          return li;
+        });
+        // Replace contents — keep the empty state hidden when populated.
+        const empty = refs.empty;
+        refs.list.innerHTML = '';
+        if (items.length === 0 && empty) {
+          refs.list.appendChild(empty);
+        } else {
+          items.forEach((li) => refs.list?.appendChild(li));
+        }
+      }
+
+      // Warning surface
+      if (refs.warning) {
+        refs.warning.hidden = !hasUnencryptedKeys();
+      }
+
+      // Test cartridge picker
+      if (refs.testCartridge) {
+        const current = refs.testCartridge.value;
+        refs.testCartridge.innerHTML =
+          '<option value="">— pick a cartridge —</option>' +
+          cartridges
+            .map((c) => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.label)}</option>`)
+            .join('');
+        if (current && cartridges.some((c) => c.id === current)) {
+          refs.testCartridge.value = current;
+        } else if (defaultId && cartridges.some((c) => c.id === defaultId)) {
+          refs.testCartridge.value = defaultId;
+        }
+      }
+    }
+
+    function escapeHTML(s: string): string {
+      return s.replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+      ));
+    }
+
+    // ─── Event wiring ────────────────────────────────────────────────
+
+    refs.form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!refs.formStatus || !refs.idInput || !refs.labelInput || !refs.modelInput || !refs.keyInput) return;
+      const id = refs.idInput.value.trim();
+      const label = refs.labelInput.value.trim();
+      const model = refs.modelInput.value.trim();
+      const apiKey = refs.keyInput.value.trim();
+
+      if (!id || !label || !apiKey) {
+        refs.formStatus.textContent = 'Fill in every field.';
+        return;
+      }
+
+      refs.formStatus.textContent = 'storing key…';
+      try {
+        await storeKey(id, apiKey);
+        const cartridge = defaultAnthropicCartridge({ id, label, model });
+        addCartridge(cartridge);
+        refs.formStatus.textContent = `installed · cartridge id = ${id}`;
+        refs.keyInput.value = '';
+        repaint();
+      } catch (err) {
+        refs.formStatus.textContent = `failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    });
+
+    refs.list?.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const removeId = target.getAttribute('data-sp-remove');
+      const defaultId = target.getAttribute('data-sp-default');
+      if (removeId) {
+        if (confirm(`Remove cartridge "${removeId}"? This deletes the encrypted key.`)) {
+          removeCartridge(removeId);
+          repaint();
+        }
+        return;
+      }
+      if (defaultId) {
+        setDefaultCartridge(defaultId);
+        repaint();
+      }
+    });
+
+    refs.testForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!refs.testCartridge || !refs.testPrompt || !refs.testOutput || !refs.testMeta || !refs.testSubmit || !refs.testCancel) return;
+      const cartridgeId = refs.testCartridge.value;
+      const prompt = refs.testPrompt.value.trim();
+      if (!cartridgeId || !prompt) return;
+
+      const cartridge = listCartridges().find((c) => c.id === cartridgeId);
+      if (!cartridge) {
+        refs.testMeta.textContent = 'cartridge not found';
+        return;
+      }
+      if (cartridge.provider !== 'anthropic') {
+        refs.testMeta.textContent = 'v0.41 only fires anthropic cartridges';
+        return;
+      }
+
+      // Reset UI
+      refs.testOutput.hidden = false;
+      refs.testOutput.textContent = '';
+      refs.testMeta.textContent = 'streaming…';
+      refs.testSubmit.disabled = true;
+      refs.testCancel.hidden = false;
+
+      testAbort = new AbortController();
+      const started = Date.now();
+
+      try {
+        const result = await anthropicComplete({
+          cartridge,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 1024,
+          signal: testAbort.signal,
+          onChunk: (chunk) => {
+            if (chunk.text && refs.testOutput) refs.testOutput.textContent = chunk.text;
+            if (chunk.error && refs.testMeta) refs.testMeta.textContent = `error: ${chunk.error}`;
+          },
+        });
+        const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+        const usage = result.usage
+          ? ` · ${result.usage.input_tokens}↓ / ${result.usage.output_tokens}↑ tokens`
+          : '';
+        const stop = result.stop_reason ? ` · ${result.stop_reason}` : '';
+        if (result.error) {
+          refs.testMeta.textContent = `error after ${elapsed}s: ${result.error}`;
+        } else {
+          refs.testMeta.textContent = `done in ${elapsed}s${usage}${stop}`;
+        }
+      } catch (err) {
+        refs.testMeta.textContent = err instanceof Error && err.name === 'AbortError'
+          ? 'cancelled'
+          : `error: ${err instanceof Error ? err.message : String(err)}`;
+      } finally {
+        refs.testSubmit.disabled = false;
+        refs.testCancel.hidden = true;
+        testAbort = null;
+      }
+    });
+
+    refs.testCancel?.addEventListener('click', () => {
+      testAbort?.abort();
+    });
+
+    // Cross-tab updates: listen for cartridge changes from another tab.
+    window.addEventListener('storage', (e) => {
+      if (!e.key) return;
+      if (e.key.startsWith('sparrow:cartridges')) repaint();
+    });
+    window.addEventListener('sparrow:cartridges-changed', () => repaint());
+
+    repaint();
+  </script>
+
+  <style is:global>
+    .sp-cart { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+    .sp-cart__head { margin-bottom: 36px; }
+    .sp-cart__kicker { font-family: var(--sp-mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--sp-ember); margin: 0 0 14px; }
+    .sp-cart__title { font-family: var(--sp-display); font-weight: 400; font-size: clamp(38px, 6vw, 60px); line-height: 1.04; letter-spacing: -0.018em; margin: 0 0 18px; }
+    .sp-cart__title em { font-style: italic; color: var(--sp-ember); }
+    .sp-cart__lede { font-family: 'Inter Tight', system-ui, sans-serif; font-size: 16px; line-height: 1.55; max-width: 64ch; color: var(--sp-ash); margin: 0; }
+    .sp-cart code { font-family: var(--sp-mono); font-size: 0.85em; padding: 1px 6px; border: 1px solid var(--sp-rule); border-radius: 3px; color: var(--sp-bone); }
+
+    .sp-cart__warning {
+      display: grid; grid-template-columns: 32px 1fr; gap: 14px;
+      padding: 16px 18px; margin: 0 0 32px;
+      border: 1px solid var(--sp-oxblood);
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-oxblood) 14%, var(--sp-blue-hour));
+    }
+    .sp-cart__warning[hidden] { display: none; }
+    .sp-cart__warning-icon {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--sp-oxblood); color: var(--sp-bone);
+      font-family: var(--sp-display); font-size: 18px; font-weight: 700;
+    }
+    .sp-cart__warning-title { font-family: 'Inter Tight', system-ui, sans-serif; font-size: 15px; color: var(--sp-bone); margin: 0 0 4px; font-weight: 600; }
+    .sp-cart__warning-text { font-family: 'Inter Tight', system-ui, sans-serif; font-size: 14px; color: var(--sp-ash); margin: 0; line-height: 1.5; }
+    .sp-cart__warning-text a { color: var(--sp-ember); }
+
+    .sp-cart__installed, .sp-cart__add, .sp-cart__test, .sp-cart__where { margin-bottom: 48px; }
+    .sp-cart__h { font-family: var(--sp-display); font-weight: 400; font-size: 26px; letter-spacing: -0.012em; margin: 0 0 18px; color: var(--sp-bone); }
+
+    .sp-cart__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+    .sp-cart__empty { padding: 24px; border: 1px dashed var(--sp-rule); border-radius: 4px; color: var(--sp-mute); font-family: 'Inter Tight', system-ui, sans-serif; }
+    .sp-cart__empty p { margin: 0 0 6px; }
+    .sp-cart__empty-hint { font-size: 13px; color: var(--sp-mute); }
+
+    .sp-cart__row {
+      display: grid; grid-template-columns: 36px 1fr auto; gap: 14px; align-items: center;
+      padding: 14px 18px;
+      border: 1px solid color-mix(in oklch, var(--cart-color, var(--sp-rule)) 30%, var(--sp-rule));
+      border-radius: 4px;
+      background: color-mix(in oklch, var(--sp-blue-hour) 92%, var(--cart-color, transparent));
+    }
+    .sp-cart__row-glyph { font-family: var(--sp-display); font-size: 26px; color: var(--cart-color, var(--sp-ember)); text-align: center; }
+    .sp-cart__row-label { font-family: 'Inter Tight', system-ui, sans-serif; font-size: 16px; color: var(--sp-bone); margin: 0 0 4px; font-weight: 500; }
+    .sp-cart__row-meta { font-family: var(--sp-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--sp-mute); margin: 0; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+    .sp-cart__row-default { color: var(--cart-color, var(--sp-ember)); text-transform: uppercase; }
+    .sp-cart__row-actions { display: inline-flex; gap: 6px; }
+    .sp-cart__row-action { font-family: var(--sp-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; padding: 6px 10px; background: transparent; border: 1px solid var(--sp-rule); color: var(--sp-ash); border-radius: 3px; cursor: pointer; }
+    .sp-cart__row-action:hover { border-color: var(--sp-ember); color: var(--sp-ember); }
+    .sp-cart__row-action--danger:hover { border-color: var(--sp-oxblood); color: var(--sp-oxblood); }
+
+    .sp-cart__add-hint, .sp-cart__test-hint { font-family: 'Inter Tight', system-ui, sans-serif; font-size: 14px; line-height: 1.55; color: var(--sp-ash); margin: 0 0 18px; }
+    .sp-cart__add-hint a, .sp-cart__where a { color: var(--sp-ember); }
+
+    .sp-cart__form { display: grid; gap: 14px; padding: 22px; border: 1px solid var(--sp-rule); border-radius: 4px; background: color-mix(in oklch, var(--sp-blue-hour) 96%, transparent); }
+    .sp-cart__field { display: grid; gap: 6px; }
+    .sp-cart__field-label { font-family: var(--sp-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--sp-mute); display: inline-flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .sp-cart__field-hint { font-size: 10px; letter-spacing: 0.14em; color: var(--sp-mute); text-transform: none; }
+    .sp-cart__field-input { font-family: 'Inter Tight', system-ui, sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--sp-rule); border-radius: 3px; background: var(--sp-ink); color: var(--sp-bone); }
+    .sp-cart__field-input:focus { outline: 2px solid var(--sp-ember); outline-offset: 1px; }
+    .sp-cart__field-textarea { resize: vertical; font-family: 'Inter Tight', system-ui, sans-serif; }
+    .sp-cart__submit { font-family: var(--sp-mono); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; padding: 12px 18px; border: 1px solid var(--sp-ember); background: color-mix(in oklch, var(--sp-ember) 18%, var(--sp-blue-hour)); color: var(--sp-bone); border-radius: 3px; cursor: pointer; justify-self: start; }
+    .sp-cart__submit:hover:not(:disabled) { background: color-mix(in oklch, var(--sp-ember) 32%, var(--sp-blue-hour)); }
+    .sp-cart__submit:disabled { opacity: 0.5; cursor: progress; }
+    .sp-cart__cancel { font-family: var(--sp-mono); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; padding: 12px 18px; border: 1px solid var(--sp-rule); background: transparent; color: var(--sp-ash); border-radius: 3px; cursor: pointer; justify-self: start; }
+    .sp-cart__cancel:hover { border-color: var(--sp-oxblood); color: var(--sp-oxblood); }
+    .sp-cart__form-status { font-family: var(--sp-mono); font-size: 11px; color: var(--sp-mute); margin: 4px 0 0; min-height: 14px; }
+
+    .sp-cart__output { font-family: var(--sp-mono); font-size: 13px; line-height: 1.55; color: var(--sp-bone); padding: 18px; margin: 18px 0 0; border: 1px solid var(--sp-rule); border-radius: 4px; background: var(--sp-ink); white-space: pre-wrap; word-break: break-word; max-height: 480px; overflow-y: auto; }
+    .sp-cart__output[hidden] { display: none; }
+    .sp-cart__test-meta { font-family: var(--sp-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--sp-mute); margin: 8px 0 0; min-height: 14px; }
+  </style>
+</SparrowLayout>
