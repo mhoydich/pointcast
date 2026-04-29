@@ -28,6 +28,22 @@
   aria-hidden="true"
 ></div>
 
+{/* Phase 4 — cursor-anchored speech input. Pressing 'T' (when no other
+    input is focused) opens this floating mini-form near the visitor's
+    cursor. Submitting sends a chat with bubble:{x,y} so peers see it
+    both as a WIRE entry AND a floating bubble above your cursor. */}
+<form id="pc-cursor-say" class="pc-cursor-say" hidden>
+  <input
+    type="text"
+    id="pc-cursor-say-input"
+    class="pc-cursor-say__input"
+    placeholder="say something — enter to send · esc to cancel"
+    maxlength="120"
+    autocomplete="off"
+    aria-label="Speak from cursor"
+  />
+</form>
+
 <script>
   (() => {
     const layer = document.getElementById('pc-peer-cursors');
@@ -161,10 +177,17 @@
     document.addEventListener('touchmove', onTouch, { passive: true });
 
     // ── Receive + render ──
+    // Phase 4 — track recent chat entries that include a cursor bubble
+    // so we can render them as floating speech bubbles above the
+    // sender's cursor (or as a fallback floating bubble if their
+    // cursor isn't visible). Dedupe by `at`.
+    const seenBubbleAts = new Set<number>();
+
     function paintPayload(payload: any) {
       if (!payload) return;
       const peers = Array.isArray(payload.peers) ? payload.peers : [];
       const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+      const chat = Array.isArray(payload.chat) ? payload.chat : [];
 
       // Build nounId -> currentPath map so we can scope to this room.
       const pathByNoun = new Map<number, string | undefined>();
@@ -200,16 +223,60 @@
       }
 
       // Remove cursors that are no longer present.
-      for (const nid of cursorEls.keys()) {
+      for (const nid of Array.from(cursorEls.keys())) {
         if (!presentNouns.has(nid)) {
-          // Fade then remove.
           const entry = cursorEls.get(nid)!;
           entry.el.style.opacity = '0';
           setTimeout(() => removeCursor(nid), 600);
-          // Mark as removed so we don't double-fade.
           cursorEls.delete(nid);
         }
       }
+
+      // Phase 4 — render any new cursor-anchored chat bubbles. Filter
+      // to co-room senders only; skip our own (we already painted
+      // optimistically when we sent).
+      for (const c of chat) {
+        if (!c || typeof c.at !== 'number' || !c.bubble) continue;
+        if (seenBubbleAts.has(c.at)) continue;
+        if (c.room && c.room !== here) continue;
+        if (Number(c.nounId) === myNounId) { seenBubbleAts.add(c.at); continue; }
+        const bx = Math.max(0, Math.min(10000, Number(c.bubble.x) || 0));
+        const by = Math.max(0, Math.min(10000, Number(c.bubble.y) || 0));
+        renderSpeechBubble(Number(c.nounId), String(c.msg || ''), bx, by);
+        seenBubbleAts.add(c.at);
+      }
+      // Trim the dedupe set so it doesn't grow unbounded (the chat ring
+      // buffer is at most 20, so 64 is plenty of headroom).
+      if (seenBubbleAts.size > 64) {
+        const arr = Array.from(seenBubbleAts.values()).sort((a, b) => a - b);
+        seenBubbleAts.clear();
+        for (let i = arr.length - 32; i < arr.length; i++) seenBubbleAts.add(arr[i]);
+      }
+    }
+
+    function renderSpeechBubble(nid: number, text: string, x: number, y: number) {
+      if (!layer) return;
+      const bubble = document.createElement('div');
+      bubble.className = 'pc-cursor-bubble';
+      bubble.style.left = (x / 100) + 'vw';
+      bubble.style.top = (y / 100) + 'vh';
+      bubble.style.setProperty('--cursor-hue', String((nid * 137) % 360));
+
+      const tag = document.createElement('span');
+      tag.className = 'pc-cursor-bubble__who';
+      tag.textContent = 'noun ' + nid;
+      const msg = document.createElement('span');
+      msg.className = 'pc-cursor-bubble__msg';
+      msg.textContent = text.length > 120 ? text.slice(0, 119) + '…' : text;
+
+      bubble.appendChild(tag);
+      bubble.appendChild(msg);
+      layer.appendChild(bubble);
+
+      // Float up + fade out over 5s, then remove.
+      requestAnimationFrame(() => bubble.classList.add('pc-cursor-bubble--in'));
+      setTimeout(() => bubble.classList.add('pc-cursor-bubble--out'), 4_000);
+      setTimeout(() => { try { bubble.remove(); } catch {} }, 5_000);
     }
 
     // ── WS lifecycle ──
@@ -261,6 +328,85 @@
     });
 
     connect();
+
+    // ── Phase 4: cursor speech bubble (press T to talk from cursor) ──
+    const sayForm = document.getElementById('pc-cursor-say') as HTMLFormElement | null;
+    const sayInput = document.getElementById('pc-cursor-say-input') as HTMLInputElement | null;
+
+    function isFormFocused(): boolean {
+      const a = document.activeElement;
+      if (!a) return false;
+      const tag = (a.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      if ((a as HTMLElement).isContentEditable) return true;
+      return false;
+    }
+
+    let sayCursorX = -1;
+    let sayCursorY = -1;
+
+    function openSay() {
+      if (!sayForm || !sayInput) return;
+      // Anchor to the visitor's last cursor position (in CSS px).
+      const cssX = (pendingX / 100) * window.innerWidth / 100; // pendingX is 0..10000
+      const cssY = (pendingY / 100) * window.innerHeight / 100;
+      // Clamp inside viewport so the input is always visible.
+      const px = Math.max(8, Math.min(window.innerWidth - 240, (cssX * 100)));
+      const py = Math.max(8, Math.min(window.innerHeight - 40, (cssY * 100)));
+      sayForm.style.left = px + 'px';
+      sayForm.style.top = py + 'px';
+      sayCursorX = pendingX;
+      sayCursorY = pendingY;
+      sayForm.hidden = false;
+      sayInput.value = '';
+      try { sayInput.focus(); } catch {}
+    }
+    function closeSay() {
+      if (!sayForm) return;
+      sayForm.hidden = true;
+    }
+
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sayForm && !sayForm.hidden) {
+        e.preventDefault();
+        closeSay();
+        return;
+      }
+      // Only intercept 'T' / 't' when no form is focused; don't conflict
+      // with /api/key bindings or input typing.
+      if (!sayForm) return;
+      if (sayForm.hidden && (e.key === 't' || e.key === 'T') && !isFormFocused()) {
+        // Avoid typing T into another field after opening — preventDefault.
+        e.preventDefault();
+        openSay();
+      }
+    });
+
+    if (sayForm && sayInput) {
+      sayForm.addEventListener('submit', (e: Event) => {
+        e.preventDefault();
+        const raw = sayInput.value.trim();
+        closeSay();
+        if (!raw) return;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const trimmed = raw.length > 120 ? raw.slice(0, 120) : raw;
+        const x = Math.max(0, Math.min(10000, sayCursorX));
+        const y = Math.max(0, Math.min(10000, sayCursorY));
+        try {
+          ws.send(JSON.stringify({
+            type: 'chat',
+            nounId: myNounId >= 0 ? myNounId : undefined,
+            msg: trimmed,
+            tag: myNounId >= 0 ? ('noun-' + myNounId) : 'visitor',
+            bubble: { x: x, y: y },
+          }));
+          // Optimistic local render so the speaker sees the bubble
+          // immediately above their cursor — peers' broadcast will
+          // catch up on the next tick (and dedupe by `at`).
+          renderSpeechBubble(myNounId, trimmed, x, y);
+        } catch {}
+      });
+    }
   })();
 </script>
 
@@ -322,5 +468,78 @@
      instead of glides. */
   @media (prefers-reduced-motion: reduce) {
     .pc-peer-cursor { transition: opacity 0.4s ease; }
+  }
+
+  /* Phase 4 — cursor-anchored speech bubble (peer-rendered + own
+     optimistic). Floats up from the anchor point; fades. */
+  .pc-cursor-bubble {
+    position: absolute;
+    transform: translate(-2px, -100%) translateY(-22px);
+    background: hsl(var(--cursor-hue, 280), 78%, 96%);
+    color: hsl(var(--cursor-hue, 280), 78%, 22%);
+    border: 1px solid hsl(var(--cursor-hue, 280), 78%, 50%);
+    border-radius: 10px;
+    padding: 5px 9px;
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.35;
+    max-width: 240px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 4.5s ease-out;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 90;
+  }
+  .pc-cursor-bubble__who {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .pc-cursor-bubble__msg {
+    word-break: break-word;
+  }
+  .pc-cursor-bubble--in {
+    opacity: 1;
+    transform: translate(-2px, -100%) translateY(-30px);
+  }
+  .pc-cursor-bubble--out {
+    opacity: 0;
+    transform: translate(-2px, -100%) translateY(-90px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pc-cursor-bubble {
+      transition: opacity 0.4s ease;
+      transform: translate(-2px, -100%) translateY(-30px);
+    }
+    .pc-cursor-bubble--out { transform: translate(-2px, -100%) translateY(-30px); }
+  }
+
+  /* Phase 4 — cursor speech input form. Anchored at the visitor's
+     cursor position when they press T. */
+  .pc-cursor-say {
+    position: fixed;
+    z-index: 95;
+    pointer-events: auto;
+  }
+  .pc-cursor-say[hidden] { display: none; }
+  .pc-cursor-say__input {
+    width: 240px;
+    padding: 6px 10px;
+    border: 2px solid #534AB7;
+    background: #fff;
+    color: #12110E;
+    border-radius: 14px;
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    outline: none;
+  }
+  .pc-cursor-say__input::placeholder {
+    color: #8b8a85;
+    font-size: 11px;
   }
 </style>
