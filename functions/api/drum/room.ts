@@ -14,28 +14,38 @@
  * Per docs/briefs/2026-04-26-drum-realtime.md.
  */
 
+import { acceptDrumWebSocketFallback } from '../../_realtime-fallback';
+
 interface Env {
   DRUM_ROOM?: DurableObjectNamespace;
   VISITS?: KVNamespace;
 }
 
+const DRUM_ROOM_KEY = 'main:2026-04-29b';
+// Account-level DO duration is exhausted right now; use Pages fallback.
+const USE_DURABLE_OBJECTS = false;
+
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   // Reject anything that's not a WebSocket upgrade
-  if (request.headers.get('Upgrade') !== 'websocket') {
+  if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
     return new Response('expected WebSocket upgrade', { status: 426 });
   }
 
   // No DO binding → tell the client to use polling. The client hooks
   // already do this on close/error so a 503 here triggers the fallback.
-  if (!env.DRUM_ROOM) {
-    return new Response('DRUM_ROOM Durable Object not configured · use /api/sounds polling', { status: 503 });
+  if (!USE_DURABLE_OBJECTS || !env.DRUM_ROOM) {
+    return acceptDrumWebSocketFallback(request, env.VISITS);
   }
 
   try {
-    const id = env.DRUM_ROOM.idFromName('main');
+    const id = env.DRUM_ROOM.idFromName(DRUM_ROOM_KEY);
     const stub = env.DRUM_ROOM.get(id);
-    return await stub.fetch(request);
+    const response = await stub.fetch(request);
+    if (response.status === 101) return response;
+    console.error(`[drum/room] DO returned ${response.status}; using fallback`);
+    return acceptDrumWebSocketFallback(request, env.VISITS);
   } catch (err) {
-    return new Response(`drum-room error: ${(err as Error).message}`, { status: 500 });
+    console.error('[drum/room] DO fetch failed:', err);
+    return acceptDrumWebSocketFallback(request, env.VISITS);
   }
 };

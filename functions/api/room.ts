@@ -25,17 +25,36 @@
  *   2. npx wrangler pages deploy dist ...           (this function)
  */
 
+import { acceptPresenceWebSocketFallback } from '../_realtime-fallback';
+
 interface Env {
-  PRESENCE: DurableObjectNamespace;
+  PRESENCE?: DurableObjectNamespace;
+  VISITS?: KVNamespace;
 }
+
+const ROOM_PREFIX = 'room:2026-04-29c:';
+// Account-level DO duration is exhausted right now; use Pages fallback.
+const USE_DURABLE_OBJECTS = false;
 
 export const onRequest: PagesFunction<Env> = async (ctx) => {
   const reqUrl = new URL(ctx.request.url);
   const raw = reqUrl.searchParams.get('url') ?? '/';
-  const roomKey = `room:${normalizeRoomPath(raw)}`;
+  const roomKey = ROOM_PREFIX + normalizeRoomPath(raw);
+  if (!USE_DURABLE_OBJECTS || !ctx.env.PRESENCE) {
+    return acceptPresenceWebSocketFallback(ctx.request, roomKey, 'human', ctx.env.VISITS);
+  }
+
   const id = ctx.env.PRESENCE.idFromName(roomKey);
   const stub = ctx.env.PRESENCE.get(id);
-  return stub.fetch(ctx.request);
+  try {
+    const response = await stub.fetch(ctx.request);
+    if (response.status === 101) return response;
+    console.error(`[room] DO returned ${response.status}; using fallback`);
+    return acceptPresenceWebSocketFallback(ctx.request, roomKey, 'human', ctx.env.VISITS);
+  } catch (err) {
+    console.error('[room] DO fetch failed:', err);
+    return acceptPresenceWebSocketFallback(ctx.request, roomKey, 'human', ctx.env.VISITS);
+  }
 };
 
 /**

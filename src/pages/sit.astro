@@ -190,21 +190,49 @@ const jsonLd = {
       // ────────────────────────────────────────────────────────────────
       var ws = null;
       var wsConnectTimer = null;
+      var sitSid = (function () {
+        var key = 'pc:sit:sid';
+        try {
+          var existing = localStorage.getItem(key);
+          if (existing) return existing;
+          var hasRandomUUID = window.crypto && typeof window.crypto.randomUUID === 'function';
+          var next = hasRandomUUID ? window.crypto.randomUUID() : 'sit-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+          localStorage.setItem(key, next);
+          return next;
+        } catch {
+          return 'sit-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        }
+      })();
+      function normalizePresence(j) {
+        if (!j || typeof j !== 'object') return null;
+        var sessions = Array.isArray(j.sessions) ? j.sessions : [];
+        var sitting = Number(j.sitting || j.count || 0);
+        if (!sitting) sitting = Math.max(sessions.length, Number(j.humans || 0) + Number(j.agents || 0), 0);
+        var minutes = Number(j.total_minutes || j.totalMinutes || 0);
+        if (!minutes && sessions.length) {
+          var now = Date.now();
+          minutes = sessions.reduce(function (sum, session) {
+            if (!session || !session.joinedAt) return sum;
+            var joinedAt = Date.parse(session.joinedAt);
+            if (!Number.isFinite(joinedAt)) return sum;
+            return sum + Math.max(0, Math.floor((now - joinedAt) / 60000));
+          }, 0);
+        }
+        return { sitting: sitting, minutes: minutes };
+      }
       function tryHttpFallback() {
         fetch('/api/sit/presence', { credentials: 'omit' })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
-            if (!j) return;
-            var s = Number(j.sitting || j.count || 0);
-            var m = Number(j.total_minutes || j.totalMinutes || 0);
-            if (s > 0) paint(s, m || localTotal);
+            var next = normalizePresence(j);
+            if (next && next.sitting > 0) paint(next.sitting, next.minutes || localTotal);
           })
           .catch(function () { /* keep local */ });
       }
 
       try {
         var proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        ws = new WebSocket(proto + window.location.host + '/api/sit');
+        ws = new WebSocket(proto + window.location.host + '/api/sit?sid=' + encodeURIComponent(sitSid) + '&kind=human');
       } catch (e) { ws = null; }
 
       if (ws) {
@@ -224,8 +252,9 @@ const jsonLd = {
         ws.addEventListener('message', function (evt) {
           try {
             var msg = JSON.parse(evt.data);
-            if (msg && msg.type === 'presence') {
-              paint(msg.sitting, msg.total_minutes);
+            var next = normalizePresence(msg);
+            if (next) {
+              paint(next.sitting, next.minutes || localTotal);
             }
           } catch {}
         });

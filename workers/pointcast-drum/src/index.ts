@@ -49,6 +49,7 @@ interface DrumEvent {
 }
 
 const RING_SIZE = 50;
+const DRUM_ROOM_KEY = 'main:2026-04-29b';
 
 export class DrumRoom {
   state: DurableObjectState;
@@ -152,7 +153,7 @@ export default {
     if (!env.DRUM_ROOM) {
       return new Response('DRUM_ROOM binding missing', { status: 503 });
     }
-    const id = env.DRUM_ROOM.idFromName('main');
+    const id = env.DRUM_ROOM.idFromName(DRUM_ROOM_KEY);
     const stub = env.DRUM_ROOM.get(id);
     return await stub.fetch(req);
   },
