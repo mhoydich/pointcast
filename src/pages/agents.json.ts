@@ -17,6 +17,14 @@ import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
+import {
+  AGENT_VALUE_SURFACE,
+  agentEconomics,
+  agentExperimentCards,
+  agentInterestMechanics,
+  agentMaturityLadder,
+  agentValueLoops,
+} from '../lib/agent-value';
 import contracts from '../data/contracts.json';
 import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 
@@ -80,6 +88,8 @@ export const GET: APIRoute = async () => {
         wellKnownPointCastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         wellKnownFarcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
+        agentValue: 'https://pointcast.xyz/agent-value',
+        agentValueJson: 'https://pointcast.xyz/agent-value.json',
         protocol: 'https://pointcast.xyz/protocol',
         protocolJson: 'https://pointcast.xyz/protocol.json',
         llms: 'https://pointcast.xyz/llms.txt',
@@ -97,6 +107,7 @@ export const GET: APIRoute = async () => {
       human: {
         home: 'https://pointcast.xyz/',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
+        agentValue: 'https://pointcast.xyz/agent-value',
         investmentThesis: 'https://pointcast.xyz/investment-thesis',
         manifesto: 'https://pointcast.xyz/manifesto',
         protocol: 'https://pointcast.xyz/protocol',
@@ -206,6 +217,7 @@ export const GET: APIRoute = async () => {
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
+        agentValue: 'https://pointcast.xyz/agent-value.json',
         protocol: 'https://pointcast.xyz/protocol.json',
         pointcastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         farcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
@@ -442,6 +454,29 @@ export const GET: APIRoute = async () => {
         privacy: NOUNS_BATTLER_AGENT_BENCH.privacy,
         note: 'Task board, Sideline Desk, and Sponsorship Desk for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids. The asset factory, sponsorship market, and rewards model are prototype creative/accounting workflows, not promised investment yield.',
       },
+      agentValueBoard: {
+        html: AGENT_VALUE_SURFACE.url,
+        json: AGENT_VALUE_SURFACE.json,
+        thesis: AGENT_VALUE_SURFACE.thesis,
+        shortRule: AGENT_VALUE_SURFACE.shortRule,
+        operatingFrame: AGENT_VALUE_SURFACE.operatingFrame,
+        roles: agentValueLoops.map((loop) => ({
+          id: loop.id,
+          role: loop.role,
+          output: loop.output,
+          proof: loop.proof,
+          valueMetric: loop.valueMetric,
+        })),
+        interestMechanics: agentInterestMechanics.map((item) => item.title),
+        maturityLadder: agentMaturityLadder.map((stage) => stage.stage),
+        economics: agentEconomics.map((lane) => lane.lane),
+        experiments: agentExperimentCards.map((card) => ({
+          id: card.id,
+          name: card.name,
+          acceptance: card.acceptance,
+        })),
+        note: 'Explains how agents become valuable by finishing bounded, cited, accepted loops, and how they become interesting through visible roles, memory, taste constraints, consequence, and credit.',
+      },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
         rss: 'https://pointcast.xyz/rss.xml',
@@ -600,7 +635,7 @@ export const GET: APIRoute = async () => {
         '/.well-known/farcaster.json', '/.well-known/pointcast-peer.json',
         '/now.json', '/cast.json', '/battle.json', '/timeline.json',
         '/stack.json', '/protocol.json', '/feed.json', '/feed.xml', '/nature-yield.json',
-        '/garden-yield.json', '/meditate.json', '/b/*.json',
+        '/garden-yield.json', '/meditate.json', '/agent-value.json', '/b/*.json',
         '/c/*.json', '/c/*.rss', '/play.json', '/zen-cats.json', '/nouns-open-circuit.json',
         '/api/zen-cat-metadata/*', '/api/zen-cat-svg/*', '/llms.txt', '/llms-full.txt',
       ],

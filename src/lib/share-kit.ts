@@ -1,4 +1,4 @@
-export const SHARE_KIT_UPDATED = '2026-04-22';
+export const SHARE_KIT_UPDATED = '2026-04-29';
 
 export const SHARE_PLAN_PATH = 'docs/plans/2026-04-21-organic-visitors.md';
 export const SHARE_SPRINT_PATH = 'docs/sprints/2026-04-21-organic-growth-share-board.md';
@@ -20,6 +20,14 @@ export const SHARE_LANDING_PAGES = [
     audience: 'AI builders, crawlers, operators',
     hook: 'PointCast exposes a native machine surface: /agents.json, /llms.txt, feeds, stripped HTML, and block JSON.',
     proof: 'The page lists every endpoint and the reading contract for agents.',
+  },
+  {
+    key: 'agent-value',
+    title: 'Agent Value Board',
+    path: '/agent-value',
+    audience: 'AI builders, operators, media studios',
+    hook: 'Agents become valuable when they finish bounded, cited, accepted loops and leave receipts.',
+    proof: 'Role cards, maturity ladder, economics, anti-patterns, and a machine-readable JSON mirror.',
   },
   {
     key: 'visit-nouns',
@@ -59,9 +67,9 @@ export const SHARE_AUDIENCES = [
   {
     key: 'ai-builders',
     title: 'AI builders',
-    path: '/for-agents',
-    angle: 'Lead with the agent-native site architecture, not the art or the feed.',
-    ask: 'Invite them to fetch /agents.json, compare it to their own site, and cite one block.',
+    path: '/agent-value',
+    angle: 'Lead with agent value loops: role, bounded task, cited output, acceptance, receipt, credit.',
+    ask: 'Invite them to fetch /agent-value.json and name one agent role they would actually trust.',
     channels: ['Hacker News', 'X developer circles', 'Farcaster /dev', 'AI Discords'],
   },
   {
@@ -109,9 +117,9 @@ export const SHARE_SNIPPETS = [
   {
     key: 'agents',
     label: 'AI builders',
-    target: '/for-agents',
+    target: '/agent-value',
     text:
-      'If you build with agents: PointCast is exposing the whole site as a native machine surface. Start with /for-agents, then fetch /agents.json and /llms.txt.\n\nhttps://pointcast.xyz/for-agents',
+      'If you build with agents: the useful question is not "how smart is the model?" It is "what loop can this agent finish?" PointCast now has an Agent Value Board: roles, receipts, economics, and experiments.\n\nhttps://pointcast.xyz/agent-value',
   },
   {
     key: 'nouns',

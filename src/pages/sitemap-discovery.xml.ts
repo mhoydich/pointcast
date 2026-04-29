@@ -3,6 +3,8 @@ import type { APIRoute } from 'astro';
 const urls = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
+  ['https://pointcast.xyz/agent-value', 'weekly', '0.9'],
+  ['https://pointcast.xyz/agent-value.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/investment-thesis', 'weekly', '0.85'],
   ['https://pointcast.xyz/investment-thesis.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/nouns-nation/roadmap', 'weekly', '0.85'],
