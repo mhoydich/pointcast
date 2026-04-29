@@ -84,6 +84,8 @@ export const GET: APIRoute = async () => {
       '/tide':           'the room',
       '/tide.json':      'this manifest',
       '/tide/today.json':'today\'s defaults (palette+scene+soundscape derived from clock+date)',
+      '/tide/preview':   '40-card gallery of every palette × scene combination',
+      '/tide/share/{palette}/{scene}': 'shareable card for a single combo, with og:image',
       '/tide/moments':   'saved moments viewer',
       '/bath':           'companion (button-y, Spotify, mood selector)',
       '/meditate':       'companion (still room, breathing)',
