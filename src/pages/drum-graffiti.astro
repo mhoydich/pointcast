@@ -1,0 +1,261 @@
+---
+/**
+ * /drum-graffiti — anonymous shared wall · comms 7 · 2026-04-28 PT.
+ *
+ * Click anywhere on the wall to place a 12-char tag. Pick one of six
+ * neon colors. The wall holds the last 200 strokes; older ones layer
+ * underneath. KV-backed (functions/api/graffiti.ts on env.VISITS).
+ *
+ * Anonymous attribution — author Noun id is stored but rendered small
+ * + faded. The wall's the wall.
+ *
+ * Aesthetic: dark concrete with a faint brick-grain pattern, neon
+ * spray-paint text rendered with strong drop-shadow + slight rotation
+ * per stroke. Click flash + small modal for the input.
+ *
+ * Avoid literal '{...}' in body text — Astro parses those as JSX
+ * expressions and breaks the build. Use HTML entities (&#123; / &#125;)
+ * when you must show curly braces.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-graffiti — anonymous shared wall';
+const description = 'Tag the wall. Twelve chars, six neon colors, last two hundred strokes. KV-backed, anonymous-ish, layered. The wall is the wall.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-graffiti', name: 'PointCast Drum · Graffiti', url: 'https://pointcast.xyz/drum-graffiti', description };
+
+const COLORS = [
+  { id: 'cyan',    label: 'CYAN',    hex: '#5fbafd' },
+  { id: 'magenta', label: 'MAGENTA', hex: '#f04ec8' },
+  { id: 'yellow',  label: 'YELLOW',  hex: '#ffd400' },
+  { id: 'lime',    label: 'LIME',    hex: '#a8ff3a' },
+  { id: 'orange',  label: 'ORANGE',  hex: '#ff5c23' },
+  { id: 'white',   label: 'WHITE',   hex: '#fffaf0' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="gf" id="gf-main">
+    <DrumNav current="walkie" />
+
+    <header class="gf__head">
+      <p class="gf__kicker">DRUM HUB · COMMS 7 · GRAFFITI · 200 STROKES · KV</p>
+      <h1 class="gf__title"><em>Tag the wall.</em></h1>
+      <p class="gf__dek">Click anywhere on the wall. Type up to twelve characters. Pick one of six neon colors. Drop your tag. The wall holds the last two hundred strokes; older ones layer underneath.</p>
+    </header>
+
+    <section class="gf__bay">
+      <div class="gf__panel">
+        <span class="gf__panel-label mono">PICK A COLOR</span>
+        <div class="gf__colors" role="radiogroup" aria-label="Spray color">
+          {COLORS.map((c, i) => (
+            <button type="button" class={'gf__color' + (i === 0 ? ' gf__color--on' : '')} data-color={c.id} data-hex={c.hex} aria-label={'Color ' + c.label}>
+              <span class="gf__color-can"></span>
+              <span class="gf__color-label mono">{c.label}</span>
+            </button>
+          ))}
+        </div>
+        <p class="gf__panel-note mono" id="gf-note">click the wall to tag</p>
+      </div>
+
+      <div class="gf__wall" id="gf-wall" tabindex="0" aria-label="Click to tag the wall">
+        <div class="gf__wall-grain" aria-hidden="true"></div>
+        <p class="gf__wall-empty mono" id="gf-empty">— blank wall · be the first —</p>
+      </div>
+    </section>
+
+    <div class="gf__modal" id="gf-modal" hidden>
+      <div class="gf__modal-card">
+        <p class="gf__modal-eyebrow mono">★ TAG IT ★</p>
+        <input class="gf__modal-input" id="gf-input" maxlength="12" placeholder="up to 12 chars" />
+        <p class="gf__modal-count mono" id="gf-count">0 / 12</p>
+        <div class="gf__modal-actions">
+          <button type="button" class="gf__modal-cancel mono" id="gf-cancel">CANCEL</button>
+          <button type="button" class="gf__modal-send mono" id="gf-send">SPRAY →</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="gf__foot">
+      <p>Strokes live in <code>env.VISITS</code> KV at <code>graffiti:wall</code> as a single JSON array, capped at 200 entries. <code>POST /api/graffiti</code> writes a stroke; <code>GET /api/graffiti</code> reads the wall. Author Noun id is stored but never highlighted on the wall — anonymous-feel, accountable-trail.</p>
+      <p class="gf__credit mono">v0.1 · 2026-04-28 · drum sprint · comms 7</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  var COLORS = { cyan: '#5fbafd', magenta: '#f04ec8', yellow: '#ffd400', lime: '#a8ff3a', orange: '#ff5c23', white: '#fffaf0' };
+  var wall = document.getElementById('gf-wall');
+  var emptyEl = document.getElementById('gf-empty');
+  var modal = document.getElementById('gf-modal');
+  var input = document.getElementById('gf-input');
+  var count = document.getElementById('gf-count');
+  var note = document.getElementById('gf-note');
+  var send = document.getElementById('gf-send');
+  var cancel = document.getElementById('gf-cancel');
+  var currentColor = 'cyan';
+  var pendingPos = null;
+
+  function getSession() { try { var k='pc:session'; var s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s;} catch(e){ return 'gf-' + Math.random().toString(36).slice(2,10);} }
+  function nounIdFor(sid) { var h=5381; for(var i=0;i<sid.length;i++) h=(h*33+sid.charCodeAt(i))&0x7fffffff; return h%1200; }
+  var sid = getSession();
+  var storedNoun = 0;
+  try { var s = localStorage.getItem('pc:nounId'); storedNoun = s ? Number(s) : nounIdFor(sid); } catch(e){ storedNoun = nounIdFor(sid); }
+  if (!Number.isFinite(storedNoun) || storedNoun < 0 || storedNoun > 1199) storedNoun = nounIdFor(sid);
+  try { localStorage.setItem('pc:nounId', String(storedNoun)); } catch(e){}
+
+  document.querySelectorAll('.gf__color').forEach(function(b){
+    var hex = b.getAttribute('data-hex'); if (hex) b.style.setProperty('--gf-color', hex);
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.gf__color').forEach(function(x){ x.classList.remove('gf__color--on'); });
+      b.classList.add('gf__color--on');
+      currentColor = b.getAttribute('data-color') || 'cyan';
+    });
+  });
+
+  input.addEventListener('input', function(){ count.textContent = input.value.length + ' / 12'; });
+  cancel.addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e){ if (e.target === modal) closeModal(); });
+  window.addEventListener('keydown', function(e){
+    if (modal.hidden) return;
+    if (e.key === 'Escape') { closeModal(); }
+    if (e.key === 'Enter') { e.preventDefault(); doSpray(); }
+  });
+
+  function openModal(x, y) {
+    pendingPos = { x: x, y: y };
+    modal.hidden = false;
+    input.value = ''; count.textContent = '0 / 12';
+    setTimeout(function(){ input.focus(); }, 50);
+  }
+  function closeModal() {
+    modal.hidden = true; pendingPos = null;
+  }
+
+  wall.addEventListener('click', function(e){
+    if (!modal.hidden) return;
+    var rect = wall.getBoundingClientRect();
+    var x = (e.clientX - rect.left) / rect.width;
+    var y = (e.clientY - rect.top) / rect.height;
+    openModal(Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y)));
+  });
+
+  function renderStroke(s, opts) {
+    if (emptyEl && emptyEl.parentNode) emptyEl.remove();
+    var el = document.createElement('span');
+    el.className = 'gf__stroke';
+    el.style.left = (s.x * 100).toFixed(2) + '%';
+    el.style.top = (s.y * 100).toFixed(2) + '%';
+    var color = COLORS[s.color] || COLORS.cyan;
+    el.style.color = color;
+    var rot = ((parseInt(String(s.id || '').slice(0, 4), 36) || 0) % 21) - 10; // -10..+10 deg
+    el.style.transform = 'translate(-50%, -50%) rotate(' + rot + 'deg)';
+    el.style.setProperty('--gf-stroke-color', color);
+    el.title = 'noun #' + (s.nounId || '—');
+    el.textContent = s.text || '';
+    if (opts && opts.fresh) el.classList.add('gf__stroke--fresh');
+    wall.appendChild(el);
+  }
+
+  function renderAll(strokes) {
+    Array.from(wall.querySelectorAll('.gf__stroke')).forEach(function(e){ e.remove(); });
+    if (!strokes || strokes.length === 0) {
+      if (!wall.querySelector('.gf__wall-empty')) {
+        var p = document.createElement('p');
+        p.className = 'gf__wall-empty mono';
+        p.id = 'gf-empty';
+        p.textContent = '— blank wall · be the first —';
+        wall.appendChild(p);
+      }
+      return;
+    }
+    var existingEmpty = wall.querySelector('.gf__wall-empty');
+    if (existingEmpty) existingEmpty.remove();
+    // Render oldest first so newer strokes sit on top
+    var sorted = strokes.slice().sort(function(a, b){ return (a.t || 0) - (b.t || 0); });
+    sorted.forEach(function(s){ renderStroke(s); });
+  }
+
+  function fetchAll() {
+    fetch('/api/graffiti', { cache: 'no-store' }).then(function(r){
+      if (!r.ok) return null; return r.json();
+    }).then(function(data){
+      if (!data) return;
+      renderAll(Array.isArray(data.strokes) ? data.strokes : []);
+    }).catch(function(){});
+  }
+  fetchAll();
+  setInterval(fetchAll, 5000);
+
+  function doSpray() {
+    var text = (input.value || '').trim().slice(0, 12);
+    if (!text || !pendingPos) { closeModal(); return; }
+    send.disabled = true; send.textContent = 'SPRAYING…';
+    var pos = pendingPos;
+    fetch('/api/graffiti', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x: pos.x, y: pos.y, text: text, color: currentColor, nounId: storedNoun }),
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.ok && data.stroke) {
+        renderStroke(data.stroke, { fresh: true });
+        try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'graffiti', sessionId: sid, color: currentColor, nounId: storedNoun }) }); } catch(e){}
+        send.textContent = 'SPRAY →'; send.disabled = false;
+        closeModal();
+      } else {
+        send.textContent = 'TRY AGAIN'; setTimeout(function(){ send.textContent = 'SPRAY →'; send.disabled = false; }, 1400);
+      }
+    }).catch(function(){
+      send.textContent = 'OFFLINE'; setTimeout(function(){ send.textContent = 'SPRAY →'; send.disabled = false; }, 1400);
+    });
+  }
+  send.addEventListener('click', doSpray);
+})();
+</script>
+
+<style>
+.gf { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #1a0e08 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+.gf__head { max-width: 980px; margin: 0 auto 16px; padding: 0 6px; }
+.gf__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+.gf__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 48px); line-height: 1.05; }
+.gf__title em { font-style: italic; }
+.gf__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+.gf__bay { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 800px) { .gf__bay { grid-template-columns: 1fr; } }
+
+.gf__panel { background: rgba(18, 17, 14, 0.6); border: 2px solid #ff5c23; box-shadow: 6px 6px 0 0 #050310; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.gf__panel-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; color: #ff5c23; }
+.gf__colors { display: flex; flex-direction: column; gap: 4px; }
+.gf__color { background: #050310; color: #fffaf0; border: 2px solid #5f5e5a; padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: border-color 80ms; }
+.gf__color:hover { border-color: var(--gf-color, #ffd400); }
+.gf__color--on { border-color: var(--gf-color, #ffd400); box-shadow: 3px 3px 0 0 #050310; background: rgba(255, 138, 74, 0.05); }
+.gf__color-can { width: 14px; height: 14px; background: var(--gf-color, #ffd400); border: 1.5px solid #050310; border-radius: 50%; box-shadow: 0 0 6px var(--gf-color, transparent); }
+.gf__color-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; }
+.gf__panel-note { margin: 0; font-size: 9px; letter-spacing: 0.18em; color: #ff8a4a; padding-top: 8px; border-top: 1px dashed #5f5e5a; }
+
+.gf__wall { position: relative; min-height: 60vh; aspect-ratio: 16 / 10; background: linear-gradient(180deg, #2a1d10 0%, #1a0e08 100%); border: 4px solid #ff5c23; box-shadow: 0 0 60px rgba(255, 92, 35, 0.2) inset, 6px 6px 0 0 #050310; cursor: crosshair; overflow: hidden; }
+.gf__wall:focus { outline: 3px dashed #ffd400; outline-offset: 4px; }
+.gf__wall-grain { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 24px, transparent 24px 26px), repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0 80px, transparent 80px 82px); pointer-events: none; }
+.gf__wall-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #5f5e5a; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.2em; pointer-events: none; }
+
+.gf__stroke { position: absolute; transform: translate(-50%, -50%); font-family: 'Bungee', Impact, sans-serif; font-size: clamp(20px, 3vw, 38px); letter-spacing: 0.04em; pointer-events: none; text-shadow: 2px 2px 0 #050310, 0 0 18px var(--gf-stroke-color, #5fbafd); white-space: nowrap; user-select: none; opacity: 0.92; }
+.gf__stroke--fresh { animation: gf-spray 0.6s ease-out; }
+@keyframes gf-spray { 0% { transform: translate(-50%, -50%) scale(0.4); filter: blur(8px); opacity: 0; } 70% { transform: translate(-50%, -50%) scale(1.1); filter: blur(0); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.92; } }
+
+.gf__modal { position: fixed; inset: 0; background: rgba(5, 3, 16, 0.78); backdrop-filter: blur(6px); z-index: 50; display: flex; align-items: center; justify-content: center; }
+.gf__modal-card { background: #0c0820; border: 4px solid #ffd400; box-shadow: 8px 8px 0 0 #050310; padding: 22px; min-width: 320px; max-width: 460px; width: 90%; }
+.gf__modal-eyebrow { margin: 0 0 12px; text-align: center; font-size: 11px; letter-spacing: 0.32em; color: #ffd400; }
+.gf__modal-input { width: 100%; box-sizing: border-box; background: #050310; color: #fffaf0; border: 2px solid #ffd400; padding: 14px; font-family: 'Bungee', Impact, sans-serif; font-size: 24px; letter-spacing: 0.06em; text-align: center; }
+.gf__modal-input:focus { outline: 2px dashed #ff8a4a; outline-offset: 3px; }
+.gf__modal-count { margin: 8px 0 14px; text-align: center; font-size: 10px; letter-spacing: 0.18em; color: #cfc6df; }
+.gf__modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.gf__modal-cancel { background: transparent; border: 1.5px solid #5f5e5a; color: #cfc6df; padding: 8px 14px; cursor: pointer; font-size: 11px; letter-spacing: 0.18em; }
+.gf__modal-send { background: #ffd400; color: #050310; border: 2px solid #050310; box-shadow: 3px 3px 0 0 #050310; padding: 8px 18px; cursor: pointer; font-size: 12px; letter-spacing: 0.22em; font-weight: 700; }
+.gf__modal-send:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #050310; }
+
+.gf__foot { max-width: 1280px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+.gf__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ff5c23; color: #ff5c23; }
+.gf__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff5c23; }
+</style>
