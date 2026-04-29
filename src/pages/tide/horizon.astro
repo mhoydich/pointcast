@@ -1,0 +1,311 @@
+---
+/**
+ * /tide/horizon — always-on TV variant of /tide.
+ *
+ * One purpose: a horizon line you can leave on a screen forever.
+ * No UI. No drawer. No audio. No keyboard. No tap interaction.
+ * Just sky, water, three wave layers, drifting orb, rising foam,
+ * grain. Palette auto-rotates with the clock (matches /tide.json
+ * clockDefault) so the room ages with the room.
+ *
+ * Fewer moving parts than /tide, but the same waves logic and
+ * palette swatches. Reads the same /tide.json clockDefault map
+ * inline (in the same array) so this page is true to the catalog.
+ *
+ * Surface metadata:
+ *   - data-surface="tv" auto-set when width >= 1920 OR fullscreen
+ *   - prefers-reduced-motion respected (foam stilled, wave morph paused)
+ *   - title bar shows "/tide/horizon · {palette}"
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const title = '/tide/horizon — always-on';
+const description =
+  'A stripped-down always-on TV variant of /tide. WAVES scene only, palette auto-rotates with the clock, no UI, no audio, no controls. Leave on a TV; the room ages with the room.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="th" id="th-main"
+        data-palette="daybreak"
+        data-dark="0"
+        data-surface="auto">
+    <div class="th__sky">
+      <div class="th__orb"></div>
+      <div class="th__haze"></div>
+    </div>
+    <svg class="th__waves" viewBox="0 0 200 100" preserveAspectRatio="none">
+      <path class="th__wave th__wave--back" />
+      <path class="th__wave th__wave--mid" />
+      <path class="th__wave th__wave--front" />
+    </svg>
+    <div class="th__foam">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="th__grain" aria-hidden="true"></div>
+
+    <!-- Tiny corner clock + palette name. Hidden at TV size. -->
+    <footer class="th__foot mono" aria-hidden="false">
+      <span id="th-name">DAYBREAK</span>
+      <span class="th__sep" aria-hidden="true">·</span>
+      <span id="th-clock">—</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  /* Palette catalog — same ids/colors as /tide.json. */
+  var PALETTES = [
+    { id:'daybreak',  name:'DAYBREAK',  sky:'#FFD4C2', water:'#F4A78D', foam:'#FFE9D8', orb:'#FFB496', wave1:'#E08F73', wave2:'#C4715A', wave3:'#AA5443', dark:false },
+    { id:'crystal',   name:'CRYSTAL',   sky:'#BFEFEC', water:'#7FE5DC', foam:'#F4FBFA', orb:'#FFFFFF', wave1:'#5DCBC0', wave2:'#3FA89C', wave3:'#1F8579', dark:false },
+    { id:'kelp',      name:'KELP',      sky:'#9FB28A', water:'#5C7A4E', foam:'#E0D4B8', orb:'#D9C46E', wave1:'#3F5E33', wave2:'#2A4424', wave3:'#1A2E18', dark:false },
+    { id:'coral',     name:'CORAL',     sky:'#FFC4B0', water:'#FF8675', foam:'#FFE0D6', orb:'#FFEEC2', wave1:'#E76B5C', wave2:'#C4493D', wave3:'#9B2D24', dark:false },
+    { id:'abyss',     name:'ABYSS',     sky:'#1E2D5C', water:'#0A1F3A', foam:'#2EC4B6', orb:'#88E0D4', wave1:'#0E2548', wave2:'#06162D', wave3:'#020912', dark:true  },
+    { id:'storm',     name:'STORM',     sky:'#5A6470', water:'#2C2E33', foam:'#FFE15D', orb:'#FFE15D', wave1:'#1E2025', wave2:'#16181C', wave3:'#0C0E12', dark:true  },
+    { id:'lagoon',    name:'LAGOON',    sky:'#A0E6DC', water:'#2EC4B6', foam:'#F5DEA8', orb:'#F5DEA8', wave1:'#26A89C', wave2:'#188076', wave3:'#0F5C55', dark:false },
+    { id:'nighttide', name:'NIGHTTIDE', sky:'#3A0E5C', water:'#0E1845', foam:'#FF1493', orb:'#FF69B4', wave1:'#3D1276', wave2:'#1F1054', wave3:'#0A0830', dark:true  },
+  ];
+
+  function clockPaletteId() {
+    var h = new Date().getHours();
+    if (h < 5)  return 'abyss';
+    if (h < 8)  return 'daybreak';
+    if (h < 11) return 'crystal';
+    if (h < 14) return 'lagoon';
+    if (h < 17) return 'kelp';
+    if (h < 20) return 'coral';
+    if (h < 22) return 'storm';
+    return 'nighttide';
+  }
+  function indexOfId(id) {
+    for (var i = 0; i < PALETTES.length; i++) if (PALETTES[i].id === id) return i;
+    return 0;
+  }
+
+  /* Wave path morph — same keyframes as /tide WAVES scene. */
+  var WAVE_PATHS = {
+    back: [
+      'M 0 60 C 25 45, 50 75, 75 60 S 125 45, 150 60 S 200 75, 200 60 L 200 100 L 0 100 Z',
+      'M 0 64 C 30 52, 60 72, 90 60 S 150 50, 180 64 S 220 72, 200 60 L 200 100 L 0 100 Z',
+      'M 0 58 C 20 50, 55 70, 80 62 S 130 48, 160 58 S 210 72, 200 64 L 200 100 L 0 100 Z',
+    ],
+    mid: [
+      'M 0 70 C 30 55, 60 85, 90 70 S 150 55, 180 70 S 220 85, 200 70 L 200 100 L 0 100 Z',
+      'M 0 74 C 20 60, 70 88, 100 74 S 160 62, 190 74 S 220 86, 200 76 L 200 100 L 0 100 Z',
+      'M 0 68 C 35 56, 65 82, 95 70 S 155 58, 175 70 S 215 84, 200 70 L 200 100 L 0 100 Z',
+    ],
+    front: [
+      'M 0 82 C 30 70, 60 96, 100 82 S 160 70, 200 82 L 200 100 L 0 100 Z',
+      'M 0 86 C 25 76, 75 94, 110 84 S 165 74, 200 84 L 200 100 L 0 100 Z',
+      'M 0 80 C 35 72, 70 92, 105 80 S 160 72, 200 80 L 200 100 L 0 100 Z',
+    ],
+  };
+  function applyWavePath(el, frames, t) {
+    var n = frames.length;
+    var f = (t * n) % n;
+    var i = Math.floor(f);
+    var nextI = (i + 1) % n;
+    var phase = f - i;
+    var a = frames[i], b = frames[nextI];
+    var na = a.match(/-?\d+\.?\d*/g) || [];
+    var nb = b.match(/-?\d+\.?\d*/g) || [];
+    if (na.length !== nb.length) { el.setAttribute('d', a); return; }
+    var ai = 0;
+    var blended = a.replace(/-?\d+\.?\d*/g, function () {
+      var av = parseFloat(na[ai]);
+      var bv = parseFloat(nb[ai]);
+      ai++;
+      return (av + (bv - av) * phase).toFixed(2);
+    });
+    el.setAttribute('d', blended);
+  }
+
+  /* apply palette + render */
+  var idx = indexOfId(clockPaletteId());
+  function applyPalette(i) {
+    var p = PALETTES[i];
+    var main = document.getElementById('th-main');
+    if (!main) return;
+    main.dataset.palette = p.id;
+    main.dataset.dark = p.dark ? '1' : '0';
+    main.style.setProperty('--sky', p.sky);
+    main.style.setProperty('--water', p.water);
+    main.style.setProperty('--foam', p.foam);
+    main.style.setProperty('--orb', p.orb);
+    main.style.setProperty('--wave-1', p.wave1);
+    main.style.setProperty('--wave-2', p.wave2);
+    main.style.setProperty('--wave-3', p.wave3);
+    var nm = document.getElementById('th-name');
+    if (nm) nm.textContent = p.name;
+    document.title = '/tide/horizon · ' + p.name;
+  }
+  applyPalette(idx);
+
+  /* clock tick: re-check every 60s in case the hour rolled */
+  function tick() {
+    var clk = document.getElementById('th-clock');
+    if (clk) {
+      var n = new Date();
+      clk.textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') + ' PT';
+    }
+    var want = indexOfId(clockPaletteId());
+    if (want !== idx) {
+      idx = want;
+      applyPalette(idx);
+    }
+  }
+  tick();
+  setInterval(tick, 60_000);
+
+  /* surface detection: TV vs desktop */
+  function detectSurface() {
+    var w = window.innerWidth;
+    var hasTouch = 'ontouchstart' in window;
+    var ua = (navigator.userAgent || '').toLowerCase();
+    var tvUA = /\b(?:tv|appletv|googletv|smart-tv|chromecast)\b/.test(ua);
+    var main = document.getElementById('th-main');
+    if (!main) return;
+    if (tvUA || (w >= 1920 && !hasTouch)) main.dataset.surface = 'tv';
+    else if (hasTouch && w < 768) main.dataset.surface = 'mobile';
+    else main.dataset.surface = 'desktop';
+  }
+  detectSurface();
+  window.addEventListener('resize', detectSurface);
+
+  /* RAF: morph wave paths smoothly */
+  var t0 = performance.now();
+  function frame(now) {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      var back = document.querySelector('.th__wave--back');
+      var mid = document.querySelector('.th__wave--mid');
+      var front = document.querySelector('.th__wave--front');
+      var dt = (now - t0) / 1000;
+      if (back && mid && front) {
+        applyWavePath(back,  WAVE_PATHS.back,  (dt / 18) % 1);
+        applyWavePath(mid,   WAVE_PATHS.mid,   (dt / 13) % 1);
+        applyWavePath(front, WAVE_PATHS.front, (dt / 9)  % 1);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+<style is:global>
+  body:has(.th) { margin: 0; overflow: hidden; background: #000; }
+
+  .th {
+    --sky: #FFD4C2; --water: #F4A78D; --foam: #FFE9D8; --orb: #FFB496;
+    --wave-1: #E08F73; --wave-2: #C4715A; --wave-3: #AA5443;
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh; height: 100dvh;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--sky) 0%, var(--water) 100%);
+    transition: background 4s ease;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    cursor: none;
+  }
+
+  .th__sky { position: absolute; inset: 0; }
+  .th__orb {
+    position: absolute; top: 12%; right: 18%;
+    width: clamp(160px, 18vmax, 320px);
+    aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--orb) 0%, transparent 70%);
+    filter: blur(36px); opacity: 0.85;
+    animation: th-orb-drift 80s ease-in-out infinite;
+    transition: background 4s ease;
+  }
+  @keyframes th-orb-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(-3vw, 1vh) scale(1.05); }
+    66%      { transform: translate(2vw, -1.5vh) scale(0.95); }
+  }
+  .th__haze {
+    position: absolute; top: 30%; left: 0; right: 0; height: 22%;
+    background: linear-gradient(180deg, transparent 0%, var(--foam) 50%, transparent 100%);
+    opacity: 0.18;
+    transition: background 4s ease;
+    animation: th-haze-drift 60s ease-in-out infinite;
+  }
+  @keyframes th-haze-drift {
+    0%, 100% { transform: translateX(0); opacity: 0.18; }
+    50%      { transform: translateX(-3vw); opacity: 0.28; }
+  }
+  .th__waves { position: absolute; bottom: 0; left: 0; width: 100%; height: 70%; }
+  .th__wave--back  { fill: var(--wave-1); opacity: 0.55; transition: fill 3s ease; }
+  .th__wave--mid   { fill: var(--wave-2); opacity: 0.75; transition: fill 3s ease; }
+  .th__wave--front { fill: var(--wave-3); opacity: 1.0;  transition: fill 3s ease; }
+  .th__foam { position: absolute; inset: 0; }
+  .th__foam span {
+    position: absolute; bottom: -10%;
+    width: clamp(4px, 1vmin, 8px); aspect-ratio: 1; border-radius: 50%;
+    background: var(--foam); opacity: 0;
+    animation: th-foam-rise linear infinite;
+    transition: background 4s ease;
+  }
+  .th__foam span:nth-child(1)  { left:  4%; animation-duration: 14s; animation-delay:  0s;   }
+  .th__foam span:nth-child(2)  { left: 11%; animation-duration: 18s; animation-delay:  3s;   }
+  .th__foam span:nth-child(3)  { left: 18%; animation-duration: 16s; animation-delay:  6s;   }
+  .th__foam span:nth-child(4)  { left: 25%; animation-duration: 20s; animation-delay:  1.5s; }
+  .th__foam span:nth-child(5)  { left: 32%; animation-duration: 15s; animation-delay:  4.2s; }
+  .th__foam span:nth-child(6)  { left: 39%; animation-duration: 19s; animation-delay:  8s;   }
+  .th__foam span:nth-child(7)  { left: 46%; animation-duration: 17s; animation-delay:  2.5s; }
+  .th__foam span:nth-child(8)  { left: 53%; animation-duration: 21s; animation-delay:  5.5s; }
+  .th__foam span:nth-child(9)  { left: 60%; animation-duration: 14s; animation-delay:  7s;   }
+  .th__foam span:nth-child(10) { left: 67%; animation-duration: 18s; animation-delay:  3.5s; }
+  .th__foam span:nth-child(11) { left: 74%; animation-duration: 16s; animation-delay:  6.5s; }
+  .th__foam span:nth-child(12) { left: 81%; animation-duration: 20s; animation-delay:  0.8s; }
+  .th__foam span:nth-child(13) { left: 88%; animation-duration: 13s; animation-delay:  9s;   }
+  .th__foam span:nth-child(14) { left: 95%; animation-duration: 23s; animation-delay:  4.8s; }
+  .th__foam span:nth-child(15) { left:  8%; animation-duration: 15s; animation-delay:  10s;  }
+  .th__foam span:nth-child(16) { left: 22%; animation-duration: 22s; animation-delay:  2.2s; }
+  .th__foam span:nth-child(17) { left: 36%; animation-duration: 11s; animation-delay:  4s;   }
+  .th__foam span:nth-child(18) { left: 50%; animation-duration: 24s; animation-delay:  0s;   }
+  .th__foam span:nth-child(19) { left: 64%; animation-duration: 10s; animation-delay:  6s;   }
+  .th__foam span:nth-child(20) { left: 78%; animation-duration: 26s; animation-delay:  1s;   }
+  .th__foam span:nth-child(21) { left: 92%; animation-duration: 9s;  animation-delay:  3s;   }
+  .th__foam span:nth-child(22) { left: 42%; animation-duration: 30s; animation-delay:  2s;   }
+  @keyframes th-foam-rise {
+    0%   { transform: translateY(0)     scale(1);   opacity: 0; }
+    10%  {                              opacity: 0.9; }
+    50%  { transform: translateY(-50vh) scale(1.1); opacity: 0.75; }
+    90%  {                              opacity: 0.4; }
+    100% { transform: translateY(-105vh) scale(0.6); opacity: 0; }
+  }
+
+  .th__grain {
+    position: absolute; inset: 0; z-index: 5; pointer-events: none;
+    opacity: 0.4;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='3'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+    mix-blend-mode: overlay;
+  }
+
+  .th__foot {
+    position: fixed; bottom: 22px; left: 22px; z-index: 10;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
+    font-family: 'JetBrains Mono Variable', 'Courier New', monospace;
+    font-size: 10px; letter-spacing: 0.20em; font-weight: 700;
+    backdrop-filter: blur(8px);
+    opacity: 0.55;
+  }
+  .th__sep { opacity: 0.45; }
+
+  /* TV surface: even smaller corner chip, push to outer edge */
+  .th[data-surface="tv"] .th__foot { font-size: 11px; opacity: 0.32; bottom: 32px; left: 32px; }
+
+  /* Mobile: slightly more legible */
+  .th[data-surface="mobile"] .th__foot { font-size: 9px; opacity: 0.7; bottom: 16px; left: 16px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .th__orb, .th__haze, .th__foam span { animation: none !important; }
+    .th__foam span { opacity: 0.45; bottom: 30%; }
+  }
+</style>
