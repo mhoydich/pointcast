@@ -895,31 +895,59 @@ async function dispatchTool(
     }
     case 'drum_tap': {
       const combo = Math.max(1, Math.min(5, Number(args.combo) || 1));
-      await fetch(`${base}/api/sounds`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'drum', seed: combo, sessionId: `mcp-${sessionId}` }),
-      });
+      // Dual broadcast: type=drum so /drum-tv, /drum-marquee, /drum-radio
+      // and the cast surfaces flash on the original drum bus; type=agent
+      // so /drum-agent (the Machine Room) surfaces the agent in real time.
+      // Per Mike 2026-04-29 after watching an agent tap with no feedback:
+      // "did this work, i was hoping to see in real time when the agents
+      // got there." Before this fix the MCP broadcasts only emitted
+      // type=drum, which /drum-agent line 211 filters out.
+      await Promise.all([
+        fetch(`${base}/api/sounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed: combo, sessionId: `mcp-${sessionId}` }),
+        }),
+        fetch(`${base}/api/sounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'agent', seed: combo, sessionId: `mcp-${sessionId}` }),
+        }),
+      ]);
       return textContent(`✓ tapped the drum (combo x${combo}) — broadcast to every visitor`);
     }
     case 'drum_play_instrument': {
       const inst = String(args.inst || '');
       if (!inst) return { content: [{ type: 'text', text: 'inst is required' }], isError: true };
-      await fetch(`${base}/api/sounds`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'orchestra', inst, sessionId: `mcp-${sessionId}` }),
-      });
+      await Promise.all([
+        fetch(`${base}/api/sounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'orchestra', inst, sessionId: `mcp-${sessionId}` }),
+        }),
+        fetch(`${base}/api/sounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'agent', seed: 0, sessionId: `mcp-${sessionId}` }),
+        }),
+      ]);
       return textContent(`✓ played ${inst} — broadcast to every visitor on the orchestra surfaces`);
     }
     case 'drum_sing_voice': {
       const voice = String(args.voice || '');
       if (!voice) return { content: [{ type: 'text', text: 'voice is required' }], isError: true };
-      await fetch(`${base}/api/sounds`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'choir', voice, sessionId: `mcp-${sessionId}` }),
-      });
+      await Promise.all([
+        fetch(`${base}/api/sounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'choir', voice, sessionId: `mcp-${sessionId}` }),
+        }),
+        fetch(`${base}/api/sounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'agent', seed: 0, sessionId: `mcp-${sessionId}` }),
+        }),
+      ]);
       return textContent(`✓ sang ${voice} — the choir surface picked it up`);
     }
     case 'drum_set_track': {

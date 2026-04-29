@@ -105,15 +105,39 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       if (!env.PC_PING_KV) {
         return json({ ok: false, reason: 'key-not-bound', hint: 'Bind PC_PING_KV in Cloudflare Pages → Settings → KV namespace bindings.' }, 503);
       }
+      // Mike 2026-04-29: KV.list returns keys in lexicographic order. Our
+      // keys are `ping:<ISO-timestamp>:<id>` so the first 1000 keys are
+      // the OLDEST 1000, not the newest. Pre-fix this returned ancient
+      // April-18 pings and hid everything Mike sent today. We now
+      // paginate the cursor to the tail of the list and slice the last
+      // `limit` keys, so newest messages always come back.
       try {
-        const list = await env.PC_PING_KV.list({ prefix: 'ping:', limit: 50 });
+        const limitParam = Number(url.searchParams.get('limit') || '50');
+        const limit = Math.max(1, Math.min(200, isFinite(limitParam) ? limitParam : 50));
+        const allKeys: { name: string }[] = [];
+        let cursor: string | undefined = undefined;
+        // Cap pagination so a runaway KV doesn't melt CPU. ~5000 keys is
+        // plenty of headroom for this app's volume.
+        for (let i = 0; i < 5; i++) {
+          const page: any = await env.PC_PING_KV.list({
+            prefix: 'ping:',
+            limit: 1000,
+            ...(cursor ? { cursor } : {}),
+          });
+          for (const k of page.keys) allKeys.push({ name: k.name });
+          if (page.list_complete || !page.cursor) break;
+          cursor = page.cursor;
+        }
+        // Lex sort matches chronological for ISO timestamps; tail is newest.
+        allKeys.sort((a, b) => a.name.localeCompare(b.name));
+        const tail = allKeys.slice(-limit).reverse(); // newest first
         const entries = await Promise.all(
-          list.keys.map(async (k) => {
+          tail.map(async (k) => {
             const v = await env.PC_PING_KV!.get(k.name);
             return { key: k.name, message: v ? JSON.parse(v) : null };
           }),
         );
-        return json({ ok: true, count: entries.length, entries });
+        return json({ ok: true, count: entries.length, total: allKeys.length, entries });
       } catch (err: any) {
         return json({ ok: false, error: 'kv-list-failed', message: err?.message || String(err) }, 500);
       }
