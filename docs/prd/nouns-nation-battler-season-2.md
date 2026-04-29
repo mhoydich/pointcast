@@ -74,6 +74,31 @@ After each slate, generate a local share card:
 
 The existing poster system can supply the visual language; this should feel like a sports-page tear sheet rather than a data export.
 
+### Bowl Countdown
+
+The TV cast should keep the season destination visible even when a viewer joins mid-match:
+
+- Add a persistent countdown card in the TV review strip. Shipped in V20.
+- Count down regular-season matches to the Nouns Bowl path, then switch to semifinal, final, and champion states. Shipped in V20.
+- Reuse the countdown line inside the TV league interstitial so replayed briefs explain the stakes. Shipped in V20.
+
+### Commissioner Desk
+
+The TV cast should periodically explain the table like a tiny sports desk:
+
+- Add a Commissioner Desk segment to the TV interstitial deck. Shipped in V21.
+- Summarize leader, cut line, fan heat, survivor edge, rivalry heat, boss field, and next fixture when relevant. Shipped in V21.
+- Switch to bracket and champion copy during playoffs and post-season. Shipped in V21.
+- Add a Copy Desk action in the Watch Party Kit so the same desk read can be sent to chat. Shipped in V22.
+- Add a compact Commissioner Desk archive in the Watch Party Kit so recent table reads can be copied after the slate moves on. Shipped in V23.
+- Add a Season Desk Wall that combines local desk reads, recap cards, and a copyable host run sheet. Shipped in V24.
+- Add portable Desk Wall snapshot links that can be opened without mutating local league state. Shipped in V25.
+- Add copyable and printable Season Reports to the Desk Wall so a host can send one clean season read after a slate. Shipped in V26.
+- Add downloadable 16:9 Season Report cards and matching social post copy to the Desk Wall. Shipped in V27.
+- Add an in-session Report Gallery for comparing and re-sharing multiple report cards during a slate. Shipped in V28.
+- Add shareable report-card links that open snapshot-backed cards in focused view. Shipped in V29.
+- Add league-integrity scoring coverage, canonical public card links, and a compact Watch Now rail. Shipped in V30.
+
 ### Commissioner's Cup
 
 Explore a mid-season knockout bracket:
@@ -115,6 +140,22 @@ Explore a mid-season knockout bracket:
 - Add copy actions for recap text and next-match hook.
 - Add a printable or poster-wall-compatible recap route later.
 
+### Sprint E: Broadcast Stakes
+
+- Add a Bowl Countdown card to TV mode. Shipped in V20.
+- Highlight final-stretch and playoff countdown states. Shipped in V20.
+- Add the countdown to league interstitial metadata. Shipped in V20.
+- Add a Commissioner Desk interstitial for table movement and next-match stakes. Shipped in V21.
+- Add a Copy Desk action that reuses Commissioner Desk copy for chat/share handoff. Shipped in V22.
+- Add a persistent local desk archive strip for reusable host notes. Shipped in V23.
+- Add a local public Desk Wall route for host recaps and run sheets. Shipped in V24.
+- Add copyable Desk Wall snapshot links and raw snapshot JSON exports. Shipped in V25.
+- Add printable Season Reports and copy-ready report text for local and snapshot Desk Wall states. Shipped in V26.
+- Add browser-rendered Season Report card PNG downloads and social post text for shareable slate artifacts. Shipped in V27.
+- Add ephemeral Report Gallery saves so hosts can collect up to six card/caption pairs before posting. Shipped in V28.
+- Add current-card and gallery-card share links using `view=card` snapshot URLs. Shipped in V29.
+- Add quick-sim score regression coverage, canonical copied card URLs, and a Watch Now viewer-entry rail. Shipped in V30.
+
 ## Acceptance Criteria
 
 - A new viewer can open the game, understand the loop, and dismiss the guide in one click.
@@ -124,6 +165,19 @@ Explore a mid-season knockout bracket:
 - Recap Studio creates a copy-ready result artifact after live and quick-sim matches.
 - Rivalry context appears in normal, TV, rooting, standings, and recap surfaces once fixtures repeat.
 - Boss fields appear late-season or in playoffs, can be forced by URL, and change both field behavior and TV/recap language.
+- TV mode keeps the Nouns Bowl destination visible through a live countdown card.
+- TV interstitial replay includes a Commissioner Desk segment that changes by league phase.
+- Watch Party Kit can copy the current Commissioner Desk summary in one click.
+- Watch Party Kit can copy recent Commissioner Desk archive cards without leaving the match.
+- `/nouns-nation-battler-desk/` shows local desk reads, recap cards, and a copyable host run sheet.
+- Desk Wall snapshot links load as imported snapshots and can return to the local wall.
+- Desk Wall Season Reports can be copied or printed from local and imported snapshot state.
+- Desk Wall Season Report cards can be downloaded as PNGs and paired with copied social post text.
+- Desk Wall Report Gallery can save, clear, copy, and re-download in-session report cards.
+- Desk Wall card links open focused report cards from snapshot state without mutating local league state.
+- Quick Sim recaps and league scoring preserve the same final score.
+- Copied Desk Wall card links use public PointCast URLs when generated from localhost.
+- Normal mode exposes a Watch Now rail before the deeper operator kit.
 - No onboarding state is transmitted; it stays in localStorage.
 - `npm run build` succeeds.
 - The battler remains playable inside the PointCast iframe and direct static route.

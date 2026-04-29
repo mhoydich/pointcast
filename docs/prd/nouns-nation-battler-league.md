@@ -173,9 +173,94 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Surface boss context in the match title, challenge ribbon, TV lower text, Director Mode line, field-guide interstitial, Watch Party links, Recap Studio, and battle log.
 - Give each boss field a readable sim effect: moving/wider rift lanes with Tide recovery, harder crown pressure, extra scrap storm tech, and stronger blackout ambush rules.
 
+## V20 Bowl Countdown Additions
+
+- Add a persistent Bowl Countdown card to the TV review strip.
+- Show how many matches remain until the Nouns Bowl during the regular season, then switch to semifinal, final, and champion copy during playoffs.
+- Highlight late regular-season and playoff countdown states so the broadcast feels closer to a live sports channel.
+- Feed the same countdown line into the TV league interstitial meta so replayed briefs carry season urgency.
+
+## V21 Commissioner Desk Additions
+
+- Add a fourth TV overview interstitial called Commissioner Desk.
+- Summarize the current table leader, cut-line pressure, fan-heat team, live survivor edge, boss-field hook, rivalry heat, next fixture, or playoff bracket depending on league phase.
+- Give Commissioner Desk its own TV interstitial styling and Noun selection so it reads as a broadcast segment instead of another rule card.
+- Keep the feature passive and local: no new controls, no persistence changes, no server data.
+
+## V22 Desk Copy Additions
+
+- Add a Copy Desk action to the Watch Party Kit.
+- Generate share text from the same Commissioner Desk card shown in TV mode, including title, body, meta, and TV link.
+- Let hosts explain "what matters now" in chat without rewriting the table, rivalry, boss field, or playoff context.
+- Keep the copy action local and stateless alongside the existing invite, storyline, TV, guide, and poster copy buttons.
+
+## V23 Desk Archive Additions
+
+- Add a Commissioner Desk archive strip below the Watch Party Kit actions.
+- Persist the current and recent desk reads in the local league object so a host can copy a previous slate summary after the live hook changes.
+- Show compact labels for season, day/slate, playoff, or champion state, plus the desk title and meta line.
+- Keep the archive small and local: six stored desk cards, four visible cards, no network state.
+
+## V24 Season Desk Wall Additions
+
+- Add `/nouns-nation-battler-desk/` as a public wrapper for a local Season Desk Wall.
+- Add `/games/nouns-nation-battler/desk/` as the static wall that reads `pc:nouns-nation-league-v4` from the current browser.
+- Combine recent Commissioner Desk reads, Recap Studio cards, top-line season state, and a copyable host run sheet.
+- Link the wall from the Watch Party Kit and public battler page so operators have a cleaner post-slate handoff.
+
+## V25 Portable Desk Snapshot Additions
+
+- Encode Season Desk Wall state into `#snapshot=` links.
+- Include phase, standings table, recent Commissioner Desk reads, and recent Recap Studio cards in the snapshot payload.
+- Let viewers open a snapshot without overwriting their own `localStorage` league.
+- Add copy actions for snapshot links and raw snapshot JSON, plus a Use Local action to return to the browser's own wall.
+
+## V26 Printable Season Report Additions
+
+- Add a printable Season Report panel inside the Season Desk Wall.
+- Summarize source, phase, table leader, desk/recap counts, top standings, latest desk read, and recent recap cards.
+- Add Copy Report and Print Report actions so hosts can send the season state to chat, notes, or a review thread.
+- Render reports from local state or imported snapshot state without adding storage or overwriting a viewer's league.
+
+## V27 Season Report Card Additions
+
+- Add a 16:9 Social Report Card canvas to the Season Desk Wall.
+- Render the active source, phase, table leader, top standings, latest desk line, latest recap, and TV link into a downloadable PNG.
+- Add Copy Social Post and Download Card actions so a host can share the same slate state as text or image.
+- Generate cards from local state or imported snapshot state without adding a backend or new persistence layer.
+
+## V28 In-Session Report Gallery Additions
+
+- Add an in-session Report Gallery to the Season Desk Wall.
+- Let hosts save up to six generated report cards while the page is open.
+- Allow saved cards to be re-downloaded and their matching social post text copied from the gallery.
+- Keep the gallery ephemeral and browser-only so it supports slate review without adding storage, accounts, or publishing state.
+
+## V29 Shareable Report Card Link Additions
+
+- Add Copy Card Link to the Season Desk Wall.
+- Encode the same snapshot payload into `#snapshot=...&view=card` links so a single report card opens in focused view.
+- Add Copy Link to saved Report Gallery cards so a host can share a selected card without manually rebuilding the URL.
+- Keep card links snapshot-backed and local/client-rendered, with no backend image storage or local league mutation.
+
+## V30 League Integrity + Watch Now Additions
+
+- Preserve simulated winner and loser scores when Quick Sim creates league recaps, standings totals, and Desk Wall report cards.
+- Add a focused `nouns-nation-battler-score` regression test so quick-sim results cannot silently drift from recap text again.
+- Add a compact Watch Now rail in the normal game view with the current matchup, field, challenge progress, Bowl countdown, rooting prompt, and post-slate card handoff.
+- Copy Desk Wall snapshot and card links against the canonical PointCast desk route when generated from localhost, so shared report cards do not leak dev URLs.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
+- Store recent Commissioner Desk archive cards in that same local league object.
+- Let the Season Desk Wall read from the same local league object without adding server state.
+- Let imported Desk Wall snapshots live only in the URL hash unless the host explicitly returns to local state.
+- Render Season Reports from the active local or snapshot wall state without creating a new persistence layer.
+- Render Season Report cards directly in the browser canvas without storing images.
+- Keep Report Gallery cards in memory only for the active Desk Wall session.
+- Let shareable card links carry snapshot state in the URL hash and render in focused card view.
+- Keep shared Desk Wall links canonical to the public PointCast desk route when copied from local development.
 - Continue storing root preference under `pc:nouns-nation-root`.
 - Continue storing all-time local season stats under `pc:nouns-nation-season`.
 
@@ -187,6 +272,7 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Playoff fixtures are created from the regular-season table.
 - The final champion is displayed and auto-next stops.
 - Quick Sim and Sim Day advance league state without requiring the visible match to finish.
+- Quick Sim recaps, logs, and league scoring preserve the same simulated final score.
 - Clicking a numbered Noun updates the scout card without pausing the match.
 - `/nouns-nation-battler-tv` loads the no-chrome cast route and the normal route remains unchanged.
 - TV keyboard shortcuts work without exposing the operator controls on screen.
@@ -200,11 +286,23 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Each match arms a Season Challenge and surfaces its progress in the field ribbon, stat strip, standings/rooting layer, and TV challenge interstitial.
 - Resetting a league advances to the next numbered season locally.
 - The Watch Guide can be opened from the controls, direct `#guide=1` links, and TV `G`.
+- The normal view includes a compact Watch Now rail that explains the current matchup before the deeper controls.
 - The normal view shows a Season 2 scope board without blocking play.
 - The normal view includes a Watch Party Kit with live invite copy and copyable links for TV, guide, and posters.
 - Live storylines update from the current table, challenge, survivor count, and next fixture.
 - The normal view includes a Recap Studio that updates after live and quick-sim results with copyable recap text and a next-match hook.
 - Repeat fixtures show rivalry labels, head-to-head records, rivalry heat, and extra fan heat for rivalry wins.
 - Boss fields activate late in the season or playoffs, can be forced with `boss=<id>`, and appear in TV, recap, watch-party, and field-guide surfaces.
+- TV mode shows a Bowl Countdown card that updates across regular season, playoffs, final, and champion states.
+- TV interstitial replay includes a Commissioner Desk segment that explains table movement and next-match stakes.
+- The Watch Party Kit includes a Copy Desk action that shares the current Commissioner Desk readout.
+- The Watch Party Kit keeps a compact Commissioner Desk archive with copy buttons for recent league reads.
+- The public Season Desk Wall shows local desk reads, recap cards, metrics, and a copyable run sheet.
+- The Season Desk Wall can export and load snapshot links without changing local league state.
+- The Season Desk Wall can copy and print a Season Report from local or snapshot state.
+- The Season Desk Wall can download a 16:9 Season Report card and copy matching social post text.
+- The Season Desk Wall can save up to six in-session report cards, then copy or re-download each one.
+- The Season Desk Wall can copy a focused report-card link from the current card or a saved gallery card.
+- The Season Desk Wall copies public PointCast card links when generated from localhost.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.

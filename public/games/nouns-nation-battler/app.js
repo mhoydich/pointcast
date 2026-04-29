@@ -379,6 +379,9 @@ const el = {
   guideStartButton: document.querySelector("#guideStartButton"),
   guideTvButton: document.querySelector("#guideTvButton"),
   guideCloseButton: document.querySelector("#guideCloseButton"),
+  watchNowTitle: document.querySelector("#watchNowTitle"),
+  watchNowBody: document.querySelector("#watchNowBody"),
+  watchNowGrid: document.querySelector("#watchNowGrid"),
   resetLeagueButton: document.querySelector("#resetLeagueButton"),
   seasonScopeTitle: document.querySelector("#seasonScopeTitle"),
   seasonScopeGrid: document.querySelector("#seasonScopeGrid"),
@@ -387,6 +390,7 @@ const el = {
   watchKitCopy: document.querySelector("#watchKitCopy"),
   watchKitStoryline: document.querySelector("#watchKitStoryline"),
   watchKitLinks: document.querySelector("#watchKitLinks"),
+  watchKitDeskArchive: document.querySelector("#watchKitDeskArchive"),
   watchKitPlays: document.querySelector("#watchKitPlays"),
   watchKitOutput: document.querySelector("#watchKitOutput"),
   recapCard: document.querySelector("#recapCard"),
@@ -422,6 +426,8 @@ const el = {
   tvBigPlay: document.querySelector("#tvBigPlay"),
   tvStarNoun: document.querySelector("#tvStarNoun"),
   tvComeback: document.querySelector("#tvComeback"),
+  tvBowlCard: document.querySelector("#tvBowlCard"),
+  tvBowlCountdown: document.querySelector("#tvBowlCountdown"),
   tvDirectorCue: document.querySelector("#tvDirectorCue"),
   tvReplayCue: document.querySelector("#tvReplayCue"),
   tvPath: document.querySelector("#tvPath"),
@@ -506,6 +512,7 @@ function normalizeLeague(league) {
   league.seasonNumber ||= 1;
   league.recaps ||= [];
   league.recapCards ||= [];
+  league.deskCards ||= [];
   league.challengeRecaps ||= [];
   league.rivalries ||= {};
   league.playoffs ||= [];
@@ -536,6 +543,7 @@ function createLeague(seasonNumber = 1) {
     playoffs: [],
     recaps: [],
     recapCards: [],
+    deskCards: [],
     challengeRecaps: [],
     rivalries: {},
     table: Object.fromEntries(gangPool.map((gang) => [
@@ -1022,7 +1030,7 @@ function resetMatch() {
   if (state.bossField) addLog(`Boss field: ${state.bossField.rule}`);
   addLog(`Season challenge: ${state.challenge.name}. ${state.challenge.rule}`);
   addLog(`Rivalry desk: ${rivalryWatchLine(currentRivalry())}`);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V19", `${fieldName()} + ${state.challenge.name}`);
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V30", `${fieldName()} + ${state.challenge.name}`);
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
@@ -1231,6 +1239,20 @@ function buildRecapCard({ phaseLabel, winnerSide, loserSide, winnerScore, loserS
   };
 }
 
+function resultScore(winnerSide, leftAlive, rightAlive, scoreOverride = null) {
+  if (scoreOverride) {
+    return {
+      winnerScore: Math.max(1, Math.round(scoreOverride.winnerScore || 0)),
+      loserScore: Math.max(0, Math.round(scoreOverride.loserScore || 0)),
+    };
+  }
+  const winnerAlive = winnerSide === 0 ? leftAlive : rightAlive;
+  return {
+    winnerScore: Math.max(1, Math.round(winnerAlive || 0)),
+    loserScore: Math.max(0, Math.round(30 - (winnerAlive || 0))),
+  };
+}
+
 function recapShareText(card) {
   return `${card.phase}: ${card.headline}. Final ${card.title}. ${card.mvp}. ${card.challenge}. Next: ${card.next}. Watch: ${publicUrl("/nouns-nation-battler-tv/")}`;
 }
@@ -1311,6 +1333,40 @@ function renderRecapStudio(left = aliveUnits(0).length, right = aliveUnits(1).le
   `).join("");
 }
 
+function renderWatchNow(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  if (!el.watchNowTitle || !el.watchNowGrid) return;
+  const bowl = bowlCountdownCard();
+  const leader = standings()[0];
+  const challenge = state.challenge?.name || "Season Challenge";
+  const field = fieldName();
+  el.watchNowTitle.textContent = `${gangs[0].short} vs ${gangs[1].short} on ${field}`;
+  el.watchNowBody.textContent = `${currentFixtureLabel()} · ${challenge}: ${challengeProgressLine()} · ${bowl.text}`;
+  const cards = [
+    {
+      tag: "Pick",
+      title: `${gangs[0].short} or ${gangs[1].short}`,
+      body: `${left}-${right} alive now. Choose a side and let the league table do the rest.`,
+    },
+    {
+      tag: "Stakes",
+      title: bowl.text,
+      body: leader ? `${leader.gang.short} lead at ${leader.wins}-${leader.losses}; top four reach the Bowl.` : "The table is forming.",
+    },
+    {
+      tag: "After",
+      title: "Card the slate",
+      body: "Recap Studio and the Desk Wall turn the result into copy, cards, and share links.",
+    },
+  ];
+  el.watchNowGrid.innerHTML = cards.map((card) => `
+    <article class="watch-now-card">
+      <span>${escapeHtml(card.tag)}</span>
+      <strong>${escapeHtml(card.title)}</strong>
+      <p>${escapeHtml(card.body)}</p>
+    </article>
+  `).join("");
+}
+
 function renderWatchKit(left = aliveUnits(0).length, right = aliveUnits(1).length) {
   if (!el.watchKitLinks) return;
   const matchup = currentFixtureLabel();
@@ -1325,6 +1381,9 @@ function renderWatchKit(left = aliveUnits(0).length, right = aliveUnits(1).lengt
   const liveTv = publicUrl(`/games/nouns-nation-battler/#mode=tv&type=${state.battleType?.id || "open"}&challenge=${state.challenge?.id || "ko-race"}${bossHash}`);
   const guide = publicUrl("/games/nouns-nation-battler/#guide=1");
   const posters = publicUrl("/nouns-nation-battler-posters/");
+  const deskWall = publicUrl("/nouns-nation-battler-desk/");
+  const deskCard = rememberDeskArchive(left, right);
+  const deskShare = deskCard.text;
   el.watchKitTitle.textContent = `${leagueLine}: ${gangs[0].short} vs ${gangs[1].short}`;
   el.watchKitHook.textContent = `${matchup} · ${field} · ${challenge} · ${rivalryBadgeLabel(rivalry)}`;
   el.watchKitCopy.textContent = shareText;
@@ -1338,6 +1397,8 @@ function renderWatchKit(left = aliveUnits(0).length, right = aliveUnits(1).lengt
   el.watchKitLinks.innerHTML = [
     { label: "Copy Invite", text: shareText },
     { label: "Copy Storyline", text: storylineDigest(left, right) },
+    { label: "Copy Desk", text: deskShare },
+    { label: "Copy Desk Wall", text: deskWall },
     { label: "Copy TV Link", text: liveTv },
     { label: "Copy Guide", text: guide },
     { label: "Copy Posters", text: posters },
@@ -1345,8 +1406,10 @@ function renderWatchKit(left = aliveUnits(0).length, right = aliveUnits(1).lengt
     <button class="watch-kit-copy" type="button" data-copy-label="${escapeHtml(item.label)}" data-copy-text="${escapeHtml(item.text)}">${item.label}</button>
   `).join("") + `
     <a class="watch-kit-link" href="/nouns-nation-battler-tv/" target="_blank" rel="noreferrer">Open TV</a>
+    <a class="watch-kit-link" href="/nouns-nation-battler-desk/" target="_blank" rel="noreferrer">Desk Wall</a>
     <a class="watch-kit-link" href="/nouns-nation-battler-posters/" target="_blank" rel="noreferrer">Poster Wall</a>
   `;
+  renderDeskArchive(deskCard);
   el.watchKitPlays.innerHTML = watchPartyPlays.map((play, index) => {
     const body = index === 0
       ? `Tonight's angle: ${challenge} on ${field}. The easiest invite is "pick ${gangs[0].short} or ${gangs[1].short} and watch the Nouns Bowl race."`
@@ -2138,17 +2201,14 @@ function matchStarLines() {
   ].filter(Boolean);
 }
 
-function applyLeagueResult(winnerSide, loserSide, leftAlive, rightAlive, source = "live") {
+function applyLeagueResult(winnerSide, loserSide, leftAlive, rightAlive, source = "live", scoreOverride = null) {
   if (state.league.phase === "champion") return;
   const winnerGang = gangs[winnerSide];
   const loserGang = gangs[loserSide];
   const phaseLabel = state.league.phase === "regular"
     ? `Day ${state.league.day + 1}, slate ${state.league.slot + 1}`
     : state.league.playoffSlot < 2 ? `Nouns Bowl semifinal ${state.league.playoffSlot + 1}` : "Nouns Bowl final";
-  const winnerAlive = winnerSide === 0 ? leftAlive : rightAlive;
-  const loserAlive = loserSide === 0 ? leftAlive : rightAlive;
-  const winnerScore = Math.max(1, winnerAlive);
-  const loserScore = Math.max(0, 30 - winnerAlive);
+  const { winnerScore, loserScore } = resultScore(winnerSide, leftAlive, rightAlive, scoreOverride);
   const winnerRow = state.league.table[winnerGang.name];
   const loserRow = state.league.table[loserGang.name];
   const close = winnerScore - loserScore <= 6;
@@ -2253,7 +2313,14 @@ function quickSimCurrentMatch() {
   }
   saveSeason();
   quickSimChallenge(winnerSide, loserSide, winnerScore, loserScore);
-  applyLeagueResult(winnerSide, loserSide, winnerSide === 0 ? winnerScore : loserScore, winnerSide === 1 ? winnerScore : loserScore, "quick");
+  applyLeagueResult(
+    winnerSide,
+    loserSide,
+    winnerSide === 0 ? winnerScore : loserScore,
+    winnerSide === 1 ? winnerScore : loserScore,
+    "quick",
+    { winnerScore, loserScore }
+  );
   addLog(`Quick sim: ${gangs[winnerSide].name} survive ${winnerScore}-${loserScore}.`);
   showToast(`Quick sim: ${gangs[winnerSide].short} win`);
   resetMatch();
@@ -2420,6 +2487,7 @@ function render() {
     .map((move) => `<span><b>${move.tag}</b>${move.text}</span>`)
     .join("");
   renderLeague();
+  renderWatchNow(left, right);
   renderWatchKit(left, right);
   renderRecapStudio(left, right);
   renderRooting(left, right);
@@ -2491,6 +2559,7 @@ function renderTv(left, right) {
   el.tvBigPlay.textContent = reviewPulseLine();
   el.tvStarNoun.textContent = reviewMvpLine();
   el.tvComeback.textContent = reviewComebackLine(left, right);
+  renderBowlCountdown();
   el.tvDirectorCue.textContent = state.directorCue;
   el.tvReplayCue.textContent = state.replayClock > 0 ? state.replayCue : directorFieldLine();
   el.tvPath.textContent = tvPathLine();
@@ -2503,10 +2572,11 @@ function renderTvInterstitial(left, right) {
   el.tvInterstitial.classList.toggle("show", active);
   if (!active) return;
   const deck = interstitialDeck(left, right);
-  const index = state.interstitialClock > 380 ? 0 : state.interstitialClock > 190 ? 1 : 2;
+  const index = state.interstitialClock > 420 ? 0 : state.interstitialClock > 280 ? 1 : state.interstitialClock > 140 ? 2 : 3;
   const card = deck[index] || deck[0];
-  el.tvInterstitial.classList.toggle("challenge-guide", index === 1);
-  el.tvInterstitial.classList.toggle("field-guide", index === 2);
+  el.tvInterstitial.classList.toggle("commissioner-guide", card.variant === "commissioner");
+  el.tvInterstitial.classList.toggle("challenge-guide", card.variant === "challenge");
+  el.tvInterstitial.classList.toggle("field-guide", card.variant === "field");
   const signature = `${index}:${card.title}:${card.body}:${card.meta}`;
   if (state.interstitialSignature === signature) return;
   state.interstitialSignature = signature;
@@ -2519,6 +2589,7 @@ function renderTvInterstitial(left, right) {
 
 function interstitialDeck(left, right) {
   const league = state.league;
+  const bowl = bowlCountdownCard();
   const phase = league.phase === "regular"
     ? `Day ${league.day + 1} of ${LEAGUE_DAYS}, slate ${league.slot + 1}`
     : league.phase === "playoffs" ? tvLeagueLine() : "Nouns Bowl complete";
@@ -2528,23 +2599,162 @@ function interstitialDeck(left, right) {
   return [
     {
       kicker: "League interstitial",
+      variant: "league",
       title: currentFixtureLabel(),
       body: championLine,
-      meta: `${phase} · ${rivalryBadgeLabel()}: ${rivalryWatchLine()} · ${standings().slice(0, 3).map((row) => `${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
+      meta: `${phase} · ${bowl.text} · ${rivalryBadgeLabel()}: ${rivalryWatchLine()} · ${standings().slice(0, 3).map((row) => `${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
     },
+    commissionerDeskCard(left, right),
     {
       kicker: "Season challenge",
+      variant: "challenge",
       title: state.challenge?.name || "Challenge loading",
       body: state.challenge?.rule || "A rotating side objective is being armed for this match.",
       meta: `${challengeProgressLine()} · ${state.challenge?.tv || "Challenge heat feeds the league table."}`,
     },
     {
       kicker: "Field guide",
+      variant: "field",
       title: fieldName(),
       body: battleTypeOverview(),
       meta: `${gangs[0].short} ${left}/30 standing · ${gangs[1].short} ${right}/30 standing · ${fieldStatLabel()}: ${fieldStatLine(statLeader("hp", (unit) => unit.down ? -1 : unit.morale * unit.hp))}`,
     },
   ];
+}
+
+function commissionerDeskCard(left, right) {
+  const league = state.league;
+  const rows = standings();
+  const leader = rows[0];
+  const bubble = rows[3];
+  const chase = rows[4];
+  const hot = [...rows].sort((a, b) => b.fans - a.fans || (b.challengeWins || 0) - (a.challengeWins || 0))[0];
+  const bowl = bowlCountdownCard(league);
+  const rivalry = currentRivalry();
+  if (league.phase === "champion") {
+    return {
+      kicker: "Commissioner Desk",
+      variant: "commissioner",
+      title: `${league.champion || "Champion"} close the season`,
+      body: "The trophy is lifted. Recap Studio and the poster wall are the cleanest follow-up artifacts before a fresh table starts.",
+      meta: `${bowl.text} · ${rows.slice(0, 4).map((row, index) => `${index + 1}. ${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
+    };
+  }
+  if (league.phase === "playoffs") {
+    const bracket = league.playoffs
+      .map((pair, index) => {
+        const label = index < 2 ? `Semi ${index + 1}` : "Bowl";
+        const leftSeed = gangPool[pair[0]]?.short || "?";
+        const rightSeed = gangPool[pair[1]]?.short || "?";
+        const winner = pair.winner ? ` -> ${gangPool.find((gang) => gang.name === pair.winner)?.short || "W"}` : "";
+        return `${label} ${leftSeed}/${rightSeed}${winner}`;
+      })
+      .join(" · ");
+    return {
+      kicker: "Commissioner Desk",
+      variant: "commissioner",
+      title: league.playoffSlot < 2 ? "Semifinal desk" : "Nouns Bowl desk",
+      body: `${currentFixtureLabel()} carries the bracket story now. ${league.playoffSlot < 2 ? "A final seat is on the line." : "The champion is decided here."}`,
+      meta: `${bowl.text} · ${bracket}`,
+    };
+  }
+  const edge = left === right ? "field is even" : left > right ? `${gangs[0].short} hold a ${left - right}-Noun edge` : `${gangs[1].short} hold a ${right - left}-Noun edge`;
+  const cutLine = bubble && chase ? `${bubble.gang.short} guard the cut over ${chase.gang.short}` : "the cut line is still forming";
+  const rivalryLine = rivalry?.meetings > 0 ? `${rivalryBadgeLabel(rivalry)} adds ${rivalry.heat || 0} heat. ` : "";
+  const bossLine = state.bossField ? `${state.bossField.short} is the boss-field hook. ` : "";
+  return {
+    kicker: "Commissioner Desk",
+    variant: "commissioner",
+    title: leader ? `${leader.gang.short} on top, ${bubble?.gang.short || "cut"} on watch` : "Table desk loading",
+    body: `${leader?.gang.short || "The leader"} set the pace while ${cutLine}. ${rivalryLine}${bossLine}${edge}.`,
+    meta: `${bowl.text} · ${hot?.gang.short || "Heat"} ${hot?.fans || 0} fan heat · Next: ${upcomingFixtureLabel()}`,
+  };
+}
+
+function commissionerDeskShareText(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const desk = commissionerDeskCard(left, right);
+  return `${desk.kicker}: ${desk.title}. ${desk.body} ${desk.meta}. Watch: ${publicUrl("/nouns-nation-battler-tv/")}`;
+}
+
+function deskArchiveLabel() {
+  const league = state.league;
+  if (league.phase === "regular") return `S${league.seasonNumber} D${league.day + 1}.${league.slot + 1}`;
+  if (league.phase === "playoffs") return league.playoffSlot < 2 ? `S${league.seasonNumber} Semi ${league.playoffSlot + 1}` : `S${league.seasonNumber} Bowl`;
+  return `S${league.seasonNumber} Champions`;
+}
+
+function deskArchiveId() {
+  const league = state.league;
+  const phaseSlot = league.phase === "regular"
+    ? `d${league.day}-s${league.slot}`
+    : league.phase === "playoffs" ? `p${league.playoffSlot}` : "champion";
+  return [
+    league.seasonNumber,
+    league.phase,
+    phaseSlot,
+    state.battleType?.id || "open",
+    state.challenge?.id || "challenge",
+    state.bossField?.id || "base",
+    gangs.map((gang) => gang.short).join("-"),
+  ].join(":");
+}
+
+function currentDeskArchiveCard(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const desk = commissionerDeskCard(left, right);
+  return {
+    id: deskArchiveId(),
+    label: deskArchiveLabel(),
+    matchup: currentFixtureLabel(),
+    title: desk.title,
+    body: desk.body,
+    meta: desk.meta,
+    text: commissionerDeskShareText(left, right),
+  };
+}
+
+function rememberDeskArchive(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const card = currentDeskArchiveCard(left, right);
+  state.league.deskCards ||= [];
+  const existingIndex = state.league.deskCards.findIndex((item) => item?.id === card.id);
+  if (existingIndex === 0) {
+    state.league.deskCards[0] = { ...state.league.deskCards[0], ...card };
+    return card;
+  }
+  if (existingIndex > 0) state.league.deskCards.splice(existingIndex, 1);
+  state.league.deskCards.unshift(card);
+  state.league.deskCards = state.league.deskCards.slice(0, 6);
+  saveLeague();
+  return card;
+}
+
+function renderDeskArchive(currentCard = null) {
+  if (!el.watchKitDeskArchive) return;
+  const cards = [
+    currentCard,
+    ...(state.league.deskCards || []).filter((card) => card?.id !== currentCard?.id),
+  ].filter(Boolean).slice(0, 4);
+  if (!cards.length) {
+    el.watchKitDeskArchive.innerHTML = "";
+    return;
+  }
+  el.watchKitDeskArchive.innerHTML = `
+    <div class="watch-kit-desk-head">
+      <span>Desk Archive</span>
+      <strong>Copy recent league reads</strong>
+    </div>
+    <div class="watch-kit-desk-list">
+      ${cards.map((card, index) => `
+        <article class="watch-kit-desk-card">
+          <div>
+            <span>${escapeHtml(index === 0 ? `Now · ${card.label}` : card.label)}</span>
+            <strong>${escapeHtml(card.title)}</strong>
+            <p>${escapeHtml(card.meta)}</p>
+          </div>
+          <button class="watch-kit-copy watch-kit-desk-copy" type="button" data-copy-label="${escapeHtml(index === 0 ? "Copy Current Desk" : "Copy Desk Archive")}" data-copy-text="${escapeHtml(card.text)}">Copy</button>
+        </article>
+      `).join("")}
+    </div>
+  `;
 }
 
 function battleTypeOverview() {
@@ -2600,9 +2810,16 @@ function interstitialNouns(index) {
       ? [...state.units]
         .filter((unit) => !unit.down)
         .sort((a, b) => (
-          challengeNounScore(b) - challengeNounScore(a)
+          (b.morale * 18 + b.stats.damage + b.stats.kos * 24 + b.stats.heals * 0.35) - (a.morale * 18 + a.stats.damage + a.stats.kos * 24 + a.stats.heals * 0.35)
         ))
         .slice(0, 8)
+      : index === 2
+        ? [...state.units]
+          .filter((unit) => !unit.down)
+          .sort((a, b) => (
+            challengeNounScore(b) - challengeNounScore(a)
+          ))
+          .slice(0, 8)
     : [...state.units]
       .filter((unit) => !unit.down)
       .sort((a, b) => (
@@ -2676,6 +2893,33 @@ function reviewComebackLine(left, right) {
   const chaser = left > right ? gangs[1].short : gangs[0].short;
   if (diff >= 12) return `${leader} in control`;
   return `${chaser} needs a swing`;
+}
+
+function bowlCountdownCard(league = state.league) {
+  if (!league) return { phase: "loading", text: "Bowl path loading" };
+  if (league.phase === "champion") {
+    const champion = gangPool.find((gang) => gang.name === league.champion);
+    return { phase: "champion", text: `${champion?.short || "CH"} lifted S${league.seasonNumber}` };
+  }
+  if (league.phase === "playoffs") {
+    if (league.playoffSlot >= 2) return { phase: "final", text: "Nouns Bowl final live" };
+    const gamesLeft = Math.max(1, 3 - league.playoffSlot);
+    return { phase: "playoffs", text: `${gamesLeft} Bowl games left · Semi ${league.playoffSlot + 1}` };
+  }
+  const totalRegular = LEAGUE_DAYS * DAILY_SLOTS;
+  const currentSlate = league.day * DAILY_SLOTS + league.slot + 1;
+  const slatesAfterThis = Math.max(0, totalRegular - currentSlate);
+  const matchesToBowl = slatesAfterThis + 3;
+  const phase = slatesAfterThis <= DAILY_SLOTS * 2 ? "near" : league.day >= 7 ? "boss" : "regular";
+  const context = phase === "near" ? "playoff chase" : phase === "boss" ? "boss stretch" : "table grind";
+  return { phase, text: `${matchesToBowl} to Bowl · ${context}` };
+}
+
+function renderBowlCountdown() {
+  if (!el.tvBowlCountdown || !el.tvBowlCard) return;
+  const card = bowlCountdownCard();
+  el.tvBowlCountdown.textContent = card.text;
+  el.tvBowlCard.dataset.phase = card.phase;
 }
 
 function tvLeagueLine() {
