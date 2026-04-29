@@ -7,16 +7,25 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation',
-  status: 'standalone PointCast area with federation strategy v0',
+  status: 'standalone PointCast area with federation strategy v0 and Battle Desk V3',
   human: 'https://pointcast.xyz/nouns-nation/',
   summary:
-    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
+    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
+  latestVersion: {
+    name: 'Battle Desk V3',
+    human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
+    thought:
+      'Make the sport watchable, make receipts portable, and make the federation door easy for outside nations without flattening their culture.',
+    signature: 'Michael Hoydich x Codex 5.5 extra-high',
+    shippedAt: '2026-04-29',
+  },
   routes: {
     hub: 'https://pointcast.xyz/nouns-nation/',
     federation: 'https://pointcast.xyz/nouns-nation/federation/',
     join: 'https://pointcast.xyz/nouns-nation/join/',
     investmentThesis: 'https://pointcast.xyz/investment-thesis',
     investmentThesisJson: 'https://pointcast.xyz/investment-thesis.json',
+    battleDeskV3: 'https://pointcast.xyz/nouns-nation-battler-v3/',
     battleDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
     tvCast: 'https://pointcast.xyz/nouns-nation-battler-tv/',
@@ -73,6 +82,7 @@ const payload = {
     'https://pointcast.xyz/b/0406',
     'https://pointcast.xyz/b/0407',
     'https://pointcast.xyz/b/0408',
+    'https://pointcast.xyz/b/0409',
   ],
   caveats: [
     'Federation is v0 strategy, not a moderated submission backend.',

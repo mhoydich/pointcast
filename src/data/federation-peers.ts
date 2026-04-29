@@ -39,6 +39,14 @@ export const FEDERATION_PEERS: FederationPeer[] = [
     status: 'live',
   },
   {
+    handle: 'pointcast.xyz/nouns-nation',
+    baseUrl: 'https://pointcast.xyz/nouns-nation/',
+    kicker: 'Battle Desk V3 — federation league, bring-your-own nations, teams, crews',
+    nounSeed: 911,
+    accent: '#2f8f5f',
+    status: 'live',
+  },
+  {
     handle: 'pointcast.xyz/sparrow',
     baseUrl: 'https://pointcast.xyz/sparrow',
     kicker: 'sibling reader — blue-hour OKLCH, syndicated cast feed',
