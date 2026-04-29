@@ -15,6 +15,8 @@ const payload = {
     hub: 'https://pointcast.xyz/nouns-nation/',
     federation: 'https://pointcast.xyz/nouns-nation/federation/',
     join: 'https://pointcast.xyz/nouns-nation/join/',
+    investmentThesis: 'https://pointcast.xyz/investment-thesis',
+    investmentThesisJson: 'https://pointcast.xyz/investment-thesis.json',
     battleDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
     tvCast: 'https://pointcast.xyz/nouns-nation-battler-tv/',
