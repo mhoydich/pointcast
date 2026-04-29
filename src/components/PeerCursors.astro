@@ -1,0 +1,326 @@
+---
+/**
+ * PeerCursors — render co-room peers' live cursors on the page.
+ *
+ * Reads from the same /api/presence WebSocket VisitorHereStrip already
+ * holds open — but to keep the components independent we open our own
+ * connection here, throttled and lightweight. The DO already accepts
+ * `{type: 'cursor', x, y}` messages and broadcasts a `peers[]` array
+ * (Phase 2 was built for this; we're finally rendering it).
+ *
+ * Filtering: we only show cursors of peers whose currentPath matches
+ * this viewer's pathname. Cross-room cursors don't make sense (the
+ * coordinate space is per-page).
+ *
+ * Opt-out: localStorage `pc:cursors-off` = '1' disables rendering.
+ *
+ * Privacy / trust: cursors are quantized to integers 0..10000 by the
+ * DO (1/100 of viewport precision). No keystrokes, no clicks — just
+ * pointer position. Cursor render auto-stops when the visitor opts
+ * out via the toggle in this component's UI (TBD — for v1 we just
+ * read the flag if it's set).
+ */
+---
+
+<div
+  id="pc-peer-cursors"
+  class="pc-peer-cursors"
+  aria-hidden="true"
+></div>
+
+<script>
+  (() => {
+    const layer = document.getElementById('pc-peer-cursors');
+    if (!layer) return;
+
+    // Honor opt-out.
+    try {
+      if (localStorage.getItem('pc:cursors-off') === '1') return;
+    } catch {}
+
+    // Reuse the visitor session id stamped by VisitorHereStrip + Footer
+    // so we share identity without a second handshake.
+    const sessionKey = 'pc:visitor:sid';
+    const nounKey = 'pc:visitor:noun';
+    const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+    const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} };
+
+    function uuidLike(): string {
+      try {
+        if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
+          return (crypto as any).randomUUID();
+        }
+      } catch {}
+      // Fallback — good enough for an opaque session id.
+      return 'pc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    let sessionId = lsGet(sessionKey);
+    if (!sessionId) {
+      sessionId = uuidLike();
+      lsSet(sessionKey, sessionId);
+    }
+
+    const cachedNoun = parseInt(lsGet(nounKey) ?? '', 10);
+    const myNounId = Number.isFinite(cachedNoun) ? cachedNoun : -1;
+
+    // ── DOM map of peer cursors ──
+    interface CursorEl {
+      el: HTMLDivElement;
+      lastAt: number;
+    }
+    const cursorEls = new Map<number, CursorEl>(); // keyed by peer nounId
+
+    function ensureCursor(nounId: number): CursorEl {
+      let entry = cursorEls.get(nounId);
+      if (entry) return entry;
+      const el = document.createElement('div');
+      el.className = 'pc-peer-cursor';
+      el.setAttribute('data-noun-id', String(nounId));
+
+      const arrow = document.createElement('div');
+      arrow.className = 'pc-peer-cursor__arrow';
+      arrow.textContent = '➤';
+      el.appendChild(arrow);
+
+      const tag = document.createElement('div');
+      tag.className = 'pc-peer-cursor__tag';
+      const av = document.createElement('img');
+      av.className = 'pc-peer-cursor__noun';
+      av.src = 'https://noun.pics/' + nounId + '.svg';
+      av.alt = '';
+      tag.appendChild(av);
+      const label = document.createElement('span');
+      label.textContent = 'noun ' + nounId;
+      tag.appendChild(label);
+      el.appendChild(tag);
+
+      layer!.appendChild(el);
+      entry = { el, lastAt: 0 };
+      cursorEls.set(nounId, entry);
+      return entry;
+    }
+
+    function removeCursor(nounId: number) {
+      const entry = cursorEls.get(nounId);
+      if (!entry) return;
+      try { entry.el.remove(); } catch {}
+      cursorEls.delete(nounId);
+    }
+
+    // ── Cursor send (throttled) ──
+    let ws: WebSocket | null = null;
+    let lastSendAt = 0;
+    let pendingX = -1;
+    let pendingY = -1;
+    let sendTimer = 0;
+    const SEND_INTERVAL_MS = 80; // ~12 Hz cap, well under the DO 10 Hz fast-mode broadcast
+
+    function sendCursor() {
+      sendTimer = 0;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (pendingX < 0 || pendingY < 0) return;
+      try {
+        ws.send(JSON.stringify({
+          type: 'cursor',
+          x: pendingX,
+          y: pendingY,
+          tag: myNounId >= 0 ? ('noun-' + myNounId) : 'visitor',
+        }));
+        lastSendAt = Date.now();
+      } catch {}
+    }
+
+    function onMouseMove(e: MouseEvent) {
+      // Quantize to 0..10000 viewport-normalized integers (DO clamp matches).
+      const w = Math.max(1, window.innerWidth);
+      const h = Math.max(1, window.innerHeight);
+      pendingX = Math.max(0, Math.min(10000, Math.round((e.clientX / w) * 10000)));
+      pendingY = Math.max(0, Math.min(10000, Math.round((e.clientY / h) * 10000)));
+      const elapsed = Date.now() - lastSendAt;
+      if (elapsed >= SEND_INTERVAL_MS) {
+        sendCursor();
+      } else if (!sendTimer) {
+        sendTimer = window.setTimeout(sendCursor, SEND_INTERVAL_MS - elapsed);
+      }
+    }
+
+    // Touch: send a cursor on tap so mobile peers also light up briefly.
+    function onTouch(e: TouchEvent) {
+      if (!e.touches || !e.touches.length) return;
+      const t = e.touches[0];
+      const w = Math.max(1, window.innerWidth);
+      const h = Math.max(1, window.innerHeight);
+      pendingX = Math.max(0, Math.min(10000, Math.round((t.clientX / w) * 10000)));
+      pendingY = Math.max(0, Math.min(10000, Math.round((t.clientY / h) * 10000)));
+      sendCursor();
+    }
+
+    document.addEventListener('mousemove', onMouseMove, { passive: true });
+    document.addEventListener('touchstart', onTouch, { passive: true });
+    document.addEventListener('touchmove', onTouch, { passive: true });
+
+    // ── Receive + render ──
+    function paintPayload(payload: any) {
+      if (!payload) return;
+      const peers = Array.isArray(payload.peers) ? payload.peers : [];
+      const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+
+      // Build nounId -> currentPath map so we can scope to this room.
+      const pathByNoun = new Map<number, string | undefined>();
+      for (const s of sessions) {
+        if (!s) continue;
+        pathByNoun.set(Number(s.nounId), typeof s.currentPath === 'string' ? s.currentPath : undefined);
+      }
+      const here = window.location.pathname;
+      const presentNouns = new Set<number>();
+      const now = Date.now();
+
+      for (const p of peers) {
+        if (!p) continue;
+        const nid = Number(p.nounId);
+        if (!Number.isFinite(nid) || nid < 0) continue;
+        if (nid === myNounId) continue; // never render self
+        const peerPath = pathByNoun.get(nid);
+        if (peerPath !== here) continue; // cross-room peer — skip
+        // Clamp peer.at to the recent window — DO emits within 20s TTL.
+        const at = Number(p.at) || now;
+        if (now - at > 8_000) continue; // stale; let it fade out naturally
+
+        const cur = ensureCursor(nid);
+        const x = Math.max(0, Math.min(10000, Number(p.x) || 0));
+        const y = Math.max(0, Math.min(10000, Number(p.y) || 0));
+        // Position in viewport — the layer is fixed, full-screen.
+        cur.el.style.left = (x / 100) + 'vw';
+        cur.el.style.top = (y / 100) + 'vh';
+        cur.el.style.opacity = '1';
+        cur.el.style.setProperty('--cursor-hue', String((nid * 137) % 360));
+        cur.lastAt = at;
+        presentNouns.add(nid);
+      }
+
+      // Remove cursors that are no longer present.
+      for (const nid of cursorEls.keys()) {
+        if (!presentNouns.has(nid)) {
+          // Fade then remove.
+          const entry = cursorEls.get(nid)!;
+          entry.el.style.opacity = '0';
+          setTimeout(() => removeCursor(nid), 600);
+          // Mark as removed so we don't double-fade.
+          cursorEls.delete(nid);
+        }
+      }
+    }
+
+    // ── WS lifecycle ──
+    function host(): string { return window.location.host; }
+    function wsURL(): string {
+      const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      return proto + host() + '/api/presence?sid=' + encodeURIComponent(sessionId!) + '&kind=human';
+    }
+
+    let reconnectTimer = 0;
+    function connect() {
+      try { ws = new WebSocket(wsURL()); } catch { scheduleReconnect(); return; }
+      ws.addEventListener('open', () => {
+        // Identify with current path so the DO publishes us correctly.
+        try {
+          ws!.send(JSON.stringify({
+            type: 'identify',
+            nounId: myNounId >= 0 ? myNounId : undefined,
+            currentPath: window.location.pathname,
+            tag: myNounId >= 0 ? ('noun-' + myNounId) : 'visitor',
+          }));
+        } catch {}
+      });
+      ws.addEventListener('message', (evt) => {
+        try { paintPayload(JSON.parse(evt.data)); } catch {}
+      });
+      ws.addEventListener('close', scheduleReconnect);
+      ws.addEventListener('error', scheduleReconnect);
+    }
+    function scheduleReconnect() {
+      if (reconnectTimer) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = 0;
+        connect();
+      }, 4000);
+    }
+
+    // Re-emit currentPath after Astro view transitions; clear the layer
+    // so cursors from the previous page don't linger.
+    document.addEventListener('astro:after-swap', () => {
+      // Drop all rendered cursors — the next broadcast will repopulate
+      // from the new room's peer set.
+      for (const nid of Array.from(cursorEls.keys())) removeCursor(nid);
+      try {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'update', currentPath: window.location.pathname }));
+        }
+      } catch {}
+    });
+
+    connect();
+  })();
+</script>
+
+<style>
+  .pc-peer-cursors {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 80; /* above content, below modals */
+  }
+  .pc-peer-cursor {
+    position: absolute;
+    width: 0;
+    height: 0;
+    transition: left 0.12s linear, top 0.12s linear, opacity 0.4s ease;
+    transform: translate(-2px, -2px);
+    will-change: transform, left, top;
+    --cursor-hue: 280;
+  }
+  .pc-peer-cursor__arrow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 18px;
+    line-height: 1;
+    color: hsl(var(--cursor-hue), 78%, 38%);
+    text-shadow:
+      1px 0 #fff, -1px 0 #fff, 0 1px #fff, 0 -1px #fff,
+      0 1px 2px rgba(0,0,0,0.25);
+    transform: rotate(-12deg);
+  }
+  .pc-peer-cursor__tag {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    background: hsl(var(--cursor-hue), 78%, 38%);
+    color: #fff;
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 6px 2px 4px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+    white-space: nowrap;
+  }
+  .pc-peer-cursor__noun {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  /* Reduced motion — drop the position transition so the cursor snaps
+     instead of glides. */
+  @media (prefers-reduced-motion: reduce) {
+    .pc-peer-cursor { transition: opacity 0.4s ease; }
+  }
+</style>
