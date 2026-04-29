@@ -35,6 +35,9 @@
         <li class={`here-slot here-slot--ghost`} data-slot={i + 1}>
           <img class="here-slot__noun here-slot__noun--other" alt="" src="" loading="lazy" hidden />
           <span class="here-slot__ghost" aria-hidden="true">·</span>
+          {/* Phase 3 — peer current page. Server-rendered hidden; client
+              shows + populates when the broadcast includes currentPath. */}
+          <a class="here-slot__where" hidden href="" aria-label=""></a>
         </li>
       ))}
       {/* Overflow slot when >12 — replaced by "+N" number. */}
@@ -84,6 +87,9 @@
         <span id="here-focus-joined">joined —</span>
       </p>
       <p class="here-focus__detail" id="here-focus-detail"></p>
+      {/* Phase 3 — JOIN button. Shown when the focused peer is on a
+          different page than the viewer. One-click teleport. */}
+      <a class="here-focus__join mono" id="here-focus-join" hidden href=""></a>
     </div>
     <button class="here-focus__close mono" id="here-focus-close" type="button" aria-label="Close visitor details">×</button>
   </div>
@@ -260,6 +266,43 @@
         slot.title = 'visitor · tap for details';
         slot.setAttribute('aria-label', 'visitor · tap for details');
       }
+      // Phase 3 — render the peer's current page as a click-to-teleport chip
+      // beneath the avatar. We don't show the chip for /, /index, or our
+      // own page (the visitor is already there).
+      var whereLink = slot.querySelector('.here-slot__where');
+      var peerPath = sanitizePeerPath(session.currentPath);
+      if (whereLink) {
+        if (peerPath && peerPath !== window.location.pathname) {
+          whereLink.hidden = false;
+          whereLink.href = peerPath;
+          whereLink.textContent = 'on ' + shortenPath(peerPath);
+          whereLink.setAttribute('aria-label', 'go to ' + peerPath + ' (where this visitor is)');
+        } else {
+          whereLink.hidden = true;
+          whereLink.removeAttribute('href');
+          whereLink.textContent = '';
+        }
+      }
+    }
+
+    // Defense-in-depth on the receiving side: even though the server
+    // already sanitizes currentPath, never render a peer-supplied value
+    // that doesn't pass our own check. Mirrors normalizeCurrentPath in
+    // workers/presence/src/index.ts.
+    function sanitizePeerPath(value) {
+      if (typeof value !== 'string') return null;
+      var v = value.trim();
+      if (!v || v.length > 200) return null;
+      if (v.charAt(0) !== '/') return null;
+      if (v.indexOf('//') === 0) return null;
+      if (/[?#]/.test(v)) return null;
+      if (!/^[A-Za-z0-9\/_\-.]+$/.test(v)) return null;
+      return v;
+    }
+    function shortenPath(p) {
+      if (!p) return '';
+      if (p.length <= 22) return p;
+      return p.slice(0, 21) + '…';
     }
 
     // ---------- visitor-slot focus (click/tap to show details) ----------
@@ -304,6 +347,20 @@
       if (session.listening) parts.push('🎵 ' + session.listening);
       if (session.where) parts.push('📍 ' + session.where);
       if (focusDetail) focusDetail.textContent = parts.length ? parts.join(' · ') : 'no self-report — just showing up is enough.';
+      // Phase 3 — also render a JOIN button in the focus card if the peer
+      // is on a different page from the viewer. One-click teleport.
+      var peerPath = sanitizePeerPath(session.currentPath);
+      var joinBtn = document.getElementById('here-focus-join');
+      if (joinBtn) {
+        if (peerPath && peerPath !== window.location.pathname) {
+          joinBtn.hidden = false;
+          joinBtn.href = peerPath;
+          joinBtn.textContent = 'JOIN ON ' + shortenPath(peerPath).toUpperCase() + ' →';
+        } else {
+          joinBtn.hidden = true;
+          joinBtn.removeAttribute('href');
+        }
+      }
       focusEl.hidden = false;
       focusCurrentSlot = slot;
     }
@@ -378,6 +435,7 @@
           if (Object.prototype.hasOwnProperty.call(extra, 'mood')) payload.mood = extra.mood;
           if (Object.prototype.hasOwnProperty.call(extra, 'listening')) payload.listening = extra.listening;
           if (Object.prototype.hasOwnProperty.call(extra, 'where')) payload.where = extra.where;
+          if (Object.prototype.hasOwnProperty.call(extra, 'currentPath')) payload.currentPath = extra.currentPath;
         }
         ws.send(JSON.stringify(payload));
         return true;
@@ -391,8 +449,18 @@
         mood: lsGet('pc:visitor:mood'),
         listening: lsGet('pc:visitor:listening'),
         where: lsGet('pc:visitor:where'),
+        // Phase 3 — broadcast the current page so peers can see + follow.
+        // Agents don't get this (server strips it for kind=agent anyway).
+        currentPath: window.location && window.location.pathname ? window.location.pathname : undefined,
       };
     }
+
+    // Re-emit currentPath after Astro view transitions so peers see the
+    // visitor moving between rooms in real time.
+    document.addEventListener('astro:after-swap', function () {
+      if (isAgent) return;
+      sendPresence('update', { currentPath: window.location.pathname });
+    });
 
     function stopHeartbeat() {
       if (heartbeatTimer) {
@@ -719,6 +787,40 @@
     border-color: rgba(138, 36, 50, 0.55);
     filter: grayscale(1) contrast(1.04);
   }
+  /* Phase 3 — peer current page chip. Sits below the avatar, click
+     teleports the viewer to that page. Hidden by default; populated
+     by paintSlot when the peer broadcasts a currentPath that differs
+     from the viewer's own pathname. */
+  .here-slot__where {
+    position: absolute;
+    left: 50%;
+    bottom: -16px;
+    transform: translateX(-50%);
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 8.5px;
+    line-height: 1;
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+    color: #534AB7;
+    background: #FFF1A8;
+    border: 1px solid rgba(83, 74, 183, 0.42);
+    padding: 2px 5px;
+    border-radius: 3px;
+    text-decoration: none;
+    white-space: nowrap;
+    z-index: 2;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+  }
+  .here-slot__where:hover {
+    background: #F59F00;
+    color: #fff;
+    border-color: #F59F00;
+  }
+  .here-slot__where[hidden] { display: none; }
+  /* The slot is `position: relative` already by virtue of how PointCast
+     positions ring/label; the chip overhangs below — we expand the row
+     so the chips don't get clipped. */
+  .here-strip__slots { padding-bottom: 14px; }
   @keyframes here-avatar-in {
     0%   { opacity: 0; transform: scale(0.72); }
     75%  { opacity: 1; transform: scale(1.08); }
@@ -837,6 +939,27 @@
     flex-shrink: 0;
   }
   .here-focus__close:hover { background: #f5f2ea; color: #12110E; }
+
+  /* Phase 3 — JOIN button in the focus card. Same chip aesthetic as the
+     existing PROFILE link to reinforce that it's a teleport. */
+  .here-focus__join {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 4px 9px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    color: #534AB7;
+    background: #FFF1A8;
+    border: 1px solid #534AB7;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .here-focus__join:hover {
+    background: #534AB7;
+    color: #FFF1A8;
+  }
+  .here-focus__join[hidden] { display: none; }
 
   .here-slot--occupied {
     cursor: pointer;

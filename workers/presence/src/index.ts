@@ -81,6 +81,10 @@ interface VisitorSession {
   // Phase 2 — cursor/chat rooms. Null until the visitor starts moving.
   cursor?: { x: number; y: number; at: number } | null;
   tag?: string; // short display tag attached to cursor + chat ('visitor', '0x12…abcd')
+  // Phase 3 — current page (broadcast publicly so peers can see + follow).
+  // Distinct from `where` (self-reported town) and `pathTrail` (private
+  // history). Always a leading-'/' relative URL with no query or fragment.
+  currentPath?: string;
 }
 
 interface PeerView {
@@ -110,6 +114,8 @@ interface PublicSessionView {
   where?: string;
   country?: string;
   deviceClass?: DeviceClass;
+  // Phase 3 — peer current page. Public so any viewer can see + follow.
+  currentPath?: string;
 }
 
 interface PrivateSessionView extends PublicSessionView {
@@ -150,6 +156,7 @@ type ClientMessage =
       x?: unknown;
       y?: unknown;
       msg?: unknown;
+      currentPath?: unknown;
     }
   | null
   | undefined;
@@ -198,6 +205,25 @@ function normalizeText(value: unknown, maxLength: number): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, maxLength);
+}
+
+/**
+ * Sanitize a peer-broadcast path. Must be a leading-'/' relative URL with
+ * no scheme/authority/query/fragment, no consecutive slashes (avoids
+ * protocol smuggling like `//evil.example`), printable ASCII only, and
+ * length-capped. Returns undefined for anything suspicious so peers never
+ * render an attacker-controlled link target.
+ */
+function normalizeCurrentPath(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 200) return undefined;
+  if (!trimmed.startsWith('/')) return undefined;
+  if (trimmed.startsWith('//')) return undefined;
+  if (/[?#]/.test(trimmed)) return undefined;
+  // Reject any character outside printable ASCII (path-safe subset).
+  if (!/^[A-Za-z0-9/_\-.]+$/.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 function normalizeNounId(value: unknown, fallback: number): number {
@@ -468,6 +494,7 @@ export class PresenceRoom {
       delete visitor.mood;
       delete visitor.listening;
       delete visitor.where;
+      delete visitor.currentPath;
       visitor.walletAddress = undefined;
       visitor.nostrPubkey = undefined;
       visitor.pathTrail = [];
@@ -506,6 +533,11 @@ export class PresenceRoom {
       const pk = normalizeText(patch.nostrPubkey, 80);
       if (pk) visitor.nostrPubkey = pk;
       else visitor.nostrPubkey = undefined;
+    }
+    if (hasOwn(patch, 'currentPath')) {
+      const next = normalizeCurrentPath(patch.currentPath);
+      if (next) visitor.currentPath = next;
+      else delete visitor.currentPath;
     }
   }
 
@@ -548,6 +580,7 @@ export class PresenceRoom {
       if (visitor.mood) out.mood = visitor.mood;
       if (visitor.listening) out.listening = visitor.listening;
       if (visitor.where) out.where = visitor.where;
+      if (visitor.currentPath) out.currentPath = visitor.currentPath;
     }
     if (visitor.edge.country) out.country = visitor.edge.country;
     if (visitor.edge.deviceClass && visitor.edge.deviceClass !== 'unknown') {
