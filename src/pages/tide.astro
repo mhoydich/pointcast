@@ -181,6 +181,8 @@ const description =
   var SOUNDSCAPES = ['drift', 'chimes', 'bubbles', 'granular'];
 
   function clockPaletteId(){var h=new Date().getHours();if(h<5)return'abyss';if(h<8)return'daybreak';if(h<11)return'crystal';if(h<14)return'lagoon';if(h<17)return'kelp';if(h<20)return'coral';if(h<22)return'storm';return'nighttide';}
+  function clockSceneId(){var h=new Date().getHours();if(h<6)return'mystify';if(h<10)return'waves';if(h<14)return'starfield';if(h<18)return'bounce';if(h<21)return'waves';return'pipes';}
+  function dateSoundscapeId(){var d=new Date();var s=new Date(d.getFullYear(),0,0);var dy=Math.floor((d.getTime()-s.getTime())/86400000);var arr=['drift','chimes','bubbles','granular'];return arr[dy%arr.length];}
   function indexOfId(id){for(var i=0;i<PALETTES.length;i++)if(PALETTES[i].id===id)return i;return -1;}
 
   /* Custom palette generator — pick a base hue, derive 7 swatches around it.
@@ -969,8 +971,15 @@ const description =
         if (i < 0) i = indexOfId(clockPaletteId());
         return i < 0 ? 0 : i;
       })();
-  var initialMode = hashParsed.mode || (function(){ try { return localStorage.getItem('pc:tide:mode') || 'waves'; } catch(e){ return 'waves'; } })();
-  var initialSoundscape = (function(){ try { return localStorage.getItem('pc:tide:soundscape') || 'drift'; } catch(e){ return 'drift'; } })();
+  // tide-of-the-day defaults: when no saved value exists, derive scene from
+  // hour-of-day and soundscape from day-of-year (matches /tide/today.json).
+  var savedMode = (function(){ try { return localStorage.getItem('pc:tide:mode'); } catch(e){ return null; } })();
+  var savedSoundscapeRaw = (function(){ try { return localStorage.getItem('pc:tide:soundscape'); } catch(e){ return null; } })();
+  var initialMode = hashParsed.mode || savedMode || clockSceneId();
+  var initialSoundscape = savedSoundscapeRaw || dateSoundscapeId();
+  // True when both are coming from today-defaults (not user choice + not hash).
+  // Drives the "TIDE OF THE DAY" chip in the footer.
+  var todayDefaultsActive = !hashParsed.mode && !savedMode && !savedSoundscapeRaw;
   var savedAuto = parseInt((function(){ try { return localStorage.getItem('pc:tide:autoMs') || '90000'; } catch(e){ return '90000'; } })(), 10);
   if (!Number.isFinite(savedAuto)) savedAuto = 90_000;
   var savedVol = parseFloat((function(){ try { return localStorage.getItem('pc:tide:volume') || '0.35'; } catch(e){ return '0.35'; } })());
