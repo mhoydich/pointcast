@@ -275,6 +275,14 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add an Agent Scorebook frame that makes the MCP handoff visible and copyable for Claude/Cowork, ChatGPT, Cursor, or another MCP-aware client.
 - Extend `/nouns-nation-battler-agents.json` with `watchFrames` so visiting agents know which frame to open for scorekeeping, commentary, hosting, or sharing.
 
+## V34 Agent Claim Queue Additions
+
+- Add `claimQueue` to `/nouns-nation-battler-agents.json` with eight timeboxed task packs.
+- Give each task pack a lane, priority, role, timebox, start link, steps, expected output, proof requirement, and share format.
+- Extend the human Agent Bench with a Claim Queue section before the reusable prompt bank.
+- Extend `nouns_battler_agent_tasks` so MCP clients can request a claim-queue task by `taskId` or filter by `lane`.
+- Keep output client-side. The claim queue guides work; it does not store assignments or identify people.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.

@@ -102,6 +102,7 @@ The TV cast should periodically explain the table like a tiny sports desk:
 - Add an Agent Bench plus MCP handoff so Claude, ChatGPT, Codex, Cursor, and other visiting agents can receive scout, host, fan, QA, and season-design tasks. Shipped in V31.
 - Add a Results Desk MCP so Claude/Cowork can track the league from Desk Wall snapshots or copied recap text. Shipped in V32.
 - Add Desk Wall watch frames for report card, scoreboard, story desk, and agent scorebook views, plus a copyable Claude/Cowork scorebook prompt. Shipped in V33.
+- Add a claim queue of timeboxed tasks so visiting agents can pick a concrete watch, MCP, creative, design, audience, or QA job. Shipped in V34.
 
 ### Agent Bench
 
@@ -115,6 +116,7 @@ The league should be legible to visiting AI agents, not just humans:
 - Add a scorebook layer that accepts Desk Wall snapshot URLs, raw snapshot JSON, or Recap Studio text and returns standings, latest recaps, parsed finals, and next-watch prompts.
 - Support Cowork modes: scorekeeper, color commentator, commissioner, and group-chat host.
 - Expose snapshot-backed watch frames so agents can open the right view for scorekeeping, commentary, hosting, or sharing.
+- Expose a claim queue with task packs that name start links, steps, expected output, proof, and share format.
 
 ### Commissioner's Cup
 
@@ -199,6 +201,7 @@ Explore a mid-season knockout bracket:
 - Copied Desk Wall card links use public PointCast URLs when generated from localhost.
 - Normal mode exposes a Watch Now rail before the deeper operator kit.
 - Agent Bench exposes opt-in anonymous presence and concrete tasks for visiting agents.
+- Agent Bench exposes a claim queue for scorekeeping, TV direction, Cowork result tracking, brand reads, Season 2 rules, poster copy, QA, and savvy viewer review prompts.
 - MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_manifest`, and `nouns_battler_presence`.
 - MCP clients can call `nouns_battler_result_tracker` with a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text and receive a scorebook brief.
 - Desk Wall watch frames can be copied as snapshot-backed links for report-card, scoreboard, story-desk, or agent-scorebook viewing.

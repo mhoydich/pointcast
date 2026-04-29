@@ -388,6 +388,15 @@ export const GET: APIRoute = async () => {
         tools: NOUNS_BATTLER_AGENT_BENCH.mcp.tools,
         resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
         watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+        claimQueue: NOUNS_BATTLER_AGENT_BENCH.claimQueue.map((task) => ({
+          id: task.id,
+          title: task.title,
+          lane: task.lane,
+          priority: task.priority,
+          role: task.role,
+          timebox: task.timebox,
+          startHere: task.startHere,
+        })),
         tasks: NOUNS_BATTLER_AGENT_BENCH.tasks.map((task) => ({
           id: task.id,
           title: task.title,

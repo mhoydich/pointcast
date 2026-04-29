@@ -11,6 +11,8 @@
  *                                       handoff.
  * v0.5.0 — Nouns Nation Battler result tracking + Claude/Cowork
  *          scorebook briefs from Desk Wall snapshots and recap text.
+ * v0.6.0 — Battler claim queue with timeboxed watch, MCP, creative,
+ *          design, audience, and QA task packs.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -51,7 +53,7 @@
  *   connector_links       (no input)   addable MCP links for AI clients
  *   apps_list             (no input)   PointCast app shelf for clients
  *   nouns_battler_manifest (no input)  Nouns Nation Battler manifest
- *   nouns_battler_agent_tasks ({taskId?, role?}) visiting-agent tasks
+ *   nouns_battler_agent_tasks ({taskId?, role?, lane?}) visiting-agent tasks
  *   nouns_battler_presence (no input)  anonymous presence instructions
  *   nouns_battler_result_tracker ({snapshotUrl?, snapshotJson?, recapText?, view?})
  *                                       parse/track Battler results
@@ -83,7 +85,9 @@
 
 import {
   NOUNS_BATTLER_AGENT_BENCH,
+  filterNounsBattlerAgentTaskPacks,
   filterNounsBattlerAgentTasks,
+  findNounsBattlerAgentTaskPack,
   findNounsBattlerAgentTask,
 } from '../../src/lib/nouns-battler-agent-bench';
 import type { Env } from './visit';
@@ -363,14 +367,18 @@ const TOOL_DEFINITIONS = [
   {
     name: 'nouns_battler_agent_tasks',
     description:
-      'Return the Agent Bench task board for visiting AI agents. Optional filters: taskId for one task, role for scout/host/commentator/art-director/designer/fan/qa.',
+      'Return the Agent Bench task board and claim queue for visiting AI agents. Optional filters: taskId for one role prompt or claim-queue task, role for scout/host/commentator/art-director/designer/fan/qa, lane for watch/mcp/creative/design/verify/audience.',
     inputSchema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Optional task id such as scout-current-slate or desk-read.' },
+        taskId: { type: 'string', description: 'Optional task id such as scout-current-slate, desk-read, scorekeeper-open-slate, or qa-public-circuit.' },
         role: {
           type: 'string',
           description: 'Optional role filter: scout, host, commentator, art-director, designer, fan, or qa.',
+        },
+        lane: {
+          type: 'string',
+          description: 'Optional claim queue lane filter: watch, mcp, creative, design, verify, or audience.',
         },
       },
       additionalProperties: false,
@@ -1089,16 +1097,30 @@ async function dispatchTool(
     case 'nouns_battler_agent_tasks': {
       const taskId = String(args.taskId || '').trim();
       const role = String(args.role || '').trim();
+      const lane = String(args.lane || '').trim();
       const singleTask = taskId ? findNounsBattlerAgentTask(taskId) : undefined;
-      if (taskId && !singleTask) return { content: [{ type: 'text', text: `unknown Nouns Battler task: ${taskId}` }], isError: true };
-      const tasks = singleTask ? [singleTask] : filterNounsBattlerAgentTasks(role);
+      const singleTaskPack = taskId ? findNounsBattlerAgentTaskPack(taskId) : undefined;
+      if (taskId && !singleTask && !singleTaskPack) return { content: [{ type: 'text', text: `unknown Nouns Battler task: ${taskId}` }], isError: true };
+      const tasks = singleTask ? [singleTask] : taskId ? [] : filterNounsBattlerAgentTasks(role);
+      const claimQueue = singleTaskPack
+        ? [singleTaskPack]
+        : taskId
+          ? []
+          : filterNounsBattlerAgentTaskPacks(lane).filter((task: any) => {
+              if (!role) return true;
+              return task.role === role || task.lane === role;
+            });
       const bench = {
         ...NOUNS_BATTLER_AGENT_BENCH,
         generatedAt: new Date().toISOString(),
+        claimQueue,
         tasks,
       };
       const summary = [
-        `${tasks.length} Nouns Nation Battler task${tasks.length === 1 ? '' : 's'}${role ? ` for role ${role}` : ''}:`,
+        `${claimQueue.length} claim-queue task${claimQueue.length === 1 ? '' : 's'}${lane ? ` in lane ${lane}` : ''}${role ? ` for role ${role}` : ''}.`,
+        ...claimQueue.map((task: any) => `  · ${task.id} · ${task.title} (${task.lane}/${task.role}, ${task.timebox}) — ${task.expectedOutput}`),
+        '',
+        `${tasks.length} reusable role prompt${tasks.length === 1 ? '' : 's'}${role ? ` for role ${role}` : ''}:`,
         ...tasks.map((task: any) => `  · ${task.id} · ${task.title} (${task.role}) — ${task.expectedOutput}`),
         '',
         `MCP next step: call nouns_battler_manifest, then visit ${NOUNS_BATTLER_AGENT_BENCH.entryPoints.tv}`,
