@@ -1,0 +1,1010 @@
+---
+/**
+ * /drum-pinata — Birthday Imprint · virtual piñata · 2026-04-29 PT.
+ *
+ * A piñata hangs at the center of the page. Visitors take swings (drum
+ * taps); the piñata bursts when the room hits a goal threshold (default
+ * 100 swings). Per Mike: "ways to share and smile, everyone likes to
+ * hit the drum."
+ *
+ * URL params:
+ *   ?for=NAME    — name on the piñata ("NAME's piñata")
+ *   ?from=SENDER — sender attribution ("from SENDER")
+ *   ?goal=N      — burst threshold, 50–500 (default 100)
+ *
+ * Mechanics:
+ *   - Tap "TAKE A SWING" or press SPACE / RETURN.
+ *   - Each swing broadcasts type=pinata to /api/sounds + plays a
+ *     soft thwack via Web Audio + increments local count + wobbles
+ *     the SVG more vigorously.
+ *   - We poll /api/sounds for type=pinata events to track the room's
+ *     total. We self-filter our own broadcasts so we don't double-count.
+ *   - When the global total crosses the goal, the first client to
+ *     detect it broadcasts type=pinata-burst (idempotent via local
+ *     "burst seen" flag).
+ *   - Burst overlay rains confetti for ~5s, then a "swing again" button
+ *     resets the local round (room history persists).
+ *
+ * Aesthetic: cobalt-blue night sky page bg, warm spotlight on the
+ * piñata, multi-color fringe (magenta/yellow/cyan/green), display
+ * sans-serif for "PIÑATA", JetBrains Mono for counts, italic serif
+ * for warm copy.
+ *
+ * IMPORTANT: literal '{' and '}' in body text MUST be escaped as
+ * &#123; / &#125; — Astro parses unescaped curly braces as JSX.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-pinata — virtual piñata · Birthday Imprint';
+const description =
+  'A virtual piñata hangs at the center of the page. Take a swing. The piñata bursts when the room reaches the threshold. A small shared celebration on PointCast.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-pinata',
+  name: 'PointCast Drum · Piñata',
+  url: 'https://pointcast.xyz/drum-pinata',
+  description,
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og-drum-pinata.png"
+  jsonLd={jsonLd}
+>
+  <main class="dpn" id="dpn-main">
+    <DrumNav current="pinata" />
+
+    <header class="dpn__head">
+      <p class="dpn__kicker">DRUM HUB · BIRTHDAY IMPRINT · TYPE=PINATA · SHARED ROUND</p>
+      <h1 class="dpn__title"><span id="dpn-name-h1">a piñata</span> <em>· take a swing.</em></h1>
+      <p class="dpn__dek" id="dpn-dek">
+        A piñata hangs from the rafter. Tap the button (or press <kbd>SPACE</kbd> / <kbd>RETURN</kbd>) to swing.
+        Every visitor's swing counts toward the same goal. When the room hits the threshold, the piñata bursts —
+        confetti rains, the moment is recorded, the round resets.
+      </p>
+    </header>
+
+    <section class="dpn__stage" aria-label="Piñata stage">
+      <div class="dpn__rafter" aria-hidden="true"></div>
+
+      <div class="dpn__string" id="dpn-string" aria-hidden="true"></div>
+
+      <div class="dpn__pinata-wrap" id="dpn-pinata-wrap">
+        <svg class="dpn__pinata" id="dpn-pinata" viewBox="-160 -140 320 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Piñata">
+          <defs>
+            <radialGradient id="dpn-spot" cx="50%" cy="40%" r="65%">
+              <stop offset="0%" stop-color="#ffe9a3" stop-opacity="0.42" />
+              <stop offset="60%" stop-color="#ffe9a3" stop-opacity="0.0" />
+            </radialGradient>
+            <radialGradient id="dpn-body" cx="50%" cy="45%" r="55%">
+              <stop offset="0%" stop-color="#ff5cd5" />
+              <stop offset="100%" stop-color="#b8268a" />
+            </radialGradient>
+          </defs>
+
+          <ellipse cx="0" cy="0" rx="150" ry="135" fill="url(#dpn-spot)" />
+
+          <g class="dpn__star" id="dpn-star">
+            <polygon
+              points="0,-110 18,-30 100,-34 32,15 60,95 0,48 -60,95 -32,15 -100,-34 -18,-30"
+              fill="url(#dpn-body)"
+              stroke="#3a0c2c"
+              stroke-width="3"
+              stroke-linejoin="round"
+            />
+            <polygon
+              points="0,-78 12,-18 70,-20 22,12 42,68 0,32 -42,68 -22,12 -70,-20 -12,-18"
+              fill="#ffd400"
+              opacity="0.75"
+              stroke="#3a0c2c"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <circle cx="0" cy="0" r="22" fill="#3a0c2c" stroke="#ffd400" stroke-width="3" />
+            <circle cx="0" cy="0" r="8" fill="#ff5cd5" />
+
+            <g class="dpn__fringe">
+              <rect x="-8" y="-115" width="16" height="22" fill="#ff5cd5" />
+              <rect x="-92" y="-44" width="16" height="22" fill="#ffd400" />
+              <rect x="78" y="-44" width="16" height="22" fill="#22d3ee" />
+              <rect x="-50" y="80" width="16" height="22" fill="#22d3ee" />
+              <rect x="34" y="80" width="16" height="22" fill="#7cf26b" />
+              <rect x="-8" y="40" width="16" height="22" fill="#ffd400" />
+            </g>
+
+            <g class="dpn__tassels">
+              <path d="M-24,98 L-30,140 L-18,140 Z" fill="#ff5cd5" stroke="#3a0c2c" stroke-width="1" />
+              <path d="M-8,100 L-12,150 L0,150 Z" fill="#ffd400" stroke="#3a0c2c" stroke-width="1" />
+              <path d="M8,100 L4,150 L16,150 Z" fill="#22d3ee" stroke="#3a0c2c" stroke-width="1" />
+              <path d="M24,98 L20,140 L32,140 Z" fill="#7cf26b" stroke="#3a0c2c" stroke-width="1" />
+            </g>
+          </g>
+        </svg>
+
+        <p class="dpn__name-plate" id="dpn-name-plate">someone's piñata</p>
+      </div>
+
+      <section class="dpn__progress" aria-label="Progress">
+        <div class="dpn__bar"><div class="dpn__bar-fill" id="dpn-bar-fill"></div></div>
+        <p class="dpn__bar-meta mono">
+          <span id="dpn-room-count">0</span> / <span id="dpn-goal">100</span> swings
+          · <span id="dpn-room-here">1</span> here
+          · your swings: <strong id="dpn-my-count">0</strong>
+        </p>
+      </section>
+
+      <div class="dpn__swing-row">
+        <button type="button" class="dpn__swing" id="dpn-swing" aria-label="Take a swing">
+          <span class="dpn__swing-cap">
+            <span class="dpn__swing-glyph">🥢</span>
+            <span class="dpn__swing-label">TAKE A SWING</span>
+            <span class="dpn__swing-kbd mono">SPACE / RETURN</span>
+          </span>
+        </button>
+        <p class="dpn__swing-note" id="dpn-swing-note">— ready —</p>
+      </div>
+    </section>
+
+    <section class="dpn__share" aria-label="Share">
+      <h2 class="dpn__h mono">★ MAKE IT YOURS &amp; SHARE</h2>
+      <p class="dpn__share-blurb">
+        Set the name and sender, set a goal between 50 and 500, copy the link.
+      </p>
+
+      <form class="dpn__form" id="dpn-form" onsubmit="return false;">
+        <label class="dpn__lbl">
+          <span class="dpn__lbl-t mono">FOR</span>
+          <input class="dpn__in" id="dpn-for" type="text" placeholder="name on the piñata" maxlength="40" />
+        </label>
+        <label class="dpn__lbl">
+          <span class="dpn__lbl-t mono">FROM</span>
+          <input class="dpn__in" id="dpn-from" type="text" placeholder="from whom" maxlength="40" />
+        </label>
+        <label class="dpn__lbl">
+          <span class="dpn__lbl-t mono">GOAL</span>
+          <input class="dpn__in dpn__in--num" id="dpn-goal-in" type="number" min="50" max="500" step="10" placeholder="100" />
+        </label>
+      </form>
+
+      <div class="dpn__share-row">
+        <button type="button" class="dpn__btn" id="dpn-copy">copy link</button>
+        <a class="dpn__btn" id="dpn-tweet" href="#" target="_blank" rel="noopener noreferrer">tweet</a>
+        <button type="button" class="dpn__btn" id="dpn-native">share…</button>
+        <span class="dpn__share-status mono" id="dpn-share-status"></span>
+      </div>
+    </section>
+
+    <footer class="dpn__foot">
+      <p>
+        Same /api/sounds bus as the rest of the drum hub. Your swings + everyone else's land on every cast surface.
+        The burst is shared: when the room hits the goal, the page bursts on every visitor's screen at once.
+      </p>
+      <p class="dpn__credit mono">v0.1 · 2026-04-29 · Birthday Imprint · pointcast.xyz/drum-pinata</p>
+    </footer>
+
+    <div class="dpn__overlay" id="dpn-overlay" hidden aria-hidden="true">
+      <div class="dpn__confetti" id="dpn-confetti"></div>
+      <div class="dpn__burst-card">
+        <p class="dpn__burst-kicker mono">★ THE PIÑATA BURST ★</p>
+        <p class="dpn__burst-line">at swing #<span id="dpn-burst-n">—</span></p>
+        <p class="dpn__burst-name" id="dpn-burst-name">someone's piñata</p>
+        <button type="button" class="dpn__btn dpn__btn--big" id="dpn-again">swing again</button>
+      </div>
+    </div>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  var params = new URLSearchParams(window.location.search);
+  var qFor = (params.get('for') || '').trim().slice(0, 40);
+  var qFrom = (params.get('from') || '').trim().slice(0, 40);
+  var qGoalRaw = parseInt(params.get('goal') || '100', 10);
+  var GOAL = Math.min(500, Math.max(50, isFinite(qGoalRaw) ? qGoalRaw : 100));
+
+  function getSession() {
+    try {
+      var k = 'pc:session';
+      var s = localStorage.getItem(k);
+      if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+      return s;
+    } catch (e) { return 'dpn-' + Math.random().toString(36).slice(2, 10); }
+  }
+  var sid = getSession();
+  var shortPid = '';
+  try {
+    if (window.crypto && crypto.subtle) {
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode(sid)).then(function(buf){
+        var arr = Array.from(new Uint8Array(buf)).slice(0, 5);
+        shortPid = arr.map(function(b){ return b.toString(16).padStart(2,'0'); }).join('').slice(0, 8);
+      }).catch(function(){});
+    }
+  } catch (e) {}
+
+  var el = {
+    name: document.getElementById('dpn-name-h1'),
+    plate: document.getElementById('dpn-name-plate'),
+    pinata: document.getElementById('dpn-pinata'),
+    star: document.getElementById('dpn-star'),
+    bar: document.getElementById('dpn-bar-fill'),
+    roomN: document.getElementById('dpn-room-count'),
+    goalN: document.getElementById('dpn-goal'),
+    here: document.getElementById('dpn-room-here'),
+    myN: document.getElementById('dpn-my-count'),
+    swing: document.getElementById('dpn-swing'),
+    note: document.getElementById('dpn-swing-note'),
+    forIn: document.getElementById('dpn-for'),
+    fromIn: document.getElementById('dpn-from'),
+    goalIn: document.getElementById('dpn-goal-in'),
+    copy: document.getElementById('dpn-copy'),
+    tweet: document.getElementById('dpn-tweet'),
+    native: document.getElementById('dpn-native'),
+    shareStatus: document.getElementById('dpn-share-status'),
+    overlay: document.getElementById('dpn-overlay'),
+    confetti: document.getElementById('dpn-confetti'),
+    burstN: document.getElementById('dpn-burst-n'),
+    burstName: document.getElementById('dpn-burst-name'),
+    again: document.getElementById('dpn-again'),
+  };
+
+  function pinataLabel() {
+    if (qFor) return qFor + "'s piñata";
+    return "someone's piñata";
+  }
+  function setHeader() {
+    var lbl = pinataLabel();
+    el.name.textContent = lbl;
+    el.plate.textContent = lbl + (qFrom ? ' · from ' + qFrom : '');
+    el.burstName.textContent = lbl;
+  }
+  el.forIn.value = qFor;
+  el.fromIn.value = qFrom;
+  el.goalIn.value = String(GOAL);
+  el.goalN.textContent = String(GOAL);
+  setHeader();
+
+  var myCount = 0;
+  var roomCount = 0;
+  var lastTs = Date.now() - 30000;
+  var burstSeen = false;
+  var pendingSelf = []; // timestamps of recent self-broadcasts to filter
+
+  function updateBar() {
+    var pct = Math.min(100, Math.round((roomCount / GOAL) * 100));
+    el.bar.style.width = pct + '%';
+    el.roomN.textContent = String(roomCount);
+    el.myN.textContent = String(myCount);
+  }
+
+  // ====== AUDIO ======
+  var ac = null;
+  function audio() {
+    if (ac) return ac;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      ac = new Ctx();
+    } catch (e) { return null; }
+    return ac;
+  }
+  function thwack() {
+    var a = audio(); if (!a) return;
+    try {
+      var t0 = a.currentTime;
+      var noise = a.createBufferSource();
+      var buf = a.createBuffer(1, Math.floor(0.18 * a.sampleRate), a.sampleRate);
+      var data = buf.getChannelData(0);
+      for (var i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2.4);
+      }
+      noise.buffer = buf;
+      var bp = a.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 320; bp.Q.value = 1.4;
+      var g = a.createGain();
+      g.gain.setValueAtTime(0.5, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+      noise.connect(bp); bp.connect(g); g.connect(a.destination);
+      noise.start(t0); noise.stop(t0 + 0.2);
+
+      var osc = a.createOscillator();
+      var og = a.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(220, t0);
+      osc.frequency.exponentialRampToValueAtTime(70, t0 + 0.15);
+      og.gain.setValueAtTime(0.18, t0);
+      og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+      osc.connect(og); og.connect(a.destination);
+      osc.start(t0); osc.stop(t0 + 0.2);
+    } catch (e) {}
+  }
+  function bigPop() {
+    var a = audio(); if (!a) return;
+    try {
+      var t0 = a.currentTime;
+      var noise = a.createBufferSource();
+      var buf = a.createBuffer(1, Math.floor(0.6 * a.sampleRate), a.sampleRate);
+      var data = buf.getChannelData(0);
+      for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.6);
+      noise.buffer = buf;
+      var hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 200;
+      var g = a.createGain();
+      g.gain.setValueAtTime(0.6, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.6);
+      noise.connect(hp); hp.connect(g); g.connect(a.destination);
+      noise.start(t0); noise.stop(t0 + 0.6);
+    } catch (e) {}
+  }
+
+  // ====== SWING ======
+  var wobble = 0; // intensity 0..1
+  function bumpWobble() {
+    wobble = Math.min(1, wobble + 0.18);
+    el.pinata.style.setProperty('--dpn-wobble', String(0.5 + wobble * 1.6));
+    el.pinata.classList.remove('dpn__pinata--hit');
+    void el.pinata.offsetWidth;
+    el.pinata.classList.add('dpn__pinata--hit');
+  }
+  setInterval(function(){ wobble = Math.max(0, wobble - 0.04); el.pinata.style.setProperty('--dpn-wobble', String(0.5 + wobble * 1.6)); }, 200);
+
+  function fireSwing() {
+    if (burstSeen) return;
+    myCount += 1;
+    roomCount += 1; // optimistic local bump; we'll reconcile via tail self-filter
+    pendingSelf.push(Date.now());
+    if (pendingSelf.length > 50) pendingSelf.shift();
+    bumpWobble();
+    thwack();
+    updateBar();
+    el.note.textContent = 'transmitting · type=pinata';
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'pinata', sessionId: sid, note: 'swing', goal: GOAL, forName: qFor || null })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.ok) el.note.textContent = 'transmitted ✓';
+      else el.note.textContent = '✗ ' + ((data && data.reason) || 'send failed');
+    }).catch(function(){ el.note.textContent = '✗ offline'; });
+
+    // Local threshold cross → broadcast burst (idempotent)
+    if (roomCount >= GOAL && !burstSeen) {
+      triggerBurstLocal(roomCount);
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'pinata-burst', sessionId: sid, at: roomCount, goal: GOAL, forName: qFor || null })
+        });
+      } catch (e) {}
+    }
+  }
+
+  el.swing.addEventListener('mousedown', function(e){ fireSwing(); e.preventDefault(); });
+  el.swing.addEventListener('touchstart', function(e){ fireSwing(); e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', function(e){
+    if (e.repeat) return;
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.code === 'Space' || e.code === 'Enter') { fireSwing(); e.preventDefault(); }
+  });
+
+  // ====== BURST ======
+  var CONFETTI = ['🎉','🎊','✨','🍬','🍭','🎁','💛','💜','💖','💚'];
+  var BURST_COLORS = ['#ff5cd5','#ffd400','#22d3ee','#7cf26b','#ff8a4a','#ffffff'];
+
+  function triggerBurstLocal(at) {
+    if (burstSeen) return;
+    burstSeen = true;
+    el.burstN.textContent = String(at);
+    el.overlay.hidden = false;
+    el.overlay.setAttribute('aria-hidden', 'false');
+    bigPop();
+    rainConfetti(140);
+    setTimeout(function(){ rainConfetti(80); }, 900);
+    setTimeout(function(){ rainConfetti(60); }, 2200);
+    el.pinata.classList.add('dpn__pinata--burst');
+  }
+
+  function rainConfetti(n) {
+    for (var i = 0; i < n; i++) {
+      (function(idx){
+        var s = document.createElement('span');
+        var useEmoji = Math.random() < 0.55;
+        if (useEmoji) {
+          s.className = 'dpn__bit dpn__bit--emoji';
+          s.textContent = CONFETTI[Math.floor(Math.random() * CONFETTI.length)];
+        } else {
+          s.className = 'dpn__bit dpn__bit--shape';
+          s.style.background = BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)];
+          if (Math.random() < 0.4) s.style.borderRadius = '50%';
+        }
+        s.style.left = (Math.random() * 100) + '%';
+        s.style.top = '-40px';
+        s.style.fontSize = (14 + Math.random() * 28) + 'px';
+        s.style.setProperty('--dx', ((Math.random() - 0.5) * 240) + 'px');
+        s.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+        s.style.animationDuration = (2.4 + Math.random() * 2.4) + 's';
+        s.style.animationDelay = (Math.random() * 0.6) + 's';
+        el.confetti.appendChild(s);
+        setTimeout(function(){ if (s.parentNode) s.parentNode.removeChild(s); }, 5400);
+      })(i);
+    }
+  }
+
+  el.again.addEventListener('click', function(){
+    burstSeen = false;
+    myCount = 0;
+    // Don't reset room count — that's the global. Just re-enable for next round locally.
+    el.overlay.hidden = true;
+    el.overlay.setAttribute('aria-hidden', 'true');
+    el.pinata.classList.remove('dpn__pinata--burst');
+    if (el.confetti) el.confetti.innerHTML = '';
+    updateBar();
+    el.note.textContent = '— ready · next round —';
+  });
+
+  // ====== POLL /api/sounds for room state ======
+  function looksLikeSelf(e) {
+    if (!e || !e.t) return false;
+    if (e.sessionId === sid) return true;
+    // Fallback: time-window match against a recent self-broadcast
+    for (var i = pendingSelf.length - 1; i >= 0; i--) {
+      if (Math.abs(pendingSelf[i] - (e.t || 0)) < 1500) {
+        pendingSelf.splice(i, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function tail() {
+    fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+      if (!data) return;
+      var events = Array.isArray(data.events) ? data.events : [];
+      if (!events.length) return;
+      lastTs = events[events.length - 1].t || Date.now();
+      events.forEach(function(e){
+        if (e.type === 'pinata') {
+          if (looksLikeSelf(e)) return; // avoid double-counting our optimistic bump
+          roomCount += 1;
+          if (roomCount >= GOAL && !burstSeen) {
+            triggerBurstLocal(roomCount);
+            try {
+              fetch('/api/sounds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'pinata-burst', sessionId: sid, at: roomCount, goal: GOAL, forName: qFor || null })
+              });
+            } catch (er) {}
+          }
+        } else if (e.type === 'pinata-burst') {
+          if (!burstSeen) {
+            var at = (e.at && Number(e.at)) || roomCount || GOAL;
+            triggerBurstLocal(at);
+          }
+        }
+      });
+      updateBar();
+    }).catch(function(){});
+  }
+  setInterval(tail, 1500); tail();
+
+  // Periodic full reconciliation: read recent sounds and recount type=pinata.
+  function reconcile() {
+    fetch('/api/sounds?since=' + (Date.now() - 1000 * 60 * 60 * 6), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if (!data) return;
+        var events = Array.isArray(data.events) ? data.events : [];
+        var totalSwings = 0;
+        var sawBurst = false;
+        var burstAt = 0;
+        events.forEach(function(e){
+          if (e.type === 'pinata') totalSwings += 1;
+          else if (e.type === 'pinata-burst') {
+            sawBurst = true;
+            if (Number(e.at) > burstAt) burstAt = Number(e.at) || 0;
+          }
+        });
+        if (totalSwings > roomCount) roomCount = totalSwings;
+        updateBar();
+        if (sawBurst && !burstSeen) {
+          triggerBurstLocal(burstAt || roomCount || GOAL);
+        }
+      }).catch(function(){});
+  }
+  setTimeout(reconcile, 800);
+  setInterval(reconcile, 25000);
+
+  // ====== /api/visit roster ======
+  function refreshVisit() {
+    fetch('/api/visit', { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+      if (!data) return;
+      var present = Array.isArray(data.present) ? data.present : [];
+      var humans = present.filter(function(p){ var t = (p && p.type) || ''; return p && p.pid && typeof p.nounId === 'number' && !t.startsWith('bot:'); });
+      el.here.textContent = String(Math.max(1, humans.length));
+    }).catch(function(){});
+  }
+  refreshVisit(); setInterval(refreshVisit, 8000);
+
+  // ====== SHARE ======
+  function buildShareUrl() {
+    var u = new URL(window.location.href);
+    u.search = '';
+    var f = (el.forIn.value || '').trim().slice(0, 40);
+    var fr = (el.fromIn.value || '').trim().slice(0, 40);
+    var g = parseInt(el.goalIn.value || '100', 10);
+    if (!isFinite(g)) g = 100;
+    g = Math.min(500, Math.max(50, g));
+    if (f) u.searchParams.set('for', f);
+    if (fr) u.searchParams.set('from', fr);
+    u.searchParams.set('goal', String(g));
+    return u.toString();
+  }
+  function refreshTweet() {
+    var url = buildShareUrl();
+    var f = (el.forIn.value || '').trim();
+    var text = f ? ("take a swing at " + f + "'s piñata on PointCast") : 'take a swing at the PointCast piñata';
+    el.tweet.href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url);
+  }
+  function reflectInputs() {
+    qFor = (el.forIn.value || '').trim().slice(0, 40);
+    qFrom = (el.fromIn.value || '').trim().slice(0, 40);
+    var g = parseInt(el.goalIn.value || '100', 10);
+    if (isFinite(g)) GOAL = Math.min(500, Math.max(50, g));
+    el.goalN.textContent = String(GOAL);
+    setHeader();
+    refreshTweet();
+    updateBar();
+  }
+  el.forIn.addEventListener('input', reflectInputs);
+  el.fromIn.addEventListener('input', reflectInputs);
+  el.goalIn.addEventListener('input', reflectInputs);
+  refreshTweet();
+
+  el.copy.addEventListener('click', function(){
+    var url = buildShareUrl();
+    try {
+      navigator.clipboard.writeText(url).then(function(){
+        el.shareStatus.textContent = 'copied ✓';
+        setTimeout(function(){ el.shareStatus.textContent = ''; }, 2000);
+      }).catch(function(){
+        el.shareStatus.textContent = url;
+      });
+    } catch (e) { el.shareStatus.textContent = url; }
+  });
+  el.native.addEventListener('click', function(){
+    var url = buildShareUrl();
+    var f = (el.forIn.value || '').trim();
+    var title = f ? (f + "'s piñata · PointCast") : 'PointCast piñata';
+    if (navigator.share) {
+      navigator.share({ title: title, text: 'take a swing', url: url }).catch(function(){});
+    } else {
+      el.shareStatus.textContent = 'share not supported · use copy';
+      setTimeout(function(){ el.shareStatus.textContent = ''; }, 2000);
+    }
+  });
+
+  updateBar();
+})();
+</script>
+
+<style>
+  .dpn {
+    min-height: 100vh;
+    padding: 12px 12px 60px;
+    background:
+      radial-gradient(ellipse at 50% 32%, rgba(255, 233, 163, 0.25) 0%, rgba(255, 233, 163, 0) 42%),
+      linear-gradient(180deg, #1a3a72 0%, #0c1d3d 70%, #050a1a 100%);
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .dpn__head { max-width: 980px; margin: 0 auto 18px; padding: 0 6px; }
+  .dpn__kicker {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+  .dpn__title {
+    margin: 0 0 8px;
+    font-family: 'Bungee', 'Anton', Impact, sans-serif;
+    font-size: clamp(34px, 5.4vw, 60px);
+    line-height: 1.05;
+    color: #ff5cd5;
+    text-shadow: 3px 3px 0 #3a0c2c, 6px 6px 0 rgba(0,0,0,0.4);
+    letter-spacing: 0.02em;
+  }
+  .dpn__title em {
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    color: #ffd400;
+    text-shadow: 2px 2px 0 #3a0c2c;
+    font-size: 0.78em;
+    letter-spacing: 0;
+  }
+  .dpn__dek {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 64ch;
+    color: #cfd9f3;
+  }
+  .dpn__dek kbd {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    padding: 1px 6px;
+    background: #050a1a;
+    color: #ffd400;
+    border: 1px solid #ffd400;
+    border-radius: 3px;
+  }
+
+  .dpn__stage {
+    position: relative;
+    max-width: 980px;
+    margin: 0 auto 18px;
+    background: linear-gradient(180deg, rgba(255,233,163,0.05), rgba(0,0,0,0.18));
+    border: 2px solid #ffd400;
+    box-shadow: 6px 6px 0 0 #050a1a, 0 0 60px rgba(255,233,163,0.15) inset;
+    padding: 26px 18px 28px;
+    min-height: 540px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .dpn__rafter {
+    position: absolute;
+    top: 0; left: 18px; right: 18px;
+    height: 14px;
+    background:
+      repeating-linear-gradient(90deg, #6b3a17 0 18px, #4a2810 18px 22px),
+      #6b3a17;
+    border-bottom: 2px solid #2a1505;
+    box-shadow: 0 2px 0 0 #050a1a;
+  }
+  .dpn__string {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    width: 2px;
+    height: 64px;
+    background: #fffaf0;
+    transform-origin: top center;
+    animation: dpn-string-sway 4.2s ease-in-out infinite;
+  }
+  @keyframes dpn-string-sway {
+    0%, 100% { transform: translateX(-1px) rotate(-1.6deg); }
+    50%      { transform: translateX(-1px) rotate(1.6deg); }
+  }
+
+  .dpn__pinata-wrap {
+    position: relative;
+    margin-top: 78px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .dpn__pinata {
+    width: clamp(260px, 36vw, 380px);
+    height: clamp(260px, 36vw, 380px);
+    transform-origin: 50% -20%;
+    --dpn-wobble: 0.5;
+    animation: dpn-sway calc(3.6s / var(--dpn-wobble)) ease-in-out infinite;
+    filter: drop-shadow(8px 12px 0 rgba(0,0,0,0.4));
+    cursor: pointer;
+    transition: filter 200ms;
+  }
+  .dpn__pinata:hover {
+    filter: drop-shadow(8px 12px 0 rgba(0,0,0,0.5)) brightness(1.06);
+  }
+  @keyframes dpn-sway {
+    0%, 100% { transform: rotate(-3.5deg); }
+    50%      { transform: rotate(3.5deg); }
+  }
+  .dpn__pinata--hit { animation: dpn-hit 0.45s ease-out, dpn-sway calc(3.2s / var(--dpn-wobble)) ease-in-out infinite 0.45s; }
+  @keyframes dpn-hit {
+    0%   { transform: rotate(0deg) scale(1); }
+    18%  { transform: rotate(-12deg) scale(0.96); }
+    44%  { transform: rotate(10deg) scale(1.02); }
+    70%  { transform: rotate(-6deg) scale(0.99); }
+    100% { transform: rotate(0deg) scale(1); }
+  }
+  .dpn__pinata--burst { animation: dpn-burst-fade 1.2s ease-out forwards; }
+  @keyframes dpn-burst-fade {
+    0%   { opacity: 1; transform: rotate(0deg) scale(1); }
+    30%  { opacity: 1; transform: rotate(-14deg) scale(1.08); filter: brightness(1.5) drop-shadow(0 0 32px #ffd400); }
+    100% { opacity: 0.18; transform: rotate(20deg) scale(0.7); }
+  }
+
+  .dpn__star { transform-origin: 0 0; }
+  .dpn__pinata--hit .dpn__star { animation: dpn-star-jiggle 0.4s ease-out; }
+  @keyframes dpn-star-jiggle {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+  .dpn__fringe rect { animation: dpn-fringe 1.2s ease-in-out infinite alternate; }
+  @keyframes dpn-fringe {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(3px); }
+  }
+
+  .dpn__name-plate {
+    margin: 4px 0 0;
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: clamp(16px, 2.2vw, 22px);
+    color: #ffd400;
+    text-shadow: 1px 1px 0 #3a0c2c;
+  }
+
+  .dpn__progress {
+    width: min(620px, 100%);
+    margin-top: 18px;
+  }
+  .dpn__bar {
+    height: 18px;
+    background: rgba(0,0,0,0.32);
+    border: 2px solid #ffd400;
+    border-radius: 9px;
+    overflow: hidden;
+    box-shadow: 2px 2px 0 0 #050a1a;
+  }
+  .dpn__bar-fill {
+    height: 100%;
+    width: 0%;
+    background: repeating-linear-gradient(45deg, #ff5cd5 0 14px, #ffd400 14px 28px, #22d3ee 28px 42px, #7cf26b 42px 56px);
+    transition: width 380ms ease-out;
+  }
+  .dpn__bar-meta {
+    margin: 6px 2px 0;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #cfd9f3;
+    text-align: center;
+  }
+  .dpn__bar-meta strong { color: #ffd400; }
+
+  .dpn__swing-row {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .dpn__swing {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    transform: translateY(0);
+    transition: transform 80ms;
+  }
+  .dpn__swing:active { transform: translateY(2px); }
+  .dpn__swing-cap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 38px;
+    background: linear-gradient(180deg, #ff5cd5 0%, #b8268a 100%);
+    color: #fffaf0;
+    border: 3px solid #ffd400;
+    border-radius: 14px;
+    box-shadow: 6px 8px 0 0 #050a1a, 0 0 30px rgba(255,212,0,0.32);
+  }
+  .dpn__swing:hover .dpn__swing-cap { filter: brightness(1.08); }
+  .dpn__swing-glyph { font-size: 28px; line-height: 1; transform: rotate(-12deg); }
+  .dpn__swing-label {
+    font-family: 'Bungee', 'Anton', Impact, sans-serif;
+    font-size: clamp(20px, 2.4vw, 28px);
+    letter-spacing: 0.14em;
+    color: #fffaf0;
+    -webkit-text-stroke: 2px #3a0c2c;
+  }
+  .dpn__swing-kbd {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    padding: 2px 8px;
+    background: #050a1a;
+    color: #ffd400;
+    border: 1px solid #ffd400;
+    border-radius: 3px;
+  }
+  .dpn__swing-note {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: #cfd9f3;
+    min-height: 14px;
+  }
+
+  .dpn__share {
+    max-width: 980px;
+    margin: 0 auto 18px;
+    background: rgba(0,0,0,0.28);
+    border: 2px solid #ffd400;
+    box-shadow: 6px 6px 0 0 #050a1a;
+    padding: 18px;
+  }
+  .dpn__h {
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    color: #ffd400;
+  }
+  .dpn__share-blurb {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #cfd9f3;
+    max-width: 64ch;
+  }
+  .dpn__form {
+    display: grid;
+    grid-template-columns: 2fr 2fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 600px) { .dpn__form { grid-template-columns: 1fr; } }
+  .dpn__lbl { display: flex; flex-direction: column; gap: 4px; }
+  .dpn__lbl-t {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #ffd400;
+    text-transform: uppercase;
+  }
+  .dpn__in {
+    background: #050a1a;
+    border: 1.5px solid #ffd400;
+    color: #fffaf0;
+    padding: 8px 10px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 13px;
+    border-radius: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .dpn__in:focus { outline: none; border-color: #ff5cd5; box-shadow: 0 0 0 2px rgba(255,92,213,0.28); }
+
+  .dpn__share-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .dpn__btn {
+    display: inline-block;
+    padding: 8px 14px;
+    background: #ffd400;
+    color: #050a1a;
+    border: 2px solid #050a1a;
+    box-shadow: 3px 3px 0 0 #050a1a;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 80ms, box-shadow 80ms;
+  }
+  .dpn__btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #050a1a; }
+  .dpn__btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 #050a1a; }
+  .dpn__btn--big {
+    padding: 12px 22px;
+    background: #ff5cd5;
+    color: #fffaf0;
+    border-color: #050a1a;
+    font-size: 13px;
+  }
+  .dpn__share-status {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: #7cf26b;
+  }
+
+  .dpn__foot {
+    max-width: 980px;
+    margin: 18px auto 0;
+    padding: 14px 6px 0;
+    border-top: 1px dashed rgba(255,212,0,0.4);
+    font-size: 12px;
+    line-height: 1.55;
+    color: #cfd9f3;
+  }
+  .dpn__credit {
+    margin: 8px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ffd400;
+  }
+
+  .dpn__overlay {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(255,212,0,0.22) 0%, rgba(5,10,26,0.94) 70%);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+  }
+  .dpn__confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .dpn__bit {
+    position: absolute;
+    will-change: transform;
+    animation-name: dpn-fall;
+    animation-timing-function: cubic-bezier(.2,.6,.4,1);
+    animation-fill-mode: forwards;
+  }
+  .dpn__bit--shape {
+    width: 14px; height: 18px;
+  }
+  @keyframes dpn-fall {
+    0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--dx, 0px), 110vh) rotate(var(--rot, 360deg)); opacity: 0.95; }
+  }
+
+  .dpn__burst-card {
+    position: relative;
+    z-index: 2;
+    background: #ffd400;
+    border: 4px solid #050a1a;
+    box-shadow: 10px 10px 0 0 #050a1a, 0 0 80px rgba(255,212,0,0.6);
+    padding: 28px 36px;
+    text-align: center;
+    transform: rotate(-2deg);
+    animation: dpn-card-bounce 0.7s ease-out;
+  }
+  @keyframes dpn-card-bounce {
+    0%   { transform: rotate(-2deg) scale(0.4); opacity: 0; }
+    60%  { transform: rotate(2deg) scale(1.08); opacity: 1; }
+    100% { transform: rotate(-2deg) scale(1); }
+  }
+  .dpn__burst-kicker {
+    margin: 0 0 6px;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: #b8268a;
+  }
+  .dpn__burst-line {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(18px, 2.6vw, 28px);
+    color: #050a1a;
+    font-weight: 700;
+  }
+  .dpn__burst-line span {
+    background: #ff5cd5;
+    color: #fffaf0;
+    padding: 2px 10px;
+    margin-left: 4px;
+    -webkit-text-stroke: 1px #050a1a;
+  }
+  .dpn__burst-name {
+    margin: 6px 0 18px;
+    font-family: 'Caveat', 'Comic Sans MS', cursive, Georgia, serif;
+    font-size: clamp(28px, 4.4vw, 50px);
+    color: #050a1a;
+    line-height: 1;
+    transform: rotate(1deg);
+  }
+
+  .mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; }
+</style>

@@ -1,0 +1,603 @@
+---
+/**
+ * /drum-card — collaborative birthday card · 2026-04-29 PT.
+ *
+ * Part of the Birthday Imprint trio (/drum-cake · /drum-card · /drum-pinata).
+ *
+ * The page renders a LARGE open greeting card — cover on the left with a
+ * tied red bow + display-script "happy birthday", inside on the right with
+ * the personalized greeting and a 24-cell signature grid. Visitors tap the
+ * "sign the card" CTA; each tap broadcasts type=sign to /api/sounds, stamps
+ * a Noun avatar onto the next available slot in the grid, and plays a soft
+ * pen-scratch tone via Web Audio.
+ *
+ * Mike said: "neat unfurl, ability to potentially customize, ways to share
+ * and smile." So:
+ *   ?for=NAME&from=SENDER customize the greeting
+ *   the message line stays in the URL hash (no backend write) — copy a
+ *     "signed link" with your one-line message preserved
+ *   share row: copy-link · tweet · native share
+ *
+ * IMPORTANT: literal '{' and '}' in body text MUST be escaped as &#123;
+ * / &#125; — Astro parses unescaped curly braces as JSX expressions and
+ * breaks the build. Documented in PR #222.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-card — sign the birthday card';
+const description = 'A collaborative birthday card. Tap to sign — your Noun stamps onto the page. Customize it for someone with ?for=NAME&from=SENDER and share the signed link.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-card',
+  name: 'PointCast Drum · Birthday Card',
+  url: 'https://pointcast.xyz/drum-card',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-card.png" jsonLd={jsonLd}>
+  <main class="dcd" id="dcd-main">
+    <DrumNav current="card" />
+
+    <header class="dcd__head">
+      <p class="dcd__kicker mono">BIRTHDAY IMPRINT · TYPE=SIGN · COLLABORATIVE CARD</p>
+      <h1 class="dcd__title"><em>Sign the card.</em></h1>
+      <p class="dcd__dek">A birthday card you can sign together. Each tap leaves your mark — a small Noun stamped into the page. Customize the greeting with <code>?for=NAME</code> and <code>?from=SENDER</code>, write a one-line message, share the signed link.</p>
+    </header>
+
+    <section class="dcd__stage" aria-label="Birthday card">
+      <div class="dcd__card" id="dcd-card" role="img" aria-label="Open birthday card">
+        <svg class="dcd__svg" viewBox="0 0 1000 620" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <filter id="dcd-paper" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
+              <feColorMatrix values="0 0 0 0 0.96  0 0 0 0 0.93  0 0 0 0 0.85  0 0 0 0.04 0"/>
+              <feComposite in2="SourceGraphic" operator="in"/>
+            </filter>
+            <linearGradient id="dcd-fold" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
+              <stop offset="48%" stop-color="rgba(0,0,0,0.06)"/>
+              <stop offset="50%" stop-color="rgba(0,0,0,0.18)"/>
+              <stop offset="52%" stop-color="rgba(0,0,0,0.06)"/>
+              <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+            </linearGradient>
+            <pattern id="dcd-dots" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="2" r="0.7" fill="#c4351c" opacity="0.18"/>
+            </pattern>
+          </defs>
+
+          <!-- card body / paper -->
+          <rect x="20" y="30" width="960" height="560" rx="6" ry="6" fill="#fffaf0" stroke="#13110d" stroke-width="2"/>
+          <rect x="20" y="30" width="960" height="560" rx="6" ry="6" fill="#13110d" filter="url(#dcd-paper)" opacity="0.5"/>
+
+          <!-- center fold -->
+          <rect x="20" y="30" width="960" height="560" fill="url(#dcd-fold)"/>
+          <line x1="500" y1="30" x2="500" y2="590" stroke="#13110d" stroke-width="0.8" stroke-dasharray="2 4" opacity="0.4"/>
+
+          <!-- LEFT PAGE · COVER -->
+          <g class="dcd__cover">
+            <!-- pattern field -->
+            <rect x="40" y="50" width="440" height="520" fill="url(#dcd-dots)"/>
+            <!-- ribbon -->
+            <rect x="40" y="200" width="440" height="56" fill="#c4351c"/>
+            <rect x="40" y="200" width="440" height="56" fill="#13110d" opacity="0.06"/>
+            <!-- bow knot -->
+            <ellipse cx="260" cy="228" rx="46" ry="22" fill="#c4351c" stroke="#7a1a0c" stroke-width="1.5"/>
+            <ellipse cx="216" cy="228" rx="22" ry="14" fill="#c4351c" stroke="#7a1a0c" stroke-width="1.5"/>
+            <ellipse cx="304" cy="228" rx="22" ry="14" fill="#c4351c" stroke="#7a1a0c" stroke-width="1.5"/>
+            <circle cx="260" cy="228" r="9" fill="#7a1a0c"/>
+            <!-- ribbon tails -->
+            <path d="M250 256 L240 308 L262 296 L256 326 L268 320 L280 256 Z" fill="#c4351c" stroke="#7a1a0c" stroke-width="1"/>
+            <!-- "happy birthday" script -->
+            <text class="dcd__cover-script" x="260" y="430" text-anchor="middle">happy birthday</text>
+            <text class="dcd__cover-kicker mono" x="260" y="510" text-anchor="middle">A POINTCAST CARD</text>
+            <text class="dcd__cover-kicker mono" x="260" y="528" text-anchor="middle">EL SEGUNDO · CC0</text>
+            <!-- gold corner stars -->
+            <text class="dcd__cover-star" x="68" y="92">✦</text>
+            <text class="dcd__cover-star" x="448" y="92">✦</text>
+            <text class="dcd__cover-star" x="68" y="572">✦</text>
+            <text class="dcd__cover-star" x="448" y="572">✦</text>
+          </g>
+
+          <!-- RIGHT PAGE · INSIDE -->
+          <g class="dcd__inside">
+            <!-- inside greeting -->
+            <text class="dcd__inside-kicker mono" x="540" y="92">— DEAR —</text>
+            <text class="dcd__inside-name" id="dcd-svg-for" x="740" y="148" text-anchor="middle">friend</text>
+            <line x1="540" y1="172" x2="940" y2="172" stroke="#13110d" stroke-width="0.6" stroke-dasharray="2 3" opacity="0.3"/>
+
+            <text class="dcd__inside-greeting" x="740" y="220" text-anchor="middle">happy birthday.</text>
+
+            <!-- message slot (bound at runtime) -->
+            <foreignObject x="540" y="240" width="400" height="60">
+              <p xmlns="http://www.w3.org/1999/xhtml" class="dcd__inside-msg" id="dcd-svg-msg">— a small note from the room —</p>
+            </foreignObject>
+
+            <!-- signature grid label -->
+            <text class="dcd__inside-kicker mono" x="540" y="332">— SIGNED BY —</text>
+
+            <!-- 24 signature spots in a 6x4 grid · positions held in JS too -->
+            <g id="dcd-sig-grid"></g>
+
+            <!-- from line -->
+            <line x1="540" y1="528" x2="940" y2="528" stroke="#13110d" stroke-width="0.6" stroke-dasharray="2 3" opacity="0.3"/>
+            <text class="dcd__inside-kicker mono" x="540" y="552">— FROM —</text>
+            <text class="dcd__inside-from" id="dcd-svg-from" x="740" y="552" text-anchor="middle">the room</text>
+          </g>
+        </svg>
+
+        <!-- overlay flourish -->
+        <div class="dcd__shine" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section class="dcd__sign" aria-label="Sign the card">
+      <button type="button" class="dcd__cta" id="dcd-sign" aria-label="Sign the card">
+        <span class="dcd__cta-glyph" aria-hidden="true">✒︎</span>
+        <span class="dcd__cta-label">SIGN THE CARD</span>
+        <span class="dcd__cta-kbd mono">SPACE / ENTER</span>
+      </button>
+      <p class="dcd__cta-note mono" id="dcd-note">— ready · noun #— —</p>
+      <p class="dcd__cta-meta mono" id="dcd-meta">your signatures: <strong>0</strong> · room signatures: <strong>—</strong></p>
+    </section>
+
+    <section class="dcd__customize" aria-label="Customize the card">
+      <h2 class="dcd__h mono">★ CUSTOMIZE</h2>
+      <div class="dcd__inputs">
+        <label class="dcd__field">
+          <span class="dcd__field-label mono">FOR</span>
+          <input type="text" id="dcd-for" maxlength="40" placeholder="friend" autocomplete="off"/>
+        </label>
+        <label class="dcd__field">
+          <span class="dcd__field-label mono">FROM</span>
+          <input type="text" id="dcd-from" maxlength="40" placeholder="the room" autocomplete="off"/>
+        </label>
+        <label class="dcd__field dcd__field--wide">
+          <span class="dcd__field-label mono">A LINE (max 60 · stays in URL only)</span>
+          <input type="text" id="dcd-msg" maxlength="60" placeholder="a small note that stays in your link" autocomplete="off"/>
+        </label>
+      </div>
+      <p class="dcd__hint">Your message lives in the URL hash — never written to a server. Share the signed link to send the card.</p>
+    </section>
+
+    <section class="dcd__share" aria-label="Share the card">
+      <h2 class="dcd__h mono">★ SHARE</h2>
+      <div class="dcd__share-row">
+        <button type="button" class="dcd__btn" id="dcd-copy">copy link</button>
+        <a href="#" class="dcd__btn" id="dcd-tweet" target="_blank" rel="noopener">tweet</a>
+        <button type="button" class="dcd__btn" id="dcd-native">native share</button>
+      </div>
+      <p class="dcd__share-url mono" id="dcd-url">—</p>
+    </section>
+
+    <section class="dcd__strip" aria-label="Last 8 signatures">
+      <h2 class="dcd__h mono">★ WHO'S SIGNED · LAST 8</h2>
+      <ul class="dcd__strip-row" id="dcd-strip" role="list">
+        <li class="dcd__strip-empty mono">— waiting on the first signature —</li>
+      </ul>
+    </section>
+
+    <footer class="dcd__foot">
+      <p>Part of the Birthday Imprint — <a href="/drum-cake">/drum-cake</a> · <a href="/drum-card">/drum-card</a> · <a href="/drum-pinata">/drum-pinata</a>. The card is the slow one. Let it fill up.</p>
+      <p class="dcd__credit mono">v0.1 · 2026-04-29 · pointcast.xyz/drum-card</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  var GRID_COLS = 6;
+  var GRID_ROWS = 4;
+  var GRID_SLOTS = GRID_COLS * GRID_ROWS;
+  var GRID_X0 = 560;
+  var GRID_Y0 = 348;
+  var GRID_DX = 64;
+  var GRID_DY = 44;
+
+  var qs = function(s){ return document.querySelector(s); };
+  var stage = qs('#dcd-card');
+  var sigGrid = document.getElementById('dcd-sig-grid');
+  var stripEl = document.getElementById('dcd-strip');
+  var noteEl = document.getElementById('dcd-note');
+  var metaEl = document.getElementById('dcd-meta');
+  var btn = document.getElementById('dcd-sign');
+  var inFor = document.getElementById('dcd-for');
+  var inFrom = document.getElementById('dcd-from');
+  var inMsg = document.getElementById('dcd-msg');
+  var svgFor = document.getElementById('dcd-svg-for');
+  var svgFrom = document.getElementById('dcd-svg-from');
+  var svgMsg = document.getElementById('dcd-svg-msg');
+  var copyBtn = document.getElementById('dcd-copy');
+  var tweetA = document.getElementById('dcd-tweet');
+  var nativeBtn = document.getElementById('dcd-native');
+  var urlEl = document.getElementById('dcd-url');
+
+  function getSession() {
+    try {
+      var k='pc:session';
+      var s=localStorage.getItem(k);
+      if(!s){ s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s); }
+      return s;
+    } catch(e){ return 'dcd-' + Math.random().toString(36).slice(2,10); }
+  }
+  function hash32(s){ var h=5381; for(var i=0;i<s.length;i++) h=(h*33 + s.charCodeAt(i)) & 0x7fffffff; return h; }
+  function nounIdFor(sid){ return hash32(sid) % 1200; }
+
+  var sid = getSession();
+  var myNoun = 0;
+  try {
+    var stored = localStorage.getItem('pc:nounId');
+    myNoun = stored ? Number(stored) : nounIdFor(sid);
+  } catch(e){ myNoun = nounIdFor(sid); }
+  if (!Number.isFinite(myNoun) || myNoun < 0 || myNoun > 1199) myNoun = nounIdFor(sid);
+  try { localStorage.setItem('pc:nounId', String(myNoun)); } catch(e){}
+
+  var shortPid = '';
+  try {
+    if (window.crypto && crypto.subtle) {
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode(sid)).then(function(buf){
+        var arr = Array.from(new Uint8Array(buf)).slice(0, 4);
+        shortPid = arr.map(function(b){ return b.toString(16).padStart(2,'0'); }).join('').slice(0, 8);
+        renderNote();
+      }).catch(function(){});
+    }
+  } catch(e){}
+
+  function escapeHTML(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function softTrim(s, n){ s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) : s; }
+
+  function readParams() {
+    var url = new URL(window.location.href);
+    var forName = softTrim(url.searchParams.get('for') || 'friend', 40);
+    var fromName = softTrim(url.searchParams.get('from') || 'the room', 40);
+    var msg = '';
+    var hash = window.location.hash || '';
+    if (hash.indexOf('#m=') === 0) {
+      try { msg = softTrim(decodeURIComponent(hash.slice(3)), 60); } catch(e){ msg = ''; }
+    }
+    return { for: forName, from: fromName, msg: msg };
+  }
+
+  function setSvgText(el, text){ if (el) el.textContent = text; }
+
+  function renderCard(p) {
+    setSvgText(svgFor, p.for);
+    setSvgText(svgFrom, p.from);
+    if (svgMsg) svgMsg.textContent = p.msg ? '"' + p.msg + '"' : '— a small note from the room —';
+    inFor.value = (p.for === 'friend') ? '' : p.for;
+    inFrom.value = (p.from === 'the room') ? '' : p.from;
+    inMsg.value = p.msg || '';
+    updateShareUrl(p);
+    document.title = '/drum-card — happy birthday, ' + p.for;
+  }
+
+  function buildShareUrl(p) {
+    var url = new URL(window.location.origin + '/drum-card');
+    if (p.for && p.for !== 'friend') url.searchParams.set('for', p.for);
+    if (p.from && p.from !== 'the room') url.searchParams.set('from', p.from);
+    var s = url.toString();
+    if (p.msg) s += '#m=' + encodeURIComponent(p.msg);
+    return s;
+  }
+
+  function updateShareUrl(p) {
+    var s = buildShareUrl(p);
+    urlEl.textContent = s;
+    var tweetText = 'happy birthday, ' + p.for + ' — sign the card on PointCast';
+    tweetA.href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(tweetText) + '&url=' + encodeURIComponent(s);
+    history.replaceState(null, '', s.replace(window.location.origin, ''));
+  }
+
+  // ---- signature grid ----
+  var slotsUsed = 0;
+  var slotColors = ['#c4351c','#c9982a','#3b6e3b','#13110d','#7a1a0c','#205d83'];
+
+  function gridXY(i) {
+    var col = i % GRID_COLS;
+    var row = Math.floor(i / GRID_COLS) % GRID_ROWS;
+    return { x: GRID_X0 + col * GRID_DX, y: GRID_Y0 + row * GRID_DY };
+  }
+
+  function marginXY(i) {
+    var ringIdx = i - GRID_SLOTS;
+    var ring = Math.floor(ringIdx / 28);
+    var step = ringIdx % 28;
+    var x, y;
+    if (step < 7) { x = 540 + step * 60; y = 60 - ring * 10; }
+    else if (step < 14) { x = 940 + ring * 8; y = 90 + (step - 7) * 60; }
+    else if (step < 21) { x = 940 - (step - 14) * 60; y = 580 + ring * 10; }
+    else { x = 540 - ring * 8; y = 580 - (step - 21) * 60; }
+    if (x < 510) x = 510; if (x > 990) x = 990;
+    if (y < 36) y = 36; if (y > 588) y = 588;
+    return { x: x, y: y };
+  }
+
+  function placeSignature(seed, idx) {
+    var pos = idx < GRID_SLOTS ? gridXY(idx) : marginXY(idx);
+    var size = idx < GRID_SLOTS ? 26 : 16;
+    var rot = ((hash32(String(seed) + '-rot') % 22) - 11);
+
+    var ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    ring.setAttribute('cx', pos.x);
+    ring.setAttribute('cy', pos.y);
+    ring.setAttribute('r', size + 1);
+    ring.setAttribute('fill', '#fffaf0');
+    ring.setAttribute('stroke', slotColors[seed % slotColors.length]);
+    ring.setAttribute('stroke-width', '1.4');
+    sigGrid.appendChild(ring);
+
+    var img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', 'https://noun.pics/' + (seed % 1200) + '.svg');
+    img.setAttribute('href', 'https://noun.pics/' + (seed % 1200) + '.svg');
+    img.setAttribute('x', pos.x - size);
+    img.setAttribute('y', pos.y - size);
+    img.setAttribute('width', size * 2);
+    img.setAttribute('height', size * 2);
+    img.setAttribute('clip-path', 'circle(' + size + 'px at ' + size + 'px ' + size + 'px)');
+    img.setAttribute('transform', 'rotate(' + rot + ' ' + pos.x + ' ' + pos.y + ')');
+    img.setAttribute('class', 'dcd__sig-noun');
+    sigGrid.appendChild(img);
+
+    slotsUsed += 1;
+  }
+
+  // ---- live strip ----
+  function pushStrip(seed) {
+    var emptyEl = stripEl.querySelector('.dcd__strip-empty');
+    if (emptyEl) emptyEl.remove();
+    var li = document.createElement('li');
+    li.className = 'dcd__strip-cell';
+    li.innerHTML = '<img class="dcd__strip-noun" src="https://noun.pics/' + (seed % 1200) + '.svg" alt="signature noun #' + (seed % 1200) + '" loading="lazy"/>';
+    stripEl.prepend(li);
+    var cells = stripEl.querySelectorAll('.dcd__strip-cell');
+    if (cells.length > 8) for (var i = 8; i < cells.length; i++) cells[i].remove();
+  }
+
+  // ---- sound: pen scratch ----
+  var ac = null;
+  function ensureAC() {
+    if (!ac) {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) ac = new Ctx();
+      } catch(e){}
+    }
+    if (ac && ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function playScratch() {
+    var ctx = ensureAC();
+    if (!ctx) return;
+    var t0 = ctx.currentTime;
+    var buf = ctx.createBuffer(1, 4410, 22050);
+    var ch = buf.getChannelData(0);
+    for (var i = 0; i < ch.length; i++) {
+      var env = Math.exp(-i / 1500);
+      ch[i] = (Math.random() * 2 - 1) * 0.35 * env;
+    }
+    var src = ctx.createBufferSource(); src.buffer = buf;
+    var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+    var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+    var g = ctx.createGain(); g.gain.value = 0.18;
+    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ctx.destination);
+    src.start(t0);
+    src.stop(t0 + 0.25);
+
+    var osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = 740;
+    var og = ctx.createGain(); og.gain.value = 0; og.gain.linearRampToValueAtTime(0.04, t0 + 0.005); og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+    osc.connect(og); og.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + 0.2);
+  }
+
+  // ---- self count + room count ----
+  var myCount = 0;
+  var roomCount = 0;
+  function renderMeta() {
+    metaEl.innerHTML = 'your signatures: <strong>' + myCount + '</strong> · room signatures: <strong>' + (roomCount || '—') + '</strong>';
+  }
+  function renderNote(extra) {
+    var pid = shortPid || '—';
+    noteEl.textContent = (extra || '— ready') + ' · noun #' + myNoun + ' · pid ' + pid;
+  }
+
+  // ---- sign action ----
+  function fireSign() {
+    myCount += 1;
+    btn.classList.remove('dcd__cta--hit'); void btn.offsetWidth; btn.classList.add('dcd__cta--hit');
+    placeSignature(myNoun, slotsUsed);
+    pushStrip(myNoun);
+    playScratch();
+    renderMeta();
+    renderNote('signed');
+
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'sign', sessionId: sid, nounId: myNoun, note: 'card' })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.ok) renderNote('transmitted'); else renderNote('local-only');
+    }).catch(function(){ renderNote('offline'); });
+  }
+
+  btn.addEventListener('mousedown', function(e){ fireSign(); e.preventDefault(); });
+  btn.addEventListener('touchstart', function(e){ fireSign(); e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', function(e){
+    var t = e.target;
+    var tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea') return;
+    if (e.repeat) return;
+    if (e.code === 'Space' || e.code === 'Enter') { fireSign(); e.preventDefault(); }
+  });
+
+  // ---- live tail ----
+  var lastTs = Date.now() - 2000;
+  function tail() {
+    fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if (!data) return;
+        var events = Array.isArray(data.events) ? data.events : [];
+        if (!events.length) return;
+        lastTs = events[events.length - 1].t || Date.now();
+        events.forEach(function(e){
+          if (e.type !== 'sign') return;
+          if (e.sessionId && e.sessionId === sid) return;
+          if (Math.abs((e.t || 0) - Date.now()) < 4000 && e.pid === shortPid) return;
+          var seed = (typeof e.nounId === 'number' && e.nounId >= 0 && e.nounId < 1200)
+            ? e.nounId
+            : hash32(String(e.sessionId || e.pid || Math.random())) % 1200;
+          placeSignature(seed, slotsUsed);
+          pushStrip(seed);
+          roomCount += 1;
+          renderMeta();
+        });
+      }).catch(function(){});
+  }
+  setInterval(tail, 2200); tail();
+
+  // ---- inputs · update card live + URL ----
+  function readInputs() {
+    return {
+      for: softTrim(inFor.value.trim() || 'friend', 40),
+      from: softTrim(inFrom.value.trim() || 'the room', 40),
+      msg: softTrim(inMsg.value.trim(), 60)
+    };
+  }
+  function onChange() { var p = readInputs(); renderCard(p); }
+  [inFor, inFrom, inMsg].forEach(function(el){
+    el.addEventListener('input', onChange);
+    el.addEventListener('change', onChange);
+  });
+
+  // ---- share buttons ----
+  copyBtn.addEventListener('click', function(){
+    var p = readInputs();
+    var s = buildShareUrl(p);
+    try {
+      navigator.clipboard.writeText(s).then(function(){
+        copyBtn.textContent = 'copied ✓';
+        setTimeout(function(){ copyBtn.textContent = 'copy link'; }, 1400);
+      });
+    } catch(e){
+      copyBtn.textContent = 'select & copy';
+    }
+  });
+  nativeBtn.addEventListener('click', function(){
+    var p = readInputs();
+    var s = buildShareUrl(p);
+    if (navigator.share) {
+      navigator.share({ title: 'happy birthday, ' + p.for, text: 'sign the card', url: s }).catch(function(){});
+    } else {
+      copyBtn.click();
+    }
+  });
+
+  // ---- init ----
+  renderCard(readParams());
+  renderMeta();
+  renderNote();
+})();
+</script>
+
+<style>
+  .dcd { min-height: 100vh; padding: 12px 12px 60px; background: #f6efe1; color: #13110d; font-family: 'Inter Tight Variable', 'Inter Variable', system-ui, sans-serif; }
+  .dcd .mono { font-family: 'JetBrains Mono Variable', ui-monospace, 'JetBrains Mono', monospace; }
+
+  .dcd__head { max-width: 1080px; margin: 0 auto 18px; padding: 0 6px; }
+  .dcd__kicker { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #c4351c; }
+  .dcd__title { margin: 0 0 6px; font-family: 'Gloock', Georgia, serif; font-size: clamp(34px, 5.4vw, 60px); line-height: 1.02; color: #13110d; font-weight: 400; }
+  .dcd__title em { font-style: italic; }
+  .dcd__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #3a352b; }
+  .dcd__dek code { background: #fffaf0; padding: 1px 6px; border: 1px solid #d6cdb9; font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 12px; color: #c4351c; }
+
+  .dcd__stage { max-width: 1080px; margin: 0 auto 22px; padding: 8px; perspective: 1400px; }
+  .dcd__card {
+    position: relative;
+    width: 100%;
+    background: #fffaf0;
+    border-radius: 6px;
+    box-shadow:
+      0 1px 0 rgba(0,0,0,0.05) inset,
+      0 22px 38px -12px rgba(70, 40, 10, 0.32),
+      0 8px 18px -6px rgba(70, 40, 10, 0.18);
+    transform: rotateX(2deg);
+    transition: transform 220ms;
+  }
+  .dcd__card:hover { transform: rotateX(0deg); }
+  .dcd__svg { display: block; width: 100%; height: auto; border-radius: 6px; }
+
+  .dcd__shine { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 32%, rgba(255,255,255,0) 68%, rgba(255,255,255,0.10)); border-radius: 6px; mix-blend-mode: overlay; }
+
+  /* SVG text styles */
+  .dcd__cover-script { font-family: 'Gloock', 'Playfair Display', Georgia, serif; font-style: italic; font-size: 64px; fill: #c4351c; letter-spacing: 0.01em; }
+  .dcd__cover-kicker { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.28em; fill: #13110d; }
+  .dcd__cover-star { font-family: 'Gloock', Georgia, serif; font-size: 22px; fill: #c9982a; }
+
+  .dcd__inside-kicker { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.28em; fill: #c4351c; }
+  .dcd__inside-name { font-family: 'Gloock', Georgia, serif; font-style: italic; font-size: 50px; fill: #13110d; }
+  .dcd__inside-greeting { font-family: 'Gloock', Georgia, serif; font-style: italic; font-size: 36px; fill: #c4351c; letter-spacing: 0.01em; }
+  .dcd__inside-from { font-family: 'Gloock', Georgia, serif; font-style: italic; font-size: 22px; fill: #13110d; }
+  .dcd__inside-msg { margin: 0; padding: 0 18px; font-family: 'Gloock', Georgia, serif; font-style: italic; font-size: 17px; line-height: 1.45; color: #3a352b; text-align: center; }
+
+  .dcd__sig-noun { transition: transform 200ms; }
+
+  /* Sign CTA */
+  .dcd__sign { max-width: 1080px; margin: 0 auto 22px; padding: 24px 18px; background: #fffaf0; border: 2px solid #13110d; border-radius: 6px; display: flex; flex-direction: column; align-items: center; gap: 12px; box-shadow: 4px 6px 0 0 #c4351c; }
+  .dcd__cta { background: linear-gradient(180deg, #c4351c 0%, #9c2814 100%); color: #fffaf0; border: 3px solid #13110d; border-radius: 10px; padding: 22px 36px; font-family: 'Inter Tight Variable', 'Inter Variable', system-ui, sans-serif; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 18px; box-shadow: 4px 6px 0 0 #13110d; transition: transform 100ms, box-shadow 100ms; }
+  .dcd__cta:hover { filter: brightness(1.05); }
+  .dcd__cta:active { transform: translate(2px, 3px); box-shadow: 1px 2px 0 0 #13110d; }
+  .dcd__cta--hit { animation: dcd-hit 220ms ease-out; }
+  @keyframes dcd-hit { 0% { transform: scale(1); } 35% { transform: scale(0.95); filter: brightness(1.2); } 100% { transform: scale(1); } }
+  .dcd__cta-glyph { font-size: 32px; line-height: 1; color: #fffaf0; }
+  .dcd__cta-label { font-size: clamp(20px, 2.4vw, 28px); letter-spacing: 0.16em; }
+  .dcd__cta-kbd { font-size: 9px; letter-spacing: 0.22em; padding: 2px 8px; background: #13110d; color: #fffaf0; border-radius: 4px; }
+
+  .dcd__cta-note { margin: 0; font-size: 11px; letter-spacing: 0.16em; color: #5f5e5a; min-height: 14px; text-transform: uppercase; }
+  .dcd__cta-meta { margin: 0; font-size: 11px; color: #3a352b; }
+  .dcd__cta-meta strong { color: #c4351c; }
+
+  /* Customize */
+  .dcd__customize { max-width: 1080px; margin: 0 auto 18px; padding: 18px; background: #fffaf0; border: 1.5px dashed #c4351c; border-radius: 6px; }
+  .dcd__h { margin: 0 0 12px; font-size: 11px; letter-spacing: 0.32em; color: #c4351c; text-transform: uppercase; }
+  .dcd__inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .dcd__field { display: flex; flex-direction: column; gap: 4px; }
+  .dcd__field--wide { grid-column: 1 / -1; }
+  .dcd__field-label { font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: #5f5e5a; }
+  .dcd__field input { padding: 10px 12px; font-family: 'Inter Tight Variable', 'Inter Variable', system-ui, sans-serif; font-size: 15px; color: #13110d; background: #f6efe1; border: 1.5px solid #13110d; border-radius: 4px; outline: none; transition: border-color 120ms; }
+  .dcd__field input:focus { border-color: #c4351c; }
+  .dcd__hint { margin: 12px 0 0; font-size: 12px; line-height: 1.4; color: #5f5e5a; }
+
+  /* Share */
+  .dcd__share { max-width: 1080px; margin: 0 auto 18px; padding: 18px; background: #fffaf0; border: 1.5px solid #13110d; border-radius: 6px; }
+  .dcd__share-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dcd__btn { padding: 10px 16px; background: #13110d; color: #fffaf0; border: 2px solid #13110d; border-radius: 4px; font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; text-decoration: none; cursor: pointer; transition: background 120ms, color 120ms; }
+  .dcd__btn:hover { background: #c4351c; border-color: #c4351c; }
+  .dcd__share-url { margin: 12px 0 0; padding: 8px 10px; font-size: 11px; line-height: 1.4; color: #3a352b; background: #f6efe1; border: 1px solid #d6cdb9; border-radius: 4px; word-break: break-all; }
+
+  /* Strip */
+  .dcd__strip { max-width: 1080px; margin: 0 auto 18px; padding: 18px; background: #fffaf0; border: 1.5px solid #d6cdb9; border-radius: 6px; }
+  .dcd__strip-row { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  .dcd__strip-cell { width: 44px; height: 44px; border-radius: 50%; background: #f6efe1; border: 1.5px solid #c4351c; overflow: hidden; flex-shrink: 0; }
+  .dcd__strip-noun { width: 100%; height: 100%; display: block; }
+  .dcd__strip-empty { font-size: 11px; letter-spacing: 0.18em; color: #8a8378; padding: 10px 0; text-transform: uppercase; }
+
+  /* Footer */
+  .dcd__foot { max-width: 1080px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #d6cdb9; font-size: 12px; line-height: 1.5; color: #5f5e5a; }
+  .dcd__foot a { color: #c4351c; }
+  .dcd__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #8a8378; }
+
+  @media (max-width: 720px) {
+    .dcd__inputs { grid-template-columns: 1fr; }
+    .dcd__cta { padding: 18px 22px; gap: 12px; }
+    .dcd__cta-glyph { font-size: 26px; }
+  }
+</style>
