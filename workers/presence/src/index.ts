@@ -103,6 +103,10 @@ interface ChatEntry {
   msg: string;
   at: number; // server ms
   sid: string; // first 8 chars of session id — stable-per-visitor grouping
+  // Phase 3 — sender's currentPath at send time. Snapshotted so the
+  // client can scope the WIRE panel to "this room" vs "all"; subsequent
+  // peer navigation does not retroactively re-tag this entry.
+  room?: string;
 }
 
 /**
@@ -518,6 +522,11 @@ export class PresenceRoom {
       at: Date.now(),
       sid: sessionId.slice(0, 8),
     };
+    // Phase 3 — stamp the sender's room at send time. Server-derived from
+    // the visitor's last-known currentPath; client cannot spoof the room
+    // tag this way. Falls back to undefined when the visitor hasn't
+    // emitted a currentPath yet.
+    if (visitor.currentPath) entry.room = visitor.currentPath;
     this.chatLog.push(entry);
     if (this.chatLog.length > MAX_CHAT_BUFFER) {
       this.chatLog.splice(0, this.chatLog.length - MAX_CHAT_BUFFER);

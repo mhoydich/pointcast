@@ -22,7 +22,7 @@
  *     agents: number,
  *     sessions: Array<PublicSessionView>,  // every viewer sees this
  *     peers?: Array<PeerView>,             // active cursors (last 20s)
- *     chat?: Array<ChatEntry>,             // ring buffer, last 20 messages
+ *     chat?: Array<ChatEntry>,             // ring buffer; each entry carries sender's room? (their currentPath at send time)
  *     waves?: Array<WaveEntry>,            // directional waves, TTL 8s
  *     you?: PrivateSessionView,            // only for the session-matched viewer
  *   }

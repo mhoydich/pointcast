@@ -21,6 +21,9 @@
     <span class="here-strip__kicker mono">
       <span class="here-strip__kicker-label">PEOPLES HERE</span>
       <span class="here-strip__kicker-sub" id="here-count">· 1 ·</span>
+      {/* Phase 3 — per-room count: "ROOM 2" highlights when this page
+          has co-room peers. Hidden when only YOU are on this page. */}
+      <span class="here-strip__room-count" id="here-room-count" hidden></span>
     </span>
 
     <ol class="here-strip__slots" id="here-slots">
@@ -124,6 +127,14 @@
   {/* Phase 3 — WIRE panel. Live chat ring buffer surfaced from the DO. */}
   <div class="here-strip__panel here-strip__panel--wire" id="here-wire-panel" hidden>
     <p class="here-panel__eyebrow mono">WIRE · live · last 20 messages</p>
+    {/* Phase 3 — room/all tabs. Filters wireLog client-side using
+        each chat entry's `room` (sender's currentPath at send time). */}
+    <div class="here-wire__tabs mono" role="tablist">
+      <button type="button" class="here-wire__tab" id="here-wire-tab-room" role="tab" aria-selected="true" data-scope="room">THIS ROOM</button>
+      <button type="button" class="here-wire__tab" id="here-wire-tab-all" role="tab" aria-selected="false" data-scope="all">ALL</button>
+      <span class="here-wire__tab-spacer" aria-hidden="true"></span>
+      <span class="here-wire__tab-room" id="here-wire-tab-room-name"></span>
+    </div>
     <ol class="here-wire__log" id="here-wire-log" role="log" aria-live="polite"></ol>
     <form class="here-wire__form" id="here-wire-form">
       <input
@@ -291,6 +302,11 @@
       }
       slot.classList.add('here-slot--occupied');
       slot.dataset.kind = session.kind || 'human';
+      // Phase 3 — co-room: peer is on the same path as the viewer. We
+      // toggle a class so CSS can give them a distinct ring/glow.
+      var sameRoom = !!session.currentPath && session.currentPath === window.location.pathname;
+      if (sameRoom) slot.classList.add('here-slot--coroom');
+      else slot.classList.remove('here-slot--coroom');
       // Stash the session JSON on the slot so the click handler can read it.
       try { slot.dataset.session = JSON.stringify(session); } catch (e) {}
       slot.setAttribute('role', 'button');
@@ -477,12 +493,40 @@
       return others;
     }
 
+    var lastPresencePayload = null;
     function paintPresence(payload) {
+      if (payload) lastPresencePayload = payload;
       var humans = Number(payload && payload.humans) || 0;
       var agents = Number(payload && payload.agents) || 0;
       var total = Math.max(1, humans + agents);
       var others = otherSessionsFromPayload(payload);
+      // Phase 3 — co-room first. Sort other-peers so visitors on the
+      // same page bubble to the front of the avatar row. Stable sort
+      // to preserve joinedAt order within each group.
+      var here = window.location.pathname;
+      var coRoomCount = 0;
+      for (var k = 0; k < others.length; k++) {
+        if (others[k] && others[k].currentPath === here) coRoomCount++;
+      }
+      others = others.slice().sort(function (a, b) {
+        var ar = (a && a.currentPath === here) ? 0 : 1;
+        var br = (b && b.currentPath === here) ? 0 : 1;
+        return ar - br;
+      });
       if (countEl) countEl.textContent = '· ' + total + ' ·';
+      // Phase 3 — per-room chip. "ROOM 2" when there's at least one
+      // co-room peer; hidden otherwise. YOU is implicit (we always count
+      // ourselves, so the displayed value is `coRoomCount + 1`).
+      var roomCountEl = document.getElementById('here-room-count');
+      if (roomCountEl) {
+        if (coRoomCount > 0) {
+          roomCountEl.hidden = false;
+          roomCountEl.textContent = '· ROOM ' + (coRoomCount + 1);
+        } else {
+          roomCountEl.hidden = true;
+          roomCountEl.textContent = '';
+        }
+      }
       for (var i = 0; i < otherSlots.length; i++) {
         if (i < others.length) paintSlot(otherSlots[i], others[i]);
         else clearSlot(otherSlots[i]);
@@ -654,8 +698,35 @@
     var wireLog = document.getElementById('here-wire-log');
     var wireForm = document.getElementById('here-wire-form');
     var wireInput = document.getElementById('here-wire-input');
+    var wireTabRoom = document.getElementById('here-wire-tab-room');
+    var wireTabAll = document.getElementById('here-wire-tab-all');
+    var wireTabRoomName = document.getElementById('here-wire-tab-room-name');
     var seenChatAt = 0;
     var unreadChat = 0;
+    // Phase 3 — WIRE scope: 'room' (default — only this page's chat)
+    // or 'all' (every chat in the ring buffer).
+    var wireScope = 'room';
+    var lastChatPayload = []; // stash so we can re-render on tab switch
+
+    function setWireScope(next) {
+      wireScope = next === 'all' ? 'all' : 'room';
+      if (wireTabRoom) wireTabRoom.setAttribute('aria-selected', String(wireScope === 'room'));
+      if (wireTabAll) wireTabAll.setAttribute('aria-selected', String(wireScope === 'all'));
+      paintChat(lastChatPayload);
+    }
+    if (wireTabRoom) wireTabRoom.addEventListener('click', function () { setWireScope('room'); });
+    if (wireTabAll) wireTabAll.addEventListener('click', function () { setWireScope('all'); });
+    // Show the current room name in the tab bar so the visitor knows what
+    // "THIS ROOM" means.
+    if (wireTabRoomName) wireTabRoomName.textContent = window.location.pathname;
+    document.addEventListener('astro:after-swap', function () {
+      if (wireTabRoomName) wireTabRoomName.textContent = window.location.pathname;
+      // Re-render filtered log against the new room.
+      paintChat(lastChatPayload);
+      // Re-paint presence so co-room highlight + room count + slot
+      // sort reflect the new pathname.
+      if (lastPresencePayload) paintPresence(lastPresencePayload);
+    });
 
     if (wireBtn && wirePanel) {
       wireBtn.addEventListener('click', function () {
@@ -682,12 +753,23 @@
     }
 
     function paintChat(chat) {
-      if (!wireLog || !Array.isArray(chat)) return;
-      // Render the full ring buffer to keep DOM in sync — ≤20 entries.
+      if (!wireLog) return;
+      if (Array.isArray(chat)) lastChatPayload = chat;
+      var source = lastChatPayload || [];
+      // Apply scope filter. We compare entry.room against the viewer's
+      // current pathname; entries without `room` (older messages or
+      // pre-Phase-3 senders) are treated as "all"-only — they only show
+      // up under the ALL tab so we don't leak cross-room context.
+      var here = window.location.pathname;
+      var filtered = wireScope === 'all'
+        ? source
+        : source.filter(function (c) { return c && c.room === here; });
+      // Render the filtered list. Cap to last 20 entries (DO already
+      // ring-buffers to that depth, but defensive).
       wireLog.innerHTML = '';
       var newer = 0;
-      for (var i = 0; i < chat.length; i++) {
-        var c = chat[i]; if (!c || typeof c.at !== 'number') continue;
+      for (var i = 0; i < filtered.length; i++) {
+        var c = filtered[i]; if (!c || typeof c.at !== 'number') continue;
         var li = document.createElement('li');
         li.className = 'here-wire__entry' + (Number(c.nounId) === Number(nounId) ? ' here-wire__entry--mine' : '');
         var who = document.createElement('span');
@@ -698,13 +780,34 @@
         msg.textContent = String(c.msg || '');
         li.appendChild(who);
         li.appendChild(msg);
+        // In ALL scope, decorate with the sender's room so cross-room
+        // context is legible.
+        if (wireScope === 'all' && c.room) {
+          var room = document.createElement('span');
+          room.className = 'here-wire__room mono';
+          room.textContent = c.room;
+          li.appendChild(room);
+        }
         wireLog.appendChild(li);
-        if (c.at > seenChatAt && Number(c.nounId) !== Number(nounId)) newer++;
       }
-      // Auto-scroll the log to the most recent entry.
+      // Empty-state hint when filtered.
+      if (!filtered.length && wireScope === 'room') {
+        var li2 = document.createElement('li');
+        li2.className = 'here-wire__empty mono';
+        li2.textContent = 'no messages from this room yet — try ALL';
+        wireLog.appendChild(li2);
+      }
+      // Auto-scroll.
       try { wireLog.scrollTop = wireLog.scrollHeight; } catch (e) {}
-      // Update unread badge when WIRE is closed.
-      if (chat.length) seenChatAt = chat[chat.length - 1].at;
+      // Unread badge logic — counts new messages from peers regardless
+      // of current scope filter (so visitors don't miss cross-room pings
+      // they care about). Source for `newer` is the unfiltered chat.
+      for (var k = 0; k < source.length; k++) {
+        var s = source[k];
+        if (!s || typeof s.at !== 'number') continue;
+        if (s.at > seenChatAt && Number(s.nounId) !== Number(nounId)) newer++;
+      }
+      if (source.length) seenChatAt = source[source.length - 1].at;
       if (newer > 0 && wirePanel && wirePanel.hidden) {
         unreadChat += newer;
         if (wireBadge) { wireBadge.hidden = false; wireBadge.textContent = String(unreadChat); }
@@ -1206,6 +1309,94 @@
     flex-shrink: 0;
   }
   .here-focus__close:hover { background: #f5f2ea; color: #12110E; }
+
+  /* Phase 3 — per-room count chip in the kicker. "ROOM 2" appears
+     next to the global count when there's at least one co-room peer. */
+  .here-strip__room-count {
+    display: inline-block;
+    margin-left: 6px;
+    color: #F59F00;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .here-strip__room-count[hidden] { display: none; }
+
+  /* Phase 3 — co-room peer highlight. Bolder ring + saturated fill so
+     visitors on the same page as YOU are visually grouped. */
+  .here-slot--coroom .here-slot__noun--other {
+    border-color: #F59F00 !important;
+    box-shadow: 0 0 0 2px rgba(245, 159, 0, 0.28), 0 0 0 1px #F59F00 inset;
+  }
+  .here-slot--coroom {
+    background: rgba(255, 241, 168, 0.45) !important;
+  }
+  /* Co-room peers sit in front of the row — the JS sort handles order;
+     this gives them a subtle lift so the eye finds them instantly. */
+  .here-slot--coroom::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 1px dashed rgba(245, 159, 0, 0.5);
+    border-radius: 6px;
+    pointer-events: none;
+  }
+
+  /* Phase 3 — WIRE tabs (THIS ROOM / ALL). */
+  .here-wire__tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0 4px;
+    border-bottom: 1px solid #d6d4cd;
+  }
+  .here-wire__tab {
+    background: transparent;
+    border: 1px solid #d6d4cd;
+    color: #5f5e5a;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .here-wire__tab[aria-selected="true"] {
+    background: #534AB7;
+    border-color: #534AB7;
+    color: #FFF1A8;
+  }
+  .here-wire__tab:hover { background: #FFF1A8; color: #534AB7; }
+  .here-wire__tab[aria-selected="true"]:hover { background: #F59F00; border-color: #F59F00; color: #fff; }
+  .here-wire__tab-spacer { flex: 1; }
+  .here-wire__tab-room {
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    color: #534AB7;
+    background: #FFF1A8;
+    padding: 2px 6px;
+    border: 1px solid rgba(83, 74, 183, 0.42);
+    border-radius: 3px;
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Cross-room marker on chat entries when ALL scope is active. */
+  .here-wire__entry .here-wire__room {
+    grid-column: 2;
+    margin-left: auto;
+    color: #8b8a85;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+  }
+  .here-wire__empty {
+    padding: 6px 0;
+    color: #8b8a85;
+    font-style: italic;
+    text-align: center;
+  }
 
   /* Phase 3 — focus-card action row. Wraps JOIN + WAVE + FOLLOW. */
   .here-focus__actions {
