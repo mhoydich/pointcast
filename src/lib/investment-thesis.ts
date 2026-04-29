@@ -1,14 +1,17 @@
-export const INVESTMENT_THESIS_VERSION = '2026-04-29';
+export const INVESTMENT_THESIS_VERSION = '2026-04-29-v2';
 
 export const INVESTMENT_THESIS = {
-  name: 'Nouns Nation Builder Investment Thesis',
+  name: 'Nouns Nation Builder Investment Thesis V2',
   url: 'https://pointcast.xyz/investment-thesis',
   json: 'https://pointcast.xyz/investment-thesis.json',
+  roadmap: 'https://pointcast.xyz/nouns-nation/roadmap',
+  roadmapJson: 'https://pointcast.xyz/nouns-nation/roadmap.json',
+  deck: 'https://pointcast.xyz/decks/nouns-nation-builder-roadmap-v2.pptx',
   date: INVESTMENT_THESIS_VERSION,
   decision: 'Invest, but milestone-gated.',
   instrument: 'SAFE plus sponsor, grant, and cloud-credit stack before any token or DAO financing.',
   summary:
-    'Nouns Nation Builder is investable as an agent-native media venue first, a Nounish game studio second, and a future onchain community protocol third. The wedge is not another NFT game. The wedge is a live, AI-readable sports and culture venue where humans root, agents scout, and every output becomes a reusable artifact.',
+    'Nouns Nation Builder is investable as an agent-native media venue first, a Nounish game studio second, and a future onchain community protocol third. V2 adds the venue ladder: browser room, living-room TV, partner venues, and eventually ticketed live finals.',
   allocation: {
     firstCheck: '$50k-$75k for 90 days of product proof.',
     expansionCeiling: 'Up to $250k after retention proof, agent-output proof, and one sponsor or ecosystem funding partner.',
@@ -20,7 +23,7 @@ export const thesisPillars = [
   {
     title: 'What I am buying',
     body:
-      'A small, fast studio building a Nounish nation: automated leagues, watch-party pages, agent task boards, MCP tools, manifests, recaps, posters, and eventually a Builder DAO around the best rituals.',
+      'A small, fast studio building a Nounish nation: automated leagues, watch-party pages, TV cast surfaces, agent task boards, MCP tools, manifests, recaps, posters, venue kits, and eventually a Builder DAO around the best rituals.',
   },
   {
     title: 'Why it can work',
@@ -43,7 +46,7 @@ export const whyNow = [
   {
     title: 'Agents are becoming an operating layer',
     body:
-      'OpenAI described its April 2026 Agents SDK direction around MCP, skills, shell tools, patch tools, subagents, and code-mode workflows as normal builder primitives.',
+      'OpenAI described its April 2026 Agents SDK direction around MCP, skills, shell tools, patch tools, sandbox execution, subagents, and code-mode workflows as normal builder primitives.',
   },
   {
     title: 'MCP gives agents a doorway',
@@ -53,7 +56,7 @@ export const whyNow = [
   {
     title: 'PointCast has shipped the shape',
     body:
-      'The latest GitHub work is not only content. It is a standalone Nouns Nation hub, federation manifest, Battle Desk V2, rooms, WIRE, FOLLOW, agent visitor centers, Battler manifests, and Nouns Nation agent claim queues.',
+      'The latest GitHub work is not only content. It is a standalone Nouns Nation hub, Battle Desk V3, Sponsorship Desk, federation manifest, co-presence, WIRE, FOLLOW, agent visitor centers, media catalogs, agent activity broadcasts, and Nouns Nation agent claim queues.',
   },
 ] as const;
 
@@ -61,7 +64,7 @@ export const capitalPlan = [
   {
     label: 'First check',
     body:
-      '$50k-$75k for 90 days of product proof: Nouns Nation hub, Battler TV, Agent Bench, scorebook, sponsor kit, and distribution tests.',
+      '$50k-$75k for 90 days of product proof: Nouns Nation hub, Battler TV, Agent Bench, scorebook, roadmap deck, sponsor kit, and distribution tests.',
   },
   {
     label: 'Expansion check',
@@ -98,38 +101,66 @@ export const returnPaths = [
 export const githubSignals = [
   {
     label: 'MAIN',
-    title: 'PointCast main is moving fast',
+    title: 'PointCast main is current at ade9f31',
     body:
-      'This thesis was rebased onto origin/main at 3b34c6b on Apr 29, after a run that added /lantern and immediately followed a fresh Nouns Nation area rollout.',
-    url: 'https://github.com/mhoydich/pointcast/commit/3b34c6b',
+      'V2 was rebased onto the latest origin/main on Apr 29. The freshest product receipt fixes MCP broadcasts so /drum-agent surfaces real agent activity.',
+    url: 'https://github.com/mhoydich/pointcast/commit/ade9f31',
+  },
+  {
+    label: 'SPONSOR',
+    title: 'Sponsorship Desk is now on main',
+    body:
+      'Commit f931c96 added the Nouns Nation sponsorship desk, which gives the investment thesis a concrete package for revenue tests before larger capital.',
+    url: 'https://github.com/mhoydich/pointcast/commit/f931c96',
+  },
+  {
+    label: 'BATTLE',
+    title: 'Battle Desk V3 is live on main',
+    body:
+      'Commit 1422c7e added Battle Desk V3 for the Nouns Nation arena, extending the weekly ritual layer the roadmap is built around.',
+    url: 'https://github.com/mhoydich/pointcast/commit/1422c7e',
+  },
+  {
+    label: 'BUILD',
+    title: 'Main also carries the build fix',
+    body:
+      'Commit 4da250b landed dock-kit and federation-peers data so main builds cleanly before this roadmap ships.',
+    url: 'https://github.com/mhoydich/pointcast/commit/4da250b',
+  },
+  {
+    label: 'BIRTHDAY',
+    title: 'The imprint surface keeps expanding',
+    body:
+      'Commit e1a1e39 added the drum-birthday imprint with four collaborative birthday surfaces.',
+    url: 'https://github.com/mhoydich/pointcast/commit/e1a1e39',
+  },
+  {
+    label: 'PRESENCE',
+    title: 'Presence is becoming product',
+    body:
+      'Commit cf363fb added VIBE, BRING, and cursor speech bubbles. A venue needs people to feel each other before it can sell repeat rituals.',
+    url: 'https://github.com/mhoydich/pointcast/commit/cf363fb',
+  },
+  {
+    label: 'PRESS',
+    title: 'Media catalogs are now shipping',
+    body:
+      'Commit d28a2c2 added /drum-press with eight imprints and forty-seven titles. The broader PointCast studio can package archives, not only live toys.',
+    url: 'https://github.com/mhoydich/pointcast/commit/d28a2c2',
   },
   {
     label: 'NATION',
     title: 'The investable surface now has a hub',
     body:
-      'Commit 954d1b5 added /nouns-nation, /nouns-nation.json, federation strategy, a join path, and Battle Desk V2. That turns the idea into a named venue with an intake shape.',
+      'Commit 954d1b5 added /nouns-nation, /nouns-nation.json, federation strategy, a join path, and the first Battle Desk V2 frame. That turned the idea into a named venue with an intake shape.',
     url: 'https://github.com/mhoydich/pointcast/commit/954d1b5',
-  },
-  {
-    label: 'ROOMS',
-    title: 'Presence is becoming product',
-    body:
-      'Fresh GitHub commits add room-scoped WIRE, co-room highlighting, WAVE, and FOLLOW. That matters because a venue needs social presence before it can sell repeat rituals.',
-    url: 'https://github.com/mhoydich/pointcast/commit/16ef4176b4acee7674d73d945d081005284b9457',
   },
   {
     label: 'BATTLER',
     title: 'Nouns Nation is no longer just a toy',
     body:
-      'Recent Battler work includes Battle Desk V2, v34 desk language, boss fields, a two-week league, Nouns Bowl framing, Watch Party Kit, Recap Studio, Desk Wall, poster wall, and TV mode.',
+      'Recent Battler work now includes Battle Desk V3, Battle Desk V2, v34 desk language, boss fields, a two-week league, Nouns Bowl framing, Watch Party Kit, Recap Studio, Desk Wall, poster wall, and TV mode.',
     url: 'https://pointcast.xyz/nouns-nation/',
-  },
-  {
-    label: 'AGENTS',
-    title: 'The agent surface is investable',
-    body:
-      'The agent claim queue gives Claude, ChatGPT, Codex, Cursor, and MCP clients concrete jobs: scout, host, commentate, QA, keep score, propose rules, and route viewers.',
-    url: 'https://github.com/mhoydich/pointcast/commit/2036287772f94abfae2d9cf478f086cf3d92010f',
   },
 ] as const;
 
@@ -216,14 +247,39 @@ export const thesisSources = [
     note: 'MCP as model-to-tool connection standard.',
   },
   {
+    label: 'Anthropic MCP Connector',
+    url: 'https://docs.anthropic.com/en/docs/agents-and-tools/mcp-connector',
+    note: 'Remote MCP connection path from the Messages API.',
+  },
+  {
     label: 'Cloudflare Remote MCP',
     url: 'https://developers.cloudflare.com/agents/guides/remote-mcp-server/',
     note: 'Remote MCP server deployment pattern.',
   },
   {
+    label: 'GitHub Copilot Coding Agent',
+    url: 'https://docs.github.com/copilot/concepts/coding-agent/about-copilot-coding-agent',
+    note: 'Background coding agent, GitHub Actions environment, and PR review loop.',
+  },
+  {
+    label: 'Nouns Nation Roadmap V2',
+    url: 'https://pointcast.xyz/nouns-nation/roadmap',
+    note: 'Three-year roadmap and deck for TV, venues, and live finals.',
+  },
+  {
     label: 'PointCast Latest Main Commit',
-    url: 'https://github.com/mhoydich/pointcast/commit/3b34c6b',
+    url: 'https://github.com/mhoydich/pointcast/commit/ade9f31',
     note: 'Latest checked origin/main before publishing this thesis.',
+  },
+  {
+    label: 'Nouns Nation Sponsorship Desk',
+    url: 'https://github.com/mhoydich/pointcast/commit/f931c96',
+    note: 'Sponsorship desk commit landed immediately before Roadmap V2.',
+  },
+  {
+    label: 'Nouns Nation Battle Desk V3',
+    url: 'https://github.com/mhoydich/pointcast/commit/1422c7e',
+    note: 'Battle Desk V3 commit for the current arena surface.',
   },
   {
     label: 'Nouns Nation Area Commit',

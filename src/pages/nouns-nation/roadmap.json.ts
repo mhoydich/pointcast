@@ -1,22 +1,14 @@
 import type { APIRoute } from 'astro';
 import {
-  INVESTMENT_THESIS,
-  capitalPlan,
-  diligencePlan,
-  githubSignals,
-  returnPaths,
-  risks,
-  thesisPillars,
-  thesisSources,
-  whyNow,
-} from '../lib/investment-thesis';
-import {
   NOUNS_NATION_ROADMAP,
   aiToolingCurve,
   capitalGatesV2,
+  ninetyDayMoves,
+  roadmapGithubSignals,
+  roadmapSources,
   threeYearRoadmap,
   venueLadder,
-} from '../lib/nouns-nation-roadmap';
+} from '../../lib/nouns-nation-roadmap';
 
 export const GET: APIRoute = async () => {
   return new Response(
@@ -24,22 +16,16 @@ export const GET: APIRoute = async () => {
       {
         $schema: 'https://pointcast.xyz/for-agents',
         generatedAt: new Date().toISOString(),
-        thesis: INVESTMENT_THESIS,
         roadmap: NOUNS_NATION_ROADMAP,
-        pillars: thesisPillars,
-        whyNow,
         aiToolingCurve,
         threeYearRoadmap,
         venueLadder,
-        capitalPlan,
         capitalGates: capitalGatesV2,
-        returnPaths,
-        githubSignals,
-        risks,
-        diligencePlan,
-        sources: thesisSources,
+        ninetyDayMoves,
+        githubSignals: roadmapGithubSignals,
+        sources: roadmapSources,
         disclaimer:
-          'Strategic investment memo only. Not personalized financial advice, a public securities offering, or legal advice.',
+          'Strategic roadmap only. Not personalized financial advice, a public securities offering, or legal advice.',
       },
       null,
       2,
@@ -48,6 +34,7 @@ export const GET: APIRoute = async () => {
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'public, max-age=300',
+        'access-control-allow-origin': '*',
       },
     },
   );

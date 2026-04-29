@@ -5,6 +5,8 @@ const urls = [
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
   ['https://pointcast.xyz/investment-thesis', 'weekly', '0.85'],
   ['https://pointcast.xyz/investment-thesis.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/nouns-nation/roadmap', 'weekly', '0.85'],
+  ['https://pointcast.xyz/nouns-nation/roadmap.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/for-agents', 'weekly', '0.9'],
   ['https://pointcast.xyz/agents.json', 'daily', '0.9'],
   ['https://pointcast.xyz/.well-known/agents.json', 'daily', '0.8'],
