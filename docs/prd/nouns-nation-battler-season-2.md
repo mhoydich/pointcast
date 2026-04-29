@@ -103,6 +103,7 @@ The TV cast should periodically explain the table like a tiny sports desk:
 - Add a Results Desk MCP so Claude/Cowork can track the league from Desk Wall snapshots or copied recap text. Shipped in V32.
 - Add Desk Wall watch frames for report card, scoreboard, story desk, and agent scorebook views, plus a copyable Claude/Cowork scorebook prompt. Shipped in V33.
 - Add a claim queue of timeboxed tasks so visiting agents can pick a concrete watch, MCP, creative, design, audience, or QA job. Shipped in V34.
+- Add an Agent Sideline Desk with local task claiming, Agent Noun identity, report cards, asset briefs, sponsor slots, product concepts, and a participant rewards draft. Shipped in V35.
 
 ### Agent Bench
 
@@ -117,6 +118,9 @@ The league should be legible to visiting AI agents, not just humans:
 - Support Cowork modes: scorekeeper, color commentator, commissioner, and group-chat host.
 - Expose snapshot-backed watch frames so agents can open the right view for scorekeeping, commentary, hosting, or sharing.
 - Expose a claim queue with task packs that name start links, steps, expected output, proof, and share format.
+- Expose a Sideline Desk where an agent can claim a task, generate a report card, produce poster/ad/art/product/sponsor-read briefs, copy a TV ticker line, and save local reports.
+- Publish an asset factory and prototype participant rewards model for accepted creative, QA, hosting, sponsor, and watch-party contributions.
+- Keep yield language clear: rewards/accounting draft only, not a promised investment return.
 
 ### Commissioner's Cup
 
@@ -177,6 +181,7 @@ Explore a mid-season knockout bracket:
 - Add Agent Bench JSON, human page, `/agents.json` discovery, and MCP Battler tools. Shipped in V31.
 - Add Results Desk MCP tools and resource for snapshot/recap-based scorekeeping. Shipped in V32.
 - Add snapshot-backed Desk Wall `view=card`, `view=scoreboard`, `view=story`, and `view=agent` modes plus a Watch Frames rail. Shipped in V33.
+- Add Agent Sideline Desk, asset factory, sponsor/product packaging, and participant rewards draft. Shipped in V35.
 
 ## Acceptance Criteria
 
@@ -202,7 +207,9 @@ Explore a mid-season knockout bracket:
 - Normal mode exposes a Watch Now rail before the deeper operator kit.
 - Agent Bench exposes opt-in anonymous presence and concrete tasks for visiting agents.
 - Agent Bench exposes a claim queue for scorekeeping, TV direction, Cowork result tracking, brand reads, Season 2 rules, poster copy, QA, and savvy viewer review prompts.
-- MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_manifest`, and `nouns_battler_presence`.
+- Agent Sideline Desk lets visiting agents claim a task, get an Agent Noun identity, create a report card, generate an asset/product/sponsor brief, copy a ticker line, and save reports locally.
+- Agent manifests expose asset factory, business model, and participant rewards draft.
+- MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_asset_factory`, `nouns_battler_manifest`, and `nouns_battler_presence`.
 - MCP clients can call `nouns_battler_result_tracker` with a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text and receive a scorebook brief.
 - Desk Wall watch frames can be copied as snapshot-backed links for report-card, scoreboard, story-desk, or agent-scorebook viewing.
 - The Agent Scorebook frame gives Claude/Cowork a ready prompt for `nouns_battler_result_tracker`.

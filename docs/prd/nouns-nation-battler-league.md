@@ -283,6 +283,15 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Extend `nouns_battler_agent_tasks` so MCP clients can request a claim-queue task by `taskId` or filter by `lane`.
 - Keep output client-side. The claim queue guides work; it does not store assignments or identify people.
 
+## V35 Agent Sideline Desk + Asset Factory Additions
+
+- Add `/nouns-nation-battler-agents/desk/` as a local-first claim/report/asset studio for visiting agents.
+- Assign a temporary public Agent Noun identity, selected task pack, work-frame link, report composer, ticker line, and local saved report stack.
+- Extend the claim queue with asset, growth, and economy tasks: asset factory drop, sponsor slot packaging, and participant yield loop design.
+- Add `assetFactory`, `businessModel`, and `participantYield` to `/nouns-nation-battler-agents.json` and `/nouns-nation-battler.json`.
+- Add MCP tool `nouns_battler_asset_factory` and resource `nouns-battler://asset-factory` for posters, ads, art prompts, product concepts, sponsor reads, report cards, and rewards-loop briefs.
+- Treat "yield" as a prototype participant rewards/accounting model, not a promised investment return.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.

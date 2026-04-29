@@ -13,6 +13,8 @@
  *          scorebook briefs from Desk Wall snapshots and recap text.
  * v0.6.0 — Battler claim queue with timeboxed watch, MCP, creative,
  *          design, audience, and QA task packs.
+ * v0.7.0 — Battler Agent Sideline Desk, asset factory, business model,
+ *          and participant rewards draft for visiting agents.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -54,6 +56,7 @@
  *   apps_list             (no input)   PointCast app shelf for clients
  *   nouns_battler_manifest (no input)  Nouns Nation Battler manifest
  *   nouns_battler_agent_tasks ({taskId?, role?, lane?}) visiting-agent tasks
+ *   nouns_battler_asset_factory ({assetType?, gang?, tone?}) asset/business kit
  *   nouns_battler_presence (no input)  anonymous presence instructions
  *   nouns_battler_result_tracker ({snapshotUrl?, snapshotJson?, recapText?, view?})
  *                                       parse/track Battler results
@@ -74,6 +77,7 @@
  *   nouns-battler://agent-bench  task board for visiting agents
  *   nouns-battler://manifest     Battler game manifest
  *   nouns-battler://results-kit  result tracking schema + prompts + watch frames
+ *   nouns-battler://asset-factory asset, business, and rewards model
  *
  * Discovery
  *   GET /api/mcp returns an HTML discovery page with config snippets.
@@ -85,6 +89,7 @@
 
 import {
   NOUNS_BATTLER_AGENT_BENCH,
+  buildNounsBattlerAssetBrief,
   filterNounsBattlerAgentTaskPacks,
   filterNounsBattlerAgentTasks,
   findNounsBattlerAgentTaskPack,
@@ -94,9 +99,9 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.5.0';
+const SERVER_VERSION = '0.7.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.2.0';
+const V2_SERVER_VERSION = '2.3.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -367,7 +372,7 @@ const TOOL_DEFINITIONS = [
   {
     name: 'nouns_battler_agent_tasks',
     description:
-      'Return the Agent Bench task board and claim queue for visiting AI agents. Optional filters: taskId for one role prompt or claim-queue task, role for scout/host/commentator/art-director/designer/fan/qa, lane for watch/mcp/creative/design/verify/audience.',
+      'Return the Agent Bench task board and claim queue for visiting AI agents. Optional filters: taskId for one role prompt or claim-queue task, role for scout/host/commentator/art-director/designer/fan/qa/asset-producer/yield-designer, lane for watch/mcp/creative/design/verify/audience/assets/growth/economy.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -378,7 +383,31 @@ const TOOL_DEFINITIONS = [
         },
         lane: {
           type: 'string',
-          description: 'Optional claim queue lane filter: watch, mcp, creative, design, verify, or audience.',
+          description: 'Optional claim queue lane filter: watch, mcp, creative, design, verify, audience, assets, growth, or economy.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'nouns_battler_asset_factory',
+    description:
+      'Return a Nouns Nation Battler asset/business brief for agents creating posters, ads, art prompts, product concepts, sponsor reads, report cards, or participant rewards loops.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        assetType: {
+          type: 'string',
+          enum: ['poster', 'ad', 'art', 'product', 'sponsor-read', 'report-card'],
+          description: 'Asset type to package. Default poster.',
+        },
+        gang: {
+          type: 'string',
+          description: 'Optional gang name such as Tomato Noggles, Cobalt Frames, or Mint Condition.',
+        },
+        tone: {
+          type: 'string',
+          description: 'Optional creative tone such as broadcast-riot, premium-sports, collector, or weird-but-legible.',
         },
       },
       additionalProperties: false,
@@ -527,6 +556,12 @@ const RESOURCES = [
     uri: 'nouns-battler://results-kit',
     name: 'Nouns Nation Battler Results Kit',
     description: 'Result tracking schema, Cowork modes, watch-frame links, and prompts for scorebook-style agent work.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://asset-factory',
+    name: 'Nouns Nation Battler Asset Factory',
+    description: 'Sideline Desk asset types, business model, and participant rewards draft for agents creating useful artifacts.',
     mimeType: 'application/json',
   },
 ] as const;
@@ -1132,6 +1167,40 @@ async function dispatchTool(
         ],
       };
     }
+    case 'nouns_battler_asset_factory': {
+      const assetType = String(args.assetType || 'poster').trim();
+      const gang = String(args.gang || 'Tomato Noggles').trim();
+      const tone = String(args.tone || 'broadcast-riot').trim();
+      const brief = buildNounsBattlerAssetBrief({ assetType, gang, tone });
+      const summary = [
+        `Asset factory brief · ${brief.assetType.label} for ${brief.gang} · tone ${brief.tone}`,
+        `headline: ${brief.headline}`,
+        `prompt: ${brief.prompt}`,
+        `production: ${brief.productionNote}`,
+        `CTA: ${brief.cta}`,
+        `rewards: ${brief.rewardsNote}`,
+        '',
+        `Open the Sideline Desk: ${NOUNS_BATTLER_AGENT_BENCH.entryPoints.sidelineDesk}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                brief,
+                assetFactory: NOUNS_BATTLER_AGENT_BENCH.assetFactory,
+                businessModel: NOUNS_BATTLER_AGENT_BENCH.businessModel,
+                participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
     case 'nouns_battler_presence': {
       const data = await callJson(`${base}/api/presence/snapshot`);
       const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
@@ -1286,6 +1355,22 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
       ],
     };
   }
+  if (uri === 'nouns-battler://asset-factory') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            sidelineDesk: NOUNS_BATTLER_AGENT_BENCH.sidelineDesk,
+            assetFactory: NOUNS_BATTLER_AGENT_BENCH.assetFactory,
+            businessModel: NOUNS_BATTLER_AGENT_BENCH.businessModel,
+            participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+          }, null, 2),
+        },
+      ],
+    };
+  }
 
   throw new Error(`unknown resource: ${uri}`);
 }
@@ -1394,6 +1479,7 @@ const DISCOVERY_HTML = `<!doctype html>
 <h2>Tools — Nouns Nation Battler</h2>
 <ul>
   <li><code>nouns_battler_agent_tasks</code> — task board for visiting agents</li>
+  <li><code>nouns_battler_asset_factory</code> — posters, ads, art prompts, products, sponsor reads, and rewards model</li>
   <li><code>nouns_battler_manifest</code> — game, TV, Desk Wall, poster, and league manifest</li>
   <li><code>nouns_battler_presence</code> — anonymous agent presence instructions and snapshot</li>
   <li><code>nouns_battler_result_tracker</code> — scorebook from Desk Wall snapshots or Recap Studio text</li>
@@ -1433,6 +1519,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>connector_links</code> — addable connector links</li>
   <li><code>apps_list</code> — client app shelf</li>
   <li><code>nouns_battler_agent_tasks</code> — Nouns Battler assignments</li>
+  <li><code>nouns_battler_asset_factory</code> — Battler assets, products, sponsor slots, and participant rewards draft</li>
   <li><code>nouns_battler_manifest</code> — Nouns Battler manifest</li>
   <li><code>nouns_battler_presence</code> — Battler presence handoff</li>
   <li><code>nouns_battler_result_tracker</code> — Battler result scorebook</li>
@@ -1444,7 +1531,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
   <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
   <li><code>pointcast://connectors</code> · <code>pointcast://apps</code></li>
-  <li><code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code></li>
+  <li><code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">

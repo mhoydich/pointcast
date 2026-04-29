@@ -152,6 +152,7 @@ export const GET: APIRoute = async () => {
         nounsNationBattlerDesk: 'https://pointcast.xyz/nouns-nation-battler-desk/',
         nounsNationBattlerPosters: 'https://pointcast.xyz/nouns-nation-battler-posters/',
         nounsNationBattlerAgents: 'https://pointcast.xyz/nouns-nation-battler-agents/',
+        nounsNationBattlerAgentDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
         battle: 'https://pointcast.xyz/battle',
         now: 'https://pointcast.xyz/now',
         search: 'https://pointcast.xyz/search',
@@ -381,6 +382,7 @@ export const GET: APIRoute = async () => {
       },
       nounsNationBattlerAgentBench: {
         html: 'https://pointcast.xyz/nouns-nation-battler-agents/',
+        desk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
         json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
         manifest: 'https://pointcast.xyz/nouns-nation-battler.json',
         mcp: 'https://pointcast.xyz/api/mcp-v2',
@@ -388,6 +390,10 @@ export const GET: APIRoute = async () => {
         tools: NOUNS_BATTLER_AGENT_BENCH.mcp.tools,
         resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
         watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+        sidelineDesk: NOUNS_BATTLER_AGENT_BENCH.sidelineDesk,
+        assetFactory: NOUNS_BATTLER_AGENT_BENCH.assetFactory,
+        businessModel: NOUNS_BATTLER_AGENT_BENCH.businessModel,
+        participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
         claimQueue: NOUNS_BATTLER_AGENT_BENCH.claimQueue.map((task) => ({
           id: task.id,
           title: task.title,
@@ -404,7 +410,7 @@ export const GET: APIRoute = async () => {
           difficulty: task.difficulty,
         })),
         privacy: NOUNS_BATTLER_AGENT_BENCH.privacy,
-        note: 'Task board for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids.',
+        note: 'Task board and Sideline Desk for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids. The asset factory and rewards model are prototype creative/accounting workflows, not promised investment yield.',
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
