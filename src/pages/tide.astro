@@ -597,6 +597,7 @@ const description =
     if (chimeTimer) { clearTimeout(chimeTimer); chimeTimer = null; }
     if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
     if (granularTimer) { clearTimeout(granularTimer); granularTimer = null; }
+    if (markovTimer) { clearTimeout(markovTimer); markovTimer = null; }
   }
 
   function startSoundscape(sId) {
@@ -606,6 +607,7 @@ const description =
     else if (sId === 'chimes') startChimes();
     else if (sId === 'bubbles') startBubbles();
     else if (sId === 'granular') startGranular();
+    else if (sId === 'markov') startMarkov();
   }
 
   /* DRIFT — filtered brown-noise + LFO + sine pad on root+fifth */
@@ -721,6 +723,7 @@ const description =
 
   /* GRANULAR — overlapping short sine grains around palette root, slowly drifting */
   var granularTimer = null;
+  var markovTimer = null;
   function startGranular() {
     var ctx = audioCtx, p = PALETTES[idx];
     // quiet pad bed for body
@@ -758,6 +761,71 @@ const description =
       granularTimer = setTimeout(fireGrain, nextMs);
     }
     fireGrain();
+  }
+
+  /* MARKOV — first-order Markov chain over a palette pentatonic.
+     Each note picks the next note via a transition weight matrix tuned
+     so consonant intervals dominate. Tunes form, evolve, and recur.
+     Soft sine-pad bed so the surface always has body. */
+  function startMarkov() {
+    var ctx = audioCtx, p = PALETTES[idx];
+    // pentatonic intervals from root: 1, 9/8, 5/4, 3/2, 5/3, 2 — 6 states
+    var ratios = [1, 9/8, 5/4, 3/2, 5/3, 2];
+    // simple transition table: index → weights toward each next index.
+    // hand-tuned to favor stepwise + 4ths + return-to-root.
+    var TRANS = [
+      [0.10, 0.30, 0.18, 0.22, 0.10, 0.10], // from 0 (root)
+      [0.30, 0.05, 0.30, 0.10, 0.15, 0.10], // from 1
+      [0.20, 0.25, 0.10, 0.25, 0.10, 0.10], // from 2
+      [0.30, 0.10, 0.20, 0.05, 0.25, 0.10], // from 3 (5th)
+      [0.10, 0.15, 0.20, 0.30, 0.05, 0.20], // from 4
+      [0.40, 0.10, 0.15, 0.20, 0.10, 0.05], // from 5 (octave)
+    ];
+    // pad bed — sine fifth
+    var pad = ctx.createOscillator(); pad.type = 'sine'; pad.frequency.value = p.tone.root * 1.5 * 0.5;
+    var padG = ctx.createGain(); padG.gain.value = 0.03;
+    pad.connect(padG); padG.connect(master);
+    pad.start();
+    audioNodes.push(pad, padG);
+
+    var state = 0;
+    function pickNext(from) {
+      var row = TRANS[from];
+      var r = Math.random();
+      var acc = 0;
+      for (var i = 0; i < row.length; i++) {
+        acc += row[i];
+        if (r <= acc) return i;
+      }
+      return row.length - 1;
+    }
+    function fireNote() {
+      if (!audioOn || soundscape !== 'markov' || !audioCtx) return;
+      var now = audioCtx.currentTime;
+      state = pickNext(state);
+      // 25% chance octave-up, 10% chance octave-down for variety
+      var oct = 1;
+      var roll = Math.random();
+      if (roll < 0.10) oct = 0.5;
+      else if (roll < 0.35) oct = 2;
+      var f = p.tone.root * ratios[state] * oct;
+      var dur = 0.6 + Math.random() * 0.8;
+      // primary tone
+      var osc = ctx.createOscillator();
+      osc.type = (Math.random() < 0.7) ? 'sine' : 'triangle';
+      osc.frequency.value = f;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.14, now + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(g); g.connect(master);
+      osc.start(now); osc.stop(now + dur + 0.05);
+      audioNodes.push(osc, g);
+      // schedule next: 380-1100ms — slow but not glacial
+      var nextMs = 380 + Math.random() * 720;
+      markovTimer = setTimeout(fireNote, nextMs);
+    }
+    fireNote();
   }
 
   function setSoundscape(sId) {
@@ -1024,6 +1092,7 @@ const description =
   if (mode === 'mystify') initMystify();
   if (mode === 'bounce') initBounce();
   if (mode === 'pipes') initPipes();
+  if (mode === 'tessellate') initTessellate();
 
   startRafLoop();
   tickClock();
@@ -1162,10 +1231,26 @@ const description =
   .tide[data-mode="bounce"]    .tide__scene--starfield,
   .tide[data-mode="bounce"]    .tide__scene--mystify,
   .tide[data-mode="bounce"]    .tide__scene--pipes,
-  .tide[data-mode="pipes"]     .tide__scene--waves,
-  .tide[data-mode="pipes"]     .tide__scene--starfield,
-  .tide[data-mode="pipes"]     .tide__scene--mystify,
-  .tide[data-mode="pipes"]     .tide__scene--bounce { display: none; }
+  .tide[data-mode="waves"]      .tide__scene--tessellate,
+  .tide[data-mode="starfield"]  .tide__scene--tessellate,
+  .tide[data-mode="mystify"]    .tide__scene--tessellate,
+  .tide[data-mode="bounce"]     .tide__scene--tessellate,
+  .tide[data-mode="pipes"]      .tide__scene--waves,
+  .tide[data-mode="pipes"]      .tide__scene--starfield,
+  .tide[data-mode="pipes"]      .tide__scene--mystify,
+  .tide[data-mode="pipes"]      .tide__scene--bounce,
+  .tide[data-mode="pipes"]      .tide__scene--tessellate,
+  .tide[data-mode="tessellate"] .tide__scene--waves,
+  .tide[data-mode="tessellate"] .tide__scene--starfield,
+  .tide[data-mode="tessellate"] .tide__scene--mystify,
+  .tide[data-mode="tessellate"] .tide__scene--bounce,
+  .tide[data-mode="tessellate"] .tide__scene--pipes { display: none; }
+
+  /* TESSELLATE scene — flat backdrop; canvas paints the tiles */
+  .tide__scene--tessellate { z-index: 1; width: 100vw; height: 100vh; }
+  .tide[data-mode="tessellate"] {
+    background: radial-gradient(ellipse at 50% 50%, color-mix(in oklab, var(--wave-3) 75%, #000 25%) 0%, #04060a 100%);
+  }
 
   /* WAVES scene */
   .tide__scene--waves { z-index: 1; }
