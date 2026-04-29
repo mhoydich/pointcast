@@ -114,6 +114,10 @@
         {/* Phase 3 — FOLLOW toggle. When ON, viewer auto-teleports
             whenever this peer's currentPath changes. Stored locally. */}
         <button class="here-focus__follow mono" id="here-focus-follow" type="button" hidden aria-pressed="false">FOLLOW</button>
+        {/* Phase 3 — REPLY-to-TELL. Opens WIRE pre-filled with
+            "@noun-NNN " so the response threads via mention without a
+            new DO message type. */}
+        <button class="here-focus__reply mono" id="here-focus-reply" type="button" hidden>REPLY</button>
       </div>
     </div>
     <button class="here-focus__close mono" id="here-focus-close" type="button" aria-label="Close visitor details">×</button>
@@ -435,10 +439,11 @@
           joinBtn.removeAttribute('href');
         }
       }
-      // Phase 3 — show WAVE + FOLLOW buttons in the focus card. Always
-      // available for human/wallet peers; hidden for agents.
+      // Phase 3 — show WAVE + FOLLOW + REPLY buttons in the focus card.
+      // Always available for human/wallet peers; hidden for agents.
       var waveBtnFocus = document.getElementById('here-focus-wave');
       var followBtnFocus = document.getElementById('here-focus-follow');
+      var replyBtnFocus = document.getElementById('here-focus-reply');
       var isHumanPeer = !session.kind || session.kind === 'human' || session.kind === 'wallet';
       if (waveBtnFocus) waveBtnFocus.hidden = !isHumanPeer;
       if (followBtnFocus) {
@@ -447,6 +452,7 @@
         followBtnFocus.setAttribute('aria-pressed', String(isFollowing));
         followBtnFocus.textContent = isFollowing ? 'FOLLOWING ✓' : 'FOLLOW';
       }
+      if (replyBtnFocus) replyBtnFocus.hidden = !isHumanPeer;
       focusEl.hidden = false;
       focusCurrentSlot = slot;
     }
@@ -777,7 +783,29 @@
         who.textContent = 'noun ' + c.nounId;
         var msg = document.createElement('span');
         msg.className = 'here-wire__msg';
-        msg.textContent = String(c.msg || '');
+        // Phase 3 — highlight @noun-NNN mentions; if it mentions YOU,
+        // tag the entire entry so the row gets a brighter treatment.
+        var raw = String(c.msg || '');
+        var mineMention = '@noun-' + nounId;
+        if (raw.indexOf(mineMention) >= 0) {
+          li.classList.add('here-wire__entry--at-me');
+        }
+        // Render mentions as styled chips. Simple regex; max 32 chars
+        // for the noun id digits to avoid catastrophic backtracking.
+        var mentionRe = /@noun-(\d{1,4})/g;
+        var pos = 0;
+        var match;
+        while ((match = mentionRe.exec(raw)) !== null) {
+          if (match.index > pos) {
+            msg.appendChild(document.createTextNode(raw.slice(pos, match.index)));
+          }
+          var chip = document.createElement('span');
+          chip.className = 'here-wire__mention';
+          chip.textContent = match[0];
+          msg.appendChild(chip);
+          pos = match.index + match[0].length;
+        }
+        if (pos < raw.length) msg.appendChild(document.createTextNode(raw.slice(pos)));
         li.appendChild(who);
         li.appendChild(msg);
         // In ALL scope, decorate with the sender's room so cross-room
@@ -877,6 +905,34 @@
             focusFollowBtn.setAttribute('aria-pressed', 'true');
             focusFollowBtn.textContent = 'FOLLOWING ✓';
           }
+        } catch (e) {}
+      });
+    }
+    // Phase 3 — REPLY button opens WIRE with @noun-N prefilled. Threading
+    // is just a mention convention; no DO change needed since chat already
+    // ring-buffers and broadcasts.
+    var focusReplyBtn = document.getElementById('here-focus-reply');
+    if (focusReplyBtn) {
+      focusReplyBtn.addEventListener('click', function () {
+        if (!focusCurrentSlot) return;
+        try {
+          var s = JSON.parse(focusCurrentSlot.dataset.session || '{}');
+          var n = Number(s.nounId);
+          if (!(n >= 0)) return;
+          // Open WIRE if it's closed.
+          if (wirePanel && wirePanel.hidden && wireBtn) {
+            wireBtn.click();
+          }
+          if (wireInput) {
+            var prefill = '@noun-' + n + ' ';
+            wireInput.value = prefill;
+            try { wireInput.focus(); } catch (e2) {}
+            try {
+              wireInput.setSelectionRange(prefill.length, prefill.length);
+            } catch (e3) {}
+          }
+          // Hide focus card so the visitor's eye lands on WIRE.
+          hideFocus();
         } catch (e) {}
       });
     }
@@ -1489,6 +1545,44 @@
     border-color: #F59F00;
   }
   .here-focus__follow[hidden] { display: none; }
+
+  /* Phase 3 — REPLY button. Opens WIRE pre-filled with @noun-N mention. */
+  .here-focus__reply {
+    padding: 4px 9px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: transparent;
+    color: #534AB7;
+    border: 1px solid #534AB7;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .here-focus__reply:hover {
+    background: #FFF1A8;
+    color: #534AB7;
+  }
+  .here-focus__reply[hidden] { display: none; }
+
+  /* Phase 3 — @-mention chip + at-me row highlight. */
+  .here-wire__mention {
+    display: inline;
+    background: rgba(83, 74, 183, 0.16);
+    color: #534AB7;
+    border-radius: 3px;
+    padding: 0 3px;
+    font-weight: 600;
+  }
+  .here-wire__entry--at-me {
+    background: rgba(245, 159, 0, 0.14);
+    border-radius: 3px;
+    padding: 2px 4px;
+    margin: 0 -4px;
+  }
+  .here-wire__entry--at-me .here-wire__mention {
+    background: #F59F00;
+    color: #fff;
+  }
 
   /* Phase 3 — wave overlay (ephemeral chip). Appears between the avatar
      row and the state line, slides up + fades out. */
