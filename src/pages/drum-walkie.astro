@@ -1,0 +1,280 @@
+---
+/**
+ * /drum-walkie — push-to-talk channels · comms 6 · 2026-04-28 PT.
+ *
+ * Walkie-talkie metaphor. Pick one of four channels (general, drums,
+ * calm, loud). Hold the BIG button (mouse or spacebar) and type a
+ * 100-char burst. Release to send. Visitors tuned to the same channel
+ * see your burst land in their feed. Pure transient via /api/sounds
+ * type=walkie + channel. No KV.
+ *
+ * Channels are intent presets — general for chat, drums for room
+ * coordination, calm for quiet check-ins, loud for hype.
+ *
+ * Aesthetic: ham-radio rig, brushed metal, big chunky push button,
+ * channel-select knob with detents, scrolling band of recent bursts.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-walkie — push-to-talk channels';
+const description = 'Walkie-talkie for the drum hub. Four channels, hold to talk, 100-char bursts. Pure transient — leave the page and your channel\'s history goes with you.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-walkie', name: 'PointCast Drum · Walkie', url: 'https://pointcast.xyz/drum-walkie', description };
+
+const CHANNELS = [
+  { id: 'general', label: 'GENERAL', color: '#5fbafd', note: 'general chatter' },
+  { id: 'drums',   label: 'DRUMS',   color: '#ff5c23', note: 'room coordination' },
+  { id: 'calm',    label: 'CALM',    color: '#8ec78a', note: 'quiet check-ins' },
+  { id: 'loud',    label: 'LOUD',    color: '#ffd400', note: 'hype mode' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="wk" id="wk-main">
+    <DrumNav current="bulletin" />
+
+    <header class="wk__head">
+      <p class="wk__kicker">DRUM HUB · COMMS 6 · WALKIE · PUSH-TO-TALK · 4 CHANNELS</p>
+      <h1 class="wk__title"><em>Pick a channel. Hold the button. Talk.</em></h1>
+      <p class="wk__dek">Four preset channels. Hold the button (mouse or spacebar) to start a burst, type your 100 chars, release to send. The room hears whatever's on their tuned channel. Bursts don't persist — leave the page and the history leaves with you.</p>
+    </header>
+
+    <section class="wk__rig">
+      <div class="wk__channels" role="radiogroup" aria-label="Channel">
+        {CHANNELS.map((c, i) => (
+          <button type="button" class={'wk__chan' + (i === 0 ? ' wk__chan--on' : '')} data-channel={c.id} data-color={c.color} aria-label={'Channel ' + c.label}>
+            <span class="wk__chan-led"></span>
+            <span class="wk__chan-label mono">{c.label}</span>
+            <span class="wk__chan-note mono">{c.note}</span>
+          </button>
+        ))}
+      </div>
+
+      <div class="wk__panel">
+        <div class="wk__display">
+          <p class="wk__display-eyebrow mono">★ TUNED · <span id="wk-tuned">GENERAL</span> ★</p>
+          <p class="wk__display-band mono" id="wk-band">— silent —</p>
+          <p class="wk__display-meta mono" id="wk-meta">noun #—</p>
+        </div>
+
+        <div class="wk__controls">
+          <button type="button" class="wk__ptt" id="wk-ptt" aria-label="Push to talk">
+            <span class="wk__ptt-cap">
+              <span class="wk__ptt-icon">📡</span>
+              <span class="wk__ptt-text mono">PUSH TO TALK</span>
+              <span class="wk__ptt-kbd mono">HOLD SPACE</span>
+            </span>
+          </button>
+          <input
+            class="wk__input"
+            id="wk-input"
+            maxlength="100"
+            placeholder="Hold the button — start typing — release to send."
+            disabled
+          />
+          <span class="wk__count mono" id="wk-count">0 / 100</span>
+        </div>
+      </div>
+
+      <ul class="wk__feed" id="wk-feed" aria-label="Recent bursts">
+        <li class="wk__feed-empty mono">— no bursts yet on this channel —</li>
+      </ul>
+    </section>
+
+    <footer class="wk__foot">
+      <p>Each burst fires <code>type=walkie</code> to <code>/api/sounds</code> with the channel and 100-char text. Cast surfaces (<a href="/drum-tv">/drum-tv</a>, <a href="/drum-marquee">/drum-marquee</a>) show all channels colored by id; this page filters to your tuned channel.</p>
+      <p class="wk__credit mono">v0.1 · 2026-04-28 · drum sprint · comms 6</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  var COLORS = { general: '#5fbafd', drums: '#ff5c23', calm: '#8ec78a', loud: '#ffd400' };
+  var ptt = document.getElementById('wk-ptt');
+  var input = document.getElementById('wk-input');
+  var count = document.getElementById('wk-count');
+  var feed = document.getElementById('wk-feed');
+  var tuned = document.getElementById('wk-tuned');
+  var band = document.getElementById('wk-band');
+  var meta = document.getElementById('wk-meta');
+  var currentChannel = 'general';
+  var holding = false;
+
+  function getSession() { try { var k='pc:session'; var s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s;} catch(e){ return 'wk-' + Math.random().toString(36).slice(2,10);} }
+  function nounIdFor(sid) { var h=5381; for(var i=0;i<sid.length;i++) h=(h*33+sid.charCodeAt(i))&0x7fffffff; return h%1200; }
+  var sid = getSession();
+  var storedNoun = 0;
+  try { var s = localStorage.getItem('pc:nounId'); storedNoun = s ? Number(s) : nounIdFor(sid); } catch(e){ storedNoun = nounIdFor(sid); }
+  if (!Number.isFinite(storedNoun) || storedNoun < 0 || storedNoun > 1199) storedNoun = nounIdFor(sid);
+  try { localStorage.setItem('pc:nounId', String(storedNoun)); } catch(e){}
+
+  // Apply channel colors
+  document.querySelectorAll('.wk__chan').forEach(function(b){
+    var c = b.getAttribute('data-color'); if (c) b.style.setProperty('--wk-color', c);
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.wk__chan').forEach(function(x){ x.classList.remove('wk__chan--on'); });
+      b.classList.add('wk__chan--on');
+      currentChannel = b.getAttribute('data-channel') || 'general';
+      tuned.textContent = currentChannel.toUpperCase();
+      // Reset feed for the new channel
+      feed.innerHTML = '<li class="wk__feed-empty mono">— no bursts yet on this channel —</li>';
+      band.textContent = '— silent —';
+      meta.textContent = 'noun #—';
+    });
+  });
+
+  function startTalk(e) {
+    if (holding) return;
+    holding = true;
+    ptt.classList.add('wk__ptt--down');
+    input.disabled = false;
+    input.focus();
+    if (e) e.preventDefault();
+  }
+  function endTalk(e) {
+    if (!holding) return;
+    holding = false;
+    ptt.classList.remove('wk__ptt--down');
+    var text = (input.value || '').trim().slice(0, 100);
+    input.value = ''; count.textContent = '0 / 100';
+    input.disabled = true;
+    if (text) sendBurst(text);
+    if (e) e.preventDefault();
+  }
+  input.addEventListener('input', function(){ count.textContent = input.value.length + ' / 100'; });
+
+  function sendBurst(text) {
+    var payload = { type: 'walkie', sessionId: sid, channel: currentChannel, text: text, nounId: storedNoun };
+    try {
+      fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    } catch(e){}
+    // Optimistic local render so the speaker sees their own burst land
+    addBurst({ t: Date.now(), text: text, channel: currentChannel, nounId: storedNoun, _self: true });
+  }
+
+  function addBurst(b) {
+    if (b.channel !== currentChannel) return;
+    var emptyEl = feed.querySelector('.wk__feed-empty');
+    if (emptyEl) emptyEl.remove();
+    var color = COLORS[b.channel] || COLORS.general;
+    var li = document.createElement('li');
+    li.className = 'wk__feed-row' + (b._self ? ' wk__feed-row--self' : '');
+    li.style.setProperty('--wk-row-color', color);
+    var d = new Date(b.t || Date.now());
+    var stamp = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+    li.innerHTML =
+      '<span class="wk__feed-time mono"></span>' +
+      '<img class="wk__feed-noun" alt="" width="22" height="22" loading="lazy" />' +
+      '<span class="wk__feed-pid mono"></span>' +
+      '<span class="wk__feed-text"></span>';
+    li.querySelector('.wk__feed-time').textContent = stamp;
+    li.querySelector('.wk__feed-noun').src = 'https://noun.pics/' + (b.nounId || 0) + '.svg';
+    li.querySelector('.wk__feed-pid').textContent = 'noun #' + (b.nounId || '—');
+    li.querySelector('.wk__feed-text').textContent = b.text || '';
+    feed.prepend(li);
+    var rows = feed.querySelectorAll('.wk__feed-row');
+    if (rows.length > 12) for (var i = 12; i < rows.length; i++) rows[i].remove();
+    band.textContent = b.text || '';
+    meta.textContent = 'noun #' + (b.nounId || '—') + ' · ' + b.channel.toUpperCase();
+  }
+
+  // Mouse / touch on PTT
+  ptt.addEventListener('mousedown', startTalk);
+  ptt.addEventListener('touchstart', startTalk, { passive: false });
+  window.addEventListener('mouseup', endTalk);
+  window.addEventListener('touchend', endTalk);
+  // Spacebar everywhere except inside the input itself (where space is text)
+  window.addEventListener('keydown', function(e){
+    if (e.repeat) return;
+    if (e.code === 'Space' && document.activeElement !== input) startTalk(e);
+  });
+  window.addEventListener('keyup', function(e){
+    if (e.code === 'Space' && document.activeElement !== input) endTalk(e);
+  });
+
+  // Poll for incoming bursts on the tuned channel
+  var lastTs = Date.now() - 5000;
+  var lastSendAt = 0;
+  function poll() {
+    fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' }).then(function(r){
+      if (!r.ok) return null;
+      return r.json();
+    }).then(function(data){
+      if (!data) return;
+      var events = Array.isArray(data.events) ? data.events : [];
+      if (!events.length) return;
+      lastTs = events[events.length - 1].t || Date.now();
+      events.forEach(function(e){
+        if (e.type !== 'walkie' || !e.text) return;
+        if (e.channel !== currentChannel) return;
+        // Skip own optimistic echoes (timestamp window)
+        if (Math.abs((e.t || 0) - lastSendAt) < 800) return;
+        addBurst({ t: e.t, text: e.text, channel: e.channel, nounId: e.nounId });
+      });
+    }).catch(function(){});
+  }
+  setInterval(poll, 1500);
+  poll();
+
+  // Track lastSendAt by intercepting sendBurst echo through fetch
+  var origSend = sendBurst;
+  sendBurst = function(text) { lastSendAt = Date.now(); origSend(text); };
+})();
+</script>
+
+<style>
+.wk { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #1a0e08 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+.wk__head { max-width: 980px; margin: 0 auto 16px; padding: 0 6px; }
+.wk__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffd400; }
+.wk__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 48px); line-height: 1.05; }
+.wk__title em { font-style: italic; }
+.wk__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+.wk__rig { max-width: 980px; margin: 0 auto; background: linear-gradient(180deg, #2c1d05 0%, #1a0e08 100%); border: 4px solid #c9a449; box-shadow: 6px 6px 0 0 #050310; padding: 18px; display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: 'channels panel' 'feed feed'; gap: 18px; }
+@media (max-width: 700px) { .wk__rig { grid-template-columns: 1fr; grid-template-areas: 'channels' 'panel' 'feed'; } }
+
+.wk__channels { grid-area: channels; display: flex; flex-direction: column; gap: 6px; }
+.wk__chan { background: #050310; color: #fffaf0; border: 2px solid #5f5e5a; padding: 10px 12px; cursor: pointer; display: grid; grid-template-columns: 14px 1fr; grid-template-rows: auto auto; grid-template-areas: 'led label' '. note'; gap: 2px 8px; align-items: center; transition: border-color 80ms; text-align: left; }
+.wk__chan:hover { border-color: var(--wk-color, #ffd400); }
+.wk__chan--on { border-color: var(--wk-color, #ffd400); background: rgba(255, 212, 0, 0.06); box-shadow: 3px 3px 0 0 #050310; }
+.wk__chan-led { grid-area: led; width: 10px; height: 10px; border-radius: 50%; background: #1a1a1a; border: 1.5px solid #050310; }
+.wk__chan--on .wk__chan-led { background: var(--wk-color, #ffd400); box-shadow: 0 0 8px var(--wk-color, #ffd400); }
+.wk__chan-label { grid-area: label; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.18em; font-weight: 700; }
+.wk__chan-note { grid-area: note; font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.14em; color: #cfc6df; opacity: 0.8; }
+
+.wk__panel { grid-area: panel; background: rgba(0, 0, 0, 0.5); border: 2px solid #c9a449; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.wk__display { background: #050310; border: 2px solid #c9a449; padding: 14px; }
+.wk__display-eyebrow { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.32em; color: #c9a449; }
+.wk__display-eyebrow span { color: #ffd400; }
+.wk__display-band { margin: 0; font-family: Georgia, serif; font-style: italic; font-size: 18px; line-height: 1.4; color: #fffaf0; min-height: 28px; word-break: break-word; }
+.wk__display-meta { margin: 6px 0 0; font-size: 10px; letter-spacing: 0.16em; color: #5f5e5a; }
+
+.wk__controls { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.wk__ptt { background: transparent; border: 0; padding: 0; cursor: pointer; }
+.wk__ptt-cap { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 26px; background: linear-gradient(180deg, #ff5c23, #a83b2a); color: #050310; border: 3px solid #050310; border-radius: 18px; box-shadow: 4px 6px 0 0 #050310; transition: transform 60ms, box-shadow 60ms; min-width: 240px; }
+.wk__ptt:hover .wk__ptt-cap { filter: brightness(1.05); }
+.wk__ptt--down .wk__ptt-cap { transform: translate(2px, 4px); box-shadow: 0 0 0 0 #050310; filter: brightness(0.85); }
+.wk__ptt-icon { font-size: 32px; line-height: 1; }
+.wk__ptt-text { font-family: 'Bungee', Impact, sans-serif; font-size: 18px; letter-spacing: 0.12em; }
+.wk__ptt-kbd { font-size: 9px; letter-spacing: 0.18em; padding: 2px 6px; background: #050310; color: #ff8a4a; border: 1px solid #050310; border-radius: 3px; }
+
+.wk__input { width: 100%; max-width: 480px; box-sizing: border-box; background: #050310; color: #fffaf0; border: 2px solid #5f5e5a; padding: 10px 14px; font-family: 'JetBrains Mono Variable', monospace; font-size: 13px; letter-spacing: 0.04em; transition: border-color 80ms; }
+.wk__input:focus { outline: none; border-color: #ffd400; }
+.wk__input:disabled { opacity: 0.5; cursor: not-allowed; }
+.wk__count { font-size: 10px; letter-spacing: 0.16em; color: #cfc6df; }
+
+.wk__feed { grid-area: feed; list-style: none; margin: 0; padding: 0; background: #050310; border: 1.5px solid #c9a449; box-shadow: inset 0 0 30px rgba(255, 212, 0, 0.08); display: flex; flex-direction: column; gap: 1px; max-height: 320px; overflow-y: auto; }
+.wk__feed-empty { padding: 16px 18px; color: #5f5e5a; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.18em; }
+.wk__feed-row { display: grid; grid-template-columns: 80px 22px minmax(0, 110px) minmax(0, 1fr); gap: 8px; padding: 6px 12px; align-items: center; color: #fffaf0; border-left: 4px solid var(--wk-row-color, #5fbafd); }
+.wk__feed-row--self { background: rgba(255, 212, 0, 0.06); }
+.wk__feed-time { color: #5f5e5a; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; }
+.wk__feed-noun { image-rendering: pixelated; border: 1px solid #050310; background: #fffaf0; }
+.wk__feed-pid { color: var(--wk-row-color, #5fbafd); font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.14em; overflow: hidden; text-overflow: ellipsis; }
+.wk__feed-text { font-family: Georgia, serif; font-size: 14px; line-height: 1.4; word-break: break-word; }
+
+.wk__foot { max-width: 980px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+.wk__foot a { color: #ffd400; }
+.wk__foot code { background: #050310; padding: 1px 6px; border: 1px solid #c9a449; color: #ffd400; }
+.wk__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #c9a449; }
+</style>
