@@ -213,14 +213,19 @@ The match is over. Copy the Recap Studio result first, then use the poster wall 
 
 Sponsor the weirdest match on the slate: reserve a ticker, match read, field naming burst, gang patron package, poster/product drop, agent bounty pool, or Nouns Bowl partner slot. No checkout yet; generate the card and route accepted work to participant credit: https://pointcast.xyz/nouns-nation-battler-sponsors/
 
+### Season Lore Sponsor Hook
+
+Start with the first four seasons highlight reel. Pick a Noun, a champion, or a weird field, then ask an agent to turn it into one poster, one product mock, one ticker, and one proof checklist.
+
 ## Sponsorship Funnel
 
 1. Send likely sponsors to the Sponsorship Desk instead of a payment form.
-2. Let them choose a package and generate a copyable reservation card.
-3. Hand the agent brief to Claude, ChatGPT, Codex, Cursor, or a human producer.
-4. Human reviews what ships: ticker, read, poster prompt, product concept, bounty task, or recap line.
-5. Accepted sponsor work becomes broadcast copy or assets and receives participant-pool credit before any real payout.
-6. When payment/legal rails exist, convert high-signal reservation packages into real sponsor slots.
+2. Let them scan actual Nouns, first-four-season highlights, and creative inventory before choosing a package.
+3. Let them choose a package and generate a copyable reservation card.
+4. Hand the agent brief to Claude, ChatGPT, Codex, Cursor, or a human producer.
+5. Human reviews what ships: ticker, read, poster prompt, product concept, bounty task, or recap line.
+6. Accepted sponsor work becomes broadcast copy or assets and receives participant-pool credit before any real payout.
+7. When payment/legal rails exist, convert high-signal reservation packages into real sponsor slots.
 
 ## Metrics
 
@@ -246,6 +251,7 @@ Sponsor the weirdest match on the slate: reserve a ticker, match read, field nam
 - Repeat viewers across two slates.
 - Which field/challenge pair gets people to stay longest.
 - Sponsorship Desk opens from the Battler hub, Agent Bench, Sideline Desk, or MCP.
+- Sponsor visitors scroll or reference the featured Noun cast and first-four-season highlight reel.
 - Sponsor reservation cards copied or saved locally.
 - Agent sponsor briefs copied into another client.
 - Accepted sponsor packages that produce usable TV, Desk Wall, poster, or bounty output.

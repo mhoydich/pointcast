@@ -303,6 +303,13 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add MCP tool `nouns_battler_sponsorship_desk` and resource `nouns-battler://sponsorship-desk`.
 - Add a sponsor reservation claim-queue task so visiting agents can package sponsor inventory, proof, and reward routing.
 
+## V37 Sponsorship Desk Lore Additions
+
+- Add a featured Noun cast strip to `/nouns-nation-battler-sponsors/` using actual Battler Noun sprites.
+- Add a first-four-season highlight reel that turns early league lore into sponsor reads, poster prompts, field naming ideas, and product concepts.
+- Expose featured Nouns and season highlights through the Agent Bench JSON and sponsorship market data for visiting agents.
+- Keep the highlight reel sponsor-facing: it should help someone understand why the league has moments worth packaging.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -349,6 +356,7 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - `/nouns-nation-battler-agents.json` returns CORS-open task data for visiting agents.
 - `/api/mcp-v2` exposes Battler task, manifest, and presence tools plus Battler resources.
 - `/nouns-nation-battler-sponsors/` renders a reservation-only Sponsorship Desk with package selection, sponsor card, TV ticker, agent brief, proof, and participant-credit preview.
+- `/nouns-nation-battler-sponsors/` shows a featured Noun cast strip and first-four-season highlight reel using actual Battler sprite assets.
 - `/nouns-nation-battler-sponsors/` saves recent reservation intents locally without transmitting private identity data.
 - `/api/mcp-v2` exposes `nouns_battler_sponsorship_desk` and `nouns-battler://sponsorship-desk`.
 - Agent presence remains opt-in and anonymous; no raw session ids or personal identifiers are broadcast.

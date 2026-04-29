@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.5.0';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.5.1';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -541,6 +541,136 @@ export const NOUNS_BATTLER_BUSINESS_MODEL = {
   ],
 } as const;
 
+export const NOUNS_BATTLER_FEATURED_NOUNS = [
+  {
+    id: 'noun-12',
+    number: 12,
+    name: 'Noun 12',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-12.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-12.svg',
+    gang: 'Tomato Noggles',
+    role: 'captain',
+    note: 'Opens the sponsor desk with split-tomato energy and first-whistle reads.',
+  },
+  {
+    id: 'noun-41',
+    number: 41,
+    name: 'Noun 41',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-41.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-41.svg',
+    gang: 'Cobalt Frames',
+    role: 'slinger',
+    note: 'A replay-room favorite for blue-frame long shots and late table swings.',
+  },
+  {
+    id: 'noun-27',
+    number: 27,
+    name: 'Noun 27',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-27.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-27.svg',
+    gang: 'Garden Stack',
+    role: 'healer',
+    note: 'The calm recovery line for sponsor reads about saves, resets, and second chances.',
+  },
+  {
+    id: 'noun-56',
+    number: 56,
+    name: 'Noun 56',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-56.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-56.svg',
+    gang: 'Mint Condition',
+    role: 'runner',
+    note: 'Turns field flips into product-drop language and watch-party sparks.',
+  },
+  {
+    id: 'noun-33',
+    number: 33,
+    name: 'Noun 33',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-33.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-33.svg',
+    gang: 'Golden Nouncil',
+    role: 'bonker',
+    note: 'Built for crowd chants, gold-scorebug moments, and Nouns Bowl pressure.',
+  },
+  {
+    id: 'noun-48',
+    number: 48,
+    name: 'Noun 48',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-48.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-48.svg',
+    gang: 'Pixel Union',
+    role: 'runner',
+    note: 'A clean pixel mascot for poster-wall tests and small supporter tickers.',
+  },
+  {
+    id: 'noun-7',
+    number: 7,
+    name: 'Noun 7',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-7.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-7.svg',
+    gang: 'Night Auction',
+    role: 'captain',
+    note: 'Good for midnight sponsor reads, comeback lines, and auction-house drama.',
+  },
+  {
+    id: 'noun-50',
+    number: 50,
+    name: 'Noun 50',
+    asset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-50.svg',
+    localAsset: '/games/nouns-nation-battler/assets/noun-50.svg',
+    gang: 'Sunset Prop House',
+    role: 'slinger',
+    note: 'A bright final-minute read for field naming bursts and social cards.',
+  },
+] as const;
+
+export const NOUNS_BATTLER_SEASON_HIGHLIGHTS = [
+  {
+    season: 'Season 1',
+    title: 'Open Field Founding',
+    champion: 'Tomato Noggles',
+    mvp: 'Noun 12',
+    nounAsset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-12.svg',
+    localNounAsset: '/games/nouns-nation-battler/assets/noun-12.svg',
+    field: 'Open Field Clash',
+    line: 'The first table taught the room how to root: simple lanes, loud KOs, and one sponsor read after every survival swing.',
+    sponsorInventory: 'Match Presented By, Ticker Spark, rookie watch guide read',
+  },
+  {
+    season: 'Season 2',
+    title: 'Crown Rush Rivalry',
+    champion: 'Cobalt Frames',
+    mvp: 'Noun 41',
+    nounAsset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-41.svg',
+    localNounAsset: '/games/nouns-nation-battler/assets/noun-41.svg',
+    field: 'Crown Rush',
+    line: 'Center-crown pressure made every replay feel like a possession battle, with Cobalt turning blue-frame control into a sponsorable lower-third.',
+    sponsorInventory: 'Field Naming Burst, replay moment read, rivalry poster',
+  },
+  {
+    season: 'Season 3',
+    title: 'Rift Week Broadcast',
+    champion: 'Golden Nouncil',
+    mvp: 'Noun 33',
+    nounAsset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-33.svg',
+    localNounAsset: '/games/nouns-nation-battler/assets/noun-33.svg',
+    field: 'Amplifier Rift',
+    line: 'Amplifier overloads created the first true desk mythology: sudden surges, weird element calls, and Nouns that looked built for posters.',
+    sponsorInventory: 'Poster/Product Drop, agent bounty pool, field explainer card',
+  },
+  {
+    season: 'Season 4',
+    title: 'Lava Audit Bowl',
+    champion: 'Mint Condition',
+    mvp: 'Noun 56',
+    nounAsset: 'https://pointcast.xyz/games/nouns-nation-battler/assets/noun-56.svg',
+    localNounAsset: '/games/nouns-nation-battler/assets/noun-56.svg',
+    field: 'Lava Audit',
+    line: 'The fourth run turned sponsor work into the sport itself: proof checklists, accepted agent tasks, Bowl reads, and a cleaner path to participant credit.',
+    sponsorInventory: 'Nouns Bowl Partner, Agent Bounty Pool, participant-credit desk read',
+  },
+] as const;
+
 export const NOUNS_BATTLER_SPONSORSHIP_MARKET = {
   route: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
   storageKey: 'pc:nouns-battler-sponsor-intents-v1',
@@ -548,6 +678,8 @@ export const NOUNS_BATTLER_SPONSORSHIP_MARKET = {
     'Reservation-only sponsorship participation for Nouns Nation Battler. No checkout, no wallet signing, no private identity capture, no automatic payout.',
   promise:
     'Pick a package, generate a sponsor card, route the work to a human or agent, and credit accepted deliverables through the participant rewards model.',
+  featuredNouns: NOUNS_BATTLER_FEATURED_NOUNS,
+  seasonHighlights: NOUNS_BATTLER_SEASON_HIGHLIGHTS,
   packages: [
     {
       id: 'ticker-spark',
@@ -975,6 +1107,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     purpose:
       'A local-first reservation desk where humans and agents package sponsorship inventory without checkout, wallet signing, or private identity capture.',
     outputs: ['sponsor card', 'TV ticker', 'agent task brief', 'proof requirements', 'participant-credit preview'],
+    featuredNouns: NOUNS_BATTLER_FEATURED_NOUNS,
+    seasonHighlights: NOUNS_BATTLER_SEASON_HIGHLIGHTS,
   },
   sponsorshipMarket: NOUNS_BATTLER_SPONSORSHIP_MARKET,
   businessModel: NOUNS_BATTLER_BUSINESS_MODEL,

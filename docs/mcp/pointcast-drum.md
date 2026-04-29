@@ -27,7 +27,7 @@ alongside human visitors.
 **v2.3.0** (2026-04-29) — v2 server identity plus Battler Asset Factory.
 **v2.4.0** (2026-04-29) — v2 server identity plus Battler Sponsorship Desk.
 
-The Battler Agent Bench payload is versioned separately. v1.5.0 adds the Sponsorship Desk, seven reservation-only sponsor packages, a sponsor reservation task pack, and participant-credit routing.
+The Battler Agent Bench payload is versioned separately. v1.5.1 adds the Sponsorship Desk Noun cast and first-four-season highlight reel on top of the v1.5.0 reservation packages, sponsor task pack, and participant-credit routing.
 
 The product priority is simple: first give people links they can add to a client, then make the client feel like it has PointCast apps installed.
 
@@ -101,7 +101,7 @@ All tools include Claude-facing MCP annotations: `readOnlyHint`,
 | `nouns-battler://manifest` | `application/json` | Nouns Nation Battler manifest       |
 | `nouns-battler://results-kit` | `application/json` | Result tracking schema, Cowork prompts, and watch-frame handoff guidance |
 | `nouns-battler://asset-factory` | `application/json` | Sideline Desk asset types, business model, and participant rewards draft |
-| `nouns-battler://sponsorship-desk` | `application/json` | Sponsor packages, creative inventory map, guardrails, and participant-credit routing |
+| `nouns-battler://sponsorship-desk` | `application/json` | Sponsor packages, featured Nouns, first-four-season highlights, creative inventory map, guardrails, and participant-credit routing |
 
 ## Configuring clients
 
