@@ -1,0 +1,961 @@
+---
+/**
+ * /drum-cake — virtual birthday cake, collaboratively lit and blown · 2026-04-29 PT.
+ *
+ * Part of the Birthday Imprint — 4 collaborative birthday-drum surfaces:
+ *   /drum-birthday  → hub
+ *   /drum-cake      → THIS PAGE · candles, light + blow
+ *   /drum-card      → signatures
+ *   /drum-pinata    → burst
+ *
+ * Per Mike: "a bunch of birthday drum apps, different ways to celebrate
+ * one's birthday with collaborative drumming, neat unfurl, ability to
+ * potentially customize, ways to share and smile."
+ *
+ * URL params (all optional):
+ *   ?for=NAME    — recipient's name (default: "you")
+ *   ?age=N       — number of candles (default 8, capped at 24)
+ *   ?from=SENDER — who sent the cake (default: anon)
+ *   ?wish=...    — pre-filled wish line for receiver
+ *
+ * Two phases of shared room state, derived from /api/sounds:
+ *   LIGHT  — visitors tap LIGHT A CANDLE; each tap lights one candle.
+ *            Once all candles are lit, the room flips to BLOW.
+ *   BLOW   — visitors tap BLOW; each tap extinguishes a random candle.
+ *            Once all are out → confetti + wish line.
+ *
+ * Broadcasts type=cake-light and type=cake-blow to /api/sounds. Reads
+ * cumulative counts back from the room to determine current phase. Self
+ * filter: don't double-count our own taps when the tail picks them up.
+ *
+ * Aesthetic: pastel cream page bg, magenta frosting, buttercream yellow,
+ * candles rotating pink/blue/yellow/green. Display sans-serif title,
+ * JetBrains Mono kickers, italic serif for the warm copy. Hand-drawn-
+ * feeling SVG with three layers, frosting drips, alternating candles.
+ *
+ * IMPORTANT: literal '{' and '}' in JSX body text MUST be escaped as
+ * &#123; / &#125; — Astro parses unescaped curly braces as JSX
+ * expressions and will break the build. This file uses no inline curly
+ * braces in body copy; if you add any, escape them.
+ *
+ * SPACE / RETURN tap the active phase button.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-cake — a virtual birthday cake, lit & blown together';
+const description = 'A collaborative virtual birthday cake. Visitors tap to light candles, then tap to blow them out. Personalize with ?for=NAME&age=N and share. Part of the PointCast Birthday Imprint.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-cake',
+  name: 'PointCast Drum · Cake',
+  url: 'https://pointcast.xyz/drum-cake',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-cake.png" jsonLd={jsonLd}>
+  <main class="dc" id="dc-main" data-default-candles="8" data-max-candles="24">
+    <DrumNav current="cake" />
+
+    <header class="dc__head">
+      <p class="dc__kicker">DRUM HUB · CAKE · TYPE=CAKE-LIGHT / CAKE-BLOW</p>
+      <h1 class="dc__title"><span class="dc__title-em">happy birthday,</span> <span class="dc__title-name" id="dc-for-name">you</span><span class="dc__title-bang">.</span></h1>
+      <p class="dc__dek">A small cake, baked from SVG. Tap together to <strong>light</strong> the candles. When they're all lit, the room flips and we all <strong>blow</strong>. Make a wish. Share the link — your friend lands on a cake with their name and their candles.</p>
+      <p class="dc__from" id="dc-from-line"></p>
+    </header>
+
+    <section class="dc__cakebox" aria-label="Birthday cake">
+      <svg class="dc__cake" id="dc-cake" viewBox="0 0 800 540" role="img" aria-label="A three-layer birthday cake with candles" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="dc-rough" x="-2%" y="-2%" width="104%" height="104%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" />
+            <feDisplacementMap in="SourceGraphic" scale="1.5" />
+          </filter>
+          <linearGradient id="dc-flame" x1="0%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stop-color="#ffb300" />
+            <stop offset="50%" stop-color="#ffd84a" />
+            <stop offset="100%" stop-color="#fff5b0" />
+          </linearGradient>
+          <radialGradient id="dc-flame-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#fff3a0" stop-opacity="0.85" />
+            <stop offset="100%" stop-color="#ffd84a" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+
+        <ellipse cx="400" cy="510" rx="290" ry="14" fill="#0d0a18" opacity="0.12" />
+
+        <g class="dc-layer dc-layer--bottom">
+          <rect x="100" y="380" width="600" height="110" rx="6" fill="#f7d56b" stroke="#1a1206" stroke-width="3" />
+          <path d="M100 388 Q160 374 220 388 T340 388 T460 388 T580 388 T700 388" fill="none" stroke="#1a1206" stroke-width="1.5" opacity="0.45" />
+          <path d="M100 480 Q160 470 220 480 T340 480 T460 480 T580 480 T700 480" fill="none" stroke="#1a1206" stroke-width="1.5" opacity="0.35" />
+          <g fill="#d6346a">
+            <circle cx="160" cy="430" r="6" />
+            <circle cx="240" cy="450" r="5" />
+            <circle cx="320" cy="425" r="6" />
+            <circle cx="400" cy="455" r="6" />
+            <circle cx="480" cy="430" r="5" />
+            <circle cx="560" cy="448" r="6" />
+            <circle cx="640" cy="430" r="5" />
+          </g>
+        </g>
+
+        <g class="dc-layer dc-layer--mid">
+          <rect x="160" y="290" width="480" height="100" rx="6" fill="#fff1e0" stroke="#1a1206" stroke-width="3" />
+          <path d="M160 388 Q190 372 220 388 Q250 404 280 388 Q310 372 340 388 Q370 404 400 388 Q430 372 460 388 Q490 404 520 388 Q550 372 580 388 Q610 404 640 388" fill="#d6346a" stroke="#1a1206" stroke-width="2.5" />
+          <path d="M180 388 L182 410 M220 388 L218 414 M268 388 L272 408 M310 388 L308 416 M360 388 L362 412 M400 388 L398 416 M450 388 L452 410 M495 388 L498 416 M540 388 L538 414 M590 388 L592 410 M630 388 L632 416" stroke="#d6346a" stroke-width="6" stroke-linecap="round" fill="none" />
+          <circle cx="220" cy="340" r="4" fill="#5b9cff" />
+          <circle cx="320" cy="360" r="4" fill="#7adb6e" />
+          <circle cx="420" cy="335" r="4" fill="#ffb6d3" />
+          <circle cx="520" cy="355" r="4" fill="#5b9cff" />
+        </g>
+
+        <g class="dc-layer dc-layer--top">
+          <rect x="220" y="210" width="360" height="90" rx="6" fill="#f7d56b" stroke="#1a1206" stroke-width="3" />
+          <path d="M220 298 Q260 282 300 298 Q340 314 380 298 Q420 282 460 298 Q500 314 540 298 Q580 282 620 298" fill="#d6346a" stroke="#1a1206" stroke-width="2.5" />
+          <path d="M240 298 L242 320 M285 298 L283 324 M335 298 L338 320 M390 298 L388 324 M440 298 L442 322 M495 298 L498 324 M555 298 L552 320 M600 298 L602 322" stroke="#d6346a" stroke-width="5" stroke-linecap="round" fill="none" />
+          <circle cx="280" cy="250" r="3.5" fill="#7adb6e" />
+          <circle cx="380" cy="270" r="3.5" fill="#ffb6d3" />
+          <circle cx="480" cy="250" r="3.5" fill="#5b9cff" />
+          <circle cx="560" cy="265" r="3.5" fill="#ffb300" />
+        </g>
+
+        <g id="dc-candles" class="dc-candles" />
+      </svg>
+
+      <p class="dc__counter mono" id="dc-counter">— booting cake —</p>
+    </section>
+
+    <section class="dc__pad" aria-label="Cake action">
+      <button type="button" class="dc__action dc__action--light" id="dc-action" aria-live="polite">
+        <span class="dc__action-cap">
+          <span class="dc__action-glyph" id="dc-action-glyph">✷</span>
+          <span class="dc__action-label" id="dc-action-label">LIGHT A CANDLE</span>
+          <span class="dc__action-kbd mono">SPACE / RETURN</span>
+        </span>
+      </button>
+      <p class="dc__note mono" id="dc-note">— ready —</p>
+    </section>
+
+    <section class="dc__wish" id="dc-wish-section" aria-label="The wish" hidden>
+      <h2 class="dc__h2"><em>Make a wish.</em></h2>
+      <p class="dc__sub">All the candles are out. Type a wish and share — only your friends with the link will see it.</p>
+      <label for="dc-wish-input" class="dc__sr">Your wish</label>
+      <input type="text" id="dc-wish-input" class="dc__input" maxlength="140" placeholder="i wish for…" />
+      <p class="dc__wish-hint mono" id="dc-wish-hint">— wishes are local · share via &amp;wish=… in the link —</p>
+      <div class="dc__confetti" id="dc-confetti" aria-hidden="true"></div>
+    </section>
+
+    <section class="dc__share" aria-label="Share this cake">
+      <h2 class="dc__h2"><em>Send it to someone.</em></h2>
+      <p class="dc__sub">The link carries the name and the candles. Whoever opens it sees their cake — already lit, ready to be blown.</p>
+      <div class="dc__share-row">
+        <button type="button" class="dc__share-btn" id="dc-copy">copy link</button>
+        <a class="dc__share-btn" id="dc-tweet" href="#" target="_blank" rel="noopener">tweet</a>
+        <button type="button" class="dc__share-btn" id="dc-native" hidden>share…</button>
+      </div>
+      <p class="dc__share-url mono" id="dc-share-url">—</p>
+      <details class="dc__custom">
+        <summary class="mono">customize</summary>
+        <div class="dc__custom-body">
+          <label class="dc__field"><span class="mono">for</span><input type="text" id="dc-cf-for" maxlength="40" placeholder="elaine" /></label>
+          <label class="dc__field"><span class="mono">age</span><input type="number" id="dc-cf-age" min="1" max="24" placeholder="8" /></label>
+          <label class="dc__field"><span class="mono">from</span><input type="text" id="dc-cf-from" maxlength="40" placeholder="mike" /></label>
+          <button type="button" class="dc__share-btn dc__share-btn--alt" id="dc-cf-apply">build link</button>
+        </div>
+      </details>
+    </section>
+
+    <footer class="dc__foot">
+      <p>The Birthday Imprint: <a href="/drum-birthday">/drum-birthday</a> (hub) · <a href="/drum-cake">/drum-cake</a> (this cake) · <a href="/drum-card">/drum-card</a> (signatures) · <a href="/drum-pinata">/drum-pinata</a> (burst). All the rooms share the <code>/api/sounds</code> bus, so a candle lit here flickers across the cast surfaces too.</p>
+      <p class="dc__credit mono">v0.1 · 2026-04-29 · birthday imprint · pointcast.xyz</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  var main = document.getElementById('dc-main');
+  if (!main) return;
+
+  var DEFAULT_CANDLES = parseInt(main.getAttribute('data-default-candles') || '8', 10);
+  var MAX_CANDLES = parseInt(main.getAttribute('data-max-candles') || '24', 10);
+  var CANDLE_COLORS = ['#ffb6d3', '#5b9cff', '#ffd84a', '#7adb6e'];
+
+  // --- params ---
+  var qs = new URLSearchParams(window.location.search);
+  var pFor = (qs.get('for') || '').trim().slice(0, 40);
+  var pAgeRaw = parseInt(qs.get('age') || '', 10);
+  var pAge = (Number.isFinite(pAgeRaw) && pAgeRaw > 0) ? Math.min(pAgeRaw, MAX_CANDLES) : DEFAULT_CANDLES;
+  var pFrom = (qs.get('from') || '').trim().slice(0, 40);
+  var pWish = (qs.get('wish') || '').trim().slice(0, 140);
+  var N = pAge;
+
+  // --- DOM ---
+  var nameEl = document.getElementById('dc-for-name');
+  var fromEl = document.getElementById('dc-from-line');
+  var counterEl = document.getElementById('dc-counter');
+  var noteEl = document.getElementById('dc-note');
+  var actionBtn = document.getElementById('dc-action');
+  var actionLabel = document.getElementById('dc-action-label');
+  var actionGlyph = document.getElementById('dc-action-glyph');
+  var candlesG = document.getElementById('dc-candles');
+  var wishSection = document.getElementById('dc-wish-section');
+  var wishInput = document.getElementById('dc-wish-input');
+  var confettiBox = document.getElementById('dc-confetti');
+  var shareUrlEl = document.getElementById('dc-share-url');
+  var copyBtn = document.getElementById('dc-copy');
+  var tweetBtn = document.getElementById('dc-tweet');
+  var nativeBtn = document.getElementById('dc-native');
+  var cfFor = document.getElementById('dc-cf-for');
+  var cfAge = document.getElementById('dc-cf-age');
+  var cfFrom = document.getElementById('dc-cf-from');
+  var cfApply = document.getElementById('dc-cf-apply');
+
+  if (pFor) nameEl.textContent = pFor;
+  if (pFrom) fromEl.textContent = '— from ' + pFrom + ' —';
+  if (cfFor) cfFor.value = pFor;
+  if (cfAge) cfAge.value = String(N);
+  if (cfFrom) cfFrom.value = pFrom;
+  if (pWish && wishInput) wishInput.value = pWish;
+
+  // --- session id (mirrors drum-agent pattern) ---
+  function getSession() {
+    try {
+      var k = 'pc:session';
+      var s = localStorage.getItem(k);
+      if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(k, s); }
+      return s;
+    } catch(e) { return 'dc-' + Math.random().toString(36).slice(2, 10); }
+  }
+  var sid = getSession();
+  var shortPid = '';
+  try {
+    if (window.crypto && crypto.subtle) {
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode(sid)).then(function(buf){
+        var arr = Array.from(new Uint8Array(buf)).slice(0, 5);
+        shortPid = arr.map(function(b){ return b.toString(16).padStart(2,'0'); }).join('').slice(0, 8);
+      }).catch(function(){});
+    }
+  } catch(e) {}
+
+  // --- candle SVG generation ---
+  // Candles sit on top of the top layer (y≈210). Each candle = wick + body + flame + smoke wisp.
+  function buildCandles() {
+    candlesG.innerHTML = '';
+    var topLayerLeft = 235;
+    var topLayerRight = 565;
+    var span = topLayerRight - topLayerLeft;
+    var step = N > 1 ? span / (N - 1) : 0;
+    var baseY = 210;
+    for (var i = 0; i < N; i++) {
+      var x = N === 1 ? (topLayerLeft + topLayerRight) / 2 : topLayerLeft + step * i;
+      var color = CANDLE_COLORS[i % CANDLE_COLORS.length];
+      var height = 55 + (i % 3) * 4;
+      var top = baseY - height;
+
+      var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('id', 'candle-' + i);
+      g.setAttribute('class', 'dc-candle');
+      g.setAttribute('data-lit', '0');
+
+      var stripe = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      stripe.setAttribute('x', String(x - 7));
+      stripe.setAttribute('y', String(top));
+      stripe.setAttribute('width', '14');
+      stripe.setAttribute('height', String(height));
+      stripe.setAttribute('rx', '2');
+      stripe.setAttribute('fill', color);
+      stripe.setAttribute('stroke', '#1a1206');
+      stripe.setAttribute('stroke-width', '2');
+      g.appendChild(stripe);
+
+      var stripe2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      var s2y1 = top + 12;
+      var s2y2 = top + height - 12;
+      stripe2.setAttribute('d', 'M' + (x - 7) + ' ' + s2y1 + ' L' + (x + 7) + ' ' + s2y1 + ' M' + (x - 7) + ' ' + s2y2 + ' L' + (x + 7) + ' ' + s2y2);
+      stripe2.setAttribute('stroke', '#1a1206');
+      stripe2.setAttribute('stroke-width', '1');
+      stripe2.setAttribute('opacity', '0.4');
+      g.appendChild(stripe2);
+
+      var wick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      wick.setAttribute('x1', String(x));
+      wick.setAttribute('y1', String(top));
+      wick.setAttribute('x2', String(x));
+      wick.setAttribute('y2', String(top - 8));
+      wick.setAttribute('stroke', '#1a1206');
+      wick.setAttribute('stroke-width', '2');
+      wick.setAttribute('stroke-linecap', 'round');
+      g.appendChild(wick);
+
+      var flame = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      flame.setAttribute('class', 'dc-flame');
+      flame.setAttribute('data-cx', String(x));
+      flame.setAttribute('data-cy', String(top - 8));
+
+      var glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      glow.setAttribute('cx', String(x));
+      glow.setAttribute('cy', String(top - 14));
+      glow.setAttribute('r', '14');
+      glow.setAttribute('fill', 'url(#dc-flame-glow)');
+      glow.setAttribute('class', 'dc-flame__glow');
+      flame.appendChild(glow);
+
+      var flameShape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      var fy = top - 8;
+      flameShape.setAttribute('d', 'M' + x + ' ' + fy + ' Q' + (x - 5) + ' ' + (fy - 8) + ' ' + (x - 3) + ' ' + (fy - 14) + ' Q' + x + ' ' + (fy - 22) + ' ' + (x + 3) + ' ' + (fy - 14) + ' Q' + (x + 5) + ' ' + (fy - 8) + ' ' + x + ' ' + fy + ' Z');
+      flameShape.setAttribute('fill', 'url(#dc-flame)');
+      flameShape.setAttribute('stroke', '#b8550a');
+      flameShape.setAttribute('stroke-width', '1');
+      flameShape.setAttribute('class', 'dc-flame__shape');
+      flame.appendChild(flameShape);
+
+      g.appendChild(flame);
+
+      var smoke = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      smoke.setAttribute('class', 'dc-smoke');
+      var sm1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      sm1.setAttribute('cx', String(x));
+      sm1.setAttribute('cy', String(top - 14));
+      sm1.setAttribute('r', '3');
+      sm1.setAttribute('fill', '#888');
+      sm1.setAttribute('opacity', '0');
+      smoke.appendChild(sm1);
+      var sm2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      sm2.setAttribute('cx', String(x + 2));
+      sm2.setAttribute('cy', String(top - 22));
+      sm2.setAttribute('r', '4');
+      sm2.setAttribute('fill', '#aaa');
+      sm2.setAttribute('opacity', '0');
+      smoke.appendChild(sm2);
+      var sm3 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      sm3.setAttribute('cx', String(x - 1));
+      sm3.setAttribute('cy', String(top - 30));
+      sm3.setAttribute('r', '3');
+      sm3.setAttribute('fill', '#bbb');
+      sm3.setAttribute('opacity', '0');
+      smoke.appendChild(sm3);
+
+      g.appendChild(smoke);
+      candlesG.appendChild(g);
+    }
+  }
+  buildCandles();
+
+  // --- state ---
+  var litCount = 0;     // how many candles have been lit (room-wide)
+  var blownCount = 0;   // how many lit candles have been blown (room-wide)
+  var phase = 'light';  // 'light' | 'blow' | 'done'
+  var myTaps = 0;
+  var lastTs = Date.now() - 1000;
+  var pending = 0; // ack counter for self filter
+
+  function applyState() {
+    // Light up the first `litCount` candles, then extinguish the first `blownCount` of those.
+    for (var i = 0; i < N; i++) {
+      var c = document.getElementById('candle-' + i);
+      if (!c) continue;
+      var shouldBeLit = i < litCount;
+      var shouldBeBlown = i < blownCount;
+      var flame = c.querySelector('.dc-flame');
+      var smoke = c.querySelector('.dc-smoke');
+      if (shouldBeLit && !shouldBeBlown) {
+        c.setAttribute('data-lit', '1');
+        c.setAttribute('data-blown', '0');
+        if (flame) flame.classList.add('lit');
+        if (smoke) smoke.classList.remove('puff');
+      } else if (shouldBeBlown) {
+        c.setAttribute('data-lit', '0');
+        c.setAttribute('data-blown', '1');
+        if (flame) flame.classList.remove('lit');
+        if (smoke) smoke.classList.add('puff');
+      } else {
+        c.setAttribute('data-lit', '0');
+        c.setAttribute('data-blown', '0');
+        if (flame) flame.classList.remove('lit');
+        if (smoke) smoke.classList.remove('puff');
+      }
+    }
+
+    // Phase transitions.
+    var prev = phase;
+    if (litCount < N) phase = 'light';
+    else if (blownCount < N) phase = 'blow';
+    else phase = 'done';
+
+    if (phase === 'light') {
+      actionBtn.classList.remove('dc__action--blow', 'dc__action--done');
+      actionBtn.classList.add('dc__action--light');
+      actionLabel.textContent = 'LIGHT A CANDLE';
+      actionGlyph.textContent = '✷';
+      actionBtn.disabled = false;
+    } else if (phase === 'blow') {
+      actionBtn.classList.remove('dc__action--light', 'dc__action--done');
+      actionBtn.classList.add('dc__action--blow');
+      actionLabel.textContent = 'MAKE A WISH AND BLOW';
+      actionGlyph.textContent = '〰';
+      actionBtn.disabled = false;
+    } else {
+      actionBtn.classList.remove('dc__action--light', 'dc__action--blow');
+      actionBtn.classList.add('dc__action--done');
+      actionLabel.textContent = 'happy birthday';
+      actionGlyph.textContent = '🎉';
+      actionBtn.disabled = true;
+    }
+
+    counterEl.textContent =
+      litCount + ' lit · ' + blownCount + ' blown · phase: ' + phase +
+      ' · candles: ' + N + ' · your taps: ' + myTaps;
+
+    if (phase === 'done' && prev !== 'done') {
+      revealWish();
+      burstConfetti();
+    } else if (phase !== 'done' && wishSection) {
+      wishSection.hidden = false; // keep wish visible once seen, hide-only during boot
+    }
+  }
+
+  function revealWish() {
+    if (!wishSection) return;
+    wishSection.hidden = false;
+    wishSection.classList.add('dc__wish--in');
+    if (wishInput && pWish && !wishInput.value) wishInput.value = pWish;
+  }
+
+  function burstConfetti() {
+    if (!confettiBox) return;
+    confettiBox.innerHTML = '';
+    var COLORS = ['#d6346a', '#5b9cff', '#7adb6e', '#ffd84a', '#ffb6d3', '#ffb300'];
+    var n = 70;
+    for (var i = 0; i < n; i++) {
+      var d = document.createElement('span');
+      d.className = 'dc__confetti-bit';
+      d.style.left = (Math.random() * 100) + '%';
+      d.style.background = COLORS[i % COLORS.length];
+      d.style.animationDelay = (Math.random() * 0.6) + 's';
+      d.style.animationDuration = (2 + Math.random() * 2.5) + 's';
+      d.style.transform = 'rotate(' + (Math.random() * 360) + 'deg)';
+      confettiBox.appendChild(d);
+    }
+    setTimeout(function(){ if (confettiBox) confettiBox.innerHTML = ''; }, 6000);
+  }
+
+  // --- action ---
+  function fireTap() {
+    if (phase === 'done') return;
+    var type = phase === 'light' ? 'cake-light' : 'cake-blow';
+    myTaps += 1;
+    pending += 1;
+
+    actionBtn.classList.remove('dc__action--hit'); void actionBtn.offsetWidth; actionBtn.classList.add('dc__action--hit');
+
+    // Optimistic local update — applyState() will read these.
+    if (phase === 'light') litCount = Math.min(N, litCount + 1);
+    else if (phase === 'blow') blownCount = Math.min(N, blownCount + 1);
+    applyState();
+
+    noteEl.textContent = 'transmitting · type=' + type;
+    fetch('/api/sounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: type, sessionId: sid, note: 'tap', forName: pFor || null, age: N })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.ok) {
+        noteEl.textContent = 'transmitted ✓ · type=' + type;
+      } else {
+        noteEl.textContent = '✗ ' + (data && data.reason ? data.reason : 'send failed');
+      }
+    }).catch(function(){
+      noteEl.textContent = '✗ offline (your tap stays local)';
+    });
+  }
+
+  actionBtn.addEventListener('mousedown', function(e){ fireTap(); e.preventDefault(); });
+  actionBtn.addEventListener('touchstart', function(e){ fireTap(); e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', function(e){
+    if (e.repeat) return;
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.code === 'Space' || e.code === 'Enter') { fireTap(); e.preventDefault(); }
+  });
+
+  // --- room poll: bootstrap + tail ---
+  // On boot we fetch the entire recent stream and count cake-* events to set the initial phase.
+  // Then we tail since the latest timestamp, applying remote events (filtering our own pending acks).
+  function boot() {
+    fetch('/api/sounds?limit=500', { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+      if (!data) { applyState(); return; }
+      var events = Array.isArray(data.events) ? data.events : [];
+      var lit = 0, blown = 0;
+      for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (e.type === 'cake-light') lit += 1;
+        else if (e.type === 'cake-blow') blown += 1;
+      }
+      // Cap at N — stale rooms with old counts don't break the visual.
+      litCount = Math.min(N, lit);
+      blownCount = Math.min(N, blown);
+      // Make sure blown never exceeds lit.
+      if (blownCount > litCount) blownCount = litCount;
+      lastTs = events.length ? (events[events.length - 1].t || Date.now()) : Date.now() - 500;
+      applyState();
+    }).catch(function(){ applyState(); });
+  }
+
+  function tail() {
+    fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+      if (!data) return;
+      var events = Array.isArray(data.events) ? data.events : [];
+      if (!events.length) return;
+      lastTs = events[events.length - 1].t || Date.now();
+      var changed = false;
+      for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (e.type !== 'cake-light' && e.type !== 'cake-blow') continue;
+        // Self filter — events the server echoed back from us. We track by sessionId.
+        if (e.sessionId === sid && pending > 0) {
+          pending -= 1;
+          continue;
+        }
+        if (e.type === 'cake-light') {
+          if (litCount < N) { litCount += 1; changed = true; }
+        } else {
+          if (blownCount < N && blownCount < litCount) { blownCount += 1; changed = true; }
+        }
+      }
+      if (changed) applyState();
+    }).catch(function(){});
+  }
+  boot();
+  setInterval(tail, 1500);
+
+  // --- share row ---
+  function buildShareUrl(opts) {
+    opts = opts || {};
+    var u = new URL(window.location.href);
+    u.search = '';
+    if (opts.forName) u.searchParams.set('for', opts.forName);
+    else if (pFor) u.searchParams.set('for', pFor);
+    if (opts.age) u.searchParams.set('age', String(opts.age));
+    else if (N !== DEFAULT_CANDLES) u.searchParams.set('age', String(N));
+    if (opts.from) u.searchParams.set('from', opts.from);
+    else if (pFrom) u.searchParams.set('from', pFrom);
+    if (opts.wish) u.searchParams.set('wish', opts.wish);
+    return u.toString();
+  }
+
+  function refreshShareUrl() {
+    var url = buildShareUrl();
+    if (shareUrlEl) shareUrlEl.textContent = url;
+    if (tweetBtn) {
+      var who = pFor ? pFor : 'a friend';
+      var text = 'a cake for ' + who + ' — light a candle, make a wish';
+      tweetBtn.setAttribute('href', 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url));
+    }
+  }
+  refreshShareUrl();
+
+  if (copyBtn) copyBtn.addEventListener('click', function(){
+    var url = buildShareUrl();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function(){
+        copyBtn.textContent = 'copied ✓';
+        setTimeout(function(){ copyBtn.textContent = 'copy link'; }, 1600);
+      }).catch(function(){
+        copyBtn.textContent = '✗ copy failed';
+      });
+    } else {
+      try { var ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); copyBtn.textContent = 'copied ✓'; setTimeout(function(){ copyBtn.textContent = 'copy link'; }, 1600); } catch(e) {}
+    }
+  });
+
+  if (nativeBtn && navigator.share) {
+    nativeBtn.hidden = false;
+    nativeBtn.addEventListener('click', function(){
+      navigator.share({
+        title: 'a birthday cake' + (pFor ? ' for ' + pFor : ''),
+        text: 'light a candle with me',
+        url: buildShareUrl(),
+      }).catch(function(){});
+    });
+  }
+
+  if (cfApply) {
+    cfApply.addEventListener('click', function(){
+      var fn = (cfFor.value || '').trim().slice(0, 40);
+      var ag = parseInt(cfAge.value, 10);
+      var fr = (cfFrom.value || '').trim().slice(0, 40);
+      var url = buildShareUrl({
+        forName: fn,
+        age: (Number.isFinite(ag) && ag > 0) ? Math.min(ag, MAX_CANDLES) : null,
+        from: fr,
+      });
+      if (shareUrlEl) shareUrlEl.textContent = url;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function(){
+          cfApply.textContent = 'copied ✓';
+          setTimeout(function(){ cfApply.textContent = 'build link'; }, 1600);
+        });
+      }
+    });
+  }
+
+  // wish input — local only, broadcast via URL
+  if (wishInput) {
+    wishInput.addEventListener('input', function(){
+      var v = wishInput.value || '';
+      try { localStorage.setItem('pc:dc:wish', v); } catch(e) {}
+      var url = buildShareUrl({ wish: v });
+      if (shareUrlEl) shareUrlEl.textContent = url;
+    });
+    try {
+      var saved = localStorage.getItem('pc:dc:wish');
+      if (saved && !wishInput.value && !pWish) wishInput.value = saved;
+    } catch(e) {}
+  }
+
+  // hide the wish section until we transition into 'done' for the first time
+  // (if the room is already done at boot, show it immediately).
+  if (wishSection) {
+    if (litCount >= N && blownCount >= N) {
+      wishSection.hidden = false;
+    } else {
+      wishSection.hidden = true;
+    }
+  }
+})();
+</script>
+
+<style>
+.dc {
+  min-height: 100vh;
+  padding: 12px 12px 60px;
+  background:
+    radial-gradient(circle at 20% 10%, #ffe6c2 0%, transparent 40%),
+    radial-gradient(circle at 80% 30%, #ffd9ec 0%, transparent 45%),
+    #fff5dd;
+  color: #1a1206;
+  font-family: 'Inter Variable', system-ui, -apple-system, sans-serif;
+}
+.dc__head {
+  max-width: 980px;
+  margin: 0 auto 18px;
+  padding: 0 6px;
+  text-align: center;
+}
+.dc__kicker {
+  margin: 0 0 8px;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #b8550a;
+}
+.dc__title {
+  margin: 0 0 8px;
+  font-family: 'Gloock', 'Playfair Display', Georgia, serif;
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 1.02;
+  color: #1a1206;
+  letter-spacing: -0.01em;
+}
+.dc__title-em { font-style: italic; color: #d6346a; }
+.dc__title-name { font-weight: 700; }
+.dc__title-bang { color: #b8550a; }
+.dc__dek {
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.55;
+  max-width: 56ch;
+  color: #3a2410;
+  font-family: 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+}
+.dc__dek strong { font-style: normal; font-weight: 700; color: #d6346a; }
+.dc__from {
+  margin: 8px 0 0;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #b8550a;
+  text-transform: uppercase;
+}
+
+.dc__cakebox {
+  max-width: 880px;
+  margin: 0 auto 18px;
+  padding: 24px 18px 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2px solid #1a1206;
+  border-radius: 14px;
+  box-shadow: 6px 8px 0 0 #d6346a, 0 0 0 1px rgba(26, 18, 6, 0.05) inset;
+}
+.dc__cake {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 540px;
+}
+.dc__counter {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #5b3a1a;
+}
+
+/* candles */
+.dc-candle .dc-flame__shape { opacity: 0.18; transform-origin: center; transform-box: fill-box; }
+.dc-candle .dc-flame__glow { opacity: 0; }
+.dc-candle .dc-flame.lit .dc-flame__shape { opacity: 1; animation: dc-flicker 0.45s ease-in-out infinite alternate; }
+.dc-candle .dc-flame.lit .dc-flame__glow { opacity: 1; animation: dc-glow 1.2s ease-in-out infinite alternate; }
+.dc-candle .dc-smoke circle { transition: opacity 220ms; }
+.dc-candle .dc-smoke.puff circle { animation: dc-puff 1.6s ease-out forwards; }
+.dc-candle .dc-smoke.puff circle:nth-child(2) { animation-delay: 0.12s; }
+.dc-candle .dc-smoke.puff circle:nth-child(3) { animation-delay: 0.24s; }
+
+@keyframes dc-flicker {
+  0%   { transform: scaleY(1) scaleX(1)   translateY(0); }
+  50%  { transform: scaleY(1.08) scaleX(0.95) translateY(-1px); }
+  100% { transform: scaleY(0.95) scaleX(1.05) translateY(1px); }
+}
+@keyframes dc-glow {
+  0%   { opacity: 0.65; }
+  100% { opacity: 1; }
+}
+@keyframes dc-puff {
+  0%   { opacity: 0; transform: translateY(0) scale(0.6); }
+  20%  { opacity: 0.6; transform: translateY(-2px) scale(0.9); }
+  60%  { opacity: 0.4; transform: translateY(-14px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-30px) scale(1.5); }
+}
+
+/* action button */
+.dc__pad {
+  max-width: 980px;
+  margin: 0 auto 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.dc__action {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.dc__action-cap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 48px;
+  border: 3px solid #1a1206;
+  border-radius: 14px;
+  box-shadow: 6px 8px 0 0 #1a1206;
+  transition: transform 80ms, box-shadow 120ms;
+  font-family: 'Inter Variable', system-ui, sans-serif;
+}
+.dc__action--light .dc__action-cap {
+  background: linear-gradient(180deg, #ffe79a, #f7d56b);
+  color: #1a1206;
+}
+.dc__action--blow .dc__action-cap {
+  background: linear-gradient(180deg, #cfe6ff, #a4cffa);
+  color: #0d2a4a;
+}
+.dc__action--done .dc__action-cap {
+  background: linear-gradient(180deg, #f7c8df, #d6346a);
+  color: #fff;
+  cursor: default;
+}
+.dc__action:hover .dc__action-cap { transform: translate(-1px, -1px); box-shadow: 7px 9px 0 0 #1a1206; }
+.dc__action--hit .dc__action-cap { animation: dc-hit 180ms ease-out; }
+@keyframes dc-hit {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.94) translate(2px, 3px); box-shadow: 2px 3px 0 0 #1a1206; }
+  100% { transform: scale(1); }
+}
+.dc__action[disabled] { cursor: default; opacity: 0.95; }
+.dc__action-glyph { font-size: clamp(44px, 5vw, 72px); line-height: 1; }
+.dc__action-label {
+  font-size: clamp(20px, 2.4vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.dc__action-kbd {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  padding: 2px 8px;
+  background: #1a1206;
+  color: #fff5dd;
+  border-radius: 3px;
+}
+.dc__note {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #5b3a1a;
+  min-height: 14px;
+}
+
+/* wish */
+.dc__wish {
+  max-width: 720px;
+  margin: 0 auto 18px;
+  padding: 22px 22px 28px;
+  background: #fffbef;
+  border: 2px solid #1a1206;
+  border-radius: 14px;
+  box-shadow: 6px 8px 0 0 #5b9cff;
+  position: relative;
+  overflow: hidden;
+  transition: opacity 320ms;
+}
+.dc__wish[hidden] { display: none; }
+.dc__h2 {
+  margin: 0 0 6px;
+  font-family: 'Gloock', 'Playfair Display', Georgia, serif;
+  font-size: clamp(24px, 3vw, 34px);
+  color: #1a1206;
+}
+.dc__h2 em { color: #d6346a; font-style: italic; }
+.dc__sub {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #3a2410;
+  max-width: 56ch;
+}
+.dc__sr { position: absolute; left: -9999px; }
+.dc__input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-style: italic;
+  font-size: 18px;
+  border: 2px solid #1a1206;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1206;
+}
+.dc__input:focus { outline: none; border-color: #d6346a; box-shadow: 0 0 0 3px #ffd6e8; }
+.dc__wish-hint {
+  margin: 8px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: #5b3a1a;
+}
+.dc__confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.dc__confetti-bit {
+  position: absolute;
+  top: -20px;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  animation-name: dc-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+@keyframes dc-fall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(420px) rotate(720deg); opacity: 0; }
+}
+
+/* share */
+.dc__share {
+  max-width: 720px;
+  margin: 0 auto 18px;
+  padding: 18px 22px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 2px solid #1a1206;
+  border-radius: 14px;
+  box-shadow: 6px 8px 0 0 #7adb6e;
+}
+.dc__share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.dc__share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  font-family: 'Inter Variable', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: #d6346a;
+  color: #fff;
+  border: 2px solid #1a1206;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 3px 4px 0 0 #1a1206;
+  transition: transform 80ms, box-shadow 120ms;
+}
+.dc__share-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 5px 0 0 #1a1206; text-decoration: none; }
+.dc__share-btn:active { transform: translate(2px, 3px); box-shadow: 1px 2px 0 0 #1a1206; }
+.dc__share-btn--alt { background: #5b9cff; }
+.dc__share-url {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #5b3a1a;
+  word-break: break-all;
+  background: #fffbef;
+  border: 1px dashed #1a1206;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.dc__custom { margin-top: 6px; font-family: 'JetBrains Mono Variable', ui-monospace, monospace; }
+.dc__custom summary { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #b8550a; cursor: pointer; padding: 6px 0; }
+.dc__custom-body { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding-top: 8px; border-top: 1px dashed #1a1206; }
+.dc__field { display: flex; flex-direction: column; gap: 4px; font-size: 10px; }
+.dc__field span { letter-spacing: 0.18em; text-transform: uppercase; color: #5b3a1a; }
+.dc__field input {
+  padding: 8px 10px;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 13px;
+  border: 2px solid #1a1206;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1206;
+  width: 140px;
+}
+
+.dc__foot {
+  max-width: 720px;
+  margin: 18px auto 0;
+  padding: 14px 6px 0;
+  border-top: 1px dashed #1a1206;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #3a2410;
+}
+.dc__foot a { color: #d6346a; }
+.dc__foot code { background: #fffbef; padding: 1px 6px; border: 1px solid #1a1206; border-radius: 3px; font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 12px; }
+.dc__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #b8550a; }
+
+.mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; }
+
+@media (max-width: 600px) {
+  .dc__action-cap { padding: 22px 28px; }
+  .dc__cakebox { padding: 14px 8px; }
+  .dc__field input { width: 110px; }
+}
+</style>

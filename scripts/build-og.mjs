@@ -29,6 +29,11 @@ const CARDS = [
   { svg: 'og-drum.svg',    png: 'og-drum.png'    }, // /drum
   { svg: 'og-collect.svg', png: 'og-collect.png' }, // /collect
   { svg: 'og-about.svg',   png: 'og-about.png'   }, // /about
+  // Birthday Imprint — added 2026-04-29 PT for the drum-birthday family.
+  { svg: 'og-drum-birthday.svg', png: 'og-drum-birthday.png' }, // /drum-birthday
+  { svg: 'og-drum-cake.svg',     png: 'og-drum-cake.png'     }, // /drum-cake
+  { svg: 'og-drum-card.svg',     png: 'og-drum-card.png'     }, // /drum-card
+  { svg: 'og-drum-pinata.svg',   png: 'og-drum-pinata.png'   }, // /drum-pinata
 ];
 
 /**

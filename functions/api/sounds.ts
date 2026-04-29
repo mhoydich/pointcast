@@ -77,6 +77,13 @@ const ALLOWED_TYPES = new Set([
   'confessional', 'soft',
   // Agent/mcp signaling
   'agent', 'mcp',
+  // Birthday imprint — shipped 2026-04-29 PT. Per Mike: "a bunch of
+  // birthday drum apps, different ways to celebrate one's birthday with
+  // collaborative drumming, ways to share." Each fan-out type maps to
+  // a /drum-birthday* surface so cast surfaces can flash differently
+  // for cake-lit vs piñata-burst vs card-signed events.
+  'birthday', 'cake-light', 'cake-blow', 'sign',
+  'pinata', 'pinata-burst', 'wish', 'roll', 'toast',
 ]);
 
 interface SoundEvent {
