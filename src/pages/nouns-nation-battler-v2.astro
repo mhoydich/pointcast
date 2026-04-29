@@ -1,0 +1,1243 @@
+---
+/**
+ * /nouns-nation-battler-v2 - second control-room surface for the v30
+ * Nouns Nation automated league battler.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+
+const ch = CHANNELS.BTL;
+
+const tickerItems = [
+  'V2 control room is listening to the embedded v30 match engine',
+  'Live table, top Nouns, pressure line, and replay desk update from postMessage snapshots',
+  'Run Next, Quick Sim, Sim Day, Slow, Live, and Rush from the desk',
+  'TV Cast, Desk Wall, posters, and JSON stay one click away',
+  'Every match feeds the local two-week march to the Nouns Bowl',
+];
+
+const fallbackStandings = [
+  { short: 'TN', name: 'Tomato Noggles', record: '0-0', detail: '+0 / 0 fans', color: '#e45745' },
+  { short: 'CF', name: 'Cobalt Frames', record: '0-0', detail: '+0 / 0 fans', color: '#3677e0' },
+  { short: 'GN', name: 'Golden Nouncil', record: '0-0', detail: '+0 / 0 fans', color: '#d49b19' },
+  { short: 'GS', name: 'Garden Stack', record: '0-0', detail: '+0 / 0 fans', color: '#3f9b54' },
+  { short: 'PU', name: 'Pixel Union', record: '0-0', detail: '+0 / 0 fans', color: '#8b5cf6' },
+  { short: 'NA', name: 'Night Auction', record: '0-0', detail: '+0 / 0 fans', color: '#2f3a4f' },
+  { short: 'SP', name: 'Sunset Prop House', record: '0-0', detail: '+0 / 0 fans', color: '#ef7d2d' },
+  { short: 'MC', name: 'Mint Condition', record: '0-0', detail: '+0 / 0 fans', color: '#13a6a1' },
+];
+
+const fieldCards = [
+  { label: 'Hub', title: 'Nouns Nation', href: '/nouns-nation/' },
+  { label: 'Federate', title: 'Bring a Nation', href: '/nouns-nation/join/' },
+  { label: 'Watch', title: 'TV Cast', href: '/nouns-nation-battler-tv/' },
+  { label: 'Archive', title: 'Desk Wall', href: '/nouns-nation-battler-desk/' },
+  { label: 'Collect', title: 'Poster Wall', href: '/nouns-nation-battler-posters/' },
+  { label: 'Data', title: 'JSON Feed', href: '/nouns-nation-battler.json' },
+];
+
+const runSheet = [
+  { stamp: '00', title: 'Open the slate', note: 'Check matchup, field type, challenge, and speed.' },
+  { stamp: '15', title: 'Find pressure', note: 'Compare alive count, damage leaders, and table position.' },
+  { stamp: '30', title: 'Root the room', note: 'Pick a side, then let the table remember it locally.' },
+  { stamp: '45', title: 'Send the artifact', note: 'Jump to TV Cast, Desk Wall, or posters after the result.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  name: 'PointCast Battle Desk V2: Nouns Nation Battler',
+  description: 'A v2 GameCast-style control room for the automated 30v30 Nouns Nation Battler league.',
+  url: 'https://pointcast.xyz/nouns-nation-battler-v2/',
+  gamePlatform: 'Web browser',
+  genre: 'Auto battler',
+  inLanguage: 'en-US',
+};
+---
+
+<BlockLayout
+  title="PointCast Battle Desk V2"
+  description="A GameCast-style v2 control room for Nouns Nation Battler with a live pressure line, analyst rail, league table, top Nouns, replay log, controls, and the embedded 30 vs 30 field feed."
+  image="/images/og/battle.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/nouns-nation.json', title: 'Nouns Nation federation manifest (JSON)' },
+    { type: 'application/json', href: '/nouns-nation-battler.json', title: 'Nouns Nation Battler manifest (JSON)' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/battle.png',
+    buttons: [
+      { label: 'Watch v2', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-v2/' },
+      { label: 'Nouns Nation', action: 'link', target: 'https://pointcast.xyz/nouns-nation/' },
+      { label: 'TV Cast', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-tv/' },
+      { label: 'Desk Wall', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-desk/' },
+      { label: 'Game JSON', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler.json' },
+    ],
+  }}
+>
+  <main
+    class="battle-v2"
+    data-battle-v2
+    style={`--btl: ${ch.color600}; --btl-dark: ${ch.color800}; --btl-soft: ${ch.color50}; --left-team: #e45745; --right-team: #3677e0; --left-share: 50%; --right-share: 50%; --pressure-x: 50%;`}
+  >
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nouns-nation/">Nouns Nation</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nouns-nation-battler/">Battle Desk</a>
+      <span aria-hidden="true">/</span>
+      <span>V2</span>
+    </nav>
+
+    <section class="topline" aria-label="Battle desk v2 ticker">
+      <div class="brand-lockup">
+        <span>PointCast BTL</span>
+        <strong>Control Room V2</strong>
+      </div>
+      <div class="ticker" aria-label="Live desk ticker">
+        <span class="ticker__live" data-live-field="state">LIVE</span>
+        <div class="ticker__viewport">
+          <div class="ticker__track">
+            {tickerItems.concat(tickerItems).map((item) => <span>{item}</span>)}
+          </div>
+        </div>
+      </div>
+      <a href="/nouns-nation/">Nation Hub</a>
+    </section>
+
+    <section class="command-head" aria-label="Live command header">
+      <div class="title-lockup">
+        <p>CH.BTL / automated league feed</p>
+        <h1>Battle Desk V2</h1>
+      </div>
+      <div class="status-bank" aria-label="Current match state">
+        <article>
+          <span>Match</span>
+          <strong data-live-field="match">1</strong>
+        </article>
+        <article>
+          <span>Field</span>
+          <strong data-live-field="field">Open Field</strong>
+        </article>
+        <article>
+          <span>Updated</span>
+          <strong data-live-field="last-update">warming</strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="score-deck" aria-label="Live matchup">
+      <article class="team-card team-card--left">
+        <div class="team-chip" data-live-field="left-short">TN</div>
+        <div class="team-meta">
+          <h2 data-live-field="left-name">Tomato Noggles</h2>
+          <p data-live-field="left-mark">split tomato noggles</p>
+        </div>
+        <div class="alive-box">
+          <span>Alive</span>
+          <strong data-live-field="left-alive">30</strong>
+        </div>
+      </article>
+
+      <div class="match-center">
+        <p data-live-field="league-line">Day 1 / 14 / Slate 1 of 4</p>
+        <h2 data-live-field="matchup">Nouns Nation Battler</h2>
+        <div class="pressure" aria-label="Pressure meter">
+          <i></i>
+        </div>
+        <div class="pressure-labels">
+          <span data-live-field="left-pressure">50%</span>
+          <strong data-live-field="momentum-label">Even field</strong>
+          <span data-live-field="right-pressure">50%</span>
+        </div>
+      </div>
+
+      <article class="team-card team-card--right">
+        <div class="team-chip" data-live-field="right-short">CF</div>
+        <div class="team-meta">
+          <h2 data-live-field="right-name">Cobalt Frames</h2>
+          <p data-live-field="right-mark">blue square lenses</p>
+        </div>
+        <div class="alive-box">
+          <span>Alive</span>
+          <strong data-live-field="right-alive">30</strong>
+        </div>
+      </article>
+    </section>
+
+    <section class="control-strip" aria-label="Desk controls">
+      <button type="button" data-desk-command="newMatch">Next</button>
+      <button type="button" data-desk-command="quickSim">Quick Sim</button>
+      <button type="button" data-desk-command="simDay">Sim Day</button>
+      <button type="button" data-desk-command="togglePause">Pause</button>
+      <button type="button" data-desk-command="setAutoNext">Auto Next</button>
+      <button type="button" data-desk-command="setSpeed" data-speed="0.75">Slow</button>
+      <button type="button" class="is-active" data-desk-command="setSpeed" data-speed="1">Live</button>
+      <button type="button" data-desk-command="setSpeed" data-speed="1.55">Rush</button>
+      <button type="button" data-desk-command="root" data-team="0">Root Left</button>
+      <button type="button" data-desk-command="root" data-team="1">Root Right</button>
+    </section>
+
+    <section class="main-grid" aria-label="V2 live layout">
+      <section class="field-shell" aria-label="Embedded match field">
+        <header class="section-head">
+          <div>
+            <p>Main Feed</p>
+            <h2 data-live-field="control-copy">Live engine locked</h2>
+          </div>
+          <span data-live-field="speed">Live speed</span>
+        </header>
+        <iframe
+          id="battleFrameV2"
+          src="about:blank"
+          data-battle-src="/games/nouns-nation-battler/index.html"
+          title="Nouns Nation Battler live field feed"
+          loading="eager"
+          allow="fullscreen"
+        ></iframe>
+      </section>
+
+      <aside class="analyst-rail" aria-label="Live analyst rail">
+        <section class="panel panel--callout">
+          <header class="section-head">
+            <div>
+              <p>Pressure Read</p>
+              <h2 data-live-field="analyst-headline">Even field</h2>
+            </div>
+            <span data-live-field="total-live">60 live</span>
+          </header>
+          <p class="analysis-copy" data-live-field="challenge">
+            Season challenge loading from the match engine.
+          </p>
+          <div class="mini-stats">
+            <article>
+              <span>Auto</span>
+              <strong data-live-field="auto-next">On</strong>
+            </article>
+            <article>
+              <span>Root</span>
+              <strong data-live-field="root-line">Pick</strong>
+            </article>
+            <article>
+              <span>Weather</span>
+              <strong data-live-field="weather">Clear</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header class="section-head">
+            <div>
+              <p>Leaders</p>
+              <h2>Top Nouns</h2>
+            </div>
+            <span data-live-field="leader-count">warming</span>
+          </header>
+          <div class="leader-board" data-live-field="top-nouns">
+            <article>
+              <img src="/games/nouns-nation-battler/assets/noun-0.svg" alt="" loading="lazy" />
+              <span>#0 / pregame</span>
+              <strong>Noun on deck</strong>
+              <em>0 dmg / 0 KO</em>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header class="section-head">
+            <div>
+              <p>Replay Desk</p>
+              <h2>Latest Calls</h2>
+            </div>
+          </header>
+          <div class="replay-log" data-live-field="log">
+            <p>Waiting for first push.</p>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="lower-grid" aria-label="League and desk tools">
+      <section class="panel panel--table">
+        <header class="section-head">
+          <div>
+            <p>LeagueCast</p>
+            <h2>Standings</h2>
+          </div>
+          <span data-live-field="table-note">local table</span>
+        </header>
+        <div class="standings" data-live-field="standings">
+          {fallbackStandings.map((row, index) => (
+            <article style={`--team:${row.color}`}>
+              <span>{index + 1}</span>
+              <strong>{row.short}</strong>
+              <em>{row.name}</em>
+              <b>{row.record}</b>
+              <i>{row.detail}</i>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section class="panel panel--links">
+        <header class="section-head">
+          <div>
+            <p>Desk Outputs</p>
+            <h2>After the Whistle</h2>
+          </div>
+        </header>
+        <div class="link-grid">
+          {fieldCards.map((card) => (
+            <a href={card.href}>
+              <span>{card.label}</span>
+              <strong>{card.title}</strong>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section class="panel panel--runsheet">
+        <header class="section-head">
+          <div>
+            <p>Run Sheet</p>
+            <h2>Producer Board</h2>
+          </div>
+        </header>
+        <div class="run-sheet">
+          {runSheet.map((item) => (
+            <article>
+              <span>{item.stamp}</span>
+              <strong>{item.title}</strong>
+              <p>{item.note}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+
+  var SOURCE = 'pointcast:nouns-nation-battler';
+  var CONTROL_SOURCE = 'pointcast:battle-desk';
+  var desk = document.querySelector('[data-battle-v2]');
+  var frame = document.getElementById('battleFrameV2');
+  if (!desk || !frame) return;
+
+  function find(selector) {
+    return desk.querySelector(selector);
+  }
+
+  function setText(selector, value) {
+    var node = find(selector);
+    if (node) node.textContent = value;
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char];
+    });
+  }
+
+  function assetPath(asset) {
+    if (!asset) return '/games/nouns-nation-battler/assets/noun-0.svg';
+    if (/^https?:\/\//.test(asset) || asset.charAt(0) === '/') return asset;
+    return '/games/nouns-nation-battler/' + asset.replace(/^\.?\//, '');
+  }
+
+  function postCommand(command, extra) {
+    if (!frame.contentWindow) return;
+    frame.contentWindow.postMessage(Object.assign({
+      source: CONTROL_SOURCE,
+      type: 'command',
+      command: command,
+    }, extra || {}), window.location.origin);
+  }
+
+  function speedLabel(speed) {
+    if (speed >= 1.4) return 'Rush';
+    if (speed <= 0.8) return 'Slow';
+    return 'Live';
+  }
+
+  function scoreUnit(unit) {
+    var stats = unit && unit.stats ? unit.stats : {};
+    return Number(stats.damage || 0) + Number(stats.kos || 0) * 34 + Number(stats.heals || 0) * 0.12;
+  }
+
+  function renderTopNouns(leaders) {
+    var node = find('[data-live-field="top-nouns"]');
+    if (!node) return;
+    var rows = []
+      .concat((leaders && leaders.left) || [])
+      .concat((leaders && leaders.right) || [])
+      .sort(function (a, b) { return scoreUnit(b) - scoreUnit(a); })
+      .slice(0, 8);
+
+    setText('[data-live-field="leader-count"]', rows.length ? rows.length + ' tracked' : 'warming');
+    if (!rows.length) return;
+
+    node.innerHTML = rows.map(function (unit, index) {
+      var stats = unit.stats || {};
+      var line = '#' + escapeHtml(unit.number || '?') + ' / ' + escapeHtml(unit.role || 'noun') + ' / ' + escapeHtml(unit.hp || 0) + '% HP';
+      var stat = escapeHtml(stats.damage || 0) + ' dmg / ' + escapeHtml(stats.kos || 0) + ' KO / ' + escapeHtml(Math.round(stats.heals || 0)) + ' heal';
+      return '<article>' +
+        '<img src="' + escapeHtml(assetPath(unit.asset)) + '" alt="" loading="lazy" />' +
+        '<span>' + String(index + 1) + ' / ' + line + '</span>' +
+        '<strong>' + escapeHtml(unit.name || 'Noun') + '</strong>' +
+        '<em>' + stat + '</em>' +
+      '</article>';
+    }).join('');
+  }
+
+  function renderStandings(rows) {
+    var node = find('[data-live-field="standings"]');
+    if (!node || !rows || !rows.length) return;
+    node.innerHTML = rows.slice(0, 8).map(function (row, index) {
+      var diff = Number(row.pf || 0) - Number(row.pa || 0);
+      var diffLabel = (diff >= 0 ? '+' : '') + diff;
+      return '<article style="--team:' + escapeHtml(row.color || '#8A2432') + '">' +
+        '<span>' + String(index + 1) + '</span>' +
+        '<strong>' + escapeHtml(row.short || '--') + '</strong>' +
+        '<em>' + escapeHtml(row.name || 'Gang') + '</em>' +
+        '<b>' + escapeHtml(row.wins || 0) + '-' + escapeHtml(row.losses || 0) + '</b>' +
+        '<i>' + diffLabel + ' / ' + escapeHtml(row.fans || 0) + ' fans</i>' +
+      '</article>';
+    }).join('');
+    setText('[data-live-field="table-note"]', rows.length + ' gangs');
+  }
+
+  function renderLog(logs) {
+    var node = find('[data-live-field="log"]');
+    if (!node || !logs || !logs.length) return;
+    node.innerHTML = logs.slice(0, 9).map(function (line) {
+      return '<p>' + escapeHtml(line) + '</p>';
+    }).join('');
+  }
+
+  function renderSnapshot(payload) {
+    if (!payload || !payload.gangs || payload.gangs.length < 2) return;
+
+    var leftGang = payload.gangs[0];
+    var rightGang = payload.gangs[1];
+    var left = payload.alive ? Number(payload.alive.left || 0) : 30;
+    var right = payload.alive ? Number(payload.alive.right || 0) : 30;
+    var total = Math.max(1, left + right);
+    var leftShare = (left / total) * 100;
+    var rightShare = 100 - leftShare;
+    var stateLabel = payload.finished ? 'FINAL' : (payload.running ? 'LIVE' : 'PAUSED');
+    var fieldName = payload.field && payload.field.boss ? payload.field.boss : ((payload.field && payload.field.name) || 'Open Field');
+    var pressureLabel = Math.abs(left - right) < 2
+      ? 'Even field'
+      : (left > right ? leftGang.short + ' pressure' : rightGang.short + ' pressure');
+    var challenge = payload.challenge
+      ? payload.challenge.name + ': ' + payload.challenge.line + '. ' + payload.challenge.rule
+      : 'Challenge loading from the match engine.';
+    var weather = payload.weather && payload.weather.name ? payload.weather.name : (payload.weather || 'Clear');
+    var speed = Number(payload.speed || 1);
+
+    desk.style.setProperty('--left-team', leftGang.color || '#e45745');
+    desk.style.setProperty('--right-team', rightGang.color || '#3677e0');
+    desk.style.setProperty('--left-share', leftShare.toFixed(1) + '%');
+    desk.style.setProperty('--right-share', rightShare.toFixed(1) + '%');
+    desk.style.setProperty('--pressure-x', leftShare.toFixed(1) + '%');
+
+    setText('[data-live-field="state"]', stateLabel);
+    setText('[data-live-field="match"]', String(payload.match || 1));
+    setText('[data-live-field="last-update"]', new Date(payload.timestamp || Date.now()).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    }));
+
+    setText('[data-live-field="left-short"]', leftGang.short || 'L');
+    setText('[data-live-field="left-name"]', leftGang.name || 'Left Gang');
+    setText('[data-live-field="left-mark"]', leftGang.mark || '');
+    setText('[data-live-field="left-alive"]', String(left));
+    setText('[data-live-field="left-pressure"]', Math.round(leftShare) + '%');
+
+    setText('[data-live-field="right-short"]', rightGang.short || 'R');
+    setText('[data-live-field="right-name"]', rightGang.name || 'Right Gang');
+    setText('[data-live-field="right-mark"]', rightGang.mark || '');
+    setText('[data-live-field="right-alive"]', String(right));
+    setText('[data-live-field="right-pressure"]', Math.round(rightShare) + '%');
+
+    setText('[data-live-field="field"]', fieldName);
+    setText('[data-live-field="speed"]', speedLabel(speed) + ' speed');
+    setText('[data-live-field="auto-next"]', payload.autoNext ? 'On' : 'Off');
+    setText('[data-live-field="momentum-label"]', pressureLabel);
+    setText('[data-live-field="analyst-headline"]', pressureLabel);
+    setText('[data-live-field="total-live"]', total + ' live');
+    setText('[data-live-field="weather"]', weather);
+    setText('[data-live-field="league-line"]', payload.league && payload.league.line ? payload.league.line : 'League loading');
+    setText('[data-live-field="matchup"]', payload.league && payload.league.matchup ? payload.league.matchup : 'Nouns Nation Battler');
+    setText('[data-live-field="root-line"]', payload.rootingFor ? payload.rootingFor : 'Pick');
+    setText('[data-live-field="challenge"]', challenge);
+    setText('[data-live-field="control-copy"]', stateLabel === 'LIVE' ? 'Live engine locked' : 'Engine hold');
+
+    Array.prototype.forEach.call(desk.querySelectorAll('[data-speed]'), function (button) {
+      button.classList.toggle('is-active', Number(button.dataset.speed) === speed);
+    });
+
+    renderTopNouns(payload.leaders);
+    renderStandings(payload.standings);
+    renderLog(payload.logs);
+  }
+
+  desk.addEventListener('click', function (event) {
+    var target = event.target;
+    if (!target || !target.closest) return;
+    var button = target.closest('[data-desk-command]');
+    if (!button || !desk.contains(button)) return;
+    var command = button.dataset.deskCommand;
+
+    if (command === 'setSpeed') {
+      postCommand(command, { value: Number(button.dataset.speed || 1) });
+    } else if (command === 'root') {
+      postCommand(command, { team: Number(button.dataset.team || 0) });
+    } else {
+      postCommand(command);
+    }
+  });
+
+  window.addEventListener('message', function (event) {
+    if (event.origin !== window.location.origin) return;
+    var message = event.data || {};
+    if (message.source !== SOURCE || message.type !== 'snapshot') return;
+    renderSnapshot(message.payload);
+  });
+
+  frame.addEventListener('load', function () {
+    window.setTimeout(function () {
+      postCommand('snapshot');
+    }, 350);
+  });
+
+  try {
+    localStorage.setItem('pc:nouns-nation-guide-v1', 'seen');
+  } catch (error) {
+    /* LocalStorage can be unavailable in hardened browsers. The field still loads. */
+  }
+
+  var battleSrc = frame.getAttribute('data-battle-src');
+  if (battleSrc && frame.getAttribute('src') !== battleSrc) {
+    frame.setAttribute('src', battleSrc);
+  }
+
+  window.setInterval(function () {
+    postCommand('snapshot');
+  }, 2500);
+})();
+</script>
+
+<style>
+  .battle-v2 {
+    --paper: #f5f1e6;
+    --ink: #101216;
+    --muted: #5f6673;
+    --line: rgba(16, 18, 22, 0.14);
+    --panel: #fffdf8;
+    --panel-cool: #edf4f5;
+    --yellow: #f3c63d;
+    --green: #1d8b65;
+    min-height: 100vh;
+    padding: 16px clamp(12px, 2.8vw, 30px) 40px;
+    color: var(--ink);
+    background:
+      linear-gradient(90deg, rgba(16, 18, 22, 0.05) 1px, transparent 1px),
+      linear-gradient(rgba(16, 18, 22, 0.05) 1px, transparent 1px),
+      radial-gradient(circle at 12% 0%, rgba(243, 198, 61, 0.28), transparent 36%),
+      var(--paper);
+    background-size: 22px 22px, 22px 22px, auto, auto;
+  }
+
+  .battle-v2 * {
+    box-sizing: border-box;
+  }
+
+  .battle-v2 a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  .topline,
+  .score-deck,
+  .control-strip,
+  .field-shell,
+  .panel {
+    border: 2px solid var(--ink);
+    background: var(--panel);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  .topline {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 54px;
+    margin-bottom: 14px;
+    background: #151922;
+    color: #fffaf0;
+  }
+
+  .brand-lockup {
+    display: grid;
+    align-content: center;
+    min-height: 54px;
+    padding: 8px 14px;
+    background: var(--btl);
+    color: #fffdf7;
+    text-transform: uppercase;
+  }
+
+  .brand-lockup span,
+  .title-lockup p,
+  .status-bank span,
+  .ticker__live,
+  .ticker__track,
+  .team-card p,
+  .alive-box span,
+  .match-center p,
+  .pressure-labels,
+  .section-head p,
+  .section-head span,
+  .mini-stats span,
+  .leader-board span,
+  .leader-board em,
+  .replay-log p,
+  .standings span,
+  .standings i,
+  .link-grid span,
+  .run-sheet span {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  .brand-lockup span {
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+  }
+
+  .brand-lockup strong {
+    font-size: 1.02rem;
+    line-height: 1;
+  }
+
+  .ticker {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+    overflow: hidden;
+  }
+
+  .ticker__live {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #fffdf7;
+    font-size: 0.73rem;
+    text-transform: uppercase;
+  }
+
+  .ticker__live::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #ff4d5f;
+    box-shadow: 0 0 0 3px rgba(255, 77, 95, 0.18);
+  }
+
+  .ticker__viewport {
+    overflow: hidden;
+  }
+
+  .ticker__track {
+    display: inline-flex;
+    gap: 36px;
+    min-width: max-content;
+    color: #f8eeca;
+    font-size: 0.78rem;
+    animation: ticker 46s linear infinite;
+  }
+
+  .topline > a {
+    margin-right: 12px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 250, 240, 0.5);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+  }
+
+  .command-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 0.85fr);
+    align-items: end;
+    gap: 16px;
+    margin: 14px 0;
+  }
+
+  .title-lockup p,
+  .section-head p {
+    margin: 0 0 6px;
+    color: var(--btl-dark);
+    font-size: 0.72rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  h1,
+  h2,
+  p {
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 4.4vw, 4.6rem);
+    line-height: 0.92;
+  }
+
+  h2 {
+    font-size: 1.16rem;
+    line-height: 1.05;
+  }
+
+  .status-bank {
+    display: grid;
+    grid-template-columns: 0.55fr minmax(0, 1fr) 0.72fr;
+    gap: 8px;
+  }
+
+  .status-bank article {
+    min-width: 0;
+    min-height: 70px;
+    display: grid;
+    align-content: center;
+    border: 2px solid var(--ink);
+    background: #fffdf8;
+    padding: 10px;
+  }
+
+  .status-bank span {
+    color: var(--muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+  }
+
+  .status-bank strong {
+    overflow: hidden;
+    font-size: 1.08rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .score-deck {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.78fr) minmax(0, 1fr);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .team-card {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 13px;
+  }
+
+  .team-card--left {
+    border-left: 14px solid var(--left-team);
+  }
+
+  .team-card--right {
+    border-right: 14px solid var(--right-team);
+  }
+
+  .team-chip {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    border: 2px solid var(--ink);
+    background: var(--ink);
+    color: #fffdf7;
+    font-weight: 700;
+  }
+
+  .team-meta {
+    min-width: 0;
+  }
+
+  .team-meta h2 {
+    overflow-wrap: anywhere;
+    font-size: clamp(1.25rem, 2vw, 2rem);
+  }
+
+  .team-meta p {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+  }
+
+  .alive-box {
+    min-width: 88px;
+    display: grid;
+    justify-items: center;
+    border: 2px solid var(--ink);
+    background: #fff;
+    padding: 8px 10px;
+  }
+
+  .alive-box span {
+    color: var(--muted);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+  }
+
+  .alive-box strong {
+    font-size: 2.7rem;
+    line-height: 0.9;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .match-center {
+    display: grid;
+    align-content: center;
+    gap: 8px;
+    padding: 13px;
+    border-left: 2px solid var(--ink);
+    border-right: 2px solid var(--ink);
+    background: var(--panel-cool);
+    text-align: center;
+  }
+
+  .match-center p {
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+  }
+
+  .pressure {
+    position: relative;
+    height: 20px;
+    border: 2px solid var(--ink);
+    background: linear-gradient(90deg, var(--left-team) 0 var(--left-share), var(--right-team) var(--left-share) 100%);
+  }
+
+  .pressure i {
+    position: absolute;
+    top: -7px;
+    bottom: -7px;
+    left: calc(var(--pressure-x) - 2px);
+    width: 4px;
+    background: var(--ink);
+  }
+
+  .pressure-labels {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    gap: 8px;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+  }
+
+  .pressure-labels strong {
+    color: var(--ink);
+    font-size: 0.78rem;
+  }
+
+  .control-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 10px;
+    background: #fff9de;
+  }
+
+  button {
+    min-height: 34px;
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 2px 2px 0 var(--ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 7px 9px;
+  }
+
+  button:hover,
+  button:focus-visible,
+  button.is-active {
+    background: var(--yellow);
+    outline: none;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.7fr);
+    gap: 15px;
+    align-items: start;
+  }
+
+  .field-shell {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .field-shell .section-head {
+    margin: 0;
+    padding: 12px 14px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .section-head span {
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+  }
+
+  .field-shell iframe {
+    display: block;
+    width: 100%;
+    height: min(760px, 80vh);
+    min-height: 690px;
+    border: 0;
+    background: #f2eddc;
+  }
+
+  .analyst-rail,
+  .lower-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .panel--callout {
+    border-top: 8px solid var(--green);
+  }
+
+  .analysis-copy {
+    color: var(--muted);
+    font-size: 0.94rem;
+    line-height: 1.45;
+  }
+
+  .mini-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .mini-stats article {
+    min-width: 0;
+    min-height: 64px;
+    display: grid;
+    align-content: center;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 8px;
+  }
+
+  .mini-stats span {
+    color: var(--muted);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+  }
+
+  .mini-stats strong {
+    overflow: hidden;
+    font-size: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .leader-board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .leader-board article {
+    min-width: 0;
+    min-height: 132px;
+    display: grid;
+    align-content: start;
+    gap: 5px;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 8px;
+  }
+
+  .leader-board img {
+    width: 46px;
+    height: 46px;
+    image-rendering: pixelated;
+  }
+
+  .leader-board span,
+  .leader-board em {
+    color: var(--muted);
+    font-size: 0.63rem;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .leader-board strong {
+    font-size: 0.86rem;
+    line-height: 1.08;
+  }
+
+  .replay-log {
+    display: grid;
+    gap: 8px;
+  }
+
+  .replay-log p {
+    border-left: 8px solid var(--yellow);
+    background: #fff;
+    padding: 8px 9px;
+    font-size: 0.78rem;
+    line-height: 1.32;
+  }
+
+  .lower-grid {
+    grid-template-columns: minmax(360px, 1.05fr) minmax(240px, 0.55fr) minmax(300px, 0.72fr);
+    margin-top: 15px;
+  }
+
+  .standings {
+    display: grid;
+    gap: 7px;
+  }
+
+  .standings article {
+    display: grid;
+    grid-template-columns: 28px 46px minmax(0, 1fr) 56px 92px;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    border-left: 8px solid var(--team, var(--btl));
+    background: #fff;
+    padding: 6px 8px;
+  }
+
+  .standings span,
+  .standings i {
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .standings strong,
+  .standings b {
+    font-size: 0.9rem;
+  }
+
+  .standings em {
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 0.84rem;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .link-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .link-grid a {
+    min-height: 88px;
+    display: grid;
+    align-content: end;
+    border: 2px solid var(--ink);
+    background: #fff;
+    box-shadow: 2px 2px 0 var(--ink);
+    padding: 10px;
+  }
+
+  .link-grid a:hover,
+  .link-grid a:focus-visible {
+    background: var(--yellow);
+    outline: none;
+  }
+
+  .link-grid span {
+    color: var(--muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+  }
+
+  .link-grid strong {
+    font-size: 1rem;
+  }
+
+  .run-sheet {
+    display: grid;
+    gap: 10px;
+  }
+
+  .run-sheet article {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 3px 9px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 9px;
+  }
+
+  .run-sheet span {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    min-height: 36px;
+    border: 2px solid var(--ink);
+    background: var(--ink);
+    color: #fffdf7;
+    font-size: 0.72rem;
+  }
+
+  .run-sheet strong {
+    font-size: 0.95rem;
+  }
+
+  .run-sheet p {
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.32;
+  }
+
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ticker__track {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .command-head,
+    .main-grid,
+    .lower-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .analyst-rail {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 880px) {
+    .battle-v2 {
+      padding: 12px 10px 34px;
+    }
+
+    .topline,
+    .score-deck,
+    .status-bank,
+    .analyst-rail {
+      grid-template-columns: 1fr;
+    }
+
+    .topline {
+      gap: 0;
+    }
+
+    .topline > a {
+      margin: 0 12px 10px;
+      text-align: center;
+    }
+
+    .ticker {
+      padding: 10px 12px;
+    }
+
+    .score-deck {
+      display: grid;
+    }
+
+    .match-center {
+      border-left: 0;
+      border-right: 0;
+      border-top: 2px solid var(--ink);
+      border-bottom: 2px solid var(--ink);
+    }
+
+    .field-shell iframe {
+      min-height: 900px;
+      height: 900px;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .team-card {
+      grid-template-columns: 48px minmax(0, 1fr);
+    }
+
+    .alive-box {
+      grid-column: 1 / -1;
+      justify-items: start;
+    }
+
+    .control-strip,
+    .link-grid,
+    .leader-board,
+    .mini-stats {
+      grid-template-columns: 1fr;
+      display: grid;
+    }
+
+    .standings article {
+      grid-template-columns: 24px 38px minmax(0, 1fr) 48px;
+    }
+
+    .standings i {
+      display: none;
+    }
+  }
+</style>
