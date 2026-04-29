@@ -44,7 +44,40 @@ const BUFFER_KEY = 'sounds:buffer';
 const BUFFER_SIZE = 50;
 const BUFFER_TTL_SECONDS = 60;
 const MAX_EVENT_AGE_MS = 30_000;
-const ALLOWED_TYPES = new Set(['profile', 'emoji', 'emoji-add', 'drum']);
+// Allowlist of event families that can fan out across the drum-hub bus.
+// Every /drum* surface broadcasts events here; cast surfaces (/drum-tv,
+// /drum-tv-v2, /drum-marquee, /drum-radio, /drum-viz, /drum-tv-bingo,
+// /drum-tv-gauntlet, /drum-tv-roulette) read them back.
+//
+// Until 2026-04-29 this set was tight — only 'profile', 'emoji',
+// 'emoji-add', 'drum' — which silently rejected every other surface's
+// broadcasts (orchestra, choir, lounge, theremin, bells, organ, strings,
+// marimba, hang, tr808, harp, rhodes, plus the seven comms tools and
+// the games). Tools worked locally (audio played, KV writes succeeded)
+// but cross-surface flash was dead. Found 2026-04-29 morning audit
+// after the comms-tools sprint exposed the gap.
+//
+// Now permissively allowlists every event family the hub generates.
+const ALLOWED_TYPES = new Set([
+  // Original 4
+  'profile', 'emoji', 'emoji-add', 'drum',
+  // Instrument variants (v2-v18, plus apr26 and the bell rooms)
+  'orchestra', 'choir', 'choir-chord', 'symphony', 'lounge',
+  'theremin', 'bells', 'organ', 'strings', 'marimba', 'hang',
+  'tr808', 'harp', 'rhodes', 'button',
+  // Daily / loop / sequencer
+  'daily', 'jam', 'jam-amp',
+  // Games + meta surfaces
+  'potato', 'milestone', 'tap',
+  // Kitchen + ritual rooms
+  'kettle', 'pace', 'bath',
+  // Communication tools shipped 2026-04-28..29
+  'shout', 'applause', 'walkie', 'graffiti',
+  'letter', 'pin', 'heart',
+  'confessional', 'soft',
+  // Agent/mcp signaling
+  'agent', 'mcp',
+]);
 
 interface SoundEvent {
   type: string;
