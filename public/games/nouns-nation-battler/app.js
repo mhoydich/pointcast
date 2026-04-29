@@ -14,6 +14,7 @@ function routeParam(name) {
 
 const isTvMode = routeParam("mode") === "tv" || routeParam("view") === "tv";
 const LEAGUE_KEY = "pc:nouns-nation-league-v4";
+const GUIDE_KEY = "pc:nouns-nation-guide-v1";
 const LEAGUE_DAYS = 14;
 const DAILY_SLOTS = 4;
 
@@ -77,6 +78,85 @@ const challengeDeck = [
   },
 ];
 
+const watchGuideCards = [
+  {
+    tag: "1 / Watch",
+    title: "Read the field",
+    body: "The Nouns move on their own. Big flashes, the move feed, and the survivor count tell you who is taking control.",
+  },
+  {
+    tag: "2 / Root",
+    title: "Pick a gang",
+    body: "Root Left or Right stores your local fan line. Wins, takedowns, challenge wins, and root power build over time.",
+  },
+  {
+    tag: "3 / Challenge",
+    title: "Follow the side quest",
+    body: "Every match arms a Season Challenge. KOs, healing, field control, and comeback states can score bonus fan heat.",
+  },
+  {
+    tag: "4 / Scout",
+    title: "Find the hot Noun",
+    body: "Click a numbered battler or use the scout panel. Roles, HP, damage, KOs, heals, specials, and amps explain the star.",
+  },
+];
+
+const seasonTwoRoadmap = [
+  {
+    status: "Now",
+    title: "Rookie Watch Path",
+    body: "First-run guide, TV guide replay, and a direct onboarding URL for reviewers.",
+  },
+  {
+    status: "Now",
+    title: "Rivalry Weeks",
+    body: "Second-round rematches get head-to-head records, rivalry badges, and louder fan-heat stakes.",
+  },
+  {
+    status: "Now",
+    title: "Boss Fields",
+    body: "Late-season fields mutate into Monsoon Rift, Neon Crown, Blackout Fog, and Scrap Storm.",
+  },
+  {
+    status: "Later",
+    title: "Playbook Traits",
+    body: "Gangs carry two seasonal modifiers so Tomato, Cobalt, Mint, and Nouncil feel distinct.",
+  },
+  {
+    status: "Now",
+    title: "Recap Cards",
+    body: "After each match, Recap Studio turns the result, MVP, challenge angle, and next fixture into copy-ready share text.",
+  },
+  {
+    status: "Explore",
+    title: "Commissioner's Cup",
+    body: "A mid-season knockout bracket that can interrupt the table without replacing the Nouns Bowl.",
+  },
+];
+
+const watchPartyPlays = [
+  {
+    phase: "Hook",
+    title: "Lead with a match, not a feature list",
+    body: "Share the TV link when the field, challenge, and two gangs are already named.",
+  },
+  {
+    phase: "Ritual",
+    title: "Make one slate feel scheduled",
+    body: "Run a lunch slate, dinner slate, or late slate so people know when to drop in.",
+  },
+  {
+    phase: "Root",
+    title: "Ask viewers to choose a gang",
+    body: "Rooting makes the auto-battle social: pick left, pick right, then watch the table move.",
+  },
+  {
+    phase: "Artifact",
+    title: "Send posters after the match",
+    body: "Use the poster wall and recap language as the thing people forward after watching.",
+  },
+];
+
 const battleTypes = [
   {
     id: "open",
@@ -126,6 +206,49 @@ const battleTypes = [
     fieldClass: "fog-field",
     weather: ["fog", "clear"],
     log: "Fog Bowl rules: ranged shots lose bite while close-range ambushes become louder.",
+  },
+];
+
+const bossFieldDeck = [
+  {
+    id: "monsoon-rift",
+    base: "rift",
+    name: "Monsoon Rift",
+    short: "Monsoon",
+    className: "boss-monsoon",
+    statLabel: "Monsoon amp",
+    tv: "boss field: monsoon rift",
+    rule: "Monsoon Rift rules: amplifier lanes widen, Tide Nouns recover faster, and wet crosswinds shove the field.",
+  },
+  {
+    id: "neon-crown",
+    base: "crown",
+    name: "Neon Crown",
+    short: "Neon Crown",
+    className: "boss-neon",
+    statLabel: "Neon crown",
+    tv: "boss field: neon crown",
+    rule: "Neon Crown rules: the crown grows louder, holders charge specials faster, and pressure pulses hit harder.",
+  },
+  {
+    id: "scrap-storm",
+    base: "trash",
+    name: "Scrap Storm",
+    short: "Scrap Storm",
+    className: "boss-scrap",
+    statLabel: "Scrap storm",
+    tv: "boss field: scrap storm",
+    rule: "Scrap Storm rules: extra junk heaps spawn, scrap tech fires more often, and guarded looters can swing a slate.",
+  },
+  {
+    id: "blackout-fog",
+    base: "fog",
+    name: "Blackout Fog",
+    short: "Blackout",
+    className: "boss-blackout",
+    statLabel: "Blackout cover",
+    tv: "boss field: blackout fog",
+    rule: "Blackout Fog rules: ranged damage falls off harder while close ambushes and concealed bonkers get louder.",
   },
 ];
 
@@ -244,12 +367,35 @@ const el = {
   leftFlag: document.querySelector("#leftFlag"),
   rightFlag: document.querySelector("#rightFlag"),
   matchTitle: document.querySelector("#matchTitle"),
+  rivalryBadge: document.querySelector("#rivalryBadge"),
   newMatchButton: document.querySelector("#newMatchButton"),
   quickSimButton: document.querySelector("#quickSimButton"),
   simDayButton: document.querySelector("#simDayButton"),
   pauseButton: document.querySelector("#pauseButton"),
   autoNextButton: document.querySelector("#autoNextButton"),
+  guideButton: document.querySelector("#guideButton"),
+  watchGuide: document.querySelector("#watchGuide"),
+  guideGrid: document.querySelector("#guideGrid"),
+  guideStartButton: document.querySelector("#guideStartButton"),
+  guideTvButton: document.querySelector("#guideTvButton"),
+  guideCloseButton: document.querySelector("#guideCloseButton"),
   resetLeagueButton: document.querySelector("#resetLeagueButton"),
+  seasonScopeTitle: document.querySelector("#seasonScopeTitle"),
+  seasonScopeGrid: document.querySelector("#seasonScopeGrid"),
+  watchKitTitle: document.querySelector("#watchKitTitle"),
+  watchKitHook: document.querySelector("#watchKitHook"),
+  watchKitCopy: document.querySelector("#watchKitCopy"),
+  watchKitStoryline: document.querySelector("#watchKitStoryline"),
+  watchKitLinks: document.querySelector("#watchKitLinks"),
+  watchKitPlays: document.querySelector("#watchKitPlays"),
+  watchKitOutput: document.querySelector("#watchKitOutput"),
+  recapCard: document.querySelector("#recapCard"),
+  recapCardOutput: document.querySelector("#recapCardOutput"),
+  recapCardKicker: document.querySelector("#recapCardKicker"),
+  recapCardTitle: document.querySelector("#recapCardTitle"),
+  recapCardBody: document.querySelector("#recapCardBody"),
+  recapCardStats: document.querySelector("#recapCardStats"),
+  recapCardActions: document.querySelector("#recapCardActions"),
   speedGroup: document.querySelector("#speedGroup"),
   momentumBar: document.querySelector("#momentumBar"),
   moveFeed: document.querySelector("#moveFeed"),
@@ -316,6 +462,8 @@ const state = {
   challenge: null,
   challengeProgress: null,
   challengeClock: 0,
+  bossField: null,
+  guideOpen: false,
   autoNext: true,
   nextTimer: null,
   rootingFor: localStorage.getItem("pc:nouns-nation-root") || "",
@@ -324,6 +472,7 @@ const state = {
   selectedUnitId: "",
   moveHistory: [],
   reviewMoment: "Opening charge",
+  recapSignature: "",
 };
 
 if (!state.league) {
@@ -356,11 +505,14 @@ function loadLeague() {
 function normalizeLeague(league) {
   league.seasonNumber ||= 1;
   league.recaps ||= [];
+  league.recapCards ||= [];
   league.challengeRecaps ||= [];
+  league.rivalries ||= {};
   league.playoffs ||= [];
   for (const gang of gangPool) {
     league.table[gang.name] ||= { wins: 0, losses: 0, pf: 0, pa: 0, streak: 0, fans: 50, last: "" };
     league.table[gang.name].challengeWins ||= 0;
+    league.table[gang.name].rivalryWins ||= 0;
     league.table[gang.name].lastChallenge ||= "";
   }
   return league;
@@ -383,10 +535,12 @@ function createLeague(seasonNumber = 1) {
     schedule,
     playoffs: [],
     recaps: [],
+    recapCards: [],
     challengeRecaps: [],
+    rivalries: {},
     table: Object.fromEntries(gangPool.map((gang) => [
       gang.name,
-      { wins: 0, losses: 0, pf: 0, pa: 0, streak: 0, fans: 50, challengeWins: 0, lastChallenge: "", last: "" },
+      { wins: 0, losses: 0, pf: 0, pa: 0, streak: 0, fans: 50, challengeWins: 0, rivalryWins: 0, lastChallenge: "", last: "" },
     ])),
   };
 }
@@ -428,21 +582,187 @@ function currentFixture() {
   return null;
 }
 
-function currentFixtureLabel() {
-  const fixture = currentFixture();
+function fixtureName(fixture) {
   if (!fixture) return "Champion crowned";
-  return `${gangPool[fixture[0]].name} vs ${gangPool[fixture[1]].name}`;
+  return `${gangPool[fixture[0]]?.name || "TBD"} vs ${gangPool[fixture[1]]?.name || "TBD"}`;
+}
+
+function currentFixtureLabel() {
+  return fixtureName(currentFixture());
+}
+
+function gangByName(name) {
+  return gangPool.find((gang) => gang.name === name) || null;
+}
+
+function rivalryKey(nameA, nameB) {
+  return [nameA, nameB].filter(Boolean).sort((a, b) => a.localeCompare(b)).join("::");
+}
+
+function emptyRivalry(nameA, nameB) {
+  const names = [nameA, nameB].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  return {
+    key: names.join("::"),
+    names,
+    meetings: 0,
+    wins: Object.fromEntries(names.map((name) => [name, 0])),
+    heat: 0,
+    lastWinner: "",
+    lastScore: "",
+    lastField: "",
+    lastChallenge: "",
+  };
+}
+
+function normalizeRivalryRecord(record, nameA, nameB) {
+  const base = emptyRivalry(nameA, nameB);
+  const merged = { ...base, ...(record || {}) };
+  merged.key = base.key;
+  merged.names = base.names;
+  merged.wins = { ...base.wins, ...(record?.wins || {}) };
+  merged.meetings ||= 0;
+  merged.heat ||= 0;
+  merged.lastWinner ||= "";
+  merged.lastScore ||= "";
+  merged.lastField ||= "";
+  merged.lastChallenge ||= "";
+  return merged;
+}
+
+function rivalryForNames(nameA, nameB) {
+  if (!nameA || !nameB) return null;
+  const key = rivalryKey(nameA, nameB);
+  return normalizeRivalryRecord(state.league.rivalries?.[key], nameA, nameB);
+}
+
+function ensureRivalry(nameA, nameB) {
+  const key = rivalryKey(nameA, nameB);
+  state.league.rivalries ||= {};
+  state.league.rivalries[key] = normalizeRivalryRecord(state.league.rivalries[key], nameA, nameB);
+  return state.league.rivalries[key];
+}
+
+function currentRivalry() {
+  return rivalryForNames(gangs[0]?.name, gangs[1]?.name);
+}
+
+function rivalryRecordLine(rivalry = currentRivalry()) {
+  if (!rivalry?.names?.length) return "H2H loading";
+  const [first, second] = rivalry.names;
+  const firstGang = gangByName(first);
+  const secondGang = gangByName(second);
+  return `${firstGang?.short || "A"} ${rivalry.wins?.[first] || 0}-${rivalry.wins?.[second] || 0} ${secondGang?.short || "B"}`;
+}
+
+function rivalryBadgeLabel(rivalry = currentRivalry()) {
+  if (!rivalry || rivalry.meetings <= 0) return "First meeting";
+  const [first, second] = rivalry.names;
+  const firstWins = rivalry.wins?.[first] || 0;
+  const secondWins = rivalry.wins?.[second] || 0;
+  if (firstWins === secondWins && rivalry.meetings > 1) return "Rubber match";
+  if (rivalry.meetings === 1) return "Runback rivalry";
+  return `Rivalry match ${rivalry.meetings + 1}`;
+}
+
+function rivalryWatchLine(rivalry = currentRivalry()) {
+  if (!rivalry) return "Head-to-head loading";
+  if (rivalry.meetings <= 0) return "First meeting: head-to-head starts here.";
+  const [first, second] = rivalry.names;
+  const firstWins = rivalry.wins?.[first] || 0;
+  const secondWins = rivalry.wins?.[second] || 0;
+  const firstGang = gangByName(first);
+  const secondGang = gangByName(second);
+  if (firstWins === secondWins) {
+    return `${firstGang?.short || "A"} and ${secondGang?.short || "B"} are tied ${firstWins}-${secondWins}; winner takes the edge.`;
+  }
+  const leader = firstWins > secondWins ? first : second;
+  const chaser = leader === first ? second : first;
+  const leaderWins = Math.max(firstWins, secondWins);
+  const chaserWins = Math.min(firstWins, secondWins);
+  return `${gangByName(leader)?.short || "Leader"} lead the rivalry ${leaderWins}-${chaserWins}; ${gangByName(chaser)?.short || "chaser"} need the runback.`;
+}
+
+function rivalryResultLine(rivalry = currentRivalry()) {
+  if (!rivalry?.lastWinner) return rivalryWatchLine(rivalry);
+  const winner = gangByName(rivalry.lastWinner);
+  return `${winner?.short || "Winner"} took ${rivalry.lastScore}; ${rivalryRecordLine(rivalry)} H2H, ${rivalry.heat || 0} heat.`;
+}
+
+function registerRivalryResult(winnerName, loserName, winnerScore, loserScore, close) {
+  const rivalry = ensureRivalry(winnerName, loserName);
+  const hadHistory = rivalry.meetings > 0;
+  rivalry.meetings += 1;
+  rivalry.wins[winnerName] = (rivalry.wins[winnerName] || 0) + 1;
+  rivalry.wins[loserName] ||= 0;
+  rivalry.lastWinner = winnerName;
+  rivalry.lastScore = `${winnerScore}-${loserScore}`;
+  rivalry.lastField = fieldName();
+  rivalry.lastChallenge = state.challenge?.name || "Season Challenge";
+  rivalry.heat = Math.min(99, (rivalry.heat || 0) + (hadHistory ? 10 : 4) + (close ? 2 : 0));
+  return { rivalry, hadHistory, line: rivalryResultLine(rivalry) };
+}
+
+function upcomingFixtureLabel() {
+  const league = state.league;
+  if (league.phase === "regular") {
+    const nextSlot = league.slot + 1;
+    const nextDay = nextSlot >= DAILY_SLOTS ? league.day + 1 : league.day;
+    const slot = nextSlot >= DAILY_SLOTS ? 0 : nextSlot;
+    const fixture = league.schedule[nextDay]?.[slot];
+    return fixture ? fixtureName(fixture) : "Playoff cut after the final slate";
+  }
+  if (league.phase === "playoffs") {
+    const fixture = league.playoffs[league.playoffSlot + 1];
+    return fixture ? fixtureName(fixture) : "Nouns Bowl trophy lift";
+  }
+  return `${league.champion || "Champion"} title defense`;
 }
 
 function currentBattleType() {
   const forced = routeParam("battle") || routeParam("type");
   const forcedType = battleTypes.find((type) => type.id === forced);
   if (forcedType) return forcedType;
+  const forcedBossParam = routeParam("boss");
+  const forcedBoss = bossFieldDeck.find((boss) => boss.id === forcedBossParam || boss.short.toLowerCase().replace(/\s+/g, "-") === forcedBossParam);
+  if (forcedBoss) return battleTypes.find((type) => type.id === forcedBoss.base) || battleTypes[0];
   const league = state.league;
   if (league.phase === "playoffs") return league.playoffSlot === 2 ? battleTypes[2] : battleTypes[1];
   const rotation = ["open", "lava", "rift", "cloud", "trash", "crown", "fog", "rift", "lava", "cloud"];
   const id = rotation[(league.day * DAILY_SLOTS + league.slot) % rotation.length];
   return battleTypes.find((type) => type.id === id) || battleTypes[0];
+}
+
+function bossFieldFor(type = state.battleType) {
+  if (!type) return null;
+  return bossFieldDeck.find((boss) => boss.base === type.id) || null;
+}
+
+function bossFieldEligible() {
+  const forced = routeParam("boss");
+  if (forced === "0" || forced === "off") return false;
+  if (forced) return true;
+  const league = state.league;
+  return league.phase === "playoffs" || (league.phase === "regular" && league.day >= 7);
+}
+
+function currentBossField(type = state.battleType) {
+  const forced = routeParam("boss");
+  const forcedBoss = bossFieldDeck.find((boss) => boss.id === forced || boss.short.toLowerCase().replace(/\s+/g, "-") === forced);
+  if (forcedBoss) return (!type || forcedBoss.base === type.id) ? forcedBoss : null;
+  if (!bossFieldEligible()) return null;
+  return bossFieldFor(type);
+}
+
+function isBossField(id) {
+  return state.bossField?.id === id;
+}
+
+function fieldName() {
+  return state.bossField?.name || state.battleType?.name || "Open Field";
+}
+
+function bossFieldLine() {
+  return state.bossField ? `${state.bossField.short}: ${state.bossField.rule}` : "Boss field dormant until Day 8 or playoffs.";
 }
 
 function matchOrdinal(league = state.league) {
@@ -654,10 +974,12 @@ function resetMatch() {
   state.interstitialClock = isTvMode ? 560 : 0;
   state.interstitialSignature = "";
   state.battleType = currentBattleType();
+  state.bossField = currentBossField(state.battleType);
   armChallenge();
   state.weather = state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
   state.moveHistory = [];
   state.selectedUnitId = "";
+  state.recapSignature = "";
   if (isTvMode) {
     state.autoNext = true;
     state.speed = Math.max(state.speed, 1.55);
@@ -668,8 +990,9 @@ function resetMatch() {
   gangs = fixture ? [gangPool[fixture[0]], gangPool[fixture[1]]] : [gangPool[0], gangPool[1]];
   document.documentElement.style.setProperty("--left-gang", gangs[0].color);
   document.documentElement.style.setProperty("--right-gang", gangs[1].color);
-  el.field.classList.remove(...battleTypes.map((type) => type.fieldClass));
+  el.field.classList.remove(...battleTypes.map((type) => type.fieldClass), "boss-field", ...bossFieldDeck.map((boss) => boss.className));
   el.field.classList.add(state.battleType.fieldClass);
+  if (state.bossField) el.field.classList.add("boss-field", state.bossField.className);
   el.weather.className = `weather ${weatherClass()}`;
   el.pauseButton.textContent = "Pause";
   el.leftGang.textContent = gangs[0].name;
@@ -696,15 +1019,17 @@ function resetMatch() {
 
   addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, 30 strong on each side.`);
   addLog(state.battleType.log);
+  if (state.bossField) addLog(`Boss field: ${state.bossField.rule}`);
   addLog(`Season challenge: ${state.challenge.name}. ${state.challenge.rule}`);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V13", `${state.battleType.name} + ${state.challenge.name}`);
+  addLog(`Rivalry desk: ${rivalryWatchLine(currentRivalry())}`);
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V19", `${fieldName()} + ${state.challenge.name}`);
   showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
   render();
   state.match += 1;
 }
 
 function matchTitle() {
-  const typeName = state.battleType?.name || "Open Field Clash";
+  const typeName = fieldName();
   if (state.league.phase === "regular") {
     return `S${state.league.seasonNumber} Day ${state.league.day + 1} ${typeName}`;
   }
@@ -721,6 +1046,355 @@ function brandKitMarkup(gang) {
     <i class="swatch" style="--swatch:${gang.dark}"></i>
     <em>${gang.mark}</em>
   `;
+}
+
+function renderGuide() {
+  if (!el.guideGrid) return;
+  el.guideGrid.innerHTML = watchGuideCards.map((card) => `
+    <article class="guide-step">
+      <span>${card.tag}</span>
+      <strong>${card.title}</strong>
+      <p>${card.body}</p>
+    </article>
+  `).join("");
+}
+
+function renderSeasonScope(rows = standings()) {
+  if (!el.seasonScopeGrid) return;
+  const leader = rows[0]?.gang?.short || "field";
+  const season = state.league?.seasonNumber || 1;
+  el.seasonScopeTitle.textContent = `Season ${season + 1}: ${leader} target, rival weeks, boss fields`;
+  el.seasonScopeGrid.innerHTML = seasonTwoRoadmap.map((item) => `
+    <article class="season-scope-card">
+      <span>${item.status}</span>
+      <strong>${item.title}</strong>
+      <p>${item.body}</p>
+    </article>
+  `).join("");
+}
+
+function publicUrl(path) {
+  return `https://pointcast.xyz${path}`;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  }[char]));
+}
+
+function launchShareText(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const matchup = currentFixtureLabel();
+  const challenge = state.challenge?.name || "Season Challenge";
+  const field = fieldName();
+  const story = storylineDigest(left, right);
+  const rivalry = currentRivalry();
+  const rivalryLine = rivalry?.meetings > 0 ? `${rivalryBadgeLabel(rivalry)}: ${rivalryWatchLine(rivalry)} ` : "";
+  const bossLine = state.bossField ? `${state.bossField.short} boss field is active. ` : "";
+  const leagueLine = state.league.phase === "regular"
+    ? `S${state.league.seasonNumber} Day ${state.league.day + 1}/${LEAGUE_DAYS}`
+    : state.league.phase === "playoffs" ? `S${state.league.seasonNumber} Nouns Bowl` : `S${state.league.seasonNumber} champion lap`;
+  return `${leagueLine}: ${matchup} on ${field}. ${bossLine}${rivalryLine}${challenge} is live, ${left + right} Nouns are still standing. ${story} Watch: ${publicUrl("/nouns-nation-battler-tv/")}`;
+}
+
+function storylineDigest(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const rows = standings();
+  const leader = rows[0];
+  const bubble = rows[3];
+  const chase = rows[4];
+  if (state.league.phase === "champion") {
+    return `${state.league.champion} own the Bowl; next season needs a challenger.`;
+  }
+  if (state.league.phase === "playoffs") {
+    return state.league.playoffSlot < 2
+      ? `Winner moves one step from the Nouns Bowl final.`
+      : `This is the Nouns Bowl final.`;
+  }
+  const edge = left === right ? "even field" : left > right ? `${gangs[0].short} survivor edge` : `${gangs[1].short} survivor edge`;
+  const bubbleLine = bubble && chase ? `${bubble.gang.short} hold the cut over ${chase.gang.short}` : "top four chase is forming";
+  const rivalry = currentRivalry();
+  const rivalryLine = rivalry?.meetings > 0 ? `${rivalryBadgeLabel(rivalry)} in play, ` : "";
+  return `${rivalryLine}${leader?.gang.short || "Field"} lead the table, ${bubbleLine}, ${edge}.`;
+}
+
+function liveStorylines(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const rows = standings();
+  const leader = rows[0];
+  const bubble = rows[3];
+  const chase = rows[4];
+  const hot = rows.slice(0, 4).sort((a, b) => (b.challengeWins || 0) - (a.challengeWins || 0) || b.fans - a.fans)[0];
+  const rivalry = currentRivalry();
+  const rivalryCard = rivalry?.meetings > 0
+    ? [{ tag: "Rivalry", title: `${rivalryBadgeLabel(rivalry)} · ${rivalryRecordLine(rivalry)}`, body: rivalryWatchLine(rivalry) }]
+    : [];
+  const survivor = left === right
+    ? "Even survivor count. The next special probably decides the tone."
+    : left > right
+      ? `${gangs[0].short} have ${left - right} extra Nouns alive.`
+      : `${gangs[1].short} have ${right - left} extra Nouns alive.`;
+  if (state.league.phase === "champion") {
+    return [
+      { tag: "Champion", title: state.league.champion || "Nouns Bowl", body: "Trophy run is complete. Reset starts the next season with fresh stakes." },
+      { tag: "Runback", title: "Title defense", body: `${state.league.champion || "The champion"} become the target for the next two-week table.` },
+      { tag: "Artifact", title: "Poster wall", body: "Use the poster wall as the post-season share object." },
+    ];
+  }
+  if (state.league.phase === "playoffs") {
+    const next = state.league.playoffSlot < 2 ? "Final seat is on the line." : "Champion is decided here.";
+    return [
+      { tag: "Bowl", title: state.league.playoffSlot < 2 ? "Semifinal pressure" : "Nouns Bowl final", body: next },
+      { tag: "Match", title: currentFixtureLabel(), body: `${fieldName()} plus ${state.challenge?.name || "challenge heat"} gives the broadcast its angle. ${rivalryWatchLine(rivalry)}` },
+      { tag: "Next", title: upcomingFixtureLabel(), body: "The next hook is already ready for the invite rail." },
+    ];
+  }
+  return [
+    {
+      tag: "Chase",
+      title: leader ? `${leader.gang.short} lead the table` : "Table forming",
+      body: bubble && chase ? `${bubble.gang.short} sit on the cut line; ${chase.gang.short} are the first team out.` : "Top four advance to the Nouns Bowl bracket.",
+    },
+    ...rivalryCard,
+    {
+      tag: "Live",
+      title: `${state.challenge?.name || "Challenge"} on ${fieldName()}`,
+      body: `${survivor} ${challengeProgressLine()}. ${state.bossField ? bossFieldLine() : ""}`,
+    },
+    {
+      tag: "Heat",
+      title: hot ? `${hot.gang.short} have ${hot.fans} fan heat` : "Fan heat loading",
+      body: hot ? `${hot.challengeWins || 0} challenge wins make them the easiest gang to pitch right now.` : "Challenge wins and rooting build the social layer.",
+    },
+    {
+      tag: "Next",
+      title: upcomingFixtureLabel(),
+      body: "Use this as the return hook after the current slate resolves.",
+    },
+  ];
+}
+
+function matchMvpLine(source = "live") {
+  if (source !== "live") return "";
+  const star = statLeader("damage", (unit) => unit.stats.damage + unit.stats.kos * 42 + unit.stats.heals * 0.2 + unit.stats.specials * 18);
+  if (!star || star.stats.damage + star.stats.kos + star.stats.heals + star.stats.specials === 0) return "";
+  return `MVP: #${star.number} ${gangs[star.team].short} ${star.name} · ${star.stats.damage} dmg / ${star.stats.kos} KO`;
+}
+
+function recapChallengeLine() {
+  const challenge = state.challenge;
+  const progress = state.challengeProgress;
+  if (!challenge || !progress) return "Challenge desk: loading";
+  if (progress.winner) {
+    return `${progress.winner} won ${challenge.name}${progress.reason ? ` (${progress.reason})` : ""}`;
+  }
+  return `${challenge.name}: ${challengeProgressLine()}`;
+}
+
+function buildRecapCard({ phaseLabel, winnerSide, loserSide, winnerScore, loserScore, close, source = "live", rivalryLine = "" }) {
+  const winnerGang = gangs[winnerSide];
+  const loserGang = gangs[loserSide];
+  const mvpLine = matchMvpLine(source) || `MVP: ${winnerGang.short} bench closed it by committee`;
+  const challengeLine = recapChallengeLine();
+  const finishLine = close ? "close finish" : winnerScore >= 20 ? "statement finish" : "survival finish";
+  const rivalryStat = rivalryLine ? `Rivalry: ${rivalryLine}` : `${rivalryBadgeLabel()}: ${rivalryWatchLine()}`;
+  const field = fieldName();
+  return {
+    id: `s${state.league.seasonNumber}-${Date.now().toString(36)}`,
+    phase: phaseLabel,
+    headline: `${winnerGang.name} hold ${field}`,
+    title: `${winnerGang.short} ${winnerScore}, ${loserGang.short} ${loserScore}`,
+    body: `${winnerGang.short} beat ${loserGang.short} on ${field}. ${challengeLine}. ${state.bossField ? `Boss desk: ${state.bossField.short} changed the field. ` : ""}${rivalryLine ? `Rivalry desk: ${rivalryLine}` : rivalryWatchLine()}`,
+    winner: winnerGang.name,
+    loser: loserGang.name,
+    winnerShort: winnerGang.short,
+    loserShort: loserGang.short,
+    score: `${winnerScore}-${loserScore}`,
+    field,
+    challenge: challengeLine,
+    mvp: mvpLine,
+    finish: finishLine,
+    next: "",
+    tableHook: "",
+    leftColor: gangs[0].color,
+    rightColor: gangs[1].color,
+    stats: [
+      `${finishLine} · ${winnerScore}-${loserScore}`,
+      mvpLine,
+      challengeLine,
+      rivalryStat,
+      `${field} field`,
+    ],
+    share: "",
+  };
+}
+
+function recapShareText(card) {
+  return `${card.phase}: ${card.headline}. Final ${card.title}. ${card.mvp}. ${card.challenge}. Next: ${card.next}. Watch: ${publicUrl("/nouns-nation-battler-tv/")}`;
+}
+
+function finalizeRecapCard(card, left, right) {
+  card.next = upcomingFixtureLabel();
+  card.tableHook = storylineDigest(left, right);
+  card.share = recapShareText(card);
+  card.stats = [
+    ...card.stats.slice(0, 4),
+    `Next: ${card.next}`,
+    card.tableHook,
+  ];
+  addRecapCard(card);
+}
+
+function addRecapCard(card) {
+  state.league.recapCards ||= [];
+  state.league.recapCards.unshift(card);
+  state.league.recapCards = state.league.recapCards.slice(0, 8);
+}
+
+function latestRecapCard() {
+  return (state.league.recapCards || [])[0] || null;
+}
+
+function liveRecapPreview(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  const story = storylineDigest(left, right);
+  const matchup = currentFixtureLabel();
+  const challenge = state.challenge?.name || "Season Challenge";
+  return {
+    preview: true,
+    phase: "Recap armed",
+    headline: "Final card appears after a win",
+    title: `${gangs[0].short} vs ${gangs[1].short} live`,
+    body: `${matchup} is still running. The final card will capture the winner, score, MVP, challenge angle, and next fixture.`,
+    leftColor: gangs[0].color,
+    rightColor: gangs[1].color,
+    stats: [
+      `${left}-${right} alive now`,
+      `${challenge}: ${challengeProgressLine()}`,
+      story,
+      `Next hook: ${upcomingFixtureLabel()}`,
+    ],
+    share: launchShareText(left, right),
+  };
+}
+
+function renderRecapStudio(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  if (!el.recapCard) return;
+  const card = latestRecapCard() || liveRecapPreview(left, right);
+  const actions = [
+    { label: card.preview ? "Copy Live Hook" : "Copy Recap", text: card.share },
+    { label: "Copy Next Hook", text: `${card.preview ? storylineDigest(left, right) : card.tableHook} Next: ${card.preview ? upcomingFixtureLabel() : card.next}` },
+  ];
+  const signature = [
+    card.id || "preview",
+    card.preview ? "preview" : "recap",
+    card.phase,
+    card.title,
+    card.body,
+    card.leftColor,
+    card.rightColor,
+    card.stats.join("|"),
+    actions.map((item) => `${item.label}:${item.text}`).join("|"),
+  ].join("::");
+  if (state.recapSignature === signature) return;
+  state.recapSignature = signature;
+  el.recapCard.classList.toggle("preview", Boolean(card.preview));
+  el.recapCard.style.setProperty("--recap-left", card.leftColor || gangs[0].color);
+  el.recapCard.style.setProperty("--recap-right", card.rightColor || gangs[1].color);
+  el.recapCardKicker.textContent = card.phase;
+  el.recapCardTitle.textContent = card.title;
+  el.recapCardBody.textContent = card.body;
+  el.recapCardStats.innerHTML = card.stats.map((stat) => `<span>${escapeHtml(stat)}</span>`).join("");
+  el.recapCardActions.innerHTML = actions.map((item) => `
+    <button class="recap-copy" type="button" data-copy-target="recap" data-copy-label="${escapeHtml(item.label)}" data-copy-text="${escapeHtml(item.text)}">${item.label}</button>
+  `).join("");
+}
+
+function renderWatchKit(left = aliveUnits(0).length, right = aliveUnits(1).length) {
+  if (!el.watchKitLinks) return;
+  const matchup = currentFixtureLabel();
+  const challenge = state.challenge?.name || "Season Challenge";
+  const field = fieldName();
+  const rivalry = currentRivalry();
+  const leagueLine = state.league.phase === "regular"
+    ? `S${state.league.seasonNumber} Day ${state.league.day + 1}/${LEAGUE_DAYS} slate ${state.league.slot + 1}`
+    : state.league.phase === "playoffs" ? `S${state.league.seasonNumber} Nouns Bowl` : `S${state.league.seasonNumber} champion replay`;
+  const shareText = launchShareText(left, right);
+  const bossHash = state.bossField ? `&boss=${state.bossField.id}` : "";
+  const liveTv = publicUrl(`/games/nouns-nation-battler/#mode=tv&type=${state.battleType?.id || "open"}&challenge=${state.challenge?.id || "ko-race"}${bossHash}`);
+  const guide = publicUrl("/games/nouns-nation-battler/#guide=1");
+  const posters = publicUrl("/nouns-nation-battler-posters/");
+  el.watchKitTitle.textContent = `${leagueLine}: ${gangs[0].short} vs ${gangs[1].short}`;
+  el.watchKitHook.textContent = `${matchup} · ${field} · ${challenge} · ${rivalryBadgeLabel(rivalry)}`;
+  el.watchKitCopy.textContent = shareText;
+  el.watchKitStoryline.innerHTML = liveStorylines(left, right).map((story) => `
+    <article>
+      <span>${escapeHtml(story.tag)}</span>
+      <strong>${escapeHtml(story.title)}</strong>
+      <p>${escapeHtml(story.body)}</p>
+    </article>
+  `).join("");
+  el.watchKitLinks.innerHTML = [
+    { label: "Copy Invite", text: shareText },
+    { label: "Copy Storyline", text: storylineDigest(left, right) },
+    { label: "Copy TV Link", text: liveTv },
+    { label: "Copy Guide", text: guide },
+    { label: "Copy Posters", text: posters },
+  ].map((item) => `
+    <button class="watch-kit-copy" type="button" data-copy-label="${escapeHtml(item.label)}" data-copy-text="${escapeHtml(item.text)}">${item.label}</button>
+  `).join("") + `
+    <a class="watch-kit-link" href="/nouns-nation-battler-tv/" target="_blank" rel="noreferrer">Open TV</a>
+    <a class="watch-kit-link" href="/nouns-nation-battler-posters/" target="_blank" rel="noreferrer">Poster Wall</a>
+  `;
+  el.watchKitPlays.innerHTML = watchPartyPlays.map((play, index) => {
+    const body = index === 0
+      ? `Tonight's angle: ${challenge} on ${field}. The easiest invite is "pick ${gangs[0].short} or ${gangs[1].short} and watch the Nouns Bowl race."`
+      : index === 1
+        ? `Promise a simple cadence: one slate now, one recap after, then bring people back for Day ${Math.min(LEAGUE_DAYS, state.league.day + 2)}.`
+        : index === 2
+          ? `Use ${gangs[0].name} vs ${gangs[1].name} as the fan choice. The match is automated, but the rooting is human.`
+          : play.body;
+    return `
+      <article class="watch-kit-play">
+        <span>${escapeHtml(play.phase)}</span>
+        <strong>${escapeHtml(play.title)}</strong>
+        <p>${escapeHtml(body)}</p>
+      </article>
+    `;
+  }).join("");
+}
+
+function showGuide(markSeen = false) {
+  if (!el.watchGuide) return;
+  renderGuide();
+  state.guideOpen = true;
+  el.watchGuide.hidden = false;
+  requestAnimationFrame(() => el.watchGuide.classList.add("show"));
+  if (markSeen) localStorage.setItem(GUIDE_KEY, "seen");
+}
+
+function hideGuide(markSeen = true) {
+  if (!el.watchGuide) return;
+  state.guideOpen = false;
+  if (markSeen) localStorage.setItem(GUIDE_KEY, "seen");
+  el.watchGuide.classList.remove("show");
+  setTimeout(() => {
+    if (!state.guideOpen) el.watchGuide.hidden = true;
+  }, 180);
+}
+
+function bootGuide() {
+  renderGuide();
+  renderSeasonScope();
+  renderWatchKit();
+  if (routeParam("guide") === "1" || routeParam("onboard") === "1") {
+    showGuide(false);
+    return;
+  }
+  if (!isTvMode && localStorage.getItem(GUIDE_KEY) !== "seen") {
+    setTimeout(() => showGuide(false), 650);
+  }
 }
 
 function pickGangs() {
@@ -782,11 +1456,12 @@ function centerPressure(bounds) {
 
 function amplifierZones(bounds) {
   if (state.battleType.id !== "rift") return [];
+  const boss = isBossField("monsoon-rift");
   return elements.map((element, index) => ({
     ...element,
-    x: bounds.width * (0.31 + (index % 2) * 0.38),
-    y: bounds.height * (0.34 + Math.floor(index / 2) * 0.34),
-    radius: Math.min(bounds.width, bounds.height) * 0.115,
+    x: bounds.width * (0.31 + (index % 2) * 0.38 + (boss ? Math.sin((state.tick + index * 41) / 160) * 0.025 : 0)),
+    y: bounds.height * (0.34 + Math.floor(index / 2) * 0.34 + (boss ? Math.cos((state.tick + index * 29) / 170) * 0.025 : 0)),
+    radius: Math.min(bounds.width, bounds.height) * (boss ? 0.14 : 0.115),
   }));
 }
 
@@ -819,7 +1494,7 @@ function crownZone(bounds) {
   return {
     x: bounds.width / 2,
     y: bounds.height / 2,
-    radius: Math.min(bounds.width, bounds.height) * 0.15,
+    radius: Math.min(bounds.width, bounds.height) * (isBossField("neon-crown") ? 0.19 : 0.15),
   };
 }
 
@@ -852,11 +1527,15 @@ function terrainZones(bounds) {
     ];
   }
   if (state.battleType.id === "trash") {
-    return [
+    const zones = [
       { id: "trash-a", label: "Scrap", x: bounds.width * 0.28, y: bounds.height * 0.5, width: minSide * 0.18, height: minSide * 0.18, shape: "heap" },
       { id: "trash-b", label: "Loot", x: bounds.width * 0.5, y: bounds.height * 0.36, width: minSide * 0.16, height: minSide * 0.16, shape: "heap" },
       { id: "trash-c", label: "Junk", x: bounds.width * 0.72, y: bounds.height * 0.5, width: minSide * 0.18, height: minSide * 0.18, shape: "heap" },
     ];
+    if (isBossField("scrap-storm")) {
+      zones.push({ id: "trash-d", label: "Storm", x: bounds.width * 0.5, y: bounds.height * 0.64, width: minSide * 0.2, height: minSide * 0.15, shape: "heap" });
+    }
+    return zones;
   }
   return [];
 }
@@ -864,7 +1543,7 @@ function terrainZones(bounds) {
 function renderTerrainZones(bounds) {
   terrainZones(bounds).forEach((zone) => {
     const node = document.createElement("div");
-    node.className = `terrain-zone terrain-${state.battleType.id} terrain-${zone.shape}`;
+    node.className = `terrain-zone terrain-${state.battleType.id} terrain-${zone.shape}${state.bossField ? " terrain-boss" : ""}`;
     node.style.left = `${zone.x}px`;
     node.style.top = `${zone.y}px`;
     node.style.width = `${zone.width}px`;
@@ -909,12 +1588,12 @@ function applyTerrainRules(unit, dt, bounds) {
     const scrapZone = terrainZones(bounds).find((zone) => inTerrainZone(unit, zone));
     if (scrapZone) {
       unit.special = Math.max(0, unit.special - 0.42 * dt);
-      if (Math.random() > 0.996) {
-        unit.guard = Math.max(unit.guard, 80);
-        unit.haste = Math.max(unit.haste, 44);
+      if (Math.random() > (isBossField("scrap-storm") ? 0.992 : 0.996)) {
+        unit.guard = Math.max(unit.guard, isBossField("scrap-storm") ? 120 : 80);
+        unit.haste = Math.max(unit.haste, isBossField("scrap-storm") ? 62 : 44);
         creditAmp(unit, "scrap tech");
-        pop(unit.x, unit.y - 26, "loot", gangs[unit.team].accent);
-      } else if (Math.random() > 0.997) {
+        pop(unit.x, unit.y - 26, isBossField("scrap-storm") ? "storm" : "loot", gangs[unit.team].accent);
+      } else if (Math.random() > (isBossField("scrap-storm") ? 0.9985 : 0.997)) {
         unit.stunned = Math.max(unit.stunned, 18);
         pop(unit.x, unit.y - 26, "trip", "#fffdf5");
       }
@@ -943,6 +1622,43 @@ function applyChallengeRules(unit, dt) {
   if (challenge.id === "amp-hunt" && unit.amplified > 0) {
     unit.haste = Math.max(unit.haste, 12);
     unit.special = Math.max(0, unit.special - 0.14 * dt);
+  }
+}
+
+function applyBossFieldRules(unit, dt, bounds) {
+  if (!state.bossField) return;
+  if (isBossField("monsoon-rift")) {
+    unit.vx += Math.sin((state.tick + unit.index * 11) / 44) * 0.025 * dt;
+    if (unit.element?.id === "tide") {
+      unit.guard = Math.max(unit.guard, 14);
+      unit.special = Math.max(0, unit.special - 0.18 * dt);
+      if (unit.role.name === "healer") unit.cooldown = Math.max(0, unit.cooldown - 0.1 * dt);
+    }
+    return;
+  }
+  if (isBossField("neon-crown")) {
+    const zone = crownZone(bounds);
+    if (state.crownHolderId === unit.id) {
+      unit.special = Math.max(0, unit.special - 0.26 * dt);
+      unit.morale = Math.min(1.66, unit.morale + 0.0015 * dt);
+    } else if (zone && distance(unit, zone) < zone.radius * 1.25) {
+      unit.cooldown = Math.max(0, unit.cooldown - 0.08 * dt);
+    }
+    return;
+  }
+  if (isBossField("scrap-storm")) {
+    const scrapZone = terrainZones(bounds).find((zone) => inTerrainZone(unit, zone));
+    if (scrapZone) {
+      unit.guard = Math.max(unit.guard, 24);
+      unit.special = Math.max(0, unit.special - 0.18 * dt);
+    }
+    return;
+  }
+  if (isBossField("blackout-fog")) {
+    if (unit.role.name === "bonker" || unit.role.name === "runner") {
+      unit.haste = Math.max(unit.haste, 10);
+      unit.guard = Math.max(unit.guard, 18);
+    }
   }
 }
 
@@ -1001,26 +1717,28 @@ function terrainPulse(bounds) {
   }
   if (state.battleType.id === "trash") {
     const looters = aliveUnits().filter((unit) => zones.some((zone) => inTerrainZone(unit, zone)));
-    const unit = looters[Math.floor(Math.random() * looters.length)];
-    if (unit) {
+    const picks = isBossField("scrap-storm")
+      ? looters.sort(() => Math.random() - 0.5).slice(0, 2)
+      : [looters[Math.floor(Math.random() * looters.length)]].filter(Boolean);
+    picks.forEach((unit) => {
       unit.guard = Math.max(unit.guard, 120);
       unit.special = Math.max(0, unit.special - 60);
       creditAmp(unit, "scrap pulse");
       scoreChallenge(unit.team, 1, "field", "trash planet loot");
-      recordMove(gangs[unit.team].short, `#${unit.number} ${unit.name} finds scrap tech`);
-      pop(unit.x, unit.y - 28, "scrap", gangs[unit.team].accent);
-      flashField("trash-burst");
-    }
+      recordMove(gangs[unit.team].short, `#${unit.number} ${unit.name} finds ${isBossField("scrap-storm") ? "storm tech" : "scrap tech"}`);
+      pop(unit.x, unit.y - 28, isBossField("scrap-storm") ? "storm" : "scrap", gangs[unit.team].accent);
+    });
+    if (picks.length) flashField("trash-burst");
     return;
   }
   if (state.battleType.id === "fog") {
     const team = aliveUnits(0).length <= aliveUnits(1).length ? 0 : 1;
-    aliveUnits(team).slice(0, 8).forEach((unit) => {
-      unit.guard = Math.max(unit.guard, 70);
-      unit.cooldown = Math.max(0, unit.cooldown - 10);
+    aliveUnits(team).slice(0, isBossField("blackout-fog") ? 12 : 8).forEach((unit) => {
+      unit.guard = Math.max(unit.guard, isBossField("blackout-fog") ? 96 : 70);
+      unit.cooldown = Math.max(0, unit.cooldown - (isBossField("blackout-fog") ? 16 : 10));
     });
     scoreChallenge(team, 1, "field", "fog bowl ambush");
-    recordMove(gangs[team].short, "fog bowl ambush set");
+    recordMove(gangs[team].short, isBossField("blackout-fog") ? "blackout ambush set" : "fog bowl ambush set");
     flashField("fog-burst");
   }
 }
@@ -1069,14 +1787,15 @@ function crownRushPulse(bounds) {
   holder.guard = Math.max(holder.guard, 80);
   holder.haste = Math.max(holder.haste, 70);
   holder.morale = Math.min(1.62, holder.morale + 0.05);
-  const enemies = nearbyUnits(holder, 1 - holder.team, 98).slice(0, 5);
+  if (isBossField("neon-crown")) holder.special = Math.max(0, holder.special - 34);
+  const enemies = nearbyUnits(holder, 1 - holder.team, isBossField("neon-crown") ? 126 : 98).slice(0, isBossField("neon-crown") ? 7 : 5);
   enemies.forEach((enemy) => {
-    dealDamage(holder, enemy, 5);
+    dealDamage(holder, enemy, isBossField("neon-crown") ? 8 : 5);
     spark(enemy.x, enemy.y);
     if (enemy.hp <= 0) downUnit(enemy, holder, distance(holder, enemy));
   });
   scoreChallenge(holder.team, 1, "field", "crown pressure");
-  recordMove(gangs[holder.team].short, "crown pressure pulse");
+  recordMove(gangs[holder.team].short, isBossField("neon-crown") ? "neon crown pressure" : "crown pressure pulse");
 }
 
 function stepUnit(unit, dt, bounds) {
@@ -1098,6 +1817,7 @@ function stepUnit(unit, dt, bounds) {
   }
   applyTerrainRules(unit, dt, bounds);
   applyChallengeRules(unit, dt);
+  applyBossFieldRules(unit, dt, bounds);
   if (state.battleType.id === "crown") {
     const holder = crownHolder();
     const zone = crownZone(bounds);
@@ -1270,9 +1990,9 @@ function attack(unit, target, d) {
   const crit = Math.random() > (ampCrit ? 0.84 : 0.91);
   const roleBoost = unit.role.name === "captain" && aliveUnits(unit.team).length < 14 ? 1.35 : 1;
   const ampBoost = unit.amplified > 0 ? 1.18 : 1;
-  const crownBoost = state.battleType.id === "crown" && state.crownHolderId === unit.id ? 1.28 : 1;
-  const fogBoost = state.battleType.id === "fog" && unit.role.name === "bonker" && d < 42 ? 1.18 : 1;
-  const fogPenalty = state.battleType.id === "fog" && unit.role.name === "slinger" && d > 88 ? 0.74 : 1;
+  const crownBoost = state.battleType.id === "crown" && state.crownHolderId === unit.id ? (isBossField("neon-crown") ? 1.42 : 1.28) : 1;
+  const fogBoost = state.battleType.id === "fog" && unit.role.name === "bonker" && d < 42 ? (isBossField("blackout-fog") ? 1.34 : 1.18) : 1;
+  const fogPenalty = state.battleType.id === "fog" && unit.role.name === "slinger" && d > 88 ? (isBossField("blackout-fog") ? 0.58 : 0.74) : 1;
   const damage = Math.round((unit.role.damage + rand(-3, 4)) * unit.morale * roleBoost * ampBoost * crownBoost * fogBoost * fogPenalty * (crit ? 1.8 : 1));
   const guarded = target.guard > 0 ? 0.64 : 1;
   const dealt = dealDamage(unit, target, Math.max(1, Math.round(damage * guarded)));
@@ -1418,7 +2138,7 @@ function matchStarLines() {
   ].filter(Boolean);
 }
 
-function applyLeagueResult(winnerSide, loserSide, leftAlive, rightAlive) {
+function applyLeagueResult(winnerSide, loserSide, leftAlive, rightAlive, source = "live") {
   if (state.league.phase === "champion") return;
   const winnerGang = gangs[winnerSide];
   const loserGang = gangs[loserSide];
@@ -1447,8 +2167,16 @@ function applyLeagueResult(winnerSide, loserSide, leftAlive, rightAlive) {
   loserRow.fans = Math.max(10, loserRow.fans + (close ? 1 : -2));
   loserRow.last = "L";
 
-  addRecap(`${phaseLabel}: ${winnerGang.short} beat ${loserGang.short}, ${winnerScore}-${loserScore}.`);
+  const rivalryResult = registerRivalryResult(winnerGang.name, loserGang.name, winnerScore, loserScore, close);
+  if (rivalryResult.hadHistory) {
+    winnerRow.rivalryWins = (winnerRow.rivalryWins || 0) + 1;
+    winnerRow.fans = Math.min(99, winnerRow.fans + 3);
+    addLog(`Rivalry heat: ${rivalryResult.line}`);
+  }
+  addRecap(`${phaseLabel}: ${winnerGang.short} beat ${loserGang.short}, ${winnerScore}-${loserScore}. ${rivalryResult.line}`);
+  const recapCard = buildRecapCard({ phaseLabel, winnerSide, loserSide, winnerScore, loserScore, close, source, rivalryLine: rivalryResult.line });
   advanceLeague(winnerGang.name, loserGang.name);
+  finalizeRecapCard(recapCard, leftAlive, rightAlive);
   saveLeague();
 }
 
@@ -1514,6 +2242,7 @@ function quickSimCurrentMatch() {
   if (!fixture) return;
   gangs = [gangPool[fixture[0]], gangPool[fixture[1]]];
   state.battleType = currentBattleType();
+  state.bossField = currentBossField(state.battleType);
   armChallenge();
   const [winnerSide, loserSide, winnerScore, loserScore] = simulatedScore();
   gangRecord(gangs[winnerSide].name).wins += 1;
@@ -1524,7 +2253,7 @@ function quickSimCurrentMatch() {
   }
   saveSeason();
   quickSimChallenge(winnerSide, loserSide, winnerScore, loserScore);
-  applyLeagueResult(winnerSide, loserSide, winnerSide === 0 ? winnerScore : loserScore, winnerSide === 1 ? winnerScore : loserScore);
+  applyLeagueResult(winnerSide, loserSide, winnerSide === 0 ? winnerScore : loserScore, winnerSide === 1 ? winnerScore : loserScore, "quick");
   addLog(`Quick sim: ${gangs[winnerSide].name} survive ${winnerScore}-${loserScore}.`);
   showToast(`Quick sim: ${gangs[winnerSide].short} win`);
   resetMatch();
@@ -1653,6 +2382,7 @@ function render() {
   if (el.challengeRibbon) {
     el.challengeRibbon.textContent = challengeRibbonLine(left, right);
   }
+  renderRivalryBadge();
   el.field.classList.toggle("challenge-won", Boolean(state.challengeProgress?.winner));
   const momentum = left + right === 0 ? 0 : (right - left) / 30;
   el.momentumBar.style.transform = `scaleX(${clamp(Math.abs(momentum), 0.04, 1)})`;
@@ -1690,9 +2420,18 @@ function render() {
     .map((move) => `<span><b>${move.tag}</b>${move.text}</span>`)
     .join("");
   renderLeague();
+  renderWatchKit(left, right);
+  renderRecapStudio(left, right);
   renderRooting(left, right);
   renderScout();
   renderTv(left, right);
+}
+
+function renderRivalryBadge() {
+  if (!el.rivalryBadge) return;
+  const rivalry = currentRivalry();
+  el.rivalryBadge.textContent = `${rivalryBadgeLabel(rivalry)} · ${rivalryWatchLine(rivalry)} · ${rivalry?.heat || 0} heat`;
+  el.rivalryBadge.classList.toggle("hot", (rivalry?.meetings || 0) > 0);
 }
 
 function updateDirector(bounds) {
@@ -1791,7 +2530,7 @@ function interstitialDeck(left, right) {
       kicker: "League interstitial",
       title: currentFixtureLabel(),
       body: championLine,
-      meta: `${phase} · ${standings().slice(0, 3).map((row) => `${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
+      meta: `${phase} · ${rivalryBadgeLabel()}: ${rivalryWatchLine()} · ${standings().slice(0, 3).map((row) => `${row.gang.short} ${row.wins}-${row.losses}`).join(" · ")}`,
     },
     {
       kicker: "Season challenge",
@@ -1801,7 +2540,7 @@ function interstitialDeck(left, right) {
     },
     {
       kicker: "Field guide",
-      title: state.battleType.name,
+      title: fieldName(),
       body: battleTypeOverview(),
       meta: `${gangs[0].short} ${left}/30 standing · ${gangs[1].short} ${right}/30 standing · ${fieldStatLabel()}: ${fieldStatLine(statLeader("hp", (unit) => unit.down ? -1 : unit.morale * unit.hp))}`,
     },
@@ -1809,6 +2548,7 @@ function interstitialDeck(left, right) {
 }
 
 function battleTypeOverview() {
+  if (state.bossField) return state.bossField.rule;
   if (state.battleType.id === "rift") return "Element lanes boost matched Nouns. Spark crits, Tide heals, Bloom guards, and Shade accelerates specials.";
   if (state.battleType.id === "crown") return "The center crown picks a holder. Crowned Nouns gain guard, haste, special charge, and pressure pulses.";
   if (state.battleType.id === "lava") return "Audit lanes burn campers but charge specials faster. Watch the middle lanes for risky power swings.";
@@ -1843,7 +2583,8 @@ function challengeStatLine() {
 function challengeRibbonLine(left, right) {
   const season = state.league?.seasonNumber || 1;
   const nounCount = Number.isFinite(left + right) ? `${left + right} live` : "match live";
-  return `S${season} challenge · ${challengeStatLine()} · ${nounCount}`;
+  const boss = state.bossField ? `${state.bossField.short} boss · ` : "";
+  return `S${season} challenge · ${boss}${challengeStatLine()} · ${nounCount}`;
 }
 
 function challengeTvLine() {
@@ -1895,6 +2636,7 @@ function cueReplay(text, unit = null) {
 }
 
 function battleTvLine() {
+  if (state.bossField) return state.bossField.tv;
   if (state.battleType.id === "rift") return "amplifier rift";
   if (state.battleType.id === "crown") return crownTvLine();
   if (state.battleType.id === "lava") return "lava audit";
@@ -1907,7 +2649,7 @@ function battleTvLine() {
 function directorFieldLine() {
   const target = state.units.find((unit) => unit.id === state.directorTargetId);
   const targetLine = target ? `tracking #${target.number} ${gangs[target.team].short}` : "tracking field";
-  return `${state.battleType.name} · ${targetLine} · ${challengeTvLine()}`;
+  return `${fieldName()} · ${targetLine} · ${challengeTvLine()}`;
 }
 
 function reviewPulseLine() {
@@ -1949,6 +2691,8 @@ function tvLeagueLine() {
 
 function tvPathLine() {
   const league = state.league;
+  const rivalry = currentRivalry();
+  const rivalryLine = rivalry?.meetings > 0 ? `${rivalryBadgeLabel(rivalry)}: ${rivalryWatchLine(rivalry)} · ` : "";
   if (league.phase === "champion") {
     const recap = (league.recaps || [])[0];
     return `${challengeTvLine()} · ${league.champion} are champions${recap ? ` · ${recap}` : ""}`;
@@ -1963,13 +2707,13 @@ function tvPathLine() {
         return `${label}: ${left} vs ${right}${winner}`;
       })
       .join(" · ");
-    return `${challengeTvLine()} · ${path}`;
+    return `${rivalryLine}${challengeTvLine()} · ${path}`;
   }
   const path = standings()
     .slice(0, 4)
     .map((row, index) => `${index + 1}. ${row.gang.short} ${row.wins}-${row.losses}`)
     .join(" · ");
-  return `${challengeTvLine()} · ${path}`;
+  return `${rivalryLine}${storylineDigest()} · ${challengeTvLine()} · ${path}`;
 }
 
 function statLeader(key, score = (unit) => unit.stats[key]) {
@@ -1989,6 +2733,7 @@ function amplifierStatLine() {
 }
 
 function fieldStatLabel() {
+  if (state.bossField) return state.bossField.statLabel;
   if (state.battleType.id === "rift") return "Amp field";
   if (state.battleType.id === "crown") return "Crown";
   if (state.battleType.id === "lava") return "Audit heat";
@@ -1999,6 +2744,13 @@ function fieldStatLabel() {
 }
 
 function fieldStatLine(liveLeader) {
+  if (isBossField("monsoon-rift")) return `${amplifierStatLine()} · tide lanes`;
+  if (isBossField("neon-crown")) {
+    const holder = crownHolder();
+    return holder ? `neon #${holder.number} ${gangs[holder.team].short}` : "neon crown open";
+  }
+  if (isBossField("scrap-storm")) return `${aliveUnits().filter((unit) => terrainZones(fieldBounds()).some((zone) => inTerrainZone(unit, zone))).length} in storm`;
+  if (isBossField("blackout-fog")) return `${aliveUnits().filter((unit) => unit.guard > 0 || unit.haste > 0).length} hidden`;
   if (state.battleType.id === "rift") return amplifierStatLine();
   if (state.battleType.id === "crown") {
     const holder = crownHolder();
@@ -2035,11 +2787,12 @@ function renderLeague() {
         <span>${row.wins}-${row.losses}</span>
         <span>${diff >= 0 ? "+" : ""}${diff}</span>
         <span>${streak}</span>
-        <span>${row.challengeWins || 0} ch · ${row.fans} fans</span>
+        <span>${row.challengeWins || 0} ch · ${row.rivalryWins || 0} riv · ${row.fans} fans</span>
       </div>
     `;
   }).join("");
   renderBracket(rows);
+  renderSeasonScope(rows);
 }
 
 function renderBracket(rows) {
@@ -2085,14 +2838,18 @@ function renderRooting(left, right) {
     .map((gang, index) => {
       const record = gangRecord(gang.name);
       const leagueRow = state.league.table[gang.name] || {};
+      const rivalry = currentRivalry();
+      const rivalryWins = rivalry?.wins?.[gang.name] || 0;
+      const rivalryLosses = Math.max(0, (rivalry?.meetings || 0) - rivalryWins);
       const alive = index === 0 ? left : right;
-      const power = Math.round((alive / 30) * 60 + record.wins * 8 + record.takedowns * 0.4);
+      const power = Math.round((alive / 30) * 60 + record.wins * 8 + rivalryWins * 10 + record.takedowns * 0.4);
       return `
         <div class="root-card" style="border-color:${gang.color}">
           <b>${gang.name}</b>
           <span>${record.wins}-${record.losses} record</span>
           <span>${record.takedowns} takedowns</span>
           <span>${leagueRow.challengeWins || 0} challenge wins</span>
+          <span>${rivalryWins}-${rivalryLosses} rivalry H2H</span>
           <span>${power} root power</span>
         </div>
       `;
@@ -2185,6 +2942,37 @@ function spark(x, y) {
 el.newMatchButton.addEventListener("click", resetMatch);
 el.quickSimButton.addEventListener("click", quickSimCurrentMatch);
 el.simDayButton.addEventListener("click", simCurrentDay);
+el.guideButton.addEventListener("click", () => showGuide(false));
+el.guideStartButton.addEventListener("click", () => {
+  hideGuide(true);
+  showToast("Guide saved. Pick a gang and watch the challenge.");
+});
+el.guideCloseButton.addEventListener("click", () => hideGuide(true));
+el.guideTvButton.addEventListener("click", () => {
+  if (isTvMode) {
+    hideGuide(true);
+    state.interstitialClock = 560;
+    flashTvHint("TV brief replay");
+    return;
+  }
+  localStorage.setItem(GUIDE_KEY, "seen");
+  window.open(`${window.location.origin}/games/nouns-nation-battler/#mode=tv&guide=1`, "_blank", "noopener");
+});
+document.addEventListener("click", async (event) => {
+  const button = event.target instanceof Element ? event.target.closest("[data-copy-text]") : null;
+  if (!button) return;
+  const text = button.dataset.copyText || "";
+  const label = button.dataset.copyLabel || "link";
+  const output = button.dataset.copyTarget === "recap" ? el.recapCardOutput : el.watchKitOutput;
+  try {
+    await navigator.clipboard.writeText(text);
+    if (output) output.textContent = `${label} copied`;
+    showToast(`${label} copied`);
+  } catch {
+    if (output) output.textContent = text;
+    showToast(button.dataset.copyTarget === "recap" ? "Copy blocked. Text is in the recap card." : "Copy blocked. Text is in the launch kit.");
+  }
+});
 el.pauseButton.addEventListener("click", () => {
   if (state.finished) {
     resetMatch();
@@ -2231,6 +3019,10 @@ el.speedGroup.addEventListener("click", (event) => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.guideOpen) {
+    hideGuide(true);
+    return;
+  }
   if (!isTvMode) return;
   if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target?.tagName)) return;
   const key = event.key.toLowerCase();
@@ -2253,6 +3045,9 @@ window.addEventListener("keydown", (event) => {
   } else if (key === "i") {
     state.interstitialClock = 560;
     flashTvHint("Interstitial replay");
+  } else if (key === "g") {
+    showGuide(false);
+    flashTvHint("Watch guide");
   }
 });
 
@@ -2262,7 +3057,7 @@ function flashTvHint(text) {
   el.tvCastHint.classList.add("flash");
   clearTimeout(el.tvCastHint.timer);
   el.tvCastHint.timer = setTimeout(() => {
-    el.tvCastHint.textContent = "Space pause · N next · Q quick sim · D sim day · I brief · R reset";
+    el.tvCastHint.textContent = "Space pause · N next · Q quick sim · D sim day · I brief · G guide · R reset";
     el.tvCastHint.classList.remove("flash");
   }, 1200);
 }
@@ -2277,4 +3072,5 @@ window.addEventListener("resize", () => {
 });
 
 resetMatch();
+bootGuide();
 requestAnimationFrame(update);

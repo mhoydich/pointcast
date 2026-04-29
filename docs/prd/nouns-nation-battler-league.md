@@ -126,6 +126,53 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add a field challenge ribbon so viewers can follow the current side objective at a glance.
 - Add a TV challenge brief between the League Interstitial and Field Guide, using actual generated battler Nouns and live challenge progress.
 
+## V14 Onboarding + Season 2 Scope Additions
+
+- Add a replayable Watch Guide inside the game for first-time viewers and reviewers.
+- Show the guide once for non-TV viewers, support direct onboarding links with `#guide=1`, and keep all onboarding state local.
+- Add `G` as a TV shortcut for the guide while preserving `I` for the TV interstitial deck.
+- Add a compact Season 2 scope board for Rookie Watch Path, Rivalry Weeks, Boss Fields, Playbook Traits, Recap Cards, and Commissioner's Cup.
+- Track the full next-season scope in `docs/prd/nouns-nation-battler-season-2.md`.
+
+## V15 Watch Party + GTM Additions
+
+- Add an operator-facing Watch Party Kit to the normal game view.
+- Generate invite copy from the live season, day, slate, matchup, field, challenge, and survivor count.
+- Add copy buttons for the invite, TV route, rookie guide, and poster wall.
+- Keep TV mode clean by hiding the Watch Party Kit on broadcast routes.
+- Track the go-to-market plan in `docs/prd/nouns-nation-battler-gtm.md`.
+
+## V16 Live Storyline Additions
+
+- Add a live storyline engine that turns standings, bubble teams, fan heat, current challenge, survivor edge, and next fixture into short watch hooks.
+- Surface storylines inside the Watch Party Kit so operators can explain why the current slate matters.
+- Add a Copy Storyline action for quick group-chat followups.
+- Feed the storyline digest into the TV path line so the broadcast itself carries the playoff-chase context.
+
+## V17 Recap Studio Additions
+
+- Add a post-match Recap Studio to the normal game route.
+- Persist the latest recap cards in league state with phase, winner, score, field, challenge angle, MVP line, table hook, and next fixture.
+- Generate recap cards for both live finishes and Quick Sim results.
+- Add copy actions for the full recap and the next-match hook so every slate creates a followup artifact.
+- Keep TV mode clean by hiding Recap Studio from fullscreen broadcast routes.
+
+## V18 Rivalry Heat Additions
+
+- Track head-to-head rivalry records inside the local league object without resetting existing v4 league saves.
+- Label first meetings, runback rivalries, rivalry match numbers, and rubber matches in the match header.
+- Award extra fan heat and a rivalry-win stat when a gang wins a rematch.
+- Surface rivalry context in Watch Party copy, live storylines, TV lower text, league interstitials, root cards, standings, battle log, and Recap Studio.
+
+## V19 Boss Field Additions
+
+- Mutate late-season and playoff fields into boss variants without changing the league save schema.
+- Add Monsoon Rift, Neon Crown, Scrap Storm, and Blackout Fog as stronger versions of Rift, Crown, Trash, and Fog.
+- Activate boss fields automatically from regular season Day 8 onward and throughout playoffs.
+- Support direct boss links with `boss=monsoon-rift`, `boss=neon-crown`, `boss=scrap-storm`, or `boss=blackout-fog`; `boss=off` disables the mutation.
+- Surface boss context in the match title, challenge ribbon, TV lower text, Director Mode line, field-guide interstitial, Watch Party links, Recap Studio, and battle log.
+- Give each boss field a readable sim effect: moving/wider rift lanes with Tide recovery, harder crown pressure, extra scrap storm tech, and stronger blackout ambush rules.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -152,5 +199,12 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - TV mode shows a Noun-heavy League Interstitial and Field Guide at match start, and `I` replays the overview deck.
 - Each match arms a Season Challenge and surfaces its progress in the field ribbon, stat strip, standings/rooting layer, and TV challenge interstitial.
 - Resetting a league advances to the next numbered season locally.
+- The Watch Guide can be opened from the controls, direct `#guide=1` links, and TV `G`.
+- The normal view shows a Season 2 scope board without blocking play.
+- The normal view includes a Watch Party Kit with live invite copy and copyable links for TV, guide, and posters.
+- Live storylines update from the current table, challenge, survivor count, and next fixture.
+- The normal view includes a Recap Studio that updates after live and quick-sim results with copyable recap text and a next-match hook.
+- Repeat fixtures show rivalry labels, head-to-head records, rivalry heat, and extra fan heat for rivalry wins.
+- Boss fields activate late in the season or playoffs, can be forced with `boss=<id>`, and appear in TV, recap, watch-party, and field-guide surfaces.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.
