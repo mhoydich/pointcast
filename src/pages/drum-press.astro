@@ -1,0 +1,884 @@
+---
+/**
+ * /drum-press — the publishing house · 2026-04-29 PT.
+ *
+ * PointCast's drum-hub now spans 47 surfaces. This page reframes that
+ * sprawl as a catalog: an inventive, slightly self-aware publishing
+ * house called DRUM PRESS that puts out small noisy editions of
+ * collaborative drumming. Each surface is a "title"; titles are
+ * grouped into eight imprints (Voices, Instruments, Arcade, Comms,
+ * Broadcast, Machine, Editions, plus the First Press).
+ *
+ * Per Mike 2026-04-29 (post-AgentLane): "rethink homepage for drum
+ * and an almost publishing house that published tons of drum media,
+ * inventive, neat publishing house, etc etc, enjoy the assignment."
+ *
+ * Page structure:
+ *   1. Masthead — title, kicker, vol/no, dek
+ *   2. Now In Print — live count + event tail (polls /api/sounds)
+ *   3. This Week's Editions — 3 randomized features
+ *   4. The Catalog — 8 imprints, all titles, with cat-no + sub
+ *   5. Editor's Note — short essay
+ *   6. Colophon — credits, tech notes, machine-readable footer
+ *
+ * Aesthetic: late-90s indie zine catalog meets small literary press.
+ * Warm oat paper, ink black, marquee-red accent, JetBrains Mono +
+ * system serif. ASCII rules and ornaments. Scoped CSS — does not
+ * borrow PointCast's main palette so the imprint feels like its own
+ * thing.
+ *
+ * IMPORTANT: literal '{' and '}' in <pre> / body text MUST be escaped
+ * as &#123; / &#125; (PR #222 lesson).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'DRUM PRESS — catalog of drum media';
+const description = 'A small, slightly self-aware publishing house that puts out 47 editions of collaborative drumming. Catalog organized by imprint: voices, instruments, arcade, communiqués, broadcast, machine, editions. Pressed nightly on Cloudflare Pages.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/drum-press',
+  name: 'DRUM PRESS · Catalog of Drum Media',
+  url: 'https://pointcast.xyz/drum-press',
+  description,
+  publisher: {
+    '@type': 'Organization',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────
+// CATALOG — single source of truth. Cat-no follows the pattern
+// DR-{IMPRINT}{NN}. Order within imprint is release order (earliest
+// → latest), which is also numerical for the v-series.
+// ─────────────────────────────────────────────────────────────────
+
+interface Title {
+  cat: string;       // catalog number, e.g. DR-V12
+  href: string;      // local route
+  name: string;      // display title
+  sub: string;       // one-line note
+  era: string;       // release month/marker
+  format: string;    // pressing format note
+}
+
+interface Imprint {
+  code: string;       // short imprint code, e.g. INST
+  name: string;       // display name
+  blurb: string;      // one-sentence editorial blurb
+  titles: Title[];
+}
+
+const imprints: Imprint[] = [
+  {
+    code: 'FIRST',
+    name: 'The First Press',
+    blurb: 'Where it began. A single button, played in one tab, heard from another.',
+    titles: [
+      { cat: 'DR-001', href: '/drum',    name: 'classic',   sub: 'the original drum',          era: 'mar 2026', format: 'cookie-clicker' },
+    ],
+  },
+  {
+    code: 'VOX',
+    name: 'Voices',
+    blurb: 'Ensembles. Multi-player rooms where the sound is the sum of who is in the tab.',
+    titles: [
+      { cat: 'DR-V02', href: '/drum-v2',  name: 'collab',    sub: 'pentatonic voice + leaderboard', era: 'mar 2026', format: 'live · token-priced' },
+      { cat: 'DR-V03', href: '/drum-v3',  name: 'spotify',   sub: 'drum along to a track',           era: 'mar 2026', format: 'live · spotify-synced' },
+      { cat: 'DR-V04', href: '/drum-v4',  name: 'orchestra', sub: 'strings + winds + the lot',       era: 'apr 2026', format: 'live ensemble' },
+      { cat: 'DR-V05', href: '/drum-v5',  name: 'loops',     sub: 'sixteen looping bars',            era: 'apr 2026', format: 'looper' },
+      { cat: 'DR-V06', href: '/drum-v6',  name: 'choir',     sub: 'chord-summoning room',            era: 'apr 2026', format: 'live chorale' },
+      { cat: 'DR-V07', href: '/drum-v7',  name: 'big',       sub: 'thirty pads, one room',           era: 'apr 2026', format: '30-pad' },
+      { cat: 'DR-V08', href: '/drum-v8',  name: 'symphony',  sub: 'forty-two pads, full kit',        era: 'apr 2026', format: '42-pad' },
+    ],
+  },
+  {
+    code: 'INST',
+    name: 'Instruments',
+    blurb: 'Solo voices. One instrument per pressing. Same hub, different timbre.',
+    titles: [
+      { cat: 'DR-V09', href: '/drum-v9',  name: 'lounge',    sub: 'sax · after-hours',          era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V10', href: '/drum-v10', name: 'theremin',  sub: 'gesture · contactless',      era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V11', href: '/drum-v11', name: 'bells',     sub: 'chimes · a quiet room',      era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V12', href: '/drum-v12', name: 'organ',     sub: 'pipes · a loud room',        era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V13', href: '/drum-v13', name: 'strings',   sub: 'pizz / arco',                era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V14', href: '/drum-v14', name: 'marimba',   sub: 'mallets · wood + metal',     era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V15', href: '/drum-v15', name: 'hang',      sub: 'handpan · steel skin',       era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V16', href: '/drum-v16', name: '808',       sub: 'machine · the grid',         era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V17', href: '/drum-v17', name: 'harp',      sub: 'gliss · falling water',      era: 'apr 2026', format: 'one-instrument' },
+      { cat: 'DR-V18', href: '/drum-v18', name: 'rhodes',    sub: 'electric piano · velvet',    era: 'apr 2026', format: 'one-instrument' },
+    ],
+  },
+  {
+    code: 'ARC',
+    name: 'Arcade',
+    blurb: 'Games. Limited-edition rounds with rules; a beat counts as a play.',
+    titles: [
+      { cat: 'DR-ARC1', href: '/drum-potato',       name: 'potato',    sub: 'hot potato · do not hold',   era: 'apr 2026', format: 'round-based' },
+      { cat: 'DR-ARC2', href: '/drum-tv-bingo',     name: 'bingo',     sub: 'tv game · 5 in a row',       era: 'apr 2026', format: 'cast-game' },
+      { cat: 'DR-ARC3', href: '/drum-tv-gauntlet',  name: 'gauntlet',  sub: 'tv 60-second race',          era: 'apr 2026', format: 'cast-game' },
+      { cat: 'DR-ARC4', href: '/drum-tv-roulette',  name: 'roulette',  sub: 'tv wheel · spin to play',    era: 'apr 2026', format: 'cast-game' },
+    ],
+  },
+  {
+    code: 'COMM',
+    name: 'Communiqués',
+    blurb: 'Words instead of beats. Walls, mics, soft confessions, notes for the next visitor.',
+    titles: [
+      { cat: 'DR-COM1', href: '/drum-shout',        name: 'shout',         sub: 'mic · loud one-shots',          era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM2', href: '/drum-applause',     name: 'applause',      sub: 'meter · clap together',         era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM3', href: '/drum-letters',      name: 'letters',       sub: 'note for the next visitor',     era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM4', href: '/drum-bulletin',     name: 'bulletin',      sub: 'pinboard · pinned by anyone',   era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM5', href: '/drum-walkie',       name: 'walkie',        sub: 'ptt · 4 channels',              era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM6', href: '/drum-graffiti',     name: 'graffiti',      sub: 'wall · spray + tag',            era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM7', href: '/drum-emoji-mesh',   name: 'emoji mesh',    sub: 'storm · whole-room weather',    era: 'apr 2026', format: 'comms' },
+      { cat: 'DR-COM8', href: '/drum-confessional', name: 'confessional',  sub: 'soft · one line at a time',     era: 'apr 2026', format: 'comms' },
+    ],
+  },
+  {
+    code: 'CST',
+    name: 'Broadcast',
+    blurb: 'For the room screen. Cast surfaces that flash when anyone, anywhere on the hub, taps.',
+    titles: [
+      { cat: 'DR-CST1', href: '/drum-tv',      name: 'tv',       sub: 'cast mode · the original',  era: 'apr 2026', format: 'cast' },
+      { cat: 'DR-CST2', href: '/drum-tv-v2',   name: 'venue',    sub: 'tv v2 · stage + crowd',     era: 'apr 2026', format: 'cast' },
+      { cat: 'DR-CST3', href: '/drum-viz',     name: 'viz',      sub: 'tv v3 · waveform',          era: 'apr 2026', format: 'cast' },
+      { cat: 'DR-CST4', href: '/drum-marquee', name: 'marquee',  sub: 'tv minimalist · ticker',    era: 'apr 2026', format: 'cast' },
+      { cat: 'DR-CST5', href: '/drum-radio',   name: 'radio',    sub: '96.1 fm · the rooms on air',era: 'apr 2026', format: 'cast' },
+    ],
+  },
+  {
+    code: 'MAC',
+    name: 'Machine',
+    blurb: 'For the agents. A play floor, a hall of residents, and a machine-readable front door.',
+    titles: [
+      { cat: 'DR-MAC1', href: '/drum-agents', name: 'agents hall', sub: 'directory · resident agents', era: 'apr 2026', format: 'machine' },
+      { cat: 'DR-MAC2', href: '/drum-agent',  name: 'agent room',  sub: 'play floor · type=agent',     era: 'apr 2026', format: 'machine' },
+      { cat: 'DR-MAC3', href: '/api/mcp',     name: 'mcp',         sub: 'jsonrpc · 24 tools',          era: 'apr 2026', format: 'protocol' },
+    ],
+  },
+  {
+    code: 'ED',
+    name: 'Editions',
+    blurb: 'Daily and ritual rooms. Some reprint nightly, some are one-of-one, this catalog is one of them.',
+    titles: [
+      { cat: 'DR-ED01', href: '/drum-daily',    name: 'daily',     sub: 'beat of the day · reprints',    era: 'apr 2026', format: 'daily' },
+      { cat: 'DR-ED02', href: '/drum-jam',      name: 'jam',       sub: 'three or more · live session',  era: 'apr 2026', format: 'live' },
+      { cat: 'DR-ED03', href: '/drum-pulse',    name: 'pulse',     sub: 'heartbeat · whole-room',        era: 'apr 2026', format: 'ritual' },
+      { cat: 'DR-ED04', href: '/drum-apr26',    name: 'sequencer', sub: 'apr 26 · 8-pad sequencer',      era: 'apr 2026', format: 'one-off' },
+      { cat: 'DR-ED05', href: '/drum-stickers', name: 'stickers',  sub: 'binder · paste a sticker',      era: 'apr 2026', format: 'collectible' },
+      { cat: 'DR-ED06', href: '/drum-postcard', name: 'postcard',  sub: 'receipt of your visit',         era: 'apr 2026', format: 'keepsake' },
+      { cat: 'DR-ED07', href: '/drum-buttons',  name: 'buttons',   sub: 'one-shots · the panel',         era: 'apr 2026', format: 'control' },
+      { cat: 'DR-ED08', href: '/drum-trophies', name: 'trophies',  sub: 'on-chain · tezos editions',     era: 'apr 2026', format: 'on-chain' },
+      { cat: 'DR-ED09', href: '/drum-press',    name: 'press',     sub: 'this catalog · self-ref',       era: 'apr 2026', format: 'reference' },
+    ],
+  },
+];
+
+const totalTitles = imprints.reduce((n, i) => n + i.titles.length, 0);
+const totalImprints = imprints.length;
+
+// Issue/volume number — playful, increments daily so the masthead
+// feels alive without doing real publication tracking.
+const today = new Date();
+const issueNo = Math.floor((today.getTime() - new Date(2026, 2, 1).getTime()) / 86_400_000) + 1;
+const volNo = 1;
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="dp" id="dp-main">
+    <DrumNav current="press" />
+
+    <header class="dp__masthead">
+      <p class="dp__kicker mono">★ DRUM HUB · DRUM PRESS · CATALOG OF DRUM MEDIA ★</p>
+      <h1 class="dp__title">DRUM <em>PRESS</em></h1>
+      <p class="dp__strap mono">est. mar 2026 · el segundo, ca · vol. {volNo} · no. {issueNo}</p>
+      <p class="dp__dek">
+        A small, slightly self-aware publishing house. We put out
+        <strong>{totalTitles} editions</strong> of collaborative drumming
+        across <strong>{totalImprints} imprints</strong>. Each room is its
+        own pressing. Some reprint nightly. Some are one-of-one. Some only
+        open when others do.
+      </p>
+      <hr class="dp__rule" />
+    </header>
+
+    <section class="dp__now" aria-label="Now in print">
+      <div class="dp__now-row">
+        <p class="dp__eyebrow mono">▌ NOW IN PRINT</p>
+        <p class="dp__count mono">live: <strong id="dp-count">—</strong> · pressing</p>
+      </div>
+      <p class="dp__tail mono" id="dp-tail" aria-live="polite">— stream open · waiting for the first beat —</p>
+    </section>
+
+    <section class="dp__features" aria-label="This week's editions">
+      <p class="dp__eyebrow mono">❡ THIS WEEK'S EDITIONS</p>
+      <div class="dp__features-grid" id="dp-features">
+        {/* JS will randomize a 3-card spread on load. SSR a default so non-JS still gets content. */}
+        <a class="dp__feature" href="/drum-v15">
+          <span class="dp__feature-cat mono">DR-V15</span>
+          <span class="dp__feature-title">hang</span>
+          <span class="dp__feature-sub mono">handpan · steel skin</span>
+          <span class="dp__feature-go mono">go to room →</span>
+        </a>
+        <a class="dp__feature" href="/drum-letters">
+          <span class="dp__feature-cat mono">DR-COM3</span>
+          <span class="dp__feature-title">letters</span>
+          <span class="dp__feature-sub mono">a note for the next visitor</span>
+          <span class="dp__feature-go mono">go to room →</span>
+        </a>
+        <a class="dp__feature" href="/drum-radio">
+          <span class="dp__feature-cat mono">DR-CST5</span>
+          <span class="dp__feature-title">radio</span>
+          <span class="dp__feature-sub mono">96.1 fm · all rooms, on air</span>
+          <span class="dp__feature-go mono">go to room →</span>
+        </a>
+      </div>
+    </section>
+
+    <hr class="dp__rule dp__rule--ornate" />
+
+    <section class="dp__catalog" aria-label="The catalog">
+      <p class="dp__eyebrow mono">§ THE CATALOG</p>
+      <h2 class="dp__catalog-title">{totalTitles} titles · {totalImprints} imprints · in print</h2>
+
+      {imprints.map((imp) => (
+        <article class="dp__imprint" id={`imp-${imp.code.toLowerCase()}`}>
+          <header class="dp__imprint-head">
+            <div class="dp__imprint-id">
+              <span class="dp__imprint-code mono">DR-{imp.code}</span>
+              <h3 class="dp__imprint-name">{imp.name}</h3>
+            </div>
+            <p class="dp__imprint-blurb">{imp.blurb}</p>
+            <p class="dp__imprint-meta mono">{imp.titles.length} {imp.titles.length === 1 ? 'title' : 'titles'} in print</p>
+          </header>
+          <ul class="dp__shelf" role="list">
+            {imp.titles.map((t) => (
+              <li class="dp__title">
+                <a class="dp__cover" href={t.href}>
+                  <span class="dp__cat mono">{t.cat}</span>
+                  <span class="dp__name">{t.name}</span>
+                  <span class="dp__sub mono">{t.sub}</span>
+                  <span class="dp__meta mono"><span>{t.format}</span><span>{t.era}</span></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </article>
+      ))}
+    </section>
+
+    <hr class="dp__rule dp__rule--ornate" />
+
+    <section class="dp__editor" aria-label="Editor's note">
+      <p class="dp__eyebrow mono">¶ EDITOR'S NOTE</p>
+      <div class="dp__editor-body">
+        <p>
+          PointCast began as one drum room — a single button, played in one
+          tab, heard from another. We did not expect to keep building. But
+          each Sunday the room asked for another room: a quieter one, a
+          louder one, one with words instead of beats, one where the agents
+          could play too. So this is the press: forty-seven small
+          broadcasts, plus the catalog you are reading.
+        </p>
+        <p>
+          Most of the rooms work without anyone in them. A few only open
+          when others do. None of them are finished. The press is open;
+          please come in.
+        </p>
+        <p class="dp__editor-sig mono">— the editor, el segundo</p>
+      </div>
+    </section>
+
+    <hr class="dp__rule dp__rule--ornate" />
+
+    <section class="dp__colophon" aria-label="Colophon">
+      <p class="dp__eyebrow mono">※ COLOPHON</p>
+      <dl class="dp__colophon-list mono">
+        <div class="dp__col-row"><dt>Set in</dt><dd>JetBrains Mono &amp; system serif</dd></div>
+        <div class="dp__col-row"><dt>Pressed on</dt><dd>Cloudflare Pages, Workers KV</dd></div>
+        <div class="dp__col-row"><dt>Distributed via</dt><dd><a href="/api/mcp">/api/mcp</a> · <a href="/agents.json">/agents.json</a> · <a href="/llms.txt">/llms.txt</a> · <a href="/town">/town</a></dd></div>
+        <div class="dp__col-row"><dt>Cross-surface bus</dt><dd><a href="/api/sounds">/api/sounds</a> — events fan out to cast surfaces</dd></div>
+        <div class="dp__col-row"><dt>Editor</dt><dd>Mike (el segundo)</dd></div>
+        <div class="dp__col-row"><dt>Engravers</dt><dd>many — see <a href="/drum-agents">/drum-agents</a></dd></div>
+        <div class="dp__col-row"><dt>Reprints</dt><dd>nightly · daily room reprints with the visitor count</dd></div>
+        <div class="dp__col-row"><dt>Errata</dt><dd>logged in <a href="/town">/town</a> blocks</dd></div>
+      </dl>
+      <p class="dp__return mono">
+        ─── back to the press: <a href="/drum-press">/drum-press</a> ·
+        the rooms: <a href="/drum">/drum</a> ·
+        the front: <a href="/">/</a> ───
+      </p>
+    </section>
+
+    <footer class="dp__foot">
+      <p class="mono">DRUM PRESS · printed in el segundo · all editions in print · pointcast.xyz</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  // ── Now-in-print live wire ─────────────────────────────────────
+  // Polls /api/visit for room counts and /api/sounds for the event
+  // tail. Same bus the cast surfaces use. Two-second cadence is
+  // gentle; this page is browseable, not stadium-loud.
+  (function () {
+    const countEl = document.getElementById('dp-count');
+    const tailEl = document.getElementById('dp-tail');
+
+    async function tickCount() {
+      try {
+        const r = await fetch('/api/visit', { cache: 'no-store' });
+        const j = await r.json().catch(() => null);
+        if (!j) return;
+        const n = (j.activeCount ?? j.count ?? j.active ?? '—');
+        if (countEl) countEl.textContent = String(n);
+      } catch (_) { /* silent */ }
+    }
+
+    let lastSince = Date.now() - 30_000;
+    async function tickTail() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastSince}`, { cache: 'no-store' });
+        const j = await r.json().catch(() => null);
+        if (!j || !Array.isArray(j.events)) return;
+        if (j.events.length === 0) return;
+        lastSince = j.now ?? Date.now();
+        const e = j.events[j.events.length - 1];
+        const t = new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        if (tailEl) tailEl.textContent = `[${t}] type=${e.type} · seed=${e.seed} · pid=${e.pid}`;
+      } catch (_) { /* silent */ }
+    }
+
+    tickCount(); tickTail();
+    setInterval(tickCount, 6_000);
+    setInterval(tickTail, 2_000);
+  })();
+
+  // ── Featured editions randomizer ───────────────────────────────
+  // Picks 3 titles from across the catalog at random on each load,
+  // weighted slightly toward variety (one from instruments, one from
+  // comms, one from anywhere). Falls back to SSR'd defaults if any
+  // step fails.
+  (function () {
+    const features = document.getElementById('dp-features');
+    if (!features) return;
+
+    // Mirror of catalog — kept compact. If the page catalog grows we
+    // can flip this to a data-attribute or a small JSON island.
+    const POOL = [
+      // [cat, href, name, sub, imprint-bucket]
+      ['DR-001', '/drum',           'classic',      'the original drum',                  'first'],
+      ['DR-V02', '/drum-v2',        'collab',       'pentatonic voice + leaderboard',     'vox'],
+      ['DR-V03', '/drum-v3',        'spotify',      'drum along to a track',              'vox'],
+      ['DR-V04', '/drum-v4',        'orchestra',    'strings + winds + the lot',          'vox'],
+      ['DR-V05', '/drum-v5',        'loops',        'sixteen looping bars',               'vox'],
+      ['DR-V06', '/drum-v6',        'choir',        'chord-summoning room',               'vox'],
+      ['DR-V07', '/drum-v7',        'big',          'thirty pads, one room',              'vox'],
+      ['DR-V08', '/drum-v8',        'symphony',     'forty-two pads, full kit',           'vox'],
+      ['DR-V09', '/drum-v9',        'lounge',       'sax · after-hours',                  'inst'],
+      ['DR-V10', '/drum-v10',       'theremin',     'gesture · contactless',              'inst'],
+      ['DR-V11', '/drum-v11',       'bells',        'chimes · a quiet room',              'inst'],
+      ['DR-V12', '/drum-v12',       'organ',        'pipes · a loud room',                'inst'],
+      ['DR-V13', '/drum-v13',       'strings',      'pizz / arco',                        'inst'],
+      ['DR-V14', '/drum-v14',       'marimba',      'mallets · wood + metal',             'inst'],
+      ['DR-V15', '/drum-v15',       'hang',         'handpan · steel skin',               'inst'],
+      ['DR-V16', '/drum-v16',       '808',          'machine · the grid',                 'inst'],
+      ['DR-V17', '/drum-v17',       'harp',         'gliss · falling water',              'inst'],
+      ['DR-V18', '/drum-v18',       'rhodes',       'electric piano · velvet',            'inst'],
+      ['DR-ARC1','/drum-potato',    'potato',       'hot potato · do not hold',           'arc'],
+      ['DR-ARC2','/drum-tv-bingo',  'bingo',        'tv game · 5 in a row',               'arc'],
+      ['DR-ARC3','/drum-tv-gauntlet','gauntlet',    'tv 60-second race',                  'arc'],
+      ['DR-ARC4','/drum-tv-roulette','roulette',    'tv wheel · spin to play',            'arc'],
+      ['DR-COM1','/drum-shout',     'shout',        'mic · loud one-shots',               'comm'],
+      ['DR-COM2','/drum-applause',  'applause',     'meter · clap together',              'comm'],
+      ['DR-COM3','/drum-letters',   'letters',      'note for the next visitor',          'comm'],
+      ['DR-COM4','/drum-bulletin',  'bulletin',     'pinboard · pinned by anyone',        'comm'],
+      ['DR-COM5','/drum-walkie',    'walkie',       'ptt · 4 channels',                   'comm'],
+      ['DR-COM6','/drum-graffiti',  'graffiti',     'wall · spray + tag',                 'comm'],
+      ['DR-COM7','/drum-emoji-mesh','emoji mesh',   'storm · whole-room weather',         'comm'],
+      ['DR-COM8','/drum-confessional','confessional','soft · one line at a time',         'comm'],
+      ['DR-CST1','/drum-tv',        'tv',           'cast mode · the original',           'cst'],
+      ['DR-CST2','/drum-tv-v2',     'venue',        'tv v2 · stage + crowd',              'cst'],
+      ['DR-CST3','/drum-viz',       'viz',          'tv v3 · waveform',                   'cst'],
+      ['DR-CST4','/drum-marquee',   'marquee',      'tv minimalist · ticker',             'cst'],
+      ['DR-CST5','/drum-radio',     'radio',        '96.1 fm · the rooms on air',         'cst'],
+      ['DR-MAC1','/drum-agents',    'agents hall',  'directory · resident agents',        'mac'],
+      ['DR-MAC2','/drum-agent',     'agent room',   'play floor · type=agent',            'mac'],
+      ['DR-MAC3','/api/mcp',        'mcp',          'jsonrpc · 24 tools',                 'mac'],
+      ['DR-ED01','/drum-daily',     'daily',        'beat of the day · reprints',         'ed'],
+      ['DR-ED02','/drum-jam',       'jam',          'three or more · live session',       'ed'],
+      ['DR-ED03','/drum-pulse',     'pulse',        'heartbeat · whole-room',             'ed'],
+      ['DR-ED04','/drum-apr26',     'sequencer',    'apr 26 · 8-pad sequencer',           'ed'],
+      ['DR-ED05','/drum-stickers',  'stickers',     'binder · paste a sticker',           'ed'],
+      ['DR-ED06','/drum-postcard',  'postcard',     'receipt of your visit',              'ed'],
+      ['DR-ED07','/drum-buttons',   'buttons',      'one-shots · the panel',              'ed'],
+      ['DR-ED08','/drum-trophies',  'trophies',     'on-chain · tezos editions',          'ed'],
+    ];
+
+    function pickOne(bucket) {
+      const candidates = POOL.filter((p) => p[4] === bucket);
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+    function pickAny(skip) {
+      const candidates = POOL.filter((p) => !skip.has(p));
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    const a = pickOne('inst') || pickAny(new Set());
+    const b = pickOne('comm') || pickAny(new Set([a]));
+    const c = pickAny(new Set([a, b]));
+    const picks = [a, b, c].filter(Boolean);
+    if (picks.length < 3) return;
+
+    features.innerHTML = picks.map(([cat, href, name, sub]) => `
+      <a class="dp__feature" href="${href}">
+        <span class="dp__feature-cat mono">${cat}</span>
+        <span class="dp__feature-title">${name}</span>
+        <span class="dp__feature-sub mono">${sub}</span>
+        <span class="dp__feature-go mono">go to room →</span>
+      </a>
+    `).join('');
+  })();
+</script>
+
+<style is:global>
+  /* ─── DRUM PRESS — scoped to .dp ─────────────────────────────── */
+  .dp {
+    --dp-paper: #f4ead4;
+    --dp-paper-deep: #ecdfbe;
+    --dp-ink: #0c0a07;
+    --dp-rule: #1a1610;
+    --dp-mute: #5b5347;
+    --dp-accent: #c4351c;
+    --dp-accent-faint: rgba(196, 53, 28, 0.12);
+    --dp-cream: #fbf6e7;
+
+    background: var(--dp-paper);
+    color: var(--dp-ink);
+    padding: 28px clamp(16px, 4vw, 48px) 56px;
+    min-height: 100vh;
+    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Iowan Old Style W02', 'Iowan Old Style W03', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.5;
+  }
+
+  .dp .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Masthead ─────────────────────────────────────────────── */
+  .dp__masthead {
+    text-align: center;
+    margin: 14px auto 28px;
+    max-width: 920px;
+  }
+  .dp__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--dp-accent);
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .dp__title {
+    font-size: clamp(54px, 11vw, 128px);
+    font-weight: 800;
+    margin: 0;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    color: var(--dp-ink);
+  }
+  .dp__title em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--dp-accent);
+  }
+  .dp__strap {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dp-mute);
+    margin: 14px 0 18px;
+  }
+  .dp__dek {
+    font-size: clamp(15px, 1.3vw, 18px);
+    line-height: 1.55;
+    color: var(--dp-ink);
+    margin: 0 auto;
+    max-width: 640px;
+  }
+  .dp__dek strong { font-weight: 700; }
+  .dp__rule {
+    border: 0;
+    border-top: 1px solid var(--dp-rule);
+    margin: 28px auto 24px;
+    max-width: 920px;
+  }
+  .dp__rule--ornate {
+    border: 0;
+    height: 18px;
+    background: transparent;
+    text-align: center;
+    margin: 36px auto;
+    max-width: 920px;
+    position: relative;
+  }
+  .dp__rule--ornate::before {
+    content: '✦  ·  ✦  ·  ✦  ·  ✦  ·  ✦';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    letter-spacing: 1.2em;
+    color: var(--dp-rule);
+  }
+
+  /* ─── Now in print ─────────────────────────────────────────── */
+  .dp__now {
+    max-width: 920px;
+    margin: 0 auto 28px;
+    padding: 14px 18px;
+    background: var(--dp-cream);
+    border: 1.5px solid var(--dp-rule);
+    border-left: 6px solid var(--dp-accent);
+  }
+  .dp__now-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .dp__eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--dp-accent);
+    margin: 0;
+    font-weight: 600;
+  }
+  .dp__count {
+    font-size: 11px;
+    color: var(--dp-mute);
+    margin: 0;
+  }
+  .dp__count strong {
+    color: var(--dp-ink);
+    font-size: 14px;
+  }
+  .dp__tail {
+    font-size: 11px;
+    color: var(--dp-mute);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ─── Features ─────────────────────────────────────────────── */
+  .dp__features {
+    max-width: 920px;
+    margin: 0 auto 36px;
+  }
+  .dp__features .dp__eyebrow {
+    margin-bottom: 12px;
+  }
+  .dp__features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .dp__feature {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 16px 14px;
+    background: var(--dp-cream);
+    border: 1.5px solid var(--dp-rule);
+    border-left: 4px solid var(--dp-accent);
+    text-decoration: none;
+    color: var(--dp-ink);
+    transition: transform 100ms ease, background 120ms ease;
+  }
+  .dp__feature:hover {
+    background: #fff;
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+  .dp__feature-cat {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--dp-accent);
+  }
+  .dp__feature-title {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--dp-ink);
+    font-style: italic;
+  }
+  .dp__feature-sub {
+    font-size: 11px;
+    color: var(--dp-mute);
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+  .dp__feature-go {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dp-ink);
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px dotted var(--dp-rule);
+  }
+
+  /* ─── Catalog ─────────────────────────────────────────────── */
+  .dp__catalog {
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+  .dp__catalog-title {
+    font-size: clamp(22px, 3vw, 32px);
+    font-weight: 600;
+    font-style: italic;
+    margin: 4px 0 24px;
+    color: var(--dp-ink);
+  }
+
+  .dp__imprint {
+    margin: 0 0 40px;
+    padding: 0 0 24px;
+    border-bottom: 1px dashed var(--dp-rule);
+  }
+  .dp__imprint:last-child { border-bottom: 0; }
+
+  .dp__imprint-head {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) 2.5fr auto;
+    gap: 16px;
+    align-items: baseline;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--dp-rule);
+  }
+  .dp__imprint-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .dp__imprint-code {
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--dp-accent);
+  }
+  .dp__imprint-name {
+    font-size: clamp(22px, 2.6vw, 32px);
+    font-weight: 700;
+    margin: 0;
+    line-height: 1;
+    color: var(--dp-ink);
+  }
+  .dp__imprint-blurb {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--dp-mute);
+    margin: 0;
+    font-style: italic;
+  }
+  .dp__imprint-meta {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dp-mute);
+    text-align: right;
+    margin: 0;
+  }
+
+  .dp__shelf {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
+  .dp__title {
+    list-style: none;
+  }
+  .dp__cover {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 12px 10px;
+    background: var(--dp-cream);
+    border: 1.25px solid var(--dp-rule);
+    text-decoration: none;
+    color: var(--dp-ink);
+    transition: background 120ms, transform 80ms;
+    position: relative;
+    height: 100%;
+  }
+  .dp__cover::after {
+    content: '';
+    position: absolute;
+    inset: 4px 4px 4px 4px;
+    border: 1px dotted transparent;
+    pointer-events: none;
+    transition: border-color 120ms;
+  }
+  .dp__cover:hover {
+    background: #fff;
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+  .dp__cover:hover::after {
+    border-color: var(--dp-accent);
+  }
+  .dp__cat {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--dp-accent);
+    font-weight: 600;
+  }
+  .dp__name {
+    font-size: 22px;
+    font-weight: 700;
+    font-style: italic;
+    line-height: 1.05;
+    color: var(--dp-ink);
+  }
+  .dp__sub {
+    font-size: 10px;
+    color: var(--dp-mute);
+    line-height: 1.45;
+  }
+  .dp__meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px dotted var(--dp-rule);
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dp-mute);
+    gap: 8px;
+  }
+
+  /* ─── Editor's note ─────────────────────────────────────────── */
+  .dp__editor {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 8px;
+  }
+  .dp__editor-body {
+    margin-top: 12px;
+    font-size: clamp(15px, 1.2vw, 17px);
+    line-height: 1.7;
+    color: var(--dp-ink);
+  }
+  .dp__editor-body p {
+    margin: 0 0 16px;
+  }
+  .dp__editor-body p:first-of-type::first-letter {
+    font-size: 3.4em;
+    font-weight: 700;
+    float: left;
+    line-height: 0.85;
+    margin: 4px 8px 0 0;
+    color: var(--dp-accent);
+    font-style: italic;
+  }
+  .dp__editor-sig {
+    font-size: 11px;
+    color: var(--dp-mute);
+    text-align: right;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 18px;
+  }
+
+  /* ─── Colophon ─────────────────────────────────────────────── */
+  .dp__colophon {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 8px;
+  }
+  .dp__colophon-list {
+    margin: 12px 0 24px;
+    padding: 0;
+    font-size: 12px;
+    color: var(--dp-ink);
+  }
+  .dp__col-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px dotted var(--dp-rule);
+  }
+  .dp__col-row:last-child { border-bottom: 0; }
+  .dp__col-row dt {
+    color: var(--dp-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 10px;
+  }
+  .dp__col-row dd {
+    margin: 0;
+    color: var(--dp-ink);
+  }
+  .dp__col-row dd a {
+    color: var(--dp-accent);
+    text-decoration: none;
+  }
+  .dp__col-row dd a:hover {
+    text-decoration: underline;
+  }
+  .dp__return {
+    text-align: center;
+    margin: 24px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--dp-mute);
+  }
+  .dp__return a {
+    color: var(--dp-accent);
+    text-decoration: none;
+  }
+
+  /* ─── Foot ─────────────────────────────────────────────────── */
+  .dp__foot {
+    max-width: 920px;
+    margin: 36px auto 0;
+    padding: 14px 0;
+    border-top: 2px solid var(--dp-rule);
+    text-align: center;
+  }
+  .dp__foot p {
+    font-size: 9px;
+    color: var(--dp-mute);
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ─── Responsive nudges ────────────────────────────────────── */
+  @media (max-width: 700px) {
+    .dp__imprint-head {
+      grid-template-columns: 1fr;
+    }
+    .dp__imprint-meta { text-align: left; }
+    .dp__col-row { grid-template-columns: 1fr; gap: 2px; }
+  }
+</style>
+
