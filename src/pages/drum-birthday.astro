@@ -374,7 +374,40 @@ const siblings = [
   });
 
   // ─── Polling /api/sounds ─────────────────────────────────────────────
-  var lastTs = Date.now() - 5000;
+  // Hydrate from existing room state on load — without this, the room
+  // counter starts at 0 even if 50 visitors just tapped, so a guest
+  // landing mid-party can't tell anyone else is here. Pull the last
+  // 30s window once at boot, fold it into roomTotal, render the most
+  // recent 5 events into the feed. Fixes Mike 2026-04-29:
+  // "morgan and i visited from mobile, didn't see the clicks."
+  var lastTs = Date.now() - 30_000;
+  var hydrated = false;
+  function hydrate() {
+    if (hydrated) return;
+    fetch('/api/sounds?since=' + (Date.now() - 30_000), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var events = Array.isArray(data.events) ? data.events : [];
+        var bdays = events.filter(function (e) { return e.type === 'birthday'; });
+        if (bdays.length) {
+          roomTotal += bdays.length;
+          roomEl.textContent = String(roomTotal);
+          updateFill();
+          // Render the last 5 (newest first via prepend) so the feed
+          // shows real other-visitor activity from the moment of arrival.
+          var slice = bdays.slice(-5);
+          for (var i = 0; i < slice.length; i++) {
+            var e = slice[i];
+            var mine = shortPid && e.pid === shortPid;
+            addFeedRow(e, !!mine);
+          }
+          if (events.length) lastTs = events[events.length - 1].t || lastTs;
+        }
+        hydrated = true;
+      }).catch(function () { hydrated = true; });
+  }
+  hydrate();
 
   function fmtTime(t) {
     var d = new Date(t || Date.now());
