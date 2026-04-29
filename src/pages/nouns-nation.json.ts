@@ -10,12 +10,12 @@ const payload = {
   status: 'standalone PointCast area with federation strategy v0 and Battle Desk V3',
   human: 'https://pointcast.xyz/nouns-nation/',
   summary:
-    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
+    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
   latestVersion: {
     name: 'Battle Desk V3',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
     thought:
-      'Make the sport watchable, make receipts portable, and make the federation door easy for outside nations without flattening their culture.',
+      'Make the sport watchable, make receipts portable, give the league memory through champions and MVPs, and make the federation door easy for outside nations without flattening their culture.',
     signature: 'Michael Hoydich x Codex 5.5 extra-high',
     shippedAt: '2026-04-29',
   },
@@ -29,6 +29,7 @@ const payload = {
     investmentThesis: 'https://pointcast.xyz/investment-thesis',
     investmentThesisJson: 'https://pointcast.xyz/investment-thesis.json',
     battleDeskV3: 'https://pointcast.xyz/nouns-nation-battler-v3/',
+    seasonRecapArchive: 'https://pointcast.xyz/nouns-nation-battler-v3/#season-recap',
     battleDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
     tvCast: 'https://pointcast.xyz/nouns-nation-battler-tv/',

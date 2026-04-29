@@ -86,7 +86,7 @@ const payload = {
     name: 'PointCast Battle Desk V3',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
     format:
-      'Federation-minded operating room with live field feed, signed Michael Hoydich x Codex 5.5 extra-high thought, portable receipt posture, bring-your-own-nation lanes, producer loop, controls, top Nouns, replay calls, and embedded v30 field feed',
+      'Federation-minded operating room with live field feed, signed Michael Hoydich x Codex 5.5 extra-high thought, portable receipt posture, bring-your-own-nation lanes, season recap archive, champion and MVP overview, media coverage slate, next-season preview, rival Builder Circuit preview, producer loop, controls, top Nouns, replay calls, and embedded v30 field feed',
     embeddedFeed: 'https://pointcast.xyz/games/nouns-nation-battler/',
     signature: {
       by: ['Michael Hoydich', 'Codex 5.5 extra-high'],
@@ -116,6 +116,24 @@ const payload = {
       ],
     },
   },
+  seasonRecapDesk: {
+    human: 'https://pointcast.xyz/nouns-nation-battler-v3/#season-recap',
+    purpose:
+      'A media coverage layer for the league memory: recent champions, Bowl scores, MVP storylines, recurring coverage angles, next-season preview cards, and a rival-league concept for imported nations.',
+    sections: [
+      'recent champions',
+      'MVP board',
+      'media angles',
+      'next season preview',
+      'rival Builder Circuit preview',
+    ],
+    rivalLeague: {
+      name: 'The Builder Circuit',
+      role:
+        'A rival/farm league built from imported nations before they graduate into the main Nouns Nation Bowl calendar.',
+      candidateTeams: ['Beach Builders', 'Protocol Club', 'Meme Union', 'Shop Class'],
+    },
+  },
   game: {
     genre: 'auto battler',
     matchSize: '30 vs 30',
@@ -135,7 +153,7 @@ const payload = {
     seasonChallenges: ['KO Race', 'Mint Window', 'Amp Hunt', 'Captain Call', 'Field Claim', 'Last Stand', 'Underdog Audit'],
     elements: ['Spark', 'Tide', 'Bloom', 'Shade'],
     advancedMoves: ['Breakaway dash', 'Noggles slam', 'Auction volley', 'Quorum rally', 'Emergency mint', 'Element amplifier overload'],
-    systems: ['Battle Desk V3 federation operating room', 'Sponsorship Desk', 'featured Noun cast', 'first-four-season highlights', 'reservation-only sponsor packages', 'sponsor cards', 'TV ticker reservations', 'agent sponsor briefs', 'proof requirements', 'participant-credit routing', 'creative inventory map', 'Agent Sideline Desk', 'agent report cards', 'agent asset factory', 'posters/ads/art/products prompts', 'sponsor slot packaging', 'participant rewards model', 'prototype yield split', 'Agent task claim queue', 'timeboxed visiting-agent task packs', 'Desk Wall watch frames', 'scoreboard frame', 'story desk frame', 'agent scorebook frame', 'Claude scorebook prompt', 'Results Desk MCP', 'Claude Cowork scorebook', 'snapshot result tracker', 'recap text parser', 'Agent Bench', 'MCP battler tasks', 'MCP battler manifest', 'MCP sponsorship desk', 'opt-in anonymous agent presence', 'visiting agent prompts', 'rookie Watch Guide', 'Watch Now rail', 'direct onboarding hash', 'live storyline engine', 'playoff chase hooks', 'next fixture hook', 'rivalry heat', 'head-to-head records', 'rivalry win stat', 'Watch Party Kit', 'copyable Commissioner Desk', 'Commissioner Desk archive', 'Season Desk Wall', 'canonical report-card share URLs', 'shareable report card links', 'focused report card view', 'in-session Report Gallery', 'downloadable Season Report cards', 'printable Season Reports', 'portable desk snapshots', 'copyable host run sheet', 'Recap Studio', 'persisted recap cards', 'copyable recap text', 'quick-sim score consistency', 'battler score regression tests', 'live invite copy', 'copyable launch links', 'GTM strategy', 'Season 2 scope board', 'numbered rosters', 'scout cards', 'top performer roster list', 'quick simulation', 'day simulation', 'recent league recaps', 'season numbers', 'season challenge wins', 'season challenge recaps', 'live match stat leaders', 'fullscreen TV cast', 'Bowl Countdown card', 'Commissioner Desk interstitial', 'match-start overview interstitials', 'Noun-heavy challenge interstitial', 'Noun-heavy field guide interstitial', 'Director Mode camera cues', 'replay bay', 'camera target spotlighting', 'watch-party story cards', 'Market Pulse card', 'MVP Watch card', 'Comeback Line card', 'broadcast scoreboard', 'QR handoff', 'keyboard cast controls', 'two-week schedule', 'standings', 'playoff bracket', 'Nouns Bowl champion', 'fan heat', 'morale', 'cooldowns', 'healing', 'gang surges', 'status effects', 'center-field control', 'late-season boss fields', 'boss field TV context', 'Monsoon Rift', 'Neon Crown', 'Scrap Storm', 'Blackout Fog', 'amplifier rift field', 'elemental affinity lanes', 'amplifier overloads', 'crown rush field', 'center crown control', 'crown pressure pulses', 'lava audit lanes', 'cloud court lift zones', 'trash planet scrap tech', 'fog bowl ambush cover', '20-poster type-heavy Nouns series', 'persistent local season stats', 'rooting preference'],
+    systems: ['Battle Desk V3 federation operating room', 'Season Recap Archive', 'recent champion archive', 'MVP overview board', 'media coverage angles', 'next-season preview', 'rival Builder Circuit preview', 'Sponsorship Desk', 'featured Noun cast', 'first-four-season highlights', 'reservation-only sponsor packages', 'sponsor cards', 'TV ticker reservations', 'agent sponsor briefs', 'proof requirements', 'participant-credit routing', 'creative inventory map', 'Agent Sideline Desk', 'agent report cards', 'agent asset factory', 'posters/ads/art/products prompts', 'sponsor slot packaging', 'participant rewards model', 'prototype yield split', 'Agent task claim queue', 'timeboxed visiting-agent task packs', 'Desk Wall watch frames', 'scoreboard frame', 'story desk frame', 'agent scorebook frame', 'Claude scorebook prompt', 'Results Desk MCP', 'Claude Cowork scorebook', 'snapshot result tracker', 'recap text parser', 'Agent Bench', 'MCP battler tasks', 'MCP battler manifest', 'MCP sponsorship desk', 'opt-in anonymous agent presence', 'visiting agent prompts', 'rookie Watch Guide', 'Watch Now rail', 'direct onboarding hash', 'live storyline engine', 'playoff chase hooks', 'next fixture hook', 'rivalry heat', 'head-to-head records', 'rivalry win stat', 'Watch Party Kit', 'copyable Commissioner Desk', 'Commissioner Desk archive', 'Season Desk Wall', 'canonical report-card share URLs', 'shareable report card links', 'focused report card view', 'in-session Report Gallery', 'downloadable Season Report cards', 'printable Season Reports', 'portable desk snapshots', 'copyable host run sheet', 'Recap Studio', 'persisted recap cards', 'copyable recap text', 'quick-sim score consistency', 'battler score regression tests', 'live invite copy', 'copyable launch links', 'GTM strategy', 'Season 2 scope board', 'numbered rosters', 'scout cards', 'top performer roster list', 'quick simulation', 'day simulation', 'recent league recaps', 'season numbers', 'season challenge wins', 'season challenge recaps', 'live match stat leaders', 'fullscreen TV cast', 'Bowl Countdown card', 'Commissioner Desk interstitial', 'match-start overview interstitials', 'Noun-heavy challenge interstitial', 'Noun-heavy field guide interstitial', 'Director Mode camera cues', 'replay bay', 'camera target spotlighting', 'watch-party story cards', 'Market Pulse card', 'MVP Watch card', 'Comeback Line card', 'broadcast scoreboard', 'QR handoff', 'keyboard cast controls', 'two-week schedule', 'standings', 'playoff bracket', 'Nouns Bowl champion', 'fan heat', 'morale', 'cooldowns', 'healing', 'gang surges', 'status effects', 'center-field control', 'late-season boss fields', 'boss field TV context', 'Monsoon Rift', 'Neon Crown', 'Scrap Storm', 'Blackout Fog', 'amplifier rift field', 'elemental affinity lanes', 'amplifier overloads', 'crown rush field', 'center crown control', 'crown pressure pulses', 'lava audit lanes', 'cloud court lift zones', 'trash planet scrap tech', 'fog bowl ambush cover', '20-poster type-heavy Nouns series', 'persistent local season stats', 'rooting preference'],
   },
   agentEconomy: {
     sidelineDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
@@ -184,6 +202,7 @@ const payload = {
     human: 'https://pointcast.xyz/nouns-nation-battler/',
     broadcastDesk: 'https://pointcast.xyz/nouns-nation-battler/',
     broadcastDeskV3: 'https://pointcast.xyz/nouns-nation-battler-v3/',
+    seasonRecapArchive: 'https://pointcast.xyz/nouns-nation-battler-v3/#season-recap',
     broadcastDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
     tv: 'https://pointcast.xyz/nouns-nation-battler-tv/',
