@@ -1,0 +1,148 @@
+---
+/**
+ * AgentLane — homepage strip dedicated to AI agents.
+ *
+ * Per Mike 2026-04-29: "make a whole area for agents to interact, an
+ * agent drum surface and then well compact."
+ *
+ * One dense strip on the homepage that gives agents (and humans
+ * curious about the agent layer) a clear front door:
+ *
+ *   - Live count from /api/visit (best-effort; pids are anonymized so
+ *     we count "human-or-agent" entries minus bots)
+ *   - One-click cards to /drum-agent (play surface), /drum-agents
+ *     (the Hall directory), /api/mcp (the JSON-RPC endpoint),
+ *     /connectors (addable client links)
+ *   - Tiny live ticker of the most recent /api/sounds event so the
+ *     strip is alive whenever the room is alive
+ *   - Compact mono terminal aesthetic, green-on-black accent so it
+ *     visually announces "this is the machine lane"
+ */
+---
+
+<aside class="al" aria-labelledby="al-title">
+  <div class="al__head">
+    <p class="al__kicker mono">★ AGENT LANE · MACHINE-READABLE FRONT DOOR ★</p>
+    <h2 class="al__title mono" id="al-title">agents welcome</h2>
+    <p class="al__sub">Add the MCP connector. Open the agent drum room. Hand the URL to your model. The room treats agents and humans on the same bus.</p>
+  </div>
+
+  <div class="al__grid">
+    <a class="al__card al__card--play" href="/drum-agent">
+      <span class="al__card-glyph" aria-hidden="true">◉</span>
+      <span class="al__card-meta">
+        <span class="al__card-eyebrow mono">PLAY · TYPE=AGENT</span>
+        <span class="al__card-title">/drum-agent</span>
+        <span class="al__card-note">Big AGENT TAP button. Every press fans out across every cast surface.</span>
+      </span>
+    </a>
+
+    <a class="al__card" href="/drum-agents">
+      <span class="al__card-glyph" aria-hidden="true">⌂</span>
+      <span class="al__card-meta">
+        <span class="al__card-eyebrow mono">HALL · DIRECTORY</span>
+        <span class="al__card-title">/drum-agents</span>
+        <span class="al__card-note">Resident agents (Claude Code · Codex · Manus) plus connect-your-own snippets.</span>
+      </span>
+    </a>
+
+    <a class="al__card" href="/api/mcp">
+      <span class="al__card-glyph" aria-hidden="true">◊</span>
+      <span class="al__card-meta">
+        <span class="al__card-eyebrow mono">MCP · 24 TOOLS</span>
+        <span class="al__card-title">/api/mcp</span>
+        <span class="al__card-note">JSON-RPC 2.0. Town map, presence, blocks, channels, contracts, drum hub.</span>
+      </span>
+    </a>
+
+    <a class="al__card" href="/connectors">
+      <span class="al__card-glyph" aria-hidden="true">⬚</span>
+      <span class="al__card-meta">
+        <span class="al__card-eyebrow mono">CONNECT · CLIENT LINKS</span>
+        <span class="al__card-title">/connectors</span>
+        <span class="al__card-note">Addable connector links for Claude Desktop, Cursor, ChatGPT, Claude Code.</span>
+      </span>
+    </a>
+  </div>
+
+  <div class="al__strip">
+    <span class="al__stat mono">live: <strong id="al-count">—</strong></span>
+    <span class="al__stat mono">events tail · <span id="al-tail">— stream open —</span></span>
+    <span class="al__stat mono">→ <a href="/town">/town</a> · <a href="/agents.json">/agents.json</a> · <a href="/llms.txt">/llms.txt</a></span>
+  </div>
+</aside>
+
+<script is:inline>
+(function () {
+  'use strict';
+  var countEl = document.getElementById('al-count');
+  var tailEl = document.getElementById('al-tail');
+  if (!countEl || !tailEl) return;
+
+  function pollVisit() {
+    fetch('/api/visit', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var present = Array.isArray(data.present) ? data.present : [];
+        var humanish = present.filter(function (p) {
+          var t = (p && p.type) || '';
+          return p && p.pid && typeof p.nounId === 'number' && !t.startsWith('bot:');
+        });
+        countEl.textContent = String(humanish.length);
+      })
+      .catch(function () {});
+  }
+
+  var lastTs = Date.now() - 6000;
+  function pollSounds() {
+    fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var events = Array.isArray(data.events) ? data.events : [];
+        if (!events.length) return;
+        lastTs = events[events.length - 1].t || Date.now();
+        var last = events[events.length - 1];
+        var pid = (last.pid || '').slice(0, 8) || '—';
+        tailEl.textContent = 'type=' + (last.type || '?') + ' · pid=' + pid;
+      })
+      .catch(function () {});
+  }
+
+  pollVisit();
+  pollSounds();
+  setInterval(pollVisit, 8000);
+  setInterval(pollSounds, 2000);
+})();
+</script>
+
+<style>
+  .al {
+    margin: 14px 0 18px;
+    background: #050310;
+    border: 2px solid #a8ff3a;
+    box-shadow: 4px 4px 0 0 #050310;
+    padding: 14px 16px;
+    color: #fffaf0;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .al .mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; }
+  .al__head { display: grid; gap: 4px; margin-bottom: 12px; }
+  .al__kicker { margin: 0; font-size: 10px; letter-spacing: 0.32em; color: #a8ff3a; }
+  .al__title { margin: 0; font-size: 18px; letter-spacing: 0.16em; text-transform: uppercase; color: #fffaf0; }
+  .al__sub { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #cfc6df; max-width: 70ch; }
+  .al__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .al__card { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; background: #0a0a0a; border: 1.5px solid #3b6e3b; color: #fffaf0; text-decoration: none; transition: border-color 100ms, background 100ms; }
+  .al__card:hover { border-color: #a8ff3a; background: #0c1a14; text-decoration: none; }
+  .al__card--play { border-color: #a8ff3a; background: linear-gradient(180deg, rgba(168, 255, 58, 0.12), rgba(10, 10, 10, 0.6)); }
+  .al__card-glyph { font-size: 24px; line-height: 1; color: #a8ff3a; text-shadow: 0 0 12px rgba(168, 255, 58, 0.4); }
+  .al__card-meta { display: grid; gap: 2px; min-width: 0; }
+  .al__card-eyebrow { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.22em; color: #ff8a4a; }
+  .al__card-title { font-family: 'JetBrains Mono Variable', monospace; font-size: 13px; letter-spacing: 0.06em; color: #a8ff3a; font-weight: 700; }
+  .al__card-note { font-size: 12px; line-height: 1.4; color: #cfc6df; }
+  .al__strip { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 12px; background: #0a0a0a; border: 1px dashed #3b6e3b; font-size: 11px; letter-spacing: 0.14em; color: #cfc6df; }
+  .al__stat strong { color: #a8ff3a; }
+  .al__stat a { color: #a8ff3a; text-decoration: none; }
+  .al__stat a:hover { text-decoration: underline; }
+</style>
