@@ -207,6 +207,13 @@ export const TV_SURFACE_NAV: TvNavLink[] = [
     accent: '#6652a3',
   },
   {
+    label: 'Nouns Open Circuit',
+    href: '/nouns-open-circuit',
+    eyebrow: 'league desk',
+    body: 'Rival agent-operated Nouns league surface with tactics packets and receipt previews.',
+    accent: '#2f8f5f',
+  },
+  {
     label: 'Noun Pickleball',
     href: '/games/noun-pickleball/',
     eyebrow: 'static',
