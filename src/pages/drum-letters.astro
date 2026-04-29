@@ -1,0 +1,257 @@
+---
+/**
+ * /drum-letters — write a letter to a future visitor · comms 4 · 2026-04-28 PT.
+ *
+ * KV-backed (functions/api/letters.ts on env.VISITS). Each letter has
+ * a 500-char body, a mood color, an author noun, and a delivered_count.
+ * The page shows you ONE undelivered letter on visit (random pick from
+ * the last 200 stored, excluding ids you've already seen this session)
+ * and lets you write one for the next visitor.
+ *
+ * The "future visitor" framing matters — it's not a chat, not a wall,
+ * just a small letter you leave behind. They might never read it.
+ * Someone else might read it ten times.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = '/drum-letters — write to the next visitor';
+const description = 'Leave a letter for the next visitor to /drum-letters. Read whatever they left for you. KV-backed, 500 chars, six mood colors. Small letters between strangers.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', '@id': 'https://pointcast.xyz/drum-letters', name: 'PointCast Drum · Letters', url: 'https://pointcast.xyz/drum-letters', description };
+
+const COLORS = [
+  { id: 'warm',   label: 'WARM',   hex: '#ff8a4a' },
+  { id: 'bright', label: 'BRIGHT', hex: '#ffd400' },
+  { id: 'ocean',  label: 'OCEAN',  hex: '#5fbafd' },
+  { id: 'garden', label: 'GARDEN', hex: '#3b6e3b' },
+  { id: 'fog',    label: 'FOG',    hex: '#cfc6df' },
+  { id: 'rose',   label: 'ROSE',   hex: '#d6745f' },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="lt" id="lt-main">
+    <DrumNav current="letters" />
+
+    <header class="lt__head">
+      <p class="lt__kicker">DRUM HUB · COMMS 4 · LETTERS · 500 CHAR · KV</p>
+      <h1 class="lt__title"><em>Leave a letter for the next visitor.</em></h1>
+      <p class="lt__dek">Write something to whoever comes through next. They might be a stranger. They might be you, six months from now. Read whatever the last visitor left. Letters last 200 deep before they roll off.</p>
+    </header>
+
+    <section class="lt__stage">
+      <article class="lt__received" id="lt-received" aria-label="Letter received">
+        <div class="lt__received-head">
+          <p class="lt__received-eyebrow mono">★ A LETTER FOR YOU ★</p>
+          <p class="lt__received-meta mono" id="lt-meta">— loading —</p>
+        </div>
+        <div class="lt__received-card" id="lt-card" data-color="warm">
+          <img class="lt__received-noun" id="lt-noun" alt="" width="56" height="56" />
+          <p class="lt__received-body" id="lt-body">…</p>
+          <p class="lt__received-foot mono" id="lt-foot">—</p>
+        </div>
+        <div class="lt__received-actions">
+          <button type="button" class="lt__next mono" id="lt-next">DRAW ANOTHER →</button>
+          <span class="lt__count mono" id="lt-count">— letters in the box</span>
+        </div>
+      </article>
+
+      <form class="lt__compose" id="lt-form" autocomplete="off">
+        <p class="lt__compose-eyebrow mono">★ WRITE TO THE NEXT VISITOR ★</p>
+        <textarea
+          class="lt__compose-body"
+          id="lt-input"
+          maxlength="500"
+          placeholder="Dear stranger,&#10;&#10;…"
+          rows="6"
+          aria-label="Letter body"
+        ></textarea>
+        <div class="lt__compose-row">
+          <span class="lt__compose-count mono" id="lt-cc">0 / 500</span>
+          <div class="lt__compose-colors" role="radiogroup" aria-label="Letter color">
+            {COLORS.map((c, i) => (
+              <button type="button" class={`lt__color ${i === 0 ? 'lt__color--on' : ''}`} data-color={c.id} style={`--lt-color: ${c.hex}`} aria-label={`Color ${c.label}`}>
+                <span class="lt__color-swatch"></span>
+                <span class="lt__color-label mono">{c.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div class="lt__compose-foot">
+          <span class="lt__sig mono" id="lt-sig">signed: noun #—</span>
+          <button type="submit" class="lt__send mono" id="lt-send">DROP IN THE BOX →</button>
+        </div>
+      </form>
+    </section>
+
+    <footer class="lt__foot">
+      <p>Letters live in <code>env.VISITS</code> KV (key prefix <code>letter:*</code>) with an index at <code>letters:index</code>, capped at 200 entries. POST <code>/api/letters</code> writes; GET picks one at random excluding ids already seen this session and increments <code>delivered_count</code>.</p>
+      <p class="lt__credit mono">v0.1 · 2026-04-28 · drum sprint · comms 4</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(function () { 'use strict';
+  const SEEN_KEY = 'pc:drum-letters:seen';
+  const COLORS = { warm: '#ff8a4a', bright: '#ffd400', ocean: '#5fbafd', garden: '#3b6e3b', fog: '#cfc6df', rose: '#d6745f' };
+  const cardEl = document.getElementById('lt-card');
+  const bodyEl = document.getElementById('lt-body');
+  const metaEl = document.getElementById('lt-meta');
+  const footEl = document.getElementById('lt-foot');
+  const nounEl = document.getElementById('lt-noun');
+  const countEl = document.getElementById('lt-count');
+  const input = document.getElementById('lt-input');
+  const cc = document.getElementById('lt-cc');
+  const send = document.getElementById('lt-send');
+  const next = document.getElementById('lt-next');
+  const sig = document.getElementById('lt-sig');
+
+  function getSeen() {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+    catch { return new Set(); }
+  }
+  function saveSeen(set) {
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...set].slice(-200))); } catch {}
+  }
+  function getSession() {
+    try { const k='pc:session'; let s=localStorage.getItem(k); if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k,s);} return s;} catch { return 'lt-' + Math.random().toString(36).slice(2,10);}
+  }
+  function nounIdFor(sid) { let h=5381; for(let i=0;i<sid.length;i++) h=(h*33+sid.charCodeAt(i))&0x7fffffff; return h%1200; }
+  const sid = getSession();
+  let storedNoun = 0;
+  try { const s = localStorage.getItem('pc:nounId'); storedNoun = s ? Number(s) : nounIdFor(sid); }
+  catch { storedNoun = nounIdFor(sid); }
+  if (!Number.isFinite(storedNoun) || storedNoun < 0 || storedNoun > 1199) storedNoun = nounIdFor(sid);
+  try { localStorage.setItem('pc:nounId', String(storedNoun)); } catch {}
+  sig.textContent = `signed: noun #${storedNoun}`;
+
+  let seen = getSeen();
+  let currentColor = 'warm';
+
+  function fmtTimeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  }
+  function paintLetter(letter) {
+    if (!letter) {
+      bodyEl.textContent = 'No letters yet, or you\'ve seen them all this session. Be the first to write one.';
+      metaEl.textContent = '— empty box —';
+      footEl.textContent = '';
+      cardEl.dataset.color = 'fog';
+      cardEl.style.setProperty('--lt-card-color', COLORS.fog);
+      nounEl.removeAttribute('src');
+      return;
+    }
+    seen.add(letter.id); saveSeen(seen);
+    bodyEl.textContent = letter.body || '';
+    metaEl.textContent = `from noun #${letter.nounId} · ${fmtTimeAgo(letter.t)}`;
+    footEl.textContent = `read ${letter.delivered_count || 0}× · color ${(letter.color || 'warm').toLowerCase()}`;
+    cardEl.dataset.color = letter.color || 'warm';
+    cardEl.style.setProperty('--lt-card-color', COLORS[letter.color] || COLORS.warm);
+    nounEl.src = `https://noun.pics/${letter.nounId || 0}.svg`;
+  }
+  async function fetchOne() {
+    metaEl.textContent = '— drawing a letter —';
+    try {
+      const exclude = [...seen].slice(-150).join(',');
+      const r = await fetch(`/api/letters?exclude=${encodeURIComponent(exclude)}`, { cache: 'no-store' });
+      if (!r.ok) { paintLetter(null); return; }
+      const data = await r.json();
+      countEl.textContent = `${data.count || 0} letter${(data.count || 0) === 1 ? '' : 's'} in the box`;
+      paintLetter(data.letter);
+    } catch { paintLetter(null); }
+  }
+  fetchOne();
+
+  next.addEventListener('click', () => fetchOne());
+
+  input.addEventListener('input', () => { cc.textContent = `${input.value.length} / 500`; });
+
+  document.querySelectorAll('.lt__color').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.lt__color').forEach((x) => x.classList.remove('lt__color--on'));
+      b.classList.add('lt__color--on');
+      currentColor = b.getAttribute('data-color') || 'warm';
+    });
+  });
+
+  document.getElementById('lt-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = (input.value || '').trim().slice(0, 500);
+    if (!text) { input.focus(); return; }
+    send.disabled = true; send.textContent = 'DROPPING…';
+    try {
+      const r = await fetch('/api/letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: text, color: currentColor, nounId: storedNoun }),
+      });
+      const data = await r.json();
+      if (data && data.ok) {
+        input.value = ''; cc.textContent = '0 / 500';
+        send.textContent = 'DROPPED ✓';
+        if (typeof data.count === 'number') countEl.textContent = `${data.count} letter${data.count === 1 ? '' : 's'} in the box`;
+        // Mark as seen so we don't immediately re-draw our own
+        if (data.letter && data.letter.id) { seen.add(data.letter.id); saveSeen(seen); }
+        // Also broadcast a tiny confessional-style ping so cast surfaces flash
+        try { fetch('/api/sounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'letter', sessionId: sid, color: currentColor, nounId: storedNoun }) }); } catch {}
+        setTimeout(() => { send.textContent = 'DROP IN THE BOX →'; send.disabled = false; }, 1600);
+      } else {
+        send.textContent = 'TRY AGAIN'; setTimeout(() => { send.textContent = 'DROP IN THE BOX →'; send.disabled = false; }, 1800);
+      }
+    } catch {
+      send.textContent = 'OFFLINE'; setTimeout(() => { send.textContent = 'DROP IN THE BOX →'; send.disabled = false; }, 1800);
+    }
+  });
+})();
+</script>
+
+<style>
+.lt { min-height: 100vh; padding: 12px 12px 60px; background: linear-gradient(180deg, #1a0e26 0%, #050310 100%); color: #fffaf0; font-family: 'Inter Variable', system-ui, sans-serif; }
+.lt__head { max-width: 980px; margin: 0 auto 16px; padding: 0 6px; }
+.lt__kicker { margin: 0 0 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: #ff8a4a; }
+.lt__title { margin: 0 0 6px; font-family: Georgia, serif; font-size: clamp(28px, 4.6vw, 48px); line-height: 1.05; }
+.lt__title em { font-style: italic; }
+.lt__dek { margin: 0; font-size: 14px; line-height: 1.55; max-width: 64ch; color: #cfc6df; }
+
+.lt__stage { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 800px) { .lt__stage { grid-template-columns: 1fr; } }
+
+.lt__received, .lt__compose { background: rgba(18, 17, 14, 0.55); border: 3px solid #ff8a4a; box-shadow: 6px 6px 0 0 #050310; padding: 16px; }
+.lt__received-eyebrow, .lt__compose-eyebrow { font-size: 11px; letter-spacing: 0.32em; color: #ffd400; margin: 0 0 4px; text-align: center; }
+.lt__received-meta { font-size: 10px; letter-spacing: 0.16em; color: #cfc6df; margin: 0 0 10px; text-align: center; }
+
+.lt__received-card { background: var(--lt-card-color, #ff8a4a); color: #050310; border: 3px solid #050310; box-shadow: 4px 4px 0 0 #050310; padding: 14px; display: grid; grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: auto 1fr auto; grid-template-areas: 'noun body' '. body' '. foot'; gap: 10px 14px; min-height: 220px; }
+.lt__received-noun { grid-area: noun; image-rendering: pixelated; border: 2px solid #050310; background: #fffaf0; }
+.lt__received-body { grid-area: body; margin: 0; font-family: Georgia, serif; font-size: 17px; line-height: 1.55; white-space: pre-wrap; }
+.lt__received-foot { grid-area: foot; margin: 0; font-size: 10px; letter-spacing: 0.16em; color: #050310; opacity: 0.7; }
+
+.lt__received-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #5f5e5a; }
+.lt__next { background: #050310; color: #ffd400; border: 1.5px solid #ffd400; padding: 6px 14px; cursor: pointer; font-size: 11px; letter-spacing: 0.18em; }
+.lt__next:hover { background: #ffd400; color: #050310; }
+.lt__count { font-size: 10px; letter-spacing: 0.16em; color: #ff8a4a; }
+
+.lt__compose-body { width: 100%; box-sizing: border-box; background: #050310; color: #fffaf0; border: 2px solid #ff8a4a; padding: 14px; font-family: Georgia, serif; font-size: 17px; line-height: 1.55; resize: vertical; min-height: 140px; }
+.lt__compose-body::placeholder { color: #5f5e5a; font-style: italic; }
+.lt__compose-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 14px; flex-wrap: wrap; }
+.lt__compose-count { font-size: 11px; letter-spacing: 0.16em; color: #cfc6df; }
+.lt__compose-colors { display: flex; gap: 6px; flex-wrap: wrap; }
+.lt__color { background: transparent; border: 1.5px solid #5f5e5a; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; color: inherit; }
+.lt__color:hover { border-color: var(--lt-color, #ff8a4a); }
+.lt__color--on { border-color: var(--lt-color, #ff8a4a); background: rgba(255, 138, 74, 0.1); }
+.lt__color-swatch { width: 12px; height: 12px; background: var(--lt-color, #ff8a4a); border: 1px solid #050310; }
+.lt__color-label { font-size: 9px; letter-spacing: 0.18em; }
+.lt__compose-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #5f5e5a; }
+.lt__sig { font-size: 10px; letter-spacing: 0.16em; color: #ff8a4a; }
+.lt__send { padding: 8px 18px; background: #ffd400; color: #050310; border: 2px solid #050310; box-shadow: 3px 3px 0 0 #050310; cursor: pointer; font-size: 12px; letter-spacing: 0.22em; font-weight: 700; }
+.lt__send:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #050310; }
+.lt__send:disabled { background: #5f5e5a; color: #cfc6df; cursor: not-allowed; }
+
+.lt__foot { max-width: 980px; margin: 18px auto 0; padding: 14px 6px 0; border-top: 1px dashed #5f5e5a; font-size: 12px; line-height: 1.5; color: #cfc6df; }
+.lt__foot code { background: #050310; padding: 1px 6px; border: 1px solid #ff8a4a; color: #ff8a4a; }
+.lt__credit { margin: 8px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff8a4a; }
+</style>
