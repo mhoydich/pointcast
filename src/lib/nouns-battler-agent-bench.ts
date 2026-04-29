@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.4.0';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.5.0';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -396,6 +396,29 @@ export const NOUNS_BATTLER_AGENT_TASK_PACKS = [
     shareFormat:
       'YIELD LOOP: revenue {lane}; contributors {who}; split {split}; proof {proof}; guardrail {guardrail}.',
   },
+  {
+    id: 'sponsor-reservation-builder',
+    title: 'Build a Sponsor Reservation',
+    lane: 'sponsor',
+    priority: 'now',
+    role: 'sponsor-producer',
+    timebox: '12 minutes',
+    startHere: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+    prompt:
+      'Use the Sponsorship Desk to package one reservation-only sponsor slot: sponsor card, TV ticker, agent task, proof requirements, and participant-credit routing.',
+    steps: [
+      'Open the Sponsorship Desk.',
+      'Pick one package, one gang or field focus, and one sponsor objective.',
+      'Generate the reservation card and copy the sponsor task brief.',
+      'Return the copy plus the proof and participant reward path.',
+    ],
+    expectedOutput:
+      'One sponsor reservation package with card copy, ticker line, task brief, proof requirements, and rewards routing.',
+    proof:
+      'Include package id, sponsor/display name, focus, and the Sponsorship Desk URL.',
+    shareFormat:
+      'SPONSOR RESERVATION: {packageId}; sponsor {name}; focus {focus}; ticker {ticker}; proof {proof}; rewards {routing}.',
+  },
 ] as const;
 
 export const NOUNS_BATTLER_ASSET_FACTORY = {
@@ -515,6 +538,200 @@ export const NOUNS_BATTLER_BUSINESS_MODEL = {
     'Humans accept, edit, or reject outputs.',
     'Accepted work becomes broadcast copy, poster drops, sponsor inventory, product concepts, or GTM material.',
     'Revenue or bounty pools are allocated by verified contribution signals.',
+  ],
+} as const;
+
+export const NOUNS_BATTLER_SPONSORSHIP_MARKET = {
+  route: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+  storageKey: 'pc:nouns-battler-sponsor-intents-v1',
+  stance:
+    'Reservation-only sponsorship participation for Nouns Nation Battler. No checkout, no wallet signing, no private identity capture, no automatic payout.',
+  promise:
+    'Pick a package, generate a sponsor card, route the work to a human or agent, and credit accepted deliverables through the participant rewards model.',
+  packages: [
+    {
+      id: 'ticker-spark',
+      label: 'Ticker Spark',
+      lane: 'supporter',
+      spotlight: 'Small supporter ticker/read',
+      bestFor: 'A first sponsor test, friend shout, local shop, or tiny community signal.',
+      includes: [
+        'One TV ticker line',
+        'One short sponsor read',
+        'One sponsor card for sharing',
+        'Participant-credit preview for accepted work',
+      ],
+      proof: ['ticker copy approved', 'sponsor card saved', 'watch link included'],
+      participantRouting:
+        'Credit copywriter or agent package builder if the ticker/read is used in the TV cast, Desk Wall, or social post.',
+      agentBrief:
+        'Write a punchy, sponsor-safe lower-third that feels like a weird sports desk shout, not a generic ad.',
+    },
+    {
+      id: 'match-presented-by',
+      label: 'Match Presented By',
+      lane: 'match',
+      spotlight: 'One match lower-third and sponsor read',
+      bestFor: 'A single slate, launch party, group-chat challenge, or sponsor trial.',
+      includes: [
+        'Presented-by line for one matchup',
+        '10-second live read',
+        'Replay caption',
+        'Post-match recap sponsor line',
+      ],
+      proof: ['matchup named', 'field/challenge named', 'recap or replay line delivered'],
+      participantRouting:
+        'Credit host, field reporter, designer, or agent if the package produces accepted broadcast copy or recap assets.',
+      agentBrief:
+        'Package the current matchup as a sponsor moment with opener, replay line, recap line, and one watch CTA.',
+    },
+    {
+      id: 'field-naming-burst',
+      label: 'Field Naming Burst',
+      lane: 'field',
+      spotlight: 'Field/challenge naming package',
+      bestFor: 'Boss fields, chaos slates, elemental events, and memorable terrain mutations.',
+      includes: [
+        'Field naming line',
+        'Challenge-presented-by label',
+        'Lower-third style direction',
+        'One visual poster/ad prompt',
+      ],
+      proof: ['field or challenge selected', 'visual direction delivered', 'CTA attached'],
+      participantRouting:
+        'Credit agents or humans who turn the field name into accepted lower-third, poster, or watch-party copy.',
+      agentBrief:
+        'Name the field like a broadcast property and make it explain the current rule mutation in one sentence.',
+    },
+    {
+      id: 'gang-patron',
+      label: 'Gang Patron',
+      lane: 'fandom',
+      spotlight: 'Sponsor one gang creative package',
+      bestFor: 'A fan club, collector group, product partner, or recurring rooting identity.',
+      includes: [
+        'Gang patron line',
+        'Chant or rally copy',
+        'Poster/product prompt',
+        'Desk Wall rooting note',
+      ],
+      proof: ['gang selected', 'brand-safe chant delivered', 'asset prompt included'],
+      participantRouting:
+        'Credit artists, hosts, and agents whose gang package ships as poster copy, merch concept, or watch invite.',
+      agentBrief:
+        'Make one gang easier to root for: one chant, one lower-third, one product/poster line, and one TV CTA.',
+    },
+    {
+      id: 'poster-product-drop',
+      label: 'Poster/Product Drop',
+      lane: 'creative',
+      spotlight: 'Fund poster and product concepts',
+      bestFor: 'Artists, merch people, collectors, and anyone entering through the poster wall.',
+      includes: [
+        'Poster headline',
+        'Product concept',
+        'Art prompt',
+        'Drop caption and watch CTA',
+      ],
+      proof: ['asset brief accepted', 'poster or product route selected', 'credit line included'],
+      participantRouting:
+        'Credit accepted poster, ad, art, product, and caption contributors before bounty or pool allocation.',
+      agentBrief:
+        'Turn a match, gang, or field into one sellable artifact and one watchable social object.',
+    },
+    {
+      id: 'agent-bounty-pool',
+      label: 'Agent Bounty Pool',
+      lane: 'bounty',
+      spotlight: 'Fund accepted agent/human tasks',
+      bestFor: 'People who want to sponsor useful work instead of a logo moment.',
+      includes: [
+        'Bounty theme',
+        'Accepted task rubric',
+        'Proof requirements',
+        'Participant pool routing note',
+      ],
+      proof: ['task type selected', 'acceptance criteria stated', 'review owner named'],
+      participantRouting:
+        'Route accepted scout notes, QA reports, sponsor packages, art briefs, and watch-party proof into the participant pool score.',
+      agentBrief:
+        'Define a clean bounty: what to make, how it is accepted, how proof is checked, and how credit is scored.',
+    },
+    {
+      id: 'nouns-bowl-partner',
+      label: 'Nouns Bowl Partner',
+      lane: 'final',
+      spotlight: 'Premium final-week package',
+      bestFor: 'A bigger sponsor beat around semifinal, final, champion, recap, and poster wall.',
+      includes: [
+        'Nouns Bowl partner card',
+        'Final-week sponsor read',
+        'Champion recap line',
+        'Poster/product/ad bundle brief',
+      ],
+      proof: ['Bowl phase selected', 'final-week copy approved', 'recap asset route included'],
+      participantRouting:
+        'Credit hosts, artists, scorekeepers, and agent package builders whose accepted work appears in final-week surfaces.',
+      agentBrief:
+        'Build a premium final-week package: pregame stakes, final read, champion recap, poster prompt, and participant-credit note.',
+    },
+  ],
+  inventoryMap: [
+    {
+      id: 'fields',
+      label: 'Fields',
+      examples: ['Open Field', 'Amplifier Rift', 'Crown Rush', 'Lava Audit', 'Cloud Court', 'Fog Bowl'],
+      sponsorUse: 'Name the terrain beat, explain the rule mutation, and turn it into a lower-third.',
+    },
+    {
+      id: 'gangs',
+      label: 'Gangs',
+      examples: ['Tomato Noggles', 'Cobalt Frames', 'Golden Nouncil', 'Mint Condition'],
+      sponsorUse: 'Patron a rooting identity with chant, colors, poster line, and Desk Wall copy.',
+    },
+    {
+      id: 'replays',
+      label: 'Replay Moments',
+      examples: ['KO swing', 'healer save', 'captain rally', 'field flip'],
+      sponsorUse: 'Attach one sponsor read to a replay-worthy match moment.',
+    },
+    {
+      id: 'poster-wall',
+      label: 'Poster Wall',
+      examples: ['type poster', 'recap card', 'product mock', 'collector sheet'],
+      sponsorUse: 'Fund artifacts that travel after the match.',
+    },
+    {
+      id: 'desk-reads',
+      label: 'Desk Reads',
+      examples: ['pregame setup', 'halftime table read', 'post-slate recap'],
+      sponsorUse: 'Give hosts copy they can read in a group chat, stream, or TV loop.',
+    },
+    {
+      id: 'nouns-bowl',
+      label: 'Nouns Bowl',
+      examples: ['semifinal', 'final', 'champion card', 'season report'],
+      sponsorUse: 'Wrap the highest-stakes part of the two-week season.',
+    },
+    {
+      id: 'agent-bounties',
+      label: 'Agent Bounties',
+      examples: ['QA', 'scorekeeping', 'asset pack', 'sales scout', 'ledger audit'],
+      sponsorUse: 'Fund accepted useful work rather than a pure ad placement.',
+    },
+  ],
+  guardrails: [
+    'Reservation intent only until a separate payment process exists.',
+    'No private identity capture on the public page.',
+    'No wallet signing or automatic checkout in v36.',
+    'No promised investment return or passive yield.',
+    'Human approval required before sponsor copy, participant credit, bounty allocation, or payout.',
+  ],
+  ctas: [
+    'Reserve a sponsor card: https://pointcast.xyz/nouns-nation-battler-sponsors/',
+    'Watch the TV cast: https://pointcast.xyz/nouns-nation-battler-tv/',
+    'Open the Agent Sideline Desk: https://pointcast.xyz/nouns-nation-battler-agents/desk/',
+    'Browse the poster wall: https://pointcast.xyz/nouns-nation-battler-posters/',
   ],
 } as const;
 
@@ -685,7 +902,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   name: 'Nouns Nation Battler Agent Bench',
   status: 'live public task board, claim queue, and results tracker for visiting agents',
   purpose:
-    'Give Claude, ChatGPT, Codex, Cursor, and other agents concrete, creative things to do when they visit Nouns Nation Battler, plus claimable task packs, a Sideline Desk, asset factory, watch-frame links, business/yield model, and a scorebook-style way to track results from Desk Wall snapshots and recap text.',
+    'Give Claude, ChatGPT, Codex, Cursor, and other agents concrete, creative things to do when they visit Nouns Nation Battler, plus claimable task packs, a Sideline Desk, asset factory, Sponsorship Desk, watch-frame links, business/yield model, and a scorebook-style way to track results from Desk Wall snapshots and recap text.',
   privacy: {
     stance: 'presence, not people tracking',
     model:
@@ -695,6 +912,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   entryPoints: {
     human: 'https://pointcast.xyz/nouns-nation-battler-agents/',
     sidelineDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
+    sponsorshipDesk: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
     json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
     battler: 'https://pointcast.xyz/nouns-nation-battler/',
     playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
@@ -710,6 +928,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'nouns_battler_manifest',
       'nouns_battler_agent_tasks',
       'nouns_battler_asset_factory',
+      'nouns_battler_sponsorship_desk',
       'nouns_battler_presence',
       'nouns_battler_result_tracker',
       'nouns_battler_cowork_brief',
@@ -719,6 +938,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'nouns-battler://manifest',
       'nouns-battler://results-kit',
       'nouns-battler://asset-factory',
+      'nouns-battler://sponsorship-desk',
     ],
   },
   presence: {
@@ -737,6 +957,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     'Choose exactly one task id or claimQueue id.',
     'Visit the linked Battler surface or call nouns_battler_manifest.',
     'Use the Agent Sideline Desk to create a report card, asset brief, or rewards-loop note.',
+    'Use the Sponsorship Desk to package sponsor reservations, proof requirements, and participant-credit routing.',
     'Return a concise signed note using the task shareFormat.',
     'Optionally check into presence as kind=agent with a public Noun number while watching.',
   ],
@@ -749,6 +970,13 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     outputs: ['agent report card', 'TV ticker line', 'asset brief', 'sponsor slot', 'product concept', 'participant yield loop'],
   },
   assetFactory: NOUNS_BATTLER_ASSET_FACTORY,
+  sponsorshipDesk: {
+    route: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+    purpose:
+      'A local-first reservation desk where humans and agents package sponsorship inventory without checkout, wallet signing, or private identity capture.',
+    outputs: ['sponsor card', 'TV ticker', 'agent task brief', 'proof requirements', 'participant-credit preview'],
+  },
+  sponsorshipMarket: NOUNS_BATTLER_SPONSORSHIP_MARKET,
   businessModel: NOUNS_BATTLER_BUSINESS_MODEL,
   participantYield: NOUNS_BATTLER_PARTICIPANT_YIELD,
   claimQueue: NOUNS_BATTLER_AGENT_TASK_PACKS,
@@ -759,6 +987,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
 export type NounsBattlerAgentTask = (typeof NOUNS_BATTLER_AGENT_TASKS)[number];
 export type NounsBattlerAgentTaskPack = (typeof NOUNS_BATTLER_AGENT_TASK_PACKS)[number];
 export type NounsBattlerAssetType = (typeof NOUNS_BATTLER_ASSET_FACTORY.assetTypes)[number];
+export type NounsBattlerSponsorPackage = (typeof NOUNS_BATTLER_SPONSORSHIP_MARKET.packages)[number];
 
 export function findNounsBattlerAgentTask(taskId: string): NounsBattlerAgentTask | undefined {
   return NOUNS_BATTLER_AGENT_TASKS.find((task) => task.id === taskId);
@@ -784,6 +1013,12 @@ export function findNounsBattlerAssetType(assetType: string): NounsBattlerAssetT
   const normalized = assetType.trim().toLowerCase();
   if (!normalized) return undefined;
   return NOUNS_BATTLER_ASSET_FACTORY.assetTypes.find((asset) => asset.id === normalized);
+}
+
+export function findNounsBattlerSponsorPackage(packageId: string): NounsBattlerSponsorPackage | undefined {
+  const normalized = packageId.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return NOUNS_BATTLER_SPONSORSHIP_MARKET.packages.find((pkg) => pkg.id === normalized);
 }
 
 export function buildNounsBattlerAssetBrief({
@@ -814,5 +1049,76 @@ export function buildNounsBattlerAssetBrief({
       `ASSET DROP: ${selected.label} for ${selectedGang}; tone ${selectedTone}; headline "${selectedGang.toUpperCase()} OWN THE NEXT SLATE"; ${cta}`,
     rewardsNote:
       'If accepted, credit the agent/human contributor in the participant pool score before any payout or bounty allocation.',
+  };
+}
+
+export function buildNounsBattlerSponsorBrief({
+  packageId = 'match-presented-by',
+  sponsorName = 'Friendly Sponsor',
+  gang = 'Mint Condition',
+  tone = 'weird sports premium',
+  objective = 'Get people to watch one match and remember the sponsor line.',
+  participantKind = 'human-and-agent',
+}: {
+  packageId?: string;
+  sponsorName?: string;
+  gang?: string;
+  tone?: string;
+  objective?: string;
+  participantKind?: string;
+} = {}) {
+  const selected =
+    findNounsBattlerSponsorPackage(packageId) ?? NOUNS_BATTLER_SPONSORSHIP_MARKET.packages[1];
+  const selectedSponsor = sponsorName.trim() || 'Friendly Sponsor';
+  const selectedFocus = gang.trim() || 'Mint Condition';
+  const selectedTone = tone.trim() || 'weird sports premium';
+  const selectedObjective =
+    objective.trim() || 'Get people to watch one match and remember the sponsor line.';
+  const selectedParticipantKind = participantKind.trim() || 'human-and-agent';
+  const cta = NOUNS_BATTLER_SPONSORSHIP_MARKET.ctas[0];
+
+  const sponsorCard = [
+    `SPONSOR RESERVATION: ${selected.label}`,
+    `Sponsor: ${selectedSponsor}`,
+    `Focus: ${selectedFocus}`,
+    `Tone: ${selectedTone}`,
+    `Objective: ${selectedObjective}`,
+    `Inventory: ${selected.spotlight}`,
+    `Includes: ${selected.includes.join('; ')}`,
+    'Guardrail: reservation intent only; human approval required before usage or payout.',
+    cta,
+  ].join('\n');
+
+  const ticker =
+    `${selectedSponsor.toUpperCase()} reserves ${selected.label} for ${selectedFocus}: ${selected.spotlight}. Watch: https://pointcast.xyz/nouns-nation-battler-tv/`;
+  const agentTaskBrief = [
+    `AGENT SPONSOR BRIEF: ${selected.id}`,
+    `Package this for ${selectedSponsor} with a ${selectedTone} voice.`,
+    `Focus on ${selectedFocus}. Objective: ${selectedObjective}`,
+    'Make: sponsor card, TV ticker, 10-second read, proof checklist, and participant-credit note.',
+    `Agent angle: ${selected.agentBrief}`,
+  ].join('\n');
+
+  return {
+    version: NOUNS_BATTLER_AGENT_BENCH_VERSION,
+    market: {
+      route: NOUNS_BATTLER_SPONSORSHIP_MARKET.route,
+      stance: NOUNS_BATTLER_SPONSORSHIP_MARKET.stance,
+      storageKey: NOUNS_BATTLER_SPONSORSHIP_MARKET.storageKey,
+    },
+    package: selected,
+    sponsorName: selectedSponsor,
+    focus: selectedFocus,
+    tone: selectedTone,
+    objective: selectedObjective,
+    participantKind: selectedParticipantKind,
+    sponsorCard,
+    ticker,
+    agentTaskBrief,
+    proofRequirements: selected.proof,
+    participantRewardRouting: selected.participantRouting,
+    reservationCopy:
+      `RESERVE: ${selectedSponsor} wants ${selected.label} for ${selectedFocus}. Objective: ${selectedObjective}. Package: ${selected.id}. ${cta}`,
+    guardrails: NOUNS_BATTLER_SPONSORSHIP_MARKET.guardrails,
   };
 }

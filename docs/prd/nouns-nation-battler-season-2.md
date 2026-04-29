@@ -182,6 +182,7 @@ Explore a mid-season knockout bracket:
 - Add Results Desk MCP tools and resource for snapshot/recap-based scorekeeping. Shipped in V32.
 - Add snapshot-backed Desk Wall `view=card`, `view=scoreboard`, `view=story`, and `view=agent` modes plus a Watch Frames rail. Shipped in V33.
 - Add Agent Sideline Desk, asset factory, sponsor/product packaging, and participant rewards draft. Shipped in V35.
+- Add Sponsorship Desk for reservation-only sponsor cards, TV tickers, agent briefs, proof requirements, creative inventory, and participant-credit routing. Shipped in V36.
 
 ## Acceptance Criteria
 
@@ -209,7 +210,10 @@ Explore a mid-season knockout bracket:
 - Agent Bench exposes a claim queue for scorekeeping, TV direction, Cowork result tracking, brand reads, Season 2 rules, poster copy, QA, and savvy viewer review prompts.
 - Agent Sideline Desk lets visiting agents claim a task, get an Agent Noun identity, create a report card, generate an asset/product/sponsor brief, copy a ticker line, and save reports locally.
 - Agent manifests expose asset factory, business model, and participant rewards draft.
-- MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_asset_factory`, `nouns_battler_manifest`, and `nouns_battler_presence`.
+- Sponsorship Desk lets humans and agents reserve no-money-yet sponsor packages, copy sponsor cards, TV tickers, agent briefs, proof checklists, and participant-credit previews.
+- Sponsor reservations are stored only in browser localStorage under `pc:nouns-battler-sponsor-intents-v1`.
+- Agent manifests expose sponsorship desk data, sponsorship market data, and the sponsor reservation task pack.
+- MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_asset_factory`, `nouns_battler_sponsorship_desk`, `nouns_battler_manifest`, and `nouns_battler_presence`.
 - MCP clients can call `nouns_battler_result_tracker` with a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text and receive a scorebook brief.
 - Desk Wall watch frames can be copied as snapshot-backed links for report-card, scoreboard, story-desk, or agent-scorebook viewing.
 - The Agent Scorebook frame gives Claude/Cowork a ready prompt for `nouns_battler_result_tracker`.

@@ -209,6 +209,19 @@ Never watched? Start here: https://pointcast.xyz/games/nouns-nation-battler/#gui
 
 The match is over. Copy the Recap Studio result first, then use the poster wall as the archive: https://pointcast.xyz/nouns-nation-battler-posters/
 
+### Sponsor Reservation
+
+Sponsor the weirdest match on the slate: reserve a ticker, match read, field naming burst, gang patron package, poster/product drop, agent bounty pool, or Nouns Bowl partner slot. No checkout yet; generate the card and route accepted work to participant credit: https://pointcast.xyz/nouns-nation-battler-sponsors/
+
+## Sponsorship Funnel
+
+1. Send likely sponsors to the Sponsorship Desk instead of a payment form.
+2. Let them choose a package and generate a copyable reservation card.
+3. Hand the agent brief to Claude, ChatGPT, Codex, Cursor, or a human producer.
+4. Human reviews what ships: ticker, read, poster prompt, product concept, bounty task, or recap line.
+5. Accepted sponsor work becomes broadcast copy or assets and receives participant-pool credit before any real payout.
+6. When payment/legal rails exist, convert high-signal reservation packages into real sponsor slots.
+
 ## Metrics
 
 - Direct TV link opens.
@@ -232,6 +245,11 @@ The match is over. Copy the Recap Studio result first, then use the poster wall 
 - Number of people who choose a gang in replies or chat.
 - Repeat viewers across two slates.
 - Which field/challenge pair gets people to stay longest.
+- Sponsorship Desk opens from the Battler hub, Agent Bench, Sideline Desk, or MCP.
+- Sponsor reservation cards copied or saved locally.
+- Agent sponsor briefs copied into another client.
+- Accepted sponsor packages that produce usable TV, Desk Wall, poster, or bounty output.
+- Participant-credit notes attached to accepted sponsor work.
 
 ## Next Product Bets
 
@@ -244,6 +262,7 @@ The match is over. Copy the Recap Studio result first, then use the poster wall 
 - Persistent report-card collections if in-session gallery use proves repeatable.
 - Hosted card-image rendering if snapshot-backed card links get traction.
 - Lightweight season integrity tests for playoff seeding, boss-field routing, and challenge awards.
+- Accepted Work Ledger for sponsor reservations, accepted/rejected status, contributor points, and participant-credit accounting.
 
 ## Acceptance Criteria
 
@@ -266,6 +285,8 @@ The match is over. Copy the Recap Studio result first, then use the poster wall 
 - The normal game view includes a Watch Now rail for the current matchup.
 - Quick Sim preserves one final score across recap copy, league table, and report artifacts.
 - Copied Desk Wall card links use public PointCast URLs when generated from localhost.
+- Sponsorship Desk creates reservation-only sponsor cards, tickers, agent briefs, proof checklists, and participant-credit previews.
+- Sponsorship Desk stores saved sponsor intents locally under `pc:nouns-battler-sponsor-intents-v1`.
 - The TV cast remains clean and control-light.
 - The public battler page links to this GTM doc.
 - The JSON manifest exposes the GTM strategy link.

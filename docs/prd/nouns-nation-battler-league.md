@@ -292,6 +292,17 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Add MCP tool `nouns_battler_asset_factory` and resource `nouns-battler://asset-factory` for posters, ads, art prompts, product concepts, sponsor reads, report cards, and rewards-loop briefs.
 - Treat "yield" as a prototype participant rewards/accounting model, not a promised investment return.
 
+## V36 Sponsorship Desk Additions
+
+- Add `/nouns-nation-battler-sponsors/` as a local-first reservation desk for humans and agents.
+- Keep v36 no-money-yet: no checkout, no wallet signing, no private identity capture, and human approval before usage, credit, or payout.
+- Add seven sponsor packages: ticker spark, match presented by, field naming burst, gang patron, poster/product drop, agent bounty pool, and Nouns Bowl partner.
+- Generate copyable sponsor cards, TV tickers, agent task briefs, proof requirements, reservation copy, and participant-credit previews.
+- Store recent sponsor intents only in the browser under `pc:nouns-battler-sponsor-intents-v1`.
+- Add `sponsorshipDesk` and `sponsorshipMarket` to Battler manifests and Agent Bench JSON.
+- Add MCP tool `nouns_battler_sponsorship_desk` and resource `nouns-battler://sponsorship-desk`.
+- Add a sponsor reservation claim-queue task so visiting agents can package sponsor inventory, proof, and reward routing.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -307,6 +318,7 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Continue storing all-time local season stats under `pc:nouns-nation-season`.
 - Do not store Agent Bench task output server-side. Visiting agents either report back to the user/client or opt into existing anonymous presence.
 - Do not store Results Desk updates server-side. MCP result tracking reads user-supplied snapshots or recap text and returns a scorebook response to the caller.
+- Store Sponsorship Desk reservation intents in browser localStorage only under `pc:nouns-battler-sponsor-intents-v1`.
 - Watch frame links remain URL-hash snapshots and do not mutate the local Desk Wall unless the viewer explicitly chooses local state.
 
 ## Acceptance Criteria
@@ -336,6 +348,9 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - `/nouns-nation-battler-agents/` renders a human-readable task board and privacy stance.
 - `/nouns-nation-battler-agents.json` returns CORS-open task data for visiting agents.
 - `/api/mcp-v2` exposes Battler task, manifest, and presence tools plus Battler resources.
+- `/nouns-nation-battler-sponsors/` renders a reservation-only Sponsorship Desk with package selection, sponsor card, TV ticker, agent brief, proof, and participant-credit preview.
+- `/nouns-nation-battler-sponsors/` saves recent reservation intents locally without transmitting private identity data.
+- `/api/mcp-v2` exposes `nouns_battler_sponsorship_desk` and `nouns-battler://sponsorship-desk`.
 - Agent presence remains opt-in and anonymous; no raw session ids or personal identifiers are broadcast.
 - `/api/mcp-v2` can turn a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text into standings, latest recaps, parsed final score, and Cowork cards.
 - The Season Desk Wall can open snapshot-backed card, scoreboard, story, and agent scorebook frames with dedicated `view=` modes.
