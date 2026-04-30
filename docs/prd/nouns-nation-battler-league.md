@@ -310,6 +310,16 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Expose featured Nouns and season highlights through the Agent Bench JSON and sponsorship market data for visiting agents.
 - Keep the highlight reel sponsor-facing: it should help someone understand why the league has moments worth packaging.
 
+## V38 Production Desk Additions
+
+- Add `/nouns-nation-battler-production/` as the public operating desk for accepted work, broadcast queue items, rooting cards, archive cards, and Nouns Bowl hype week.
+- Keep the desk local-first: no private identity capture, no payment rails, no automatic payout, and no promised investment return.
+- Add accepted-work contribution types: scout report, poster/ad, TV lower-third, sponsor package, QA fix, watch-party proof, season archive card, and director queue.
+- Generate copyable ledger cards, broadcast director briefs, agent task handoffs, rooting cards, and participant-credit previews for human approval.
+- Store local ledger cards under `pc:nouns-battler-work-ledger-v1`, broadcast queue items under `pc:nouns-battler-broadcast-queue-v1`, and rooting cards under `pc:nouns-battler-rooting-v1`.
+- Extend Agent Bench to v1.6.0 with production task packs: accepted-work ledger, broadcast director queue, rooting card maker, and Nouns Bowl hype producer.
+- Add MCP tool `nouns_battler_production_desk` and resource `nouns-battler://production-desk`.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -326,6 +336,9 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Do not store Agent Bench task output server-side. Visiting agents either report back to the user/client or opt into existing anonymous presence.
 - Do not store Results Desk updates server-side. MCP result tracking reads user-supplied snapshots or recap text and returns a scorebook response to the caller.
 - Store Sponsorship Desk reservation intents in browser localStorage only under `pc:nouns-battler-sponsor-intents-v1`.
+- Store Production Desk ledger cards in browser localStorage only under `pc:nouns-battler-work-ledger-v1`.
+- Store Production Desk broadcast queue items in browser localStorage only under `pc:nouns-battler-broadcast-queue-v1`.
+- Store Production Desk rooting cards in browser localStorage only under `pc:nouns-battler-rooting-v1`.
 - Watch frame links remain URL-hash snapshots and do not mutate the local Desk Wall unless the viewer explicitly chooses local state.
 
 ## Acceptance Criteria
@@ -359,6 +372,10 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - `/nouns-nation-battler-sponsors/` shows a featured Noun cast strip and first-four-season highlight reel using actual Battler sprite assets.
 - `/nouns-nation-battler-sponsors/` saves recent reservation intents locally without transmitting private identity data.
 - `/api/mcp-v2` exposes `nouns_battler_sponsorship_desk` and `nouns-battler://sponsorship-desk`.
+- `/nouns-nation-battler-production/` renders a Production Desk with accepted-work ledger builder, broadcast director queue, rooting layer, first-four-season archive, and Nouns Bowl hype week.
+- `/nouns-nation-battler-production/` stores recent ledger cards and broadcast queue items locally without transmitting private identity data.
+- `/api/mcp-v2` exposes `nouns_battler_production_desk` and `nouns-battler://production-desk`.
+- `/nouns-nation-battler-agents.json` exposes Agent Bench version `1.6.0` with production desk data and production task packs.
 - Agent presence remains opt-in and anonymous; no raw session ids or personal identifiers are broadcast.
 - `/api/mcp-v2` can turn a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text into standings, latest recaps, parsed final score, and Cowork cards.
 - The Season Desk Wall can open snapshot-backed card, scoreboard, story, and agent scorebook frames with dedicated `view=` modes.

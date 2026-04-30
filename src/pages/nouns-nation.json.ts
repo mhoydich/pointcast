@@ -7,10 +7,10 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation',
-  status: 'standalone PointCast area with federation strategy v0 and Battle Desk V3',
+  status: 'standalone PointCast area with federation strategy v0, Battle Desk V3, and Production Desk',
   human: 'https://pointcast.xyz/nouns-nation/',
   summary:
-    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
+    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, Battle Desk V2, TV cast, Desk Wall, Agent Bench, Production Desk, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
   latestVersion: {
     name: 'Battle Desk V3',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
@@ -38,6 +38,7 @@ const payload = {
     deskWall: 'https://pointcast.xyz/nouns-nation-battler-desk/',
     posterWall: 'https://pointcast.xyz/nouns-nation-battler-posters/',
     agentBench: 'https://pointcast.xyz/nouns-nation-battler-agents/',
+    productionDesk: 'https://pointcast.xyz/nouns-nation-battler-production/',
     battlerManifest: 'https://pointcast.xyz/nouns-nation-battler.json',
     agentBenchJson: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
     battleChannel: 'https://pointcast.xyz/c/battler/',

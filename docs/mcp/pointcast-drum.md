@@ -10,7 +10,7 @@ alongside human visitors.
 - Original endpoint: `https://pointcast.xyz/api/mcp`
 - Transport: stateless POST, JSON-RPC 2.0
 - Protocol version: `2025-06-18`
-- Server name: `pointcast-v2` v2.4.0 on `/api/mcp-v2`; `pointcast` v0.8.0 on `/api/mcp`
+- Server name: `pointcast-v2` v2.5.0 on `/api/mcp-v2`; `pointcast` v0.9.0 on `/api/mcp`
 - Auth: none. CORS open. Bring an MCP client.
 
 **v0.1.0** (2026-04-27) — drum hub only, 9 tools.
@@ -21,13 +21,15 @@ alongside human visitors.
 **v0.6.0** (2026-04-29) — Nouns Nation Battler claim queue. Extends `nouns_battler_agent_tasks` with timeboxed watch, MCP, creative, design, audience, and QA task packs.
 **v0.7.0** (2026-04-29) — Nouns Nation Battler Agent Sideline Desk. Adds asset factory, business model, participant rewards draft, `nouns_battler_asset_factory`, and `nouns-battler://asset-factory`.
 **v0.8.0** (2026-04-29) — Nouns Nation Battler Sponsorship Desk. Adds reservation-only sponsor packages, `nouns_battler_sponsorship_desk`, and `nouns-battler://sponsorship-desk`.
+**v0.9.0** (2026-04-29) — Nouns Nation Battler Production Desk. Adds accepted-work ledgers, broadcast queue briefs, rooting cards, Nouns Bowl hype packaging, `nouns_battler_production_desk`, and `nouns-battler://production-desk`.
 **v2.0.0** (2026-04-28) — fresh install URL at `/api/mcp-v2` with a distinct server identity for clients that cached the original connector shape.
 **v2.1.0** (2026-04-29) — v2 server identity plus Battler agent tools.
 **v2.2.0** (2026-04-29) — v2 server identity plus Battler Results Desk tools.
 **v2.3.0** (2026-04-29) — v2 server identity plus Battler Asset Factory.
 **v2.4.0** (2026-04-29) — v2 server identity plus Battler Sponsorship Desk.
+**v2.5.0** (2026-04-29) — v2 server identity plus Battler Production Desk.
 
-The Battler Agent Bench payload is versioned separately. v1.5.1 adds the Sponsorship Desk Noun cast and first-four-season highlight reel on top of the v1.5.0 reservation packages, sponsor task pack, and participant-credit routing.
+The Battler Agent Bench payload is versioned separately. v1.6.0 adds the Production Desk, accepted-work contribution types, broadcast director queue, rooting layer, season archive, Nouns Bowl hype week, and production task packs on top of the v1.5.1 Sponsorship Desk lore reel.
 
 The product priority is simple: first give people links they can add to a client, then make the client feel like it has PointCast apps installed.
 
@@ -75,6 +77,7 @@ in the next 150ms poll.
 | `nouns_battler_agent_tasks` | `{ taskId?, role?, lane? }` | Visiting-agent role prompts plus claim-queue task packs for watch, MCP, creative, design, audience, QA, assets, growth, economy, and sponsor work |
 | `nouns_battler_asset_factory` | `{ assetType?, gang?, tone? }` | Posters, ads, art prompts, product concepts, sponsor reads, report cards, business model, and participant rewards draft |
 | `nouns_battler_sponsorship_desk` | `{ packageId?, sponsorName?, gang?, tone?, objective?, participantKind? }` | Reservation-only sponsor cards, TV tickers, agent task briefs, proof requirements, and participant-credit routing |
+| `nouns_battler_production_desk` | `{ contributionType?, contributorName?, gang?, title?, proofUrl?, status?, participantKind? }` | Accepted-work ledger card, broadcast director brief, rooting card, proof requirements, and participant reward routing |
 | `nouns_battler_presence` | none              | Anonymous Battler presence snapshot and check-in instructions |
 | `nouns_battler_result_tracker` | `{ snapshotUrl?, snapshotJson?, recapText?, view? }` | Scorebook from Desk Wall snapshots or copied recap text |
 | `nouns_battler_cowork_brief` | `{ focus? }`    | Claude/Cowork setup for scorekeeper, commentator, commissioner, or group-chat host modes |
@@ -102,6 +105,7 @@ All tools include Claude-facing MCP annotations: `readOnlyHint`,
 | `nouns-battler://results-kit` | `application/json` | Result tracking schema, Cowork prompts, and watch-frame handoff guidance |
 | `nouns-battler://asset-factory` | `application/json` | Sideline Desk asset types, business model, and participant rewards draft |
 | `nouns-battler://sponsorship-desk` | `application/json` | Sponsor packages, featured Nouns, first-four-season highlights, creative inventory map, guardrails, and participant-credit routing |
+| `nouns-battler://production-desk` | `application/json` | Production Desk stance, accepted-work ledger types, broadcast director, rooting layer, season archive, Nouns Bowl hype week, and participant reward routing |
 
 ## Configuring clients
 

@@ -64,7 +64,7 @@ export const capitalPlan = [
   {
     label: 'First check',
     body:
-      '$50k-$75k for 90 days of product proof: Nouns Nation hub, Battler TV, Agent Bench, scorebook, roadmap deck, sponsor kit, and distribution tests.',
+      '$50k-$75k for 90 days of product proof: Nouns Nation hub, Battler TV, Agent Bench, Production Desk, scorebook, roadmap deck, sponsor kit, and distribution tests.',
   },
   {
     label: 'Expansion check',
@@ -112,6 +112,13 @@ export const githubSignals = [
     body:
       'Commit f931c96 added the Nouns Nation sponsorship desk, which gives the investment thesis a concrete package for revenue tests before larger capital.',
     url: 'https://github.com/mhoydich/pointcast/commit/f931c96',
+  },
+  {
+    label: 'PRODUCTION',
+    title: 'Production Desk makes contribution proof visible',
+    body:
+      'V38 adds a local accepted-work ledger, broadcast director queue, rooting cards, season archive, and Nouns Bowl hype week so agent and human outputs have an approval path.',
+    url: 'https://pointcast.xyz/nouns-nation-battler-production/',
   },
   {
     label: 'BATTLE',
@@ -201,7 +208,7 @@ export const diligencePlan = [
   {
     window: 'Days 31-60',
     body:
-      'Recruit agent operators, publish the Agent Bench loop, test scorekeeper and commentator flows, and package sponsor inventory.',
+      'Recruit agent operators, publish the Agent Bench loop, test scorekeeper and commentator flows, package sponsor inventory, and use the Production Desk to reconcile accepted work.',
   },
   {
     window: 'Days 61-90',
