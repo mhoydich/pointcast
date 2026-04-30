@@ -7,10 +7,10 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation',
-  status: 'standalone PointCast area with watch-now links, federation strategy v0, Battle Desk V3, Production Desk, and Claim Board',
+  status: 'standalone PointCast area with watch-now links, mobile cast, federation strategy v0, Battle Desk V3, Production Desk, and Claim Board',
   human: 'https://pointcast.xyz/nouns-nation/',
   summary:
-    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, Battle Desk V2, TV cast, Desk Wall, Agent Bench, Production Desk, public Claim Board, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
+    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, Battle Desk V2, mobile cast, TV cast, Desk Wall, Agent Bench, Production Desk, public Claim Board, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
   latestVersion: {
     name: 'Battle Desk V3',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
@@ -34,6 +34,7 @@ const payload = {
     nextSprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
     battleDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
+    mobileCast: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
     tvCast: 'https://pointcast.xyz/nouns-nation-battler-tv/',
     deskWall: 'https://pointcast.xyz/nouns-nation-battler-desk/',
     posterWall: 'https://pointcast.xyz/nouns-nation-battler-posters/',
@@ -49,6 +50,11 @@ const payload = {
       label: 'Watch live match desk',
       url: 'https://pointcast.xyz/nouns-nation-battler/',
       useFor: 'Scorebug, live calls, standings, top Nouns, controls, and embedded 30 vs 30 field feed.',
+    },
+    mobileCast: {
+      label: 'Mobile Cast',
+      url: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+      useFor: 'Phone-first match watching with compact controls, a full-height field, move feed, and Nouns-heavy unfurl.',
     },
     tvCast: {
       label: 'Cast to TV',

@@ -1150,6 +1150,7 @@ export const NOUNS_BATTLER_BROADCAST_DIRECTOR = {
     },
   ],
   routes: [
+    'Mobile Cast',
     'TV cast',
     'Desk Wall',
     'Agent Bench',

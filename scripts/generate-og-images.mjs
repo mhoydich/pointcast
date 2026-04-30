@@ -14,6 +14,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
 
 const OUT_DIR = path.resolve(process.cwd(), 'public/images/og');
@@ -36,6 +37,11 @@ const CHANNELS = {
 
 function xmlEscape(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function nounDataUri(id) {
+  const file = path.join(process.cwd(), 'public', 'games', 'nouns-nation-battler', 'assets', `noun-${id}.svg`);
+  return `data:image/svg+xml;base64,${readFileSync(file).toString('base64')}`;
 }
 
 /** Simple word-wrap for SVG <tspan> runs. Returns array of lines. */
@@ -130,24 +136,37 @@ function blockCard(block) {
  * card.
  */
 function pageCard(page) {
-  const titleLines = wrapText(page.title || '', page.titleChars ?? 18, 2);
-  const titleFontSize = page.titleFontSize ?? 108;
+  const hasNouns = Boolean(page.nouns?.length);
+  const titleLines = wrapText(page.title || '', page.titleChars ?? (hasNouns ? 16 : 18), page.titleLines ?? 2);
+  const titleFontSize = page.titleFontSize ?? (hasNouns ? 82 : 108);
   const lineHeight = Math.round(titleFontSize * 1.08);
   const titleText = titleLines.map((l, i) =>
-    `<text x="80" y="${260 + i * lineHeight}" font-family="Inter, system-ui, sans-serif" font-size="${titleFontSize}" font-weight="500" letter-spacing="-2" fill="#12110E">${xmlEscape(l)}</text>`
+    `<text x="80" y="${260 + i * lineHeight}" font-family="Inter, system-ui, sans-serif" font-size="${titleFontSize}" font-weight="500" letter-spacing="0" fill="#12110E">${xmlEscape(l)}</text>`
   ).join('');
 
-  const dekLines = page.dek ? wrapText(page.dek, 54, 3) : [];
+  const dekFontSize = page.dekFontSize ?? (hasNouns ? 22 : 24);
+  const dekLines = page.dek ? wrapText(page.dek, page.dekChars ?? (hasNouns ? 48 : 54), page.dekLines ?? (hasNouns ? 2 : 3)) : [];
   // dek Y begins after the title block
-  const dekBaseY = 260 + titleLines.length * lineHeight + 60;
+  const dekBaseY = 260 + titleLines.length * lineHeight + (hasNouns ? 54 : 60);
   const dekText = dekLines.map((l, i) =>
-    `<text x="80" y="${dekBaseY + i * 36}" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="400" fill="#38373A">${xmlEscape(l)}</text>`
+    `<text x="80" y="${dekBaseY + i * 34}" font-family="Inter, system-ui, sans-serif" font-size="${dekFontSize}" font-weight="400" fill="#38373A">${xmlEscape(l)}</text>`
   ).join('');
 
   // Right-column glyph (optional) — for the pages that have a natural icon
   const glyph = page.glyph
     ? `<text x="${W - 80}" y="280" font-family="JetBrains Mono, ui-monospace, monospace" font-size="${page.glyphSize ?? 240}" font-weight="500" fill="${page.color600}" text-anchor="end" opacity="0.18">${xmlEscape(page.glyph)}</text>`
     : '';
+
+  const nounArt = (page.nouns ?? []).slice(0, 5).map((id, i) => {
+    const x = W - 430 + (i % 3) * 118;
+    const y = 84 + Math.floor(i / 3) * 126;
+    const size = i === 0 ? 132 : 108;
+    return `<g>
+      <rect x="${x - 10}" y="${y - 10}" width="${size + 20}" height="${size + 20}" fill="#FFFDF5" stroke="${page.color600}" stroke-width="3" />
+      <image x="${x}" y="${y}" width="${size}" height="${size}" href="${nounDataUri(id)}" />
+      <text x="${x}" y="${y + size + 26}" font-family="JetBrains Mono, ui-monospace, monospace" font-size="14" font-weight="800" letter-spacing="2" fill="${page.color800}">NOUN ${id}</text>
+    </g>`;
+  }).join('');
 
   // Bottom metadata — url, kind, sibling surfaces
   const siblings = (page.siblings ?? []).slice(0, 3).join(' · ');
@@ -157,6 +176,7 @@ function pageCard(page) {
     <!-- Left accent bar — page color -->
     <rect x="0" y="0" width="24" height="${H}" fill="${page.color600}" />
     ${glyph}
+    ${nounArt}
     <!-- Kicker line -->
     <text x="80" y="110" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22" font-weight="500" letter-spacing="3.6" fill="${page.color800}">${xmlEscape(page.kicker)}</text>
     <text x="80" y="148" font-family="JetBrains Mono, ui-monospace, monospace" font-size="16" font-weight="400" letter-spacing="2.5" fill="#5F5E5A">POINTCAST · ${xmlEscape(page.kind.toUpperCase())}</text>
@@ -220,6 +240,174 @@ const PAGES = [
     glyph: 'VS',
     glyphSize: 200,
     siblings: ['/battle.json', '/c/battler'],
+  },
+  {
+    slug: 'nouns-nation',
+    url: '/nouns-nation',
+    kind: 'league room',
+    kicker: 'NOUNS NATION · WATCH NOW',
+    title: 'League room.',
+    dek: 'Live desk, mobile cast, TV cast, raw field feed, Desk Wall, Claim Board, and federation rails.',
+    color600: '#8A2432',
+    color800: '#551620',
+    glyph: 'BTL',
+    glyphSize: 210,
+    nouns: [12, 19, 27, 34, 41],
+    siblings: ['/nouns-nation-battler', '/nouns-nation-battler-mobile', '/nouns-nation.json'],
+  },
+  {
+    slug: 'nouns-battler-live',
+    url: '/nouns-nation-battler',
+    kind: 'live match desk',
+    kicker: 'CH.BTL · LIVE DESK',
+    title: 'Watch the match.',
+    dek: 'Scorebug, field feed, standings, top Nouns, live calls, controls, and the fastest route into the league.',
+    color600: '#8A2432',
+    color800: '#551620',
+    glyph: '30v30',
+    glyphSize: 170,
+    nouns: [58, 3, 12, 41, 27],
+    siblings: ['/nouns-nation-battler-mobile', '/nouns-nation-battler-tv', '/nouns-nation-battler-desk'],
+  },
+  {
+    slug: 'nouns-battler-mobile',
+    url: '/nouns-nation-battler-mobile',
+    kind: 'phone cast',
+    kicker: 'CH.BTL · MOBILE CAST',
+    title: 'Watch from your phone.',
+    dek: 'Compact score strip, full-height field, quick controls, move feed, and Nouns that fit in your hand.',
+    color600: '#3677E0',
+    color800: '#173D7A',
+    glyph: 'MOB',
+    glyphSize: 210,
+    nouns: [7, 33, 48, 56, 50],
+    siblings: ['/nouns-nation-battler', '/nouns-nation-battler-tv', '/games/nouns-nation-battler'],
+  },
+  {
+    slug: 'nouns-battler-tv',
+    url: '/nouns-nation-battler-tv',
+    kind: 'tv cast',
+    kicker: 'CH.BTL · TV CAST',
+    title: 'Cast the field.',
+    dek: 'No-chrome broadcast mode for big screens, lunch reviews, watch parties, and couch scouting.',
+    color600: '#050308',
+    color800: '#050308',
+    glyph: 'LIVE',
+    glyphSize: 190,
+    nouns: [21, 24, 35, 44, 52],
+    siblings: ['/nouns-nation-battler-mobile', '/nouns-nation-battler-desk', '/nouns-nation-battler'],
+  },
+  {
+    slug: 'nouns-battler-desk-wall',
+    url: '/nouns-nation-battler-desk',
+    kind: 'recap wall',
+    kicker: 'CH.BTL · DESK WALL',
+    title: 'Save the receipt.',
+    dek: 'Scoreboards, story desk, report cards, run sheets, and shareable watch frames for every slate.',
+    color600: '#5F5E5A',
+    color800: '#38373A',
+    glyph: 'WALL',
+    glyphSize: 175,
+    nouns: [9, 16, 29, 37, 45],
+    siblings: ['/games/nouns-nation-battler/desk', '/nouns-nation-battler-tv', '/nouns-nation-battler'],
+  },
+  {
+    slug: 'nouns-battler-posters',
+    url: '/nouns-nation-battler-posters',
+    kind: 'poster wall',
+    kicker: 'CH.BTL · POSTER SERIES',
+    title: 'Twenty loud posters.',
+    dek: 'Type-heavy Nouns posters for match energy, gang lore, Bowl stakes, and post-game sharing.',
+    color600: '#D49B19',
+    color800: '#7A5511',
+    glyph: 'POST',
+    glyphSize: 180,
+    nouns: [4, 14, 25, 40, 59],
+    siblings: ['/games/nouns-nation-battler/posters', '/nouns-nation-battler-tv', '/nouns-nation-battler'],
+  },
+  {
+    slug: 'nouns-battler-agents',
+    url: '/nouns-nation-battler-agents',
+    kind: 'agent bench',
+    kicker: 'CH.BTL · AGENT BENCH',
+    title: 'Give agents a job.',
+    dek: 'Claim queues, scorebooks, asset briefs, sponsor packages, production cards, and MCP tools.',
+    color600: '#534AB7',
+    color800: '#332C7C',
+    glyph: 'MCP',
+    glyphSize: 210,
+    nouns: [0, 10, 20, 30, 54],
+    siblings: ['/nouns-nation-battler-agents.json', '/nouns-nation-battler-tasks', '/api/mcp-v2'],
+  },
+  {
+    slug: 'nouns-battler-sponsors',
+    url: '/nouns-nation-battler-sponsors',
+    kind: 'sponsor desk',
+    kicker: 'CH.BTL · SPONSORSHIP DESK',
+    title: 'Sponsor the weird slate.',
+    dek: 'Reservation-only sponsor cards, tickers, proof requirements, agent briefs, and participant-credit routing.',
+    color600: '#0F6E56',
+    color800: '#074638',
+    glyph: 'AD',
+    glyphSize: 250,
+    nouns: [12, 33, 41, 48, 56],
+    siblings: ['/nouns-nation-battler-tasks', '/nouns-nation-battler-production', '/nouns-nation-battler-tv'],
+  },
+  {
+    slug: 'nouns-battler-production',
+    url: '/nouns-nation-battler-production',
+    kind: 'production desk',
+    kicker: 'CH.BTL · PRODUCTION DESK',
+    title: 'Turn work into show.',
+    dek: 'Accepted-work ledger, broadcast director queue, rooting cards, season archive, and Nouns Bowl hype.',
+    color600: '#BA7517',
+    color800: '#834F0A',
+    glyph: 'AIR',
+    glyphSize: 210,
+    nouns: [7, 28, 36, 43, 51],
+    siblings: ['/nouns-nation-battler-tasks', '/nouns-nation-battler-tv', '/nouns-nation-battler-agents/desk'],
+  },
+  {
+    slug: 'nouns-battler-claim-board',
+    url: '/nouns-nation-battler-tasks',
+    kind: 'claim board',
+    kicker: 'CH.BTL · CLAIM BOARD',
+    title: 'Claim one useful thing.',
+    dek: 'Sponsor cards, bounties, poster briefs, QA, watch-party proof, run sheets, and Bowl hype cards.',
+    color600: '#1E7C2F',
+    color800: '#0F4515',
+    glyph: 'TASK',
+    glyphSize: 170,
+    nouns: [12, 33, 41, 48, 50],
+    siblings: ['/nouns-nation-battler-production', '/nouns-nation-battler-sponsors', '/nouns-nation-battler-agents.json'],
+  },
+  {
+    slug: 'nouns-battler-v3',
+    url: '/nouns-nation-battler-v3',
+    kind: 'federation desk',
+    kicker: 'CH.BTL · BATTLE DESK V3',
+    title: 'Operate the league.',
+    dek: 'Federation thought, live field, season archive, media slate, Sprint Room, rival league preview, and receipts.',
+    color600: '#8A2432',
+    color800: '#551620',
+    glyph: 'V3',
+    glyphSize: 260,
+    nouns: [12, 41, 27, 58, 3],
+    siblings: ['/nouns-nation', '/nouns-nation-battler', '/nouns-nation-battler-sprint.json'],
+  },
+  {
+    slug: 'nouns-battler-v2',
+    url: '/nouns-nation-battler-v2',
+    kind: 'analyst desk',
+    kicker: 'CH.BTL · BATTLE DESK V2',
+    title: 'Read the match.',
+    dek: 'GameCast-style pressure line, analyst rail, table, leaders, controls, and embedded field feed.',
+    color600: '#3677E0',
+    color800: '#173D7A',
+    glyph: 'V2',
+    glyphSize: 260,
+    nouns: [2, 11, 22, 31, 46],
+    siblings: ['/nouns-nation-battler', '/nouns-nation-battler-tv', '/nouns-nation'],
   },
   {
     slug: 'collection',
