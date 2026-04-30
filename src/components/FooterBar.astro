@@ -211,6 +211,13 @@ const pingable = RESIDENTS.filter(
         </div>
         <p class="fb-ask__status mono" id="fb-ask-status" aria-live="polite"></p>
       </form>
+      <section class="fb-echoes" id="fb-echoes" hidden>
+        <p class="fb-echoes__label mono">
+          <span>YOUR RECENT SENDS</span>
+          <span class="fb-echoes__counts mono" id="fb-echoes-counts"></span>
+        </p>
+        <ul class="fb-echoes__list" id="fb-echoes-list"></ul>
+      </section>
     </div>
   </div>
 
@@ -521,6 +528,16 @@ const pingable = RESIDENTS.filter(
       }, 30);
       openPopover = 'tray:' + id;
       document.addEventListener('keydown', onEsc);
+      // Per-tray on-open hooks (defined later in the IIFE; hoisted because
+      // they're function declarations).
+      try {
+        if (id === 'ask') {
+          renderEchoes();
+          reconcileEchoes();
+        } else if (id === 'agent') {
+          refreshAgentActivity();
+        }
+      } catch (e) {}
     }
 
     document.querySelectorAll('.fb__stamp').forEach(function (st) {
@@ -677,11 +694,151 @@ const pingable = RESIDENTS.filter(
     var $askTo   = document.getElementById('fb-ask-to');
     var $askCount = document.getElementById('fb-ask-count');
     var $askStatus = document.getElementById('fb-ask-status');
+    var $echoes      = document.getElementById('fb-echoes');
+    var $echoesList  = document.getElementById('fb-echoes-list');
+    var $echoesCount = document.getElementById('fb-echoes-counts');
 
     if ($askBody && $askCount) {
       $askBody.addEventListener('input', function () {
         $askCount.textContent = String($askBody.value.length) + ' / 2000';
       });
+    }
+
+    // ─── Echoes — visible round-trip for ASK ──────────────────────
+    // Mike 2026-04-29 sprint: "fun just started interacting" → make
+    // the loop visible. Each send is stashed in localStorage; when the
+    // ASK tray opens we re-render and check /blocks.json for any block
+    // whose `source` references a stashed ping key — those flip to
+    // "answered" with a link to the block.
+    var ECHOES_KEY = 'pc:ask:echoes';
+    var ECHOES_MAX = 6;
+
+    function loadEchoes() {
+      try {
+        var raw = localStorage.getItem(ECHOES_KEY);
+        var arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) { return []; }
+    }
+    function saveEchoes(arr) {
+      try { localStorage.setItem(ECHOES_KEY, JSON.stringify(arr.slice(-ECHOES_MAX))); } catch (e) {}
+    }
+    function addEcho(echo) {
+      var arr = loadEchoes();
+      arr.push(echo);
+      saveEchoes(arr);
+    }
+    function shortTime(ts) {
+      try {
+        var d = new Date(ts);
+        var hh = String(d.getHours()).padStart(2, '0');
+        var mm = String(d.getMinutes()).padStart(2, '0');
+        return hh + ':' + mm;
+      } catch (e) { return '—'; }
+    }
+    function renderEchoes() {
+      if (!$echoes || !$echoesList) return;
+      var arr = loadEchoes();
+      if (!arr.length) {
+        $echoes.hidden = true;
+        return;
+      }
+      $echoes.hidden = false;
+      var answered = arr.filter(function (e) { return e.status === 'answered'; }).length;
+      if ($echoesCount) {
+        $echoesCount.textContent = answered + ' / ' + arr.length + ' answered';
+      }
+      $echoesList.innerHTML = arr.slice().reverse().map(function (e) {
+        var pill = e.status === 'answered'
+          ? ('<a class="fb-echo__pill fb-echo__pill--answered mono" href="' + (e.blockHref || '#') + '">✓ answered</a>')
+          : '<span class="fb-echo__pill fb-echo__pill--sent mono">● sent</span>';
+        return '<li class="fb-echo">' +
+          '<span class="fb-echo__time mono">' + shortTime(e.ts) + '</span>' +
+          '<span class="fb-echo__to mono">→ ' + (e.to || 'cast') + '</span>' +
+          '<span class="fb-echo__body">' + (e.body ? e.body.replace(/[<>&]/g, function (c) { return c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&amp;'; }) : '') + '</span>' +
+          pill +
+          '</li>';
+      }).join('');
+    }
+
+    // ─── AGENT stamp activity ──────────────────────────────────────
+    // The 03 AGENT stamp gets a green "live" dot when residents are
+    // active. Reads /agents.json (the agent-readable manifest), counts
+    // entries with status='resident'/'live'/'director'. Cheap, fails
+    // silent. Heuristic: 1 live = on, 2+ = busy (pulsing).
+    var AGENT_ACTIVITY_TTL = 10 * 60 * 1000;
+    var agentActivityCache = { ts: 0, data: null };
+    async function refreshAgentActivity() {
+      var dot = document.getElementById('fb-stamp-dot-agent');
+      if (!dot) return;
+      try {
+        var now = Date.now();
+        var data;
+        if (agentActivityCache.data && (now - agentActivityCache.ts) < AGENT_ACTIVITY_TTL) {
+          data = agentActivityCache.data;
+        } else {
+          var r = await fetch('/agents.json', { cache: 'no-store' });
+          if (!r.ok) return;
+          data = await r.json();
+          agentActivityCache = { ts: now, data: data };
+        }
+        var residents = (data && data.residents) || (data && data.agents) || [];
+        var liveCount = 0;
+        for (var i = 0; i < residents.length; i++) {
+          var x = residents[i];
+          if (x && (x.status === 'resident' || x.status === 'live' || x.status === 'director')) liveCount++;
+        }
+        if (liveCount >= 2) {
+          dot.setAttribute('data-state', 'busy');
+        } else if (liveCount >= 1) {
+          dot.setAttribute('data-state', 'on');
+        } else {
+          dot.setAttribute('data-state', 'off');
+        }
+      } catch (e) {}
+    }
+
+    // Cross-check echoes against published blocks. If a block's `source`
+    // string contains the ping key from any echo, mark it answered.
+    var ECHO_BLOCKS_TTL = 60 * 1000;
+    var echoBlocksCache = { ts: 0, data: null };
+    async function reconcileEchoes() {
+      var arr = loadEchoes();
+      var pending = arr.filter(function (e) { return e.status !== 'answered' && e.key; });
+      if (!pending.length) return;
+      try {
+        var now = Date.now();
+        var data;
+        if (echoBlocksCache.data && (now - echoBlocksCache.ts) < ECHO_BLOCKS_TTL) {
+          data = echoBlocksCache.data;
+        } else {
+          var r = await fetch('/blocks.json', { cache: 'no-store' });
+          if (!r.ok) return;
+          data = await r.json();
+          echoBlocksCache = { ts: now, data: data };
+        }
+        var blocks = Array.isArray(data) ? data : (data && data.blocks) || [];
+        var changed = false;
+        for (var i = 0; i < arr.length; i++) {
+          var echo = arr[i];
+          if (echo.status === 'answered' || !echo.key) continue;
+          for (var j = 0; j < blocks.length; j++) {
+            var b = blocks[j];
+            var src = (b && b.source) || '';
+            if (typeof src === 'string' && src.indexOf(echo.key) !== -1) {
+              echo.status = 'answered';
+              echo.blockId = b.id;
+              echo.blockHref = '/b/' + b.id;
+              changed = true;
+              break;
+            }
+          }
+        }
+        if (changed) {
+          saveEchoes(arr);
+          renderEchoes();
+        }
+      } catch (e) {}
     }
 
     if ($askForm) {
@@ -707,8 +864,19 @@ const pingable = RESIDENTS.filter(
           if (res.ok) {
             $askStatus.textContent = 'sent. one of us picks this up next session.';
             $askStatus.setAttribute('data-state', 'ok');
+            try {
+              var payload = await res.clone().json();
+              addEcho({
+                key: payload && payload.key ? String(payload.key) : '',
+                ts: new Date().toISOString(),
+                to: to,
+                body: body.slice(0, 140),
+                status: 'sent',
+              });
+            } catch (e) {}
             $askBody.value = '';
             if ($askCount) $askCount.textContent = '0 / 2000';
+            renderEchoes();
           } else if (res.status === 503) {
             $askStatus.textContent = 'inbox not bound on this preview — try pointcast.xyz';
             $askStatus.setAttribute('data-state', 'warn');
@@ -841,6 +1009,19 @@ const pingable = RESIDENTS.filter(
     }
     updatePresence();
     setInterval(updatePresence, 45 * 1000);
+
+    // Initial pulses for echoes + agent activity. Both fail silently
+    // when the endpoints aren't reachable (dev preview, offline).
+    setTimeout(function () {
+      try { reconcileEchoes(); } catch (e) {}
+      try { refreshAgentActivity(); } catch (e) {}
+    }, 1500);
+    setInterval(function () {
+      try { reconcileEchoes(); } catch (e) {}
+    }, 90 * 1000);
+    setInterval(function () {
+      try { refreshAgentActivity(); } catch (e) {}
+    }, 5 * 60 * 1000);
 
     (function scheduleNounRefresh() {
       var now = new Date();
@@ -1186,6 +1367,59 @@ const pingable = RESIDENTS.filter(
   .fb-ask__status[data-state='warn']    { color: #c4952e; }
   .fb-ask__status[data-state='err']     { color: #8a2432; }
   .fb-ask__status[data-state='pending'] { color: #6b5a3a; }
+
+  /* Echoes — visible round-trip for the ASK tray */
+  .fb-echoes {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed #d4c6a4;
+  }
+  .fb-echoes__label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #8a7854;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  .fb-echoes__counts { color: #2f8f5f; font-weight: 700; }
+  .fb-echoes__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .fb-echo {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 7px;
+    background: #fffdf8;
+    border: 1px solid #ece4d3;
+    border-radius: 2px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .fb-echo__time { font-size: 9.5px; color: #8a7854; letter-spacing: 0.04em; }
+  .fb-echo__to   { font-size: 9.5px; color: #6b5a3a; letter-spacing: 0.06em; }
+  .fb-echo__body {
+    color: #2d1f08;
+    font-family: Georgia, serif;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .fb-echo__pill {
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 1px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .fb-echo__pill--sent     { background: #f8e9c8; color: #c4952e; }
+  .fb-echo__pill--answered { background: #d8f0e2; color: #2f8f5f; }
+  .fb-echo__pill--answered:hover { background: #2f8f5f; color: #fff; }
 
   .fb-residents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .fb-resident { margin: 0; }
