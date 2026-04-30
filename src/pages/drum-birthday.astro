@@ -437,6 +437,24 @@ const siblings = [
     for (var i = 5; i < rows.length; i++) rows[i].remove();
   }
 
+  // Tap-together pulse — when a non-self event lands, briefly highlight
+  // the room counter + fire a small ring animation around the tap pad
+  // so the visitor SEES that someone else just tapped. Per Mike
+  // 2026-04-29: "morgan and i visited from mobile, didn't see the
+  // clicks." The /api/visit chip handles presence; this handles
+  // *transient* signals — Morgan tapped right now, here's the visual.
+  function pulseFromOther() {
+    if (!roomEl) return;
+    roomEl.classList.remove('db__count-other');
+    void roomEl.offsetWidth;
+    roomEl.classList.add('db__count-other');
+    if (tap) {
+      tap.classList.remove('db__tap--echo');
+      void tap.offsetWidth;
+      tap.classList.add('db__tap--echo');
+    }
+  }
+
   function poll() {
     fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -445,6 +463,7 @@ const siblings = [
         var events = Array.isArray(data.events) ? data.events : [];
         if (!events.length) return;
         lastTs = events[events.length - 1].t || Date.now();
+        var sawOther = false;
         events.forEach(function (e) {
           if (e.type !== 'birthday') return;
           // self-filter: skip our own broadcasts (we already counted optimistically)
@@ -456,7 +475,9 @@ const siblings = [
           roomEl.textContent = String(roomTotal);
           updateFill();
           checkThresholds(roomTotal);
+          sawOther = true;
         });
+        if (sawOther) pulseFromOther();
       }).catch(function () {});
   }
   setInterval(poll, 2000);
@@ -516,10 +537,16 @@ const siblings = [
     } catch (e) { setShareStatus('couldn’t copy — link: ' + url); }
   }
 
-  // native share API
+  // native share API — promote to primary CTA on mobile (Web Share is
+  // a one-tap path to iMessage / WhatsApp / system share sheet, way
+  // cheaper than copy + paste). On desktop it stays a tertiary option.
   if (navigator.share) {
     nativeBtn.hidden = false;
+    var isCoarse = false;
+    try { isCoarse = window.matchMedia('(pointer: coarse)').matches; } catch (e) {}
+    if (isCoarse) nativeBtn.classList.add('db__share-btn--primary');
     nativeBtn.addEventListener('click', function () {
+      try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
       navigator.share({
         title: 'Birthday drum · PointCast',
         text: buildShareText(),
@@ -721,6 +748,31 @@ const siblings = [
     0% { filter: brightness(1.4) saturate(1.3); }
     100% { filter: brightness(1) saturate(1); }
   }
+
+  /* Tap-together — visual signal that another visitor just tapped.
+     Echo ring around the tap pad + transient color flash on the room
+     counter. Distinct from db__tap--hit (your own tap) so visitors
+     can tell "the room thumped" from "I thumped." */
+  .db__tap--echo .db__tap-cap {
+    animation: db-echo 0.7s ease-out;
+  }
+  @keyframes db-echo {
+    0%   { box-shadow: 6px 7px 0 0 #11100c, 0 0 0 0 rgba(214, 52, 106, 0.55), inset 0 -10px 0 0 rgba(17,16,12,0.2), inset 0 8px 0 0 rgba(255,255,255,0.4); }
+    50%  { box-shadow: 6px 7px 0 0 #11100c, 0 0 0 22px rgba(214, 52, 106, 0.0), inset 0 -10px 0 0 rgba(17,16,12,0.2), inset 0 8px 0 0 rgba(255,255,255,0.4); }
+    100% { box-shadow: 6px 7px 0 0 #11100c, 0 0 0 0 rgba(214, 52, 106, 0), inset 0 -10px 0 0 rgba(17,16,12,0.2), inset 0 8px 0 0 rgba(255,255,255,0.4); }
+  }
+  .db__count-other {
+    animation: db-count-other 0.6s ease-out;
+  }
+  @keyframes db-count-other {
+    0%   { color: #d6346a; transform: scale(1.18); }
+    100% { color: inherit; transform: scale(1); }
+  }
+  /* Honor reduced-motion — drop the animations but keep the color flash */
+  @media (prefers-reduced-motion: reduce) {
+    .db__tap--echo .db__tap-cap,
+    .db__count-other { animation: none; }
+  }
   .db__tap-glyph {
     font-size: clamp(40px, 6vw, 64px);
     line-height: 1;
@@ -851,6 +903,23 @@ const siblings = [
   .db__btn--magenta { background: #d6346a; color: #fff5d8; }
   .db__btn--cyan    { background: #3aa9c4; color: #fff5d8; }
   .db__btn--yellow  { background: #f0c431; color: #11100c; }
+
+  /* On touch devices, promote the native-share button to a full-width
+     primary CTA. Web Share is the one-tap way into iMessage / WhatsApp /
+     the system sheet — copy-link + tweet are fallbacks for desktop. */
+  .db__share-btn--primary {
+    order: -1;
+    flex: 1 1 100%;
+    background: #d6346a;
+    color: #fff5d8;
+    padding: 14px 18px;
+    font-size: 13px;
+    box-shadow: 5px 5px 0 0 #11100c;
+  }
+  .db__share-btn--primary:hover {
+    background: #11100c;
+    color: #fff5d8;
+  }
   .db__share-status {
     margin: 0;
     font-size: 11px; letter-spacing: 0.12em;
