@@ -63,7 +63,13 @@ interface DuelState {
   winner: 0 | 1 | 2;     // 0 = no winner yet
   p1Score: number;
   p2Score: number;
-  mode: 'tug';           // future: 'duel' (reaction), 'race' (speed-30)
+  mode: 'tug' | 'race' | 'duel';
+  // duel-mode fields (ignored for tug/race)
+  p1Ready?: boolean;
+  p2Ready?: boolean;
+  bellAt?: number;       // 0 = not armed; otherwise UTC ms when bell rings
+  roundState?: 'idle' | 'arming' | 'resolved';
+  falseStart?: 0 | 1 | 2;
 }
 
 interface DuelEvent {
@@ -91,6 +97,11 @@ function freshState(): DuelState {
     p1Score: 0,
     p2Score: 0,
     mode: 'tug',
+    p1Ready: false,
+    p2Ready: false,
+    bellAt: 0,
+    roundState: 'idle',
+    falseStart: 0,
   };
 }
 
@@ -202,6 +213,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     side?: unknown;
     to?: unknown;
     signal?: unknown;
+    mode?: unknown;       // for kind=join: requested mode (first join wins)
   };
   try {
     body = (await request.json()) as typeof body;
@@ -231,6 +243,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
     if (!state.p1Pid) {
       state.p1Pid = pid;
+      // First join sets the room mode. Subsequent joins read the mode
+      // out of state (we don't let the second player override).
+      if (typeof body.mode === 'string') {
+        const m = body.mode;
+        if (m === 'tug' || m === 'race' || m === 'duel') state.mode = m;
+      }
       await saveState(env, room, state);
       return json({ ok: true, side: 1, state });
     }
@@ -241,6 +259,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
     // Room is full and pid isn't a seated player → spectator
     return json({ ok: true, side: 0, state, role: 'spectator' });
+  }
+
+  // ── kind=ready (duel mode only): mark this side ready. When both
+  // sides are ready, server picks a random bell time 2-5s out and
+  // broadcasts it via state. Either side tapping before the bell
+  // forfeits the round (false start); first to tap after wins.
+  if (kind === 'ready') {
+    if (state.mode !== 'duel') {
+      return json({ ok: false, reason: 'not-duel-mode' }, { status: 400 });
+    }
+    if (state.p1Pid !== pid && state.p2Pid !== pid) {
+      return json({ ok: false, reason: 'not-a-player' }, { status: 403 });
+    }
+    if (state.roundState === 'arming' || state.roundState === 'resolved') {
+      return json({ ok: true, state });
+    }
+    if (state.p1Pid === pid) state.p1Ready = true;
+    if (state.p2Pid === pid) state.p2Ready = true;
+    if (state.p1Ready && state.p2Ready) {
+      const offset = DUEL_BELL_MIN_MS + Math.floor(Math.random() * (DUEL_BELL_MAX_MS - DUEL_BELL_MIN_MS));
+      state.bellAt = Date.now() + offset;
+      state.roundState = 'arming';
+    }
+    await saveState(env, room, state);
+    return json({ ok: true, state });
   }
 
   if (kind === 'signal') {
@@ -299,6 +342,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     state.p2Score = 0;
     state.winner = 0;
     state.startedAt = Date.now();
+    state.p1Ready = false;
+    state.p2Ready = false;
+    state.bellAt = 0;
+    state.roundState = 'idle';
+    state.falseStart = 0;
     await saveState(env, room, state);
     await saveEvents(env, room, []);
     return json({ ok: true, state });
@@ -325,6 +373,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const t = Date.now();
+
+  // duel mode: tap timing decides the round
+  if (state.mode === 'duel') {
+    if (state.roundState !== 'arming') {
+      return json({ ok: true, state, ignored: 'not-armed' });
+    }
+    const bell = state.bellAt || 0;
+    if (t < bell) {
+      // FALSE START — tapper loses, opponent wins
+      state.falseStart = side as 0 | 1 | 2;
+      state.winner = side === 1 ? 2 : 1;
+      state.roundState = 'resolved';
+    } else {
+      // Valid tap after bell — first to land wins
+      state.winner = side as 0 | 1 | 2;
+      state.roundState = 'resolved';
+    }
+    await saveState(env, room, state);
+    return json({ ok: true, state, t });
+  }
+
+  // tug / race mode: same scoring
   if (side === 1) {
     state.p1Score += 1;
     if (state.p1Score >= WIN_TAPS) state.winner = 1;

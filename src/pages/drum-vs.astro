@@ -80,6 +80,11 @@ const jsonLd = {
             <span class="dv__mode-name">race</span>
             <span class="dv__mode-sub mono">side-by-side bars · sprint</span>
           </label>
+          <label class="dv__mode-opt">
+            <input type="radio" name="dv-mode" value="duel" />
+            <span class="dv__mode-name">reaction duel</span>
+            <span class="dv__mode-sub mono">bell rings 2-5s · first tap wins · don't false-start</span>
+          </label>
         </fieldset>
         <button type="button" class="dv__btn dv__btn--magenta dv__btn--big" id="dv-new-room">
           ▸ open a new duel
@@ -145,6 +150,22 @@ const jsonLd = {
             <span class="dv__race-runner" id="dv-race-runner-2" aria-hidden="true"></span>
           </div>
           <span class="dv__race-pct mono" id="dv-race-pct-2">0%</span>
+        </div>
+      </div>
+
+      {/* Reaction duel UI (mode=duel). Hidden when mode=tug or race. */}
+      <div class="dv__duel" id="dv-duel" aria-label="Reaction duel" hidden>
+        <div class="dv__duel-stage" id="dv-duel-stage" data-state="idle">
+          <p class="dv__duel-status" id="dv-duel-status">— ready up to start the round —</p>
+          <p class="dv__duel-instr mono" id="dv-duel-instr">tap READY · bell rings 2-5s after both ready · first tap after bell wins · false start = loss</p>
+          <button type="button" class="dv__duel-btn" id="dv-duel-ready" hidden>
+            <span class="dv__duel-glyph" aria-hidden="true">●</span>
+            <span class="dv__duel-label mono">READY</span>
+          </button>
+          <button type="button" class="dv__duel-btn dv__duel-btn--tap" id="dv-duel-tap" hidden>
+            <span class="dv__duel-glyph" aria-hidden="true">▣</span>
+            <span class="dv__duel-label mono">TAP NOW</span>
+          </button>
         </div>
       </div>
 
@@ -267,7 +288,7 @@ const jsonLd = {
     var qs = new URLSearchParams(window.location.search);
     var room = (qs.get('room') || '').toUpperCase();
     var mode = (qs.get('mode') || 'tug').toLowerCase();
-    if (mode !== 'race' && mode !== 'tug') mode = 'tug';
+    if (mode !== 'race' && mode !== 'tug' && mode !== 'duel') mode = 'tug';
     var dvMain = document.getElementById('dv-main');
     if (dvMain) dvMain.dataset.mode = mode;
     var lobby = document.getElementById('dv-lobby');
@@ -297,20 +318,32 @@ const jsonLd = {
     document.getElementById('dv-room').textContent = room;
     var ropeWrap = document.getElementById('dv-rope');
     var raceWrap = document.getElementById('dv-race');
+    var duelWrap = document.getElementById('dv-duel');
+    var sidesWrap = document.getElementById('dv-sides');
     if (mode === 'race') {
       if (ropeWrap) ropeWrap.hidden = true;
       if (raceWrap) raceWrap.hidden = false;
+      if (duelWrap) duelWrap.hidden = true;
+    } else if (mode === 'duel') {
+      if (ropeWrap) ropeWrap.hidden = true;
+      if (raceWrap) raceWrap.hidden = true;
+      if (duelWrap) duelWrap.hidden = false;
+      // Sides (tap pads) hidden in duel mode — duel has its own button
+      if (sidesWrap) sidesWrap.hidden = true;
     } else {
       if (ropeWrap) ropeWrap.hidden = false;
       if (raceWrap) raceWrap.hidden = true;
+      if (duelWrap) duelWrap.hidden = true;
     }
     var barMode = document.querySelector('.dv__bar-mode');
     if (barMode) {
       barMode.textContent = mode === 'race'
         ? '▌ RACE · FIRST TO 50'
-        : '▌ TUG-OF-WAR · FIRST TO 50';
+        : mode === 'duel'
+          ? '▌ REACTION DUEL · FIRST TAP AFTER BELL WINS'
+          : '▌ TUG-OF-WAR · FIRST TO 50';
     }
-    if (strap) strap.textContent = 'room ' + room + ' · ' + (mode === 'race' ? 'race' : 'tug') + ' · waiting for both Nouns…';
+    if (strap) strap.textContent = 'room ' + room + ' · ' + (mode === 'race' ? 'race' : mode === 'duel' ? 'duel' : 'tug') + ' · waiting for both Nouns…';
 
     var sid = getSid();
     var myNoun = getNounId(sid);
@@ -395,6 +428,8 @@ const jsonLd = {
     }
 
     function applyServerState(state) {
+      if (mode === 'duel') applyDuelState(state);
+
       if (!state) return;
       p1Score = Number(state.p1Score) || 0;
       p2Score = Number(state.p2Score) || 0;
@@ -479,7 +514,7 @@ const jsonLd = {
       fetch('/api/duel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room: room, sessionId: sid, kind: 'join' }),
+        body: JSON.stringify({ room: room, sessionId: sid, kind: 'join', mode: mode }),
       })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
@@ -742,6 +777,155 @@ const jsonLd = {
       };
     })();
 
+    // ─── Reaction-duel state machine ───────────────────────────────────
+    // Drives the duel UI based on server state.{p1Ready, p2Ready, bellAt,
+    // roundState, falseStart, winner}. Polls existing state via the same
+    // poll() loop; doesn't add round-trips. Local countdown is purely
+    // visual — the server's bellAt is canonical.
+    var duelEls = {
+      stage: document.getElementById('dv-duel-stage'),
+      status: document.getElementById('dv-duel-status'),
+      instr: document.getElementById('dv-duel-instr'),
+      readyBtn: document.getElementById('dv-duel-ready'),
+      tapBtn: document.getElementById('dv-duel-tap'),
+    };
+    var duelState = { roundState: 'idle', bellAt: 0, p1Ready: false, p2Ready: false, falseStart: 0 };
+    var duelLocalReady = false;     // we sent kind=ready, awaiting echo
+    var duelLocalTap = false;       // we sent kind=tap, awaiting resolve
+    var duelTickerTimer = null;
+
+    function applyDuelState(st) {
+      if (mode !== 'duel') return;
+      duelState.roundState = st.roundState || 'idle';
+      duelState.bellAt = Number(st.bellAt) || 0;
+      duelState.p1Ready = !!st.p1Ready;
+      duelState.p2Ready = !!st.p2Ready;
+      duelState.falseStart = Number(st.falseStart) || 0;
+      renderDuel();
+    }
+
+    function renderDuel() {
+      if (mode !== 'duel') return;
+      var s = duelState.roundState;
+      var bothReady = duelState.p1Ready && duelState.p2Ready;
+      duelEls.stage.dataset.state = s;
+      // Reset visibility
+      duelEls.readyBtn.hidden = true;
+      duelEls.tapBtn.hidden = true;
+
+      if (winner !== 0) {
+        // Round resolved. Show outcome.
+        var youWon = (winner === mySide);
+        if (duelState.falseStart !== 0) {
+          var falseStarter = duelState.falseStart === mySide;
+          duelEls.status.textContent = falseStarter
+            ? '✗ FALSE START · you tapped before the bell'
+            : '✓ ' + (winner === mySide ? 'you ' : 'they ') + 'won by waiting · their false start';
+          duelEls.instr.textContent = 'click rematch to go again';
+        } else {
+          duelEls.status.textContent = youWon ? '✓ YOU WON the round' : '✗ THEY tapped first';
+          duelEls.instr.textContent = 'click rematch to go again';
+        }
+        return;
+      }
+
+      if (s === 'idle' || !bothReady) {
+        var meReady = (mySide === 1 && duelState.p1Ready) || (mySide === 2 && duelState.p2Ready);
+        var theyReady = (mySide === 1 && duelState.p2Ready) || (mySide === 2 && duelState.p1Ready);
+        if (meReady && !theyReady) {
+          duelEls.status.textContent = '✓ ready · waiting for opponent…';
+          duelEls.instr.textContent = 'they need to ready up · then bell rings 2-5s after';
+        } else if (!meReady && theyReady) {
+          duelEls.status.textContent = 'opponent is ready · your move';
+          duelEls.instr.textContent = 'tap READY when you are';
+          duelEls.readyBtn.hidden = false;
+        } else if (!meReady && !theyReady) {
+          duelEls.status.textContent = '— ready up to start the round —';
+          duelEls.instr.textContent = 'both players tap READY · then bell rings 2-5s after · first tap wins · false start loses';
+          duelEls.readyBtn.hidden = false;
+        } else {
+          // both ready (would only happen mid-transition before server flips state to arming)
+          duelEls.status.textContent = 'both ready · arming…';
+        }
+        return;
+      }
+
+      if (s === 'arming') {
+        var msToBell = duelState.bellAt - Date.now();
+        if (msToBell > 0) {
+          // Pre-bell — DO NOT TAP
+          duelEls.status.textContent = '⚠ HOLD · do not tap until the bell';
+          duelEls.instr.textContent = 'bell rings in ~' + Math.ceil(msToBell / 100) / 10 + 's · false start = loss';
+          duelEls.tapBtn.hidden = false;  // visible so they CAN tap (and lose if early)
+          duelEls.tapBtn.classList.remove('dv__duel-btn--armed');
+          duelEls.tapBtn.classList.add('dv__duel-btn--hold');
+        } else {
+          // Bell rang — TAP NOW
+          duelEls.status.textContent = '◉ TAP! TAP! TAP!';
+          duelEls.instr.textContent = 'first to tap wins this round';
+          duelEls.tapBtn.hidden = false;
+          duelEls.tapBtn.classList.add('dv__duel-btn--armed');
+          duelEls.tapBtn.classList.remove('dv__duel-btn--hold');
+        }
+      }
+    }
+
+    // 60 Hz-ish ticker so the bell countdown and 'TAP NOW' state flip
+    // visually without waiting for next state poll. Bell time is
+    // server-canonical so all clients flip together within ~1 frame.
+    function startDuelTicker() {
+      if (duelTickerTimer) return;
+      duelTickerTimer = setInterval(function () { renderDuel(); }, 80);
+    }
+    if (mode === 'duel') startDuelTicker();
+
+    // READY click — POST kind=ready
+    if (duelEls.readyBtn) {
+      duelEls.readyBtn.addEventListener('click', function () {
+        if (duelLocalReady) return;
+        duelLocalReady = true;
+        try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+        fetch('/api/duel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ room: room, sessionId: sid, kind: 'ready' }),
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (data && data.ok && data.state) applyDuelState(data.state);
+          })
+          .catch(function () { duelLocalReady = false; });
+      });
+    }
+
+    // TAP click — POST kind=tap, server resolves the round
+    if (duelEls.tapBtn) {
+      var doTap = function () {
+        if (duelLocalTap) return;
+        duelLocalTap = true;
+        try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
+        fetch('/api/duel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ room: room, sessionId: sid, kind: 'tap', side: mySide }),
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (data && data.ok && data.state) {
+              applyServerState(data.state);
+              applyDuelState(data.state);
+            }
+          })
+          .catch(function () { duelLocalTap = false; });
+      };
+      duelEls.tapBtn.addEventListener('mousedown', function (e) { doTap(); e.preventDefault(); });
+      duelEls.tapBtn.addEventListener('touchstart', function (e) { doTap(); e.preventDefault(); }, { passive: false });
+    }
+
+    // Reset duel-local flags on rematch
+    if (rematchBtn = document.getElementById('dv-rematch')) {
+      // Already wired below; we'll piggyback in the existing handler — this
+      // var declaration is a no-op since the existing handler exists later.
+    }
+
     // ─── Tap broadcast ─────────────────────────────────────────────────
     function fireTap(side) {
       if (mySide !== side || winner !== 0) return;
@@ -884,6 +1068,8 @@ const jsonLd = {
             if (data && data.ok) {
               optimisticP1 = 0;
               optimisticP2 = 0;
+              duelLocalReady = false;
+              duelLocalTap = false;
               applyServerState(data.state);
             }
           });
@@ -1228,6 +1414,139 @@ const jsonLd = {
     font-weight: 800;
     color: var(--dv-ink);
     text-align: right;
+  }
+
+  /* ─── Reaction duel UI (mode=duel) ───────────────────── */
+  .dv__duel {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 24px 36px;
+    background: #fffaef;
+    border: 2px solid var(--dv-ink);
+    border-bottom: 0;
+  }
+  .dv__duel[hidden] { display: none; }
+  .dv__duel-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    text-align: center;
+  }
+  .dv__duel-status {
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 800;
+    margin: 0;
+    color: var(--dv-ink);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .dv__duel-stage[data-state="arming"] .dv__duel-status {
+    color: var(--dv-magenta);
+  }
+  .dv__duel-stage[data-state="resolved"] .dv__duel-status {
+    color: var(--dv-ink);
+    background: var(--dv-yellow);
+    padding: 6px 18px;
+    border: 2px solid var(--dv-ink);
+  }
+  .dv__duel-instr {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: lowercase;
+    color: var(--dv-mute);
+    margin: 0;
+    max-width: 480px;
+  }
+  .dv__duel-btn {
+    appearance: none;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 320px;
+  }
+  .dv__duel-btn .dv__duel-glyph {
+    font-size: 56px;
+    line-height: 1;
+    margin: 4px 0;
+  }
+  .dv__duel-btn .dv__duel-label {
+    font-size: 18px;
+    letter-spacing: 0.22em;
+    font-weight: 800;
+    margin: 4px 0;
+  }
+  .dv__duel-btn:not(.dv__duel-btn--tap) {
+    /* Pre-game READY button */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 36px;
+    border: 3px solid var(--dv-ink);
+    background: var(--dv-magenta);
+    color: #fff5d8;
+    box-shadow: 6px 7px 0 0 var(--dv-ink);
+    transition: transform 60ms, box-shadow 60ms, filter 60ms;
+  }
+  .dv__duel-btn:not(.dv__duel-btn--tap):hover {
+    filter: brightness(1.05);
+    transform: translate(-1px, -1px);
+    box-shadow: 7px 8px 0 0 var(--dv-ink);
+  }
+  .dv__duel-btn:not(.dv__duel-btn--tap):active {
+    transform: translate(2px, 3px);
+    box-shadow: 3px 4px 0 0 var(--dv-ink);
+  }
+
+  /* TAP NOW button: hold-state (red, do not tap) vs armed-state (green, GO!) */
+  .dv__duel-btn--tap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 32px 48px;
+    border: 4px solid var(--dv-ink);
+    box-shadow: 8px 9px 0 0 var(--dv-ink);
+    transition: transform 60ms, box-shadow 60ms, filter 60ms, background 80ms;
+  }
+  .dv__duel-btn--hold {
+    background: linear-gradient(180deg, #d6346a 0%, #b02458 100%);
+    color: #fff5d8;
+    cursor: not-allowed;
+  }
+  .dv__duel-btn--armed {
+    background: linear-gradient(180deg, #5fdb6e 0%, #2f8c69 100%);
+    color: #fff5d8;
+    cursor: pointer;
+    animation: dv-duel-pulse 0.6s ease-in-out infinite alternate;
+  }
+  .dv__duel-btn--armed:hover { filter: brightness(1.1); }
+  .dv__duel-btn--armed:active {
+    transform: translate(3px, 4px);
+    box-shadow: 4px 5px 0 0 var(--dv-ink);
+  }
+  @keyframes dv-duel-pulse {
+    0%   { box-shadow: 8px 9px 0 0 var(--dv-ink), 0 0 0 0 rgba(95, 219, 110, 0.6); }
+    100% { box-shadow: 8px 9px 0 0 var(--dv-ink), 0 0 0 18px rgba(95, 219, 110, 0); }
+  }
+  .dv__duel-stage[data-state="arming"] {
+    /* When the round is armed, give the whole stage a subtle red tint
+       so visitors feel the tension. Then green when the bell rings. */
+    background: rgba(214, 52, 106, 0.06);
+    padding: 14px 12px;
+    border-radius: 6px;
+  }
+
+  @media (max-width: 480px) {
+    .dv__duel { padding: 24px 14px 28px; }
+    .dv__duel-btn--tap { padding: 24px 28px; }
+    .dv__duel-btn .dv__duel-glyph { font-size: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dv__duel-btn--armed { animation: none; }
   }
 
   /* ─── Lobby mode picker ──────────────────────────────── */
