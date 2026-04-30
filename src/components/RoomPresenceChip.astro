@@ -1,0 +1,190 @@
+---
+/**
+ * <RoomPresenceChip /> — small "ROOM · 3 HERE" presence pill.
+ *
+ * Per Mike 2026-04-29 sprint: "consider mobile friendly directions"
+ * after testing /drum-birthday with Morgan from mobile and not seeing
+ * her clicks. The /api/sounds bus has known KV-race limitations under
+ * concurrent writes — single events can be clobbered. But /api/visit
+ * is reliable for presence. This chip uses /api/visit to make the
+ * room *feel* alive: visitors see the count + mini Noun avatars of
+ * who else is here, even if the per-event flash sometimes misses.
+ *
+ * Drop into any drum-* page that wants to show co-presence:
+ *   <RoomPresenceChip surface="birthday" />
+ *
+ * Surface name is purely cosmetic (shows in the chip label). Polls
+ * /api/visit every 10s. Pure presentation — no state mutations.
+ */
+interface Props {
+  /** Cosmetic name shown in the chip — e.g. "birthday", "cake", "card", "pinata". */
+  surface: string;
+}
+const { surface } = Astro.props;
+---
+
+<aside class="rpc" aria-label={`Who's in the ${surface} room`}>
+  <span class="rpc__label mono">★ ROOM · {surface.toUpperCase()}</span>
+  <span class="rpc__sep" aria-hidden="true">·</span>
+  <span class="rpc__count mono"><strong id="rpc-count">—</strong> here</span>
+  <ul class="rpc__avatars" id="rpc-avatars" role="list" aria-live="polite" aria-atomic="false"></ul>
+  <span class="rpc__hint mono" id="rpc-hint">opening room…</span>
+</aside>
+
+<script is:inline>
+  (function () {
+    var countEl = document.getElementById('rpc-count');
+    var avatarsEl = document.getElementById('rpc-avatars');
+    var hintEl = document.getElementById('rpc-hint');
+    if (!countEl || !avatarsEl) return;
+
+    // Self-register so the visitor counts as present too. Otherwise
+    // the chip says "0 here" while the visitor is staring at their
+    // own page — the worst kind of empty room.
+    var sid = '';
+    try { sid = localStorage.getItem('pc:sid') || ''; } catch (e) {}
+    if (!sid) {
+      sid = (Math.random().toString(36).slice(2) + Date.now().toString(36));
+      try { localStorage.setItem('pc:sid', sid); } catch (e) {}
+    }
+
+    function selfRegister() {
+      try {
+        fetch('/api/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sid, room: 'drum' }),
+        }).catch(function () {});
+      } catch (e) {}
+    }
+    selfRegister();
+    // Re-register every 30s so we don't drop off the roster.
+    setInterval(selfRegister, 30_000);
+
+    function tick() {
+      fetch('/api/visit', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          var present = Array.isArray(data.present) ? data.present : [];
+          var humans = present.filter(function (p) { return p && p.pid; });
+          // Active count from various API shape variants
+          var n = data.activeCount || data.active || data.count || humans.length || 0;
+          countEl.textContent = String(n);
+          // Render up to 6 mini-noun avatars
+          var slice = humans.slice(0, 6);
+          var html = slice.map(function (p) {
+            var nounId = (p.nounId | 0) || 1;
+            var label = p.tag || ('noun ' + nounId);
+            return '<li class="rpc__av" title="' + label + '">' +
+                   '<img src="https://noun.pics/' + nounId + '.svg" alt="" width="22" height="22" loading="lazy" />' +
+                   '</li>';
+          }).join('');
+          if (humans.length > 6) {
+            html += '<li class="rpc__more mono">+' + (humans.length - 6) + '</li>';
+          }
+          avatarsEl.innerHTML = html;
+          if (hintEl) {
+            if (n <= 1) hintEl.textContent = 'just you so far · share the link →';
+            else if (n === 2) hintEl.textContent = 'you + 1 other · tap together';
+            else hintEl.textContent = n + ' in the room · live';
+          }
+        }).catch(function () {});
+    }
+    tick();
+    setInterval(tick, 10_000);
+  })();
+</script>
+
+<style>
+  .rpc {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(17, 16, 12, 0.04);
+    border: 1.5px solid rgba(17, 16, 12, 0.12);
+    border-radius: 999px;
+    font-family: 'Iowan Old Style', 'Palatino', 'Times New Roman', Times, serif;
+    color: #11100c;
+    font-size: 13px;
+    /* Sit comfortably in any page flow — caller sets margins */
+    width: max-content;
+    max-width: 100%;
+  }
+  .rpc .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.06em;
+  }
+  .rpc__label {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #c4351c;
+    font-weight: 700;
+  }
+  .rpc__sep { color: rgba(17, 16, 12, 0.3); }
+  .rpc__count {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5b5347;
+  }
+  .rpc__count strong {
+    color: #11100c;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .rpc__avatars {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .rpc__av {
+    list-style: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #fff;
+    border: 2px solid rgba(17, 16, 12, 0.18);
+    margin-left: -6px;
+    flex-shrink: 0;
+  }
+  .rpc__av:first-child { margin-left: 0; }
+  .rpc__av img {
+    width: 22px;
+    height: 22px;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .rpc__more {
+    list-style: none;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: #5b5347;
+    margin-left: 2px;
+    padding: 2px 4px;
+  }
+  .rpc__hint {
+    font-size: 10px;
+    color: #5b5347;
+    letter-spacing: 0.06em;
+    margin-left: auto;
+  }
+
+  @media (max-width: 480px) {
+    .rpc {
+      width: 100%;
+      justify-content: flex-start;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 12px;
+    }
+    .rpc__hint { width: 100%; margin-left: 0; }
+  }
+</style>
