@@ -7,7 +7,7 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation',
-  status: 'standalone PointCast area with federation strategy v0, Battle Desk V3, Production Desk, and Claim Board',
+  status: 'standalone PointCast area with watch-now links, federation strategy v0, Battle Desk V3, Production Desk, and Claim Board',
   human: 'https://pointcast.xyz/nouns-nation/',
   summary:
     'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, Battle Desk V2, TV cast, Desk Wall, Agent Bench, Production Desk, public Claim Board, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
@@ -43,6 +43,28 @@ const payload = {
     battlerManifest: 'https://pointcast.xyz/nouns-nation-battler.json',
     agentBenchJson: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
     battleChannel: 'https://pointcast.xyz/c/battler/',
+  },
+  watchNow: {
+    liveDesk: {
+      label: 'Watch live match desk',
+      url: 'https://pointcast.xyz/nouns-nation-battler/',
+      useFor: 'Scorebug, live calls, standings, top Nouns, controls, and embedded 30 vs 30 field feed.',
+    },
+    tvCast: {
+      label: 'Cast to TV',
+      url: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+      useFor: 'Fullscreen broadcast mode for big screens, parties, second screens, and hands-off watching.',
+    },
+    rawGameFeed: {
+      label: 'Raw battler feed',
+      url: 'https://pointcast.xyz/games/nouns-nation-battler/',
+      useFor: 'The automated match engine with no desk wrapper.',
+    },
+    deskWall: {
+      label: 'Desk Wall recaps',
+      url: 'https://pointcast.xyz/nouns-nation-battler-desk/',
+      useFor: 'Snapshot-backed scoreboards, report cards, story desk, and shareable watch frames.',
+    },
   },
   federation: {
     posture: 'Federate results and event grammar while letting nations keep local identity, lore, rules, and home desks.',
