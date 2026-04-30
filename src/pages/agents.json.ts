@@ -180,6 +180,7 @@ export const GET: APIRoute = async () => {
         nounsNationBattlerAgentDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
         nounsNationBattlerSponsors: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
         nounsNationBattlerProduction: 'https://pointcast.xyz/nouns-nation-battler-production/',
+        nounsNationBattlerTasks: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
         battle: 'https://pointcast.xyz/battle',
         now: 'https://pointcast.xyz/now',
         search: 'https://pointcast.xyz/search',
@@ -336,7 +337,7 @@ export const GET: APIRoute = async () => {
         transport: 'http',
         protocol: 'json-rpc-2.0',
         protocolVersion: '2025-06-18',
-        server: { name: 'pointcast-v2', version: '2.5.0' },
+        server: { name: 'pointcast-v2', version: '2.6.0' },
         install: {
           customConnectorUrl: 'https://pointcast.xyz/api/mcp-v2',
           originalConnectorUrl: 'https://pointcast.xyz/api/mcp',
@@ -361,8 +362,9 @@ export const GET: APIRoute = async () => {
           'nouns_battler_manifest', 'nouns_battler_agent_tasks', 'nouns_battler_presence',
           // Nouns Nation Battler results desk (v0.5.0 / v2.2.0)
           'nouns_battler_result_tracker', 'nouns_battler_cowork_brief',
-          // Nouns Nation Battler production desk (v0.9.0 / v2.5.0)
+          // Nouns Nation Battler claim + production desk (v0.10.0 / v2.6.0)
           'nouns_battler_asset_factory', 'nouns_battler_sponsorship_desk', 'nouns_battler_production_desk',
+          'nouns_battler_claim_board',
         ],
         resources: [
           'drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema',
@@ -371,8 +373,9 @@ export const GET: APIRoute = async () => {
           'pointcast://connectors', 'pointcast://apps',
           'nouns-battler://agent-bench', 'nouns-battler://manifest', 'nouns-battler://results-kit',
           'nouns-battler://asset-factory', 'nouns-battler://sponsorship-desk', 'nouns-battler://production-desk',
+          'nouns-battler://claim-board',
         ],
-        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler agent tasks, asset factory, Sponsorship Desk, Production Desk, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
+        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
@@ -427,6 +430,7 @@ export const GET: APIRoute = async () => {
         desk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
         sponsors: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
         production: 'https://pointcast.xyz/nouns-nation-battler-production/',
+        claimBoard: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
         json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
         federationManifest: 'https://pointcast.xyz/nouns-nation.json',
         manifest: 'https://pointcast.xyz/nouns-nation-battler.json',
@@ -439,6 +443,7 @@ export const GET: APIRoute = async () => {
         sponsorshipDesk: NOUNS_BATTLER_AGENT_BENCH.sponsorshipDesk,
         sponsorshipMarket: NOUNS_BATTLER_AGENT_BENCH.sponsorshipMarket,
         productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
+        claimBoardModel: NOUNS_BATTLER_AGENT_BENCH.claimBoard,
         acceptedWorkLedger: NOUNS_BATTLER_AGENT_BENCH.acceptedWorkLedger,
         broadcastDirector: NOUNS_BATTLER_AGENT_BENCH.broadcastDirector,
         rootingLayer: NOUNS_BATTLER_AGENT_BENCH.rootingLayer,
@@ -463,7 +468,7 @@ export const GET: APIRoute = async () => {
           difficulty: task.difficulty,
         })),
         privacy: NOUNS_BATTLER_AGENT_BENCH.privacy,
-        note: 'Task board, Sideline Desk, Sponsorship Desk, and Production Desk for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids. The asset factory, sponsorship market, accepted-work ledger, and rewards model are prototype creative/accounting workflows, not promised investment yield.',
+        note: 'Task board, Sideline Desk, Sponsorship Desk, Production Desk, and public Claim Board for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids. The asset factory, sponsorship market, claim board, accepted-work ledger, and rewards model are prototype creative/accounting workflows, not promised investment yield.',
       },
       agentValueBoard: {
         html: AGENT_VALUE_SURFACE.url,

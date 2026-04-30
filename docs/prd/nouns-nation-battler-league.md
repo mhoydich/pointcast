@@ -320,6 +320,16 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Extend Agent Bench to v1.6.0 with production task packs: accepted-work ledger, broadcast director queue, rooting card maker, and Nouns Bowl hype producer.
 - Add MCP tool `nouns_battler_production_desk` and resource `nouns-battler://production-desk`.
 
+## V39 Claim Board Additions
+
+- Add `/nouns-nation-battler-tasks/` as the public Claim Board for sponsor reservations, agent bounties, poster/product drops, QA audits, watch-party proof, production run sheets, and Nouns Bowl hype cards.
+- Keep the board local-first and no-money-yet: public display names only, no private identity capture, no payment rails, no automatic payout, and human approval before sponsor use or participant-credit reconciliation.
+- Add seven claimable cards with Noun sprites, task asks, proof requirements, acceptance notes, target surfaces, and reward signals.
+- Generate copyable claim cards, proof checklists, Production Desk handoffs, and participant-credit previews.
+- Store recent claims locally under `pc:nouns-battler-claim-board-v1`.
+- Extend Agent Bench to v1.7.0 with Claim Board data and a claim-board operator task pack.
+- Add MCP tool `nouns_battler_claim_board` and resource `nouns-battler://claim-board`.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -339,6 +349,7 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Store Production Desk ledger cards in browser localStorage only under `pc:nouns-battler-work-ledger-v1`.
 - Store Production Desk broadcast queue items in browser localStorage only under `pc:nouns-battler-broadcast-queue-v1`.
 - Store Production Desk rooting cards in browser localStorage only under `pc:nouns-battler-rooting-v1`.
+- Store Claim Board cards in browser localStorage only under `pc:nouns-battler-claim-board-v1`.
 - Watch frame links remain URL-hash snapshots and do not mutate the local Desk Wall unless the viewer explicitly chooses local state.
 
 ## Acceptance Criteria
@@ -375,7 +386,10 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - `/nouns-nation-battler-production/` renders a Production Desk with accepted-work ledger builder, broadcast director queue, rooting layer, first-four-season archive, and Nouns Bowl hype week.
 - `/nouns-nation-battler-production/` stores recent ledger cards and broadcast queue items locally without transmitting private identity data.
 - `/api/mcp-v2` exposes `nouns_battler_production_desk` and `nouns-battler://production-desk`.
-- `/nouns-nation-battler-agents.json` exposes Agent Bench version `1.6.0` with production desk data and production task packs.
+- `/nouns-nation-battler-tasks/` renders a public Claim Board with claim cards, proof checklists, production handoffs, and participant-credit previews.
+- `/nouns-nation-battler-tasks/` stores recent claims locally without transmitting private identity data.
+- `/api/mcp-v2` exposes `nouns_battler_claim_board` and `nouns-battler://claim-board`.
+- `/nouns-nation-battler-agents.json` exposes Agent Bench version `1.7.0` with production desk data, Claim Board data, production task packs, and claim-board task packs.
 - Agent presence remains opt-in and anonymous; no raw session ids or personal identifiers are broadcast.
 - `/api/mcp-v2` can turn a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text into standings, latest recaps, parsed final score, and Cowork cards.
 - The Season Desk Wall can open snapshot-backed card, scoreboard, story, and agent scorebook frames with dedicated `view=` modes.

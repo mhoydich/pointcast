@@ -184,6 +184,7 @@ Explore a mid-season knockout bracket:
 - Add Agent Sideline Desk, asset factory, sponsor/product packaging, and participant rewards draft. Shipped in V35.
 - Add Sponsorship Desk for reservation-only sponsor cards, TV tickers, agent briefs, proof requirements, creative inventory, and participant-credit routing. Shipped in V36.
 - Add Production Desk for accepted-work ledgers, broadcast queue briefs, rooting cards, season archive cards, and Nouns Bowl hype week. Shipped in V38.
+- Add Claim Board for public sponsor, bounty, poster/product, QA, watch-party, production, and Nouns Bowl work cards. Shipped in V39.
 
 ## Acceptance Criteria
 
@@ -216,8 +217,12 @@ Explore a mid-season knockout bracket:
 - Agent manifests expose sponsorship desk data, sponsorship market data, and the sponsor reservation task pack.
 - Production Desk lets humans and agents log accepted-work cards, copy broadcast director briefs, make rooting cards, and save local queue items without server-side identity capture.
 - Agent manifests expose production desk data, accepted-work contribution types, broadcast director data, rooting layer data, season archive, Nouns Bowl hype week, and production task packs.
+- Claim Board lets humans and agents claim sponsor reservations, bounties, poster/product drops, QA audits, watch-party proof, production run sheets, and Nouns Bowl hype cards without server-side identity capture.
+- Claim Board stores recent local claim cards under `pc:nouns-battler-claim-board-v1`.
+- Agent manifests expose Claim Board data, claimable cards, and the claim-board operator task pack.
 - MCP clients can call `nouns_battler_agent_tasks`, `nouns_battler_asset_factory`, `nouns_battler_sponsorship_desk`, `nouns_battler_manifest`, and `nouns_battler_presence`.
 - MCP clients can call `nouns_battler_production_desk` and read `nouns-battler://production-desk`.
+- MCP clients can call `nouns_battler_claim_board` and read `nouns-battler://claim-board`.
 - MCP clients can call `nouns_battler_result_tracker` with a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text and receive a scorebook brief.
 - Desk Wall watch frames can be copied as snapshot-backed links for report-card, scoreboard, story-desk, or agent-scorebook viewing.
 - The Agent Scorebook frame gives Claude/Cowork a ready prompt for `nouns_battler_result_tracker`.
