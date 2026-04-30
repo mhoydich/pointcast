@@ -85,6 +85,14 @@ const jsonLd = {
         <p class="dv__bar-score mono"><span id="dv-score-p1">0</span> · <span id="dv-score-p2">0</span></p>
       </div>
 
+      {/* Lane indicator — KV slow lane vs P2P fast lane */}
+      <div class="dv__lane" id="dv-lane" aria-live="polite" data-mode="kv">
+        <span class="dv__lane-dot" id="dv-lane-dot" aria-hidden="true"></span>
+        <span class="dv__lane-label mono" id="dv-lane-label">KV · ~400ms</span>
+        <span class="dv__lane-rtt mono" id="dv-lane-rtt"></span>
+        <span class="dv__lane-hint mono" id="dv-lane-hint">connecting…</span>
+      </div>
+
       {/* The rope */}
       <div class="dv__rope" aria-label="Tug-of-war rope">
         <div class="dv__rope-track">
@@ -406,8 +414,9 @@ const jsonLd = {
           if (mySide === 1 && data.state) _myPid = data.state.p1Pid;
           if (mySide === 2 && data.state) _myPid = data.state.p2Pid;
           applyServerState(data.state);
-          // Once seated, kick polling
+          // Once seated, kick polling + try the WebRTC upgrade
           schedulePoll();
+          try { rtc.maybeStart(); } catch (e) {}
         })
         .catch(function () {
           if (strap) strap.textContent = 'room ' + room + ' · network slow — retrying…';
@@ -415,6 +424,249 @@ const jsonLd = {
         });
     }
     joinRoom();
+
+    // ─── WebRTC peer-to-peer upgrade ────────────────────────────────────
+    // Once both seats are filled, set up an RTCPeerConnection between
+    // the two players. Tap events go over the data channel for sub-50ms
+    // latency once connected. KV remains canonical truth — every tap
+    // STILL POSTs to /api/duel for authoritative scoring + winner state.
+    // P1 = offerer (creates data channel + offer). P2 = answerer.
+    // Signaling rides on /api/duel kind=signal. STUN-only, no TURN.
+    var rtc = (function () {
+      var pc = null;
+      var dc = null;
+      var connected = false;
+      var pendingIce = [];
+      var sigSeen = {};
+      var lastSigTs = 0;
+      var sigTimer = null;
+      var rttMs = 0;
+      var statusEl = document.getElementById('dv-lane-label');
+      var rttEl = document.getElementById('dv-lane-rtt');
+      var hintEl = document.getElementById('dv-lane-hint');
+      var laneEl = document.getElementById('dv-lane');
+
+      function setStatus(label, hint, mode) {
+        if (statusEl) statusEl.textContent = label;
+        if (hintEl) hintEl.textContent = hint || '';
+        if (laneEl) laneEl.dataset.mode = mode || 'kv';
+      }
+      function setRTT(ms) {
+        rttMs = ms;
+        if (rttEl) rttEl.textContent = '· ' + Math.round(ms) + 'ms';
+      }
+
+      function otherPid() {
+        if (mySide === 1) return p2Pid;
+        if (mySide === 2) return p1Pid;
+        return null;
+      }
+
+      function postSignal(kind, payload) {
+        var to = otherPid();
+        if (!to) return Promise.resolve();
+        return fetch('/api/duel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room: room, sessionId: sid, kind: 'signal', to: to,
+            signal: { kind: kind, payload: payload },
+          }),
+        }).catch(function () {});
+      }
+
+      function ensurePc() {
+        if (pc) return pc;
+        if (typeof RTCPeerConnection === 'undefined') {
+          setStatus('KV · ~400ms', 'no WebRTC in this browser', 'kv');
+          return null;
+        }
+        try {
+          pc = new RTCPeerConnection({
+            iceServers: [
+              { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+            ],
+          });
+        } catch (e) {
+          setStatus('KV · ~400ms', 'WebRTC init failed', 'kv');
+          return null;
+        }
+        pc.onicecandidate = function (ev) {
+          if (ev.candidate) {
+            postSignal('ice', JSON.stringify(ev.candidate.toJSON ? ev.candidate.toJSON() : ev.candidate));
+          }
+        };
+        pc.oniceconnectionstatechange = function () {
+          if (!pc) return;
+          var s = pc.iceConnectionState;
+          if (s === 'failed' || s === 'disconnected' || s === 'closed') {
+            connected = false;
+            setStatus('KV · ~400ms', 'P2P dropped — KV fallback', 'kv');
+          }
+        };
+        pc.ondatachannel = function (ev) {
+          dc = ev.channel;
+          wireDataChannel();
+        };
+        return pc;
+      }
+
+      function wireDataChannel() {
+        if (!dc) return;
+        dc.onopen = function () {
+          connected = true;
+          setStatus('P2P · live', 'measuring rtt…', 'p2p');
+          send({ kind: 'hello', pid: pidOfMe() });
+          send({ kind: 'ping', t0: performance.now() });
+        };
+        dc.onclose = function () {
+          connected = false;
+          setStatus('KV · ~400ms', 'P2P closed', 'kv');
+        };
+        dc.onerror = function () {
+          connected = false;
+          setStatus('KV · ~400ms', 'P2P error — KV fallback', 'kv');
+        };
+        dc.onmessage = function (ev) {
+          var msg = null;
+          try { msg = JSON.parse(ev.data); } catch (e) { return; }
+          if (!msg || !msg.kind) return;
+          if (msg.kind === 'tap') {
+            var oppSide = msg.side;
+            if (oppSide === 1) optimisticP1 += 1;
+            else if (oppSide === 2) optimisticP2 += 1;
+            updateUI();
+          } else if (msg.kind === 'ping') {
+            send({ kind: 'pong', t0: msg.t0 });
+          } else if (msg.kind === 'pong') {
+            var delta = performance.now() - msg.t0;
+            setRTT(delta);
+            if (hintEl) hintEl.textContent = 'data channel · ~' + Math.round(delta) + 'ms peer-to-peer';
+          }
+        };
+      }
+
+      function send(obj) {
+        if (!dc || dc.readyState !== 'open') return false;
+        try { dc.send(JSON.stringify(obj)); return true; } catch (e) { return false; }
+      }
+
+      function isSeated() {
+        return mySide === 1 || mySide === 2;
+      }
+      function bothSeated() {
+        return !!p1Pid && !!p2Pid;
+      }
+
+      function pollSignals() {
+        if (!isSeated() || connected) {
+          if (sigTimer) clearTimeout(sigTimer);
+          sigTimer = null;
+          return;
+        }
+        var me = pidOfMe();
+        if (!me) {
+          sigTimer = setTimeout(pollSignals, 500);
+          return;
+        }
+        fetch('/api/duel?room=' + encodeURIComponent(room) +
+              '&sigSince=' + lastSigTs +
+              '&for=' + encodeURIComponent(me), { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !Array.isArray(data.signals)) return;
+            data.signals.forEach(handleSignal);
+            if (data.signals.length) {
+              lastSigTs = data.signals[data.signals.length - 1].t || lastSigTs;
+            }
+          })
+          .catch(function () {})
+          .finally(function () {
+            if (!connected) sigTimer = setTimeout(pollSignals, 600);
+          });
+      }
+
+      function handleSignal(s) {
+        if (!s || !s.id || sigSeen[s.id]) return;
+        sigSeen[s.id] = 1;
+        var p = ensurePc();
+        if (!p) return;
+        if (s.kind === 'offer') {
+          if (mySide !== 2) return;
+          var sdp = JSON.parse(s.payload);
+          p.setRemoteDescription(sdp).then(function () {
+            return p.createAnswer();
+          }).then(function (ans) {
+            return p.setLocalDescription(ans);
+          }).then(function () {
+            postSignal('answer', JSON.stringify(p.localDescription));
+            pendingIce.forEach(function (c) { try { p.addIceCandidate(c); } catch (e) {} });
+            pendingIce = [];
+          }).catch(function () {
+            setStatus('KV · ~400ms', 'P2P offer-handle failed', 'kv');
+          });
+        } else if (s.kind === 'answer') {
+          if (mySide !== 1) return;
+          var sdp2 = JSON.parse(s.payload);
+          p.setRemoteDescription(sdp2).then(function () {
+            pendingIce.forEach(function (c) { try { p.addIceCandidate(c); } catch (e) {} });
+            pendingIce = [];
+          }).catch(function () {});
+        } else if (s.kind === 'ice') {
+          var c;
+          try { c = JSON.parse(s.payload); } catch (e) { return; }
+          if (!p.remoteDescription) {
+            pendingIce.push(c);
+          } else {
+            try { p.addIceCandidate(c); } catch (e) {}
+          }
+        }
+      }
+
+      function startAsP1() {
+        var p = ensurePc();
+        if (!p) return;
+        dc = p.createDataChannel('drum-vs', { ordered: true, maxRetransmits: 0 });
+        wireDataChannel();
+        p.createOffer().then(function (offer) {
+          return p.setLocalDescription(offer);
+        }).then(function () {
+          postSignal('offer', JSON.stringify(p.localDescription));
+        }).catch(function () {
+          setStatus('KV · ~400ms', 'P2P offer failed', 'kv');
+        });
+      }
+
+      function startAsP2() {
+        ensurePc();
+        if (!sigTimer) pollSignals();
+      }
+
+      function maybeStart() {
+        if (!isSeated()) return;
+        if (!bothSeated()) {
+          if (!sigTimer) pollSignals();
+          return;
+        }
+        if (connected) return;
+        if (mySide === 1 && !pc) startAsP1();
+        else if (mySide === 2 && !pc) startAsP2();
+        if (!sigTimer) pollSignals();
+      }
+
+      setInterval(function () {
+        if (connected && dc && dc.readyState === 'open') {
+          send({ kind: 'ping', t0: performance.now() });
+        }
+      }, 5000);
+
+      return {
+        maybeStart: maybeStart,
+        sendTap: function (side) { return send({ kind: 'tap', side: side, t: Date.now() }); },
+        isConnected: function () { return connected; },
+        rttMs: function () { return rttMs; },
+      };
+    })();
 
     // ─── Tap broadcast ─────────────────────────────────────────────────
     function fireTap(side) {
@@ -429,6 +681,10 @@ const jsonLd = {
       void btn.offsetWidth;
       btn.classList.add('dv__tap--hit');
 
+      // Fast lane: peer data channel (if connected)
+      try { rtc.sendTap(side); } catch (e) {}
+
+      // Slow lane: KV canonical
       fetch('/api/duel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -475,9 +731,15 @@ const jsonLd = {
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (!data || !data.ok) return;
+          var hadBoth = !!p1Pid && !!p2Pid;
           if (data.state) applyServerState(data.state);
           if (Array.isArray(data.events) && data.events.length) {
             lastTs = data.events[data.events.length - 1].t || lastTs;
+          }
+          // 2nd player just joined → kick the WebRTC dance
+          var hasBothNow = !!p1Pid && !!p2Pid;
+          if (!hadBoth && hasBothNow) {
+            try { rtc.maybeStart(); } catch (e) {}
           }
         })
         .catch(function () {})
@@ -683,6 +945,63 @@ const jsonLd = {
   .dv__bar-room { font-size: 10px; letter-spacing: 0.26em; color: var(--dv-mute); }
   .dv__bar-room strong { color: var(--dv-ink); font-size: 14px; letter-spacing: 0.18em; }
   .dv__bar-score { font-size: 14px; color: var(--dv-ink); font-weight: 700; }
+
+  /* ─── Lane indicator (KV slow vs P2P fast) ─────────────── */
+  .dv__lane {
+    max-width: 980px;
+    margin: 8px auto 0;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: var(--dv-deep);
+    border: 1.5px solid var(--dv-ink);
+    border-bottom: 0;
+    font-size: 11px;
+  }
+  .dv__lane-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dv-mute);
+    flex-shrink: 0;
+  }
+  .dv__lane[data-mode="p2p"] .dv__lane-dot {
+    background: #2f8c69;
+    box-shadow: 0 0 0 0 rgba(47, 140, 105, 0.5);
+    animation: dv-lane-pulse 1.6s ease-out infinite;
+  }
+  .dv__lane[data-mode="kv"] .dv__lane-dot { background: var(--dv-mute); }
+  @keyframes dv-lane-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(47, 140, 105, 0.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(47, 140, 105, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 140, 105, 0); }
+  }
+  .dv__lane-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--dv-ink);
+  }
+  .dv__lane[data-mode="p2p"] .dv__lane-label { color: #2f8c69; }
+  .dv__lane-rtt {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--dv-mute);
+  }
+  .dv__lane-hint {
+    font-size: 10px;
+    color: var(--dv-mute);
+    letter-spacing: 0.1em;
+    margin-left: auto;
+    text-transform: lowercase;
+  }
+  @media (max-width: 480px) {
+    .dv__lane { font-size: 10px; padding: 6px 10px; }
+    .dv__lane-hint { width: 100%; margin-left: 0; }
+  }
 
   /* ─── Rope ──────────────────────────────────────────────────── */
   .dv__rope {

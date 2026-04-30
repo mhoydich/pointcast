@@ -50,6 +50,9 @@ const JSON_HEADERS = {
 const STATE_TTL = 3600;       // 1 hour — long enough for a chat session
 const EVENTS_TTL = 60;        // 60s — events are ephemeral signal
 const EVENTS_CAP = 30;        // last 30 events per room
+const SIGNALS_TTL = 90;
+const SIGNALS_CAP = 40;
+const SIGNAL_PAYLOAD_CAP = 4096;
 const ROOM_RE = /^[A-HJ-NP-Za-hj-np-z2-9]{4,8}$/; // 4-8 chars, no I/O/0/1
 const WIN_TAPS = 50;
 
@@ -68,6 +71,15 @@ interface DuelEvent {
   t: number;
   pid: string;
   n: number;             // server-side score for this side AFTER this event
+}
+
+interface DuelSignal {
+  from: string;
+  to: string;
+  payload: string;
+  kind: 'offer' | 'answer' | 'ice' | 'bye';
+  t: number;
+  id: string;
 }
 
 function freshState(): DuelState {
@@ -127,6 +139,25 @@ async function saveEvents(env: Env, room: string, events: DuelEvent[]): Promise<
   });
 }
 
+async function loadSignals(env: Env, room: string): Promise<DuelSignal[]> {
+  if (!env.VISITS) return [];
+  const raw = await env.VISITS.get(`duel:${room}:signals`);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveSignals(env: Env, room: string, signals: DuelSignal[]): Promise<void> {
+  if (!env.VISITS) return;
+  await env.VISITS.put(`duel:${room}:signals`, JSON.stringify(signals), {
+    expirationTtl: SIGNALS_TTL,
+  });
+}
+
 export const onRequestOptions: PagesFunction<Env> = () =>
   new Response(null, {
     status: 204,
@@ -145,11 +176,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     return json({ ok: false, reason: 'bad-room' }, { status: 400 });
   }
   const since = Number(url.searchParams.get('since')) || 0;
+  const forPid = url.searchParams.get('for') || '';
+  const sigSince = Number(url.searchParams.get('sigSince')) || 0;
   const state = await loadState(env, room);
   const events = await loadEvents(env, room);
   const filtered = events.filter((e) => (e.t || 0) > since);
+  let signals: DuelSignal[] = [];
+  if (forPid) {
+    const all = await loadSignals(env, room);
+    signals = all.filter((s) => s.to === forPid && (s.t || 0) > sigSince);
+  }
   return json(
-    { ok: true, state, events: filtered, now: Date.now() },
+    { ok: true, state, events: filtered, signals, now: Date.now() },
     { headers: { 'Cache-Control': 'private, max-age=0, must-revalidate' } },
   );
 };
@@ -162,6 +200,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     sessionId?: unknown;
     kind?: unknown;
     side?: unknown;
+    to?: unknown;
+    signal?: unknown;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -201,6 +241,53 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
     // Room is full and pid isn't a seated player → spectator
     return json({ ok: true, side: 0, state, role: 'spectator' });
+  }
+
+  if (kind === 'signal') {
+    if (state.p1Pid !== pid && state.p2Pid !== pid) {
+      return json({ ok: false, reason: 'not-a-player' }, { status: 403 });
+    }
+    const to = typeof body.to === 'string' ? body.to.slice(0, 12) : '';
+    if (!to || (to !== state.p1Pid && to !== state.p2Pid)) {
+      return json({ ok: false, reason: 'bad-recipient' }, { status: 400 });
+    }
+    const sig = body.signal;
+    if (
+      !sig ||
+      typeof sig !== 'object' ||
+      typeof (sig as Record<string, unknown>).payload !== 'string' ||
+      typeof (sig as Record<string, unknown>).kind !== 'string'
+    ) {
+      return json({ ok: false, reason: 'bad-signal' }, { status: 400 });
+    }
+    const sigKind = (sig as { kind: string }).kind;
+    if (sigKind !== 'offer' && sigKind !== 'answer' && sigKind !== 'ice' && sigKind !== 'bye') {
+      return json({ ok: false, reason: 'bad-signal-kind' }, { status: 400 });
+    }
+    const payload = (sig as { payload: string }).payload;
+    if (payload.length > SIGNAL_PAYLOAD_CAP) {
+      return json({ ok: false, reason: 'signal-too-large' }, { status: 413 });
+    }
+    const t = Date.now();
+    const id = (
+      Math.random().toString(36).slice(2, 6) +
+      Math.random().toString(36).slice(2, 6)
+    );
+    const newSignal: DuelSignal = {
+      from: pid,
+      to,
+      payload,
+      kind: sigKind as 'offer' | 'answer' | 'ice' | 'bye',
+      t,
+      id,
+    };
+    const all = await loadSignals(env, room);
+    all.push(newSignal);
+    const trimmed = all
+      .filter((s) => t - (s.t || 0) < SIGNALS_TTL * 1000)
+      .slice(-SIGNALS_CAP);
+    await saveSignals(env, room, trimmed);
+    return json({ ok: true, t, id });
   }
 
   // ── kind=reset: zero the score, keep the seats ──
