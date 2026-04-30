@@ -54,7 +54,7 @@ const jsonLd = {
     <DrumNav current="vs" />
 
     <header class="dv__head">
-      <p class="dv__kicker mono">★ DRUM HUB · BIRTHDAY IMPRINT · 1v1 TUG-OF-WAR ★</p>
+      <p class="dv__kicker mono">★ DRUM HUB · 1v1 GAMES FOR FRIENDS ★</p>
       <h1 class="dv__title">drum <em>vs</em></h1>
       <p class="dv__strap mono" id="dv-strap">— preparing the rope —</p>
     </header>
@@ -66,8 +66,21 @@ const jsonLd = {
         <h2 class="dv__lobby-title">tap, send, race</h2>
         <p class="dv__lobby-body">
           Generate a room, send the link to a friend. First side to <strong>50 taps</strong> wins.
-          Both your Nouns at the rope. Your taps land instantly; their taps arrive ~400ms later.
+          Pick a mode below. Once both Nouns are in, the page upgrades to peer-to-peer for sub-50ms latency.
         </p>
+        <fieldset class="dv__mode-picker">
+          <legend class="dv__mode-legend mono">★ pick a mode</legend>
+          <label class="dv__mode-opt">
+            <input type="radio" name="dv-mode" value="tug" checked />
+            <span class="dv__mode-name">tug-of-war</span>
+            <span class="dv__mode-sub mono">rope marker · slow squeeze</span>
+          </label>
+          <label class="dv__mode-opt">
+            <input type="radio" name="dv-mode" value="race" />
+            <span class="dv__mode-name">race</span>
+            <span class="dv__mode-sub mono">side-by-side bars · sprint</span>
+          </label>
+        </fieldset>
         <button type="button" class="dv__btn dv__btn--magenta dv__btn--big" id="dv-new-room">
           ▸ open a new duel
         </button>
@@ -93,8 +106,8 @@ const jsonLd = {
         <span class="dv__lane-hint mono" id="dv-lane-hint">connecting…</span>
       </div>
 
-      {/* The rope */}
-      <div class="dv__rope" aria-label="Tug-of-war rope">
+      {/* The rope (mode=tug — default). Hidden when mode=race. */}
+      <div class="dv__rope" id="dv-rope" aria-label="Tug-of-war rope">
         <div class="dv__rope-track">
           <span class="dv__rope-mark dv__rope-mark--left" aria-hidden="true">P1</span>
           <span class="dv__rope-line" aria-hidden="true"></span>
@@ -109,6 +122,29 @@ const jsonLd = {
           <span class="dv__rope-meter-mid"></span>
           <span class="dv__rope-meter-tick"></span>
           <span class="dv__rope-meter-tick"></span>
+        </div>
+      </div>
+
+      {/* Race lanes (mode=race). Hidden when mode=tug. Two parallel
+          progress bars — first to fill wins. Same scoring as tug
+          (first to 50 taps), different visual: a sprint instead of
+          a tug. */}
+      <div class="dv__race" id="dv-race" aria-label="Side-by-side race" hidden>
+        <div class="dv__race-row dv__race-row--p1">
+          <span class="dv__race-tag mono" aria-hidden="true">P1</span>
+          <div class="dv__race-track">
+            <div class="dv__race-fill dv__race-fill--p1" id="dv-race-fill-1"></div>
+            <span class="dv__race-runner" id="dv-race-runner-1" aria-hidden="true"></span>
+          </div>
+          <span class="dv__race-pct mono" id="dv-race-pct-1">0%</span>
+        </div>
+        <div class="dv__race-row dv__race-row--p2">
+          <span class="dv__race-tag mono" aria-hidden="true">P2</span>
+          <div class="dv__race-track">
+            <div class="dv__race-fill dv__race-fill--p2" id="dv-race-fill-2"></div>
+            <span class="dv__race-runner" id="dv-race-runner-2" aria-hidden="true"></span>
+          </div>
+          <span class="dv__race-pct mono" id="dv-race-pct-2">0%</span>
         </div>
       </div>
 
@@ -230,6 +266,10 @@ const jsonLd = {
 
     var qs = new URLSearchParams(window.location.search);
     var room = (qs.get('room') || '').toUpperCase();
+    var mode = (qs.get('mode') || 'tug').toLowerCase();
+    if (mode !== 'race' && mode !== 'tug') mode = 'tug';
+    var dvMain = document.getElementById('dv-main');
+    if (dvMain) dvMain.dataset.mode = mode;
     var lobby = document.getElementById('dv-lobby');
     var game = document.getElementById('dv-game');
     var strap = document.getElementById('dv-strap');
@@ -242,7 +282,11 @@ const jsonLd = {
       if (newRoomBtn) {
         newRoomBtn.addEventListener('click', function () {
           var rid = newRoomId();
-          window.location.href = '/drum-vs?room=' + rid;
+          var modeRadio = document.querySelector('input[name="dv-mode"]:checked');
+          var mode = modeRadio ? modeRadio.value : 'tug';
+          var url = '/drum-vs?room=' + rid;
+          if (mode && mode !== 'tug') url += '&mode=' + mode;
+          window.location.href = url;
         });
       }
       return;
@@ -251,7 +295,22 @@ const jsonLd = {
     // ─── Game (with ?room=) ────────────────────────────────────────────
     if (game) game.hidden = false;
     document.getElementById('dv-room').textContent = room;
-    if (strap) strap.textContent = 'room ' + room + ' · waiting for both Nouns…';
+    var ropeWrap = document.getElementById('dv-rope');
+    var raceWrap = document.getElementById('dv-race');
+    if (mode === 'race') {
+      if (ropeWrap) ropeWrap.hidden = true;
+      if (raceWrap) raceWrap.hidden = false;
+    } else {
+      if (ropeWrap) ropeWrap.hidden = false;
+      if (raceWrap) raceWrap.hidden = true;
+    }
+    var barMode = document.querySelector('.dv__bar-mode');
+    if (barMode) {
+      barMode.textContent = mode === 'race'
+        ? '▌ RACE · FIRST TO 50'
+        : '▌ TUG-OF-WAR · FIRST TO 50';
+    }
+    if (strap) strap.textContent = 'room ' + room + ' · ' + (mode === 'race' ? 'race' : 'tug') + ' · waiting for both Nouns…';
 
     var sid = getSid();
     var myNoun = getNounId(sid);
@@ -300,6 +359,12 @@ const jsonLd = {
       ropeFlagNoun.style.backgroundImage = 'url(https://noun.pics/' + id + '.svg)';
     }
 
+    var raceFill1 = document.getElementById('dv-race-fill-1');
+    var raceFill2 = document.getElementById('dv-race-fill-2');
+    var racePct1 = document.getElementById('dv-race-pct-1');
+    var racePct2 = document.getElementById('dv-race-pct-2');
+    var raceRunner1 = document.getElementById('dv-race-runner-1');
+    var raceRunner2 = document.getElementById('dv-race-runner-2');
     function updateUI() {
       var p1 = Math.max(p1Score, optimisticP1);
       var p2 = Math.max(p2Score, optimisticP2);
@@ -307,12 +372,21 @@ const jsonLd = {
       headScore2.textContent = String(p2);
       scoreEl1.textContent = String(p1);
       scoreEl2.textContent = String(p2);
-      // Rope position: -1 (full P1) ... +1 (full P2)
-      var net = p2 - p1; // positive = rope pulled right (P2 winning)
-      var bound = 50; // win threshold
+      var bound = 50; // win threshold (shared by tug + race)
+      // Rope position (mode=tug): -1 (full P1) ... +1 (full P2)
+      var net = p2 - p1;
       var ratio = Math.max(-1, Math.min(1, net / bound));
-      var pct = 50 + ratio * 50; // percentage from left edge
+      var pct = 50 + ratio * 50;
       if (ropeFlag) ropeFlag.style.left = pct + '%';
+      // Race bars (mode=race): each side fills toward 100% independently
+      var p1pct = Math.min(100, (p1 / bound) * 100);
+      var p2pct = Math.min(100, (p2 / bound) * 100);
+      if (raceFill1) raceFill1.style.width = p1pct + '%';
+      if (raceFill2) raceFill2.style.width = p2pct + '%';
+      if (racePct1) racePct1.textContent = Math.round(p1pct) + '%';
+      if (racePct2) racePct2.textContent = Math.round(p2pct) + '%';
+      if (raceRunner1) raceRunner1.style.left = p1pct + '%';
+      if (raceRunner2) raceRunner2.style.left = p2pct + '%';
       // Whoever is currently winning sees their noun on the marker
       var leadId = (p1 > p2) ? (p1Pid ? getNounId(p1Pid) : myNoun) :
                   (p2 > p1) ? (p2Pid ? getNounId(p2Pid) : myNoun) :
@@ -751,7 +825,7 @@ const jsonLd = {
     var shareNative = document.getElementById('dv-share-native');
     var shareTweet = document.getElementById('dv-share-tweet');
     var shareStatus = document.getElementById('dv-share-status');
-    var inviteUrl = window.location.origin + '/drum-vs?room=' + room;
+    var inviteUrl = window.location.origin + '/drum-vs?room=' + room + (mode !== 'tug' ? '&mode=' + mode : '');
     var inviteText = 'tap with me — drum-vs room ' + room + ' · pointcast.xyz';
 
     function setShareStatus(msg) {
@@ -1081,6 +1155,131 @@ const jsonLd = {
   }
   .dv__rope-meter-mid {
     width: 2px; height: 10px; background: var(--dv-magenta);
+  }
+
+  /* ─── Race lanes (mode=race) ──────────────────────────── */
+  .dv__race {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 18px 24px 22px;
+    background: #fffaef;
+    border: 2px solid var(--dv-ink);
+    border-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .dv__race[hidden] { display: none; }
+  .dv__race-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 56px;
+    gap: 12px;
+    align-items: center;
+  }
+  .dv__race-tag {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dv-mute);
+    font-weight: 700;
+  }
+  .dv__race-track {
+    position: relative;
+    height: 22px;
+    background: var(--dv-deep);
+    border: 2px solid var(--dv-ink);
+    overflow: hidden;
+  }
+  .dv__race-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    transition: width 220ms cubic-bezier(0.2, 0.8, 0.4, 1);
+  }
+  .dv__race-fill--p1 {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--dv-yellow) 0 8px,
+      #ffd84a 8px 16px
+    );
+  }
+  .dv__race-fill--p2 {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--dv-cyan) 0 8px,
+      #5fc0d8 8px 16px
+    );
+  }
+  .dv__race-runner {
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    width: 16px;
+    height: 16px;
+    background: var(--dv-magenta);
+    border: 2px solid var(--dv-ink);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: left 220ms cubic-bezier(0.2, 0.8, 0.4, 1);
+    pointer-events: none;
+  }
+  .dv__race-pct {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--dv-ink);
+    text-align: right;
+  }
+
+  /* ─── Lobby mode picker ──────────────────────────────── */
+  .dv__mode-picker {
+    margin: 18px auto;
+    padding: 14px 16px;
+    border: 2px dashed var(--dv-ink);
+    background: var(--dv-paper);
+    text-align: left;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dv__mode-legend {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--dv-magenta);
+    font-weight: 700;
+    padding: 0 8px;
+  }
+  .dv__mode-opt {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    grid-template-rows: auto auto;
+    gap: 2px 10px;
+    padding: 8px 10px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: background 100ms, border-color 100ms;
+  }
+  .dv__mode-opt:hover { background: rgba(214, 52, 106, 0.05); }
+  .dv__mode-opt input[type="radio"] {
+    grid-row: 1 / 3;
+    align-self: start;
+    margin: 4px 0 0;
+    accent-color: var(--dv-magenta);
+  }
+  .dv__mode-opt:has(input:checked) {
+    background: rgba(214, 52, 106, 0.08);
+    border-color: var(--dv-ink);
+  }
+  .dv__mode-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--dv-ink);
+  }
+  .dv__mode-sub {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--dv-mute);
   }
 
   /* ─── Sides ─────────────────────────────────────────────────── */
