@@ -1,0 +1,173 @@
+---
+/**
+ * CBChannel — one operator lane in the /cb room.
+ *
+ * Renders a single resident's current preamble in CB-radio chrome:
+ * handle plate, phase chip (commentary vs final), blinking REC dot when
+ * still chattering, and a typewriter-feel transmission body.
+ *
+ * Phase semantics come from the OpenAI Responses API distinction:
+ *   commentary   — still working, this is an intermediate update
+ *   final        — task done, signing off
+ */
+interface Props {
+  handle: string;
+  name: string;
+  color: string;
+  phase: 'commentary' | 'final';
+  preamble: string;
+  since: string;
+}
+
+const { handle, name, color, phase, preamble, since } = Astro.props;
+const isLive = phase === 'commentary';
+
+// "08:25" or "Apr 30" depending on age — but we just show wall-clock HH:MM
+// for now. Anything from "today" feels like dispatch.
+let stamp = '--:--';
+try {
+  const d = new Date(since);
+  stamp = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+} catch {}
+---
+
+<article class="lane" style={`--accent:${color}`} data-phase={phase}>
+  <header class="lane-head">
+    <div class="plate">
+      <span class="plate-channel">CB·19</span>
+      <span class="plate-handle">{handle}</span>
+    </div>
+    <span class={`chip ${isLive ? 'chip-live' : 'chip-clear'}`}>
+      {isLive ? (
+        <>
+          <span class="rec-dot" aria-hidden="true"></span>
+          10-1 chatter
+        </>
+      ) : (
+        <>10-4 clear</>
+      )}
+    </span>
+  </header>
+
+  <div class="transmission">
+    <span class="caret">&gt;</span>
+    <p class="msg">{preamble}</p>
+  </div>
+
+  <footer class="lane-foot">
+    <span class="who">{name}</span>
+    <span class="when">{stamp}</span>
+  </footer>
+</article>
+
+<style>
+  .lane {
+    --accent: #c46734;
+    background: #1a1208;
+    color: #f3eee0;
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    box-shadow: 6px 6px 0 0 var(--accent);
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  }
+
+  .lane-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  /* license-plate-style handle */
+  .plate {
+    display: inline-flex;
+    align-items: stretch;
+    border: 2px solid #f3eee0;
+    border-radius: 4px;
+    overflow: hidden;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+  .plate-channel {
+    background: #f3eee0;
+    color: #1a1208;
+    padding: 0.4rem 0.5rem;
+  }
+  .plate-handle {
+    background: var(--accent);
+    color: #1a1208;
+    padding: 0.4rem 0.6rem;
+  }
+
+  /* phase chip */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+  }
+  .chip-live {
+    color: #ff6b6b;
+  }
+  .chip-clear {
+    color: #4ad6ff;
+  }
+  .rec-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: rec 1s infinite ease-in-out;
+  }
+  @keyframes rec {
+    0%, 100% { opacity: 0.3; }
+    50%      { opacity: 1; }
+  }
+
+  /* transmission body */
+  .transmission {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    background: #0d0905;
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 0.9rem;
+    border-radius: 0 6px 6px 0;
+  }
+  .caret {
+    color: var(--accent);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .msg {
+    margin: 0;
+    line-height: 1.45;
+    font-size: 0.95rem;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    color: #f3eee0;
+  }
+
+  /* footer line */
+  .lane-foot {
+    display: flex;
+    justify-content: space-between;
+    color: #8a8275;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+  .who {
+    text-transform: uppercase;
+  }
+</style>
