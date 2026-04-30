@@ -1,11 +1,17 @@
 # BLOCKS.md
 
-**PointCast v2.1 — the Blocks pivot, live edition**
+**PointCast v2.2 — the Blocks pivot, live edition**
 
 Author: Mike Hoydich × Claude
-Revision: **v2.1** (2026-04-17) — live on `main`, serving pointcast.xyz.
+Revision: **v2.2** (2026-04-30) — live on `main`, serving pointcast.xyz.
 
 Previous revisions:
+- **v2.2** (2026-04-30) — adds optional `spend` field on Block (Stripe Link
+  receipt sibling to `edition`). A Block carrying both is a "dual-rail"
+  block: `edition` is on-chain identity of the artifact (Tezos), `spend`
+  is off-chain receipt of what funded it (Stripe Link). Receipts publish
+  to existing channels for now (FD for agent-essay receipts; later channel
+  addition deferred per ongoing discussion). Per proposal #262.
 - **v2.1** (2026-04-17 evening) — adds 9th channel BTL (Battler),
   `media.thumbnail` + `media.ipfsFallback` schema fields, agent-layer
   surfaces (/manifesto, /glossary, /agents.json, /llms-full.txt),

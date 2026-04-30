@@ -43,6 +43,29 @@ const blocks = defineCollection({
       })
       .optional(),
 
+    // Spend / Link receipt metadata — added 2026-04-30 per #262.
+    // Sibling to `edition`. A Block carrying both is a "dual-rail" block:
+    // edition is the on-chain identity of the artifact (Tezos);
+    // spend is the off-chain receipt of what funded it (Stripe Link).
+    // Populated by the Link webhook on settled spend requests.
+    spend: z
+      .object({
+        agent: z.enum(['claude', 'codex', 'manus', 'cc']),
+        loop: z.string().min(1),                                 // see src/lib/agent-value.ts loop ids
+        amount_usd: z.number().nonnegative().max(500),           // link-cli max is $500/req
+        currency: z.string().default('usd'),
+        merchant: z.string().min(1),                             // e.g. "replicate.com"
+        merchant_url: z.string().url().optional(),
+        credential_type: z.enum(['card', 'shared_payment_token']).default('shared_payment_token'),
+        status: z.enum(['pending', 'approved', 'denied', 'expired', 'settled', 'refunded']),
+        link_session_id: z.string().min(1),                      // spend_request id from link-cli
+        receipt_url: z.string().url().optional(),                // Stripe-hosted receipt
+        approved_by: z.string().optional(),                      // future: visitor handle when v1 multi-tenant
+        mode: z.enum(['test', 'live']).default('test'),          // v0 ships in test mode
+        context: z.string().optional(),                          // user-facing approval blurb (>=100 chars per CLI)
+      })
+      .optional(),
+
     media: z
       .object({
         kind: z.enum(['image', 'audio', 'video', 'embed']),
