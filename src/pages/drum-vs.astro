@@ -1,0 +1,1044 @@
+---
+/**
+ * /drum-vs — 1v1 drum games for friends · 2026-04-30 PT.
+ *
+ * Per Mike: "more drum, this time, as games to send to friends 1v1,
+ * try to get best latency, nouns, etc."
+ *
+ * Currently ships TUG-OF-WAR mode:
+ *   Two players, each gets a side. First to 50 taps wins. Tap rate
+ *   is everything — no skill ceiling, just rhythm + reflexes. The
+ *   rope marker in the middle slides toward whoever's tapping faster.
+ *
+ * URL model:
+ *   /drum-vs              → lobby. Shows "Create a duel" button.
+ *   /drum-vs?room=K3M9X7  → joins room K3M9X7. First to land becomes
+ *                            P1 (left side); second becomes P2 (right);
+ *                            anyone after is a spectator.
+ *
+ * Backed by /api/duel — separate from /api/sounds so the global bus
+ * race doesn't eat tap events. Each tap optimistically updates locally
+ * for 0ms perceived latency on YOUR side; opponent taps arrive via
+ * 400ms polling. Future v2 could upgrade to WebRTC P2P data channels
+ * for sub-50ms peer-to-peer once we ship a signaling layer.
+ *
+ * Identity: each player is shown as their PointCast Noun (derived
+ * from sessionId). No login — the URL is the invite.
+ *
+ * Mobile-first: stacked vertical layout on phones (your side on top
+ * with the big tap button; opponent on bottom). Big haptic kick on
+ * each tap. Native Web Share for the invite URL.
+ *
+ * IMPORTANT: literal '{' and '}' in body text MUST be escaped as
+ * &#123; / &#125; (PR #222 lesson).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'DRUM VS — 1v1 tug-of-war for friends';
+const description = 'Send a link, tap together, first to 50 wins. A 1v1 drum game on PointCast — your Noun pulls one end of the rope, your friend pulls the other. Backed by a room-scoped event bus for tight cross-device latency.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/drum-vs',
+  name: 'PointCast Drum VS · 1v1 Tug-of-War',
+  url: 'https://pointcast.xyz/drum-vs',
+  description,
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Any',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-vs.png" jsonLd={jsonLd}>
+  <main class="dv" id="dv-main">
+    <DrumNav current="vs" />
+
+    <header class="dv__head">
+      <p class="dv__kicker mono">★ DRUM HUB · BIRTHDAY IMPRINT · 1v1 TUG-OF-WAR ★</p>
+      <h1 class="dv__title">drum <em>vs</em></h1>
+      <p class="dv__strap mono" id="dv-strap">— preparing the rope —</p>
+    </header>
+
+    {/* LOBBY: shown when no ?room= param. */}
+    <section class="dv__lobby" id="dv-lobby" hidden>
+      <div class="dv__lobby-card">
+        <p class="dv__eyebrow mono">★ NEW DUEL ★</p>
+        <h2 class="dv__lobby-title">tap, send, race</h2>
+        <p class="dv__lobby-body">
+          Generate a room, send the link to a friend. First side to <strong>50 taps</strong> wins.
+          Both your Nouns at the rope. Your taps land instantly; their taps arrive ~400ms later.
+        </p>
+        <button type="button" class="dv__btn dv__btn--magenta dv__btn--big" id="dv-new-room">
+          ▸ open a new duel
+        </button>
+        <p class="dv__lobby-hint mono">no signup · no install · the URL is the invite</p>
+      </div>
+    </section>
+
+    {/* GAME: shown when ?room= present. */}
+    <section class="dv__game" id="dv-game" hidden>
+
+      {/* Top status bar — mode, room id, score */}
+      <div class="dv__bar">
+        <p class="dv__bar-mode mono">▌ TUG-OF-WAR · FIRST TO 50</p>
+        <p class="dv__bar-room mono">ROOM · <strong id="dv-room">—</strong></p>
+        <p class="dv__bar-score mono"><span id="dv-score-p1">0</span> · <span id="dv-score-p2">0</span></p>
+      </div>
+
+      {/* The rope */}
+      <div class="dv__rope" aria-label="Tug-of-war rope">
+        <div class="dv__rope-track">
+          <span class="dv__rope-mark dv__rope-mark--left" aria-hidden="true">P1</span>
+          <span class="dv__rope-line" aria-hidden="true"></span>
+          <span class="dv__rope-flag" id="dv-rope-flag" aria-hidden="true">
+            <span class="dv__rope-flag-noun" id="dv-rope-flag-noun"></span>
+          </span>
+          <span class="dv__rope-mark dv__rope-mark--right" aria-hidden="true">P2</span>
+        </div>
+        <div class="dv__rope-meter" aria-hidden="true">
+          <span class="dv__rope-meter-tick"></span>
+          <span class="dv__rope-meter-tick"></span>
+          <span class="dv__rope-meter-mid"></span>
+          <span class="dv__rope-meter-tick"></span>
+          <span class="dv__rope-meter-tick"></span>
+        </div>
+      </div>
+
+      {/* Two-side play area */}
+      <div class="dv__sides" id="dv-sides">
+
+        {/* P1 side */}
+        <article class="dv__side dv__side--p1" data-side="1" id="dv-side-1">
+          <header class="dv__side-head">
+            <img class="dv__side-noun" id="dv-noun-1" src="" alt="" width="80" height="80" />
+            <div class="dv__side-info">
+              <p class="dv__side-tag mono">P1 · LEFT</p>
+              <p class="dv__side-status mono" id="dv-status-1">— waiting —</p>
+            </div>
+            <p class="dv__side-score mono" id="dv-side-score-1" aria-live="polite">0</p>
+          </header>
+          <button type="button" class="dv__tap dv__tap--p1" id="dv-tap-1" aria-label="P1 tap">
+            <span class="dv__tap-cap">
+              <span class="dv__tap-glyph" aria-hidden="true">▣</span>
+              <span class="dv__tap-label mono">PULL</span>
+              <span class="dv__tap-kbd mono">A · ←</span>
+            </span>
+          </button>
+        </article>
+
+        {/* P2 side */}
+        <article class="dv__side dv__side--p2" data-side="2" id="dv-side-2">
+          <header class="dv__side-head">
+            <img class="dv__side-noun" id="dv-noun-2" src="" alt="" width="80" height="80" />
+            <div class="dv__side-info">
+              <p class="dv__side-tag mono">P2 · RIGHT</p>
+              <p class="dv__side-status mono" id="dv-status-2">— waiting —</p>
+            </div>
+            <p class="dv__side-score mono" id="dv-side-score-2" aria-live="polite">0</p>
+          </header>
+          <button type="button" class="dv__tap dv__tap--p2" id="dv-tap-2" aria-label="P2 tap">
+            <span class="dv__tap-cap">
+              <span class="dv__tap-glyph" aria-hidden="true">▣</span>
+              <span class="dv__tap-label mono">PULL</span>
+              <span class="dv__tap-kbd mono">L · →</span>
+            </span>
+          </button>
+        </article>
+      </div>
+
+      {/* Invite row — visible when only 1 player has joined */}
+      <section class="dv__invite" id="dv-invite" hidden>
+        <p class="dv__invite-line">
+          ☞ <strong>send the link</strong> to a friend so they can join the rope.
+        </p>
+        <div class="dv__invite-row">
+          <button type="button" class="dv__btn dv__btn--share" id="dv-share-native" hidden>
+            ▸ share via iMessage / WhatsApp
+          </button>
+          <button type="button" class="dv__btn" id="dv-share-copy">copy link</button>
+          <a class="dv__btn dv__btn--ghost" id="dv-share-tweet" target="_blank" rel="noopener" href="#">tweet</a>
+        </div>
+        <p class="dv__share-status mono" id="dv-share-status">&nbsp;</p>
+      </section>
+
+      {/* Victory overlay */}
+      <section class="dv__victory" id="dv-victory" hidden>
+        <div class="dv__victory-card">
+          <p class="dv__victory-kicker mono">★ FINAL PULL ★</p>
+          <p class="dv__victory-line">
+            <span id="dv-victory-name">—</span> <em>won the rope.</em>
+          </p>
+          <p class="dv__victory-score mono"><span id="dv-victory-p1">0</span> · <span id="dv-victory-p2">0</span></p>
+          <button type="button" class="dv__btn dv__btn--big dv__btn--magenta" id="dv-rematch">▸ rematch</button>
+          <button type="button" class="dv__btn" id="dv-share-result">share result</button>
+        </div>
+      </section>
+
+      {/* Foot — fine print */}
+      <footer class="dv__foot">
+        <p class="mono">
+          DRUM VS · v0.1 · 2026-04-30 · pointcast.xyz/drum-vs · room state in
+          <code>/api/duel</code> · 400ms poll + optimistic local · WebRTC P2P upgrade pending.
+        </p>
+      </footer>
+    </section>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ─── Helpers ────────────────────────────────────────────────────────
+    var ROOM_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
+    function newRoomId() {
+      var s = '';
+      var arr = new Uint8Array(6);
+      try { (window.crypto || {}).getRandomValues(arr); } catch (e) { for (var i = 0; i < 6; i++) arr[i] = Math.floor(Math.random() * 256); }
+      for (var i = 0; i < 6; i++) s += ROOM_ALPHA[arr[i] % ROOM_ALPHA.length];
+      return s;
+    }
+    function getSid() {
+      try {
+        var sid = localStorage.getItem('pc:sid');
+        if (sid) return sid;
+        sid = (Math.random().toString(36).slice(2) + Date.now().toString(36));
+        localStorage.setItem('pc:sid', sid);
+        return sid;
+      } catch (e) {
+        return 'anon-' + Date.now();
+      }
+    }
+    function getNounId(seed) {
+      // Deterministic noun id from a string seed (0..1199)
+      var h = 0;
+      for (var i = 0; i < seed.length; i++) {
+        h = ((h << 5) - h) + seed.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h) % 1200;
+    }
+
+    var qs = new URLSearchParams(window.location.search);
+    var room = (qs.get('room') || '').toUpperCase();
+    var lobby = document.getElementById('dv-lobby');
+    var game = document.getElementById('dv-game');
+    var strap = document.getElementById('dv-strap');
+
+    // ─── Lobby (no room param) ─────────────────────────────────────────
+    if (!room) {
+      if (lobby) lobby.hidden = false;
+      if (strap) strap.textContent = 'tap "open a new duel" to start a room';
+      var newRoomBtn = document.getElementById('dv-new-room');
+      if (newRoomBtn) {
+        newRoomBtn.addEventListener('click', function () {
+          var rid = newRoomId();
+          window.location.href = '/drum-vs?room=' + rid;
+        });
+      }
+      return;
+    }
+
+    // ─── Game (with ?room=) ────────────────────────────────────────────
+    if (game) game.hidden = false;
+    document.getElementById('dv-room').textContent = room;
+    if (strap) strap.textContent = 'room ' + room + ' · waiting for both Nouns…';
+
+    var sid = getSid();
+    var myNoun = getNounId(sid);
+    var mySide = 0;          // 0 = unassigned/spectator, 1 or 2 once joined
+    var lastTs = 0;
+    var p1Score = 0, p2Score = 0;
+    var p1Pid = null, p2Pid = null;
+    var winner = 0;
+    var pollMs = 400;
+
+    // Optimistic local mirror — we increment our own score immediately on
+    // tap, the server eventually echoes it back. We trust server state on
+    // each poll for canonical truth (so cheaters can't run up the score
+    // by spoofing the local DOM — the server validates).
+    var optimisticP1 = 0;
+    var optimisticP2 = 0;
+
+    var nounImg1 = document.getElementById('dv-noun-1');
+    var nounImg2 = document.getElementById('dv-noun-2');
+    var status1 = document.getElementById('dv-status-1');
+    var status2 = document.getElementById('dv-status-2');
+    var scoreEl1 = document.getElementById('dv-side-score-1');
+    var scoreEl2 = document.getElementById('dv-side-score-2');
+    var headScore1 = document.getElementById('dv-score-p1');
+    var headScore2 = document.getElementById('dv-score-p2');
+    var tap1 = document.getElementById('dv-tap-1');
+    var tap2 = document.getElementById('dv-tap-2');
+    var ropeFlag = document.getElementById('dv-rope-flag');
+    var ropeFlagNoun = document.getElementById('dv-rope-flag-noun');
+    var sideEl1 = document.getElementById('dv-side-1');
+    var sideEl2 = document.getElementById('dv-side-2');
+    var invite = document.getElementById('dv-invite');
+    var victory = document.getElementById('dv-victory');
+    var victoryName = document.getElementById('dv-victory-name');
+    var victoryP1 = document.getElementById('dv-victory-p1');
+    var victoryP2 = document.getElementById('dv-victory-p2');
+
+    function setNounAt(el, id) {
+      if (!el) return;
+      el.src = 'https://noun.pics/' + id + '.svg';
+      el.alt = 'Noun ' + id;
+      el.style.imageRendering = 'pixelated';
+    }
+    function setRopeNoun(id) {
+      if (!ropeFlagNoun) return;
+      ropeFlagNoun.style.backgroundImage = 'url(https://noun.pics/' + id + '.svg)';
+    }
+
+    function updateUI() {
+      var p1 = Math.max(p1Score, optimisticP1);
+      var p2 = Math.max(p2Score, optimisticP2);
+      headScore1.textContent = String(p1);
+      headScore2.textContent = String(p2);
+      scoreEl1.textContent = String(p1);
+      scoreEl2.textContent = String(p2);
+      // Rope position: -1 (full P1) ... +1 (full P2)
+      var net = p2 - p1; // positive = rope pulled right (P2 winning)
+      var bound = 50; // win threshold
+      var ratio = Math.max(-1, Math.min(1, net / bound));
+      var pct = 50 + ratio * 50; // percentage from left edge
+      if (ropeFlag) ropeFlag.style.left = pct + '%';
+      // Whoever is currently winning sees their noun on the marker
+      var leadId = (p1 > p2) ? (p1Pid ? getNounId(p1Pid) : myNoun) :
+                  (p2 > p1) ? (p2Pid ? getNounId(p2Pid) : myNoun) :
+                              myNoun;
+      setRopeNoun(leadId);
+    }
+
+    function applyServerState(state) {
+      if (!state) return;
+      p1Score = Number(state.p1Score) || 0;
+      p2Score = Number(state.p2Score) || 0;
+      p1Pid = state.p1Pid || null;
+      p2Pid = state.p2Pid || null;
+      winner = Number(state.winner) || 0;
+      // Reconcile optimistic — never go backward from server truth
+      if (optimisticP1 < p1Score) optimisticP1 = p1Score;
+      if (optimisticP2 < p2Score) optimisticP2 = p2Score;
+
+      // Render side info
+      if (p1Pid) {
+        var p1Noun = getNounId(p1Pid);
+        setNounAt(nounImg1, p1Noun);
+        status1.textContent = (p1Pid === pidOfMe()) ? 'YOU' : 'OPPONENT';
+        sideEl1.classList.add('dv__side--seated');
+      } else {
+        nounImg1.src = '';
+        status1.textContent = '— empty —';
+        sideEl1.classList.remove('dv__side--seated');
+      }
+      if (p2Pid) {
+        var p2Noun = getNounId(p2Pid);
+        setNounAt(nounImg2, p2Noun);
+        status2.textContent = (p2Pid === pidOfMe()) ? 'YOU' : 'OPPONENT';
+        sideEl2.classList.add('dv__side--seated');
+      } else {
+        nounImg2.src = '';
+        status2.textContent = '— empty —';
+        sideEl2.classList.remove('dv__side--seated');
+      }
+
+      // Highlight the player's own side
+      sideEl1.classList.toggle('dv__side--mine', mySide === 1);
+      sideEl2.classList.toggle('dv__side--mine', mySide === 2);
+
+      // Disable the tap button on the side that ISN'T mine
+      tap1.disabled = (mySide !== 1) || winner !== 0;
+      tap2.disabled = (mySide !== 2) || winner !== 0;
+
+      // Show invite row if waiting for second player
+      var bothSeated = !!p1Pid && !!p2Pid;
+      invite.hidden = bothSeated;
+      if (!bothSeated) {
+        if (strap) strap.textContent = 'room ' + room + ' · waiting for the other side…';
+      } else if (winner === 0) {
+        if (strap) strap.textContent = 'room ' + room + ' · GO · first to 50 takes the rope';
+      }
+
+      // Victory state
+      if (winner !== 0) {
+        var winnerLabel = winner === 1 ? 'P1' : 'P2';
+        var winnerPid = winner === 1 ? p1Pid : p2Pid;
+        if (winnerPid && winnerPid === pidOfMe()) winnerLabel = 'you';
+        else if (winnerPid && winnerPid !== pidOfMe()) winnerLabel = 'they';
+        victoryName.textContent = winnerLabel;
+        victoryP1.textContent = String(p1Score);
+        victoryP2.textContent = String(p2Score);
+        victory.hidden = false;
+        if (strap) strap.textContent = 'room ' + room + ' · ' + winnerLabel + ' won · rematch?';
+      } else {
+        victory.hidden = true;
+      }
+
+      updateUI();
+    }
+
+    // pidOfMe — derive from sid for client-side compare. Server hashes
+    // sessionId via sha256 then takes the first 10 chars; we mirror
+    // that here purely for the UI display ("YOU" tag). Note: doing
+    // sha256 in browser is awkward so we cache the answer.
+    var _myPid = null;
+    function pidOfMe() {
+      if (_myPid) return _myPid;
+      // Fallback — assume server's pid for our session. Hashing async
+      // here would race with first paint; accept short-term mismatch.
+      // Set _myPid lazily on first server response that includes our seat.
+      return _myPid || '';
+    }
+
+    function joinRoom() {
+      fetch('/api/duel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: room, sessionId: sid, kind: 'join' }),
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !data.ok) return;
+          mySide = Number(data.side) || 0;
+          if (mySide === 1 && data.state) _myPid = data.state.p1Pid;
+          if (mySide === 2 && data.state) _myPid = data.state.p2Pid;
+          applyServerState(data.state);
+          // Once seated, kick polling
+          schedulePoll();
+        })
+        .catch(function () {
+          if (strap) strap.textContent = 'room ' + room + ' · network slow — retrying…';
+          setTimeout(joinRoom, 1500);
+        });
+    }
+    joinRoom();
+
+    // ─── Tap broadcast ─────────────────────────────────────────────────
+    function fireTap(side) {
+      if (mySide !== side || winner !== 0) return;
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+      // Optimistic local
+      if (side === 1) optimisticP1 += 1;
+      else optimisticP2 += 1;
+      updateUI();
+      var btn = side === 1 ? tap1 : tap2;
+      btn.classList.remove('dv__tap--hit');
+      void btn.offsetWidth;
+      btn.classList.add('dv__tap--hit');
+
+      fetch('/api/duel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room: room,
+          sessionId: sid,
+          kind: 'tap',
+          side: side,
+        }),
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !data.ok) return;
+          // Server canonical scores — reconcile (server can only go up)
+          if (data.state) applyServerState(data.state);
+        })
+        .catch(function () { /* offline; optimistic stays */ });
+    }
+
+    tap1.addEventListener('mousedown', function (e) { fireTap(1); e.preventDefault(); });
+    tap1.addEventListener('touchstart', function (e) { fireTap(1); e.preventDefault(); }, { passive: false });
+    tap2.addEventListener('mousedown', function (e) { fireTap(2); e.preventDefault(); });
+    tap2.addEventListener('touchstart', function (e) { fireTap(2); e.preventDefault(); }, { passive: false });
+
+    // Keyboard: A / Left arrow → P1, L / Right arrow → P2
+    window.addEventListener('keydown', function (e) {
+      if (e.repeat) return;
+      var k = e.key.toLowerCase();
+      var ae = document.activeElement;
+      var tag = ae && ae.tagName ? ae.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (k === 'a' || k === 'arrowleft' || k === 'q') { fireTap(1); e.preventDefault(); }
+      else if (k === 'l' || k === 'arrowright' || k === 'p') { fireTap(2); e.preventDefault(); }
+    });
+
+    // ─── Poll loop ─────────────────────────────────────────────────────
+    var pollTimer = null;
+    function schedulePoll() {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(poll, pollMs);
+    }
+    function poll() {
+      fetch('/api/duel?room=' + encodeURIComponent(room) + '&since=' + lastTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !data.ok) return;
+          if (data.state) applyServerState(data.state);
+          if (Array.isArray(data.events) && data.events.length) {
+            lastTs = data.events[data.events.length - 1].t || lastTs;
+          }
+        })
+        .catch(function () {})
+        .finally(function () { schedulePoll(); });
+    }
+
+    // ─── Invite row ────────────────────────────────────────────────────
+    var shareCopy = document.getElementById('dv-share-copy');
+    var shareNative = document.getElementById('dv-share-native');
+    var shareTweet = document.getElementById('dv-share-tweet');
+    var shareStatus = document.getElementById('dv-share-status');
+    var inviteUrl = window.location.origin + '/drum-vs?room=' + room;
+    var inviteText = 'tap with me — drum-vs room ' + room + ' · pointcast.xyz';
+
+    function setShareStatus(msg) {
+      if (!shareStatus) return;
+      shareStatus.textContent = msg || ' ';
+      if (msg) setTimeout(function () { if (shareStatus.textContent === msg) shareStatus.textContent = ' '; }, 2400);
+    }
+
+    if (shareCopy) {
+      shareCopy.addEventListener('click', function () {
+        try {
+          navigator.clipboard.writeText(inviteUrl);
+          setShareStatus('✓ link copied');
+        } catch (e) {
+          setShareStatus('✗ copy unavailable');
+        }
+      });
+    }
+    if (shareTweet) {
+      shareTweet.href =
+        'https://twitter.com/intent/tweet?text=' + encodeURIComponent(inviteText) +
+        '&url=' + encodeURIComponent(inviteUrl);
+    }
+    if (shareNative && navigator.share) {
+      shareNative.hidden = false;
+      var isCoarse = false;
+      try { isCoarse = window.matchMedia('(pointer: coarse)').matches; } catch (e) {}
+      if (isCoarse) shareNative.classList.add('dv__btn--primary');
+      shareNative.addEventListener('click', function () {
+        try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+        navigator.share({
+          title: 'drum vs · 1v1 tug-of-war',
+          text: inviteText,
+          url: inviteUrl,
+        }).then(function () { setShareStatus('✓ sent'); })
+          .catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            setShareStatus('share canceled');
+          });
+      });
+    }
+
+    // ─── Rematch ───────────────────────────────────────────────────────
+    var rematchBtn = document.getElementById('dv-rematch');
+    var shareResultBtn = document.getElementById('dv-share-result');
+    if (rematchBtn) {
+      rematchBtn.addEventListener('click', function () {
+        if (mySide !== 1 && mySide !== 2) return;
+        fetch('/api/duel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ room: room, sessionId: sid, kind: 'reset' }),
+        })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (data && data.ok) {
+              optimisticP1 = 0;
+              optimisticP2 = 0;
+              applyServerState(data.state);
+            }
+          });
+      });
+    }
+    if (shareResultBtn && navigator.share) {
+      shareResultBtn.addEventListener('click', function () {
+        var msg = 'i played drum vs · final ' + p1Score + '·' + p2Score + ' · join: ' + inviteUrl;
+        navigator.share({ title: 'drum vs result', text: msg, url: inviteUrl }).catch(function () {});
+      });
+    }
+
+  })();
+</script>
+
+<style>
+  .dv {
+    --dv-paper: #fff5d8;
+    --dv-deep: #f8e8c0;
+    --dv-ink: #11100c;
+    --dv-mute: #5b5347;
+    --dv-magenta: #d6346a;
+    --dv-yellow: #f0c431;
+    --dv-cyan: #3aa9c4;
+    --dv-teal: #2f8c69;
+
+    background: var(--dv-paper);
+    color: var(--dv-ink);
+    padding: 18px clamp(14px, 3vw, 28px) calc(28px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.45;
+  }
+  .dv .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Header ───────────────────────────────────────────────────── */
+  .dv__head {
+    text-align: center;
+    margin: 8px auto 18px;
+    max-width: 720px;
+  }
+  .dv__kicker {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--dv-magenta);
+    text-transform: uppercase;
+    margin: 0 0 8px;
+    font-weight: 700;
+  }
+  .dv__title {
+    font-size: clamp(40px, 7vw, 76px);
+    font-weight: 800;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+    line-height: 0.96;
+    color: var(--dv-ink);
+  }
+  .dv__title em {
+    font-style: italic;
+    color: var(--dv-magenta);
+    font-weight: 500;
+  }
+  .dv__strap {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dv-mute);
+    margin: 0;
+  }
+
+  /* ─── Lobby ───────────────────────────────────────────────────── */
+  .dv__lobby {
+    max-width: 540px;
+    margin: 24px auto;
+  }
+  .dv__lobby-card {
+    padding: 28px 24px;
+    background: #fffaef;
+    border: 2.5px solid var(--dv-ink);
+    box-shadow: 6px 6px 0 0 var(--dv-magenta);
+    text-align: center;
+  }
+  .dv__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--dv-magenta);
+    font-weight: 700;
+    margin: 0 0 10px;
+  }
+  .dv__lobby-title {
+    font-size: 32px;
+    font-weight: 800;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .dv__lobby-body {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--dv-ink);
+    margin: 0 0 18px;
+  }
+  .dv__lobby-body strong { color: var(--dv-magenta); }
+  .dv__lobby-hint {
+    font-size: 10px;
+    color: var(--dv-mute);
+    margin: 14px 0 0;
+    letter-spacing: 0.16em;
+  }
+
+  /* ─── Game bar ───────────────────────────────────────────────── */
+  .dv__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    background: var(--dv-deep);
+    border: 2px solid var(--dv-ink);
+    border-bottom: 0;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    margin: 0 auto;
+    max-width: 980px;
+  }
+  .dv__bar p { margin: 0; }
+  .dv__bar-mode { font-size: 10px; letter-spacing: 0.26em; color: var(--dv-magenta); font-weight: 700; }
+  .dv__bar-room { font-size: 10px; letter-spacing: 0.26em; color: var(--dv-mute); }
+  .dv__bar-room strong { color: var(--dv-ink); font-size: 14px; letter-spacing: 0.18em; }
+  .dv__bar-score { font-size: 14px; color: var(--dv-ink); font-weight: 700; }
+
+  /* ─── Rope ──────────────────────────────────────────────────── */
+  .dv__rope {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 16px 20px;
+    background: #fffaef;
+    border: 2px solid var(--dv-ink);
+    border-bottom: 0;
+  }
+  .dv__rope-track {
+    position: relative;
+    height: 60px;
+    display: flex;
+    align-items: center;
+  }
+  .dv__rope-mark {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--dv-mute);
+    font-weight: 700;
+  }
+  .dv__rope-mark--left { left: 0; }
+  .dv__rope-mark--right { right: 0; }
+  .dv__rope-line {
+    position: absolute;
+    left: 32px;
+    right: 32px;
+    height: 8px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--dv-ink) 0 16px,
+      var(--dv-magenta) 16px 32px
+    );
+    border-radius: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .dv__rope-flag {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid var(--dv-ink);
+    box-shadow: 4px 4px 0 0 var(--dv-magenta);
+    z-index: 2;
+    transition: left 220ms cubic-bezier(0.2, 0.8, 0.4, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .dv__rope-flag-noun {
+    width: 48px;
+    height: 48px;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+  }
+  .dv__rope-meter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 8px 32px 0;
+  }
+  .dv__rope-meter-tick {
+    width: 1px; height: 8px; background: var(--dv-ink); opacity: 0.3;
+  }
+  .dv__rope-meter-mid {
+    width: 2px; height: 10px; background: var(--dv-magenta);
+  }
+
+  /* ─── Sides ─────────────────────────────────────────────────── */
+  .dv__sides {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    max-width: 980px;
+    margin: 0 auto;
+    border: 2px solid var(--dv-ink);
+    background: #fffaef;
+  }
+  .dv__side {
+    padding: 18px 18px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    transition: background 200ms;
+  }
+  .dv__side--p1 {
+    background: linear-gradient(180deg, #fffaef 0%, rgba(214, 52, 106, 0.04) 100%);
+    border-right: 1.5px dashed var(--dv-ink);
+  }
+  .dv__side--p2 {
+    background: linear-gradient(180deg, #fffaef 0%, rgba(58, 169, 196, 0.05) 100%);
+  }
+  .dv__side--mine {
+    background: linear-gradient(180deg, rgba(240, 196, 49, 0.18) 0%, rgba(240, 196, 49, 0.04) 100%);
+  }
+  .dv__side--seated:not(.dv__side--mine) .dv__side-status {
+    color: var(--dv-mute);
+  }
+  .dv__side-head {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 12px;
+    align-items: center;
+  }
+  .dv__side-noun {
+    width: 64px;
+    height: 64px;
+    border: 2px solid var(--dv-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 6px;
+  }
+  .dv__side-noun:not([src]),
+  .dv__side-noun[src=""] {
+    background: repeating-linear-gradient(45deg, #fff 0 6px, #fff5d8 6px 12px);
+  }
+  .dv__side-tag {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--dv-mute);
+    margin: 0;
+  }
+  .dv__side-status {
+    font-size: 12px;
+    margin: 2px 0 0;
+    letter-spacing: 0.04em;
+    color: var(--dv-ink);
+    font-weight: 700;
+  }
+  .dv__side-score {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--dv-ink);
+    margin: 0;
+    line-height: 1;
+  }
+
+  /* ─── Tap button ───────────────────────────────────────────── */
+  .dv__tap {
+    appearance: none;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    width: 100%;
+  }
+  .dv__tap:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .dv__tap-cap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 22px 16px;
+    border: 3px solid var(--dv-ink);
+    background: var(--dv-yellow);
+    color: var(--dv-ink);
+    box-shadow: 6px 7px 0 0 var(--dv-ink);
+    transition: transform 60ms, box-shadow 60ms, filter 60ms, background 120ms;
+  }
+  .dv__tap--p1 .dv__tap-cap { background: linear-gradient(180deg, #ffd84a 0%, #f0c431 100%); }
+  .dv__tap--p2 .dv__tap-cap { background: linear-gradient(180deg, #5fc0d8 0%, #3aa9c4 100%); color: #fff; }
+  .dv__tap:hover:not(:disabled) .dv__tap-cap { filter: brightness(1.05); transform: translate(-1px, -1px); box-shadow: 7px 8px 0 0 var(--dv-ink); }
+  .dv__tap:active:not(:disabled) .dv__tap-cap,
+  .dv__tap--hit .dv__tap-cap {
+    transform: translate(4px, 5px);
+    box-shadow: 2px 3px 0 0 var(--dv-ink);
+    animation: dv-thump 0.15s ease-out;
+  }
+  @keyframes dv-thump {
+    0% { filter: brightness(1.4) saturate(1.3); }
+    100% { filter: brightness(1) saturate(1); }
+  }
+  .dv__tap-glyph {
+    font-size: 30px;
+    line-height: 1;
+  }
+  .dv__tap-label {
+    font-size: 16px;
+    letter-spacing: 0.22em;
+    font-weight: 800;
+  }
+  .dv__tap-kbd {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    padding: 2px 6px;
+    background: rgba(17, 16, 12, 0.16);
+    border-radius: 3px;
+  }
+  .dv__tap--p2 .dv__tap-kbd { background: rgba(255, 255, 255, 0.22); }
+
+  /* ─── Invite row ──────────────────────────────────────────── */
+  .dv__invite {
+    max-width: 720px;
+    margin: 16px auto 0;
+    padding: 14px 16px;
+    background: var(--dv-deep);
+    border: 2px dashed var(--dv-magenta);
+    text-align: center;
+  }
+  .dv__invite-line { margin: 0 0 10px; font-size: 14px; }
+  .dv__invite-line strong { color: var(--dv-magenta); }
+  .dv__invite-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+  }
+  .dv__share-status {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--dv-mute);
+    min-height: 14px;
+  }
+
+  /* ─── Buttons ─────────────────────────────────────────────── */
+  .dv__btn {
+    appearance: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border: 2.5px solid var(--dv-ink);
+    color: var(--dv-ink);
+    background: #fffaef;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 0 var(--dv-ink);
+    transition: transform 80ms, box-shadow 80ms;
+  }
+  .dv__btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 var(--dv-ink); text-decoration: none; }
+  .dv__btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--dv-ink); }
+  .dv__btn--magenta { background: var(--dv-magenta); color: #fff5d8; }
+  .dv__btn--big { padding: 14px 22px; font-size: 13px; }
+  .dv__btn--ghost { background: transparent; }
+  .dv__btn--share { background: var(--dv-magenta); color: #fff5d8; }
+  .dv__btn--primary {
+    flex: 1 1 100%;
+    padding: 14px 18px;
+    font-size: 13px;
+    box-shadow: 5px 5px 0 0 var(--dv-ink);
+    order: -1;
+  }
+
+  /* ─── Victory overlay ─────────────────────────────────────── */
+  .dv__victory {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 16, 12, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 10;
+  }
+  .dv__victory[hidden] { display: none; }
+  .dv__victory-card {
+    background: var(--dv-paper);
+    border: 3px solid var(--dv-ink);
+    box-shadow: 8px 8px 0 0 var(--dv-magenta);
+    padding: 32px 28px;
+    text-align: center;
+    max-width: 420px;
+    width: 100%;
+  }
+  .dv__victory-kicker {
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: var(--dv-magenta);
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  .dv__victory-line {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+  .dv__victory-line em { color: var(--dv-magenta); font-style: italic; }
+  .dv__victory-score {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dv-ink);
+    margin: 0 0 20px;
+    letter-spacing: 0.18em;
+  }
+  .dv__victory .dv__btn { margin: 4px 4px; }
+
+  /* ─── Foot ───────────────────────────────────────────────── */
+  .dv__foot {
+    max-width: 980px;
+    margin: 18px auto 0;
+    padding: 12px 0 0;
+    border-top: 1px dotted var(--dv-mute);
+    text-align: center;
+  }
+  .dv__foot p {
+    margin: 0;
+    font-size: 10px;
+    color: var(--dv-mute);
+    letter-spacing: 0.06em;
+  }
+  .dv__foot code {
+    background: rgba(17, 16, 12, 0.08);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+
+  /* ─── Mobile reflow — stacked sides on phones ─────────────── */
+  @media (max-width: 720px) {
+    .dv__sides {
+      grid-template-columns: 1fr;
+    }
+    .dv__side--p1 {
+      border-right: 0;
+      border-bottom: 1.5px dashed var(--dv-ink);
+    }
+    .dv__rope-track { height: 52px; }
+    .dv__rope-flag { width: 48px; height: 48px; }
+    .dv__rope-flag-noun { width: 40px; height: 40px; }
+    .dv__bar { font-size: 11px; padding: 8px 12px; }
+    .dv__bar-mode { font-size: 9px; letter-spacing: 0.2em; }
+  }
+  @media (max-width: 480px) {
+    .dv__title { font-size: 38px; }
+    .dv__tap-cap { padding: 18px 12px; }
+    .dv__tap-label { font-size: 14px; letter-spacing: 0.18em; }
+    .dv__side-noun { width: 52px; height: 52px; }
+    .dv__side-head { grid-template-columns: 52px 1fr auto; gap: 8px; }
+    .dv__side-score { font-size: 24px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dv__rope-flag { transition: none; }
+    .dv__tap--hit .dv__tap-cap { animation: none; }
+  }
+</style>
+

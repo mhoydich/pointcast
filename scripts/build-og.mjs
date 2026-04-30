@@ -34,6 +34,7 @@ const CARDS = [
   { svg: 'og-drum-cake.svg',     png: 'og-drum-cake.png'     }, // /drum-cake
   { svg: 'og-drum-card.svg',     png: 'og-drum-card.png'     }, // /drum-card
   { svg: 'og-drum-pinata.svg',   png: 'og-drum-pinata.png'   }, // /drum-pinata
+  { svg: 'og-drum-vs.svg',       png: 'og-drum-vs.png'       }, // /drum-vs (1v1 tug-of-war)
 ];
 
 /**
