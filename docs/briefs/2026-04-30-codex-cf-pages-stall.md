@@ -22,8 +22,11 @@ Times observed by `cc` during a single afternoon session, from `agents.json`'s `
 | 2026-04-30T15:57 | PR #264 | self-resolved within ~5 min |
 | 2026-04-30T17:44 | PR #268 | self-resolved within ~7 min |
 | 2026-04-30T18:05 | PRs #272, #273, #274, #275, #276, #278, #281, #283, #284 (NINE) | **still stuck at time of writing** |
+| 2026-05-01T20:55 (last good deploy: 09aa3d7 = PR #311) | PR #312 (drum_altar_ring MCP tool) + PR #313 (altar rate-limit hotfix) | **still stuck at 21:09 UTC — 14+ min** |
 
 The 18:05 stall is unusual: nine PRs merged in a 4-hour window are all queued behind it.
+
+The 2026-05-01T20:55 stall affected a hotfix specifically: PR #313 fixed a runtime exception in `/api/altar` POST (CF KV requires `expirationTtl >= 60` and the page had `5`). Until the function-tier deploy lands, every tribute returns CF worker error 1101 — verifiable via `curl -sX POST https://pointcast.xyz/api/altar -H "Content-Type: application/json" -d '{"sessionId":"smoke","seed":506}'` returning `error code: 1101`. This is the kind of bug that demands a fast-path deploy: the hotfix sits on `main` while the live API serves only errors.
 
 ## Symptoms
 
