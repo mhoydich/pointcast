@@ -1,0 +1,943 @@
+---
+/**
+ * /drum-league — community competition layer for the drum hub.
+ *
+ * Per Mike 2026-04-30: "maybe some type of community competition game,
+ * league, uplifting, nouns, participatory, fun, entertaining."
+ *
+ * The synthesis I'm going for: cooperative-with-a-leaderboard. Every
+ * tap on any /drum-* surface (47+ rooms) ticks a single shared community
+ * counter. We're all building one big number together. The competition
+ * layer is light: a top-12 leaderboard celebrates whoever is helping
+ * the most this week, but you don't lose by being below #12 — you're
+ * still in the credits, you helped, your noun is in the pulse stream.
+ *
+ * Page shape:
+ *   1. Masthead — "Drum League · week of YYYY-MM-DD"
+ *   2. This Week's Tally — big animated number + progress bar
+ *   3. Live Pulse — last ~30s of community taps as noun stamps
+ *   4. Top 12 Contributors — leaderboard from /api/drum/top
+ *   5. Your Lane — your noun, your count, your rank
+ *   6. Today's Featured Duel — deterministic /drum-vs?room= from today's
+ *      date, so everyone landing today joins the same room
+ *   7. Daily Challenge — editorial rotating prompt
+ *   8. Ceremony Hall — placeholder for last week's champs
+ *
+ * Aesthetic: warm publish-house colors (cream + magenta + cyan),
+ * celebratory but not gaudy. Reuses the visual grammar of /drum-press
+ * and /drum-vs so the league feels like a sibling.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'Drum League — community competition for the drum hub';
+const description = 'Every tap on any /drum-* surface ticks a single shared community counter. Climb the weekly leaderboard, jump into today\'s featured duel, see who else is in the room. Cooperative-with-a-leaderboard.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/drum-league',
+  name: 'PointCast Drum League',
+  url: 'https://pointcast.xyz/drum-league',
+  description,
+  applicationCategory: 'GameApplication',
+};
+
+// ─── Featured duel — deterministic room id from today's date ────────
+// Everyone landing on /drum-league today gets the same room id, so
+// the "featured duel" is a default mass-meeting place. Friday turns
+// into a different room than Saturday, etc.
+const today = new Date();
+const yyyymmdd = today.toISOString().slice(0, 10).replace(/-/g, '');
+// Convert to a 6-char base32 id (no I/O/0/1) — readable, stable per day
+const ROOM_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function dailyRoomId(seedStr: string): string {
+  // Simple deterministic hash → 6 chars from the safe alphabet.
+  let h = 5381;
+  for (let i = 0; i < seedStr.length; i++) h = ((h << 5) + h + seedStr.charCodeAt(i)) >>> 0;
+  let s = '';
+  for (let i = 0; i < 6; i++) {
+    s += ROOM_ALPHA[h & 31];
+    h = (h >>> 5) | (h << 27);
+  }
+  return s;
+}
+const featuredRoomId = dailyRoomId('league-' + yyyymmdd);
+
+// ─── Daily challenge — pick from a rotating list by day-of-year ────
+const challenges = [
+  { glyph: '🥁', text: 'Tap on /drum (the original) and watch /drum-tv flash on a second screen. The classic everyone goes to.' },
+  { glyph: '🎂', text: 'Light all the candles on /drum-cake — then come back and blow them out with someone.' },
+  { glyph: '💌', text: 'Sign the /drum-card. Your noun joins the room\'s collective signature page.' },
+  { glyph: '🪅', text: 'Take a swing on /drum-pinata. Help the room hit 100 — the burst is shared.' },
+  { glyph: '⚡', text: 'Pick a friend, send them a /drum-vs link. Race to 50. First taps land sub-50ms once both phones are in.' },
+  { glyph: '🔔', text: 'Try /drum-vs?mode=duel — bell rings random 2-5s, first tap after wins. Don\'t false-start.' },
+  { glyph: '🎺', text: 'Visit /drum-v4 (orchestra). Tap a kick, a snare, a hihat. Cast surfaces flash on every note.' },
+  { glyph: '📻', text: 'Open /drum-radio on a TV. Every tap from every room lands as a beat on 96.1 fm.' },
+  { glyph: '✉️', text: 'Leave a note on /drum-letters. The next visitor gets your message. Past notes wait their turn.' },
+  { glyph: '🤖', text: 'Connect a Claude/Cursor MCP client to /api/mcp and have your agent join the room. /drum-agent shows them in real time.' },
+  { glyph: '☕', text: 'Tap on /kettle, then /drum, then /drum-pulse. The whole site is one slow-pulsing room.' },
+  { glyph: '✨', text: 'Open /drum-press and pick a title you haven\'t played yet. There are 54 of them.' },
+  { glyph: '🌙', text: 'Stay quiet. Open /drum-bulletin. Read what the room pinned. Pin one thing back.' },
+  { glyph: '🎯', text: 'Beat the daily target. We\'re aiming for 50,000 taps this week — every contribution counts.' },
+];
+const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000);
+const todayChallenge = challenges[dayOfYear % challenges.length];
+
+// ─── Week label ─────────────────────────────────────────────────
+function weekLabel(d: Date): string {
+  // ISO week — close enough; YYYY-Www format
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((t.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+function shortDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function startOfWeek(d: Date): Date {
+  const out = new Date(d);
+  const day = out.getDay() || 7; // Mon=1..Sun=7
+  out.setDate(out.getDate() - (day - 1));
+  return out;
+}
+function endOfWeek(d: Date): Date {
+  const s = startOfWeek(d);
+  s.setDate(s.getDate() + 6);
+  return s;
+}
+const weekStart = startOfWeek(today);
+const weekEnd = endOfWeek(today);
+const weekStartLabel = shortDate(weekStart);
+const weekEndLabel = shortDate(weekEnd);
+const weekIso = weekLabel(today);
+
+// Editorial target — visual goal for the progress bar. Loose because
+// the actual count comes from /api/drum which is all-time, not weekly.
+// We just show progress against a soft community target.
+const WEEKLY_TARGET = 50_000;
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <main class="dl" id="dl-main">
+    <DrumNav current="league" />
+    <RoomPresenceChip surface="league" />
+
+    <header class="dl__masthead">
+      <p class="dl__kicker mono">★ DRUM HUB · COMMUNITY LEAGUE · ALL OF US TOGETHER ★</p>
+      <h1 class="dl__title">drum <em>league</em></h1>
+      <p class="dl__strap mono">
+        week of {weekStartLabel} — {weekEndLabel} · {weekIso}
+      </p>
+      <p class="dl__dek">
+        Every tap on every /drum-* surface ticks the same community counter.
+        Climb the leaderboard, jump into today's featured duel, see who's
+        in the pulse — your noun is in the credits no matter where you finish.
+      </p>
+    </header>
+
+    <hr class="dl__rule dl__rule--ornate" />
+
+    {/* This Week's Tally — big animated number + progress bar */}
+    <section class="dl__tally" aria-label="This week's tally">
+      <p class="dl__eyebrow mono">▌ THIS WEEK'S TALLY</p>
+      <div class="dl__tally-card">
+        <div class="dl__tally-num">
+          <strong id="dl-tally-num" aria-live="polite">—</strong>
+          <span class="dl__tally-of mono">of {WEEKLY_TARGET.toLocaleString()}</span>
+        </div>
+        <div class="dl__tally-bar" aria-hidden="true">
+          <div class="dl__tally-fill" id="dl-tally-fill"></div>
+        </div>
+        <p class="dl__tally-hint mono" id="dl-tally-hint">— loading global drum count —</p>
+      </div>
+    </section>
+
+    {/* Featured duel — daily room id */}
+    <section class="dl__featured" aria-label="Today's featured duel">
+      <p class="dl__eyebrow mono">⚡ TODAY'S FEATURED DUEL</p>
+      <div class="dl__featured-card">
+        <div class="dl__featured-body">
+          <h2 class="dl__featured-title">join room <em>{featuredRoomId}</em></h2>
+          <p class="dl__featured-note">
+            Everyone landing on this page today shares the same featured-duel room id.
+            First two visitors get the seats; the rest watch (or open a fresh duel of their own).
+            Resets at midnight PT.
+          </p>
+        </div>
+        <div class="dl__featured-cta">
+          <a class="dl__btn dl__btn--magenta" href={`/drum-vs?room=${featuredRoomId}`}>
+            ▸ join the duel
+            <span class="dl__btn-sub mono">tug-of-war · first to 50</span>
+          </a>
+          <a class="dl__btn" href={`/drum-vs?room=${featuredRoomId}&mode=duel`}>
+            ▸ as a reaction duel
+            <span class="dl__btn-sub mono">bell · first tap wins</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <hr class="dl__rule" />
+
+    {/* Live pulse — last ~30s of taps streaming */}
+    <section class="dl__pulse" aria-label="Live pulse">
+      <p class="dl__eyebrow mono">◉ LIVE PULSE · LAST 30 SECONDS</p>
+      <ul class="dl__pulse-list" id="dl-pulse-list" role="list">
+        <li class="dl__pulse-empty mono">— stream open · waiting for the first tap —</li>
+      </ul>
+    </section>
+
+    {/* Top 12 leaderboard */}
+    <section class="dl__top" aria-label="Top contributors">
+      <p class="dl__eyebrow mono">★ TOP 12 CONTRIBUTORS · ALL-TIME</p>
+      <ol class="dl__top-list" id="dl-top-list" role="list">
+        <li class="dl__top-empty mono">— loading leaderboard —</li>
+      </ol>
+      <p class="dl__top-foot mono">
+        anonymized to noun id · counts are stable per browser session ·
+        names are nobody's business here
+      </p>
+    </section>
+
+    <hr class="dl__rule" />
+
+    {/* Your lane */}
+    <section class="dl__yours" aria-label="Your lane">
+      <p class="dl__eyebrow mono">☞ YOUR LANE</p>
+      <div class="dl__yours-card">
+        <div class="dl__yours-noun-wrap">
+          <img class="dl__yours-noun" id="dl-yours-noun" src="" alt="" width="96" height="96" />
+        </div>
+        <div class="dl__yours-body">
+          <p class="dl__yours-tag mono">YOU · NOUN <strong id="dl-yours-noun-id">—</strong></p>
+          <p class="dl__yours-stat">
+            <strong id="dl-yours-count" aria-live="polite">—</strong>
+            <span class="dl__yours-of mono">taps so far</span>
+          </p>
+          <p class="dl__yours-rank mono" id="dl-yours-rank">— calculating rank —</p>
+        </div>
+      </div>
+    </section>
+
+    {/* Daily challenge — rotating editorial */}
+    <section class="dl__challenge" aria-label="Today's challenge">
+      <p class="dl__eyebrow mono">❡ TODAY'S CHALLENGE</p>
+      <div class="dl__challenge-card">
+        <span class="dl__challenge-glyph" aria-hidden="true">{todayChallenge.glyph}</span>
+        <p class="dl__challenge-text">{todayChallenge.text}</p>
+      </div>
+    </section>
+
+    <hr class="dl__rule dl__rule--ornate" />
+
+    {/* Ceremony hall — placeholder for end-of-week recap */}
+    <section class="dl__ceremony" aria-label="Ceremony hall">
+      <p class="dl__eyebrow mono">※ CEREMONY HALL</p>
+      <p class="dl__ceremony-body">
+        Sundays at 5pm PT, the top three contributors get a portrait card on the
+        masthead and a permanent block in the Drum Press. The League is young —
+        the first ceremony is coming. Until then, this hall is quiet.
+      </p>
+      <p class="dl__ceremony-note mono">
+        ※ first ceremony scheduled for the first Sunday after launch ·
+        check back · or simply keep playing
+      </p>
+    </section>
+
+    {/* Foot */}
+    <footer class="dl__foot">
+      <p class="mono">
+        DRUM LEAGUE · v0.1 · 2026-04-30 · pointcast.xyz/drum-league ·
+        cooperative + leaderboarded · every tap counts ·
+        <a href="/drum-press">all 54 titles in print →</a>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ── Identity (sessionId → noun) ─────────────────────────────────
+    function getSid() {
+      try {
+        var s = localStorage.getItem('pc:sid');
+        if (s) return s;
+        s = (Math.random().toString(36).slice(2) + Date.now().toString(36));
+        localStorage.setItem('pc:sid', s);
+        return s;
+      } catch (e) { return 'anon-' + Date.now(); }
+    }
+    function nounIdFromString(s) {
+      var h = 0;
+      for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+      return Math.abs(h) % 1200;
+    }
+    var sid = getSid();
+    var myNoun = nounIdFromString(sid);
+
+    // Render YOUR card immediately (rest fetches async).
+    var yoursNounEl = document.getElementById('dl-yours-noun');
+    var yoursNounIdEl = document.getElementById('dl-yours-noun-id');
+    if (yoursNounEl) {
+      yoursNounEl.src = 'https://noun.pics/' + myNoun + '.svg';
+      yoursNounEl.alt = 'Your Noun ' + myNoun;
+      yoursNounEl.style.imageRendering = 'pixelated';
+    }
+    if (yoursNounIdEl) yoursNounIdEl.textContent = String(myNoun);
+
+    // ── Tally: poll /api/drum?sessionId= for {globalTotal, yourTotal} ──
+    function fmtNum(n) {
+      try { return n.toLocaleString(); } catch (e) { return String(n); }
+    }
+    var tallyNumEl = document.getElementById('dl-tally-num');
+    var tallyFillEl = document.getElementById('dl-tally-fill');
+    var tallyHintEl = document.getElementById('dl-tally-hint');
+    var yoursCountEl = document.getElementById('dl-yours-count');
+    var yoursRankEl = document.getElementById('dl-yours-rank');
+    var WEEKLY_TARGET = 50000;
+
+    function pollTally() {
+      fetch('/api/drum?sessionId=' + encodeURIComponent(sid), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          var total = Number(d.globalTotal) || 0;
+          var yours = Number(d.yourTotal) || 0;
+          if (tallyNumEl) tallyNumEl.textContent = fmtNum(total);
+          var pct = Math.min(100, (total / WEEKLY_TARGET) * 100);
+          if (tallyFillEl) tallyFillEl.style.width = pct + '%';
+          if (tallyHintEl) {
+            tallyHintEl.textContent = pct >= 100
+              ? '🎉 weekly target hit · the league did it · keep going'
+              : Math.round(pct) + '% to ' + fmtNum(WEEKLY_TARGET) + ' · the more we tap, the closer we get';
+          }
+          if (yoursCountEl) yoursCountEl.textContent = fmtNum(yours);
+        }).catch(function () {});
+    }
+    pollTally();
+    setInterval(pollTally, 4000);
+
+    // ── Top 12 leaderboard ──────────────────────────────────────────
+    var topListEl = document.getElementById('dl-top-list');
+    function pollTop() {
+      fetch('/api/drum/top', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          var entries = Array.isArray(d.entries) ? d.entries : [];
+          if (!entries.length) {
+            if (topListEl) topListEl.innerHTML = '<li class="dl__top-empty mono">— no taps yet · be the first —</li>';
+            return;
+          }
+          // Build rows for top 12
+          var rows = entries.slice(0, 12).map(function (e, i) {
+            var rank = e.rank || (i + 1);
+            var nid = (e.nounId | 0) || 1;
+            var count = Number(e.count) || 0;
+            var hash = (e.hash || '').slice(0, 8);
+            var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+            return '<li class="dl__top-row" data-rank="' + rank + '">' +
+                   '<span class="dl__top-rank mono">' + (rank < 10 ? '0' + rank : rank) + '</span>' +
+                   '<span class="dl__top-medal" aria-hidden="true">' + medal + '</span>' +
+                   '<img class="dl__top-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="40" height="40" loading="lazy" />' +
+                   '<span class="dl__top-name">noun ' + nid + '</span>' +
+                   '<span class="dl__top-hash mono">' + hash + '</span>' +
+                   '<span class="dl__top-count mono">' + fmtNum(count) + '</span>' +
+                   '</li>';
+          }).join('');
+          if (topListEl) topListEl.innerHTML = rows;
+
+          // Compute your rank by hash match if possible
+          if (yoursRankEl) {
+            // sessionId hash isn't exposed client-side but server stores
+            // it. Best approximation: match by nounId. If multiple match
+            // we just show the best rank.
+            var matched = entries.filter(function (e) { return e.nounId === myNoun; });
+            if (matched.length === 0) {
+              yoursRankEl.textContent = '— not on the leaderboard yet · keep tapping —';
+            } else {
+              var best = matched.reduce(function (m, e) {
+                return (m.rank || 9999) <= (e.rank || 9999) ? m : e;
+              });
+              yoursRankEl.textContent = best.rank
+                ? '★ rank #' + best.rank + ' · ' + fmtNum(best.count) + ' taps'
+                : '— ranked outside top — ';
+            }
+          }
+        }).catch(function () {});
+    }
+    pollTop();
+    setInterval(pollTop, 8000);
+
+    // ── Live pulse — /api/sounds firehose ───────────────────────────
+    var pulseListEl = document.getElementById('dl-pulse-list');
+    var lastPulseTs = Date.now() - 30000;
+    var pulseSeen = {};
+    function fmtTime(t) {
+      var d = new Date(t || Date.now());
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+    function pulseRow(e) {
+      var key = (e.t || 0) + ':' + (e.pid || '') + ':' + (e.type || '');
+      if (pulseSeen[key]) return null;
+      pulseSeen[key] = 1;
+      // Map pid (server-derived hash, opaque) to a noun id
+      var nid = nounIdFromString(e.pid || 'anon');
+      var li = document.createElement('li');
+      li.className = 'dl__pulse-row mono';
+      li.innerHTML =
+        '<span class="dl__pulse-time">' + fmtTime(e.t) + '</span>' +
+        '<img class="dl__pulse-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="22" height="22" loading="lazy" />' +
+        '<span class="dl__pulse-type">[' + (e.type || 'tap') + ']</span>' +
+        '<span class="dl__pulse-pid">noun ' + nid + '</span>';
+      return li;
+    }
+    function pollPulse() {
+      fetch('/api/sounds?since=' + lastPulseTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.events)) return;
+          if (d.events.length === 0) return;
+          lastPulseTs = d.now || Date.now();
+          // Clear empty placeholder
+          var empty = pulseListEl ? pulseListEl.querySelector('.dl__pulse-empty') : null;
+          if (empty) empty.remove();
+          var added = 0;
+          d.events.forEach(function (e) {
+            var li = pulseRow(e);
+            if (li && pulseListEl) {
+              pulseListEl.prepend(li);
+              added++;
+            }
+          });
+          if (pulseListEl) {
+            // Trim to last 12 rows
+            var rows = pulseListEl.querySelectorAll('.dl__pulse-row');
+            for (var i = 12; i < rows.length; i++) rows[i].remove();
+          }
+        }).catch(function () {});
+    }
+    pollPulse();
+    setInterval(pollPulse, 1500);
+  })();
+</script>
+
+<style>
+  .dl {
+    --dl-paper: #fff5d8;
+    --dl-deep: #f8e8c0;
+    --dl-cream: #fffaef;
+    --dl-ink: #11100c;
+    --dl-mute: #5b5347;
+    --dl-magenta: #d6346a;
+    --dl-yellow: #f0c431;
+    --dl-cyan: #3aa9c4;
+    --dl-teal: #2f8c69;
+    --dl-gold: #c9982a;
+
+    background: var(--dl-paper);
+    color: var(--dl-ink);
+    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.5;
+  }
+  .dl .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Masthead ────────────────────────────────────────────── */
+  .dl__masthead {
+    text-align: center;
+    margin: 14px auto 28px;
+    max-width: 920px;
+  }
+  .dl__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--dl-magenta);
+    text-transform: uppercase;
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  .dl__title {
+    font-size: clamp(54px, 11vw, 128px);
+    font-weight: 800;
+    margin: 0;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+  }
+  .dl__title em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--dl-magenta);
+  }
+  .dl__strap {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dl-mute);
+    margin: 14px 0 18px;
+  }
+  .dl__dek {
+    font-size: clamp(15px, 1.3vw, 18px);
+    line-height: 1.55;
+    margin: 0 auto;
+    max-width: 640px;
+  }
+
+  /* ─── Rules ──────────────────────────────────────────────── */
+  .dl__rule {
+    border: 0;
+    border-top: 1px solid var(--dl-ink);
+    margin: 28px auto 24px;
+    max-width: 920px;
+    opacity: 0.5;
+  }
+  .dl__rule--ornate {
+    border: 0;
+    height: 18px;
+    text-align: center;
+    margin: 36px auto;
+    max-width: 920px;
+    position: relative;
+  }
+  .dl__rule--ornate::before {
+    content: '★  ·  ★  ·  ★  ·  ★  ·  ★';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    letter-spacing: 1.2em;
+    color: var(--dl-gold);
+  }
+
+  /* ─── Section eyebrows ────────────────────────────────────── */
+  .dl__eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--dl-magenta);
+    font-weight: 700;
+    margin: 0 0 10px;
+  }
+
+  /* ─── Tally card ──────────────────────────────────────────── */
+  .dl__tally {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .dl__tally-card {
+    padding: 24px 24px;
+    background: var(--dl-cream);
+    border: 2.5px solid var(--dl-ink);
+    box-shadow: 6px 6px 0 0 var(--dl-magenta);
+  }
+  .dl__tally-num {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .dl__tally-num strong {
+    font-size: clamp(44px, 7vw, 96px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--dl-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .dl__tally-of {
+    font-size: 14px;
+    color: var(--dl-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .dl__tally-bar {
+    height: 16px;
+    background: var(--dl-deep);
+    border: 1.5px solid var(--dl-ink);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .dl__tally-fill {
+    height: 100%;
+    width: 0%;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--dl-magenta) 0 12px,
+      var(--dl-yellow) 12px 24px
+    );
+    transition: width 600ms cubic-bezier(0.2, 0.8, 0.4, 1);
+  }
+  .dl__tally-hint {
+    font-size: 11px;
+    color: var(--dl-mute);
+    margin: 0;
+    letter-spacing: 0.1em;
+  }
+
+  /* ─── Featured duel card ──────────────────────────────────── */
+  .dl__featured {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .dl__featured-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    padding: 22px 24px;
+    background: var(--dl-cream);
+    border: 2px solid var(--dl-ink);
+    border-left: 6px solid var(--dl-magenta);
+    align-items: center;
+  }
+  .dl__featured-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .dl__featured-title em {
+    font-style: italic;
+    color: var(--dl-magenta);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  .dl__featured-note {
+    font-size: 14px;
+    color: var(--dl-ink);
+    margin: 0;
+    line-height: 1.5;
+    max-width: 480px;
+  }
+  .dl__featured-cta {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ─── Buttons ─────────────────────────────────────────────── */
+  .dl__btn {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 18px;
+    background: var(--dl-cream);
+    border: 2.5px solid var(--dl-ink);
+    color: var(--dl-ink);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 0 var(--dl-ink);
+    transition: transform 80ms, box-shadow 80ms;
+    min-width: 200px;
+  }
+  .dl__btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 0 var(--dl-ink);
+    text-decoration: none;
+  }
+  .dl__btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--dl-ink);
+  }
+  .dl__btn--magenta {
+    background: var(--dl-magenta);
+    color: #fff5d8;
+  }
+  .dl__btn--magenta:hover { background: var(--dl-ink); color: #fff5d8; }
+  .dl__btn-sub {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: lowercase;
+    opacity: 0.75;
+    font-weight: 500;
+  }
+
+  /* ─── Live pulse ──────────────────────────────────────────── */
+  .dl__pulse {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .dl__pulse-list {
+    list-style: none;
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--dl-cream);
+    border: 1.5px solid var(--dl-ink);
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dl__pulse-row {
+    display: grid;
+    grid-template-columns: 80px 22px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--dl-ink);
+    padding: 4px 0;
+    border-bottom: 1px dotted rgba(17, 16, 12, 0.1);
+  }
+  .dl__pulse-row:last-child { border-bottom: 0; }
+  .dl__pulse-time { color: var(--dl-mute); letter-spacing: 0.1em; }
+  .dl__pulse-noun {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    image-rendering: pixelated;
+    background: #fff;
+    border: 1px solid var(--dl-ink);
+  }
+  .dl__pulse-type {
+    color: var(--dl-magenta);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+  }
+  .dl__pulse-pid {
+    color: var(--dl-mute);
+    text-align: right;
+    letter-spacing: 0.06em;
+  }
+  .dl__pulse-empty {
+    font-size: 11px;
+    color: var(--dl-mute);
+    text-align: center;
+    padding: 18px;
+    letter-spacing: 0.16em;
+  }
+
+  /* ─── Top 12 leaderboard ──────────────────────────────────── */
+  .dl__top {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .dl__top-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .dl__top-row {
+    display: grid;
+    grid-template-columns: 36px 28px 44px 1fr 80px auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--dl-cream);
+    border: 1.5px solid var(--dl-ink);
+    transition: background 120ms;
+  }
+  .dl__top-row[data-rank="1"] { background: linear-gradient(180deg, #fffaef 0%, rgba(201, 152, 42, 0.18) 100%); border-color: var(--dl-gold); border-width: 2.5px; }
+  .dl__top-row[data-rank="2"] { background: linear-gradient(180deg, #fffaef 0%, rgba(180, 180, 180, 0.18) 100%); }
+  .dl__top-row[data-rank="3"] { background: linear-gradient(180deg, #fffaef 0%, rgba(176, 119, 27, 0.14) 100%); }
+  .dl__top-rank {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--dl-ink);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .dl__top-medal { font-size: 18px; }
+  .dl__top-noun {
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--dl-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .dl__top-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--dl-ink);
+    letter-spacing: -0.01em;
+  }
+  .dl__top-hash {
+    font-size: 9px;
+    color: var(--dl-mute);
+    letter-spacing: 0.18em;
+  }
+  .dl__top-count {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--dl-magenta);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .dl__top-empty {
+    font-size: 12px;
+    color: var(--dl-mute);
+    text-align: center;
+    padding: 18px;
+  }
+  .dl__top-foot {
+    font-size: 10px;
+    color: var(--dl-mute);
+    letter-spacing: 0.1em;
+    text-align: center;
+    margin: 0;
+  }
+
+  /* ─── Your lane ──────────────────────────────────────────── */
+  .dl__yours {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .dl__yours-card {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 18px;
+    padding: 18px 22px;
+    background: var(--dl-cream);
+    border: 2px solid var(--dl-ink);
+    box-shadow: 4px 4px 0 0 var(--dl-cyan);
+    align-items: center;
+  }
+  .dl__yours-noun {
+    width: 96px;
+    height: 96px;
+    border: 2.5px solid var(--dl-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 6px;
+  }
+  .dl__yours-tag {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--dl-mute);
+    margin: 0 0 6px;
+    text-transform: uppercase;
+  }
+  .dl__yours-tag strong { color: var(--dl-ink); }
+  .dl__yours-stat {
+    margin: 0 0 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .dl__yours-stat strong {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--dl-magenta);
+    font-variant-numeric: tabular-nums;
+  }
+  .dl__yours-of {
+    font-size: 11px;
+    color: var(--dl-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .dl__yours-rank {
+    font-size: 11px;
+    color: var(--dl-ink);
+    margin: 0;
+    letter-spacing: 0.1em;
+  }
+
+  /* ─── Daily challenge ─────────────────────────────────────── */
+  .dl__challenge {
+    max-width: 920px;
+    margin: 0 auto 28px;
+  }
+  .dl__challenge-card {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 16px 22px;
+    background: var(--dl-yellow);
+    border: 2px solid var(--dl-ink);
+    box-shadow: 4px 4px 0 0 var(--dl-ink);
+  }
+  .dl__challenge-glyph {
+    font-size: 44px;
+    line-height: 1;
+  }
+  .dl__challenge-text {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    color: var(--dl-ink);
+  }
+
+  /* ─── Ceremony hall ──────────────────────────────────────── */
+  .dl__ceremony {
+    max-width: 720px;
+    margin: 0 auto 24px;
+    text-align: center;
+  }
+  .dl__ceremony-body {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--dl-ink);
+    margin: 8px 0 12px;
+  }
+  .dl__ceremony-note {
+    font-size: 10px;
+    color: var(--dl-mute);
+    letter-spacing: 0.16em;
+    margin: 0;
+  }
+
+  /* ─── Foot ────────────────────────────────────────────────── */
+  .dl__foot {
+    max-width: 920px;
+    margin: 36px auto 0;
+    padding: 14px 0;
+    border-top: 2px solid var(--dl-ink);
+    text-align: center;
+  }
+  .dl__foot p {
+    font-size: 10px;
+    color: var(--dl-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .dl__foot a {
+    color: var(--dl-magenta);
+    text-decoration: none;
+    margin-left: 6px;
+  }
+
+  /* ─── Mobile reflows ──────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .dl__featured-card { grid-template-columns: 1fr; gap: 16px; }
+    .dl__top-row {
+      grid-template-columns: 28px 22px 36px 1fr auto;
+      gap: 8px;
+      padding: 8px 10px;
+    }
+    .dl__top-hash { display: none; }
+    .dl__top-noun { width: 36px; height: 36px; }
+    .dl__top-name { font-size: 14px; }
+    .dl__pulse-row { grid-template-columns: 64px 22px 1fr auto; font-size: 10px; }
+    .dl__yours-card { grid-template-columns: 72px 1fr; gap: 12px; padding: 14px 16px; }
+    .dl__yours-noun { width: 72px; height: 72px; }
+    .dl__yours-stat strong { font-size: 28px; }
+  }
+  @media (max-width: 480px) {
+    .dl__challenge-card { grid-template-columns: 44px 1fr; }
+    .dl__challenge-glyph { font-size: 36px; }
+    .dl { padding-left: 14px; padding-right: 14px; }
+  }
+</style>
