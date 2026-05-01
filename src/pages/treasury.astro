@@ -1,0 +1,304 @@
+---
+/**
+ * /treasury — sibling to /money. Allowance + burn-rate dashboard.
+ *
+ * /money is the ledger (what was spent). /treasury is the budget
+ * (what's allocated, what's left, what the burn looks like). Reads
+ * the per-agent allowance config from src/data/treasury.json and
+ * cross-references actual spend from blocks with `spend` fields.
+ *
+ * Single-tenant, Mike-funded for v0. Per-agent monthly allowance.
+ * Suggested in Block 0420 as next-up; built 2026-05-01 afternoon.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import treasury from '../data/treasury.json';
+
+const all = await getCollection('blocks');
+
+// Filter to spend blocks, then to the current period (default monthly).
+const periodStart = new Date(treasury.period_start);
+const now = new Date();
+const periodMs = 30 * 24 * 60 * 60 * 1000; // approx month
+const periodEnd = new Date(periodStart.getTime() + periodMs);
+
+const spendBlocks = all.filter((b) => (b.data as any).spend);
+const periodSpends = spendBlocks.filter((b) => {
+  const t = new Date((b.data as any).timestamp).getTime();
+  return t >= periodStart.getTime() && t <= now.getTime();
+});
+
+// Per-agent rollup
+type AgentKey = keyof typeof treasury.per_agent;
+const agents: AgentKey[] = Object.keys(treasury.per_agent) as AgentKey[];
+const agentRollup: Record<string, { allowance: number; spent: number; remaining: number; pct: number; receipts: number }> = {};
+for (const a of agents) {
+  const allowance = treasury.per_agent[a].allowance_usd;
+  const spent = periodSpends
+    .filter((b) => (b.data as any).spend?.agent === a)
+    .reduce((s, b) => s + ((b.data as any).spend?.amount_usd ?? 0), 0);
+  const remaining = Math.max(0, allowance - spent);
+  agentRollup[a] = {
+    allowance,
+    spent,
+    remaining,
+    pct: allowance > 0 ? Math.min(100, (spent / allowance) * 100) : 0,
+    receipts: periodSpends.filter((b) => (b.data as any).spend?.agent === a).length,
+  };
+}
+
+// Per-merchant rollup
+const merchantRollup: Record<string, { cap: number; spent: number; remaining: number; pct: number }> = {};
+for (const [m, cfg] of Object.entries(treasury.merchant_caps)) {
+  const spent = periodSpends
+    .filter((b) => (b.data as any).spend?.merchant === m)
+    .reduce((s, b) => s + ((b.data as any).spend?.amount_usd ?? 0), 0);
+  merchantRollup[m] = {
+    cap: cfg.monthly_usd,
+    spent,
+    remaining: Math.max(0, cfg.monthly_usd - spent),
+    pct: cfg.monthly_usd > 0 ? Math.min(100, (spent / cfg.monthly_usd) * 100) : 0,
+  };
+}
+
+// Totals
+const totalAllowance = treasury.total_usd;
+const totalSpent = periodSpends.reduce((s, b) => s + ((b.data as any).spend?.amount_usd ?? 0), 0);
+const totalRemaining = Math.max(0, totalAllowance - totalSpent);
+
+// Burn rate (extrapolated daily based on period elapsed)
+const daysElapsed = Math.max(0.5, (now.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000));
+const burnPerDay = totalSpent / daysElapsed;
+const projectedRunwayDays = burnPerDay > 0 ? totalRemaining / burnPerDay : Infinity;
+
+const periodEndStr = periodEnd.toISOString().slice(0, 10);
+const daysToReset = Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+
+function fmt(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
+const EMERALD = '#0B6B3A';
+const EMERALD_DEEP = '#06451F';
+const EMERALD_TINT = '#E7F3EC';
+const AMBER = '#BA7517';
+const CORAL = '#C73E3E';
+const INK = '#1A1A1A';
+const HAIR = '#D4CBB6';
+---
+
+<BaseLayout title="Treasury — PointCast" description="Allowance + burn-rate dashboard for resident agent loops. Sibling to /money.">
+  <main class="treasury">
+    <header class="treasury__header">
+      <div class="treasury__chip">TRY</div>
+      <h1>Treasury</h1>
+      <p class="dek">
+        Per-agent monthly allowance and burn rate. /money is the ledger
+        (what was spent). /treasury is the budget (what's allocated,
+        what's left). Single-tenant, Mike-funded for v0. Resets on the
+        1st of each month.
+      </p>
+    </header>
+
+    <section class="totals">
+      <div class="totals__cell">
+        <span class="totals__label">allocated this period</span>
+        <span class="totals__big">{fmt(totalAllowance)}</span>
+        <span class="totals__sub">{treasury.funder.handle} · {treasury.funder.payment_method_kind}</span>
+      </div>
+      <div class="totals__cell">
+        <span class="totals__label">spent so far</span>
+        <span class="totals__big" style={`color: ${EMERALD}`}>{fmt(totalSpent)}</span>
+        <span class="totals__sub">{periodSpends.length} receipt{periodSpends.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="totals__cell">
+        <span class="totals__label">remaining</span>
+        <span class="totals__big" style={`color: ${totalRemaining > 0 ? INK : CORAL}`}>{fmt(totalRemaining)}</span>
+        <span class="totals__sub">{daysToReset} day{daysToReset === 1 ? '' : 's'} to reset</span>
+      </div>
+      <div class="totals__cell">
+        <span class="totals__label">burn / day</span>
+        <span class="totals__big">{fmt(burnPerDay)}</span>
+        <span class="totals__sub">projected runway: {projectedRunwayDays === Infinity ? '∞' : `${Math.floor(projectedRunwayDays)}d`}</span>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>By agent</h2>
+      <ul class="rollup">
+        {agents.map((a) => {
+          const r = agentRollup[a];
+          const pct = Math.round(r.pct);
+          return (
+            <li class="row">
+              <div class="row__head">
+                <span class="row__name">{a}</span>
+                <span class="row__nums">{fmt(r.spent)} / {fmt(r.allowance)} · {r.receipts} loop{r.receipts === 1 ? '' : 's'}</span>
+              </div>
+              <div class="bar"><div class="bar__fill" style={`width: ${pct}%`} /></div>
+              <p class="row__rationale">{treasury.per_agent[a].rationale}</p>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    <section class="block">
+      <h2>By merchant</h2>
+      <ul class="rollup">
+        {Object.entries(merchantRollup).map(([m, r]) => {
+          const pct = Math.round(r.pct);
+          return (
+            <li class="row">
+              <div class="row__head">
+                <span class="row__name">{m}</span>
+                <span class="row__nums">{fmt(r.spent)} / {fmt(r.cap)} · {(treasury.merchant_caps as any)[m].kind}</span>
+              </div>
+              <div class="bar"><div class="bar__fill" style={`width: ${pct}%; background: ${AMBER}`} /></div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    <section class="block kill-switch">
+      <h2>Kill switch</h2>
+      <p class="dek">Server-side hard caps. Belt-and-suspenders to the Link dashboard caps Mike set at onboard. Both layers must allow a charge for it to clear.</p>
+      <ul class="kill">
+        <li><span>per purchase:</span> <strong>{fmt(treasury.kill_switch.per_purchase_usd)}</strong></li>
+        <li><span>per agent / day:</span> <strong>{fmt(treasury.kill_switch.per_agent_per_day_usd)}</strong></li>
+        <li><span>rolling 30 days:</span> <strong>{fmt(treasury.kill_switch.rolling_30d_usd)}</strong></li>
+      </ul>
+    </section>
+
+    <footer class="treasury__footer">
+      <a href="/money">/money — the ledger</a>
+      <span>·</span>
+      <a href="/money.json">/money.json — agent feed</a>
+      <span>·</span>
+      <a href="/b/0420">/b/0420 — where this goes</a>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style define:vars={{ EMERALD, EMERALD_DEEP, EMERALD_TINT, AMBER, CORAL, INK, HAIR }}>
+  .treasury {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    color: var(--INK);
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .treasury__header {
+    border-left: 6px solid var(--AMBER);
+    padding-left: 1rem;
+    margin-bottom: 2rem;
+  }
+  .treasury__chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
+    background: var(--AMBER);
+    color: white;
+    padding: 0.2rem 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .treasury h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 3rem;
+    margin: 0 0 0.5rem;
+    color: var(--EMERALD_DEEP);
+  }
+  .treasury .dek {
+    font-style: italic;
+    color: #555;
+    font-size: 1rem;
+    line-height: 1.5;
+    max-width: 64ch;
+  }
+  .totals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 700px) { .totals { grid-template-columns: repeat(2, 1fr); } }
+  .totals__cell {
+    background: var(--EMERALD_TINT);
+    border: 1px solid var(--HAIR);
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .totals__label {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b6358;
+  }
+  .totals__big {
+    font-family: Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--EMERALD_DEEP);
+  }
+  .totals__sub { font-size: 0.78rem; color: #6b6358; }
+  .block { margin-bottom: 2rem; }
+  .block h2 {
+    font-family: Georgia, serif;
+    font-size: 1.4rem;
+    margin: 0 0 0.6rem;
+  }
+  .rollup { list-style: none; margin: 0; padding: 0; }
+  .row {
+    background: white;
+    border: 1px solid var(--HAIR);
+    border-left: 4px solid var(--EMERALD);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .row__head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .row__name {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--EMERALD_DEEP);
+  }
+  .row__nums {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    color: var(--INK);
+  }
+  .row__rationale { font-size: 0.85rem; color: #6b6358; margin: 0.45rem 0 0; font-style: italic; }
+  .bar {
+    height: 8px;
+    background: var(--HAIR);
+    margin-top: 0.5rem;
+    overflow: hidden;
+  }
+  .bar__fill {
+    height: 100%;
+    background: var(--EMERALD);
+    transition: width 200ms ease-out;
+  }
+  .kill-switch { background: #FBF1E1; border: 1px solid var(--AMBER); padding: 1rem 1.25rem; }
+  .kill { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: 0.9rem; }
+  .kill li span { color: #6b6358; }
+  .kill li strong { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; color: var(--AMBER); margin-left: 0.3rem; }
+  .treasury__footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--HAIR);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: #888;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .treasury__footer a { color: var(--EMERALD_DEEP); text-decoration: none; }
+  .treasury__footer a:hover { text-decoration: underline; }
+</style>
