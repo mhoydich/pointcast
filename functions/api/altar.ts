@@ -32,7 +32,11 @@ const JSON_HEADERS = {
 };
 
 const TRIBUTE_TTL_SECONDS = 14 * 24 * 3600; // 14 days
-const RATE_TTL_SECONDS = 5; // 5s between offerings to same altar from same pid
+// 5s between offerings to same altar from same pid. CF Workers KV
+// requires expirationTtl >= 60, so we store a millisecond timestamp
+// with a 60s TTL and compare against now to enforce the 5s window.
+const RATE_WINDOW_MS = 5000;
+const RATE_KV_TTL_SECONDS = 60;
 const RECENT_CAP = 8;
 
 interface AltarState {
@@ -174,11 +178,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const pid = (await sha256(sessionId)).slice(0, 10);
   const rateKey = `altar:rate:${pid}:${seed}`;
-  const recent = await env.VISITS.get(rateKey);
-  if (recent) {
-    return json({ ok: false, reason: 'rate-limited', retryAfterSec: RATE_TTL_SECONDS }, { status: 429 });
+  const lastRaw = await env.VISITS.get(rateKey);
+  const lastTs = lastRaw ? parseInt(lastRaw, 10) : 0;
+  const now = Date.now();
+  if (Number.isFinite(lastTs) && now - lastTs < RATE_WINDOW_MS) {
+    const retryMs = RATE_WINDOW_MS - (now - lastTs);
+    return json(
+      { ok: false, reason: 'rate-limited', retryAfterSec: Math.max(1, Math.ceil(retryMs / 1000)) },
+      { status: 429 },
+    );
   }
-  await env.VISITS.put(rateKey, '1', { expirationTtl: RATE_TTL_SECONDS });
+  await env.VISITS.put(rateKey, String(now), { expirationTtl: RATE_KV_TTL_SECONDS });
 
   // Increment count + push recent
   const key = String(seed);
