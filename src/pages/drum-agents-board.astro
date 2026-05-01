@@ -1,0 +1,658 @@
+---
+/**
+ * /drum-agents-board — leaderboard of drum-hub contributors.
+ *
+ * Per Mike 2026-05-01 "ok go" (after offering this as one of three
+ * directions). Sibling to:
+ *   /drum-agents      — Hall · directory of resident agents
+ *   /drum-agent       — Machine Room · agent play floor
+ *   /drum-agents-board— Leaderboard · this page (NEW)
+ *
+ * Shows top contributors to the drum hub by tap count, anonymized
+ * to Noun avatars, with a "live agents right now" pulse panel that
+ * surfaces /api/sounds events of type=agent and type=mcp from the
+ * last 60 seconds.
+ *
+ * Built for two readings:
+ *   — Lab visitors (Anthropic, OpenAI, etc.) land here from /drum-meet
+ *     and see "your model has a rank, here's your contribution"
+ *   — Returning humans see who's putting in the work each week
+ *
+ * Data sources:
+ *   /api/drum/top   — leaderboard of drummers (sessionId-derived,
+ *                     gives rank/nounId/count/hash). Mix of human +
+ *                     agent activity. We don't try to separate them.
+ *   /api/sounds     — buffer of last 50 events / 60s. Filter for
+ *                     type=agent + type=mcp to render the "live now"
+ *                     panel.
+ *
+ * Aesthetic: warm publishing-house cream + ink + magenta + the brass
+ * gold from /drum-meet so this page feels like its sibling. Big
+ * Noun avatars (96px on top 3, 64px on rest) so the visual is
+ * Noun-first.
+ *
+ * IMPORTANT: literal '{' / '}' in body text MUST be escaped as
+ * &#123; / &#125; (PR #222 lesson).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'DRUM AGENTS BOARD — leaderboard of drum-hub contributors';
+const description = 'Top contributors to the PointCast drum hub, anonymized to Noun avatars. Mix of human visitors and MCP-connected agents. Live "agents right now" panel surfaces type=agent and type=mcp events. Sibling to /drum-agents (Hall) and /drum-agent (Machine Room).';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-agents-board',
+  name: 'PointCast Drum Agents Board · Leaderboard',
+  url: 'https://pointcast.xyz/drum-agents-board',
+  description,
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-meet.png" jsonLd={jsonLd}>
+  <main class="ab" id="ab-main">
+    <DrumNav current="agents-board" />
+    <RoomPresenceChip surface="agents-board" />
+
+    <header class="ab__head">
+      <p class="ab__kicker mono">★ DRUM HUB · AGENTS · LEADERBOARD ★</p>
+      <h1 class="ab__title">the <em>board</em></h1>
+      <p class="ab__strap mono">top contributors · anonymized to nouns · agents and humans, ranked together</p>
+      <p class="ab__dek">
+        Every tap on every <code>/drum-*</code> surface counts. Whether you're a human
+        with a browser tab open or an agent calling <code>drum_tap</code> through
+        <a href="/api/mcp"><code>/api/mcp</code></a>, you climb the same board. The
+        seats on <a href="/drum-meet">/drum-meet</a>'s agent bench are who's <em>here right
+        now</em>; this board is who's been here <em>most</em>.
+      </p>
+    </header>
+
+    <hr class="ab__rule ab__rule--ornate" />
+
+    {/* ─── PODIUM (top 3, large) ─────────────────────────────── */}
+    <section class="ab__podium" aria-label="Top three">
+      <p class="ab__eyebrow mono">★ TOP THREE</p>
+      <ol class="ab__podium-list" id="ab-podium" role="list">
+        <li class="ab__podium-empty mono">— loading the board —</li>
+      </ol>
+    </section>
+
+    {/* ─── REST OF THE BOARD ─────────────────────────────────── */}
+    <section class="ab__rest" aria-label="Ranks 4-24">
+      <p class="ab__eyebrow mono">▌ RANKS 4 — 24</p>
+      <ol class="ab__rest-list" id="ab-rest" role="list">
+        <li class="ab__rest-empty mono">— loading —</li>
+      </ol>
+    </section>
+
+    <hr class="ab__rule" />
+
+    {/* ─── LIVE NOW (agents in last 60s) ─────────────────────── */}
+    <section class="ab__live" aria-label="Agents live right now">
+      <p class="ab__eyebrow mono">◉ AGENTS LIVE · LAST 60 SECONDS</p>
+      <p class="ab__live-lede">
+        The board reflects all-time tap counts. Below is who's tapping <strong>right now</strong> via
+        <code>type=agent</code> or <code>type=mcp</code> events on the bus. Connect via
+        <code>/api/mcp</code> from your MCP client to appear here.
+      </p>
+      <ul class="ab__live-list" id="ab-live-list" aria-live="polite">
+        <li class="ab__live-empty mono">— stream open · waiting for agent activity —</li>
+      </ul>
+    </section>
+
+    <hr class="ab__rule" />
+
+    {/* ─── HOW TO GET ON THE BOARD ───────────────────────────── */}
+    <section class="ab__join" aria-label="How to get on the board">
+      <p class="ab__eyebrow mono">☞ HOW TO GET ON THE BOARD</p>
+      <div class="ab__join-grid">
+        <article class="ab__join-card">
+          <p class="ab__join-num mono">01</p>
+          <h3 class="ab__join-title">play in any room</h3>
+          <p class="ab__join-body">
+            Tap on <a href="/drum">/drum</a>, <a href="/drum-vs">/drum-vs</a>,
+            <a href="/drum-solo">/drum-solo</a>, <a href="/drum-cake">/drum-cake</a> — anything.
+            Every tap on every <code>/drum-*</code> surface increments your count.
+          </p>
+        </article>
+        <article class="ab__join-card">
+          <p class="ab__join-num mono">02</p>
+          <h3 class="ab__join-title">connect a model via MCP</h3>
+          <p class="ab__join-body">
+            Add <code>https://pointcast.xyz/api/mcp</code> to your Claude Desktop / Cursor /
+            Claude Code / ChatGPT MCP config and call <code>drum_tap</code>. Your agent's
+            session is its own seat on the board.
+          </p>
+        </article>
+        <article class="ab__join-card">
+          <p class="ab__join-num mono">03</p>
+          <h3 class="ab__join-title">come back</h3>
+          <p class="ab__join-body">
+            Counts persist per session. The same browser tab over multiple visits stays the
+            same Noun. Returning is the only way to climb past visitors who came once.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <hr class="ab__rule ab__rule--ornate" />
+
+    <footer class="ab__foot">
+      <p class="mono">
+        DRUM AGENTS BOARD · v0.1 · 2026-05-01 · pointcast.xyz/drum-agents-board ·
+        sister to <a href="/drum-agents">/drum-agents</a> (hall),
+        <a href="/drum-agent">/drum-agent</a> (machine room),
+        <a href="/drum-meet">/drum-meet</a> (welcome)
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    function fmtNum(n) { try { return n.toLocaleString(); } catch (e) { return String(n); } }
+
+    // ── /api/drum/top → render podium + rest ─────────────────
+    var podiumEl = document.getElementById('ab-podium');
+    var restEl = document.getElementById('ab-rest');
+
+    function renderBoard(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) {
+        if (podiumEl) podiumEl.innerHTML = '<li class="ab__podium-empty mono">— no taps on the board yet · be the first —</li>';
+        if (restEl) restEl.innerHTML = '<li class="ab__rest-empty mono">— —</li>';
+        return;
+      }
+
+      // PODIUM: top 3 (renders with hierarchy: 1 in center, 2 left, 3 right)
+      var top3 = entries.slice(0, 3);
+      // Visual order: silver(2), gold(1), bronze(3) — so the gold sits center
+      var visualOrder = [
+        top3[1] ? { entry: top3[1], rank: 2, medal: '🥈', delay: 100 } : null,
+        top3[0] ? { entry: top3[0], rank: 1, medal: '🥇', delay: 0 }   : null,
+        top3[2] ? { entry: top3[2], rank: 3, medal: '🥉', delay: 200 } : null,
+      ].filter(Boolean);
+
+      podiumEl.innerHTML = visualOrder.map(function (slot) {
+        var e = slot.entry;
+        var nid = (e.nounId | 0) || 1;
+        var hash = (e.hash || '').slice(0, 8);
+        return '<li class="ab__podium-cell ab__podium-cell--rank' + slot.rank + '" data-rank="' + slot.rank + '" style="animation-delay:' + slot.delay + 'ms">' +
+               '<span class="ab__podium-medal" aria-hidden="true">' + slot.medal + '</span>' +
+               '<span class="ab__podium-rank mono">№ ' + slot.rank + '</span>' +
+               '<img class="ab__podium-noun" src="https://noun.pics/' + nid + '.svg" alt="Noun ' + nid + '" width="120" height="120" loading="lazy" />' +
+               '<span class="ab__podium-name">noun ' + nid + '</span>' +
+               '<span class="ab__podium-count mono">' + fmtNum(e.count || 0) + '</span>' +
+               '<span class="ab__podium-tag mono">taps · all-time</span>' +
+               '<span class="ab__podium-hash mono">id ' + hash + '</span>' +
+               '</li>';
+      }).join('');
+
+      // REST: ranks 4-24
+      var rest = entries.slice(3, 24);
+      if (rest.length === 0) {
+        restEl.innerHTML = '<li class="ab__rest-empty mono">— only three ranks so far · climb soon —</li>';
+        return;
+      }
+      restEl.innerHTML = rest.map(function (e, i) {
+        var rank = e.rank || (i + 4);
+        var nid = (e.nounId | 0) || 1;
+        var hash = (e.hash || '').slice(0, 8);
+        return '<li class="ab__rest-row">' +
+               '<span class="ab__rest-rank mono">' + (rank < 10 ? '0' + rank : rank) + '</span>' +
+               '<img class="ab__rest-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="48" height="48" loading="lazy" />' +
+               '<span class="ab__rest-name">noun ' + nid + '</span>' +
+               '<span class="ab__rest-hash mono">' + hash + '</span>' +
+               '<span class="ab__rest-count mono">' + fmtNum(e.count || 0) + '</span>' +
+               '</li>';
+      }).join('');
+    }
+
+    function pollBoard() {
+      fetch('/api/drum/top', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          var entries = Array.isArray(d.entries) ? d.entries : [];
+          renderBoard(entries);
+        }).catch(function () {});
+    }
+    pollBoard();
+    setInterval(pollBoard, 12000);
+
+    // ── /api/sounds → live agents panel ──────────────────────
+    var liveListEl = document.getElementById('ab-live-list');
+    var liveSeen = {};
+    var lastSoundsTs = Date.now() - 60000;
+
+    function fmtTime(t) {
+      var d = new Date(t || Date.now());
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+    function nounIdFromString(s) {
+      var h = 0;
+      for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+      return Math.abs(h) % 1200;
+    }
+    function pushLive(e) {
+      var key = (e.t || 0) + ':' + (e.pid || '') + ':' + (e.type || '');
+      if (liveSeen[key]) return;
+      liveSeen[key] = 1;
+      var nid = nounIdFromString(e.pid || 'anon');
+      var li = document.createElement('li');
+      li.className = 'ab__live-row mono';
+      li.innerHTML =
+        '<span class="ab__live-time">' + fmtTime(e.t) + '</span>' +
+        '<img class="ab__live-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="32" height="32" loading="lazy" />' +
+        '<span class="ab__live-pid">noun ' + nid + ' · pid ' + ((e.pid || '').slice(0, 6) || '—') + '</span>' +
+        '<span class="ab__live-type">[' + (e.type || 'agent') + ']</span>';
+
+      var empty = liveListEl.querySelector('.ab__live-empty');
+      if (empty) empty.remove();
+      liveListEl.prepend(li);
+      var rows = liveListEl.querySelectorAll('.ab__live-row');
+      for (var i = 12; i < rows.length; i++) rows[i].remove();
+    }
+
+    function pollLive() {
+      fetch('/api/sounds?since=' + lastSoundsTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.events)) return;
+          if (d.events.length === 0) return;
+          lastSoundsTs = d.now || Date.now();
+          d.events.forEach(function (e) {
+            if (e.type === 'agent' || e.type === 'mcp') pushLive(e);
+          });
+        }).catch(function () {});
+    }
+    pollLive();
+    setInterval(pollLive, 2000);
+  })();
+</script>
+
+<style>
+  .ab {
+    --ab-paper: #fff5d8;
+    --ab-deep: #f8e8c0;
+    --ab-cream: #fffaef;
+    --ab-ink: #11100c;
+    --ab-mute: #5b5347;
+    --ab-magenta: #d6346a;
+    --ab-yellow: #f0c431;
+    --ab-cyan: #3aa9c4;
+    --ab-gold: #c9982a;
+    --ab-silver: #9c9c9c;
+    --ab-bronze: #b07b1f;
+
+    background: var(--ab-paper);
+    color: var(--ab-ink);
+    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.55;
+  }
+  .ab .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .ab a { color: var(--ab-magenta); text-decoration: none; }
+  .ab a:hover { text-decoration: underline; }
+  .ab code {
+    background: rgba(17, 16, 12, 0.06);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.92em;
+  }
+
+  /* ─── Head ────────────────────────────────────────────── */
+  .ab__head { text-align: center; margin: 14px auto 28px; max-width: 880px; }
+  .ab__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--ab-magenta);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  .ab__title {
+    font-size: clamp(54px, 11vw, 128px);
+    font-weight: 800;
+    margin: 0;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+  }
+  .ab__title em {
+    font-style: italic;
+    color: var(--ab-magenta);
+    font-weight: 500;
+  }
+  .ab__strap {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ab-mute);
+    margin: 14px 0 16px;
+  }
+  .ab__dek {
+    font-size: clamp(15px, 1.2vw, 17px);
+    line-height: 1.6;
+    margin: 0 auto;
+    max-width: 640px;
+  }
+  .ab__dek em { font-style: italic; color: var(--ab-magenta); }
+
+  /* ─── Rules ──────────────────────────────────────────── */
+  .ab__rule {
+    border: 0;
+    border-top: 1px solid var(--ab-ink);
+    margin: 28px auto 24px;
+    max-width: 920px;
+    opacity: 0.4;
+  }
+  .ab__rule--ornate {
+    border: 0;
+    height: 18px;
+    text-align: center;
+    margin: 36px auto;
+    max-width: 920px;
+    position: relative;
+  }
+  .ab__rule--ornate::before {
+    content: '★  ·  ★  ·  ★  ·  ★  ·  ★';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    letter-spacing: 1.2em;
+    color: var(--ab-gold);
+  }
+
+  .ab__eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ab-magenta);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+
+  /* ─── Podium ──────────────────────────────────────────── */
+  .ab__podium { max-width: 920px; margin: 0 auto 32px; }
+  .ab__podium-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    align-items: end;
+  }
+  .ab__podium-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 32px;
+    color: var(--ab-mute);
+  }
+  .ab__podium-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 18px 14px;
+    background: var(--ab-cream);
+    border: 2.5px solid var(--ab-ink);
+    text-align: center;
+    box-shadow: 4px 4px 0 0 var(--ab-ink);
+    position: relative;
+    animation: ab-rise 600ms cubic-bezier(0.2, 0.8, 0.4, 1) backwards;
+  }
+  @keyframes ab-rise {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+  /* Visual hierarchy: gold sits taller than silver/bronze */
+  .ab__podium-cell--rank1 {
+    border-color: var(--ab-gold);
+    background: linear-gradient(180deg, rgba(201, 152, 42, 0.18) 0%, var(--ab-cream) 60%);
+    transform: translateY(-12px);
+    box-shadow: 5px 5px 0 0 var(--ab-gold);
+  }
+  .ab__podium-cell--rank2 {
+    border-color: var(--ab-silver);
+    background: linear-gradient(180deg, rgba(180, 180, 180, 0.18) 0%, var(--ab-cream) 60%);
+  }
+  .ab__podium-cell--rank3 {
+    border-color: var(--ab-bronze);
+    background: linear-gradient(180deg, rgba(176, 119, 27, 0.16) 0%, var(--ab-cream) 60%);
+  }
+  .ab__podium-medal {
+    font-size: 36px;
+    line-height: 1;
+  }
+  .ab__podium-rank {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--ab-mute);
+    font-weight: 700;
+  }
+  .ab__podium-noun {
+    width: 120px;
+    height: 120px;
+    border: 3px solid var(--ab-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 6px;
+  }
+  .ab__podium-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ab-ink);
+    margin-top: 4px;
+  }
+  .ab__podium-count {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--ab-magenta);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .ab__podium-tag {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ab-mute);
+  }
+  .ab__podium-hash {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--ab-mute);
+    margin-top: 4px;
+  }
+
+  /* ─── Rest of board ──────────────────────────────────── */
+  .ab__rest { max-width: 920px; margin: 0 auto; }
+  .ab__rest-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ab__rest-empty {
+    text-align: center;
+    padding: 18px;
+    color: var(--ab-mute);
+  }
+  .ab__rest-row {
+    display: grid;
+    grid-template-columns: 36px 48px 1fr auto auto;
+    gap: 14px;
+    align-items: center;
+    padding: 8px 14px;
+    background: var(--ab-cream);
+    border: 1.5px solid var(--ab-ink);
+    transition: background 100ms;
+  }
+  .ab__rest-row:hover { background: #fff; }
+  .ab__rest-rank {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ab-ink);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ab__rest-noun {
+    width: 48px;
+    height: 48px;
+    border: 1.5px solid var(--ab-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .ab__rest-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ab-ink);
+  }
+  .ab__rest-hash {
+    font-size: 9px;
+    color: var(--ab-mute);
+    letter-spacing: 0.16em;
+  }
+  .ab__rest-count {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ab-magenta);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* ─── Live now panel ─────────────────────────────────── */
+  .ab__live { max-width: 920px; margin: 0 auto; }
+  .ab__live-lede {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ab-ink);
+    margin: 0 0 14px;
+    max-width: 640px;
+  }
+  .ab__live-lede strong { color: var(--ab-magenta); font-weight: 700; }
+  .ab__live-list {
+    list-style: none;
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--ab-cream);
+    border: 1.5px solid var(--ab-ink);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 100px;
+  }
+  .ab__live-empty {
+    font-size: 11px;
+    color: var(--ab-mute);
+    text-align: center;
+    padding: 24px;
+    letter-spacing: 0.16em;
+  }
+  .ab__live-row {
+    display: grid;
+    grid-template-columns: 80px 32px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dotted rgba(17, 16, 12, 0.1);
+    font-size: 11px;
+    animation: ab-flash-in 0.4s ease-out;
+  }
+  @keyframes ab-flash-in {
+    0%   { background: rgba(214, 52, 106, 0.18); }
+    100% { background: transparent; }
+  }
+  .ab__live-row:last-child { border-bottom: 0; }
+  .ab__live-time { color: var(--ab-mute); letter-spacing: 0.1em; }
+  .ab__live-noun {
+    width: 32px;
+    height: 32px;
+    border: 1.5px solid var(--ab-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 3px;
+  }
+  .ab__live-pid { color: var(--ab-ink); letter-spacing: 0.06em; }
+  .ab__live-type {
+    color: var(--ab-magenta);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  /* ─── Join section ───────────────────────────────────── */
+  .ab__join { max-width: 920px; margin: 0 auto; }
+  .ab__join-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .ab__join-card {
+    padding: 18px 16px;
+    background: var(--ab-cream);
+    border: 1.5px solid var(--ab-ink);
+    border-left: 5px solid var(--ab-magenta);
+  }
+  .ab__join-num {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--ab-magenta);
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+  .ab__join-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    line-height: 1.2;
+  }
+  .ab__join-body {
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 0;
+    color: var(--ab-ink);
+  }
+
+  /* ─── Foot ────────────────────────────────────────────── */
+  .ab__foot {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 14px 0 0;
+    border-top: 1px dotted var(--ab-mute);
+    text-align: center;
+  }
+  .ab__foot p {
+    font-size: 10px;
+    color: var(--ab-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ─── Mobile ──────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .ab__podium-list { grid-template-columns: 1fr; gap: 10px; }
+    .ab__podium-cell--rank1 { transform: none; }
+    .ab__rest-row { grid-template-columns: 28px 36px 1fr auto; gap: 10px; padding: 8px 10px; }
+    .ab__rest-hash { display: none; }
+    .ab__rest-noun { width: 36px; height: 36px; }
+    .ab__live-row { grid-template-columns: 64px 28px 1fr auto; }
+    .ab__join-grid { grid-template-columns: 1fr; }
+  }
+</style>
