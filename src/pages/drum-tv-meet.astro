@@ -1,0 +1,685 @@
+---
+/**
+ * /drum-tv-meet — cast/projection mode for the AI-lab visit.
+ *
+ * Per Mike 2026-04-30 (late, "keep going + check websockets/viz/
+ * communication/latency along with the sprint").
+ *
+ * /drum-meet is the browseable interactive welcome page.
+ * /drum-tv-meet is its projection-mode sibling — designed to live
+ * on a 60" TV behind a demo. Big enough to read across a room,
+ * theatrical, with live activity drawn at scale:
+ *
+ *   1. WELCOME RIBBON — slow-scrolling, TV-readable
+ *   2. AGENT BENCH — 6 huge noun-shaped seats (Claude / GPT-5 /
+ *      Codex / Manus / Gemini / open) that flash + pulse magenta
+ *      when MCP activity is detected
+ *   3. ACTIVITY PULSE — the page flashes a ring around the screen
+ *      on every /api/sounds event; type-coded by color
+ *   4. AI-VS-AI SCOREBOARD — pre-seeded /drum-vs?room=AIVSAI
+ *      score in 60"-readable type, updates in real time
+ *   5. LANE INDICATOR — visible bus state ("KV · ~1.5s") so the
+ *      audience knows what they're seeing happens at edge cadence
+ *
+ * Aesthetic: dark cabinet, brass-gold accents, ON AIR pulse,
+ * TV-overscan-safe padding (5%). Designed for fullscreen.
+ *
+ * Tier: today this is /api/sounds polling at 600ms (tighter than
+ * cast surfaces' 1.5s baseline since we want the demo to feel
+ * snappy). When codex lands the WebSocket Durable Object pilot
+ * (per docs/briefs/2026-04-30-codex-comms-architecture.md), this
+ * surface is the natural first consumer — sub-200ms cross-surface
+ * latency would make the demo feel real-time.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'DRUM TV · MEET — projection cast for the in-person visit';
+const description = 'Cast/projection mode for the AI-lab visit. Designed for a 60" TV: big agent bench, live activity pulse, AI-vs-AI scoreboard, latency indicator. Sister to /drum-meet (the browseable welcome).';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-tv-meet',
+  name: 'PointCast Drum TV Meet · Projection Cast',
+  url: 'https://pointcast.xyz/drum-tv-meet',
+  description,
+};
+
+const featuredRoom = 'AIVSAI';
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-meet.png" jsonLd={jsonLd}>
+  <main class="tvm" id="tvm-main">
+
+    {/* ─── HEADER STRIP ──────────────────────────────────────── */}
+    <header class="tvm__strip">
+      <div class="tvm__strip-left">
+        <span class="tvm__on-air">
+          <span class="tvm__on-air-dot" aria-hidden="true"></span>
+          ON AIR
+        </span>
+        <span class="tvm__strip-label mono">PC · POINTCAST · DRUM TV · MEET</span>
+      </div>
+      <div class="tvm__strip-right">
+        <span class="tvm__lane mono" id="tvm-lane">
+          <span class="tvm__lane-dot" id="tvm-lane-dot" aria-hidden="true"></span>
+          <span id="tvm-lane-label">KV · 600ms</span>
+          <span class="tvm__lane-rtt" id="tvm-lane-rtt"></span>
+        </span>
+      </div>
+    </header>
+
+    {/* ─── WELCOME RIBBON (slow scroll) ─────────────────────── */}
+    <section class="tvm__welcome" aria-label="Welcome">
+      <p class="tvm__welcome-line">
+        <span>welcome from <em>anthropic</em></span>
+        <span class="tvm__welcome-dot" aria-hidden="true">★</span>
+        <span>welcome from <em>openai</em></span>
+        <span class="tvm__welcome-dot" aria-hidden="true">★</span>
+        <span>tap a drum from your model</span>
+        <span class="tvm__welcome-dot" aria-hidden="true">★</span>
+        <span><code>pointcast.xyz/api/mcp</code> · 24 tools</span>
+        <span class="tvm__welcome-dot" aria-hidden="true">★</span>
+        <span>made with claude code · codex · manus</span>
+        <span class="tvm__welcome-dot" aria-hidden="true">★</span>
+      </p>
+    </section>
+
+    {/* ─── BENCH (massive) ──────────────────────────────────── */}
+    <section class="tvm__bench" aria-label="Agent bench">
+      <p class="tvm__eyebrow mono">▌ AGENT BENCH · LIVE</p>
+      <ul class="tvm__bench-list" id="tvm-bench-list" role="list">
+        <li class="tvm__seat" data-family="claude">
+          <img class="tvm__seat-noun" src="https://noun.pics/156.svg" alt="" width="120" height="120" loading="lazy" />
+          <span class="tvm__seat-name mono">CLAUDE</span>
+          <span class="tvm__seat-state mono" id="tvm-seat-claude">— quiet —</span>
+        </li>
+        <li class="tvm__seat" data-family="gpt">
+          <img class="tvm__seat-noun" src="https://noun.pics/805.svg" alt="" width="120" height="120" loading="lazy" />
+          <span class="tvm__seat-name mono">GPT-5</span>
+          <span class="tvm__seat-state mono" id="tvm-seat-gpt">— quiet —</span>
+        </li>
+        <li class="tvm__seat" data-family="codex">
+          <img class="tvm__seat-noun" src="https://noun.pics/42.svg" alt="" width="120" height="120" loading="lazy" />
+          <span class="tvm__seat-name mono">CODEX</span>
+          <span class="tvm__seat-state mono" id="tvm-seat-codex">— quiet —</span>
+        </li>
+        <li class="tvm__seat" data-family="manus">
+          <img class="tvm__seat-noun" src="https://noun.pics/256.svg" alt="" width="120" height="120" loading="lazy" />
+          <span class="tvm__seat-name mono">MANUS</span>
+          <span class="tvm__seat-state mono" id="tvm-seat-manus">— quiet —</span>
+        </li>
+        <li class="tvm__seat" data-family="gemini">
+          <img class="tvm__seat-noun" src="https://noun.pics/911.svg" alt="" width="120" height="120" loading="lazy" />
+          <span class="tvm__seat-name mono">GEMINI</span>
+          <span class="tvm__seat-state mono" id="tvm-seat-gemini">— quiet —</span>
+        </li>
+        <li class="tvm__seat tvm__seat--open" data-family="open">
+          <span class="tvm__seat-noun tvm__seat-noun--placeholder" aria-hidden="true">？</span>
+          <span class="tvm__seat-name mono">OPEN</span>
+          <span class="tvm__seat-state mono">— your model? —</span>
+        </li>
+      </ul>
+    </section>
+
+    {/* ─── AI VS AI SCOREBOARD ──────────────────────────────── */}
+    <section class="tvm__board" aria-label="AI vs AI scoreboard">
+      <p class="tvm__eyebrow mono">⚡ AI-VS-AI · ROOM <strong>{featuredRoom}</strong></p>
+      <div class="tvm__board-row">
+        <div class="tvm__board-side tvm__board-side--p1">
+          <span class="tvm__board-tag mono">P1</span>
+          <span class="tvm__board-score" id="tvm-board-p1">0</span>
+        </div>
+        <div class="tvm__board-vs">
+          <span class="tvm__board-vs-text">VS</span>
+          <span class="tvm__board-status mono" id="tvm-board-status">— waiting for both seats —</span>
+        </div>
+        <div class="tvm__board-side tvm__board-side--p2">
+          <span class="tvm__board-tag mono">P2</span>
+          <span class="tvm__board-score" id="tvm-board-p2">0</span>
+        </div>
+      </div>
+    </section>
+
+    {/* ─── ACTIVITY TICKER ──────────────────────────────────── */}
+    <section class="tvm__ticker" aria-label="Activity ticker">
+      <p class="tvm__eyebrow mono">◉ /api/sounds · LAST 8 EVENTS</p>
+      <ul class="tvm__ticker-list" id="tvm-ticker-list" aria-live="polite">
+        <li class="tvm__ticker-empty mono">— stream open · waiting for the first event —</li>
+      </ul>
+    </section>
+
+    {/* ─── FOOT STRIP ────────────────────────────────────────── */}
+    <footer class="tvm__foot">
+      <p class="mono">
+        DRUM TV · MEET · projecting from el segundo · <span id="tvm-now-time">—</span> · /drum-meet on a separate browser
+      </p>
+    </footer>
+
+    {/* ─── PULSE FLASH OVERLAY ──────────────────────────────── */}
+    <div class="tvm__flash" id="tvm-flash" aria-hidden="true"></div>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ─── State ──────────────────────────────────────────────
+    var lastTs = Date.now() - 5000;
+    var lastDuelTs = 0;
+    var seats = ['claude', 'gpt', 'codex', 'manus', 'gemini'];
+    var lastTick = {};
+    var rtts = []; // rolling sample of poll round-trips for the lane indicator
+
+    // ─── DOM refs ──────────────────────────────────────────
+    var benchList = document.getElementById('tvm-bench-list');
+    var tickerList = document.getElementById('tvm-ticker-list');
+    var flash = document.getElementById('tvm-flash');
+    var laneLabel = document.getElementById('tvm-lane-label');
+    var laneRtt = document.getElementById('tvm-lane-rtt');
+    var laneDot = document.getElementById('tvm-lane-dot');
+    var nowTimeEl = document.getElementById('tvm-now-time');
+    var boardP1 = document.getElementById('tvm-board-p1');
+    var boardP2 = document.getElementById('tvm-board-p2');
+    var boardStatus = document.getElementById('tvm-board-status');
+
+    // ─── Color palette per event type ──────────────────────
+    var TYPE_COLORS = {
+      drum: '#ffd400', orchestra: '#3aa9c4', choir: '#7cf26b',
+      bells: '#22d3ee', organ: '#ff8a4a', lounge: '#ff5cd5',
+      birthday: '#d6346a', cake: '#ffd400', sign: '#ffd400',
+      pinata: '#d6346a', shout: '#d6346a', applause: '#7cf26b',
+      letter: '#3aa9c4', heart: '#d6346a',
+      agent: '#5fdb6e', mcp: '#5fdb6e',
+      tap: '#ffd400', drum_tap: '#ffd400',
+    };
+    function colorFor(type) { return TYPE_COLORS[type] || '#ffd400'; }
+
+    // ─── Pulse flash on event ──────────────────────────────
+    function pulse(color) {
+      if (!flash) return;
+      flash.style.boxShadow = 'inset 0 0 0 18px ' + color;
+      flash.style.opacity = '0.9';
+      setTimeout(function () { flash.style.opacity = '0'; }, 240);
+    }
+
+    // ─── Bench ──────────────────────────────────────────────
+    function pidToSeat(pid) {
+      if (!pid) return null;
+      var h = 0;
+      for (var i = 0; i < pid.length; i++) { h = ((h << 5) - h) + pid.charCodeAt(i); h |= 0; }
+      return seats[Math.abs(h) % seats.length];
+    }
+    function updateSeats() {
+      var now = Date.now();
+      seats.forEach(function (k) {
+        var stateEl = document.getElementById('tvm-seat-' + k);
+        var seatEl = document.querySelector('.tvm__seat[data-family="' + k + '"]');
+        if (!stateEl || !seatEl) return;
+        var since = lastTick[k] ? Math.floor((now - lastTick[k]) / 1000) : null;
+        if (since != null && since < 60) {
+          stateEl.textContent = '◉ live · ' + since + 's ago';
+          seatEl.classList.add('tvm__seat--live');
+        } else {
+          stateEl.textContent = '— quiet —';
+          seatEl.classList.remove('tvm__seat--live');
+        }
+      });
+    }
+
+    // ─── Ticker ─────────────────────────────────────────────
+    var seenKeys = {};
+    function pushTicker(e) {
+      var key = (e.t || 0) + ':' + (e.pid || '') + ':' + (e.type || '');
+      if (seenKeys[key]) return;
+      seenKeys[key] = 1;
+      var li = document.createElement('li');
+      li.className = 'tvm__ticker-row mono';
+      var t = new Date(e.t || Date.now());
+      var time = String(t.getHours()).padStart(2, '0') + ':' +
+                 String(t.getMinutes()).padStart(2, '0') + ':' +
+                 String(t.getSeconds()).padStart(2, '0');
+      var color = colorFor(e.type);
+      li.innerHTML =
+        '<span class="tvm__ticker-time">' + time + '</span>' +
+        '<span class="tvm__ticker-bar" style="background:' + color + '"></span>' +
+        '<span class="tvm__ticker-type">[' + (e.type || 'event') + ']</span>' +
+        '<span class="tvm__ticker-pid">' + ((e.pid || '').slice(0, 8) || '—') + '</span>';
+      var empty = tickerList.querySelector('.tvm__ticker-empty');
+      if (empty) empty.remove();
+      tickerList.prepend(li);
+      var rows = tickerList.querySelectorAll('.tvm__ticker-row');
+      for (var i = 8; i < rows.length; i++) rows[i].remove();
+    }
+
+    // ─── Poll /api/sounds ─────────────────────────────────
+    function pollSounds() {
+      var t0 = performance.now();
+      fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.events)) return;
+          var rtt = performance.now() - t0;
+          rtts.push(rtt);
+          if (rtts.length > 12) rtts.shift();
+          var avg = Math.round(rtts.reduce(function (a, b) { return a + b; }, 0) / rtts.length);
+          if (laneRtt) laneRtt.textContent = '· avg ' + avg + 'ms';
+          if (laneDot) laneDot.style.background = avg < 250 ? '#5fdb6e' : avg < 500 ? '#ffd400' : '#d6346a';
+
+          if (d.events.length === 0) return;
+          lastTs = d.now || Date.now();
+          d.events.forEach(function (e) {
+            pulse(colorFor(e.type));
+            pushTicker(e);
+            // Bench seat detection — agent / mcp events
+            if (e.type === 'agent' || e.type === 'mcp') {
+              var seat = pidToSeat(e.pid);
+              if (seat) lastTick[seat] = e.t || Date.now();
+            }
+          });
+          updateSeats();
+        })
+        .catch(function () {})
+        .finally(function () { setTimeout(pollSounds, 600); });
+    }
+    pollSounds();
+
+    // Re-tick the "Xs ago" labels even when no new events
+    setInterval(updateSeats, 1000);
+
+    // ─── Poll /api/duel for the AI-VS-AI room ───────────────
+    var ROOM = 'AIVSAI';
+    function pollDuel() {
+      fetch('/api/duel?room=' + ROOM + '&since=' + lastDuelTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.state) return;
+          if (Array.isArray(d.events) && d.events.length) {
+            lastDuelTs = d.events[d.events.length - 1].t || lastDuelTs;
+          }
+          var s = d.state;
+          if (boardP1) boardP1.textContent = String(s.p1Score || 0);
+          if (boardP2) boardP2.textContent = String(s.p2Score || 0);
+          if (boardStatus) {
+            if (s.winner === 1) boardStatus.textContent = 'P1 WON · final pull';
+            else if (s.winner === 2) boardStatus.textContent = 'P2 WON · final pull';
+            else if (!s.p1Pid && !s.p2Pid) boardStatus.textContent = '— waiting for both seats —';
+            else if (!s.p2Pid) boardStatus.textContent = '— waiting for P2 to join —';
+            else if (!s.p1Pid) boardStatus.textContent = '— waiting for P1 to join —';
+            else if (s.mode === 'duel' && s.roundState === 'arming') boardStatus.textContent = 'arming · bell soon';
+            else if (s.mode === 'duel' && s.roundState === 'idle') boardStatus.textContent = '— ready up to start the round —';
+            else boardStatus.textContent = 'GO · first to 50';
+          }
+        })
+        .catch(function () {})
+        .finally(function () { setTimeout(pollDuel, 1000); });
+    }
+    pollDuel();
+
+    // ─── Footer clock ───────────────────────────────────────
+    function tickClock() {
+      if (!nowTimeEl) return;
+      var d = new Date();
+      nowTimeEl.textContent = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    }
+    setInterval(tickClock, 1000);
+    tickClock();
+  })();
+</script>
+
+<style>
+  .tvm {
+    /* Dark cabinet, brass-gold accents, projection-friendly */
+    --tvm-bg:        #0a0612;
+    --tvm-bg-deep:   #050310;
+    --tvm-cabinet:   #1a1028;
+    --tvm-ink:       #f5f0ff;
+    --tvm-mute:      #b3a8d8;
+    --tvm-magenta:   #d6346a;
+    --tvm-yellow:    #ffd400;
+    --tvm-cyan:      #22d3ee;
+    --tvm-green:     #5fdb6e;
+    --tvm-brass:     #c9982a;
+    --tvm-brass-glow:#ffc845;
+
+    background: linear-gradient(180deg, var(--tvm-bg) 0%, var(--tvm-bg-deep) 100%);
+    color: var(--tvm-ink);
+    /* TV overscan-safe padding (~5%) */
+    padding: clamp(20px, 3.5vh, 48px) clamp(32px, 4vw, 64px);
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.4;
+    overflow: hidden;
+    position: relative;
+  }
+  .tvm .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.06em;
+  }
+
+  .tvm__eyebrow {
+    font-size: clamp(11px, 1.4vw, 16px);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--tvm-brass-glow);
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+  .tvm__eyebrow strong { color: var(--tvm-ink); }
+
+  /* ─── Strip (top brass bar) ──────────────────────────── */
+  .tvm__strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: linear-gradient(180deg, #f0c845 0%, var(--tvm-brass) 50%, #8a6818 100%);
+    border: 2px solid #1a1108;
+    border-radius: 4px;
+    color: var(--tvm-bg-deep);
+    margin-bottom: clamp(16px, 2vh, 28px);
+    box-shadow: inset 0 1px 0 rgba(255,220,150,0.5), inset 0 -1px 0 rgba(0,0,0,0.4);
+  }
+  .tvm__strip-left, .tvm__strip-right {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .tvm__on-air {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: clamp(12px, 1.4vw, 18px);
+    font-weight: 800;
+    letter-spacing: 0.28em;
+    color: var(--tvm-bg-deep);
+  }
+  .tvm__on-air-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--tvm-magenta);
+    animation: tvm-pulse 1.6s ease-out infinite;
+  }
+  @keyframes tvm-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.6); }
+    50%      { box-shadow: 0 0 0 8px rgba(214, 52, 106, 0); }
+  }
+  .tvm__strip-label {
+    font-size: clamp(11px, 1.2vw, 15px);
+    letter-spacing: 0.22em;
+    color: var(--tvm-bg-deep);
+  }
+  .tvm__lane {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: clamp(11px, 1.2vw, 14px);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--tvm-bg-deep);
+    background: rgba(0,0,0,0.18);
+    padding: 4px 10px;
+    border-radius: 12px;
+  }
+  .tvm__lane-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--tvm-green);
+  }
+  .tvm__lane-rtt { opacity: 0.7; font-weight: 500; }
+
+  /* ─── Welcome ribbon ──────────────────────────────────── */
+  .tvm__welcome {
+    margin: clamp(10px, 1.5vh, 24px) 0 clamp(18px, 2.5vh, 32px);
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1.5px solid rgba(201, 152, 42, 0.4);
+    border-radius: 4px;
+  }
+  .tvm__welcome-line {
+    margin: 0;
+    padding: 10px 0;
+    font-size: clamp(18px, 2.4vw, 32px);
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    display: inline-flex;
+    gap: 32px;
+    animation: tvm-scroll 60s linear infinite;
+  }
+  .tvm__welcome-line em {
+    font-style: italic;
+    color: var(--tvm-magenta);
+    font-weight: 600;
+  }
+  .tvm__welcome-line code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.7em;
+    color: var(--tvm-brass-glow);
+    background: rgba(255,200,69,0.1);
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+  .tvm__welcome-dot {
+    color: var(--tvm-brass-glow);
+    font-size: 0.7em;
+    align-self: center;
+  }
+  @keyframes tvm-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tvm__welcome-line { animation: none; }
+  }
+
+  /* ─── Bench (massive seats) ──────────────────────────── */
+  .tvm__bench {
+    margin-bottom: clamp(20px, 2.5vh, 32px);
+  }
+  .tvm__bench-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: clamp(10px, 1vw, 18px);
+  }
+  .tvm__seat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: clamp(14px, 2vh, 24px) 8px;
+    background: var(--tvm-cabinet);
+    border: 2.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    text-align: center;
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .tvm__seat--live {
+    border-color: var(--tvm-magenta);
+    box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.4);
+    animation: tvm-seat-pulse 1.4s ease-out infinite;
+  }
+  @keyframes tvm-seat-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.5); }
+    50%      { box-shadow: 0 0 0 12px rgba(214, 52, 106, 0); }
+  }
+  .tvm__seat--open {
+    background: repeating-linear-gradient(45deg, var(--tvm-cabinet) 0 8px, var(--tvm-bg) 8px 16px);
+  }
+  .tvm__seat-noun {
+    width: clamp(80px, 10vw, 140px);
+    height: clamp(80px, 10vw, 140px);
+    border: 3px solid var(--tvm-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 6px;
+  }
+  .tvm__seat-noun--placeholder {
+    border-style: dashed;
+    border-color: var(--tvm-mute);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(40px, 5vw, 64px);
+    font-weight: 800;
+    color: var(--tvm-mute);
+  }
+  .tvm__seat-name {
+    font-size: clamp(13px, 1.6vw, 20px);
+    letter-spacing: 0.22em;
+    font-weight: 800;
+    color: var(--tvm-ink);
+  }
+  .tvm__seat-state {
+    font-size: clamp(10px, 1vw, 13px);
+    letter-spacing: 0.16em;
+    color: var(--tvm-mute);
+  }
+  .tvm__seat--live .tvm__seat-state {
+    color: var(--tvm-magenta);
+    font-weight: 700;
+  }
+
+  /* ─── AI VS AI scoreboard ─────────────────────────────── */
+  .tvm__board {
+    margin-bottom: clamp(20px, 2.5vh, 32px);
+    padding: clamp(14px, 2vh, 24px) clamp(20px, 2.5vw, 32px);
+    background: var(--tvm-cabinet);
+    border: 2px solid var(--tvm-magenta);
+    border-radius: 6px;
+  }
+  .tvm__board-row {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+    align-items: center;
+    gap: 12px;
+  }
+  .tvm__board-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .tvm__board-tag {
+    font-size: clamp(11px, 1.2vw, 14px);
+    letter-spacing: 0.32em;
+    color: var(--tvm-mute);
+    font-weight: 700;
+  }
+  .tvm__board-side--p1 .tvm__board-tag { color: var(--tvm-yellow); }
+  .tvm__board-side--p2 .tvm__board-tag { color: var(--tvm-cyan); }
+  .tvm__board-score {
+    font-size: clamp(60px, 9vw, 132px);
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--tvm-ink);
+    letter-spacing: -0.03em;
+  }
+  .tvm__board-side--p1 .tvm__board-score { color: var(--tvm-yellow); }
+  .tvm__board-side--p2 .tvm__board-score { color: var(--tvm-cyan); }
+  .tvm__board-vs {
+    text-align: center;
+  }
+  .tvm__board-vs-text {
+    display: block;
+    font-style: italic;
+    font-size: clamp(40px, 6vw, 88px);
+    color: var(--tvm-magenta);
+    font-weight: 500;
+    line-height: 1;
+    margin-bottom: 8px;
+    font-family: 'Lora', Georgia, serif;
+  }
+  .tvm__board-status {
+    font-size: clamp(10px, 1.2vw, 14px);
+    letter-spacing: 0.18em;
+    color: var(--tvm-mute);
+    text-transform: uppercase;
+  }
+
+  /* ─── Ticker ─────────────────────────────────────────── */
+  .tvm__ticker {
+    margin-bottom: clamp(16px, 2vh, 28px);
+  }
+  .tvm__ticker-list {
+    list-style: none;
+    margin: 0;
+    padding: clamp(10px, 1.5vh, 18px) clamp(16px, 2vw, 24px);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 60px;
+  }
+  .tvm__ticker-row {
+    display: grid;
+    grid-template-columns: clamp(60px, 7vw, 100px) clamp(20px, 2.5vw, 36px) 1fr auto;
+    gap: 10px;
+    align-items: center;
+    font-size: clamp(11px, 1.3vw, 16px);
+    color: var(--tvm-ink);
+    padding: 4px 0;
+    border-bottom: 1px dotted rgba(184, 166, 121, 0.18);
+  }
+  .tvm__ticker-row:last-child { border-bottom: 0; }
+  .tvm__ticker-time { color: var(--tvm-mute); letter-spacing: 0.1em; }
+  .tvm__ticker-bar {
+    width: 100%;
+    height: clamp(8px, 1vh, 14px);
+    background: var(--tvm-yellow);
+    border-radius: 2px;
+  }
+  .tvm__ticker-type {
+    color: var(--tvm-brass-glow);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+  .tvm__ticker-pid { color: var(--tvm-mute); letter-spacing: 0.12em; text-align: right; }
+  .tvm__ticker-empty {
+    font-size: clamp(11px, 1.2vw, 15px);
+    color: var(--tvm-mute);
+    text-align: center;
+    padding: 14px;
+    letter-spacing: 0.16em;
+  }
+
+  /* ─── Foot ───────────────────────────────────────────── */
+  .tvm__foot {
+    text-align: center;
+    padding: 10px 0 0;
+    border-top: 1px dotted rgba(184, 166, 121, 0.2);
+  }
+  .tvm__foot p {
+    font-size: clamp(10px, 1.1vw, 13px);
+    color: var(--tvm-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ─── Pulse flash overlay ────────────────────────────── */
+  .tvm__flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 0 transparent;
+    opacity: 0;
+    transition: opacity 220ms ease-out;
+    z-index: 9999;
+  }
+
+  /* ─── Mobile ───────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .tvm__bench-list { grid-template-columns: repeat(3, 1fr); }
+    .tvm__board-row { grid-template-columns: 1fr; gap: 8px; }
+    .tvm__welcome-line { font-size: 18px; }
+  }
+</style>
