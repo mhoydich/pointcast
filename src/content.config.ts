@@ -57,10 +57,20 @@ const blocks = defineCollection({
         merchant: z.string().min(1),                             // e.g. "replicate.com"
         merchant_url: z.string().url().optional(),
         credential_type: z.enum(['card', 'shared_payment_token']).default('shared_payment_token'),
-        status: z.enum(['pending', 'approved', 'denied', 'expired', 'settled', 'refunded']),
-        link_session_id: z.string().default(''),                 // spendRequestId from link-cli (camelCase). may be '' if cli output shape changes — see scripts/agent-spend.mjs parser.
+        // Status enum mirrors link-cli's actual status values verified 2026-04-30.
+        // 'pending_approval' is the initial state from `create`; transitions to
+        // 'approved' / 'denied' / 'expired' on user action; 'settled' / 'refunded'
+        // happen post-charge. 'pending'/'unknown' kept for historical receipts.
+        status: z.enum(['pending', 'pending_approval', 'approved', 'denied', 'expired', 'settled', 'refunded', 'unknown']),
+        link_session_id: z.string().default(''),                 // settled.id from link-cli (lsrq_xxx prefix). may be '' for pre-2026-04-30 historical blocks.
+        approval_url: z.string().url().optional(),               // app.link.com/activity/approve/{id} — present while pending_approval
         receipt_url: z.string().url().optional(),                // Stripe-hosted receipt
         approved_by: z.string().optional(),                      // future: visitor handle when v1 multi-tenant
+        // Card-credential metadata captured from `retrieve --include card`.
+        // Never store the full PAN here — that lives only in ~/.link-cli-receipts/{id}.json (0600).
+        card_last4: z.string().regex(/^\d{4}$/).optional(),
+        card_brand: z.string().optional(),                       // e.g. 'visa', 'mastercard'
+        card_valid_until: z.string().optional(),                 // ISO timestamp; credential expiration
         mode: z.enum(['test', 'live']).default('test'),          // v0 ships in test mode
         context: z.string().optional(),                          // user-facing approval blurb (>=100 chars per CLI)
       })

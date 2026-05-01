@@ -125,39 +125,104 @@ function validate(args) {
 
 // ─── link-cli shell-out ─────────────────────────────────────────────────────
 
-function runLinkCli(args) {
-  return new Promise((resolve, reject) => {
-    const cliArgs = [
-      'spend-request', 'create',
-      '--payment-method-id', process.env.LINK_PAYMENT_METHOD_ID,
-      '--credential-type',   'card',
-      '--amount',            String(Math.round(args.amountUsd * 100)),
-      '--currency',          'usd',
-      '--merchant-name',     args.merchant,
-      '--merchant-url',      args['merchant-url'],
-      '--context',           args.context,
-      '--request-approval',
-      '--format',            'json',
-    ];
-    if (!args.isLive) cliArgs.push('--test');
-    const modeLabel = args.isLive ? 'LIVE — REAL MONEY' : 'test mode';
-    process.stdout.write(`→ link-cli ${cliArgs.slice(0, 2).join(' ')}  (${modeLabel}, $${args.amountUsd.toFixed(2)} → ${args.merchant})\n`);
-    process.stdout.write(`  awaiting approval push on Mike's phone…\n`);
+// link-cli's spend-request flow is two-step (discovered 2026-04-30 ~22:00 PT
+// after losing two credentials):
+//   1. `create` returns immediately with status: 'pending_approval' and a
+//      `_next.command` instruction to poll `retrieve <id> --interval 2 --max-attempts N`.
+//   2. The user approves in the Link iPhone app (or via approval_url in browser).
+//   3. We must poll `retrieve` to get the issued credential.
+//
+// `--request-approval` on `create` does NOT poll inline — that flag tells the
+// CLI to fire the user-side push, but the credential still lives in `retrieve`.
+//
+// For credential-type=card, `retrieve --include card` returns the actual
+// virtual card { number, cvc, exp_month, exp_year, brand, valid_until }.
 
-    const proc = spawn('link-cli', cliArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+function runCli(args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('link-cli', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     proc.stdout.on('data', (d) => (stdout += d.toString()));
     proc.stderr.on('data', (d) => (stderr += d.toString()));
-    proc.on('error', (err) => reject(new Error(`link-cli not on PATH: ${err.message}. Run \`npm install -g @stripe/link-cli\`.`)));
+    proc.on('error', (err) => reject(new Error(`link-cli spawn failed: ${err.message}. Run \`npm install -g @stripe/link-cli\`.`)));
     proc.on('close', (code) => {
-      if (code !== 0) {
+      if (code !== 0 && !opts.allowNonZero) {
         reject(new Error(`link-cli exited ${code}\n${stderr || stdout}`));
         return;
       }
-      try { resolve(JSON.parse(stdout)); }
+      try { resolve({ data: JSON.parse(stdout), code }); }
       catch { reject(new Error(`link-cli stdout not JSON:\n${stdout.slice(0, 500)}`)); }
     });
   });
+}
+
+function unwrap(d) {
+  // link-cli returns either a single object or a single-element array.
+  if (Array.isArray(d)) return d[0] ?? {};
+  return d ?? {};
+}
+
+async function createSpendRequest(args) {
+  const cliArgs = [
+    'spend-request', 'create',
+    '--payment-method-id', process.env.LINK_PAYMENT_METHOD_ID,
+    '--credential-type',   'card',
+    '--amount',            String(Math.round(args.amountUsd * 100)),
+    '--currency',          'usd',
+    '--merchant-name',     args.merchant,
+    '--merchant-url',      args['merchant-url'],
+    '--context',           args.context,
+    '--format',            'json',
+  ];
+  if (!args.isLive) cliArgs.push('--test');
+  const modeLabel = args.isLive ? 'LIVE — REAL MONEY' : 'test mode';
+  process.stdout.write(`→ link-cli spend-request create  (${modeLabel}, $${args.amountUsd.toFixed(2)} → ${args.merchant})\n`);
+
+  const { data } = await runCli(cliArgs);
+  return unwrap(data);
+}
+
+async function pollUntilTerminal(spendRequestId, intervalSec = 2, maxAttempts = 150) {
+  process.stdout.write(`  polling spend-request ${spendRequestId} every ${intervalSec}s (max ${maxAttempts} attempts)…\n`);
+  process.stdout.write(`  ↳ approve on iPhone Link app, OR open the approval_url in browser if shown above.\n`);
+  // link-cli's retrieve has built-in polling — much cheaper than us looping.
+  const { data } = await runCli([
+    'spend-request', 'retrieve', spendRequestId,
+    '--interval', String(intervalSec),
+    '--max-attempts', String(maxAttempts),
+    '--include', 'card',
+    '--format', 'json',
+  ], { allowNonZero: true });
+  return unwrap(data);
+}
+
+async function runLinkCli(args) {
+  // Two-step: create → returns pending_approval + approval_url.
+  const created = await createSpendRequest(args);
+  const status0 = created.status ?? created.code;
+  const id = created.id ?? created.spendRequestId ?? created.spend_request_id;
+  const approvalUrl = created.approval_url ?? created.approvalUrl;
+
+  if (status0 === 'approved' || status0 === 'settled') {
+    // Test mode often resolves immediately. Retrieve once with --include card to grab it.
+    if (!id) return created;
+    const { data } = await runCli(['spend-request','retrieve', id, '--include','card','--format','json']);
+    return unwrap(data);
+  }
+
+  if (!id) {
+    throw new Error(`link-cli created response missing id field. Got: ${JSON.stringify(created).slice(0,400)}`);
+  }
+  if (approvalUrl) {
+    process.stdout.write(`  approval_url: ${approvalUrl}\n`);
+  }
+
+  // Poll until terminal status. Re-throws on POLLING_TIMEOUT / DENIED / EXPIRED.
+  const settled = await pollUntilTerminal(id);
+  if (settled.code === 'POLLING_TIMEOUT' || settled.status === 'expired' || settled.status === 'denied') {
+    throw new Error(`spend-request ${id} did not resolve approved. status=${settled.status ?? settled.code}. Recover via \`link-cli spend-request retrieve ${id} --include card --format json\` once approved.`);
+  }
+  return settled;
 }
 
 // ─── block writer ───────────────────────────────────────────────────────────
@@ -172,23 +237,21 @@ async function nextBlockId() {
 }
 
 async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, context, settled, channel, isLive }) {
-  // link-cli's response shape uses camelCase; older docs sometimes show snake_case.
-  // Try both so we capture the spend-request id wherever it lands.
-  const spendRequestId =
-    settled.spendRequestId ??
-    settled.id ??
-    settled.spend_request_id ??
-    settled.spendRequest?.id ??
-    '';
-  const receiptUrl =
-    settled.receiptUrl ??
-    settled.receipt_url ??
-    settled.spendRequest?.receiptUrl ??
-    undefined;
-  const status =
-    settled.status ??
-    settled.spendRequest?.status ??
-    'settled';
+  // Verified shape from `link-cli spend-request retrieve --include card --format json`
+  // (2026-04-30 night): top-level `id` (lsrq_xxx prefix), `status`, `card` object
+  // with { number, cvc, exp_month, exp_year, brand, valid_until, billing_address }.
+  // Older parses checked `spendRequestId` / camelCase — kept as fallback.
+  const spendRequestId = settled.id ?? settled.spendRequestId ?? settled.spend_request_id ?? '';
+  const status = settled.status ?? 'unknown';
+  const approvalUrl = settled.approval_url ?? settled.approvalUrl ?? undefined;
+  const receiptUrl = settled.receipt_url ?? settled.receiptUrl ?? undefined;
+  const card = settled.card ?? settled.virtualCard ?? null;
+  // We store last4 + brand + valid_until in the Block — never the full PAN.
+  // The PAN lives only in ~/.link-cli-receipts/{id}.json (mode 0600) for the
+  // user to paste into a merchant checkout. Block is git-tracked & public.
+  const cardLast4  = card ? (card.last4 ?? card.number?.slice(-4) ?? null) : null;
+  const cardBrand  = card?.brand ?? null;
+  const cardValidUntil = card?.valid_until ?? card?.validUntil ?? null;
 
   const block = {
     id,
@@ -209,7 +272,11 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
       credential_type: 'card',
       status,
       link_session_id: spendRequestId,
+      approval_url: approvalUrl,
       receipt_url: receiptUrl,
+      card_last4: cardLast4 ?? undefined,
+      card_brand: cardBrand ?? undefined,
+      card_valid_until: cardValidUntil ?? undefined,
       mode: isLive ? 'live' : 'test',
       context,
     },
