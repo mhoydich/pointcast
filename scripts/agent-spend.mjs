@@ -214,13 +214,13 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
       context,
     },
     author: agent === 'cc' ? 'cc' : agent,
-    source: `link-cli spend-request create --test, approved 2026-04-30 by Mike`,
+    source: `link-cli spend-request create${isLive ? '' : ' --test'}, approved by Mike on ${new Date().toISOString().slice(0, 10)}`,
     meta: {
       location: 'El Segundo, CA',
       station: 'Money',
       series: 'receipt',
       module: '/wire',
-      topics: `link; ${agent}; ${loop}; receipt; testmode`,
+      topics: `link; ${agent}; ${loop}; receipt; ${isLive ? 'live' : 'testmode'}`,
       status: 'published',
     },
   };
@@ -260,7 +260,41 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
     die(1, err.message);
   }
 
-  process.stdout.write(`\n✓ approved — spend_request ${settled.id ?? '?'} status=${settled.status ?? '?'}\n`);
+  // Resolve id/status with the same camelCase fallbacks writeBlock uses.
+  const sid = settled.spendRequestId ?? settled.id ?? settled.spend_request_id ?? settled.spendRequest?.id ?? '?';
+  const sstatus = settled.status ?? settled.spendRequest?.status ?? '?';
+  process.stdout.write(`\n✓ approved — spend_request ${sid} status=${sstatus}\n`);
+
+  // CRITICAL — print and persist the credential. link-cli returns one-time-use
+  // card details that we MUST surface for the user to paste into the merchant
+  // checkout form. If we don't, the credential is lost (no list cmd to recover).
+  // Save to ~/.link-cli-receipts/{id}.json with 0600 mode (user-only) — gitignored
+  // by living outside the repo entirely. Print to stdout so the user can copy now.
+  const card = settled.card ?? settled.virtualCard ?? settled.spendRequest?.card ?? settled.credential ?? null;
+  if (card || args.isLive) {
+    process.stdout.write('\n— CARD CREDENTIAL (one-time use, expires fast) —\n');
+    if (card) {
+      const last4 = card.last4 ?? card.number?.slice(-4) ?? '????';
+      process.stdout.write(`  number:   ${card.number ?? `•••• ${last4}`}\n`);
+      process.stdout.write(`  exp:      ${card.expMonth ?? card.exp_month ?? '??'}/${card.expYear ?? card.exp_year ?? '????'}\n`);
+      process.stdout.write(`  cvc:      ${card.cvc ?? card.cvv ?? '???'}\n`);
+      process.stdout.write(`  brand:    ${card.brand ?? '?'}\n`);
+    } else {
+      process.stdout.write('  (link-cli payload had no recognizable card field — full raw dump below)\n');
+    }
+    process.stdout.write('\n— RAW link-cli RESPONSE (for debug / recovery) —\n');
+    process.stdout.write(JSON.stringify(settled, null, 2) + '\n');
+    process.stdout.write('\nPaste into the merchant checkout in the next ~10 min before this credential expires.\n\n');
+
+    // Also persist outside the repo for after-the-fact recovery.
+    const RECEIPTS_DIR = path.join(process.env.HOME ?? '', '.link-cli-receipts');
+    try {
+      await fs.mkdir(RECEIPTS_DIR, { recursive: true, mode: 0o700 });
+      const stash = path.join(RECEIPTS_DIR, `${sid}.json`);
+      await fs.writeFile(stash, JSON.stringify(settled, null, 2) + '\n', { mode: 0o600 });
+      process.stdout.write(`(also saved to ${stash} — file mode 0600, outside the repo)\n\n`);
+    } catch { /* non-fatal */ }
+  }
 
   const id = await nextBlockId();
   let target;
