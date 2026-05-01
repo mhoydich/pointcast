@@ -165,12 +165,30 @@ async function nextBlockId() {
 }
 
 async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, context, settled, channel }) {
+  // link-cli's response shape uses camelCase; older docs sometimes show snake_case.
+  // Try both so we capture the spend-request id wherever it lands.
+  const spendRequestId =
+    settled.spendRequestId ??
+    settled.id ??
+    settled.spend_request_id ??
+    settled.spendRequest?.id ??
+    '';
+  const receiptUrl =
+    settled.receiptUrl ??
+    settled.receipt_url ??
+    settled.spendRequest?.receiptUrl ??
+    undefined;
+  const status =
+    settled.status ??
+    settled.spendRequest?.status ??
+    'settled';
+
   const block = {
     id,
     channel,
     type: 'NOTE',
     title: `${agent} ${loop} — ${merchant} — $${amountUsd.toFixed(2)} (testmode)`,
-    dek: `Test-mode receipt of a ${loop} loop. Approved by Mike via Stripe Link push. Spend-request ${settled.id ?? 'unknown'}.`,
+    dek: `Test-mode receipt of a ${loop} loop. Approved by Mike via Stripe Link. Spend-request ${spendRequestId || 'unknown'}.`,
     timestamp: new Date().toISOString(),
     size: '1x1',
     noun: Number(id),
@@ -182,9 +200,9 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
       merchant,
       merchant_url: merchantUrl,
       credential_type: 'card',
-      status: settled.status ?? 'settled',
-      link_session_id: settled.id ?? '',
-      receipt_url: settled.receipt_url ?? undefined,
+      status,
+      link_session_id: spendRequestId,
+      receipt_url: receiptUrl,
       mode: 'test',
       context,
     },
