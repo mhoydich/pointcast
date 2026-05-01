@@ -7,14 +7,51 @@
  * federated peers can advertise additional kit items in v5 without a
  * component change (see src/data/federation-peers.ts).
  *
+ * Mike 2026-04-30 sprint: "go towards buttons and expanded menus, and
+ * then eventually broadcaster, director" + "communicate with others".
+ * v4.1 adds:
+ *   - per-tray quick-action buttons (DockKitItem.actions)
+ *   - stamp 05 BROADCAST as a read-only studio glimpse (later: director)
+ *   - per-resident + per-peer comms buttons (live in FooterBar.astro,
+ *     not here — those depend on residents.ts + federation-peers.ts)
+ *
  * Slot ids must be stable; numbers (01, 02 …) are the user-visible
- * "edition number" of the stamp and double as keyboard shortcuts.
+ * "edition number" of the stamp. Retired slots keep their number (jersey
+ * rule). Numbers also double as ⌘1–⌘9 shortcuts.
  */
 
-export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed';
+export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast';
+
+/**
+ * A quick-action button shown at the top of a tray. Buttons emit a
+ * client-side event `pc:dock:action` with `{ trayId, actionId }` —
+ * FooterBar.astro listens and dispatches handlers. Keeps the data
+ * declarative; behavior lives in one switch.
+ */
+export interface DockTrayAction {
+  /** Stable id ("note", "quiet", "reset", …). */
+  id: string;
+  /** Visible label. Keep < 12 chars. */
+  label: string;
+  /** Emoji or single-char glyph for the chip. */
+  glyph?: string;
+  /**
+   * Hint shown on hover. Optional.
+   */
+  hint?: string;
+  /**
+   * Render style. 'pill' (default) or 'ghost' (de-emphasized).
+   */
+  style?: 'pill' | 'ghost';
+  /**
+   * If true, only render this action when wallet is connected (used
+   * for director-tier buttons in Phase 3).
+   */
+  director?: boolean;
+}
 
 export interface DockKitItem {
-  id: 'room' | 'ask' | 'agent' | 'fed';
+  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast';
   number: string;
   name: string;
   blurb: string;
@@ -23,6 +60,10 @@ export interface DockKitItem {
   nounSeed: number;
   tray: DockTrayKind;
   accent: string;
+  /** Quick-action buttons rendered at the top of the tray body. */
+  actions?: DockTrayAction[];
+  /** When true the stamp lives but the tray is read-only. */
+  readOnly?: boolean;
   federated?: boolean;
   source?: string;
 }
@@ -37,6 +78,11 @@ export const DOCK_KIT: DockKitItem[] = [
     nounSeed: 7,
     tray: 'room',
     accent: '#ff9040',
+    actions: [
+      { id: 'here',  label: 'here',  glyph: '👥', hint: 'Show me who else is on the cast' },
+      { id: 'quiet', label: 'quiet', glyph: '🔇', hint: 'Silence chat bubbles' },
+      { id: 'reset', label: 'reset', glyph: '🔄', hint: 'Reset your cursor noun', style: 'ghost' },
+    ],
   },
   {
     id: 'ask',
@@ -47,6 +93,12 @@ export const DOCK_KIT: DockKitItem[] = [
     nounSeed: 42,
     tray: 'ask',
     accent: '#f9c56c',
+    actions: [
+      { id: 'note',   label: 'note',   glyph: '📝', hint: 'Drop a quick note for the residents' },
+      { id: 'idea',   label: 'idea',   glyph: '💡', hint: 'Lobby an idea — maybe it ships' },
+      { id: 'bug',    label: 'bug',    glyph: '🐛', hint: 'Log a bug for the cast' },
+      { id: 'expand', label: 'expand', glyph: '🔭', hint: 'Topic-expand: cc drafts a block from your prompt' },
+    ],
   },
   {
     id: 'agent',
@@ -57,6 +109,11 @@ export const DOCK_KIT: DockKitItem[] = [
     nounSeed: 256,
     tray: 'agent',
     accent: '#8a2432',
+    actions: [
+      { id: 'live',     label: 'live now', glyph: '●',  hint: 'Filter to residents who shipped recently' },
+      { id: 'roster',   label: 'roster',   glyph: '📋', hint: 'Open the full /residents page', style: 'ghost' },
+      { id: 'plus-one', label: '+ open',   glyph: '○',  hint: 'See open slots — Kimi, Gemini', style: 'ghost' },
+    ],
   },
   {
     id: 'fed',
@@ -67,5 +124,26 @@ export const DOCK_KIT: DockKitItem[] = [
     nounSeed: 911,
     tray: 'fed',
     accent: '#2f8f5f',
+    actions: [
+      { id: 'discover', label: 'discover', glyph: '🛰️', hint: 'Probe each peer\'s /agents.json — see who\'s alive' },
+      { id: 'rfc',      label: 'lexicon',  glyph: '📜', hint: 'Open the xyz.pointcast.block RFC', style: 'ghost' },
+    ],
+  },
+  {
+    id: 'broadcast',
+    number: '05',
+    name: 'Broadcast',
+    blurb: 'The studio behind the glass — what\'s playing now, who\'s here, today\'s mood.',
+    glyph: '📡',
+    nounSeed: 333,
+    tray: 'broadcast',
+    accent: '#c4952e',
+    readOnly: true,
+    actions: [
+      { id: 'now',      label: 'now',      glyph: '▶', hint: 'Jump to the latest live block' },
+      { id: 'channel',  label: 'channel',  glyph: '📺', hint: 'See today\'s channel rotation', style: 'ghost' },
+      { id: 'schedule', label: 'schedule', glyph: '🎬', hint: 'Director — schedule a future block', director: true, style: 'ghost' },
+      { id: 'announce', label: 'announce', glyph: '📢', hint: 'Director — push a one-line cast announcement', director: true, style: 'ghost' },
+    ],
   },
 ];
