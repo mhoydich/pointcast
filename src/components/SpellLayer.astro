@@ -1,0 +1,376 @@
+---
+/**
+ * SpellLayer — the page-wide overlay where spells render.
+ *
+ * Mike 2026-05-01: Peach-inspired magic words. Type `+confetti` in the
+ * omnibox or click a chip in slot 06 CAST → a `pc:spell:cast` event
+ * fires with the spell id → this layer paints accordingly.
+ *
+ * Why a single layer (not per-spell components):
+ *   - bursts/companions/ambient are all DOM-light effects
+ *   - one fixed overlay = predictable z-stacking, single pointer-events
+ *     boundary, easy global "clear all"
+ *   - new spells = new case in the dispatch switch + a row in spells.ts
+ *
+ * Pointer-events:
+ *   layer = none (clicks pass through to the page)
+ *   ambient surfaces (breath/candle) re-enable pointer-events: auto
+ *     on themselves so they can be clicked to dismiss
+ *
+ * A11y:
+ *   layer is aria-hidden (decorative)
+ *   bursts/companions are role=presentation
+ *   reduced-motion suppresses animations — bursts skip, companions
+ *     teleport-walk, ambient becomes static
+ *
+ * Mount: BaseLayout.astro and BlockLayout.astro both render <SpellLayer />
+ * once near the closing </body>, alongside the FooterBar.
+ */
+---
+
+<div class="spell-layer" id="pc-spell-layer" aria-hidden="true"></div>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var $layer = document.getElementById('pc-spell-layer');
+    if (!$layer) return;
+
+    // Track active companions/ambient so "clear" can wipe them.
+    var active = { byId: {}, bursts: 0 };
+
+    function reduce() {
+      try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+    }
+
+    // ─── confetti (burst) ───────────────────────────────────────
+    function castConfetti(durationMs) {
+      if (reduce()) return; // no animation in reduced-motion mode
+      var palette = ['#d4a437', '#4A9EFF', '#c4952e', '#fdf2d6', '#8a2432', '#2f8f5f'];
+      var count = 36;
+      for (var i = 0; i < count; i++) {
+        var d = document.createElement('span');
+        d.className = 'spell-confetti';
+        var size = 6 + Math.floor(Math.random() * 8);
+        var startX = Math.random() * window.innerWidth;
+        var driftX = (Math.random() - 0.5) * 240;
+        var rotateStart = Math.floor(Math.random() * 360);
+        var rotateEnd = rotateStart + 360 + Math.floor(Math.random() * 720);
+        var fallTime = (durationMs || 4500) - Math.floor(Math.random() * 600);
+        d.style.cssText =
+          'left:' + startX + 'px;' +
+          'top:-' + size + 'px;' +
+          'width:' + size + 'px;' +
+          'height:' + Math.floor(size * 0.6) + 'px;' +
+          'background:' + palette[Math.floor(Math.random() * palette.length)] + ';' +
+          'transform:rotate(' + rotateStart + 'deg);' +
+          'animation:spell-confetti-fall ' + fallTime + 'ms cubic-bezier(.32,.4,.6,1) forwards;' +
+          '--spell-drift-x:' + driftX + 'px;' +
+          '--spell-rotate-end:' + rotateEnd + 'deg;';
+        $layer.appendChild(d);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, fallTime + 100);
+        })(d);
+      }
+    }
+
+    // ─── cat (companion) ────────────────────────────────────────
+    function castCat(durationMs) {
+      // One cat at a time — recasting sends the existing one off.
+      if (active.byId.cat) {
+        var prev = active.byId.cat;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var cat = document.createElement('button');
+      cat.className = 'spell-cat';
+      cat.type = 'button';
+      cat.setAttribute('aria-label', 'A walking cat. Click to send away.');
+      cat.title = 'click to send the cat home';
+      cat.textContent = '🐈';
+      // 60% chance left-to-right, 40% right-to-left (whim).
+      var ltr = Math.random() < 0.6;
+      cat.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 60000);
+      // Scale walk speed to viewport width — keep ~80px/s feel.
+      var walkSeconds = Math.max(8, Math.min(30, window.innerWidth / 80));
+      cat.style.cssText =
+        'animation:spell-cat-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite;';
+      cat.addEventListener('click', function () {
+        if (cat.parentNode) cat.parentNode.removeChild(cat);
+        active.byId.cat = null;
+      });
+      $layer.appendChild(cat);
+      active.byId.cat = cat;
+      // Auto-dismiss after duration so it doesn't loop forever.
+      setTimeout(function () {
+        if (cat && cat.parentNode) cat.parentNode.removeChild(cat);
+        if (active.byId.cat === cat) active.byId.cat = null;
+      }, dur);
+    }
+
+    // ─── breath (ambient) ───────────────────────────────────────
+    // 4-7-8 breathing — inhale 4s, hold 7s, exhale 8s. Cycle ~19s.
+    function castBreath() {
+      if (active.byId.breath) return; // toggle via dismiss
+      var b = document.createElement('div');
+      b.className = 'spell-breath';
+      b.setAttribute('role', 'button');
+      b.setAttribute('aria-label', 'Breathing circle, 4-7-8 rhythm. Click to dismiss.');
+      b.tabIndex = 0;
+      b.innerHTML =
+        '<div class="spell-breath__ring" aria-hidden="true"></div>' +
+        '<div class="spell-breath__inner" aria-hidden="true"></div>' +
+        '<p class="spell-breath__cue mono" id="pc-spell-breath-cue">breathe in · 4</p>';
+      b.addEventListener('click', dismissBreath);
+      b.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismissBreath(); }
+      });
+      $layer.appendChild(b);
+      active.byId.breath = b;
+      // Cue cycle so the user knows the phase even with reduce-motion.
+      var phases = [
+        { text: 'breathe in · 4',  ms: 4000 },
+        { text: 'hold · 7',        ms: 7000 },
+        { text: 'breathe out · 8', ms: 8000 },
+      ];
+      var idx = 0;
+      var $cue = b.querySelector('#pc-spell-breath-cue');
+      function advance() {
+        if (!active.byId.breath) return;
+        if ($cue) $cue.textContent = phases[idx].text;
+        idx = (idx + 1) % phases.length;
+        active.byId.breathTimer = setTimeout(advance, phases[(idx + 2) % 3].ms);
+      }
+      advance();
+    }
+    function dismissBreath() {
+      var b = active.byId.breath;
+      if (!b) return;
+      if (active.byId.breathTimer) { clearTimeout(active.byId.breathTimer); active.byId.breathTimer = 0; }
+      if (b.parentNode) b.parentNode.removeChild(b);
+      active.byId.breath = null;
+    }
+
+    // ─── candle (ambient) ───────────────────────────────────────
+    function castCandle() {
+      if (active.byId.candle) return;
+      var c = document.createElement('button');
+      c.className = 'spell-candle';
+      c.type = 'button';
+      c.setAttribute('aria-label', 'A lit candle. Click to snuff out.');
+      c.title = 'click to snuff out';
+      c.innerHTML =
+        '<span class="spell-candle__flame" aria-hidden="true">🔥</span>' +
+        '<span class="spell-candle__body" aria-hidden="true">🕯️</span>';
+      c.addEventListener('click', function () {
+        if (c.parentNode) c.parentNode.removeChild(c);
+        active.byId.candle = null;
+      });
+      $layer.appendChild(c);
+      active.byId.candle = c;
+    }
+
+    // ─── dispatch ───────────────────────────────────────────────
+    function castSpell(id) {
+      switch (id) {
+        case 'confetti': castConfetti(4500); break;
+        case 'cat':      castCat(60000); break;
+        case 'breath':   castBreath(); break;
+        case 'candle':   castCandle(); break;
+        default:
+          // Unknown spell — silent no-op; could surface a toast in the
+          // bar but spells are meant to be playful, so we just ignore.
+          try { console.info('[spell] unknown:', id); } catch (e) {}
+      }
+    }
+
+    function clearAll() {
+      // Kill all ambients/companions — bursts time out on their own.
+      Object.keys(active.byId).forEach(function (k) {
+        var el = active.byId[k];
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        active.byId[k] = null;
+      });
+      if (active.byId.breathTimer) { clearTimeout(active.byId.breathTimer); active.byId.breathTimer = 0; }
+    }
+
+    window.addEventListener('pc:spell:cast', function (e) {
+      var id = e && e.detail && e.detail.id;
+      if (id) castSpell(id);
+    });
+    window.addEventListener('pc:spell:clear', clearAll);
+  })();
+</script>
+
+<style is:global>
+  .spell-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 30; /* under footer (40) + trays (49) but above page content */
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  /* ── confetti ────────────────────────────────────────────── */
+  .spell-confetti {
+    position: absolute;
+    border-radius: 1px;
+    pointer-events: none;
+    will-change: transform, top, opacity;
+  }
+  @keyframes spell-confetti-fall {
+    0%   { top: -12px; opacity: 1; transform: translateX(0) rotate(0deg); }
+    80%  { opacity: 1; }
+    100% {
+      top: 105vh;
+      opacity: 0;
+      transform: translateX(var(--spell-drift-x, 0)) rotate(var(--spell-rotate-end, 360deg));
+    }
+  }
+
+  /* ── cat (companion) ─────────────────────────────────────── */
+  .spell-cat {
+    position: fixed;
+    bottom: 56px;     /* sit above the dock */
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 32px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    image-rendering: pixelated;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+  .spell-cat[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-cat-walk-ltr {
+    0%   { left: -40px; }
+    48%  { left: calc(50vw - 18px); }
+    52%  { left: calc(50vw - 18px); } /* tiny pause mid-screen */
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-cat-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    48%  { left: calc(50vw - 18px); }
+    52%  { left: calc(50vw - 18px); }
+    100% { left: -40px; }
+  }
+
+  /* ── breath (ambient) ────────────────────────────────────── */
+  .spell-breath {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 240px;
+    height: 240px;
+    border: 0;
+    background: none;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .spell-breath__ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(74, 158, 255, 0.4);
+    background: radial-gradient(circle at center, rgba(74, 158, 255, 0.18) 0%, rgba(74, 158, 255, 0) 70%);
+    animation: spell-breath-cycle 19s ease-in-out infinite;
+  }
+  .spell-breath__inner {
+    position: absolute;
+    inset: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(253, 242, 214, 0.6) 0%, rgba(253, 242, 214, 0) 70%);
+    animation: spell-breath-cycle-inner 19s ease-in-out infinite;
+  }
+  .spell-breath__cue {
+    position: relative;
+    z-index: 1;
+    color: #fdf2d6;
+    background: rgba(26, 18, 8, 0.7);
+    padding: 6px 10px;
+    border-radius: 2px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  /* Inhale 4s → expand. Hold 7s → stay. Exhale 8s → contract. */
+  @keyframes spell-breath-cycle {
+    0%               { transform: scale(0.7); }   /* start small */
+    21%  /* +4s */   { transform: scale(1); }     /* inhale done */
+    57%  /* +7s */   { transform: scale(1); }     /* hold */
+    100% /* +8s */   { transform: scale(0.7); }   /* exhale done */
+  }
+  @keyframes spell-breath-cycle-inner {
+    0%               { transform: scale(0.55); opacity: 0.7; }
+    21%              { transform: scale(0.95); opacity: 1; }
+    57%              { transform: scale(0.95); opacity: 1; }
+    100%             { transform: scale(0.55); opacity: 0.7; }
+  }
+
+  /* ── candle (ambient) ────────────────────────────────────── */
+  .spell-candle {
+    position: fixed;
+    right: 24px;
+    bottom: 60px;
+    width: 44px;
+    height: 64px;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    text-shadow: 0 0 12px rgba(255, 180, 80, 0.7);
+  }
+  .spell-candle__flame {
+    font-size: 18px;
+    line-height: 18px;
+    animation: spell-candle-flicker 1.6s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+  .spell-candle__body {
+    font-size: 32px;
+    line-height: 32px;
+    margin-top: -4px;
+  }
+  @keyframes spell-candle-flicker {
+    0%, 100% { transform: translateY(0) scale(1) rotate(-1deg); opacity: 1; }
+    25%      { transform: translateY(-1px) scale(1.05) rotate(2deg); opacity: 0.95; }
+    50%      { transform: translateY(0) scale(0.97) rotate(-2deg); opacity: 1; }
+    75%      { transform: translateY(-1px) scale(1.03) rotate(1deg); opacity: 0.92; }
+  }
+
+  /* ── reduced-motion ──────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .spell-cat,
+    .spell-breath__ring,
+    .spell-breath__inner,
+    .spell-candle__flame { animation: none; }
+    .spell-cat { left: 50%; transform: translateX(-50%); }
+    .spell-breath__ring { transform: scale(0.85); }
+    .spell-breath__inner { transform: scale(0.75); }
+  }
+</style>

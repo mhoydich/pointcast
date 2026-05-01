@@ -20,7 +20,7 @@
  * rule). Numbers also double as ⌘1–⌘9 shortcuts.
  */
 
-export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast';
+export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast';
 
 /**
  * A quick-action button shown at the top of a tray. Buttons emit a
@@ -51,7 +51,7 @@ export interface DockTrayAction {
 }
 
 export interface DockKitItem {
-  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast';
+  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast';
   number: string;
   name: string;
   blurb: string;
@@ -144,6 +144,26 @@ export const DOCK_KIT: DockKitItem[] = [
       { id: 'channel',  label: 'channel',  glyph: '📺', hint: 'See today\'s channel rotation', style: 'ghost' },
       { id: 'schedule', label: 'schedule', glyph: '🎬', hint: 'Director — schedule a future block', director: true, style: 'ghost' },
       { id: 'announce', label: 'announce', glyph: '📢', hint: 'Director — push a one-line cast announcement', director: true, style: 'ghost' },
+    ],
+  },
+  {
+    // Mike 2026-05-01 — Peach-app inspired magic words. Type `+confetti`
+    // in the omnibox or click a chip below to spawn ephemeral page
+    // elements. See src/data/spells.ts and src/components/SpellLayer.astro.
+    id: 'cast',
+    number: '06',
+    name: 'Cast',
+    blurb: 'Magic words. Type `+confetti` or click a chip — the page changes.',
+    glyph: '✨',
+    nounSeed: 500,
+    tray: 'cast',
+    accent: '#a78bfa',
+    actions: [
+      { id: 'confetti', label: 'confetti', glyph: '🎊', hint: 'Pixel rectangles in the PC palette. Falls, drifts, fades.' },
+      { id: 'cat',      label: 'cat',      glyph: '🐈', hint: 'A pixel cat walks across the bottom.' },
+      { id: 'breath',   label: 'breath',   glyph: '🫧', hint: '4-7-8 breathing circle. Tap to dismiss.' },
+      { id: 'candle',   label: 'candle',   glyph: '🕯', hint: 'A flickering candle in the corner.' },
+      { id: 'clear',    label: 'clear',    glyph: '🌪', hint: 'Snuff out everything currently cast.', style: 'ghost' },
     ],
   },
 ];
