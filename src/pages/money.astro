@@ -1,0 +1,378 @@
+---
+/**
+ * /money — the spend ledger.
+ *
+ * Per #262 (Stripe Link agent payments). Every Block carrying a `spend`
+ * field is a receipt of an agent loop that cost something. This page is
+ * the collected ledger: who spent what, on what, in service of which
+ * loop, with which credential, in which mode (test/live).
+ *
+ * Tezos = identity of artifact (`edition`). Link = money of action
+ * (`spend`). A Block carrying both is a "dual-rail" block — when one
+ * exists it gets a special callout at the top.
+ *
+ * The /money channel proper (MNY) was deferred; this page reads from
+ * any block with a populated `spend` field, regardless of channel.
+ *
+ * Author: cc, 2026-04-30 evening.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const all = await getCollection('blocks');
+type B = (typeof all)[number];
+
+const receipts = all
+  .filter((b) => (b.data as any).spend)
+  .sort((a, b) => new Date((b.data as any).timestamp).getTime() - new Date((a.data as any).timestamp).getTime());
+
+const totalUsd = receipts.reduce((s, b) => s + ((b.data as any).spend?.amount_usd ?? 0), 0);
+const totalLive = receipts
+  .filter((b) => ((b.data as any).spend?.mode ?? 'test') === 'live')
+  .reduce((s, b) => s + ((b.data as any).spend?.amount_usd ?? 0), 0);
+const totalTest = totalUsd - totalLive;
+
+const dualRail = receipts.filter((b) => (b.data as any).edition && (b.data as any).spend);
+
+const byAgent = new Map<string, { count: number; usd: number }>();
+for (const b of receipts) {
+  const s = (b.data as any).spend;
+  if (!s) continue;
+  const cur = byAgent.get(s.agent) ?? { count: 0, usd: 0 };
+  cur.count += 1;
+  cur.usd += s.amount_usd;
+  byAgent.set(s.agent, cur);
+}
+
+function fmt(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+function rel(d: Date | string): string {
+  const t = new Date(d).getTime();
+  const dt = Math.floor((Date.now() - t) / 1000);
+  if (dt < 60)        return `${dt}s ago`;
+  if (dt < 3600)      return `${Math.floor(dt / 60)}m ago`;
+  if (dt < 86400)     return `${Math.floor(dt / 3600)}h ago`;
+  if (dt < 86400 * 7) return `${Math.floor(dt / 86400)}d ago`;
+  return new Date(d).toISOString().slice(0, 10);
+}
+
+const EMERALD       = '#0B6B3A';
+const EMERALD_DEEP  = '#06451F';
+const EMERALD_TINT  = '#E7F3EC';
+const AMBER         = '#BA7517';
+const INK           = '#1A1A1A';
+const HAIR          = '#D4CBB6';
+---
+
+<BaseLayout
+  title="Money — PointCast"
+  description="Agent spend receipts. Tezos = identity of artifact. Link = money of action."
+>
+  <main class="money">
+    <header class="money__header">
+      <div class="money__chip">MNY</div>
+      <h1>Money</h1>
+      <p class="dek">
+        Receipts of agent loops. Every block here is something a resident
+        spent on the town's behalf — image-gen, inference, sponsorship,
+        domain renewal — with the user-facing context they wrote when
+        asking, the merchant they paid, and the credential they used.
+        Tezos handles identity of artifact; Link handles money of action.
+      </p>
+    </header>
+
+    <section class="totals">
+      <div class="totals__cell">
+        <span class="totals__label">total</span>
+        <span class="totals__big">{fmt(totalUsd)}</span>
+        <span class="totals__sub">{receipts.length} receipt{receipts.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="totals__cell">
+        <span class="totals__label">testmode</span>
+        <span class="totals__big" style={`color: ${AMBER}`}>{fmt(totalTest)}</span>
+        <span class="totals__sub">no real charges</span>
+      </div>
+      <div class="totals__cell">
+        <span class="totals__label">live</span>
+        <span class="totals__big" style={`color: ${EMERALD}`}>{fmt(totalLive)}</span>
+        <span class="totals__sub">real spend</span>
+      </div>
+      <div class="totals__cell">
+        <span class="totals__label">dual-rail</span>
+        <span class="totals__big">{dualRail.length}</span>
+        <span class="totals__sub">blocks w/ Tezos + Link</span>
+      </div>
+    </section>
+
+    {byAgent.size > 0 && (
+      <section class="agents">
+        <h2>By agent</h2>
+        <div class="agents__grid">
+          {[...byAgent.entries()].map(([agent, stat]) => (
+            <div class="agent">
+              <span class="agent__name">{agent}</span>
+              <span class="agent__usd">{fmt(stat.usd)}</span>
+              <span class="agent__count">{stat.count} loop{stat.count === 1 ? '' : 's'}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <section class="ledger">
+      <h2>Receipts</h2>
+      {receipts.length === 0 ? (
+        <p class="empty">
+          No receipts yet. The first one fires when an agent runs
+          <code>scripts/agent-spend.mjs</code> and the spend request
+          settles.
+        </p>
+      ) : (
+        <ol class="ledger__list">
+          {receipts.map((b) => {
+            const s: any = (b.data as any).spend;
+            return (
+              <li class="receipt">
+                <a class="receipt__link" href={`/b/${b.data.id}`}>
+                  <span class="receipt__id">{b.data.id}</span>
+                  <span class="receipt__title">{b.data.title}</span>
+                </a>
+                <div class="receipt__row">
+                  <span class={`pill pill--${s.mode}`}>{s.mode}</span>
+                  <span class="receipt__amt">{fmt(s.amount_usd)}</span>
+                  <span class="receipt__sep">→</span>
+                  <span class="receipt__merchant">{s.merchant}</span>
+                  <span class="receipt__sep">·</span>
+                  <span class="receipt__agent">{s.agent}/{s.loop}</span>
+                  <span class="receipt__sep">·</span>
+                  <span class="receipt__when">{rel(b.data.timestamp)}</span>
+                  <span class={`status status--${s.status}`}>{s.status}</span>
+                </div>
+                {s.context && (
+                  <p class="receipt__context">{s.context}</p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
+
+    <footer class="money__footer">
+      <a href="/b/0410">Why this exists</a>
+      <span>·</span>
+      <a href="https://link.com/agents">link.com/agents</a>
+      <span>·</span>
+      <a href="https://github.com/mhoydich/pointcast/issues/262">#262</a>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style define:vars={{ EMERALD, EMERALD_DEEP, EMERALD_TINT, AMBER, INK, HAIR }}>
+  .money {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    color: var(--INK);
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .money__header {
+    border-left: 6px solid var(--EMERALD);
+    padding-left: 1rem;
+    margin-bottom: 2rem;
+  }
+  .money__chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
+    background: var(--EMERALD);
+    color: white;
+    padding: 0.2rem 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .money h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 3rem;
+    margin: 0 0 0.5rem;
+    color: var(--EMERALD_DEEP);
+  }
+  .money .dek {
+    font-style: italic;
+    color: #555;
+    font-size: 1rem;
+    line-height: 1.5;
+    max-width: 64ch;
+  }
+  .totals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 700px) { .totals { grid-template-columns: repeat(2, 1fr); } }
+  .totals__cell {
+    background: var(--EMERALD_TINT);
+    border: 1px solid var(--HAIR);
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .totals__label {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b6358;
+  }
+  .totals__big {
+    font-family: Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--EMERALD_DEEP);
+  }
+  .totals__sub {
+    font-size: 0.78rem;
+    color: #6b6358;
+  }
+  .agents {
+    margin-bottom: 2rem;
+  }
+  .agents h2, .ledger h2 {
+    font-family: Georgia, serif;
+    font-size: 1.4rem;
+    margin: 0 0 0.6rem;
+    color: var(--INK);
+  }
+  .agents__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.5rem;
+  }
+  .agent {
+    background: white;
+    border: 1px solid var(--HAIR);
+    border-left: 3px solid var(--EMERALD);
+    padding: 0.6rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .agent__name {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    color: var(--EMERALD_DEEP);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .agent__usd {
+    font-family: Georgia, serif;
+    font-size: 1.25rem;
+  }
+  .agent__count {
+    font-size: 0.78rem;
+    color: #6b6358;
+  }
+  .ledger__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .receipt {
+    background: white;
+    border: 1px solid var(--HAIR);
+    border-left: 4px solid var(--EMERALD);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .receipt__link {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    text-decoration: none;
+    color: var(--INK);
+    font-weight: 600;
+  }
+  .receipt__link:hover { color: var(--EMERALD_DEEP); }
+  .receipt__id {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    color: var(--AMBER);
+  }
+  .receipt__title { font-size: 1rem; }
+  .receipt__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    font-size: 0.85rem;
+    margin: 0.4rem 0 0;
+    color: #555;
+  }
+  .receipt__amt {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: var(--EMERALD_DEEP);
+    font-weight: 600;
+  }
+  .receipt__sep { color: #aaa; }
+  .receipt__merchant { color: var(--INK); }
+  .receipt__agent {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.78rem;
+  }
+  .receipt__when { color: #888; font-size: 0.78rem; }
+  .receipt__context {
+    font-size: 0.85rem;
+    color: #666;
+    margin: 0.5rem 0 0;
+    font-style: italic;
+    line-height: 1.4;
+    border-top: 1px dotted var(--HAIR);
+    padding-top: 0.45rem;
+  }
+  .pill {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    padding: 0.1rem 0.4rem;
+    text-transform: uppercase;
+  }
+  .pill--test { background: var(--AMBER); color: white; }
+  .pill--live { background: var(--EMERALD); color: white; }
+  .status {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: #6b6358;
+    letter-spacing: 0.05em;
+    margin-left: auto;
+  }
+  .status--settled, .status--approved { color: var(--EMERALD_DEEP); }
+  .status--denied, .status--expired   { color: #993556; }
+  .empty {
+    background: var(--EMERALD_TINT);
+    border: 1px dashed var(--EMERALD);
+    padding: 1.25rem;
+    text-align: center;
+    color: #555;
+  }
+  .empty code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    background: white;
+    padding: 0.1rem 0.3rem;
+  }
+  .money__footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--HAIR);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: #888;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .money__footer a { color: var(--EMERALD_DEEP); text-decoration: none; }
+  .money__footer a:hover { text-decoration: underline; }
+</style>
