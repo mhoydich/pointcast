@@ -93,6 +93,23 @@ const pingable = RESIDENTS.filter(
       </span>
     </button>
 
+    <!-- ─── Speech bubble — Mike 2026-04-30 ──────────────────────
+         Appears above the YOU chip when room is on, others are
+         present, and the omnibox is in SAY mode. typing → live
+         preview, sent → 4s snapshot then fade. -->
+    <div
+      class="fb__bubble"
+      id="fb-bubble"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      data-state="hidden"
+      hidden
+    >
+      <span class="fb__bubble-body" id="fb-bubble-body"></span>
+      <span class="fb__bubble-tail" aria-hidden="true"></span>
+    </div>
+
     <form class="fb__omni" id="fb-omni-form" role="search" autocomplete="off">
       <span class="fb__omni-mode mono" id="fb-omni-mode" aria-hidden="true">GO</span>
       <input
@@ -772,8 +789,20 @@ const pingable = RESIDENTS.filter(
       $omniMode.setAttribute('data-mode', mode.toLowerCase());
     }
 
-    $omni.addEventListener('input', applyOmniMode);
-    $omni.addEventListener('focus', applyOmniMode);
+    $omni.addEventListener('input', function () {
+      applyOmniMode();
+      try { syncBubbleFromInput(); } catch (e) {}
+    });
+    $omni.addEventListener('focus', function () {
+      applyOmniMode();
+      try { syncBubbleFromInput(); } catch (e) {}
+    });
+    $omni.addEventListener('blur', function () {
+      // Hide if not in a sent-snapshot window. Empty input still clears.
+      if (!bubbleState.persistUntil || Date.now() >= bubbleState.persistUntil) {
+        if (!String($omni.value || '').trim()) hideBubble();
+      }
+    });
 
     $omniForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -820,6 +849,12 @@ const pingable = RESIDENTS.filter(
       }
       if (mode === 'SAY') {
         window.dispatchEvent(new CustomEvent('pc:room:chat', { detail: { msg: raw } }));
+        // Snapshot the sent message into the bubble for ~4s if anyone
+        // else is here to read it. Same gates as live-typing preview.
+        try {
+          if (roomOn && bubbleState.othersPresent) showBubble(raw, 4000);
+          else hideBubble();
+        } catch (e) {}
         $omni.value = '';
         $omni.placeholder = 'say something…';
         applyOmniMode();
@@ -852,6 +887,9 @@ const pingable = RESIDENTS.filter(
       if (label) label.textContent = roomOn ? 'Room: ON' : 'Room: OFF';
       if (btn) btn.setAttribute('aria-pressed', roomOn ? 'true' : 'false');
       applyOmniMode();
+      // Bubble follows room state — turning room off clears any pending
+      // bubble; turning it on does nothing yet (waits for input).
+      if (!roomOn) try { hideBubble(); } catch (e) {}
     }
 
     var $roomToggleBtn = document.getElementById('fb-tray-room-toggle');
@@ -1174,6 +1212,63 @@ const pingable = RESIDENTS.filter(
       }
     });
 
+    // ─── speech-bubble mode (Mike 2026-04-30) ───────────────────
+    // The bar grows a chat-bubble face when room is on, others are
+    // present, and omni is in SAY mode. Three signals together gate
+    // visibility; presence count flips bubbleState.othersPresent.
+    var bubbleState = { othersPresent: false, hideTimer: 0, persistTimer: 0, persistUntil: 0 };
+
+    var $bubble     = document.getElementById('fb-bubble');
+    var $bubbleBody = document.getElementById('fb-bubble-body');
+
+    function clampBubble(s, n) {
+      var str = String(s || '');
+      if (str.length <= n) return str;
+      return str.slice(0, n - 1) + '…';
+    }
+
+    function hideBubble() {
+      if (!$bubble) return;
+      bubbleState.persistUntil = 0;
+      if (bubbleState.hideTimer) { clearTimeout(bubbleState.hideTimer); bubbleState.hideTimer = 0; }
+      if (bubbleState.persistTimer) { clearTimeout(bubbleState.persistTimer); bubbleState.persistTimer = 0; }
+      $bubble.setAttribute('data-state', 'hidden');
+      setTimeout(function () {
+        if ($bubble.getAttribute('data-state') === 'hidden') $bubble.hidden = true;
+      }, 200);
+    }
+
+    function showBubble(text, persistMs) {
+      if (!$bubble || !$bubbleBody) return;
+      if (!roomOn || !bubbleState.othersPresent) { hideBubble(); return; }
+      $bubbleBody.textContent = clampBubble(text, 100);
+      $bubble.hidden = false;
+      void $bubble.offsetWidth;
+      $bubble.setAttribute('data-state', persistMs ? 'sent' : 'typing');
+      if (bubbleState.hideTimer) { clearTimeout(bubbleState.hideTimer); bubbleState.hideTimer = 0; }
+      if (bubbleState.persistTimer) { clearTimeout(bubbleState.persistTimer); bubbleState.persistTimer = 0; }
+      if (persistMs && persistMs > 0) {
+        bubbleState.persistUntil = Date.now() + persistMs;
+        bubbleState.persistTimer = setTimeout(function () {
+          bubbleState.persistUntil = 0;
+          if (roomOn && bubbleState.othersPresent && inferOmniMode($omni.value) === 'SAY' && $omni.value.trim()) {
+            showBubble($omni.value, 0);
+          } else {
+            hideBubble();
+          }
+        }, persistMs);
+      }
+    }
+
+    function syncBubbleFromInput() {
+      if (bubbleState.persistUntil && Date.now() < bubbleState.persistUntil) return;
+      if (!roomOn || !bubbleState.othersPresent) { hideBubble(); return; }
+      var mode = inferOmniMode($omni.value);
+      var raw = String($omni.value || '').trim();
+      if (mode !== 'SAY' || !raw) { hideBubble(); return; }
+      showBubble(raw, 0);
+    }
+
     async function updatePresence() {
       try {
         var r = await fetch('/api/presence/snapshot', { cache: 'no-store' });
@@ -1185,6 +1280,9 @@ const pingable = RESIDENTS.filter(
         if ($liveHere) $liveHere.textContent = String(total);
         var here = document.getElementById('fb-tray-room-here');
         if (here) here.textContent = String(total);
+        // Bubble cares whether anyone else is here (>1 means at least one peer).
+        bubbleState.othersPresent = total > 1;
+        if (!bubbleState.othersPresent) hideBubble();
         var dot = document.getElementById('fb-stamp-dot-room');
         if (dot) {
           if (roomOn && total > 1) dot.setAttribute('data-state', 'busy');
@@ -2378,10 +2476,84 @@ const pingable = RESIDENTS.filter(
     .fb__stamp[data-tray='fed']      { display: none; }
   }
 
+  /* ─── Speech bubble — Mike 2026-04-30 ──────────────────────────
+     Floats above the YOU chip with a downward tail. Outside the chip
+     button so clicks never get intercepted. */
+  .fb__bubble {
+    pointer-events: none;
+    position: absolute;
+    left: 18px;
+    bottom: 50px;
+    max-width: min(320px, calc(100vw - 28px));
+    padding: 8px 12px;
+    background: #fffdf6;
+    color: #2d1f08;
+    border: 1px solid #4e3a16;
+    border-radius: 10px;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    line-height: 1.35;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+    word-wrap: break-word;
+    z-index: 41;
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+    transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  }
+  .fb__bubble[data-state='typing'] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    border-color: rgba(196, 149, 46, 0.5);
+    background: linear-gradient(180deg, #fffdf6 0%, #fff8e5 100%);
+  }
+  .fb__bubble[data-state='sent'] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    border-color: #2d1f08;
+    background: linear-gradient(180deg, #fffdf6 0%, #faf2dc 100%);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(249, 197, 108, 0.4);
+  }
+  .fb__bubble-body {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+  }
+  .fb__bubble-tail {
+    position: absolute;
+    bottom: -7px;
+    left: 14px;
+    width: 12px;
+    height: 12px;
+    background: inherit;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    border-color: inherit;
+    transform: rotate(45deg);
+    border-top: 0;
+    border-left: 0;
+  }
+  .fb__bubble[data-state='typing'] .fb__bubble-tail {
+    background: #fff8e5;
+    border-right-color: rgba(196, 149, 46, 0.5);
+    border-bottom-color: rgba(196, 149, 46, 0.5);
+  }
+  .fb__bubble[data-state='sent'] .fb__bubble-tail {
+    background: #faf2dc;
+    border-right-color: #2d1f08;
+    border-bottom-color: #2d1f08;
+  }
+  @media (max-width: 640px) {
+    .fb__bubble { left: 12px; bottom: 48px; max-width: min(260px, calc(100vw - 20px)); font-size: 12.5px; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .fb__on-air-dot,
     .fb__stamp-dot[data-state='busy'] { animation: none; }
     .fb__menu, .fb__menu-panel, .fb__tray { transition: none; }
     .fb__action[data-flash='true'] { animation: none; }
+    .fb__bubble { transition: opacity 0.1s ease; transform: none; }
   }
 </style>
