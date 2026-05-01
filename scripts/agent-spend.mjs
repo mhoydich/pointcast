@@ -114,11 +114,14 @@ function validate(args) {
   if (!args.context || args.context.length < 100) {
     die(3, `--context required, min 100 chars (link-cli requirement). Got ${args.context?.length ?? 0}.`);
   }
-  // --live is opt-in; without it we default to --test. Hard cap on live amount
-  // is intentionally lower than the per-purchase cap until the loop is proven.
+  // --live is opt-in; without it we default to --test. Hard cap on live
+  // amount aligned with LINK_CAPS.perPurchaseUsd. Raised from $2 → $10 on
+  // 2026-04-30 night so a single run can clear merchant minimums (Replicate
+  // is $5 to top up). The dashboard cap on the user's Link account is still
+  // the belt-and-suspenders layer.
   const isLive = args.live === true;
-  if (isLive && amountUsd > 2.0) {
-    die(2, `--live capped at $2.00/req for v0 proving runs. Got $${amountUsd}. Raise the cap explicitly when ready.`);
+  if (isLive && amountUsd > LINK_CAPS.perPurchaseUsd) {
+    die(2, `--live capped at $${LINK_CAPS.perPurchaseUsd.toFixed(2)}/req for v0 proving runs. Got $${amountUsd}. Raise the cap explicitly when ready.`);
   }
   return { ...args, amountUsd, channel: args.channel || 'FD', isLive };
 }
