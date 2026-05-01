@@ -314,6 +314,154 @@
       active.byId.starfield = sky;
     }
 
+    // ─── firework (burst) ───────────────────────────────────────
+    // Three staggered bursts at random viewport positions. Each burst
+    // spawns 22 sparks that shoot radially outward and fade. Pure CSS
+    // custom-property trick: compute dx/dy in JS, animate in CSS.
+    function castFirework(durationMs) {
+      if (reduce()) return;
+      var colors = ['#d4a437', '#4A9EFF', '#c4952e', '#fdf2d6', '#8a2432', '#2f8f5f', '#a78bfa'];
+      function fireBurst(delay) {
+        setTimeout(function () {
+          var cx = 10 + Math.random() * 80; // vw
+          var cy = 10 + Math.random() * 55; // vh
+          var sparkCount = 22;
+          for (var i = 0; i < sparkCount; i++) {
+            var s = document.createElement('span');
+            s.className = 'spell-firework-spark';
+            var angleRad = (i / sparkCount) * 2 * Math.PI;
+            var dist = 55 + Math.random() * 80;
+            var dx = (Math.cos(angleRad) * dist).toFixed(1);
+            var dy = (Math.sin(angleRad) * dist).toFixed(1);
+            var color = colors[Math.floor(Math.random() * colors.length)];
+            var sparkDur = 700 + Math.floor(Math.random() * 600);
+            s.style.cssText =
+              'left:' + cx + 'vw;' +
+              'top:' + cy + 'vh;' +
+              'background:' + color + ';' +
+              '--spell-fw-dx:' + dx + 'px;' +
+              '--spell-fw-dy:' + dy + 'px;' +
+              'animation:spell-firework-spark-fly ' + sparkDur + 'ms ease-out forwards;';
+            $layer.appendChild(s);
+            active.bursts++;
+            (function (el) {
+              setTimeout(function () {
+                if (el && el.parentNode) el.parentNode.removeChild(el);
+                active.bursts = Math.max(0, active.bursts - 1);
+              }, sparkDur + 100);
+            })(s);
+          }
+        }, delay);
+      }
+      fireBurst(0);
+      fireBurst(600);
+      fireBurst(1300);
+    }
+
+    // ─── fish (companion) ────────────────────────────────────────
+    // Glides smoothly at ~60px/s with a gentle vertical bob. Calmer
+    // than cat or pup — ease-in-out swim, unhurried.
+    function castFish(durationMs) {
+      if (active.byId.fish) {
+        var prev = active.byId.fish;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var fish = document.createElement('button');
+      fish.className = 'spell-fish';
+      fish.type = 'button';
+      fish.setAttribute('aria-label', 'A fish gliding by. Click to let it swim away.');
+      fish.title = 'click to release the fish';
+      fish.textContent = '🐟';
+      var ltr = Math.random() < 0.5;
+      fish.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 45000);
+      var swimSeconds = Math.max(10, Math.min(28, window.innerWidth / 60));
+      fish.style.cssText =
+        'animation:spell-fish-swim-' + (ltr ? 'ltr' : 'rtl') + ' ' + swimSeconds + 's ease-in-out infinite,' +
+        'spell-fish-bob 2.4s ease-in-out infinite;';
+      fish.addEventListener('click', function () {
+        if (fish.parentNode) fish.parentNode.removeChild(fish);
+        active.byId.fish = null;
+      });
+      $layer.appendChild(fish);
+      active.byId.fish = fish;
+      setTimeout(function () {
+        if (fish && fish.parentNode) fish.parentNode.removeChild(fish);
+        if (active.byId.fish === fish) active.byId.fish = null;
+      }, dur);
+    }
+
+    // ─── moth (companion) ────────────────────────────────────────
+    // Flies mid-screen height (not bottom like cat/pup) with an erratic
+    // vertical flutter that mimics being drawn toward a light source.
+    function castMoth(durationMs) {
+      if (active.byId.moth) {
+        var prev = active.byId.moth;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var moth = document.createElement('button');
+      moth.className = 'spell-moth';
+      moth.type = 'button';
+      moth.setAttribute('aria-label', 'A moth fluttering by. Click to send it on.');
+      moth.title = 'click to send the moth on';
+      moth.textContent = '🦋';
+      var ltr = Math.random() < 0.5;
+      moth.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var flySeconds = Math.max(10, Math.min(30, window.innerWidth / 70));
+      moth.style.cssText =
+        'animation:spell-moth-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-moth-flutter 0.55s ease-in-out infinite;';
+      moth.addEventListener('click', function () {
+        if (moth.parentNode) moth.parentNode.removeChild(moth);
+        active.byId.moth = null;
+      });
+      $layer.appendChild(moth);
+      active.byId.moth = moth;
+      setTimeout(function () {
+        if (moth && moth.parentNode) moth.parentNode.removeChild(moth);
+        if (active.byId.moth === moth) active.byId.moth = null;
+      }, dur);
+    }
+
+    // ─── snow (ambient) ──────────────────────────────────────────
+    // 60 soft white flakes, each with a random size, fall speed, and
+    // lateral drift. Negative animation-delay puts each flake mid-fall
+    // on cast so the screen fills immediately.
+    function castSnow() {
+      if (active.byId.snow) return;
+      var snow = document.createElement('button');
+      snow.className = 'spell-snow';
+      snow.type = 'button';
+      snow.setAttribute('aria-label', 'Snowfall overlay. Click to dismiss.');
+      snow.title = 'click to stop the snow';
+      var html = '';
+      for (var i = 0; i < 60; i++) {
+        var leftPct = (Math.random() * 100).toFixed(1);
+        var delay = (Math.random() * 8).toFixed(2);
+        var dur = (5 + Math.random() * 7).toFixed(2);
+        var size = (4 + Math.random() * 5).toFixed(1);
+        var drift = ((Math.random() - 0.5) * 70).toFixed(1);
+        var op = (0.5 + Math.random() * 0.4).toFixed(2);
+        html += '<span class="spell-snow__flake" style="' +
+          'left:' + leftPct + '%;' +
+          'width:' + size + 'px;' +
+          'height:' + size + 'px;' +
+          'animation-delay:-' + delay + 's;' +
+          'animation-duration:' + dur + 's;' +
+          'opacity:' + op + ';' +
+          '--spell-snow-drift:' + drift + 'px;' +
+          '"></span>';
+      }
+      snow.innerHTML = html;
+      snow.addEventListener('click', function () {
+        if (snow.parentNode) snow.parentNode.removeChild(snow);
+        active.byId.snow = null;
+      });
+      $layer.appendChild(snow);
+      active.byId.snow = snow;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -325,6 +473,10 @@
         case 'candle':    castCandle(); break;
         case 'rain':      castRain(); break;
         case 'starfield': castStarfield(); break;
+        case 'firework':  castFirework(3500); break;
+        case 'fish':      castFish(45000); break;
+        case 'moth':      castMoth(55000); break;
+        case 'snow':      castSnow(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -636,24 +788,174 @@
     50%      { opacity: 1; transform: scale(1.2); }
   }
 
+  /* ── firework (burst) ───────────────────────────────────── */
+  .spell-firework-spark {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-firework-spark-fly {
+    0% {
+      transform: translate(-50%, -50%);
+      opacity: 1;
+    }
+    75% { opacity: 0.75; }
+    100% {
+      transform: translate(
+        calc(-50% + var(--spell-fw-dx, 0px)),
+        calc(-50% + var(--spell-fw-dy, 0px))
+      );
+      opacity: 0;
+    }
+  }
+
+  /* ── fish (companion) ────────────────────────────────────── */
+  .spell-fish {
+    position: fixed;
+    bottom: 72px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 3px rgba(74, 158, 255, 0.3));
+  }
+  .spell-fish[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-fish-swim-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-fish-swim-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-fish-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+  .spell-fish[data-dir='rtl'] {
+    animation-name: spell-fish-swim-rtl, spell-fish-bob-rtl !important;
+  }
+  @keyframes spell-fish-bob-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-4px); }
+  }
+
+  /* ── moth (companion) ────────────────────────────────────── */
+  /* Hovers at 35vh — mid-screen, not bottom — and flutters erratically
+     as if drawn toward a light source just out of frame. */
+  .spell-moth {
+    position: fixed;
+    bottom: 35vh;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 26px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 0 4px rgba(255, 210, 120, 0.4));
+  }
+  .spell-moth[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-moth-fly-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-moth-fly-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  /* Erratic vertical flutter — asymmetric timing evokes moth-like energy. */
+  @keyframes spell-moth-flutter {
+    0%   { transform: translateY(0) scale(1); }
+    18%  { transform: translateY(-18px) scale(0.94); }
+    33%  { transform: translateY(6px) scale(1.03); }
+    55%  { transform: translateY(-24px) scale(0.92); }
+    72%  { transform: translateY(10px) scale(1.02); }
+    88%  { transform: translateY(-12px) scale(0.96); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  .spell-moth[data-dir='rtl'] {
+    animation-name: spell-moth-fly-rtl, spell-moth-flutter-rtl !important;
+  }
+  @keyframes spell-moth-flutter-rtl {
+    0%   { transform: scaleX(-1) translateY(0); }
+    18%  { transform: scaleX(-1) translateY(-18px); }
+    33%  { transform: scaleX(-1) translateY(6px); }
+    55%  { transform: scaleX(-1) translateY(-24px); }
+    72%  { transform: scaleX(-1) translateY(10px); }
+    88%  { transform: scaleX(-1) translateY(-12px); }
+    100% { transform: scaleX(-1) translateY(0); }
+  }
+
+  /* ── snow (ambient) ──────────────────────────────────────── */
+  .spell-snow {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-snow__flake {
+    position: absolute;
+    top: -10px;
+    background: rgba(220, 235, 255, 0.88);
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(200, 220, 255, 0.5);
+    animation: spell-snow-fall linear infinite;
+  }
+  @keyframes spell-snow-fall {
+    0%   { top: -10px; transform: translateX(0); }
+    100% { top: 105vh;  transform: translateX(var(--spell-snow-drift, 0px)); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
     .spell-pup,
     .spell-penguin,
+    .spell-fish,
+    .spell-moth,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
     .spell-rain__drop,
-    .spell-starfield__star { animation: none; }
+    .spell-starfield__star,
+    .spell-snow__flake { animation: none; }
     .spell-cat,
     .spell-pup,
-    .spell-penguin { left: 50%; transform: translateX(-50%); }
+    .spell-penguin,
+    .spell-fish,
+    .spell-moth { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
-    .spell-penguin[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-penguin[data-dir='rtl'],
+    .spell-fish[data-dir='rtl'],
+    .spell-moth[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
+    .spell-snow__flake { display: none; } /* snow motion-only */
     .spell-starfield__star { opacity: 0.7; }
   }
 </style>

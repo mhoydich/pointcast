@@ -116,6 +116,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#a78bfa',
   },
+
+  // ─── BURSTS (continued) ──────────────────────────────────────
+  {
+    id: 'firework',
+    label: 'firework',
+    blurb: 'Three colorful bursts shoot outward. Good for any occasion.',
+    glyph: '🎆',
+    kind: 'burst',
+    durationMs: 3500,
+    accent: '#d4a437',
+  },
+
+  // ─── COMPANIONS (continued) ──────────────────────────────────
+  {
+    id: 'fish',
+    label: 'fish',
+    blurb: 'A fish glides past, unhurried. Gentle bob.',
+    glyph: '🐟',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'moth',
+    label: 'moth',
+    blurb: 'A moth flutters mid-screen, drawn toward the light.',
+    glyph: '🦋',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (continued) ─────────────────────────────────────
+  {
+    id: 'snow',
+    label: 'snow',
+    blurb: 'Soft snowflakes drift down. Quiet company.',
+    glyph: '❄️',
+    kind: 'ambient',
+    accent: '#b8d4f0',
+  },
 ];
 
 /** Lookup helper. */
