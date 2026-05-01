@@ -198,6 +198,45 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#2f8f5f',
   },
+
+  // ─── BURSTS (batch 5) ─────────────────────────────────────────
+  {
+    id: 'bloom',
+    label: 'bloom',
+    blurb: 'A garden erupts from center — flowers scatter outward in all directions.',
+    glyph: '🌸',
+    kind: 'burst',
+    durationMs: 2800,
+    accent: '#8a2432',
+  },
+
+  // ─── AMBIENT (batch 5) ────────────────────────────────────────
+  {
+    id: 'aurora',
+    label: 'aurora',
+    blurb: 'Northern lights ripple across the top of the viewport. Slow, shifting.',
+    glyph: '🌌',
+    kind: 'ambient',
+    accent: '#2f8f5f',
+  },
+
+  // ─── IDENTITY (batch 5) ───────────────────────────────────────
+  {
+    id: 'here',
+    label: 'here',
+    blurb: 'You are here. A pulsing beacon in the center of the screen.',
+    glyph: '📍',
+    kind: 'ambient',
+    accent: '#8a2432',
+  },
+  {
+    id: 'mood',
+    label: 'mood',
+    blurb: 'A color-shifting orb that broadcasts the current vibe. No words needed.',
+    glyph: '🎨',
+    kind: 'ambient',
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */

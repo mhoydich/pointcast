@@ -303,7 +303,7 @@
           'height:' + size + 'px;' +
           'animation-delay:' + delay + 's;' +
           'animation-duration:' + dur + 's;' +
-          '"></span>';
+          '></span>';
       }
       sky.innerHTML = html;
       sky.addEventListener('click', function () {
@@ -587,6 +587,98 @@
       active.byId.chimes = ch;
     }
 
+    // ─── bloom (burst) ───────────────────────────────────────────
+    // Flowers scatter radially from viewport center — reuses the
+    // firework dx/dy custom-prop trick on emoji text nodes.
+    function castBloom(durationMs) {
+      if (reduce()) return;
+      var flowers = ['🌸', '🌺', '🌼', '🌻', '🌷', '🌸', '🌼', '🌺', '🌸', '🌻', '🌷', '🌼', '🌸', '🌺'];
+      var count = 14;
+      for (var i = 0; i < count; i++) {
+        var b = document.createElement('span');
+        b.className = 'spell-bloom-petal';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 60 + Math.random() * 110;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var rot = (-120 + Math.floor(Math.random() * 240));
+        var dur = (durationMs || 2800) - Math.floor(Math.random() * 400);
+        var size = 20 + Math.floor(Math.random() * 16);
+        b.textContent = flowers[i % flowers.length];
+        b.style.cssText =
+          'left:50vw;top:45vh;font-size:' + size + 'px;' +
+          '--spell-fw-dx:' + dx + 'px;--spell-fw-dy:' + dy + 'px;' +
+          '--spell-bloom-rot:' + rot + 'deg;' +
+          'animation:spell-bloom-fly ' + dur + 'ms ease-out forwards;';
+        $layer.appendChild(b);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 100);
+        })(b);
+      }
+    }
+
+    // ─── aurora (ambient) ────────────────────────────────────────
+    // Color bands (green / teal / purple) drift slowly across the top
+    // of the viewport — pure CSS pseudo-element gradients, no canvas.
+    function castAurora() {
+      if (active.byId.aurora) return;
+      var a = document.createElement('button');
+      a.className = 'spell-aurora';
+      a.type = 'button';
+      a.setAttribute('aria-label', 'Aurora overlay. Click to dismiss.');
+      a.title = 'click to dim the aurora';
+      a.addEventListener('click', function () {
+        if (a.parentNode) a.parentNode.removeChild(a);
+        active.byId.aurora = null;
+      });
+      $layer.appendChild(a);
+      active.byId.aurora = a;
+    }
+
+    // ─── here (ambient) ──────────────────────────────────────────
+    // A pulsing location beacon centered on screen — two concentric
+    // ripple rings radiate outward from a 📍 glyph. Click to dismiss.
+    function castHere() {
+      if (active.byId.here) return;
+      var h = document.createElement('button');
+      h.className = 'spell-here';
+      h.type = 'button';
+      h.setAttribute('aria-label', 'You are here. Click to dismiss.');
+      h.title = 'click to dismiss';
+      h.innerHTML =
+        '<span class="spell-here__ring spell-here__ring--1" aria-hidden="true"></span>' +
+        '<span class="spell-here__ring spell-here__ring--2" aria-hidden="true"></span>' +
+        '<span class="spell-here__pin" aria-hidden="true">📍</span>';
+      h.addEventListener('click', function () {
+        if (h.parentNode) h.parentNode.removeChild(h);
+        active.byId.here = null;
+      });
+      $layer.appendChild(h);
+      active.byId.here = h;
+    }
+
+    // ─── mood (ambient) ──────────────────────────────────────────
+    // A slowly hue-rotating color orb bottom-left. Cycles through the
+    // full spectrum every ~20s — no words, just vibe. Click to dismiss.
+    function castMood() {
+      if (active.byId.mood) return;
+      var m = document.createElement('button');
+      m.className = 'spell-mood';
+      m.type = 'button';
+      m.setAttribute('aria-label', 'Mood orb. Click to dismiss.');
+      m.title = 'click to dismiss';
+      m.addEventListener('click', function () {
+        if (m.parentNode) m.parentNode.removeChild(m);
+        active.byId.mood = null;
+      });
+      $layer.appendChild(m);
+      active.byId.mood = m;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -606,6 +698,10 @@
         case 'wave':      castWave(3000); break;
         case 'firefly':   castFirefly(40000); break;
         case 'chimes':    castChimes(); break;
+        case 'bloom':     castBloom(2800); break;
+        case 'aurora':    castAurora(); break;
+        case 'here':      castHere(); break;
+        case 'mood':      castMood(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -1170,6 +1266,145 @@
     100% { transform: rotate(9deg); }
   }
 
+  /* ── bloom (burst) ───────────────────────────────────────── */
+  .spell-bloom-petal {
+    position: absolute;
+    pointer-events: none;
+    will-change: transform, opacity;
+    transform: translate(-50%, -50%);
+    line-height: 1;
+  }
+  @keyframes spell-bloom-fly {
+    0% {
+      transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
+      opacity: 1;
+    }
+    55% { opacity: 1; }
+    100% {
+      transform: translate(
+        calc(-50% + var(--spell-fw-dx, 0px)),
+        calc(-50% + var(--spell-fw-dy, 0px))
+      ) scale(1.1) rotate(var(--spell-bloom-rot, 180deg));
+      opacity: 0;
+    }
+  }
+
+  /* ── aurora (ambient) ────────────────────────────────────── */
+  /* Two pseudo-element gradient bands shift at different speeds —
+     no canvas, no SVG. Top-viewport height (45vh) keeps it subtle. */
+  .spell-aurora {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 45vh;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-aurora::before,
+  .spell-aurora::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  .spell-aurora::before {
+    background: linear-gradient(
+      180deg,
+      rgba(47, 143, 95, 0.0) 0%,
+      rgba(47, 143, 95, 0.20) 28%,
+      rgba(74, 158, 255, 0.16) 55%,
+      rgba(167, 139, 250, 0.10) 75%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    animation: spell-aurora-wave 10s ease-in-out infinite alternate;
+  }
+  .spell-aurora::after {
+    background: linear-gradient(
+      180deg,
+      rgba(167, 139, 250, 0.0) 0%,
+      rgba(167, 139, 250, 0.14) 22%,
+      rgba(47, 143, 95, 0.18) 50%,
+      rgba(74, 158, 255, 0.09) 72%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    animation: spell-aurora-wave 14s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes spell-aurora-wave {
+    0%   { transform: translateX(-8%) scaleY(0.82); opacity: 0.65; }
+    50%  { transform: translateX(5%) scaleY(1.12); opacity: 1; }
+    100% { transform: translateX(-3%) scaleY(0.90); opacity: 0.75; }
+  }
+
+  /* ── here (ambient) ──────────────────────────────────────── */
+  .spell-here {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .spell-here__pin {
+    position: relative;
+    z-index: 1;
+    font-size: 40px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 8px rgba(138, 36, 50, 0.65));
+  }
+  .spell-here__ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(138, 36, 50, 0.55);
+    top: 50%;
+    left: 50%;
+    width: 80px;
+    height: 80px;
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  .spell-here__ring--1 { animation: spell-here-ripple 2.4s ease-out infinite; }
+  .spell-here__ring--2 { animation: spell-here-ripple 2.4s ease-out 1.2s infinite; }
+  @keyframes spell-here-ripple {
+    0%   { transform: translate(-50%, -50%) scale(0.35); opacity: 0.9; }
+    100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+  }
+
+  /* ── mood (ambient) ──────────────────────────────────────── */
+  .spell-mood {
+    position: fixed;
+    bottom: 72px;
+    left: 24px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.5) 0%, rgba(212, 164, 55, 0.9) 100%);
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    box-shadow: 0 0 20px 6px rgba(212, 164, 55, 0.4);
+    animation: spell-mood-hue 20s linear infinite;
+  }
+  @keyframes spell-mood-hue {
+    0%   { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -1185,7 +1420,11 @@
     .spell-starfield__star,
     .spell-snow__flake,
     .spell-firefly__glow,
-    .spell-chimes__pipe { animation: none; }
+    .spell-chimes__pipe,
+    .spell-here__ring,
+    .spell-aurora::before,
+    .spell-aurora::after,
+    .spell-mood { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -1204,5 +1443,9 @@
     .spell-starfield__star { opacity: 0.7; }
     .spell-firefly__glow { opacity: 0.7; }
     .spell-chimes__pipe { transform: rotate(0deg); }
+    .spell-here__ring { display: none; } /* ripples motion-only */
+    .spell-aurora::before { opacity: 0.8; transform: none; } /* static band */
+    .spell-aurora::after  { opacity: 0.6; transform: none; }
+    .spell-mood { filter: hue-rotate(60deg); } /* fixed warm amber */
   }
 </style>
