@@ -1,0 +1,172 @@
+---
+/**
+ * <DrumLeagueStrip /> — homepage strip pointing at /drum-league.
+ *
+ * Compact card showing the live community tap count + top 3 noun
+ * avatars + a "join the league" CTA. Per Mike 2026-04-30: the league
+ * is community competition, uplifting, participatory.
+ */
+---
+
+<aside class="dls" aria-labelledby="dls-title">
+  <div class="dls__head">
+    <p class="dls__kicker mono">★ DRUM LEAGUE · COMMUNITY COUNTER · ALL OF US ★</p>
+    <h2 class="dls__title" id="dls-title">we're at <strong id="dls-count">—</strong> taps this week</h2>
+    <p class="dls__strap mono">every drum surface counts · top contributors get a portrait sunday</p>
+  </div>
+
+  <div class="dls__row">
+    <div class="dls__top" id="dls-top" role="list" aria-label="Top contributors">
+      <span class="dls__top-empty mono">— loading top three —</span>
+    </div>
+    <a class="dls__cta mono" href="/drum-league">
+      ▸ open the league
+      <span class="dls__cta-sub">live counter · top 12 · today's duel</span>
+    </a>
+  </div>
+</aside>
+
+<script is:inline>
+  (function () {
+    var countEl = document.getElementById('dls-count');
+    var topEl = document.getElementById('dls-top');
+    function fmt(n) { try { return n.toLocaleString(); } catch (e) { return String(n); } }
+    function tickCount() {
+      var sid;
+      try { sid = localStorage.getItem('pc:sid') || ''; } catch (e) { sid = ''; }
+      if (!sid) sid = 'anon-' + Date.now();
+      fetch('/api/drum?sessionId=' + encodeURIComponent(sid), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          var n = Number(d.globalTotal) || 0;
+          if (countEl) countEl.textContent = fmt(n);
+        }).catch(function () {});
+    }
+    function tickTop() {
+      fetch('/api/drum/top', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.entries) || !topEl) return;
+          var top3 = d.entries.slice(0, 3);
+          if (top3.length === 0) {
+            topEl.innerHTML = '<span class="dls__top-empty mono">— no taps yet · be the first —</span>';
+            return;
+          }
+          topEl.innerHTML = top3.map(function (e, i) {
+            var rank = e.rank || (i + 1);
+            var nid = (e.nounId | 0) || 1;
+            var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+            return '<span class="dls__top-row" role="listitem">' +
+                   '<span class="dls__top-medal" aria-hidden="true">' + medal + '</span>' +
+                   '<img class="dls__top-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="36" height="36" loading="lazy" />' +
+                   '<span class="dls__top-count mono">' + fmt(Number(e.count) || 0) + '</span>' +
+                   '</span>';
+          }).join('');
+        }).catch(function () {});
+    }
+    tickCount(); tickTop();
+    setInterval(tickCount, 8000);
+    setInterval(tickTop, 12000);
+  })();
+</script>
+
+<style>
+  .dls {
+    --dls-paper: #fff5d8;
+    --dls-deep: #f8e8c0;
+    --dls-ink: #11100c;
+    --dls-mute: #5b5347;
+    --dls-magenta: #d6346a;
+    --dls-yellow: #f0c431;
+    --dls-gold: #c9982a;
+
+    display: block;
+    padding: 16px clamp(14px, 3vw, 24px);
+    margin: 0 0 18px;
+    background: var(--dls-paper);
+    border: 2px solid var(--dls-ink);
+    color: var(--dls-ink);
+    font-family: 'Iowan Old Style', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.45;
+    box-shadow: 5px 5px 0 0 var(--dls-yellow), 10px 10px 0 0 var(--dls-magenta);
+  }
+  .dls .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+  .dls__head { text-align: center; margin: 0 0 14px; }
+  .dls__kicker {
+    font-size: 9px; letter-spacing: 0.28em; color: var(--dls-magenta);
+    text-transform: uppercase; font-weight: 700; margin: 0 0 6px;
+  }
+  .dls__title {
+    font-size: clamp(22px, 3vw, 32px);
+    font-weight: 700; margin: 0 0 4px; line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .dls__title strong {
+    color: var(--dls-magenta);
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+  }
+  .dls__strap { font-size: 10px; color: var(--dls-mute); margin: 0; letter-spacing: 0.14em; }
+  .dls__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .dls__top {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: #fffaef;
+    border: 1.5px solid var(--dls-ink);
+    padding: 8px 12px;
+  }
+  .dls__top-empty { font-size: 10px; color: var(--dls-mute); }
+  .dls__top-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dls__top-medal { font-size: 16px; }
+  .dls__top-noun {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--dls-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .dls__top-count {
+    font-size: 12px; font-weight: 800; color: var(--dls-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .dls__cta {
+    display: flex; flex-direction: column; gap: 3px;
+    padding: 12px 18px;
+    background: var(--dls-magenta);
+    color: #fff5d8;
+    border: 2.5px solid var(--dls-ink);
+    text-decoration: none;
+    font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 0 var(--dls-ink);
+    transition: transform 80ms, box-shadow 80ms;
+  }
+  .dls__cta:hover {
+    background: var(--dls-ink); color: #fff5d8;
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 0 var(--dls-ink);
+    text-decoration: none;
+  }
+  .dls__cta-sub {
+    font-size: 9px; letter-spacing: 0.12em; opacity: 0.8;
+    text-transform: lowercase; font-weight: 500;
+  }
+  @media (max-width: 720px) {
+    .dls__row { grid-template-columns: 1fr; }
+  }
+</style>
