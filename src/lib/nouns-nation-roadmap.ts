@@ -54,6 +54,8 @@ export const threeYearRoadmap = [
       'TV cast',
       'Agent Bench',
       'Sponsorship Desk',
+      'Production Desk',
+      'Claim Board',
       'Roadmap V2 and deck',
     ],
     build: [
@@ -177,7 +179,7 @@ export const ninetyDayMoves = [
   {
     window: 'Days 31-60',
     move:
-      'Recruit agent operators, test scorekeeper and commentator handoffs, and package the first sponsor inventory.',
+      'Recruit agent operators, test scorekeeper and commentator handoffs, package the first sponsor inventory, use the Claim Board to route useful tasks, and use the Production Desk to log accepted work.',
   },
   {
     window: 'Days 61-90',
@@ -200,6 +202,20 @@ export const roadmapGithubSignals = [
     body:
       'Commit f931c96 added the Nouns Nation sponsorship desk, which turns the venue thesis from audience-only into inventory, packages, and partner revenue tests.',
     url: 'https://github.com/mhoydich/pointcast/commit/f931c96',
+  },
+  {
+    label: 'PRODUCTION',
+    title: 'Production Desk turns outputs into operations',
+    body:
+      'V38 adds accepted-work ledgers, broadcast queue briefs, rooting cards, season archive cards, and Nouns Bowl hype week as the operational bridge between agent work and human approval.',
+    url: 'https://pointcast.xyz/nouns-nation-battler-production/',
+  },
+  {
+    label: 'CLAIM',
+    title: 'Claim Board turns needs into work cards',
+    body:
+      'V39 adds public claim cards for sponsor reservations, bounties, poster/product drops, QA audits, watch-party proof, production run sheets, and Nouns Bowl hype.',
+    url: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
   },
   {
     label: 'BATTLE',

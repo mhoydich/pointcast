@@ -223,9 +223,27 @@ Start with the first four seasons highlight reel. Pick a Noun, a champion, or a 
 2. Let them scan actual Nouns, first-four-season highlights, and creative inventory before choosing a package.
 3. Let them choose a package and generate a copyable reservation card.
 4. Hand the agent brief to Claude, ChatGPT, Codex, Cursor, or a human producer.
-5. Human reviews what ships: ticker, read, poster prompt, product concept, bounty task, or recap line.
-6. Accepted sponsor work becomes broadcast copy or assets and receives participant-pool credit before any real payout.
-7. When payment/legal rails exist, convert high-signal reservation packages into real sponsor slots.
+5. Route open work through the Claim Board when the package needs a human or agent to produce proof.
+6. Human reviews what ships: ticker, read, poster prompt, product concept, bounty task, or recap line.
+7. Accepted sponsor work is logged in the Production Desk as a ledger card, broadcast queue item, rooting card, or Nouns Bowl hype beat.
+8. Production Desk records receive participant-pool credit before any real payout.
+9. When payment/legal rails exist, convert high-signal reservation packages into real sponsor slots.
+
+## Claim Board Funnel
+
+1. Send open work to `/nouns-nation-battler-tasks/`.
+2. Pick one card: sponsor reservation, agent bounty, poster/product drop, QA audit, watch-party proof, production run sheet, or Nouns Bowl hype.
+3. Generate a claim card with public claimant display, status, proof URL or note, target surface, and participant-credit signal.
+4. Use the proof checklist to finish the work or hand it to Claude, ChatGPT, Codex, Cursor, or a human producer.
+5. Move accepted work into the Production Desk ledger for review and manual credit reconciliation.
+
+## Production Funnel
+
+1. Send useful human or agent output to `/nouns-nation-battler-production/`.
+2. Pick the contribution type: scout report, poster/ad, lower-third, sponsor package, QA fix, watch-party proof, archive card, or director queue.
+3. Add public proof, status, gang/field focus, and participant mode.
+4. Copy the ledger card and director brief for human approval.
+5. Route accepted work to TV cast, Desk Wall, Agent Bench, Poster Wall, Sponsorship Desk, or Nouns Bowl hype week.
 
 ## Metrics
 
@@ -256,6 +274,15 @@ Start with the first four seasons highlight reel. Pick a Noun, a champion, or a 
 - Agent sponsor briefs copied into another client.
 - Accepted sponsor packages that produce usable TV, Desk Wall, poster, or bounty output.
 - Participant-credit notes attached to accepted sponsor work.
+- Claim Board opens from the Battler hub, Agent Bench, Sideline Desk, Sponsorship Desk, Production Desk, or MCP.
+- Claim cards copied or saved locally.
+- Claim proof checklists produce actionable QA reports, sponsor packages, poster briefs, watch-party proof, or production run sheets.
+- Claim Board cards that become accepted Production Desk ledger entries.
+- Production Desk opens from the Battler hub, Agent Bench, Sideline Desk, Sponsorship Desk, or MCP.
+- Accepted-work ledger cards copied or saved locally.
+- Broadcast director queue items copied or saved locally.
+- Rooting cards copied before a slate.
+- Nouns Bowl hype week cards reused in sponsor, host, or poster work.
 
 ## Next Product Bets
 
@@ -268,7 +295,8 @@ Start with the first four seasons highlight reel. Pick a Noun, a champion, or a 
 - Persistent report-card collections if in-session gallery use proves repeatable.
 - Hosted card-image rendering if snapshot-backed card links get traction.
 - Lightweight season integrity tests for playoff seeding, boss-field routing, and challenge awards.
-- Accepted Work Ledger for sponsor reservations, accepted/rejected status, contributor points, and participant-credit accounting.
+- Hosted accepted-work wall if local Production Desk usage proves people want public receipts.
+- Hosted Claim Board wall if local claim cards prove people want public receipts and status tracking.
 
 ## Acceptance Criteria
 
@@ -293,6 +321,10 @@ Start with the first four seasons highlight reel. Pick a Noun, a champion, or a 
 - Copied Desk Wall card links use public PointCast URLs when generated from localhost.
 - Sponsorship Desk creates reservation-only sponsor cards, tickers, agent briefs, proof checklists, and participant-credit previews.
 - Sponsorship Desk stores saved sponsor intents locally under `pc:nouns-battler-sponsor-intents-v1`.
+- Claim Board creates public claim cards, proof checklists, production handoffs, and participant-credit previews.
+- Claim Board stores saved claim cards locally under `pc:nouns-battler-claim-board-v1`.
+- Production Desk creates accepted-work ledger cards, broadcast director briefs, rooting cards, proof checklists, and participant-credit previews.
+- Production Desk stores saved ledger cards locally under `pc:nouns-battler-work-ledger-v1` and broadcast queue items under `pc:nouns-battler-broadcast-queue-v1`.
 - The TV cast remains clean and control-light.
 - The public battler page links to this GTM doc.
 - The JSON manifest exposes the GTM strategy link.

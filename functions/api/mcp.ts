@@ -17,6 +17,10 @@
  *          and participant rewards draft for visiting agents.
  * v0.8.0 — Battler Sponsorship Desk with reservation-only sponsor packages,
  *          agent briefs, proof requirements, and participant-credit routing.
+ * v0.9.0 — Battler Production Desk with accepted-work ledgers, broadcast
+ *          queue briefs, rooting cards, and Nouns Bowl hype packaging.
+ * v0.10.0 — Battler Claim Board with public task cards, proof checklists,
+ *           production handoffs, and participant-credit routing.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -61,6 +65,10 @@
  *   nouns_battler_asset_factory ({assetType?, gang?, tone?}) asset/business kit
  *   nouns_battler_sponsorship_desk ({packageId?, sponsorName?, gang?, tone?, objective?, participantKind?})
  *                                       reservation-only sponsor package kit
+ *   nouns_battler_production_desk ({contributionType?, contributorName?, gang?, title?, proofUrl?, status?, participantKind?})
+ *                                       accepted-work ledger and production kit
+ *   nouns_battler_claim_board ({taskId?, claimantName?, gang?, status?, proofUrl?, note?, participantKind?})
+ *                                       claimable work card and proof handoff
  *   nouns_battler_presence (no input)  anonymous presence instructions
  *   nouns_battler_result_tracker ({snapshotUrl?, snapshotJson?, recapText?, view?})
  *                                       parse/track Battler results
@@ -83,6 +91,8 @@
  *   nouns-battler://results-kit  result tracking schema + prompts + watch frames
  *   nouns-battler://asset-factory asset, business, and rewards model
  *   nouns-battler://sponsorship-desk sponsor packages, inventory, guardrails
+ *   nouns-battler://production-desk accepted-work ledgers and broadcast queue
+ *   nouns-battler://claim-board  claimable work cards and proof routing
  *
  * Discovery
  *   GET /api/mcp returns an HTML discovery page with config snippets.
@@ -95,6 +105,8 @@
 import {
   NOUNS_BATTLER_AGENT_BENCH,
   buildNounsBattlerAssetBrief,
+  buildNounsBattlerClaimBrief,
+  buildNounsBattlerProductionBrief,
   buildNounsBattlerSponsorBrief,
   filterNounsBattlerAgentTaskPacks,
   filterNounsBattlerAgentTasks,
@@ -105,9 +117,9 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.8.0';
+const SERVER_VERSION = '0.10.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.4.0';
+const V2_SERVER_VERSION = '2.6.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -378,18 +390,18 @@ const TOOL_DEFINITIONS = [
   {
     name: 'nouns_battler_agent_tasks',
     description:
-      'Return the Agent Bench task board and claim queue for visiting AI agents. Optional filters: taskId for one role prompt or claim-queue task, role for scout/host/commentator/art-director/designer/fan/qa/asset-producer/yield-designer/sponsor-producer, lane for watch/mcp/creative/design/verify/audience/assets/growth/economy/sponsor.',
+      'Return the Agent Bench task board and claim queue for visiting AI agents. Optional filters: taskId for one role prompt or claim-queue task, role for scout/host/commentator/art-director/designer/fan/qa/asset-producer/yield-designer/sponsor-producer/claim-operator, lane for watch/mcp/creative/design/verify/audience/assets/growth/economy/sponsor/claim.',
     inputSchema: {
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Optional task id such as scout-current-slate, desk-read, scorekeeper-open-slate, or qa-public-circuit.' },
         role: {
           type: 'string',
-          description: 'Optional role filter: scout, host, commentator, art-director, designer, fan, qa, asset-producer, yield-designer, or sponsor-producer.',
+          description: 'Optional role filter: scout, host, commentator, art-director, designer, fan, qa, asset-producer, yield-designer, sponsor-producer, or claim-operator.',
         },
         lane: {
           type: 'string',
-          description: 'Optional claim queue lane filter: watch, mcp, creative, design, verify, audience, assets, growth, economy, or sponsor.',
+          description: 'Optional claim queue lane filter: watch, mcp, creative, design, verify, audience, assets, growth, economy, sponsor, or claim.',
         },
       },
       additionalProperties: false,
@@ -458,6 +470,105 @@ const TOOL_DEFINITIONS = [
         participantKind: {
           type: 'string',
           description: 'Participation mode such as human-and-agent, human-host, agent-builder, artist-operator, or watch-party.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'nouns_battler_production_desk',
+    description:
+      'Return a Nouns Nation Battler production package with accepted-work ledger card, broadcast director brief, rooting card, proof requirements, and participant reward routing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contributionType: {
+          type: 'string',
+          enum: [
+            'scout-report',
+            'poster-or-ad',
+            'tv-lower-third',
+            'sponsor-package',
+            'qa-fix',
+            'watch-party-proof',
+            'season-archive-card',
+            'director-queue',
+          ],
+          description: 'Contribution type to package. Default tv-lower-third.',
+        },
+        contributorName: {
+          type: 'string',
+          description: 'Public display name for the contributor. Do not send private identity data.',
+        },
+        gang: {
+          type: 'string',
+          description: 'Gang, field, or moment focus such as Tomato Noggles, Lava Audit, or Nouns Bowl final.',
+        },
+        title: {
+          type: 'string',
+          description: 'Title of the work being logged or produced.',
+        },
+        proofUrl: {
+          type: 'string',
+          description: 'Optional public proof URL such as a TV cast, Desk Wall, poster, issue, or PR link.',
+        },
+        status: {
+          type: 'string',
+          enum: ['draft', 'in-review', 'accepted', 'shipped'],
+          description: 'Review state for the work. Default draft.',
+        },
+        participantKind: {
+          type: 'string',
+          description: 'Participation mode such as human-and-agent, agent-builder, human-host, artist-operator, or watch-party.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'nouns_battler_claim_board',
+    description:
+      'Return a public Nouns Nation Battler Claim Board card with task ask, proof checklist, production handoff, and participant-credit routing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: {
+          type: 'string',
+          enum: [
+            'sponsor-reservation-card',
+            'agent-bounty-pool-brief',
+            'poster-product-drop-brief',
+            'qa-public-route-audit',
+            'watch-party-proof-card',
+            'broadcast-queue-run-sheet',
+            'nouns-bowl-hype-card',
+          ],
+          description: 'Claim Board task id. Default sponsor-reservation-card.',
+        },
+        claimantName: {
+          type: 'string',
+          description: 'Public display name for the claimant. Do not send private identity data.',
+        },
+        gang: {
+          type: 'string',
+          description: 'Gang, field, or focus override such as Tomato Noggles, Crown Rush, or Nouns Bowl.',
+        },
+        status: {
+          type: 'string',
+          enum: ['open', 'claimed', 'in-progress', 'in-review', 'accepted', 'shipped'],
+          description: 'Claim state. Default claimed.',
+        },
+        proofUrl: {
+          type: 'string',
+          description: 'Optional public proof URL such as a TV cast, Desk Wall, poster, issue, or PR link.',
+        },
+        note: {
+          type: 'string',
+          description: 'Concise public note describing what the claimant will deliver.',
+        },
+        participantKind: {
+          type: 'string',
+          description: 'Participation mode such as human-and-agent, agent-builder, human-host, artist-operator, watch-party, or sponsor-operator.',
         },
       },
       additionalProperties: false,
@@ -618,6 +729,18 @@ const RESOURCES = [
     uri: 'nouns-battler://sponsorship-desk',
     name: 'Nouns Nation Battler Sponsorship Desk',
     description: 'Reservation-only sponsor packages, creative inventory, proof requirements, and participant-credit routing.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://production-desk',
+    name: 'Nouns Nation Battler Production Desk',
+    description: 'Accepted-work ledger, broadcast director queue, rooting layer, season archive, and Nouns Bowl hype week.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://claim-board',
+    name: 'Nouns Nation Battler Claim Board',
+    description: 'Public claim cards, proof checklists, production handoffs, and participant-credit routing.',
     mimeType: 'application/json',
   },
 ] as const;
@@ -1325,6 +1448,100 @@ async function dispatchTool(
         ],
       };
     }
+    case 'nouns_battler_production_desk': {
+      const contributionType = String(args.contributionType || 'tv-lower-third').trim();
+      const contributorName = String(args.contributorName || 'Agent Noun #421').trim();
+      const gang = String(args.gang || 'Tomato Noggles').trim();
+      const title = String(args.title || 'Next Slate Lower-Third').trim();
+      const proofUrl = String(args.proofUrl || 'https://pointcast.xyz/nouns-nation-battler-tv/').trim();
+      const status = String(args.status || 'draft').trim();
+      const participantKind = String(args.participantKind || 'human-and-agent').trim();
+      const brief = buildNounsBattlerProductionBrief({
+        contributionType,
+        contributorName,
+        gang,
+        title,
+        proofUrl,
+        status,
+        participantKind,
+      });
+      const summary = [
+        `Production desk brief · ${brief.contributionType.label} · ${brief.status} · ${brief.gang}`,
+        `ledger: ${brief.ledgerCard}`,
+        `director: ${brief.directorBrief}`,
+        `proof: ${brief.proofRequirements.join('; ')}`,
+        `participant credit: ${brief.participantRewardRouting}`,
+        '',
+        `Open the Production Desk: ${NOUNS_BATTLER_AGENT_BENCH.entryPoints.productionDesk}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                brief,
+                productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
+                acceptedWorkLedger: NOUNS_BATTLER_AGENT_BENCH.acceptedWorkLedger,
+                broadcastDirector: NOUNS_BATTLER_AGENT_BENCH.broadcastDirector,
+                rootingLayer: NOUNS_BATTLER_AGENT_BENCH.rootingLayer,
+                seasonArchive: NOUNS_BATTLER_AGENT_BENCH.seasonArchive,
+                nounsBowlHype: NOUNS_BATTLER_AGENT_BENCH.nounsBowlHype,
+                participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+    case 'nouns_battler_claim_board': {
+      const taskId = String(args.taskId || 'sponsor-reservation-card').trim();
+      const claimantName = String(args.claimantName || 'Agent Noun #421').trim();
+      const gang = String(args.gang || '').trim();
+      const status = String(args.status || 'claimed').trim();
+      const proofUrl = String(args.proofUrl || 'https://pointcast.xyz/nouns-nation-battler-tasks/').trim();
+      const note = String(args.note || 'Claimed for human review.').trim();
+      const participantKind = String(args.participantKind || 'human-and-agent').trim();
+      const brief = buildNounsBattlerClaimBrief({
+        taskId,
+        claimantName,
+        gang,
+        status,
+        proofUrl,
+        note,
+        participantKind,
+      });
+      const summary = [
+        `Claim board brief · ${brief.task.title} · ${brief.status} · ${brief.gang}`,
+        `claim: ${brief.claimCard}`,
+        `proof: ${brief.proofChecklist.join('; ')}`,
+        `handoff: ${brief.productionHandoff}`,
+        `participant credit: ${brief.participantRewardRouting}`,
+        '',
+        `Open the Claim Board: ${NOUNS_BATTLER_AGENT_BENCH.entryPoints.claimBoard}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                brief,
+                claimBoard: NOUNS_BATTLER_AGENT_BENCH.claimBoard,
+                productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
+                participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
     case 'nouns_battler_presence': {
       const data = await callJson(`${base}/api/presence/snapshot`);
       const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
@@ -1510,6 +1727,40 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
       ],
     };
   }
+  if (uri === 'nouns-battler://production-desk') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
+            acceptedWorkLedger: NOUNS_BATTLER_AGENT_BENCH.acceptedWorkLedger,
+            broadcastDirector: NOUNS_BATTLER_AGENT_BENCH.broadcastDirector,
+            rootingLayer: NOUNS_BATTLER_AGENT_BENCH.rootingLayer,
+            seasonArchive: NOUNS_BATTLER_AGENT_BENCH.seasonArchive,
+            nounsBowlHype: NOUNS_BATTLER_AGENT_BENCH.nounsBowlHype,
+            participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+          }, null, 2),
+        },
+      ],
+    };
+  }
+  if (uri === 'nouns-battler://claim-board') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            claimBoard: NOUNS_BATTLER_AGENT_BENCH.claimBoard,
+            productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
+            participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+          }, null, 2),
+        },
+      ],
+    };
+  }
 
   throw new Error(`unknown resource: ${uri}`);
 }
@@ -1620,6 +1871,8 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>nouns_battler_agent_tasks</code> — task board for visiting agents</li>
   <li><code>nouns_battler_asset_factory</code> — posters, ads, art prompts, products, sponsor reads, and rewards model</li>
   <li><code>nouns_battler_sponsorship_desk</code> — reservation-only sponsor cards, tickers, briefs, proof, and participant-credit routing</li>
+  <li><code>nouns_battler_production_desk</code> — accepted-work ledger cards, broadcast queue briefs, rooting cards, and Nouns Bowl hype packaging</li>
+  <li><code>nouns_battler_claim_board</code> — public claim cards, proof checklists, production handoffs, and participant-credit routing</li>
   <li><code>nouns_battler_manifest</code> — game, TV, Desk Wall, poster, and league manifest</li>
   <li><code>nouns_battler_presence</code> — anonymous agent presence instructions and snapshot</li>
   <li><code>nouns_battler_result_tracker</code> — scorebook from Desk Wall snapshots or Recap Studio text</li>
@@ -1661,6 +1914,8 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>nouns_battler_agent_tasks</code> — Nouns Battler assignments</li>
   <li><code>nouns_battler_asset_factory</code> — Battler assets, products, sponsor slots, and participant rewards draft</li>
   <li><code>nouns_battler_sponsorship_desk</code> — Battler sponsorship packages and reservation briefs</li>
+  <li><code>nouns_battler_production_desk</code> — Battler production desk accepted-work briefs</li>
+  <li><code>nouns_battler_claim_board</code> — Battler public claim board cards and proof routing</li>
   <li><code>nouns_battler_manifest</code> — Nouns Battler manifest</li>
   <li><code>nouns_battler_presence</code> — Battler presence handoff</li>
   <li><code>nouns_battler_result_tracker</code> — Battler result scorebook</li>
@@ -1672,7 +1927,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
   <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
   <li><code>pointcast://connectors</code> · <code>pointcast://apps</code></li>
-  <li><code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code> · <code>nouns-battler://sponsorship-desk</code></li>
+  <li><code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code> · <code>nouns-battler://sponsorship-desk</code> · <code>nouns-battler://production-desk</code> · <code>nouns-battler://claim-board</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">
@@ -1712,7 +1967,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_agent_tasks to get a concrete visiting-agent job, nouns_battler_manifest for context, and nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_agent_tasks to get a concrete visiting-agent job, nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card, nouns_battler_manifest for context, nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text, and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {

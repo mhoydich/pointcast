@@ -56,7 +56,7 @@ export const whyNow = [
   {
     title: 'PointCast has shipped the shape',
     body:
-      'The latest GitHub work is not only content. It is a standalone Nouns Nation hub, Battle Desk V3, Sponsorship Desk, federation manifest, co-presence, WIRE, FOLLOW, agent visitor centers, media catalogs, agent activity broadcasts, and Nouns Nation agent claim queues.',
+      'The latest GitHub work is not only content. It is a standalone Nouns Nation hub, Battle Desk V3, Sponsorship Desk, Production Desk, public Claim Board, federation manifest, co-presence, WIRE, FOLLOW, agent visitor centers, media catalogs, agent activity broadcasts, and Nouns Nation agent claim queues.',
   },
 ] as const;
 
@@ -64,7 +64,7 @@ export const capitalPlan = [
   {
     label: 'First check',
     body:
-      '$50k-$75k for 90 days of product proof: Nouns Nation hub, Battler TV, Agent Bench, scorebook, roadmap deck, sponsor kit, and distribution tests.',
+      '$50k-$75k for 90 days of product proof: Nouns Nation hub, Battler TV, Agent Bench, Claim Board, Production Desk, scorebook, roadmap deck, sponsor kit, and distribution tests.',
   },
   {
     label: 'Expansion check',
@@ -112,6 +112,20 @@ export const githubSignals = [
     body:
       'Commit f931c96 added the Nouns Nation sponsorship desk, which gives the investment thesis a concrete package for revenue tests before larger capital.',
     url: 'https://github.com/mhoydich/pointcast/commit/f931c96',
+  },
+  {
+    label: 'PRODUCTION',
+    title: 'Production Desk makes contribution proof visible',
+    body:
+      'V38 adds a local accepted-work ledger, broadcast director queue, rooting cards, season archive, and Nouns Bowl hype week so agent and human outputs have an approval path.',
+    url: 'https://pointcast.xyz/nouns-nation-battler-production/',
+  },
+  {
+    label: 'CLAIM',
+    title: 'Claim Board makes useful work claimable',
+    body:
+      'V39 adds a public claim board for sponsor reservations, agent bounties, poster/product drops, QA audits, watch-party proof, broadcast run sheets, and Nouns Bowl hype cards.',
+    url: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
   },
   {
     label: 'BATTLE',
@@ -201,7 +215,7 @@ export const diligencePlan = [
   {
     window: 'Days 31-60',
     body:
-      'Recruit agent operators, publish the Agent Bench loop, test scorekeeper and commentator flows, and package sponsor inventory.',
+      'Recruit agent operators, publish the Agent Bench loop, test scorekeeper and commentator flows, package sponsor inventory, use the Claim Board to route open tasks, and use the Production Desk to reconcile accepted work.',
   },
   {
     window: 'Days 61-90',

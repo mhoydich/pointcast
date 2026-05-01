@@ -13,6 +13,7 @@ function routeParam(name) {
 }
 
 const isTvMode = routeParam("mode") === "tv" || routeParam("view") === "tv";
+const isMobileMode = routeParam("mode") === "mobile" || routeParam("view") === "mobile";
 const LEAGUE_KEY = "pc:nouns-nation-league-v4";
 const GUIDE_KEY = "pc:nouns-nation-guide-v1";
 const LEAGUE_DAYS = 14;
@@ -490,6 +491,7 @@ if (!state.league) {
 }
 
 document.body.classList.toggle("tv-mode", isTvMode);
+document.body.classList.toggle("mobile-mode", isMobileMode);
 
 function loadSeason() {
   try {

@@ -1,0 +1,268 @@
+---
+/**
+ * /booth — the PointCast Spotify booth.
+ *
+ * Sprint 2026-04-30 (Mike: "lets try a couple of pointcast features,
+ * developer.spotify.com/documentation/web-api/tutorials/building-with-ai
+ * enjoy, make a one hour sprint"). First Spotify surface on PointCast.
+ *
+ * What it is: a small room with three resident DJ slots (Claude / Codex /
+ * Manus) — each shows what that agent is "spinning" via a Spotify embed
+ * iframe — and a today's-mix playlist embed at the top. No OAuth, no
+ * Web Playback SDK; just the official iframe embeds. Curation lives in
+ * src/data/spotify-booth.json so anyone (or any agent) can update the
+ * room by editing one file.
+ *
+ * Why iframes over Web API: the tutorial (building-with-ai) recommends
+ * Auth Code w/ PKCE for user data, which needs a backend or a logged-in
+ * visitor — too heavy for a static Astro room. Iframes work for every
+ * visitor, no login. When we want "what Mike is actually listening to
+ * right now" we'll add a Worker that holds the refresh token and serves
+ * /api/now-spinning.json — tracked in TASKS.md as a follow-up.
+ *
+ * Aesthetic: PointCast geocities + sim city — saturated color blocks,
+ * pixel-art chrome on the iframes (see SpotifyEmbed.astro), no clean
+ * AI-product gloss.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SpotifyEmbed from '../components/SpotifyEmbed.astro';
+import booth from '../data/spotify-booth.json';
+
+const { todaysMix, residents, updated } = booth as typeof booth;
+---
+
+<BaseLayout title="the booth · pointcast" description="three resident agents, three records spinning, one room.">
+  <main class="booth">
+    <header class="masthead">
+      <div class="sign">
+        <span class="bulb b1"></span>
+        <span class="bulb b2"></span>
+        <span class="bulb b3"></span>
+        <h1>THE BOOTH</h1>
+        <span class="bulb b3"></span>
+        <span class="bulb b2"></span>
+        <span class="bulb b1"></span>
+      </div>
+      <p class="tagline">
+        a small room. three records spinning. last cued <time>{updated}</time>.
+      </p>
+    </header>
+
+    <section class="mix">
+      <h2><span class="dot"></span> today's mix</h2>
+      <p class="note">{todaysMix.note}</p>
+      <SpotifyEmbed
+        kind={todaysMix.kind as 'playlist'}
+        spotifyId={todaysMix.spotifyId}
+        height={352}
+        accent="#c46734"
+        placeholderLabel="paste a playlist id in spotify-booth.json"
+      />
+    </section>
+
+    <section class="residents">
+      <h2><span class="dot"></span> residents on deck</h2>
+      <div class="grid">
+        {residents.map((r) => (
+          <article class="card" style={`--accent:${r.color}`}>
+            <header class="card-head">
+              <span class="badge">DJ</span>
+              <h3>{r.name}</h3>
+            </header>
+            <div class="track-meta">
+              <p class="track-title">{r.track.title}</p>
+              <p class="track-artist">{r.track.artist}</p>
+            </div>
+            <SpotifyEmbed
+              kind="track"
+              spotifyId={r.track.spotifyId}
+              height={152}
+              accent={r.color}
+              placeholderLabel="not spinning yet"
+            />
+            <p class="blurb">{r.track.blurb}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <footer class="signpost">
+      <p>
+        edit <code>src/data/spotify-booth.json</code> to swap records.
+        agents can read this room as JSON at <a href="/booth.json">/booth.json</a>.
+      </p>
+      <p class="links">
+        <a href="/now">/now</a> ·
+        <a href="/radio">/radio</a> ·
+        <a href="/town">/town</a>
+      </p>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style>
+  .booth {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    color: #1a1208;
+  }
+
+  /* masthead — marquee-style sign */
+  .masthead {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  .sign {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 1.5rem;
+    background: #1a1208;
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 4px #c46734,
+      6px 6px 0 4px #1a1208;
+  }
+  .sign h1 {
+    margin: 0;
+    color: #f3eee0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    letter-spacing: 0.2em;
+    font-weight: 700;
+  }
+  .bulb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 8px currentColor;
+    animation: bulb 1.6s infinite ease-in-out;
+  }
+  .b1 { color: #ffd24a; background: #ffd24a; animation-delay: 0s; }
+  .b2 { color: #ff6b9d; background: #ff6b9d; animation-delay: 0.3s; }
+  .b3 { color: #4ad6ff; background: #4ad6ff; animation-delay: 0.6s; }
+  @keyframes bulb {
+    0%, 100% { opacity: 0.4; transform: scale(0.85); }
+    50%      { opacity: 1;   transform: scale(1.1);  }
+  }
+  .tagline {
+    margin-top: 1rem;
+    color: #5F5E5A;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.875rem;
+  }
+
+  /* sections */
+  section {
+    margin-bottom: 3rem;
+  }
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 0.5rem;
+  }
+  .dot {
+    width: 12px;
+    height: 12px;
+    background: #c46734;
+    border: 2px solid #1a1208;
+    box-shadow: 2px 2px 0 0 #1a1208;
+  }
+  .note {
+    margin: 0 0 1rem;
+    color: #5F5E5A;
+    font-size: 0.95rem;
+  }
+
+  /* residents grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .card {
+    background: #f8f4ec;
+    border: 2px solid #1a1208;
+    border-radius: 14px;
+    box-shadow: 6px 6px 0 0 var(--accent);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .card-head h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: var(--accent);
+    color: #f8f4ec;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    border-radius: 4px;
+    border: 2px solid #1a1208;
+  }
+  .track-meta {
+    line-height: 1.2;
+  }
+  .track-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .track-artist {
+    margin: 0.15rem 0 0;
+    color: #5F5E5A;
+    font-size: 0.85rem;
+  }
+  .blurb {
+    margin: 0;
+    font-style: italic;
+    color: #5F5E5A;
+    font-size: 0.85rem;
+  }
+
+  /* footer */
+  .signpost {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 2px dashed #1a1208;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    color: #5F5E5A;
+  }
+  .signpost code {
+    background: #ece5d2;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    color: #1a1208;
+  }
+  .signpost .links {
+    margin-top: 0.5rem;
+  }
+  .signpost a {
+    color: #c46734;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .signpost a:hover {
+    color: #1a1208;
+  }
+</style>

@@ -1,0 +1,859 @@
+---
+/**
+ * /nouns-nation-battler-tasks - public Claim Board for sponsor, bounty,
+ * creative, QA, watch-party, production, and Nouns Bowl work.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  NOUNS_BATTLER_AGENT_BENCH_VERSION,
+  NOUNS_BATTLER_CLAIM_BOARD,
+  NOUNS_BATTLER_PARTICIPANT_YIELD,
+} from '../lib/nouns-battler-agent-bench';
+
+const statuses = NOUNS_BATTLER_CLAIM_BOARD.statuses;
+const participantKinds = ['human-and-agent', 'agent-builder', 'human-host', 'artist-operator', 'watch-party', 'sponsor-operator'];
+
+const laneLabels = {
+  sponsorship: 'Sponsors',
+  bounty: 'Bounties',
+  creative: 'Posters',
+  qa: 'QA',
+  audience: 'Watch Parties',
+  production: 'Production',
+  finals: 'Nouns Bowl',
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Nouns Nation Battler Claim Board',
+  description:
+    'A local-first public claim board for Nouns Nation Battler sponsor reservations, agent bounties, poster drops, QA, watch parties, production beats, and Nouns Bowl hype work.',
+  url: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
+  isPartOf: {
+    '@type': 'VideoGame',
+    name: 'Nouns Nation Battler',
+    url: 'https://pointcast.xyz/nouns-nation-battler/',
+  },
+};
+---
+
+<BlockLayout
+  title="Nouns Battler Claim Board"
+  description="Claim one useful thing for Nouns Nation Battler: sponsor package, bounty, poster/product brief, QA audit, watch-party proof, production run sheet, or Nouns Bowl hype card."
+  image="/images/og/nouns-battler-claim-board.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/nouns-nation-battler-agents.json', title: 'Nouns Nation Battler Agent Bench' },
+    { type: 'application/json', href: '/nouns-nation-battler.json', title: 'Nouns Nation Battler manifest' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/nouns-battler-claim-board.png',
+    buttons: [
+      { label: 'Claim Board', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-tasks/' },
+      { label: 'Production', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-production/' },
+      { label: 'Sponsors', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-sponsors/' },
+      { label: 'Agent JSON', action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-agents.json' },
+    ],
+  }}
+>
+  <main class="claim-board" data-claim-board>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nouns-nation-battler/">Nouns Nation Battler</a>
+      <span aria-hidden="true">/</span>
+      <span>Claim Board</span>
+    </nav>
+
+    <section class="hero" aria-labelledby="claim-title">
+      <div class="hero__copy">
+        <p class="kicker">CH.BTL / CLAIM BOARD / v{NOUNS_BATTLER_AGENT_BENCH_VERSION}</p>
+        <h1 id="claim-title">Claim one useful thing.</h1>
+        <p>
+          A public, no-money-yet board for the work around the sport: sponsor reservations,
+          agent bounties, posters, QA passes, watch-party proof, broadcast run sheets, and
+          Nouns Bowl hype. Claiming creates a copyable work card; acceptance still needs a human.
+        </p>
+        <nav class="hero-actions" aria-label="Claim board links">
+          <a class="primary" href="#claim-builder">Build claim</a>
+          <a href="#open-cards">Open cards</a>
+          <a href="/nouns-nation-battler-production/">Production Desk</a>
+          <a href="/api/mcp-v2">MCP</a>
+        </nav>
+      </div>
+      <div class="hero__stack" aria-label="Featured claim Nouns">
+        {NOUNS_BATTLER_CLAIM_BOARD.tasks.slice(0, 6).map((task) => (
+          <article>
+            <img src={task.nounAsset} alt={`Noun ${task.nounNumber}`} width="96" height="96" loading="eager" />
+            <span>{task.lane}</span>
+            <strong>#{task.nounNumber}</strong>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="guardrails" aria-label="Claim board guardrails">
+      {NOUNS_BATTLER_CLAIM_BOARD.guardrails.map((guardrail) => <span>{guardrail}</span>)}
+    </section>
+
+    <section class="loop" aria-labelledby="loop-title">
+      <div class="section-head">
+        <p class="kicker">Claim loop</p>
+        <h2 id="loop-title">From need to proof to accepted work.</h2>
+      </div>
+      <div class="loop__steps">
+        {NOUNS_BATTLER_CLAIM_BOARD.mainLoop.map((step, index) => (
+          <article>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <p>{step}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section id="open-cards" class="cards" aria-labelledby="cards-title">
+      <div class="section-head">
+        <p class="kicker">Open claim cards</p>
+        <h2 id="cards-title">{NOUNS_BATTLER_CLAIM_BOARD.tasks.length} things worth doing now.</h2>
+      </div>
+      <div class="lane-tabs" aria-label="Lane filters">
+        <button type="button" class="is-active" data-lane-filter="all">All</button>
+        {NOUNS_BATTLER_CLAIM_BOARD.lanes.map((lane) => (
+          <button type="button" data-lane-filter={lane}>{laneLabels[lane] || lane}</button>
+        ))}
+      </div>
+      <div class="card-grid">
+        {NOUNS_BATTLER_CLAIM_BOARD.tasks.map((task) => (
+          <article class="claim-card" data-task-card data-lane={task.lane} data-task-id={task.id}>
+            <div class="claim-card__top">
+              <img src={task.nounAsset} alt={`Noun ${task.nounNumber}`} width="88" height="88" loading="lazy" />
+              <div>
+                <span>{task.lane}</span>
+                <strong>{task.priority}</strong>
+                <em>{task.timebox}</em>
+              </div>
+            </div>
+            <h3>{task.title}</h3>
+            <p>{task.ask}</p>
+            <dl>
+              <div>
+                <dt>Focus</dt>
+                <dd>{task.gang} / {task.field}</dd>
+              </div>
+              <div>
+                <dt>Credit</dt>
+                <dd>{task.rewardSignal}</dd>
+              </div>
+            </dl>
+            <code>{task.shareFormat}</code>
+            <div class="card-actions">
+              <button type="button" data-claim-task={task.id}>Claim this</button>
+              <a href={task.startHere}>{new URL(task.startHere).pathname || '/'}</a>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section id="claim-builder" class="builder" aria-label="Claim builder">
+      <aside class="builder__form">
+        <div class="section-head">
+          <p class="kicker">Claim builder</p>
+          <h2>Generate the work card.</h2>
+        </div>
+        <form data-claim-form>
+          <label>
+            Claimable task
+            <select data-task-select>
+              {NOUNS_BATTLER_CLAIM_BOARD.tasks.map((task) => (
+                <option value={task.id}>{task.title}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Public claimant
+            <input data-claimant value="Agent Noun #421" />
+          </label>
+          <label>
+            Status
+            <select data-status-select>
+              {statuses.map((status) => <option value={status}>{status}</option>)}
+            </select>
+          </label>
+          <label>
+            Participant mode
+            <select data-participant-kind>
+              {participantKinds.map((kind) => <option value={kind}>{kind}</option>)}
+            </select>
+          </label>
+          <label class="wide">
+            Gang or field focus
+            <input data-focus value={NOUNS_BATTLER_CLAIM_BOARD.tasks[0].gang} />
+          </label>
+          <label class="wide">
+            Proof URL
+            <input data-proof-url value="https://pointcast.xyz/nouns-nation-battler-tasks/" />
+          </label>
+          <label class="wide">
+            Claim note
+            <textarea rows="4" data-claim-note>Claimed for human review. I will return proof, a target surface, and participant-credit routing.</textarea>
+          </label>
+        </form>
+      </aside>
+
+      <section class="builder__output">
+        <article class="output-card">
+          <div class="output-card__head">
+            <img data-output-noun src={NOUNS_BATTLER_CLAIM_BOARD.tasks[0].nounAsset} alt="" width="96" height="96" />
+            <div>
+              <p class="kicker" data-output-lane>{NOUNS_BATTLER_CLAIM_BOARD.tasks[0].lane}</p>
+              <h2 data-output-title>{NOUNS_BATTLER_CLAIM_BOARD.tasks[0].title}</h2>
+            </div>
+          </div>
+          <pre data-claim-output></pre>
+          <div class="button-row">
+            <button type="button" data-copy-claim>Copy claim</button>
+            <button type="button" data-copy-handoff>Copy handoff</button>
+            <button type="button" data-save-claim>Save local claim</button>
+            <button type="button" data-mark-review>Send to review</button>
+          </div>
+          <p data-copy-status>Ready to claim.</p>
+        </article>
+        <div class="output-grid">
+          <article>
+            <p class="kicker">Proof checklist</p>
+            <pre data-proof-output></pre>
+          </article>
+          <article>
+            <p class="kicker">Production handoff</p>
+            <pre data-handoff-output></pre>
+          </article>
+          <article>
+            <p class="kicker">Participant credit</p>
+            <pre data-credit-output></pre>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <section class="saved" aria-labelledby="saved-title">
+      <div class="section-head">
+        <p class="kicker">Local claims</p>
+        <h2 id="saved-title">Saved only in this browser.</h2>
+      </div>
+      <div data-saved-claims><p>No local claims yet.</p></div>
+    </section>
+  </main>
+</BlockLayout>
+
+<script
+  define:vars={{
+    claimBoard: NOUNS_BATTLER_CLAIM_BOARD,
+    participantYield: NOUNS_BATTLER_PARTICIPANT_YIELD,
+  }}
+>
+  const root = document.querySelector('[data-claim-board]');
+  const state = { taskId: claimBoard.tasks[0]?.id || '', lane: 'all' };
+
+  function el(selector) {
+    return root?.querySelector(selector);
+  }
+
+  function all(selector) {
+    return Array.from(root?.querySelectorAll(selector) || []);
+  }
+
+  function selectedTask() {
+    return claimBoard.tasks.find((task) => task.id === state.taskId) || claimBoard.tasks[0];
+  }
+
+  function values() {
+    const task = selectedTask();
+    return {
+      task,
+      claimant: el('[data-claimant]')?.value?.trim() || 'Agent Noun #421',
+      status: el('[data-status-select]')?.value || 'claimed',
+      participantKind: el('[data-participant-kind]')?.value || 'human-and-agent',
+      focus: el('[data-focus]')?.value?.trim() || task.gang,
+      proofUrl: el('[data-proof-url]')?.value?.trim() || claimBoard.route,
+      note: el('[data-claim-note]')?.value?.trim() || 'Claimed for human review.',
+    };
+  }
+
+  function contributionHint(lane) {
+    if (lane === 'qa') return 'qa-fix';
+    if (lane === 'audience') return 'watch-party-proof';
+    if (lane === 'production') return 'director-queue';
+    if (lane === 'sponsorship') return 'sponsor-package';
+    return 'poster-or-ad';
+  }
+
+  function claimText() {
+    const v = values();
+    return [
+      `CLAIM BOARD CARD: ${v.task.title}`,
+      `Task: ${v.task.id}`,
+      `Lane: ${v.task.lane}`,
+      `Status: ${v.status}`,
+      `Claimant: ${v.claimant}`,
+      `Focus: ${v.focus} / ${v.task.field}`,
+      `Noun: #${v.task.nounNumber}`,
+      `Ask: ${v.task.ask}`,
+      `Proof: ${v.task.proof}`,
+      `Proof URL: ${v.proofUrl}`,
+      `Credit signal: ${v.task.rewardSignal}`,
+      `Target: ${v.task.targetSurface}`,
+      'Guardrail: human approval required before sponsor use, payout, or participant-credit reconciliation.',
+    ].join('\n');
+  }
+
+  function proofText() {
+    const v = values();
+    return [
+      `Required proof: ${v.task.proof}`,
+      `Acceptance: ${v.task.acceptance}`,
+      `Public proof URL or note: ${v.proofUrl}`,
+      `Claim note: ${v.note}`,
+      'Keep draft, in-review, accepted, and shipped states separate.',
+    ].join('\n');
+  }
+
+  function handoffText() {
+    const v = values();
+    return [
+      `PRODUCTION HANDOFF: ${v.task.title}`,
+      'Move accepted work to: https://pointcast.xyz/nouns-nation-battler-production/',
+      `Contribution type hint: ${contributionHint(v.task.lane)}`,
+      `Lower-third: ${v.focus.toUpperCase()} / ${v.task.lane.toUpperCase()} CLAIM / HUMAN REVIEW`,
+      `Host line: ${v.claimant} claimed ${v.task.title}; check proof, then route it to ${v.task.targetSurface}.`,
+      `Note: ${v.note}`,
+    ].join('\n');
+  }
+
+  function creditText() {
+    const v = values();
+    return [
+      `Participant mode: ${v.participantKind}`,
+      `Selected signal: ${v.task.rewardSignal}`,
+      `Contribution score model: ${participantYield.contributionScore}`,
+      `Expected output: ${v.task.expectedOutput}`,
+      'Credit is manual accounting language, not an automatic payout or promised return.',
+    ].join('\n');
+  }
+
+  function render() {
+    const v = values();
+    all('[data-task-card]').forEach((card) => {
+      const show = state.lane === 'all' || card.dataset.lane === state.lane;
+      card.hidden = !show;
+    });
+    all('[data-lane-filter]').forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.laneFilter === state.lane);
+    });
+    el('[data-task-select]').value = v.task.id;
+    el('[data-output-noun]').src = v.task.nounAsset;
+    el('[data-output-noun]').alt = `Noun ${v.task.nounNumber}`;
+    el('[data-output-lane]').textContent = `${v.task.lane} / ${v.task.priority}`;
+    el('[data-output-title]').textContent = v.task.title;
+    el('[data-claim-output]').textContent = claimText();
+    el('[data-proof-output]').textContent = proofText();
+    el('[data-handoff-output]').textContent = handoffText();
+    el('[data-credit-output]').textContent = creditText();
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function stored() {
+    try {
+      return JSON.parse(localStorage.getItem(claimBoard.storageKey) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  function saveClaim(card) {
+    const items = stored();
+    items.unshift({ when: new Date().toLocaleString(), card });
+    localStorage.setItem(claimBoard.storageKey, JSON.stringify(items.slice(0, 12)));
+    renderStored();
+  }
+
+  function renderStored() {
+    const target = el('[data-saved-claims]');
+    const items = stored();
+    if (!target) return;
+    target.innerHTML = items.length
+      ? items.map((item) => `<article><span>${escapeHtml(item.when)}</span><pre>${escapeHtml(item.card)}</pre></article>`).join('')
+      : '<p>No local claims yet.</p>';
+  }
+
+  async function copyText(text, label) {
+    try {
+      await navigator.clipboard.writeText(text);
+      el('[data-copy-status]').textContent = `${label} copied.`;
+    } catch {
+      el('[data-copy-status]').textContent = `${label}: ${text}`;
+    }
+  }
+
+  all('[data-lane-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.lane = button.dataset.laneFilter || 'all';
+      render();
+    });
+  });
+
+  all('[data-claim-task]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.taskId = button.dataset.claimTask || state.taskId;
+      const task = selectedTask();
+      el('[data-focus]').value = task.gang;
+      el('[data-status-select]').value = 'claimed';
+      location.hash = 'claim-builder';
+      render();
+    });
+  });
+
+  all('[data-claim-form] input, [data-claim-form] textarea, [data-claim-form] select').forEach((control) => {
+    control.addEventListener('input', () => {
+      if (control.matches('[data-task-select]')) state.taskId = control.value;
+      render();
+    });
+    control.addEventListener('change', () => {
+      if (control.matches('[data-task-select]')) {
+        state.taskId = control.value;
+        const task = selectedTask();
+        el('[data-focus]').value = task.gang;
+      }
+      render();
+    });
+  });
+
+  el('[data-copy-claim]')?.addEventListener('click', () => copyText(claimText(), 'Claim card'));
+  el('[data-copy-handoff]')?.addEventListener('click', () => copyText(handoffText(), 'Production handoff'));
+  el('[data-save-claim]')?.addEventListener('click', () => {
+    saveClaim(claimText());
+    el('[data-copy-status]').textContent = 'Claim saved locally.';
+  });
+  el('[data-mark-review]')?.addEventListener('click', () => {
+    el('[data-status-select]').value = 'in-review';
+    render();
+    saveClaim(claimText());
+    el('[data-copy-status]').textContent = 'Claim moved to in-review and saved locally.';
+  });
+
+  render();
+  renderStored();
+</script>
+
+<style>
+  .claim-board {
+    --ink: #16120d;
+    --paper: #fff9ea;
+    --blue: #b8ddff;
+    --lime: #d7ff3f;
+    --gold: #ffcd4d;
+    --red: #e45745;
+    --mint: #a9f7df;
+    color: var(--ink);
+    display: grid;
+    gap: 24px;
+    padding: 24px clamp(16px, 3vw, 44px) 72px;
+    background:
+      linear-gradient(90deg, rgba(184, 221, 255, 0.55), rgba(255, 249, 234, 0.9) 46%, rgba(169, 247, 223, 0.45)),
+      repeating-linear-gradient(0deg, rgba(22, 18, 13, 0.035) 0 1px, transparent 1px 24px),
+      #fff7e1;
+  }
+
+  .crumb,
+  .hero-actions,
+  .guardrails,
+  .lane-tabs,
+  .button-row,
+  .card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .crumb {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .crumb a,
+  .hero-actions a,
+  .lane-tabs button,
+  .button-row button,
+  .card-actions button,
+  .card-actions a {
+    border: 2px solid var(--ink);
+    border-radius: 7px;
+    background: #fffef8;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 950;
+    padding: 9px 12px;
+    text-decoration: none;
+  }
+
+  .hero-actions .primary,
+  .lane-tabs .is-active,
+  .button-row button:first-child,
+  .card-actions button {
+    background: var(--ink);
+    color: #fff7df;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(48px, 8vw, 104px);
+    line-height: 0.88;
+    letter-spacing: 0;
+  }
+
+  h2 {
+    font-size: clamp(28px, 4.5vw, 56px);
+    line-height: 0.95;
+    letter-spacing: 0;
+  }
+
+  h3 {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .hero__copy {
+    display: grid;
+    align-content: center;
+    gap: 14px;
+    min-height: 480px;
+  }
+
+  .hero__copy p:not(.kicker) {
+    max-width: 790px;
+    color: #464038;
+    font-size: clamp(18px, 2vw, 25px);
+    font-weight: 750;
+    line-height: 1.34;
+  }
+
+  .hero__stack {
+    border: 3px solid var(--ink);
+    background: #fffef8;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero__stack article {
+    display: grid;
+    place-items: center;
+    gap: 6px;
+    min-height: 160px;
+    border-right: 2px solid rgba(22, 18, 13, 0.16);
+    border-bottom: 2px solid rgba(22, 18, 13, 0.16);
+    padding: 12px;
+  }
+
+  .hero__stack img,
+  .claim-card img,
+  .output-card__head img {
+    image-rendering: pixelated;
+    object-fit: contain;
+  }
+
+  .hero__stack span,
+  .hero__stack strong,
+  .guardrails span,
+  .claim-card__top span,
+  .claim-card__top strong,
+  .claim-card__top em {
+    border: 2px solid var(--ink);
+    background: var(--lime);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 950;
+    padding: 3px 7px;
+    text-transform: uppercase;
+  }
+
+  .hero__stack strong,
+  .claim-card__top strong {
+    background: var(--gold);
+  }
+
+  .claim-card__top em {
+    background: #fffef8;
+  }
+
+  .guardrails {
+    border-top: 3px solid var(--ink);
+    border-bottom: 3px solid var(--ink);
+    padding: 12px 0;
+  }
+
+  .guardrails span {
+    background: var(--blue);
+  }
+
+  .section-head {
+    max-width: 900px;
+  }
+
+  .loop,
+  .cards,
+  .builder,
+  .saved {
+    display: grid;
+    gap: 14px;
+  }
+
+  .loop__steps,
+  .card-grid,
+  .output-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .loop__steps article,
+  .claim-card,
+  .output-card,
+  .output-grid article,
+  .saved [data-saved-claims] article {
+    min-width: 0;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    background: #fffef8;
+    padding: 14px;
+  }
+
+  .loop__steps article {
+    display: grid;
+    gap: 10px;
+  }
+
+  .loop__steps span {
+    width: fit-content;
+    background: var(--red);
+    color: #fff;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-weight: 950;
+    padding: 5px 8px;
+  }
+
+  .loop__steps p,
+  .claim-card p,
+  .claim-card dd,
+  .saved p {
+    color: #5d564d;
+    font-weight: 800;
+    line-height: 1.4;
+  }
+
+  .claim-card {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
+  .claim-card[hidden] {
+    display: none;
+  }
+
+  .claim-card__top {
+    display: flex;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .claim-card__top div,
+  .output-card__head {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .claim-card dl {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .claim-card dt {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  .claim-card dd {
+    margin: 0;
+  }
+
+  code,
+  pre {
+    background: var(--ink);
+    color: #fff7df;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  code {
+    display: block;
+    padding: 9px;
+    overflow-wrap: anywhere;
+  }
+
+  pre {
+    margin: 0;
+    overflow-x: auto;
+    padding: 12px;
+    white-space: pre-wrap;
+  }
+
+  .builder {
+    grid-template-columns: minmax(300px, 0.42fr) minmax(0, 0.58fr);
+    align-items: start;
+  }
+
+  .builder__form,
+  .builder__output {
+    display: grid;
+    gap: 12px;
+  }
+
+  form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  label {
+    display: grid;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  .wide {
+    grid-column: 1 / -1;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    border: 2px solid var(--ink);
+    border-radius: 7px;
+    background: #fffef8;
+    color: var(--ink);
+    font: inherit;
+    font-size: 15px;
+    padding: 10px;
+    text-transform: none;
+  }
+
+  .output-card,
+  .output-grid article {
+    display: grid;
+    gap: 12px;
+  }
+
+  .output-card__head {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .output-card__head h2 {
+    font-size: clamp(24px, 3.2vw, 42px);
+  }
+
+  [data-copy-status] {
+    color: #5d564d;
+    font-weight: 900;
+  }
+
+  .saved [data-saved-claims] {
+    display: grid;
+    gap: 10px;
+  }
+
+  .saved span {
+    display: block;
+    margin-bottom: 8px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 1040px) {
+    .hero,
+    .builder {
+      grid-template-columns: 1fr;
+    }
+
+    .loop__steps,
+    .card-grid,
+    .output-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 680px) {
+    .hero__copy {
+      min-height: auto;
+      padding: 28px 0;
+    }
+
+    .hero__stack,
+    .loop__steps,
+    .card-grid,
+    .output-grid,
+    form {
+      grid-template-columns: 1fr;
+    }
+
+    .output-card__head {
+      align-items: start;
+    }
+  }
+</style>

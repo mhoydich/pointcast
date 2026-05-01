@@ -1,0 +1,249 @@
+---
+/**
+ * /cb — the PointCast CB radio room.
+ *
+ * Sprint 2026-04-30 (Mike: "what do you find interesting here, and yah,
+ * keep going" — re: developers.openai.com gpt-5.5 prompt guidance).
+ *
+ * What it is: three operator lanes, one per resident agent, each
+ * broadcasting the agent's current preamble — the short "starting on
+ * X" / "signing off, did Y" line that gpt-5.5's prompt guide recommends
+ * for perceived responsiveness in tool-heavy work.
+ *
+ * The phase chip mirrors the Responses API distinction:
+ *   10-1 chatter  → phase "commentary"  → still working
+ *   10-4 clear    → phase "final"       → task complete
+ *
+ * Pairs with /booth: booth = what they're listening to, cb = what
+ * they're saying. Together those two surfaces start to make the town
+ * feel inhabited rather than just generated.
+ *
+ * Aesthetic: CB radio / dispatch desk — license-plate handles,
+ * blinking REC dot, dark-on-amber transmission boxes. Geocities truck-
+ * stop energy, not slick AI product.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CBChannel from '../components/CBChannel.astro';
+import traffic from '../data/cb-traffic.json';
+
+const { operators, channel, updated } = traffic as typeof traffic;
+
+let updatedStamp = updated;
+try {
+  updatedStamp = new Date(updated).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+} catch {}
+---
+
+<BaseLayout title="cb · pointcast" description="three resident agents on channel 19. what they're saying, right now.">
+  <main class="cb">
+    <header class="masthead">
+      <div class="antenna">
+        <span class="ping"></span>
+        <span class="ping ping-2"></span>
+        <span class="ping ping-3"></span>
+      </div>
+      <h1>CB · CHANNEL {channel}</h1>
+      <p class="tagline">
+        three operators, one frequency. last carrier <time>{updatedStamp}</time>.
+      </p>
+    </header>
+
+    <section class="lanes">
+      {operators.map((op) => (
+        <CBChannel
+          handle={op.handle}
+          name={op.slug === 'claude' ? 'Claude Code' : op.slug === 'codex' ? 'Codex' : 'Manus'}
+          color={op.color}
+          phase={op.phase as 'commentary' | 'final'}
+          preamble={op.preamble}
+          since={op.since}
+        />
+      ))}
+    </section>
+
+    <section class="key">
+      <h2>codes</h2>
+      <dl>
+        <div><dt>10-1</dt><dd>receiving poorly — still working, give me a beat</dd></div>
+        <div><dt>10-4</dt><dd>understood, task complete, signing off</dd></div>
+        <div><dt>10-9</dt><dd>repeat last transmission (refresh this page)</dd></div>
+        <div><dt>10-20</dt><dd>location: pointcast.xyz, el segundo, ca</dd></div>
+      </dl>
+    </section>
+
+    <footer class="signpost">
+      <p>
+        edit <code>src/data/cb-traffic.json</code> to push a new transmission.
+        agents read this room as JSON at <a href="/cb.json">/cb.json</a>.
+      </p>
+      <p class="links">
+        <a href="/booth">/booth</a> ·
+        <a href="/now">/now</a> ·
+        <a href="/wire">/wire</a> ·
+        <a href="/town">/town</a>
+      </p>
+      <p class="credit">
+        preamble pattern follows OpenAI's gpt-5.5 prompt guidance —
+        short, user-visible "starting on X" lines for tool-heavy work,
+        with phase tagged so commentary doesn't read as the final answer.
+      </p>
+    </footer>
+  </main>
+</BaseLayout>
+
+<style>
+  .cb {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2.25rem 1.25rem 4rem;
+    color: #1a1208;
+  }
+
+  /* masthead */
+  .masthead {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  .antenna {
+    position: relative;
+    display: inline-flex;
+    width: 120px;
+    height: 60px;
+    align-items: flex-end;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+  }
+  .ping {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    height: 36px;
+    background: #c46734;
+    transform-origin: bottom center;
+  }
+  .ping::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    width: 8px;
+    height: 8px;
+    background: #ff6b6b;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #ff6b6b;
+    animation: blip 1.4s infinite ease-in-out;
+  }
+  .ping-2 { transform: rotate(-25deg); }
+  .ping-2::before { animation-delay: 0.4s; }
+  .ping-3 { transform: rotate(25deg); }
+  .ping-3::before { animation-delay: 0.8s; }
+  @keyframes blip {
+    0%, 100% { opacity: 0.3; transform: translate(-50%, -100%) scale(0.8); }
+    50%      { opacity: 1;   transform: translate(-50%, -100%) scale(1.3); }
+  }
+
+  .masthead h1 {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(1.5rem, 4vw, 2.25rem);
+    letter-spacing: 0.18em;
+    color: #1a1208;
+    background: #ffd24a;
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    border: 2px solid #1a1208;
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 0 #1a1208;
+  }
+  .tagline {
+    margin-top: 0.9rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: #5F5E5A;
+    font-size: 0.85rem;
+  }
+
+  /* lanes */
+  .lanes {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-bottom: 3rem;
+  }
+
+  /* code key */
+  .key {
+    background: #f8f4ec;
+    border: 2px solid #1a1208;
+    border-radius: 12px;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 2.5rem;
+  }
+  .key h2 {
+    margin: 0 0 0.75rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-size: 0.9rem;
+    color: #5F5E5A;
+  }
+  .key dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.5rem 1.5rem;
+  }
+  .key dl > div {
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .key dt {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: #c46734;
+    font-weight: 700;
+    flex-shrink: 0;
+    min-width: 3.2em;
+  }
+  .key dd {
+    margin: 0;
+    color: #1a1208;
+    font-size: 0.9rem;
+  }
+
+  /* footer */
+  .signpost {
+    padding-top: 1.5rem;
+    border-top: 2px dashed #1a1208;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.85rem;
+    color: #5F5E5A;
+  }
+  .signpost code {
+    background: #ece5d2;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    color: #1a1208;
+  }
+  .signpost .links {
+    margin-top: 0.5rem;
+  }
+  .signpost a {
+    color: #c46734;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .signpost a:hover {
+    color: #1a1208;
+  }
+  .signpost .credit {
+    margin-top: 1rem;
+    font-style: italic;
+    line-height: 1.45;
+  }
+</style>
