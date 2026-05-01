@@ -162,7 +162,7 @@ export const DOCK_KIT: DockKitItem[] = [
       { id: 'confetti', label: 'confetti', glyph: '🎊', hint: 'Pixel rectangles in the PC palette. Falls, drifts, fades.' },
       { id: 'cat',      label: 'cat',      glyph: '🐈', hint: 'A pixel cat walks across the bottom.' },
       { id: 'breath',   label: 'breath',   glyph: '🫧', hint: '4-7-8 breathing circle. Tap to dismiss.' },
-      { id: 'candle',   label: 'candle',   glyph: '🕯', hint: 'A flickering candle in the corner.' },
+      { id: 'rain',     label: 'rain',     glyph: '🌧', hint: 'Gentle pixel rain across the page.' },
       { id: 'clear',    label: 'clear',    glyph: '🌪', hint: 'Snuff out everything currently cast.', style: 'ghost' },
     ],
   },

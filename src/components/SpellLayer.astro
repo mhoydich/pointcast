@@ -175,13 +175,156 @@
       active.byId.candle = c;
     }
 
+    // ─── pup (companion) ────────────────────────────────────────
+    // Like cat but bouncier — see the @keyframes spell-pup-walk-* CSS
+    // for the small vertical hop on each step. Tail-wag is a separate
+    // micro-animation on the glyph.
+    function castPup(durationMs) {
+      if (active.byId.pup) {
+        var prev = active.byId.pup;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var pup = document.createElement('button');
+      pup.className = 'spell-pup';
+      pup.type = 'button';
+      pup.setAttribute('aria-label', 'A walking puppy. Click to send home.');
+      pup.title = 'click to send the pup home';
+      pup.textContent = '🐶';
+      var ltr = Math.random() < 0.5;
+      pup.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 50000);
+      var walkSeconds = Math.max(7, Math.min(22, window.innerWidth / 110));
+      pup.style.cssText =
+        'animation:spell-pup-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-pup-bounce 0.42s ease-in-out infinite;';
+      pup.addEventListener('click', function () {
+        if (pup.parentNode) pup.parentNode.removeChild(pup);
+        active.byId.pup = null;
+      });
+      $layer.appendChild(pup);
+      active.byId.pup = pup;
+      setTimeout(function () {
+        if (pup && pup.parentNode) pup.parentNode.removeChild(pup);
+        if (active.byId.pup === pup) active.byId.pup = null;
+      }, dur);
+    }
+
+    // ─── penguin (companion) ────────────────────────────────────
+    // Slow waddle — long step time + side-to-side rock applied via the
+    // wobble keyframe. Penguin doesn't pause; he just keeps going.
+    function castPenguin(durationMs) {
+      if (active.byId.penguin) {
+        var prev2 = active.byId.penguin;
+        if (prev2 && prev2.parentNode) prev2.parentNode.removeChild(prev2);
+      }
+      var pen = document.createElement('button');
+      pen.className = 'spell-penguin';
+      pen.type = 'button';
+      pen.setAttribute('aria-label', 'A waddling penguin. Click to send home.');
+      pen.title = 'click to send the penguin home';
+      pen.textContent = '🐧';
+      var ltr = Math.random() < 0.5;
+      pen.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 70000);
+      // Penguin walks slower than cat or pup — ~50px/s.
+      var walkSeconds = Math.max(14, Math.min(40, window.innerWidth / 50));
+      pen.style.cssText =
+        'animation:spell-penguin-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-penguin-wobble 0.7s ease-in-out infinite;';
+      pen.addEventListener('click', function () {
+        if (pen.parentNode) pen.parentNode.removeChild(pen);
+        active.byId.penguin = null;
+      });
+      $layer.appendChild(pen);
+      active.byId.penguin = pen;
+      setTimeout(function () {
+        if (pen && pen.parentNode) pen.parentNode.removeChild(pen);
+        if (active.byId.penguin === pen) active.byId.penguin = null;
+      }, dur);
+    }
+
+    // ─── rain (ambient) ─────────────────────────────────────────
+    // 80 light blue pixel-rain streaks fall continuously. Implemented
+    // as a single overlay div with N child spans on randomized
+    // animation delays, each a slim translucent line. Click to dismiss.
+    function castRain() {
+      if (active.byId.rain) return;
+      var rain = document.createElement('button');
+      rain.className = 'spell-rain';
+      rain.type = 'button';
+      rain.setAttribute('aria-label', 'Pixel rain overlay. Click to dismiss.');
+      rain.title = 'click to clear the rain';
+      var html = '';
+      for (var i = 0; i < 80; i++) {
+        var leftPct = Math.random() * 100;
+        var delay = (Math.random() * 1.6).toFixed(2);
+        var dur = (1.2 + Math.random() * 1.2).toFixed(2);
+        var len = 14 + Math.floor(Math.random() * 14);
+        var op = (0.35 + Math.random() * 0.35).toFixed(2);
+        html += '<span class="spell-rain__drop" style="' +
+          'left:' + leftPct + '%;' +
+          'height:' + len + 'px;' +
+          'animation-delay:' + delay + 's;' +
+          'animation-duration:' + dur + 's;' +
+          'opacity:' + op + ';' +
+          '"></span>';
+      }
+      rain.innerHTML = html;
+      rain.addEventListener('click', function () {
+        if (rain.parentNode) rain.parentNode.removeChild(rain);
+        active.byId.rain = null;
+      });
+      $layer.appendChild(rain);
+      active.byId.rain = rain;
+    }
+
+    // ─── starfield (ambient) ────────────────────────────────────
+    // Slow-twinkling stars at random positions. Each star is a small
+    // dot with a soft box-shadow + opacity-pulse animation on staggered
+    // delay. ~60 stars across the viewport.
+    function castStarfield() {
+      if (active.byId.starfield) return;
+      var sky = document.createElement('button');
+      sky.className = 'spell-starfield';
+      sky.type = 'button';
+      sky.setAttribute('aria-label', 'Starfield overlay. Click to dismiss.');
+      sky.title = 'click to dim the stars';
+      var html = '';
+      for (var j = 0; j < 60; j++) {
+        var x = (Math.random() * 100).toFixed(1);
+        var y = (Math.random() * 100).toFixed(1);
+        var size = (1 + Math.random() * 2).toFixed(1);
+        var delay = (Math.random() * 4).toFixed(2);
+        var dur = (3 + Math.random() * 4).toFixed(2);
+        html += '<span class="spell-starfield__star" style="' +
+          'left:' + x + '%;' +
+          'top:' + y + '%;' +
+          'width:' + size + 'px;' +
+          'height:' + size + 'px;' +
+          'animation-delay:' + delay + 's;' +
+          'animation-duration:' + dur + 's;' +
+          '"></span>';
+      }
+      sky.innerHTML = html;
+      sky.addEventListener('click', function () {
+        if (sky.parentNode) sky.parentNode.removeChild(sky);
+        active.byId.starfield = null;
+      });
+      $layer.appendChild(sky);
+      active.byId.starfield = sky;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
-        case 'confetti': castConfetti(4500); break;
-        case 'cat':      castCat(60000); break;
-        case 'breath':   castBreath(); break;
-        case 'candle':   castCandle(); break;
+        case 'confetti':  castConfetti(4500); break;
+        case 'cat':       castCat(60000); break;
+        case 'pup':       castPup(50000); break;
+        case 'penguin':   castPenguin(70000); break;
+        case 'breath':    castBreath(); break;
+        case 'candle':    castCandle(); break;
+        case 'rain':      castRain(); break;
+        case 'starfield': castStarfield(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -363,14 +506,154 @@
     75%      { transform: translateY(-1px) scale(1.03) rotate(1deg); opacity: 0.92; }
   }
 
+  /* ── pup (companion) ─────────────────────────────────────── */
+  .spell-pup {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+  .spell-pup[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-pup-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-pup-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-pup-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+  .spell-pup[data-dir='rtl'] { /* Compose flip with the bounce. */
+    animation-name: spell-pup-walk-rtl, spell-pup-bounce-rtl !important;
+  }
+  @keyframes spell-pup-bounce-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-6px); }
+  }
+
+  /* ── penguin (companion) ─────────────────────────────────── */
+  .spell-penguin {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+  .spell-penguin[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-penguin-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-penguin-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  /* Wobble — small left/right tilt, applied as the second animation. */
+  @keyframes spell-penguin-wobble {
+    0%, 100% { transform: rotate(-4deg); }
+    50%      { transform: rotate(4deg); }
+  }
+  .spell-penguin[data-dir='rtl'] {
+    animation-name: spell-penguin-walk-rtl, spell-penguin-wobble-rtl !important;
+  }
+  @keyframes spell-penguin-wobble-rtl {
+    0%, 100% { transform: scaleX(-1) rotate(-4deg); }
+    50%      { transform: scaleX(-1) rotate(4deg); }
+  }
+
+  /* ── rain (ambient) ──────────────────────────────────────── */
+  .spell-rain {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-rain__drop {
+    position: absolute;
+    top: -20px;
+    width: 1.5px;
+    background: linear-gradient(180deg, rgba(74, 158, 255, 0.05) 0%, rgba(74, 158, 255, 0.55) 70%, rgba(74, 158, 255, 0.85) 100%);
+    border-radius: 1px;
+    animation: spell-rain-fall linear infinite;
+  }
+  @keyframes spell-rain-fall {
+    0%   { top: -20px; }
+    100% { top: 105vh; }
+  }
+
+  /* ── starfield (ambient) ─────────────────────────────────── */
+  .spell-starfield {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 100%, rgba(167, 139, 250, 0.08) 0%, rgba(167, 139, 250, 0) 60%);
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-starfield__star {
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.7), 0 0 8px rgba(167, 139, 250, 0.4);
+    animation: spell-star-twinkle ease-in-out infinite;
+  }
+  @keyframes spell-star-twinkle {
+    0%, 100% { opacity: 0.3; transform: scale(0.85); }
+    50%      { opacity: 1; transform: scale(1.2); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
+    .spell-pup,
+    .spell-penguin,
     .spell-breath__ring,
     .spell-breath__inner,
-    .spell-candle__flame { animation: none; }
-    .spell-cat { left: 50%; transform: translateX(-50%); }
+    .spell-candle__flame,
+    .spell-rain__drop,
+    .spell-starfield__star { animation: none; }
+    .spell-cat,
+    .spell-pup,
+    .spell-penguin { left: 50%; transform: translateX(-50%); }
+    .spell-pup[data-dir='rtl'],
+    .spell-penguin[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
+    .spell-rain__drop { display: none; } /* rain motion-only */
+    .spell-starfield__star { opacity: 0.7; }
   }
 </style>

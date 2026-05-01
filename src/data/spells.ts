@@ -64,6 +64,24 @@ export const SPELLS: Spell[] = [
     durationMs: 60_000,
     accent: '#8a2432',
   },
+  {
+    id: 'pup',
+    label: 'pup',
+    blurb: 'A bouncy puppy trots across the bottom, tail wagging.',
+    glyph: '🐶',
+    kind: 'companion',
+    durationMs: 50_000,
+    accent: '#c4952e',
+  },
+  {
+    id: 'penguin',
+    label: 'penguin',
+    blurb: 'A penguin waddles across with a tidy side-to-side rock.',
+    glyph: '🐧',
+    kind: 'companion',
+    durationMs: 70_000,
+    accent: '#1b3a5b',
+  },
 
   // ─── AMBIENT (persistent) ────────────────────────────────────
   {
@@ -81,6 +99,22 @@ export const SPELLS: Spell[] = [
     glyph: '🕯',
     kind: 'ambient',
     accent: '#c4952e',
+  },
+  {
+    id: 'rain',
+    label: 'rain',
+    blurb: 'Gentle pixel rain drifts down the page. Soft, patient.',
+    glyph: '🌧',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'starfield',
+    label: 'starfield',
+    blurb: 'Slow-twinkling stars drift in from the edges. Calming.',
+    glyph: '✨',
+    kind: 'ambient',
+    accent: '#a78bfa',
   },
 ];
 
